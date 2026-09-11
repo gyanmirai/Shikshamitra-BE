@@ -3,83 +3,175 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-08-10
+updated_on: 2026-09-11
 owner: backend-team
 audience: humans-and-agents
 ---
 
-# Understand Student product behavior
+# Understand Student Enrollment Admissions behavior
 
-TL;DR: Student owns pre-admission enrollment, active student records, attendance, leave, compliance, certificates, and dashboard previews.
-Student Enrollment uses Admission Year Setup and a per-applicant Stepper where Pipeline is the source of truth before activation.
+TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
 
-## Product areas
+## Offering identity
 
-| Area | Status | Behavior owned by Student |
-|---|---|---|
-| Student Enrollment | Implemented and actively refined | Inquiry capture, owner assignment, assessment flow, visits and events, registration, Finance handoff status, placement review, activation, family self-service, admission intelligence, and governance |
-| Student Records | Implemented | Active student list, management, bulk upload, profile, dashboard preview, and records settings |
-| Attendance and leave | Implemented | Student attendance days, entries, leave requests, and leave type settings |
-| Compliance | Implemented | Student identity compliance workflow |
-| Certificates | Implemented | Student certificates and certificate templates |
-| Inquiry Source | Implemented compatibility surface | Product label for compatibility route `inquiry-preferences` |
+The active identity is Admission Cycle, optional Campus, Board, Medium, Stage, and Standard.
+Division is not part of Admission Offering identity.
+The database prevents duplicate non-deleted identities with separate filtered indexes for Campus and no-Campus records.
+Campus is backed by the tenant-scoped Admission Campus source. Campus codes are unique per tenant,
+and only active campuses can be selected for an offering. Deactivating a campus does not delete
+history, but offerings that reference it become configuration-incomplete until an active campus is
+selected or the campus is cleared.
 
-## Student Enrollment ownership boundary
+## Admission window
 
-[Student Enrollment workflows](./workflows.md) and this product page are the current functional sources for admissions behavior.
-Student Enrollment begins when an applicant is captured in Pipeline for an academic year.
-Even direct registration, management referral, transfer, RTE, or government-allotment cases must create a Pipeline inquiry record first.
-Student Enrollment ends when the applicant is activated and handed to Student Records as an active student.
-Student Enrollment owns applicant progression, admission communication, registration readiness, Finance handoff status, placement review, and activation orchestration.
-Finance owns fee posting, receipts, settlement, reconciliation, concessions, and refunds.
-Institute Setup and Class Management own academic structure, class or division capacity, and active-student counts used for placement decisions.
-Student Records owns the active student's long-term lifecycle after activation.
+`UseCycleDates` expresses whether an offering inherits its cycle window.
+Inherited dates are persisted as null overrides.
+Explicit dates must be ordered and fall inside the Admission Cycle.
+API payload dates use `DateTimeOffset` while cycle inheritance remains date-based.
 
-## Current Enrollment capabilities
+## Readiness and availability
 
-| Capability | Baseline rule |
+Readiness is computed from the cycle, academic hierarchy, dates, published workflow, published inquiry form, and published application form.
+It is never stored as an editable flag.
+
+| Availability | Meaning |
 |---|---|
-| Pipeline | Required for every applicant and fixed enough for supportable reporting |
-| Admission Year Setup | Admission-specific rules attached to an Institute Setup academic year |
-| Applicant Stepper | Visible progress through Inquiry, Exam, Registration, Finance, Placement, and Activation |
-| Inquiry settings | Inquiry sources, inquiry types, default owner, owner pool, and quick-capture required fields are configurable |
-| Assessment | Optional by academic year, standard, admission pathway, and school policy |
-| Registration | Required before activation and configurable by section, field, document, language, and route |
-| Finance handoff | Enrollment requests or displays Finance verification but does not own payment accounting |
-| Placement | Required, with timing configurable between standard-only and division-before-activation |
-| Activation | Converts applicant to active Student only after configured gates pass |
-| Communication | Required templates and simple reminders for key moments, with write-only provider credentials and delivery status based on provider evidence |
-| Family enrollment center | Branded, tenant-qualified inquiry, OTP return, status, registration, document, event, offer, communication-preference, and withdrawal workflows |
-| Admission intelligence | Scoped funnel, source, standard, outcome, cross-cycle, capacity, response-risk, abandonment, and SLA indicators |
-| Governance | Delegation, audit search, retention, privacy requests, advisory forecasts, waitlist monitoring, and scheduled coordinator report delivery |
+| `ConfigurationIncomplete` | Required configuration is missing or no longer published |
+| `NotOpenYet` | The cycle or effective window has not opened |
+| `Open` | Inquiries and applications may start |
+| `Closed` | The cycle or effective window is closed |
+| `Inactive` | An administrator deactivated the offering |
 
-## Deliberately deferred surfaces
+## Runtime integrity
 
-Simple admission reminders are part of Communication Settings.
-Enrollment does not expose a separate generic Automation settings page.
-Advanced audience builders, discount campaigns, multi-branch communication journeys, and additional provider-specific adapters remain deferred.
-GR number automation is reserved for activation and can be implemented in a later slice.
+Starting an application freezes its workflow definition and application form definition references.
+Changing future offering defaults does not rewrite existing applications.
+Once an application references an offering, its cycle and academic identity cannot change.
+An offering with applications cannot be deleted and must be deactivated instead.
+Published workflow and form versions are immutable; changes require cloning a new version.
 
-## Data-integrity rules
+## Security and audit
 
-| Rule | Consequence |
-|---|---|
-| Pipeline is canonical before activation | No applicant should bypass inquiry capture, even when staff proceeds directly to registration |
-| Admission setup belongs to the academic year | Enrollment must extend the Institute Setup academic year rather than creating a parallel school-year model |
-| Published setup is versioned | Existing applicants retain the Admission Year Setup version that determined their completed, skipped, and blocked steps |
-| Duplicate inquiry prevention | Likely matches should open the existing applicant or require an authorized continue reason |
-| Stepper state must be explainable | Every skipped, blocked, reopened, or completed step must have rule or audit evidence |
-| Student identity data is critical | Do not silently mutate student, parent, contact, medical, or compliance data |
-| Enrollment settings must preserve history | Inactive Inquiry Sources and historical configuration labels remain visible on records that already use them |
-| Academic structure belongs to Institute Setup and Class Management | Enrollment must not duplicate board, medium, standard, division, or capacity truth |
-| Finance owns money | Enrollment must not claim paid status unless Finance returned or verified it |
-| Parent communication must be honest | Delivery success must not be inferred from template configuration alone |
-| Provider credentials are write-only | Stored header values, parameter values, and callback secrets are redacted from every read response |
-| Admission reports enforce scope | Report totals and groupings must use tenant, academic-year, UserScope, date, and standard filters on the server |
-| Activation is a boundary | Ordinary active-student lifecycle changes belong to Student Records after activation |
+Backend authorization is required for every offering operation.
+ABP tenant filters and academic UserScope restrict reads and hierarchy writes.
+Concurrency stamps protect update, activate, deactivate, and delete commands.
+Soft deletion preserves historical references and uniqueness semantics.
 
-## Documentation status
+## Managed Inquiry stages
 
-This page and [workflows.md](./workflows.md) define the canonical Enrollment product behavior.
-When changing Enrollment behavior, update this page, [api.md](./api.md), [workflows.md](./workflows.md), and [testing.md](./testing.md).
-Frontend route and screen documentation remains in [Student frontend docs](../../../../Shikshamitra-FE/docs/student/README.md).
+Inquiry stages can opt into version 1 of the `inquiry` policy inside `ConfigurationJson`.
+Missing configuration or `enabled: false` preserves the existing Basic inquiry and application-start behavior.
+Managed Inquiry can require contact or qualification before application start, constrain source capture, require guardian email or applicant date of birth, configure duplicate handling, and assign offering-scoped active counsellors manually or round robin.
+First-contact and qualification deadlines are snapshotted when the inquiry is created.
+Follow-ups retain assignment, purpose, due time, completion or cancellation state, actor, and audit timestamps.
+Qualification uses a versioned checklist and records Qualified, Nurture, Not interested, Lost, or Duplicate with a reason where required.
+Application start rechecks the linked inquiry, offering, scope, contact, outcome, and policy requirement on the server.
+Existing inquiries and workflows remain compatible; management is created only for an enabled policy attached to the selected offering's published workflow.
+
+## Managed assessment stages
+
+Assessment stages can opt into version 1 of the `assessment` policy inside `ConfigurationJson`.
+Missing configuration or `enabled: false` preserves existing manual assessment behavior, including published historical workflows.
+Managed assessments support result-only and scheduled-session modes, optional attendance evidence, aggregate marks/pass thresholds, independent result review, bounded retakes, and authorized waivers.
+The policy is pinned by the application's immutable workflow version and copied onto every attempt.
+
+Shared sessions belong to an offering and workflow stage, with future dates, a location, and capacity.
+Each applicant has independent attempts, attendance, marks, result, reviewer, and audit activities.
+Booking uses both application and session concurrency protection; cancelled unstarted bookings release capacity.
+Session identity cannot move to another offering or stage, and a session with bookings cannot be cancelled.
+
+When enabled, attendance is required before recording a result.
+Scheduled sessions must have started before staff can record attendance or results.
+Scored outcomes are calculated by the backend; unscored results require an explicit passed or failed outcome.
+Required review must come from a different authorized staff member than the result recorder.
+A rejected review returns the attempt for correction, including attendance correction.
+Retakes require a completed failed or absent result and remaining attempts; cancellation of an unstarted booking does not consume an attempt.
+
+An assessment cannot normally advance without completed evidence or a recorded waiver.
+Failed, absent, and retake outcomes additionally require an explicitly matching, non-default `assessment.outcome` route, preventing accidental use of a default success route.
+Results and reviews do not advance the workflow automatically.
+Existing separately authorized workflow skip and override controls remain available with their existing audit and permission requirements.
+
+Assessment does not approve admission or create a Student.
+Admissions finalization still requires an accepted offer and completed admissions workflow, and creates or links the Student plus a Student Onboarding case.
+Operational StudentEnrollment creation remains part of onboarding activation.
+Subject-level marks, public applicant self-booking, and external examination provider integrations are not included in this assessment policy version.
+
+## Managed document verification
+
+Document Verification opts into `ConfigurationJson.documentVerification` version 1. Missing or disabled policy retains legacy manual behavior. Published workflow versions pin the requirements for existing applicants. Each requirement has a stable code, required/optional/conditional applicability, upload/original/either/both collection, safe PDF/JPEG/PNG formats, a 1 to 20 MB limit, and optional tenant document-type mapping. Mapped uploads satisfy both policy and catalog constraints.
+
+Evidence is owned by the application and runtime stage. Every upload, replacement, original observation, and waiver adds an immutable revision. A replacement resets original observation and review; recording an original can retain the previous upload with its original uploader identity. Accept/reject reviews are immutable and apply only to the latest unreviewed revision. File validity alone never means acceptance. Independent review excludes the revision submitter, retained file uploader, and original observer. Waivers require policy support, a distinct permission, and a recorded reason.
+
+Conditional requirements use saved application answers, linked inquiry snapshot answers, and assessment facts. Missing referenced answers block completion; an explicitly saved blank answer supports `IsEmpty`. Application status and reserved inquiry/assessment/document facts come from server records. Required and matched conditional requirements block normal advance, skip, and administrator override until accepted collection evidence or an authorized waiver exists. Optional evidence does not block completion. Finalization rechecks visited managed document stages before creating a Student; successful finalized retries preserve their existing outcome.
+
+Accepted and historical admissions evidence remains canonical after finalization and is linked to the same Student without overwriting Student documents. Only latest accepted, mapped file evidence meeting its collection mode can satisfy a matching onboarding upload requirement. A waiver, original-only observation, or unmapped custom requirement remains visible but does not silently satisfy an independently mandatory onboarding upload.
+
+## Managed eligibility
+
+Eligibility opts into `ConfigurationJson.eligibility` version 1. Missing or disabled settings retain basic completion. All configured criteria must pass; each answer criterion can combine bounded ALL/ANY rules. Schools select fixed age cutoffs, published application or inquiry answer fields, an explicit earlier managed assessment stage, or an explicit earlier managed document stage. Stage codes remain stable when a workflow version is cloned.
+
+Application and inquiry criteria must use the exact form versions selected on the Offering. The runtime has no workflow-stage form fallback. Offering create/update rejects incompatible selections; missing selections may remain in an inactive draft but block activation. Availability checks and new inquiry/application creation also reject incompatible managed setup. Existing applications keep their pinned sources.
+
+Age uses the canonical applicant DOB, or the current linked Student DOB, as a calendar date. Minimum and maximum ages count completed calendar months; maximum 72 permits 72 completed months and fails at 73. Leap-day and month-end anniversaries follow calendar month clamping. Missing, future, invalid, or incompatible source values need correction. A saved blank is distinct from an unavailable answer: explicit `IsEmpty`/`IsNotEmpty` evaluates it, while other blank comparisons remain unknown. Numeric equality is decimal equality, and multiple-choice membership compares whole choices.
+
+Checking eligibility records an immutable evaluation with criterion explanations and a fingerprint of only the declared source information and policy. Changed DOB, source form answers, selected assessment evidence, or selected document revisions invalidate the prior result. Routine admission status changes do not invalidate criteria that never reference that status. Staff can recheck visited completed Eligibility stages before finalization. Resubmitting a corrected form at the managed Eligibility stage preserves that stage for an explicit check and continuation.
+
+An optional exception requires a fresh failing evaluation, a recorded reason, separate request/review permissions, any configured real school role, and an independent reviewer when enabled. Requests and decisions are immutable; approval preserves the original failing evaluation. Unknown information cannot be waived through an eligibility exception. New evaluations or changed facts invalidate earlier exception authority.
+
+Normal completion, skip, and administrator override all require a fresh evaluation. Eligible results and approved exceptions can follow ordinary routes. Ineligible or unknown results can leave only through an explicit matching `eligibility.status` route; this never rejects the admission automatically. Initial finalization rechecks every visited managed Eligibility stage and requires an eligible result or approved exception. Successfully finalized admissions retain their original outcome and read-only evaluation history on retries.
+
+New inquiry snapshots record their source form ID in existing extra properties. Older snapshots without confirmed form provenance remain readable but produce unknown eligibility answer criteria; the evaluator never guesses their source from a subsequently changed offering.
+
+## Managed Review
+
+Review stage type 6 supports an opt-in `configurationJson.review` version 1 policy; missing or disabled policy retains the established stage behavior.
+One managed Review owns the application's decision in this delivery.
+Schools may select a reviewer role, a named reviewer, a due interval, required or optional checklist items, selected earlier managed Assessment/Document/Eligibility stages, and an independent approver or approver role.
+Offering create, update and activation validate that a default named reviewer is active, belongs to the configured role and has exact access to that offering's hierarchy.
+The same validation protects starting new applications; if an assigned reviewer later loses access, an authorized assignment change is the recovery for existing applications.
+Selected prerequisite stages must occur on every path to Review in the pinned workflow.
+
+Draft saves, assignment changes and submitted recommendations append immutable history.
+Submitting requires all configured required confirmations, a recommendation and a reason, but never silently approves, rejects or waitlists an application.
+Existing admission decision commands remain authoritative and additionally enforce the Review permission, role, reviewer separation and fresh submitted evidence.
+Approval requires passed prerequisites; an explicit negative decision can use known adverse evidence but cannot use missing or stale evidence.
+Only an explicit matching negative route can advance a waitlisted or rejected application; a default route never implies that decision.
+
+Canonical applicant identity, current application form submissions and exact selected prerequisite evidence determine freshness.
+Corrections invalidate earlier recommendations even when the application concurrency stamp did not change.
+An authorized correction request reopens the application form, and resubmission remains at Review until staff submit a new recommendation and record a new decision.
+Completed Review stages can be refreshed before finalization, including reaffirming approval after offer acceptance without resetting the admission lifecycle.
+Generic skip requests are rejected for managed Review; administrative override cannot substitute for a recorded fresh decision.
+Offer, offer acceptance and initial finalization require fresh approved Review evidence, while a successful finalized retry remains idempotent.
+Committee voting, delegation, reminders and reopening historical Assessment or Document stages are outside this delivery.
+
+## Managed Form stages
+
+Form stages opt into `configurationJson.form` version 1. Schools can choose applicant, guardian, staff, or shared responsibility; save and resume; an optional 1-365 day deadline; late-submission behavior; automatic advancement; 1-20 submission attempts; correction requests; and verification of selected published form sections. Missing or disabled settings retain the established Form stage.
+
+## Managed Payment stages
+
+Payment stages opt into `configurationJson.payment` version 1. Schools configure a named purpose, ISO currency, required amount, payer, staff collection methods, optional deadline, late-payment behavior, installments, independent verification, authorized full waivers, and continuation after settlement. Missing or disabled settings retain basic manual stage behavior.
+
+The workflow cannot skip a managed Payment stage. It completes only after the configured amount is settled or a full waiver is recorded with a reason. Pending verification reserves its amount so staff cannot collect the same balance twice. Overpayments, disallowed methods, stale writes, same-user verification, duplicate retries with changed payloads, and unreasoned rejection, waiver, or reversal are rejected.
+
+Admission payment rows remain Finance-owned audited records while the Admissions module owns stage orchestration. Online gateway collection stays unavailable until a trusted tenant gateway is configured; a draft that selects `onlineGateway` cannot be published.
+
+## Managed Offer stages
+
+Offer stages opt into `configurationJson.offer` version 1. Schools can configure unconditional or conditional content, terms, acceptance evidence, default and override validity, decline reasons, extension and reissue limits, completion outcomes, and automatic continuation after acceptance. Missing or disabled settings preserve the established admission decision and offer behavior.
+
+The existing Admission Application remains the single source for current offer status, issue and response timestamps, and expiry. Every managed issue, acceptance, decline, extension, withdrawal, and reissue appends immutable decision history with the stage, actor, version, reason, safe metadata, and idempotency key. Commands use optimistic concurrency, and a matching retry returns the existing result without creating a second event.
+
+Managed Offer cannot be skipped. It completes only with a policy-allowed accepted, declined, expired, or withdrawn outcome. Acceptance enforces configured terms and conditional evidence. Declined, expired, and withdrawn outcomes require an explicit matching `offer.status` route so they cannot follow the acceptance path accidentally. This staff runtime records the response; applicant portal delivery, email/SMS delivery, and automated reminders require a separate notification integration.
+
+## Managed Seat stages
+
+Seat stages opt into `configurationJson.seat` version 1. Schools set the offering capacity, choose manual reservation or reservation on stage entry, define hold duration and staff override limits, enable bounded renewals and FIFO waitlisting, control authorized capacity exceptions, require release reasons, and choose which outcomes may complete the stage. Missing or disabled settings preserve the basic workflow step.
+
+One tenant-scoped pool owns reserved and confirmed counts for each Admission Offering. Each application and frozen Seat stage owns at most one reservation record. Confirmed seats remain allocated after stage completion until admission finalization or an authorized reasoned release. Expired holds stop consuming effective capacity and are reconciled into permanent history on the next Seat command.
+
+Managed Seat cannot be skipped. Confirmation is always an allowed completion outcome; waitlisted, released, or expired completion requires both policy permission and an explicit matching `seat.status` transition. Every mutation checks application, pool, and reservation concurrency, and repeats with the same idempotency key return the recorded result.
+
+The Form-stage definition must equal the Offering application form. Applications still pin the published definition and record immutable submission snapshots. Managed submit enforces visible required fields, deadline, and attempt limits. Automatic advancement occurs only when configured and no section verification remains. Staff verification and reasoned revocation are audited. A correction request reopens the same form and invalidates all earlier section verification; the applicant must resubmit within the remaining attempt limit. Normal completion cannot bypass unresolved Form blockers.

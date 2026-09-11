@@ -22,10 +22,15 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
 
 		builder.Property(x => x.PhotoBlobName)
 			.HasMaxLength(512);
+		builder.Property(x => x.GrNumber)
+			.HasMaxLength(100);
 
 		// Add indexes for filtering by admission status and academic year
 		builder.HasIndex(x => new { x.AdmissionApprovalStatus, x.DivisionId });
 		builder.HasIndex(x => new { x.AcademicYearId, x.Status });
+		builder.HasIndex(x => new { x.TenantId, x.GrNumber })
+			.IsUnique()
+			.HasFilter("\"GrNumber\" IS NOT NULL");
 
 		// Configure navigation properties to load aggregate parts together
 		// This ensures the aggregate is loaded as a complete unit

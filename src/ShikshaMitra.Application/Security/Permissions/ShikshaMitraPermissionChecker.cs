@@ -1,7 +1,8 @@
 using System;
-using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Hosting;
+using System.Linq;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Authorization.Permissions;
@@ -39,6 +40,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 	private readonly ICurrentUser _currentUser;
 	private readonly IClassTeacherAccessService _classTeacherAccessService;
 	private readonly IReportingManagerAccessService _reportingManagerAccessService;
+	private readonly IHostEnvironment _hostEnvironment;
 
 	public ShikshaMitraPermissionChecker(
 		ICurrentPrincipalAccessor currentPrincipalAccessor,
@@ -48,16 +50,24 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 		ISimpleStateCheckerManager<PermissionDefinition> stateCheckerManager,
 		ICurrentUser currentUser,
 		IClassTeacherAccessService classTeacherAccessService,
-		IReportingManagerAccessService reportingManagerAccessService)
+		IReportingManagerAccessService reportingManagerAccessService,
+		IHostEnvironment hostEnvironment)
 		: base(currentPrincipalAccessor, permissionDefinitionManager, currentTenant, permissionValueProviderManager, stateCheckerManager)
 	{
 		_currentUser = currentUser;
 		_classTeacherAccessService = classTeacherAccessService;
 		_reportingManagerAccessService = reportingManagerAccessService;
+		_hostEnvironment = hostEnvironment;
 	}
 
 	public override async Task<bool> IsGrantedAsync(string name)
 	{
+		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
+		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
+		{
+			return true;
+		}
+
 		if (await base.IsGrantedAsync(name))
 		{
 			return true;
@@ -120,6 +130,12 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 
 	public override async Task<bool> IsGrantedAsync(ClaimsPrincipal? claimsPrincipal, string name)
 	{
+		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
+		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
+		{
+			return true;
+		}
+
 		if (await base.IsGrantedAsync(claimsPrincipal, name))
 		{
 			return true;
@@ -241,4 +257,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 			claimsPrincipal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 		return Guid.TryParse(value, out userId);
 	}
+
+	private static bool IsAdmissionsPermission(string name) =>
+		name.StartsWith("Students.Admission", StringComparison.Ordinal);
 }

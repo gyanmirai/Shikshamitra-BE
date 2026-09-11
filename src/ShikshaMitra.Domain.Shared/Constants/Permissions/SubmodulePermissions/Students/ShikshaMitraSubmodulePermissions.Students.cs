@@ -49,8 +49,21 @@ public static partial class ShikshaMitraSubmodulePermissions
 		/// </summary>
 		public static readonly Dictionary<string, SubmoduleInfo> Submodules = new()
 		{
-			// Enrollment submodules (defined in Students.Enrollment.cs)
-			{ "Students.Enrollment.AdmissionsCrm", new SubmoduleInfo(Enrollment_AdmissionsCrm.All, Enrollment_AdmissionsCrm.DisplayNames) },
+			{ "Students.Admissions", new SubmoduleInfo(Admissions.All, Admissions.DisplayNames) },
+			{ "Students.Admissions.Offerings", new SubmoduleInfo(AdmissionOfferings.All, AdmissionOfferings.DisplayNames) },
+			{ "Students.Admissions.Inquiries", new SubmoduleInfo(AdmissionInquiries.All, AdmissionInquiries.DisplayNames) },
+			{ "Students.Admissions.Workflows", new SubmoduleInfo(AdmissionWorkflows.All, AdmissionWorkflows.DisplayNames) },
+			{ "Students.Admissions.Forms", new SubmoduleInfo(AdmissionForms.All, AdmissionForms.DisplayNames) },
+			{ "Students.Admissions.Applications", new SubmoduleInfo(AdmissionApplications.All, AdmissionApplications.DisplayNames) },
+			{ "Students.Admissions.Assessments", new SubmoduleInfo(AdmissionAssessments.All, AdmissionAssessments.DisplayNames) },
+			{ "Students.Admissions.Payments", new SubmoduleInfo(AdmissionPayments.All, AdmissionPayments.DisplayNames) },
+			{ "Students.Admissions.Offers", new SubmoduleInfo(AdmissionOffers.All, AdmissionOffers.DisplayNames) },
+			{ "Students.Admissions.Seats", new SubmoduleInfo(AdmissionSeats.All, AdmissionSeats.DisplayNames) },
+			{ "Students.Admissions.Documents", new SubmoduleInfo(AdmissionDocuments.All, AdmissionDocuments.DisplayNames) },
+			{ "Students.Admissions.Eligibility", new SubmoduleInfo(AdmissionEligibility.All, AdmissionEligibility.DisplayNames) },
+			{ "Students.Admissions.Reviews", new SubmoduleInfo(AdmissionReviews.All, AdmissionReviews.DisplayNames) },
+			{ "Students.Admissions.Applicants", new SubmoduleInfo(AdmissionApplicants.All, AdmissionApplicants.DisplayNames) },
+			{ "Students.Onboarding", new SubmoduleInfo(StudentOnboarding.All, StudentOnboarding.DisplayNames) },
 			{ "Students.IdentityCompliance", new SubmoduleInfo(IdentityCompliance.All, IdentityCompliance.DisplayNames) },
 
 			// Records submodules (defined in Students.Records.cs)

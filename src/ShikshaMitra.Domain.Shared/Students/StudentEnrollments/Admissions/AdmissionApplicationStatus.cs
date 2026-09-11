@@ -1,0 +1,52 @@
+namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
+
+public enum AdmissionApplicationStatus
+{
+	Draft = 0,
+	Submitted = 1,
+	Withdrawn = 2,
+	Rejected = 3,
+	InReview = 4,
+	Waitlisted = 5,
+	Approved = 6,
+	Offered = 7,
+	OfferAccepted = 8,
+	OfferDeclined = 9,
+	/// <summary>Legacy terminal state used by the former admission-owned enrollment command.</summary>
+	Enrolled = 10,
+	/// <summary>The admission is closed and responsibility has moved to Student Onboarding.</summary>
+	AdmissionFinalized = 11
+}
+
+public enum AdmissionRuntimeStageStatus
+{
+	Pending = 0,
+	Active = 1,
+	Completed = 2,
+	Skipped = 3,
+	Failed = 4,
+	Cancelled = 5
+}
+
+public enum AdmissionWorkflowInstanceStatus
+{
+	Active = 0,
+	Completed = 1,
+	Cancelled = 2,
+	Failed = 3,
+	NotStarted = 4
+}
+
+public enum AdmissionWorkflowTransitionAction
+{
+	Completed = 0,
+	Skipped = 1,
+	AdminOverride = 2
+}
+
+public enum AdmissionFormInstanceStatus
+{
+	Draft = 0,
+	Submitted = 1,
+	Reopened = 2
+}

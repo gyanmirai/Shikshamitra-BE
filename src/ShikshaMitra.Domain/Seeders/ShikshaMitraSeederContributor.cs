@@ -146,6 +146,7 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 		TenantStep<Seeders.CommunicationProviderSeederContributor>(serviceProvider, "CommunicationProviderSeeder", "CommunicationProviderSeeder:v1", 135, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.AcademicSetupSeederContributor>(serviceProvider, "AcademicSetupSeeder", "AcademicSetupSeeder:v2", 140, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.DemoAcademicAndInstituteSeederContributor>(serviceProvider, "DemoAcademicAndInstituteSeeder", "DemoAcademicAndInstituteSeeder:v2", 150, Seeders.ShikshaMitraSeederProfile.Demo),
+		TenantStep<Seeders.AdmissionWorkflowDemoRepairSeederContributor>(serviceProvider, "AdmissionWorkflowDemoRepairSeeder", "AdmissionWorkflowDemoRepairSeeder:v1", 155, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.HRSeederContributor>(serviceProvider, "HRSeeder", "HRSeeder:v8", 160, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.PayrollStatutorySettingsBackfillSeederContributor>(
 			serviceProvider,
@@ -167,14 +168,6 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 			Seeders.ShikshaMitraSeederProfile.FullDemoOnly),
 		TenantStep<Seeders.LeaveApprovedUnitsRepairSeederContributor>(serviceProvider, "LeaveApprovedUnitsRepairSeeder", "LeaveApprovedUnitsRepairSeeder:v1", 165, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.StudentSeederContributor>(serviceProvider, "StudentSeeder", "StudentSeeder:v1", 170, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Student>(serviceProvider)),
-		TenantStep<Seeders.AdmissionCrmSeederContributor>(serviceProvider, "AdmissionCrmSeeder", "AdmissionCrmSeeder:v2", 172, Seeders.ShikshaMitraSeederProfile.All, useCompletionMarker: false),
-		TenantStep<Seeders.AdmissionCrmDemoScenarioSeederContributor>(
-			serviceProvider,
-			Seeders.AdmissionCrmDemoScenarioSeederContributor.StepName,
-			Seeders.AdmissionCrmDemoScenarioSeederContributor.StepVersion,
-			Seeders.AdmissionCrmDemoScenarioSeederContributor.StepOrder,
-			Seeders.ShikshaMitraSeederProfile.Demo,
-			useCompletionMarker: true),
 		TenantStep<Seeders.LibrarySeederContributor>(serviceProvider, "LibrarySeeder", "LibrarySeeder:v1", 175, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<Book>(serviceProvider)),
 		TenantStep<Seeders.FeeRefundSeederContributor>(serviceProvider, "FeeRefundSeeder", "FeeRefundSeeder:v1", 180, Seeders.ShikshaMitraSeederProfile.Demo, ExistingEntityGuard<FeeRefundRequest>(serviceProvider)),
 		TenantStep<Seeders.FeeAssignmentRepairSeederContributor>(serviceProvider, "FeeAssignmentRepairSeeder", "FeeAssignmentRepairSeeder:v2", 185, Seeders.ShikshaMitraSeederProfile.Demo),

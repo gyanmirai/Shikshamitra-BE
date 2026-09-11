@@ -116,56 +116,31 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.Students,
 			ShikshaMitraModulePermissions.Calendar);
-		var admissionsReceptionistPermissions = AdmissionCrmPermissions(
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignOwner,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeStage,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageTasks,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ArchiveReopen,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.IssueRegistrationForm,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageRegistrationLinks);
-		var admissionsCounselorPermissions = AdmissionCrmPermissions(
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignOwner,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.SetPriority,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeStage,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageTasks,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ArchiveReopen,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ScheduleExam,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.VerifyRegistration,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ReviewDocuments,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ConfirmOriginalSeen,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ConfirmAdmissionReadiness,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewAdmissionRoutes,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageAdmissionRoutes,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignAdmissionRoute);
-		var admissionsApproverPermissions = AdmissionCrmPermissions(
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Analytics,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewSeatPlans,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageSeatPlans,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageSeatReservations,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageOffers,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveOffers,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageWaitlist,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.MakeAdmissionDecision,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideSeatCapacity,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.PublishExamResults,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideExamResult,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideEligibility,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ConfirmAdmissionReadiness,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideAdmissionReadiness,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewActivation,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.PreviewActivation,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveActivation,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.RepairActivation,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ViewAdmissionRoutes,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveAdmissionRoutes,
-			ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.EvaluateAdmissionRoute);
-
+		var admissionsReceptionistPermissions = AdmissionsBasePermissions()
+			.Concat([
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Submit,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit
+			]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+		var admissionsCounselorPermissions = admissionsReceptionistPermissions
+			.Concat([
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.SkipStage,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Waive,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier
+			]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+		var admissionsApproverPermissions = admissionsCounselorPermissions
+			.Concat([
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.OverrideWorkflow,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer,
+				ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Cancel,
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair
+			]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 		// Seed baseline access for deterministic staff personas. Tenant admins can still adjust
 		// grants through the Security module; this only inserts missing grants.
 		return new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
@@ -191,13 +166,24 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		};
 	}
 
-	private static string[] AdmissionCrmPermissions(params string[] permissions) =>
+	private static string[] AdmissionsBasePermissions() =>
 	[
 		ShikshaMitraModulePermissions.Students,
-		ShikshaMitraSubModulePermissions.Enrollment,
 		ShikshaMitraSubmodulePermissions.Students.Default,
-		"Students.Enrollment.AdmissionsCrm",
-		.. permissions
+		ShikshaMitraSubmodulePermissions.Students.Admissions.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Create,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Edit,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Assign,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.Edit,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesView,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesCreate,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View,
+		ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View,
+		ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View
 	];
 
 	private static string[] LeaveSelfServicePermissions() =>
@@ -370,10 +356,6 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		yield return "AbpTenantManagement.Tenants.Add";
 		yield return TenantManagementPermissions.Tenants.Delete;
 		yield return TenantManagementPermissions.Tenants.ManageConnectionStrings;
-		foreach (var permission in AdmissionCrmPlatformPermissions.All)
-		{
-			yield return permission;
-		}
 	}
 
 }

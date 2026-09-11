@@ -96,9 +96,7 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 		       OR to_regclass('"AppEmployees"') IS NULL
 		       OR to_regclass('"AppEmployeeApplications"') IS NULL
 		       OR to_regclass('"AppEmployeeLeavePolicies"') IS NULL
-		       OR to_regclass('"AppAcademicCalendarDays"') IS NULL
-		       OR to_regclass('"AppAdmissionCrmCycleConfigurations"') IS NULL
-		       OR to_regclass('"AppAdmissionCrmPipelineStages"') IS NULL THEN
+		       OR to_regclass('"AppAcademicCalendarDays"') IS NULL THEN
 		        RAISE EXCEPTION 'Legacy migration baseline cannot be reconciled because one or more required baseline tables are missing.';
 		    END IF;
 		END
@@ -106,43 +104,6 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 
 		ALTER TABLE "AppAcademicCalendarDays"
 		ADD COLUMN IF NOT EXISTS "AutoScanImpacts" boolean NOT NULL DEFAULT TRUE;
-
-		ALTER TABLE "AppAdmissionCrmCycleConfigurations"
-		ADD COLUMN IF NOT EXISTS "EntranceExamRequired" boolean NOT NULL DEFAULT TRUE,
-		ADD COLUMN IF NOT EXISTS "JourneyLocked" boolean NOT NULL DEFAULT FALSE,
-		ADD COLUMN IF NOT EXISTS "JourneyLockedAt" timestamp without time zone NULL,
-		ADD COLUMN IF NOT EXISTS "JourneyLockedByUserId" uuid NULL,
-		ADD COLUMN IF NOT EXISTS "JourneyLockReason" character varying(1000) NULL;
-
-		ALTER TABLE "AppAdmissionCrmPipelineStages"
-		ADD COLUMN IF NOT EXISTS "BaseSystemStage" integer NOT NULL DEFAULT 0,
-		ADD COLUMN IF NOT EXISTS "StageKey" character varying(64) NOT NULL DEFAULT '';
-
-		UPDATE "AppAdmissionCrmPipelineStages"
-		SET "StageKey" = CASE "SystemStage"
-		        WHEN 0 THEN 'NewInquiry'
-		        WHEN 1 THEN 'FollowUp'
-		        WHEN 2 THEN 'ExamReady'
-		        WHEN 3 THEN 'ExamScheduled'
-		        WHEN 4 THEN 'ExamCompleted'
-		        WHEN 5 THEN 'Eligible'
-		        WHEN 6 THEN 'Waitlisted'
-		        WHEN 7 THEN 'Rejected'
-		        WHEN 8 THEN 'Stale'
-		        WHEN 9 THEN 'Archived'
-		        ELSE "SystemStage"::text
-		    END,
-		    "BaseSystemStage" = "SystemStage"
-		WHERE "StageKey" = '';
-
-		DROP INDEX IF EXISTS "IX_AppAdmissionCrmPipelineStages_TenantId_AcademicYearId_Syste~";
-
-		CREATE UNIQUE INDEX IF NOT EXISTS "IX_AppAdmissionCrmPipelineStages_TenantId_AcademicYearId_StageKey"
-		ON "AppAdmissionCrmPipelineStages" ("TenantId", "AcademicYearId", "StageKey")
-		WHERE "IsDeleted" = FALSE;
-
-		CREATE INDEX IF NOT EXISTS "IX_AppAdmissionCrmPipelineStages_TenantId_AcademicYearId_SystemStage"
-		ON "AppAdmissionCrmPipelineStages" ("TenantId", "AcademicYearId", "SystemStage");
 
 		DO $bridge$
 		BEGIN
@@ -152,12 +113,6 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 		        WHERE table_schema = 'public'
 		          AND table_name = 'AppAcademicCalendarDays'
 		          AND column_name = 'AutoScanImpacts'
-		    ) OR NOT EXISTS (
-		        SELECT 1
-		        FROM information_schema.columns
-		        WHERE table_schema = 'public'
-		          AND table_name = 'AppAdmissionCrmPipelineStages'
-		          AND column_name = 'StageKey'
 		    ) THEN
 		        RAISE EXCEPTION 'Legacy migration baseline reconciliation did not produce the required folded schema.';
 		    END IF;

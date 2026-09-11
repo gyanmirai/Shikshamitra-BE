@@ -155,12 +155,12 @@ public class RolePermissionSeederContributor_Tests
 	}
 
 	[Fact]
-	public void Principal_Should_Have_Admissions_Crm_Operational_Access()
+	public void Principal_Should_Have_Student_Onboarding_Operational_Access()
 	{
 		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
 		var principalPermissions = rolePermissions["Principal"];
 
-		foreach (var permission in ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.All)
+		foreach (var permission in ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.All)
 		{
 			principalPermissions.ShouldContain(permission);
 		}
@@ -174,27 +174,23 @@ public class RolePermissionSeederContributor_Tests
 		var counselor = rolePermissions["Admissions Counselor"];
 		var approver = rolePermissions["Admissions Approver"];
 
-		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.View);
-		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add);
-		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignOwner);
-		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration);
-		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ChangeExamResult);
-		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveOffers);
+		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start);
+		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View);
+		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
+		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize);
+		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate);
 
-		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ScheduleExam);
-		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ReviewDocuments);
-		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageAdmissionRoutes);
-		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.AssignAdmissionRoute);
-		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideExamResult);
-		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation);
+		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance);
+		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat);
+		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier);
+		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize);
+		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate);
 
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveOffers);
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ExecuteActivation);
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.OverrideExamResult);
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ApproveAdmissionRoutes);
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.EvaluateAdmissionRoute);
-		approver.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.ManageConfiguration);
-		approver.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.Enrollment_AdmissionsCrm.Add);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair);
+		approver.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure);
 	}
 
 	[Fact]

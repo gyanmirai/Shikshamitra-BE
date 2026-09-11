@@ -33,6 +33,7 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	public Guid? StandardId { get; private set; }
 	public Guid? DivisionId { get; private set; }
 	public int? GrNo { get; private set; }
+	public string? GrNumber { get; private set; }
 	public int? RollNo { get; private set; }
 	public StudentLifeCycleStatusEnum Status { get; private set; }
 	public StudentEnrollmentApprovalState AdmissionApprovalStatus { get; private set; }
@@ -598,6 +599,12 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	public void AssignGrNo(int? grNo)
 	{
 		GrNo = grNo;
+	}
+
+	public void AssignGrNumber(string grNumber, int? legacyGrNo = null)
+	{
+		GrNumber = Check.NotNullOrWhiteSpace(grNumber, nameof(grNumber), 100).Trim();
+		GrNo = legacyGrNo;
 	}
 
 	public void UpdateFamilyInfo(

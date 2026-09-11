@@ -1,0 +1,46 @@
+namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
+
+public static class AdmissionErrorCodes
+{
+	public const string CycleCodeAlreadyExists = "Admissions.CycleCodeAlreadyExists";
+	public const string CycleCannotBeModified = "Admissions.CycleCannotBeModified";
+	public const string CycleDateRangeInvalid = "Admissions.CycleDateRangeInvalid";
+	public const string CycleOutsideAcademicYear = "Admissions.CycleOutsideAcademicYear";
+	public const string CycleConcurrencyConflict = "Admissions.CycleConcurrencyConflict";
+	public const string OfferingDateRangeInvalid = "Admissions.OfferingDateRangeInvalid";
+	public const string OfferingDuplicate = "Admissions.OfferingDuplicate";
+	public const string OfferingCycleNotFound = "Admissions.OfferingCycleNotFound";
+	public const string OfferingAcademicHierarchyInvalid = "Admissions.OfferingAcademicHierarchyInvalid";
+	public const string InquiryDuplicate = "Admissions.InquiryDuplicate";
+	public const string InquiryCycleNotFound = "Admissions.InquiryCycleNotFound";
+	public const string InquiryCycleNotOpen = "Admissions.InquiryCycleNotOpen";
+	public const string InquiryDuplicateTargetInvalid = "Admissions.InquiryDuplicateTargetInvalid";
+	public const string InquiryIdentityIncomplete = "Admissions.InquiryIdentityIncomplete";
+	public const string InquiryCounsellorRequired = "Admissions.InquiryCounsellorRequired";
+	public const string InquiryCounsellorCandidatesRequired = "Admissions.InquiryCounsellorCandidatesRequired";
+	public const string InquiryCounsellorInvalid = "Admissions.InquiryCounsellorInvalid";
+	public const string InquiryOfferingRequired = "Admissions.InquiryOfferingRequired";
+	public const string OfferingWorkflowNotPublished = "Admissions.OfferingWorkflowNotPublished";
+	public const string OfferingFormNotPublished = "Admissions.OfferingFormNotPublished";
+	public const string OfferingConfigurationIncomplete = "Admissions.Offering.ConfigurationIncomplete";
+	public const string OfferingInactive = "Admissions.Offering.Inactive";
+	public const string OfferingNotOpenYet = "Admissions.Offering.NotOpenYet";
+	public const string OfferingClosed = "Admissions.Offering.Closed";
+	public const string OfferingIdentityLocked = "Admissions.Offering.IdentityLocked";
+	public const string OfferingHasApplications = "Admissions.Offering.HasApplications";
+	public const string OfferingConcurrencyConflict = "Admissions.Offering.ConcurrencyConflict";
+	public const string OfferingHierarchyOutOfScope = "Admissions.Offering.HierarchyOutOfScope";
+	public const string OfferingCampusInvalid = "Admissions.Offering.CampusInvalid";
+	public const string OfferingBulkValidationFailed = "Admissions.Offering.BulkValidationFailed";
+	public const string OfferingStateCommandRequired = "Admissions.Offering.StateCommandRequired";
+	public const string ApplicationDecisionInvalidState = "Admissions.Application.DecisionInvalidState";
+	public const string ApplicationDecisionReasonRequired = "Admissions.Application.DecisionReasonRequired";
+	public const string ApplicationOfferExpiryInvalid = "Admissions.Application.OfferExpiryInvalid";
+	public const string ApplicationEnrollmentNotReady = "Admissions.Application.EnrollmentNotReady";
+	public const string ApplicationAlreadyEnrolled = "Admissions.Application.AlreadyEnrolled";
+	public const string ApplicationEnrollmentDataMissing = "Admissions.Application.EnrollmentDataMissing";
+	public const string ApplicationEnrollmentDuplicate = "Admissions.Application.EnrollmentDuplicate";
+	public const string ApplicationEnrollmentDivisionInvalid = "Admissions.Application.EnrollmentDivisionInvalid";
+	public const string ApplicationEnrollmentDivisionFull = "Admissions.Application.EnrollmentDivisionFull";
+	public const string CampusCodeAlreadyExists = "Admissions.CampusCodeAlreadyExists";
+}

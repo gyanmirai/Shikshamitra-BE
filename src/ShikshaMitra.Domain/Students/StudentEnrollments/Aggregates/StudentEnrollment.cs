@@ -1,4 +1,6 @@
 ﻿using System;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -30,18 +32,26 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>Division the student is assigned to.</summary>
     public Guid? DivisionId { get; private set; }
 
+	/// <summary>Year-and-division scoped roll number. The Student root keeps a compatibility projection.</summary>
+	public int? RollNumber { get; private set; }
+
+	/// <summary>Onboarding case that created this operational enrollment.</summary>
+	public Guid? OnboardingCaseId { get; private set; }
+
     /// <summary>Indicates whether this enrollment is currently active.</summary>
     public bool IsActive { get; private set; }
 
     private StudentEnrollment() { /* For ORM */ }
 
-    internal StudentEnrollment(
+    private StudentEnrollment(
         Guid id,
         Guid? tenantId,
         Guid studentId,
         Guid academicYearId,
         Guid? standardId,
-        Guid? divisionId)
+        Guid? divisionId,
+		int? rollNumber = null,
+		Guid? onboardingCaseId = null)
         : base(id)
     {
         TenantId      = tenantId;
@@ -49,12 +59,36 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
         AcademicYearId = academicYearId;
         StandardId    = standardId;
         DivisionId    = divisionId;
+		RollNumber = rollNumber;
+		OnboardingCaseId = onboardingCaseId;
         IsActive      = true;
     }
+
+    public static StudentEnrollment Create(
+        Guid id,
+        Guid? tenantId,
+        Guid studentId,
+        Guid academicYearId,
+        Guid? standardId,
+        Guid? divisionId,
+		int? rollNumber = null,
+		Guid? onboardingCaseId = null) => new(id, tenantId, studentId, academicYearId, standardId, divisionId, rollNumber, onboardingCaseId);
 
     /// <summary>Marks this enrollment as inactive (e.g. student transferred out).</summary>
     public void Deactivate() => IsActive = false;
 
     /// <summary>Re-activates a previously deactivated enrollment.</summary>
     public void Activate() => IsActive = true;
+
+    public void AssignDivision(Guid? divisionId) => DivisionId = divisionId;
+
+	public void LinkOnboardingCase(Guid onboardingCaseId)
+	{
+		if (OnboardingCaseId.HasValue)
+		{
+			if (OnboardingCaseId == onboardingCaseId) return;
+			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
+		}
+		OnboardingCaseId = Check.NotDefaultOrNull<Guid>(onboardingCaseId, nameof(onboardingCaseId));
+	}
 }

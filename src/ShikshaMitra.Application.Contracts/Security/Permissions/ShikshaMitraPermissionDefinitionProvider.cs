@@ -15,24 +15,13 @@ public class ShikshaMitraPermissionDefinitionProvider : PermissionDefinitionProv
 
 		DefineUserScopePermissions(group);
 		DefineGroupPermissions(group);
-		DefinePlatformEnrollmentPermissions(group);
-		SetTenantPermissionMultiTenancySide(context);
+			SetTenantPermissionMultiTenancySide(context);
 
 		// Define Module Visibility Permissions (these go in JWT)
 		DefineModulePermissions(group);
 		DefineSubmodulePermissions(group);
 
 		DefineAbpIdentityCustomPermissions(context);
-	}
-
-	private static void DefinePlatformEnrollmentPermissions(PermissionGroupDefinition group)
-	{
-		var root = group.AddPermission(AdmissionCrmPlatformPermissions.Default, L("Permission:Platform.Enrollment"), MultiTenancySides.Host);
-		root.AddChild(AdmissionCrmPlatformPermissions.StartSupportSession, L("Permission:Platform.Enrollment.StartSupportSession"), MultiTenancySides.Host);
-		root.AddChild(AdmissionCrmPlatformPermissions.ManagePresets, L("Permission:Platform.Enrollment.ManagePresets"), MultiTenancySides.Host);
-		root.AddChild(AdmissionCrmPlatformPermissions.ApplyPresets, L("Permission:Platform.Enrollment.ApplyPresets"), MultiTenancySides.Host);
-		root.AddChild(AdmissionCrmPlatformPermissions.ManageTenantAccess, L("Permission:Platform.Enrollment.ManageTenantAccess"), MultiTenancySides.Host);
-		root.AddChild(AdmissionCrmPlatformPermissions.ViewAudit, L("Permission:Platform.Enrollment.ViewAudit"), MultiTenancySides.Host);
 	}
 
 	private void DefineAbpIdentityCustomPermissions(IPermissionDefinitionContext context)

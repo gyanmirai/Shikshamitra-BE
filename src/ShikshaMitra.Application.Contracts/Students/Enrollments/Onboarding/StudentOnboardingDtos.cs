@@ -76,6 +76,7 @@ public class StudentOnboardingServiceHandoffDto : EntityDto<Guid>
 
 public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 {
+	public bool DocumentUploadsEnabled { get; set; } = true;
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public Guid ApplicationId { get; set; }
 	public string ApplicationNumber { get; set; } = string.Empty;

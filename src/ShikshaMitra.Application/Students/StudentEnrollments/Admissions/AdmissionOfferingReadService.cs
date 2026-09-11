@@ -28,12 +28,14 @@ public class AdmissionOfferingReadService(
 	IRepository<EducationMediumStage, Guid> stageRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
-	IUserScopeAccessService scopeAccessService)
+	IUserScopeAccessService scopeAccessService,
+	AdmissionEligibilityOfferingValidator eligibilityValidator)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<PagedResultDto<AdmissionOfferingListDto>> GetListAsync(AdmissionOfferingListInput input)
 	{
-		var query = await GetRowsQueryAsync(input);
+		var read = await GetRowsQueryAsync(input);
+		var query = read.Query;
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var pageRows = await AsyncExecuter.ToListAsync(
 			ApplySorting(query, input.Sorting)
@@ -41,18 +43,19 @@ public class AdmissionOfferingReadService(
 				.Take(input.MaxResultCount));
 		return new PagedResultDto<AdmissionOfferingListDto>(
 			totalCount,
-			pageRows.Select(MapList).ToList());
+			pageRows.Select(row => MapList(row, read.Errors.GetValueOrDefault(row.Offering.Id))).ToList());
 	}
 
 	public async Task<AdmissionOfferingDto> GetAsync(Guid id)
 	{
-		var rows = await GetRowsAsync(new AdmissionOfferingListInput
+		var read = await GetRowsQueryAsync(new AdmissionOfferingListInput
 		{
 			MaxResultCount = 1,
 			SkipCount = 0
 		}, id);
+		var rows = await AsyncExecuter.ToListAsync(read.Query);
 		var row = rows.SingleOrDefault() ?? throw new EntityNotFoundException(typeof(AdmissionOffering), id);
-		return MapDetail(row);
+		return MapDetail(row, read.Errors.GetValueOrDefault(row.Offering.Id));
 	}
 
 	public async Task<AdmissionOfferingAvailabilityDto> GetAvailabilityAsync(Guid id)
@@ -70,14 +73,7 @@ public class AdmissionOfferingReadService(
 		};
 	}
 
-	private async Task<List<AdmissionOfferingReadRow>> GetRowsAsync(
-		AdmissionOfferingListInput input,
-		Guid? offeringId = null)
-	{
-		return await AsyncExecuter.ToListAsync(await GetRowsQueryAsync(input, offeringId));
-	}
-
-	private async Task<IQueryable<AdmissionOfferingReadRow>> GetRowsQueryAsync(
+	private async Task<AdmissionOfferingReadQuery> GetRowsQueryAsync(
 		AdmissionOfferingListInput input,
 		Guid? offeringId = null)
 	{
@@ -154,18 +150,20 @@ public class AdmissionOfferingReadService(
 				divisions.Any(division => division.StandardId == row.Offering.StandardId && scope.DivisionIds.Contains(division.Id)));
 		}
 
-		query = ApplyDerivedFilters(query, input, Clock.Now.Date);
+		var eligibilityErrors = await eligibilityValidator.GetErrorsAsync(query.Select(row => row.Offering));
+		query = ApplyDerivedFilters(query, input, Clock.Now.Date, eligibilityErrors.Keys.ToList());
 
-		return query;
+		return new(query, eligibilityErrors);
 	}
 
 	private static IQueryable<AdmissionOfferingReadRow> ApplyDerivedFilters(
 		IQueryable<AdmissionOfferingReadRow> query,
 		AdmissionOfferingListInput input,
-		DateTime today)
+		DateTime today,
+		List<Guid> incompatibleOfferingIds)
 	{
-		var ready = ApplyConfigurationReadyFilter(query);
-		var incomplete = ApplyConfigurationIncompleteFilter(query);
+		var ready = ApplyConfigurationReadyFilter(query, incompatibleOfferingIds);
+		var incomplete = ApplyConfigurationIncompleteFilter(query, incompatibleOfferingIds);
 
 		if (input.ConfigurationStatus == AdmissionOfferingConfigurationStatus.Ready)
 			query = ready;
@@ -180,9 +178,9 @@ public class AdmissionOfferingReadService(
 		query = status switch
 		{
 			AdmissionOfferingAvailabilityStatus.Inactive => query.Where(row => !row.Offering.IsActive),
-			AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete => ApplyConfigurationIncompleteFilter(query)
+			AdmissionOfferingAvailabilityStatus.ConfigurationIncomplete => ApplyConfigurationIncompleteFilter(query, incompatibleOfferingIds)
 				.Where(row => row.Offering.IsActive),
-			AdmissionOfferingAvailabilityStatus.Open => ApplyConfigurationReadyFilter(query)
+			AdmissionOfferingAvailabilityStatus.Open => ApplyConfigurationReadyFilter(query, incompatibleOfferingIds)
 				.Where(row => row.Offering.IsActive)
 				.Where(row =>
 					(row.Offering.OpenDate.HasValue && row.Offering.OpenDate.Value.Date <= today) ||
@@ -190,13 +188,13 @@ public class AdmissionOfferingReadService(
 				.Where(row =>
 					(row.Offering.CloseDate.HasValue && row.Offering.CloseDate.Value.Date >= today) ||
 					(!row.Offering.CloseDate.HasValue && row.Cycle.EndDate.Date >= today)),
-			AdmissionOfferingAvailabilityStatus.NotOpenYet => ApplyConfigurationReadyFilter(query)
+			AdmissionOfferingAvailabilityStatus.NotOpenYet => ApplyConfigurationReadyFilter(query, incompatibleOfferingIds)
 				.Where(row => row.Offering.IsActive)
 				.Where(row => row.Cycle.Status != AdmissionCycleStatus.Closed && row.Cycle.Status != AdmissionCycleStatus.Archived)
 				.Where(row =>
 					(row.Offering.OpenDate.HasValue && row.Offering.OpenDate.Value.Date > today) ||
 					(!row.Offering.OpenDate.HasValue && row.Cycle.StartDate.Date > today)),
-			AdmissionOfferingAvailabilityStatus.Closed => ApplyConfigurationReadyFilter(query)
+			AdmissionOfferingAvailabilityStatus.Closed => ApplyConfigurationReadyFilter(query, incompatibleOfferingIds)
 				.Where(row => row.Offering.IsActive)
 				.Where(row => row.Cycle.Status == AdmissionCycleStatus.Closed || row.Cycle.Status == AdmissionCycleStatus.Archived ||
 					(row.Offering.CloseDate.HasValue && row.Offering.CloseDate.Value.Date < today) ||
@@ -208,7 +206,8 @@ public class AdmissionOfferingReadService(
 	}
 
 	private static IQueryable<AdmissionOfferingReadRow> ApplyConfigurationReadyFilter(
-		IQueryable<AdmissionOfferingReadRow> query) => query.Where(row =>
+		IQueryable<AdmissionOfferingReadRow> query, List<Guid> incompatibleOfferingIds) => query.Where(row =>
+			!incompatibleOfferingIds.Contains(row.Offering.Id) &&
 			(!row.Offering.CampusId.HasValue || row.Campus != null && row.Campus.IsActive) &&
 			row.Cycle.Status == AdmissionCycleStatus.Published &&
 			row.Board.AcademicYearId == row.Cycle.AcademicYearId &&
@@ -225,7 +224,8 @@ public class AdmissionOfferingReadService(
 			row.ApplicationFormIdentityReady);
 
 	private static IQueryable<AdmissionOfferingReadRow> ApplyConfigurationIncompleteFilter(
-		IQueryable<AdmissionOfferingReadRow> query) => query.Where(row =>
+		IQueryable<AdmissionOfferingReadRow> query, List<Guid> incompatibleOfferingIds) => query.Where(row =>
+			incompatibleOfferingIds.Contains(row.Offering.Id) ||
 			(row.Offering.CampusId.HasValue && (row.Campus == null || !row.Campus.IsActive)) ||
 			row.Cycle.Status != AdmissionCycleStatus.Published ||
 			row.Board.AcademicYearId != row.Cycle.AcademicYearId ||
@@ -241,9 +241,9 @@ public class AdmissionOfferingReadService(
 			row.ApplicationForm == null || row.ApplicationForm.Status != AdmissionFormStatus.Published ||
 			!row.ApplicationFormIdentityReady);
 
-	private AdmissionOfferingListDto MapList(AdmissionOfferingReadRow row)
+	private AdmissionOfferingListDto MapList(AdmissionOfferingReadRow row, List<AdmissionOfferingValidationError>? eligibilityErrors)
 	{
-		var validation = BuildValidation(row);
+		var validation = BuildValidation(row, eligibilityErrors);
 		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(
 			row.Offering, row.Cycle, validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));
 		return new AdmissionOfferingListDto
@@ -273,9 +273,9 @@ public class AdmissionOfferingReadService(
 		};
 	}
 
-	private AdmissionOfferingDto MapDetail(AdmissionOfferingReadRow row)
+	private AdmissionOfferingDto MapDetail(AdmissionOfferingReadRow row, List<AdmissionOfferingValidationError>? eligibilityErrors)
 	{
-		var list = MapList(row);
+		var list = MapList(row, eligibilityErrors);
 		return new AdmissionOfferingDto
 		{
 			Id = list.Id,
@@ -310,7 +310,7 @@ public class AdmissionOfferingReadService(
 			InquiryFormVersion = row.InquiryForm?.Version,
 			ApplicationFormName = row.ApplicationForm?.Name,
 			ApplicationFormVersion = row.ApplicationForm?.Version,
-			Configuration = MapValidation(BuildValidation(row)),
+			Configuration = MapValidation(BuildValidation(row, eligibilityErrors)),
 			ConcurrencyStamp = row.Offering.ConcurrencyStamp,
 			CreationTime = row.Offering.CreationTime,
 			CreatorId = row.Offering.CreatorId,
@@ -319,9 +319,9 @@ public class AdmissionOfferingReadService(
 		};
 	}
 
-	private static AdmissionOfferingValidationResult BuildValidation(AdmissionOfferingReadRow row)
+	private static AdmissionOfferingValidationResult BuildValidation(AdmissionOfferingReadRow row, List<AdmissionOfferingValidationError>? eligibilityErrors)
 	{
-		var errors = new List<AdmissionOfferingValidationError>();
+		var errors = new List<AdmissionOfferingValidationError>(eligibilityErrors ?? []);
 		if (row.Cycle.Status != AdmissionCycleStatus.Published)
 			errors.Add(new(AdmissionOfferingValidationCodes.CycleUnavailable, "Admission Cycle is not published."));
 		if (row.Offering.CampusId.HasValue && row.Campus == null)
@@ -402,6 +402,9 @@ public class AdmissionOfferingReadService(
 		AdmissionOfferingAvailabilityStatus.Closed => "Applications for this Admission Offering are closed.",
 		_ => null
 	};
+
+	private sealed record AdmissionOfferingReadQuery(IQueryable<AdmissionOfferingReadRow> Query,
+		Dictionary<Guid, List<AdmissionOfferingValidationError>> Errors);
 
 	private sealed class AdmissionOfferingReadRow
 	{

@@ -294,13 +294,16 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 		}
 		if (completeWorkflow)
-			await CompleteCertificationWorkflowAsync(application.Id);
+			await CompleteCertificationWorkflowAsync(application.Id, stopBeforeApproval: true);
 
 		application = await _applicationAppService.GetAsync(application.Id);
 		application = await _applicationAppService.MarkInReviewAsync(application.Id,
 			Decision(application, "Application review started"));
 		application = await _applicationAppService.ApproveAsync(application.Id,
 			Decision(application, "Eligibility and submitted application approved"));
+		if (completeWorkflow)
+			await CompleteCertificationWorkflowAsync(application.Id);
+		application = await _applicationAppService.GetAsync(application.Id);
 		application = await _applicationAppService.IssueOfferAsync(application.Id,
 			Decision(application, "Admission offer issued", DateTime.UtcNow.AddDays(30)));
 		if (acceptOffer)
@@ -342,7 +345,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 	}
 
-	private async Task CompleteCertificationWorkflowAsync(Guid applicationId)
+	private async Task CompleteCertificationWorkflowAsync(Guid applicationId, bool stopBeforeApproval = false)
 	{
 		for (var index = 0; index < 20; index++)
 		{
@@ -350,6 +353,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			if (runtime.Status == AdmissionWorkflowInstanceStatus.Completed)
 				return;
 			var stageId = runtime.CurrentStageInstanceId.ShouldNotBeNull();
+			if (stopBeforeApproval && runtime.Stages.Single(stage => stage.Id == stageId).StageType == AdmissionWorkflowStageType.Approval)
+				return;
 			var application = await _applicationAppService.GetAsync(applicationId);
 			await _applicationAppService.AdvanceWorkflowAsync(applicationId, new AdvanceAdmissionWorkflowDto
 			{

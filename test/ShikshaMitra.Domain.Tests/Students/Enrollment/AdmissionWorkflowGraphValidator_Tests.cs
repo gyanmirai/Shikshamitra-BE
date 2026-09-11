@@ -141,6 +141,23 @@ public class AdmissionWorkflowGraphValidator_Tests
 		issues.ShouldContain(issue => issue.Code == AdmissionWorkflowErrorCodes.InvalidCondition);
 	}
 
+	[Theory]
+	[InlineData(AdmissionWorkflowStageType.Payment)]
+	[InlineData(AdmissionWorkflowStageType.Offer)]
+	[InlineData(AdmissionWorkflowStageType.Seat)]
+	public void Optional_managed_configuration_preserves_basic_stage_behavior(AdmissionWorkflowStageType type)
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
+		var optional = Stage(workflowId, type.ToString().ToUpperInvariant(), 1, type: type);
+		var terminal = Stage(workflowId, "TERMINAL", 2, isTerminal: true);
+
+		var issues = _validator.Validate([entry, optional, terminal],
+			[Transition(workflowId, entry.Id, optional.Id, 1), Transition(workflowId, optional.Id, terminal.Id, 1)]);
+
+		issues.ShouldNotContain(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+	}
+
 	private static AdmissionWorkflowStageDefinition Stage(
 		Guid workflowId,
 		string code,

@@ -28,38 +28,68 @@ public class AdmissionApplicationDecisionService(
 	IRepository<StudentOnboardingEvent, Guid> eventRepository,
 	IRepository<StudentOnboardingPolicy, Guid> policyRepository,
 	IStudentRepository studentRepository,
-	IRepository<StudentEnrollment, Guid> enrollmentRepository)
+	IRepository<StudentEnrollment, Guid> enrollmentRepository,
+	AdmissionDocumentHandoffService documentHandoff,
+	AdmissionEligibilityRuntimeService eligibilityRuntime,
+	AdmissionReviewDecisionGuard reviewGuard,
+	AdmissionSeatRuntimeService seatRuntime,
+	AdmissionOfferCommandService offerCommands,
+	AdmissionApplicationScopeAccessService applicationScope)
 	: ApplicationService, ITransientDependency
 {
 	public Task<AdmissionApplicationDto> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) =>
 		ChangeAsync(id, input, application => application.MarkInReview(CurrentUser.Id, input.Reason));
 
 	public Task<AdmissionApplicationDto> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input) =>
-		ChangeAsync(id, input, application => application.Approve(CurrentUser.Id, input.Reason));
+		ChangeAsync(id, input, application => application.Approve(CurrentUser.Id, input.Reason), "approve");
 
 	public Task<AdmissionApplicationDto> RejectAsync(Guid id, AdmissionApplicationDecisionDto input) =>
-		ChangeAsync(id, input, application => application.Reject(CurrentUser.Id, input.Reason ?? string.Empty));
+		ChangeAsync(id, input, application => application.Reject(CurrentUser.Id, input.Reason ?? string.Empty), "reject");
 
 	public Task<AdmissionApplicationDto> WaitlistAsync(Guid id, AdmissionApplicationDecisionDto input) =>
-		ChangeAsync(id, input, application => application.Waitlist(CurrentUser.Id, input.Reason ?? string.Empty));
+		ChangeAsync(id, input, application => application.Waitlist(CurrentUser.Id, input.Reason ?? string.Empty), "waitlist");
 
-	public Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input) =>
-		ChangeAsync(id, input, application => application.IssueOffer(
+	public async Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input)
+	{
+		if (await offerCommands.TryIssueLegacyAsync(id, input)) return await GetDecisionResultAsync(id);
+		return await ChangeAsync(id, input, application => application.IssueOffer(
 			input.OfferExpiresAt?.ToUniversalTime() ?? throw new BusinessException(AdmissionErrorCodes.ApplicationOfferExpiryInvalid),
-			CurrentUser.Id,
-			input.Reason));
+			CurrentUser.Id, input.Reason), "issueOffer");
+	}
 
-	public Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input) =>
-		ChangeAsync(id, input, application => application.AcceptOffer(CurrentUser.Id, input.Reason));
+	public async Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input)
+	{
+		if (await offerCommands.TryRespondLegacyAsync(id, input, true)) return await GetDecisionResultAsync(id);
+		return await ChangeAsync(id, input, application => application.AcceptOffer(CurrentUser.Id, input.Reason), "acceptOffer");
+	}
 
-	public Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input) =>
-		ChangeAsync(id, input, application => application.DeclineOffer(CurrentUser.Id, input.Reason ?? string.Empty));
+	public async Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input)
+	{
+		if (await offerCommands.TryRespondLegacyAsync(id, input, false)) return await GetDecisionResultAsync(id);
+		return await ChangeAsync(id, input, application => application.DeclineOffer(CurrentUser.Id, input.Reason ?? string.Empty));
+	}
 
 	public async Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id)
 	{
 		var context = await LoadFinalizationContextAsync(id);
 		var matches = await FindPossibleMatchesAsync(context.Applicant);
 		var items = BuildReadinessItems(context, matches);
+		try { await documentHandoff.EnsureCompleteAsync(context.Application); }
+		catch (BusinessException exception) when (exception.Code is AdmissionDocumentErrorCodes.EvidenceRequired or AdmissionDocumentErrorCodes.InvalidPolicy)
+		{
+			items.Add(Item("admission_documents", "Admission document evidence accepted", false, exception.Message));
+		}
+		try { await eligibilityRuntime.EnsureApplicationCompleteAsync(context.Application); }
+		catch (BusinessException exception) when (exception.Code is AdmissionEligibilityErrorCodes.EvaluationRequired or AdmissionEligibilityErrorCodes.StaleEvaluation or AdmissionEligibilityErrorCodes.InvalidPolicy)
+		{
+			items.Add(Item("admission_eligibility", "Admission eligibility checked", false, "Check the latest eligibility information and resolve unmet criteria before finalizing admission."));
+		}
+		try { await reviewGuard.EnsureApplicationCompleteAsync(context.Application); }
+		catch (BusinessException exception) when (exception.Code?.StartsWith("Admissions:Review:", StringComparison.Ordinal) == true)
+		{ items.Add(Item("admission_review", "Admission review approved", false, AdmissionReviewDecisionGuard.Message(exception.Code))); }
+		try { await seatRuntime.EnsureApplicationCompleteAsync(context.Application); }
+		catch (BusinessException exception) when (exception.Code is AdmissionSeatStageErrorCodes.CompletionRequired or AdmissionSeatStageErrorCodes.InvalidPolicy)
+		{ items.Add(Item("admission_seat", "Admission seat confirmed", false, exception.Message)); }
 		return new AdmissionFinalizationPreviewDto
 		{
 			ApplicationId = id,
@@ -77,6 +107,9 @@ public class AdmissionApplicationDecisionService(
 		if (context.Application.Status == AdmissionApplicationStatus.AdmissionFinalized &&
 		    context.Application.StudentId.HasValue && context.Application.OnboardingCaseId.HasValue)
 		{
+			await documentHandoff.LinkAsync(context.Application,
+				await studentRepository.GetAsync(context.Application.StudentId.Value));
+			await CurrentUnitOfWork!.SaveChangesAsync();
 			return BuildResult(context.Application, context.Application.StudentId.Value,
 				context.Application.OnboardingCaseId.Value, false);
 		}
@@ -89,8 +122,13 @@ public class AdmissionApplicationDecisionService(
 		existingCase ??= idempotentCase;
 		if (existingCase != null)
 		{
+			await documentHandoff.EnsureCompleteAsync(context.Application);
+			await eligibilityRuntime.EnsureApplicationCompleteAsync(context.Application);
+			await reviewGuard.EnsureApplicationCompleteAsync(context.Application);
+			await seatRuntime.EnsureApplicationCompleteAsync(context.Application);
 			context.Applicant.LinkStudent(existingCase.StudentId);
 			context.Application.FinalizeAdmission(existingCase.StudentId, existingCase.Id, existingCase.CreationTime);
+			await documentHandoff.LinkAsync(context.Application, await studentRepository.GetAsync(existingCase.StudentId));
 			await applicantRepository.UpdateAsync(context.Applicant, false);
 			await applicationRepository.UpdateAsync(context.Application, false);
 			await CurrentUnitOfWork!.SaveChangesAsync();
@@ -109,6 +147,10 @@ public class AdmissionApplicationDecisionService(
 				.WithData("Blockers", string.Join(", ", blockingItems.Select(item => item.Label)));
 		if (!input.ConfirmGuardianContactVerified)
 			throw new BusinessException(StudentOnboardingErrorCodes.GuardianContactUnverified);
+		await documentHandoff.EnsureCompleteAsync(context.Application);
+		await eligibilityRuntime.EnsureApplicationCompleteAsync(context.Application);
+		await reviewGuard.EnsureApplicationCompleteAsync(context.Application);
+		await seatRuntime.EnsureApplicationCompleteAsync(context.Application);
 
 		var selectedStudentId = context.Applicant.ExistingStudentId ?? input.ExistingStudentId;
 		if (selectedStudentId.HasValue && input.ConfirmCreateNew)
@@ -152,6 +194,7 @@ public class AdmissionApplicationDecisionService(
 
 		context.Applicant.LinkStudent(student.Id);
 		context.Application.FinalizeAdmission(student.Id, onboardingCase.Id, now);
+		await documentHandoff.LinkAsync(context.Application, student);
 		await applicantRepository.UpdateAsync(context.Applicant, false);
 		await applicationRepository.UpdateAsync(context.Application, false);
 		await historyRepository.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(),
@@ -337,22 +380,41 @@ public class AdmissionApplicationDecisionService(
 		return new FinalizationContext(application, applicant, guardian, cycle, offering, workflow);
 	}
 
-	private async Task<AdmissionApplicationDto> ChangeAsync(Guid id, AdmissionApplicationDecisionDto input, Action<AdmissionApplication> change)
+	private async Task<AdmissionApplicationDto> ChangeAsync(Guid id, AdmissionApplicationDecisionDto input, Action<AdmissionApplication> change, string? decision = null)
 	{
 		var application = await GetApplicationAsync(id);
 		EnsureConcurrency(application, input.ConcurrencyStamp);
-		change(application);
+		var review = decision is "approve" or "reject" or "waitlist" ? await reviewGuard.EnsureDecisionAsync(application, decision) : null;
+		if (decision is "issueOffer" or "acceptOffer") await reviewGuard.EnsureApplicationCompleteAsync(application);
+		var reaffirm = review != null && decision == "approve" && application.Status is AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted;
+		if (!reaffirm) change(application);
+		if (review != null) await reviewGuard.RecordDecisionAsync(review, decision!, input.Reason);
 		await applicationRepository.UpdateAsync(application, false);
 		await historyRepository.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(), CurrentTenant.Id,
 			application.Id, application.Status, input.Reason, CurrentUser.Id), false);
 		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
 			"ApplicationDecisionChanged", $"Application status changed to {application.Status}", application.ApplicantId, application.Id), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		return AdmissionApplicationMapper.ToDto(application);
+		var result = AdmissionApplicationMapper.ToDto(application);
+		result.ReviewDecision = await reviewGuard.GetCapabilitiesAsync(application);
+		return result;
 	}
 
-	private async Task<AdmissionApplication> GetApplicationAsync(Guid id) => await applicationRepository.FindAsync(id) ??
-		throw new EntityNotFoundException(typeof(AdmissionApplication), id);
+	private async Task<AdmissionApplication> GetApplicationAsync(Guid id)
+	{
+		var application = await applicationRepository.FindAsync(id) ??
+			throw new EntityNotFoundException(typeof(AdmissionApplication), id);
+		await applicationScope.EnsureCanAccessAsync(application);
+		return application;
+	}
+
+	private async Task<AdmissionApplicationDto> GetDecisionResultAsync(Guid id)
+	{
+		var application = await GetApplicationAsync(id);
+		var result = AdmissionApplicationMapper.ToDto(application);
+		result.ReviewDecision = await reviewGuard.GetCapabilitiesAsync(application);
+		return result;
+	}
 
 	private static void EnsureConcurrency(AdmissionApplication application, string? stamp)
 	{

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -199,7 +200,8 @@ public class ShikshaMitraApplicationTestModule : AbpModule
         {
             options.Configure(dbContextConfigurationContext =>
             {
-                dbContextConfigurationContext.DbContextOptions.UseSqlite(_sqliteConnection);
+                dbContextConfigurationContext.DbContextOptions.UseSqlite(_sqliteConnection)
+                    .ReplaceService<IMemberTranslatorProvider, SqliteApplicationTestMemberTranslatorProvider>();
             });
         });
     }

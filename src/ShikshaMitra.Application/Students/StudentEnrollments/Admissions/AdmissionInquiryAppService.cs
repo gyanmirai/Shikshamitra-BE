@@ -25,12 +25,15 @@ public class AdmissionInquiryAppService(
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
 	IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository,
-	IRepository<IdentityUser, Guid> userRepository) : ApplicationService, IAdmissionInquiryAppService
+	AdmissionInquiryScopeAccessService scopeAccess,
+	AdmissionInquiryPolicyResolver policyResolver,
+	AdmissionInquiryRuntimeService inquiryRuntime,
+	AdmissionInquiryAssignmentService assignmentService) : ApplicationService, IAdmissionInquiryAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
 	public async Task<PagedResultDto<AdmissionInquiryDto>> GetListAsync(AdmissionInquiryListInput input)
 	{
-		var query = await inquiryRepository.GetQueryableAsync();
+		var query = await scopeAccess.GetScopedQueryAsync();
 		query = query.Where(x => (!input.AdmissionCycleId.HasValue || x.AdmissionCycleId == input.AdmissionCycleId) &&
 			(!input.AdmissionOfferingId.HasValue || x.AdmissionOfferingId == input.AdmissionOfferingId) &&
 			(!input.Status.HasValue || x.Status == input.Status) &&
@@ -53,10 +56,13 @@ public class AdmissionInquiryAppService(
 			throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound);
 		var values = input.FormValues.ToDictionary(x => x.FieldCode, x => UnwrapValue(x.ValueJson), StringComparer.OrdinalIgnoreCase);
 		var inquiryFields = new List<AdmissionFormFieldDefinition>();
+		AdmissionInquiryPolicyContext? managedPolicy = null;
 		if (input.AdmissionOfferingId.HasValue)
 		{
 			var runtime = await offeringRuntimeService.GetAvailableAsync(input.AdmissionOfferingId.Value);
 			var offering = runtime.Offering;
+			await scopeAccess.EnsureOfferingAccessAsync(offering.Id);
+			managedPolicy = await policyResolver.ResolveAsync(offering.Id);
 			if (offering.AdmissionCycleId != input.AdmissionCycleId)
 			{
 				throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound,
@@ -93,10 +99,31 @@ public class AdmissionInquiryAppService(
 			throw new BusinessException(AdmissionErrorCodes.InquiryIdentityIncomplete,
 				"Applicant and primary guardian identity is incomplete.")
 				.WithData("Fields", string.Join(", ", missingIdentity));
+		if (managedPolicy != null)
+		{
+			var policy = managedPolicy.Policy;
+			if (policy.AllowedSources.Count > 0 && !policy.AllowedSources.Contains(input.Source))
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceNotAllowed);
+			if (policy.RequireSourceDetailFor.Contains(input.Source) && string.IsNullOrWhiteSpace(input.SourceDetail))
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceDetailRequired);
+			if (policy.RequireGuardianEmail && string.IsNullOrWhiteSpace(input.GuardianEmail))
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Guardian email is required by the Inquiry policy.");
+			if (policy.RequireApplicantDateOfBirth && !input.ApplicantDateOfBirth.HasValue)
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Applicant date of birth is required by the Inquiry policy.");
+		}
 		var phone = string.Concat((string.IsNullOrWhiteSpace(input.Phone) ? input.GuardianPhone : input.Phone).Where(char.IsDigit));
 		var query = await inquiryRepository.GetQueryableAsync();
-		if (!input.ExistingFamilyId.HasValue && !input.CreateSeparateFamily && await AsyncExecuter.AnyAsync(query.Where(x => x.AdmissionCycleId == input.AdmissionCycleId && x.NormalizedPhone == phone)))
-			throw new BusinessException(AdmissionErrorCodes.InquiryDuplicate);
+		var duplicateExists = !input.ExistingFamilyId.HasValue && await AsyncExecuter.AnyAsync(query.Where(x =>
+			x.AdmissionCycleId == input.AdmissionCycleId && x.NormalizedPhone == phone));
+		if (duplicateExists)
+		{
+			if (!input.CreateSeparateFamily) throw new BusinessException(AdmissionErrorCodes.InquiryDuplicate);
+			if (managedPolicy?.Policy.DuplicateRule == AdmissionInquiryDuplicateRule.Block)
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.DuplicateBlocked);
+			if (managedPolicy?.Policy.DuplicateRule == AdmissionInquiryDuplicateRule.RequireReason &&
+				string.IsNullOrWhiteSpace(input.DuplicateOverrideReason))
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.DuplicateReasonRequired);
+		}
 		var family = input.ExistingFamilyId.HasValue ? await familyRepository.FindAsync(input.ExistingFamilyId.Value) : null;
 		if (input.ExistingFamilyId.HasValue && family == null) throw new BusinessException(AdmissionApplicantErrorCodes.ApplicantFamilyNotFound);
 		family ??= new AdmissionFamily(GuidGenerator.Create(), CurrentTenant.Id, $"FAM/{DateTime.UtcNow:yyyy}/{GuidGenerator.Create():N}"[..20]);
@@ -118,6 +145,9 @@ public class AdmissionInquiryAppService(
 		var inquiry = new AdmissionInquiry(GuidGenerator.Create(), CurrentTenant.Id, input.AdmissionCycleId, input.AdmissionOfferingId,
 			input.ApplicantName, phone, input.Email, input.Source, input.SourceDetail);
 		inquiry.LinkIdentity(family.Id, applicant.Id);
+		if (managedPolicy != null && input.AdmissionOfferingId.HasValue &&
+			await assignmentService.ResolvePolicyAssignmentAsync(managedPolicy.Policy, input.AdmissionOfferingId.Value) is Guid counsellorId)
+			inquiry.AssignCounsellor(counsellorId);
 		if (input.FormValues.Count > 0)
 		{
 			var snapshot = input.FormValues
@@ -131,10 +161,12 @@ public class AdmissionInquiryAppService(
 				.ToDictionary(group => group.Key, group => group.Last().ValueJson,
 					StringComparer.OrdinalIgnoreCase);
 			if (snapshot.Count > 0)
-				inquiry.RecordFormResponseSnapshot(JsonSerializer.Serialize(snapshot));
+				inquiry.RecordFormResponseSnapshot(JsonSerializer.Serialize(snapshot), inquiryFields.FirstOrDefault()?.FormDefinitionId);
 		}
-		await inquiryRepository.InsertAsync(inquiry, autoSave: true);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "InquiryCreated", "Inquiry created", applicant.Id, null, inquiry.Id), autoSave: true);
+		await inquiryRepository.InsertAsync(inquiry, autoSave: false);
+		await inquiryRuntime.EnsureManagementAsync(inquiry);
+		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "InquiryCreated", "Inquiry created", applicant.Id, null, inquiry.Id,
+			JsonSerializer.Serialize(new { Managed = managedPolicy != null, input.DuplicateOverrideReason })), autoSave: true);
 		return Map(inquiry);
 	}
 
@@ -142,6 +174,9 @@ public class AdmissionInquiryAppService(
 	public async Task<AdmissionInquiryDto> SetStatusAsync(Guid id, AdmissionInquiryStatus status, Guid? duplicateOfId = null)
 	{
 		var inquiry = await GetInquiryAsync(id);
+		if (await inquiryRuntime.EnsureManagementAsync(inquiry) != null)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState,
+				"Use the managed qualification action to change this inquiry status.");
 		if (status == AdmissionInquiryStatus.Duplicate && (!duplicateOfId.HasValue || duplicateOfId == id || await inquiryRepository.FindAsync(duplicateOfId.Value) == null))
 			throw new BusinessException(AdmissionErrorCodes.InquiryDuplicateTargetInvalid);
 		inquiry.SetStatus(status, duplicateOfId);
@@ -154,7 +189,12 @@ public class AdmissionInquiryAppService(
 	public async Task<AdmissionInquiryDto> MarkContactedAsync(Guid id)
 	{
 		var inquiry = await GetInquiryAsync(id);
-		inquiry.MarkContacted(DateTime.UtcNow);
+		var contactedAt = Clock.Now;
+		inquiry.MarkContacted(contactedAt);
+		if (await inquiryRuntime.EnsureManagementAsync(inquiry) is { } state)
+		{
+			state.RecordContact(contactedAt);
+		}
 		await inquiryRepository.UpdateAsync(inquiry, autoSave: true);
 		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "InquiryContacted", "Inquiry marked as contacted", inquiry.ApplicantId, null, inquiry.Id), autoSave: true);
 		return Map(inquiry);
@@ -167,7 +207,9 @@ public class AdmissionInquiryAppService(
 		var guardians = await guardianRepository.GetListAsync(x => x.Mobile == phone || (!string.IsNullOrWhiteSpace(input.GuardianEmail) && x.Email == input.GuardianEmail!.Trim().ToLowerInvariant()));
 		var applicants = await applicantRepository.GetListAsync(x => (!string.IsNullOrWhiteSpace(input.ApplicantName) && (x.FirstName + " " + (x.LastName ?? string.Empty)).Trim().Contains(input.ApplicantName)) && (!input.ApplicantDateOfBirth.HasValue || x.DateOfBirth == input.ApplicantDateOfBirth.Value.Date));
 		var familyIds = guardians.Select(x => x.FamilyId).Concat(applicants.Select(x => x.FamilyId)).Distinct().ToList();
-		var allApplicants = await applicantRepository.GetListAsync(x => familyIds.Contains(x.FamilyId));
+		var scopedApplicantIds = await AsyncExecuter.ToListAsync((await scopeAccess.GetScopedQueryAsync())
+			.Where(x => x.ApplicantId.HasValue).Select(x => x.ApplicantId!.Value));
+		var allApplicants = await applicantRepository.GetListAsync(x => familyIds.Contains(x.FamilyId) && scopedApplicantIds.Contains(x.Id));
 		var familyGuardians = await guardianRepository.GetListAsync(x => familyIds.Contains(x.FamilyId) && x.IsPrimaryContact);
 		return allApplicants.Select(x => { var guardian = familyGuardians.FirstOrDefault(g => g.FamilyId == x.FamilyId); return new AdmissionInquiryDuplicateMatchDto { ApplicantId = x.Id, FamilyId = x.FamilyId, ApplicantName = string.Join(" ", new[] { x.FirstName, x.LastName }.Where(y => !string.IsNullOrWhiteSpace(y))), GuardianPhone = guardian?.Mobile, GuardianEmail = guardian?.Email, DateOfBirth = x.DateOfBirth }; }).ToList();
 	}
@@ -176,36 +218,12 @@ public class AdmissionInquiryAppService(
 	public async Task<AdmissionInquiryDto> AssignCounsellorAsync(Guid id, AssignAdmissionCounsellorDto input)
 	{
 		var inquiry = await GetInquiryAsync(id);
-		Guid counsellorId;
-		if (input.Mode == AdmissionCounsellorAssignmentMode.Manual)
-		{
-			counsellorId = input.CounsellorId ?? throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorRequired);
-			await EnsureActiveCounsellorAsync(counsellorId);
-		}
-		else
-		{
-			if (input.CandidateCounsellorIds.Count == 0) throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorCandidatesRequired);
-			var candidateIds = input.CandidateCounsellorIds.Distinct().ToList();
-			var activeCandidates = await AsyncExecuter.ToListAsync((await userRepository.GetQueryableAsync())
-				.Where(user => candidateIds.Contains(user.Id) && user.IsActive)
-				.Select(user => user.Id));
-			if (activeCandidates.Count != candidateIds.Count)
-				throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid,
-					"Every counsellor candidate must be an active tenant user.");
-			var assigned = await AsyncExecuter.ToListAsync((await inquiryRepository.GetQueryableAsync()).Where(x => x.AssignedCounsellorId.HasValue && input.CandidateCounsellorIds.Contains(x.AssignedCounsellorId.Value)).GroupBy(x => x.AssignedCounsellorId).Select(x => new { Id = x.Key!.Value, Count = x.Count() }));
-			counsellorId = candidateIds.OrderBy(x => assigned.FirstOrDefault(a => a.Id == x)?.Count ?? 0).ThenBy(x => x).First();
-		}
+		var counsellorId = await assignmentService.ResolveExplicitAsync(input,
+			inquiry.AdmissionOfferingId ?? throw new BusinessException(AdmissionErrorCodes.InquiryOfferingRequired));
 		inquiry.AssignCounsellor(counsellorId); await inquiryRepository.UpdateAsync(inquiry, false); await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "CounsellorAssigned", $"Counsellor assigned: {counsellorId}", inquiry.ApplicantId, null, inquiry.Id), true); return Map(inquiry);
 	}
 
-	private async Task<AdmissionInquiry> GetInquiryAsync(Guid id) => await inquiryRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionInquiry), id);
-	private async Task EnsureActiveCounsellorAsync(Guid id)
-	{
-		var user = await userRepository.FindAsync(id);
-		if (user == null || !user.IsActive)
-			throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid,
-				"The counsellor must be an active tenant user.");
-	}
+	private Task<AdmissionInquiry> GetInquiryAsync(Guid id) => scopeAccess.GetAsync(id);
 	private static AdmissionInquiryDto Map(AdmissionInquiry x) => new()
 	{
 		Id = x.Id, InquiryNumber = x.InquiryNumber, AdmissionCycleId = x.AdmissionCycleId, AdmissionOfferingId = x.AdmissionOfferingId, FamilyId = x.FamilyId, ApplicantId = x.ApplicantId, AssignedCounsellorId = x.AssignedCounsellorId,

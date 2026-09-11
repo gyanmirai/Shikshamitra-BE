@@ -14,12 +14,16 @@ public class AdmissionApplicationReadService(
 	IRepository<AdmissionApplication, Guid> applicationRepository,
 	IRepository<AdmissionApplicant, Guid> applicantRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
-	IRepository<AdmissionApplicationStageInstance, Guid> stageRepository)
+	IRepository<AdmissionApplicationStageInstance, Guid> stageRepository,
+	AdmissionApplicationScopeAccessService scopeAccess,
+	AdmissionReviewDecisionGuard reviewGuard)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<PagedResultDto<AdmissionApplicationDto>> GetListAsync(AdmissionApplicationListInput input)
 	{
 		var query = await applicationRepository.GetQueryableAsync();
+		var visibleOfferings = await scopeAccess.GetScopedOfferingsAsync();
+		query = query.Where(application => visibleOfferings.Any(offering => offering.Id == application.AdmissionOfferingId));
 		var applicantIds = await GetMatchingApplicantIdsAsync(input.Search);
 		var stageIds = await GetMatchingStageIdsAsync(input.CurrentStageSearch);
 		query = query.Where(application =>
@@ -41,12 +45,17 @@ public class AdmissionApplicationReadService(
 	{
 		var application = await GetEntityAsync(id);
 		var applicant = await applicantRepository.FindAsync(application.ApplicantId);
-		return AdmissionApplicationMapper.ToDto(application, applicant == null ? string.Empty : GetName(applicant));
+		var result = AdmissionApplicationMapper.ToDto(application, applicant == null ? string.Empty : GetName(applicant));
+		result.ReviewDecision = await reviewGuard.GetCapabilitiesAsync(application);
+		return result;
 	}
 
-	public async Task<AdmissionApplication> GetEntityAsync(Guid id) =>
-		await applicationRepository.FindAsync(id) ??
-		throw new EntityNotFoundException(typeof(AdmissionApplication), id);
+	public async Task<AdmissionApplication> GetEntityAsync(Guid id)
+	{
+		var application = await applicationRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), id);
+		await scopeAccess.EnsureCanAccessAsync(application);
+		return application;
+	}
 
 	private async Task<List<Guid>?> GetMatchingApplicantIdsAsync(string? search)
 	{

@@ -19,6 +19,7 @@ public static class AdmissionErrorCodes
 	public const string InquiryCounsellorRequired = "Admissions.InquiryCounsellorRequired";
 	public const string InquiryCounsellorCandidatesRequired = "Admissions.InquiryCounsellorCandidatesRequired";
 	public const string InquiryCounsellorInvalid = "Admissions.InquiryCounsellorInvalid";
+	public const string InquiryOfferingRequired = "Admissions.InquiryOfferingRequired";
 	public const string OfferingWorkflowNotPublished = "Admissions.OfferingWorkflowNotPublished";
 	public const string OfferingFormNotPublished = "Admissions.OfferingFormNotPublished";
 	public const string OfferingConfigurationIncomplete = "Admissions.Offering.ConfigurationIncomplete";

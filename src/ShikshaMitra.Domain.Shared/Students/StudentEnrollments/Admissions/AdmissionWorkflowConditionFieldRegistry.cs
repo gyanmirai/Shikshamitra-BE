@@ -7,7 +7,20 @@ public static class AdmissionWorkflowConditionFieldRegistry
 {
 	private static readonly HashSet<string> ExactFields = new(StringComparer.OrdinalIgnoreCase)
 	{
-		"application.status"
+		"application.status",
+		"payment.status",
+		"payment.settledAmount",
+		"payment.outstandingAmount",
+		"offer.status",
+		"offer.versionNumber",
+		"offer.extensionCount",
+		"offer.isExpired",
+		"seat.status",
+		"seat.remainingCapacity",
+		"seat.isExpired",
+		"seat.waitlistPosition",
+		"review.status",
+		"review.decision"
 	};
 
 	private static readonly string[] ExtensiblePrefixes =
@@ -16,10 +29,8 @@ public static class AdmissionWorkflowConditionFieldRegistry
 		"inquiry.",
 		"assessment.",
 		"documents.",
-		"payment.",
 		"eligibility.",
 		"approval.",
-		"offer.",
 		"seat.",
 		"enrollment.",
 		"appointment."

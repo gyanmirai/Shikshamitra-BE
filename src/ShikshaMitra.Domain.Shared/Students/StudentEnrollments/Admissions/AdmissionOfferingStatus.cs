@@ -29,6 +29,10 @@ public static class AdmissionOfferingValidationCodes
 	public const string ApplicationFormMissing = "ApplicationFormMissing";
 	public const string ApplicationFormNotPublished = "ApplicationFormNotPublished";
 	public const string ApplicationFormIdentityIncomplete = "ApplicationFormIdentityIncomplete";
+	public const string WorkflowFormMismatch = "WorkflowFormMismatch";
+	public const string EligibilityFormMismatch = "EligibilityFormMismatch";
+	public const string InquiryCounsellorUnavailable = "InquiryCounsellorUnavailable";
+	public const string ReviewAssigneeUnavailable = "ReviewAssigneeUnavailable";
 	public const string CampusMissing = "CampusMissing";
 	public const string CampusInactive = "CampusInactive";
 	public const string Duplicate = "Duplicate";

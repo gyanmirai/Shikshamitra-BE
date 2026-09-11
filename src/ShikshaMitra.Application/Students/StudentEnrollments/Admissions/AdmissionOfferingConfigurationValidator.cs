@@ -20,11 +20,15 @@ public class AdmissionOfferingConfigurationValidator(
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
 	IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository,
+	IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
 	IEducationBoardRepository boardRepository,
 	IEducationMediumRepository mediumRepository,
 	IEducationMediumStageRepository stageRepository,
 	IStandardRepository standardRepository,
-	AcademicOrganizationScopeAccessService scopeAccessService)
+	AcademicOrganizationScopeAccessService scopeAccessService,
+	AdmissionEligibilityOfferingValidator eligibilityValidator,
+	AdmissionInquiryOfferingValidator inquiryValidator,
+	AdmissionReviewOfferingValidator reviewValidator)
 	: ApplicationService, ITransientDependency
 {
 	private static readonly HashSet<string> IncompleteConfigurationCodes =
@@ -58,6 +62,8 @@ public class AdmissionOfferingConfigurationValidator(
 		await ValidateHierarchyAsync(cycle, input, errors);
 		ValidateDates(cycle, input, errors);
 		await ValidatePublishedConfigurationAsync(input, errors);
+		errors.AddRange(await inquiryValidator.ValidateAsync(cycle, input));
+		errors.AddRange(await reviewValidator.ValidateAsync(cycle, input));
 		await ValidateUniquenessAsync(admissionCycleId, input, excludingOfferingId, errors);
 		return new AdmissionOfferingValidationResult(errors);
 	}
@@ -185,6 +191,23 @@ public class AdmissionOfferingConfigurationValidator(
 			AdmissionOfferingValidationCodes.ApplicationFormNotPublished,
 			"Application Form", errors);
 		await ValidateApplicationFormIdentityAsync(input.ApplicationFormDefinitionId, errors);
+		await ValidateWorkflowFormCompatibilityAsync(input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, errors);
+		foreach (var error in await eligibilityValidator.ValidateAsync(input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, input.InquiryFormDefinitionId))
+			errors.Add(error);
+	}
+
+	private async Task ValidateWorkflowFormCompatibilityAsync(
+		Guid? workflowId,
+		Guid? formId,
+		ICollection<AdmissionOfferingValidationError> errors)
+	{
+		if (!workflowId.HasValue || !formId.HasValue) return;
+		var stages = await workflowStageRepository.GetListAsync(stage =>
+			stage.WorkflowDefinitionId == workflowId.Value && stage.StageType == AdmissionWorkflowStageType.Form);
+		if (stages.Select(stage => AdmissionFormStageAccessService.ReadFormDefinitionId(stage.ConfigurationJson))
+			.Any(configured => configured.HasValue && configured.Value != formId.Value))
+			errors.Add(Error(AdmissionOfferingValidationCodes.WorkflowFormMismatch,
+				"Every Form stage in the workflow must use the same published Application Form selected for this offering."));
 	}
 
 	private async Task ValidateApplicationFormIdentityAsync(
@@ -255,6 +278,10 @@ public class AdmissionOfferingConfigurationValidator(
 
 	private static string ToBusinessErrorCode(string validationCode) => validationCode switch
 	{
+		AdmissionOfferingValidationCodes.EligibilityFormMismatch => AdmissionEligibilityErrorCodes.OfferingFormMismatch,
+		AdmissionOfferingValidationCodes.WorkflowFormMismatch => AdmissionFormStageErrorCodes.OfferingFormMismatch,
+		AdmissionOfferingValidationCodes.InquiryCounsellorUnavailable => AdmissionErrorCodes.InquiryCounsellorInvalid,
+		AdmissionOfferingValidationCodes.ReviewAssigneeUnavailable => AdmissionReviewErrorCodes.ReviewerNotAllowed,
 		AdmissionOfferingValidationCodes.HierarchyInvalid => AdmissionErrorCodes.OfferingAcademicHierarchyInvalid,
 		AdmissionOfferingValidationCodes.HierarchyOutOfScope => AdmissionErrorCodes.OfferingHierarchyOutOfScope,
 		AdmissionOfferingValidationCodes.DateRangeInvalid => AdmissionErrorCodes.OfferingDateRangeInvalid,

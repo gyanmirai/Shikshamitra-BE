@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
@@ -132,7 +133,14 @@ public class StudentScopeAccessService(
 
 	public async Task EnsureCanAccessStudentAsync(Student student, string operation)
 	{
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, operation: operation);
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		if (!StudentRecordScope.HasAccess(student, scope))
+		{
+			Logger.LogInformation("UserScope denied Student access. UserId: {UserId}, TenantId: {TenantId}, StudentId: {StudentId}, Operation: {Operation}",
+				scope.UserId, scope.TenantId, student.Id, operation);
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied)
+				.WithData("StudentId", student.Id).WithData("Operation", operation);
+		}
 	}
 
 	public async Task<Student> GetStudentAsync(Guid studentId, string operation, bool includeDetails = false)

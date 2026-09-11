@@ -53,6 +53,8 @@ public class AdmissionWorkflowGraphValidator : DomainService
 		ValidateStages(stages, issues);
 		var validTransitions = ValidateTransitions(stages, transitions, issues);
 		ValidateGraph(stages, validTransitions, issues);
+		issues.AddRange(AdmissionInquiryGraphRules.Validate(stages));
+		issues.AddRange(AdmissionReviewGraphRules.Validate(stages, validTransitions));
 		return issues;
 	}
 
@@ -229,9 +231,27 @@ public class AdmissionWorkflowGraphValidator : DomainService
 		AdmissionWorkflowStageTypeMetadata metadata,
 		ICollection<AdmissionWorkflowValidationIssue> issues)
 	{
+		if (stage.StageType == AdmissionWorkflowStageType.Inquiry)
+		{
+			try { AdmissionInquiryPolicy.Read(stage.ConfigurationJson); }
+			catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+			{
+				issues.Add(Error(AdmissionInquiryManagementErrorCodes.InvalidPolicy, exception.Message, stage.Id));
+				return;
+			}
+		}
+		if (stage.StageType == AdmissionWorkflowStageType.Assessment)
+		{
+			try { AdmissionAssessmentPolicy.Read(stage.ConfigurationJson); }
+			catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+			{
+				issues.Add(Error(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message, stage.Id));
+				return;
+			}
+		}
 		if (string.IsNullOrWhiteSpace(stage.ConfigurationJson))
 		{
-			if (metadata.SupportedConfiguration.Count > 0)
+			if (metadata.SupportedConfiguration.Count > 0 && !UsesOptionalManagedConfiguration(stage.StageType))
 			{
 				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidTransition, $"Stage '{stage.Name}' is missing required configuration.", stage.Id));
 			}
@@ -241,6 +261,24 @@ public class AdmissionWorkflowGraphValidator : DomainService
 
 		try
 		{
+			if (stage.StageType == AdmissionWorkflowStageType.Eligibility)
+			{
+				try { AdmissionEligibilityPolicy.Read(stage.ConfigurationJson); }
+				catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+				{
+					issues.Add(Error(AdmissionEligibilityErrorCodes.InvalidPolicy, exception.Message, stage.Id));
+					return;
+				}
+			}
+			if (stage.StageType == AdmissionWorkflowStageType.DocumentVerification)
+			{
+				try { AdmissionDocumentPolicy.Read(stage.ConfigurationJson); }
+				catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+				{
+					issues.Add(Error(AdmissionDocumentErrorCodes.InvalidPolicy, exception.Message, stage.Id));
+					return;
+				}
+			}
 			using var document = JsonDocument.Parse(stage.ConfigurationJson);
 			if (document.RootElement.ValueKind != JsonValueKind.Object)
 			{
@@ -249,6 +287,7 @@ public class AdmissionWorkflowGraphValidator : DomainService
 
 			foreach (var requiredProperty in metadata.SupportedConfiguration)
 			{
+				if (UsesOptionalManagedConfiguration(stage.StageType)) continue;
 				if (!document.RootElement.TryGetProperty(requiredProperty, out var value) || value.ValueKind == JsonValueKind.Null || string.IsNullOrWhiteSpace(value.ToString()))
 				{
 					issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidTransition, $"Stage '{stage.Name}' requires '{requiredProperty}'.", stage.Id));
@@ -260,6 +299,12 @@ public class AdmissionWorkflowGraphValidator : DomainService
 			issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidTransition, $"Stage '{stage.Name}' has invalid configuration JSON.", stage.Id));
 		}
 	}
+
+	private static bool UsesOptionalManagedConfiguration(AdmissionWorkflowStageType type) => type is
+		AdmissionWorkflowStageType.Inquiry or AdmissionWorkflowStageType.Assessment or
+		AdmissionWorkflowStageType.DocumentVerification or AdmissionWorkflowStageType.Eligibility or
+		AdmissionWorkflowStageType.Review or AdmissionWorkflowStageType.Payment or
+		AdmissionWorkflowStageType.Offer or AdmissionWorkflowStageType.Seat;
 
 	private static void ValidateCondition(
 		AdmissionWorkflowTransitionDefinition transition,

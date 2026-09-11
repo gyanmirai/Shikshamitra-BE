@@ -59,6 +59,8 @@ public class ShikshaMitraDomainSharedModule : AbpModule
             options.MapCodeNamespace("ST", typeof(ShikshaMitraResource));
             options.MapCodeNamespace("HR", typeof(ShikshaMitraResource));
             options.MapCodeNamespace("Academic", typeof(ShikshaMitraResource));
+            options.MapCodeNamespace("Admissions", typeof(ShikshaMitraResource));
+            options.MapCodeNamespace("Document", typeof(ShikshaMitraResource));
         });
     }
 }

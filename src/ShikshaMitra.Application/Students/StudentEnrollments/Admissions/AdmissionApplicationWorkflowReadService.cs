@@ -47,6 +47,22 @@ public class AdmissionApplicationWorkflowReadService(
 				DisplayOrder = stage.DisplayOrder,
 				Status = stage.Status,
 				AllowManualSkip = definitions.First(definition => definition.Id == stage.DefinitionStageId).AllowManualSkip,
+				FormStageEnabled = stage.StageType == AdmissionWorkflowStageType.Form &&
+					AdmissionFormStageAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				PaymentStageEnabled = stage.StageType == AdmissionWorkflowStageType.Payment &&
+					AdmissionPaymentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				OfferStageEnabled = stage.StageType == AdmissionWorkflowStageType.Offer &&
+					AdmissionOfferAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				SeatStageEnabled = stage.StageType == AdmissionWorkflowStageType.Seat &&
+					AdmissionSeatAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				AssessmentEnabled = stage.StageType == AdmissionWorkflowStageType.Assessment &&
+					AdmissionAssessmentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				DocumentVerificationEnabled = stage.StageType == AdmissionWorkflowStageType.DocumentVerification &&
+					AdmissionDocumentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				EligibilityEnabled = stage.StageType == AdmissionWorkflowStageType.Eligibility &&
+					AdmissionEligibilityAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				ReviewEnabled = stage.StageType == AdmissionWorkflowStageType.Review &&
+					AdmissionReviewAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
 				EnteredAt = stage.EnteredAt,
 				CompletedAt = stage.CompletedAt,
 				CompletedBy = stage.CompletedBy,

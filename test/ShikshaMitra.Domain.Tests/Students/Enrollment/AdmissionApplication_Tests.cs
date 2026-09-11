@@ -116,6 +116,22 @@ public class AdmissionApplication_Tests
 		application.OfferExpiresAt.ShouldNotBeNull();
 	}
 
+	[Fact]
+	public void Supports_offer_extension_withdrawal_and_reissue()
+	{
+		var application = CreateSubmittedApplication();
+		application.MarkInReview(Guid.NewGuid(), null);
+		application.Approve(Guid.NewGuid(), null);
+		var firstExpiry = DateTime.UtcNow.AddDays(7);
+		application.IssueOffer(firstExpiry, Guid.NewGuid(), null);
+		application.ExtendOffer(firstExpiry.AddDays(3));
+		application.OfferExpiresAt!.Value.ShouldBeGreaterThan(firstExpiry);
+		application.WithdrawOffer(Guid.NewGuid(), "Offer details need correction.");
+		application.Status.ShouldBe(AdmissionApplicationStatus.Approved);
+		application.ReissueOffer(DateTime.UtcNow.AddDays(14), Guid.NewGuid(), "Corrected offer.");
+		application.Status.ShouldBe(AdmissionApplicationStatus.Offered);
+	}
+
 	[Theory]
 	[InlineData(AdmissionApplicationStatus.Draft)]
 	[InlineData(AdmissionApplicationStatus.Rejected)]

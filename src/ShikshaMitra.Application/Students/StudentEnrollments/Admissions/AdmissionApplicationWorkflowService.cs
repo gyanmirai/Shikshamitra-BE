@@ -18,13 +18,21 @@ public class AdmissionApplicationWorkflowService(
 	IRepository<AdmissionWorkflowTransitionDefinition, Guid> transitionRepository,
 	IRepository<AdmissionWorkflowTransitionHistory, Guid> historyRepository,
 	IRepository<AdmissionApplicationWorkflowInstance, Guid> workflowRepository,
-	IRepository<AdmissionFormInstance, Guid> formRepository,
-	IRepository<AdmissionFormFieldValue, Guid> valueRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository,
 	AdmissionApplicationReadService applicationReadService,
 	AdmissionApplicationWorkflowReadService workflowReadService,
 	AdmissionWorkflowTransitionSelector transitionSelector,
-	AdmissionWorkflowStageHandlerRegistry stageHandlerRegistry)
+	AdmissionWorkflowStageHandlerRegistry stageHandlerRegistry,
+	AdmissionFormStageRuntimeService formRuntime,
+	AdmissionInquiryRuntimeService inquiryRuntime,
+	AdmissionAssessmentRuntimeService assessmentRuntime,
+	AdmissionDocumentRuntimeService documentRuntime,
+	AdmissionEligibilityRuntimeService eligibilityRuntime,
+	AdmissionReviewRuntimeService reviewRuntime,
+	AdmissionPaymentRuntimeService paymentRuntime,
+	AdmissionOfferRuntimeService offerRuntime,
+	AdmissionSeatRuntimeService seatRuntime,
+	AdmissionWorkflowRuntimeValueService runtimeValueService)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionApplicationWorkflowDto> AdvanceAsync(Guid id, AdvanceAdmissionWorkflowDto input)
@@ -47,6 +55,14 @@ public class AdmissionApplicationWorkflowService(
 	public async Task AdvanceAfterSubmitAsync(AdmissionApplication application)
 	{
 		if (!application.CurrentStageInstanceId.HasValue) return;
+		var current = await stageRepository.GetAsync(application.CurrentStageInstanceId.Value);
+		if (current.StageType == AdmissionWorkflowStageType.Form &&
+			AdmissionFormStageAccessService.ReadPolicy(await stageDefinitionRepository.GetAsync(current.DefinitionStageId)) != null &&
+			!await formRuntime.ShouldAdvanceAfterSubmitAsync(application.Id)) return;
+		if (current.StageType == AdmissionWorkflowStageType.Eligibility &&
+			AdmissionEligibilityAccessService.ReadPolicy(await stageDefinitionRepository.GetAsync(current.DefinitionStageId)) != null) return;
+		if (current.StageType == AdmissionWorkflowStageType.Review &&
+			AdmissionReviewAccessService.ReadPolicy(await stageDefinitionRepository.GetAsync(current.DefinitionStageId)) != null) return;
 		var workflow = await workflowRepository.FindAsync(instance => instance.ApplicationId == application.Id);
 		if (workflow == null) return;
 		await AdvanceInternalAsync(application, workflow, new AdvanceAdmissionWorkflowDto
@@ -70,24 +86,65 @@ public class AdmissionApplicationWorkflowService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.InvalidCurrentStage);
 		var definition = await stageDefinitionRepository.FindAsync(current.DefinitionStageId) ??
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), current.DefinitionStageId);
+		var managedForm = current.StageType == AdmissionWorkflowStageType.Form && AdmissionFormStageAccessService.ReadPolicy(definition) != null;
+		var managedInquiry = current.StageType == AdmissionWorkflowStageType.Inquiry && AdmissionInquiryPolicyResolver.Read(definition) != null;
+		if (managedInquiry && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
+		var inquiry = managedInquiry ? await inquiryRuntime.EnsureStageCompleteAsync(application, definition) : null;
+		var managedAssessment = current.StageType == AdmissionWorkflowStageType.Assessment && AdmissionAssessmentAccessService.ReadPolicy(definition) != null;
+		if (managedAssessment) await assessmentRuntime.EnsureAccessAsync(application.Id, current.Id);
+		var managedDocuments = current.StageType == AdmissionWorkflowStageType.DocumentVerification && AdmissionDocumentAccessService.ReadPolicy(definition) != null;
+		AdmissionDocumentEvaluation? documents = managedDocuments ? await documentRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		var managedEligibility = current.StageType == AdmissionWorkflowStageType.Eligibility && AdmissionEligibilityAccessService.ReadPolicy(definition) != null;
+		var eligibility = managedEligibility ? await eligibilityRuntime.EnsureEvidenceAsync(application.Id, current.Id) : null;
+		var managedReview = current.StageType == AdmissionWorkflowStageType.Review && AdmissionReviewAccessService.ReadPolicy(definition) != null;
+		if (managedReview && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
+		var review = managedReview ? await reviewRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		var managedPayment = current.StageType == AdmissionWorkflowStageType.Payment && AdmissionPaymentAccessService.ReadPolicy(definition) != null;
+		if (managedPayment && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
+		var payment = managedPayment ? await paymentRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		var managedOffer = current.StageType == AdmissionWorkflowStageType.Offer && AdmissionOfferAccessService.ReadPolicy(definition) != null;
+		if (managedOffer && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
+		var offer = managedOffer ? await offerRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		var managedSeat = current.StageType == AdmissionWorkflowStageType.Seat && AdmissionSeatAccessService.ReadPolicy(definition) != null;
+		if (managedSeat && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
+		var seat = managedSeat ? await seatRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
 		if (input.SkipCurrentStage && !input.AdminOverride && !definition.AllowManualSkip)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
 		var context = new AdmissionWorkflowStageRuntimeContext(
 			application.Id, workflow.Id, current.Id, application.Status);
-		if (!input.SkipCurrentStage && !input.AdminOverride)
+		if (!input.SkipCurrentStage && !input.AdminOverride && !managedReview && !managedInquiry && !managedPayment && !managedOffer && !managedSeat)
 			await stageHandlerRegistry.EnsureCanCompleteAsync(current.StageType, context);
+		AdmissionAssessmentAttempt? assessment = null;
+		if (!input.SkipCurrentStage && !input.AdminOverride && managedAssessment)
+			assessment = await assessmentRuntime.EnsureCompleteAsync(application.Id, current.Id);
+		if (!input.SkipCurrentStage && !input.AdminOverride && managedForm)
+			await formRuntime.EnsureCompleteAsync(application.Id, current.Id);
 
 		var transitions = await transitionRepository.GetListAsync(transition =>
 			transition.WorkflowDefinitionId == application.WorkflowDefinitionId &&
 			transition.FromStageId == current.DefinitionStageId);
+		var runtimeValues = await runtimeValueService.ReadAsync(application, managedAssessment ? current.Id : null, managedInquiry || managedDocuments || managedEligibility || managedReview);
+		runtimeValues = await inquiryRuntime.AddFactsAsync(application, runtimeValues, inquiry);
+		runtimeValues = await documentRuntime.AddFactsAsync(application, runtimeValues, documents);
+		runtimeValues = await eligibilityRuntime.AddFactsAsync(application, runtimeValues, eligibility);
+		runtimeValues = await reviewRuntime.AddFactsAsync(application, runtimeValues, review);
+		runtimeValues = AdmissionPaymentRuntimeService.AddFacts(runtimeValues, payment);
+		runtimeValues = AdmissionOfferRuntimeService.AddFacts(runtimeValues, offer);
+		runtimeValues = AdmissionSeatRuntimeService.AddFacts(runtimeValues, seat);
 		var selected = definition.IsTerminalStage ? null : transitionSelector.Select(
-			transitions, await GetRuntimeValuesAsync(application), input.TransitionDefinitionId, input.AdminOverride);
+			transitions, runtimeValues, input.TransitionDefinitionId, input.AdminOverride);
+		if (assessment != null) AdmissionAssessmentEvidence.EnsureRoute(assessment, selected, runtimeValues);
+		if (eligibility != null) AdmissionEligibilityEvidence.EnsureRoute(eligibility.Status, selected, runtimeValues);
+		if (review != null) AdmissionReviewRouteRules.EnsureRoute(review.Decision!.Decision, selected, runtimeValues);
+		if (offer != null) AdmissionOfferRouteRules.EnsureRoute(offer.Status, selected, runtimeValues);
+		if (seat != null) AdmissionSeatRouteRules.EnsureRoute(seat.Status, selected, runtimeValues);
 		var next = selected == null ? null : stages.SingleOrDefault(stage =>
 			stage.DefinitionStageId == selected.ToStageId && stage.Status == AdmissionRuntimeStageStatus.Pending) ??
 			throw new BusinessException(AdmissionApplicationErrorCodes.NoEligibleTransition);
 		await CompleteCurrentAsync(application, workflow, current, input, context);
 		await EnterNextAsync(application, workflow, current, next, selected);
-		await RecordHistoryAsync(application, workflow, current, next, selected, input);
+		await RecordHistoryAsync(application, workflow, current, next, selected, input,
+			inquiry == null && assessment == null && documents == null && eligibility == null && review == null && payment == null && offer == null && seat == null ? null : runtimeValues);
 	}
 
 	private async Task CompleteCurrentAsync(
@@ -130,6 +187,8 @@ public class AdmissionApplicationWorkflowService(
 		await stageHandlerRegistry.OnEnterAsync(next.StageType,
 			new AdmissionWorkflowStageRuntimeContext(application.Id, workflow.Id, next.Id, application.Status));
 		application.SetCurrentStage(next.Id);
+		await reviewRuntime.EnterAsync(application, next);
+		await seatRuntime.EnterAsync(application, next);
 		application.RecordTransitioned(workflow.Id, current.Id, next.Id, selected?.Id);
 		application.RecordStageEntered(workflow.Id, next.Id);
 		await stageRepository.UpdateAsync(next, false);
@@ -141,31 +200,15 @@ public class AdmissionApplicationWorkflowService(
 		AdmissionApplicationStageInstance current,
 		AdmissionApplicationStageInstance? next,
 		AdmissionWorkflowTransitionDefinition? selected,
-		AdvanceAdmissionWorkflowDto input)
+		AdvanceAdmissionWorkflowDto input,
+		IReadOnlyDictionary<string, string>? assessedValues = null)
 	{
 		await historyRepository.InsertAsync(new AdmissionWorkflowTransitionHistory(
 			GuidGenerator.Create(), CurrentTenant.Id, application.Id, workflow.Id, current.Id, next?.Id,
 			selected?.Id, GetAction(input), input.IdempotencyKey.Trim(), input.Reason,
-			JsonSerializer.Serialize(new { selected?.Id, selected?.IsDefault, selected?.ConditionRuleJson })), false);
+			JsonSerializer.Serialize(new { selected?.Id, selected?.IsDefault, selected?.ConditionRuleJson, AssessedValues = assessedValues })), false);
 		await applicationRepository.UpdateAsync(application, false);
 		await AddActivitiesAsync(application, current, next, input);
-	}
-
-	private async Task<IReadOnlyDictionary<string, string>> GetRuntimeValuesAsync(AdmissionApplication application)
-	{
-		var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-		{
-			["application.status"] = application.Status.ToString()
-		};
-		var form = await formRepository.FindAsync(instance => instance.ApplicationId == application.Id);
-		if (form == null) return result;
-		foreach (var value in await valueRepository.GetListAsync(item => item.FormInstanceId == form.Id))
-		{
-			var unwrapped = AdmissionApplicationValueConverter.Unwrap(value.ValueJson);
-			result[value.FieldCode] = unwrapped;
-			result[$"application.{value.FieldCode}"] = unwrapped;
-		}
-		return result;
 	}
 
 	private async Task AddActivitiesAsync(

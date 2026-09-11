@@ -57,6 +57,12 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void SaveDraft() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); LastSavedAt = DateTime.UtcNow; }
 	public void Submit() { if (Status != AdmissionApplicationStatus.Draft) throw new BusinessException(AdmissionApplicationErrorCodes.AlreadySubmitted); Status = AdmissionApplicationStatus.Submitted; SubmittedAt = DateTime.UtcNow; LastSavedAt = SubmittedAt; }
 	public void Reopen() { if (Status != AdmissionApplicationStatus.Submitted) throw new BusinessException(AdmissionApplicationErrorCodes.FormNotSubmitted); Status = AdmissionApplicationStatus.Draft; LastSavedAt = DateTime.UtcNow; }
+	public void ReopenForManagedReview()
+	{
+		EnsureStatus(AdmissionApplicationStatus.Submitted, AdmissionApplicationStatus.InReview, AdmissionApplicationStatus.Waitlisted, AdmissionApplicationStatus.Approved);
+		Status = AdmissionApplicationStatus.Draft; LastSavedAt = DateTime.UtcNow;
+		DecisionBy = null; DecisionAt = null; DecisionReason = null;
+	}
 
 	public void MarkInReview(Guid? actorId, string? reason)
 	{
@@ -104,6 +110,32 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		EnsureStatus(AdmissionApplicationStatus.Offered);
 		SetDecision(AdmissionApplicationStatus.OfferDeclined, actorId, reason, requireReason: true);
+	}
+
+	public void ExtendOffer(DateTime expiresAt)
+	{
+		EnsureStatus(AdmissionApplicationStatus.Offered);
+		if (expiresAt <= DateTime.UtcNow || !OfferExpiresAt.HasValue || expiresAt <= OfferExpiresAt.Value)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationOfferExpiryInvalid);
+		OfferExpiresAt = expiresAt;
+	}
+
+	public void WithdrawOffer(Guid? actorId, string reason)
+	{
+		EnsureStatus(AdmissionApplicationStatus.Offered);
+		SetDecision(AdmissionApplicationStatus.Approved, actorId, reason, requireReason: true);
+	}
+
+	public void ReissueOffer(DateTime expiresAt, Guid? actorId, string? reason)
+	{
+		var expired = Status == AdmissionApplicationStatus.Offered && OfferExpiresAt.HasValue && OfferExpiresAt.Value <= DateTime.UtcNow;
+		if (!expired && Status != AdmissionApplicationStatus.OfferDeclined && Status != AdmissionApplicationStatus.Approved)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionInvalidState);
+		if (expiresAt <= DateTime.UtcNow)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationOfferExpiryInvalid);
+		OfferExpiresAt = expiresAt;
+		OfferAcceptedAt = null;
+		SetDecision(AdmissionApplicationStatus.Offered, actorId, reason, requireReason: false);
 	}
 
 	public void MarkEnrolled(Guid studentId, Guid studentEnrollmentId)

@@ -28,7 +28,9 @@ public class AdmissionApplicationFormService(
 	AdmissionApplicationReadService applicationReadService,
 	AdmissionApplicationFormValidator formValidator,
 	AdmissionFormDataSourceRegistry dataSourceRegistry,
-	AdmissionApplicationWorkflowService workflowService)
+	AdmissionApplicationWorkflowService workflowService,
+	AdmissionFormStageRuntimeService formStageRuntime,
+	AdmissionReviewDecisionGuard reviewGuard)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionApplicationFormDto> GetAsync(Guid applicationId)
@@ -121,6 +123,7 @@ public class AdmissionApplicationFormService(
 		if (application.Status == AdmissionApplicationStatus.Submitted)
 			return new AdmissionApplicationSubmitResultDto { Application = AdmissionApplicationMapper.ToDto(application) };
 		application.SaveDraft();
+		await formStageRuntime.EnsureCanSubmitAsync(applicationId);
 		var instance = await GetInstanceAsync(applicationId);
 		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
 		var cycle = await cycleRepository.FindAsync(application.AdmissionCycleId) ??
@@ -159,8 +162,15 @@ public class AdmissionApplicationFormService(
 	public async Task<AdmissionApplicationFormDto> ReopenAsync(Guid applicationId)
 	{
 		var application = await applicationReadService.GetEntityAsync(applicationId);
+		await formStageRuntime.EnsureDirectReopenAllowedAsync(applicationId);
 		var instance = await GetInstanceAsync(applicationId);
-		application.Reopen();
+		var review = await reviewGuard.GetStateAsync(application);
+		if (review?.Context.IsActive == true)
+		{
+			if (review.Decision?.Decision != "requestCorrection") throw new BusinessException(AdmissionReviewErrorCodes.DecisionNotAllowed);
+			application.ReopenForManagedReview();
+		}
+		else application.Reopen();
 		instance.Reopen();
 		await applicationRepository.UpdateAsync(application, false);
 		await instanceRepository.UpdateAsync(instance, false);

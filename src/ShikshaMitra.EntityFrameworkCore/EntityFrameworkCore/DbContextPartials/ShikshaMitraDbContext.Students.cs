@@ -14,6 +14,8 @@ namespace ShikshaMitra.EntityFrameworkCore;
 
 public partial class ShikshaMitraDbContext
 {
+	public DbSet<AdmissionAssessmentSession> AdmissionAssessmentSessions { get; set; }
+	public DbSet<AdmissionAssessmentAttempt> AdmissionAssessmentAttempts { get; set; }
     // ───────────────────────────────────────────────
     // Students — Core
     // ───────────────────────────────────────────────
@@ -60,8 +62,19 @@ public partial class ShikshaMitraDbContext
 	public DbSet<AdmissionFormSubmission> AdmissionFormSubmissions { get; set; }
 	public DbSet<AdmissionFormChangeHistory> AdmissionFormChangeHistories { get; set; }
 	public DbSet<AdmissionActivity> AdmissionActivities { get; set; }
+	public DbSet<AdmissionInquiryManagement> AdmissionInquiryManagement { get; set; }
+	public DbSet<AdmissionInquiryFollowUp> AdmissionInquiryFollowUps { get; set; }
+	public DbSet<AdmissionDocumentEvidence> AdmissionDocumentEvidence { get; set; }
+	public DbSet<AdmissionDocumentReview> AdmissionDocumentReviews { get; set; }
 	public DbSet<AdmissionNote> AdmissionNotes { get; set; }
 	public DbSet<AdmissionApplicationDecisionHistory> AdmissionApplicationDecisionHistories { get; set; }
+	public DbSet<AdmissionEligibilityEvaluation> AdmissionEligibilityEvaluations { get; set; }
+	public DbSet<AdmissionEligibilityException> AdmissionEligibilityExceptions { get; set; }
+	public DbSet<AdmissionReviewWorkItem> AdmissionReviewWorkItems { get; set; }
+	public DbSet<AdmissionReviewRecord> AdmissionReviewRecords { get; set; }
+	public DbSet<AdmissionReviewDecision> AdmissionReviewDecisions { get; set; }
+	public DbSet<AdmissionSeatPool> AdmissionSeatPools { get; set; }
+	public DbSet<AdmissionSeatReservation> AdmissionSeatReservations { get; set; }
 	public DbSet<StudentOnboardingCase> StudentOnboardingCases { get; set; }
 	public DbSet<StudentOnboardingStep> StudentOnboardingSteps { get; set; }
 	public DbSet<StudentOnboardingEvent> StudentOnboardingEvents { get; set; }

@@ -28,6 +28,7 @@ public class AdmissionApplicationLifecycleService(
 	IRepository<AdmissionFormChangeHistory, Guid> historyRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository,
 	AdmissionOfferingRuntimeService offeringRuntimeService,
+	AdmissionInquiryRuntimeService inquiryRuntime,
 	AdmissionWorkflowStageHandlerRegistry stageHandlerRegistry)
 	: ApplicationService, ITransientDependency
 {
@@ -40,6 +41,7 @@ public class AdmissionApplicationLifecycleService(
 		var offering = (await offeringRuntimeService.GetAvailableAsync(offeringId)).Offering;
 		inquiryId = await ResolveInquiryAsync(applicantId, offeringId, inquiryId);
 		var inquiry = await EnsureInquiryMatchesAsync(inquiryId, applicantId, offering);
+		await inquiryRuntime.EnsureCanStartApplicationAsync(offering.Id, inquiry);
 		var workflow = await workflowRepository.FindAsync(offering.WorkflowDefinitionId!.Value);
 		var form = await formRepository.FindAsync(offering.ApplicationFormDefinitionId!.Value);
 		if (workflow?.Status != AdmissionWorkflowStatus.Published || form?.Status != AdmissionFormStatus.Published)

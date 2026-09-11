@@ -21,16 +21,16 @@ public static class AdmissionWorkflowStageTypeRegistry
 {
 	public static IReadOnlyList<AdmissionWorkflowStageTypeMetadata> All { get; } =
 	[
-		Metadata(AdmissionWorkflowStageType.Inquiry, "Inquiry", "Capture and qualify an admission inquiry.", "mdi:account-question-outline", "#0EA5E9", true, false, false, true, true, "InquiryStageHandler"),
-		Metadata(AdmissionWorkflowStageType.Form, "Form", "Collect information with a published dynamic form.", "mdi:form-select", "#6366F1", true, false, true, true, true, "FormStageHandler", ["formDefinitionId"]),
-		Metadata(AdmissionWorkflowStageType.Assessment, "Assessment", "Record an entrance exam, interaction, or other assessment.", "mdi:clipboard-text-outline", "#8B5CF6", false, false, false, true, true, "AssessmentStageHandler"),
-		Metadata(AdmissionWorkflowStageType.Eligibility, "Eligibility", "Evaluate configured admission eligibility criteria.", "mdi:shield-check-outline", "#14B8A6", false, true, false, true, false, "EligibilityStageHandler"),
-		Metadata(AdmissionWorkflowStageType.Payment, "Payment", "Collect or verify an admission payment.", "mdi:cash-check", "#F59E0B", false, false, false, true, false, "PaymentStageHandler"),
-		Metadata(AdmissionWorkflowStageType.DocumentVerification, "Document verification", "Review required applicant documents.", "mdi:file-check-outline", "#06B6D4", false, false, false, true, true, "DocumentVerificationStageHandler"),
-		Metadata(AdmissionWorkflowStageType.Review, "Review", "Perform a manual or committee review.", "mdi:account-search-outline", "#64748B", false, true, false, true, false, "ReviewStageHandler"),
+		Metadata(AdmissionWorkflowStageType.Inquiry, "Inquiry", "Capture and qualify an admission inquiry.", "mdi:account-question-outline", "#0EA5E9", true, false, false, true, true, "InquiryStageHandler", ["inquiry"]),
+		Metadata(AdmissionWorkflowStageType.Form, "Form", "Collect, submit, verify, and correct a published dynamic form.", "mdi:form-select", "#6366F1", true, false, true, true, true, "FormStageHandler", ["formDefinitionId", "form"]),
+		Metadata(AdmissionWorkflowStageType.Assessment, "Assessment", "Record an entrance exam, interaction, or other assessment.", "mdi:clipboard-text-outline", "#8B5CF6", false, false, false, true, true, "AssessmentStageHandler", ["assessment"]),
+		Metadata(AdmissionWorkflowStageType.Eligibility, "Eligibility", "Evaluate configured admission eligibility criteria.", "mdi:shield-check-outline", "#14B8A6", false, true, false, true, true, "EligibilityStageHandler", ["eligibility"]),
+		Metadata(AdmissionWorkflowStageType.Payment, "Payment", "Collect, verify, waive, or reverse an admission payment.", "mdi:cash-check", "#F59E0B", false, false, false, true, true, "PaymentStageHandler", ["payment"]),
+		Metadata(AdmissionWorkflowStageType.DocumentVerification, "Document verification", "Review required applicant documents.", "mdi:file-check-outline", "#06B6D4", false, false, false, true, true, "DocumentVerificationStageHandler", ["documentVerification"]),
+		Metadata(AdmissionWorkflowStageType.Review, "Review", "Record an assigned review and an explicit admission decision.", "mdi:account-search-outline", "#64748B", false, true, false, true, true, "ReviewStageHandler", ["review"]),
 		Metadata(AdmissionWorkflowStageType.Approval, "Approval", "Record an authorized admission decision.", "mdi:check-decagram-outline", "#22C55E", false, true, false, true, true, "ApprovalStageHandler"),
-		Metadata(AdmissionWorkflowStageType.Offer, "Offer", "Issue and track an admission offer.", "mdi:email-seal-outline", "#10B981", false, true, false, true, false, "OfferStageHandler"),
-		Metadata(AdmissionWorkflowStageType.Seat, "Seat", "Reserve or confirm a seat.", "mdi:seat-outline", "#F97316", false, true, false, true, false, "SeatStageHandler"),
+		Metadata(AdmissionWorkflowStageType.Offer, "Offer", "Issue, respond to, extend, withdraw, or reissue an admission offer.", "mdi:email-seal-outline", "#10B981", false, true, false, true, true, "OfferStageHandler", ["offer"]),
+		Metadata(AdmissionWorkflowStageType.Seat, "Seat", "Reserve, confirm, release, or waitlist admission capacity.", "mdi:seat-outline", "#F97316", false, true, false, true, true, "SeatStageHandler", ["seat"]),
 		Metadata(AdmissionWorkflowStageType.Enrollment, "Enrollment", "Complete the admission workflow after the enrollment decision is recorded.", "mdi:account-school-outline", "#16A34A", false, true, false, false, true, "EnrollmentStageHandler"),
 		Metadata(AdmissionWorkflowStageType.Custom, "Custom", "Configure a school-specific manual stage.", "mdi:puzzle-outline", "#475569", true, true, false, true, true, "CustomStageHandler"),
 		Metadata(AdmissionWorkflowStageType.Appointment, "Appointment", "Schedule and complete an applicant appointment.", "mdi:calendar-clock-outline", "#EC4899", false, false, false, true, false, "AppointmentStageHandler")

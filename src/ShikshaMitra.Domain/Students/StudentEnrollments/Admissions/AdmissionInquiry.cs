@@ -27,6 +27,7 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTime? ContactedAt { get; private set; }
 	public DateTime? LastActivityAt { get; private set; }
 	public string? FormResponseSnapshotJson => this.GetProperty<string>(FormResponseSnapshotProperty);
+	public Guid? FormResponseDefinitionId => this.GetProperty<Guid?>("AdmissionFormResponseDefinitionId");
 
 	protected AdmissionInquiry() { }
 
@@ -73,10 +74,11 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		LastActivityAt = DateTime.UtcNow;
 	}
 
-	public void RecordFormResponseSnapshot(string snapshotJson)
+	public void RecordFormResponseSnapshot(string snapshotJson, Guid? formDefinitionId = null)
 	{
 		this.SetProperty(FormResponseSnapshotProperty,
 			Check.NotNullOrWhiteSpace(snapshotJson, nameof(snapshotJson)));
+		if (formDefinitionId.HasValue) this.SetProperty("AdmissionFormResponseDefinitionId", formDefinitionId);
 	}
 
 	private static string NormalizePhone(string phone)

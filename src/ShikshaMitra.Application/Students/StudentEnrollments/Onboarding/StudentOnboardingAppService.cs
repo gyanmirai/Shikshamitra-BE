@@ -39,6 +39,7 @@ public class StudentOnboardingAppService(
 	IRepository<StudentEnrollment, Guid> enrollmentRepository,
 	IStudentRepository studentRepository,
 	StudentDocumentManager studentDocumentManager,
+	AdmissionStudentEvidenceReader admissionEvidenceReader,
 	IIdentityUserRepository identityUserRepository,
 	IDistributedEventBus distributedEventBus,
 	IUnitOfWorkManager unitOfWorkManager)
@@ -810,11 +811,13 @@ public class StudentOnboardingAppService(
 			"Primary contact and address information are available.",
 			"Add a primary contact number and local address.", at);
 		var documentStatus = await studentDocumentManager.GetRequiredDocumentsStatusAsync(student.Id);
+		var acceptedAdmissionDocumentTypes = await admissionEvidenceReader.GetAcceptedUploadDocumentTypeIdsAsync(student.Id);
 		var documentsReady = documentStatus.Where(item => item.documentType.IsRequired)
-			.All(item => item.uploadedDocument?.ValidatedAt.HasValue == true);
+			.All(item => item.uploadedDocument?.ValidatedAt.HasValue == true ||
+				acceptedAdmissionDocumentTypes.Contains(item.documentType.Id));
 		SetComputedStep(steps, StudentOnboardingStepKeys.Documents, documentsReady,
-			"All configured required documents are uploaded and validated.",
-			"Upload and validate every required document.", at);
+			"Required documents have validated Student uploads or accepted admission uploads.",
+			"Provide a validated Student upload or an accepted admission upload for every required document type.", at);
 		SetComputedStep(steps, StudentOnboardingStepKeys.MedicalAndPreviousSchool,
 			student.MedicalRecord != null || student.PreviousSchoolDetail != null,
 			"Medical or previous-school information is available.",

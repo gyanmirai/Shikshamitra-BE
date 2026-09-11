@@ -16,11 +16,14 @@ using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Entities;
 using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.Admissions;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
 public partial class ShikshaMitraDbContext
 {
+	public DbSet<AdmissionPaymentTransaction> AdmissionPaymentTransactions { get; set; }
+
 	// ───────────────────────────────────────────────
 	// Finance — Fee Settings
 	// ───────────────────────────────────────────────

@@ -27,6 +27,7 @@ public class CreateAdmissionInquiryDto
 {
 	public Guid? ExistingFamilyId { get; set; }
 	public bool CreateSeparateFamily { get; set; }
+	public string? DuplicateOverrideReason { get; set; }
 	public Guid AdmissionCycleId { get; set; }
 	public Guid? AdmissionOfferingId { get; set; }
 	public string ApplicantName { get; set; } = string.Empty;

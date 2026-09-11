@@ -10,18 +10,18 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string Prefix = "Students.Admissions.Payments";
 			public const string View = Prefix + ".View";
-			public const string Record = Prefix + ".Record";
-			public const string Verify = Prefix + ".Verify";
-			public const string Waive = Prefix + ".Waive";
-			public const string Reverse = Prefix + ".Reverse";
-			public static readonly string[] All = [View, Record, Verify, Waive, Reverse];
+			public const string Add = Prefix + ".Add";
+			public const string Delete = Prefix + ".Delete";
+			public const string Record = Add;
+			public const string Verify = Add;
+			public const string Waive = Add;
+			public const string Reverse = Delete;
+			public static readonly string[] All = [View, Add, Delete];
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				[View] = "View admission payments",
-				[Record] = "Record admission payments",
-				[Verify] = "Verify admission payments",
-				[Waive] = "Waive admission payments",
-				[Reverse] = "Reverse admission payments"
+				[Add] = "Add or update admission payments",
+				[Delete] = "Delete or reverse admission payments"
 			};
 		}
 	}

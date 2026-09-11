@@ -10,27 +10,21 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string Prefix = "Students.Admissions.Seats";
 			public const string View = Prefix + ".View";
-			public const string Reserve = Prefix + ".Reserve";
-			public const string Confirm = Prefix + ".Confirm";
-			public const string Renew = Prefix + ".Renew";
-			public const string Release = Prefix + ".Release";
-			public const string Waitlist = Prefix + ".Waitlist";
-			public const string ManageCapacity = Prefix + ".ManageCapacity";
-			public const string OverrideCapacity = Prefix + ".OverrideCapacity";
-			public static readonly string[] All =
-			[
-				View, Reserve, Confirm, Renew, Release, Waitlist, ManageCapacity, OverrideCapacity
-			];
+			public const string Add = Prefix + ".Add";
+			public const string Delete = Prefix + ".Delete";
+			public const string Reserve = Add;
+			public const string Confirm = Add;
+			public const string Renew = Add;
+			public const string Release = Delete;
+			public const string Waitlist = Add;
+			public const string ManageCapacity = Add;
+			public const string OverrideCapacity = Add;
+			public static readonly string[] All = [View, Add, Delete];
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				[View] = "View admission seat allocation",
-				[Reserve] = "Reserve admission seats",
-				[Confirm] = "Confirm admission seats",
-				[Renew] = "Renew admission seat reservations",
-				[Release] = "Release admission seats",
-				[Waitlist] = "Manage admission waitlists",
-				[ManageCapacity] = "Manage admission seat capacity",
-				[OverrideCapacity] = "Override admission seat capacity"
+				[Add] = "Add or update admission seat allocation",
+				[Delete] = "Delete or release admission seat allocation"
 			};
 		}
 	}

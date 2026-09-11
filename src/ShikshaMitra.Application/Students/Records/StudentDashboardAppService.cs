@@ -6,14 +6,15 @@ using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.Students.Records;
 
-[Authorize(ShikshaMitraSubModulePermissions.StudentDashboard)]
 [RemoteService(false)]
 public class StudentDashboardAppService(StudentDashboardPreviewService previewService)
 	: ApplicationService, IStudentDashboardAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Dashboard.View)]
 	public Task<StudentDashboardPreviewDto> GetPreviewAsync(string dashboardKey) =>
 		previewService.GetPreviewAsync(dashboardKey);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Dashboard.Add)]
 	public Task<StudentDashboardPreviewDto> RefreshPreviewAsync(string dashboardKey) =>
 		previewService.RefreshPreviewAsync(dashboardKey);
 

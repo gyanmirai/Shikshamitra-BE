@@ -21,7 +21,7 @@ public class RolePermissionSeederContributor_Tests
 	public void Permission_Grant_Changes_Should_Use_The_Current_Seeder_Marker_Version()
 	{
 		RolePermissionSeederContributor.StepName.ShouldBe("RolePermissionSeeder");
-		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v21");
+		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v24");
 		RolePermissionSeederContributor.StepOrder.ShouldBe(120);
 	}
 
@@ -167,30 +167,25 @@ public class RolePermissionSeederContributor_Tests
 	}
 
 	[Fact]
-	public void Admissions_Personas_Should_Keep_Least_Privilege_Boundaries()
+	public void Admissions_Personas_Should_Use_The_Three_Action_Permission_Model()
 	{
 		var rolePermissions = RolePermissionSeederContributor.BuildRolePermissions();
 		var receptionist = rolePermissions["Admissions Receptionist"];
 		var counselor = rolePermissions["Admissions Counselor"];
 		var approver = rolePermissions["Admissions Approver"];
 
-		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start);
+		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add);
 		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View);
-		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
-		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize);
-		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate);
+		receptionist.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add);
+		receptionist.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Delete);
 
-		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance);
-		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat);
-		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier);
-		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize);
-		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate);
+		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add);
+		counselor.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add);
+		counselor.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Delete);
 
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer);
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize);
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate);
-		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair);
-		approver.ShouldNotContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add);
+		approver.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Delete);
 	}
 
 	[Fact]

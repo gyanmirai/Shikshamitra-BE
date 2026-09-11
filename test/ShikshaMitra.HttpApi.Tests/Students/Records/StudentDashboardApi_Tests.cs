@@ -29,7 +29,7 @@ public class StudentDashboardApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Require_Student_Reports_View_Permission()
+	public async Task Should_Require_Student_Dashboard_View_Permission()
 	{
 		using var noPermissionClient = CreatePermissionClient();
 
@@ -43,7 +43,8 @@ public class StudentDashboardApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Create_And_Queue_Reporting_Dashboard_Preview()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
-		using var dashboardClient = CreatePermissionClient(ShikshaMitraSubModulePermissions.StudentDashboard);
+		using var dashboardClient = CreatePermissionClient(
+			ShikshaMitraSubmodulePermissions.Students.Dashboard.View);
 
 		var response = await dashboardClient.GetAsync(ReportingPreviewUrl);
 
@@ -56,6 +57,19 @@ public class StudentDashboardApi_Tests : ShikshaMitraApiTestBase
 		preview.PayloadJson.ShouldBe("{}");
 		preview.IsStale.ShouldBeTrue();
 		preview.RefreshStartedAt.ShouldNotBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Require_Student_Dashboard_Add_Permission_To_Refresh()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		using var viewOnlyClient = CreatePermissionClient(
+			ShikshaMitraSubmodulePermissions.Students.Dashboard.View);
+
+		var response = await viewOnlyClient.PostAsync($"{ReportingPreviewUrl}/refresh", content: null);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
 	[Fact]

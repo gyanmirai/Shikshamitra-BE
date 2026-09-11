@@ -15,8 +15,8 @@ namespace ShikshaMitra.Seeders;
 public class RolePermissionSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "RolePermissionSeeder";
-	// Re-run baseline grants for the Account Head master and separate Edit/ChangeStatus actions.
-	internal const string StepVersion = "RolePermissionSeeder:v21";
+	// Re-run baseline grants after completing View, Add, and Delete for every Student submodule.
+	internal const string StepVersion = "RolePermissionSeeder:v24";
 	internal const int StepOrder = 120;
 	private const string RoleProviderName = "R";
 
@@ -169,6 +169,8 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 	private static string[] AdmissionsBasePermissions() =>
 	[
 		ShikshaMitraModulePermissions.Students,
+		ShikshaMitraSubModulePermissions.Enrollment,
+		ShikshaMitraSubModulePermissions.StudentOnboarding,
 		ShikshaMitraSubmodulePermissions.Students.Default,
 		ShikshaMitraSubmodulePermissions.Students.Admissions.View,
 		ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View,

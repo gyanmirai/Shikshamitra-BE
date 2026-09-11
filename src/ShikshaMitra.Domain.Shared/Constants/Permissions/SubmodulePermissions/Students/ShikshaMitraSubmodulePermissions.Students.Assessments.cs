@@ -10,18 +10,20 @@ public static partial class ShikshaMitraSubmodulePermissions
 		{
 			private const string Prefix = "Students.Admissions.Assessments";
 			public const string View = Prefix + ".View";
-			public const string ManageSessions = Prefix + ".ManageSessions";
-			public const string Book = Prefix + ".Book";
-			public const string RecordAttendance = Prefix + ".RecordAttendance";
-			public const string RecordResults = Prefix + ".RecordResults";
-			public const string Review = Prefix + ".Review";
-			public const string Waive = Prefix + ".Waive";
-			public static readonly string[] All = [View, ManageSessions, Book, RecordAttendance, RecordResults, Review, Waive];
+			public const string Add = Prefix + ".Add";
+			public const string Delete = Prefix + ".Delete";
+			public const string ManageSessions = Add;
+			public const string Book = Add;
+			public const string RecordAttendance = Add;
+			public const string RecordResults = Add;
+			public const string Review = Add;
+			public const string Waive = Delete;
+			public static readonly string[] All = [View, Add, Delete];
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
-				[View] = "View admission assessments", [ManageSessions] = "Manage assessment sessions",
-				[Book] = "Book assessments and arrange retakes", [RecordAttendance] = "Record assessment attendance",
-				[RecordResults] = "Record assessment results", [Review] = "Review assessment results", [Waive] = "Waive admission assessments"
+				[View] = "View admission assessments",
+				[Add] = "Add or update admission assessments",
+				[Delete] = "Delete or waive admission assessments"
 			};
 		}
 	}

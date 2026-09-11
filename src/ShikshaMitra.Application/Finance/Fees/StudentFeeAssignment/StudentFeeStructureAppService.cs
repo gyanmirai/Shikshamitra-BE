@@ -52,13 +52,14 @@ public partial class StudentFeeStructureAppService(
 
 		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
 		var academicYear = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
-		await ValidateConcessionPolicySnapshotAsync(feeStructure, academicYear.Id);
+		if (feeStructure.ConcessionPolicyId.HasValue || feeStructure.ConcessionPolicyVersionId.HasValue)
+			await ValidateConcessionPolicySnapshotAsync(feeStructure, academicYear.Id);
 		await ValidateCollectionPolicySnapshotAsync(feeStructure, academicYear.Id);
 		await ValidateRefundPolicySnapshotAsync(feeStructure, academicYear.Id);
 		var prorationSnapshot = await ValidateProrationPolicySnapshotAsync(feeStructure, academicYear.Id);
 		if (prorationSnapshot != null)
 			await AuthorizationService.CheckAsync(
-				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Simulate);
+				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View);
 		var chargePeriod = await ResolveChargePeriodAsync(
 			input.ChargeStartDate, input.ChargeEndDate, input.ChargePeriodSource,
 			input.ChargePeriodSourceReferenceId, input.ChargePeriodOverrideReason, academicYear);
@@ -119,7 +120,11 @@ public partial class StudentFeeStructureAppService(
 				.WithData("FeeStructureStandardId", feeStructure.StandardId);
 		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
 		var academicYear = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
-		var concessionSnapshot = await ValidateConcessionPolicySnapshotAsync(feeStructure, academicYear.Id);
+		// New structures can be assigned without concessions. Preserve and validate legacy attachments.
+		(ConcessionPolicy Policy, FinancePolicyVersion Version)? concessionSnapshot =
+			feeStructure.ConcessionPolicyId.HasValue || feeStructure.ConcessionPolicyVersionId.HasValue
+				? await ValidateConcessionPolicySnapshotAsync(feeStructure, academicYear.Id)
+				: null;
 		var collectionSnapshot = await ValidateCollectionPolicySnapshotAsync(feeStructure, academicYear.Id);
 		var refundSnapshot = await ValidateRefundPolicySnapshotAsync(feeStructure, academicYear.Id);
 		var prorationSnapshot = await ValidateProrationPolicySnapshotAsync(feeStructure, academicYear.Id);
@@ -152,8 +157,8 @@ public partial class StudentFeeStructureAppService(
 				studentId: student.Id,
 				feeStructureStandardId: feeStructure.Id,
 				academicYearId: academicYear.Id,
-				concessionPolicyId: concessionSnapshot.Policy.Id,
-				concessionPolicyVersionId: concessionSnapshot.Version.Id,
+				concessionPolicyId: concessionSnapshot?.Policy.Id ?? Guid.Empty,
+				concessionPolicyVersionId: concessionSnapshot?.Version.Id ?? Guid.Empty,
 				concessionFeeHeadScope: feeStructure.ConcessionFeeHeadScope,
 				concessionApplicableFeeHeadIds: feeStructure.GetConcessionApplicableFeeHeadIds(),
 				collectionPolicyId: collectionSnapshot.Policy.Id,

@@ -4,6 +4,7 @@ using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using System;
 using System.Collections.Generic;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -101,6 +102,17 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     /// <summary>Updates the amount for this fee head.</summary>
     public void UpdateAmount(decimal amount)
     {
+        if (amount < 0 || decimal.Round(amount, 2) != amount)
+            throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
         Amount = amount;
     }
+
+	public void UpdateConfiguration(decimal amount, bool isOneTime, bool isOptional, MonthEnum? month, int? year)
+	{
+		UpdateAmount(amount);
+		IsOneTime = isOneTime;
+		IsOptional = isOptional;
+		PayableMonth = isOneTime ? month : null;
+		PayableYear = isOneTime ? year : null;
+	}
 }

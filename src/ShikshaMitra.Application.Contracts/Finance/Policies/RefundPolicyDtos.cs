@@ -6,8 +6,11 @@ using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Domain.Finance.Policies;
 
-public class RefundPolicyDto : EntityDto<Guid>
+public class RefundPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 {
+	public Guid? CurrentVersionId { get; set; }
+	public int CurrentVersionNumber => Version;
+	public bool IsAttachable => Status == "Active" && CurrentVersionId.HasValue;
 	public Guid AcademicYearId { get; set; }
 	public string PolicyName { get; set; } = string.Empty;
 	public string PolicyCode { get; set; } = string.Empty;

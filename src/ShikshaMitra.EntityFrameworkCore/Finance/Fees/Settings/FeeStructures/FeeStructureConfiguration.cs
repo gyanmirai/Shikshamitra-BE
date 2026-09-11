@@ -11,6 +11,13 @@ public class FeeStructureConfiguration : IEntityTypeConfiguration<FeeStructure>
 	{
 		builder.ToTable("Finance_FeeStructures", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.Property(x => x.RevisionNumber).HasDefaultValue(1);
+		builder.Property(x => x.NormalizedName).HasMaxLength(256).IsRequired();
+		builder.HasIndex(x => new { x.StandardId, x.NormalizedName }).IsUnique()
+			.HasFilter("\"PreviousRevisionId\" IS NULL AND NOT \"IsDeleted\"");
+		builder.HasIndex(x => new { x.RevisionRootId, x.RevisionNumber }).IsUnique();
+		builder.HasOne<FeeStructure>().WithMany().HasForeignKey(x => x.PreviousRevisionId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_Finance_FeeStructures_PreviousRevisionId");
+		builder.HasOne<ReceiptBook>().WithMany().HasForeignKey(x => x.ReceiptBookId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_Finance_FeeStructures_ReceiptBookId");
 
 		// FeeStructureDetail is a child entity of FeeStructure aggregate root.
 		// Cascade delete ensures details are removed when the parent structure is deleted.

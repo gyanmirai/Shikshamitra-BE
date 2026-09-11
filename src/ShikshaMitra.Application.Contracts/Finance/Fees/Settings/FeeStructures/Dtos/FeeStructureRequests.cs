@@ -4,12 +4,14 @@ using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using ShikshaMitra.Domain.Finance.Policies;
 
 namespace ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 
 public class StandardFeeStructureSaveRequest
 {
+	public Guid? RequestId { get; set; }
 	[Required]
 	public Guid StandardId { get; set; }
 	public required StandardFeeStructureRequest StandardFeeStructures { get; set; }
@@ -17,26 +19,31 @@ public class StandardFeeStructureSaveRequest
 
 public class StandardFeeStructureRequest
 {
+	public string? ConcurrencyStamp { get; set; }
+	/// <summary>Incomplete drafts can be saved; publication always validates the complete configuration.</summary>
+	public bool SaveAsDraft { get; set; } = true;
+	public Guid? ReceiptBookId { get; set; }
 	[Required]
 	public string Name { get; set; } = string.Empty;
 	[Required]
 	public List<FeeHeadAssignmentRequest> FeeHeads { get; set; } = new();
-	/// <summary>The active Collection Policy governing late fee/waiver for this fee structure. Required on create and update.</summary>
-	[Required]
+	/// <summary>The active Collection Policy governing late fee/waiver for this fee structure. Required for publication; an incomplete draft may omit it.</summary>
 	public Guid? CollectionPolicyId { get; set; }
-	/// <summary>Optional client assertion. The server always resolves and stores the policy's current immutable version.</summary>
+	/// <summary>Exact immutable version. When omitted on an unchanged attachment, retain the saved version.</summary>
 	public Guid? CollectionPolicyVersionId { get; set; }
 	/// <summary>Active Concession Policy attached to this fee structure. The server resolves and stores its exact version.</summary>
 	public Guid? ConcessionPolicyId { get; set; }
+	public Guid? ConcessionPolicyVersionId { get; set; }
+	[JsonConverter(typeof(JsonStringEnumConverter))]
 	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; set; } = ConcessionFeeHeadScope.EntireFeeStructure;
 	public List<Guid> ConcessionApplicableFeeHeadIds { get; set; } = [];
-	/// <summary>Optional Active Refund Policy. The server stores its current immutable version.</summary>
+	/// <summary>Optional Active Refund Policy. The server retains the selected immutable version.</summary>
 	public Guid? RefundPolicyId { get; set; }
-	/// <summary>Optional client assertion; the server remains authoritative for the current version.</summary>
+	/// <summary>Exact version assertion; the server validates ownership and availability.</summary>
 	public Guid? RefundPolicyVersionId { get; set; }
-	/// <summary>Optional Active Proration Policy. The server stores its current immutable version.</summary>
+	/// <summary>Optional Active Proration Policy. The server retains the selected immutable version.</summary>
 	public Guid? ProrationPolicyId { get; set; }
-	/// <summary>Optional client assertion; the server remains authoritative for the current version.</summary>
+	/// <summary>Exact version assertion; the server validates ownership and availability.</summary>
 	public Guid? ProrationPolicyVersionId { get; set; }
 }
 
@@ -77,6 +84,7 @@ public class CollectionPolicyAttachmentImpactResponse
 
 public class FeeHeadAssignmentRequest
 {
+	public Guid? Id { get; set; }
 	[Required]
 	public Guid FeeHeadId { get; set; }
 	public decimal Amount { get; set; }
@@ -88,10 +96,11 @@ public class FeeHeadAssignmentRequest
 	/// <summary>Optional Payment Term master attached to this fee head.</summary>
 	public Guid? PaymentTermId { get; set; }
 
-	/// <summary>Specific published/draft version used for demand generation.</summary>
+	/// <summary>Specific published or superseded version; draft versions are rejected.</summary>
 	public Guid? PaymentTermVersionId { get; set; }
 
 	/// <summary>Inherited master schedule vs structure-specific overrides.</summary>
+	[JsonConverter(typeof(JsonStringEnumConverter))]
 	public ScheduleMode ScheduleMode { get; set; } = ScheduleMode.Inherited;
 
 	/// <summary>Structure-specific installment overrides when ScheduleMode is Customized.</summary>

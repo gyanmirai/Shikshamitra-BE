@@ -17,8 +17,11 @@ public class ProrationPolicyRuleDto
 	public string? AfterCutoffAction { get; set; }
 }
 
-public class ProrationPolicyDto : EntityDto<Guid>
+public class ProrationPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 {
+	public Guid? CurrentVersionId { get; set; }
+	public int CurrentVersionNumber => Version;
+	public bool IsAttachable => Status == "Active" && CurrentVersionId.HasValue;
 	public Guid AcademicYearId { get; set; }
 	public string AcademicYearName { get; set; } = string.Empty;
 	public string PolicyName { get; set; } = string.Empty;

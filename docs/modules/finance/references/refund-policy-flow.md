@@ -620,13 +620,7 @@ Every mutation returns the persisted status, concurrency token, calculation vers
 ```text
 Finance.Policies.RefundPolicy.View
 Finance.Policies.RefundPolicy.Add
-Finance.Policies.RefundPolicy.Edit
-Finance.Policies.RefundPolicy.Simulate
-Finance.Policies.RefundPolicy.Archive
-Finance.Policies.RefundPolicy.Unarchive
-Finance.Policies.RefundPolicy.Clone
-Finance.Policies.RefundPolicy.ViewVersions
-Finance.Policies.RefundPolicy.ManageAttachment
+Finance.Policies.RefundPolicy.Delete
 
 Finance.Fees.Refund.View
 Finance.Fees.Refund.Create

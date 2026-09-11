@@ -18,8 +18,13 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid FeeStructureMetadataId { get; private set; }
 
 	public string Name { get; private set; }
+	public string NormalizedName { get; private set; } = string.Empty;
 	public ICollection<FeeStructureDetail> FeeStructureDetails { get; private set; } = new List<FeeStructureDetail>();
 	public bool IsLocked { get; private set; }
+	public Guid RevisionRootId { get; private set; }
+	public Guid? PreviousRevisionId { get; private set; }
+	public int RevisionNumber { get; private set; } = 1;
+	public Guid? ReceiptBookId { get; private set; }
 
 	/// <summary>
 	/// The Collection Policy attached to this Fee Structure — the resolution point
@@ -53,18 +58,43 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		TenantId = tenantId;
 		FeeStructureMetadataId = feeStructureMetadataId;
 		StandardId = standardId;
-		Name = name;
+		ChangeName(name);
 		FeeStructureDetails = new List<FeeStructureDetail>();
 		IsLocked = false;
+		RevisionRootId = id;
 	}
 
 	public void ChangeName(string name)
 	{
-		Name = name;
+		EnsureNotLocked();
+		var validName = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: 256).Trim();
+		if (PreviousRevisionId.HasValue && Name != validName)
+			throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration).WithData("Errors", new[] { "A revision retains the name of its published structure." });
+		Name = validName;
+		NormalizedName = Name.ToUpperInvariant();
+	}
+
+	public void SetRevision(FeeStructure previous, int revisionNumber)
+	{
+		EnsureNotLocked();
+		if (!previous.IsLocked || revisionNumber <= previous.RevisionNumber ||
+			previous.StandardId != StandardId || previous.FeeStructureMetadataId != FeeStructureMetadataId ||
+			previous.TenantId != TenantId)
+			throw new BusinessException(FeeStructureErrorCodes.RevisionRequiresPublication);
+		RevisionRootId = previous.RevisionRootId;
+		PreviousRevisionId = previous.Id;
+		RevisionNumber = revisionNumber;
+	}
+
+	public void SetReceiptBook(Guid? receiptBookId)
+	{
+		EnsureNotLocked();
+		ReceiptBookId = receiptBookId;
 	}
 
 	public void AttachCollectionPolicy(Guid? collectionPolicyId, Guid? collectionPolicyVersionId)
 	{
+		EnsureNotLocked();
 		if (collectionPolicyId.HasValue != collectionPolicyVersionId.HasValue)
 		{
 			throw new BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
@@ -76,6 +106,7 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>Legacy hydration path for rows created before immutable policy attachment.</summary>
 	public void AttachCollectionPolicy(Guid? collectionPolicyId)
 	{
+		EnsureNotLocked();
 		CollectionPolicyId = collectionPolicyId;
 		CollectionPolicyVersionId = null;
 	}
@@ -86,6 +117,7 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ConcessionFeeHeadScope feeHeadScope,
 		IReadOnlyCollection<Guid>? applicableFeeHeadIds)
 	{
+		EnsureNotLocked();
 		if (concessionPolicyId.HasValue != concessionPolicyVersionId.HasValue)
 			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound)
 				.WithData("field", "ConcessionPolicyVersionId");
@@ -110,6 +142,7 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void AttachRefundPolicy(Guid? refundPolicyId, Guid? refundPolicyVersionId)
 	{
+		EnsureNotLocked();
 		if (refundPolicyId.HasValue != refundPolicyVersionId.HasValue)
 			throw new BusinessException(RefundPolicyErrorCodes.PolicyVersionNotFound)
 				.WithData("field", "RefundPolicyVersionId");
@@ -119,6 +152,7 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void AttachProrationPolicy(Guid? prorationPolicyId, Guid? prorationPolicyVersionId)
 	{
+		EnsureNotLocked();
 		if (prorationPolicyId.HasValue != prorationPolicyVersionId.HasValue)
 			throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound)
 				.WithData("field", "ProrationPolicyVersionId");
@@ -128,12 +162,22 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void AddDetail(FeeStructureDetail detail)
 	{
+		EnsureNotLocked();
+		if (detail.FeeStructureId != Id || detail.TenantId != TenantId || FeeStructureDetails.Any(x => x.FeeHeadId == detail.FeeHeadId))
+			throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		FeeStructureDetails.Add(detail);
 	}
 
 	public void ClearDetails()
 	{
+		EnsureNotLocked();
 		FeeStructureDetails.Clear();
+	}
+
+	public void RemoveDetail(FeeStructureDetail detail)
+	{
+		EnsureNotLocked();
+		FeeStructureDetails.Remove(detail);
 	}
 
 	public void Lock()

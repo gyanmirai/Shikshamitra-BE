@@ -747,6 +747,8 @@ public class PaymentTermAppService(
 			Status = ResolveLifecycleStatus(term),
 			IsDefault = term.IsDefault,
 			CurrentVersionNumber = latest?.VersionNumber ?? 0,
+			PublishedVersionId = published?.Id,
+			PublishedVersionNumber = published?.VersionNumber,
 			HasDraft = draft != null,
 			HasPublishedVersion = published != null,
 			InstallmentCount = latest?.Installments.Count ?? 0,

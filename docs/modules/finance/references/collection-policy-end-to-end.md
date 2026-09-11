@@ -479,7 +479,7 @@ Closing a dirty drawer asks for confirmation.
 ### Frontend security and client rules
 
 - Menu and route use `Finance.Policies.CollectionPolicy.View`, not Fee Collections permission.
-- Buttons use Add, Edit, Clone, Simulate, Archive, Unarchive, ViewVersions, ManageAttachment, waiver, override, exception, and report permissions as applicable.
+- Configuration buttons use View, Add and Delete. Operational waiver, override, exception and report grants remain separate.
 - Backend repeats every permission and ownership check.
 - RTK Query uses typed request/response contracts, precise cache tags by year/policy, and invalidates list/detail/version/impact after mutation.
 - Prevent duplicate submit while saving and send an idempotency key for financial commands.
@@ -528,17 +528,12 @@ Conflicts return a stable business error rather than overwriting another adminis
 
 ## Permissions and suggested school roles
 
-Align the Collection Policy permission family with Concession Policy's fine-grained lifecycle.
+Configuration follows the [three-permission contract](../api.md#fee-configuration-permissions): View includes history/simulation; Add includes editing, activation, cloning, restoring and attachments; Delete covers archival. Operational permissions remain independent.
 
 | Permission | Finance admin | Accountant | Collector | Principal/approver | Auditor |
 |---|---:|---:|---:|---:|---:|
 | View | Yes | Yes | Read effective result | Yes | Yes |
-| Add/Edit | Yes | Optional | No | No | No |
-| Activate | Yes | No | No | Optional | No |
-| Clone/Simulate | Yes | Optional | No | No | No |
-| Archive/Unarchive | Yes | No | No | No | No |
-| ViewVersions | Yes | Optional | No | Yes | Yes |
-| ManageAttachment | Yes | Optional | No | No | No |
+| Add | Yes | Optional | No | No | No |
 | EditStudentOverride | Optional | Optional | No | Optional | No |
 | ApproveWaiver | Optional | Optional | No | Yes | No |
 | ApproveWaiverAboveThreshold | No | No | No | Yes | No |

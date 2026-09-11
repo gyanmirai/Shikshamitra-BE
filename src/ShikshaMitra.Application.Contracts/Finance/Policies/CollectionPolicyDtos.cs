@@ -40,8 +40,11 @@ public class CollectionPolicyFeeHeadOverrideDto
 	public LateFeeRuleOverrideDto? LateFeeRule { get; set; }
 }
 
-public class CollectionPolicyDto : EntityDto<Guid>
+public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 {
+	public Guid? CurrentVersionId { get; set; }
+	public int CurrentVersionNumber => Version;
+	public bool IsAttachable => Status == "Active" && CurrentVersionId.HasValue;
 	public Guid AcademicYearId { get; set; }
 	public string PolicyName { get; set; } = string.Empty;
 	public string PolicyCode { get; set; } = string.Empty;

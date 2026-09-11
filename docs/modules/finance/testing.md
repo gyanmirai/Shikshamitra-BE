@@ -12,6 +12,8 @@ audience: humans-and-agents
 
 TL;DR: use focused Finance tests for changed financial behavior, then run module docs validation.
 
+Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
+
 ## Required docs checks
 
 ```powershell

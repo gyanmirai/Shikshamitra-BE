@@ -8510,16 +8510,35 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid?>("PreviousRevisionId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ProrationPolicyId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("ProrationPolicyVersionId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ReceiptBookId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("RefundPolicyId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("RefundPolicyVersionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("RevisionNumber")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
+                    b.Property<Guid>("RevisionRootId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("StandardId")
@@ -8540,17 +8559,28 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("ConcessionPolicyId")
                         .HasDatabaseName("IX_Finance_FeeStructures_ConcessionPolicyId");
 
+                    b.HasIndex("PreviousRevisionId");
+
                     b.HasIndex("ProrationPolicyId")
                         .HasDatabaseName("IX_Finance_FeeStructures_ProrationPolicyId");
 
                     b.HasIndex("ProrationPolicyVersionId")
                         .HasDatabaseName("IX_Finance_FeeStructures_ProrationPolicyVersionId");
 
+                    b.HasIndex("ReceiptBookId");
+
                     b.HasIndex("RefundPolicyId")
                         .HasDatabaseName("IX_Finance_FeeStructures_RefundPolicyId");
 
                     b.HasIndex("RefundPolicyVersionId")
                         .HasDatabaseName("IX_Finance_FeeStructures_RefundPolicyVersionId");
+
+                    b.HasIndex("RevisionRootId", "RevisionNumber")
+                        .IsUnique();
+
+                    b.HasIndex("StandardId", "NormalizedName")
+                        .IsUnique()
+                        .HasFilter("\"PreviousRevisionId\" IS NULL AND NOT \"IsDeleted\"");
 
                     b.ToTable("Finance_FeeStructures", (string)null);
                 });
@@ -36164,6 +36194,12 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("CollectionPolicyVersionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("ShikshaMitra.Domain.Finance.Fees.Settings.FeeStructure", null)
+                        .WithMany()
+                        .HasForeignKey("PreviousRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_Finance_FeeStructures_PreviousRevisionId");
+
                     b.HasOne("ShikshaMitra.Domain.Finance.Policies.ProrationPolicy", null)
                         .WithMany()
                         .HasForeignKey("ProrationPolicyId")
@@ -36173,6 +36209,12 @@ namespace ShikshaMitra.Migrations
                         .WithMany()
                         .HasForeignKey("ProrationPolicyVersionId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Domain.Finance.Fees.Settings.ReceiptBook", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiptBookId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_Finance_FeeStructures_ReceiptBookId");
 
                     b.HasOne("ShikshaMitra.Domain.Finance.Policies.RefundPolicy", null)
                         .WithMany()

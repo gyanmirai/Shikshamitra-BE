@@ -9,6 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Superseded by the scaffolded 20260911071719 migration and its target model. -->
+    <Compile Remove="Migrations\20260909160000_AddFeeStructureRevisions.cs" />
     <Compile Remove="HR\EventAndHolidays\**" />
     <EmbeddedResource Remove="HR\EventAndHolidays\**" />
     <None Remove="HR\EventAndHolidays\**" />

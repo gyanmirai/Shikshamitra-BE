@@ -93,7 +93,7 @@ public class EfCoreFeeRefundRepository(
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
     }
 
-    public async Task<long> GetCountAsync(CancellationToken cancellationToken = default)
+    public override async Task<long> GetCountAsync(CancellationToken cancellationToken = default)
     {
         var dbSet = await GetDbSetAsync();
         return await dbSet.LongCountAsync(cancellationToken);

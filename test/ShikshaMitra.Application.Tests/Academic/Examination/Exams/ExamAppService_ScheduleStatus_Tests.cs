@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using ShikshaMitra.Academic.Examination.Settings;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -14,7 +17,9 @@ using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Claims;
 using Xunit;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
@@ -31,11 +36,16 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 	private readonly IRepository<Exam, Guid> _examRepository;
 	private readonly IRepository<AssignedSubject, Guid> _assignedSubjectRepository;
 	private readonly IRepository<ElectiveGroup, Guid> _electiveGroupRepository;
+	private readonly IRepository<GradingScale, Guid> _gradingScaleRepository;
+	private readonly IRepository<Employee, Guid> _employeeRepository;
+	private readonly IRepository<IdentityUser, Guid> _identityUserRepository;
+	private readonly IRepository<IdentityRole, Guid> _identityRoleRepository;
 	private readonly StandardManager _standardManager;
 	private readonly DivisionManager _divisionManager;
 	private readonly ExamTypeManager _examTypeManager;
 	private readonly ExamManager _examManager;
 	private readonly ICurrentTenant _currentTenant;
+	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 
 	public ExamAppService_ScheduleStatus_Tests()
 	{
@@ -47,11 +57,100 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 		_examRepository = GetRequiredService<IRepository<Exam, Guid>>();
 		_assignedSubjectRepository = GetRequiredService<IRepository<AssignedSubject, Guid>>();
 		_electiveGroupRepository = GetRequiredService<IRepository<ElectiveGroup, Guid>>();
+		_gradingScaleRepository = GetRequiredService<IRepository<GradingScale, Guid>>();
+		_employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
+		_identityUserRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
+		_identityRoleRepository = GetRequiredService<IRepository<IdentityRole, Guid>>();
 		_standardManager = GetRequiredService<StandardManager>();
 		_divisionManager = GetRequiredService<DivisionManager>();
 		_examTypeManager = GetRequiredService<ExamTypeManager>();
 		_examManager = GetRequiredService<ExamManager>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
+		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
+	}
+
+	[Fact]
+	public async Task CreateBasicDetailsAsync_Should_Allow_Primary_Teacher_For_Exact_Assigned_Subjects()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+				var stage = await _stageRepository.GetAsync(stageId);
+				var unique = Guid.NewGuid().ToString("N");
+				var teacherUserId = Guid.NewGuid();
+				var teacher = await CreateTeacherAsync(teacherUserId, unique);
+
+				var standard = await _standardManager.CreateAsync(
+					stageId,
+					$"Teacher Exam {unique}"[..30],
+					12,
+					shiftId: null);
+				await _standardRepository.InsertAsync(standard, autoSave: true);
+
+				var division = await _divisionManager.CreateAsync(standard.Id, $"A-{unique}"[..30], 35);
+				await _divisionRepository.InsertAsync(division, autoSave: true);
+
+				var assignedSubject = await CreatePrimaryTeacherSubjectAsync(
+					standard.Id,
+					stage.EducationMediumId,
+					teacher.Id,
+					$"Core Mathematics {unique}"[..30]);
+				var otherSubject = await CreateSubjectAsync(
+					stage.EducationMediumId,
+					$"Unallocated Subject {unique}"[..30]);
+
+				var examType = await _examTypeManager.CreateAsync(
+					$"Practical {unique}"[..30],
+					description: null,
+					stage.EducationMediumId);
+				var gradingScale = await _gradingScaleRepository.InsertAsync(
+					new GradingScale(
+						Guid.NewGuid(),
+						TestTenantId,
+						$"Main Grade {unique}"[..30],
+						"100",
+						stage.EducationMediumId),
+					autoSave: true);
+
+				using (_currentPrincipalAccessor.Change(BuildTeacherPrincipal(teacherUserId)))
+				{
+					var examId = await _examAppService.CreateBasicDetailsAsync(new ExamBasicDetailsRequestDto
+					{
+						ExamTypeId = examType.Id,
+						ExamName = $"Allocated Exam {unique}"[..40],
+						StandardId = standard.Id,
+						GradingScaleId = gradingScale.Id,
+						DivisionIds = [division.Id],
+						SubjectIds = [assignedSubject.SubjectId]
+					});
+
+					var saved = await _examAppService.GetBasicDetailsAsync(examId);
+					saved.SubjectIds.ShouldBe([assignedSubject.SubjectId]);
+					saved.DivisionIds.ShouldBe([division.Id]);
+					var visibleExams = await _examAppService.GetListAsync(new GetExamsInput
+					{
+						AcademicMediumId = stage.EducationMediumId,
+						Status = ExamStatus.Pending,
+						MaxResultCount = 10
+					});
+					visibleExams.Items.Select(item => item.ExamId).ShouldContain(examId);
+
+					var denied = await Should.ThrowAsync<BusinessException>(() =>
+						_examAppService.CreateBasicDetailsAsync(new ExamBasicDetailsRequestDto
+						{
+							ExamTypeId = examType.Id,
+							ExamName = $"Mixed Scope Exam {unique}"[..40],
+							StandardId = standard.Id,
+							GradingScaleId = gradingScale.Id,
+							DivisionIds = [division.Id],
+							SubjectIds = [assignedSubject.SubjectId, otherSubject.Id]
+						}));
+					denied.Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
+				}
+			}
+		});
 	}
 
 	[Fact]
@@ -333,5 +432,95 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 		await _subjectRepository.InsertAsync(subject, autoSave: true);
 
 		return subject;
+	}
+
+	private async Task<AssignedSubject> CreatePrimaryTeacherSubjectAsync(
+		Guid standardId,
+		Guid mediumId,
+		Guid teacherEmployeeId,
+		string subjectName)
+	{
+		var subject = await CreateSubjectAsync(mediumId, subjectName);
+		var assignedSubject = new AssignedSubject(
+			Guid.NewGuid(),
+			TestTenantId,
+			standardId,
+			subject.Id,
+			$"SUB-{Guid.NewGuid():N}"[..12],
+			SubjectStatus.Published);
+		assignedSubject.SetPrimaryTeacher(teacherEmployeeId);
+		return await _assignedSubjectRepository.InsertAsync(assignedSubject, autoSave: true);
+	}
+
+	private async Task<Employee> CreateTeacherAsync(Guid userId, string unique)
+	{
+		var roleId = Guid.NewGuid();
+		await _identityUserRepository.InsertAsync(
+			new IdentityUser(
+				userId,
+				$"exam-teacher-{unique[..8]}",
+				$"{unique[..12]}@test.local",
+				TestTenantId),
+			autoSave: true);
+		await _identityRoleRepository.InsertAsync(
+			new IdentityRole(roleId, $"exam-teacher-{unique[..8]}", TestTenantId),
+			autoSave: true);
+
+		var employee = new Employee(
+			Guid.NewGuid(),
+			TestTenantId,
+			userId,
+			$"EXM{unique[..9]}",
+			new EmployeeBasicInfo(
+				ProfilePictureBlobName: null,
+				LastName: "Patel",
+				FirstName: "Akshay",
+				MiddleName: null,
+				ShortName: "Akshay",
+				EmployeeStatusType: EmployeeStatusType.Active,
+				DateOfBirth: new DateOnly(1990, 1, 1),
+				FamilyCast: null,
+				CastType: null,
+				GenderType: null,
+				Religion: null,
+				MaritalStatus: null,
+				BloodGroup: null,
+				MobileNo: null,
+				SecondaryMobileNo: null,
+				Email: $"{unique[..12]}@test.local",
+				PanNo: $"ABCDE{unique[..4].ToUpperInvariant()}F",
+				AdharNo: $"1{Math.Abs((long)unique.GetHashCode()):D11}"[..12],
+				Address1: null,
+				Address2: null,
+				Address3: null,
+				Department: "Academics",
+				Designation: "Teacher",
+				DateOfJoining: new DateOnly(2025, 1, 1),
+				EmployeeGroup: EmployeeGroupType.Teaching,
+				Qualification: null,
+				RoleId: roleId,
+				IdentificationMark1: null,
+				City: null,
+				State: null,
+				Country: null,
+				PinCode: null,
+				ShiftId: null),
+			new BankDetails(null, null, null, null, null),
+			null);
+
+		return await _employeeRepository.InsertAsync(employee, autoSave: true);
+	}
+
+	private static ClaimsPrincipal BuildTeacherPrincipal(Guid userId)
+	{
+		var claims = new List<Claim>
+		{
+			new(AbpClaimTypes.UserId, userId.ToString()),
+			new(AbpClaimTypes.UserName, "akshay.patel"),
+			new(AbpClaimTypes.Role, "teacher"),
+			new(AbpClaimTypes.TenantId, TestTenantId.ToString())
+		};
+
+		return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
 	}
 }

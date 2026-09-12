@@ -82,12 +82,30 @@ public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserSco
             throw new InvalidOperationException("Approved lesson plans cannot be modified.");
         }
 
+        var hasMeaningfulChanges =
+            ChapterId != chapterId ||
+            !HasSameValue(Topic, topic) ||
+            !HasSameValue(LearningObjective, learningObjective) ||
+            !HasSameValue(TeachingMethod, teachingMethod) ||
+            !HasSameValue(ResourcesRequired, resourcesRequired) ||
+            PlannedCompletionPercentage != Math.Clamp(plannedCompletionPercentage, 0, 100);
+
+        if (Status == LessonPlanStatus.NeedsChanges && !hasMeaningfulChanges)
+        {
+            throw new LessonPlanRevisionRequiredException();
+        }
+
         ChapterId = chapterId;
         Topic = topic;
         LearningObjective = learningObjective;
         TeachingMethod = teachingMethod;
         ResourcesRequired = resourcesRequired;
         PlannedCompletionPercentage = Math.Clamp(plannedCompletionPercentage, 0, 100);
+
+        if (Status == LessonPlanStatus.NeedsChanges)
+        {
+            Status = LessonPlanStatus.Draft;
+        }
     }
 
     public void ReassignTeacher(Guid teacherId)
@@ -99,6 +117,11 @@ public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserSco
 
     public void Submit()
     {
+        if (Status == LessonPlanStatus.NeedsChanges)
+        {
+            throw new LessonPlanRevisionRequiredException();
+        }
+
         Status = LessonPlanStatus.Submitted;
     }
 
@@ -125,4 +148,10 @@ public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserSco
         ReviewedAt = DateTime.UtcNow;
         ReviewRemarks = remarks;
     }
+
+    private static bool HasSameValue(string? currentValue, string? updatedValue) =>
+        string.Equals(
+            currentValue?.Trim() ?? string.Empty,
+            updatedValue?.Trim() ?? string.Empty,
+            StringComparison.Ordinal);
 }

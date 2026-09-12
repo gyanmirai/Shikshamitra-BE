@@ -29,4 +29,8 @@ public static class CurriculumErrorCodes
     // ── Chapter: 04xxxx ──────────────────────────────────────────
 
     public const string ChapterIsInUse = "Academic:Curriculum:040001";
+
+    // ── Lesson Plan: 05xxxx ──────────────────────────────────────
+
+    public const string LessonPlanRevisionRequired = "Academic:Curriculum:050001";
 }

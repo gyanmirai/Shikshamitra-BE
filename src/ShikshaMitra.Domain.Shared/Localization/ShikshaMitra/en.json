@@ -452,6 +452,25 @@
     "Academic:Curriculum:010001": "Education medium was not found.",
     "Academic:Curriculum:010002": "A subject named '{Name}' already exists for this medium.",
     "Academic:Curriculum:010003": "The color '{Color}' is already used by subject '{ExistingSubjectName}'. Please choose a different color.",
-    "Academic:Curriculum:010004": "Subject was not found."
+    "Academic:Curriculum:010004": "Subject was not found.",
+
+    "Academic:Reports:AiNotConfigured": "ShikshaMitra AI is not configured. Ask an administrator to configure the AI provider API key.",
+    "Academic:Reports:AiServiceUnavailable": "ShikshaMitra AI is temporarily unavailable. Please try again.",
+    "Academic:Reports:AiInvalidResponse": "ShikshaMitra AI could not create a valid Curriculum report plan. Please make the request more specific.",
+    "Academic:Reports:AiPromptInvalid": "Describe the Curriculum report you want to create.",
+    "Academic:Reports:AiProviderUnsupported": "The configured AI provider is not supported.",
+    "Academic:Reports:AiMultiAgentUnavailable": "The specialist report planners are temporarily unavailable.",
+    "Academic:Reports:AiModuleNotAvailable": "AI report generation is not available for the {Module} module yet.",
+    "Academic:Reports:AiModuleScopeMismatch": "{RequestedModule} reports cannot be generated from Curriculum Reports. Open the appropriate Academic module to request that report.",
+    "Academic:Reports:AiUnsafeRequest": "This request cannot be processed because it contains unsafe instructions.",
+    "Academic:Reports:AiDatasetNotAllowed": "The requested data is not available in Curriculum Reports.",
+    "Academic:Reports:AiInvalidCatalogToken": "The request refers to Curriculum data that is unavailable or outside your access scope.",
+    "Academic:Reports:AiColumnNotAllowed": "The report plan contains a column that is not available for the selected Curriculum dataset.",
+    "Academic:Reports:AiSortNotAllowed": "The report plan cannot sort by a field that is not included in the selected Curriculum dataset.",
+    "Academic:Reports:AiTooManyColumns": "A dynamic Curriculum report can contain at most 20 columns.",
+    "Academic:Reports:AiResultTooLarge": "This report contains too many rows. Narrow the class, division, subject, or chapter filters and try again.",
+    "Academic:Reports:AiAcademicContextRequired": "Select an Academic Year, Board, and Medium before creating an AI report.",
+    "Academic:Reports:AiAcademicContextInvalid": "The selected Academic Year, Board, and Medium do not belong to the same academic hierarchy.",
+    "Academic:Reports:AiFilterCouldNotBeResolved": "ShikshaMitra AI understood that a {FilterType} filter is required, but could not match its value to accessible Curriculum data. Check the requested name and try again."
   }
 }

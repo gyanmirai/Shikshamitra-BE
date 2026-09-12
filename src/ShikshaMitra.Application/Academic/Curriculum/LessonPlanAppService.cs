@@ -20,6 +20,7 @@ using Volo.Abp.Authorization;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.Users;
 
 namespace ShikshaMitra.Academic.Curriculum;
@@ -39,6 +40,7 @@ public class LessonPlanAppService(
     IRepository<AssignedSubjectChapter, Guid> chapterRepository,
     IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
     IRepository<Employee, Guid> employeeRepository,
+    IRepository<IdentityUser, Guid> identityUserRepository,
     IRepository<AcademicCalendarDay, Guid> calendarDayRepository,
     IRepository<EmployeeLeave, Guid> employeeLeaveRepository,
     IRepository<EducationMediumStage, Guid> mediumStageRepository,
@@ -346,8 +348,14 @@ public class LessonPlanAppService(
         await EnsureOwnTeacherRecordAsync(input.TeacherId, "create");
         await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, input.StandardId, input.SubjectId);
 
-        await EnsureLessonPlanCanBeCreatedForDateAsync(input.TeacherId, input.PlannedDate, input.StandardId, input.DivisionId);
-        await EnsureUniqueLessonPlanAsync(input.TeacherId, input.PlannedDate, input.Topic, input.TimetableSlotId);
+        // PlannedDate is a school-calendar date selected in the browser. Preserve the
+        // submitted offset for calendar validation, then persist its UTC instant.
+        // Converting to DateTime before taking Date shifts positive-offset midnights
+        // into the previous UTC date (for example, 15 Sep IST becomes 14 Sep UTC).
+        var plannedLocalDate = input.PlannedDate.Date;
+        var plannedDateUtc = input.PlannedDate.UtcDateTime;
+        await EnsureLessonPlanCanBeCreatedForDateAsync(input.TeacherId, plannedLocalDate, input.StandardId, input.DivisionId);
+        await EnsureUniqueLessonPlanAsync(input.TeacherId, plannedDateUtc, input.Topic, input.TimetableSlotId);
 
         var lessonPlan = new LessonPlan(
             GuidGenerator.Create(),
@@ -358,7 +366,7 @@ public class LessonPlanAppService(
             input.DivisionId,
             input.SubjectId,
             input.ChapterId,
-            input.PlannedDate,
+            plannedDateUtc,
             input.Topic,
             input.PlannedCompletionPercentage,
             input.TimetableSlotId,
@@ -392,7 +400,7 @@ public class LessonPlanAppService(
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-update");
-        await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "modify");
+        await EnsureCurrentTeacherOwnsLessonPlanAsync(lessonPlan, "revise");
         EnsureLessonPlanEditable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(input.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
         await lessonPlanProgressManager.EnsureTargetAsync(lessonPlan, input.ChapterId, input.PlannedCompletionPercentage);
@@ -423,7 +431,7 @@ public class LessonPlanAppService(
     {
         var lessonPlan = await lessonPlanRepository.GetAsync(id);
         await EnsureLessonPlanAccessAsync(lessonPlan, "lesson-plan-submit");
-        await EnsureOwnTeacherRecordAsync(lessonPlan.TeacherId, "submit");
+        await EnsureCurrentTeacherOwnsLessonPlanAsync(lessonPlan, "submit");
         EnsureLessonPlanSubmittable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(lessonPlan.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
         await EnsureLessonPlanCanBeCreatedForDateAsync(lessonPlan.TeacherId, lessonPlan.PlannedDate, lessonPlan.StandardId, lessonPlan.DivisionId);
@@ -442,7 +450,7 @@ public class LessonPlanAppService(
         {
             var plan = await lessonPlanRepository.GetAsync(id);
             await EnsureLessonPlanAccessAsync(plan, "lesson-plan-submit");
-            await EnsureOwnTeacherRecordAsync(plan.TeacherId, "submit");
+            await EnsureCurrentTeacherOwnsLessonPlanAsync(plan, "submit");
             EnsureLessonPlanSubmittable(plan);
             await EnsureChapterMatchesPlanTargetAsync(plan.ChapterId, plan.StandardId, plan.SubjectId);
             await EnsureLessonPlanCanBeCreatedForDateAsync(plan.TeacherId, plan.PlannedDate, plan.StandardId, plan.DivisionId);
@@ -782,6 +790,9 @@ public class LessonPlanAppService(
         var reviewers = reviewerIds.Count > 0
             ? await employeeRepository.GetListAsync(x => x.UserId.HasValue && reviewerIds.Contains(x.UserId.Value))
             : new List<Employee>();
+        var reviewerUsers = reviewerIds.Count > 0
+            ? await identityUserRepository.GetListAsync(x => reviewerIds.Contains(x.Id))
+            : new List<IdentityUser>();
         var timetableSlots = new List<TimetableSlot>();
 
         if (timetableSlotIds.Count > 0)
@@ -799,6 +810,9 @@ public class LessonPlanAppService(
             var reviewer = item.ReviewedBy.HasValue
                 ? reviewers.FirstOrDefault(x => x.UserId == item.ReviewedBy.Value)
                 : null;
+            var reviewerUser = item.ReviewedBy.HasValue
+                ? reviewerUsers.FirstOrDefault(x => x.Id == item.ReviewedBy.Value)
+                : null;
             var diary = diaries.FirstOrDefault(x => x.LessonPlanId == item.Id);
             var timetableSlot = item.TimetableSlotId.HasValue
                 ? timetableSlots.FirstOrDefault(x => x.Id == item.TimetableSlotId.Value)
@@ -809,7 +823,7 @@ public class LessonPlanAppService(
             item.DivisionName = division?.Name;
             item.SubjectName = subject?.Name;
             item.ChapterName = chapter?.ChapterName;
-            item.ReviewedByName = reviewer?.EmployeeName;
+            item.ReviewedByName = reviewer?.EmployeeName ?? GetIdentityUserDisplayName(reviewerUser);
             item.PeriodName = timetableSlot != null ? $"Period {timetableSlot.Sequence}" : item.PeriodName;
             item.StartTime = timetableSlot?.StartTime.ToString("hh:mm tt");
             item.EndTime = timetableSlot?.EndTime.ToString("hh:mm tt");
@@ -832,6 +846,21 @@ public class LessonPlanAppService(
         }
 
         return items;
+    }
+
+    private static string? GetIdentityUserDisplayName(IdentityUser? user)
+    {
+        if (user == null)
+        {
+            return null;
+        }
+
+        var fullName = string.Join(
+            " ",
+            new[] { user.Name, user.Surname }.Where(x => !string.IsNullOrWhiteSpace(x))
+        );
+
+        return string.IsNullOrWhiteSpace(fullName) ? user.UserName : fullName;
     }
 
     private async Task<List<TeacherDiaryDto>> MapTeacherDiariesAsync(IEnumerable<TeacherDiary> diaries)
@@ -1011,6 +1040,27 @@ public class LessonPlanAppService(
         throw new AbpAuthorizationException($"You can only {action} your own lesson records.");
     }
 
+    private async Task EnsureCurrentTeacherOwnsLessonPlanAsync(LessonPlan lessonPlan, string action)
+    {
+        var currentUserId = CurrentUser.GetId();
+        if (lessonPlan.TeacherId == currentUserId)
+        {
+            return;
+        }
+
+        var assignedTeacher = await employeeRepository.FirstOrDefaultAsync(
+            employee => employee.Id == lessonPlan.TeacherId && employee.UserId == currentUserId
+        );
+        if (assignedTeacher != null)
+        {
+            return;
+        }
+
+        throw new AbpAuthorizationException(
+            $"Only the assigned teacher can {action} this lesson plan."
+        );
+    }
+
     private bool IsAdminUser()
     {
         return CurrentUser.Roles.Any(role =>
@@ -1102,9 +1152,14 @@ public class LessonPlanAppService(
 
     private static void EnsureLessonPlanSubmittable(LessonPlan lessonPlan)
     {
-        if (lessonPlan.Status is not (LessonPlanStatus.Draft or LessonPlanStatus.Rejected or LessonPlanStatus.NeedsChanges))
+        if (lessonPlan.Status == LessonPlanStatus.NeedsChanges)
         {
-            throw new UserFriendlyException("Only draft, rejected, or changes-requested lesson plans can be submitted.");
+            throw new LessonPlanRevisionRequiredException();
+        }
+
+        if (lessonPlan.Status is not (LessonPlanStatus.Draft or LessonPlanStatus.Rejected))
+        {
+            throw new UserFriendlyException("Only draft or rejected lesson plans can be submitted.");
         }
     }
 

@@ -62,6 +62,7 @@ public class ConcessionPolicyAppService(
 			dto.IsUsedInDownstream = usedIds.Contains(x.Id);
 			return dto;
 		}).ToList();
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", items);
 		return new PagedResultDto<ConcessionPolicyDto>(total, items);
 	}
 
@@ -71,6 +72,7 @@ public class ConcessionPolicyAppService(
 		var entity = await GetRequiredAsync(id);
 		var dto = ConcessionPolicyMapping.ToDto(entity);
 		dto.IsUsedInDownstream = (await GetUsedIdsAsync([id])).Contains(id);
+		await CurrentPolicyVersionLookup.PopulateAsync(versionRepository, "concession", new[] { dto });
 		return dto;
 	}
 
@@ -108,7 +110,7 @@ public class ConcessionPolicyAppService(
 		return ConcessionPolicyMapping.ToDto(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Edit)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Add)]
 	public async Task<ConcessionPolicyDto> UpdateAsync(Guid id, CreateUpdateConcessionPolicyDto input)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -134,7 +136,7 @@ public class ConcessionPolicyAppService(
 		return ConcessionPolicyMapping.ToDto(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Clone)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Add)]
 	public async Task<ConcessionPolicyDto> CloneAsync(Guid id, ConcessionPolicyCloneRequestDto input)
 	{
 		var source = await GetRequiredAsync(id);
@@ -158,7 +160,7 @@ public class ConcessionPolicyAppService(
 		return await CreateAsync(dto);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Archive)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Delete)]
 	public async Task ArchiveAsync(Guid id)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -170,7 +172,7 @@ public class ConcessionPolicyAppService(
 		await WriteVersionAsync(entity, "archived");
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Unarchive)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Add)]
 	public async Task<ConcessionPolicyDto> UnarchiveAsync(Guid id)
 	{
 		var entity = await GetRequiredAsync(id);
@@ -181,7 +183,7 @@ public class ConcessionPolicyAppService(
 		return ConcessionPolicyMapping.ToDto(entity);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.ViewVersions)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.View)]
 	public async Task<PagedResultDto<FinancePolicyVersionDto>> GetVersionsAsync(
 		Guid id, FinancePolicyVersionListRequestDto input)
 	{
@@ -203,7 +205,7 @@ public class ConcessionPolicyAppService(
 		return new PagedResultDto<FinancePolicyVersionDto>(total, items);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Simulate)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.View)]
 	public async Task<ConcessionPolicySimulateResponseDto> SimulateAsync(Guid id, ConcessionPolicySimulateRequestDto input)
 	{
 		var entity = await GetRequiredAsync(id);

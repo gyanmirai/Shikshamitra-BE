@@ -388,18 +388,12 @@ Every write returns the persisted resource, concurrency token, Status, Version, 
 
 ## Permission model
 
-The current `Policies_ConcessionPolicy` View/Add/Delete family is insufficient. Use action-specific permissions:
+Policy configuration uses the [three-permission contract](../api.md#fee-configuration-permissions). Financial concession request permissions remain separate:
 
 ```text
 Finance.Policies.ConcessionPolicy.View
 Finance.Policies.ConcessionPolicy.Add
-Finance.Policies.ConcessionPolicy.Edit
-Finance.Policies.ConcessionPolicy.Clone
-Finance.Policies.ConcessionPolicy.Simulate
-Finance.Policies.ConcessionPolicy.Archive
-Finance.Policies.ConcessionPolicy.Unarchive
-Finance.Policies.ConcessionPolicy.ViewVersions
-Finance.Policies.ConcessionPolicy.ManageAttachment
+Finance.Policies.ConcessionPolicy.Delete
 
 Finance.Fees.ConcessionRequest.View
 Finance.Fees.ConcessionRequest.Create
@@ -416,8 +410,8 @@ Frontend route, button, controller, app-service, and domain authorization must u
 
 Suggested segregation:
 
-- Fee setup staff: View, Add, Edit, Clone, Simulate, ManageAttachment.
-- Finance manager/principal: Archive, Unarchive, ApproveAboveThreshold, Reverse.
+- Fee setup staff: View and Add for policy configuration.
+- Finance manager/principal: Delete for policy archival, Add for restoration, and separately granted financial approval/reversal actions.
 - Request maker: View, Create, EditDraft, Submit, Withdraw.
 - Request checker: View, Approve, Reject.
 

@@ -356,24 +356,9 @@ Use a unique assignment scope of tenant + student + academic year, not the curre
 
 ## Permissions
 
-The current Proration permission class has only View, Add, and Delete. Replace/extend it to parity with other versioned policies:
+Proration configuration exposes View, Add and Delete under the [fee configuration permission contract](../api.md#fee-configuration-permissions). View includes history/simulation; Add includes editing, activation, cloning, restoration and attachments; Delete controls archival/deletion. Operational `OverrideChargePeriod` and `Recalculate` grants remain independent and retain their existing names.
 
-| Permission | Use |
-|---|---|
-| `Finance.Policies.ProrationPolicy.View` | Menu, route, list, detail |
-| `.Add` | Create Draft |
-| `.Edit` | Edit Draft/Active under lifecycle rules |
-| `.Activate` | Activate a validated Draft |
-| `.Clone` | Clone to Draft |
-| `.Simulate` | Simulation and assignment preview |
-| `.Archive` | Archive |
-| `.Unarchive` | Restore to Draft |
-| `.ViewVersions` | Version/audit history |
-| `.ManageAttachment` | Attach/replace on Fee Structure |
-| `.OverrideChargePeriod` | Manual date/source override with reason |
-| `.Recalculate` | Unpaid demand replacement/correction |
-
-Apply permissions in controller/application entry points and mirror them in frontend menu, route, buttons, row actions, Fee Structure attachment, and manual override controls. Authentication alone is insufficient.
+Apply the same canonical actions in backend entry points and frontend controls; tenant/scope/version checks still apply.
 
 ## Validation and error contract
 

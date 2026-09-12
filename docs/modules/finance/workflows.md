@@ -47,7 +47,7 @@ Payment Terms are versioned schedule templates. They own installment coverage da
 
 1. Create and edit accept only the user-editable states `Draft` and `Active`; archive is a separate guarded workflow, matching HR policy status management.
 2. `Draft` saves an editable version. `Active` atomically validates and publishes that exact immutable version. The server derives the next valid activation date inside the selected board period; clients do not provide it.
-3. A Fee Structure may attach only an active Payment Term's published version.
+3. A Fee Structure may explicitly attach a published or superseded version of an active Payment Term; draft and archived versions are rejected. Existing pins remain stable. See [Fee Structure publication](./references/fee-structure-workspace.md).
 4. Student assignment snapshots all installment rows into DueFee records so later term edits cannot rewrite issued student schedules.
 5. A snapshot is collectable when `DemandDate <= today`. This also provides the late-assignment catch-up rule: already-reached installments become available immediately, while future installments remain hidden from collection.
 6. A board can have only one selected default Payment Term per academic year. The default flag can be selected while a term is still a draft, although the term remains unavailable to Fee Structures until it is published. Selecting a different default clears the previous flag before save, with a filtered unique index as the concurrency guard.

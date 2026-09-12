@@ -13,6 +13,8 @@ audience: humans-and-agents
 TL;DR: use this page to find Finance endpoint families and route ownership.
 Controller source paths are canonical when a route detail changes.
 
+Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
+
 ## Shared request rules
 
 Finance APIs require authenticated access and tenant context through the platform pipeline.
@@ -86,3 +88,20 @@ Coverage is in `AccountSettingsPermissionContract_Tests`, `RolePermissionSeederC
 Do not create a parallel curated contract tree for Finance.
 Add endpoint details here when Finance API docs need more route detail.
 Do not restore generated exports under `docs/`.
+
+
+## Fee configuration permissions
+
+Fee Structure and each of the four policy configuration families expose exactly three actions: `View`, `Add`, and `Delete`.
+
+| Action | Fee Structure | Collection, Concession, Refund and Proration policies |
+|---|---|---|
+| View | Lists, details, context, readiness review | Lists, detail, version/audit history, simulation |
+| Add | Create, edit/PATCH, publish and create revision | Create, edit, activate, clone, restore and manage attachments |
+| Delete | Delete an unused draft | Archive/delete where the existing endpoint supports it |
+
+Canonical roots are `Finance.Settings.FeeStructure` and `Finance.Policies.{CollectionPolicy,ConcessionPolicy,RefundPolicy,ProrationPolicy}`. Menu/module visibility grants do not authorize these API actions. Structure attachment changes require both structure Add and the changed policy family's Add. Context capability flags named `edit` and `publish` both derive from structure Add.
+
+Operational waiver approvals, approval thresholds, student overrides, exception windows and charge-period overrides retain their existing permission keys and grants. They are registered separately from each configuration family's three-action `All` collection; configuration Add does not grant financial approval authority.
+
+Deployment: rebuild/restart the API so its permission definitions and permission-list responses reflect this contract, then reload the role editor and application permission state. Existing View/Add/Delete grants keep the same names. Retired fine-grained configuration grants are not promoted automatically: a role that had only Edit/Archive/Publish must be explicitly reviewed and granted Add/Delete as appropriate. Concession and Refund now have canonical Delete grants; an old Archive grant alone does not imply Delete. No permission-grant data migration or tenant grant update is performed by this code change.

@@ -10,6 +10,7 @@ using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Users;
 using Xunit;
@@ -23,10 +24,12 @@ public class LessonPlanAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	private static readonly Guid ManagerEmployeeId = Guid.Parse("11111111-1111-1111-1111-222222222222");
 	private static readonly Guid TeacherUserId = Guid.Parse("22222222-2222-2222-2222-111111111111");
 	private static readonly Guid TeacherEmployeeId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+	private static readonly Guid AdminUserId = Guid.Parse("2e701e62-0953-4dd3-910b-dc6cc93ccb0d");
 
 	private readonly ILessonPlanAppService _lessonPlanAppService;
 	private readonly IRepository<LessonPlan, Guid> _lessonPlanRepository;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
+	private readonly IIdentityUserRepository _identityUserRepository;
 	private readonly ICurrentTenant _currentTenant;
 
 	public LessonPlanAppService_Tests()
@@ -34,6 +37,7 @@ public class LessonPlanAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		_lessonPlanAppService = GetRequiredService<ILessonPlanAppService>();
 		_lessonPlanRepository = GetRequiredService<IRepository<LessonPlan, Guid>>();
 		_employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
+		_identityUserRepository = GetRequiredService<IIdentityUserRepository>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 	}
 
@@ -96,6 +100,70 @@ public class LessonPlanAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 
 				result.Status.ShouldBe(LessonPlanStatus.NeedsChanges);
 				result.ReviewRemarks.ShouldBe("Please add teaching aids details.");
+			}
+		});
+	}
+
+	[Fact]
+	public async Task RequestChangesAsync_Should_Return_Admin_Identity_When_Reviewer_Has_No_Employee_Record()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var adminUser = new IdentityUser(
+					AdminUserId,
+					"academic-admin",
+					"academic-admin@example.test",
+					TestTenantId)
+				{
+					Name = "Academic",
+					Surname = "Admin"
+				};
+				await _identityUserRepository.InsertAsync(adminUser, autoSave: true);
+
+				var plan = await CreateSubmittedLessonPlanAsync(TeacherEmployeeId, "Cell Division");
+				var result = await _lessonPlanAppService.RequestChangesAsync(plan.Id, new ReviewRemarksDto
+				{
+					Comment = "Please add teaching aids details."
+				});
+
+				result.ReviewedBy.ShouldBe(AdminUserId);
+				result.ReviewedByName.ShouldBe("Academic Admin");
+				(await _employeeRepository.AnyAsync(employee => employee.UserId == AdminUserId)).ShouldBeFalse();
+			}
+		});
+	}
+
+	[Fact]
+	public async Task Admin_Reviewer_Should_Not_Revise_Or_Submit_A_Teacher_Lesson_Plan()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var plan = await CreateSubmittedLessonPlanAsync(TeacherEmployeeId, "Teacher-owned topic");
+				plan.RequestChanges(AdminUserId, "Please revise the learning activity.");
+				await _lessonPlanRepository.UpdateAsync(plan, autoSave: true);
+
+				var update = new UpdateLessonPlanDto
+				{
+					ChapterId = plan.ChapterId,
+					Topic = "Admin-authored replacement",
+					PlannedCompletionPercentage = plan.PlannedCompletionPercentage
+				};
+
+				var updateError = await Should.ThrowAsync<AbpAuthorizationException>(
+					() => _lessonPlanAppService.UpdateAsync(plan.Id, update));
+				updateError.Message.ShouldContain("Only the assigned teacher");
+
+				var submitError = await Should.ThrowAsync<AbpAuthorizationException>(
+					() => _lessonPlanAppService.SubmitAsync(plan.Id));
+				submitError.Message.ShouldContain("Only the assigned teacher");
+
+				var persisted = await _lessonPlanRepository.GetAsync(plan.Id);
+				persisted.Topic.ShouldBe("Teacher-owned topic");
+				persisted.Status.ShouldBe(LessonPlanStatus.NeedsChanges);
 			}
 		});
 	}

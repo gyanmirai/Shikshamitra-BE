@@ -24,7 +24,7 @@ public class CreateLessonPlanDto
     public Guid ChapterId { get; set; }
 
     [Required]
-    public DateTime PlannedDate { get; set; }
+    public DateTimeOffset PlannedDate { get; set; }
 
     public Guid? TimetableSlotId { get; set; }
 

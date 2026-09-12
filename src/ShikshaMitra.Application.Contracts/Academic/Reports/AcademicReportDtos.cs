@@ -69,6 +69,155 @@ public class AcademicReportExportCreateResponseDto
     public string Status { get; set; } = "Queued";
 }
 
+public class AcademicAiReportExportRequestDto
+{
+    [Required]
+    [StringLength(2000, MinimumLength = 10)]
+    public string Prompt { get; set; } = string.Empty;
+
+    [Required]
+    public Guid? AcademicYearId { get; set; }
+
+    [Required]
+    public Guid? EducationBoardId { get; set; }
+
+    [Required]
+    public Guid? EducationMediumId { get; set; }
+
+    [Required]
+    public string Module { get; set; } = AcademicReportModules.Curriculum;
+
+    public AcademicDynamicReportSpecDto? Plan { get; set; }
+}
+
+public class AcademicAiReportExportResponseDto : AcademicReportExportCreateResponseDto
+{
+    public string ReportType { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public AcademicReportFilterDto Filters { get; set; } = new();
+    public AcademicDynamicReportSpecDto Plan { get; set; } = new();
+}
+
+public class AcademicAiReportPlanRequestDto
+{
+    [Required]
+    [StringLength(2000, MinimumLength = 10)]
+    public string Prompt { get; set; } = string.Empty;
+
+    [Required]
+    public Guid? AcademicYearId { get; set; }
+
+    [Required]
+    public Guid? EducationBoardId { get; set; }
+
+    [Required]
+    public Guid? EducationMediumId { get; set; }
+
+    [Required]
+    public string Module { get; set; } = AcademicReportModules.Curriculum;
+}
+
+public class AcademicAiReportPlanResponseDto
+{
+    public AcademicDynamicReportSpecDto Plan { get; set; } = new();
+}
+
+public class AcademicDynamicReportSpecDto
+{
+    [Required]
+    public string Module { get; set; } = AcademicReportModules.Curriculum;
+
+    [Required]
+    public string Dataset { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(120, MinimumLength = 3)]
+    public string Title { get; set; } = string.Empty;
+
+    [StringLength(400)]
+    public string Summary { get; set; } = string.Empty;
+
+    [StringLength(500)]
+    public string InterpretedRequest { get; set; } = string.Empty;
+
+    [MaxLength(4)]
+    public List<string> RequestedFilterTypes { get; set; } = [];
+
+    public List<AcademicDynamicReportAppliedFilterDto> AppliedFilters { get; set; } = [];
+
+    [MinLength(1)]
+    [MaxLength(20)]
+    public List<string> Columns { get; set; } = [];
+
+    public AcademicDynamicReportFilterDto Filters { get; set; } = new();
+
+    [MaxLength(3)]
+    public List<AcademicDynamicReportSortDto> Sort { get; set; } = [];
+}
+
+public class AcademicDynamicReportAppliedFilterDto
+{
+    public string Type { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public List<string> Values { get; set; } = [];
+}
+
+public class AcademicDynamicReportFilterDto
+{
+    [MaxLength(250)]
+    public List<string> ClassTokens { get; set; } = [];
+
+    [MaxLength(250)]
+    public List<string> DivisionTokens { get; set; } = [];
+
+    [MaxLength(250)]
+    public List<string> SubjectTokens { get; set; } = [];
+
+    [MaxLength(250)]
+    public List<string> ChapterTokens { get; set; } = [];
+}
+
+public class AcademicDynamicReportSortDto
+{
+    [Required]
+    public string Field { get; set; } = string.Empty;
+
+    [Required]
+    public string Direction { get; set; } = AcademicDynamicSortDirections.Ascending;
+}
+
+public static class AcademicReportModules
+{
+    public const string Curriculum = "Curriculum";
+    public const string Homework = "Homework";
+    public const string Assignment = "Assignment";
+    public const string Examination = "Examination";
+    public const string Timetable = "Timetable";
+}
+
+public static class AcademicDynamicDatasets
+{
+    public const string CurriculumSubjects = "curriculum.subjects";
+    public const string CurriculumChapters = "curriculum.chapters";
+    public const string CurriculumTeachers = "curriculum.teachers";
+}
+
+public static class AcademicDynamicSortDirections
+{
+    public const string Ascending = "ascending";
+    public const string Descending = "descending";
+}
+
+public static class AcademicDynamicFilterTypes
+{
+    public const string Class = "class";
+    public const string Division = "division";
+    public const string Subject = "subject";
+    public const string Chapter = "chapter";
+
+    public static readonly string[] All = [Class, Division, Subject, Chapter];
+}
+
 public class AcademicReportExportJobDto
 {
     public Guid Id { get; set; }
@@ -82,6 +231,8 @@ public class AcademicReportExportJobDto
     public DateTime? CompletedAt { get; set; }
     public DateTime ExpiresAt { get; set; }
     public string? RequestJson { get; set; }
+    public bool IsDynamic { get; set; }
+    public string? Module { get; set; }
 }
 
 public class AcademicReportOptionsDto
@@ -114,6 +265,7 @@ public static class AcademicReportFormat
 public static class AcademicReportTypes
 {
     public const string ChapterProgressReport = "Chapter Progress Report";
+    public const string SubjectPrimaryTeacherReport = "Subject Primary Teacher Report";
     public const string SubjectWiseChapterCoverage = "Subject-wise Chapter Coverage";
     public const string ChapterDescriptionSummary = "Chapter Description Summary";
     public const string TimelineReport = "Timeline Report";

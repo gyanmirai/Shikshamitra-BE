@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Reports;
+using Volo.Abp;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.DependencyInjection;
@@ -15,6 +16,8 @@ namespace ShikshaMitra.Academic.Reports;
 public class AcademicReportExportBackgroundJob(
     AcademicReportGenerator reportGenerator,
     AcademicPdfService pdfService,
+    AcademicDynamicReportQueryService dynamicReportQueryService,
+    AcademicDynamicReportPdfService dynamicReportPdfService,
     TimetableReportsPdfService timetablePdfService,
     AcademicExcelService excelService,
     IRepository<ShikshaMitra.HR.Reports.HrReportExportJob, Guid> exportJobRepository,
@@ -40,8 +43,35 @@ public class AcademicReportExportBackgroundJob(
 
             try
             {
-                args.Request = reportGenerator.NormalizeAndValidateRequest(args.Request, exportAllRows: true);
-                var report = await reportGenerator.GenerateAsync(args.Request, args.UserId, args.TenantId, exportAllRows: true);
+                AcademicReportPreviewDto report;
+                string format;
+                byte[] bytes;
+                if (args.DynamicSpec != null)
+                {
+                    var scope = new AcademicAiReportCatalogScope(
+                        args.AcademicYearId,
+                        args.EducationBoardId,
+                        args.EducationMediumId,
+                        args.AllowedClassIds,
+                        args.AllowedDivisionIds);
+                    report = await dynamicReportQueryService.GenerateAsync(args.DynamicSpec, scope);
+                    format = AcademicReportFormat.Pdf;
+                    bytes = dynamicReportPdfService.Generate(args.DynamicSpec, report);
+                }
+                else
+                {
+                    var request = args.Request ?? throw new BusinessException("Academic:Reports:RequestRequired");
+                    args.Request = reportGenerator.NormalizeAndValidateRequest(request, exportAllRows: true);
+                    report = await reportGenerator.GenerateAsync(args.Request, args.UserId, args.TenantId, exportAllRows: true);
+                    format = string.Equals(args.Request.Format, AcademicReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
+                        ? AcademicReportFormat.Pdf
+                        : AcademicReportFormat.Excel;
+                    bytes = format == AcademicReportFormat.Pdf
+                        ? TimetableReportsPdfService.IsTimetableReport(report.ReportType)
+                            ? await timetablePdfService.GenerateAsync(report)
+                            : await pdfService.GenerateReportPdf(report)
+                        : excelService.GenerateReportExcel(report);
+                }
 
                 job = await exportJobRepository.GetAsync(args.JobId);
                 if (job.Status == HrReportExportStatus.Cancelled)
@@ -49,16 +79,6 @@ public class AcademicReportExportBackgroundJob(
                     logger.LogInformation("Academic report export {JobId} was cancelled before file save", args.JobId);
                     return;
                 }
-
-                var format = string.Equals(args.Request.Format, AcademicReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
-                    ? AcademicReportFormat.Pdf
-                    : AcademicReportFormat.Excel;
-
-                var bytes = format == AcademicReportFormat.Pdf
-                    ? TimetableReportsPdfService.IsTimetableReport(report.ReportType)
-                        ? await timetablePdfService.GenerateAsync(report)
-                        : await pdfService.GenerateReportPdf(report)
-                    : excelService.GenerateReportExcel(report);
 
                 var blobName = BuildBlobName(args, format);
 

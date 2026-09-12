@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -31,6 +32,18 @@ public class AcademicReportController(
         return reportAppService.CreateExportAsync(input);
     }
 
+    [HttpPost("ai/exports")]
+    public virtual Task<AcademicAiReportExportResponseDto> CreateAiExportAsync(AcademicAiReportExportRequestDto input)
+    {
+        return reportAppService.CreateAiExportAsync(input);
+    }
+
+    [HttpPost("ai/plan")]
+    public virtual Task<AcademicAiReportPlanResponseDto> CreateAiPlanAsync(AcademicAiReportPlanRequestDto input)
+    {
+        return reportAppService.CreateAiPlanAsync(input);
+    }
+
     [HttpGet("exports")]
     public virtual Task<List<AcademicReportExportJobDto>> GetExportsAsync()
     {
@@ -44,8 +57,16 @@ public class AcademicReportController(
     }
 
     [HttpGet("exports/{jobId}/download")]
-    public virtual async Task<AcademicReportDownloadDto> DownloadExportAsync(Guid jobId)
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    public virtual async Task<IActionResult> DownloadExportFileAsync(Guid jobId)
     {
-        return await reportAppService.DownloadExportAsync(jobId);
+        var file = await reportAppService.DownloadExportAsync(jobId);
+        return File(file.Bytes, file.ContentType, file.FileName);
+    }
+
+    [ApiExplorerSettings(IgnoreApi = true)]
+    public virtual Task<AcademicReportDownloadDto> DownloadExportAsync(Guid jobId)
+    {
+        return reportAppService.DownloadExportAsync(jobId);
     }
 }

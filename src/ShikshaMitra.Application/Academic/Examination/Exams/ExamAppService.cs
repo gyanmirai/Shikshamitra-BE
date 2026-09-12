@@ -57,7 +57,7 @@ public class ExamAppService(
 
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
 	{
-		await EnsureCanAccessClassDivisionsAsync(input.StandardId, input.DivisionIds);
+		await EnsureCanAccessClassDivisionsAsync(input.StandardId, input.DivisionIds, input.SubjectIds);
 		await EnsureElectiveAssignmentsReadyAsync(input.StandardId, input.DivisionIds, input.SubjectIds);
 		await EnsureExamSettingsAvailableForFutureUseAsync(input.ExamTypeId, input.GradingScaleId);
 
@@ -79,6 +79,7 @@ public class ExamAppService(
 		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		await EnsureCanAccessExamAsync(exam);
 		EnsureExamSetupEditable(exam);
+		await EnsureCanAccessClassDivisionsAsync(input.StandardId, input.DivisionIds, input.SubjectIds);
 		await EnsureElectiveAssignmentsReadyAsync(input.StandardId, input.DivisionIds, input.SubjectIds);
 		await EnsureExamSettingsAvailableForFutureUseAsync(input.ExamTypeId, input.GradingScaleId);
 
@@ -527,8 +528,13 @@ public class ExamAppService(
 					select new { exam, standard, stage, examType };
 
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-		var rows = (await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.ExamName)))
-			.Where(row => CanAccessExam(row.exam, row.standard, row.stage, scope))
+		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.ExamName));
+		var primaryTeacherSubjects = await GetCurrentPrimaryTeacherSubjectIdsByStandardAsync(
+			rows.Select(row => row.exam.StandardId).Distinct().ToList());
+		rows = rows
+			.Where(row =>
+				CanAccessExam(row.exam, row.standard, row.stage, scope) ||
+				PrimaryTeacherCanAccessExam(row.exam, primaryTeacherSubjects))
 			.ToList();
 
 		return rows
@@ -562,7 +568,7 @@ public class ExamAppService(
 
 	public async Task DeleteAsync(Guid examId)
 	{
-		var exam = await examRepository.GetAsync(examId);
+		var exam = await examRepository.GetAsync(examId, includeDetails: true);
 		await EnsureCanAccessExamAsync(exam);
 
 		if (exam.Status != ExamStatus.Pending)
@@ -682,8 +688,12 @@ public class ExamAppService(
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		if (!scope.IsAdmin)
 		{
+			var primaryTeacherSubjects = await GetCurrentPrimaryTeacherSubjectIdsByStandardAsync(
+				allRows.Select(row => row.exam.StandardId).Distinct().ToList());
 			allRows = allRows
-				.Where(row => CanAccessExam(row.exam, row.standard, row.stage, scope))
+				.Where(row =>
+					CanAccessExam(row.exam, row.standard, row.stage, scope) ||
+					PrimaryTeacherCanAccessExam(row.exam, primaryTeacherSubjects))
 				.ToList();
 		}
 
@@ -818,13 +828,21 @@ public class ExamAppService(
 
 		var standard = await standardRepository.GetAsync(exam.StandardId);
 		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
-		if (!CanAccessExam(exam, standard, stage, scope))
+		if (CanAccessExam(exam, standard, stage, scope) ||
+			await CurrentUserIsPrimaryTeacherForAllSubjectsAsync(
+				exam.StandardId,
+				exam.ExamSubjects.Select(subject => subject.SubjectId).ToList()))
 		{
-			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+			return;
 		}
+
+		throw new BusinessException(UserScopeErrorCodes.AccessDenied);
 	}
 
-	private async Task EnsureCanAccessClassDivisionsAsync(Guid standardId, IReadOnlyCollection<Guid> divisionIds)
+	private async Task EnsureCanAccessClassDivisionsAsync(
+		Guid standardId,
+		IReadOnlyCollection<Guid> divisionIds,
+		IReadOnlyCollection<Guid> subjectIds)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		if (scope.IsAdmin)
@@ -834,15 +852,85 @@ public class ExamAppService(
 
 		var standard = await standardRepository.GetAsync(standardId);
 		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
-		foreach (var divisionId in divisionIds)
+		var canAccessEveryDivision = divisionIds.All(divisionId =>
 		{
 			var scopeProbe = new Exam(Guid.NewGuid(), Guid.NewGuid(), "scope-probe", standardId);
 			scopeProbe.AddDivision(Guid.NewGuid(), divisionId);
-			if (!CanAccessExam(scopeProbe, standard, stage, scope))
-			{
-				throw new BusinessException(UserScopeErrorCodes.AccessDenied);
-			}
+			return CanAccessExam(scopeProbe, standard, stage, scope);
+		});
+
+		if (canAccessEveryDivision ||
+			await CurrentUserIsPrimaryTeacherForAllSubjectsAsync(standardId, subjectIds))
+		{
+			return;
 		}
+
+		throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+	}
+
+	private async Task<bool> CurrentUserIsPrimaryTeacherForAllSubjectsAsync(
+		Guid standardId,
+		IReadOnlyCollection<Guid> subjectIds)
+	{
+		var requestedSubjectIds = subjectIds
+			.Where(subjectId => subjectId != Guid.Empty)
+			.ToHashSet();
+		if (requestedSubjectIds.Count == 0)
+		{
+			return false;
+		}
+
+		var primaryTeacherSubjects = await GetCurrentPrimaryTeacherSubjectIdsByStandardAsync([standardId]);
+		return primaryTeacherSubjects.TryGetValue(standardId, out var allocatedSubjectIds) &&
+			requestedSubjectIds.IsSubsetOf(allocatedSubjectIds);
+	}
+
+	private async Task<Dictionary<Guid, HashSet<Guid>>> GetCurrentPrimaryTeacherSubjectIdsByStandardAsync(
+		IReadOnlyCollection<Guid> standardIds)
+	{
+		if (!CurrentUser.Id.HasValue || standardIds.Count == 0)
+		{
+			return new Dictionary<Guid, HashSet<Guid>>();
+		}
+
+		var currentEmployee = await employeeRepository.FirstOrDefaultAsync(
+			employee => employee.UserId == CurrentUser.Id.Value);
+		if (currentEmployee == null)
+		{
+			return new Dictionary<Guid, HashSet<Guid>>();
+		}
+
+		var uniqueStandardIds = standardIds.Distinct().ToList();
+		var assignmentsWithTeachersQuery = await assignmentRepository.WithDetailsAsync(
+			assignment => assignment.Teachers);
+		var primaryTeacherAssignments = await AsyncExecuter.ToListAsync(
+			assignmentsWithTeachersQuery
+				.Where(assignment =>
+					uniqueStandardIds.Contains(assignment.StandardId) &&
+					assignment.Status == SubjectStatus.Published &&
+					assignment.Teachers.Any(teacher =>
+						teacher.TeacherType == SubjectTeacherType.Primary &&
+						teacher.TeacherId == currentEmployee.Id))
+				.Select(assignment => new { assignment.StandardId, assignment.SubjectId })
+				.Distinct());
+
+		return primaryTeacherAssignments
+			.GroupBy(assignment => assignment.StandardId)
+			.ToDictionary(
+				group => group.Key,
+				group => group.Select(assignment => assignment.SubjectId).ToHashSet());
+	}
+
+	private static bool PrimaryTeacherCanAccessExam(
+		Exam exam,
+		IReadOnlyDictionary<Guid, HashSet<Guid>> primaryTeacherSubjects)
+	{
+		var examSubjectIds = exam.ExamSubjects
+			.Select(subject => subject.SubjectId)
+			.ToHashSet();
+		return examSubjectIds.Count > 0 &&
+			primaryTeacherSubjects.TryGetValue(exam.StandardId, out var allocatedSubjectIds) &&
+			examSubjectIds.IsSubsetOf(allocatedSubjectIds);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]

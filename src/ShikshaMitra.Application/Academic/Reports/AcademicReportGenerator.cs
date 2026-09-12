@@ -97,6 +97,7 @@ public class AcademicReportGenerator(
             ReportTypes = new List<AcademicReportOptionDto>
             {
                 new() { Id = AcademicReportTypes.ChapterProgressReport, Label = "Chapter Progress Report" },
+                new() { Id = AcademicReportTypes.SubjectPrimaryTeacherReport, Label = "Subject Primary Teacher Report" },
                 new() { Id = AcademicReportTypes.SubjectWiseChapterCoverage, Label = "Subject-wise Chapter Coverage" },
                 new() { Id = AcademicReportTypes.ChapterDescriptionSummary, Label = "Chapter Description Summary" },
                 new() { Id = AcademicReportTypes.TimelineReport, Label = "Timeline Report" },
@@ -214,6 +215,8 @@ public class AcademicReportGenerator(
         {
             case AcademicReportTypes.ChapterProgressReport:
                 return await BuildChapterProgressReportAsync(query, request, payload, exportAllRows);
+            case AcademicReportTypes.SubjectPrimaryTeacherReport:
+                return await BuildSubjectPrimaryTeacherReportAsync(query, request, payload, exportAllRows);
             case AcademicReportTypes.SubjectWiseChapterCoverage:
                 return await BuildSubjectWiseChapterCoverageAsync(query, request, payload, exportAllRows);
             case AcademicReportTypes.ChapterDescriptionSummary:
@@ -501,6 +504,49 @@ public class AcademicReportGenerator(
                 });
             }
         }
+
+        payload.TotalCount = rows.Count;
+        payload.Page = request.Page;
+        payload.PageSize = request.PageSize;
+        payload.Rows = exportAllRows
+            ? rows
+            : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+        return payload;
+    }
+
+    private async Task<AcademicReportPreviewDto> BuildSubjectPrimaryTeacherReportAsync(
+        IQueryable<AssignedSubject> query,
+        AcademicReportRequestDto request,
+        AcademicReportPreviewDto payload,
+        bool exportAllRows)
+    {
+        payload.Columns = new List<AcademicReportColumnDto>
+        {
+            new() { Id = "SubjectName", Label = "Subject Name" },
+            new() { Id = "PrimaryTeacher", Label = "Primary Teacher" }
+        };
+
+        var subjects = await asyncExecuter.ToListAsync(query);
+        var (_, _, _, _, _, teachers) = await LoadLookupsAsync();
+        var rows = subjects
+            .OrderBy(subject => subject.Subject?.Name)
+            .ThenBy(subject => subject.Standard?.Name)
+            .Select(subject =>
+            {
+                var primaryTeacher = subject.Teachers.FirstOrDefault(
+                    teacher => teacher.TeacherType == SubjectTeacherType.Primary);
+                return new Dictionary<string, string?>
+                {
+                    { "SubjectName", subject.Subject?.Name ?? "—" },
+                    {
+                        "PrimaryTeacher",
+                        primaryTeacher == null
+                            ? "—"
+                            : teachers.GetValueOrDefault(primaryTeacher.TeacherId, "—")
+                    }
+                };
+            })
+            .ToList();
 
         payload.TotalCount = rows.Count;
         payload.Page = request.Page;

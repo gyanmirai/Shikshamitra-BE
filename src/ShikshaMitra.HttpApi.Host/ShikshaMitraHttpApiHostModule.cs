@@ -442,6 +442,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 						.Select(o => o.RemovePostFix("/"))
 						.ToArray() ?? Array.Empty<string>())
 					.WithAbpExposedHeaders()
+					.WithExposedHeaders("Content-Disposition")
 					.SetIsOriginAllowedToAllowWildcardSubdomains()
 					.AllowAnyHeader()
 					.AllowAnyMethod()

@@ -8,6 +8,8 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 /// </summary>
 public class RunPayrollResponse
 {
+	public Guid? PreviewRunId { get; set; }
+	public bool IsCurrent { get; set; }
 	/// <summary>
 	/// Indicates whether payroll is already generated (locked) for the month
 	/// </summary>

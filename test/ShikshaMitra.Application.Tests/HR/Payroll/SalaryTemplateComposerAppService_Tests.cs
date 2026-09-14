@@ -28,7 +28,7 @@ public class SalaryTemplateComposerAppService_Tests
 	}
 
 	[Fact]
-	public async Task Should_create_blank_draft_and_save_incomplete_rules()
+	public async Task Should_keep_blank_draft_unpublishable_and_publish_basic_100_without_balancer()
 	{
 		var suffix = Guid.NewGuid().ToString("N")[..8];
 		var basic = await InsertEarningAsync($"Composer Basic {suffix}");
@@ -40,6 +40,8 @@ public class SalaryTemplateComposerAppService_Tests
 
 		template.Status.ShouldBe("DRAFT");
 		template.Latest.Rules.ShouldBeEmpty();
+		(await Should.ThrowAsync<BusinessException>(() =>
+			_appService.PublishAsync(template.Id, template.Latest.Id))).Code.ShouldBe("HR:Payroll:SalaryTemplateRulesRequired");
 
 		var updated = await _appService.UpdateDraftAsync(
 			template.Id,
@@ -57,16 +59,16 @@ public class SalaryTemplateComposerAppService_Tests
 						LineKind = "EARNING",
 						SemanticType = "BASIC",
 						FormulaType = "PERCENTAGE_OF_GROSS",
-						Value = 60m,
+						Value = 100m,
 						DisplayOrder = 0
 					}
 				]
 			});
 
 		updated.Latest.Rules.Single().Code.ShouldNotBe("CLIENT_CONTROLLED_CODE");
-		var exception = await Should.ThrowAsync<BusinessException>(() =>
-			_appService.PublishAsync(template.Id, template.Latest.Id));
-		exception.Code.ShouldBe("HR:Payroll:SalaryTemplateRequiresOneRemainder");
+		var published = await _appService.PublishAsync(template.Id, template.Latest.Id);
+		published.Status.ShouldBe("PUBLISHED");
+		published.Latest.Rules.Count.ShouldBe(1);
 	}
 
 	[Fact]

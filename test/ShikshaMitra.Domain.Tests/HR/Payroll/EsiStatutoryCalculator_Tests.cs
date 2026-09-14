@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Services;
+using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
 using Shouldly;
@@ -11,6 +13,88 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class EsiStatutoryCalculator_Tests
 {
+	[Fact]
+	public void Monthly_classifications_not_gross_determine_coverage_when_pay_is_prorated()
+	{
+		var lines = new[]
+		{
+			new StatutoryWageLine(Guid.NewGuid(), "Basic", 12000m, StatutoryWageTreatment.Included),
+			new StatutoryWageLine(Guid.NewGuid(), "HRA", 18000m, StatutoryWageTreatment.SpecifiedExclusion)
+		};
+		var result = EsiStatutoryCalculator.Calculate(new DateTime(2026, 8, 1), BuildRule(),
+			BuildActiveEstablishment(), BuildEnrollment(EmployeeStatutoryEnrollmentStatus.Covered, "SYNTHETIC-TEST"),
+			lines.Select(line => line with { Amount = line.Amount / 2 }).ToList(), coverageWageLines: lines);
+		result.CoverageDecision.ShouldBe("WITHIN_WAGE_CEILING");
+		result.StatutoryWages.ShouldBe(7500m);
+		result.EmployeeContribution.ShouldBe(57m);
+		result.EmployerContribution.ShouldBe(244m);
+	}
+
+	[Theory]
+	[InlineData(0, 0, 0)]
+	[InlineData(12000, 90, 390)]
+	public void Period_continuation_uses_monthly_coverage_but_contributions_use_paid_wages(
+		decimal paidWages, decimal employee, decimal employer)
+	{
+		var enrollment = BuildEnrollment(EmployeeStatutoryEnrollmentStatus.Covered, "SYNTHETIC-TEST");
+		enrollment.Update(EmployeeStatutoryEnrollmentStatus.Covered, StatutoryWageCeilingCategory.Standard,
+			"SYNTHETIC-TEST", new DateTime(2026, 4, 1), null, new DateTime(2026, 9, 30), null);
+		var monthly = new StatutoryWageLine(Guid.NewGuid(), "Basic", 30000m, StatutoryWageTreatment.Included);
+		var result = EsiStatutoryCalculator.Calculate(new DateTime(2026, 8, 1), BuildRule(),
+			BuildActiveEstablishment(), enrollment, [monthly with { Amount = paidWages }], coverageWageLines: [monthly]);
+		result.CoverageDecision.ShouldBe("CONTRIBUTION_PERIOD_CONTINUATION");
+		result.EmployeeContribution.ShouldBe(employee);
+		result.EmployerContribution.ShouldBe(employer);
+	}
+
+	[Theory]
+	[InlineData(0)]
+	[InlineData(10)]
+	[InlineData(20)]
+	public void Unpaid_days_do_not_bring_an_above_ceiling_monthly_employee_into_esi(int paidDays)
+	{
+		var employeeId = Guid.NewGuid();
+		var basicId = Guid.NewGuid();
+		var basic = BuildComponent(employeeId, basicId, "Basic Salary", 30000m, true, PayrollComponentSemanticType.Basic);
+		var esi = BuildComponent(employeeId, Guid.NewGuid(), "System ESI", 0m, false, PayrollComponentSemanticType.EmployeeStateInsurance);
+		var context = new PayrollEsiStatutoryContext(new DateTime(2026, 8, 1), BuildRule(), BuildActiveEstablishment(),
+			BuildEnrollment(EmployeeStatutoryEnrollmentStatus.NotCovered),
+			new Dictionary<Guid, StatutoryWageTreatment> { [basicId] = StatutoryWageTreatment.Included }, [], esi);
+		var result = PayrollComputation.Calculate(paidDays, 0, paidDays, 25m, [basic, esi],
+			new PayrollStatutoryRuleSet(null, [], EmployeeStateInsurance: context));
+		result.EmployeeStateInsuranceCoverageDecision.ShouldBe("ABOVE_WAGE_CEILING");
+		result.EmployeeStateInsuranceWages.ShouldBe(30000m * paidDays / 25m);
+		result.Deductions.ShouldBeEmpty();
+		result.EmployerContributions.ShouldBeEmpty();
+		result.StatutoryIssueCodes.ShouldBeEmpty();
+	}
+
+	[Theory]
+	[InlineData(25, 18000, 1800, 135, 16065, 20385)]
+	[InlineData(20, 14400, 1728, 108, 12564, 16596)]
+	public void Basic_PF_ESI_should_reconcile_for_full_and_partial_attendance(
+		int paidDays, decimal gross, decimal employeePf, decimal employeeEsi, decimal net, decimal employerCost)
+	{
+		var employeeId = Guid.NewGuid();
+		var basicId = Guid.NewGuid();
+		var basic = BuildComponent(employeeId, basicId, "Basic Salary", 18000m, true, PayrollComponentSemanticType.Basic);
+		var pf = BuildComponent(employeeId, Guid.NewGuid(), "Provident Fund", 1800m, false, PayrollComponentSemanticType.EmployeeProvidentFund);
+		var esi = BuildComponent(employeeId, Guid.NewGuid(), "System ESI", 0m, false, PayrollComponentSemanticType.EmployeeStateInsurance);
+		var pfRule = new ProvidentFund(Guid.NewGuid(), null, "TEST_PF", "Synthetic PF fixture", 12m, 12m, PfContributionBasis.Basic, 15000m);
+		var context = new PayrollEsiStatutoryContext(new DateTime(2026, 8, 1), BuildRule(), BuildActiveEstablishment(),
+			BuildEnrollment(EmployeeStatutoryEnrollmentStatus.Covered, "SYNTHETIC-ESI-TEST"),
+			new Dictionary<Guid, StatutoryWageTreatment> { [basicId] = StatutoryWageTreatment.Included }, [], esi);
+		var result = PayrollComputation.Calculate(paidDays, 0, paidDays, 25m, [basic, pf, esi],
+			new PayrollStatutoryRuleSet(pfRule, [], EmployeeStateInsurance: context));
+		result.GrossSalary.ShouldBe(gross);
+		result.Earnings.Count.ShouldBe(1);
+		result.Deductions.Single(x => x.Source.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund).Amount.ShouldBe(employeePf);
+		result.Deductions.Single(x => x.Source.SemanticType == PayrollComponentSemanticType.EmployeeStateInsurance).Amount.ShouldBe(employeeEsi);
+		result.NetPay.ShouldBe(net);
+		(result.GrossSalary + result.EmployerContributions.Sum(x => x.Amount)).ShouldBe(employerCost);
+		result.StatutoryIssueCodes.ShouldBeEmpty();
+	}
+
 	[Fact]
 	public void Should_calculate_employee_and_employer_contributions_with_next_rupee_rounding()
 	{

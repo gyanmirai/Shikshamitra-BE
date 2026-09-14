@@ -100,20 +100,27 @@ public class PayrollSnapshotRefresher(
 		int month,
 		Guid? academicYearId,
 		List<Employee> scopedEmployees,
-		bool preserveReviewedSnapshots)
+		bool preserveReviewedSnapshots,
+		Func<int, Task>? reportProgress = null)
 	{
 		if (scopedEmployees.Count == 0)
 		{
 			return;
 		}
 
-		var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId);
-		var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
 		var existingSlips = await salarySlipRepository.GetByMonthAsync(internalMonthYear);
 		var finalizedEmployeeIds = existingSlips
 			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.Select(x => x.EmployeeId)
 			.ToHashSet();
+		var lockedIds = (await snapshotStore.GetByMonthAsync(internalMonthYear)).Where(x => x.IsLocked)
+			.Select(x => x.EmployeeId).ToHashSet();
+		var originalCount = scopedEmployees.Count;
+		scopedEmployees = scopedEmployees.Where(x => !finalizedEmployeeIds.Contains(x.Id) && !lockedIds.Contains(x.Id)).ToList();
+		var immutableCount = originalCount - scopedEmployees.Count;
+		if (scopedEmployees.Count == 0) return;
+		var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId);
+		var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
 		var previousMonthNetPayByEmployee = (await salarySlipRepository.GetByMonthAsync(PayrollRunRules.GetPreviousMonth(internalMonthYear)))
 			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.GroupBy(x => x.EmployeeId)
@@ -150,6 +157,9 @@ public class PayrollSnapshotRefresher(
 			compensationComponentsByEmployee);
 
 		var computedItems = new List<RunPayrollItem>();
+		using var policyReadBatch = hrPolicyResolver.BeginReadBatch(scopedEmployees);
+		using var pfReadBatch = providentFundComponentBuilder.BeginReadBatch();
+		var calendarHolidays = new Dictionary<Guid, List<ShikshaMitra.HR.Calendar.Holidays.Holiday>>();
 		var payrollContextByEmployee = new Dictionary<Guid, PayrollEmployeeComputationContext>();
 		var policyResolutionDate = PayrollRunRules.GetPayrollPolicyResolutionDate(year, month);
 		foreach (var employee in scopedEmployees)
@@ -161,10 +171,12 @@ public class PayrollSnapshotRefresher(
 					policyResolutionDate,
 					calendar.AcademicYearId);
 				var holidayOverrides = resolvedPolicies.PayrollPolicy.GetHolidayOverrides();
-				var workCalendarHolidays = await basisPreviewResolver.GetIncludedWorkCalendarHolidaysAsync(
-					resolvedPolicies.PayrollWorkCalendarPolicy.Id,
-					year,
-					month);
+				var calendarId = resolvedPolicies.PayrollWorkCalendarPolicy.Id;
+				if (!calendarHolidays.TryGetValue(calendarId, out var workCalendarHolidays))
+				{
+					workCalendarHolidays = await basisPreviewResolver.GetIncludedWorkCalendarHolidaysAsync(calendarId, year, month);
+					calendarHolidays[calendarId] = workCalendarHolidays;
+				}
 				var workingUnitsByDate = PayrollMonthCalendar.BuildWorkingUnitsByDate(
 					year,
 					month,
@@ -294,6 +306,8 @@ public class PayrollSnapshotRefresher(
 					esiContexts.GetValueOrDefault(employee.Id)),
 				revision
 			));
+			if (reportProgress != null && (computedItems.Count % 25 == 0 || computedItems.Count == scopedEmployees.Count))
+				await reportProgress(computedItems.Count + immutableCount);
 		}
 
 		await snapshotStore.UpsertAsync(internalMonthYear, computedItems, preserveReviewedSnapshots);

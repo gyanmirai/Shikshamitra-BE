@@ -80,8 +80,10 @@ internal static class PayrollLateArrivalDeductionCalculator
 			CreateSourceId(internalMonthYear, employee.Id));
 	}
 
-	private static bool IsLateArrival(DateTimeOffset timeIn, ShiftManagement shift, int graceTime) =>
-		(timeIn.TimeOfDay - shift.StartTime.ToTimeSpan()).TotalMinutes > graceTime;
+	internal static bool IsLateArrival(DateTimeOffset timeIn, ShiftManagement shift, int graceTime) =>
+		// Attendance's HH:mm contract stores clock values at offset zero. Npgsql's legacy reader
+		// can return the same instant in the server's local offset; that must not add a late penalty.
+		(timeIn.UtcDateTime.TimeOfDay - shift.StartTime.ToTimeSpan()).TotalMinutes > graceTime;
 
 	private static Guid CreateSourceId(string internalMonthYear, Guid employeeId)
 	{

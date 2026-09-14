@@ -24,6 +24,8 @@ public class RunPayrollRequestValidator : AbstractValidator<RunPayrollRequest>
 
 	public RunPayrollRequestValidator()
 	{
+		RuleFor(x => x.PreviewRunId).NotEmpty();
+		RuleFor(x => x.EmployeeIds).NotEmpty();
 		RuleFor(x => x.Month)
 			.NotEmpty()
 			.Must(BeValidMonthInput)

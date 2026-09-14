@@ -43,7 +43,8 @@ public static class EsiStatutoryCalculator
 		EmployeeStatutoryEnrollment? enrollment,
 		IReadOnlyList<StatutoryWageLine> wageLines,
 		IReadOnlyList<StatutoryOverride>? overrides = null,
-		bool assumeEstablishmentActive = false)
+		bool assumeEstablishmentActive = false,
+		IReadOnlyList<StatutoryWageLine>? coverageWageLines = null)
 	{
 		var monthStart = new DateTime(payrollMonth.Year, payrollMonth.Month, 1);
 		var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -62,7 +63,8 @@ public static class EsiStatutoryCalculator
 			return Empty("ESTABLISHMENT_INACTIVE", wageCeiling, periodStart, periodEnd, issueCodes);
 		}
 
-		var unclassified = wageLines.Where(x => x.Treatment == StatutoryWageTreatment.Unclassified).ToList();
+		var unclassified = wageLines.Concat(coverageWageLines ?? [])
+			.Where(x => x.Treatment == StatutoryWageTreatment.Unclassified).ToList();
 		if (unclassified.Count > 0)
 		{
 			issueCodes.Add(WageClassificationIssue);
@@ -80,21 +82,12 @@ public static class EsiStatutoryCalculator
 			return Empty("FORCE_NOT_COVERED_OVERRIDE", wageCeiling, periodStart, periodEnd, issueCodes, canCalculate: true);
 		}
 
-		var totalRemuneration = RoundMoney(wageLines.Sum(x => x.Amount));
-		var includedWages = RoundMoney(wageLines
-			.Where(x => x.Treatment == StatutoryWageTreatment.Included)
-			.Sum(x => x.Amount));
-		var specifiedExclusions = RoundMoney(wageLines
-			.Where(x => x.Treatment == StatutoryWageTreatment.SpecifiedExclusion)
-			.Sum(x => x.Amount));
-		var rawInKind = wageLines
-			.Where(x => x.Treatment == StatutoryWageTreatment.InKind)
-			.Sum(x => x.Amount);
-		var inKindWages = RoundMoney(Math.Min(rawInKind, totalRemuneration * rule.InKindCapPercentage / 100m));
-		var exclusionAddBack = RoundMoney(Math.Max(
-			0m,
-			specifiedExclusions - totalRemuneration * rule.ExclusionCapPercentage / 100m));
-		var statutoryWages = RoundMoney(includedWages + exclusionAddBack + inKindWages);
+		var (totalRemuneration, includedWages, specifiedExclusions, exclusionAddBack, inKindWages, statutoryWages)
+			= CalculateWages(rule, wageLines);
+		// Monthly-rated coverage uses agreed monthly remuneration, not pay reduced by unpaid days.
+		// Contributions still use the actual payable wages above. ESIC Revenue Manual, L.6.8.
+		var coverageWages = coverageWageLines == null
+			? statutoryWages : CalculateWages(rule, coverageWageLines).StatutoryWages;
 
 		var forcedCovered = coverageOverride?.OverrideType == StatutoryOverrideType.ForceCovered;
 		var continuingCoverage = enrollment is not null &&
@@ -103,7 +96,7 @@ public static class EsiStatutoryCalculator
 			(!enrollment.CoveredTo.HasValue || enrollment.CoveredTo.Value.Date >= monthStart) &&
 			enrollment.ContributionPeriodEnd.HasValue &&
 			enrollment.ContributionPeriodEnd.Value.Date >= monthStart;
-		var underCeiling = statutoryWages <= wageCeiling;
+		var underCeiling = coverageWages <= wageCeiling;
 		var isCovered = forcedCovered || continuingCoverage || underCeiling;
 		var decision = forcedCovered
 			? "FORCE_COVERED_OVERRIDE"
@@ -166,6 +159,20 @@ public static class EsiStatutoryCalculator
 			true, true, decision, totalRemuneration, includedWages, specifiedExclusions,
 			exclusionAddBack, inKindWages, statutoryWages, wageCeiling,
 			employeeContribution, employerContribution, governmentContribution, periodStart, periodEnd, issueCodes);
+	}
+
+	private static (decimal TotalRemuneration, decimal IncludedWages, decimal SpecifiedExclusions,
+		decimal ExclusionAddBack, decimal InKindWages, decimal StatutoryWages) CalculateWages(
+		StatutoryRuleVersion rule, IReadOnlyList<StatutoryWageLine> wageLines)
+	{
+		var totalRemuneration = RoundMoney(wageLines.Sum(x => x.Amount));
+		var includedWages = RoundMoney(wageLines.Where(x => x.Treatment == StatutoryWageTreatment.Included).Sum(x => x.Amount));
+		var specifiedExclusions = RoundMoney(wageLines.Where(x => x.Treatment == StatutoryWageTreatment.SpecifiedExclusion).Sum(x => x.Amount));
+		var rawInKind = wageLines.Where(x => x.Treatment == StatutoryWageTreatment.InKind).Sum(x => x.Amount);
+		var inKindWages = RoundMoney(Math.Min(rawInKind, totalRemuneration * rule.InKindCapPercentage / 100m));
+		var exclusionAddBack = RoundMoney(Math.Max(0m, specifiedExclusions - totalRemuneration * rule.ExclusionCapPercentage / 100m));
+		return (totalRemuneration, includedWages, specifiedExclusions, exclusionAddBack, inKindWages,
+			RoundMoney(includedWages + exclusionAddBack + inKindWages));
 	}
 
 	private static EsiStatutoryCalculationResult Empty(

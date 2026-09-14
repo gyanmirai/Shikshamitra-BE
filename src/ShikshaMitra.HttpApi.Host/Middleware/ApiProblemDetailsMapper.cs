@@ -16,12 +16,15 @@ public static class ApiProblemDetailsMapper
 
 		return errorCode switch
 		{
+			HRErrorCodes.PayrollPreviewStale or HRErrorCodes.PayrollPreviewNotReady => StatusCodes.Status409Conflict,
+			HRErrorCodes.PayrollPreviewNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveEmployeeNotFound => StatusCodes.Status403Forbidden,
 			HRErrorCodes.TakeAttendanceMediumStageOutOfScope => StatusCodes.Status403Forbidden,
 			HRErrorCodes.LeaveInsufficientBalance => StatusCodes.Status400BadRequest,
 			HRErrorCodes.LeaveAlreadyCancelled => StatusCodes.Status409Conflict,
 			HRErrorCodes.LeaveConflictTerminalState => StatusCodes.Status409Conflict,
 			HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed => StatusCodes.Status409Conflict,
+			HRErrorCodes.StatutoryPreviewStale => StatusCodes.Status409Conflict,
 			HRErrorCodes.LeaveAttachmentNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveFileTooLarge => StatusCodes.Status413PayloadTooLarge,
 			ValidationErrorCode => StatusCodes.Status400BadRequest,

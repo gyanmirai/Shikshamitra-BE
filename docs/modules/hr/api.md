@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-08-13
+updated_on: 2026-09-13
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -111,7 +111,8 @@ Payroll APIs manage setup, preview, review, lock, and salary slips:
 | Payroll policies | `/api/hr/payroll/policies` | `HR.PayrollManagement.Settings.PayrollPolicies.*` | Implemented |
 | Salary structure | `/api/payroll/employees/{employeeId}/salary-structure` | `HR.Employee.EmployeeList.*` | Implemented |
 | Compensation revisions | `/api/payroll/employees/{employeeId}/compensation-revisions*` | `HR.PayrollManagement.CompensationRevisions.*` | Implemented |
-| Run payroll | `/api/payroll/run` | `HR.PayrollManagement.RunPayroll.*` | Implemented |
+| Run payroll | `/api/payroll/run` | `HR.PayrollManagement.RunPayroll.*` | Generation-bound review and lock; rollout pending |
+| Durable payroll previews | `/api/payroll/run/previews*` | `HR.PayrollManagement.RunPayroll.View` | Additive migration and integration verification pending |
 | Salary slips | `/api/payroll/salary-slips` | `HR.PayrollManagement.GenerateSalarySlip.*` | Implemented |
 | Payroll attendance imports | `/api/payroll/attendance-imports*` | `HR.PayrollManagement.RunPayroll.View` | Implemented |
 | Professional tax | Not documented as HTTP API | Not documented | Partial |
@@ -119,9 +120,35 @@ Payroll APIs manage setup, preview, review, lock, and salary slips:
 Payroll month parameters use `MMMM-YYYY`, such as `JANUARY-2025`.
 Payroll lock is idempotent for an already locked month and returns the documented payroll lock error.
 Finalized and Paid salary slips are immutable and are both included in month-lock and dependency-impact checks.
+The salary-slip response includes the stored ESI rule, wages, coverage decision, insurance number, contribution period, and approved compensation revision evidence.
+These fields describe the finalized snapshot rather than current enrollment or compensation settings.
 Saved employee salary-component rows satisfy salary-structure readiness even when optional employee payroll metadata has not been saved.
 
+### Durable preview contract
+
+The synchronous preview and readiness HTTP actions are replaced in the coordinated release.
+Do not deploy this contract until the additive migration, PostgreSQL concurrency tests, and paired frontend acceptance pass.
+
+| Operation | Contract |
+|---|---|
+| `POST /api/payroll/run/previews` | Accepts `month`, optional `academicYearId`, and `refresh`; returns HTTP 202 and the authorized run status |
+| `GET /api/payroll/run/previews/{id}` | Returns status, completed employee count, timestamps, freshness, and safe failure information |
+| `GET /api/payroll/run/previews/{id}/employees` | Accepts zero-based `page`, `pageSize` from 1 to 100, and trimmed `search`; returns one page plus unfiltered authorized-population readiness |
+| Review and lock | Require `previewRunId` and explicit selected `employeeIds`; stale inputs return HTTP 409 with `PAYROLL_PREVIEW_STALE` |
+
+Run reuse requires matching tenant, month, academic year, and server-resolved employee scope.
+The worker rechecks the requesting user's active account, permission, and scope.
+Generation employee results and the complete summary publish in one transaction.
+Input revisions currently use a conservative tenant-wide fence, so an input change can invalidate additional unlocked employees.
+Attendance, HR policy/calendar, compensation, employment, enrollment, and manual adjustment writes advance that fence transactionally.
+Calculator-generated adjustments are outputs and do not invalidate their own calculation.
+Review markers identify the exact generation, and locking retains the revision fence and owner-checked month lease until commit.
+Finalized employees are excluded before recalculation.
+
 Salary structure templates are tenant-scoped, versioned calculation definitions.
+Exactly one Basic earning is required, while an explicitly designated balancing earning is optional.
+Without a balancing earning, rounded earnings must exactly reconcile to gross; `HR:Payroll:SalaryTemplateAllocationMismatch` includes gross, allocated earnings, difference, and a readable explanation.
+Basic at 100 percent with PF does not require Special Allowance, and ESI remains system-managed.
 Published versions are immutable and carry a default quote basis and protection policy.
 The calculate endpoint accepts Gross, Take-home, or Employer Cost, an effective month, a protection policy, and optional employee context.
 It returns earnings, employee deductions, employer contributions, ESI coverage and contribution details, statutory references, target variance, warnings, and a formula trace.
@@ -143,6 +170,13 @@ Recurring employee compensation is stored as effective-dated immutable revisions
 Create, update, submit, approve, and reject operations are separate permissioned endpoints.
 Employee enrollment and override endpoints enforce the employee scope in addition to the route permission.
 Impact preview returns only employees in the caller's HR scope, while tenant-wide statutory writes and activation require HR-wide scope.
+`POST /api/payroll/statutory-schemes/esi/impact-preview` accepts `monthYear`, trimmed employee name or code search, coverage, readiness, enrollment statuses, zero-based page, page size up to 100, one documented sort field, and `asc` or `desc` direction.
+Its summary and `canActivate` always cover the complete scoped employee population, while `totalCount` and `items` reflect the active filters and requested page.
+Preview issues contain a stable code plus server-authored severity, title, message, resolution target, and affected employee count where applicable.
+Coverage decisions contain both the stable decision code and a server-authored display label.
+Preview responses include `generatedAtUtc` and a deterministic SHA-256 `previewFingerprint` over activation-relevant rule, establishment, classification, employee, enrollment, override, and calculated result inputs.
+`POST /api/payroll/statutory-schemes/esi/activate` requires the reviewed `monthYear` and `previewFingerprint`, recalculates the complete preview, and returns HTTP 409 with `ESI_PREVIEW_STALE` when the result is stale.
+Stale activation does not activate the establishment or create the canonical deduction binding.
 Compensation audit identities, timestamps, rejection reasons, and calculation snapshots require `HR.PayrollManagement.CompensationRevisions.ViewAudit`.
 The creator or submitter cannot approve the same revision.
 Payroll resolves the latest approved revision for the month and keeps one-time salary components separate.

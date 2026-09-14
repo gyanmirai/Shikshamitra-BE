@@ -7,6 +7,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.WebUtilities;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -33,21 +34,22 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Payroll;
 
-[Collection(ApiTestCollection.Name)]
+[Trait("Database", "PostgreSQL")]
 [TestModule(TestTraits.Modules.HR)]
-public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
+public class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixture<PayrollWorkflowPostgresTestFactory>
 {
 	private const string BaseUrl = "/api/payroll/run";
 	private const string ReviewUrl = "/api/payroll/run/reviews";
 	private const string PayrollMonth = "APRIL-2026";
+	private readonly Dictionary<string, Guid> _previewRuns = new();
 
-	public RunPayrollApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
+	public RunPayrollApi_Tests(PayrollWorkflowPostgresTestFactory factory) : base(factory) { }
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_Payroll_Preview_Without_500()
 	{
-		var response = await Client.GetAsync($"{BaseUrl}?month=2026-05&page=0&pageSize=100");
+		var response = await RequestPreviewAsync($"{BaseUrl}?month=2026-05&page=0&pageSize=100");
 		var body = await response.Content.ReadAsStringAsync();
 
 		body.ShouldNotContain("HR:Payroll:030011");
@@ -57,7 +59,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.Forbidden);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Require_Approved_Revision_Instead_Of_Legacy_Recurring_Components()
 	{
@@ -65,7 +67,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"SavedStructureOnly{Guid.NewGuid():N}",
+			"SavedStructureOnly",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 		var earning = await PayrollTestHelper.CreateEarningComponentAsync(
 			Client,
@@ -107,7 +109,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var structureBody = await structureResponse.Content.ReadAsStringAsync();
 		structureResponse.StatusCode.ShouldBe(HttpStatusCode.OK, structureBody);
 
-		var preview = await GetAndReadAsync<RunPayrollResponse>(
+		var preview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
 		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
 
@@ -116,7 +118,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		item.IssueCodes.ShouldContain(IssueCodes.MissingSalaryStructure);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Ignore_Holiday_Attendance_For_Selected_Academic_Year()
 	{
@@ -124,13 +126,13 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"AkshayPayrollFlow{Guid.NewGuid():N}",
+			"AkshayPayrollFlow",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "AkshayPayrollFlow");
 		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 5, 10));
 
-		var preview = await GetAndReadAsync<RunPayrollResponse>(
+		var preview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100&forceRefresh=true");
 		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
 
@@ -148,13 +150,13 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		preview.Readiness.BlockingIssues.ShouldContain("NO_WORKING_DAYS");
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Reject_Academic_Year_When_Month_Is_Outside_Range()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
-		var response = await Client.GetAsync(
+		var response = await RequestPreviewAsync(
 			$"{BaseUrl}?month=2040-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -162,7 +164,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		body.ShouldContain("HR:Payroll:030031");
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Recompute_Unlocked_Zero_Basis_Snapshot()
 	{
@@ -170,19 +172,19 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollZeroBasis{Guid.NewGuid():N}",
+			"PayrollZeroBasis",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "PayrollZeroBasis");
 		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 5, 10));
 
-		var firstPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var firstPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100&forceRefresh=true");
 		firstPreview.Items.Single(x => x.EmployeeId == employee.Id).BasisDays.ShouldBe(0);
 
 		await CorruptPayrollSnapshotBasisAsync(employee.Id, "2026-05");
 
-		var refreshedPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var refreshedPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-05&academicYearId={Factory.SeededAcademicYearId}&page=0&pageSize=100&forceRefresh=false");
 		var refreshedItem = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
 
@@ -192,7 +194,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		refreshedItem.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Exclude_Employee_Before_Joining_Month()
 	{
@@ -203,22 +205,22 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			"PayrollMayJoin",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
-		var aprilPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var aprilPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-04&page=0&pageSize=100&forceRefresh=true");
 		aprilPreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeFalse();
 
-		var mayPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var mayPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
 		mayPreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeTrue();
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Readiness_Should_Not_Count_Employee_Before_Joining_Month()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
-		var before = await GetAndReadAsync<RunPayrollReadinessSummary>(
+		var before = await GetReadinessFromQueryAsync(
 			$"{BaseUrl}/readiness?month=2026-04");
 
 		await EmployeeTestHelper.CreateEmployeeAsync(
@@ -226,12 +228,12 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			"PayrollReadinessMayJoin",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
-		var after = await GetAndReadAsync<RunPayrollReadinessSummary>(
+		var after = await GetReadinessFromQueryAsync(
 			$"{BaseUrl}/readiness?month=2026-04");
 		after.EmployeeCount.ShouldBe(before.EmployeeCount);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Include_Inactive_Employee_For_Effective_Month_Only()
 	{
@@ -239,21 +241,21 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollInactiveFinal{Guid.NewGuid():N}",
+			"PayrollInactiveFinal",
 			dateOfJoining: new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await SetEmployeeStatusAsync(employee.Id, 1, new DateOnly(2026, 5, 31));
 
-		var mayPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var mayPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
 		mayPreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeTrue();
 
-		var junePreview = await GetAndReadAsync<RunPayrollResponse>(
+		var junePreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
 		junePreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeFalse();
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Report_No_Working_Days_For_Final_Month_Inactive_Employee_During_Holiday()
 	{
@@ -261,12 +263,12 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollInactiveNoAttendance{Guid.NewGuid():N}",
+			"PayrollInactiveNoAttendance",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await SetEmployeeStatusAsync(employee.Id, 1, new DateOnly(2026, 5, 31));
 
-		var mayPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var mayPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
 		var item = mayPreview.Items.Single(x => x.EmployeeId == employee.Id);
 		item.BasisDays.ShouldBe(0);
@@ -276,24 +278,24 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		item.IssueCodes.ShouldContain("MISSING_SALARY_STRUCTURE");
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Include_Left_Employee_For_Final_Month_And_Lock()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 
-		var before = await GetAndReadAsync<RunPayrollReadinessSummary>(
+		var before = await GetReadinessFromQueryAsync(
 			$"{BaseUrl}/readiness?month=2026-03");
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollLeftFinal{Guid.NewGuid():N}",
+			"PayrollLeftFinal",
 			dateOfJoining: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "PayrollLeftFinal");
 		await MarkAttendanceAsync(employee.Id, "11-03-2026");
 		await SetEmployeeStatusAsync(employee.Id, 2, new DateOnly(2026, 3, 20));
 
-		var marchPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var marchPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-03&page=0&pageSize=100&forceRefresh=true");
 		var previewItem = marchPreview.Items.Single(x => x.EmployeeId == employee.Id);
 		previewItem.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
@@ -301,7 +303,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		previewItem.IssueCodes.ShouldNotContain("NEGATIVE_NET_PAY");
 		previewItem.IssueCodes.ShouldNotContain("PAYROLL_POLICY_CONFIGURATION");
 
-		var marchReadiness = await GetAndReadAsync<RunPayrollReadinessSummary>(
+		var marchReadiness = await GetReadinessFromQueryAsync(
 			$"{BaseUrl}/readiness?month=2026-03");
 		marchReadiness.EmployeeCount.ShouldBeGreaterThanOrEqualTo(before.EmployeeCount + 1);
 
@@ -310,6 +312,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new PayrollRunReviewRequest
 			{
 				Month = "2026-03",
+				PreviewRunId = LastPreviewId("2026-03"),
 				EmployeeIds = new List<Guid> { employee.Id }
 			},
 			JsonOptions);
@@ -321,18 +324,19 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new RunPayrollRequest
 			{
 				Month = "2026-03",
+				PreviewRunId = LastPreviewId("2026-03"),
 				EmployeeIds = new List<Guid> { employee.Id }
 			},
 			JsonOptions);
 		var lockBody = await lockResponse.Content.ReadAsStringAsync();
 		lockResponse.StatusCode.ShouldBe(HttpStatusCode.OK, lockBody);
 
-		var junePreview = await GetAndReadAsync<RunPayrollResponse>(
+		var junePreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
 		junePreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeFalse();
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Use_Status_Change_Date_When_Effective_Date_Is_Missing()
 	{
@@ -340,22 +344,22 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollLeftNoEffectiveDate{Guid.NewGuid():N}",
+			"PayrollLeftNoEffectiveDate",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await SetEmployeeStatusAsync(employee.Id, 2, new DateOnly(2026, 5, 20));
 		await ClearStatusEffectiveDateAsync(employee.Id, new DateTimeOffset(2026, 5, 20, 12, 0, 0, TimeSpan.Zero));
 
-		var mayPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var mayPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=true");
 		mayPreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeTrue();
 
-		var junePreview = await GetAndReadAsync<RunPayrollResponse>(
+		var junePreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
 		junePreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeFalse();
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Readiness_Should_Refresh_After_Mark_Attendance_Save()
 	{
@@ -363,10 +367,10 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollAttendanceRefresh{Guid.NewGuid():N}",
+			"PayrollAttendanceRefresh",
 			dateOfJoining: new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc));
 
-		var before = await GetAndReadAsync<RunPayrollReadinessSummary>(
+		var before = await GetReadinessFromQueryAsync(
 			$"{BaseUrl}/readiness?month=2026-03");
 
 		var attendanceResponse = await Client.PostAsJsonAsync(
@@ -390,7 +394,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		attendanceResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		await AssertAttendanceStagePersistedAsync(employee.Id, new DateOnly(2026, 3, 11));
 
-		var after = await GetAndReadAsync<RunPayrollReadinessSummary>(
+		var after = await GetReadinessFromQueryAsync(
 			$"{BaseUrl}/readiness?month=2026-03");
 
 		after.EmployeeCount.ShouldBe(before.EmployeeCount);
@@ -398,7 +402,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		after.MissingAttendanceCount.ShouldBeLessThanOrEqualTo(Math.Max(0, before.MissingAttendanceCount - 1));
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Use_Manual_Attendance_For_Payable_Days()
 	{
@@ -406,7 +410,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollManualAttendance{Guid.NewGuid():N}",
+			"PayrollManualAttendance",
 			dateOfJoining: new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		var attendanceResponse = await Client.PostAsJsonAsync(
@@ -430,7 +434,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		attendanceResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		await AssertAttendanceStagePersistedAsync(employee.Id, new DateOnly(2026, 4, 14));
 
-		var preview = await GetAndReadAsync<RunPayrollResponse>(
+		var preview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-04&page=0&pageSize=100&forceRefresh=true");
 		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
 
@@ -439,7 +443,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		item.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Reduce_Payable_Days_For_Approved_Unpaid_Leave()
 	{
@@ -449,7 +453,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		const decimal monthlyGross = 30000m;
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollUnpaidLeave{Guid.NewGuid():N}",
+			"PayrollUnpaidLeave",
 			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 		await AssignSalaryStructureAsync(
 			employee.Id,
@@ -485,7 +489,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		item.IssueCodes.ShouldNotContain(IssueCodes.PayrollPolicyConfiguration);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_And_Payslip_Should_Include_Overtime_Earning()
 	{
@@ -503,7 +507,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 				Client,
-				$"PayrollOvertime{Guid.NewGuid():N}",
+				"PayrollOvertime",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 			var shiftId = await InsertShiftAsync(
 				$"Payroll overtime shift {Guid.NewGuid():N}",
@@ -568,6 +572,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				new PayrollRunReviewRequest
 				{
 					Month = month,
+				PreviewRunId = LastPreviewId(month),
 					EmployeeIds = new List<Guid> { employee.Id }
 				},
 				JsonOptions);
@@ -580,6 +585,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				new RunPayrollRequest
 				{
 					Month = month,
+				PreviewRunId = LastPreviewId(month),
 					EmployeeIds = new List<Guid> { employee.Id }
 				},
 				JsonOptions);
@@ -598,7 +604,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_And_Payslip_Should_Create_Late_Arrival_Salary_Deduction()
 	{
@@ -615,7 +621,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 				Client,
-				$"PayrollLateDeduction{Guid.NewGuid():N}",
+				"PayrollLateDeduction",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 			var shiftId = await InsertShiftAsync(
 				$"Payroll late deduction shift {Guid.NewGuid():N}",
@@ -678,7 +684,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_And_Payslip_Should_Apply_Assigned_Pf_Rule()
 	{
@@ -689,7 +695,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		const decimal monthlyGross = 30000m;
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollPfRule{Guid.NewGuid():N}",
+			"PayrollPfRule",
 			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 		var pfRule = await PayrollTestHelper.CreatePfRuleAsync(Client, "PayrollPFRule");
 		var savedRule = await Client.GetFromJsonAsync<ProvidentFundDto>(
@@ -743,7 +749,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		salarySlip.NetPay.ShouldBe(item.NetPay);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Block_Late_Arrival_Salary_Deduction_When_Amount_Is_Missing()
 	{
@@ -762,7 +768,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 				Client,
-				$"PayrollLateMissingAmount{Guid.NewGuid():N}",
+				"PayrollLateMissingAmount",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 			var shiftId = await InsertShiftAsync(
 				$"Payroll late missing amount shift {Guid.NewGuid():N}",
@@ -793,6 +799,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				new PayrollRunReviewRequest
 				{
 					Month = month,
+				PreviewRunId = LastPreviewId(month),
 					EmployeeIds = new List<Guid> { employee.Id }
 				},
 				JsonOptions);
@@ -804,6 +811,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				new RunPayrollRequest
 				{
 					Month = month,
+				PreviewRunId = LastPreviewId(month),
 					EmployeeIds = new List<Guid> { employee.Id }
 				},
 				JsonOptions);
@@ -817,7 +825,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Block_Late_Arrival_Salary_Deduction_When_Shift_Is_Missing()
 	{
@@ -835,7 +843,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 				Client,
-				$"PayrollLateMissingShift{Guid.NewGuid():N}",
+				"PayrollLateMissingShift",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
 			await ClearEmployeeShiftAsync(employee.Id);
@@ -860,7 +868,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Block_Late_Arrival_Salary_Deduction_When_Attendance_Has_No_InTime()
 	{
@@ -878,7 +886,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 				Client,
-				$"PayrollLateNoInTime{Guid.NewGuid():N}",
+				"PayrollLateNoInTime",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 			var shiftId = await InsertShiftAsync(
 				$"Payroll late no in time shift {Guid.NewGuid():N}",
@@ -907,7 +915,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Apply_Late_Arrival_Deduction_Only_After_Grace_Boundary()
 	{
@@ -926,7 +934,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 				Client,
-				$"PayrollLateBoundary{Guid.NewGuid():N}",
+				"PayrollLateBoundary",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 			var shiftId = await InsertShiftAsync(
 				$"Payroll late boundary shift {Guid.NewGuid():N}",
@@ -961,7 +969,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Refresh_Late_Arrival_Deduction_After_Amount_Changes()
 	{
@@ -979,7 +987,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 				Client,
-				$"PayrollLateAmountRefresh{Guid.NewGuid():N}",
+				"PayrollLateAmountRefresh",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 			var shiftId = await InsertShiftAsync(
 				$"Payroll late amount refresh shift {Guid.NewGuid():N}",
@@ -1013,7 +1021,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Refresh_Stale_Snapshot_When_Late_Arrival_Deduction_Is_Missing()
 	{
@@ -1031,7 +1039,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		{
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 				Client,
-				$"PayrollLateStaleSnapshot{Guid.NewGuid():N}",
+				"PayrollLateStaleSnapshot",
 				dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 			var shiftId = await InsertShiftAsync(
 				$"Payroll late stale snapshot shift {Guid.NewGuid():N}",
@@ -1066,7 +1074,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Refresh_Unlocked_Snapshot_After_Policy_Day_Calculation_Changes()
 	{
@@ -1074,13 +1082,13 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollPolicyRefresh{Guid.NewGuid():N}",
+			"PayrollPolicyRefresh",
 			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "PayrollPolicyRefresh");
 		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 6, 4));
 
-		var firstPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var firstPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
 		var firstItem = firstPreview.Items.Single(x => x.EmployeeId == employee.Id);
 		firstItem.BasisDays.ShouldNotBe(30);
@@ -1091,6 +1099,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new PayrollRunReviewRequest
 			{
 				Month = "2026-06",
+				PreviewRunId = LastPreviewId("2026-06"),
 				EmployeeIds = new List<Guid> { employee.Id }
 			},
 			JsonOptions);
@@ -1099,7 +1108,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		await SetPayrollPolicyDayCalculationAsync(firstItem.PayrollPolicyId!.Value, DayCalculationType.TotalMonthDays);
 
-		var refreshedPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var refreshedPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=false");
 		var refreshedItem = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
 
@@ -1109,7 +1118,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		refreshedItem.ReviewStatus.ShouldBe(ReviewStatuses.Pending);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Lock_Should_Reject_Reviewed_Snapshot_When_Adjustment_Changed()
 	{
@@ -1117,13 +1126,13 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollSalaryFreshness{Guid.NewGuid():N}",
+			"PayrollSalaryFreshness",
 			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "SalaryFreshness", earningAmount: 25000m, useMasterComponents: false);
 		await SeedAttendanceOnDateAsync(employee.Id, new DateOnly(2026, 6, 4));
 
-		var firstPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var firstPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
 		var firstItem = firstPreview.Items.Single(x => x.EmployeeId == employee.Id);
 		firstItem.ReviewStatus.ShouldBe(ReviewStatuses.Pending);
@@ -1133,6 +1142,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new PayrollRunReviewRequest
 			{
 				Month = "2026-06",
+				PreviewRunId = LastPreviewId("2026-06"),
 				EmployeeIds = new List<Guid> { employee.Id }
 			},
 			JsonOptions);
@@ -1147,13 +1157,14 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new RunPayrollRequest
 			{
 				Month = "2026-06",
+				PreviewRunId = LastPreviewId("2026-06"),
 				EmployeeIds = new List<Guid> { employee.Id }
 			},
 			JsonOptions);
 		var lockBody = await lockResponse.Content.ReadAsStringAsync();
 
-		lockResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest, lockBody);
-		lockBody.ShouldContain(HRErrorCodes.PayrollReviewRequiredBeforeLock);
+		lockResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict, lockBody);
+		lockBody.ShouldContain(HRErrorCodes.PayrollPreviewStale);
 
 		var refreshedPreview = await GetPayrollPreviewAsync("2026-06", forceRefresh: false);
 		var refreshedItem = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
@@ -1163,7 +1174,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		refreshedItem.NetPay.ShouldBe(firstItem.NetPay + 500d);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Adjustment_Create_Should_Reset_Reviewed_Snapshot_To_Pending()
 	{
@@ -1171,7 +1182,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollAdjustmentReviewReset{Guid.NewGuid():N}",
+			"PayrollAdjustmentReviewReset",
 			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "AdjustmentReviewReset", earningAmount: 25000m, useMasterComponents: false);
@@ -1185,6 +1196,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new PayrollRunReviewRequest
 			{
 				Month = "2026-06",
+				PreviewRunId = LastPreviewId("2026-06"),
 				EmployeeIds = new List<Guid> { employee.Id }
 			},
 			JsonOptions);
@@ -1214,12 +1226,13 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new RunPayrollRequest
 			{
 				Month = "2026-06",
+				PreviewRunId = LastPreviewId("2026-06"),
 				EmployeeIds = new List<Guid> { employee.Id }
 			},
 			JsonOptions);
 		var lockBody = await lockResponse.Content.ReadAsStringAsync();
-		lockResponse.StatusCode.ShouldBe(HttpStatusCode.BadRequest, lockBody);
-		lockBody.ShouldContain(HRErrorCodes.PayrollReviewRequiredBeforeLock);
+		lockResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict, lockBody);
+		lockBody.ShouldContain(HRErrorCodes.PayrollPreviewStale);
 
 		var refreshedPreview = await GetPayrollPreviewAsync("2026-06", forceRefresh: false);
 		var refreshedItem = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
@@ -1227,7 +1240,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		refreshedItem.NetPay.ShouldBe(firstItem.NetPay + 750d);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Use_Employee_Override_Effective_During_Month()
 	{
@@ -1235,7 +1248,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollMidMonthOverride{Guid.NewGuid():N}",
+			"PayrollMidMonthOverride",
 			dateOfJoining: new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		await AssignSalaryStructureAsync(employee.Id, "MidOverride");
@@ -1244,7 +1257,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			employee.Id,
 			new DateTime(2026, 6, 4));
 
-		var preview = await GetAndReadAsync<RunPayrollResponse>(
+		var preview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-06&page=0&pageSize=100&forceRefresh=true");
 		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
 
@@ -1254,7 +1267,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		item.DayCalculationMode.ShouldBe("total-month-days");
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Readiness_Should_Count_Absent_Attendance_As_Found()
 	{
@@ -1262,7 +1275,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollAbsentAttendance{Guid.NewGuid():N}",
+			"PayrollAbsentAttendance",
 			dateOfJoining: new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc));
 
 		var attendanceResponse = await Client.PostAsJsonAsync(
@@ -1284,19 +1297,19 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		attendanceResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		await AssertAttendanceStagePersistedAsync(employee.Id, new DateOnly(2026, 4, 15));
 
-		var preview = await GetAndReadAsync<RunPayrollResponse>(
+		var preview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-04&page=0&pageSize=100&forceRefresh=true");
 		var item = preview.Items.Single(x => x.EmployeeId == employee.Id);
 
 		item.PayableDays.ShouldBe(0);
 		item.IssueCodes.ShouldNotContain("NO_ATTENDANCE");
 
-		var readiness = await GetAndReadAsync<RunPayrollReadinessSummary>(
+		var readiness = await GetReadinessFromQueryAsync(
 			$"{BaseUrl}/readiness?month=2026-04");
 		readiness.AttendanceFoundCount.ShouldBeGreaterThanOrEqualTo(1);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Lock_Should_Reject_Employee_Before_Joining_Month()
 	{
@@ -1312,6 +1325,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new RunPayrollRequest
 			{
 				Month = "2026-04",
+				PreviewRunId = LastPreviewId("2026-04"),
 				EmployeeIds = new List<Guid> { employee.Id }
 			},
 			JsonOptions);
@@ -1319,7 +1333,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Remove_Unlocked_Stale_Rows_For_Ineligible_Employees()
 	{
@@ -1331,18 +1345,18 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 		await SeedStalePayrollRowsAsync(employee.Id, "2026-04");
 
-		var aprilPreview = await GetAndReadAsync<RunPayrollResponse>(
+		var aprilPreview = await GetPreviewFromQueryAsync(
 			$"{BaseUrl}?month=2026-04&page=0&pageSize=100&forceRefresh=true");
 
 		aprilPreview.Items.Any(x => x.EmployeeId == employee.Id).ShouldBeFalse();
 		await AssertNoStalePayrollRowsAsync(employee.Id, "2026-04");
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Get_Payroll_Readiness_Without_Generating_Preview()
+	public async Task Should_Get_Payroll_Readiness_From_Completed_Generation()
 	{
-		var response = await Client.GetAsync($"{BaseUrl}/readiness?month=2026-05");
+		var response = await RequestPreviewAsync($"{BaseUrl}/readiness?month=2026-05");
 
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.OK,
@@ -1350,7 +1364,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.Forbidden);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Preview_Should_Report_Policy_Setup_Issue_When_Month_Has_No_Academic_Year()
 	{
@@ -1358,10 +1372,10 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollNoAcademicYear{Guid.NewGuid():N}",
+			"PayrollNoAcademicYear",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
-		var previewResponse = await Client.GetAsync($"{BaseUrl}?month=2040-05&page=0&pageSize=100&forceRefresh=true");
+		var previewResponse = await RequestPreviewAsync($"{BaseUrl}?month=2040-05&page=0&pageSize=100&forceRefresh=true");
 		var previewBody = await previewResponse.Content.ReadAsStringAsync();
 		previewBody.ShouldNotContain("HR:Payroll:030011");
 		previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, previewBody);
@@ -1372,7 +1386,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		preview.Readiness.BlockingIssues.ShouldContain("PAYROLL_POLICY_CONFIGURATION");
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Readiness_Should_Report_Policy_Setup_Issue_When_Default_Payroll_Policy_Is_Missing()
 	{
@@ -1380,10 +1394,10 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 		await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollMissingDefaultPolicy{Guid.NewGuid():N}",
+			"PayrollMissingDefaultPolicy",
 			dateOfJoining: new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc));
 
-		var initialReadiness = await GetAndReadAsync<RunPayrollReadinessSummary>(
+		var initialReadiness = await GetReadinessFromQueryAsync(
 			$"{BaseUrl}/readiness?month=2026-05");
 		initialReadiness.SnapshotCount.ShouldBeGreaterThan(0);
 
@@ -1392,17 +1406,17 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var defaultPayrollPolicyId = await ClearDefaultPayrollPolicyForMonthAsync(effectiveDate);
 		try
 		{
-			var response = await Client.GetAsync($"{BaseUrl}/readiness?month=2026-05");
+			var response = await RequestPreviewAsync($"{BaseUrl}/readiness?month=2026-05");
 			var body = await response.Content.ReadAsStringAsync();
 			response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
 
-			var readiness = JsonSerializer.Deserialize<RunPayrollReadinessSummary>(body, JsonOptions)!;
+			var readiness = JsonSerializer.Deserialize<RunPayrollResponse>(body, JsonOptions)!.Readiness!;
 			readiness.CanLock.ShouldBeFalse();
 			readiness.PolicyConfigurationIssueCount.ShouldBeGreaterThan(0);
 			readiness.BlockingIssues.ShouldContain("PAYROLL_POLICY_CONFIGURATION");
 			readiness.RecommendedActions.ShouldContain("fix-payroll-policy");
 
-			var previewResponse = await Client.GetAsync($"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=false");
+			var previewResponse = await RequestPreviewAsync($"{BaseUrl}?month=2026-05&page=0&pageSize=100&forceRefresh=false");
 			var previewBody = await previewResponse.Content.ReadAsStringAsync();
 			previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK, previewBody);
 
@@ -1418,7 +1432,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Payroll_Register_Should_Report_Setup_Issue_When_Approved_Leave_Employee_Lacks_Payroll_Policy()
 	{
@@ -1428,7 +1442,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var effectiveDate = new DateTime(2026, 5, 1);
 		var employee = await EmployeeTestHelper.CreateEmployeeAsync(
 			Client,
-			$"PayrollSetupLeave{Guid.NewGuid():N}",
+			"PayrollSetupLeave",
 			dateOfJoining: effectiveDate);
 		var leavePolicyId = await EnsureActiveDefaultLeavePolicyAsync(effectiveDate);
 		await SeedApprovedPaidLeaveAsync(
@@ -1441,7 +1455,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var defaultPayrollPolicyId = await ClearDefaultPayrollPolicyForMonthAsync(effectiveDate);
 		try
 		{
-			var response = await Client.GetAsync($"{BaseUrl}?month={month}&page=0&pageSize=100&forceRefresh=true");
+			var response = await RequestPreviewAsync($"{BaseUrl}?month={month}&page=0&pageSize=100&forceRefresh=true");
 			var body = await response.Content.ReadAsStringAsync();
 			response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
 
@@ -1457,7 +1471,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Lock_Payroll_Without_500()
 	{
@@ -1472,7 +1486,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.Forbidden);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Mark_Review_Without_500()
 	{
@@ -1481,6 +1495,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new PayrollRunReviewRequest
 			{
 				Month = PayrollMonth,
+				PreviewRunId = LastPreviewId(PayrollMonth),
 				EmployeeIds = new List<System.Guid> { System.Guid.NewGuid() }
 			},
 			JsonOptions);
@@ -1491,7 +1506,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.Forbidden);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Unmark_Review_Without_500()
 	{
@@ -1501,6 +1516,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 				new PayrollRunReviewRequest
 				{
 					Month = PayrollMonth,
+				PreviewRunId = LastPreviewId(PayrollMonth),
 					EmployeeIds = new List<System.Guid> { System.Guid.NewGuid() }
 				},
 				options: JsonOptions)
@@ -1512,17 +1528,17 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			HttpStatusCode.Forbidden);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Return_Error_For_Invalid_Month_Format()
 	{
-		var response = await Client.GetAsync($"{BaseUrl}?month=invalid-format&page=0&pageSize=50");
+		var response = await RequestPreviewAsync($"{BaseUrl}?month=invalid-format&page=0&pageSize=50");
 		response.StatusCode.ShouldBeOneOf(
 			HttpStatusCode.BadRequest,
 			HttpStatusCode.Forbidden);
 	}
 
-	[Fact]
+	[PayrollWorkflowPostgresFact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task HrSwagger_Should_Contain_RunPayroll_And_AutomatedRunLock_Endpoints()
 	{
@@ -1532,9 +1548,58 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 		var json = await response.Content.ReadAsStringAsync();
 		using var document = JsonDocument.Parse(json);
 		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run", out _).ShouldBeTrue();
-		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run/readiness", out _).ShouldBeTrue();
+		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run/previews", out _).ShouldBeTrue();
+		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run/previews/{id}/employees", out _).ShouldBeTrue();
+		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run/readiness", out _).ShouldBeFalse();
 		document.RootElement.GetProperty("paths").TryGetProperty("/api/payroll/run/reviews", out _).ShouldBeTrue();
 		document.RootElement.GetProperty("paths").TryGetProperty("/api/hr/attendance/automated-runs/{batchId}/lock", out _).ShouldBeTrue();
+	}
+
+
+	private Guid LastPreviewId(string month)
+	{
+		var parsed = DateTime.Parse(month, System.Globalization.CultureInfo.InvariantCulture);
+		return _previewRuns.GetValueOrDefault(parsed.ToString("yyyy-MM"), Guid.Empty);
+	}
+
+	private async Task<RunPayrollResponse> GetPreviewFromQueryAsync(string options)
+	{
+		using var response = await RequestPreviewAsync(options);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		return (await response.Content.ReadFromJsonAsync<RunPayrollResponse>(JsonOptions))!;
+	}
+
+	private async Task<RunPayrollReadinessSummary> GetReadinessFromQueryAsync(string options) =>
+		(await GetPreviewFromQueryAsync(options)).Readiness!;
+
+	private async Task<HttpResponseMessage> RequestPreviewAsync(string options)
+	{
+		var query = QueryHelpers.ParseQuery(options[(options.IndexOf('?') + 1)..]);
+		using var start = await Client.PostAsJsonAsync($"{BaseUrl}/previews", new StartPayrollPreviewRequest
+		{
+			Month = query["month"].ToString(),
+			AcademicYearId = Guid.TryParse(query.GetValueOrDefault("academicYearId"), out var year) ? year : null,
+			Refresh = bool.TryParse(query.GetValueOrDefault("forceRefresh"), out var refresh) && refresh
+		}, JsonOptions);
+		if (start.StatusCode != HttpStatusCode.Accepted)
+		{
+			return new HttpResponseMessage(start.StatusCode)
+			{
+				Content = new StringContent(await start.Content.ReadAsStringAsync(), System.Text.Encoding.UTF8, "application/json")
+			};
+		}
+		var run = (await start.Content.ReadFromJsonAsync<PayrollPreviewStatusDto>(JsonOptions))!;
+		_previewRuns[run.Month] = run.Id;
+		using (var scope = Factory.Services.CreateScope())
+		{
+			await scope.ServiceProvider.GetRequiredService<PayrollPreviewBackgroundJob>().ExecuteAsync(
+				new PayrollPreviewJobArgs { TenantId = Guid.Parse(TestAuthHandler.TestTenantId), RunId = run.Id });
+		}
+		var status = await GetAndReadAsync<PayrollPreviewStatusDto>($"{BaseUrl}/previews/{run.Id}");
+		status.Status.ShouldBe("SUCCEEDED", status.ErrorMessage);
+		var page = query.TryGetValue("page", out var requestedPage) ? requestedPage.ToString() : "0";
+		var size = query.TryGetValue("pageSize", out var requestedSize) ? requestedSize.ToString() : "100";
+		return await Client.GetAsync($"{BaseUrl}/previews/{run.Id}/employees?page={page}&pageSize={size}");
 	}
 
 	private async Task SeedStalePayrollRowsAsync(Guid employeeId, string monthYear)
@@ -1610,7 +1675,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 
 	private async Task<RunPayrollResponse> GetPayrollPreviewAsync(string month, bool forceRefresh)
 	{
-		var response = await Client.GetAsync(
+		var response = await RequestPreviewAsync(
 			$"{BaseUrl}?month={month}&page=0&pageSize=100&forceRefresh={forceRefresh.ToString().ToLowerInvariant()}");
 		var body = await response.Content.ReadAsStringAsync();
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
@@ -1637,6 +1702,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new PayrollRunReviewRequest
 			{
 				Month = month,
+				PreviewRunId = LastPreviewId(month),
 				EmployeeIds = new List<Guid> { employeeId }
 			},
 			JsonOptions);
@@ -1650,6 +1716,7 @@ public class RunPayrollApi_Tests : ShikshaMitraApiTestBase
 			new RunPayrollRequest
 			{
 				Month = month,
+				PreviewRunId = LastPreviewId(month),
 				EmployeeIds = new List<Guid> { employeeId }
 			},
 			JsonOptions);

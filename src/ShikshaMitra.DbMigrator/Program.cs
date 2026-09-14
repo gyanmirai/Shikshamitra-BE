@@ -51,6 +51,12 @@ static class Program
 			.ConfigureLogging((context, logging) => logging.ClearProviders())
 			.ConfigureServices((hostContext, services) =>
 			{
+				if (string.IsNullOrWhiteSpace(hostContext.Configuration.GetConnectionString("Default")))
+				{
+					throw new InvalidOperationException(
+						"Configure ConnectionStrings__Default through a secure configuration provider before running DbMigrator.");
+				}
+
 				services.AddHostedService<DbMigratorHostedService>();
 			});
 }

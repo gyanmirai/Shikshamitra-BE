@@ -127,7 +127,42 @@ public class StatutoryOverrideDto
 
 public class StatutoryImpactPreviewRequestDto
 {
+	private string? _search;
+	private int _pageSize = 25;
+
 	public string MonthYear { get; set; } = string.Empty;
+	public string? Search
+	{
+		get => _search;
+		set => _search = value?.Trim();
+	}
+	public string Coverage { get; set; } = "all";
+	public string Readiness { get; set; } = "all";
+	public List<string> EnrollmentStatuses { get; set; } = [];
+	public int Page { get; set; }
+	public int PageSize
+	{
+		get => _pageSize;
+		set => _pageSize = Math.Min(100, value);
+	}
+	public string SortBy { get; set; } = "employeeName";
+	public string SortDirection { get; set; } = "asc";
+}
+
+public class ActivateStatutorySchemeDto
+{
+	public string MonthYear { get; set; } = string.Empty;
+	public string PreviewFingerprint { get; set; } = string.Empty;
+}
+
+public class StatutoryIssueDto
+{
+	public string Code { get; set; } = string.Empty;
+	public string Severity { get; set; } = "blocking";
+	public string Title { get; set; } = string.Empty;
+	public string Message { get; set; } = string.Empty;
+	public string ResolutionTarget { get; set; } = "general";
+	public int AffectedEmployeeCount { get; set; }
 }
 
 public class EmployeeStatutoryImpactDto
@@ -137,7 +172,8 @@ public class EmployeeStatutoryImpactDto
 	public string EmployeeName { get; set; } = string.Empty;
 	public bool IsCovered { get; set; }
 	public bool CanCalculate { get; set; }
-	public string CoverageDecision { get; set; } = string.Empty;
+	public string CoverageDecisionCode { get; set; } = string.Empty;
+	public string CoverageDecisionLabel { get; set; } = string.Empty;
 	public decimal StatutoryWages { get; set; }
 	public decimal WageCeiling { get; set; }
 	public decimal EmployeeContribution { get; set; }
@@ -147,21 +183,32 @@ public class EmployeeStatutoryImpactDto
 	public string WageCeilingCategory { get; set; } = nameof(StatutoryWageCeilingCategory.Standard);
 	public string? InsuranceNumber { get; set; }
 	public DateTime? ContributionPeriodEnd { get; set; }
-	public List<string> IssueCodes { get; set; } = [];
+	public List<StatutoryIssueDto> Issues { get; set; } = [];
 }
 
-public class StatutoryImpactPreviewDto
+public class StatutoryImpactSummaryDto
 {
-	public string SchemeCode { get; set; } = StatutorySchemeCodes.EmployeeStateInsurance;
-	public string MonthYear { get; set; } = string.Empty;
+	public int EmployeesNeedingAttention { get; set; }
 	public int EmployeeCount { get; set; }
 	public int CoveredEmployeeCount { get; set; }
 	public decimal EmployeeContributionTotal { get; set; }
 	public decimal EmployerContributionTotal { get; set; }
 	public decimal GovernmentContributionTotal { get; set; }
 	public bool CanActivate { get; set; }
-	public List<string> BlockingIssueCodes { get; set; } = [];
-	public List<EmployeeStatutoryImpactDto> Employees { get; set; } = [];
+	public List<StatutoryIssueDto> BlockingIssues { get; set; } = [];
+}
+
+public class StatutoryImpactPreviewDto
+{
+	public string SchemeCode { get; set; } = StatutorySchemeCodes.EmployeeStateInsurance;
+	public string MonthYear { get; set; } = string.Empty;
+	public StatutoryImpactSummaryDto Summary { get; set; } = new();
+	public int TotalCount { get; set; }
+	public int Page { get; set; }
+	public int PageSize { get; set; }
+	public List<EmployeeStatutoryImpactDto> Items { get; set; } = [];
+	public DateTime GeneratedAtUtc { get; set; }
+	public string PreviewFingerprint { get; set; } = string.Empty;
 }
 
 public interface IEsiStatutoryAppService : IApplicationService
@@ -176,7 +223,7 @@ public interface IEsiStatutoryAppService : IApplicationService
 	Task<List<StatutoryOverrideDto>> GetOverridesAsync(Guid employeeId);
 	Task CreateOverrideAsync(Guid employeeId, CreateStatutoryOverrideDto input);
 	Task<StatutoryImpactPreviewDto> PreviewAsync(StatutoryImpactPreviewRequestDto input);
-	Task<StatutoryEstablishmentDto> ActivateAsync(StatutoryImpactPreviewRequestDto input);
+	Task<StatutoryEstablishmentDto> ActivateAsync(ActivateStatutorySchemeDto input);
 }
 
 public class ConfigureStatutoryEstablishmentDtoValidator : AbstractValidator<ConfigureStatutoryEstablishmentDto>
@@ -246,8 +293,34 @@ public class CreateStatutoryOverrideDtoValidator : AbstractValidator<CreateStatu
 
 public class StatutoryImpactPreviewRequestDtoValidator : AbstractValidator<StatutoryImpactPreviewRequestDto>
 {
+	private static readonly string[] CoverageValues = ["all", "covered", "notCovered"];
+	private static readonly string[] ReadinessValues = ["all", "ready", "needsAttention"];
+	private static readonly string[] SortValues =
+	[
+		"employeeName", "employeeIdentifier", "statutoryWages", "employeeContribution",
+		"employerContribution", "readiness"
+	];
+
 	public StatutoryImpactPreviewRequestDtoValidator()
 	{
 		RuleFor(x => x.MonthYear).Matches("^(0[1-9]|1[0-2])-\\d{4}$");
+		RuleFor(x => x.Search).MaximumLength(100);
+		RuleFor(x => x.Coverage).Must(value => CoverageValues.Contains(value));
+		RuleFor(x => x.Readiness).Must(value => ReadinessValues.Contains(value));
+		RuleFor(x => x.Page).GreaterThanOrEqualTo(0);
+		RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+		RuleFor(x => x.SortBy).Must(value => SortValues.Contains(value));
+		RuleFor(x => x.SortDirection).Must(value => value is "asc" or "desc");
+		RuleForEach(x => x.EnrollmentStatuses)
+			.Must(value => Enum.TryParse<EmployeeStatutoryEnrollmentStatus>(value, true, out _));
+	}
+}
+
+public class ActivateStatutorySchemeDtoValidator : AbstractValidator<ActivateStatutorySchemeDto>
+{
+	public ActivateStatutorySchemeDtoValidator()
+	{
+		RuleFor(x => x.MonthYear).Matches("^(0[1-9]|1[0-2])-\\d{4}$");
+		RuleFor(x => x.PreviewFingerprint).NotEmpty().Matches("^[A-F0-9]{64}$");
 	}
 }

@@ -32,7 +32,7 @@ public class EsiStatutoryApi_Tests : ShikshaMitraApiTestBase
 	{
 		var response = await Client.GetAsync($"{BaseUrl}/rule?effectiveOn=2026-08-01");
 
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var rule = await response.Content.ReadFromJsonAsync<StatutoryRuleVersionDto>(JsonOptions);
 		rule.ShouldNotBeNull();
 		rule.SchemeCode.ShouldBe("ESI");
@@ -68,8 +68,69 @@ public class EsiStatutoryApi_Tests : ShikshaMitraApiTestBase
 		(await viewClient.PutAsJsonAsync($"{BaseUrl}/employees/{employeeId}/enrollment",
 			new UpdateEmployeeStatutoryEnrollmentDto())).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 		(await viewClient.PostAsJsonAsync($"{BaseUrl}/activate",
-			new StatutoryImpactPreviewRequestDto { MonthYear = "08-2026" })).StatusCode
+			new ActivateStatutorySchemeDto
+			{
+				MonthYear = "08-2026",
+				PreviewFingerprint = new string('A', 64)
+			})).StatusCode
 			.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Preview_should_return_paged_items_and_reject_stale_activation()
+	{
+		var previewResponse = await Client.PostAsJsonAsync($"{BaseUrl}/impact-preview",
+			new StatutoryImpactPreviewRequestDto
+			{
+				MonthYear = "08-2026",
+				Page = 0,
+				PageSize = 10,
+				SortBy = "employeeName",
+				SortDirection = "asc"
+			});
+		previewResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK, await previewResponse.Content.ReadAsStringAsync());
+		var preview = await previewResponse.Content.ReadFromJsonAsync<StatutoryImpactPreviewDto>(JsonOptions);
+		preview.ShouldNotBeNull();
+		preview.Page.ShouldBe(0);
+		preview.PageSize.ShouldBe(10);
+		preview.GeneratedAtUtc.ShouldNotBe(default);
+		preview.PreviewFingerprint.Length.ShouldBe(64);
+		var establishmentBefore = await Client.GetFromJsonAsync<StatutoryEstablishmentDto>(
+			$"{BaseUrl}/establishment", JsonOptions);
+		establishmentBefore.ShouldNotBeNull();
+		var repeatedResponse = await Client.PostAsJsonAsync($"{BaseUrl}/impact-preview",
+			new StatutoryImpactPreviewRequestDto
+			{
+				MonthYear = "08-2026",
+				Search = "__no_employee_matches__",
+				Page = 0,
+				PageSize = 10,
+				SortBy = "employeeName",
+				SortDirection = "asc"
+			});
+		var repeated = await repeatedResponse.Content.ReadFromJsonAsync<StatutoryImpactPreviewDto>(JsonOptions);
+		repeated.ShouldNotBeNull();
+		repeated.TotalCount.ShouldBe(0);
+		repeated.Summary.EmployeeCount.ShouldBe(preview.Summary.EmployeeCount);
+		repeated.Summary.EmployeeContributionTotal.ShouldBe(preview.Summary.EmployeeContributionTotal);
+		repeated.PreviewFingerprint.ShouldBe(preview.PreviewFingerprint);
+
+		var activationResponse = await Client.PostAsJsonAsync($"{BaseUrl}/activate",
+			new ActivateStatutorySchemeDto
+			{
+				MonthYear = "08-2026",
+				PreviewFingerprint = new string(
+					preview.PreviewFingerprint[0] == 'A' ? 'B' : 'A',
+					64)
+			});
+		activationResponse.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		(await activationResponse.Content.ReadAsStringAsync()).ShouldContain("ESI_PREVIEW_STALE");
+		var establishmentAfter = await Client.GetFromJsonAsync<StatutoryEstablishmentDto>(
+			$"{BaseUrl}/establishment", JsonOptions);
+		establishmentAfter.ShouldNotBeNull();
+		establishmentAfter.Status.ShouldBe(establishmentBefore.Status);
 	}
 
 	[Fact]

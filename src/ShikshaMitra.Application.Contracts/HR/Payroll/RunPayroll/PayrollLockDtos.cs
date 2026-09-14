@@ -8,6 +8,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 /// </summary>
 public class RunPayrollRequest
 {
+	public Guid PreviewRunId { get; set; }
 	/// <summary>
 	/// Payroll month in MMMM-YYYY format (e.g., JANUARY-2025)
 	/// </summary>
@@ -19,7 +20,7 @@ public class RunPayrollRequest
 	public Guid? AcademicYearId { get; set; }
 
 	/// <summary>
-	/// Optional target employee IDs to finalize a subset. If omitted, payroll runs for all in-scope active employees.
+	/// Explicit employees selected from the reviewed preview generation.
 	/// </summary>
 	public List<Guid>? EmployeeIds { get; set; }
 }

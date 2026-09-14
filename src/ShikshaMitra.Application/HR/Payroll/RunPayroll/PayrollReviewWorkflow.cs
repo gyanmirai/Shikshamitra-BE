@@ -12,6 +12,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 [RemoteService(false)]
 public class PayrollReviewWorkflow(
+	PayrollPreviewReviewGuard previewGuard,
 	ISalarySlipRepository salarySlipRepository,
 	IRepository<PayrollRunReview, Guid> payrollRunReviewRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
@@ -22,6 +23,7 @@ public class PayrollReviewWorkflow(
 {
 	public async Task<PayrollLockResponse> MarkReviewedAsync(PayrollRunReviewRequest request)
 	{
+		await previewGuard.EnsureCurrentAsync(request.PreviewRunId, request.Month, request.AcademicYearId, request.EmployeeIds);
 		var (year, month, internalMonthYear) = PayrollRunRules.ParseMonth(request.Month);
 		await academicYearScopeResolver.ResolveAsync(request.AcademicYearId, year, month);
 		var employeeIds = PayrollRunRules.NormalizeReviewEmployeeIds(request.EmployeeIds);
@@ -51,7 +53,7 @@ public class PayrollReviewWorkflow(
 		{
 			if (existingByEmployee.TryGetValue(employee.Id, out var existingReview))
 			{
-				existingReview.Refresh(actorUserId, reviewedAt);
+				existingReview.Refresh(actorUserId, reviewedAt, request.PreviewRunId);
 				await payrollRunReviewRepository.UpdateAsync(existingReview, autoSave: false);
 			}
 			else
@@ -63,7 +65,8 @@ public class PayrollReviewWorkflow(
 						internalMonthYear,
 						employee.Id,
 						actorUserId,
-						reviewedAt),
+						reviewedAt,
+						request.PreviewRunId),
 					autoSave: false);
 			}
 
@@ -86,6 +89,7 @@ public class PayrollReviewWorkflow(
 
 	public async Task<PayrollLockResponse> UnmarkReviewedAsync(PayrollRunReviewRequest request)
 	{
+		await previewGuard.EnsureCurrentAsync(request.PreviewRunId, request.Month, request.AcademicYearId, request.EmployeeIds);
 		var (year, month, internalMonthYear) = PayrollRunRules.ParseMonth(request.Month);
 		await academicYearScopeResolver.ResolveAsync(request.AcademicYearId, year, month);
 		var employeeIds = PayrollRunRules.NormalizeReviewEmployeeIds(request.EmployeeIds);

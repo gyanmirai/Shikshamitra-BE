@@ -71,6 +71,7 @@ internal static class PayrollReadinessProjector
 
 		return new RunPayrollReadinessSummary
 		{
+			NetPayTotal = items.Sum(x => x.NetPay),
 			Month = month,
 			CanPreview = true,
 			CanLock = !isGenerated && items.Count > 0 && items.Count == employeeCount && blockingIssues.Count == 0 && reviewedCount == employeeCount,

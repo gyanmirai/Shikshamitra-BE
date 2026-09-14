@@ -2,6 +2,10 @@ namespace ShikshaMitra.HR;
 
 public static partial class HRErrorCodes
 {
+	public const string PayrollPreviewStale = "PAYROLL_PREVIEW_STALE";
+	public const string PayrollPreviewNotFound = "PAYROLL_PREVIEW_NOT_FOUND";
+	public const string PayrollPreviewNotReady = "PAYROLL_PREVIEW_NOT_READY";
+	public const string SalaryTemplateAllocationMismatch = "HR:Payroll:SalaryTemplateAllocationMismatch";
 	public const string PayrollAlreadyLocked = "HR:Payroll:030001";
 	public const string PayrollNoEmployees = "HR:Payroll:030002";
 	public const string SalarySlipNotFound = "HR:Payroll:030003";
@@ -53,4 +57,5 @@ public static partial class HRErrorCodes
 	public const string StatutoryRuleNotFound = "HR:Payroll:030041";
 	public const string StatutoryOverrideInvalid = "HR:Payroll:030042";
 	public const string StatutoryEnrollmentNotFound = "HR:Payroll:030043";
+	public const string StatutoryPreviewStale = "ESI_PREVIEW_STALE";
 }

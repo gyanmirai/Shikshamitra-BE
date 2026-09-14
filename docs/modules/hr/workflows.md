@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-08-13
+updated_on: 2026-09-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -69,6 +69,10 @@ Later template or statutory changes do not silently change approved compensation
 Approval recalculates the quote and rejects a stale draft when the result has changed.
 One-time earnings and deductions remain separate employee salary components and do not become revision lines.
 ESI activation follows establishment details, earning-component wage mapping, employee enrollment review, tenant-wide impact preview, and explicit approval.
+HR can complete establishment details, earning classifications, and employee review in any order before approval.
+The monthly impact preview loads as a paged employee projection, but readiness and contribution totals always use the complete scoped population.
+Activation must submit the fingerprint HR reviewed and recalculates all activation-relevant inputs in the same month before making changes.
+A changed rule, establishment, treatment, enrollment, override, compensation revision, or calculated contribution makes the reviewed fingerprint stale and requires a fresh review.
 An active ESI scheme is evaluated for every payroll employee even when the selected salary template has no ESI row.
 ESI coverage above the entry ceiling continues only through the recorded contribution-period end or an audited override.
 PwD employer-share relief applies only to the PwD wage-ceiling category with a recorded start date and disability evidence.

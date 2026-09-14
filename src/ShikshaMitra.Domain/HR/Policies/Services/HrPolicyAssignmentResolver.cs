@@ -15,6 +15,15 @@ public class HrPolicyAssignmentResolver(
 	IGroupRepository groupRepository)
 	: DomainService
 {
+	private Dictionary<Guid, List<Group>>? batchGroups;
+	private Dictionary<(Guid, DateTime), List<HrPolicyAssignment>>? batchAssignments;
+	internal IDisposable BeginReadBatch()
+	{
+		var previousGroups = batchGroups;
+		var previousAssignments = batchAssignments;
+		batchGroups = new(); batchAssignments = new();
+		return new Volo.Abp.DisposeAction(() => { batchGroups = previousGroups; batchAssignments = previousAssignments; });
+	}
 	internal async Task<HrPolicyAssignmentResolution> ResolveForEmployeeAsync(
 		Employee employee,
 		Guid academicYearId,
@@ -48,7 +57,15 @@ public class HrPolicyAssignmentResolver(
 
 		var targetKeys = targets.Select(x => x.TargetKey).Distinct().ToList();
 		var query = await assignmentRepository.GetQueryableAsync();
-		var candidates = await AsyncExecuter.ToListAsync(query
+		if (batchAssignments != null && !batchAssignments.ContainsKey((academicYearId, date)))
+		{
+			batchAssignments[(academicYearId, date)] = await AsyncExecuter.ToListAsync(query.Where(x =>
+				x.AcademicYearId == academicYearId && x.IsActive && x.EffectiveFrom <= date &&
+				(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date)), cancellationToken);
+		}
+		var candidates = batchAssignments != null
+			? batchAssignments[(academicYearId, date)].Where(x => targetKeys.Contains(x.TargetKey)).ToList()
+			: await AsyncExecuter.ToListAsync(query
 			.Where(x =>
 				x.AcademicYearId == academicYearId &&
 				x.IsActive &&
@@ -80,7 +97,9 @@ public class HrPolicyAssignmentResolver(
 		if (employee != null)
 		{
 			targets.Add(new PolicyTargetKey(HrPolicyAssignmentTargetType.Employee, employee.Id.ToString("D").ToLowerInvariant(), 100));
-			var groups = await groupRepository.GetListWithDetailsAsync(academicYearId, cancellationToken: cancellationToken);
+			if (batchGroups != null && !batchGroups.ContainsKey(academicYearId))
+				batchGroups[academicYearId] = await groupRepository.GetListWithDetailsAsync(academicYearId, cancellationToken: cancellationToken);
+			var groups = batchGroups != null ? batchGroups[academicYearId] : await groupRepository.GetListWithDetailsAsync(academicYearId, cancellationToken: cancellationToken);
 			targets.AddRange(groups
 				.Where(group => HrPolicyGroupMembership.MatchesEmployee(group, employee))
 				.Select(group => new PolicyTargetKey(HrPolicyAssignmentTargetType.Group, group.Id.ToString("D").ToLowerInvariant(), 50)));

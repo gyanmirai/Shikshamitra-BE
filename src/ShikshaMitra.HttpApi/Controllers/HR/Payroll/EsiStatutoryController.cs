@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
@@ -85,6 +86,8 @@ public class EsiStatutoryController(
 
 	[HttpPost("activate")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.Activate)]
-	public Task<StatutoryEstablishmentDto> ActivateAsync([FromBody] StatutoryImpactPreviewRequestDto input) =>
+	[ProducesResponseType(typeof(StatutoryEstablishmentDto), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status409Conflict)]
+	public Task<StatutoryEstablishmentDto> ActivateAsync([FromBody] ActivateStatutorySchemeDto input) =>
 		appService.ActivateAsync(input);
 }

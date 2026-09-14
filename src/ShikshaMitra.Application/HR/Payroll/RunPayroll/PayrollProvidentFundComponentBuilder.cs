@@ -15,6 +15,13 @@ public class PayrollProvidentFundComponentBuilder(
 	ILogger<PayrollProvidentFundComponentBuilder> logger)
 	: ITransientDependency
 {
+	private Dictionary<Guid, ProvidentFund?>? readBatch;
+	public IDisposable BeginReadBatch()
+	{
+		var previous = readBatch;
+		readBatch = new();
+		return new Volo.Abp.DisposeAction(() => readBatch = previous);
+	}
 	public async Task<List<EmployeePayrollComponent>> AddProvidentFundDeductionAsync(
 		EmployeePayrollDetails? payrollDetails,
 		List<EmployeePayrollComponent> components,
@@ -115,7 +122,12 @@ public class PayrollProvidentFundComponentBuilder(
 			return null;
 		}
 
-		var rule = await providentFundRepository.FindAsync(pfRuleId.Value);
+		ProvidentFund? rule;
+		if (readBatch == null || !readBatch.TryGetValue(pfRuleId.Value, out rule))
+		{
+			rule = await providentFundRepository.FindAsync(pfRuleId.Value);
+			if (readBatch != null) readBatch[pfRuleId.Value] = rule;
+		}
 		var effectiveDate = new DateTime(year, month, 1);
 		if (rule is not { IsActive: true } ||
 		    (rule.EmployeePercentage <= 0m && rule.EmployerPercentage <= 0m) ||

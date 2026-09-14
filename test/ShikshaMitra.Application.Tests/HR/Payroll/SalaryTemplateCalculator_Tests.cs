@@ -266,8 +266,56 @@ public class SalaryTemplateCalculator_Tests
 		};
 
 		SalaryTemplateCalculator.ValidateDraftRules(incompleteRules);
-		Should.Throw<BusinessException>(() => SalaryTemplateCalculator.ValidateRules(incompleteRules))
-			.Code.ShouldBe("HR:Payroll:SalaryTemplateRequiresOneRemainder");
+		SalaryTemplateCalculator.ValidateRules(incompleteRules);
+		var error = Should.Throw<BusinessException>(() => SalaryTemplateCalculator.Calculate(
+			SalaryInputBasis.Gross, 18000m, incompleteRules, new Dictionary<Guid, SalaryTemplateComponent>(), null, []));
+		error.Code.ShouldBe(HRErrorCodes.SalaryTemplateAllocationMismatch);
+		error.Data["gross"].ShouldBe(18000m);
+		error.Data["allocated"].ShouldBe(10800m);
+		error.Data["difference"].ShouldBe(7200m);
+	}
+
+	[Theory]
+	[InlineData(SalaryInputBasis.Gross, 18000)]
+	[InlineData(SalaryInputBasis.TakeHome, 16065)]
+	[InlineData(SalaryInputBasis.EmployerCost, 20385)]
+	public void Should_calculate_basic_pf_and_system_esi_without_balancing_earning(SalaryInputBasis basis, decimal target)
+	{
+		var fixture = BuildFixture(12m, 12m, 15000m);
+		var rules = fixture.Rules.Where(x => x.Code is "BASIC" or "EMPLOYEE_PF")
+			.Select(x => x.Code == "BASIC" ? x with { Value = 100m } : x).ToList();
+		var result = SalaryTemplateCalculator.Calculate(basis, target, rules, fixture.Components, fixture.PfRule, [], BuildEsiContext(fixture.Components.Keys));
+		result.Earnings.Count.ShouldBe(1);
+		result.Gross.ShouldBe(18000m);
+		result.TotalDeductions.ShouldBe(1935m);
+		result.Net.ShouldBe(16065m);
+		result.EmployerCost.ShouldBe(20385m);
+	}
+
+	[Theory]
+	[InlineData(SalaryInputBasis.Gross, 18000)]
+	[InlineData(SalaryInputBasis.TakeHome, 18000)]
+	[InlineData(SalaryInputBasis.EmployerCost, 18000)]
+	public void Should_support_fixed_only_allocations(SalaryInputBasis basis, decimal target)
+	{
+		var rules = new List<SalaryTemplateRule> { new("BASIC", Guid.NewGuid(), SalaryTemplateLineKind.Earning,
+			SalaryTemplateFormulaType.FixedAmount, PayrollComponentSemanticType.Basic, 18000m, null, 0) };
+		var result = SalaryTemplateCalculator.Calculate(basis, target, rules, new Dictionary<Guid, SalaryTemplateComponent>(), null, []);
+		result.Gross.ShouldBe(18000m);
+		result.Earnings.Count.ShouldBe(1);
+	}
+
+	[Theory]
+	[InlineData(SalaryInputBasis.TakeHome, 20000)]
+	[InlineData(SalaryInputBasis.TakeHome, 15000)]
+	[InlineData(SalaryInputBasis.EmployerCost, 20000)]
+	[InlineData(SalaryInputBasis.EmployerCost, 15000)]
+	public void Should_reject_unreachable_fixed_target(SalaryInputBasis basis, decimal target)
+	{
+		var rules = new List<SalaryTemplateRule> { new("BASIC", Guid.NewGuid(), SalaryTemplateLineKind.Earning,
+			SalaryTemplateFormulaType.FixedAmount, PayrollComponentSemanticType.Basic, 18000m, null, 0) };
+		Should.Throw<BusinessException>(() => SalaryTemplateCalculator.Calculate(basis, target,
+			rules, new Dictionary<Guid, SalaryTemplateComponent>(), null, [])).Code.ShouldBe("HR:Payroll:CompensationTargetNotSolvable");
 	}
 
 	[Fact]

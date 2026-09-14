@@ -143,13 +143,16 @@ public static class PayrollComputation
 						? treatment
 						: StatutoryWageTreatment.Unclassified))
 				.ToList();
+			var monthlyWageLines = wageLines.Select((line, index) =>
+				line with { Amount = earnings[index].Source.Amount }).ToList();
 			var esiResult = EsiStatutoryCalculator.Calculate(
 				esiContext.PayrollMonth,
 				esiContext.Rule,
 				esiContext.Establishment,
 				esiContext.Enrollment,
 				wageLines,
-				esiContext.Overrides);
+				esiContext.Overrides,
+				coverageWageLines: monthlyWageLines);
 
 			esiRuleId = esiContext.Rule.Id;
 			esiRuleVersion = esiContext.Rule.Version;

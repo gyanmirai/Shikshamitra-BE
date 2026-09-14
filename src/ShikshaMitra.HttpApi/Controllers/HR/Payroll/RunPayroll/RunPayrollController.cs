@@ -39,7 +39,7 @@ public class RunPayrollController : AbpControllerBase
 	/// <returns>Payroll preview with employee payroll items</returns>
 	/// <response code="200">Payroll preview retrieved successfully</response>
 	/// <response code="400">Invalid month format or other validation errors</response>
-	[HttpGet("readiness")]
+	[NonAction]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View)]
 	[ProducesResponseType(typeof(RunPayrollReadinessSummary), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -50,7 +50,7 @@ public class RunPayrollController : AbpControllerBase
 		return await _runPayrollAppService.GetReadinessAsync(month, academicYearId);
 	}
 
-	[HttpGet]
+	[NonAction]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View)]
 	[ProducesResponseType(typeof(RunPayrollResponse), StatusCodes.Status200OK)]
 	[ProducesResponseType(StatusCodes.Status400BadRequest)]

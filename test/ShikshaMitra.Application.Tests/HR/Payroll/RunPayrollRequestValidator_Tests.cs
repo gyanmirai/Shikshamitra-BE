@@ -11,7 +11,7 @@ public class RunPayrollRequestValidator_Tests
 	private readonly RunPayrollRequestValidator _validator = new();
 
 	[Fact]
-	public void Should_Allow_Request_Without_EmployeeIds()
+	public void Should_Reject_Request_Without_Reviewed_Generation_And_EmployeeIds()
 	{
 		var result = _validator.Validate(new RunPayrollRequest
 		{
@@ -19,7 +19,18 @@ public class RunPayrollRequestValidator_Tests
 			EmployeeIds = null
 		});
 
-		result.IsValid.ShouldBeTrue();
+		result.IsValid.ShouldBeFalse();
+		result.Errors.ShouldContain(x => x.PropertyName == nameof(RunPayrollRequest.PreviewRunId));
+		result.Errors.ShouldContain(x => x.PropertyName == nameof(RunPayrollRequest.EmployeeIds));
+	}
+
+	[Fact]
+	public void Should_Allow_Explicit_Reviewed_Generation_And_Selected_Employees()
+	{
+		_validator.Validate(new RunPayrollRequest
+		{
+			Month = "2026-04", PreviewRunId = Guid.NewGuid(), EmployeeIds = [Guid.NewGuid()]
+		}).IsValid.ShouldBeTrue();
 	}
 
 	[Fact]

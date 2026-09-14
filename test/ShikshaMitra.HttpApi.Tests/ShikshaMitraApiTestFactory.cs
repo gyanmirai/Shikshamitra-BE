@@ -265,7 +265,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 
 		builder.ConfigureServices(services =>
 		{
-			ReplaceDbWithSqlite(services);
+			ConfigureTestDatabase(services);
 			DisableBackgroundJobs(services);
 			DisableDynamicStores(services);
 			DisableAuditing(services);
@@ -291,7 +291,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		});
 	}
 
-	private void ReplaceDbWithSqlite(IServiceCollection services)
+	protected virtual void ConfigureTestDatabase(IServiceCollection services)
 	{
 		_keepAliveConnection = new SqliteConnection("Data Source=:memory:");
 		_keepAliveConnection.Open();

@@ -10,6 +10,7 @@ public class PayrollMonthLock : CreationAuditedAggregateRoot<Guid>, IMultiTenant
 	public string MonthYear { get; private set; } = string.Empty;
 	public Guid OwnerId { get; private set; }
 	public DateTime ExpiresAt { get; private set; }
+	public void Renew(DateTime expiresAt) => ExpiresAt = expiresAt;
 
 	private PayrollMonthLock()
 	{

@@ -26,11 +26,11 @@ public class EsiStatutoryAppService(
 	IEmployeeRepository employeeRepository,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
 	PayrollComponentVersionResolver componentVersionResolver,
-	PayrollCompensationRevisionResolver compensationRevisionResolver,
 	PayrollScopedEmployeeResolver scopedEmployeeResolver,
 	IUserScopeService userScopeService,
 	IEarningComponentRepository earningComponentRepository,
-	IDeductionComponentRepository deductionComponentRepository)
+	IDeductionComponentRepository deductionComponentRepository,
+	EsiStatutoryPreviewReader previewReader)
 	: ApplicationService, IEsiStatutoryAppService
 {
 	private const string JurisdictionCode = "IN-GJ";
@@ -237,112 +237,23 @@ public class EsiStatutoryAppService(
 	public async Task<StatutoryImpactPreviewDto> PreviewAsync(StatutoryImpactPreviewRequestDto input)
 	{
 		ArgumentNullException.ThrowIfNull(input);
-		var payrollMonth = ParseMonth(input.MonthYear);
-		var establishment = await FindEstablishmentAsync();
-		var monthEnd = DateOnly.FromDateTime(payrollMonth).AddMonths(1).AddDays(-1);
-		var rule = await ResolveRuleAsync(monthEnd.ToDateTime(TimeOnly.MinValue));
-		var employees = await scopedEmployeeResolver.GetScopedPayrollEmployeesAsync(
-			payrollMonth.Year, payrollMonth.Month, includeUnknownStageEmployees: false);
-		var employeeIds = employees.Select(x => x.Id).ToList();
-		var existingComponents = await payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
-		var existingComponentsByEmployee = existingComponents.SelectMany(x => x).ToLookup(x => x.EmployeeId);
-		var compensation = await compensationRevisionResolver.ResolveAsync(
-			employeeIds, payrollMonth.Year, payrollMonth.Month, existingComponentsByEmployee);
-		var treatments = await GetEffectiveTreatmentMapAsync(payrollMonth);
-		var enrollments = (await enrollmentRepository.GetListAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance && employeeIds.Contains(x.EmployeeId)))
-			.ToDictionary(x => x.EmployeeId);
-		var overrides = (await overrideRepository.GetListAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance && employeeIds.Contains(x.EmployeeId) &&
-			x.EffectiveFrom <= payrollMonth && x.EffectiveTo >= payrollMonth))
-			.ToLookup(x => x.EmployeeId);
-
-		var result = new StatutoryImpactPreviewDto
-		{
-			MonthYear = input.MonthYear
-		};
-		foreach (var employee in employees.OrderBy(x => x.EmployeeName).ThenBy(x => x.EmployeeCode))
-		{
-			if (!compensation.TryGetValue(employee.Id, out var compensationResolution))
-			{
-				var missingRevisionEnrollment = enrollments.GetValueOrDefault(employee.Id);
-				result.Employees.Add(new EmployeeStatutoryImpactDto
-				{
-					EmployeeId = employee.Id,
-					EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
-					EmployeeName = employee.EmployeeName,
-					CoverageDecision = IssueCodes.CompensationRevisionRequired,
-					EnrollmentStatus = (missingRevisionEnrollment?.Status ?? EmployeeStatutoryEnrollmentStatus.PendingReview).ToString(),
-					WageCeilingCategory = (missingRevisionEnrollment?.WageCeilingCategory ?? StatutoryWageCeilingCategory.Standard).ToString(),
-					InsuranceNumber = missingRevisionEnrollment?.InsuranceNumber,
-					ContributionPeriodEnd = missingRevisionEnrollment?.ContributionPeriodEnd,
-					IssueCodes = [IssueCodes.CompensationRevisionRequired]
-				});
-				continue;
-			}
-
-			var wageLines = compensationResolution.Components
-				.Where(x => x.IsEarning)
-				.Select(x => new StatutoryWageLine(
-					x.ComponentId ?? x.Id,
-					x.Name,
-					x.Amount,
-					treatments.TryGetValue(x.ComponentId ?? x.Id, out var treatment)
-						? treatment
-						: StatutoryWageTreatment.Unclassified))
-				.ToList();
-			if (wageLines.Count == 0)
-			{
-				continue;
-			}
-			var calculation = EsiStatutoryCalculator.Calculate(
-				payrollMonth, rule, establishment, enrollments.GetValueOrDefault(employee.Id),
-				wageLines, overrides[employee.Id].ToList(), assumeEstablishmentActive: true);
-			var enrollment = enrollments.GetValueOrDefault(employee.Id);
-			result.Employees.Add(new EmployeeStatutoryImpactDto
-			{
-				EmployeeId = employee.Id,
-				EmployeeIdentifier = employee.EmployeeCode ?? string.Empty,
-				EmployeeName = employee.EmployeeName,
-				IsCovered = calculation.IsCovered,
-				CanCalculate = calculation.CanCalculate,
-				CoverageDecision = calculation.CoverageDecision,
-				StatutoryWages = calculation.StatutoryWages,
-				WageCeiling = calculation.WageCeiling,
-				EmployeeContribution = calculation.EmployeeContribution,
-				EmployerContribution = calculation.EmployerContribution,
-				GovernmentContribution = calculation.GovernmentContribution,
-				EnrollmentStatus = (enrollment?.Status ?? EmployeeStatutoryEnrollmentStatus.PendingReview).ToString(),
-				WageCeilingCategory = (enrollment?.WageCeilingCategory ?? StatutoryWageCeilingCategory.Standard).ToString(),
-				InsuranceNumber = enrollment?.InsuranceNumber,
-				ContributionPeriodEnd = enrollment?.ContributionPeriodEnd,
-				IssueCodes = calculation.IssueCodes.ToList()
-			});
-		}
-
-		result.EmployeeCount = result.Employees.Count;
-		result.CoveredEmployeeCount = result.Employees.Count(x => x.IsCovered);
-		result.EmployeeContributionTotal = result.Employees.Sum(x => x.EmployeeContribution);
-		result.EmployerContributionTotal = result.Employees.Sum(x => x.EmployerContribution);
-		result.GovernmentContributionTotal = result.Employees.Sum(x => x.GovernmentContribution);
-		result.BlockingIssueCodes = result.Employees.SelectMany(x => x.IssueCodes).Distinct().OrderBy(x => x).ToList();
-		if (establishment is null || !establishment.CanActivate())
-		{
-			result.BlockingIssueCodes.Add(EsiStatutoryCalculator.EstablishmentInactiveIssue);
-		}
-		result.BlockingIssueCodes = result.BlockingIssueCodes.Distinct().ToList();
-		result.CanActivate = result.BlockingIssueCodes.Count == 0;
-		return result;
+		var calculation = await previewReader.CalculateAsync(input.MonthYear);
+		return EsiStatutoryPreviewReader.Project(calculation, input);
 	}
 
-	public async Task<StatutoryEstablishmentDto> ActivateAsync(StatutoryImpactPreviewRequestDto input)
+	public async Task<StatutoryEstablishmentDto> ActivateAsync(ActivateStatutorySchemeDto input)
 	{
+		ArgumentNullException.ThrowIfNull(input);
 		await EnsureHrWideAccessAsync();
-		var preview = await PreviewAsync(input);
-		if (!preview.CanActivate)
+		var preview = await previewReader.CalculateAsync(input.MonthYear);
+		if (!string.Equals(preview.PreviewFingerprint, input.PreviewFingerprint, StringComparison.Ordinal))
+		{
+			throw new BusinessException(HRErrorCodes.StatutoryPreviewStale);
+		}
+		if (!preview.Summary.CanActivate)
 		{
 			throw new BusinessException(HRErrorCodes.StatutoryActivationBlocked)
-				.WithData("issueCodes", string.Join(",", preview.BlockingIssueCodes));
+				.WithData("issueCodes", string.Join(",", preview.Summary.BlockingIssues.Select(x => x.Code)));
 		}
 		var establishment = await FindEstablishmentAsync();
 		if (establishment is null || !establishment.CanActivate())
@@ -351,7 +262,7 @@ public class EsiStatutoryAppService(
 		}
 
 		var canonicalComponent = await EnsureCanonicalEsiComponentAsync();
-		await EnsureEmployeeBindingsAsync(preview.Employees.Select(x => x.EmployeeId), canonicalComponent);
+		await EnsureEmployeeBindingsAsync(preview.Items.Select(x => x.EmployeeId), canonicalComponent);
 		establishment.Activate(CurrentUser.Id, Clock.Now);
 		await establishmentRepository.UpdateAsync(establishment, autoSave: true);
 		return MapEstablishment(establishment);
@@ -396,16 +307,6 @@ public class EsiStatutoryAppService(
 			await payrollComponentRepository.InsertAsync(binding);
 		}
 		await CurrentUnitOfWork!.SaveChangesAsync();
-	}
-
-	private async Task<Dictionary<Guid, StatutoryWageTreatment>> GetEffectiveTreatmentMapAsync(DateTime date)
-	{
-		var treatments = await treatmentRepository.GetListAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
-			x.EffectiveFrom <= date && (!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date));
-		return treatments.OrderByDescending(x => x.EffectiveFrom)
-			.GroupBy(x => x.ComponentId)
-			.ToDictionary(x => x.Key, x => x.First().Treatment);
 	}
 
 	private async Task<List<WageComponentCatalogItem>> GetWageComponentCatalogAsync(DateTime effectiveDate)
@@ -464,9 +365,6 @@ public class EsiStatutoryAppService(
 	private async Task<EmployeeStatutoryEnrollment?> FindEnrollmentAsync(Guid employeeId) =>
 		await enrollmentRepository.FindAsync(x =>
 			x.EmployeeId == employeeId && x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance);
-
-	private static DateTime ParseMonth(string monthYear) =>
-		DateTime.ParseExact(monthYear, "MM-yyyy", CultureInfo.InvariantCulture);
 
 	private static StatutoryRuleVersionDto MapRule(StatutoryRuleVersion rule) => new()
 	{

@@ -10,18 +10,19 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Guids;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollLockWorkflow(
+	PayrollPreviewReviewGuard previewGuard,
 	ISalarySlipRepository salarySlipRepository,
 	PayrollCalendarResolver payrollCalendarResolver,
 	HrAuditWriter auditWriter,
 	PayrollIneligibleRowCleaner ineligibleRowCleaner,
 	PayrollScopedEmployeeResolver scopedEmployeeResolver,
 	PayrollRunSnapshotStore snapshotStore,
-	PayrollSnapshotRefresher snapshotRefresher,
-	PayrollSnapshotInvalidationChecker snapshotInvalidationChecker,
+	IUnitOfWorkManager uows,
 	PayrollSnapshotLockProvider snapshotLockProvider,
 	PayrollLockBatchProcessor batchProcessor,
 	PayrollAcademicYearScopeResolver academicYearScopeResolver,
@@ -33,67 +34,17 @@ public class PayrollLockWorkflow(
 	{
 		var (year, month, internalMonthYear) = PayrollRunRules.ParseMonth(request.Month);
 		var academicYearId = await academicYearScopeResolver.ResolveAsync(request.AcademicYearId, year, month);
-		await EnsureReviewedBeforeMonthLockAsync(request, year, month, internalMonthYear, academicYearId);
 
 		return await snapshotLockProvider.WithMonthLockAsync(
 			internalMonthYear,
-			() => LockCoreAsync(request, year, month, internalMonthYear, academicYearId));
-	}
-
-	private async Task EnsureReviewedBeforeMonthLockAsync(
-		RunPayrollRequest request,
-		int year,
-		int month,
-		string internalMonthYear,
-		Guid? academicYearId)
-	{
-		var allScopedEmployees = await scopedEmployeeResolver.GetScopedEmployeesAsync(includeUnknownStageEmployees: false);
-		var eligibleEmployees = await scopedEmployeeResolver.GetScopedPayrollEmployeesAsync(year, month, includeUnknownStageEmployees: false);
-		var scopedEmployees = eligibleEmployees
-			.Select(e => new PayrollTargetEmployee(e.Id, e.EmployeeCode, e.EmployeeName))
-			.ToList();
-
-		if (scopedEmployees.Count == 0)
-		{
-			throw new BusinessException(HRErrorCodes.PayrollNoEmployees)
-				.WithData("month", request.Month);
-		}
-
-		var targetEmployees = PayrollTargetEmployeeResolver.ResolvePayrollLockTargetEmployees(
-			allScopedEmployees.Select(e => new PayrollTargetEmployee(e.Id, e.EmployeeCode, e.EmployeeName)).ToList(),
-			scopedEmployees,
-			request.EmployeeIds,
-			request.Month);
-		var targetEmployeeIds = targetEmployees.Select(e => e.Id).ToList();
-		var targetEmployeeIdSet = targetEmployeeIds.ToHashSet();
-		var existingSnapshots = await snapshotStore.GetByMonthAsync(internalMonthYear);
-		var targetSnapshots = existingSnapshots
-			.Where(x => targetEmployeeIdSet.Contains(x.EmployeeId))
-			.ToList();
-		if (await snapshotInvalidationChecker.HasInvalidationsAsync(
-			    internalMonthYear,
-			    year,
-			    month,
-			    academicYearId,
-			    targetEmployeeIdSet,
-			    targetSnapshots))
-		{
-			throw new BusinessException(HRErrorCodes.PayrollReviewRequiredBeforeLock)
-				.WithData("month", request.Month)
-				.WithData("employeeIds", targetEmployeeIds);
-		}
-
-		await snapshotRefresher.RefreshForEmployeeIdsAsync(
-			internalMonthYear,
-			year,
-			month,
-			academicYearId,
-			targetEmployeeIds,
-			preserveReviewedSnapshots: true);
-
-		var snapshotByEmployee = (await snapshotStore.GetByMonthAsync(internalMonthYear))
-			.ToDictionary(x => x.EmployeeId, x => x);
-		PayrollLockPreconditionGuard.EnsureReviewed(targetEmployeeIds, snapshotByEmployee, request.Month);
+			async checkLease =>
+			{
+				using var transaction = uows.Begin(requiresNew: true, isTransactional: true);
+				var response = await LockCoreAsync(request, year, month, internalMonthYear, academicYearId);
+				await checkLease();
+				await transaction.CompleteAsync();
+				return response;
+			});
 	}
 
 	private async Task<PayrollLockResponse> LockCoreAsync(
@@ -103,6 +54,8 @@ public class PayrollLockWorkflow(
 		string internalMonthYear,
 		Guid? academicYearId)
 	{
+		await previewGuard.EnsureCurrentAsync(request.PreviewRunId, request.Month, academicYearId, request.EmployeeIds);
+		await previewGuard.EnsureReviewedAsync(request.PreviewRunId, request.EmployeeIds!);
 		using var scope = logger.BeginScope(new Dictionary<string, object>
 		{
 			["Month"] = request.Month,
@@ -139,14 +92,6 @@ public class PayrollLockWorkflow(
 		PayrollLockPreconditionGuard.EnsureNoFinalizedSlips(targetEmployeeIds, existingSlips, request.Month);
 
 		var employees = targetEmployees;
-
-		await snapshotRefresher.RefreshForEmployeeIdsAsync(
-			internalMonthYear,
-			year,
-			month,
-			academicYearId,
-			targetEmployeeIds,
-			preserveReviewedSnapshots: true);
 
 		var snapshotByEmployee = (await snapshotStore.GetByMonthAsync(internalMonthYear))
 			.ToDictionary(x => x.EmployeeId, x => x);

@@ -50,15 +50,6 @@ internal static class SalaryTemplateCalculator
 			throw new BusinessException("HR:Payroll:SalaryTemplateRequiresOneBasic");
 		}
 
-		if (rules.Count(x => x.LineKind == SalaryTemplateLineKind.Earning &&
-		                     x.FormulaType == SalaryTemplateFormulaType.RemainderOfGross) != 1 ||
-		    rules.Count(x => x.LineKind == SalaryTemplateLineKind.Earning &&
-		                     x.FormulaType == SalaryTemplateFormulaType.RemainderOfGross &&
-		                     x.SemanticType == PayrollComponentSemanticType.BalancingEarning) != 1)
-		{
-			throw new BusinessException("HR:Payroll:SalaryTemplateRequiresOneRemainder");
-		}
-
 		var basicRule = rules.Single(x =>
 			x.LineKind == SalaryTemplateLineKind.Earning &&
 			x.SemanticType == PayrollComponentSemanticType.Basic);
@@ -230,7 +221,13 @@ internal static class SalaryTemplateCalculator
 		var upperBound = inputBasis == SalaryInputBasis.EmployerCost
 			? Round(target)
 			: Round(Math.Min(100_000_000m, Math.Max(target * 2m + 100_000m, target + 1_000_000m)));
-		var breakpoints = new SortedSet<decimal> { 0.01m, upperBound };
+		var (allocationMinimum, allocationMaximum) = SalaryTemplateAllocation.GetGrossBounds(rules, upperBound);
+		if (allocationMinimum > allocationMaximum)
+		{
+			throw new BusinessException("HR:Payroll:CompensationTargetNotSolvable")
+				.WithData("salaryBasis", inputBasis.ToString()).WithData("target", target);
+		}
+		var breakpoints = new SortedSet<decimal> { allocationMinimum, allocationMaximum };
 		foreach (var slab in slabs)
 		{
 			AddBreakpoint(breakpoints, slab.FromSalary, upperBound);
@@ -250,7 +247,8 @@ internal static class SalaryTemplateCalculator
 			esiContext);
 
 		var candidates = new Dictionary<decimal, SalaryTemplateEvaluation>();
-		var boundaries = breakpoints.OrderBy(x => x).ToList();
+		var boundaries = breakpoints.Where(x => x >= allocationMinimum && x <= allocationMaximum).OrderBy(x => x).ToList();
+		AddCandidate(candidates, allocationMinimum, rules, components, pfRule, slabs, esiContext);
 		for (var index = 0; index < boundaries.Count - 1; index++)
 		{
 			var low = boundaries[index];
@@ -264,14 +262,14 @@ internal static class SalaryTemplateCalculator
 			{
 				var midPaise = lowPaise + (highPaise - lowPaise) / 2;
 				var midGross = FromPaise(midPaise);
-				var evaluation = TryEvaluateGross(midGross, rules, components, pfRule, slabs, esiContext);
+				var evaluation = TryEvaluateGross(midGross, rules, components, pfRule, slabs, esiContext, allowUnallocated: true);
 				if (evaluation == null)
 				{
 					lowPaise = midPaise + 1;
 					continue;
 				}
 
-				candidates[midGross] = evaluation;
+				AddCandidate(candidates, midGross, rules, components, pfRule, slabs, esiContext);
 				var achieved = inputBasis == SalaryInputBasis.TakeHome ? evaluation.Net : evaluation.EmployerCost;
 				if (inputBasis == SalaryInputBasis.TakeHome)
 				{
@@ -294,7 +292,10 @@ internal static class SalaryTemplateCalculator
 				}
 			}
 
-			for (var paise = Math.Max(ToPaise(low), highPaise - 2); paise <= Math.Min(ToPaise(high), lowPaise + 2); paise++)
+			// Next-higher-rupee ESI creates small downward steps in take-home pay.
+			// Check both sides rather than assuming a globally monotone cent-level function.
+			var roundingWindow = esiContext == null ? 2 : 200;
+			for (var paise = Math.Max(ToPaise(low), highPaise - roundingWindow); paise <= Math.Min(ToPaise(high), lowPaise + roundingWindow); paise++)
 			{
 				AddCandidate(candidates, FromPaise(paise), rules, components, pfRule, slabs, esiContext);
 			}
@@ -303,11 +304,16 @@ internal static class SalaryTemplateCalculator
 		var feasible = candidates.Values.Where(evaluation => inputBasis == SalaryInputBasis.TakeHome
 			? evaluation.Net >= target
 			: evaluation.EmployerCost <= target).ToList();
+		if (!rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.RemainderOfGross))
+		{
+			feasible = feasible.Where(x => Math.Abs(Round((inputBasis == SalaryInputBasis.TakeHome ? x.Net : x.EmployerCost) - target)) <= 0.01m).ToList();
+		}
 		if (feasible.Count == 0)
 		{
 			throw new BusinessException("HR:Payroll:CompensationTargetNotSolvable")
 				.WithData("salaryBasis", inputBasis.ToString())
-				.WithData("target", target);
+				.WithData("target", target)
+				.WithData("message", "This target cannot be reached with earnings that reconcile to gross. Change the target or the template's earning rules.");
 		}
 
 		return inputBasis == SalaryInputBasis.TakeHome
@@ -322,7 +328,8 @@ internal static class SalaryTemplateCalculator
 		ProvidentFund? pfRule,
 		IReadOnlyList<ProfessionalTax> professionalTaxSlabs,
 		decimal? forcedProfessionalTax = null,
-		SalaryTemplateEsiEvaluationContext? esiContext = null)
+		SalaryTemplateEsiEvaluationContext? esiContext = null,
+		bool allowUnallocated = false)
 	{
 		var values = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 		var earnings = new List<CalculatedSalaryLineDto>();
@@ -340,16 +347,26 @@ internal static class SalaryTemplateCalculator
 			trace.Add($"{GetName(rule, components)} = {Describe(rule, amount)}");
 		}
 
-		var remainderRule = orderedRules.Single(x => x.LineKind == SalaryTemplateLineKind.Earning && x.FormulaType == SalaryTemplateFormulaType.RemainderOfGross);
+		var remainderRule = orderedRules.SingleOrDefault(x => x.LineKind == SalaryTemplateLineKind.Earning && x.FormulaType == SalaryTemplateFormulaType.RemainderOfGross);
 		var remainder = Round(gross - earnings.Sum(x => x.Amount));
-		if (remainder < 0m)
+		if (remainderRule == null && remainder != 0m && !allowUnallocated)
+		{
+			throw new BusinessException(HRErrorCodes.SalaryTemplateAllocationMismatch)
+				.WithData("gross", gross).WithData("allocated", earnings.Sum(x => x.Amount))
+				.WithData("difference", remainder)
+				.WithData("message", FormattableString.Invariant($"Earnings must exactly equal gross salary. Gross: INR {gross:0.00}; allocated earnings: INR {earnings.Sum(x => x.Amount):0.00}; difference: INR {remainder:0.00}. Adjust the earning rules or explicitly choose a balancing earning."));
+		}
+		if (remainderRule != null && remainder < 0m)
 		{
 			throw new BusinessException("HR:Payroll:SalaryTemplateEarningsExceedGross").WithData("gross", gross);
 		}
 
-		values[remainderRule.Code] = remainder;
-		earnings.Add(ToLine(remainderRule, components, remainder));
-		trace.Add($"{GetName(remainderRule, components)} = gross remainder = {remainder:0.00}");
+		if (remainderRule != null)
+		{
+			values[remainderRule.Code] = remainder;
+			earnings.Add(ToLine(remainderRule, components, remainder));
+			trace.Add($"{GetName(remainderRule, components)} = gross remainder = {remainder:0.00}");
+		}
 		var basic = values[basicRule.Code];
 
 		foreach (var rule in orderedRules.Where(x => x.LineKind == SalaryTemplateLineKind.Deduction))
@@ -550,13 +567,14 @@ internal static class SalaryTemplateCalculator
 		IReadOnlyDictionary<Guid, SalaryTemplateComponent> components,
 		ProvidentFund? pfRule,
 		IReadOnlyList<ProfessionalTax> slabs,
-		SalaryTemplateEsiEvaluationContext? esiContext)
+		SalaryTemplateEsiEvaluationContext? esiContext,
+		bool allowUnallocated = false)
 	{
 		try
 		{
-			return EvaluateGross(gross, rules, components, pfRule, slabs, esiContext: esiContext);
+			return EvaluateGross(gross, rules, components, pfRule, slabs, esiContext: esiContext, allowUnallocated: allowUnallocated);
 		}
-		catch (BusinessException exception) when (exception.Code == "HR:Payroll:SalaryTemplateEarningsExceedGross")
+		catch (BusinessException exception) when (exception.Code is "HR:Payroll:SalaryTemplateEarningsExceedGross" or HRErrorCodes.SalaryTemplateAllocationMismatch)
 		{
 			return null;
 		}

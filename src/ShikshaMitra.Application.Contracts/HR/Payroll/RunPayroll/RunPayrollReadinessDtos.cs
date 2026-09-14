@@ -4,6 +4,7 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class RunPayrollReadinessSummary
 {
+	public double NetPayTotal { get; set; }
 	public string Month { get; set; } = string.Empty;
 	public bool CanPreview { get; set; }
 	public bool CanLock { get; set; }

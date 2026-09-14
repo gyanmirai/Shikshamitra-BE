@@ -14,6 +14,8 @@ using ShikshaMitra.HR.Policies;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicSetups;
@@ -922,7 +924,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	}
 
 	private Task SaveSalaryComponentsAsync(Guid employeeId, bool isTemp = true) =>
-		_employeePayrollAppService.UpdatePayrollContractAsync(employeeId, new PayrollContract
+		SaveApprovedPayrollContractAsync(employeeId, new PayrollContract
 		{
 			EarningComponents = new List<SalaryComponentContract>
 			{
@@ -940,7 +942,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		Guid employeeId,
 		IReadOnlyList<EarningComponentDto> earnings,
 		IReadOnlyList<DeductionComponentDto> deductions) =>
-		_employeePayrollAppService.UpdatePayrollContractAsync(employeeId, new PayrollContract
+		SaveApprovedPayrollContractAsync(employeeId, new PayrollContract
 		{
 			EarningComponents = earnings.Select(x => new SalaryComponentContract
 			{
@@ -959,6 +961,33 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 				IsTemp = false
 			}).ToList()
 		});
+
+	private async Task SaveApprovedPayrollContractAsync(Guid employeeId, PayrollContract contract)
+	{
+		await _employeePayrollAppService.UpdatePayrollContractAsync(employeeId, contract);
+		// Payroll now consumes an approved compensation revision, not mutable permanent components.
+		// Keep historical assertions meaningful by establishing that prerequisite in the fixture.
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var revisions = GetRequiredService<IRepository<EmployeeCompensationRevision, Guid>>();
+			var components = await GetRequiredService<IEmployeePayrollComponentRepository>().GetByEmployeeIdAsync(employeeId);
+			var prior = await revisions.GetListAsync(x => x.EmployeeId == employeeId);
+			var gross = components.Where(x => x.IsEarning).Sum(x => x.Amount);
+			var net = gross - components.Where(x => !x.IsEarning).Sum(x => x.Amount);
+			var revision = new EmployeeCompensationRevision(Guid.NewGuid(), _currentTenant.Id, employeeId,
+				prior.Count + 1, new DateTime(2020, 1, 1));
+			revision.ReplaceDraft(new DateTime(2020, 1, 1), SalaryInputBasis.Gross, CompensationProtectionPolicy.ProtectGross,
+				gross, gross, gross, Math.Max(0, net), gross, null, null, null, null, "IN-GJ", "{}");
+			revision.Submit(Guid.NewGuid(), _clock.Now);
+			revision.Approve(Guid.NewGuid(), _clock.Now);
+			await revisions.InsertAsync(revision, autoSave: true);
+			var lines = components.Where(x => !x.IsTemp).Select((component, index) =>
+				new EmployeeCompensationRevisionLine(Guid.NewGuid(), _currentTenant.Id, revision.Id, employeeId,
+					component.ComponentId, component.Name, component.Description, component.Amount, component.IsEarning,
+					component.SemanticType, CompensationLineSource.Manual, index));
+			await GetRequiredService<IRepository<EmployeeCompensationRevisionLine, Guid>>().InsertManyAsync(lines, autoSave: true);
+		});
+	}
 
 	private async Task<RunPayrollItem> EnsurePayrollSnapshotAsync(Guid employeeId, string monthYear)
 	{

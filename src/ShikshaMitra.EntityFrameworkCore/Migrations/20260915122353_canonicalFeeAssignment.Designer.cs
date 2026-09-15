@@ -15,7 +15,7 @@ namespace ShikshaMitra.Migrations
 {
     [DbContext(typeof(ShikshaMitraDbContext))]
     [Migration("20260915122353_canonicalFeeAssignment")]
-    partial class canonicalFeeAssignment
+    partial class AddCanonicalStudentFeeAssignments
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)

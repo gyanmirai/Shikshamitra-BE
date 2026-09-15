@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace ShikshaMitra.Migrations
 {
     /// <inheritdoc />
-    public partial class canonicalFeeAssignment : Migration
+    public partial class AddCanonicalStudentFeeAssignments : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

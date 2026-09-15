@@ -18,8 +18,9 @@ public class StudentFeeStructureConfiguration : IEntityTypeConfiguration<Student
 			.IsUnique().HasFilter("\"IsDeleted\" = false")
 			.HasDatabaseName("IX_StudentFeeStructures_Tenant_Student_Year");
 		builder.Property(x => x.AcademicYearId).IsRequired();
-		builder.Property(x => x.ConcessionPolicyId).IsRequired();
-		builder.Property(x => x.ConcessionPolicyVersionId).IsRequired();
+		builder.Property(x => x.ConcessionPolicyId).IsRequired(false);
+		builder.Property(x => x.ConcessionPolicyVersionId).IsRequired(false);
+		builder.Property(x => x.AssignmentSnapshotJson).HasColumnType("text");
 		builder.Property(x => x.ConcessionApplicableFeeHeadIdsJson).HasColumnType("text").IsRequired();
 		builder.HasIndex(x => x.ConcessionPolicyId)
 			.HasDatabaseName("IX_StudentFeeStructures_ConcessionPolicyId");

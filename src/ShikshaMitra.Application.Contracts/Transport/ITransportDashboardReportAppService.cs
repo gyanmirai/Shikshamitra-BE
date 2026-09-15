@@ -10,6 +10,7 @@ public interface ITransportDashboardReportAppService
 	Task<TransportDashboardSummaryDto> GetDashboardSummaryAsync(Guid academicMediumId, Guid? academicYearId);
 	Task<PagedResultDto<TransportDashboardAlertDto>> GetDashboardAlertsAsync(TransportDashboardAlertListRequestDto input);
 	Task<List<TransportReportCatalogItemDto>> GetReportCatalogAsync(Guid academicMediumId);
+	Task<TransportAiReportPlanResponseDto> CreateAiReportPlanAsync(TransportAiReportPlanRequestDto input);
 	Task<TransportReportResultDto> GetReportAsync(string reportKey, TransportReportListRequestDto input);
 	Task<TransportReportExportDto> ExportReportAsync(string reportKey, TransportReportListRequestDto input);
 }

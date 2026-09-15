@@ -39,12 +39,15 @@ public class AcademicCalendarDayDto : EntityDto<Guid>
     public string? Description { get; set; }
     public bool AppliesToAll { get; set; }
     public Guid? StandardId { get; set; }
+    public string? StandardName { get; set; }
     public Guid? DivisionId { get; set; }
     public TimeSpan? StartTime { get; set; }
     public TimeSpan? EndTime { get; set; }
     public string? Venue { get; set; }
     public Guid? ExamTypeId { get; set; }
+    public string? ExamTypeName { get; set; }
     public Guid? LinkedExamId { get; set; }
+    public string? LinkedExamName { get; set; }
     public TimeSpan? ExamStartTime { get; set; }
     public TimeSpan? ExamEndTime { get; set; }
     public string? PtmMode { get; set; }

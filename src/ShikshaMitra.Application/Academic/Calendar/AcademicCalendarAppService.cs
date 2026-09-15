@@ -322,8 +322,89 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             }
         }
 
+		await HydrateCalendarDayReferencesAsync(result);
+
         return result;
     }
+
+	private async Task HydrateCalendarDayReferencesAsync(List<AcademicCalendarDayDto> days)
+	{
+		var examIds = new HashSet<Guid>();
+		foreach (var day in days.Where(day => day.DayType == DayType.Exam))
+		{
+			if (day.LinkedExamId.HasValue)
+			{
+				examIds.Add(day.LinkedExamId.Value);
+			}
+			else if (TryGetSyncedExamId(day.Description, out var syncedExamId))
+			{
+				day.LinkedExamId = syncedExamId;
+				examIds.Add(syncedExamId);
+			}
+		}
+
+		List<Exam> exams = examIds.Count == 0
+			? []
+			: await _examRepository.GetListAsync(exam => examIds.Contains(exam.Id));
+		var examsById = exams.ToDictionary(exam => exam.Id);
+
+		foreach (var day in days.Where(day => day.LinkedExamId.HasValue))
+		{
+			if (!examsById.TryGetValue(day.LinkedExamId!.Value, out var exam))
+			{
+				continue;
+			}
+
+			day.LinkedExamName = exam.ExamName;
+			day.ExamTypeId ??= exam.ExamTypeId;
+			day.StandardId ??= exam.StandardId;
+		}
+
+		var examTypeIds = days.Where(day => day.ExamTypeId.HasValue)
+			.Select(day => day.ExamTypeId!.Value)
+			.Distinct()
+			.ToList();
+		List<ExamType> examTypes = examTypeIds.Count == 0
+			? []
+			: await _examTypeRepository.GetListAsync(examType => examTypeIds.Contains(examType.Id));
+		var examTypeNamesById = examTypes.ToDictionary(examType => examType.Id, examType => examType.Name);
+
+		var standardIds = days.Where(day => day.StandardId.HasValue)
+			.Select(day => day.StandardId!.Value)
+			.Distinct()
+			.ToList();
+		List<Standard> standards = standardIds.Count == 0
+			? []
+			: await _standardRepository.GetListAsync(standard => standardIds.Contains(standard.Id));
+		var standardNamesById = standards.ToDictionary(standard => standard.Id, standard => standard.Name);
+
+		foreach (var day in days)
+		{
+			if (day.ExamTypeId.HasValue && examTypeNamesById.TryGetValue(day.ExamTypeId.Value, out var examTypeName))
+			{
+				day.ExamTypeName = examTypeName;
+			}
+
+			if (day.StandardId.HasValue && standardNamesById.TryGetValue(day.StandardId.Value, out var standardName))
+			{
+				day.StandardName = standardName;
+			}
+		}
+	}
+
+	private static bool TryGetSyncedExamId(string? description, out Guid examId)
+	{
+		examId = Guid.Empty;
+		if (string.IsNullOrWhiteSpace(description) ||
+			!description.StartsWith(AcademicCalendarConsts.ExamSyncDescriptionPrefix, StringComparison.Ordinal))
+		{
+			return false;
+		}
+
+		return Guid.TryParse(
+			description[AcademicCalendarConsts.ExamSyncDescriptionPrefix.Length..].Trim(),
+			out examId);
+	}
 
     public async Task<AcademicCalendarDayDto> CreateCalendarDayAsync(Guid calendarId, CreateCalendarDayDto input)
     {

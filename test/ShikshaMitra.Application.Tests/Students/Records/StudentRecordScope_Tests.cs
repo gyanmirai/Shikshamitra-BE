@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using Shouldly;
@@ -8,6 +9,23 @@ namespace ShikshaMitra.Application.Tests.Students.Records;
 
 public class StudentRecordScope_Tests
 {
+	[Fact]
+	public void Query_scope_should_not_treat_a_narrow_year_assignment_as_year_wide_access()
+	{
+		var year = Guid.NewGuid();
+		var division = Guid.NewGuid();
+		var board = Guid.NewGuid(); var medium = Guid.NewGuid();
+		var stage = Guid.NewGuid(); var standard = Guid.NewGuid();
+		var student = new Student(Guid.NewGuid(), Guid.NewGuid(), "Student", null, null, year, board, medium, stage, standard);
+		student.UpdateAcademicPlacement(year, board, medium, stage, standard, division);
+		var scope = new UserScopeContext { AcademicYearIds = [year] };
+
+		StudentScopeAccessService.ApplyScope(new[] { student }.AsQueryable(), scope).ShouldBeEmpty();
+
+		scope.DivisionIds.Add(division);
+		StudentScopeAccessService.ApplyScope(new[] { student }.AsQueryable(), scope).Single().ShouldBe(student);
+	}
+
 	[Theory]
 	[InlineData("year")]
 	[InlineData("board")]

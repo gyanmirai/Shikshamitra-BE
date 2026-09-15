@@ -44,6 +44,13 @@ public class AcademicReportController(
         return reportAppService.CreateAiPlanAsync(input);
     }
 
+    [HttpPost("ai/preview")]
+    public virtual Task<AcademicAiReportPreviewResponseDto> CreateAiPreviewAsync(
+        AcademicAiReportPreviewRequestDto input)
+    {
+        return reportAppService.CreateAiPreviewAsync(input);
+    }
+
     [HttpGet("exports")]
     public virtual Task<List<AcademicReportExportJobDto>> GetExportsAsync()
     {

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Reports;
+using ShikshaMitra.Reporting.Agent;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
@@ -22,12 +23,15 @@ using Volo.Abp.BlobStoring;
 namespace ShikshaMitra.Academic.Reports;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_Reports.View)]
+[Authorize]
 public class AcademicReportAppService(
     AcademicReportGenerator reportGenerator,
     IAcademicAiReportPlanner aiReportPlanner,
     AcademicDynamicReportCatalog dynamicReportCatalog,
     AcademicDynamicReportGuard dynamicReportGuard,
+    AcademicDynamicReportQueryService dynamicReportQueryService,
+    AcademicAiReportApprovalService aiReportApprovalService,
+    ReportAgentPermissionService reportAgentPermissionService,
     IRepository<ShikshaMitra.HR.Reports.HrReportExportJob, Guid> exportJobRepository,
     IBackgroundJobManager backgroundJobManager,
     IBlobContainer blobContainer,
@@ -39,12 +43,14 @@ public class AcademicReportAppService(
     IRepository<EducationBoard, Guid> educationBoardRepository,
     IRepository<EducationMedium, Guid> educationMediumRepository) : ApplicationService, IAcademicReportAppService
 {
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_Reports.View)]
     public async Task<AcademicReportOptionsDto> GetOptionsAsync()
     {
         var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
         return await reportGenerator.GetOptionsAsync(userId, CurrentTenant.Id);
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_Reports.View)]
     public async Task<AcademicReportPreviewDto> PreviewAsync(AcademicReportRequestDto input)
     {
         var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
@@ -60,37 +66,62 @@ public class AcademicReportAppService(
         return await CreateExportJobAsync(input, userId);
     }
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_Reports.Add)]
     public async Task<AcademicAiReportPlanResponseDto> CreateAiPlanAsync(AcademicAiReportPlanRequestDto input)
     {
         var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
+        await reportAgentPermissionService.EnsureCanBuildAsync(input.Module);
         var catalogScope = await GetAiCatalogScopeAsync(
             userId, input.AcademicYearId, input.EducationBoardId, input.EducationMediumId);
-        var plan = await aiReportPlanner.CreatePlanAsync(input.Prompt, userId, input.Module, catalogScope);
-        return new AcademicAiReportPlanResponseDto { Plan = plan.Spec };
+        var plan = await aiReportPlanner.CreatePlanAsync(
+            input.Prompt, userId, input.Module, catalogScope, input.ClarificationAnswers);
+        return new AcademicAiReportPlanResponseDto
+        {
+            Status = plan.Status,
+            Plan = plan.Spec,
+            ClarificationQuestions = plan.ClarificationQuestions.ToList(),
+            Assumptions = plan.Assumptions.ToList(),
+            Confidence = plan.Confidence,
+            PermissionSummary = BuildPermissionSummary(catalogScope, input.Module),
+            ApprovalToken = plan.Spec == null
+                ? null
+                : aiReportApprovalService.CreateToken(userId, CurrentTenant.Id, catalogScope, plan.Spec)
+        };
     }
 
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.CurriculumManagement_Reports.Add)]
+    public async Task<AcademicAiReportPreviewResponseDto> CreateAiPreviewAsync(
+        AcademicAiReportPreviewRequestDto input)
+    {
+        var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
+        await reportAgentPermissionService.EnsureCanBuildAsync(input.Module);
+        var catalogScope = await GetAiCatalogScopeAsync(
+            userId, input.AcademicYearId, input.EducationBoardId, input.EducationMediumId);
+        var plan = await ResolveAiPlanAsync(input.Plan, input.Module, catalogScope);
+        var preview = await dynamicReportQueryService.GenerateAsync(plan, catalogScope);
+        const int previewRowLimit = 12;
+        preview.Rows = preview.Rows.Take(previewRowLimit).ToList();
+        preview.PageSize = preview.Rows.Count;
+
+        return new AcademicAiReportPreviewResponseDto
+        {
+            Plan = plan,
+            Preview = preview,
+            PermissionSummary = BuildPermissionSummary(catalogScope, input.Module),
+            ApprovalToken = aiReportApprovalService.CreateToken(
+                userId, CurrentTenant.Id, catalogScope, plan)
+        };
+    }
+
     public async Task<AcademicAiReportExportResponseDto> CreateAiExportAsync(AcademicAiReportExportRequestDto input)
     {
         var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
+        await reportAgentPermissionService.EnsureCanExportAsync(input.Module);
         var catalogScope = await GetAiCatalogScopeAsync(
             userId, input.AcademicYearId, input.EducationBoardId, input.EducationMediumId);
         dynamicReportGuard.EnsureRequestAllowed(input.Prompt, input.Module);
-        AcademicDynamicReportSpecDto plan;
-        if (input.Plan == null)
-        {
-            plan = (await aiReportPlanner.CreatePlanAsync(input.Prompt, userId, input.Module, catalogScope)).Spec;
-        }
-        else
-        {
-            var snapshot = await dynamicReportCatalog.BuildSnapshotAsync(catalogScope);
-            plan = AcademicDynamicReportFilterResolver.Resolve(input.Prompt, input.Plan, snapshot);
-            plan = AcademicAiReportPlanNormalizer.Normalize(
-                $"{input.Prompt}\n{plan.InterpretedRequest}", input.Module, plan,
-                dynamicReportCatalog.GetDatasets(input.Module));
-            plan = dynamicReportGuard.ValidatePlan(plan, input.Module, snapshot);
-        }
+        var requestedPlan = input.Plan ?? throw new BusinessException("Academic:Reports:AiPlanRequired");
+        var plan = await ResolveAiPlanAsync(requestedPlan, input.Module, catalogScope, input.Prompt);
+        aiReportApprovalService.ValidateToken(
+            input.ApprovalToken, userId, CurrentTenant.Id, catalogScope, plan);
         var export = await CreateDynamicExportJobAsync(plan, catalogScope, userId);
 
         return new AcademicAiReportExportResponseDto
@@ -122,7 +153,7 @@ public class AcademicReportAppService(
             CurrentTenant.Id,
             userId,
             plan.Title,
-            AcademicReportFormat.Pdf,
+            plan.Format,
             JsonSerializer.Serialize(plan.Filters),
             JsonSerializer.Serialize(storedRequest),
             DateTime.UtcNow.AddDays(7));
@@ -140,6 +171,32 @@ public class AcademicReportAppService(
             AllowedDivisionIds = scope.DivisionIds?.ToList()
         });
         return new AcademicReportExportCreateResponseDto { JobId = jobId, Status = "Queued" };
+    }
+
+    private async Task<AcademicDynamicReportSpecDto> ResolveAiPlanAsync(
+        AcademicDynamicReportSpecDto requestedPlan,
+        string module,
+        AcademicAiReportCatalogScope scope,
+        string prompt = "Approved AI report plan")
+    {
+        var snapshot = await dynamicReportCatalog.BuildSnapshotAsync(scope);
+        var plan = AcademicDynamicReportFilterResolver.Resolve(prompt, requestedPlan, snapshot);
+        plan = AcademicAiReportPlanNormalizer.Normalize(
+            $"{prompt}\n{plan.InterpretedRequest}", module, plan,
+            dynamicReportCatalog.GetDatasets(module));
+        return dynamicReportGuard.ValidatePlan(plan, module, snapshot);
+    }
+
+    private string BuildPermissionSummary(AcademicAiReportCatalogScope scope, string module)
+    {
+        var classScope = scope.ClassIds is { Count: > 0 }
+            ? $"{scope.ClassIds.Count} accessible class{(scope.ClassIds.Count == 1 ? string.Empty : "es")}"
+            : "all classes permitted in the selected medium";
+        var divisionScope = scope.DivisionIds is { Count: > 0 }
+            ? $"{scope.DivisionIds.Count} accessible division{(scope.DivisionIds.Count == 1 ? string.Empty : "s")}"
+            : "permitted divisions";
+        var definition = reportAgentPermissionService.GetAvailableModule(module);
+        return $"{definition.Label} Reports permission verified · {classScope} · {divisionScope}";
     }
 
     private async Task<AcademicAiReportCatalogScope> GetAiCatalogScopeAsync(
@@ -295,11 +352,7 @@ public class AcademicReportAppService(
             throw new BusinessException("Academic:Reports:050004"); // File not found in blob
         }
 
-        var contentType = job.Format.Equals(AcademicReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
-            ? "application/pdf"
-            : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-
-        var extension = job.Format.Equals(AcademicReportFormat.Pdf, StringComparison.OrdinalIgnoreCase) ? "pdf" : "xlsx";
+        var (contentType, extension) = GetDownloadFormat(job.Format);
         var fileName = BuildDownloadFileName(job.ReportType, job.CreationTime, extension);
 
         return new AcademicReportDownloadDto
@@ -309,6 +362,14 @@ public class AcademicReportAppService(
             FileName = fileName
         };
     }
+
+    private static (string ContentType, string Extension) GetDownloadFormat(string? format) =>
+        format?.ToLowerInvariant() switch
+        {
+            AcademicReportFormat.Pdf => ("application/pdf", "pdf"),
+            AcademicReportFormat.Csv => ("text/csv; charset=utf-8", "csv"),
+            _ => ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx")
+        };
 
     private async Task<ShikshaMitra.HR.Reports.HrReportExportJob> GetAuthorizedJobAsync(Guid jobId)
     {
@@ -381,7 +442,7 @@ public class AcademicReportAppService(
     private static AcademicReportExportJobDto MapJob(ShikshaMitra.HR.Reports.HrReportExportJob job, bool includeRequestJson = true)
     {
         var format = job.Format ?? "excel";
-        var extension = format.Equals(AcademicReportFormat.Pdf, StringComparison.OrdinalIgnoreCase) ? "pdf" : "xlsx";
+        var (_, extension) = GetDownloadFormat(format);
         var dynamicRequest = TryReadDynamicRequest(job.RequestJson);
 
         return new AcademicReportExportJobDto

@@ -32,10 +32,13 @@ public class FinanceReportExportBackgroundJob(
 
         try
         {
-            var data = await reportGenerator.GenerateAsync(args.Request, exportAllRows: true);
+            var data = await reportGenerator.GenerateAsync(
+                args.Request,
+                args.ExecutionScope,
+                exportAllRows: true);
 
             byte[] fileBytes;
-            if (args.Request.Format.ToLower() == "pdf")
+            if (string.Equals(args.Request.Format, "pdf", StringComparison.OrdinalIgnoreCase))
             {
                 fileBytes = await pdfService.GenerateReportPdfAsync(data);
             }
@@ -44,7 +47,7 @@ public class FinanceReportExportBackgroundJob(
                 fileBytes = await excelService.GenerateReportExcelAsync(data);
             }
 
-            var blobName = BuildBlobName(args, args.Request.Format.ToLower());
+            var blobName = BuildBlobName(args, args.Request.Format.ToLowerInvariant());
             await blobContainer.SaveAsync(blobName, fileBytes, overrideExisting: true);
 
             job.MarkCompleted(blobName, DateTime.UtcNow, data.Rows.Count, fileBytes.Length);

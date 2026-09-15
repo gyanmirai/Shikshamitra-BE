@@ -1,5 +1,6 @@
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,7 +14,8 @@ namespace ShikshaMitra.Academic.Reports;
 public class AcademicDynamicReportCatalog(
 	IAsyncQueryableExecuter asyncExecuter,
 	IRepository<AssignedSubject, Guid> assignedSubjectRepository,
-	IRepository<Division, Guid> divisionRepository) : ITransientDependency
+	IRepository<Division, Guid> divisionRepository,
+	IRepository<Standard, Guid> standardRepository) : ITransientDependency
 {
 	private static readonly IReadOnlyDictionary<string, AcademicDynamicDatasetDefinition> DatasetDefinitions =
 		new Dictionary<string, AcademicDynamicDatasetDefinition>(StringComparer.OrdinalIgnoreCase)
@@ -26,31 +28,33 @@ public class AcademicDynamicReportCatalog(
 				[
 					new("class", "Class"), new("subject", "Subject"), new("subjectCode", "Subject code"),
 					new("subjectType", "Subject type"), new("status", "Status"),
-					new("weeklyPeriods", "Weekly periods"), new("difficultyLevel", "Difficulty level"),
+					new("weeklyPeriods", "Weekly periods", AcademicDynamicFieldTypes.Number), new("difficultyLevel", "Difficulty level"),
 					new("subjectGroup", "Subject group"), new("primaryTeacher", "Primary teacher"),
-					new("secondaryTeachers", "Secondary teachers"), new("chapterCount", "Chapter count"),
-					new("averageProgress", "Average progress"), new("setupHealthScore", "Setup health score"),
+					new("secondaryTeachers", "Secondary teachers"), new("chapterCount", "Chapter count", AcademicDynamicFieldTypes.Number),
+					new("averageProgress", "Average progress", AcademicDynamicFieldTypes.Number), new("setupHealthScore", "Setup health score", AcademicDynamicFieldTypes.Number),
 					new("learningGoals", "Learning goals"), new("prerequisites", "Prerequisites"),
 					new("description", "Description")
 				],
-				["class", "subject", "subjectCode", "primaryTeacher", "chapterCount", "averageProgress"]),
+				["class", "subject", "subjectCode", "primaryTeacher", "chapterCount", "averageProgress"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Subject]),
 			[AcademicDynamicDatasets.CurriculumChapters] = new(
 				AcademicDynamicDatasets.CurriculumChapters,
 				AcademicReportModules.Curriculum,
 				"Curriculum chapters",
 				"One row per curriculum chapter with schedule, progress, coverage and planning details.",
 				[
-					new("class", "Class"), new("subject", "Subject"), new("chapterNumber", "Chapter number"),
+					new("class", "Class"), new("subject", "Subject"), new("chapterNumber", "Chapter number", AcademicDynamicFieldTypes.Number),
 					new("chapterName", "Chapter"), new("unitName", "Unit"), new("termName", "Term"),
-					new("topic", "Topic"), new("plannedStart", "Planned start"), new("plannedEnd", "Planned end"),
-					new("estimatedTeachingDays", "Estimated teaching days"), new("estimatedPeriods", "Estimated periods"),
-					new("revisionDays", "Revision days"), new("progressPercentage", "Progress"),
+					new("topic", "Topic"), new("plannedStart", "Planned start", AcademicDynamicFieldTypes.Date), new("plannedEnd", "Planned end", AcademicDynamicFieldTypes.Date),
+					new("estimatedTeachingDays", "Estimated teaching days", AcademicDynamicFieldTypes.Number), new("estimatedPeriods", "Estimated periods", AcademicDynamicFieldTypes.Number),
+					new("revisionDays", "Revision days", AcademicDynamicFieldTypes.Number), new("progressPercentage", "Progress", AcademicDynamicFieldTypes.Number),
 					new("coverageStatus", "Coverage status"), new("publishStatus", "Publish status"),
-					new("reviewStatus", "Review status"), new("healthScore", "Health score"),
-					new("marksWeightage", "Marks weightage"), new("difficultyLevel", "Difficulty level"),
+					new("reviewStatus", "Review status"), new("healthScore", "Health score", AcademicDynamicFieldTypes.Number),
+					new("marksWeightage", "Marks weightage", AcademicDynamicFieldTypes.Number), new("difficultyLevel", "Difficulty level"),
 					new("bloomLevel", "Bloom level"), new("description", "Description")
 				],
-				["class", "subject", "chapterNumber", "chapterName", "plannedStart", "plannedEnd", "progressPercentage"]),
+				["class", "subject", "chapterNumber", "chapterName", "plannedStart", "plannedEnd", "progressPercentage"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Subject, AcademicDynamicFilterTypes.Chapter]),
 			[AcademicDynamicDatasets.CurriculumTeachers] = new(
 				AcademicDynamicDatasets.CurriculumTeachers,
 				AcademicReportModules.Curriculum,
@@ -59,10 +63,156 @@ public class AcademicDynamicReportCatalog(
 				[
 					new("class", "Class"), new("subject", "Subject"), new("subjectCode", "Subject code"),
 					new("teacherName", "Teacher"), new("teacherCode", "Teacher code"),
-					new("teacherType", "Teacher type"), new("weeklyPeriods", "Weekly periods"),
+					new("teacherType", "Teacher type"), new("weeklyPeriods", "Weekly periods", AcademicDynamicFieldTypes.Number),
 					new("subjectStatus", "Subject status")
 				],
-				["class", "subject", "teacherName", "teacherType"])
+				["class", "subject", "teacherName", "teacherType"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Subject]),
+			[AcademicDynamicDatasets.TimetableSlots] = new(
+				AcademicDynamicDatasets.TimetableSlots,
+				AcademicReportModules.Timetable,
+				"Timetable slots",
+				"One row per scheduled timetable subject or break, including class, division, time, teacher and room.",
+				[
+					new("class", "Class"), new("division", "Division"), new("day", "Day"),
+					new("sequence", "Period number", AcademicDynamicFieldTypes.Number),
+					new("startTime", "Start time"), new("endTime", "End time"),
+					new("durationMinutes", "Duration minutes", AcademicDynamicFieldTypes.Number),
+					new("slotType", "Slot type"), new("breakType", "Break type"),
+					new("subject", "Subject"), new("teacherName", "Teacher"),
+					new("teacherCode", "Teacher code"), new("room", "Room"),
+					new("timetableStatus", "Timetable status")
+				],
+				["class", "division", "day", "sequence", "startTime", "endTime", "subject", "teacherName", "room"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Division, AcademicDynamicFilterTypes.Subject]),
+			[AcademicDynamicDatasets.StudentRecordsStudents] = new(
+				AcademicDynamicDatasets.StudentRecordsStudents,
+				AcademicReportModules.StudentRecords,
+				"Student records",
+				"One row per student in the selected academic context. This privacy-minimized dataset exposes only school identity, placement and lifecycle fields.",
+				[
+					new("class", "Class"), new("division", "Division"),
+					new("grNumber", "GR number"), new("rollNumber", "Roll number", AcademicDynamicFieldTypes.Number),
+					new("studentName", "Student"), new("lifecycleStatus", "Lifecycle status"),
+					new("admissionApprovalStatus", "Admission approval status")
+				],
+				["class", "division", "rollNumber", "grNumber", "studentName", "lifecycleStatus"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Division]),
+			[AcademicDynamicDatasets.StudentAttendanceEntries] = new(
+				AcademicDynamicDatasets.StudentAttendanceEntries,
+				AcademicReportModules.StudentAttendance,
+				"Student attendance entries",
+				"One row per marked student attendance entry, suitable for absence lists and detailed registers.",
+				[
+					new("date", "Date", AcademicDynamicFieldTypes.Date), new("class", "Class"),
+					new("division", "Division"), new("grNumber", "GR number"),
+					new("rollNumber", "Roll number", AcademicDynamicFieldTypes.Number),
+					new("studentName", "Student"), new("status", "Attendance status"),
+					new("remarks", "Remarks"), new("isLocked", "Day locked")
+				],
+				["date", "class", "division", "rollNumber", "studentName", "status"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Division]),
+			[AcademicDynamicDatasets.StudentAttendanceDailySummary] = new(
+				AcademicDynamicDatasets.StudentAttendanceDailySummary,
+				AcademicReportModules.StudentAttendance,
+				"Student attendance daily summary",
+				"One row per date, class and division with marked, present, absent and attendance percentage totals.",
+				[
+					new("date", "Date", AcademicDynamicFieldTypes.Date), new("class", "Class"),
+					new("division", "Division"), new("markedCount", "Marked students", AcademicDynamicFieldTypes.Number),
+					new("presentCount", "Present", AcademicDynamicFieldTypes.Number),
+					new("absentCount", "Absent", AcademicDynamicFieldTypes.Number),
+					new("attendancePercentage", "Attendance percentage", AcademicDynamicFieldTypes.Number),
+					new("isLocked", "Day locked")
+				],
+				["date", "class", "division", "markedCount", "presentCount", "absentCount", "attendancePercentage"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Division]),
+			[AcademicDynamicDatasets.HomeworkTasks] = new(
+				AcademicDynamicDatasets.HomeworkTasks,
+				AcademicReportModules.HomeworkAssignment,
+				"Homework tasks",
+				"One row per homework and assigned division, including publication, due date and lifecycle details.",
+				[
+					new("class", "Class"), new("division", "Division"), new("subject", "Subject"),
+					new("title", "Homework title"), new("status", "Lifecycle status"),
+					new("submissionType", "Submission type"),
+					new("publishDate", "Publish date", AcademicDynamicFieldTypes.Date),
+					new("dueDate", "Due date", AcademicDynamicFieldTypes.Date),
+					new("isPublished", "Published"), new("description", "Description")
+				],
+				["class", "division", "subject", "title", "status", "publishDate", "dueDate", "isPublished"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Division, AcademicDynamicFilterTypes.Subject]),
+			[AcademicDynamicDatasets.AssignmentTasks] = new(
+				AcademicDynamicDatasets.AssignmentTasks,
+				AcademicReportModules.HomeworkAssignment,
+				"Assignments",
+				"One row per assignment and assigned division, including publication, marks and evaluation details.",
+				[
+					new("class", "Class"), new("division", "Division"), new("subject", "Subject"),
+					new("title", "Assignment title"), new("status", "Lifecycle status"),
+					new("submissionType", "Submission type"),
+					new("publishDate", "Publish date", AcademicDynamicFieldTypes.Date),
+					new("dueDate", "Due date", AcademicDynamicFieldTypes.Date),
+					new("isPublished", "Published"),
+					new("totalMarks", "Total marks", AcademicDynamicFieldTypes.Number),
+					new("evaluationRequired", "Evaluation required"), new("evaluationMethod", "Evaluation method"),
+					new("description", "Description")
+				],
+				["class", "division", "subject", "title", "status", "dueDate", "totalMarks", "evaluationMethod"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Division, AcademicDynamicFilterTypes.Subject]),
+			[AcademicDynamicDatasets.ExaminationSchedule] = new(
+				AcademicDynamicDatasets.ExaminationSchedule,
+				AcademicReportModules.Examination,
+				"Examination schedule",
+				"One row per exam subject and participating division with its date, time and marks configuration.",
+				[
+					new("examName", "Exam"), new("class", "Class"), new("division", "Division"),
+					new("subject", "Subject"), new("examDate", "Exam date", AcademicDynamicFieldTypes.Date),
+					new("startTime", "Start time"), new("endTime", "End time"),
+					new("totalMarks", "Total marks", AcademicDynamicFieldTypes.Number),
+					new("passingMarks", "Passing marks", AcademicDynamicFieldTypes.Number),
+					new("examStatus", "Exam status"), new("notes", "Notes")
+				],
+				["examName", "class", "division", "subject", "examDate", "startTime", "endTime", "totalMarks", "passingMarks", "examStatus"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Division, AcademicDynamicFilterTypes.Subject]),
+			[AcademicDynamicDatasets.ExaminationMarks] = new(
+				AcademicDynamicDatasets.ExaminationMarks,
+				AcademicReportModules.Examination,
+				"Student examination marks",
+				"One row per student and exam subject, scoped to authorized students and published-state metadata.",
+				[
+					new("examName", "Exam"), new("class", "Class"), new("division", "Division"),
+					new("subject", "Subject"), new("grNumber", "GR number"),
+					new("rollNumber", "Roll number", AcademicDynamicFieldTypes.Number), new("studentName", "Student"),
+					new("attendanceStatus", "Exam attendance"),
+					new("marksObtained", "Marks obtained", AcademicDynamicFieldTypes.Number),
+					new("totalMarks", "Total marks", AcademicDynamicFieldTypes.Number),
+					new("percentage", "Percentage", AcademicDynamicFieldTypes.Number),
+					new("result", "Subject result"), new("isPublished", "Marks published"),
+					new("feedback", "Feedback")
+				],
+				["examName", "class", "division", "subject", "rollNumber", "studentName", "attendanceStatus", "marksObtained", "totalMarks", "percentage", "result"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Division, AcademicDynamicFilterTypes.Subject]),
+			[AcademicDynamicDatasets.ExaminationResults] = new(
+				AcademicDynamicDatasets.ExaminationResults,
+				AcademicReportModules.Examination,
+				"Student examination results",
+				"One row per student result snapshot with totals, grade, rank and publication lifecycle.",
+				[
+					new("examName", "Exam"), new("class", "Class"), new("division", "Division"),
+					new("grNumber", "GR number"), new("rollNumber", "Roll number", AcademicDynamicFieldTypes.Number),
+					new("studentName", "Student"),
+					new("totalMaxMarks", "Maximum marks", AcademicDynamicFieldTypes.Number),
+					new("totalObtainedMarks", "Obtained marks", AcademicDynamicFieldTypes.Number),
+					new("percentage", "Percentage", AcademicDynamicFieldTypes.Number), new("grade", "Grade"),
+					new("classRank", "Class rank", AcademicDynamicFieldTypes.Number),
+					new("sectionRank", "Section rank", AcademicDynamicFieldTypes.Number),
+					new("resultStatus", "Student result"), new("publicationStatus", "Publication status"),
+					new("generatedOn", "Generated on", AcademicDynamicFieldTypes.Date),
+					new("publishedOn", "Published on", AcademicDynamicFieldTypes.Date)
+				],
+				["examName", "class", "division", "rollNumber", "studentName", "totalObtainedMarks", "percentage", "grade", "sectionRank", "resultStatus", "publicationStatus"],
+				[AcademicDynamicFilterTypes.Class, AcademicDynamicFilterTypes.Division])
 		};
 
 	public IReadOnlyList<AcademicDynamicDatasetDefinition> GetDatasets(string module) =>
@@ -78,6 +228,15 @@ public class AcademicDynamicReportCatalog(
 
 	public async Task<AcademicDynamicReportCatalogSnapshot> BuildSnapshotAsync(AcademicAiReportCatalogScope scope)
 	{
+		var standardQuery = await standardRepository.GetQueryableAsync();
+		standardQuery = standardQuery.Where(item =>
+			item.EducationMediumStage.EducationMediumId == scope.EducationMediumId);
+		if (scope.ClassIds is { Count: > 0 })
+		{
+			standardQuery = standardQuery.Where(item => scope.ClassIds.Contains(item.Id));
+		}
+		var standards = await asyncExecuter.ToListAsync(standardQuery);
+
 		var query = await assignedSubjectRepository.WithDetailsAsync(
 			subject => subject.Subject,
 			subject => subject.Standard,
@@ -99,10 +258,8 @@ public class AcademicDynamicReportCatalog(
 		}
 		var divisions = await asyncExecuter.ToListAsync(divisionQuery);
 
-		var classes = assignments
-			.Where(item => item.Standard != null)
-			.GroupBy(item => item.StandardId)
-			.Select(group => new CatalogClass(group.Key, group.First().Standard.Name))
+		var classes = standards
+			.Select(item => new CatalogClass(item.Id, item.Name))
 			.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
 			.Select((item, index) => item with { Token = $"class_{index + 1}" })
 			.ToList();
@@ -150,9 +307,23 @@ public sealed record AcademicDynamicDatasetDefinition(
 	string Name,
 	string Description,
 	IReadOnlyList<AcademicDynamicColumnDefinition> Columns,
-	IReadOnlyList<string> DefaultColumns);
+	IReadOnlyList<string> DefaultColumns,
+	IReadOnlyList<string>? FilterTypes = null)
+{
+	public IReadOnlyList<string> SupportedFilterTypes => FilterTypes ?? AcademicDynamicFilterTypes.All;
+}
 
-public sealed record AcademicDynamicColumnDefinition(string Id, string Label);
+public sealed record AcademicDynamicColumnDefinition(
+	string Id,
+	string Label,
+	string DataType = AcademicDynamicFieldTypes.Text);
+
+public static class AcademicDynamicFieldTypes
+{
+	public const string Text = "text";
+	public const string Number = "number";
+	public const string Date = "date";
+}
 
 public sealed record AcademicDynamicReportCatalogSnapshot(
 	IReadOnlyList<CatalogClass> Classes,

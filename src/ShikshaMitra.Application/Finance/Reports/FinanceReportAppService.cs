@@ -18,6 +18,8 @@ namespace ShikshaMitra.Finance.Reports;
 [RemoteService(IsEnabled = false)]
 public class FinanceReportAppService(
     FinanceReportGenerator reportGenerator,
+    FinanceReportScopeService reportScopeService,
+    IFinanceAiReportPlanner aiReportPlanner,
     IBackgroundJobManager backgroundJobManager,
     IHrReportExportJobRepository jobRepository,
     IBlobContainer blobContainer)
@@ -25,16 +27,25 @@ public class FinanceReportAppService(
 {
     public async Task<FinanceReportOptionsDto> GetOptionsAsync()
     {
-        return await reportGenerator.GetOptionsAsync();
+        var allowedAcademicYearIds = await reportScopeService.GetAccessibleAcademicYearIdsAsync();
+        return await reportGenerator.GetOptionsAsync(allowedAcademicYearIds);
+    }
+
+    public async Task<FinanceAiReportPlanResponseDto> CreateAiPlanAsync(FinanceAiReportPlanRequestDto input)
+    {
+        var userId = CurrentUser.Id ?? throw new UnauthorizedAccessException();
+        return await aiReportPlanner.CreatePlanAsync(input, userId);
     }
 
     public async Task<FinanceReportPreviewDto> PreviewAsync(FinanceReportRequestDto input)
     {
-        return await reportGenerator.GenerateAsync(input, exportAllRows: false);
+        var executionScope = await reportScopeService.AuthorizeAndNormalizeAsync(input);
+        return await reportGenerator.GenerateAsync(input, executionScope, exportAllRows: false);
     }
 
     public async Task<FinanceReportExportCreateResponseDto> CreateExportAsync(FinanceReportRequestDto input)
     {
+        var executionScope = await reportScopeService.AuthorizeAndNormalizeAsync(input);
         var tenantId = CurrentTenant.Id;
         var userId = CurrentUser.Id ?? throw new UnauthorizedAccessException();
         var jobId = GuidGenerator.Create();
@@ -60,7 +71,8 @@ public class FinanceReportAppService(
             JobId = jobId,
             TenantId = tenantId,
             UserId = userId,
-            Request = input
+            Request = input,
+            ExecutionScope = executionScope
         }, delay: TimeSpan.FromSeconds(2));
 
         return new FinanceReportExportCreateResponseDto
@@ -75,25 +87,32 @@ public class FinanceReportAppService(
         var job = await jobRepository.GetAsync(jobId);
         if (job.RequestedByUserId != CurrentUser.Id)
         {
-            throw new UnauthorizedAccessException();
+            throw new BusinessException(FinanceReportRequestGuard.AccessDenied);
         }
 
-        if (string.IsNullOrEmpty(job.BlobName))
+        if (job.ExpiresAt <= DateTime.UtcNow)
         {
-            throw new Exception("Report file not generated yet.");
+            throw new BusinessException(FinanceReportRequestGuard.ExportExpired);
+        }
+
+        if (!string.Equals(job.Status, "Completed", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrEmpty(job.BlobName))
+        {
+            throw new BusinessException(FinanceReportRequestGuard.ExportNotReady)
+                .WithData("Status", job.Status);
         }
 
         var bytes = await blobContainer.GetAllBytesOrNullAsync(job.BlobName);
         if (bytes == null)
         {
-            throw new Exception("Report file not found.");
+            throw new BusinessException(FinanceReportRequestGuard.ExportNotFound);
         }
 
         return new FinanceReportDownloadDto
         {
             Bytes = bytes,
             FileName = job.BlobName.Split('/').Last(),
-            ContentType = job.Format!.ToLower() == "pdf" 
+            ContentType = string.Equals(job.Format, "pdf", StringComparison.OrdinalIgnoreCase)
                 ? "application/pdf" 
                 : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         };
@@ -106,4 +125,5 @@ public class FinanceReportExportJobArgs
     public Guid? TenantId { get; set; }
     public Guid UserId { get; set; }
     public FinanceReportRequestDto Request { get; set; } = null!;
+    public FinanceReportExecutionScope ExecutionScope { get; set; } = null!;
 }

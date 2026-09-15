@@ -10,6 +10,7 @@ using ShikshaMitra.Library.Setting.ChargeCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.Sections;
 using ShikshaMitra.Students;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.DependencyInjection;
@@ -32,13 +33,19 @@ public class LibraryReportGenerator(
 	IRepository<Employee, Guid> employeeRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
+	IRepository<AcademicYear, Guid> academicYearRepository,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
-	public async Task<LibraryReportOptionsDto> GetOptionsAsync()
+	public async Task<LibraryReportOptionsDto> GetOptionsAsync(LibraryReportExecutionScope executionScope)
 	{
-		var categories = await asyncExecuter.ToListAsync((await categoryRepository.GetQueryableAsync()).OrderBy(x => x.Name));
-		var sections = await asyncExecuter.ToListAsync((await sectionRepository.GetQueryableAsync()).OrderBy(x => x.SectionName));
+		var allowedYearIds = executionScope.AllowedAcademicYearIds;
+		var categories = await asyncExecuter.ToListAsync((await categoryRepository.GetQueryableAsync())
+			.Where(x => x.AcademicYearId.HasValue && allowedYearIds.Contains(x.AcademicYearId.Value)).OrderBy(x => x.Name));
+		var sections = await asyncExecuter.ToListAsync((await sectionRepository.GetQueryableAsync())
+			.Where(x => x.AcademicYearId.HasValue && allowedYearIds.Contains(x.AcademicYearId.Value)).OrderBy(x => x.SectionName));
+		var academicYears = await asyncExecuter.ToListAsync((await academicYearRepository.GetQueryableAsync())
+			.Where(x => allowedYearIds.Contains(x.Id)).OrderByDescending(x => x.StartDate));
 
 		return new LibraryReportOptionsDto
 		{
@@ -64,15 +71,19 @@ public class LibraryReportGenerator(
 			CopyStatuses = LibraryReportCatalog.BuildCopyStatusOptions(),
 			IssueStatuses = LibraryReportCatalog.BuildIssueStatusOptions(),
 			ChargeStatuses = LibraryReportCatalog.BuildChargeStatusOptions(),
-			Formats = LibraryReportCatalog.BuildFormatOptions()
+			Formats = LibraryReportCatalog.BuildFormatOptions(),
+			AcademicYears = academicYears.Select(x => new LibraryReportOptionDto { Id = x.Id.ToString(), Label = x.Name }).ToList()
 		};
 	}
 
-	public async Task<LibraryReportPreviewDto> GenerateAsync(LibraryReportRequestDto input, bool exportAllRows)
+	public async Task<LibraryReportPreviewDto> GenerateAsync(
+		LibraryReportRequestDto input,
+		LibraryReportExecutionScope executionScope,
+		bool exportAllRows)
 	{
 		var definition = LibraryReportCatalog.Resolve(input.ReportType);
 		var filters = NormalizeFilters(input.Filters);
-		var context = await LoadContextAsync(filters);
+		var context = await LoadContextAsync(filters, executionScope);
 
 		var rows = definition.Id switch
 		{
@@ -112,9 +123,13 @@ public class LibraryReportGenerator(
 		};
 	}
 
-	private async Task<LibraryReportContext> LoadContextAsync(LibraryReportFilterDto filters)
+	private async Task<LibraryReportContext> LoadContextAsync(
+		LibraryReportFilterDto filters,
+		LibraryReportExecutionScope executionScope)
 	{
-		var bookQuery = await bookRepository.GetQueryableAsync();
+		var allowedYearIds = executionScope.AllowedAcademicYearIds;
+		var bookQuery = (await bookRepository.GetQueryableAsync())
+			.Where(x => x.AcademicYearId.HasValue && allowedYearIds.Contains(x.AcademicYearId.Value));
 		if (filters.AcademicYearId.HasValue)
 		{
 			bookQuery = bookQuery.Where(x => x.AcademicYearId == filters.AcademicYearId.Value);
@@ -149,7 +164,8 @@ public class LibraryReportGenerator(
 
 		var categories = await asyncExecuter.ToListAsync((await categoryRepository.GetQueryableAsync())
 			.Where(x => books.Select(b => b.CategoryId).Contains(x.Id)));
-		var chargeCategoriesQuery = await chargeCategoryRepository.GetQueryableAsync();
+		var chargeCategoriesQuery = (await chargeCategoryRepository.GetQueryableAsync())
+			.Where(x => allowedYearIds.Contains(x.AcademicYearId));
 		if (filters.AcademicYearId.HasValue)
 		{
 			chargeCategoriesQuery = chargeCategoriesQuery.Where(x => x.AcademicYearId == filters.AcademicYearId.Value);
@@ -158,22 +174,20 @@ public class LibraryReportGenerator(
 		var chargeCategoryIds = chargeCategories.Select(x => x.Id).ToHashSet();
 		var issueIds = issues.Select(x => x.Id).ToHashSet();
 
-		var charges = await asyncExecuter.ToListAsync(await chargeRepository.GetQueryableAsync());
-		if (filters.AcademicYearId.HasValue)
-		{
-			charges = charges
-				.Where(x => chargeCategoryIds.Contains(x.ChargeCategoryId) ||
-				            (x.BookIssueId.HasValue && issueIds.Contains(x.BookIssueId.Value)))
-				.ToList();
-		}
+		var charges = await asyncExecuter.ToListAsync((await chargeRepository.GetQueryableAsync())
+			.Where(x => chargeCategoryIds.Contains(x.ChargeCategoryId) ||
+			            (x.BookIssueId.HasValue && issueIds.Contains(x.BookIssueId.Value))));
 
 		var sections = await asyncExecuter.ToListAsync((await sectionRepository.GetQueryableAsync())
 			.Where(x => copies.Select(c => c.SectionId).Contains(x.Id)));
 		var shelves = await asyncExecuter.ToListAsync((await shelfRepository.GetQueryableAsync())
 			.Where(x => copies.Select(c => c.ShelfId).Contains(x.Id)));
 
-		var students = await asyncExecuter.ToListAsync((await studentRepository.GetQueryableAsync())
-			.Where(x => x.AdditionalDetail != null && x.AdditionalDetail.IsLibraryMember == true));
+		var studentQuery = StudentScopeAccessService.ApplyScope(
+			(await studentRepository.GetQueryableAsync())
+				.Where(x => x.AdditionalDetail != null && x.AdditionalDetail.IsLibraryMember == true),
+			executionScope.UserScope);
+		var students = await asyncExecuter.ToListAsync(studentQuery);
 		if (filters.AcademicYearId.HasValue)
 		{
 			students = students.Where(x => x.AcademicYearId == filters.AcademicYearId.Value).ToList();
@@ -363,6 +377,8 @@ public class LibraryReportGenerator(
 	private static List<Dictionary<string, string?>> BuildReservationRows(LibraryReportContext context, LibraryReportFilterDto filters) =>
 		context.Reservations
 			.Where(reservation => filters.MemberIds is not { Count: > 0 } || filters.MemberIds.Contains(reservation.MemberId))
+			.Where(reservation => !filters.MemberRole.HasValue ||
+				context.Members.GetValueOrDefault(reservation.MemberId)?.RoleValue == filters.MemberRole.Value)
 			.Where(reservation => DateInRange(reservation.RequestedDate, filters))
 			.Select(reservation =>
 			{

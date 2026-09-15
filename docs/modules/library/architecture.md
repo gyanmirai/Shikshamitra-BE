@@ -3,7 +3,7 @@ module: library
 domain: architecture
 content_type: Conceptual
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-09-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -54,3 +54,16 @@ Start with the smallest source set that answers the change.
 | Report issue | `Application/Library/Reports/**` |
 | Notification issue | `Application/Library/Notifications/**` and the background worker |
 | Database mapping issue | `EntityFrameworkCore/Library/**` |
+
+## AI report boundary
+
+| Component | Responsibility |
+|---|---|
+| `LibraryAiReportPlanner` | Sends the semantic catalog and opaque permitted options to the configured AI provider and parses strict structured output |
+| `LibraryReportRequestGuard` | Rejects unsupported report types, columns, sorts, statuses, filters, ranges, and sizes |
+| `LibraryReportScopeService` | Resolves current UserScope, permitted academic years, and the execution-scope snapshot |
+| `LibraryReportGenerator` | Executes only repository-backed, tenant-filtered, scope-filtered report builders |
+| `LibraryReportExportBackgroundJob` | Replays the already validated typed request with its saved scope snapshot |
+
+The AI provider cannot call repositories or supply SQL.
+Opaque catalog tokens are resolved server-side and rejected when they are stale, unknown, or from another option kind.

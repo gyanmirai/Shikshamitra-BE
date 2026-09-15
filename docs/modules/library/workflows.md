@@ -3,7 +3,7 @@ module: library
 domain: workflows
 content_type: How-to
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-09-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -55,3 +55,15 @@ Reports and notifications have background and export side effects.
 | Notification settings and history | `Application/Library/Notifications/LibraryNotificationAppService.cs` |
 | Reminder execution | `Application/Library/Notifications/LibraryNotificationReminderService.cs` |
 | Scheduled reminders | `HttpApi.Host/BackgroundWorkers/LibraryNotificationReminderWorker.cs` |
+
+## Trace AI report generation
+
+1. The reports screen posts the user's wording and current clarification answers to `POST api/library/reports/ai/plan`.
+2. The application service checks `Library.Reports.View` and resolves the current tenant and UserScope.
+3. The planner receives the supported semantic report catalog plus opaque tokens for permitted years, categories, sections, and statuses.
+4. The planner either returns material clarification questions or a strict typed report request.
+5. The server resolves tokens, rejects unsupported fields and filters, and revalidates academic scope.
+6. The frontend runs a live preview through the normal report generator and shows only authorized rows.
+7. After user approval, the export endpoint checks `Library.Reports.Export`, saves the validated request and scope snapshot, and queues generation.
+8. The background job creates PDF or Excel output from deterministic report builders.
+9. Download authorization, ownership or sharing rules, and expiry are checked before the file is returned.

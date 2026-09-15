@@ -25,6 +25,13 @@ public partial class HrReportController(IHrReportAppService reportAppService) : 
 		return reportAppService.GetSourcesAsync();
 	}
 
+	[HttpPost("ai/plan")]
+	[ProducesResponseType(typeof(HrAiReportPlanResponseDto), StatusCodes.Status200OK)]
+	public Task<HrAiReportPlanResponseDto> CreateAiPlanAsync([FromBody] HrAiReportPlanRequestDto input)
+	{
+		return reportAppService.CreateAiPlanAsync(input);
+	}
+
 	[HttpGet("options")]
 	[ProducesResponseType(typeof(HrReportOptionsDto), StatusCodes.Status200OK)]
 	public Task<HrReportOptionsDto> GetOptionsAsync()

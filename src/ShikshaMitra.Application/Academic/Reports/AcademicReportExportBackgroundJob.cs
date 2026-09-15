@@ -20,6 +20,7 @@ public class AcademicReportExportBackgroundJob(
     AcademicDynamicReportPdfService dynamicReportPdfService,
     TimetableReportsPdfService timetablePdfService,
     AcademicExcelService excelService,
+    AcademicCsvService csvService,
     IRepository<ShikshaMitra.HR.Reports.HrReportExportJob, Guid> exportJobRepository,
     IBlobContainer blobContainer,
     ICurrentTenant currentTenant,
@@ -55,8 +56,13 @@ public class AcademicReportExportBackgroundJob(
                         args.AllowedClassIds,
                         args.AllowedDivisionIds);
                     report = await dynamicReportQueryService.GenerateAsync(args.DynamicSpec, scope);
-                    format = AcademicReportFormat.Pdf;
-                    bytes = dynamicReportPdfService.Generate(args.DynamicSpec, report);
+                    format = args.DynamicSpec.Format;
+                    bytes = format switch
+                    {
+                        AcademicReportFormat.Excel => excelService.GenerateReportExcel(report),
+                        AcademicReportFormat.Csv => csvService.GenerateReportCsv(report),
+                        _ => dynamicReportPdfService.Generate(args.DynamicSpec, report)
+                    };
                 }
                 else
                 {
@@ -111,7 +117,12 @@ public class AcademicReportExportBackgroundJob(
 
     private static string BuildBlobName(AcademicReportExportJobArgs args, string format)
     {
-        var extension = format == AcademicReportFormat.Pdf ? "pdf" : "xlsx";
+        var extension = format switch
+        {
+            AcademicReportFormat.Pdf => "pdf",
+            AcademicReportFormat.Csv => "csv",
+            _ => "xlsx"
+        };
         return $"academic-exports/{args.TenantId}/{args.UserId}/{args.JobId}.{extension}";
     }
 }

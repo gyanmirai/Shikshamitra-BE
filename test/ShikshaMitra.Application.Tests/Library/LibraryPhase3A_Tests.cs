@@ -10,6 +10,7 @@ using ShikshaMitra.Library.Reports;
 using ShikshaMitra.Library.Setting.ChargeCategory;
 using ShikshaMitra.Library.Setting.GeneralSetting.BookCategory;
 using ShikshaMitra.Library.Setting.Sections;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -24,6 +25,7 @@ namespace ShikshaMitra.Library;
 
 public class LibraryPhase3A_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
+	private static readonly Guid TestUserId = Guid.Parse("2e701e62-0953-4dd3-910b-dc6cc93ccb0d");
 	private readonly IBookAppService _bookAppService;
 	private readonly IBookIssueAppService _bookIssueAppService;
 	private readonly ILibraryDashboardAppService _dashboardAppService;
@@ -41,6 +43,8 @@ public class LibraryPhase3A_Tests : ShikshaMitraApplicationTestBase<ShikshaMitra
 	private readonly IRepository<BookCopy, Guid> _bookCopyRepository;
 	private readonly IRepository<BookIssue, Guid> _bookIssueRepository;
 	private readonly IRepository<LibraryCharge, Guid> _libraryChargeRepository;
+	private readonly IRepository<UserScopeAssignment, Guid> _userScopeRepository;
+	private readonly IUserScopeService _userScopeService;
 
 	public LibraryPhase3A_Tests()
 	{
@@ -61,6 +65,8 @@ public class LibraryPhase3A_Tests : ShikshaMitraApplicationTestBase<ShikshaMitra
 		_bookCopyRepository = GetRequiredService<IRepository<BookCopy, Guid>>();
 		_bookIssueRepository = GetRequiredService<IRepository<BookIssue, Guid>>();
 		_libraryChargeRepository = GetRequiredService<IRepository<LibraryCharge, Guid>>();
+		_userScopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
+		_userScopeService = GetRequiredService<IUserScopeService>();
 	}
 
 	[Fact]
@@ -87,6 +93,10 @@ public class LibraryPhase3A_Tests : ShikshaMitraApplicationTestBase<ShikshaMitra
 	public async Task Reports_Should_Preview_Phase3A_Report_Types()
 	{
 		var seeded = await SeedPhase3AContextAsync();
+		await _userScopeRepository.InsertAsync(
+			new UserScopeAssignment(Guid.NewGuid(), tenantId: null, userId: TestUserId, description: "Library report test scope"),
+			autoSave: true);
+		await _userScopeService.InvalidateUserScopeCacheAsync(TestUserId);
 
 		foreach (var reportType in new[]
 		         {

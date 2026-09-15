@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using ShikshaMitra.Academic.HomeworkAssignment;
+using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.Security.UserScope;
@@ -12,6 +14,7 @@ using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Claims;
 using Volo.Abp.Users;
 using Xunit;
 
@@ -30,7 +33,9 @@ public class LessonPlanAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	private readonly IRepository<LessonPlan, Guid> _lessonPlanRepository;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
 	private readonly IIdentityUserRepository _identityUserRepository;
+	private readonly IRepository<IdentityRole, Guid> _identityRoleRepository;
 	private readonly ICurrentTenant _currentTenant;
+	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 
 	public LessonPlanAppService_Tests()
 	{
@@ -38,7 +43,39 @@ public class LessonPlanAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		_lessonPlanRepository = GetRequiredService<IRepository<LessonPlan, Guid>>();
 		_employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
 		_identityUserRepository = GetRequiredService<IIdentityUserRepository>();
+		_identityRoleRepository = GetRequiredService<IRepository<IdentityRole, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
+		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
+	}
+
+	[Fact]
+	public async Task GetListAsync_Should_Return_Submitted_Reportee_Plan_For_Reporting_Manager()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var managerUserId = Guid.NewGuid();
+				var teacherUserId = Guid.NewGuid();
+				var manager = await CreateEmployeeAsync(managerUserId, "Review Manager");
+				var teacher = await CreateEmployeeAsync(teacherUserId, "Hindi Teacher");
+				teacher.AssignReportingManager(manager.Id);
+				await _employeeRepository.UpdateAsync(teacher, autoSave: true);
+
+				var reporteePlan = await CreateSubmittedLessonPlanAsync(teacher.Id, "Hindi lesson pending review");
+
+				using (_currentPrincipalAccessor.Change(BuildPrincipal(managerUserId, "teacher")))
+				{
+					var result = await _lessonPlanAppService.GetListAsync(new GetLessonPlansInput
+					{
+						MaxResultCount = 100
+					});
+
+					result.Items.ShouldContain(item =>
+						item.Id == reporteePlan.Id && item.Status == LessonPlanStatus.Submitted);
+				}
+			}
+		});
 	}
 
 	[Fact]
@@ -262,4 +299,72 @@ public class LessonPlanAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 
 		return await _lessonPlanRepository.InsertAsync(plan, autoSave: true);
 	}
+
+	private async Task<Employee> CreateEmployeeAsync(Guid userId, string firstName)
+	{
+		var suffix = Guid.NewGuid().ToString("N");
+		var role = await _identityRoleRepository.InsertAsync(
+			new IdentityRole(Guid.NewGuid(), $"lesson-review-{suffix[..8]}", TestTenantId),
+			autoSave: true);
+		await _identityUserRepository.InsertAsync(
+			new IdentityUser(
+				userId,
+				$"lesson-review-{suffix[..8]}",
+				$"{suffix[..12]}@test.local",
+				TestTenantId),
+			autoSave: true);
+
+		return await _employeeRepository.InsertAsync(
+			new Employee(
+				Guid.NewGuid(),
+				TestTenantId,
+				userId,
+				$"LESSON{suffix[..8]}",
+				new EmployeeBasicInfo(
+					ProfilePictureBlobName: null,
+					LastName: "Test",
+					FirstName: firstName,
+					MiddleName: null,
+					ShortName: firstName,
+					EmployeeStatusType: EmployeeStatusType.Active,
+					DateOfBirth: new DateOnly(1990, 1, 1),
+					FamilyCast: null,
+					CastType: null,
+					GenderType: null,
+					Religion: null,
+					MaritalStatus: null,
+					BloodGroup: null,
+					MobileNo: null,
+					SecondaryMobileNo: null,
+					Email: $"{suffix[..12]}@test.local",
+					PanNo: $"ABCDE{suffix[..4].ToUpperInvariant()}F",
+					AdharNo: $"1{Math.Abs((long)suffix.GetHashCode()):D11}"[..12],
+					Address1: null,
+					Address2: null,
+					Address3: null,
+					Department: "Academics",
+					Designation: "Teacher",
+					DateOfJoining: new DateOnly(2025, 1, 1),
+					EmployeeGroup: null,
+					Qualification: null,
+					RoleId: role.Id,
+					IdentificationMark1: null,
+					City: null,
+					State: null,
+					Country: null,
+					PinCode: null,
+					ShiftId: null),
+				new BankDetails(null, null, null, null, null),
+				null),
+			autoSave: true);
+	}
+
+	private static ClaimsPrincipal BuildPrincipal(Guid userId, string roleName) =>
+		new(new ClaimsIdentity(
+		[
+			new Claim(AbpClaimTypes.UserId, userId.ToString()),
+			new Claim(AbpClaimTypes.UserName, $"user-{userId:N}"),
+			new Claim(AbpClaimTypes.Role, roleName)
+		],
+		"Test"));
 }

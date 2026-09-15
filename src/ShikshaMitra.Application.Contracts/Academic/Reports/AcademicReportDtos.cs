@@ -88,6 +88,9 @@ public class AcademicAiReportExportRequestDto
     public string Module { get; set; } = AcademicReportModules.Curriculum;
 
     public AcademicDynamicReportSpecDto? Plan { get; set; }
+
+    [Required]
+    public string ApprovalToken { get; set; } = string.Empty;
 }
 
 public class AcademicAiReportExportResponseDto : AcademicReportExportCreateResponseDto
@@ -115,11 +118,65 @@ public class AcademicAiReportPlanRequestDto
 
     [Required]
     public string Module { get; set; } = AcademicReportModules.Curriculum;
+
+    [MaxLength(6)]
+    public List<AcademicAiReportClarificationAnswerDto> ClarificationAnswers { get; set; } = [];
 }
 
 public class AcademicAiReportPlanResponseDto
 {
+    public string Status { get; set; } = AcademicAiReportPlanStatuses.Ready;
+    public AcademicDynamicReportSpecDto? Plan { get; set; }
+    public List<AcademicAiReportClarificationQuestionDto> ClarificationQuestions { get; set; } = [];
+    public List<string> Assumptions { get; set; } = [];
+    public double Confidence { get; set; }
+    public string PermissionSummary { get; set; } = string.Empty;
+    public string? ApprovalToken { get; set; }
+}
+
+public class AcademicAiReportClarificationAnswerDto
+{
+    [Required]
+    [StringLength(300, MinimumLength = 1)]
+    public string Question { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(500, MinimumLength = 1)]
+    public string Answer { get; set; } = string.Empty;
+}
+
+public class AcademicAiReportClarificationQuestionDto
+{
+    public string Id { get; set; } = string.Empty;
+    public string Question { get; set; } = string.Empty;
+    public List<string> Options { get; set; } = [];
+    public string RecommendedOption { get; set; } = string.Empty;
+}
+
+public class AcademicAiReportPreviewRequestDto
+{
+    [Required]
+    public Guid? AcademicYearId { get; set; }
+
+    [Required]
+    public Guid? EducationBoardId { get; set; }
+
+    [Required]
+    public Guid? EducationMediumId { get; set; }
+
+    [Required]
+    public string Module { get; set; } = AcademicReportModules.Curriculum;
+
+    [Required]
     public AcademicDynamicReportSpecDto Plan { get; set; } = new();
+}
+
+public class AcademicAiReportPreviewResponseDto
+{
+    public AcademicDynamicReportSpecDto Plan { get; set; } = new();
+    public AcademicReportPreviewDto Preview { get; set; } = new();
+    public string PermissionSummary { get; set; } = string.Empty;
+    public string ApprovalToken { get; set; } = string.Empty;
 }
 
 public class AcademicDynamicReportSpecDto
@@ -151,8 +208,12 @@ public class AcademicDynamicReportSpecDto
 
     public AcademicDynamicReportFilterDto Filters { get; set; } = new();
 
+    public AcademicDynamicReportWhereDto Where { get; set; } = new();
+
     [MaxLength(3)]
     public List<AcademicDynamicReportSortDto> Sort { get; set; } = [];
+
+    public string Format { get; set; } = AcademicReportFormat.Pdf;
 }
 
 public class AcademicDynamicReportAppliedFilterDto
@@ -189,10 +250,18 @@ public class AcademicDynamicReportSortDto
 public static class AcademicReportModules
 {
     public const string Curriculum = "Curriculum";
+    public const string HomeworkAssignment = "Homework & Assignment";
     public const string Homework = "Homework";
     public const string Assignment = "Assignment";
     public const string Examination = "Examination";
     public const string Timetable = "Timetable";
+    public const string LearningManagement = "Learning Management";
+    public const string StudentRecords = "Student Records";
+    public const string StudentAttendance = "Student Attendance";
+    public const string HumanResources = "HR";
+    public const string Finance = "Finance";
+    public const string Library = "Library";
+    public const string Transport = "Transport";
 }
 
 public static class AcademicDynamicDatasets
@@ -200,12 +269,75 @@ public static class AcademicDynamicDatasets
     public const string CurriculumSubjects = "curriculum.subjects";
     public const string CurriculumChapters = "curriculum.chapters";
     public const string CurriculumTeachers = "curriculum.teachers";
+    public const string TimetableSlots = "timetable.slots";
+    public const string StudentRecordsStudents = "student-records.students";
+    public const string StudentAttendanceEntries = "student-attendance.entries";
+    public const string StudentAttendanceDailySummary = "student-attendance.daily-summary";
+    public const string HomeworkTasks = "homework-assignment.homework";
+    public const string AssignmentTasks = "homework-assignment.assignments";
+    public const string ExaminationSchedule = "examination.schedule";
+    public const string ExaminationMarks = "examination.marks";
+    public const string ExaminationResults = "examination.results";
 }
 
 public static class AcademicDynamicSortDirections
 {
     public const string Ascending = "ascending";
     public const string Descending = "descending";
+}
+
+public class AcademicDynamicReportWhereDto
+{
+    public string Match { get; set; } = AcademicDynamicMatchModes.All;
+
+    [MaxLength(8)]
+    public List<AcademicDynamicReportConditionDto> Conditions { get; set; } = [];
+}
+
+public class AcademicDynamicReportConditionDto
+{
+    [Required]
+    public string Field { get; set; } = string.Empty;
+
+    [Required]
+    public string Operator { get; set; } = AcademicDynamicFilterOperators.Equal;
+
+    [MaxLength(10)]
+    public List<string> Values { get; set; } = [];
+}
+
+public static class AcademicAiReportPlanStatuses
+{
+    public const string NeedsClarification = "NeedsClarification";
+    public const string Ready = "Ready";
+}
+
+public static class AcademicDynamicMatchModes
+{
+    public const string All = "all";
+    public const string Any = "any";
+}
+
+public static class AcademicDynamicFilterOperators
+{
+    public const string Equal = "eq";
+    public const string NotEquals = "ne";
+    public const string Contains = "contains";
+    public const string StartsWith = "startsWith";
+    public const string In = "in";
+    public const string GreaterThan = "gt";
+    public const string GreaterThanOrEqual = "gte";
+    public const string LessThan = "lt";
+    public const string LessThanOrEqual = "lte";
+    public const string Between = "between";
+    public const string IsEmpty = "isEmpty";
+    public const string IsNotEmpty = "isNotEmpty";
+
+    public static readonly string[] All =
+    [
+        Equal, NotEquals, Contains, StartsWith, In, GreaterThan, GreaterThanOrEqual,
+        LessThan, LessThanOrEqual, Between, IsEmpty, IsNotEmpty
+    ];
 }
 
 public static class AcademicDynamicFilterTypes
@@ -260,6 +392,7 @@ public static class AcademicReportFormat
 {
     public const string Pdf = "pdf";
     public const string Excel = "excel";
+    public const string Csv = "csv";
 }
 
 public static class AcademicReportTypes

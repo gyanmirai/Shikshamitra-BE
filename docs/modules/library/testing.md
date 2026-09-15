@@ -3,7 +3,7 @@ module: library
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-09-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -29,6 +29,7 @@ Use these tests as the first backend validation set.
 |---|---|
 | Core workflows | `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter LibraryCoreWorkflow_Tests` |
 | Reports and export behavior | `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter LibraryPhase3A_Tests` |
+| AI request guard and filter allowlists | `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter LibraryReportRequestGuard_Tests` |
 | Notifications | `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter LibraryPhase3BNotification_Tests` |
 | HTTP release gate | `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter LibraryReleaseGateApi_Tests` |
 

@@ -23,7 +23,7 @@ public class FeeMonthlyRegisterBuilder(
 {
     public string ReportType => FinanceReportTypes.FeeMonthlyRegister;
 
-    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, bool exportAllRows)
+    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
         var boardId = request.Filters.BoardId;
         var mediumId = request.Filters.MediumId;
@@ -33,7 +33,11 @@ public class FeeMonthlyRegisterBuilder(
         var receiptBookIds = request.Filters.ReceiptBookIds ?? new List<Guid>();
 
         // 1. Fetch Students
-        var studentQuery = (await studentRepository.GetQueryableAsync())
+        var studentQuery = Students.StudentScopeAccessService.ApplyScope(
+                await studentRepository.GetQueryableAsync(), executionScope.UserScope)
+            .WhereIf(request.Filters.AcademicYearIds?.Any() == true,
+                s => s.AcademicYearId.HasValue && request.Filters.AcademicYearIds!.Contains(s.AcademicYearId.Value))
+            .WhereIf(request.Filters.BatchId.HasValue, s => s.AcademicYearId == request.Filters.BatchId)
             .WhereIf(boardId.HasValue, s => s.AcademicBoardId == boardId)
             .WhereIf(mediumId.HasValue, s => s.AcademicMediumId == mediumId)
             .WhereIf(organizationIds.Any(), s => s.AcademicMediumStageId.HasValue && organizationIds.Contains(s.AcademicMediumStageId.Value))

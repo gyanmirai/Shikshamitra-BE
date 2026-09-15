@@ -92,6 +92,7 @@ public class LibraryReportOptionsDto
 	public List<LibraryReportOptionDto> IssueStatuses { get; set; } = new();
 	public List<LibraryReportOptionDto> ChargeStatuses { get; set; } = new();
 	public List<LibraryReportOptionDto> Formats { get; set; } = new();
+	public List<LibraryReportOptionDto> AcademicYears { get; set; } = new();
 }
 
 public class LibraryReportOptionDto

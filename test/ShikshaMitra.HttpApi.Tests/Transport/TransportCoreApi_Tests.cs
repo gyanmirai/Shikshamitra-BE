@@ -1052,6 +1052,16 @@ public class TransportCoreApi_Tests : ShikshaMitraApiTestBase
 		unsupported.Data.ShouldNotBeNull();
 		unsupported.Data!.IsSupported.ShouldBeFalse();
 		unsupported.Data.Message.ShouldBe("This report depends on a future transport phase.");
+
+		var invalidAiPlan = await Client.PostAsJsonAsync(
+			"/api/transport/reports/ai/plan",
+			new TransportAiReportPlanRequestDto
+			{
+				Prompt = "short",
+				AcademicMediumId = mediumId,
+				AcademicYearId = Factory.SeededAcademicYearId
+			});
+		invalidAiPlan.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
 	private async Task AssignRouteStopsAsync(Guid mediumId, Guid routeId, params Guid[] stopIds)

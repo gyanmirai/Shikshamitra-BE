@@ -47,4 +47,9 @@ public static class LibraryErrorCodes
 	public const string NotificationEventNotSupported = "Library:Notifications:010040";
 	public const string NotificationChannelDisabled = "Library:Notifications:010041";
 	public const string NotificationRecipientRequired = "Library:Notifications:010042";
+	public const string ReportRequestInvalid = "Library:Reports:010043";
+	public const string ReportScopeAccessDenied = "Library:Reports:010044";
+	public const string ReportAiPromptInvalid = "Library:Reports:010045";
+	public const string ReportAiInvalidResponse = "Library:Reports:010046";
+	public const string ReportAiInvalidCatalogToken = "Library:Reports:010047";
 }

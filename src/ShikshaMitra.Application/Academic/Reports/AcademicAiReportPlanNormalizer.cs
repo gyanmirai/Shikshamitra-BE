@@ -27,6 +27,9 @@ internal static class AcademicAiReportPlanNormalizer
 	{
 		ArgumentNullException.ThrowIfNull(plan);
 		ArgumentNullException.ThrowIfNull(datasets);
+		datasets = datasets
+			.Where(dataset => string.Equals(dataset.Module, allowedModule, StringComparison.OrdinalIgnoreCase))
+			.ToList();
 
 		if (string.IsNullOrWhiteSpace(plan.Module))
 		{
@@ -70,7 +73,7 @@ internal static class AcademicAiReportPlanNormalizer
 				.ToList();
 			selectedDataset = compatibleDatasets.Count == 1
 				? compatibleDatasets[0]
-				: InferDatasetFromPrompt(prompt, datasets);
+				: InferDatasetFromPrompt(prompt, allowedModule, datasets);
 		}
 
 		if (selectedDataset is not null)
@@ -133,20 +136,67 @@ internal static class AcademicAiReportPlanNormalizer
 
 	private static AcademicDynamicDatasetDefinition? InferDatasetFromPrompt(
 		string prompt,
+		string allowedModule,
 		IReadOnlyList<AcademicDynamicDatasetDefinition> datasets)
 	{
 		string? datasetId = null;
-		if (Contains(prompt, @"\bchapters?\b|\bunits?\b|\bchapter\s+coverage\b"))
+		if (string.Equals(allowedModule, AcademicReportModules.Curriculum, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\bchapters?\b|\bunits?\b|\bchapter\s+coverage\b"))
 		{
 			datasetId = AcademicDynamicDatasets.CurriculumChapters;
 		}
-		else if (Contains(prompt, @"\b(all|assigned|secondary)\s+teachers?\b|\bteacher\s+(type|role|code)\b"))
+		else if (string.Equals(allowedModule, AcademicReportModules.Curriculum, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\b(all|assigned|secondary)\s+teachers?\b|\bteacher\s+(type|role|code)\b"))
 		{
 			datasetId = AcademicDynamicDatasets.CurriculumTeachers;
 		}
-		else if (Contains(prompt, @"\bsubjects?\b|\bcurriculum\b|\bsyllabus\b"))
+		else if (string.Equals(allowedModule, AcademicReportModules.Curriculum, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\bsubjects?\b|\bcurriculum\b|\bsyllabus\b"))
 		{
 			datasetId = AcademicDynamicDatasets.CurriculumSubjects;
+		}
+		else if (string.Equals(allowedModule, AcademicReportModules.StudentAttendance, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\battendance\s+(summary|percentage|trend)|\bdaily\s+(summary|totals?)\b"))
+		{
+			datasetId = AcademicDynamicDatasets.StudentAttendanceDailySummary;
+		}
+		else if (string.Equals(allowedModule, AcademicReportModules.StudentAttendance, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\battendance\b|\babsent|\babsence\b|\babsentee\b"))
+		{
+			datasetId = AcademicDynamicDatasets.StudentAttendanceEntries;
+		}
+		else if (string.Equals(allowedModule, AcademicReportModules.StudentRecords, StringComparison.OrdinalIgnoreCase))
+		{
+			datasetId = AcademicDynamicDatasets.StudentRecordsStudents;
+		}
+		else if (string.Equals(allowedModule, AcademicReportModules.Timetable, StringComparison.OrdinalIgnoreCase))
+		{
+			datasetId = AcademicDynamicDatasets.TimetableSlots;
+		}
+		else if (string.Equals(allowedModule, AcademicReportModules.HomeworkAssignment, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\bhomework\b|\bhome\s+work\b"))
+		{
+			datasetId = AcademicDynamicDatasets.HomeworkTasks;
+		}
+		else if (string.Equals(allowedModule, AcademicReportModules.HomeworkAssignment, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\bassignments?\b|\brubric\b"))
+		{
+			datasetId = AcademicDynamicDatasets.AssignmentTasks;
+		}
+		else if (string.Equals(allowedModule, AcademicReportModules.Examination, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\bschedules?\b|\bexam\s+(date|time|timetable)\b"))
+		{
+			datasetId = AcademicDynamicDatasets.ExaminationSchedule;
+		}
+		else if (string.Equals(allowedModule, AcademicReportModules.Examination, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\boverall\s+results?\b|\bgrades?\b|\branks?\b|\bresult\s+summary\b"))
+		{
+			datasetId = AcademicDynamicDatasets.ExaminationResults;
+		}
+		else if (string.Equals(allowedModule, AcademicReportModules.Examination, StringComparison.OrdinalIgnoreCase) &&
+			Contains(prompt, @"\bmarks?\b|\babsent\b|\bexam\s+results?\b"))
+		{
+			datasetId = AcademicDynamicDatasets.ExaminationMarks;
 		}
 
 		return datasetId is null

@@ -40,4 +40,8 @@ public static class TransportErrorCodes
 	public const string FeeRunNotFound = "TR:Fee:090007";
 	public const string FeeRunHasNoDues = "TR:Fee:090008";
 	public const string FeeFinancePostInvalid = "TR:Fee:090009";
+	public const string ReportRequestInvalid = "TR:Report:100001";
+	public const string ReportAiPromptInvalid = "TR:Report:100002";
+	public const string ReportAiInvalidResponse = "TR:Report:100003";
+	public const string ReportAiInvalidCatalogToken = "TR:Report:100004";
 }

@@ -15,10 +15,22 @@ public class HrReportAppService(
 	HrReportTemplateService templateService,
 	HrReportExportService exportService,
 	HrReportScheduleService scheduleService,
-	HrReportRecipientLookupService recipientLookupService) : ApplicationService, IHrReportAppService
+	HrReportRecipientLookupService recipientLookupService,
+	IHrAiReportPlanner aiReportPlanner) : ApplicationService, IHrReportAppService
 {
 	public Task<HrReportSourcesDto> GetSourcesAsync() =>
 		reportGenerator.GetSourcesAsync();
+
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Build)]
+	public async Task<HrAiReportPlanResponseDto> CreateAiPlanAsync(HrAiReportPlanRequestDto input)
+	{
+		var userId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.ReportUserRequired);
+		return await aiReportPlanner.CreatePlanAsync(
+			input.Prompt,
+			userId,
+			CurrentTenant.Id,
+			input.ClarificationAnswers);
+	}
 
 	public async Task<HrReportOptionsDto> GetOptionsAsync()
 	{

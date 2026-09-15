@@ -21,6 +21,13 @@ public class LibraryReportController(ILibraryReportAppService reportAppService) 
 		return reportAppService.GetOptionsAsync();
 	}
 
+	[HttpPost("ai/plan")]
+	[ProducesResponseType(typeof(LibraryAiReportPlanResponseDto), StatusCodes.Status200OK)]
+	public Task<LibraryAiReportPlanResponseDto> CreateAiPlanAsync([FromBody] LibraryAiReportPlanRequestDto input)
+	{
+		return reportAppService.CreateAiPlanAsync(input);
+	}
+
 	[HttpPost("preview")]
 	[ProducesResponseType(typeof(LibraryReportPreviewDto), StatusCodes.Status200OK)]
 	public Task<LibraryReportPreviewDto> PreviewAsync([FromBody] LibraryReportRequestDto input)

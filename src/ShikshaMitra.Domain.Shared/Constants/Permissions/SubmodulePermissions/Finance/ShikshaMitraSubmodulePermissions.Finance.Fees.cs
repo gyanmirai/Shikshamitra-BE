@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Constants.Permissions;
 
@@ -140,14 +140,16 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
+			public const string OverrideAmount = $"{SubmoduleName}.OverrideAmount";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { View, Add, Delete };
+			public static readonly string[] All = { View, Add, Delete, OverrideAmount };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ OverrideAmount, $"{SubmoduleDisplayName}.OverrideAmount" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}

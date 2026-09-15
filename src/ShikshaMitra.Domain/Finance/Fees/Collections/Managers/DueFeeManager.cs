@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.Services;
 using ShikshaMitra.Domain.Finance.Policies;
@@ -55,9 +56,7 @@ public class DueFeeManager(
 			if (detail.IsOptional && !selectedOptionalFeeHeadIds.Contains(detail.FeeHeadId))
 				continue;
 
-			var customDetail = detail.IsOptional
-				? optionalFeeHeadDetails?.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
-				: null;
+			var customDetail = optionalFeeHeadDetails?.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId);
 			var detailChargeStart = (customDetail?.ChargeStartDate ?? assignmentChargeStart).Date;
 			var detailChargeEnd = (customDetail?.ChargeEndDate ?? assignmentChargeEnd).Date;
 			ValidateChargePeriod(detailChargeStart, detailChargeEnd, academicYear, detail.FeeHeadId);
@@ -66,7 +65,7 @@ public class DueFeeManager(
 			{
 				dueFees.AddRange(await GenerateFromPaymentTermAsync(
 					studentId, detail, customDetail, prorationPolicy, prorationPolicyVersionId,
-					detailChargeStart, detailChargeEnd));
+					detailChargeStart, detailChargeEnd, academicYear));
 				continue;
 			}
 
@@ -85,7 +84,7 @@ public class DueFeeManager(
 		ProrationPolicySnapshot? prorationPolicy,
 		Guid? prorationPolicyVersionId,
 		DateTime chargeStartDate,
-		DateTime chargeEndDate)
+		DateTime chargeEndDate, AcademicYear academicYear)
 	{
 		var schedule = await scheduleResolver.ResolveAsync(detail);
 		if (!schedule.IsValid || schedule.Installments.Count == 0)
@@ -95,25 +94,23 @@ public class DueFeeManager(
 
 		var annualAmount = customDetail?.Amount ?? detail.Amount;
 		var rows = new List<DueFee>();
-		var allocated = 0m;
+        var weights = schedule.Installments.Select(x => x.AllocationPercentage).ToArray();
+        var scheduled = AssignmentAmountCalculator.Allocate(annualAmount, weights);
+        var rule = prorationPolicy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
+            ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null, null);
+        if (detail.IsOneTime) rule = rule with { RuleType = ProrationRuleType.FullCharge };
+        var calculation = AssignmentAmountCalculator.Calculate(prorationCalculator, rule, annualAmount,
+            academicYear.StartDate.Date, academicYear.EndDate.Date, chargeStartDate, chargeEndDate);
+        var obligations = AssignmentAmountCalculator.Allocate(calculation.ProratedAmount, weights);
 		for (var i = 0; i < schedule.Installments.Count; i++)
 		{
 			var installment = schedule.Installments[i];
-			var scheduledAmount = i == schedule.Installments.Count - 1
-				? Math.Round(annualAmount - allocated, 2, MidpointRounding.AwayFromZero)
-				: customDetail != null
-					? Math.Round(annualAmount / schedule.Installments.Count, 2, MidpointRounding.AwayFromZero)
-					: Math.Round(annualAmount * installment.AllocationPercentage / 100m, 2, MidpointRounding.AwayFromZero);
-			allocated += scheduledAmount;
-
-			var calculation = CalculateProration(
-				detail, scheduledAmount, installment.CoverageStartDate, installment.CoverageEndDate,
-				chargeStartDate, chargeEndDate, prorationPolicy);
+			var scheduledAmount = scheduled[i];
 			var dueDate = installment.DueDate;
 			rows.Add(new DueFee(
 				id: GuidGenerator.Create(), tenantId: CurrentTenant.Id, studentId: studentId,
 				feeHeadId: detail.FeeHeadId, month: ToMonthEnum(dueDate.Month), year: dueDate.Year,
-				isOneTime: detail.IsOneTime, amount: calculation.ProratedAmount, dueDate: dueDate,
+				isOneTime: detail.IsOneTime, amount: obligations[i], dueDate: dueDate,
 				feeStructureDetailId: detail.Id, paymentTermId: schedule.PaymentTermId,
 				paymentTermVersionId: schedule.PaymentTermVersionId, paymentTermInstallmentId: null,
 				installmentSequence: installment.Sequence, installmentName: installment.Name,
@@ -132,6 +129,7 @@ public class DueFeeManager(
 				prorationRuleType: calculation.RuleType,
 				prorationRoundingMode: calculation.RoundingMode,
 				prorationExplanation: calculation.Explanation));
+			rows[^1].PreserveAllocation(installment.AllocationPercentage);
 		}
 
 		return rows;

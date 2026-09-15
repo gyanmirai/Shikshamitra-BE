@@ -66,3 +66,7 @@ Run these commands from the `Shikshamitra-BE` repo root:
 powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module finance
 git diff --check
 ```
+
+## Student fee assignment
+
+The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.

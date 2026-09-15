@@ -6,7 +6,10 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
 public class BulkAssignStudentFeeStructureDto
 {
-	[Required, MinLength(1)]
+    public Guid AcademicYearId { get; set; }
+    public List<AssignStudentFeeStructureDto> Items { get; set; } = [];
+
+	[Required]
 	public List<Guid> StudentIds { get; set; } = new();
 
 	[Required]

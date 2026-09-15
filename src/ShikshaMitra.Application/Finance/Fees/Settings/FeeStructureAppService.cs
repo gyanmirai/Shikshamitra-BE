@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.Managers;
@@ -205,4 +205,5 @@ public partial class FeeStructureAppService(
 	{
 		if (!preview.IsReady) throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration).WithData("Errors", preview.Errors);
 	}
+
 }

@@ -1,10 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
 public class StudentFeeStructureResponseDto
 {
+    public StudentFeeAssignmentPreviewDto? Assignment { get; set; }
+    public List<string> Warnings { get; set; } = [];
+
 	public Guid StudentFeeStructureId { get; set; }
 
 	public Guid? StandardFeeStructureId { get; set; }
@@ -15,8 +18,8 @@ public class StudentFeeStructureResponseDto
 
 	public string StructureName { get; set; }
 	public Guid AcademicYearId { get; set; }
-	public Guid ConcessionPolicyId { get; set; }
-	public Guid ConcessionPolicyVersionId { get; set; }
+	public Guid? ConcessionPolicyId { get; set; }
+	public Guid? ConcessionPolicyVersionId { get; set; }
 	public string ConcessionPolicyName { get; set; } = string.Empty;
 	public string ConcessionPolicyCode { get; set; } = string.Empty;
 	public int ConcessionPolicyVersion { get; set; }

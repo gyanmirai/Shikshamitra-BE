@@ -6,6 +6,11 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
 public class AssignStudentFeeStructureDto
 {
+    public Guid AcademicYearId { get; set; }
+    public string? PreviewToken { get; set; }
+    public string? OverrideReason { get; set; }
+    public List<AssignmentServicePeriodDto> ServicePeriods { get; set; } = [];
+
 	[Required]
 	public Guid StudentId { get; set; }
 

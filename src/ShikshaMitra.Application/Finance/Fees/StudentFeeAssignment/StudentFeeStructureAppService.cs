@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Policies;
@@ -12,10 +15,15 @@ using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Transport;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
@@ -30,295 +38,120 @@ public partial class StudentFeeStructureAppService(
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IDueFeeRepository dueFeeRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
-	IRepository<ConcessionPolicy, Guid> concessionPolicyRepository,
-	IRepository<RefundPolicy, Guid> refundPolicyRepository,
-	IRepository<ProrationPolicy, Guid> prorationPolicyRepository,
 	IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
+	IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.PaymentTerm, Guid> paymentTermRepository,
+	IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.PaymentTermVersion, Guid> paymentTermVersionRepository,
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<TransportMember, Guid> transportMemberRepository,
+	IRepository<TransportMemberRouteAssignment, Guid> transportRouteRepository,
+	IUserScopeService userScopeService,
 	DueFeeManager dueFeeManager,
-	FinanceScopeAccessService financeScopeAccessService,
-	IRepository<CollectionPolicy, Guid> collectionPolicyRepository
+	IDataProtectionProvider protectionProvider,
+	IUnitOfWorkManager unitOfWorkManager
 ) : ApplicationService, IStudentFeeStructureAppService
 {
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.Add)]
+	private const string AssignPermission = ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.Add;
+	private const string ViewPermission = ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.View;
+	private IDataProtector Protector => protectionProvider.CreateProtector("Finance.StudentAssignment.v2");
+
+	[Authorize(AssignPermission)]
 	public async Task<StudentFeeAssignmentPreviewDto> PreviewAsync(AssignStudentFeeStructureDto input)
 	{
+		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
+		var prepared = await PrepareAsync(input);
+		prepared.Preview.PreviewToken = Protector.Protect(JsonSerializer.Serialize(new PreviewAssertion(
+			CurrentTenant.Id, CurrentUser.Id, CommandFingerprint(input), prepared.Fingerprint, Clock.Now.AddMinutes(20))));
+		return prepared.Preview;
+	}
+
+	[Authorize(AssignPermission)]
+	public async Task<AssignmentCommitResultDto> AssignAsync(AssignStudentFeeStructureDto input)
+	{
+		ValidateInput(input);
+		try { return await CommitAsync(input); }
+		catch (Exception exception) when (exception.GetType().Name is "DbUpdateException" or "AbpDbConcurrencyException")
+		{
+			// The failed context is disposed before retrieving a concurrent commit.
+			using var retry = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
+			await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, false);
+			var existing = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
+			if (existing != null) return await ExistingResultAsync(existing, CommandFingerprint(input));
+			Logger.LogError(exception, "Assignment commit failed");
+			throw new BusinessException(AssignmentErrorCodes.CommitFailed);
+		}
+	}
+
+	private async Task<AssignmentCommitResultDto> CommitAsync(AssignStudentFeeStructureDto input)
+	{
+		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
+		await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, false);
+		var commandFingerprint = CommandFingerprint(input);
+		var existing = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
+		if (existing != null) return await ExistingResultAsync(existing, commandFingerprint);
+		var prepared = await PrepareAsync(input);
+		PreviewAssertion assertion;
+		try { assertion = JsonSerializer.Deserialize<PreviewAssertion>(Protector.Unprotect(input.PreviewToken ?? ""))!; }
+		catch (Exception ex) when (ex is CryptographicException or JsonException or ArgumentException)
+		{ throw new BusinessException(AssignmentErrorCodes.StalePreview); }
+		if (assertion == null || assertion.TenantId != CurrentTenant.Id || assertion.UserId != CurrentUser.Id ||
+			assertion.Command != commandFingerprint || assertion.Prepared != prepared.Fingerprint || assertion.Expires < Clock.Now)
+			throw new BusinessException(AssignmentErrorCodes.StalePreview);
+		var id = GuidGenerator.Create();
+		var structure = prepared.Structure;
+		var assignment = new StudentFeeStructure(id, CurrentTenant.Id, input.StudentId, structure.Id, input.AcademicYearId,
+			null, null, ConcessionFeeHeadScope.EntireFeeStructure, [],
+			structure.CollectionPolicyId, structure.CollectionPolicyVersionId, structure.RefundPolicyId, structure.RefundPolicyVersionId,
+			structure.ProrationPolicyId, structure.ProrationPolicyVersionId, prepared.Preview.ChargeStartDate, prepared.Preview.ChargeEndDate);
+		for (var i = 0; i < prepared.Dues.Count; i++)
+		{
+			prepared.Dues[i].BindAssignment(id);
+			prepared.Preview.Lines[i].DueFeeId = prepared.Dues[i].Id;
+		}
+		assignment.CaptureAssignment(commandFingerprint, JsonSerializer.Serialize(prepared.Preview));
+		await studentFeeStructureRepository.InsertAsync(assignment, autoSave: false);
+		await dueFeeRepository.InsertManyAsync(prepared.Dues, autoSave: false);
 		var student = await studentRepository.GetAsync(input.StudentId);
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
-		var feeStructure = await feeStructureRepository.GetAsync(input.StandardFeeStructureId);
-		if (!feeStructure.IsLocked)
-			throw new BusinessException("Finance:FeeStructureMustBeLocked");
-		if (student.StandardId != feeStructure.StandardId)
-			throw new BusinessException("Finance:FeeStructureStandardMismatch");
-
-		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
-		var academicYear = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
-		if (feeStructure.ConcessionPolicyId.HasValue || feeStructure.ConcessionPolicyVersionId.HasValue)
-			await ValidateConcessionPolicySnapshotAsync(feeStructure, academicYear.Id);
-		await ValidateCollectionPolicySnapshotAsync(feeStructure, academicYear.Id);
-		await ValidateRefundPolicySnapshotAsync(feeStructure, academicYear.Id);
-		var prorationSnapshot = await ValidateProrationPolicySnapshotAsync(feeStructure, academicYear.Id);
-		if (prorationSnapshot != null)
-			await AuthorizationService.CheckAsync(
-				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View);
-		var chargePeriod = await ResolveChargePeriodAsync(
-			input.ChargeStartDate, input.ChargeEndDate, input.ChargePeriodSource,
-			input.ChargePeriodSourceReferenceId, input.ChargePeriodOverrideReason, academicYear);
-
-		var details = await feeStructureDetailRepository.GetListAsync(x => x.FeeStructureId == feeStructure.Id);
-		foreach (var detail in details.Where(x => feeStructure.FeeStructureDetails.All(y => y.Id != x.Id)))
-			feeStructure.AddDetail(detail);
-		var lines = await dueFeeManager.GenerateForStudentAsync(
-			student.Id, feeStructure, academicYear, input.SelectedOptionalFeeHeadIds,
-			BuildOptionalDetails(input.FeeHeadDetails), prorationSnapshot?.Snapshot,
-			prorationSnapshot?.Version.Id, chargePeriod.Start, chargePeriod.End);
-		var headIds = lines.Select(x => x.FeeHeadId).Distinct().ToList();
-		var headNames = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id)))
-			.ToDictionary(x => x.Id, x => x.Name);
-		var resultLines = lines.Select(x => new StudentFeeAssignmentPreviewLineDto
-		{
-			FeeHeadId = x.FeeHeadId,
-			FeeHeadName = headNames.GetValueOrDefault(x.FeeHeadId, string.Empty),
-			InstallmentLabel = x.GetDisplayInstallmentLabel(),
-			CoverageStartDate = x.CoverageStartDate,
-			CoverageEndDate = x.CoverageEndDate,
-			ScheduledAmount = x.ScheduledAmount,
-			ProratedAmount = x.OriginalAmount,
-			ReductionAmount = x.ScheduledAmount - x.OriginalAmount,
-			Factor = x.ProrationFactor,
-			RuleType = x.ProrationRuleType?.ToString(),
-			RoundingMode = x.ProrationRoundingMode?.ToString(),
-			Explanation = x.ProrationExplanation
-		}).ToList();
-		return new StudentFeeAssignmentPreviewDto
-		{
-			ProrationPolicyId = prorationSnapshot?.Policy.Id,
-			ProrationPolicyVersionId = prorationSnapshot?.Version.Id,
-			ChargeStartDate = chargePeriod.Start,
-			ChargeEndDate = chargePeriod.End,
-			ScheduledTotal = resultLines.Sum(x => x.ScheduledAmount),
-			ProratedTotal = resultLines.Sum(x => x.ProratedAmount),
-			ReductionTotal = resultLines.Sum(x => x.ReductionAmount),
-			Lines = resultLines
-		};
+		if (student.AcademicYearId == input.AcademicYearId) student.AssignFeeStructure(structure.Id);
+		await uow.CompleteAsync();
+		return new AssignmentCommitResultDto { AssignmentId = id, Assignment = prepared.Preview };
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.Add)]
-	public async Task AssignAsync(AssignStudentFeeStructureDto input)
+	private async Task<AssignmentCommitResultDto> ExistingResultAsync(StudentFeeStructure existing, string fingerprint)
 	{
-		var student = await studentRepository.GetAsync(input.StudentId)
-			?? throw new BusinessException("Student with given id does not exist.");
-
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
-
-		var feeStructure = await feeStructureRepository.GetAsync(input.StandardFeeStructureId)
-			?? throw new BusinessException("Fee structure with given id does not exist.");
-		if (!feeStructure.IsLocked)
-			throw new BusinessException("Finance:FeeStructureMustBeLocked");
-		if (student.StandardId != feeStructure.StandardId)
-			throw new BusinessException("Finance:FeeStructureStandardMismatch")
-				.WithData("StudentStandardId", student.StandardId)
-				.WithData("FeeStructureStandardId", feeStructure.StandardId);
-		var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
-		var academicYear = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
-		// New structures can be assigned without concessions. Preserve and validate legacy attachments.
-		(ConcessionPolicy Policy, FinancePolicyVersion Version)? concessionSnapshot =
-			feeStructure.ConcessionPolicyId.HasValue || feeStructure.ConcessionPolicyVersionId.HasValue
-				? await ValidateConcessionPolicySnapshotAsync(feeStructure, academicYear.Id)
-				: null;
-		var collectionSnapshot = await ValidateCollectionPolicySnapshotAsync(feeStructure, academicYear.Id);
-		var refundSnapshot = await ValidateRefundPolicySnapshotAsync(feeStructure, academicYear.Id);
-		var prorationSnapshot = await ValidateProrationPolicySnapshotAsync(feeStructure, academicYear.Id);
-		var chargePeriod = await ResolveChargePeriodAsync(
-			input.ChargeStartDate, input.ChargeEndDate, input.ChargePeriodSource,
-			input.ChargePeriodSourceReferenceId, input.ChargePeriodOverrideReason, academicYear);
-		var requestFingerprint = BuildAssignmentFingerprint(
-			input.StandardFeeStructureId, input.SelectedOptionalFeeHeadIds, input.FeeHeadDetails,
-			chargePeriod.Start, chargePeriod.End, chargePeriod.Source,
-			chargePeriod.SourceReferenceId, chargePeriod.OverrideReason);
-		var existingAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
-			x.StudentId == student.Id && x.AcademicYearId == academicYear.Id);
-		if (existingAssignment != null)
+		if (existing.AssignmentRequestFingerprint != fingerprint || existing.AssignmentSnapshotJson == null)
+			throw new BusinessException(AssignmentErrorCodes.AlreadyAssigned);
+		var snapshot = JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(existing.AssignmentSnapshotJson)!;
+		var dues = await dueFeeRepository.GetListAsync(d => d.StudentFeeStructureId == existing.Id && d.StudentId == existing.StudentId);
+		foreach (var line in snapshot.Lines)
 		{
-			if (string.Equals(
-				existingAssignment.AssignmentRequestFingerprint,
-				requestFingerprint,
-				StringComparison.Ordinal))
-				return;
-			throw new BusinessException(
-				"A fee structure is already assigned to this student for the selected academic year.");
+			var due = dues.FirstOrDefault(d => d.Id == line.DueFeeId);
+			if (due == null) throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
+			line.PaidAmount = due.PaidAmount;
+			line.OutstandingAmount = due.OutstandingAmount;
 		}
-
-		student.AssignFeeStructure(input.StandardFeeStructureId);
-		var assignmentId = GuidGenerator.Create();
-		await studentFeeStructureRepository.InsertAsync(
-			new StudentFeeStructure(
-				id: assignmentId,
-				tenantId: CurrentTenant.Id,
-				studentId: student.Id,
-				feeStructureStandardId: feeStructure.Id,
-				academicYearId: academicYear.Id,
-				concessionPolicyId: concessionSnapshot?.Policy.Id ?? Guid.Empty,
-				concessionPolicyVersionId: concessionSnapshot?.Version.Id ?? Guid.Empty,
-				concessionFeeHeadScope: feeStructure.ConcessionFeeHeadScope,
-				concessionApplicableFeeHeadIds: feeStructure.GetConcessionApplicableFeeHeadIds(),
-				collectionPolicyId: collectionSnapshot.Policy.Id,
-				collectionPolicyVersionId: collectionSnapshot.Version.Id,
-				refundPolicyId: refundSnapshot?.Policy.Id,
-				refundPolicyVersionId: refundSnapshot?.Version.Id,
-				prorationPolicyId: prorationSnapshot?.Policy.Id,
-				prorationPolicyVersionId: prorationSnapshot?.Version.Id,
-				chargeStartDate: chargePeriod.Start,
-				chargeEndDate: chargePeriod.End,
-				chargePeriodSource: chargePeriod.Source,
-				chargePeriodSourceReferenceId: chargePeriod.SourceReferenceId,
-				chargePeriodOverrideReason: chargePeriod.OverrideReason,
-				assignmentRequestFingerprint: requestFingerprint),
-			autoSave: false);
-
-		var details = await feeStructureDetailRepository.GetListAsync(d => d.FeeStructureId == feeStructure.Id);
-		foreach (var detail in details.Where(d => feeStructure.FeeStructureDetails.All(x => x.Id != d.Id)))
-			feeStructure.AddDetail(detail);
-
-		var optionalDetails = BuildOptionalDetails(input.FeeHeadDetails);
-
-		var dueFees = await dueFeeManager.GenerateForStudentAsync(
-			student.Id, feeStructure, academicYear, input.SelectedOptionalFeeHeadIds, optionalDetails,
-			prorationSnapshot?.Snapshot, prorationSnapshot?.Version.Id, chargePeriod.Start, chargePeriod.End);
-
-		await dueFeeRepository.InsertManyAsync(dueFees, autoSave: false);
-		await CurrentUnitOfWork.SaveChangesAsync();
+		return new AssignmentCommitResultDto { AssignmentId = existing.Id, Outcome = "AlreadyAssigned",
+			Assignment = snapshot };
 	}
 
-	private async Task<(ConcessionPolicy Policy, FinancePolicyVersion Version)> ValidateConcessionPolicySnapshotAsync(
-		FeeStructure feeStructure, Guid academicYearId)
+	private static void ValidateInput(AssignStudentFeeStructureDto input)
 	{
-		if (!feeStructure.ConcessionPolicyId.HasValue || !feeStructure.ConcessionPolicyVersionId.HasValue)
-			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
-		var policy = await concessionPolicyRepository.FindAsync(feeStructure.ConcessionPolicyId.Value)
-			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotFound);
-		if (policy.Status != ConcessionPolicyStatus.Active)
-			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotActive);
-		if (policy.AcademicYearId != academicYearId)
-			throw new BusinessException(ConcessionPolicyErrorCodes.AcademicYearMismatch);
-		var version = await financePolicyVersionRepository.FindAsync(feeStructure.ConcessionPolicyVersionId.Value)
-			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
-		if (version.PolicyType != "concession" || version.PolicyId != policy.Id || version.AcademicYearId != academicYearId)
-			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
-		return (policy, version);
+		if (input.StudentId == Guid.Empty || input.AcademicYearId == Guid.Empty || input.StandardFeeStructureId == Guid.Empty ||
+			input.SelectedOptionalFeeHeadIds == null || input.FeeHeadDetails == null || input.ServicePeriods == null ||
+			input.FeeHeadDetails.Any(x => x == null) || input.ServicePeriods.Any(x => x == null) ||
+			input.SelectedOptionalFeeHeadIds.Count > 200 || input.FeeHeadDetails.Count > 200 || input.ServicePeriods.Count > 200 ||
+			input.SelectedOptionalFeeHeadIds.Distinct().Count() != input.SelectedOptionalFeeHeadIds.Count ||
+			input.FeeHeadDetails.Select(x => x.FeeHeadId).Distinct().Count() != input.FeeHeadDetails.Count ||
+			input.ServicePeriods.Select(x => x.FeeHeadId).Distinct().Count() != input.ServicePeriods.Count ||
+			input.FeeHeadDetails.Any(x => x.Amount < 0 || decimal.Round(x.Amount, 2) != x.Amount) || input.OverrideReason?.Length > 500)
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 	}
 
-	private async Task<(CollectionPolicy Policy, FinancePolicyVersion Version)> ValidateCollectionPolicySnapshotAsync(
-		FeeStructure feeStructure, Guid academicYearId)
-	{
-		if (!feeStructure.CollectionPolicyId.HasValue || !feeStructure.CollectionPolicyVersionId.HasValue)
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.PolicyNotAttached);
-		}
-		var policy = await collectionPolicyRepository.FindAsync(feeStructure.CollectionPolicyId.Value)
-			?? throw new BusinessException(CollectionPolicyErrorCodes.PolicyNotFound);
-		if (policy.Status != CollectionPolicyStatus.Active)
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.PolicyNotActive);
-		}
-		if (policy.AcademicYearId != academicYearId)
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.AcademicYearMismatch);
-		}
-		var version = await financePolicyVersionRepository.FindAsync(feeStructure.CollectionPolicyVersionId.Value)
-			?? throw new BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
-		if (version.PolicyType != "collection" || version.PolicyId != policy.Id || version.AcademicYearId != academicYearId)
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
-		}
-		return (policy, version);
-	}
-
-	private async Task<(RefundPolicy Policy, FinancePolicyVersion Version)?> ValidateRefundPolicySnapshotAsync(
-		FeeStructure feeStructure, Guid academicYearId)
-	{
-		if (!feeStructure.RefundPolicyId.HasValue && !feeStructure.RefundPolicyVersionId.HasValue)
-			return null;
-		if (!feeStructure.RefundPolicyId.HasValue || !feeStructure.RefundPolicyVersionId.HasValue)
-			throw new BusinessException(RefundPolicyErrorCodes.PolicyVersionNotFound);
-		var policy = await refundPolicyRepository.FindAsync(feeStructure.RefundPolicyId.Value)
-			?? throw new BusinessException(RefundPolicyErrorCodes.PolicyNotFound);
-		if (policy.Status != RefundPolicyStatus.Active)
-			throw new BusinessException(RefundPolicyErrorCodes.PolicyNotActive);
-		if (policy.AcademicYearId != academicYearId)
-			throw new BusinessException(RefundPolicyErrorCodes.AcademicYearMismatch);
-		var version = await financePolicyVersionRepository.FindAsync(feeStructure.RefundPolicyVersionId.Value)
-			?? throw new BusinessException(RefundPolicyErrorCodes.PolicyVersionNotFound);
-		if (version.PolicyType != "refund" || version.PolicyId != policy.Id || version.AcademicYearId != academicYearId)
-			throw new BusinessException(RefundPolicyErrorCodes.PolicyVersionNotFound);
-		return (policy, version);
-	}
-
-	private async Task<(ProrationPolicy Policy, FinancePolicyVersion Version, ProrationPolicySnapshot Snapshot)?>
-		ValidateProrationPolicySnapshotAsync(FeeStructure feeStructure, Guid academicYearId)
-	{
-		if (!feeStructure.ProrationPolicyId.HasValue && !feeStructure.ProrationPolicyVersionId.HasValue)
-			return null;
-		if (!feeStructure.ProrationPolicyId.HasValue || !feeStructure.ProrationPolicyVersionId.HasValue)
-			throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
-		var policy = await prorationPolicyRepository.FindAsync(feeStructure.ProrationPolicyId.Value)
-			?? throw new BusinessException(ProrationPolicyErrorCodes.PolicyNotFound);
-		if (policy.Status != ProrationPolicyStatus.Active)
-			throw new BusinessException(ProrationPolicyErrorCodes.PolicyNotActive);
-		if (policy.AcademicYearId != academicYearId)
-			throw new BusinessException(ProrationPolicyErrorCodes.AcademicYearMismatch);
-		var version = await financePolicyVersionRepository.FindAsync(feeStructure.ProrationPolicyVersionId.Value)
-			?? throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
-		if (version.PolicyType != "proration" || version.PolicyId != policy.Id || version.AcademicYearId != academicYearId)
-			throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
-		var snapshot = System.Text.Json.JsonSerializer.Deserialize<ProrationPolicySnapshot>(version.SnapshotJson)
-			?? throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
-		return (policy, version, snapshot);
-	}
-
-	private async Task<(DateTime Start, DateTime End, ChargePeriodSource Source, Guid? SourceReferenceId, string? OverrideReason)>
-		ResolveChargePeriodAsync(
-			DateTime? requestedStart,
-			DateTime? requestedEnd,
-			string? requestedSource,
-			Guid? sourceReferenceId,
-			string? overrideReason,
-			AcademicYear academicYear)
-	{
-		if (!Enum.TryParse<ChargePeriodSource>(requestedSource, true, out var source))
-			throw new BusinessException(ProrationPolicyErrorCodes.InvalidChargePeriod);
-		var start = (requestedStart ?? academicYear.StartDate).Date;
-		var end = (requestedEnd ?? academicYear.EndDate).Date;
-		if (start > end || start < academicYear.StartDate.Date || end > academicYear.EndDate.Date)
-			throw new BusinessException(ProrationPolicyErrorCodes.InvalidChargePeriod);
-		if (source == ChargePeriodSource.ManualOverride)
-		{
-			await AuthorizationService.CheckAsync(
-				ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.OverrideChargePeriod);
-			if (string.IsNullOrWhiteSpace(overrideReason))
-				throw new BusinessException(ProrationPolicyErrorCodes.ManualOverrideReasonRequired);
-		}
-		return (start, end, source, sourceReferenceId,
-			string.IsNullOrWhiteSpace(overrideReason) ? null : overrideReason.Trim());
-	}
-
-	private static string BuildAssignmentFingerprint(
-		Guid feeStructureId,
-		IEnumerable<Guid> selectedOptionalFeeHeadIds,
-		IEnumerable<StudentFeeHeadDetailDto> feeHeadDetails,
-		DateTime chargeStart,
-		DateTime chargeEnd,
-		ChargePeriodSource source,
-		Guid? sourceReferenceId,
-		string? overrideReason)
-	{
-		var selected = string.Join(",", selectedOptionalFeeHeadIds.Distinct().Order());
-		var details = string.Join(";", feeHeadDetails.OrderBy(x => x.FeeHeadId).Select(x => string.Join("/",
-			x.FeeHeadId, x.Amount, x.PayableMonth, x.PayableYear,
-			x.StartPayableMonth, x.StartPayableYear, x.EndPayableMonth, x.EndPayableYear,
-			x.ChargeStartDate?.Date.ToString("O"), x.ChargeEndDate?.Date.ToString("O"))));
-		var canonical = string.Join("|", feeStructureId, selected, details,
-			chargeStart.Date.ToString("O"), chargeEnd.Date.ToString("O"), source,
-			sourceReferenceId, overrideReason?.Trim());
-		return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
-	}
+	private static string Hash(object value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
+	private static string CommandFingerprint(AssignStudentFeeStructureDto input) => Hash(new {
+		input.StudentId, input.AcademicYearId, input.StandardFeeStructureId,
+		Heads = input.SelectedOptionalFeeHeadIds.Order().ToArray(), Details = input.FeeHeadDetails.OrderBy(x => x.FeeHeadId).ToArray(),
+		Periods = input.ServicePeriods.OrderBy(x => x.FeeHeadId).ToArray(), input.ChargeStartDate, input.ChargeEndDate,
+		input.ChargePeriodSource, input.ChargePeriodSourceReferenceId, input.ChargePeriodOverrideReason, input.OverrideReason });
+	private sealed record PreviewAssertion(Guid? TenantId, Guid? UserId, string Command, string Prepared, DateTime Expires);
+	private sealed record PreparedAssignment(FeeStructure Structure, StudentFeeAssignmentPreviewDto Preview, List<DueFee> Dues, string Fingerprint);
 }

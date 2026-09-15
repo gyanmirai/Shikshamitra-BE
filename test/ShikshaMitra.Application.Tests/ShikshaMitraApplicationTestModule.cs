@@ -172,6 +172,7 @@ public class ShikshaMitraApplicationTestModule : AbpModule
         });
 
         context.Services.AddAlwaysDisableUnitOfWorkTransaction();
+        context.Services.AddSingleton<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider());
         context.Services.AddHttpClient();
         ConfigureInMemorySqlite(context.Services);
 

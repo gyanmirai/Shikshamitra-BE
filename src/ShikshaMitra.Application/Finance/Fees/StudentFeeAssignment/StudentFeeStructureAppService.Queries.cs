@@ -1,221 +1,132 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using ShikshaMitra.Finance.Fees.FeeCollection;
-using Volo.Abp.Domain.Repositories;
-using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
-using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using System.Text.Json;
-using ShikshaMitra.Domain.Finance.Policies;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
+using Volo.Abp;
+using Volo.Abp.Application.Dtos;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public partial class StudentFeeStructureAppService
 {
-	[Microsoft.AspNetCore.Authorization.Authorize(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.View)]
+	[Authorize(AssignPermission)]
+	public async Task<List<AssignmentTransportSourceDto>> GetTransportSourcesAsync(Guid studentId, Guid academicYearId)
+	{
+		await RequireEnrollmentAsync(studentId, academicYearId, true);
+		var year = await academicYearRepository.GetAsync(academicYearId);
+		var members = (await transportMemberRepository.GetListAsync(x => x.StudentId == studentId)).Select(x => x.Id).ToList();
+		var routes = await transportRouteRepository.GetListAsync(x => members.Contains(x.MemberId) && x.EffectiveFrom <= year.EndDate && (!x.EffectiveTo.HasValue || x.EffectiveTo >= year.StartDate));
+		return routes.OrderBy(x => x.EffectiveFrom).Select(x => new AssignmentTransportSourceDto {
+			Id = x.Id, Label = $"Transport service from {x.EffectiveFrom:dd MMM yyyy}",
+			StartDate = x.EffectiveFrom.Date < year.StartDate.Date ? year.StartDate.Date : x.EffectiveFrom.Date,
+			EndDate = x.EffectiveTo?.Date < year.EndDate.Date ? x.EffectiveTo.Value.Date : year.EndDate.Date
+		}).ToList();
+	}
+	[Authorize(ViewPermission)]
+	public async Task<PagedResultDto<AssignmentStudentDto>> GetStudentsAsync(AssignmentStudentListInput input)
+	{
+		if (input.MaxResultCount is < 1 or > 100 || input.SkipCount < 0 || input.Search?.Length > 128)
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+		var enrollments = await ScopedEnrollmentsAsync(input.AcademicYearId);
+		if (input.StandardId.HasValue) enrollments = enrollments.Where(e => e.StandardId == input.StandardId);
+		if (input.DivisionId.HasValue) enrollments = enrollments.Where(e => e.DivisionId == input.DivisionId);
+		var standards = await standardRepository.GetQueryableAsync();
+		if (input.BoardId.HasValue) enrollments = enrollments.Where(e => standards.Any(s => s.Id == e.StandardId && s.EducationMediumStage.EducationMedium.EducationBoardId == input.BoardId));
+		if (input.EducationMediumId.HasValue) enrollments = enrollments.Where(e => standards.Any(s => s.Id == e.StandardId && s.EducationMediumStage.EducationMediumId == input.EducationMediumId));
+		var students = await studentRepository.GetQueryableAsync();
+		var assignments = await studentFeeStructureRepository.GetQueryableAsync();
+		var rows = from e in enrollments join s in students on e.StudentId equals s.Id
+			select new AssignmentStudentDto { EnrollmentId = e.Id, StudentId = s.Id, StandardId = e.StandardId, DivisionId = e.DivisionId,
+				StudentName = (s.FirstName ?? "") + " " + (s.LastName ?? ""), IsActive = e.IsActive,
+				IsFeeStructureAssigned = assignments.Any(a => a.StudentId == s.Id && a.AcademicYearId == input.AcademicYearId) };
+		if (!string.IsNullOrWhiteSpace(input.Search)) rows = rows.Where(x => x.StudentName.Contains(input.Search.Trim()));
+		return new PagedResultDto<AssignmentStudentDto>(await AsyncExecuter.CountAsync(rows),
+			await AsyncExecuter.ToListAsync(rows.OrderBy(x => x.StudentName).ThenBy(x => x.EnrollmentId).Skip(input.SkipCount).Take(input.MaxResultCount)));
+	}
+
+	[Authorize(AssignPermission)]
+	public async Task<List<AssignmentCandidateDto>> GetCandidatesAsync(Guid studentId, Guid academicYearId)
+	{
+		var enrollment = await RequireEnrollmentAsync(studentId, academicYearId, true);
+		var metadataIds = (await feeStructureMetadataRepository.GetListAsync(x => x.AcademicYearId == academicYearId)).Select(x => x.Id).ToList();
+		var structures = await feeStructureRepository.GetListAsync(x => x.IsLocked && x.StandardId == enrollment.StandardId && metadataIds.Contains(x.FeeStructureMetadataId));
+		var ids = structures.Select(x => x.Id).ToList();
+		var details = await feeStructureDetailRepository.GetListAsync(x => ids.Contains(x.FeeStructureId));
+		var headIds = details.Select(x => x.FeeHeadId).Distinct().ToList();
+		var heads = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id))).ToDictionary(x => x.Id);
+		return structures.OrderBy(x => x.Name).ThenByDescending(x => x.RevisionNumber).Select(s => new AssignmentCandidateDto {
+			Id = s.Id, Name = s.Name, RevisionNumber = s.RevisionNumber, AcademicYearId = academicYearId, StandardId = s.StandardId,
+			Total = details.Where(d => d.FeeStructureId == s.Id).Sum(d => d.Amount),
+			Heads = details.Where(d => d.FeeStructureId == s.Id).Select(d => new AssignmentHeadDto {
+				FeeHeadId = d.FeeHeadId, FeeHeadName = heads.GetValueOrDefault(d.FeeHeadId)?.Name ?? "Fee head", SupportsTransportSource = heads.GetValueOrDefault(d.FeeHeadId)?.Module == ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport, IsOptional = d.IsOptional,
+				IsOneTime = d.IsOneTime, Included = !d.IsOptional, ConfiguredAmount = d.Amount, EffectiveAmount = d.Amount,
+				AmountBasis = d.IsOneTime ? "OneTime" : "AnnualTotal", PaymentTermId = d.PaymentTermId, PaymentTermVersionId = d.PaymentTermVersionId }).ToList()
+		}).ToList();
+	}
+
+	[Authorize(ViewPermission)]
 	public async Task<StudentFeeStructureResponseDto> GetByStudentIdAsync(Guid studentId, Guid academicYearId)
 	{
-		if (academicYearId == Guid.Empty)
-			throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.AcademicYearRequired);
-		var student = await studentRepository.GetAsync(studentId)
-			?? throw new Volo.Abp.BusinessException("Student with given id does not exist.");
-
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
-
-		var assignment    = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
-			x.StudentId == studentId && x.AcademicYearId == academicYearId);
-		var feeStructureId = assignment?.FeeStructureStandardId ?? student.FeeStructureId;
-
-		if (feeStructureId == null)
-			throw new Volo.Abp.BusinessException("No fee structure has been assigned to this student.");
-
-		var feeStructure = await feeStructureRepository.GetAsync(feeStructureId.Value)
-			?? throw new Volo.Abp.BusinessException("Assigned fee structure could not be found.");
-		if (assignment is null)
-			throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
-		if (assignment.AcademicYearId == Guid.Empty ||
-			assignment.ConcessionPolicyId == Guid.Empty ||
-			assignment.ConcessionPolicyVersionId == Guid.Empty)
+		var enrollment = await RequireEnrollmentAsync(studentId, academicYearId, false);
+		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == studentId && x.AcademicYearId == academicYearId)
+			?? throw new BusinessException(AssignmentErrorCodes.NotAssigned);
+		var result = new StudentFeeStructureResponseDto { StudentFeeStructureId = assignment.Id, StandardFeeStructureId = assignment.FeeStructureStandardId,
+			StudentId = studentId, AcademicYearId = academicYearId, StandardId = enrollment.StandardId ?? Guid.Empty,
+			ConcessionPolicyId = assignment.ConcessionPolicyId, ConcessionPolicyVersionId = assignment.ConcessionPolicyVersionId,
+			RefundPolicyId = assignment.RefundPolicyId, RefundPolicyVersionId = assignment.RefundPolicyVersionId,
+			ProrationPolicyId = assignment.ProrationPolicyId, ProrationPolicyVersionId = assignment.ProrationPolicyVersionId };
+		StudentFeeAssignmentPreviewDto? snapshot = null;
+		if (assignment.AssignmentSnapshotJson != null)
 		{
-			var metadata = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
-			if (!metadata.AcademicYearId.HasValue)
-				throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.AcademicYearMismatch);
-			var attachedPolicy = await ValidateConcessionPolicySnapshotAsync(feeStructure, metadata.AcademicYearId.Value);
-			assignment.RefreshConcessionPolicySnapshot(
-				metadata.AcademicYearId.Value, attachedPolicy.Policy.Id, attachedPolicy.Version.Id,
-				feeStructure.ConcessionFeeHeadScope, feeStructure.GetConcessionApplicableFeeHeadIds());
-			await studentFeeStructureRepository.UpdateAsync(assignment, autoSave: true);
+			try { snapshot = JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(assignment.AssignmentSnapshotJson); }
+			catch (JsonException) { result.Warnings.Add("Historical assignment evidence is unavailable. Canonical obligations are shown without recalculation."); }
 		}
-
-		var dueFees = await GetDueFeesForStudentAsync(studentId, assignment);
-		var selectedFeeHeadIds = dueFees.Select(d => d.FeeHeadId).ToHashSet();
-		var details = await feeStructureDetailRepository.GetListAsync(d => d.FeeStructureId == feeStructureId.Value);
-
-		List<StudentFeeHeadDto> feeHeads;
-		if (dueFees.Count > 0)
+		var dues = await dueFeeRepository.GetListAsync(d => d.StudentFeeStructureId == assignment.Id && d.StudentId == studentId);
+		if (assignment.AssignmentSnapshotJson == null)
 		{
-			feeHeads = await BuildFeeHeadsFromDueFeesAsync(dueFees);
-			EnrichFeeHeadsFromDetails(feeHeads, details, selectedFeeHeadIds);
+			var year = await academicYearRepository.GetAsync(academicYearId);
+			var details = await feeStructureDetailRepository.GetListAsync(x => x.FeeStructureId == assignment.FeeStructureStandardId);
+			var detailIds = details.Select(d => d.Id).ToList();
+			var legacy = await dueFeeRepository.GetListAsync(d => d.StudentId == studentId && d.StudentFeeStructureId == null &&
+				((d.FeeStructureDetailId.HasValue && detailIds.Contains(d.FeeStructureDetailId.Value)) ||
+				(!d.FeeStructureDetailId.HasValue && d.DueDate >= year.StartDate && d.DueDate <= year.EndDate)));
+			dues.AddRange(legacy);
+			result.Warnings.Add("Legacy assignment: historical service facts and optional-head selections were not recorded. Existing dues are shown; no history has been repaired or recalculated.");
 		}
-		else if (details.Count > 0)
-			feeHeads = BuildFeeHeadsFromDetails(details, selectedFeeHeadIds);
-		else
-			feeHeads = [];
-
-		var policyVersion = await financePolicyVersionRepository.FindAsync(assignment.ConcessionPolicyVersionId)
-			?? throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
-		var policySnapshot = JsonSerializer.Deserialize<ConcessionPolicySnapshot>(policyVersion.SnapshotJson)
-			?? throw new Volo.Abp.BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
-		ProrationPolicySnapshot? prorationSnapshot = null;
-		if (assignment.ProrationPolicyVersionId.HasValue)
+		if (snapshot == null)
 		{
-			var prorationVersion = await financePolicyVersionRepository.FindAsync(assignment.ProrationPolicyVersionId.Value)
-				?? throw new Volo.Abp.BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
-			prorationSnapshot = JsonSerializer.Deserialize<ProrationPolicySnapshot>(prorationVersion.SnapshotJson)
-				?? throw new Volo.Abp.BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound);
+			var structure = await feeStructureRepository.FindAsync(assignment.FeeStructureStandardId);
+			var headIds = dues.Select(d => d.FeeHeadId).Distinct().ToList();
+			var names = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id))).ToDictionary(x => x.Id, x => x.Name);
+			snapshot = new StudentFeeAssignmentPreviewDto { StudentId = studentId, AcademicYearId = academicYearId,
+				StructureId = assignment.FeeStructureStandardId, StructureName = structure?.Name ?? "Historical structure", CalculationVersion = "LegacyUnknown",
+				Heads = dues.GroupBy(x => x.FeeHeadId).Select(g => new AssignmentHeadDto { FeeHeadId = g.Key, FeeHeadName = names.GetValueOrDefault(g.Key, "Fee head"),
+					Included = true, Obligation = g.Sum(d => d.OriginalAmount), Verification = "Legacy facts unavailable" }).ToList(),
+				Lines = dues.Select(d => new StudentFeeAssignmentPreviewLineDto { DueFeeId = d.Id, FeeHeadId = d.FeeHeadId, FeeHeadName = names.GetValueOrDefault(d.FeeHeadId, "Fee head"),
+					InstallmentLabel = d.GetDisplayInstallmentLabel(), DueDate = d.DueDate, DemandDate = d.DemandDate,
+					ScheduledAmount = d.ScheduledAmount, ProratedAmount = d.OriginalAmount, PaymentTermVersionId = d.PaymentTermVersionId }).ToList() };
 		}
-
-		return new StudentFeeStructureResponseDto
+		snapshot.ScheduledTotal = snapshot.Lines.Sum(x => x.ScheduledAmount);
+		snapshot.ProratedTotal = snapshot.Lines.Sum(x => x.ProratedAmount);
+		snapshot.ReductionTotal = snapshot.ScheduledTotal - snapshot.ProratedTotal;
+		foreach (var line in snapshot.Lines)
 		{
-			StudentFeeStructureId  = assignment?.Id ?? feeStructure.Id,
-			StandardFeeStructureId = feeStructure.Id,
-			StudentId              = studentId,
-			StandardId             = feeStructure.StandardId,
-			StructureName          = feeStructure.Name,
-			AcademicYearId         = assignment.AcademicYearId,
-			ConcessionPolicyId     = assignment.ConcessionPolicyId,
-			ConcessionPolicyVersionId = assignment.ConcessionPolicyVersionId,
-			ConcessionPolicyName   = policySnapshot.PolicyName,
-			ConcessionPolicyCode   = policySnapshot.PolicyCode,
-			ConcessionPolicyVersion = policySnapshot.Version,
-			ConcessionValueSource = policySnapshot.ValueSource.ToString(),
-			ConcessionCalculationMethod = policySnapshot.CalculationMethod.ToString(),
-			ConcessionPercentageValue = policySnapshot.PercentageValue,
-			ConcessionFixedAmount = policySnapshot.FixedAmount,
-			MaximumConcessionPercentage = policySnapshot.MaximumPercentage,
-			MaximumConcessionFixedAmount = policySnapshot.MaximumFixedAmount,
-			ConcessionFeeHeadScope = assignment.ConcessionFeeHeadScope.ToString(),
-			ConcessionApplicableFeeHeadIds = assignment.GetConcessionApplicableFeeHeadIds().ToList(),
-			ConcessionApplyOn = policySnapshot.ApplyOn.ToString(),
-			ProrationPolicyId = assignment.ProrationPolicyId,
-			ProrationPolicyVersionId = assignment.ProrationPolicyVersionId,
-			ProrationPolicyName = prorationSnapshot?.PolicyName,
-			ProrationPolicyCode = prorationSnapshot?.PolicyCode,
-			ProrationPolicyVersion = prorationSnapshot?.Version,
-			ChargeStartDate = assignment.ChargeStartDate == DateTime.MinValue ? null : assignment.ChargeStartDate,
-			ChargeEndDate = assignment.ChargeEndDate == DateTime.MinValue ? null : assignment.ChargeEndDate,
-			ChargePeriodSource = assignment.ChargePeriodSource.ToString(),
-			FeeHeads               = feeHeads,
-		};
+			var due = dues.FirstOrDefault(d => d.Id == line.DueFeeId);
+			if (due == null) { result.Warnings.Add("An obligation referenced by the assignment is unavailable; reconciliation is required."); continue; }
+			line.PaidAmount = due.PaidAmount;
+			line.OutstandingAmount = due.OutstandingAmount;
+		}
+		result.Assignment = snapshot;
+		result.StructureName = snapshot.StructureName;
+		result.ChargeStartDate = snapshot.ChargeStartDate;
+		result.ChargeEndDate = snapshot.ChargeEndDate;
+		result.FeeHeads = snapshot.Heads.Where(h => h.Included).Select(h => new StudentFeeHeadDto {
+			FeeHeadId = h.FeeHeadId, FeeHeadName = h.FeeHeadName, Amount = h.Obligation,
+			IsSelected = true, IsOptional = h.IsOptional, IsOneTime = h.IsOneTime, SelectedAmount = h.EffectiveAmount }).ToList();
+		return result;
 	}
-
-	private async Task<List<DueFee>> GetDueFeesForStudentAsync(Guid studentId, StudentFeeStructure? assignment)
-	{
-		var queryable = await dueFeeRepository.GetQueryableAsync();
-		var applicableIds = assignment?.GetConcessionApplicableFeeHeadIds().ToHashSet() ?? [];
-		return queryable.Where(d => d.StudentId == studentId && applicableIds.Contains(d.FeeHeadId))
-			.OrderBy(d => d.Year).ThenBy(d => d.Month).ToList();
-	}
-
-	private async Task<List<StudentFeeHeadDto>> BuildFeeHeadsFromDueFeesAsync(List<DueFee> dueFees)
-	{
-		var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
-		var feeHeads   = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
-		var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id);
-
-		return feeHeadIds.Select(feeHeadId =>
-		{
-			var lines = dueFees.Where(d => d.FeeHeadId == feeHeadId).OrderBy(l => l.Year).ThenBy(l => l.Month).ToList();
-			feeHeadMap.TryGetValue(feeHeadId, out var feeHead);
-
-			var isOneTime  = lines.All(l => l.IsOneTime);
-			var firstLine  = lines.FirstOrDefault();
-			var lastLine   = lines.LastOrDefault();
-
-			return new StudentFeeHeadDto
-			{
-				FeeHeadId    = feeHeadId,
-				FeeHeadName  = feeHead?.Name ?? string.Empty,
-				CategoryName = feeHead?.FeeCategory?.Name ?? string.Empty,
-				Amount       = (decimal)lines.Sum(l => l.OriginalAmount),
-				IsOptional   = false,
-				IsOneTime    = isOneTime,
-				IsSelected   = true,
-				SelectedAmount      = firstLine != null ? (decimal)firstLine.OriginalAmount : 0m,
-				PayableMonth        = isOneTime && firstLine != null ? firstLine.Month : null,
-				PayableYear         = isOneTime && firstLine != null ? firstLine.Year : null,
-				StartPayableMonth   = !isOneTime && firstLine != null ? firstLine.Month : null,
-				StartPayableYear    = !isOneTime && firstLine != null ? firstLine.Year : null,
-				EndPayableMonth     = !isOneTime && lastLine != null ? lastLine.Month : null,
-				EndPayableYear      = !isOneTime && lastLine != null ? lastLine.Year : null,
-			};
-		}).ToList();
-	}
-
-	private static List<StudentFeeHeadDto> BuildFeeHeadsFromDetails(
-		List<FeeStructureDetail> details, HashSet<Guid> selectedFeeHeadIds)
-		=> details.GroupBy(d => d.FeeHeadId).Select(group =>
-		{
-			var detail = group.First();
-			return new StudentFeeHeadDto
-			{
-				FeeHeadId    = detail.FeeHeadId,
-				FeeHeadName  = detail.FeeHead?.Name ?? string.Empty,
-				CategoryName = detail.FeeHead?.FeeCategory?.Name ?? string.Empty,
-				Amount       = (decimal)group.Sum(d => d.Amount),
-				IsOptional   = detail.IsOptional,
-				IsOneTime    = detail.IsOneTime,
-				IsSelected   = !detail.IsOptional || selectedFeeHeadIds.Contains(detail.FeeHeadId),
-			};
-		}).ToList();
-
-	private static void EnrichFeeHeadsFromDetails(
-		List<StudentFeeHeadDto> feeHeads, List<FeeStructureDetail> details, HashSet<Guid> selectedFeeHeadIds)
-	{
-		if (details.Count == 0) return;
-		var detailByFeeHead = details.GroupBy(d => d.FeeHeadId).ToDictionary(g => g.Key, g => g.First());
-
-		foreach (var head in feeHeads)
-		{
-			if (!detailByFeeHead.TryGetValue(head.FeeHeadId, out var detail)) continue;
-			head.FeeHeadName  = string.IsNullOrEmpty(head.FeeHeadName) ? detail.FeeHead?.Name ?? string.Empty : head.FeeHeadName;
-			head.CategoryName = string.IsNullOrEmpty(head.CategoryName) ? detail.FeeHead?.FeeCategory?.Name ?? string.Empty : head.CategoryName;
-			head.IsOptional   = detail.IsOptional;
-			head.IsOneTime    = detail.IsOneTime;
-			head.IsSelected   = !detail.IsOptional || selectedFeeHeadIds.Contains(detail.FeeHeadId);
-		}
-
-		foreach (var detailGroup in details.GroupBy(d => d.FeeHeadId))
-		{
-			if (feeHeads.Any(h => h.FeeHeadId == detailGroup.Key)) continue;
-			var detail = detailGroup.First();
-			feeHeads.Add(new StudentFeeHeadDto
-			{
-				FeeHeadId    = detail.FeeHeadId,
-				FeeHeadName  = detail.FeeHead?.Name ?? string.Empty,
-				CategoryName = detail.FeeHead?.FeeCategory?.Name ?? string.Empty,
-				Amount       = (decimal)detailGroup.Sum(d => d.Amount),
-				IsOptional   = detail.IsOptional,
-				IsOneTime    = detail.IsOneTime,
-				IsSelected   = !detail.IsOptional || selectedFeeHeadIds.Contains(detail.FeeHeadId),
-			});
-		}
-	}
-
-	private static List<CustomOptionalFeeHeadDetail> BuildOptionalDetails(
-		IEnumerable<StudentFeeHeadDetailDto>? items) =>
-		items?.Select(fd => new CustomOptionalFeeHeadDetail
-		{
-			FeeHeadId         = fd.FeeHeadId,
-			Amount            = fd.Amount,
-			PayableMonth      = fd.PayableMonth,
-			PayableYear       = fd.PayableYear,
-			StartPayableMonth = fd.StartPayableMonth,
-			StartPayableYear  = fd.StartPayableYear,
-			EndPayableMonth   = fd.EndPayableMonth,
-			EndPayableYear    = fd.EndPayableYear,
-			ChargeStartDate   = fd.ChargeStartDate,
-			ChargeEndDate     = fd.ChargeEndDate,
-		}).ToList() ?? new List<CustomOptionalFeeHeadDetail>();
 }

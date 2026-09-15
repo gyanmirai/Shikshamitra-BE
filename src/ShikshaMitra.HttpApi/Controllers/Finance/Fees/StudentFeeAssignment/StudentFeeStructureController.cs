@@ -15,10 +15,21 @@ public class StudentFeeStructureController(
 	IStudentFeeStructureAppService studentFeeStructureAppService
 ) : AbpController
 {
+	[HttpGet("transport-sources")]
+	public Task<List<AssignmentTransportSourceDto>> GetTransportSourcesAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetTransportSourcesAsync(studentId, academicYearId);
+    [HttpGet("students")]
+    public Task<Volo.Abp.Application.Dtos.PagedResultDto<AssignmentStudentDto>> GetStudentsAsync([FromQuery] AssignmentStudentListInput input) => studentFeeStructureAppService.GetStudentsAsync(input);
+
+    [HttpGet("candidates")]
+    public Task<List<AssignmentCandidateDto>> GetCandidatesAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetCandidatesAsync(studentId, academicYearId);
+
+    [HttpPost("preview-bulk")]
+    public Task<AssignmentBulkPreviewDto> PreviewBulkAsync([FromBody] BulkAssignStudentFeeStructureDto input) => studentFeeStructureAppService.PreviewBulkAsync(input);
+
 	[HttpPost("assign")]
-	public async Task AssignAsync([FromBody] AssignStudentFeeStructureDto input)
+	public async Task<AssignmentCommitResultDto> AssignAsync([FromBody] AssignStudentFeeStructureDto input)
 	{
-		await studentFeeStructureAppService.AssignAsync(input);
+		return await studentFeeStructureAppService.AssignAsync(input);
 	}
 
 	[HttpPost("preview")]

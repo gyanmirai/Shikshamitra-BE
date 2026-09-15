@@ -95,7 +95,9 @@ public class CollectionPolicyResolver(
 				}
 			}
 		}
-		policy ??= await ResolveAsync(feeStructureId);
+		if (assignment != null && policy == null)
+            throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
+        policy ??= await ResolveAsync(feeStructureId);
 
 		var query = await overrideRepository.GetQueryableAsync();
 		var overrideEntity = query

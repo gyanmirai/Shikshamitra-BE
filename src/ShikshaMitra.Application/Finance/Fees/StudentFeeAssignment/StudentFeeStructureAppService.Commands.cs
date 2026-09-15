@@ -2,139 +2,78 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
-using Volo.Abp.Domain.Repositories;
+using Volo.Abp;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public partial class StudentFeeStructureAppService
 {
-	[Microsoft.AspNetCore.Authorization.Authorize(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.Add)]
+	[Authorize(AssignPermission)]
+	public async Task<AssignmentBulkPreviewDto> PreviewBulkAsync(BulkAssignStudentFeeStructureDto input)
+	{
+		var result = new AssignmentBulkPreviewDto();
+		foreach (var item in BulkItems(input))
+		{
+			try { result.Results.Add(new() { StudentId = item.StudentId, Preview = await PreviewAsync(item) }); }
+			catch (BusinessException ex) { result.Results.Add(new() { StudentId = item.StudentId, ErrorCode = ex.Code, ErrorMessage = AssignmentErrorMessage(ex.Code) }); }
+			catch (Exception ex) { Logger.LogWarning(ex, "A bulk assignment preview failed"); result.Results.Add(new() { StudentId = item.StudentId, ErrorCode = AssignmentErrorCodes.InvalidInput, ErrorMessage = "Preview unavailable. Check access and configuration." }); }
+		}
+		return result;
+	}
+
+	[Authorize(AssignPermission)]
 	public async Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(BulkAssignStudentFeeStructureDto input)
 	{
-		var feeStructure = await feeStructureRepository.GetAsync(input.StandardFeeStructureId)
-			?? throw new Volo.Abp.BusinessException("Fee structure with given id does not exist.");
-		if (!feeStructure.IsLocked)
-			throw new Volo.Abp.BusinessException("Finance:FeeStructureMustBeLocked");
-
-		var details = await feeStructureDetailRepository.GetListAsync(d => d.FeeStructureId == feeStructure.Id);
-		foreach (var detail in details.Where(d => feeStructure.FeeStructureDetails.All(x => x.Id != d.Id)))
-			feeStructure.AddDetail(detail);
-
-		var metadata     = await feeStructureMetadataRepository.GetAsync(feeStructure.FeeStructureMetadataId);
-		var academicYear = await academicYearRepository.GetAsync(metadata.AcademicYearId!.Value);
-		var concessionSnapshot = await ValidateConcessionPolicySnapshotAsync(feeStructure, academicYear.Id);
-		var collectionSnapshot = await ValidateCollectionPolicySnapshotAsync(feeStructure, academicYear.Id);
-		var refundSnapshot = await ValidateRefundPolicySnapshotAsync(feeStructure, academicYear.Id);
-		var prorationSnapshot = await ValidateProrationPolicySnapshotAsync(feeStructure, academicYear.Id);
-		var chargePeriod = await ResolveChargePeriodAsync(
-			input.ChargeStartDate, input.ChargeEndDate, input.ChargePeriodSource,
-			input.ChargePeriodSourceReferenceId, input.ChargePeriodOverrideReason, academicYear);
-		var requestFingerprint = BuildAssignmentFingerprint(
-			input.StandardFeeStructureId, input.SelectedOptionalFeeHeadIds, input.FeeHeadDetails,
-			chargePeriod.Start, chargePeriod.End, chargePeriod.Source,
-			chargePeriod.SourceReferenceId, chargePeriod.OverrideReason);
-		var optionalDetails = BuildOptionalDetails(input.FeeHeadDetails);
 		var result = new BulkAssignStudentFeeStructureResultDto();
-
-		foreach (var studentId in input.StudentIds)
+		foreach (var item in BulkItems(input))
 		{
 			try
 			{
-				var student = await studentRepository.GetAsync(studentId);
-				if (student == null)
-				{
-					result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto
-					{
-						StudentId = studentId, Success = false, ErrorMessage = "Student not found."
-					});
-					result.SkippedCount++;
-					continue;
-				}
-
-				await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
-				if (student.StandardId != feeStructure.StandardId)
-				{
-					result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto
-					{
-						StudentId = studentId, Success = false,
-						ErrorMessage = "Student standard does not match the fee structure standard."
-					});
-					result.SkippedCount++;
-					continue;
-				}
-
-				var existingAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
-					x.StudentId == student.Id && x.AcademicYearId == academicYear.Id);
-				if (existingAssignment != null)
-				{
-					if (string.Equals(
-						existingAssignment.AssignmentRequestFingerprint,
-						requestFingerprint,
-						StringComparison.Ordinal))
-					{
-						result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto
-						{
-							StudentId = studentId, Success = true,
-							ErrorMessage = "Already assigned; treated as an idempotent retry."
-						});
-						result.SuccessCount++;
-						continue;
-					}
-					result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto
-					{
-						StudentId = studentId, Success = false, ErrorMessage = "Fee structure already assigned."
-					});
-					result.SkippedCount++;
-					continue;
-				}
-
-				student.AssignFeeStructure(input.StandardFeeStructureId);
-				var assignmentId = GuidGenerator.Create();
-				await studentFeeStructureRepository.InsertAsync(
-					new StudentFeeStructure(
-						id: assignmentId,
-						tenantId: CurrentTenant.Id,
-						studentId: student.Id,
-						feeStructureStandardId: feeStructure.Id,
-						academicYearId: academicYear.Id,
-						concessionPolicyId: concessionSnapshot.Policy.Id,
-						concessionPolicyVersionId: concessionSnapshot.Version.Id,
-						concessionFeeHeadScope: feeStructure.ConcessionFeeHeadScope,
-						concessionApplicableFeeHeadIds: feeStructure.GetConcessionApplicableFeeHeadIds(),
-						collectionPolicyId: collectionSnapshot.Policy.Id,
-						collectionPolicyVersionId: collectionSnapshot.Version.Id,
-						refundPolicyId: refundSnapshot?.Policy.Id,
-						refundPolicyVersionId: refundSnapshot?.Version.Id,
-						prorationPolicyId: prorationSnapshot?.Policy.Id,
-						prorationPolicyVersionId: prorationSnapshot?.Version.Id,
-						chargeStartDate: chargePeriod.Start,
-						chargeEndDate: chargePeriod.End,
-						chargePeriodSource: chargePeriod.Source,
-						chargePeriodSourceReferenceId: chargePeriod.SourceReferenceId,
-						chargePeriodOverrideReason: chargePeriod.OverrideReason,
-						assignmentRequestFingerprint: requestFingerprint),
-					autoSave: false);
-
-				var dueFees = await dueFeeManager.GenerateForStudentAsync(
-					student.Id, feeStructure, academicYear, input.SelectedOptionalFeeHeadIds, optionalDetails,
-					prorationSnapshot?.Snapshot, prorationSnapshot?.Version.Id, chargePeriod.Start, chargePeriod.End);
-				await dueFeeRepository.InsertManyAsync(dueFees, autoSave: false);
-
-				result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto { StudentId = studentId, Success = true });
-				result.SuccessCount++;
+				var committed = await AssignAsync(item);
+				result.Results.Add(new() { StudentId = item.StudentId, Outcome = committed.Outcome, Success = true, Result = committed });
+				if (committed.Outcome == "AlreadyAssigned") result.AlreadyAssignedCount++; else result.SuccessCount++;
+			}
+			catch (BusinessException ex)
+			{
+				var skip = ex.Code == AssignmentErrorCodes.AlreadyAssigned || ex.Code == AssignmentErrorCodes.InactiveEnrollment;
+				result.Results.Add(new() { StudentId = item.StudentId, Outcome = skip ? "Skipped" : "Failed", ErrorCode = ex.Code, ErrorMessage = AssignmentErrorMessage(ex.Code) });
+				if (skip) result.SkippedCount++; else result.FailedCount++;
 			}
 			catch (Exception ex)
 			{
-				result.Results.Add(new BulkAssignStudentFeeStructureResultItemDto
-				{
-					StudentId = studentId, Success = false, ErrorMessage = ex.Message
-				});
-				result.SkippedCount++;
+				Logger.LogError(ex, "A bulk assignment item failed");
+				result.Results.Add(new() { StudentId = item.StudentId, Outcome = "Failed", ErrorCode = AssignmentErrorCodes.CommitFailed, ErrorMessage = "Assignment could not be completed. Check access and retry this student." });
+				result.FailedCount++;
 			}
 		}
-
-		await CurrentUnitOfWork.SaveChangesAsync();
 		return result;
 	}
+
+	private static IReadOnlyList<AssignStudentFeeStructureDto> BulkItems(BulkAssignStudentFeeStructureDto input)
+	{
+		var items = input.Items;
+		if (items == null || input.StudentIds == null) throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+		if (items.Count == 0) items = input.StudentIds.Select(id => new AssignStudentFeeStructureDto {
+			StudentId = id, AcademicYearId = input.AcademicYearId, StandardFeeStructureId = input.StandardFeeStructureId,
+			SelectedOptionalFeeHeadIds = input.SelectedOptionalFeeHeadIds, FeeHeadDetails = input.FeeHeadDetails,
+			ChargeStartDate = input.ChargeStartDate, ChargeEndDate = input.ChargeEndDate, ChargePeriodSource = input.ChargePeriodSource,
+			ChargePeriodSourceReferenceId = input.ChargePeriodSourceReferenceId, ChargePeriodOverrideReason = input.ChargePeriodOverrideReason }).ToList();
+		if (items.Count is < 1 or > 100 || items.Any(x => x == null) || items.Select(x => x.StudentId).Distinct().Count() != items.Count)
+			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+		return items;
+	}
+
+	private static string AssignmentErrorMessage(string? code) => code switch {
+		AssignmentErrorCodes.AlreadyAssigned => "A different fee assignment already exists for this year. View its details before making a correction.",
+		AssignmentErrorCodes.StalePreview => "The preview expired or its inputs changed. Preview this student again.",
+		AssignmentErrorCodes.EnrollmentRequired => "No unambiguous accessible enrollment exists for this student and year.",
+		AssignmentErrorCodes.InactiveEnrollment => "The enrollment is inactive. Resolve the student's enrollment before assignment.",
+		AssignmentErrorCodes.SourceUnavailable => "Service dates could not be verified. Select a supported source or an authorized manual override.",
+		AssignmentErrorCodes.StructureMismatch => "Select a published structure matching this enrollment and academic year.",
+		AssignmentErrorCodes.ConfigurationInvalid => "Check the published structure, payment terms and attached policy versions.",
+		_ => "Check this student's configuration and inputs, then preview again."
+	};
 }

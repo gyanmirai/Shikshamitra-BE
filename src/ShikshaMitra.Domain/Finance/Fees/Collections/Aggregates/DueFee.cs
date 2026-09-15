@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.FeeAdjustment;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
@@ -18,6 +18,19 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid StudentId { get; private set; }
+    public decimal? AllocationPercentage { get; private set; }
+	public void PreserveAllocation(decimal percentage)
+	{
+		if (percentage < 0 || percentage > 100 || AllocationPercentage.HasValue) throw new ArgumentOutOfRangeException(nameof(percentage));
+		AllocationPercentage = percentage;
+	}
+	public Guid? StudentFeeStructureId { get; private set; }
+    public void BindAssignment(Guid assignmentId)
+    {
+        if (assignmentId == Guid.Empty || StudentFeeStructureId.HasValue)
+            throw new ArgumentException("A due can be bound to an assignment only once.");
+        StudentFeeStructureId = assignmentId;
+    }
 	public Guid FeeHeadId { get; private set; }
 	public MonthEnum Month { get; private set; }
 	public int Year { get; private set; }

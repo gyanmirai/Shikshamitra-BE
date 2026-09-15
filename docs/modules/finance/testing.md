@@ -50,3 +50,7 @@ dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~Finance"
 | Tenant isolation | Finance data cannot cross schools |
 | Auditability | Approval and payment actions are traceable |
 | Docs | `validate-docs.ps1 -Module finance` passes |
+
+## Student fee assignment
+
+The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
@@ -53,8 +53,8 @@ public partial class ConcessionRequestAppService
 		return new ConcessionRequestPreviewDto
 		{
 			StudentFeeStructureId = preview.Assignment.Id,
-			ConcessionPolicyId = preview.Assignment.ConcessionPolicyId,
-			ConcessionPolicyVersionId = preview.Assignment.ConcessionPolicyVersionId,
+			ConcessionPolicyId = preview.Assignment.ConcessionPolicyId!.Value,
+			ConcessionPolicyVersionId = preview.Assignment.ConcessionPolicyVersionId!.Value,
 			ConcessionPolicyName = preview.Policy.PolicyName,
 			ConcessionPolicyCode = preview.Policy.PolicyCode,
 			ConcessionPolicyVersion = preview.Policy.Version,

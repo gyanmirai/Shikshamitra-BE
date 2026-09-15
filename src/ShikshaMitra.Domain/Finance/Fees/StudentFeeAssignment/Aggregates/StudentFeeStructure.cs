@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -16,8 +16,8 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public Guid FeeStructureStandardId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
-	public Guid ConcessionPolicyId { get; private set; }
-	public Guid ConcessionPolicyVersionId { get; private set; }
+	public Guid? ConcessionPolicyId { get; private set; }
+	public Guid? ConcessionPolicyVersionId { get; private set; }
 	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; private set; }
 	public string ConcessionApplicableFeeHeadIdsJson { get; private set; } = "[]";
 	// Nullable for legacy assignments created before policy version pinning.
@@ -36,7 +36,14 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// <summary>Canonical SHA-256 of the assignment command for safe retry detection.</summary>
 	public string? AssignmentRequestFingerprint { get; private set; }
 
-	protected StudentFeeStructure() { }
+	public string? AssignmentSnapshotJson { get; private set; }
+    public void CaptureAssignment(string fingerprint, string snapshot)
+    {
+        if (AssignmentSnapshotJson != null) throw new InvalidOperationException("Assignment evidence is immutable.");
+        AssignmentRequestFingerprint = Volo.Abp.Check.NotNullOrWhiteSpace(fingerprint, nameof(fingerprint), maxLength: 64);
+        AssignmentSnapshotJson = Volo.Abp.Check.NotNullOrWhiteSpace(snapshot, nameof(snapshot));
+    }
+    protected StudentFeeStructure() { }
 
 	public StudentFeeStructure(
 		Guid id,
@@ -58,8 +65,8 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid studentId,
 		Guid feeStructureStandardId,
 		Guid academicYearId,
-		Guid concessionPolicyId,
-		Guid concessionPolicyVersionId,
+		Guid? concessionPolicyId,
+		Guid? concessionPolicyVersionId,
 		ConcessionFeeHeadScope concessionFeeHeadScope,
 		IReadOnlyCollection<Guid> concessionApplicableFeeHeadIds,
 		Guid? collectionPolicyId = null,
@@ -106,12 +113,12 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void RefreshConcessionPolicySnapshot(
 		Guid academicYearId,
-		Guid concessionPolicyId,
-		Guid concessionPolicyVersionId,
+		Guid? concessionPolicyId,
+		Guid? concessionPolicyVersionId,
 		ConcessionFeeHeadScope concessionFeeHeadScope,
 		IReadOnlyCollection<Guid> concessionApplicableFeeHeadIds)
 	{
-		if (academicYearId == Guid.Empty || concessionPolicyId == Guid.Empty || concessionPolicyVersionId == Guid.Empty)
+		if (academicYearId == Guid.Empty || !concessionPolicyId.HasValue || concessionPolicyId == Guid.Empty || !concessionPolicyVersionId.HasValue || concessionPolicyVersionId == Guid.Empty)
 			throw new ArgumentException("Academic year, concession policy, and policy version are required.");
 
 		AcademicYearId = academicYearId;

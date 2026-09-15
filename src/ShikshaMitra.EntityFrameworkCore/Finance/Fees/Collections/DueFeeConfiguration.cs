@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra;
 using ShikshaMitra.Finance.Fees.FeeCollection;
@@ -10,6 +10,10 @@ public class DueFeeConfiguration : IEntityTypeConfiguration<DueFee>
 	{
 		builder.ToTable("Finance_DueFees", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+        builder.Property(x => x.AllocationPercentage).HasPrecision(18, 6);
+		builder.HasIndex(x => x.StudentFeeStructureId);
+        builder.HasOne<ShikshaMitra.Finance.Fees.StudentFeeAssignment.StudentFeeStructure>()
+            .WithMany().HasForeignKey(x => x.StudentFeeStructureId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_DueFees_StudentFeeAssignment");
 
 		builder.Property(x => x.InstallmentName).HasMaxLength(100);
 		builder.Property(x => x.ScheduleInstanceKey).IsRequired().HasMaxLength(128);

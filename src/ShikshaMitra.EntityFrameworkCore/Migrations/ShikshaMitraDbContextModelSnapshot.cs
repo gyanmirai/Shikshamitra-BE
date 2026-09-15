@@ -11304,6 +11304,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("Year")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("StudentFeeStructureId").HasColumnType("uuid");
+                    b.Property<decimal?>("AllocationPercentage").HasPrecision(18, 6).HasColumnType("numeric(18,6)");
+                    b.HasIndex("StudentFeeStructureId");
                     b.HasKey("Id");
 
                     b.HasIndex("ProrationPolicyId")
@@ -12334,6 +12337,8 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AssignmentSnapshotJson").HasColumnType("text");
+
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
@@ -12370,10 +12375,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("ConcessionFeeHeadScope")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("ConcessionPolicyId")
+                    b.Property<Guid?>("ConcessionPolicyId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("ConcessionPolicyVersionId")
+                    b.Property<Guid?>("ConcessionPolicyVersionId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -33151,6 +33156,8 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.DueFee", b =>
                 {
+                    b.HasOne("ShikshaMitra.Finance.Fees.StudentFeeAssignment.StudentFeeStructure", null)
+                        .WithMany().HasForeignKey("StudentFeeStructureId").OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_DueFees_StudentFeeAssignment");
                     b.HasOne("ShikshaMitra.Domain.Finance.Policies.ProrationPolicy", null)
                         .WithMany()
                         .HasForeignKey("ProrationPolicyId")

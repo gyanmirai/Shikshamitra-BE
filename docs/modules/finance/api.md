@@ -105,3 +105,7 @@ Canonical roots are `Finance.Settings.FeeStructure` and `Finance.Policies.{Colle
 Operational waiver approvals, approval thresholds, student overrides, exception windows and charge-period overrides retain their existing permission keys and grants. They are registered separately from each configuration family's three-action `All` collection; configuration Add does not grant financial approval authority.
 
 Deployment: rebuild/restart the API so its permission definitions and permission-list responses reflect this contract, then reload the role editor and application permission state. Existing View/Add/Delete grants keep the same names. Retired fine-grained configuration grants are not promoted automatically: a role that had only Edit/Archive/Publish must be explicitly reviewed and granted Add/Delete as appropriate. Concession and Refund now have canonical Delete grants; an old Archive grant alone does not imply Delete. No permission-grant data migration or tenant grant update is performed by this code change.
+
+## Student fee assignment
+
+The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.

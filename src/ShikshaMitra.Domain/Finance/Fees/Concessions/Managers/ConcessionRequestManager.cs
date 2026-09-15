@@ -62,8 +62,8 @@ public class ConcessionRequestManager(
 			tenantId,
 			studentId,
 			assignment.Id,
-			assignment.ConcessionPolicyId,
-			assignment.ConcessionPolicyVersionId,
+			assignment.ConcessionPolicyId!.Value,
+			assignment.ConcessionPolicyVersionId!.Value,
 			concessionTypeId,
 			academicYearId,
 			student.AcademicBoardId ?? Guid.Empty,
@@ -377,7 +377,7 @@ public class ConcessionRequestManager(
 
 	private async Task<ConcessionPolicySnapshot> LoadPolicySnapshotAsync(StudentFeeStructure assignment)
 	{
-		var version = await financePolicyVersionRepository.FindAsync(assignment.ConcessionPolicyVersionId)
+		var version = await financePolicyVersionRepository.FindAsync(assignment.ConcessionPolicyVersionId ?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached))
 			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
 		if (version.PolicyType != "concession" || version.PolicyId != assignment.ConcessionPolicyId)
 			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
@@ -388,8 +388,8 @@ public class ConcessionRequestManager(
 	private async Task EnsureAssignmentPolicySnapshotAsync(StudentFeeStructure assignment, Guid academicYearId)
 	{
 		if (assignment.AcademicYearId != Guid.Empty &&
-			assignment.ConcessionPolicyId != Guid.Empty &&
-			assignment.ConcessionPolicyVersionId != Guid.Empty)
+			assignment.ConcessionPolicyId.HasValue && assignment.ConcessionPolicyId != Guid.Empty &&
+			assignment.ConcessionPolicyVersionId.HasValue && assignment.ConcessionPolicyVersionId != Guid.Empty)
 			return;
 
 		var feeStructure = await feeStructureRepository.GetAsync(assignment.FeeStructureStandardId);

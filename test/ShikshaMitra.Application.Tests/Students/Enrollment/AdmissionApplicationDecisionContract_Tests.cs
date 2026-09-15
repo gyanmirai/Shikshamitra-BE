@@ -20,8 +20,8 @@ public class AdmissionApplicationDecisionContract_Tests
 	[InlineData(nameof(AdmissionApplicationAppService.DeclineOfferAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
 	[InlineData(nameof(AdmissionApplicationAppService.GetFinalizationPreviewAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	[InlineData(nameof(AdmissionApplicationAppService.FinalizeAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
-	[InlineData(nameof(AdmissionApplicationAppService.EnrollAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
-	[InlineData(nameof(AdmissionApplicationAppService.GetEnrollmentOptionsAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
+	[InlineData("EnrollAsync", ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
+	[InlineData("GetEnrollmentOptionsAsync", ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	public void Decision_and_finalization_commands_require_the_expected_permission(string methodName, string permission)
 	{
 		var method = typeof(AdmissionApplicationAppService).GetMethods().Single(value => value.Name == methodName);

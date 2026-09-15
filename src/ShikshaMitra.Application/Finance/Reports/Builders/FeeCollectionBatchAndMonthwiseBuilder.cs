@@ -21,7 +21,7 @@ public class FeeCollectionBatchAndMonthwiseBuilder(
 {
     public string ReportType => FinanceReportTypes.FeeCollectionBatchAndMonthwise;
 
-    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, bool exportAllRows)
+    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
         var academicYearIds = request.Filters.AcademicYearIds ?? new List<Guid>();
         var targetMonths = request.Filters.Months != null && request.Filters.Months.Any() 

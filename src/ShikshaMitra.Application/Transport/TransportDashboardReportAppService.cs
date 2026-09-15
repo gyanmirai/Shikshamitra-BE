@@ -36,8 +36,10 @@ public class TransportDashboardReportAppService(
 	IRepository<TransportFeeRun, Guid> feeRunRepository,
 	IRepository<TransportFeeDue, Guid> feeDueRepository,
 	IRepository<Employee, Guid> employeeRepository,
+	IStudentRepository studentRepository,
 	IRepository<EducationMedium, Guid> academicMediumRepository,
-	StudentScopeAccessService studentScopeAccessService
+	StudentScopeAccessService studentScopeAccessService,
+	ITransportAiReportPlanner aiReportPlanner
 ) : ApplicationService, ITransportDashboardReportAppService
 {
 	private const string UnsupportedMessage = "This report depends on a future transport phase.";
@@ -171,7 +173,26 @@ public class TransportDashboardReportAppService(
 	public async Task<List<TransportReportCatalogItemDto>> GetReportCatalogAsync(Guid academicMediumId)
 	{
 		await EnsureCanUseMediumAsync(academicMediumId, nameof(GetReportCatalogAsync));
-		return ReportDefinitions
+		return BuildReportCatalog();
+	}
+
+	[Authorize(ShikshaMitraSubModulePermissions.TransportReports)]
+	public async Task<TransportAiReportPlanResponseDto> CreateAiReportPlanAsync(TransportAiReportPlanRequestDto input)
+	{
+		await EnsureCanUseMediumAsync(input.AcademicMediumId, nameof(CreateAiReportPlanAsync));
+		if (input.AcademicYearId.HasValue)
+		{
+			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(
+				input.AcademicYearId.Value,
+				nameof(CreateAiReportPlanAsync));
+		}
+
+		var userId = CurrentUser.Id ?? throw new BusinessException(TransportErrorCodes.ReportRequestInvalid);
+		return await aiReportPlanner.CreatePlanAsync(input, userId, BuildReportCatalog());
+	}
+
+	private static List<TransportReportCatalogItemDto> BuildReportCatalog() =>
+		ReportDefinitions
 			.Select(definition => new TransportReportCatalogItemDto
 			{
 				Key = definition.Key,
@@ -181,7 +202,6 @@ public class TransportDashboardReportAppService(
 				IsSupported = definition.IsSupported
 			})
 			.ToList();
-	}
 
 	[Authorize(ShikshaMitraSubModulePermissions.TransportReports)]
 	public async Task<TransportReportResultDto> GetReportAsync(string reportKey, TransportReportListRequestDto input)
@@ -246,6 +266,15 @@ public class TransportDashboardReportAppService(
 
 	private async Task<TransportReportContext> LoadContextAsync(Guid academicMediumId, Guid? academicYearId)
 	{
+		var allStudentsQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var relevantStudentsQuery = allStudentsQuery.Where(student =>
+			student.AcademicMediumId == academicMediumId &&
+			(!academicYearId.HasValue || student.AcademicYearId == academicYearId.Value));
+		var allStudentIds = await AsyncExecuter.ToListAsync(relevantStudentsQuery.Select(student => student.Id));
+		var scopedStudentsQuery = await studentScopeAccessService.ApplyCurrentUserScopeAsync(relevantStudentsQuery);
+		var allowedStudentIds = await AsyncExecuter.ToListAsync(scopedStudentsQuery.Select(student => student.Id));
+		var allowedStudentIdSet = allowedStudentIds.ToHashSet();
+		var hasAllRelevantStudents = allStudentIds.All(allowedStudentIdSet.Contains);
 		var stops = await stopRepository.GetListAsync(stop => stop.AcademicMediumId == academicMediumId);
 		var routes = await routeRepository.GetListAsync(route => route.AcademicMediumId == academicMediumId);
 		var routeIds = routes.Select(route => route.Id).ToList();
@@ -261,15 +290,29 @@ public class TransportDashboardReportAppService(
 		var maintenance = await maintenanceRepository.GetListAsync(row => row.AcademicMediumId == academicMediumId);
 		var staff = await staffRepository.GetListAsync(row => row.AcademicMediumId == academicMediumId);
 		var routeAssignments = await routeAssignmentRepository.GetListAsync(row => row.AcademicMediumId == academicMediumId);
-		var members = await memberRepository.GetListAsync(row => row.AcademicMediumId == academicMediumId);
-		var memberAssignments = await memberAssignmentRepository.GetListAsync(row => row.AcademicMediumId == academicMediumId);
-		var applications = await applicationRepository.GetListAsync(row => row.AcademicMediumId == academicMediumId);
-		var feeRuns = await feeRunRepository.GetListAsync(row =>
+		var members = (await memberRepository.GetListAsync(row => row.AcademicMediumId == academicMediumId))
+			.Where(row => row.MemberType == TransportMemberType.Employee ||
+				(row.StudentId.HasValue && allowedStudentIdSet.Contains(row.StudentId.Value)))
+			.ToList();
+		var allowedMemberIds = members.Select(row => row.Id).ToHashSet();
+		var memberAssignments = (await memberAssignmentRepository.GetListAsync(row => row.AcademicMediumId == academicMediumId))
+			.Where(row => allowedMemberIds.Contains(row.MemberId))
+			.ToList();
+		var applications = (await applicationRepository.GetListAsync(row => row.AcademicMediumId == academicMediumId))
+			.Where(row => row.MemberType == TransportMemberType.Employee ||
+				(row.StudentId.HasValue && allowedStudentIdSet.Contains(row.StudentId.Value)))
+			.ToList();
+		var feeRuns = hasAllRelevantStudents
+			? await feeRunRepository.GetListAsync(row =>
+				row.AcademicMediumId == academicMediumId &&
+				(!academicYearId.HasValue || row.AcademicYearId == academicYearId.Value))
+			: [];
+		var feeDues = (await feeDueRepository.GetListAsync(row =>
 			row.AcademicMediumId == academicMediumId &&
-			(!academicYearId.HasValue || row.AcademicYearId == academicYearId.Value));
-		var feeDues = await feeDueRepository.GetListAsync(row =>
-			row.AcademicMediumId == academicMediumId &&
-			(!academicYearId.HasValue || row.AcademicYearId == academicYearId.Value));
+			(!academicYearId.HasValue || row.AcademicYearId == academicYearId.Value)))
+			.Where(row => row.MemberType == TransportMemberType.Employee ||
+				(row.StudentId.HasValue && allowedStudentIdSet.Contains(row.StudentId.Value)))
+			.ToList();
 		var employeeIds = staff.Select(row => row.EmployeeId)
 			.Concat(members.Where(row => row.EmployeeId.HasValue).Select(row => row.EmployeeId!.Value))
 			.Distinct()
@@ -470,7 +513,7 @@ public class TransportDashboardReportAppService(
 			"vehicle-maintenance-schedule" or "vehicle-repair-service-history" => BuildMaintenanceReport(input, data),
 			"route-master" => BuildRouteMasterReport(input, data),
 			"route-wise-student-allocation" => BuildRouteAllocationReport(input, data),
-			"route-capacity-utilization" => new ReportTable(RouteCapacityColumns(), (await BuildRouteUsageAsync(data)).Select(RouteUsageRow).ToList()),
+			"route-capacity-utilization" => BuildRouteCapacityReport(input, await BuildRouteUsageAsync(data)),
 			"bus-stop-master" => BuildStopReport(input, data),
 			"pickup-drop-route-timing" => BuildRouteTimingReport(input, data),
 			"route-distance-fuel-estimate" => BuildRouteDistanceReport(input, data),
@@ -533,7 +576,8 @@ public class TransportDashboardReportAppService(
 	private static ReportTable BuildVehicleComplianceReport(TransportReportListRequestDto input, TransportReportContext data, string mode)
 	{
 		var complianceByVehicle = data.Compliance.ToDictionary(row => row.VehicleId);
-		var rows = FilterVehicles(input, data.Vehicles)
+		var rows = data.Vehicles
+			.Where(vehicle => !input.VehicleId.HasValue || vehicle.Id == input.VehicleId.Value)
 			.Select(vehicle =>
 			{
 				complianceByVehicle.TryGetValue(vehicle.Id, out var compliance);
@@ -551,6 +595,17 @@ public class TransportDashboardReportAppService(
 		return new ReportTable(
 			Columns(("registrationNo", "Registration No"), ("vehicleName", "Vehicle"), ("documentType", "Document"), ("referenceNo", "Reference No"), ("provider", "Provider"), ("issueDate", "Issue Date"), ("expiryDate", "Expiry Date"), ("status", "Status")),
 			rows);
+	}
+
+	private static ReportTable BuildRouteCapacityReport(
+		TransportReportListRequestDto input,
+		IEnumerable<TransportDashboardRouteUsageDto> usage)
+	{
+		var rows = usage
+			.Where(row => !input.RouteId.HasValue || row.RouteId == input.RouteId.Value)
+			.Select(RouteUsageRow)
+			.ToList();
+		return new ReportTable(RouteCapacityColumns(), rows);
 	}
 
 	private static ReportTable BuildMaintenanceReport(TransportReportListRequestDto input, TransportReportContext data)

@@ -3,7 +3,7 @@ module: library
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-09-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -31,6 +31,19 @@ This table maps the active route families to their controller and contract owner
 | Charge categories | `api/library/charge-categories` | `LibraryChargeCategoryController` | `ILibraryChargeCategoryAppService` |
 | Book categories | `api/library/book-categories` | `BookCategoryController` | `IBookCategoryAppService` |
 | Borrowing rules | `api/library/borrowing-rules` | `BorrowingRuleController` | `IBorrowingRuleAppService` |
+
+## AI report planning
+
+`POST api/library/reports/ai/plan` accepts a natural-language request plus prior clarification answers.
+It returns either `NeedsClarification` with one to three material questions or `Ready` with a typed `LibraryReportRequestDto`.
+The planner receives only semantic report capabilities and opaque tokens for permitted options.
+It never receives database schema or permission-bypassing query access.
+
+| Stage | Required permission | Server enforcement |
+|---|---|---|
+| Plan | `Library.Reports.View` | Tenant, current user, UserScope, and permitted academic-year options |
+| Preview | `Library.Reports.View` | Request guard, report-specific filters, academic scope, and scoped student members |
+| Export | `Library.Reports.Export` | Fresh request validation plus the saved permission-scope snapshot |
 
 ## Compatibility routes
 

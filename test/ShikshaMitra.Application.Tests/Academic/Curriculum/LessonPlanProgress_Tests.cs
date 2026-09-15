@@ -10,7 +10,7 @@ namespace ShikshaMitra.Academic.Curriculum;
 public class LessonPlanProgress_Tests : LessonPlanProgressTestBase
 {
     [Fact]
-    public async Task Create_Should_Validate_The_Selected_Local_Date_Not_The_Previous_Utc_Date()
+    public async Task Create_And_GetList_Should_Use_The_Selected_Local_Date_Not_The_Previous_Utc_Date()
     {
         await WithUnitOfWorkAsync(async () =>
         {
@@ -33,6 +33,18 @@ public class LessonPlanProgress_Tests : LessonPlanProgressTestBase
 
                 created.Topic.ShouldBe(input.Topic);
                 created.PlannedDate.ShouldBe(input.PlannedDate.UtcDateTime);
+
+                var result = await Service.GetListAsync(new GetLessonPlansInput
+                {
+                    AcademicYearId = YearId,
+                    TeacherId = TeacherEmployeeId,
+                    MaxResultCount = 10
+                });
+                var listedPlan = result.Items.ShouldHaveSingleItem();
+
+                listedPlan.Id.ShouldBe(created.Id);
+                listedPlan.IsPlanCreationBlocked.ShouldBeFalse();
+                listedPlan.InsightMessage.ShouldBeNull();
             }
         });
     }
@@ -62,6 +74,87 @@ public class LessonPlanProgress_Tests : LessonPlanProgressTestBase
 
                 error.Message.ShouldContain("Holiday: School Holiday");
                 (await Plans.AnyAsync(plan => plan.Topic == input.Topic)).ShouldBeFalse();
+            }
+        });
+    }
+
+    [Fact]
+    public async Task GetList_Should_Keep_The_Holiday_Warning_On_The_Exact_Institution_Date()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            using (Tenant.Change(TenantId))
+            {
+                await SeedContextAsync();
+                await AddHolidayAsync(new DateTime(2026, 9, 14), "Ganesh Chaturthi");
+
+                var input = Input(30);
+                input.PlannedDate = new DateTimeOffset(
+                    2026,
+                    9,
+                    14,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.FromHours(5.5));
+                var plan = await InsertPlanAsync(input);
+
+                var result = await Service.GetListAsync(new GetLessonPlansInput
+                {
+                    AcademicYearId = YearId,
+                    TeacherId = TeacherEmployeeId,
+                    MaxResultCount = 10
+                });
+                var listedPlan = result.Items.ShouldHaveSingleItem();
+
+                listedPlan.Id.ShouldBe(plan.Id);
+                listedPlan.IsPlanCreationBlocked.ShouldBeTrue();
+                listedPlan.InsightMessage.ShouldNotBeNull();
+                listedPlan.InsightMessage!.ShouldContain("Holiday: Ganesh Chaturthi");
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Submit_Should_Use_The_Institution_Date_When_Revalidating_A_Stored_Instant(bool bulkSubmit)
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            using (Tenant.Change(TenantId))
+            {
+                await SeedContextAsync();
+                await SeedLessonPlanOwnerAsync();
+                await AddHolidayAsync(new DateTime(2026, 9, 14), "Ganesh Chaturthi");
+
+                var input = Input(30);
+                input.PlannedDate = new DateTimeOffset(
+                    2026,
+                    9,
+                    15,
+                    0,
+                    0,
+                    0,
+                    TimeSpan.FromHours(5.5));
+                var draft = await InsertPlanAsync(input);
+
+                using (AsLessonPlanOwner())
+                {
+                    if (bulkSubmit)
+                    {
+                        await Service.BulkSubmitAsync(new BulkSubmitLessonPlansDto
+                        {
+                            LessonPlanIds = [draft.Id]
+                        });
+                    }
+                    else
+                    {
+                        await Service.SubmitAsync(draft.Id);
+                    }
+                }
+
+                (await Plans.GetAsync(draft.Id)).Status.ShouldBe(LessonPlanStatus.Submitted);
             }
         });
     }

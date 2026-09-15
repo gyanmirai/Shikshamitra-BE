@@ -17,6 +17,12 @@ public class FinanceReportController(IFinanceReportAppService appService) : AbpC
         return appService.GetOptionsAsync();
     }
 
+    [HttpPost("ai/plan")]
+    public Task<FinanceAiReportPlanResponseDto> CreateAiPlanAsync(FinanceAiReportPlanRequestDto input)
+    {
+        return appService.CreateAiPlanAsync(input);
+    }
+
     [HttpPost("preview")]
     public Task<FinanceReportPreviewDto> PreviewAsync(FinanceReportRequestDto input)
     {

@@ -24,7 +24,7 @@ public class FeeCollectionBatchwiseBuilder(
 {
     public string ReportType => FinanceReportTypes.FeeCollectionBatchwise;
 
-    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, bool exportAllRows)
+    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
         var academicYearIds = request.Filters.AcademicYearIds ?? new List<Guid>();
         var targetAcademicYears = await asyncExecuter.ToListAsync(

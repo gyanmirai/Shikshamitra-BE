@@ -14,6 +14,7 @@ namespace ShikshaMitra.Finance.Reports.Builders;
 [Volo.Abp.DependencyInjection.ExposeServices(typeof(IFinanceReportBuilder))]
 public class FeeCollectionMonthAndFeeHeadwiseBuilder(
     IRepository<PaymentMethodRecord, Guid> paymentMethodRepository,
+    IRepository<FeeRecordMetadata, Guid> feeRecordRepository,
     IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
     IRepository<DueFee, Guid> dueFeeRepository,
     IRepository<FeeHead, Guid> feeHeadRepository,
@@ -22,7 +23,7 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
 {
     public string ReportType => FinanceReportTypes.FeeCollectionMonthAndFeeHeadwise;
 
-    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, bool exportAllRows)
+    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
         var targetMonths = request.Filters.Months != null && request.Filters.Months.Any() 
             ? request.Filters.Months 
@@ -45,7 +46,14 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
 
         var targetFeeHeadIds = targetFeeHeads.Select(x => x.Id).ToList();
 
-        var paymentsQuery = await paymentMethodRepository.GetQueryableAsync();
+        var academicYearIds = request.Filters.AcademicYearIds ?? [];
+        var scopedMetadataIds = await asyncExecuter.ToListAsync(
+            (await feeRecordRepository.GetQueryableAsync())
+                .Where(metadata => academicYearIds.Contains(metadata.AcademicYearId))
+                .Select(metadata => metadata.Id));
+
+        var paymentsQuery = (await paymentMethodRepository.GetQueryableAsync())
+            .Where(payment => scopedMetadataIds.Contains(payment.FeeRecordMetadataId));
         var paymentsList = await asyncExecuter.ToListAsync(paymentsQuery);
 
         // Filter payments by requested months

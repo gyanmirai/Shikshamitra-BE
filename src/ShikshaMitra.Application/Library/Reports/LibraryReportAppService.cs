@@ -17,25 +17,35 @@ namespace ShikshaMitra.Library.Reports;
 [RemoteService(false)]
 public class LibraryReportAppService(
 	LibraryReportGenerator reportGenerator,
+	LibraryReportScopeService reportScopeService,
+	ILibraryAiReportPlanner aiReportPlanner,
 	IHrReportExportJobRepository jobRepository,
 	IBackgroundJobManager backgroundJobManager,
 	IBlobContainer blobContainer)
 	: ApplicationService, ILibraryReportAppService
 {
-	public Task<LibraryReportOptionsDto> GetOptionsAsync()
+	public async Task<LibraryReportOptionsDto> GetOptionsAsync()
 	{
-		return reportGenerator.GetOptionsAsync();
+		var executionScope = await reportScopeService.GetCurrentExecutionScopeAsync();
+		return await reportGenerator.GetOptionsAsync(executionScope);
 	}
 
-	public Task<LibraryReportPreviewDto> PreviewAsync(LibraryReportRequestDto input)
+	public async Task<LibraryAiReportPlanResponseDto> CreateAiPlanAsync(LibraryAiReportPlanRequestDto input)
 	{
-		return reportGenerator.GenerateAsync(input, exportAllRows: false);
+		var userId = CurrentUser.Id ?? throw new BusinessException(LibraryErrorCodes.ReportUserRequired);
+		return await aiReportPlanner.CreatePlanAsync(input, userId);
+	}
+
+	public async Task<LibraryReportPreviewDto> PreviewAsync(LibraryReportRequestDto input)
+	{
+		var executionScope = await reportScopeService.AuthorizeAndNormalizeAsync(input);
+		return await reportGenerator.GenerateAsync(input, executionScope, exportAllRows: false);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Library.Reports.Export)]
 	public async Task<LibraryReportExportCreateResponseDto> CreateExportAsync(LibraryReportRequestDto input)
 	{
-		LibraryReportCatalog.Resolve(input.ReportType);
+		var executionScope = await reportScopeService.AuthorizeAndNormalizeAsync(input);
 
 		var tenantId = CurrentTenant.Id;
 		var userId = CurrentUser.Id ?? throw new BusinessException(code: LibraryErrorCodes.ReportUserRequired, message: "A signed-in user is required to export Library reports.");
@@ -60,7 +70,8 @@ public class LibraryReportAppService(
 			JobId = jobId,
 			TenantId = tenantId,
 			UserId = userId,
-			Request = input
+			Request = input,
+			ExecutionScope = executionScope
 		});
 
 		return new LibraryReportExportCreateResponseDto
@@ -179,4 +190,5 @@ public class LibraryReportExportJobArgs
 	public Guid? TenantId { get; set; }
 	public Guid UserId { get; set; }
 	public LibraryReportRequestDto Request { get; set; } = null!;
+	public LibraryReportExecutionScope ExecutionScope { get; set; } = null!;
 }

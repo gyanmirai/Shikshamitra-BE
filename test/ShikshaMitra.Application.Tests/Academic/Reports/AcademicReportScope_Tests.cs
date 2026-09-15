@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using Microsoft.AspNetCore.DataProtection;
 using ShikshaMitra.Academic.Reports;
 using ShikshaMitra.Security.UserScope;
 using Shouldly;
@@ -114,8 +115,16 @@ public class AcademicReportScope_Tests
     }
 
     [Theory]
-    [InlineData("Create a homework completion report", AcademicReportModules.Homework)]
+    [InlineData("Create a homework completion report", AcademicReportModules.HomeworkAssignment)]
+    [InlineData("Create an assignment submission report", AcademicReportModules.HomeworkAssignment)]
     [InlineData("Show the examination marks", AcademicReportModules.Examination)]
+    [InlineData("Show student attendance below 75%", AcademicReportModules.StudentAttendance)]
+    [InlineData("Create an employee payroll report", AcademicReportModules.HumanResources)]
+    [InlineData("Show outstanding fees by class", AcademicReportModules.Finance)]
+    [InlineData("List overdue books", AcademicReportModules.Library)]
+    [InlineData("Create a bus route report", AcademicReportModules.Transport)]
+    [InlineData("Show student enrollment by class", AcademicReportModules.StudentRecords)]
+    [InlineData("Show LMS learning analytics", AcademicReportModules.LearningManagement)]
     [InlineData("Create the Grade 8 curriculum report", null)]
     [InlineData("Create a subject assignment report", null)]
     [InlineData("Show chapter marks weightage", null)]
@@ -315,6 +324,177 @@ public class AcademicReportScope_Tests
         AcademicReportAppService.ShouldApplyClassTeacherRestriction(true, scope).ShouldBeTrue();
     }
 
+    [Fact]
+    public void Ai_Report_Approval_Should_Bind_User_Context_And_Exact_Plan()
+    {
+        var service = new AcademicAiReportApprovalService(new EphemeralDataProtectionProvider());
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+        var scope = new AcademicAiReportCatalogScope(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), [Guid.NewGuid()], [Guid.NewGuid()]);
+        var plan = new AcademicDynamicReportSpecDto
+        {
+            Module = AcademicReportModules.Curriculum,
+            Dataset = AcademicDynamicDatasets.CurriculumSubjects,
+            Title = "Approved curriculum report",
+            Columns = ["subject", "primaryTeacher"],
+            Format = AcademicReportFormat.Excel
+        };
+
+        var token = service.CreateToken(userId, tenantId, scope, plan);
+
+        Should.NotThrow(() => service.ValidateToken(token, userId, tenantId, scope, plan));
+        plan.Columns = ["subject"];
+        var exception = Should.Throw<BusinessException>(() =>
+            service.ValidateToken(token, userId, tenantId, scope, plan));
+        exception.Code.ShouldBe("Academic:Reports:AiApprovalInvalid");
+    }
+
+    [Fact]
+    public void Ai_Report_Csv_Should_Escape_Commas_Quotes_And_New_Lines()
+    {
+        var report = new AcademicReportPreviewDto
+        {
+            Columns = [new AcademicReportColumnDto { Id = "subject", Label = "Subject, name" }],
+            Rows = [new Dictionary<string, string?> { ["subject"] = "English \"A\"\nAdvanced" }]
+        };
+
+        var csv = System.Text.Encoding.UTF8.GetString(new AcademicCsvService().GenerateReportCsv(report));
+
+        csv.ShouldContain("\"Subject, name\"");
+        csv.ShouldContain("\"English \"\"A\"\"\nAdvanced\"");
+    }
+
+    [Theory]
+    [InlineData("68%", "lt", "70", "number", true)]
+    [InlineData("72", "gte", "75", "number", false)]
+    [InlineData("Advanced Mathematics", "contains", "math", "text", true)]
+    [InlineData("15 Sep 2026", "between", "2026-09-01|2026-09-30", "date", true)]
+    public void Ai_Report_Dynamic_Conditions_Should_Use_Typed_Comparisons(
+        string actual,
+        string filterOperator,
+        string expected,
+        string dataType,
+        bool shouldMatch)
+    {
+        var condition = new AcademicDynamicReportConditionDto
+        {
+            Field = "value",
+            Operator = filterOperator,
+            Values = expected.Split('|').ToList()
+        };
+        var row = new Dictionary<string, string?> { ["value"] = actual };
+        var field = new AcademicDynamicColumnDefinition("value", "Value", dataType);
+
+        AcademicDynamicReportQueryService.MatchesCondition(row, condition, field)
+            .ShouldBe(shouldMatch);
+    }
+
+    [Theory]
+    [InlineData("Daily attendance percentage summary", AcademicDynamicDatasets.StudentAttendanceDailySummary)]
+    [InlineData("List absent students with remarks", AcademicDynamicDatasets.StudentAttendanceEntries)]
+    public void Attendance_Request_Should_Infer_The_Correct_Row_Grain(string prompt, string expectedDataset)
+    {
+        var plan = new AcademicDynamicReportSpecDto
+        {
+            Module = AcademicReportModules.StudentAttendance,
+            Dataset = "unknown",
+            Columns = []
+        };
+
+        AcademicAiReportPlanNormalizer.Normalize(
+                prompt, AcademicReportModules.StudentAttendance, plan, DynamicDatasets())
+            .Dataset.ShouldBe(expectedDataset);
+    }
+
+    [Fact]
+    public void Student_Records_Request_Should_Use_The_Privacy_Minimized_Student_Dataset()
+    {
+        var plan = new AcademicDynamicReportSpecDto
+        {
+            Module = AcademicReportModules.StudentRecords,
+            Dataset = "unknown",
+            Columns = []
+        };
+
+        var normalized = AcademicAiReportPlanNormalizer.Normalize(
+            "List enrolled students by class and division",
+            AcademicReportModules.StudentRecords,
+            plan,
+            DynamicDatasets());
+
+        normalized.Dataset.ShouldBe(AcademicDynamicDatasets.StudentRecordsStudents);
+    }
+
+    [Fact]
+    public void Timetable_Request_Should_Use_The_Scheduled_Slot_Dataset()
+    {
+        var plan = new AcademicDynamicReportSpecDto
+        {
+            Module = AcademicReportModules.Timetable,
+            Dataset = "unknown",
+            Columns = []
+        };
+
+        AcademicAiReportPlanNormalizer.Normalize(
+                "Show the weekly timetable with teachers and rooms",
+                AcademicReportModules.Timetable,
+                plan,
+                DynamicDatasets())
+            .Dataset.ShouldBe(AcademicDynamicDatasets.TimetableSlots);
+    }
+
+    [Theory]
+    [InlineData("Show homework due this week", AcademicDynamicDatasets.HomeworkTasks)]
+    [InlineData("Show assignments with marks and rubric", AcademicDynamicDatasets.AssignmentTasks)]
+    public void Homework_Assignment_Request_Should_Infer_The_Correct_Task_Dataset(
+        string prompt,
+        string expectedDataset)
+    {
+        var plan = new AcademicDynamicReportSpecDto
+        {
+            Module = AcademicReportModules.HomeworkAssignment,
+            Dataset = "unknown",
+            Columns = []
+        };
+
+        AcademicAiReportPlanNormalizer.Normalize(
+                prompt, AcademicReportModules.HomeworkAssignment, plan, DynamicDatasets())
+            .Dataset.ShouldBe(expectedDataset);
+    }
+
+    [Theory]
+    [InlineData("Show the exam schedule by subject", AcademicDynamicDatasets.ExaminationSchedule)]
+    [InlineData("List subject marks and absent students", AcademicDynamicDatasets.ExaminationMarks)]
+    [InlineData("Show overall results with grades and ranks", AcademicDynamicDatasets.ExaminationResults)]
+    public void Examination_Request_Should_Infer_The_Correct_Row_Grain(
+        string prompt,
+        string expectedDataset)
+    {
+        var plan = new AcademicDynamicReportSpecDto
+        {
+            Module = AcademicReportModules.Examination,
+            Dataset = "unknown",
+            Columns = []
+        };
+
+        AcademicAiReportPlanNormalizer.Normalize(
+                prompt, AcademicReportModules.Examination, plan, DynamicDatasets())
+            .Dataset.ShouldBe(expectedDataset);
+    }
+
+    [Theory]
+    [InlineData(" student records ", AcademicReportModules.StudentRecords)]
+    [InlineData("TIMETABLE", AcademicReportModules.Timetable)]
+    [InlineData("student attendance", AcademicReportModules.StudentAttendance)]
+    [InlineData("homework", AcademicReportModules.HomeworkAssignment)]
+    [InlineData("Assignment", AcademicReportModules.HomeworkAssignment)]
+    [InlineData("homework & assignment", AcademicReportModules.HomeworkAssignment)]
+    public void Module_Normalization_Should_Return_The_Canonical_Value(string input, string expected)
+    {
+        AcademicDynamicReportGuard.NormalizeModule(input).ShouldBe(expected);
+    }
+
     private static IReadOnlyList<AcademicDynamicDatasetDefinition> DynamicDatasets() =>
     [
         new(
@@ -337,7 +517,70 @@ public class AcademicReportScope_Tests
             "Curriculum subject teachers",
             "Teacher rows",
             [new("subject", "Subject"), new("teacherName", "Teacher"), new("teacherType", "Teacher type")],
-            ["subject", "teacherName", "teacherType"])
+            ["subject", "teacherName", "teacherType"]),
+        new(
+            AcademicDynamicDatasets.TimetableSlots,
+            AcademicReportModules.Timetable,
+            "Timetable slots",
+            "Timetable rows",
+            [new("class", "Class"), new("division", "Division"), new("day", "Day"), new("subject", "Subject")],
+            ["class", "division", "day", "subject"]),
+        new(
+            AcademicDynamicDatasets.StudentRecordsStudents,
+            AcademicReportModules.StudentRecords,
+            "Student records",
+            "Student rows",
+            [new("class", "Class"), new("division", "Division"), new("studentName", "Student"), new("lifecycleStatus", "Lifecycle status")],
+            ["class", "division", "studentName", "lifecycleStatus"]),
+        new(
+            AcademicDynamicDatasets.StudentAttendanceEntries,
+            AcademicReportModules.StudentAttendance,
+            "Student attendance entries",
+            "Attendance entry rows",
+            [new("date", "Date", AcademicDynamicFieldTypes.Date), new("studentName", "Student"), new("status", "Status")],
+            ["date", "studentName", "status"]),
+        new(
+            AcademicDynamicDatasets.StudentAttendanceDailySummary,
+            AcademicReportModules.StudentAttendance,
+            "Student attendance daily summary",
+            "Attendance summary rows",
+            [new("date", "Date", AcademicDynamicFieldTypes.Date), new("attendancePercentage", "Attendance percentage", AcademicDynamicFieldTypes.Number)],
+            ["date", "attendancePercentage"]),
+        new(
+            AcademicDynamicDatasets.HomeworkTasks,
+            AcademicReportModules.HomeworkAssignment,
+            "Homework tasks",
+            "Homework rows",
+            [new("class", "Class"), new("title", "Homework title"), new("dueDate", "Due date", AcademicDynamicFieldTypes.Date)],
+            ["class", "title", "dueDate"]),
+        new(
+            AcademicDynamicDatasets.AssignmentTasks,
+            AcademicReportModules.HomeworkAssignment,
+            "Assignments",
+            "Assignment rows",
+            [new("class", "Class"), new("title", "Assignment title"), new("totalMarks", "Total marks", AcademicDynamicFieldTypes.Number)],
+            ["class", "title", "totalMarks"]),
+        new(
+            AcademicDynamicDatasets.ExaminationSchedule,
+            AcademicReportModules.Examination,
+            "Examination schedule",
+            "Schedule rows",
+            [new("examName", "Exam"), new("subject", "Subject"), new("examDate", "Exam date", AcademicDynamicFieldTypes.Date)],
+            ["examName", "subject", "examDate"]),
+        new(
+            AcademicDynamicDatasets.ExaminationMarks,
+            AcademicReportModules.Examination,
+            "Student examination marks",
+            "Mark rows",
+            [new("studentName", "Student"), new("marksObtained", "Marks obtained", AcademicDynamicFieldTypes.Number)],
+            ["studentName", "marksObtained"]),
+        new(
+            AcademicDynamicDatasets.ExaminationResults,
+            AcademicReportModules.Examination,
+            "Student examination results",
+            "Result rows",
+            [new("studentName", "Student"), new("grade", "Grade"), new("sectionRank", "Section rank", AcademicDynamicFieldTypes.Number)],
+            ["studentName", "grade", "sectionRank"])
     ];
 
     private static AcademicDynamicReportCatalogSnapshot FilterSnapshot() => new(
@@ -354,6 +597,7 @@ public class AcademicReportScope_Tests
         Prompt = prompt,
         AcademicYearId = Guid.NewGuid(),
         EducationBoardId = Guid.NewGuid(),
-        EducationMediumId = Guid.NewGuid()
+        EducationMediumId = Guid.NewGuid(),
+        ApprovalToken = "test-approval-token"
     };
 }

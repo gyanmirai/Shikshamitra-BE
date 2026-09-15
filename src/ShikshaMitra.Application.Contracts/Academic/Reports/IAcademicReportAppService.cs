@@ -11,6 +11,7 @@ public interface IAcademicReportAppService : IApplicationService
     Task<AcademicReportPreviewDto> PreviewAsync(AcademicReportRequestDto input);
     Task<AcademicReportExportCreateResponseDto> CreateExportAsync(AcademicReportRequestDto input);
     Task<AcademicAiReportPlanResponseDto> CreateAiPlanAsync(AcademicAiReportPlanRequestDto input);
+    Task<AcademicAiReportPreviewResponseDto> CreateAiPreviewAsync(AcademicAiReportPreviewRequestDto input);
     Task<AcademicAiReportExportResponseDto> CreateAiExportAsync(AcademicAiReportExportRequestDto input);
     Task<List<AcademicReportExportJobDto>> GetExportsAsync();
     Task<AcademicReportExportJobDto> GetExportAsync(Guid jobId);

@@ -8,6 +8,7 @@ namespace ShikshaMitra.Library.Reports;
 public interface ILibraryReportAppService : IApplicationService
 {
 	Task<LibraryReportOptionsDto> GetOptionsAsync();
+	Task<LibraryAiReportPlanResponseDto> CreateAiPlanAsync(LibraryAiReportPlanRequestDto input);
 	Task<LibraryReportPreviewDto> PreviewAsync(LibraryReportRequestDto input);
 	Task<LibraryReportExportCreateResponseDto> CreateExportAsync(LibraryReportRequestDto input);
 	Task<List<LibraryReportExportJobDto>> GetExportsAsync();

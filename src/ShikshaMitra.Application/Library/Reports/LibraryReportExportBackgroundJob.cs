@@ -31,7 +31,7 @@ public class LibraryReportExportBackgroundJob(
 
 			try
 			{
-				var report = await reportGenerator.GenerateAsync(args.Request, exportAllRows: true);
+				var report = await reportGenerator.GenerateAsync(args.Request, args.ExecutionScope, exportAllRows: true);
 				var format = string.Equals(args.Request.Format, LibraryReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
 					? LibraryReportFormat.Pdf
 					: LibraryReportFormat.Excel;

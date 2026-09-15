@@ -43,6 +43,15 @@ public class TransportDashboardReportsController(ITransportDashboardReportAppSer
 		return Result.Success(catalog);
 	}
 
+	[HttpPost("reports/ai/plan")]
+	[Authorize(ShikshaMitraSubModulePermissions.TransportReports)]
+	public async Task<Result<TransportAiReportPlanResponseDto>> CreateAiReportPlan(
+		[FromBody] TransportAiReportPlanRequestDto input)
+	{
+		var plan = await dashboardReportAppService.CreateAiReportPlanAsync(input);
+		return Result.Success(plan);
+	}
+
 	[HttpGet("reports/{reportKey}")]
 	[Authorize(ShikshaMitraSubModulePermissions.TransportReports)]
 	public async Task<Result<TransportReportResultDto>> GetReport(

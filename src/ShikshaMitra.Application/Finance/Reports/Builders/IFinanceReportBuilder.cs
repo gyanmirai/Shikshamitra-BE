@@ -5,5 +5,9 @@ namespace ShikshaMitra.Finance.Reports.Builders;
 public interface IFinanceReportBuilder
 {
     string ReportType { get; }
-    Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, bool exportAllRows);
+    Task<FinanceReportPreviewDto> BuildAsync(
+        FinanceReportRequestDto request,
+        FinanceReportPreviewDto payload,
+        FinanceReportExecutionScope executionScope,
+        bool exportAllRows);
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
@@ -10,9 +11,12 @@ using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp;
@@ -27,15 +31,24 @@ namespace ShikshaMitra.Academic.Examination.Exams;
 public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private static readonly Guid TestTenantId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+	private static readonly Guid FakeAdminUserId = Guid.Parse("2e701e62-0953-4dd3-910b-dc6cc93ccb0d");
 
 	private readonly IExamAppService _examAppService;
+	private readonly IAcademicCalendarAppService _calendarAppService;
+	private readonly IRepository<AcademicCalendar, Guid> _calendarRepository;
+	private readonly IRepository<AcademicCalendarDay, Guid> _calendarDayRepository;
 	private readonly IRepository<EducationMediumStage, Guid> _stageRepository;
+	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
+	private readonly IRepository<EducationBoard, Guid> _boardRepository;
 	private readonly IRepository<Standard, Guid> _standardRepository;
 	private readonly IRepository<Division, Guid> _divisionRepository;
 	private readonly IRepository<Subject, Guid> _subjectRepository;
 	private readonly IRepository<Exam, Guid> _examRepository;
 	private readonly IRepository<AssignedSubject, Guid> _assignedSubjectRepository;
 	private readonly IRepository<ElectiveGroup, Guid> _electiveGroupRepository;
+	private readonly IRepository<Student, Guid> _studentRepository;
+	private readonly IRepository<StudentElectiveSelection, Guid> _selectionRepository;
+	private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
 	private readonly IRepository<GradingScale, Guid> _gradingScaleRepository;
 	private readonly IRepository<Employee, Guid> _employeeRepository;
 	private readonly IRepository<IdentityUser, Guid> _identityUserRepository;
@@ -44,19 +57,29 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 	private readonly DivisionManager _divisionManager;
 	private readonly ExamTypeManager _examTypeManager;
 	private readonly ExamManager _examManager;
+	private readonly EducationMediumManager _educationMediumManager;
+	private readonly IUserScopeService _userScopeService;
 	private readonly ICurrentTenant _currentTenant;
 	private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 
 	public ExamAppService_ScheduleStatus_Tests()
 	{
 		_examAppService = GetRequiredService<IExamAppService>();
+		_calendarAppService = GetRequiredService<IAcademicCalendarAppService>();
+		_calendarRepository = GetRequiredService<IRepository<AcademicCalendar, Guid>>();
+		_calendarDayRepository = GetRequiredService<IRepository<AcademicCalendarDay, Guid>>();
 		_stageRepository = GetRequiredService<IRepository<EducationMediumStage, Guid>>();
+		_mediumRepository = GetRequiredService<IRepository<EducationMedium, Guid>>();
+		_boardRepository = GetRequiredService<IRepository<EducationBoard, Guid>>();
 		_standardRepository = GetRequiredService<IRepository<Standard, Guid>>();
 		_divisionRepository = GetRequiredService<IRepository<Division, Guid>>();
 		_subjectRepository = GetRequiredService<IRepository<Subject, Guid>>();
 		_examRepository = GetRequiredService<IRepository<Exam, Guid>>();
 		_assignedSubjectRepository = GetRequiredService<IRepository<AssignedSubject, Guid>>();
 		_electiveGroupRepository = GetRequiredService<IRepository<ElectiveGroup, Guid>>();
+		_studentRepository = GetRequiredService<IRepository<Student, Guid>>();
+		_selectionRepository = GetRequiredService<IRepository<StudentElectiveSelection, Guid>>();
+		_scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
 		_gradingScaleRepository = GetRequiredService<IRepository<GradingScale, Guid>>();
 		_employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
 		_identityUserRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
@@ -65,6 +88,8 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 		_divisionManager = GetRequiredService<DivisionManager>();
 		_examTypeManager = GetRequiredService<ExamTypeManager>();
 		_examManager = GetRequiredService<ExamManager>();
+		_educationMediumManager = GetRequiredService<EducationMediumManager>();
+		_userScopeService = GetRequiredService<IUserScopeService>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
 		_currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
 	}
@@ -166,6 +191,53 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 					_examAppService.ChangeStatusAsync(exam.Id, ExamStatus.Completed));
 
 				exception.Code.ShouldBe("ShikshaMitra.Exam:CompletionBeforeScheduleEnd");
+			}
+		});
+	}
+
+	[Fact]
+	public async Task GetListAsync_Should_Move_Published_Exam_To_Ongoing_During_Schedule()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await _scopeRepository.InsertAsync(
+					new UserScopeAssignment(
+						Guid.NewGuid(),
+						TestTenantId,
+						userId: FakeAdminUserId,
+						description: "Tenant-wide live exam status test scope"),
+					autoSave: true);
+				await _userScopeService.InvalidateUserScopeCacheAsync(FakeAdminUserId);
+
+				var (exam, mediumId) = await CreateScheduledExamAsync(
+					ExamStatus.Published,
+					activeToday: true);
+
+				var all = await _examAppService.GetListAsync(new GetExamsInput
+				{
+					AcademicMediumId = mediumId,
+					MaxResultCount = 1000
+				});
+				var published = await _examAppService.GetListAsync(new GetExamsInput
+				{
+					AcademicMediumId = mediumId,
+					Status = ExamStatus.Published,
+					MaxResultCount = 10
+				});
+				var ongoing = await _examAppService.GetListAsync(new GetExamsInput
+				{
+					AcademicMediumId = mediumId,
+					Status = ExamStatus.Ongoing,
+					MaxResultCount = 10
+				});
+
+				all.Items.Single(item => item.ExamId == exam.Id).Status.ShouldBe(ExamStatus.Ongoing);
+				published.Items.Select(item => item.ExamId).ShouldNotContain(exam.Id);
+				ongoing.Items.Select(item => item.ExamId).ShouldContain(exam.Id);
+				ongoing.Items.Single(item => item.ExamId == exam.Id).Status.ShouldBe(ExamStatus.Ongoing);
+				ongoing.OngoingCount.ShouldBeGreaterThanOrEqualTo(1);
 			}
 		});
 	}
@@ -362,7 +434,207 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 		});
 	}
 
-	private async Task<(Exam exam, Guid mediumId)> CreateScheduledExamAsync(ExamStatus status)
+	[Fact]
+	public async Task SaveScheduleAsync_Should_Create_Fully_Linked_Markers_Only_In_The_Exam_Medium()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await _scopeRepository.InsertAsync(
+					new UserScopeAssignment(
+						Guid.NewGuid(),
+						TestTenantId,
+						userId: FakeAdminUserId,
+						description: "Tenant-wide academic calendar sync test scope"),
+					autoSave: true);
+				await _userScopeService.InvalidateUserScopeCacheAsync(FakeAdminUserId);
+
+				var (exam, mediumId) = await CreateScheduledExamAsync(ExamStatus.Pending);
+				var medium = await _mediumRepository.GetAsync(mediumId);
+				var otherMedium = await _educationMediumManager.CreateAsync(
+					medium.EducationBoardId,
+					$"Other {Guid.NewGuid():N}"[..30]);
+				await _mediumRepository.InsertAsync(otherMedium, autoSave: true);
+
+				var calendarStart = DateTime.Today;
+				var calendarEnd = DateTime.Today.AddMonths(1);
+				var expectedCalendar = new AcademicCalendar(
+					Guid.NewGuid(), TestTenantId, mediumId, null, "Expected calendar",
+					calendarStart, calendarEnd, isDefault: true);
+				var unrelatedCalendar = new AcademicCalendar(
+					Guid.NewGuid(), TestTenantId, otherMedium.Id, null, "Other medium calendar",
+					calendarStart, calendarEnd, isDefault: true);
+				unrelatedCalendar.Publish(FakeAdminUserId);
+				await _calendarRepository.InsertManyAsync(
+					[expectedCalendar, unrelatedCalendar],
+					autoSave: true);
+
+				await _examAppService.SaveScheduleAsync(exam.Id, new ExamScheduleRequestDto
+				{
+					SyncToAcademicCalendar = true,
+					Subjects = exam.ExamSubjects.Select(subject => new ExamSubjectScheduleDto
+					{
+						SubjectId = subject.SubjectId,
+						ExamDate = subject.ExamDate,
+						StartTime = subject.StartTime,
+						EndTime = subject.EndTime,
+						TotalMarks = subject.TotalMarks,
+						PassingMarks = subject.PassingMarks
+					}).ToList()
+				});
+
+				var markers = await _calendarDayRepository.GetListAsync(day =>
+					day.LinkedExamId == exam.Id && day.Status == CalendarDayStatus.Active);
+				markers.Count.ShouldBe(2);
+				markers.ShouldAllBe(day => day.AcademicCalendarId == expectedCalendar.Id);
+				markers.ShouldAllBe(day => day.ExamTypeId == exam.ExamTypeId);
+				markers.ShouldAllBe(day => day.StandardId == exam.StandardId);
+				markers.ShouldAllBe(day => day.ExamStartTime.HasValue && day.ExamEndTime.HasValue);
+
+				// Markers produced before the linkage fix only carried the exam id in this
+				// stable sync description. The read model must still hydrate those rows.
+				await _calendarDayRepository.InsertAsync(
+					new AcademicCalendarDay(
+						Guid.NewGuid(),
+						TestTenantId,
+						expectedCalendar.Id,
+						DateTime.Today.AddDays(10),
+						DayType.Exam,
+						"Legacy exam marker",
+						$"{AcademicCalendarConsts.ExamSyncDescriptionPrefix}{exam.Id}",
+						appliesToAll: false,
+						standardId: exam.StandardId),
+					autoSave: true);
+
+				var calendarDays = await _calendarAppService.GetCalendarDaysAsync(
+					expectedCalendar.Id,
+					dayType: DayType.Exam,
+					month: null,
+					year: null);
+				calendarDays.Count.ShouldBe(3);
+				calendarDays.ShouldAllBe(day => day.LinkedExamId == exam.Id);
+				calendarDays.ShouldAllBe(day => day.LinkedExamName == exam.ExamName);
+				calendarDays.ShouldAllBe(day => !string.IsNullOrWhiteSpace(day.ExamTypeName));
+				calendarDays.ShouldAllBe(day => !string.IsNullOrWhiteSpace(day.StandardName));
+			}
+		});
+	}
+
+	[Fact]
+	public async Task GetScheduleAsync_Should_Exclude_Unselected_Elective_Group_Subjects()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await _scopeRepository.InsertAsync(
+					new UserScopeAssignment(
+						Guid.NewGuid(),
+						TestTenantId,
+						userId: FakeAdminUserId,
+						description: "Tenant-wide elective schedule projection test scope"),
+					autoSave: true);
+				await _userScopeService.InvalidateUserScopeCacheAsync(FakeAdminUserId);
+
+				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+				var stage = await _stageRepository.GetAsync(stageId);
+				var medium = await _mediumRepository.GetAsync(stage.EducationMediumId);
+				var board = await _boardRepository.GetAsync(medium.EducationBoardId);
+				var unique = Guid.NewGuid().ToString("N");
+
+				var standard = await _standardManager.CreateAsync(
+					stageId,
+					$"Elective Exam {unique}"[..30],
+					12,
+					shiftId: null);
+				await _standardRepository.InsertAsync(standard, autoSave: true);
+
+				var division = await _divisionManager.CreateAsync(standard.Id, $"A-{unique}"[..30], 35);
+				await _divisionRepository.InsertAsync(division, autoSave: true);
+
+				var coreMathematics = await CreateSubjectAsync(
+					medium.Id,
+					$"Core Mathematics {unique}"[..30]);
+				var appliedMathematics = await CreateSubjectAsync(
+					medium.Id,
+					$"Applied Mathematics {unique}"[..30]);
+				var electiveGroup = new ElectiveGroup(
+					Guid.NewGuid(),
+					TestTenantId,
+					$"12th Eleven Maths {unique}"[..30],
+					"#FFAB00",
+					medium.Id);
+				electiveGroup.AddSubject(coreMathematics.Id);
+				electiveGroup.AddSubject(appliedMathematics.Id);
+				await _electiveGroupRepository.InsertAsync(electiveGroup, autoSave: true);
+
+				await _assignedSubjectRepository.InsertManyAsync(
+					[
+						new AssignedSubject(
+							Guid.NewGuid(), TestTenantId, standard.Id, coreMathematics.Id,
+							$"CORE{unique[..5]}", SubjectStatus.Published, SubjectType.Elective, electiveGroup.Id),
+						new AssignedSubject(
+							Guid.NewGuid(), TestTenantId, standard.Id, appliedMathematics.Id,
+							$"APP{unique[..5]}", SubjectStatus.Published, SubjectType.Elective, electiveGroup.Id)
+					],
+					autoSave: true);
+
+				var coreStudent = CreateApprovedStudent(
+					"Core", 1, board.AcademicYearId, board.Id, medium.Id, stage.Id,
+					standard.Id, division.Id, unique);
+				var appliedStudent = CreateApprovedStudent(
+					"Applied", 2, board.AcademicYearId, board.Id, medium.Id, stage.Id,
+					standard.Id, division.Id, unique);
+				await _studentRepository.InsertManyAsync([coreStudent, appliedStudent], autoSave: true);
+
+				var coreSelection = new StudentElectiveSelection(
+					Guid.NewGuid(), TestTenantId, coreStudent.Id, electiveGroup.Id,
+					coreMathematics.Id, medium.Id);
+				coreSelection.LockSelection();
+				var appliedSelection = new StudentElectiveSelection(
+					Guid.NewGuid(), TestTenantId, appliedStudent.Id, electiveGroup.Id,
+					appliedMathematics.Id, medium.Id);
+				appliedSelection.LockSelection();
+				await _selectionRepository.InsertManyAsync(
+					[coreSelection, appliedSelection],
+					autoSave: true);
+
+				var examType = await _examTypeManager.CreateAsync(
+					$"Final {unique}"[..30],
+					description: null,
+					medium.Id);
+				var exam = _examManager.Create(
+					examType.Id,
+					$"Applied Maths {unique}"[..40],
+					standard.Id,
+					[division.Id],
+					[appliedMathematics.Id]);
+				var examDate = DateTime.Today.AddDays(1);
+				exam.ExamSubjects.Single().UpdateSchedule(
+					examDate,
+					examDate.AddHours(12),
+					examDate.AddHours(13),
+					100,
+					33,
+					notes: null);
+				await _examRepository.InsertAsync(exam, autoSave: true);
+
+				var result = await _examAppService.GetScheduleAsync(exam.Id);
+
+				result.Subjects.Count.ShouldBe(1);
+				var groupSchedule = result.Subjects.Single();
+				groupSchedule.ElectiveGroupId.ShouldBe(electiveGroup.Id);
+				groupSchedule.ElectiveGroupSubjects
+					.Select(subject => subject.SubjectId)
+					.ShouldBe([appliedMathematics.Id]);
+			}
+		});
+	}
+
+	private async Task<(Exam exam, Guid mediumId)> CreateScheduledExamAsync(
+		ExamStatus status,
+		bool activeToday = false)
 	{
 		var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		var stage = await _stageRepository.GetAsync(stageId);
@@ -396,21 +668,21 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 			new List<Guid> { division.Id },
 			new List<Guid> { firstSubject.Id, finalSubject.Id });
 
-		var firstExamDate = DateTime.Now.Date.AddDays(1);
-		var finalExamDate = DateTime.Now.Date.AddDays(6);
+		var firstExamDate = DateTime.Now.Date.AddDays(activeToday ? 0 : 1);
+		var finalExamDate = DateTime.Now.Date.AddDays(activeToday ? 0 : 6);
 		exam.ExamSubjects.Single(subject => subject.SubjectId == firstSubject.Id)
 			.UpdateSchedule(
 				firstExamDate,
-				firstExamDate.AddHours(14),
-				firstExamDate.AddHours(15),
+				firstExamDate.AddHours(activeToday ? 0 : 14),
+				firstExamDate.AddHours(activeToday ? 12 : 15),
 				100,
 				33,
 				notes: null);
 		exam.ExamSubjects.Single(subject => subject.SubjectId == finalSubject.Id)
 			.UpdateSchedule(
 				finalExamDate,
-				finalExamDate.AddHours(14),
-				finalExamDate.AddHours(15),
+				finalExamDate.AddHours(activeToday ? 12 : 14),
+				finalExamDate.AddHours(activeToday ? 24 : 15).AddTicks(activeToday ? -1 : 0),
 				100,
 				33,
 				notes: null);
@@ -432,6 +704,36 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 		await _subjectRepository.InsertAsync(subject, autoSave: true);
 
 		return subject;
+	}
+
+	private static Student CreateApprovedStudent(
+		string firstName,
+		int rollNo,
+		Guid academicYearId,
+		Guid boardId,
+		Guid mediumId,
+		Guid stageId,
+		Guid standardId,
+		Guid divisionId,
+		string unique)
+	{
+		var student = new Student(
+			Guid.NewGuid(),
+			TestTenantId,
+			firstName,
+			null,
+			$"Student {unique}"[..30],
+			academicYearId,
+			boardId,
+			mediumId,
+			stageId,
+			standardId,
+			divisionId,
+			grNo: 20000 + rollNo,
+			rollNo,
+			StudentLifeCycleStatusEnum.Admission);
+		student.ApproveAdmission();
+		return student;
 	}
 
 	private async Task<AssignedSubject> CreatePrimaryTeacherSubjectAsync(

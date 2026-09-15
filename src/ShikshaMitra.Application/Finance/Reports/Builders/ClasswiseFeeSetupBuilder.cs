@@ -24,7 +24,7 @@ public class ClasswiseFeeSetupBuilder(
 {
     public string ReportType => FinanceReportTypes.ClasswiseFeeSetup;
 
-    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, bool exportAllRows)
+    public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
         var boardId = request.Filters.BoardId;
         var mediumId = request.Filters.MediumId;
@@ -32,7 +32,9 @@ public class ClasswiseFeeSetupBuilder(
         var batchId = request.Filters.BatchId; // AcademicYearId
 
         // 1. Fetch relevant Standards based on Organization (Stage)
+        var allowedStandardIds = executionScope.AllowedStandardIds;
         var standardQuery = (await standardRepository.GetQueryableAsync())
+            .Where(s => allowedStandardIds.Contains(s.Id))
             .WhereIf(organizationIds.Any(), s => organizationIds.Contains(s.EducationMediumStageId));
         var standards = await asyncExecuter.ToListAsync(standardQuery);
         var standardIds = standards.Select(s => s.Id).ToList();

@@ -354,7 +354,7 @@ public class LessonPlanAppService(
         // into the previous UTC date (for example, 15 Sep IST becomes 14 Sep UTC).
         var plannedLocalDate = input.PlannedDate.Date;
         var plannedDateUtc = input.PlannedDate.UtcDateTime;
-        await EnsureLessonPlanCanBeCreatedForDateAsync(input.TeacherId, plannedLocalDate, input.StandardId, input.DivisionId);
+        await EnsureLessonPlanCanBeCreatedForLocalDateAsync(input.TeacherId, plannedLocalDate, input.StandardId, input.DivisionId);
         await EnsureUniqueLessonPlanAsync(input.TeacherId, plannedDateUtc, input.Topic, input.TimetableSlotId);
 
         var lessonPlan = new LessonPlan(
@@ -434,7 +434,11 @@ public class LessonPlanAppService(
         await EnsureCurrentTeacherOwnsLessonPlanAsync(lessonPlan, "submit");
         EnsureLessonPlanSubmittable(lessonPlan);
         await EnsureChapterMatchesPlanTargetAsync(lessonPlan.ChapterId, lessonPlan.StandardId, lessonPlan.SubjectId);
-        await EnsureLessonPlanCanBeCreatedForDateAsync(lessonPlan.TeacherId, lessonPlan.PlannedDate, lessonPlan.StandardId, lessonPlan.DivisionId);
+        await EnsureLessonPlanCanBeCreatedForLocalDateAsync(
+            lessonPlan.TeacherId,
+            LessonPlanCalendarDate.FromStoredInstant(lessonPlan.PlannedDate),
+            lessonPlan.StandardId,
+            lessonPlan.DivisionId);
         await EnsureUniqueLessonPlanAsync(lessonPlan.TeacherId, lessonPlan.PlannedDate, lessonPlan.Topic, lessonPlan.TimetableSlotId, lessonPlan.Id);
         await lessonPlanProgressManager.EnsureTargetAsync(lessonPlan, lessonPlan.ChapterId, lessonPlan.PlannedCompletionPercentage);
 
@@ -453,7 +457,11 @@ public class LessonPlanAppService(
             await EnsureCurrentTeacherOwnsLessonPlanAsync(plan, "submit");
             EnsureLessonPlanSubmittable(plan);
             await EnsureChapterMatchesPlanTargetAsync(plan.ChapterId, plan.StandardId, plan.SubjectId);
-            await EnsureLessonPlanCanBeCreatedForDateAsync(plan.TeacherId, plan.PlannedDate, plan.StandardId, plan.DivisionId);
+            await EnsureLessonPlanCanBeCreatedForLocalDateAsync(
+                plan.TeacherId,
+                LessonPlanCalendarDate.FromStoredInstant(plan.PlannedDate),
+                plan.StandardId,
+                plan.DivisionId);
             await EnsureUniqueLessonPlanAsync(plan.TeacherId, plan.PlannedDate, plan.Topic, plan.TimetableSlotId, plan.Id);
             await lessonPlanProgressManager.EnsureTargetAsync(plan, plan.ChapterId, plan.PlannedCompletionPercentage);
             plan.Submit();
@@ -835,7 +843,7 @@ public class LessonPlanAppService(
 
             var insight = await ResolveLessonPlanInsightAsync(
                 item.TeacherId,
-                item.PlannedDate.Date,
+                LessonPlanCalendarDate.FromStoredInstant(item.PlannedDate),
                 item.StandardId,
                 item.DivisionId
             );
@@ -1171,13 +1179,13 @@ public class LessonPlanAppService(
         }
     }
 
-    private async Task EnsureLessonPlanCanBeCreatedForDateAsync(
+    private async Task EnsureLessonPlanCanBeCreatedForLocalDateAsync(
         Guid teacherId,
-        DateTime plannedDate,
+        DateTime localDate,
         Guid standardId,
         Guid divisionId)
     {
-        var insight = await ResolveLessonPlanInsightAsync(teacherId, plannedDate.Date, standardId, divisionId);
+        var insight = await ResolveLessonPlanInsightAsync(teacherId, localDate.Date, standardId, divisionId);
         if (insight.BlocksPlanCreation)
         {
             throw new UserFriendlyException(insight.Message ?? "Lesson plan creation is blocked for this date.");

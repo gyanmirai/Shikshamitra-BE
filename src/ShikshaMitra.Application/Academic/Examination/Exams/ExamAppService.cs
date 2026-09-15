@@ -53,8 +53,6 @@ public class ExamAppService(
 	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
 	IUserScopeAccessService userScopeAccessService) : ApplicationService, IExamAppService
 {
-	private const string CalendarSyncDescriptionPrefix = "Auto-created from examination schedule. ExamId: ";
-
 	public async Task<Guid> CreateBasicDetailsAsync(ExamBasicDetailsRequestDto input)
 	{
 		await EnsureCanAccessClassDivisionsAsync(input.StandardId, input.DivisionIds, input.SubjectIds);
@@ -205,29 +203,6 @@ public class ExamAppService(
 			? (await electiveGroupRepository.GetListAsync(eg => separateElectiveGroupIds.Contains(eg.Id))).ToDictionary(eg => eg.Id)
 			: new Dictionary<Guid, ElectiveGroup>();
 
-		var selectedElectiveSubjectIdsByGroup = await GetSelectedElectiveSubjectIdsByGroupAsync(
-			exam.StandardId,
-			exam.ExamDivisions.Select(x => x.DivisionId).ToList(),
-			separateElectiveGroupIds);
-		var selectedSeparateSubjectIds = selectedElectiveSubjectIdsByGroup.Values
-			.SelectMany(x => x)
-			.Distinct()
-			.ToList();
-		if (selectedSeparateSubjectIds.Count > 0)
-		{
-			var missingSelectedSubjectIds = selectedSeparateSubjectIds
-				.Where(id => !subjectDict.ContainsKey(id))
-				.ToList();
-			if (missingSelectedSubjectIds.Count > 0)
-			{
-				var selectedSubjects = await subjectRepository.GetListAsync(s => missingSelectedSubjectIds.Contains(s.Id));
-				foreach (var subject in selectedSubjects)
-				{
-					subjectDict[subject.Id] = subject;
-				}
-			}
-		}
-
 		var result = new List<ExamScheduleSubjectDto>();
 
 		// ── Case 1: Combined mode (SubjectId = ElectiveGroupId) ────────────────────────────────
@@ -270,10 +245,10 @@ public class ExamAppService(
 			var egId = group.Key;
 			electiveGroupDict.TryGetValue(egId, out var eg);
 
-			selectedElectiveSubjectIdsByGroup.TryGetValue(egId, out var selectedSubjectIds);
-
 			var scheduledSubjectsById = group.ToDictionary(s => s.SubjectId);
-			var groupSubjectIds = selectedSubjectIds?.ToList() ?? group.Select(s => s.SubjectId).ToList();
+			// The timetable is an exam-scope projection. Student elective selections may contain
+			// other peers from the same group, but only ExamSubjects explicitly belong to this exam.
+			var groupSubjectIds = group.Select(s => s.SubjectId).ToList();
 
 			var groupSubjects = groupSubjectIds
 				.Select(subjectId =>
@@ -1447,34 +1422,13 @@ public class ExamAppService(
 
 	private ExamStatus GetEffectiveScheduleStatus(Exam exam)
 	{
-		if (exam.Status == ExamStatus.Pending)
-		{
-			return ExamStatus.Pending;
-		}
-
-		var now = DateTime.Now;
 		var start = GetExamStartDateTime(exam);
 		var end = GetExamFinalEndAt(exam);
-		if (!start.HasValue || !end.HasValue)
-		{
-			// An exam without a complete schedule remains pending, including
-			// records whose subject dates are both null.
-			return ExamStatus.Pending;
-		}
 
-		if (start.HasValue && end.HasValue && now >= start.Value && now <= end.Value)
-		{
-			return ExamStatus.Ongoing;
-		}
-
-		// Once the final scheduled slot is over, an exam must leave Published and
-		// Ongoing views even if its persisted lifecycle state has not been updated.
-		if (end.HasValue && now > end.Value)
-		{
-			return ExamStatus.Completed;
-		}
-
-		return exam.Status;
+		// Exam schedule fields contain institution-local wall-clock values. Resolve
+		// them against an explicit UTC clock so an Azure/UTC host cannot lag IST by
+		// 5.5 hours and leave an active exam in the Published tab.
+		return ExamScheduleStatusResolver.Resolve(exam.Status, start, end, DateTime.UtcNow);
 	}
 
 	private static DateTime? GetExamStartDateTime(Exam exam)
@@ -1810,6 +1764,7 @@ public class ExamAppService(
 
 	private async Task SyncScheduleToAcademicCalendarAsync(Exam exam, IReadOnlyCollection<NormalizedExamSubjectSchedule> subjectSchedules)
 	{
+		var academicMediumId = await GetAcademicMediumIdForStandardAsync(exam.StandardId);
 		var scheduledRows = subjectSchedules
 			.Where(row => row.ExamDate.HasValue)
 			.Select(row => (
@@ -1830,6 +1785,7 @@ public class ExamAppService(
 		var minDate = scheduledRows.Min(row => row.Date);
 		var maxDate = scheduledRows.Max(row => row.Date);
 		var calendars = await calendarRepository.GetListAsync(calendar =>
+			calendar.AcademicMediumId == academicMediumId &&
 			calendar.Status != CalendarStatus.Archived &&
 			calendar.StartDate.Date <= maxDate &&
 			calendar.EndDate.Date >= minDate);
@@ -1841,10 +1797,8 @@ public class ExamAppService(
 				.WithData("EndDate", maxDate.ToString("yyyy-MM-dd"));
 		}
 
-		var syncMarker = $"{CalendarSyncDescriptionPrefix}{exam.Id}";
-		var calendarIds = calendars.Select(calendar => calendar.Id).ToList();
+		var syncMarker = $"{AcademicCalendarConsts.ExamSyncDescriptionPrefix}{exam.Id}";
 		var existingSyncedDays = await calendarDayRepository.GetListAsync(day =>
-			calendarIds.Contains(day.AcademicCalendarId) &&
 			day.DayType == DayType.Exam &&
 			day.Status == CalendarDayStatus.Active &&
 			day.Description != null &&
@@ -1886,7 +1840,11 @@ public class ExamAppService(
 				divisionId: null,
 				holidayCategory: null,
 				startTime: row.StartTime?.TimeOfDay,
-				endTime: row.EndTime?.TimeOfDay);
+				endTime: row.EndTime?.TimeOfDay,
+				examTypeId: exam.ExamTypeId,
+				linkedExamId: exam.Id,
+				examStartTime: row.StartTime?.TimeOfDay,
+				examEndTime: row.EndTime?.TimeOfDay);
 
 			await calendarDayRepository.InsertAsync(calendarDay);
 		}

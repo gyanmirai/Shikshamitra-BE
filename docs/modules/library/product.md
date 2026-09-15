@@ -3,7 +3,7 @@ module: library
 domain: product
 content_type: Conceptual
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-09-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -38,6 +38,8 @@ Library changes must preserve these rules.
 | Reservations must reference valid catalog and member records | It prevents orphan queue entries |
 | Charges must remain tied to a member and Library event | It keeps fee history auditable |
 | Reports must use the same status semantics as operations | It keeps operational and reporting views consistent |
+| AI plans must compile to the typed report contract | It keeps model output away from SQL, repositories, and unrestricted identifiers |
+| Library rows must be limited by tenant, academic-year scope, and student UserScope | It prevents a broad Library report permission from exposing inaccessible students |
 | Notification history must reflect sends and reminder runs | It gives staff an audit trail |
 
 ## Known partial surfaces
@@ -50,3 +52,10 @@ They do not replace source inspection for every request shape.
 | Full DTO field catalog | Inspect `Application.Contracts/Library/**` |
 | Notification delivery plumbing | Inspect `Application/Library/Notifications/**` and the host reminder worker |
 | Export file formats | Inspect `Application/Library/Reports/**` |
+
+## AI report behavior
+
+The Library AI coordinator understands inventory, circulation, overdue, reservation, member, fine, and popularity requests.
+It selects among the ten executable Library report types, chooses report-specific columns and filters, and asks for clarification only when a missing choice materially changes the result.
+The user reviews a live authorized preview before approving PDF or Excel generation.
+The model is a planner only; deterministic application code validates and executes the report.

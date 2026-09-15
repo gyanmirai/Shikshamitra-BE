@@ -33,6 +33,13 @@ public class StudentScopeAccessService(
 	public async Task<IQueryable<Student>> ApplyCurrentUserScopeAsync(IQueryable<Student> query)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		return ApplyScope(query, scope);
+	}
+
+	public static IQueryable<Student> ApplyScope(
+		IQueryable<Student> query,
+		UserScopeContext scope)
+	{
 
 		if (scope.IsAdmin)
 		{
@@ -45,29 +52,15 @@ public class StudentScopeAccessService(
 		}
 
 		return query.Where(s =>
-			scope.HasWildcardAcademicYear ||
-			(s.AcademicYearId.HasValue &&
-			 (scope.AcademicYearIds.Contains(s.AcademicYearId.Value) ||
-			  scope.WildcardBoardAcademicYearIds.Contains(s.AcademicYearId.Value))) ||
-			(s.DivisionId.HasValue &&
-			 (scope.DivisionIds.Contains(s.DivisionId.Value) ||
-			  (scope.HasWildcardDivision &&
-			   s.StandardId.HasValue &&
-			   scope.WildcardDivisionStandardIds.Contains(s.StandardId.Value)))) ||
-			(s.StandardId.HasValue &&
-			 (scope.StandardIds.Contains(s.StandardId.Value) ||
-			  (scope.HasWildcardStandard &&
-			   s.AcademicMediumStageId.HasValue &&
-			   scope.WildcardStandardMediumStageIds.Contains(s.AcademicMediumStageId.Value)))) ||
-			(s.AcademicMediumStageId.HasValue &&
-			 (scope.MediumStageIds.Contains(s.AcademicMediumStageId.Value) ||
-			  (scope.HasWildcardMediumStage &&
-			   scope.WildcardMediumStageMediumIds.Contains(s.AcademicMediumId)))) ||
-			scope.MediumIds.Contains(s.AcademicMediumId) ||
-			(scope.HasWildcardMedium &&
-			 s.AcademicBoardId.HasValue &&
-			 scope.WildcardMediumBoardIds.Contains(s.AcademicBoardId.Value)) ||
-			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
+			s.AcademicYearId.HasValue &&
+			scope.AcademicYearIds.Contains(s.AcademicYearId.Value) &&
+			(scope.WildcardBoardAcademicYearIds.Contains(s.AcademicYearId.Value) ||
+			 (s.AcademicBoardId.HasValue && scope.WildcardMediumBoardIds.Contains(s.AcademicBoardId.Value)) ||
+			 scope.WildcardMediumStageMediumIds.Contains(s.AcademicMediumId) ||
+			 (s.AcademicMediumStageId.HasValue &&
+			  scope.WildcardStandardMediumStageIds.Contains(s.AcademicMediumStageId.Value)) ||
+			 (s.StandardId.HasValue && scope.WildcardDivisionStandardIds.Contains(s.StandardId.Value)) ||
+			 (s.DivisionId.HasValue && scope.DivisionIds.Contains(s.DivisionId.Value))));
 	}
 
 	public async Task<bool> CurrentUserHasAcademicYearWideScopeAsync(Guid academicYearId)

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.Finance.Reports.Builders;
+using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
@@ -15,9 +16,15 @@ public class FinanceReportGenerator(
     IRepository<AcademicYear, Guid> academicYearRepository)
     : ITransientDependency
 {
-    public async Task<FinanceReportOptionsDto> GetOptionsAsync()
+    public async Task<FinanceReportOptionsDto> GetOptionsAsync(IReadOnlyCollection<Guid>? allowedAcademicYearIds = null)
     {
         var academicYears = await academicYearRepository.GetListAsync();
+        if (allowedAcademicYearIds != null)
+        {
+            academicYears = academicYears
+                .Where(year => allowedAcademicYearIds.Contains(year.Id))
+                .ToList();
+        }
 
         return new FinanceReportOptionsDto
         {
@@ -35,11 +42,13 @@ public class FinanceReportGenerator(
     }
 
     public async Task<FinanceReportPreviewDto> GenerateAsync(
-        FinanceReportRequestDto request, 
+        FinanceReportRequestDto request,
+        FinanceReportExecutionScope executionScope,
         bool exportAllRows)
     {
         var builder = builders.FirstOrDefault(b => b.ReportType == request.ReportType) 
-            ?? throw new Exception($"Unsupported report type: {request.ReportType}");
+            ?? throw new BusinessException(FinanceReportRequestGuard.UnsupportedReportType)
+                .WithData("ReportType", request.ReportType);
 
         var payload = new FinanceReportPreviewDto
         {
@@ -47,6 +56,6 @@ public class FinanceReportGenerator(
             NormalizedFilters = request.Filters
         };
 
-        return await builder.BuildAsync(request, payload, exportAllRows);
+        return await builder.BuildAsync(request, payload, executionScope, exportAllRows);
     }
 }

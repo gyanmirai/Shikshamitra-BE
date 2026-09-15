@@ -94,11 +94,11 @@ public class AdmissionApplicationAppService(
 		decisionService.FinalizeAsync(id, input);
 
 	[Obsolete("Admissions no longer creates operational enrollment. Use FinalizeAsync.")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	public Task<AdmissionEnrollmentResultDto> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input) => decisionService.EnrollAsync(id, input);
 
 	[Obsolete("Placement is owned by Student Onboarding.")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	public Task<AdmissionEnrollmentOptionsDto> GetEnrollmentOptionsAsync(Guid id) => decisionService.GetEnrollmentOptionsAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]

@@ -11129,6 +11129,10 @@ namespace ShikshaMitra.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<decimal?>("AllocationPercentage")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)");
+
                     b.Property<decimal>("ConcessionAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -11294,6 +11298,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("StudentFeeStructureId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("StudentId")
                         .HasColumnType("uuid");
 
@@ -11311,6 +11318,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("ProrationPolicyVersionId")
                         .HasDatabaseName("IX_DueFees_ProrationPolicyVersionId");
+
+                    b.HasIndex("StudentFeeStructureId");
 
                     b.HasIndex("TenantId", "StudentId", "ScheduleInstanceKey")
                         .IsUnique()
@@ -12341,6 +12350,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("AssignmentSnapshotJson")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("ChargeEndDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -12370,10 +12382,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("ConcessionFeeHeadScope")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("ConcessionPolicyId")
+                    b.Property<Guid?>("ConcessionPolicyId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("ConcessionPolicyVersionId")
+                    b.Property<Guid?>("ConcessionPolicyVersionId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -33160,6 +33172,12 @@ namespace ShikshaMitra.Migrations
                         .WithMany()
                         .HasForeignKey("ProrationPolicyVersionId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Finance.Fees.StudentFeeAssignment.StudentFeeStructure", null)
+                        .WithMany()
+                        .HasForeignKey("StudentFeeStructureId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_DueFees_StudentFeeAssignment");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundRequest", b =>

@@ -49,8 +49,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				_onboardingStepRepository.CountAsync(step => step.OnboardingCaseId == onboardingCase.Id)))
 				.ShouldBe(StudentOnboardingStepKeys.Defaults.Length);
 
+			#pragma warning disable CS0618 // The compatibility endpoint is intentionally exercised here.
 			var legacy = await Should.ThrowAsync<BusinessException>(() =>
 				_applicationAppService.EnrollAsync(fixture.Application.Id, new EnrollAdmissionApplicationDto()));
+			#pragma warning restore CS0618
 			legacy.Code.ShouldBe(StudentOnboardingErrorCodes.LegacyEnrollDisabled);
 		});
 

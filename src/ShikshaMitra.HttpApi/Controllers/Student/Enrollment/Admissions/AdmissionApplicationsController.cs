@@ -102,11 +102,11 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 
 	[Obsolete("Admissions no longer creates operational enrollment. Use /finalize.")]
 	[HttpPost("{id:guid}/enroll")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	public async Task<Result<AdmissionEnrollmentResultDto>> EnrollAsync(Guid id, EnrollAdmissionApplicationDto input) => Result.Success(await service.EnrollAsync(id, input));
 
 	[Obsolete("Placement is owned by Student Onboarding.")]
 	[HttpGet("{id:guid}/enrollment-options")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Enroll)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	public async Task<Result<AdmissionEnrollmentOptionsDto>> GetEnrollmentOptionsAsync(Guid id) => Result.Success(await service.GetEnrollmentOptionsAsync(id));
 }

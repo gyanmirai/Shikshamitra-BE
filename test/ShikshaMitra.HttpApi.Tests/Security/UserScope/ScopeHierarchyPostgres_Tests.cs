@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR.Employees;
@@ -97,6 +98,7 @@ public sealed class SecurityBaselineFactAttribute : FactAttribute
 public sealed class SecurityPostgresTestFactory(string connectionVariable = "SECURITY_TEST_POSTGRES") : ShikshaMitraApiTestFactory
 {
     public ScopeQueryCounter Queries { get; } = new();
+    public List<string> FailureDiagnostics { get; } = [];
     protected override void ConfigureTestDatabase(IServiceCollection services)
     {
         var connection = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(connectionVariable));
@@ -105,10 +107,34 @@ public sealed class SecurityPostgresTestFactory(string connectionVariable = "SEC
             throw new InvalidOperationException("Security tests require an empty disposable loopback payroll_tests_* database.");
         services.Configure<AbpDbContextOptions>(options => options.Configure(context =>
             context.DbContextOptions.UseNpgsql(connection.ConnectionString).AddInterceptors(Queries)));
+        services.AddSingleton<ILogger<UserScopeAppService>>(provider => new ScopeFailureLogger(
+            provider.GetRequiredService<ILoggerFactory>().CreateLogger<UserScopeAppService>(), FailureDiagnostics));
         using var database = new ShikshaMitraDbContext(new DbContextOptionsBuilder<ShikshaMitraDbContext>()
             .UseNpgsql(connection.ConnectionString).Options);
         // Never reset a database. A reused database must fail instead of destroying its contents.
         database.GetService<IRelationalDatabaseCreator>().CreateTables();
+    }
+}
+
+internal sealed class ScopeFailureLogger(ILogger<UserScopeAppService> inner, List<string> diagnostics)
+    : ILogger<UserScopeAppService>
+{
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => inner.BeginScope(state);
+    public bool IsEnabled(LogLevel logLevel) => inner.IsEnabled(logLevel);
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter)
+    {
+        if (logLevel >= LogLevel.Error)
+            for (var cause = exception; cause != null; cause = cause.InnerException)
+            {
+                // CI needs the failing code path, never exception messages, SQL parameters or identities.
+                var frames = new StackTrace(cause).GetFrames().Select(frame => frame.GetMethod())
+                    .Where(method => method != null)
+                    .Select(method => $"{method!.DeclaringType?.FullName}.{method.Name}");
+                diagnostics.Add($"{cause.GetType().FullName}; SQLSTATE={(cause as PostgresException)?.SqlState ?? "none"}; " +
+                    string.Join(" -> ", frames));
+            }
+        inner.Log(logLevel, eventId, state, exception, formatter);
     }
 }
 
@@ -142,6 +168,8 @@ public class ScopeHierarchyPostgres_Tests(ITestOutputHelper output)
                 using var response = await client.GetAsync($"/api/app/user-scope/user-scope-hierarchy?userId={managerId}");
                 var body = await response.Content.ReadAsStringAsync();
                 timer.Stop();
+                if (response.StatusCode != HttpStatusCode.OK)
+                    foreach (var diagnostic in factory.FailureDiagnostics) output.WriteLine(diagnostic);
                 response.StatusCode.ShouldBe(HttpStatusCode.OK, body);
                 if (request == -5) cold = timer.Elapsed.TotalMilliseconds;
                 if (request >= 0)

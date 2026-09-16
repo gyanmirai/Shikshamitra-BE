@@ -22,9 +22,9 @@ public class SalaryTemplateController(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
 	public Task<SalaryTemplateListDto> GetListAsync() => appService.GetListAsync();
 
-	[HttpGet("published")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
-	public Task<SalaryTemplateListDto> GetPublishedListAsync() => appService.GetPublishedListAsync();
+	[HttpGet("active")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage)]
+	public Task<SalaryTemplateListDto> GetActiveListAsync() => appService.GetActiveListAsync();
 
 	[HttpGet("component-catalog")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
@@ -35,29 +35,18 @@ public class SalaryTemplateController(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
 	public Task<SalaryTemplateDto> GetAsync(Guid id) => appService.GetAsync(id);
 
+	[HttpGet("{id:guid}/versions")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
+	public Task<SalaryTemplateVersionListDto> GetVersionsAsync(Guid id) => appService.GetVersionsAsync(id);
+
 	[HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Add)]
-	public async Task<ActionResult<SalaryTemplateDto>> CreateAsync(CreateSalaryTemplateDto input) =>
+	public async Task<ActionResult<SalaryTemplateDto>> CreateAsync(SaveSalaryTemplateDto input) =>
 		StatusCode(201, await appService.CreateAsync(input));
 
-	[HttpPost("{id:guid}/versions")]
+	[HttpPut("{id:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Edit)]
-	public Task<SalaryTemplateDto> CreateNextVersionAsync(Guid id) => appService.CreateNextVersionAsync(id);
-
-	[HttpPut("{id:guid}/versions/{versionId:guid}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Edit)]
-	public Task<SalaryTemplateDto> UpdateDraftAsync(
-		Guid id,
-		Guid versionId,
-		UpdateSalaryTemplateDraftDto input) => appService.UpdateDraftAsync(id, versionId, input);
-
-	[HttpPost("{id:guid}/versions/{versionId:guid}/publish")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Publish)]
-	public Task<SalaryTemplateDto> PublishAsync(Guid id, Guid versionId) => appService.PublishAsync(id, versionId);
-
-	[HttpPost("{id:guid}/clone")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Add)]
-	public Task<SalaryTemplateDto> CloneAsync(Guid id, [FromQuery] string name) => appService.CloneAsync(id, name);
+	public Task<SalaryTemplateDto> UpdateAsync(Guid id, SaveSalaryTemplateDto input) => appService.UpdateAsync(id, input);
 
 	[HttpPost("{id:guid}/set-default")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.SetDefault)]
@@ -65,21 +54,24 @@ public class SalaryTemplateController(
 
 	[HttpDelete("{id:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Archive)]
-	public async Task<IActionResult> ArchiveAsync(Guid id)
+	public async Task<IActionResult> ArchiveAsync(Guid id, [FromQuery] Guid? replacementDefaultTemplateId)
 	{
-		await appService.ArchiveAsync(id);
+		await appService.ArchiveAsync(id, new ArchiveSalaryTemplateDto
+		{
+			ReplacementDefaultTemplateId = replacementDefaultTemplateId
+		});
 		return NoContent();
 	}
 
 	[HttpPost("versions/{templateVersionId:guid}/calculate")]
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage)]
 	public async Task<SalaryTemplateCalculationDto> CalculateAsync(
 		Guid templateVersionId,
 		CalculateSalaryTemplateRequestDto input)
 	{
 		if (input.EmployeeId.HasValue)
 		{
-			await employeeAuthorizationService.CheckEmployeeAccessAsync(input.EmployeeId.Value, requireOwnership: true);
+			await employeeAuthorizationService.CheckEmployeeScopeAccessAsync(input.EmployeeId.Value);
 		}
 
 		return await appService.CalculateAsync(templateVersionId, input);

@@ -965,7 +965,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	private async Task SaveApprovedPayrollContractAsync(Guid employeeId, PayrollContract contract)
 	{
 		await _employeePayrollAppService.UpdatePayrollContractAsync(employeeId, contract);
-		// Payroll now consumes an approved compensation revision, not mutable permanent components.
+		// Payroll consumes an effective compensation revision, not mutable permanent components.
 		// Keep historical assertions meaningful by establishing that prerequisite in the fixture.
 		await WithUnitOfWorkAsync(async () =>
 		{

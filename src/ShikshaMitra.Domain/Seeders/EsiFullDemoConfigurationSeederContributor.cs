@@ -302,7 +302,7 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 		if (missingRevisionEmployees.Count > 0)
 		{
 			throw new InvalidOperationException(
-				$"FullDemo ESI configuration requires approved compensation revisions for: {string.Join(", ", missingRevisionEmployees)}.");
+				$"FullDemo ESI configuration requires effective salary setups for: {string.Join(", ", missingRevisionEmployees)}.");
 		}
 
 		var revisionIds = revisionsByEmployee.Values.Select(x => x.Id).ToHashSet();

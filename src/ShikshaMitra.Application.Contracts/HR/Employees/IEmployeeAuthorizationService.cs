@@ -24,4 +24,10 @@ public interface IEmployeeAuthorizationService
 
 	/// <summary>Checks an exact action permission, tenant, and employee scope independently of profile editing.</summary>
 	Task CheckEmployeeScopedPermissionAsync(Guid employeeId, string permission);
+
+	/// <summary>
+	/// Checks tenant and organization scope without requiring employee-list permissions.
+	/// The calling payroll endpoint remains responsible for its own action permission.
+	/// </summary>
+	Task CheckEmployeeScopeAccessAsync(Guid employeeId);
 }

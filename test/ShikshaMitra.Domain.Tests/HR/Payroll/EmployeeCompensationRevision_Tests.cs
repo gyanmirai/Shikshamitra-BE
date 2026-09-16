@@ -10,21 +10,17 @@ namespace ShikshaMitra.HR.Payroll;
 public class EmployeeCompensationRevision_Tests
 {
 	[Fact]
-	public void Should_require_a_separate_approver_and_preserve_the_approved_snapshot()
+	public void Should_make_a_direct_save_effective_and_preserve_the_snapshot()
 	{
-		var submitterId = Guid.NewGuid();
-		var approverId = Guid.NewGuid();
+		var savedBy = Guid.NewGuid();
 		var revision = BuildDraft();
 
-		revision.Submit(submitterId, new DateTime(2026, 8, 24, 8, 0, 0, DateTimeKind.Utc));
-
-		var selfApproval = Should.Throw<BusinessException>(() =>
-			revision.Approve(submitterId, new DateTime(2026, 8, 24, 9, 0, 0, DateTimeKind.Utc)));
-		selfApproval.Code.ShouldBe("HR:Payroll:CompensationRevisionSelfApprovalDenied");
-
-		revision.Approve(approverId, new DateTime(2026, 8, 24, 9, 5, 0, DateTimeKind.Utc));
+		revision.MakeEffective(savedBy, new DateTime(2026, 8, 24, 9, 5, 0, DateTimeKind.Utc));
 		revision.Status.ShouldBe(CompensationRevisionStatus.Approved);
-		revision.ApprovedByUserId.ShouldBe(approverId);
+		revision.SubmittedByUserId.ShouldBe(savedBy);
+		revision.ApprovedByUserId.ShouldBe(savedBy);
+		revision.IdempotencyKey.ShouldBe("save-operation-1");
+		revision.CustomizationReason.ShouldBe("Adjusted basic for contract terms");
 		Should.Throw<BusinessException>(() => revision.ReplaceDraft(
 			new DateTime(2026, 8, 1),
 			SalaryInputBasis.EmployerCost,
@@ -43,25 +39,27 @@ public class EmployeeCompensationRevision_Tests
 	}
 
 	[Fact]
-	public void Should_allow_a_rejected_revision_to_remain_auditable()
+	public void Should_allow_an_effective_revision_to_be_superseded()
 	{
 		var revision = BuildDraft();
-		var submitterId = Guid.NewGuid();
-		revision.Submit(submitterId, new DateTime(2026, 8, 24, 8, 0, 0, DateTimeKind.Utc));
+		revision.MakeEffective(Guid.NewGuid(), new DateTime(2026, 8, 24, 9, 0, 0, DateTimeKind.Utc));
+		revision.Supersede();
 
-		var selfRejection = Should.Throw<BusinessException>(() => revision.Reject(
-			submitterId,
-			new DateTime(2026, 8, 24, 8, 30, 0, DateTimeKind.Utc),
-			"I changed my mind."));
-		selfRejection.Code.ShouldBe("HR:Payroll:CompensationRevisionSelfApprovalDenied");
+		revision.Status.ShouldBe(CompensationRevisionStatus.Superseded);
+	}
 
-		revision.Reject(
-			Guid.NewGuid(),
-			new DateTime(2026, 8, 24, 9, 0, 0, DateTimeKind.Utc),
-			"The effective month is incorrect.");
+	[Fact]
+	public void Should_mark_a_legacy_migration_effective_without_inventing_an_approver()
+	{
+		var revision = BuildDraft();
+		var migratedAt = new DateTime(2026, 8, 24, 9, 0, 0, DateTimeKind.Utc);
 
-		revision.Status.ShouldBe(CompensationRevisionStatus.Rejected);
-		revision.RejectionReason.ShouldBe("The effective month is incorrect.");
+		revision.MakeEffectiveFromLegacy(migratedAt);
+
+		revision.Status.ShouldBe(CompensationRevisionStatus.Approved);
+		revision.SubmittedByUserId.ShouldBeNull();
+		revision.ApprovedByUserId.ShouldBeNull();
+		revision.ApprovedAt.ShouldBe(migratedAt);
 	}
 
 	private static EmployeeCompensationRevision BuildDraft()
@@ -71,7 +69,8 @@ public class EmployeeCompensationRevision_Tests
 			Guid.NewGuid(),
 			Guid.NewGuid(),
 			1,
-			new DateTime(2026, 8, 1));
+			new DateTime(2026, 8, 1),
+			"save-operation-1");
 		revision.ReplaceDraft(
 			new DateTime(2026, 8, 1),
 			SalaryInputBasis.EmployerCost,
@@ -86,7 +85,9 @@ public class EmployeeCompensationRevision_Tests
 			null,
 			null,
 			"IN-GJ",
-			"{}");
+			"{}",
+			"[{\"componentId\":\"basic\"}]",
+			"Adjusted basic for contract terms");
 		return revision;
 	}
 }

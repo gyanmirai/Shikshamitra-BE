@@ -20,6 +20,17 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Authorize]
 public class EmployeeStatusController(IEmployeeStatusAppService employeeStatusAppService) : AbpControllerBase
 {
+	[HttpGet("{employeeId}/activation-readiness")]
+	[ProducesResponseType(typeof(EmployeeActivationReadinessResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	[ProducesResponseType(StatusCodes.Status404NotFound)]
+	public virtual async Task<EmployeeActivationReadinessResponse> GetActivationReadinessAsync(
+		[FromRoute, Required] Guid employeeId)
+	{
+		var result = await employeeStatusAppService.GetActivationReadinessAsync(employeeId);
+		return EmployeeStatusContractMapper.ToResponse(result);
+	}
+
 	/// <summary>
 	/// Check whether an employee can be moved to a non-active status.
 	/// </summary>

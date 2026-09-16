@@ -336,8 +336,8 @@ internal static class EsiStatutoryPresentation
 		EsiStatutoryCalculator.DisabilityReliefEvidenceIssue => Create(code, "Complete PwD relief evidence",
 			"Add valid relief dates and disability evidence, or turn off employer-share relief.",
 			"employeeEnrollment", affectedEmployeeCount),
-		IssueCodes.CompensationRevisionRequired => Create(code, "Approve compensation revisions",
-			"The affected employees need an approved compensation revision for this payroll month.",
+		IssueCodes.CompensationRevisionRequired => Create(code, "Set up employee salaries",
+			"The affected employees need an effective salary setup for this payroll month.",
 			"compensationRevision", affectedEmployeeCount),
 		_ => Create(code, "Review payroll setup",
 			"Resolve this payroll setup issue before activating ESI.", "general", affectedEmployeeCount)

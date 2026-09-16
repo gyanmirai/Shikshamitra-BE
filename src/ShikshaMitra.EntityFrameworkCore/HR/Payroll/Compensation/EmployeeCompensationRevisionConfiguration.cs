@@ -18,9 +18,14 @@ public class EmployeeCompensationRevisionConfiguration : IEntityTypeConfiguratio
 		builder.Property(x => x.EmployerCost).HasPrecision(18, 2);
 		builder.Property(x => x.StatutoryProfile).IsRequired().HasMaxLength(16);
 		builder.Property(x => x.CalculationSnapshotJson).IsRequired().HasColumnType("jsonb");
+		builder.Property(x => x.IdempotencyKey).IsRequired().HasMaxLength(100);
+		builder.Property(x => x.OverridesJson).IsRequired().HasColumnType("jsonb").HasDefaultValue("[]");
+		builder.Property(x => x.CustomizationReason).HasMaxLength(500);
 		builder.Property(x => x.RejectionReason).HasMaxLength(500);
 		builder.HasIndex(x => new { x.TenantId, x.EmployeeId, x.RevisionNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
 		builder.HasIndex(x => new { x.TenantId, x.EmployeeId, x.EffectiveMonth, x.Status });
+		builder.HasIndex(x => new { x.TenantId, x.EmployeeId, x.IdempotencyKey }).IsUnique()
+			.HasFilter("\"IsDeleted\" = false AND \"IdempotencyKey\" <> ''");
 	}
 }
 

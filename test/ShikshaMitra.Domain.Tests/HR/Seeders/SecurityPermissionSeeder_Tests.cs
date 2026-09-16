@@ -57,6 +57,8 @@ public class SecurityPermissionSeeder_Tests
 
 		await grants.DidNotReceiveWithAnyArgs().InsertRoleGrantsIgnoringDuplicatesAsync(
 			default!, default!, default, default);
+		await grants.DidNotReceiveWithAnyArgs().MirrorRoleGrantsIgnoringDuplicatesAsync(
+			default!, default, default);
 	}
 
 	[Fact]

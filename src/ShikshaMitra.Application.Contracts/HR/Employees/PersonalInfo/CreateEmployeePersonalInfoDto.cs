@@ -22,7 +22,7 @@ public class CreateEmployeePersonalInfoDto
 
 	public string? ShortName { get; set; }
 
-	public EmployeeStatusType EmployeeStatusType { get; set; } = EmployeeStatusType.Active;
+	public EmployeeStatusType EmployeeStatusType { get; set; } = EmployeeStatusType.Inactive;
 
 	public DateOnly? DateOfBirth { get; set; }
 

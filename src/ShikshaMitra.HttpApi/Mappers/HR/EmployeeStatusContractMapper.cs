@@ -35,4 +35,15 @@ public static class EmployeeStatusContractMapper
 			ActiveDirectReportCount = dto.ActiveDirectReportCount
 		};
 	}
+
+	public static EmployeeActivationReadinessResponse ToResponse(EmployeeActivationReadinessDto dto)
+	{
+		return new EmployeeActivationReadinessResponse
+		{
+			CanActivate = dto.CanActivate,
+			RequiredMonth = dto.RequiredMonth,
+			CompensationRevisionId = dto.CompensationRevisionId,
+			BlockerCodes = dto.BlockerCodes
+		};
+	}
 }

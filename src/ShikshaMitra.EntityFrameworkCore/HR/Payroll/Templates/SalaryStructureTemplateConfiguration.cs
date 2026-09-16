@@ -26,11 +26,15 @@ public class SalaryStructureTemplateVersionConfiguration : IEntityTypeConfigurat
 		builder.Property(x => x.RulesJson).IsRequired().HasColumnType("jsonb");
 		builder.Property(x => x.DefaultSalaryBasis).IsRequired();
 		builder.Property(x => x.DefaultProtectionPolicy).IsRequired();
+		builder.Property(x => x.DefaultPfApplicable).IsRequired();
+		builder.Property(x => x.SaveOperationKey).IsRequired().HasMaxLength(100);
 		builder.HasOne<SalaryStructureTemplate>()
 			.WithMany()
 			.HasForeignKey(x => x.TemplateId)
 			.OnDelete(DeleteBehavior.Restrict);
 		builder.HasIndex(x => new { x.TenantId, x.TemplateId, x.VersionNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
 		builder.HasIndex(x => new { x.TenantId, x.TemplateId, x.Status });
+		builder.HasIndex(x => new { x.TenantId, x.SaveOperationKey }).IsUnique()
+			.HasFilter("\"IsDeleted\" = false AND \"SaveOperationKey\" <> ''");
 	}
 }

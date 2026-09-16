@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.HR.Employees.Status;
 
@@ -40,4 +41,12 @@ public class EmployeeStatusDeactivationCheckResponse
 {
 	public bool CanDeactivate { get; set; }
 	public int ActiveDirectReportCount { get; set; }
+}
+
+public class EmployeeActivationReadinessResponse
+{
+	public bool CanActivate { get; set; }
+	public DateTime RequiredMonth { get; set; }
+	public Guid? CompensationRevisionId { get; set; }
+	public List<string> BlockerCodes { get; set; } = [];
 }

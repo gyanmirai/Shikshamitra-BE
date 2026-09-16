@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Infrastructure.Traits;
@@ -42,6 +43,8 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		{
 			Message = "Approved for tests",
 			RequestConcurrencyStamp = context.RequestConcurrencyStamp,
+			PreviewFingerprint = context.PreviewFingerprint,
+			IdempotencyKey = Guid.NewGuid().ToString("N"),
 			FeeHeadApprovals =
 			[
 				new FeeHeadApprovalDto
@@ -58,7 +61,8 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 			],
 		};
 
-		var response = await Client.PostAsJsonAsync($"{BaseUrl}/{pendingId}/approve", approval, JsonOptions);
+		var response = await Client.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve", approval, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var result = await response.Content.ReadFromJsonAsync<ConcessionApprovalResponseDto>(JsonOptions);
@@ -72,10 +76,19 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 	public async Task Should_Reject_Pending_Request()
 	{
 		var pendingId = await CreatePendingRequestWithFeeHeadAsync();
+		var detailResponse = await Client.GetAsync($"{BaseUrl}/{pendingId}");
+		detailResponse.EnsureSuccessStatusCode();
+		var detail = await detailResponse.Content
+			.ReadFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(JsonOptions);
 
 		var response = await Client.PostAsJsonAsync(
-			$"{BaseUrl}/{pendingId}/reject",
-			new RejectConcessionRequestDto { Message = "Rejected for tests" },
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/reject",
+			new RejectConcessionRequestDto
+			{
+				Message = "Rejected for tests",
+				RequestConcurrencyStamp = detail!.Data!.ConcurrencyStamp,
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
+			},
 			JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -100,11 +113,13 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		var perLine = group.RequestedConcessionAmount / selectable.Count;
 
 		var approveResp = await Client.PostAsJsonAsync(
-			$"{BaseUrl}/{pendingId}/approve",
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve",
 			new ApproveConcessionRequestDto
 			{
 				Message = "Approve for cancel test",
 				RequestConcurrencyStamp = context.RequestConcurrencyStamp,
+				PreviewFingerprint = context.PreviewFingerprint,
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
 				FeeHeadApprovals =
 				[
 					new FeeHeadApprovalDto
@@ -123,10 +138,17 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 			JsonOptions);
 		approveResp.StatusCode.ShouldBe(HttpStatusCode.OK, await approveResp.Content.ReadAsStringAsync());
 
-		var cancelResp = await Client.PostAsync($"{ConcessionRequestsBaseUrl}/{pendingId}/cancel", null);
+		var cancelResp = await Client.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/cancel",
+			new CancelConcessionRequestDto
+			{
+				Reason = "Cannot cancel an approved request",
+				RequestConcurrencyStamp = context.RequestConcurrencyStamp,
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
+			}, JsonOptions);
 		cancelResp.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		(await cancelResp.Content.ReadAsStringAsync())
-			.ShouldContain(FinanceConcessionErrorCodes.CannotApproveOrRejectNonPending);
+			.ShouldContain(FinanceConcessionErrorCodes.InvalidTransition);
 	}
 
 	[Fact]
@@ -134,8 +156,19 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 	public async Task Should_Cancel_Pending_Request()
 	{
 		var pendingId = await CreatePendingRequestWithFeeHeadAsync();
+		var detailResponse = await Client.GetAsync($"{BaseUrl}/{pendingId}");
+		detailResponse.EnsureSuccessStatusCode();
+		var detail = await detailResponse.Content
+			.ReadFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(JsonOptions);
 
-		var cancelResp = await Client.PostAsync($"{ConcessionRequestsBaseUrl}/{pendingId}/cancel", null);
+		var cancelResp = await Client.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/cancel",
+			new CancelConcessionRequestDto
+			{
+				Reason = "Withdrawn by the request owner",
+				RequestConcurrencyStamp = detail!.Data!.ConcurrencyStamp,
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
+			}, JsonOptions);
 
 		cancelResp.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var cancelBody = await cancelResp.Content.ReadFromJsonAsync<ConcessionCancellationResponseDto>(JsonOptions);
@@ -159,6 +192,8 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		{
 			Message = "Attempt with stale request state",
 			RequestConcurrencyStamp = "stale-request-stamp",
+			PreviewFingerprint = context.PreviewFingerprint,
+			IdempotencyKey = Guid.NewGuid().ToString("N"),
 			FeeHeadApprovals =
 			[
 				new FeeHeadApprovalDto
@@ -178,7 +213,8 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 			],
 		};
 
-		var response = await Client.PostAsJsonAsync($"{BaseUrl}/{pendingId}/approve", approval, JsonOptions);
+		var response = await Client.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve", approval, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		(await response.Content.ReadAsStringAsync()).ShouldContain(FinanceConcessionErrorCodes.ConcurrencyConflict);
@@ -201,6 +237,8 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		{
 			Message = "Attempt with stale due-fee state",
 			RequestConcurrencyStamp = context.RequestConcurrencyStamp,
+			PreviewFingerprint = context.PreviewFingerprint,
+			IdempotencyKey = Guid.NewGuid().ToString("N"),
 			FeeHeadApprovals =
 			[
 				new FeeHeadApprovalDto
@@ -220,7 +258,8 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 			],
 		};
 
-		var response = await Client.PostAsJsonAsync($"{BaseUrl}/{pendingId}/approve", approval, JsonOptions);
+		var response = await Client.PostAsJsonAsync(
+			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve", approval, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		(await response.Content.ReadAsStringAsync()).ShouldContain(FinanceConcessionErrorCodes.ConcurrencyConflict);

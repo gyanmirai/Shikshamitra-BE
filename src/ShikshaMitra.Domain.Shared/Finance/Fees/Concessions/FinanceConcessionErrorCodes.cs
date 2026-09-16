@@ -15,6 +15,17 @@ public static class FinanceConcessionErrorCodes
 	public const string ReversalExceedsConcessionBalance = "Finance:Concession:010015";
 	public const string InvalidReversal = "Finance:Concession:010016";
 	public const string InvalidDocumentSubmission = "Finance:Concession:010017";
+	public const string InvalidTransition = "Finance:Concession:010018";
+	public const string NoEligibleOutstanding = "Finance:Concession:010019";
+	public const string PreviewChanged = "Finance:Concession:010020";
+	public const string IdempotencyKeyConflict = "Finance:Concession:010021";
+	public const string AmbiguousAssignment = "Finance:Concession:010022";
+	public const string LegacyRepairRequired = "Finance:Concession:010023";
+	public const string DocumentOwnershipMismatch = "Finance:Concession:010024";
+	public const string ConfigurationSnapshotInvalid = "Finance:Concession:010025";
+	public const string CancellationReasonRequired = "Finance:Concession:010026";
+	public const string ApprovalReductionReasonRequired = "Finance:Concession:010027";
+	public const string StagedDocumentExpired = "Finance:Concession:010028";
 
 	public const string StudentNotFound = "Finance:Concession:020002";
 	public const string ConcessionTypeNotFound = "Finance:Concession:020003";

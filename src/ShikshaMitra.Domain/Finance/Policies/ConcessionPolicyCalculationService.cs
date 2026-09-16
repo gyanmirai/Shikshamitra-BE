@@ -15,6 +15,12 @@ public class ConcessionPolicyCalculationService : DomainService
 	{
 		if (eligibleBase <= 0)
 			return 0m;
+		if (policy.ValueSource == ConcessionValueSource.PolicyFixed &&
+			policy.CalculationMethod == ConcessionCalculationMethod.FullWaiver)
+		{
+			// A full waiver must match the live base exactly, including minor units.
+			return eligibleBase;
+		}
 
 		decimal raw;
 		if (policy.ValueSource == ConcessionValueSource.PolicyFixed)
@@ -54,13 +60,15 @@ public class ConcessionPolicyCalculationService : DomainService
 		}
 
 		var capped = Math.Min(raw, eligibleBase);
-
-		return policy.RoundingMethod switch
+		var rounded = policy.RoundingMethod switch
 		{
 			RoundingMethodType.RoundUp => Math.Ceiling(capped),
 			RoundingMethodType.RoundDown => Math.Floor(capped),
 			RoundingMethodType.NearestRupee => Math.Round(capped, 0, MidpointRounding.AwayFromZero),
 			_ => Math.Round(capped, 2, MidpointRounding.AwayFromZero)
 		};
+
+		// Rounding is presentation policy, not authority to exceed an obligation.
+		return Math.Min(eligibleBase, Math.Max(0m, rounded));
 	}
 }

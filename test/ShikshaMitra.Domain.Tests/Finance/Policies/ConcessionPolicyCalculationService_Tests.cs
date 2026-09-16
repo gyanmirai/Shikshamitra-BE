@@ -111,6 +111,29 @@ public class ConcessionPolicyCalculationService_Tests
 		Assert.Equal(101m, _service.Calculate(policy, 1000m));
 	}
 
+	[Fact]
+	public void Round_Up_Cannot_Exceed_Eligible_Outstanding()
+	{
+		var policy = BuildPolicy(
+			ConcessionValueSource.PolicyFixed,
+			ConcessionCalculationMethod.Percentage,
+			percentageValue: 100m,
+			roundingMethod: RoundingMethodType.RoundUp);
+
+		Assert.Equal(10.20m, _service.Calculate(policy, 10.20m));
+	}
+
+	[Fact]
+	public void Full_Waiver_Preserves_Exact_Minor_Units_Regardless_Of_Rounding()
+	{
+		var policy = BuildPolicy(
+			ConcessionValueSource.PolicyFixed,
+			ConcessionCalculationMethod.FullWaiver,
+			roundingMethod: RoundingMethodType.RoundUp);
+
+		Assert.Equal(10.20m, _service.Calculate(policy, 10.20m));
+	}
+
 	private static ConcessionPolicySnapshot BuildPolicy(
 		ConcessionValueSource valueSource,
 		ConcessionCalculationMethod calculationMethod,

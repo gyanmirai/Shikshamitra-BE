@@ -46,6 +46,8 @@ public partial class ShikshaMitraDbContext
 	public DbSet<ConcessionRequestDocument> ConcessionRequestDocuments { get; set; }
 	public DbSet<ConcessionDueFeeAllocation> ConcessionDueFeeAllocations { get; set; }
 	public DbSet<ConcessionReversal> ConcessionReversals { get; set; }
+	public DbSet<ConcessionCommandReceipt> ConcessionCommandReceipts { get; set; }
+	public DbSet<ConcessionDocumentUpload> ConcessionDocumentUploads { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Concession Types

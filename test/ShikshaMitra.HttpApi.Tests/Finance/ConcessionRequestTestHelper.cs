@@ -189,6 +189,7 @@ public static class ConcessionRequestTestHelper
 			Remarks = "Test concession request",
 			FeeHeadConcessions = feeHeadConcessions,
 		};
+		await PrepareForSubmissionAsync(client, input);
 
 		var createResponse = await client.PostAsJsonAsync(
 			$"{ConcessionRequestUrl}?academicYearId={DefaultAcademicYearId}", input, JsonOptions);
@@ -208,6 +209,7 @@ public static class ConcessionRequestTestHelper
 		{
 			StudentId = studentId,
 			ConcessionTypeId = concessionTypeId,
+			IdempotencyKey = Guid.NewGuid().ToString("N"),
 			Remarks = "Test",
 			FeeHeadConcessions =
 			[
@@ -219,6 +221,43 @@ public static class ConcessionRequestTestHelper
 				},
 			],
 		};
+	}
+
+	public static async Task PrepareForSubmissionAsync(
+		HttpClient client,
+		CreateConcessionRequestDto input)
+	{
+		var previewResponse = await client.PostAsJsonAsync(
+			$"{ConcessionRequestUrl}/preview?academicYearId={DefaultAcademicYearId}",
+			new ConcessionRequestPreviewInputDto
+			{
+				StudentId = input.StudentId,
+				StudentFeeStructureId = input.StudentFeeStructureId,
+				ConcessionTypeId = input.ConcessionTypeId,
+				FeeHeadConcessions = input.FeeHeadConcessions,
+			},
+			JsonOptions);
+		await EnsureSuccessAsync(previewResponse, "Concession request preview failed");
+		var preview = await previewResponse.Content
+			.ReadFromJsonAsync<ConcessionRequestPreviewDto>(JsonOptions)
+			?? throw new InvalidOperationException("Null concession request preview");
+		input.StudentFeeStructureId = preview.StudentFeeStructureId;
+		input.PreviewFingerprint = preview.PreviewFingerprint;
+		input.IdempotencyKey ??= Guid.NewGuid().ToString("N");
+	}
+
+	public static async Task<ConcessionRequestDetailDto> CreateDraftAsync(
+		HttpClient client,
+		CreateConcessionDraftDto input)
+	{
+		input.IdempotencyKey ??= Guid.NewGuid().ToString("N");
+		var response = await client.PostAsJsonAsync(
+			$"{ConcessionRequestUrl}/drafts?academicYearId={DefaultAcademicYearId}", input, JsonOptions);
+		await EnsureSuccessAsync(response, "Concession request draft creation failed");
+		var body = await response.Content
+			.ReadFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(JsonOptions)
+			?? throw new InvalidOperationException("Null response body from concession request draft create");
+		return body.Data ?? throw new InvalidOperationException("Null draft detail");
 	}
 
 	private static async Task EnsureSuccessAsync(HttpResponseMessage response, string context)

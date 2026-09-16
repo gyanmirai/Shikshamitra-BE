@@ -29,6 +29,28 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 		[FromBody] CreateConcessionRequestDto input) =>
 		concessionRequestAppService.CreateAsync(academicYearId, input);
 
+	[HttpPost("drafts")]
+	[ProducesResponseType(typeof(ApiDataResponseDto<ConcessionRequestDetailDto>), StatusCodes.Status200OK)]
+	public Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateDraftAsync(
+		[FromQuery] Guid academicYearId,
+		[FromBody] CreateConcessionDraftDto input) =>
+		concessionRequestAppService.CreateDraftAsync(academicYearId, input);
+
+	[HttpPost("{id:guid}/submit")]
+	[ProducesResponseType(typeof(ApiDataResponseDto<ConcessionRequestDetailDto>), StatusCodes.Status200OK)]
+	public Task<ApiDataResponseDto<ConcessionRequestDetailDto>> SubmitAsync(
+		Guid id,
+		[FromBody] SubmitConcessionRequestDto input) =>
+		concessionRequestAppService.SubmitAsync(id, input);
+
+	[HttpGet("context")]
+	[ProducesResponseType(typeof(ConcessionRequestContextDto), StatusCodes.Status200OK)]
+	public Task<ConcessionRequestContextDto> GetContextAsync(
+		[FromQuery] Guid academicYearId,
+		[FromQuery] Guid studentId,
+		[FromQuery] Guid? studentFeeStructureId = null) =>
+		concessionRequestAppService.GetContextAsync(academicYearId, studentId, studentFeeStructureId);
+
 	[HttpPost("preview")]
 	[ProducesResponseType(typeof(ConcessionRequestPreviewDto), StatusCodes.Status200OK)]
 	public Task<ConcessionRequestPreviewDto> PreviewAsync(
@@ -46,9 +68,9 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 
 	[HttpDelete("{id:guid}")]
 	[ProducesResponseType(StatusCodes.Status204NoContent)]
-	public async Task<IActionResult> DeleteAsync(Guid id)
+	public async Task<IActionResult> DeleteAsync(Guid id, [FromBody] DeleteConcessionRequestDto input)
 	{
-		await concessionRequestAppService.DeleteAsync(id);
+		await concessionRequestAppService.DeleteAsync(id, input);
 		return NoContent();
 	}
 
@@ -63,6 +85,22 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 	{
 		await concessionRequestAppService.UploadDocumentsAsync(id, input);
 		return NoContent();
+	}
+
+	[HttpGet("{id:guid}/documents/{documentId:guid}/file")]
+	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+	public async Task<IActionResult> DownloadDocumentAsync(Guid id, Guid documentId)
+	{
+		var file = await concessionRequestAppService.DownloadDocumentAsync(id, documentId);
+		return File(file.Content, file.ContentType, file.FileName);
+	}
+
+	[HttpGet("staged-documents/{uploadId:guid}/file")]
+	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+	public async Task<IActionResult> DownloadStagedDocumentAsync(Guid uploadId)
+	{
+		var file = await concessionRequestAppService.DownloadStagedDocumentAsync(uploadId);
+		return File(file.Content, file.ContentType, file.FileName);
 	}
 
 	[HttpPost("types/{concessionTypeId:guid}/documents/{documentId:guid}/file")]
@@ -142,6 +180,12 @@ public class ConcessionRequestsController(IConcessionRequestAppService concessio
 	public Task<ConcessionApprovalResponseDto> ApproveAsync(Guid id, [FromBody] ApproveConcessionRequestDto input) =>
 		concessionRequestAppService.ApproveAsync(id, input);
 
+	[HttpPost("{id:guid}/approval-preview")]
+	[ProducesResponseType(typeof(ConcessionApprovalPreviewDto), StatusCodes.Status200OK)]
+	public Task<ConcessionApprovalPreviewDto> PreviewApprovalAsync(
+		Guid id, [FromBody] PreviewConcessionApprovalDto input) =>
+		concessionRequestAppService.PreviewApprovalAsync(id, input);
+
 	[HttpPost("{id:guid}/reject")]
 	[ProducesResponseType(typeof(ConcessionRejectionResponseDto), StatusCodes.Status200OK)]
 	public Task<ConcessionRejectionResponseDto> RejectAsync(Guid id, [FromBody] RejectConcessionRequestDto input) =>
@@ -149,12 +193,19 @@ public class ConcessionRequestsController(IConcessionRequestAppService concessio
 
 	[HttpPost("{id:guid}/cancel")]
 	[ProducesResponseType(typeof(ConcessionCancellationResponseDto), StatusCodes.Status200OK)]
-	public Task<ConcessionCancellationResponseDto> CancelAsync(Guid id) =>
-		concessionRequestAppService.CancelAsync(id);
+	public Task<ConcessionCancellationResponseDto> CancelAsync(
+		Guid id, [FromBody] CancelConcessionRequestDto input) =>
+		concessionRequestAppService.CancelAsync(id, input);
 
 	[HttpPost("{id:guid}/reverse")]
 	[ProducesResponseType(typeof(ConcessionReversalResponseDto), StatusCodes.Status200OK)]
 	public Task<ConcessionReversalResponseDto> ReverseAsync(
 		Guid id, [FromBody] ReverseConcessionRequestDto input) =>
 		concessionRequestAppService.ReverseAsync(id, input);
+
+	[HttpPost("{id:guid}/reversal-preview")]
+	[ProducesResponseType(typeof(ConcessionReversalPreviewDto), StatusCodes.Status200OK)]
+	public Task<ConcessionReversalPreviewDto> PreviewReversalAsync(
+		Guid id, [FromBody] PreviewConcessionReversalDto input) =>
+		concessionRequestAppService.PreviewReversalAsync(id, input);
 }

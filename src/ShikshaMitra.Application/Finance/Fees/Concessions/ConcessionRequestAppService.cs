@@ -10,6 +10,7 @@ using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
+using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
@@ -23,7 +24,7 @@ using Volo.Abp.Users;
 namespace ShikshaMitra.Finance.Fees.Concessions;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View)]
+[Authorize]
 public partial class ConcessionRequestAppService(
 	IConcessionRequestRepository concessionRequestRepository,
 	ConcessionRequestManager concessionRequestManager,
@@ -33,12 +34,16 @@ public partial class ConcessionRequestAppService(
 	IRepository<DueFee, Guid> dueFeeRepository,
 	IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+	IRepository<FeeStructure, Guid> feeStructureRepository,
+	IRepository<ConcessionCommandReceipt, Guid> concessionCommandReceiptRepository,
+	IRepository<ConcessionDocumentUpload, Guid> concessionDocumentUploadRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	FinanceScopeAccessService financeScopeAccessService,
 	IFileStorageAppService fileStorageAppService,
 	ICurrentUser currentUser,
 	IGuidGenerator guidGenerator,
+	FinanceAuditWriter financeAuditWriter,
 	IUnitOfWorkManager unitOfWorkManager,
 	Volo.Abp.EventBus.Distributed.IDistributedEventBus eventBus)
 	: ApplicationService, IConcessionRequestAppService

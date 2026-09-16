@@ -8,4 +8,6 @@ public enum ConcessionRequestStatus
 	Cancelled = 3,
 	PartiallyReversed = 4,
 	Reversed = 5,
+	// Added without renumbering historic persisted workflow values.
+	Draft = 6,
 }

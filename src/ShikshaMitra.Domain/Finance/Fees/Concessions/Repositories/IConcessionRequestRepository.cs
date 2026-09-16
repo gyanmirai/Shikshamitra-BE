@@ -29,6 +29,7 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		int skip,
 		int take,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
+		Guid? draftCreatorId = null,
 		CancellationToken cancellationToken = default);
 
 	Task<int> CountForApplicationsAsync(
@@ -39,6 +40,7 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		Guid? standardId,
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
+		Guid? draftCreatorId = null,
 		CancellationToken cancellationToken = default);
 
 	Task<Dictionary<ConcessionRequestStatus, int>> GetStatusCountsAsync(
@@ -48,5 +50,6 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		Guid? standardId,
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
+		Guid? draftCreatorId = null,
 		CancellationToken cancellationToken = default);
 }

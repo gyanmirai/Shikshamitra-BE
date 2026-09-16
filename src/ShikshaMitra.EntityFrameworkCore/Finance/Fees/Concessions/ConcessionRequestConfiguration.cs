@@ -16,6 +16,12 @@ public class ConcessionRequestConfiguration : IEntityTypeConfiguration<Concessio
 		builder.Property(x => x.Remarks).HasMaxLength(2000);
 		builder.Property(x => x.RejectionReason).HasMaxLength(2000);
 		builder.Property(x => x.ApproverMessage).HasMaxLength(1000);
+		builder.Property(x => x.CancellationReason).HasMaxLength(2000);
+		builder.Property(x => x.SelectedDueFeeIdsJson).HasColumnType("text").IsRequired();
+		builder.Property(x => x.RequestInputSnapshotJson).HasColumnType("text");
+		builder.Property(x => x.TypeRequirementsSnapshotJson).HasColumnType("text");
+		builder.Property(x => x.CreationIdempotencyKey).HasMaxLength(128);
+		builder.Property(x => x.CreationPayloadHash).HasMaxLength(64).IsFixedLength();
 		builder.Property(x => x.StudentFeeStructureId).IsRequired();
 		builder.Property(x => x.ConcessionPolicyId).IsRequired();
 		builder.Property(x => x.ConcessionPolicyVersionId).IsRequired();
@@ -26,6 +32,11 @@ public class ConcessionRequestConfiguration : IEntityTypeConfiguration<Concessio
 		builder.Property(x => x.DivisionId).IsRequired();
 		builder.HasIndex(x => new { x.AcademicYearId, x.StudentFeeStructureId, x.Status });
 		builder.HasIndex(x => new { x.StudentId, x.ConcessionPolicyId, x.Status });
+		builder.HasIndex(x => new { x.TenantId, x.StudentId, x.AcademicYearId, x.ConcessionTypeId })
+			.IsUnique()
+			.AreNullsDistinct(false)
+			.HasFilter("\"IsDeleted\" = false AND \"Status\" = 0")
+			.HasDatabaseName("UX_ConcessionRequest_PendingStudentYearType");
 
 		builder.HasOne<ConcessionType>()
 			.WithMany()

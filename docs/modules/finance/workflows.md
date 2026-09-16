@@ -3,7 +3,7 @@ module: finance
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-09-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -17,7 +17,7 @@ TL;DR: use this page to understand how Finance changes affect due rows, approval
 | Workflow | Main steps | Validation focus |
 |---|---|---|
 | Charge create and approve | Create a pending or auto-approved charge, then approve or reject through maker-checker rules | Student scope derivation, active charge category, pending-only update and delete, approver not creator |
-| Concession request | Create one request with fee-head mappings, upload documents, approve allocations to due fee rows, reject, or cancel | Allocation totals, due fee eligibility, pending-only edits, and outstanding balance updates |
+| Concession request | Resolve assignment policy, preview, save a draft, attach evidence, submit, independently approve/reject, withdraw, or reverse | Frozen submission evidence, allocation totals, exact assignment dues, concurrency/idempotency, maker-checker, and balance updates |
 | Fee adjustment | Create credit pool from paid due rows, approve and apply to pending due rows, reject, or cancel pending request | Paid source rows, pending target rows, idempotency key, and maker-checker rule |
 | Fee collection | Load student fee details, collect payment, allocate to due rows, and create receipt records | Payment amount, due allocation, receipt numbering, and audit trail |
 | Fee refund | Check eligibility, create refund request, update status, and preserve receipt/payment history | Refund eligibility and non-overlap with adjustment flow |
@@ -33,6 +33,16 @@ TL;DR: use this page to understand how Finance changes affect due rows, approval
 5. Active types cannot be deleted. An inactive type may be deleted only while unused. Once any request references a type, its evidence definitions are locked and it remains undeletable; name and description may still be corrected.
 6. Approval checks only mandatory definitions. Optional documents may be absent, but any uploaded file is always checked against its configured definition.
 7. Create, update, and status changes are captured through entity history and exposed as paged version history for the settings action drawer.
+
+## Concession request lifecycle
+
+1. Context resolution selects the student's exact academic-year fee assignment and its pinned concession policy version. When multiple current assignments match, the response supplies scoped choices and requires the caller to select one assignment ID. Missing or legacy assignments return explicit blockers; the request service does not choose an arbitrary assignment or silently repair evidence.
+2. Preview and draft evaluation use only eligible outstanding principal rows belonging to that assignment. Current-installment selection means the earliest unpaid cohort, future means later cohorts, and all-outstanding includes every eligible row. The selected due IDs are frozen on submission.
+3. Draft owners may save an incomplete request, edit values and evidence with Edit/UploadDocument, and use a matching concurrency stamp. A staged file is bound to the uploader and requirement, expires after 24 hours if it remains unattached, and becomes request evidence only when saved. Attached evidence is retained and read through the request-scoped `ViewDocument` endpoint. Submit requires selected eligible fees, mandatory evidence, a fresh fingerprint, Submit permission, one pending-request uniqueness, and an idempotency key. Pending input and evidence are immutable.
+4. Approval Preview and Approval use the request's pinned policy and frozen due IDs, reread live outstanding balances, and validate request and due-row stamps. The checker must differ from the creator. A positive reduction is allowed with a reason; the approved total can never exceed the submitted amount, current policy maximum, or live selected-row capacity. The final Approval repeats these rules rather than trusting the preview or client allocation amounts.
+5. Reject requires an independent checker and a 10-2000 character reason. The owner may withdraw Draft or Pending with a reason. Only Draft can be deleted.
+6. Approved allocations reduce `DueFee` in the same transaction and retain requested, approved, and allocation evidence. Reversal Preview reports the before/after outstanding impact. Partial or full reversal references original allocation IDs, validates the remaining reversible balance plus request/due stamps, and increases the linked due obligation atomically.
+7. Every command writes a Finance audit entry. Retryable commands store an actor-scoped idempotency receipt; replay with a different payload or resource is rejected.
 
 ## Integration rules
 

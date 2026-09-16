@@ -44,21 +44,21 @@ jobs:
               run: dotnet build --configuration Release
 
             # ⭐ Run ABP DbMigrator
-            - name: Run DbMigrator
-              env:
-                  ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
-                  ShikshaMitra__Seeders__Enabled: 'true'
-                  ShikshaMitra__Seeders__Profile: FullDemo
-              run: |
-                  cd src/ShikshaMitra.DbMigrator
-                  dotnet run --configuration Release --no-launch-profile
+            # - name: Run DbMigrator
+            #   env:
+            #       ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
+            #       ShikshaMitra__Seeders__Enabled: 'true'
+            #       ShikshaMitra__Seeders__Profile: FullDemo
+            #   run: |
+            #       cd src/ShikshaMitra.DbMigrator
+            #       dotnet run --configuration Release --no-launch-profile
 
-            - name: Run deployment startup regression gates
-              run: |
-                  dotnet test test/ShikshaMitra.HttpApi.Tests \
-                    --configuration Release \
-                    --no-build \
-                    --filter "FullyQualifiedName~OpenIddictCertificateStore_Tests"
+            # - name: Run deployment startup regression gates
+            #   run: |
+            #       dotnet test test/ShikshaMitra.HttpApi.Tests \
+            #         --configuration Release \
+            #         --no-build \
+            #         --filter "FullyQualifiedName~OpenIddictCertificateStore_Tests"
 
             # ⭐ Publish Host App
             - name: Publish

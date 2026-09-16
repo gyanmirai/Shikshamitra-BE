@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -8,7 +8,7 @@ public class RoomTypeConfiguration : IEntityTypeConfiguration<RoomType>
 {
 	public void Configure(EntityTypeBuilder<RoomType> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "RoomTypes", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "RoomTypes", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.RoomTypeName)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Curriculum.Settings;
@@ -11,7 +11,7 @@ public class ElectiveGroupConfiguration : IEntityTypeConfiguration<ElectiveGroup
 	public void Configure(EntityTypeBuilder<ElectiveGroup> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "ElectiveGroups",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "ElectiveGroups",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();

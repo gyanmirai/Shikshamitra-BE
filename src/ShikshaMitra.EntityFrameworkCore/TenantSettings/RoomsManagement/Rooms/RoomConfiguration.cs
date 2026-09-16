@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -16,7 +16,7 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
 {
 	public void Configure(EntityTypeBuilder<Room> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Rooms", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "Rooms", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.RoomName)

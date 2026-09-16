@@ -9,7 +9,7 @@ public class AcademicCalendarAuditReviewNoteConfiguration : IEntityTypeConfigura
 {
     public void Configure(EntityTypeBuilder<AcademicCalendarAuditReviewNote> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicCalendarAuditReviewNotes", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "CalendarAuditReviewNotes", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.Note).IsRequired().HasMaxLength(4000);

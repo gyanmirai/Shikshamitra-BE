@@ -9,7 +9,7 @@ public class ExamSeatingPlanSubjectConfiguration : IEntityTypeConfiguration<Exam
 {
     public void Configure(EntityTypeBuilder<ExamSeatingPlanSubject> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamSeatingPlanSubjects", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamSeatingPlanSubjects", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.SeatingPlanId).IsRequired();

@@ -81,17 +81,12 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         var timeStart = input.StartTime ?? new TimeSpan(8, 0, 0);
         var timeEnd = input.EndTime ?? new TimeSpan(16, 0, 0);
+        var availability = await _conflictService.CheckRoomsAsync(
+            rooms, input.Date, timeStart, timeEnd, input.StandardId, input.DivisionId);
 
         foreach (var room in rooms)
         {
-            var conflictCheck = await _conflictService.CheckConflictsAsync(
-                room.Id,
-                input.Date,
-                timeStart,
-                timeEnd,
-                standardId: input.StandardId,
-                divisionId: input.DivisionId
-            );
+            var conflictCheck = availability[room.Id];
 
             var status = "available";
             string? occupiedBy = null;

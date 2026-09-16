@@ -22,6 +22,45 @@ public class TimetableManager(
     IRepository<Room, Guid> roomRepository,
     IRepository<Employee, Guid> employeeRepository) : DomainService
 {
+    /// <summary>Validates all submitted periods against one read of competing assignments.</summary>
+    public async Task CheckConflictsAsync(
+        Guid standardId,
+        Guid divisionId,
+        IReadOnlyCollection<TimetableSlot> slots)
+    {
+        if (slots.Count == 0)
+        {
+            return;
+        }
+
+        var teachers = slots.SelectMany(slot => slot.Subjects)
+            .Where(subject => subject.TeacherId.HasValue)
+            .Select(subject => subject.TeacherId!.Value).Distinct().ToArray();
+        var rooms = slots.SelectMany(slot => slot.Subjects)
+            .Where(subject => subject.RoomId.HasValue)
+            .Select(subject => subject.RoomId!.Value).Distinct().ToArray();
+        if (teachers.Length == 0 && rooms.Length == 0)
+        {
+            return;
+        }
+
+        var candidates = await timetableRepository.GetConflictCandidatesAsync(
+            standardId, divisionId, slots.Select(slot => slot.Day).Distinct().ToArray(),
+            slots.Min(slot => slot.StartTime), slots.Max(slot => slot.EndTime), teachers, rooms);
+        var candidatesByDay = candidates.ToLookup(candidate => candidate.Day);
+
+        // Preserve input slot order and teacher-before-room error precedence.
+        foreach (var slot in slots)
+        {
+            await CheckResourceConflictsAsync(candidatesByDay[slot.Day], slot.StartTime, slot.EndTime,
+                slot.Subjects.Where(subject => subject.TeacherId.HasValue)
+                    .Select(subject => subject.TeacherId!.Value), "teacher");
+            await CheckResourceConflictsAsync(candidatesByDay[slot.Day], slot.StartTime, slot.EndTime,
+                slot.Subjects.Where(subject => subject.RoomId.HasValue)
+                    .Select(subject => subject.RoomId!.Value), "room");
+        }
+    }
+
     public async Task CheckTeacherConflictAsync(
         Guid standardId,
         Guid divisionId,
@@ -30,31 +69,12 @@ public class TimetableManager(
         TimeOnly endTime,
         IEnumerable<Guid> teacherIds)
     {
-        var allTimetables = await timetableRepository.GetAllWithSlotsAsync();
+        var teachers = teacherIds.Distinct().ToArray();
+        if (teachers.Length == 0) return;
 
-        var otherTimetables = allTimetables
-            .Where(t =>
-                (t.StandardId != standardId || t.DivisionId != divisionId) &&
-                t.Status != TimetableStatus.NotCreated)
-            .ToList();
-
-        var teacherIdList = teacherIds.ToList();
-        var conflicts = otherTimetables
-            .SelectMany(timetable => timetable.Slots
-                .Where(slot => slot.Day == day && TimesOverlap(slot.StartTime, slot.EndTime, startTime, endTime))
-                .SelectMany(slot => slot.Subjects
-                    .Where(subject => subject.TeacherId.HasValue && teacherIdList.Contains(subject.TeacherId.Value))
-                    .Select(subject => new ConflictRow(timetable, slot, subject, subject.TeacherId!.Value))))
-            .ToList();
-
-        if (conflicts.Count > 0)
-        {
-            var details = await BuildConflictDetailsAsync(conflicts, "teacher");
-            throw BuildConflictException(
-                TimetableErrorCodes.TeacherConflict,
-                details,
-                "One or more selected teachers are already assigned to another class during this time slot.");
-        }
+        var candidates = await timetableRepository.GetConflictCandidatesAsync(
+            standardId, divisionId, [day], startTime, endTime, teachers, []);
+        await CheckResourceConflictsAsync(candidates, startTime, endTime, teachers, "teacher");
     }
 
     public async Task CheckRoomConflictAsync(
@@ -65,31 +85,39 @@ public class TimetableManager(
         TimeOnly endTime,
         IEnumerable<Guid> roomIds)
     {
-        var allTimetables = await timetableRepository.GetAllWithSlotsAsync();
+        var rooms = roomIds.Distinct().ToArray();
+        if (rooms.Length == 0) return;
 
-        var otherTimetables = allTimetables
-            .Where(t =>
-                (t.StandardId != standardId || t.DivisionId != divisionId) &&
-                t.Status != TimetableStatus.NotCreated)
+        var candidates = await timetableRepository.GetConflictCandidatesAsync(
+            standardId, divisionId, [day], startTime, endTime, [], rooms);
+        await CheckResourceConflictsAsync(candidates, startTime, endTime, rooms, "room");
+    }
+
+    private async Task CheckResourceConflictsAsync(
+        IEnumerable<TimetableConflictCandidate> candidates,
+        TimeOnly startTime,
+        TimeOnly endTime,
+        IEnumerable<Guid> resourceIds,
+        string type)
+    {
+        var ids = resourceIds.ToHashSet();
+        if (ids.Count == 0) return;
+
+        var conflicts = candidates
+            .Where(candidate => TimesOverlap(candidate.StartTime, candidate.EndTime, startTime, endTime))
+            .Select(candidate => new { Candidate = candidate, ResourceId = type == "teacher" ? candidate.TeacherId : candidate.RoomId })
+            .Where(row => row.ResourceId.HasValue && ids.Contains(row.ResourceId.Value))
+            .Select(row => new ConflictRow(row.Candidate, row.ResourceId!.Value))
             .ToList();
+        if (conflicts.Count == 0) return;
 
-        var roomIdList = roomIds.ToList();
-        var conflicts = otherTimetables
-            .SelectMany(timetable => timetable.Slots
-                .Where(slot => slot.Day == day && TimesOverlap(slot.StartTime, slot.EndTime, startTime, endTime))
-                .SelectMany(slot => slot.Subjects
-                    .Where(subject => subject.RoomId.HasValue && roomIdList.Contains(subject.RoomId.Value))
-                    .Select(subject => new ConflictRow(timetable, slot, subject, subject.RoomId!.Value))))
-            .ToList();
-
-        if (conflicts.Count > 0)
-        {
-            var details = await BuildConflictDetailsAsync(conflicts, "room");
-            throw BuildConflictException(
-                TimetableErrorCodes.RoomConflict,
-                details,
-                "One or more selected rooms are already assigned to another class during this time slot.");
-        }
+        var details = await BuildConflictDetailsAsync(conflicts, type);
+        throw BuildConflictException(
+            type == "teacher" ? TimetableErrorCodes.TeacherConflict : TimetableErrorCodes.RoomConflict,
+            details,
+            type == "teacher"
+                ? "One or more selected teachers are already assigned to another class during this time slot."
+                : "One or more selected rooms are already assigned to another class during this time slot.");
     }
 
     private static bool TimesOverlap(TimeOnly existingStart, TimeOnly existingEnd, TimeOnly requestedStart, TimeOnly requestedEnd)
@@ -101,9 +129,9 @@ public class TimetableManager(
         List<ConflictRow> conflicts,
         string type)
     {
-        var standardIds = conflicts.Select(c => c.Timetable.StandardId).Distinct().ToList();
-        var divisionIds = conflicts.Select(c => c.Timetable.DivisionId).Distinct().ToList();
-        var subjectIds = conflicts.Select(c => c.Subject.SubjectId).Distinct().ToList();
+        var standardIds = conflicts.Select(c => c.Candidate.StandardId).Distinct().ToList();
+        var divisionIds = conflicts.Select(c => c.Candidate.DivisionId).Distinct().ToList();
+        var subjectIds = conflicts.Select(c => c.Candidate.SubjectId).Distinct().ToList();
         var resourceIds = conflicts.Select(c => c.ResourceId).Distinct().ToList();
 
         var standards = await standardRepository.GetListAsync(s => standardIds.Contains(s.Id));
@@ -114,9 +142,9 @@ public class TimetableManager(
 
         return conflicts.Select(conflict =>
         {
-            var standardName = standards.FirstOrDefault(s => s.Id == conflict.Timetable.StandardId)?.Name ?? "another class";
-            var divisionName = divisions.FirstOrDefault(d => d.Id == conflict.Timetable.DivisionId)?.Name ?? "another division";
-            var subjectName = subjects.FirstOrDefault(s => s.Id == conflict.Subject.SubjectId)?.Name ?? "assigned subject";
+            var standardName = standards.FirstOrDefault(s => s.Id == conflict.Candidate.StandardId)?.Name ?? "another class";
+            var divisionName = divisions.FirstOrDefault(d => d.Id == conflict.Candidate.DivisionId)?.Name ?? "another division";
+            var subjectName = subjects.FirstOrDefault(s => s.Id == conflict.Candidate.SubjectId)?.Name ?? "assigned subject";
             var resourceName = type == "room"
                 ? rooms.FirstOrDefault(r => r.Id == conflict.ResourceId)?.RoomName ?? "selected room"
                 : employees.FirstOrDefault(e => e.Id == conflict.ResourceId)?.EmployeeName ?? "selected teacher";
@@ -125,15 +153,15 @@ public class TimetableManager(
                 type,
                 conflict.ResourceId,
                 resourceName,
-                conflict.Timetable.StandardId,
+                conflict.Candidate.StandardId,
                 standardName,
-                conflict.Timetable.DivisionId,
+                conflict.Candidate.DivisionId,
                 divisionName,
-                conflict.Subject.SubjectId,
+                conflict.Candidate.SubjectId,
                 subjectName,
-                conflict.Slot.Day.ToString(),
-                FormatTime(conflict.Slot.StartTime),
-                FormatTime(conflict.Slot.EndTime));
+                conflict.Candidate.Day.ToString(),
+                FormatTime(conflict.Candidate.StartTime),
+                FormatTime(conflict.Candidate.EndTime));
         }).ToList();
     }
 
@@ -164,9 +192,7 @@ public class TimetableManager(
     }
 
     private sealed record ConflictRow(
-        Timetable Timetable,
-        TimetableSlot Slot,
-        TimetableSlotSubject Subject,
+        TimetableConflictCandidate Candidate,
         Guid ResourceId);
 
     private sealed record TimetableConflictDetail(

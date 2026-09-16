@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Constants.Permissions;
@@ -278,20 +279,28 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 			["Name"] = "ApiTestRoleWithColor",
 			["IsDefault"] = true,
 			["IsPublic"] = true,
+			// Match the role screen's wire payload for ABP extensible DTOs.
+			["color"] = "#abcdef",
+			["employeeOnboardingAssignable"] = false,
 			["ExtraProperties"] = new Dictionary<string, object?>
 			{
-				["color"] = "#abcdef"
+				["color"] = "#abcdef",
+				["employeeOnboardingAssignable"] = false
 			}
 		};
 
 		var response = await client.PostAsJsonAsync("/api/identity/roles", payload, JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 
-		var createdRoleDto = await response.Content.ReadFromJsonAsync<IdentityRoleDto>(JsonOptions);
+		var responseJson = await response.Content.ReadAsStringAsync();
+		var createdRoleDto = JsonSerializer.Deserialize<IdentityRoleDto>(responseJson, JsonOptions);
 		createdRoleDto.ShouldNotBeNull();
 		
-		var color = createdRoleDto.ExtraProperties.GetOrDefault("color")?.ToString();
-		color.ShouldBe("#abcdef");
+		using var responseDocument = JsonDocument.Parse(responseJson);
+		// Verify the HTTP contract directly; System.Text.Json does not populate ABP's
+		// extensible dictionary in this DTO with the host's Newtonsoft converters.
+		responseDocument.RootElement.GetProperty("extraProperties").GetProperty("color")
+			.GetString().ShouldBe("#abcdef", responseJson);
 	}
 
 	private HttpClient CreateClient(string tenantId, string permissions, string roles = "admin", string? userId = null)

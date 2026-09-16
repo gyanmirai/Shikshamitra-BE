@@ -9,7 +9,7 @@ public class AssessmentRubricConfiguration : IEntityTypeConfiguration<Assessment
 	public void Configure(EntityTypeBuilder<AssessmentRubric> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "AssessmentRubrics",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "AssessmentRubrics",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -55,7 +55,7 @@ public class AssessmentRubricCriterionConfiguration : IEntityTypeConfiguration<A
 	public void Configure(EntityTypeBuilder<AssessmentRubricCriterion> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "AssessmentRubricCriteria",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "AssessmentRubricCriteria",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -79,7 +79,7 @@ public class RubricEvaluationConfiguration : IEntityTypeConfiguration<RubricEval
 	public void Configure(EntityTypeBuilder<RubricEvaluation> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "RubricEvaluations",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "RubricEvaluations",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -110,7 +110,7 @@ public class RubricCriterionScoreConfiguration : IEntityTypeConfiguration<Rubric
 	public void Configure(EntityTypeBuilder<RubricCriterionScore> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "RubricCriterionScores",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "RubricCriterionScores",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();

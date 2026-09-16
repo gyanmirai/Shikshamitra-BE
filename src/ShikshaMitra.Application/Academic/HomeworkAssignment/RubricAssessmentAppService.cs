@@ -568,17 +568,35 @@ public class RubricAssessmentAppService(
 
 	private async Task LoadCriteriaAsync(IEnumerable<AssessmentRubric> rubrics)
 	{
-		foreach (var rubric in rubrics)
+		var items = rubrics.ToList();
+		if (items.Count == 0)
 		{
-			rubric.SetCriteriaForRead(await criterionRepository.GetListAsync(c => c.RubricId == rubric.Id));
+			return;
+		}
+
+		var rubricIds = items.Select(rubric => rubric.Id).Distinct().ToList();
+		var criteria = await criterionRepository.GetListAsync(criterion => rubricIds.Contains(criterion.RubricId));
+		var criteriaByRubric = criteria.ToLookup(criterion => criterion.RubricId);
+		foreach (var rubric in items)
+		{
+			rubric.SetCriteriaForRead(criteriaByRubric[rubric.Id].ToList());
 		}
 	}
 
 	private async Task LoadScoresAsync(IEnumerable<RubricEvaluation> evaluations)
 	{
-		foreach (var evaluation in evaluations)
+		var items = evaluations.ToList();
+		if (items.Count == 0)
 		{
-			evaluation.SetScoresForRead(await scoreRepository.GetListAsync(s => s.EvaluationId == evaluation.Id));
+			return;
+		}
+
+		var evaluationIds = items.Select(evaluation => evaluation.Id).Distinct().ToList();
+		var scores = await scoreRepository.GetListAsync(score => evaluationIds.Contains(score.EvaluationId));
+		var scoresByEvaluation = scores.ToLookup(score => score.EvaluationId);
+		foreach (var evaluation in items)
+		{
+			evaluation.SetScoresForRead(scoresByEvaluation[evaluation.Id].ToList());
 		}
 	}
 

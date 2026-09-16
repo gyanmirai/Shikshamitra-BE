@@ -8,7 +8,7 @@ public class TeacherDiaryConfiguration : IEntityTypeConfiguration<TeacherDiary>
 {
     public void Configure(EntityTypeBuilder<TeacherDiary> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "TeacherDiaries", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "TeacherDiaries", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.ActualTopicCovered).HasMaxLength(256);

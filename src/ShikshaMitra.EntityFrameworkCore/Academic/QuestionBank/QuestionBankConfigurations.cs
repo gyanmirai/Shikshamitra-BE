@@ -8,7 +8,7 @@ public class QuestionBankSettingConfiguration : IEntityTypeConfiguration<Questio
 {
     public void Configure(EntityTypeBuilder<QuestionBankSetting> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionBankSettings", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionBankSettings", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.HasIndex(x => x.AcademicYearId);
         builder.HasIndex(x => new { x.TenantId, x.AcademicYearId }).IsUnique();
@@ -19,7 +19,7 @@ public class QuestionBankItemConfiguration : IEntityTypeConfiguration<QuestionBa
 {
     public void Configure(EntityTypeBuilder<QuestionBankItem> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionBankItems", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionBankItems", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.QuestionText).IsRequired();
         builder.Property(x => x.TopicName).HasMaxLength(256);
@@ -53,7 +53,7 @@ public class QuestionOptionConfiguration : IEntityTypeConfiguration<QuestionOpti
 {
     public void Configure(EntityTypeBuilder<QuestionOption> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionOptions", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionOptions", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.OptionText).IsRequired().HasMaxLength(2000);
         builder.HasIndex(x => new { x.QuestionBankItemId, x.SortOrder }).IsUnique();
@@ -64,7 +64,7 @@ public class QuestionAttachmentConfiguration : IEntityTypeConfiguration<Question
 {
     public void Configure(EntityTypeBuilder<QuestionAttachment> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionAttachments", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionAttachments", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.FileName).IsRequired().HasMaxLength(500);
         builder.Property(x => x.FileUrl).IsRequired().HasMaxLength(1000);
@@ -76,7 +76,7 @@ public class QuestionTagConfiguration : IEntityTypeConfiguration<QuestionTag>
 {
     public void Configure(EntityTypeBuilder<QuestionTag> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionTags", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionTags", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.TagName).IsRequired().HasMaxLength(100);
         builder.HasIndex(x => new { x.QuestionBankItemId, x.TagName }).IsUnique();
@@ -87,7 +87,7 @@ public class QuestionUsageLogConfiguration : IEntityTypeConfiguration<QuestionUs
 {
     public void Configure(EntityTypeBuilder<QuestionUsageLog> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionUsageLogs", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionUsageLogs", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.HasIndex(x => x.QuestionBankItemId);
         builder.HasIndex(x => new { x.Source, x.SourceEntityId });

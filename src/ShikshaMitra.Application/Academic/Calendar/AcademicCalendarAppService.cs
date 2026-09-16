@@ -97,26 +97,13 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             query = query.Where(c => c.Status == status.Value);
         }
 
-        var totalCount = query.Count();
-        var items = query.OrderByDescending(c => c.CreationTime).ToList();
+        var items = await AsyncExecuter.ToListAsync(query.OrderByDescending(c => c.CreationTime));
         
         var dtos = ObjectMapper.Map<List<AcademicCalendar>, List<AcademicCalendarDto>>(items);
         
-        // Populate stats for each calendar DTO
-        foreach (var dto in dtos)
-        {
-            var days = await _calendarDayRepository.GetListAsync(d => d.AcademicCalendarId == dto.Id);
-            dto.TotalWorkingDays = days.Count(d => d.DayType == DayType.WorkingDay && d.Status == CalendarDayStatus.Active);
-            dto.TotalHolidays = days.Count(d => d.DayType == DayType.Holiday && d.Status == CalendarDayStatus.Active);
-            dto.TotalVacationDays = days.Count(d => d.DayType == DayType.Vacation && d.Status == CalendarDayStatus.Active);
-            dto.TotalHalfDays = days.Count(d => d.DayType == DayType.HalfDay && d.Status == CalendarDayStatus.Active);
-            dto.TotalEvents = days.Count(d => d.DayType == DayType.Event && d.Status == CalendarDayStatus.Active);
-            dto.TotalExamDays = days.Count(d => d.DayType == DayType.Exam && d.Status == CalendarDayStatus.Active);
-            dto.TotalPtmDays = days.Count(d => d.DayType == DayType.PTM && d.Status == CalendarDayStatus.Active);
-            dto.TotalEmergencyClosures = days.Count(d => d.DayType == DayType.EmergencyClosure && d.Status == CalendarDayStatus.Active);
-        }
+        await PopulateCalendarStatisticsAsync(dtos);
 
-        return new PagedResultDto<AcademicCalendarDto>(totalCount, dtos);
+        return new PagedResultDto<AcademicCalendarDto>(items.Count, dtos);
     }
 
     public async Task<AcademicCalendarDto> GetCalendarByIdAsync(Guid id)
@@ -124,17 +111,34 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var calendar = await _calendarRepository.GetAsync(id);
         var dto = ObjectMapper.Map<AcademicCalendar, AcademicCalendarDto>(calendar);
         
-        var days = await _calendarDayRepository.GetListAsync(d => d.AcademicCalendarId == id);
-        dto.TotalWorkingDays = days.Count(d => d.DayType == DayType.WorkingDay && d.Status == CalendarDayStatus.Active);
-        dto.TotalHolidays = days.Count(d => d.DayType == DayType.Holiday && d.Status == CalendarDayStatus.Active);
-        dto.TotalVacationDays = days.Count(d => d.DayType == DayType.Vacation && d.Status == CalendarDayStatus.Active);
-        dto.TotalHalfDays = days.Count(d => d.DayType == DayType.HalfDay && d.Status == CalendarDayStatus.Active);
-        dto.TotalEvents = days.Count(d => d.DayType == DayType.Event && d.Status == CalendarDayStatus.Active);
-        dto.TotalExamDays = days.Count(d => d.DayType == DayType.Exam && d.Status == CalendarDayStatus.Active);
-        dto.TotalPtmDays = days.Count(d => d.DayType == DayType.PTM && d.Status == CalendarDayStatus.Active);
-        dto.TotalEmergencyClosures = days.Count(d => d.DayType == DayType.EmergencyClosure && d.Status == CalendarDayStatus.Active);
+        await PopulateCalendarStatisticsAsync([dto]);
         
         return dto;
+    }
+
+    private async Task PopulateCalendarStatisticsAsync(IReadOnlyCollection<AcademicCalendarDto> calendars)
+    {
+        if (calendars.Count == 0) return;
+
+        var calendarIds = calendars.Select(calendar => calendar.Id).ToList();
+        var query = await _calendarDayRepository.GetQueryableAsync();
+        var counts = await AsyncExecuter.ToListAsync(query
+            .Where(day => calendarIds.Contains(day.AcademicCalendarId) && day.Status == CalendarDayStatus.Active)
+            .GroupBy(day => new { day.AcademicCalendarId, day.DayType })
+            .Select(group => new { group.Key.AcademicCalendarId, group.Key.DayType, Count = group.Count() }));
+        var byCalendarAndType = counts.ToDictionary(row => (row.AcademicCalendarId, row.DayType), row => row.Count);
+
+        foreach (var calendar in calendars)
+        {
+            calendar.TotalWorkingDays = byCalendarAndType.GetValueOrDefault((calendar.Id, DayType.WorkingDay));
+            calendar.TotalHolidays = byCalendarAndType.GetValueOrDefault((calendar.Id, DayType.Holiday));
+            calendar.TotalVacationDays = byCalendarAndType.GetValueOrDefault((calendar.Id, DayType.Vacation));
+            calendar.TotalHalfDays = byCalendarAndType.GetValueOrDefault((calendar.Id, DayType.HalfDay));
+            calendar.TotalEvents = byCalendarAndType.GetValueOrDefault((calendar.Id, DayType.Event));
+            calendar.TotalExamDays = byCalendarAndType.GetValueOrDefault((calendar.Id, DayType.Exam));
+            calendar.TotalPtmDays = byCalendarAndType.GetValueOrDefault((calendar.Id, DayType.PTM));
+            calendar.TotalEmergencyClosures = byCalendarAndType.GetValueOrDefault((calendar.Id, DayType.EmergencyClosure));
+        }
     }
 
     public async Task<AcademicCalendarDto> CreateCalendarAsync(CreateCalendarDto input)
@@ -274,7 +278,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             query = query.Where(d => d.DayType == dayType.Value);
         }
 
-        var allItems = query.ToList();
+        var allItems = await AsyncExecuter.ToListAsync(query);
         var rangeEnds = new Dictionary<Guid, DateTime?>();
         foreach (var group in allItems
                      .Where(d => d.DayType == DayType.Vacation)
@@ -408,6 +412,12 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
 
     public async Task<AcademicCalendarDayDto> CreateCalendarDayAsync(Guid calendarId, CreateCalendarDayDto input)
     {
+        return await CreateCalendarDayAsync(calendarId, input, null);
+    }
+
+    private async Task<AcademicCalendarDayDto> CreateCalendarDayAsync(
+        Guid calendarId, CreateCalendarDayDto input, AcademicCalendarAuditWriter.ActorSnapshot? actor)
+    {
         var calendar = await _calendarRepository.GetAsync(calendarId);
         var details = NormalizeDayDetails(input);
         var resolved = await ResolveExamScheduleAsync(calendar, details, input.Date.DateTime.Date);
@@ -454,6 +464,7 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             }
         }
 
+        actor ??= await _auditWriter.CaptureActorAsync();
         AcademicCalendarDay? firstDay = null;
         foreach (var date in EnumerateDates(startDate, endDate))
         {
@@ -506,7 +517,8 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
                     entityType: day.DayType.ToString(),
                     entityName: day.Title,
                     reason: input.ChangeReason,
-                    academicCalendarDayId: day.Id);
+                    academicCalendarDayId: day.Id,
+                    actor: actor);
             }
         }
 
@@ -698,9 +710,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
     public async Task<List<AcademicCalendarDayDto>> CreateCalendarDaysBulkAsync(Guid calendarId, CreateCalendarDaysBulkDto input)
     {
         var result = new List<AcademicCalendarDayDto>();
+        var actor = input.Days.Count == 0 ? null : await _auditWriter.CaptureActorAsync();
         foreach (var item in input.Days)
         {
-            var day = await CreateCalendarDayAsync(calendarId, item);
+            var day = await CreateCalendarDayAsync(calendarId, item, actor);
             result.Add(day);
         }
         return result;
@@ -1933,31 +1946,38 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         var startOfThisWeek = now.AddDays(-7);
         var startOfLastWeek = now.AddDays(-14);
 
-        var items = query.ToList();
+        var totals = await AsyncExecuter.FirstOrDefaultAsync(query
+            .GroupBy(row => 1)
+            .Select(group => new
+            {
+                Total = group.Count(),
+                ThisWeek = group.Count(row => row.ChangedAt >= startOfThisWeek),
+                LastWeek = group.Count(row => row.ChangedAt >= startOfLastWeek && row.ChangedAt < startOfThisWeek),
+                LastSyncedAt = group.Max(row => row.ChangedAt)
+            }));
 
-        var mostActive = items
+        var mostActive = await AsyncExecuter.FirstOrDefaultAsync(query
             .Where(x => x.ChangedAt >= startOfThisWeek)
             .GroupBy(x => x.ChangedByUserId)
             .Select(g => new AcademicCalendarAuditActiveUserDto
             {
                 UserId = g.Key,
-                Name = g.FirstOrDefault(x => x.ActorNameSnapshot != null)?.ActorNameSnapshot ?? "Unknown User",
-                Role = g.FirstOrDefault(x => x.ActorRoleSnapshot != null)?.ActorRoleSnapshot,
+                Name = g.Where(x => x.ActorNameSnapshot != null).Select(x => x.ActorNameSnapshot).FirstOrDefault() ?? "Unknown User",
+                Role = g.Where(x => x.ActorRoleSnapshot != null).Select(x => x.ActorRoleSnapshot).FirstOrDefault(),
                 ActionCount = g.Count()
             })
-            .OrderByDescending(x => x.ActionCount)
-            .FirstOrDefault();
+            .OrderByDescending(x => x.ActionCount));
 
         return new AcademicCalendarAuditSummaryDto
         {
-            TotalAuditEvents = items.Count,
-            ChangesThisWeek = items.Count(x => x.ChangedAt >= startOfThisWeek),
-            ChangesLastWeek = items.Count(x => x.ChangedAt >= startOfLastWeek && x.ChangedAt < startOfThisWeek),
+            TotalAuditEvents = totals?.Total ?? 0,
+            ChangesThisWeek = totals?.ThisWeek ?? 0,
+            ChangesLastWeek = totals?.LastWeek ?? 0,
             // Risk classification is out of scope for this pass — no risk engine exists yet, so this
             // stays 0 rather than fabricating a number. See implementation plan for the deferred item.
             CriticalChanges = 0,
             MostActiveUser = mostActive,
-            LastSyncedAt = items.OrderByDescending(x => x.ChangedAt).FirstOrDefault()?.ChangedAt ?? now
+            LastSyncedAt = totals?.LastSyncedAt ?? now
         };
     }
 

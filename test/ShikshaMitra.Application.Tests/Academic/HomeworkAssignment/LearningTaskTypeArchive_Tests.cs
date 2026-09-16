@@ -52,7 +52,7 @@ public class LearningTaskTypeArchive_Tests : ShikshaMitraApplicationTestBase<Shi
 					defaultMarks: 10,
 					evaluationRequired: true,
 					defaultEvaluationMethod: EvaluationMethod.Marks);
-				await _assignmentTypeManager.CreateAsync(
+				var unusedType = await _assignmentTypeManager.CreateAsync(
 					mediumId,
 					$"Project {unique}"[..30],
 					defaultSubmissionType: SubmissionType.OnlineText,
@@ -83,6 +83,8 @@ public class LearningTaskTypeArchive_Tests : ShikshaMitraApplicationTestBase<Shi
 
 				var allList = await _assignmentTypeAppService.GetAllAsync(mediumId, includeArchived: true);
 				allList.Data.Single(type => type.Id == assignmentType.Id).Status.ShouldBe(TaskTypeStatus.Archived);
+				allList.Data.Single(type => type.Id == assignmentType.Id).UsageCount.ShouldBe(1);
+				allList.Data.Single(type => type.Id == unusedType.Id).UsageCount.ShouldBe(0);
 			}
 		});
 	}
@@ -103,7 +105,7 @@ public class LearningTaskTypeArchive_Tests : ShikshaMitraApplicationTestBase<Shi
 					defaultMarks: 10,
 					evaluationRequired: true,
 					defaultEvaluationMethod: EvaluationMethod.Marks);
-				await _homeworkTypeManager.CreateAsync(
+				var unusedType = await _homeworkTypeManager.CreateAsync(
 					mediumId,
 					$"Reading {unique}"[..30],
 					defaultSubmissionType: SubmissionType.OnlineText,
@@ -133,6 +135,8 @@ public class LearningTaskTypeArchive_Tests : ShikshaMitraApplicationTestBase<Shi
 
 				var allList = await _homeworkTypeAppService.GetAllAsync(mediumId, includeArchived: true);
 				allList.Data.Single(type => type.Id == homeworkType.Id).Status.ShouldBe(TaskTypeStatus.Archived);
+				allList.Data.Single(type => type.Id == homeworkType.Id).UsageCount.ShouldBe(1);
+				allList.Data.Single(type => type.Id == unusedType.Id).UsageCount.ShouldBe(0);
 			}
 		});
 	}

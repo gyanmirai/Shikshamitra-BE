@@ -10,7 +10,7 @@ public class WeeklyLectureSlotConfiguration : IEntityTypeConfiguration<WeeklyLec
     public void Configure(EntityTypeBuilder<WeeklyLectureSlot> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "WeeklyLectureSlots",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "WeeklyLectureSlots",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
@@ -30,7 +30,7 @@ public class WeeklyLectureSlotSubjectConfiguration : IEntityTypeConfiguration<We
     public void Configure(EntityTypeBuilder<WeeklyLectureSlotSubject> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "WeeklyLectureSlotSubjects",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "WeeklyLectureSlotSubjects",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();

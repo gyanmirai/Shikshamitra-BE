@@ -1,4 +1,5 @@
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
@@ -14,6 +15,7 @@ namespace ShikshaMitra.Academic.Reports;
 public class AcademicDynamicReportCatalog(
 	IAsyncQueryableExecuter asyncExecuter,
 	IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+	IRepository<Subject, Guid> subjectRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<Standard, Guid> standardRepository) : ITransientDependency
 {
@@ -235,19 +237,22 @@ public class AcademicDynamicReportCatalog(
 		{
 			standardQuery = standardQuery.Where(item => scope.ClassIds.Contains(item.Id));
 		}
-		var standards = await asyncExecuter.ToListAsync(standardQuery);
+		var standards = await asyncExecuter.ToListAsync(standardQuery.OrderBy(item => item.Id).Select(item => new { item.Id, item.Name }));
 
-		var query = await assignedSubjectRepository.WithDetailsAsync(
-			subject => subject.Subject,
-			subject => subject.Standard,
-			subject => subject.Chapters);
+		var assignmentQuery = await assignedSubjectRepository.GetQueryableAsync();
+		var subjectQuery = await subjectRepository.GetQueryableAsync();
+		// The former required Subject include excluded invisible subjects from every child dataset.
+		var query = from assignment in assignmentQuery
+					join subject in subjectQuery on assignment.SubjectId equals subject.Id
+					select assignment;
 		query = query.Where(item =>
 			item.Standard.EducationMediumStage.EducationMediumId == scope.EducationMediumId);
 		if (scope.ClassIds is { Count: > 0 })
 		{
 			query = query.Where(item => scope.ClassIds.Contains(item.StandardId));
 		}
-		var assignments = await asyncExecuter.ToListAsync(query);
+		var assignments = await asyncExecuter.ToListAsync(query.OrderBy(item => item.Id)
+			.Select(item => new { item.Id, item.SubjectId, SubjectName = item.Subject.Name }));
 
 		var divisionQuery = await divisionRepository.GetQueryableAsync();
 		divisionQuery = divisionQuery.Where(item =>
@@ -256,7 +261,7 @@ public class AcademicDynamicReportCatalog(
 		{
 			divisionQuery = divisionQuery.Where(item => scope.DivisionIds.Contains(item.Id));
 		}
-		var divisions = await asyncExecuter.ToListAsync(divisionQuery);
+		var divisions = await asyncExecuter.ToListAsync(divisionQuery.Select(item => new { item.Id, item.Name, item.StandardId }));
 
 		var classes = standards
 			.Select(item => new CatalogClass(item.Id, item.Name))
@@ -273,24 +278,17 @@ public class AcademicDynamicReportCatalog(
 			.ToList();
 
 		var subjects = assignments
-			.Where(item => item.Subject != null)
 			.GroupBy(item => item.SubjectId)
-			.Select(group => new CatalogSubject(group.Key, group.First().Subject.Name))
+			.Select(group => new CatalogSubject(group.Key, group.First().SubjectName))
 			.OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
 			.Select((item, index) => item with { Token = $"subject_{index + 1}" })
 			.ToList();
 		var subjectTokens = subjects.ToDictionary(item => item.Id, item => item.Token);
 
-		var chapters = assignments
-			.SelectMany(assignment => assignment.Chapters.Select(chapter => new
-			{
-				chapter.Id,
-				chapter.ChapterName,
-				assignment.StandardId,
-				assignment.SubjectId
-			}))
-			.OrderBy(item => item.ChapterName, StringComparer.OrdinalIgnoreCase)
-			.Take(1000)
+		// Token order uses OrdinalIgnoreCase, so database collation cannot choose the top 1000.
+		// Scan narrow scalar pages and retain only those 1000 candidates in memory.
+		var chapterCandidates = await LoadChapterCatalogCandidatesAsync(query);
+		var chapters = chapterCandidates
 			.Select((item, index) => new CatalogChapter(
 				$"chapter_{index + 1}", item.Id, item.ChapterName, item.StandardId, item.SubjectId,
 				classTokens.GetValueOrDefault(item.StandardId, string.Empty),
@@ -298,6 +296,54 @@ public class AcademicDynamicReportCatalog(
 			.ToList();
 
 		return new AcademicDynamicReportCatalogSnapshot(classes, divisionItems, subjects, chapters);
+	}
+
+	private async Task<SortedSet<ChapterCatalogCandidate>> LoadChapterCatalogCandidatesAsync(IQueryable<AssignedSubject> assignments)
+	{
+		var comparer = Comparer<ChapterCatalogCandidate>.Create((left, right) =>
+		{
+			var result = StringComparer.OrdinalIgnoreCase.Compare(left.ChapterName, right.ChapterName);
+			if (result == 0) result = left.AssignmentId.CompareTo(right.AssignmentId);
+			if (result == 0) result = left.Id.CompareTo(right.Id);
+			return result;
+		});
+		var selected = new SortedSet<ChapterCatalogCandidate>(comparer);
+		var query = from assignment in assignments
+					from chapter in assignment.Chapters
+					select new ChapterCatalogCandidate
+					{
+						AssignmentId = assignment.Id, Id = chapter.Id, ChapterName = chapter.ChapterName,
+						StandardId = assignment.StandardId, SubjectId = assignment.SubjectId
+					};
+		ChapterCatalogCandidate? cursor = null;
+		while (true)
+		{
+			var page = query;
+			if (cursor != null)
+			{
+				var assignmentId = cursor.AssignmentId;
+				var chapterId = cursor.Id;
+				page = page.Where(item => item.AssignmentId.CompareTo(assignmentId) > 0 ||
+					(item.AssignmentId == assignmentId && item.Id.CompareTo(chapterId) > 0));
+			}
+			var items = await asyncExecuter.ToListAsync(page.OrderBy(item => item.AssignmentId).ThenBy(item => item.Id).Take(256));
+			if (items.Count == 0) return selected;
+			foreach (var item in items)
+			{
+				selected.Add(item);
+				if (selected.Count > 1000) selected.Remove(selected.Max!);
+			}
+			cursor = items[^1];
+		}
+	}
+
+	private sealed class ChapterCatalogCandidate
+	{
+		public Guid AssignmentId { get; set; }
+		public Guid Id { get; set; }
+		public string ChapterName { get; set; } = string.Empty;
+		public Guid StandardId { get; set; }
+		public Guid SubjectId { get; set; }
 	}
 }
 

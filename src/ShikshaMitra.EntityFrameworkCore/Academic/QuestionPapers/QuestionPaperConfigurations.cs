@@ -8,7 +8,7 @@ public class QuestionPaperSettingConfiguration : IEntityTypeConfiguration<Questi
 {
     public void Configure(EntityTypeBuilder<QuestionPaperSetting> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionPaperSettings", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionPaperSettings", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.DistributionTolerancePercentage).HasPrecision(5, 2);
         builder.HasIndex(x => new { x.TenantId, x.AcademicYearId }).IsUnique();
@@ -19,7 +19,7 @@ public class QuestionPaperConfiguration : IEntityTypeConfiguration<QuestionPaper
 {
     public void Configure(EntityTypeBuilder<QuestionPaper> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionPapers", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionPapers", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.PaperTitle).IsRequired().HasMaxLength(500);
         builder.Property(x => x.CreationMode).IsRequired().HasMaxLength(50);
@@ -39,7 +39,7 @@ public class QuestionPaperSectionConfiguration : IEntityTypeConfiguration<Questi
 {
     public void Configure(EntityTypeBuilder<QuestionPaperSection> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionPaperSections", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionPaperSections", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.SectionName).IsRequired().HasMaxLength(100);
         builder.Property(x => x.Marks).HasPrecision(10, 2);
@@ -53,7 +53,7 @@ public class QuestionPaperQuestionConfiguration : IEntityTypeConfiguration<Quest
 {
     public void Configure(EntityTypeBuilder<QuestionPaperQuestion> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionPaperQuestions", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionPaperQuestions", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.Marks).HasPrecision(10, 2);
         builder.Property(x => x.ChoiceGroupCode).HasMaxLength(50);
@@ -66,7 +66,7 @@ public class QuestionPaperBlueprintConfiguration : IEntityTypeConfiguration<Ques
 {
     public void Configure(EntityTypeBuilder<QuestionPaperBlueprint> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionPaperBlueprints", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionPaperBlueprints", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.TotalMarks).HasPrecision(10, 2);
         builder.HasMany(x => x.ChapterRules).WithOne().HasForeignKey(x => x.QuestionPaperBlueprintId).OnDelete(DeleteBehavior.Cascade);
@@ -80,7 +80,7 @@ public class QuestionPaperBlueprintChapterRuleConfiguration : IEntityTypeConfigu
 {
     public void Configure(EntityTypeBuilder<QuestionPaperBlueprintChapterRule> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionPaperBlueprintChapterRules", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionPaperBlueprintChapterRules", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.Marks).HasPrecision(10, 2);
     }
@@ -90,7 +90,7 @@ public class QuestionPaperBlueprintDifficultyRuleConfiguration : IEntityTypeConf
 {
     public void Configure(EntityTypeBuilder<QuestionPaperBlueprintDifficultyRule> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionPaperBlueprintDifficultyRules", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionPaperBlueprintDifficultyRules", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.Percentage).HasPrecision(5, 2);
     }
@@ -100,7 +100,7 @@ public class QuestionPaperBlueprintBloomRuleConfiguration : IEntityTypeConfigura
 {
     public void Configure(EntityTypeBuilder<QuestionPaperBlueprintBloomRule> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "QuestionPaperBlueprintBloomRules", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "QuestionPaperBlueprintBloomRules", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.Property(x => x.Percentage).HasPrecision(5, 2);
     }

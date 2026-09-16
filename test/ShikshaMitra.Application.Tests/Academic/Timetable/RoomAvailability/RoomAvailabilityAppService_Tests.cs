@@ -398,6 +398,56 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Batched_Room_Checks_Should_Match_Individual_Checks(bool blockedByCalendar)
+    {
+        var (reservedRoom, _) = await SeedRoomAndReservationAsync(Guid.NewGuid());
+        var (maintenanceRoom, _) = await SeedRoomAndReservationAsync(Guid.NewGuid());
+        var (freeRoom, _) = await SeedRoomAndReservationAsync(Guid.NewGuid());
+        var date = new DateTime(2030, 1, 7);
+        var conflictService = GetRequiredService<RoomConflictService>();
+        var maintenanceRepository = GetRequiredService<IRepository<RoomMaintenanceBlock, Guid>>();
+        var calendarRepository = GetRequiredService<IRepository<ShikshaMitra.Academic.Calendar.AcademicCalendar, Guid>>();
+        await WithUnitOfWorkAsync(async () =>
+        {
+            await _reservationRepository.InsertAsync(new RoomReservation(Guid.NewGuid(), null,
+                reservedRoom.Id, date, new TimeSpan(9, 0, 0), new TimeSpan(10, 0, 0),
+                "Reserved for class", RoomReservationType.Class));
+            await maintenanceRepository.InsertAsync(new RoomMaintenanceBlock(Guid.NewGuid(), null,
+                maintenanceRoom.Id, "Repair", "Electrical repair", MaintenanceSeverity.High,
+                date.AddHours(8), date.AddHours(12)));
+            if (blockedByCalendar)
+            {
+                var calendar = new ShikshaMitra.Academic.Calendar.AcademicCalendar(Guid.NewGuid(), null,
+                    Guid.NewGuid(), null, "Room check holiday", date, date.AddDays(7));
+                calendar.Publish(Guid.NewGuid());
+                calendar.Days.Add(new ShikshaMitra.Academic.Calendar.AcademicCalendarDay(Guid.NewGuid(), null,
+                    calendar.Id, date, ShikshaMitra.Academic.Calendar.DayType.Holiday, "Holiday"));
+                calendar.Days.Add(new ShikshaMitra.Academic.Calendar.AcademicCalendarDay(Guid.NewGuid(), null,
+                    calendar.Id, date.AddDays(1), ShikshaMitra.Academic.Calendar.DayType.Holiday, "Holiday"));
+                await calendarRepository.InsertAsync(calendar);
+            }
+        });
+
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var rooms = new[] { reservedRoom, maintenanceRoom, freeRoom };
+            var batch = await conflictService.CheckRoomsAsync(rooms, date, new TimeSpan(9, 0, 0), new TimeSpan(10, 0, 0));
+            foreach (var room in rooms)
+            {
+                var individual = await conflictService.CheckConflictsAsync(room.Id, date,
+                    new TimeSpan(9, 0, 0), new TimeSpan(10, 0, 0));
+                System.Text.Json.JsonSerializer.Serialize(batch[room.Id])
+                    .ShouldBe(System.Text.Json.JsonSerializer.Serialize(individual));
+            }
+            batch[reservedRoom.Id].CanSave.ShouldBeFalse();
+            batch[maintenanceRoom.Id].CanSave.ShouldBeFalse();
+            batch[freeRoom.Id].CanSave.ShouldBe(!blockedByCalendar);
+        });
+    }
+
     [Fact]
     public async Task SuggestRooms_Should_Respect_Pagination_And_Limits()
     {

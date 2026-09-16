@@ -17,8 +17,11 @@ public class StudentExamSubjectApplicabilityResolver(
 {
     public async Task<Dictionary<Guid, HashSet<Guid>>> ResolveAsync(
         Exam exam,
-        IReadOnlyCollection<Student> students)
+        IReadOnlyCollection<Student> students,
+        bool readOnly = false)
     {
+        using var assignmentTracking = readOnly ? assignedSubjectRepository.DisableTracking() : null;
+        using var selectionTracking = readOnly ? studentElectiveSelectionRepository.DisableTracking() : null;
         var examSubjectIds = exam.ExamSubjects.Select(subject => subject.SubjectId).ToHashSet();
         var result = students.ToDictionary(student => student.Id, _ => new HashSet<Guid>());
         if (students.Count == 0 || examSubjectIds.Count == 0)

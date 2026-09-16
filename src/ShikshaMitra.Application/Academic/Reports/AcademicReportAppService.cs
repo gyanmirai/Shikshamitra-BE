@@ -317,11 +317,13 @@ public class AcademicReportAppService(
     {
         var userId = CurrentUser.Id ?? throw new BusinessException("Academic:Reports:050003");
 
-        var jobs = await exportJobRepository.GetListAsync(x => x.RequestedByUserId == userId);
+        var query = await exportJobRepository.GetQueryableAsync();
+        var jobs = await AsyncExecuter.ToListAsync(query
+            .Where(x => x.RequestedByUserId == userId)
+            .OrderByDescending(x => x.CreationTime)
+            .Take(100));
 
         return jobs
-            .OrderByDescending(x => x.CreationTime)
-            .Take(100)
             .Select(job => MapJob(job, includeRequestJson: false))
             .ToList();
     }

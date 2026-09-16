@@ -24,7 +24,7 @@ using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Reports;
 
-public class AcademicReportGenerator(
+public partial class AcademicReportGenerator(
     IAsyncQueryableExecuter asyncExecuter,
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
     ITimetableRepository timetableRepository,
@@ -37,7 +37,7 @@ public class AcademicReportGenerator(
     IRepository<ChapterProgress, Guid> chapterProgressRepository,
     IRepository<ExamMark, Guid> examMarkRepository,
     IRepository<Exam, Guid> examRepository,
-    IRepository<Student, Guid> studentRepository,
+    IStudentRepository studentRepository,
     StudentExamSubjectApplicabilityResolver subjectApplicabilityResolver,
     IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
     IRepository<StudentSubmissionEntity, Guid> submissionRepository,
@@ -476,7 +476,7 @@ public class AcademicReportGenerator(
             return payload;
         }
 
-        var (_, _, _, _, _, teachers) = await LoadLookupsAsync();
+        var (_, _, _, _, _, teachers) = await LoadLookupsAsync(includeTeachers: true);
         var chapterIds = subjects.SelectMany(x => x.Chapters.Select(c => c.Id)).ToList();
         var progressMap = await LoadChapterProgressAsync(chapterIds, request.Filters.DivisionIds);
 
@@ -527,7 +527,7 @@ public class AcademicReportGenerator(
         };
 
         var subjects = await asyncExecuter.ToListAsync(query);
-        var (_, _, _, _, _, teachers) = await LoadLookupsAsync();
+        var (_, _, _, _, _, teachers) = await LoadLookupsAsync(includeTeachers: true);
         var rows = subjects
             .OrderBy(subject => subject.Subject?.Name)
             .ThenBy(subject => subject.Standard?.Name)
@@ -728,7 +728,7 @@ public class AcademicReportGenerator(
         };
 
         var subjects = await asyncExecuter.ToListAsync(query);
-        var (_, _, _, _, _, teachers) = await LoadLookupsAsync();
+        var (_, _, _, _, _, teachers) = await LoadLookupsAsync(includeTeachers: true);
         var chapterIds = subjects.SelectMany(x => x.Chapters.Select(c => c.Id)).ToList();
         var progressMap = await LoadChapterProgressAsync(chapterIds, request.Filters.DivisionIds);
 
@@ -829,7 +829,7 @@ public class AcademicReportGenerator(
         };
 
         var subjects = await asyncExecuter.ToListAsync(query);
-        var (_, _, _, _, _, teachers) = await LoadLookupsAsync();
+        var (_, _, _, _, _, teachers) = await LoadLookupsAsync(includeTeachers: true);
         var chapterIds = subjects.SelectMany(x => x.Chapters.Select(c => c.Id)).ToList();
         var progressMap = await LoadChapterProgressAsync(chapterIds, request.Filters.DivisionIds);
 
@@ -891,7 +891,8 @@ public class AcademicReportGenerator(
             new() { Id = "Status", Label = "Status" }
         };
 
-        var (standards, divisions, subjects, rooms, _, teachers) = await LoadLookupsAsync();
+        var (standards, divisions, subjects, rooms, _, teachers) = await LoadLookupsAsync(
+            includeStandards: true, includeDivisions: true, includeSubjects: true, includeRooms: true, includeTeachers: true);
 
         var timetableQuery = await timetableRepository.GetQueryableAsync();
         if (request.Filters.ClassIds?.Any() == true)
@@ -963,7 +964,8 @@ public class AcademicReportGenerator(
             new() { Id = "EndTime", Label = "End Time" }
         };
 
-        var (standards, divisions, subjects, rooms, _, teachers) = await LoadLookupsAsync();
+        var (standards, divisions, subjects, rooms, _, teachers) = await LoadLookupsAsync(
+            includeStandards: true, includeDivisions: true, includeSubjects: true, includeRooms: true, includeTeachers: true);
 
         var timetableQuery = await timetableRepository.GetQueryableAsync();
         var timetableIds = await asyncExecuter.ToListAsync(timetableQuery.Select(t => t.Id));
@@ -1023,7 +1025,7 @@ public class AcademicReportGenerator(
             new() { Id = "FreePeriods", Label = "Free Periods" }
         };
 
-        var (_, _, _, rooms, roomTypeMap, _) = await LoadLookupsAsync();
+        var (_, _, _, rooms, roomTypeMap, _) = await LoadLookupsAsync(includeRooms: true, includeRoomTypes: true);
 
         var timetableQuery = await timetableRepository.GetQueryableAsync();
         var timetableIds = await asyncExecuter.ToListAsync(timetableQuery.Select(t => t.Id));
@@ -1084,7 +1086,8 @@ public class AcademicReportGenerator(
             new() { Id = "AssignedTeachers", Label = "Assigned Teachers" }
         };
 
-        var (standards, divisions, subjects, _, _, teachers) = await LoadLookupsAsync();
+        var (standards, divisions, subjects, _, _, teachers) = await LoadLookupsAsync(
+            includeStandards: true, includeDivisions: true, includeSubjects: true, includeTeachers: true);
 
         var timetableQuery = await timetableRepository.GetQueryableAsync();
         if (request.Filters.ClassIds?.Any() == true)
@@ -1161,7 +1164,7 @@ public class AcademicReportGenerator(
             new() { Id = "Status", Label = "Status" }
         };
 
-        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync();
+        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync(includeStandards: true, includeDivisions: true);
 
         var timetableQuery = await timetableRepository.GetQueryableAsync();
         if (request.Filters.ClassIds?.Any() == true)
@@ -1223,7 +1226,8 @@ public class AcademicReportGenerator(
             new() { Id = "ChangeReason", Label = "Change Reason" }
         };
 
-        var (standards, divisions, _, _, _, teachers) = await LoadLookupsAsync();
+        var (standards, divisions, _, _, _, teachers) = await LoadLookupsAsync(
+            includeStandards: true, includeDivisions: true, includeTeachers: true);
 
         var timetableQuery = await timetableRepository.GetQueryableAsync();
         if (request.Filters.ClassIds?.Any() == true)
@@ -1263,18 +1267,68 @@ public class AcademicReportGenerator(
         Dictionary<Guid, string> Subjects,
         Dictionary<Guid, string> Rooms,
         Dictionary<Guid, string> RoomTypes,
-        Dictionary<Guid, string> Teachers)> LoadLookupsAsync()
+        Dictionary<Guid, string> Teachers)> LoadLookupsAsync(
+            bool includeStandards = false,
+            bool includeDivisions = false,
+            bool includeSubjects = false,
+            bool includeRooms = false,
+            bool includeRoomTypes = false,
+            bool includeTeachers = false)
     {
-        var standards = (await standardRepository.GetListAsync()).ToDictionary(s => s.Id, s => s.Name);
-        var divisions = (await divisionRepository.GetListAsync()).ToDictionary(d => d.Id, d => d.Name);
-        var subjects = (await subjectRepository.GetListAsync()).ToDictionary(s => s.Id, s => s.Name);
-        var roomList = (await roomRepository.GetListAsync());
-        var rooms = roomList.ToDictionary(r => r.Id, r => r.RoomName);
-        var roomTypes = (await roomTypeRepository.GetListAsync()).ToDictionary(rt => rt.Id, rt => rt.RoomTypeName);
-        var roomTypeMap = roomList.ToDictionary(r => r.Id, r => roomTypes.GetValueOrDefault(r.RoomTypeId, "—"));
-        var employeeQuery = await employeeRepository.GetQueryableAsync();
-        var employees = await asyncExecuter.ToListAsync(employeeQuery);
-        var teachers = employees.ToDictionary(e => e.Id, e => e.EmployeeName);
+        Dictionary<Guid, string> standards = [];
+        Dictionary<Guid, string> divisions = [];
+        Dictionary<Guid, string> subjects = [];
+        Dictionary<Guid, string> rooms = [];
+        Dictionary<Guid, string> roomTypeMap = [];
+        Dictionary<Guid, string> teachers = [];
+
+        if (includeStandards)
+        {
+            var query = await standardRepository.GetQueryableAsync();
+            var names = await asyncExecuter.ToListAsync(query.Select(s => new { s.Id, s.Name }));
+            standards = names.ToDictionary(s => s.Id, s => s.Name);
+        }
+
+        if (includeDivisions)
+        {
+            var query = await divisionRepository.GetQueryableAsync();
+            var names = await asyncExecuter.ToListAsync(query.Select(d => new { d.Id, d.Name }));
+            divisions = names.ToDictionary(d => d.Id, d => d.Name);
+        }
+
+        if (includeSubjects)
+        {
+            var query = await subjectRepository.GetQueryableAsync();
+            var names = await asyncExecuter.ToListAsync(query.Select(s => new { s.Id, s.Name }));
+            subjects = names.ToDictionary(s => s.Id, s => s.Name);
+        }
+
+        if (includeRooms || includeRoomTypes)
+        {
+            var query = await roomRepository.GetQueryableAsync();
+            var roomList = await asyncExecuter.ToListAsync(query.Select(r => new { r.Id, r.RoomName, r.RoomTypeId }));
+            if (includeRooms)
+            {
+                rooms = roomList.ToDictionary(r => r.Id, r => r.RoomName);
+            }
+
+            if (includeRoomTypes)
+            {
+                var typeQuery = await roomTypeRepository.GetQueryableAsync();
+                var types = await asyncExecuter.ToListAsync(typeQuery.Select(rt => new { rt.Id, rt.RoomTypeName }));
+                var roomTypes = types.ToDictionary(rt => rt.Id, rt => rt.RoomTypeName);
+                roomTypeMap = roomList.ToDictionary(r => r.Id, r => roomTypes.GetValueOrDefault(r.RoomTypeId, "—"));
+            }
+        }
+
+        if (includeTeachers)
+        {
+            var query = await employeeRepository.GetQueryableAsync();
+            var employees = await asyncExecuter.ToListAsync(query.Select(e => new { e.Id, e.FirstName, e.LastName }));
+            // Match Employee.EmployeeName, including existing whitespace in nonblank name parts.
+            teachers = employees.ToDictionary(e => e.Id,
+                e => string.Join(" ", new[] { e.FirstName, e.LastName }.Where(part => !string.IsNullOrWhiteSpace(part))));
+        }
 
         return (standards, divisions, subjects, rooms, roomTypeMap, teachers);
     }
@@ -1292,17 +1346,20 @@ public class AcademicReportGenerator(
         if (divisionIds?.Any() == true)
             progressQuery = progressQuery.Where(p => divisionIds.Contains(p.DivisionId));
 
-        var progressList = await asyncExecuter.ToListAsync(progressQuery);
-
-        return progressList
+        var progress = await asyncExecuter.ToListAsync(progressQuery
             .GroupBy(p => p.ChapterId)
-            .ToDictionary(
-                g => g.Key,
-                g => (
-                    Progress: (int)Math.Round(g.Average(p => p.Progress)),
-                    StartDate: g.Where(p => p.StartDate.HasValue).Select(p => p.StartDate).Min(),
-                    CompletionDate: g.Where(p => p.CompletionDate.HasValue).Select(p => p.CompletionDate).Max()
-                ));
+            .Select(group => new
+            {
+                ChapterId = group.Key,
+                AverageProgress = group.Average(p => p.Progress),
+                StartDate = group.Min(p => p.StartDate),
+                CompletionDate = group.Max(p => p.CompletionDate)
+            }));
+
+        return progress.ToDictionary(p => p.ChapterId, p => (
+            Progress: (int)Math.Round(p.AverageProgress),
+            p.StartDate,
+            p.CompletionDate));
     }
 
     // ─── Exam Reports ─────────────────────────────────────────────────────────
@@ -1512,7 +1569,7 @@ public class AcademicReportGenerator(
         }
 
         // Load lookup maps
-        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync();
+        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync(includeStandards: true, includeDivisions: true);
 
         // Load students to resolve class/division names (and apply class filter)
         var studentIds = allMarks.Select(m => m.StudentId).Distinct().ToList();
@@ -1712,7 +1769,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -1726,7 +1784,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var rows = data.Marks
@@ -1764,7 +1822,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildGradewiseResultListAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -1776,7 +1835,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var studentResults = data.Marks
@@ -1819,7 +1878,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildMarksRangeResultListAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -1830,7 +1890,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var min = request.Filters.MinMarks ?? 0;
@@ -1868,7 +1928,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildSubjectwiseMarksReportAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -1881,7 +1942,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
@@ -1929,10 +1990,11 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildDetailedResultSheetAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         // Dynamic pivot columns: Roll No, Student Name, [SubjectName...], Total, Percentage, Grade
@@ -2047,7 +2109,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildExamSummaryReportAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2062,7 +2125,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var studentTotals = data.Marks
@@ -2113,7 +2176,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildAverageSubjectMarkAnalysisAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2128,7 +2192,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -2178,7 +2242,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildSubjectAverageClassMarkAnalysisAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2193,12 +2258,12 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var examQuery = await examRepository.WithDetailsAsync(e => e.ExamSubjects);
         var exam = await asyncExecuter.FirstOrDefaultAsync(examQuery.Where(e => e.Id == request.Filters.ExamId.Value));
-        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync();
+        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync(includeStandards: true, includeDivisions: true);
         var className = exam is not null ? standards.GetValueOrDefault(exam.StandardId, "—") : "—";
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -2248,7 +2313,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildStudentGradeAnalysisSubjectWiseAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2261,7 +2327,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
@@ -2310,7 +2376,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildSubjectWiseGradeListAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2322,7 +2389,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -2369,7 +2436,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListPassFailAnalysisSubjectWiseAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2382,7 +2450,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -2425,7 +2493,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListSubjectGradeAnalysisAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         // Columns: Subject + one column per grade label
         var gradeLabels = new[] { "A+", "A", "B+", "B", "C+", "C", "D", "F" };
@@ -2434,7 +2503,7 @@ public class AcademicReportGenerator(
             payload.Columns.Add(new() { Id = $"Grade_{g.Replace("+", "Plus")}", Label = g });
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectMaxMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.TotalMarks ?? 0);
@@ -2470,7 +2539,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2483,7 +2553,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -2523,7 +2593,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectFailedDetailsAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2537,7 +2608,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -2579,7 +2650,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectGradeAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2592,7 +2664,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -2646,7 +2718,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectSmallAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -2659,7 +2732,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var rows = data.Marks
@@ -2696,7 +2769,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListWithSubjectWithGraceAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         // Grace Marks not in data model → shown as "—"; Final Marks = Obtained Marks
         payload.Columns = new List<AcademicReportColumnDto>
@@ -2712,7 +2786,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -2813,7 +2887,7 @@ public class AcademicReportGenerator(
         var students = await asyncExecuter.ToListAsync(studentQuery.Where(s => studentIds.Contains(s.Id)));
         var studentMap = students.ToDictionary(s => s.Id);
 
-        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync();
+        var (standards, divisions, _, _, _, _) = await LoadLookupsAsync(includeStandards: true, includeDivisions: true);
 
         // Per-exam metadata
         var examMetaMap = exams.ToDictionary(e => e.Id, e => (
@@ -2994,7 +3068,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildBrightStudentAnalysisAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -3007,7 +3082,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var targetGrade = request.Filters.Grade;
@@ -3049,7 +3124,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildBrightStudentListSubjectWiseAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -3062,7 +3138,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var targetGrade = request.Filters.Grade;
@@ -3114,7 +3190,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildWeakStudentAnalysisAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -3125,7 +3202,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -3166,7 +3243,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildWeakStudentAnalysisSubjectWiseAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -3180,7 +3258,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var subjectPassMap = data.ExamSubjects.ToDictionary(es => es.SubjectId, es => es.PassingMarks ?? 0);
@@ -3227,7 +3305,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildStudentGradeAnalysisAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -3239,7 +3318,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var studentTotals = data.Marks
@@ -3289,7 +3368,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListPassFailOverallAnalysisAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -3302,7 +3382,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var studentTotals = data.Marks
@@ -3346,7 +3426,8 @@ public class AcademicReportGenerator(
     private async Task<AcademicReportPreviewDto> BuildResultListOverallGradeAnalysisAsync(
         AcademicReportRequestDto request,
         AcademicReportPreviewDto payload,
-        bool exportAllRows)
+        bool exportAllRows,
+        ExamReportData? preloadedData = null)
     {
         payload.Columns = new List<AcademicReportColumnDto>
         {
@@ -3357,7 +3438,7 @@ public class AcademicReportGenerator(
         };
 
         if (request.Filters.ExamId is null) { payload.TotalCount = 0; return payload; }
-        var data = await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
+        var data = preloadedData ?? await LoadExamReportDataAsync(request.Filters.ExamId.Value, request.Filters);
         if (data is null || !data.Marks.Any()) { payload.TotalCount = 0; return payload; }
 
         var ranked = data.Marks

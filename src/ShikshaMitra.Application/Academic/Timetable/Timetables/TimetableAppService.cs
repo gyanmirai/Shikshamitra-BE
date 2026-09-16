@@ -944,7 +944,6 @@ public class TimetableAppService(
 
         EnsureNoDuplicateTimetableSlots(periodSlots);
         EnsureNoDuplicateTeacherOrRoomInsideSlot(periodSlots);
-        await EnsureNoTeacherOrRoomConflictsAsync(timetable, periodSlots);
         EnsureWeeklyLectureCountsMatch(timetable, periodSlots, publishedWeeklySubjects);
     }
 
@@ -1052,42 +1051,9 @@ public class TimetableAppService(
         }
     }
 
-    private async Task EnsureNoTeacherOrRoomConflictsAsync(Timetable timetable, List<TimetableSlot> periodSlots)
+    private Task EnsureNoTeacherOrRoomConflictsAsync(Timetable timetable, List<TimetableSlot> periodSlots)
     {
-        foreach (var slot in periodSlots)
-        {
-            var teacherIds = slot.Subjects
-                .Where(s => s.TeacherId.HasValue)
-                .Select(s => s.TeacherId!.Value)
-                .Distinct()
-                .ToList();
-            if (teacherIds.Count > 0)
-            {
-                await timetableManager.CheckTeacherConflictAsync(
-                    timetable.StandardId,
-                    timetable.DivisionId,
-                    slot.Day,
-                    slot.StartTime,
-                    slot.EndTime,
-                    teacherIds);
-            }
-
-            var roomIds = slot.Subjects
-                .Where(s => s.RoomId.HasValue)
-                .Select(s => s.RoomId!.Value)
-                .Distinct()
-                .ToList();
-            if (roomIds.Count > 0)
-            {
-                await timetableManager.CheckRoomConflictAsync(
-                    timetable.StandardId,
-                    timetable.DivisionId,
-                    slot.Day,
-                    slot.StartTime,
-                    slot.EndTime,
-                    roomIds);
-            }
-        }
+        return timetableManager.CheckConflictsAsync(timetable.StandardId, timetable.DivisionId, periodSlots);
     }
 
     private static void EnsureWeeklyLectureCountsMatch(
@@ -1185,21 +1151,23 @@ public class TimetableAppService(
         Guid standardId,
         Guid divisionId)
     {
-        var students = await studentRepository.GetListAsync(student =>
+        var studentIds = (await studentRepository.GetQueryableAsync()).Where(student =>
             student.StandardId == standardId &&
-            student.DivisionId == divisionId);
-        var studentIds = students.Select(student => student.Id).ToList();
-        if (studentIds.Count == 0)
+            student.DivisionId == divisionId).Select(student => student.Id);
+        var studentCount = await AsyncExecuter.CountAsync(studentIds);
+        if (studentCount == 0)
         {
             return [];
         }
 
-        var selections = await studentElectiveSelectionRepository.GetListAsync(selection =>
-            studentIds.Contains(selection.StudentId));
+        var selections = await AsyncExecuter.ToListAsync(
+            (await studentElectiveSelectionRepository.GetQueryableAsync())
+                .Where(selection => studentIds.Contains(selection.StudentId))
+                .Select(selection => new { selection.StudentId, selection.ElectiveGroupId, selection.SelectedSubjectId }));
 
         return selections
             .GroupBy(selection => selection.ElectiveGroupId)
-            .Where(group => group.Select(selection => selection.StudentId).Distinct().Count() == studentIds.Count)
+            .Where(group => group.Select(selection => selection.StudentId).Distinct().Count() == studentCount)
             .ToDictionary(
                 group => group.Key,
                 group => group

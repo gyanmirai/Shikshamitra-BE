@@ -11,7 +11,7 @@ public class LectureSlotConfigConfiguration : IEntityTypeConfiguration<LectureSl
     public void Configure(EntityTypeBuilder<LectureSlotConfig> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "LectureSlotConfigs",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "LectureSlotConfigs",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
@@ -35,7 +35,7 @@ public class LectureSlotGroupConfiguration : IEntityTypeConfiguration<LectureSlo
     public void Configure(EntityTypeBuilder<LectureSlotGroup> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "LectureSlotGroups",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "LectureSlotGroups",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
@@ -53,7 +53,7 @@ public class LectureSlotTimeSlotConfiguration : IEntityTypeConfiguration<Lecture
     public void Configure(EntityTypeBuilder<LectureSlotTimeSlot> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "LectureSlotTimeSlots",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "LectureSlotTimeSlots",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();

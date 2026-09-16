@@ -25,6 +25,17 @@ public class EfCoreStudentRepository(
     }
 
     /// <inheritdoc/>
+    public async Task<IQueryable<Student>> GetAcademicReportQueryableAsync()
+    {
+        var dbSet = await GetDbSetAsync();
+        return dbSet.IgnoreAutoIncludes().AsNoTracking()
+            .Include(student => student.AdditionalDetail)
+            .Include(student => student.ContactDetail)
+            .Include(student => student.FamilyDetail)
+            .Include(student => student.AcademicYear);
+    }
+
+    /// <inheritdoc/>
     public async Task<Student?> GetInquiryForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var dbSet = await GetDbSetAsync();

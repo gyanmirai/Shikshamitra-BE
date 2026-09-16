@@ -256,7 +256,7 @@ public class PayrollApprovedLeaveResolver_Tests : ShikshaMitraApplicationTestBas
 		var dbContext = ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
 		var now = DateTime.UtcNow;
 		await dbContext.Database.ExecuteSqlRawAsync(
-			"INSERT OR IGNORE INTO AppAcademicYears (Id, Name, StartDate, EndDate, IsDeleted, ConcurrencyStamp, ExtraProperties, CreationTime) VALUES ({0}, {1}, {2}, {3}, 0, {4}, {5}, {6})",
+			"INSERT OR IGNORE INTO academic_Years (Id, Name, StartDate, EndDate, IsDeleted, ConcurrencyStamp, ExtraProperties, CreationTime) VALUES ({0}, {1}, {2}, {3}, 0, {4}, {5}, {6})",
 			academicYearId,
 			$"Payroll Leave Test Year {academicYearId:N}",
 			new DateTime(2026, 1, 1),

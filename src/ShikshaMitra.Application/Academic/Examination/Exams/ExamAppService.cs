@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Domain.Entities;
 using System;
 using Volo.Abp;
 using System.Linq;
@@ -659,32 +660,33 @@ public class ExamAppService(
 			);
 		}
 
-		var allRows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.CreationTime));
+		// Status and scope need only identifiers and schedule boundaries. Hydrate room assignments,
+		// grade data and audit fields after paging instead of tracking every matching exam graph.
+		var allRows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.CreationTime)
+			.Select(x => new ExamListCandidate(x.exam.Id, x.exam.StandardId,
+				x.standard.EducationMediumStageId, x.stage.EducationMediumId, x.exam.Status,
+				x.exam.ExamDivisions.Select(division => division.DivisionId).ToList(),
+				x.exam.ExamSubjects.Select(subject => new ExamListSubjectSchedule(subject.SubjectId,
+					subject.ExamDate, subject.StartTime, subject.EndTime)).ToList())));
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		if (!scope.IsAdmin)
 		{
 			var primaryTeacherSubjects = await GetCurrentPrimaryTeacherSubjectIdsByStandardAsync(
-				allRows.Select(row => row.exam.StandardId).Distinct().ToList());
+				allRows.Select(row => row.StandardId).Distinct().ToList());
 			allRows = allRows
 				.Where(row =>
-					CanAccessExam(row.exam, row.standard, row.stage, scope) ||
-					PrimaryTeacherCanAccessExam(row.exam, primaryTeacherSubjects))
+					CanAccessExam(row.StandardId, row.StageId, row.MediumId, row.DivisionIds, scope) ||
+					PrimaryTeacherCanAccessExam(row.StandardId, row.Subjects.Select(subject => subject.SubjectId), primaryTeacherSubjects))
 				.ToList();
 		}
 
-		// Exam dates are derived from subject schedules, so apply the date filter
-		// after loading the detailed exam aggregate but before status counts and paging.
-		allRows = allRows
-			.Where(row => IsExamInDateRange(row.exam, filterStartDate!.Value, filterEndDate!.Value, isDefaultDateRange))
-			.ToList();
-
 		var rowsWithEffectiveStatus = allRows
-			.Select(x => new
+			.Select(row => new { Row = row, Window = GetExamScheduleWindow(row.Subjects) })
+			.Where(row => IsExamInDateRange(row.Row.Status, row.Window, filterStartDate!.Value, filterEndDate!.Value, isDefaultDateRange))
+			.Select(row => new
 			{
-				x.exam,
-				x.standard,
-				x.examType,
-				EffectiveStatus = GetEffectiveScheduleStatus(x.exam)
+				row.Row,
+				EffectiveStatus = ExamScheduleStatusResolver.Resolve(row.Row.Status, row.Window.StartAt, row.Window.EndAt, DateTime.UtcNow)
 			})
 			.ToList();
 
@@ -699,19 +701,34 @@ public class ExamAppService(
 
 		var totalCount = filteredRows.Count;
 
-		var queryResult = filteredRows
+		var selectedPage = filteredRows
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount)
 			.ToList();
+		var pageIds = selectedPage.Select(row => row.Row.Id).ToList();
+		// Project setup names instead of entities: Standard and Stage have model auto-includes
+		// that otherwise expand a small exam page into the whole academic setup graph.
+		var pageDetails = await AsyncExecuter.ToListAsync(query.Where(row => pageIds.Contains(row.exam.Id))
+			.Select(row => new { row.exam, StandardName = row.standard.Name, ExamTypeName = row.examType.Name }));
+		var detailsById = pageDetails.ToDictionary(row => row.exam.Id);
+		var queryResult = selectedPage.Where(row => detailsById.ContainsKey(row.Row.Id)).Select(row => new
+		{
+			detailsById[row.Row.Id].exam,
+			detailsById[row.Row.Id].StandardName,
+			detailsById[row.Row.Id].ExamTypeName,
+			row.EffectiveStatus
+		}).ToList();
 
 		// Fetch Divisions
 		var allDivisionIds = queryResult.SelectMany(x => x.exam.ExamDivisions.Select(d => d.DivisionId)).Distinct().ToList();
-		var divisions = await divisionRepository.GetListAsync(x => allDivisionIds.Contains(x.Id));
+		var divisions = await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+			.Where(x => allDivisionIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
 		var divisionDict = divisions.ToDictionary(x => x.Id, x => x.Name);
 
 		// Fetch creator names
 		var creatorIds = queryResult.Select(x => x.exam.CreatorId).Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
-		var creatorUsers = await identityUserRepository.GetListAsync(x => creatorIds.Contains(x.Id));
+		var creatorUsers = await AsyncExecuter.ToListAsync((await identityUserRepository.GetQueryableAsync())
+			.Where(x => creatorIds.Contains(x.Id)).Select(x => new { x.Id, x.Name, x.UserName, x.Email }));
 		var creatorNameById = creatorUsers.ToDictionary(
 			x => x.Id,
 			x => !string.IsNullOrWhiteSpace(x.Name) ? x.Name! : !string.IsNullOrWhiteSpace(x.UserName) ? x.UserName! : x.Email ?? "Unknown");
@@ -728,7 +745,7 @@ public class ExamAppService(
 			var startDate = GetExamStartDate(x.exam);
 			var finalEndAt = GetExamFinalEndAt(x.exam);
 			var subjectCount = x.exam.ExamSubjects.Count;
-			var roomRequiredSubjects = GetRoomRequiredSubjects(x.exam, x.examType, electiveGroupByStandardAndSubject);
+			var roomRequiredSubjects = GetRoomRequiredSubjects(x.exam, electiveGroupByStandardAndSubject);
 			var missingRoomAssignmentCount = roomRequiredSubjects
 				.SelectMany(subject => x.exam.ExamDivisions.Select(division => new { subject, division }))
 				.Count(row => !row.subject.RoomAssignments.Any(assignment => assignment.DivisionId == row.division.DivisionId));
@@ -737,16 +754,16 @@ public class ExamAppService(
 			{
                 ExamId = x.exam.Id,
                 ExamName = x.exam.ExamName,
-                ExamTypeName = x.examType.Name,
+                ExamTypeName = x.ExamTypeName,
                 StandardId = x.exam.StandardId,
-                StandardName = x.standard.Name,
+                StandardName = x.StandardName,
 				CreatedBy = x.exam.CreatorId,
 				CreatorName = x.exam.CreatorId.HasValue ? creatorNameById.GetValueOrDefault(x.exam.CreatorId.Value) : null,
 				Status = x.EffectiveStatus,
 				SubjectCount = subjectCount,
 				StartDate = startDate,
 				EndDate = finalEndAt,
-				IsScheduleComplete = IsExamScheduleComplete(x.exam, x.examType, electiveGroupByStandardAndSubject),
+				IsScheduleComplete = IsExamScheduleComplete(x.exam, electiveGroupByStandardAndSubject),
 				HasRoomAssignment = roomRequiredSubjects.Count > 0 && missingRoomAssignmentCount == 0,
 					MissingRoomAssignmentCount = missingRoomAssignmentCount,
 					IssueCount = 0,
@@ -772,25 +789,30 @@ public class ExamAppService(
 		Standard standard,
 		EducationMediumStage stage,
 		UserScopeContext scope)
+		=> CanAccessExam(exam.StandardId, standard.EducationMediumStageId, stage.EducationMediumId,
+			exam.ExamDivisions.Select(division => division.DivisionId), scope);
+
+	private static bool CanAccessExam(Guid standardId, Guid stageId, Guid mediumId,
+		IEnumerable<Guid> divisionIds, UserScopeContext scope)
 	{
 		if (scope.IsAdmin || scope.HasWildcardAcademicYear)
 		{
 			return true;
 		}
 
-		if (exam.ExamDivisions.Any(division => scope.DivisionIds.Contains(division.DivisionId)))
+		if (divisionIds.Any(divisionId => scope.DivisionIds.Contains(divisionId)))
 		{
 			return true;
 		}
 
-		if (scope.WildcardDivisionStandardIds.Contains(exam.StandardId) ||
-			(scope.HasWildcardStandard && scope.WildcardStandardMediumStageIds.Contains(standard.EducationMediumStageId)) ||
-			(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(stage.EducationMediumId)))
+		if (scope.WildcardDivisionStandardIds.Contains(standardId) ||
+			(scope.HasWildcardStandard && scope.WildcardStandardMediumStageIds.Contains(stageId)) ||
+			(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(mediumId)))
 		{
 			return true;
 		}
 
-		return scope.HasWildcardMedium && scope.MediumIds.Contains(stage.EducationMediumId);
+		return scope.HasWildcardMedium && scope.MediumIds.Contains(mediumId);
 	}
 
 	private async Task EnsureCanAccessExamAsync(Exam exam)
@@ -801,9 +823,8 @@ public class ExamAppService(
 			return;
 		}
 
-		var standard = await standardRepository.GetAsync(exam.StandardId);
-		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
-		if (CanAccessExam(exam, standard, stage, scope) ||
+		var (stageId, mediumId) = await GetStandardScopeIdsAsync(exam.StandardId);
+		if (CanAccessExam(exam.StandardId, stageId, mediumId, exam.ExamDivisions.Select(division => division.DivisionId), scope) ||
 			await CurrentUserIsPrimaryTeacherForAllSubjectsAsync(
 				exam.StandardId,
 				exam.ExamSubjects.Select(subject => subject.SubjectId).ToList()))
@@ -825,14 +846,9 @@ public class ExamAppService(
 			return;
 		}
 
-		var standard = await standardRepository.GetAsync(standardId);
-		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
+		var (stageId, mediumId) = await GetStandardScopeIdsAsync(standardId);
 		var canAccessEveryDivision = divisionIds.All(divisionId =>
-		{
-			var scopeProbe = new Exam(Guid.NewGuid(), Guid.NewGuid(), "scope-probe", standardId);
-			scopeProbe.AddDivision(Guid.NewGuid(), divisionId);
-			return CanAccessExam(scopeProbe, standard, stage, scope);
-		});
+			CanAccessExam(standardId, stageId, mediumId, [divisionId], scope));
 
 		if (canAccessEveryDivision ||
 			await CurrentUserIsPrimaryTeacherForAllSubjectsAsync(standardId, subjectIds))
@@ -899,12 +915,14 @@ public class ExamAppService(
 	private static bool PrimaryTeacherCanAccessExam(
 		Exam exam,
 		IReadOnlyDictionary<Guid, HashSet<Guid>> primaryTeacherSubjects)
+		=> PrimaryTeacherCanAccessExam(exam.StandardId, exam.ExamSubjects.Select(subject => subject.SubjectId), primaryTeacherSubjects);
+
+	private static bool PrimaryTeacherCanAccessExam(Guid standardId, IEnumerable<Guid> subjectIds,
+		IReadOnlyDictionary<Guid, HashSet<Guid>> primaryTeacherSubjects)
 	{
-		var examSubjectIds = exam.ExamSubjects
-			.Select(subject => subject.SubjectId)
-			.ToHashSet();
+		var examSubjectIds = subjectIds.ToHashSet();
 		return examSubjectIds.Count > 0 &&
-			primaryTeacherSubjects.TryGetValue(exam.StandardId, out var allocatedSubjectIds) &&
+			primaryTeacherSubjects.TryGetValue(standardId, out var allocatedSubjectIds) &&
 			examSubjectIds.IsSubsetOf(allocatedSubjectIds);
 	}
 
@@ -916,10 +934,19 @@ public class ExamAppService(
 
 		var examSubject = exam.ExamSubjects.FirstOrDefault(s => s.SubjectId == input.SubjectId)
 			?? throw new UserFriendlyException("Subject not found in this exam");
-		await EnsureElectiveSubjectUsableForDivisionAsync(exam, input.SubjectId, input.DivisionId);
-
-		// Students in this division (enrolled + approved), filtered by elective assignment when applicable.
-		var allStudents = await GetEligibleStudentsForSubjectAsync(exam, input.SubjectId, input.DivisionId);
+		var (studentQuery, electiveGroupId) = await GetEligibleStudentsQueryAsync(exam, input.SubjectId, input.DivisionId);
+		// Keep the existing CLR search and null-first roll ordering while loading only display fields.
+		var allStudents = await AsyncExecuter.ToListAsync(studentQuery.Select(student => new
+		{
+			student.Id,
+			student.FirstName,
+			student.MiddleName,
+			student.LastName,
+			student.GrNo,
+			student.RollNo
+		}));
+		if (electiveGroupId.HasValue && allStudents.Count == 0)
+			throw new UserFriendlyException("No student in this class and division is assigned to the selected elective subject. Configure marks for the elective subject selected by students.");
 
 		// Apply search filter
 		if (!string.IsNullOrWhiteSpace(input.Search))
@@ -937,12 +964,17 @@ public class ExamAppService(
 		var totalPages = (int) Math.Ceiling(totalCount / (double) input.PageSize);
 		var pagedStudents = allStudents.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToList();
 
-		// Existing marks for this exam+subject+division
-		var existingMarks = await examMarkRepository.GetListAsync(m =>
-			m.ExamId == input.ExamId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
+		// Publication applies to the entire subject/division, even when search or paging hides marks.
+		var markQuery = (await examMarkRepository.GetQueryableAsync()).Where(mark =>
+			mark.ExamId == input.ExamId && mark.SubjectId == input.SubjectId && mark.DivisionId == input.DivisionId);
+		var publication = await AsyncExecuter.FirstOrDefaultAsync(markQuery
+			.GroupBy(mark => mark.ExamId)
+			.Select(group => new { AllPublished = group.All(mark => mark.IsPublished) }));
+		var studentIds = pagedStudents.Select(student => student.Id).ToList();
+		var existingMarks = await AsyncExecuter.ToListAsync(markQuery.Where(mark => studentIds.Contains(mark.StudentId)));
 		var marksLookup = existingMarks.ToDictionary(m => m.StudentId);
 
-		var isPublished = existingMarks.Any() && existingMarks.All(m => m.IsPublished);
+		var isPublished = publication?.AllPublished == true;
 
 		// Fetch the specific grading scale configured for this subject
 		ICollection<GradeRange> gradeRanges = new List<GradeRange>();
@@ -950,7 +982,7 @@ public class ExamAppService(
 		if (examSubject.GradeScalingId.HasValue)
 		{
 			var gradingScales = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
-			var customScale = gradingScales.FirstOrDefault(gs => gs.Id == examSubject.GradeScalingId.Value);
+			var customScale = await AsyncExecuter.FirstOrDefaultAsync(gradingScales.Where(gs => gs.Id == examSubject.GradeScalingId.Value));
 			if (customScale != null)
 			{
 				gradeRanges = customScale.GradeRanges.OrderByDescending(gr => gr.MinMarks).ToList();
@@ -1458,32 +1490,42 @@ public class ExamAppService(
 		return dates.Count == 0 ? null : dates.Min();
 	}
 
+	private static ExamScheduleWindow GetExamScheduleWindow(IEnumerable<ExamListSubjectSchedule> subjects)
+	{
+		var scheduled = subjects.Where(subject => subject.ExamDate.HasValue).ToList();
+		if (scheduled.Count == 0) return new ExamScheduleWindow(null, null, null);
+		return new ExamScheduleWindow(
+			scheduled.Min(subject => subject.ExamDate!.Value.Date),
+			scheduled.Min(subject => subject.ExamDate!.Value.Date.Add(subject.StartTime?.TimeOfDay ?? TimeSpan.Zero)),
+			scheduled.Max(subject => subject.EndTime.HasValue
+				? subject.ExamDate!.Value.Date.Add(subject.EndTime.Value.TimeOfDay)
+				: subject.ExamDate!.Value.Date.AddDays(1).AddTicks(-1)));
+	}
+
 	private static bool IsExamInDateRange(
-		Exam exam,
+		ExamStatus status,
+		ExamScheduleWindow window,
 		DateTime filterStartDate,
 		DateTime filterEndDate,
 		bool includeUndatedExams)
 	{
-		var scheduledDates = exam.ExamSubjects
-			.Where(subject => subject.ExamDate.HasValue)
-			.Select(subject => subject.ExamDate!.Value.Date)
-			.ToList();
-
-		if (scheduledDates.Count == 0)
+		if (!window.FirstDate.HasValue)
 		{
 			// Pending exams are planning records until step 2 supplies subject
 			// dates. Keep them visible in the planning list even when the UI sends
 			// the current-week date range explicitly.
-			return includeUndatedExams || exam.Status == ExamStatus.Pending;
+			return includeUndatedExams || status == ExamStatus.Pending;
 		}
-
-		var examStartDate = scheduledDates.Min();
-		var examEndDate = GetExamFinalEndAt(exam)!.Value;
 
 		// Inclusive overlap: an exam that starts or ends on a filter boundary
 		// is applicable to that date range.
-		return examStartDate <= filterEndDate && examEndDate >= filterStartDate;
+		return window.FirstDate.Value <= filterEndDate && window.EndAt!.Value >= filterStartDate;
 	}
+
+	private sealed record ExamListCandidate(Guid Id, Guid StandardId, Guid StageId, Guid MediumId,
+		ExamStatus Status, List<Guid> DivisionIds, List<ExamListSubjectSchedule> Subjects);
+	private sealed record ExamListSubjectSchedule(Guid SubjectId, DateTime? ExamDate, DateTime? StartTime, DateTime? EndTime);
+	private sealed record ExamScheduleWindow(DateTime? FirstDate, DateTime? StartAt, DateTime? EndAt);
 
 	private static DateTime? GetExamFinalEndAt(Exam exam)
 	{
@@ -1525,7 +1567,6 @@ public class ExamAppService(
 
 	private static bool IsExamScheduleComplete(
 		Exam exam,
-		ExamType examType,
 		IReadOnlyDictionary<(Guid StandardId, Guid SubjectId), Guid> electiveGroupByStandardAndSubject)
 	{
 		if (exam.ExamSubjects.Count == 0)
@@ -1551,7 +1592,6 @@ public class ExamAppService(
 
 	private static List<ExamSubject> GetRoomRequiredSubjects(
 		Exam exam,
-		ExamType examType,
 		IReadOnlyDictionary<(Guid StandardId, Guid SubjectId), Guid> electiveGroupByStandardAndSubject)
 	{
 		return exam.ExamSubjects
@@ -1580,10 +1620,10 @@ public class ExamAppService(
 			return [];
 		}
 
-		var assignments = await assignmentRepository.GetListAsync(a =>
-			validStandardIds.Contains(a.StandardId) &&
-			validSubjectIds.Contains(a.SubjectId) &&
-			a.ElectiveGroupId.HasValue);
+		var assignments = await AsyncExecuter.ToListAsync((await assignmentRepository.GetQueryableAsync())
+			.Where(a => validStandardIds.Contains(a.StandardId) &&
+				validSubjectIds.Contains(a.SubjectId) && a.ElectiveGroupId.HasValue)
+			.Select(a => new { a.StandardId, a.SubjectId, a.ElectiveGroupId }));
 
 		return assignments
 			.GroupBy(a => (a.StandardId, a.SubjectId))
@@ -2056,9 +2096,19 @@ public class ExamAppService(
 
 	private async Task<Guid> GetAcademicMediumIdForStandardAsync(Guid standardId)
 	{
-		var standard = await standardRepository.GetAsync(standardId);
-		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
-		return stage.EducationMediumId;
+		var (_, mediumId) = await GetStandardScopeIdsAsync(standardId);
+		return mediumId;
+	}
+
+	private async Task<(Guid StageId, Guid MediumId)> GetStandardScopeIdsAsync(Guid standardId)
+	{
+		var stageId = await AsyncExecuter.FirstOrDefaultAsync((await standardRepository.GetQueryableAsync())
+			.Where(standard => standard.Id == standardId).Select(standard => (Guid?)standard.EducationMediumStageId))
+			?? throw new EntityNotFoundException(typeof(Standard), standardId);
+		var mediumId = await AsyncExecuter.FirstOrDefaultAsync((await educationMediumStageRepository.GetQueryableAsync())
+			.Where(stage => stage.Id == stageId).Select(stage => (Guid?)stage.EducationMediumId))
+			?? throw new EntityNotFoundException(typeof(EducationMediumStage), stageId);
+		return (stageId, mediumId);
 	}
 
 	private async Task<Guid?> GetElectiveGroupIdForSubjectAsync(Guid standardId, Guid subjectId)
@@ -2074,29 +2124,30 @@ public class ExamAppService(
 
 	private async Task<List<Student>> GetEligibleStudentsForSubjectAsync(Exam exam, Guid subjectId, Guid divisionId)
 	{
-		var students = await studentRepository.GetListAsync(s =>
+		var (query, _) = await GetEligibleStudentsQueryAsync(exam, subjectId, divisionId);
+		return await AsyncExecuter.ToListAsync(query);
+	}
+
+	private async Task<(IQueryable<Student> Query, Guid? ElectiveGroupId)> GetEligibleStudentsQueryAsync(
+		Exam exam, Guid subjectId, Guid divisionId)
+	{
+		var students = (await studentRepository.GetQueryableAsync()).Where(s =>
 			s.DivisionId == divisionId &&
 			s.Status == StudentLifeCycleStatusEnum.Enrolled &&
 			s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved &&
 			!s.IsDeleted);
 
 		var electiveGroupId = await GetElectiveGroupIdForSubjectAsync(exam.StandardId, subjectId);
-		if (!electiveGroupId.HasValue || students.Count == 0)
+		if (!electiveGroupId.HasValue)
 		{
-			return students;
+			return (students, null);
 		}
 
-		var studentIds = students.Select(s => s.Id).ToList();
-		var selections = await studentElectiveSelectionRepository.GetListAsync(s =>
-			studentIds.Contains(s.StudentId) &&
+		var selections = (await studentElectiveSelectionRepository.GetQueryableAsync()).Where(s =>
 			s.ElectiveGroupId == electiveGroupId.Value &&
-			s.IsLocked);
-		var selectedStudentIds = selections
-			.Where(s => s.SelectedSubjectId == subjectId)
-			.Select(s => s.StudentId)
-			.ToHashSet();
+			s.SelectedSubjectId == subjectId && s.IsLocked);
 
-		return students.Where(s => selectedStudentIds.Contains(s.Id)).ToList();
+		return (students.Where(student => selections.Any(selection => selection.StudentId == student.Id)), electiveGroupId);
 	}
 
 	private async Task<List<Guid>> GetRequiredSubjectIdsForDivisionAsync(Exam exam, Guid divisionId)
@@ -2253,7 +2304,7 @@ public class ExamAppService(
 	}
 	// ─── Workflow helpers ──────────────────────────────────────────────────────
 
-	private async Task<ExamMarksWorkflowState> GetOrCreateWorkflowStateAsync(Guid examId, Guid subjectId, Guid divisionId)
+	private async Task<ExamMarksWorkflowState> GetOrCreateWorkflowStateAsync(Guid examId, Guid subjectId, Guid divisionId, bool autoSave = true)
 	{
 		var existing = (await examMarksWorkflowStateRepository.GetListAsync(
 			w => w.ExamId == examId && w.SubjectId == subjectId && w.DivisionId == divisionId))
@@ -2262,7 +2313,7 @@ public class ExamAppService(
 		if (existing != null) return existing;
 
 		var state = new ExamMarksWorkflowState(GuidGenerator.Create(), examId, subjectId, divisionId, CurrentTenant.Id);
-		await examMarksWorkflowStateRepository.InsertAsync(state, autoSave: true);
+		await examMarksWorkflowStateRepository.InsertAsync(state, autoSave: autoSave);
 		return state;
 	}
 
@@ -2530,7 +2581,7 @@ public class ExamAppService(
 	public async Task<MarksWorkflowActionResponseDto> BulkSaveMarksAsync(Guid examId, BulkSaveMarksInputDto input)
 	{
 		var exam = await EnsureMarksWorkflowTargetAsync(examId, input.SubjectId, input.DivisionId);
-		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId);
+		var state = await GetOrCreateWorkflowStateAsync(examId, input.SubjectId, input.DivisionId, autoSave: false);
 
 		EnsureMarksEditableState(state);
 
@@ -2552,13 +2603,34 @@ public class ExamAppService(
 		var existingMarks = await examMarkRepository.GetListAsync(m =>
 			m.ExamId == examId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
 		var marksLookup = existingMarks.ToDictionary(m => m.StudentId);
+		var studentIds = input.Rows.Select(row => row.StudentId).ToList();
+		var studentQuery = await studentRepository.GetQueryableAsync();
+		var students = await AsyncExecuter.ToListAsync(studentQuery
+			.Where(student => studentIds.Contains(student.Id))
+			.Select(student => new { student.Id, student.DivisionId }));
+		var studentsById = students.ToDictionary(student => student.Id);
+		var electiveGroupId = await GetElectiveGroupIdForSubjectAsync(exam.StandardId, input.SubjectId);
+		var selections = electiveGroupId.HasValue
+			? await studentElectiveSelectionRepository.GetListAsync(selection =>
+				studentIds.Contains(selection.StudentId) && selection.ElectiveGroupId == electiveGroupId.Value)
+			: new List<StudentElectiveSelection>();
+		var selectionsByStudent = selections.GroupBy(selection => selection.StudentId)
+			.ToDictionary(group => group.Key, group => group.First());
 
+		// Validate the complete submission before mutating marks or flushing the unit of work.
 		foreach (var row in input.Rows)
 		{
-			var student = await studentRepository.GetAsync(row.StudentId);
+			if (!studentsById.TryGetValue(row.StudentId, out var student))
+				throw new EntityNotFoundException(typeof(Student), row.StudentId);
 			if (student.DivisionId != input.DivisionId)
 				throw new UserFriendlyException("Student does not belong to the selected division.");
-			await EnsureStudentCanTakeSubjectAsync(exam, input.SubjectId, student);
+			if (electiveGroupId.HasValue)
+			{
+				if (!selectionsByStudent.TryGetValue(row.StudentId, out var selection) || !selection.IsLocked)
+					throw new UserFriendlyException("Elective subject assignment is pending for this student. Please lock elective subject selection before entering marks.");
+				if (selection.SelectedSubjectId != input.SubjectId)
+					throw new UserFriendlyException("This student is not assigned to the selected elective subject.");
+			}
 
 			var attendanceStatus = (ExamAttendanceStatus) row.AttendanceStatus;
 			var isPresent = attendanceStatus == ExamAttendanceStatus.Present;
@@ -2568,7 +2640,14 @@ public class ExamAppService(
 
 			if (row.ObtainedMarks.HasValue && (row.ObtainedMarks.Value < 0 || row.ObtainedMarks.Value > (examSubject.TotalMarks ?? 100)))
 				throw new UserFriendlyException($"Obtained marks must be between 0 and {examSubject.TotalMarks ?? 100}");
+		}
 
+		var marksToInsert = new List<ExamMark>();
+		var marksToUpdate = new List<ExamMark>();
+		foreach (var row in input.Rows)
+		{
+			var attendanceStatus = (ExamAttendanceStatus) row.AttendanceStatus;
+			var isPresent = attendanceStatus == ExamAttendanceStatus.Present;
 			marksLookup.TryGetValue(row.StudentId, out var existing);
 
 			if (existing != null)
@@ -2576,7 +2655,7 @@ public class ExamAppService(
 				existing.UpdateAttendance(attendanceStatus);
 				if (isPresent)
 					existing.Update(row.ObtainedMarks, isAbsent: false, row.Feedback);
-				await examMarkRepository.UpdateAsync(existing, autoSave: true);
+				marksToUpdate.Add(existing);
 			}
 			else
 			{
@@ -2591,9 +2670,14 @@ public class ExamAppService(
 					feedback: isPresent ? row.Feedback : null,
 					CurrentTenant.Id);
 				mark.UpdateAttendance(attendanceStatus);
-				await examMarkRepository.InsertAsync(mark, autoSave: true);
+				marksToInsert.Add(mark);
 			}
 		}
+		if (marksToInsert.Count > 0)
+			await examMarkRepository.InsertManyAsync(marksToInsert, autoSave: false);
+		if (marksToUpdate.Count > 0)
+			await examMarkRepository.UpdateManyAsync(marksToUpdate, autoSave: false);
+		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		return BuildWorkflowResponse("Bulk marks saved successfully.", examId, new MarksWorkflowActionInput { SubjectId = input.SubjectId, DivisionId = input.DivisionId }, state.Status);
 	}

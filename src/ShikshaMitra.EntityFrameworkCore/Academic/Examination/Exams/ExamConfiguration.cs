@@ -9,7 +9,7 @@ public class ExamConfiguration : IEntityTypeConfiguration<Exam>
 {
     public void Configure(EntityTypeBuilder<Exam> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Exams", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "Exams", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.ExamName).IsRequired().HasMaxLength(256);
@@ -33,7 +33,7 @@ public class ExamDivisionConfiguration : IEntityTypeConfiguration<ExamDivision>
 {
     public void Configure(EntityTypeBuilder<ExamDivision> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamDivisions", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamDivisions", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.HasKey(x => x.Id);
@@ -45,7 +45,7 @@ public class ExamSubjectConfiguration : IEntityTypeConfiguration<ExamSubject>
 {
     public void Configure(EntityTypeBuilder<ExamSubject> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamSubjects", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamSubjects", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.SubjectId).IsRequired();
@@ -68,7 +68,7 @@ public class ExamSubjectDivisionConfiguration : IEntityTypeConfiguration<ExamSub
 {
     public void Configure(EntityTypeBuilder<ExamSubjectDivision> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamSubjectDivisions", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamSubjectDivisions", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.DivisionId).IsRequired();

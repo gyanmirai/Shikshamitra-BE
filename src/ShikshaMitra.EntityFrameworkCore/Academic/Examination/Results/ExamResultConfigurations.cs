@@ -9,7 +9,7 @@ public class ExamResultHeaderConfiguration : IEntityTypeConfiguration<ExamResult
 {
     public void Configure(EntityTypeBuilder<ExamResultHeader> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamResultHeaders", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamResultHeaders", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.ExamId).IsRequired();
@@ -25,7 +25,7 @@ public class ExamResultDetailConfiguration : IEntityTypeConfiguration<ExamResult
 {
     public void Configure(EntityTypeBuilder<ExamResultDetail> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamResultDetails", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamResultDetails", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.ResultHeaderId).IsRequired();
@@ -49,7 +49,7 @@ public class ExamResultAuditLogConfiguration : IEntityTypeConfiguration<ExamResu
 {
     public void Configure(EntityTypeBuilder<ExamResultAuditLog> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamResultAuditLogs", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamResultAuditLogs", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.ExamId).IsRequired();

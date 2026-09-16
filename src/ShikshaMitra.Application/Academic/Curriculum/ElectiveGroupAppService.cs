@@ -25,9 +25,9 @@ public class ElectiveGroupAppService(
 	IRepository<AssignedSubject, Guid> assignedSubjectRepository,
 	ILogger<ElectiveGroupAppService> logger,
 	IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository,
-	IRepository<WeeklyLectureSlotSubject, Guid> weeklyLectureSlotSubjectRepository,
-	IRepository<TimetableSlot, Guid> timetableSlotRepository,
-	IRepository<ExamSubject, Guid> examSubjectRepository
+	IRepository<WeeklyLectureSlot, Guid> weeklyLectureSlotRepository,
+	IRepository<ShikshaMitra.Academic.Timetable.Timetables.Timetable, Guid> timetableRepository,
+	IRepository<Exam, Guid> examRepository
 ) : ApplicationService, IElectiveGroupAppService
 {
 	/// <summary>
@@ -43,7 +43,7 @@ public class ElectiveGroupAppService(
 		{
 			var query = await ElectiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
 
-			var filtered = query
+			var filtered = await AsyncExecuter.ToListAsync(query
 				.Where(eg => eg.AcademicMediumId == academicMediumId)
 				.WhereIf(!includeArchived, eg => eg.Status != SubjectMasterStatus.Archived)
 				.WhereIf(
@@ -53,15 +53,10 @@ public class ElectiveGroupAppService(
 						|| eg.Subjects.Any(s => s.Subject.Name.Contains(searchTerm!))
 				)
 				.OrderBy(eg => eg.SortOrder ?? int.MaxValue)
-				.ThenBy(eg => eg.Name)
-				.ToList();
+				.ThenBy(eg => eg.Name));
 
-			var result = new List<ElectiveGroupDto>();
-			foreach (var electiveGroup in filtered)
-			{
-				result.Add(await MapElectiveGroupAsync(electiveGroup));
-			}
-			return result;
+			var usageByGroup = await GetUsageCountsAsync(filtered.Select(group => group.Id).ToList());
+			return filtered.Select(group => MapElectiveGroup(group, usageByGroup[group.Id])).ToList();
 		}
 		catch (Exception ex)
 		{
@@ -414,6 +409,11 @@ public class ElectiveGroupAppService(
 	private async Task<ElectiveGroupDto> MapElectiveGroupAsync(ElectiveGroup electiveGroup)
 	{
 		var usage = await GetUsageCountsAsync(electiveGroup.Id);
+		return MapElectiveGroup(electiveGroup, usage);
+	}
+
+	private ElectiveGroupDto MapElectiveGroup(ElectiveGroup electiveGroup, ElectiveGroupUsageCounts usage)
+	{
 		return new ElectiveGroupDto
 		{
 			Id = electiveGroup.Id,
@@ -463,21 +463,50 @@ public class ElectiveGroupAppService(
 
 	private async Task<ElectiveGroupUsageCounts> GetUsageCountsAsync(Guid electiveGroupId)
 	{
-		var assignedSubjectQuery = await assignedSubjectRepository.GetQueryableAsync();
-		var classAllocations = await AsyncExecuter.CountAsync(
-			assignedSubjectQuery
-				.Where(assignment => assignment.ElectiveGroupId == electiveGroupId)
-				.Select(assignment => assignment.StandardId)
-				.Distinct());
+		return (await GetUsageCountsAsync(new List<Guid> { electiveGroupId }))[electiveGroupId];
+	}
 
-		return new ElectiveGroupUsageCounts
+	private async Task<Dictionary<Guid, ElectiveGroupUsageCounts>> GetUsageCountsAsync(IReadOnlyCollection<Guid> groupIds)
+	{
+		var result = groupIds.Distinct().ToDictionary(id => id, _ => new ElectiveGroupUsageCounts());
+		if (result.Count == 0)
 		{
-			ClassAllocations = classAllocations,
-			StudentSelections = await studentElectiveSelectionRepository.CountAsync(s => s.ElectiveGroupId == electiveGroupId),
-			WeeklySlots = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.ElectiveGroupId == electiveGroupId),
-			TimetableSlots = await timetableSlotRepository.CountAsync(t => t.ElectiveGroupId == electiveGroupId),
-			ExamSubjects = await examSubjectRepository.CountAsync(e => e.SubjectId == electiveGroupId)
-		};
+			return result;
+		}
+
+		var assignments = await assignedSubjectRepository.GetQueryableAsync();
+		var classGroups = assignments
+			.Where(assignment => assignment.ElectiveGroupId.HasValue && groupIds.Contains(assignment.ElectiveGroupId.Value))
+			.Select(assignment => new { GroupId = assignment.ElectiveGroupId!.Value, assignment.StandardId }).Distinct();
+		await PopulateUsageCountsAsync(classGroups.Select(assignment => assignment.GroupId), result,
+			(usage, count) => usage.ClassAllocations = count);
+		var selections = await studentElectiveSelectionRepository.GetQueryableAsync();
+		await PopulateUsageCountsAsync(selections.Where(selection => groupIds.Contains(selection.ElectiveGroupId))
+			.Select(selection => selection.ElectiveGroupId), result, (usage, count) => usage.StudentSelections = count);
+		// Child rows inherit tenant and soft-delete ownership from their aggregate.
+		var weeklySlots = (await weeklyLectureSlotRepository.GetQueryableAsync()).SelectMany(slot => slot.Subjects);
+		await PopulateUsageCountsAsync(weeklySlots.Where(slot => slot.ElectiveGroupId.HasValue && groupIds.Contains(slot.ElectiveGroupId.Value))
+			.Select(slot => slot.ElectiveGroupId!.Value), result, (usage, count) => usage.WeeklySlots = count);
+		var timetableSlots = (await timetableRepository.GetQueryableAsync()).SelectMany(timetable => timetable.Slots);
+		await PopulateUsageCountsAsync(timetableSlots.Where(slot => slot.ElectiveGroupId.HasValue && groupIds.Contains(slot.ElectiveGroupId.Value))
+			.Select(slot => slot.ElectiveGroupId!.Value), result, (usage, count) => usage.TimetableSlots = count);
+		var examSubjects = (await examRepository.GetQueryableAsync()).SelectMany(exam => exam.ExamSubjects);
+		await PopulateUsageCountsAsync(examSubjects.Where(subject => groupIds.Contains(subject.SubjectId)).Select(subject => subject.SubjectId),
+			result, (usage, count) => usage.ExamSubjects = count);
+		return result;
+	}
+
+	private async Task PopulateUsageCountsAsync(
+		IQueryable<Guid> groupIds,
+		IReadOnlyDictionary<Guid, ElectiveGroupUsageCounts> usages,
+		Action<ElectiveGroupUsageCounts, int> applyCount)
+	{
+		var counts = await AsyncExecuter.ToListAsync(groupIds.GroupBy(id => id)
+			.Select(group => new { GroupId = group.Key, Count = group.Count() }));
+		foreach (var item in counts)
+		{
+			applyCount(usages[item.GroupId], item.Count);
+		}
 	}
 
 	private static List<string> BuildUsageParts(ElectiveGroupUsageCounts usage)

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -8,7 +8,7 @@ public class ShiftManagementConfiguration : IEntityTypeConfiguration<ShiftManage
 {
 	public void Configure(EntityTypeBuilder<ShiftManagement> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ShiftManagements", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ShiftManagements", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 	}
 }

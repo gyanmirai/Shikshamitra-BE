@@ -2,6 +2,7 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using System;
+using System.IO;
 using System.Net;
 using System.Text.RegularExpressions;
 using Volo.Abp.DependencyInjection;
@@ -15,6 +16,12 @@ public class AcademicDynamicReportPdfService : ITransientDependency
 	private const string Border = "#CBD5E1";
 
 	public byte[] Generate(AcademicDynamicReportSpecDto plan, AcademicReportPreviewDto report) =>
+		CreateDocument(plan, report).GeneratePdf();
+
+	public void WriteReportPdf(AcademicDynamicReportSpecDto plan, AcademicReportPreviewDto report, Stream destination) =>
+		CreateDocument(plan, report).GeneratePdf(destination);
+
+	private static IDocument CreateDocument(AcademicDynamicReportSpecDto plan, AcademicReportPreviewDto report) =>
 		Document.Create(document =>
 		{
 			document.Page(page =>
@@ -26,7 +33,7 @@ public class AcademicDynamicReportPdfService : ITransientDependency
 				page.Content().PaddingTop(10).Element(container => ComposeContent(container, report));
 				page.Footer().Element(ComposeFooter);
 			});
-		}).GeneratePdf();
+		});
 
 	private static void ComposeHeader(IContainer container, AcademicDynamicReportSpecDto plan, AcademicReportPreviewDto report)
 	{

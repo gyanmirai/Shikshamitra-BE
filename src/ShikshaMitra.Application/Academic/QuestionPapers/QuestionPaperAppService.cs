@@ -502,20 +502,24 @@ public class QuestionPaperAppService(
 
     public async Task<QuestionPaperDashboardDto> GetDashboardAsync(Guid academicYearId)
     {
-        var query = await paperRepository.WithDetailsAsync(x => x.Questions);
-        var rows = await asyncExecuter.ToListAsync(query.Where(x => x.AcademicYearId == academicYearId));
-        return new QuestionPaperDashboardDto
-        {
-            TotalPapers = rows.Count,
-            DraftPapers = rows.Count(x => x.Status == QuestionPaperStatus.Draft),
-            GeneratedPapers = rows.Count(x => x.Status == QuestionPaperStatus.Generated),
-            PendingApproval = rows.Count(x => x.Status == QuestionPaperStatus.Submitted),
-            ApprovedPapers = rows.Count(x => x.Status == QuestionPaperStatus.Approved),
-            PublishedPapers = rows.Count(x => x.Status == QuestionPaperStatus.Published),
-            LockedPapers = rows.Count(x => x.Status == QuestionPaperStatus.Locked),
-            NeedsAttention = rows.Count(x => x.Status == QuestionPaperStatus.Rejected),
-            MissingQuestions = rows.Count(x => x.Questions.Count == 0)
-        };
+        var query = await paperRepository.GetQueryableAsync();
+        query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+        var summary = await asyncExecuter.FirstOrDefaultAsync(query
+            .Where(paper => paper.AcademicYearId == academicYearId)
+            .GroupBy(paper => paper.AcademicYearId)
+            .Select(group => new QuestionPaperDashboardDto
+            {
+                TotalPapers = group.Count(),
+                DraftPapers = group.Count(paper => paper.Status == QuestionPaperStatus.Draft),
+                GeneratedPapers = group.Count(paper => paper.Status == QuestionPaperStatus.Generated),
+                PendingApproval = group.Count(paper => paper.Status == QuestionPaperStatus.Submitted),
+                ApprovedPapers = group.Count(paper => paper.Status == QuestionPaperStatus.Approved),
+                PublishedPapers = group.Count(paper => paper.Status == QuestionPaperStatus.Published),
+                LockedPapers = group.Count(paper => paper.Status == QuestionPaperStatus.Locked),
+                NeedsAttention = group.Count(paper => paper.Status == QuestionPaperStatus.Rejected),
+                MissingQuestions = group.Count(paper => !paper.Questions.Any())
+            }));
+        return summary ?? new QuestionPaperDashboardDto();
     }
 
     private async Task<QuestionPaperDto> ChangeStatusAsync(Guid id, QuestionPaperStatus status, PaperReviewDto? input)

@@ -9,7 +9,7 @@ public class AcademicCalendarConfiguration : IEntityTypeConfiguration<AcademicCa
 {
     public void Configure(EntityTypeBuilder<AcademicCalendar> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicCalendars", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "Calendars", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         
         builder.Property(x => x.Name).IsRequired().HasMaxLength(256);
@@ -28,7 +28,7 @@ public class AcademicCalendarDayConfiguration : IEntityTypeConfiguration<Academi
 {
     public void Configure(EntityTypeBuilder<AcademicCalendarDay> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicCalendarDays", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "CalendarDays", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         
         builder.Property(x => x.Title).IsRequired().HasMaxLength(AcademicCalendarConsts.CalendarDayTitleMaxLength);
@@ -50,7 +50,7 @@ public class AcademicCalendarWorkingHourConfiguration : IEntityTypeConfiguration
 {
     public void Configure(EntityTypeBuilder<AcademicCalendarWorkingHour> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicCalendarWorkingHours", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "CalendarWorkingHours", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         
         builder.HasIndex(x => new { x.AcademicCalendarId, x.StandardId, x.DivisionId });
@@ -61,7 +61,7 @@ public class AcademicCalendarSettingConfiguration : IEntityTypeConfiguration<Aca
 {
     public void Configure(EntityTypeBuilder<AcademicCalendarSetting> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicCalendarSettings", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "CalendarSettings", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         
         builder.HasIndex(x => x.AcademicMediumId).IsUnique();
@@ -72,7 +72,7 @@ public class CalendarImpactLogConfiguration : IEntityTypeConfiguration<CalendarI
 {
     public void Configure(EntityTypeBuilder<CalendarImpactLog> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "CalendarImpactLogs", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "CalendarImpactLogs", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         
         builder.Property(x => x.AffectedEntityName).IsRequired().HasMaxLength(256);
@@ -87,7 +87,7 @@ public class AcademicCalendarAuditLogConfiguration : IEntityTypeConfiguration<Ac
 {
     public void Configure(EntityTypeBuilder<AcademicCalendarAuditLog> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicCalendarAuditLogs", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "CalendarAuditLogs", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.OldValueJson).IsRequired();

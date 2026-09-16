@@ -9,7 +9,7 @@ public class ExamSeatAllocationConfiguration : IEntityTypeConfiguration<ExamSeat
 {
     public void Configure(EntityTypeBuilder<ExamSeatAllocation> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamSeatAllocations", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamSeatAllocations", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.SeatingPlanId).IsRequired();

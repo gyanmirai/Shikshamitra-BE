@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
@@ -7,7 +7,7 @@ public class FloorConfiguration : IEntityTypeConfiguration<Floor>
 {
 	public void Configure(EntityTypeBuilder<Floor> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Floors", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "Floors", ShikshaMitraConsts.DbSchema);
 
 		builder.HasKey(x => x.Id);
 

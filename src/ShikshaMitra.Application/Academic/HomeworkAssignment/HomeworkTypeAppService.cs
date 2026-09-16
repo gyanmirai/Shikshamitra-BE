@@ -126,9 +126,21 @@ public class HomeworkTypeAppService : ApplicationService, IHomeworkTypeAppServic
 			// Map to DTOs
 			var dtos = ObjectMapper.Map<List<HomeworkType>, List<HomeworkTypeDto>>(types);
 
+			var typeIds = dtos.Select(dto => dto.Id).ToList();
+			var usageCounts = new Dictionary<Guid, int>();
+			if (typeIds.Count > 0)
+			{
+				var homeworks = await _homeworkRepository.GetQueryableAsync();
+				var counts = await AsyncExecuter.ToListAsync(homeworks
+					.Where(homework => homework.HomeworkTypeId.HasValue && typeIds.Contains(homework.HomeworkTypeId.Value))
+					.GroupBy(homework => homework.HomeworkTypeId!.Value)
+					.Select(group => new { TypeId = group.Key, Count = group.Count() }));
+				usageCounts = counts.ToDictionary(item => item.TypeId, item => item.Count);
+			}
+
 			foreach (var dto in dtos)
 			{
-				dto.UsageCount = await _homeworkRepository.CountAsync(h => h.HomeworkTypeId == dto.Id);
+				dto.UsageCount = usageCounts.GetValueOrDefault(dto.Id);
 			}
 
 			_logger.LogDebug(

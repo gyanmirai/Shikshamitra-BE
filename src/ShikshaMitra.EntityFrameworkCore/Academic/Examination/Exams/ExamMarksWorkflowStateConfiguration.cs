@@ -9,7 +9,7 @@ public class ExamMarksWorkflowStateConfiguration : IEntityTypeConfiguration<Exam
 {
     public void Configure(EntityTypeBuilder<ExamMarksWorkflowState> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamMarksWorkflowStates", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamMarksWorkflowStates", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.ExamId).IsRequired();

@@ -20,6 +20,12 @@ public interface IStudentRepository : IRepository<Student, Guid>
     Task<IQueryable<Student>> GetQueryableWithoutAutoIncludesAsync();
 
     /// <summary>
+    /// Returns an untracked report query with only printed profile, family and academic-year details.
+    /// Callers must restrict the query to the report's current student batch before materialization.
+    /// </summary>
+    Task<IQueryable<Student>> GetAcademicReportQueryableAsync();
+
+    /// <summary>
     /// Gets a student with only the aggregate parts required for inquiry editing.
     /// </summary>
     Task<Student?> GetInquiryForUpdateAsync(Guid id, CancellationToken cancellationToken = default);

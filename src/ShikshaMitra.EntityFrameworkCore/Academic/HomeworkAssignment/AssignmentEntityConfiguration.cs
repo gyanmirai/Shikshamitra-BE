@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -14,7 +14,7 @@ public class AssignmentEntityConfiguration : IEntityTypeConfiguration<Assignment
 	{
 		// Table configuration
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "Assignments",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "Assignments",
 			ShikshaMitraConsts.DbSchema
 		);
 

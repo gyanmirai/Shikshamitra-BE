@@ -61,7 +61,7 @@ public class CreateUpdateTeacherDiaryDto
     public Guid LessonPlanId { get; set; }
 
     [Required]
-    public DateTime ActualDate { get; set; }
+    public DateTimeOffset ActualDate { get; set; }
 
     public bool ClassConducted { get; set; } = true;
 
@@ -112,7 +112,7 @@ public class CreateUpdateTeacherDiaryDto
     [MaxLength(128)]
     public string? MissedReason { get; set; }
 
-    public DateTime? RescheduledToDate { get; set; }
+    public DateTimeOffset? RescheduledToDate { get; set; }
     public bool IsBackdated { get; set; }
 
     [MaxLength(1024)]

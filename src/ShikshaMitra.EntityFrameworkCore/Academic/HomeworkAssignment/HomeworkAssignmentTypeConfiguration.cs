@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Homework;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -10,7 +10,7 @@ public class HomeworkAssignmentTypeConfiguration : IEntityTypeConfiguration<Home
 	public void Configure(EntityTypeBuilder<HomeworkAssignmentType> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "HomeworkAssignmentTypes",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "HomeworkAssignmentTypes",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();

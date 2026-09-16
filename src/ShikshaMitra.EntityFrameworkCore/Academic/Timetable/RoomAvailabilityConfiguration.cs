@@ -10,7 +10,7 @@ public class RoomReservationConfiguration : IEntityTypeConfiguration<RoomReserva
     public void Configure(EntityTypeBuilder<RoomReservation> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "RoomReservations",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "RoomReservations",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
@@ -30,7 +30,7 @@ public class RoomRecurringConfigConfiguration : IEntityTypeConfiguration<RoomRec
     public void Configure(EntityTypeBuilder<RoomRecurringConfig> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "RoomRecurringConfigs",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "RoomRecurringConfigs",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
@@ -42,7 +42,7 @@ public class RoomMaintenanceBlockConfiguration : IEntityTypeConfiguration<RoomMa
     public void Configure(EntityTypeBuilder<RoomMaintenanceBlock> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "RoomMaintenanceBlocks",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "RoomMaintenanceBlocks",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
@@ -59,7 +59,7 @@ public class RoomConfigConfiguration : IEntityTypeConfiguration<RoomConfig>
     public void Configure(EntityTypeBuilder<RoomConfig> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "RoomConfigs",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "RoomConfigs",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
@@ -71,7 +71,7 @@ public class RoomAuditLogConfiguration : IEntityTypeConfiguration<RoomAuditLog>
     public void Configure(EntityTypeBuilder<RoomAuditLog> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "RoomAuditLogs",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "RoomAuditLogs",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();

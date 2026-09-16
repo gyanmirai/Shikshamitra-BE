@@ -3,6 +3,8 @@ using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using System;
 using System.Collections.Generic;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.DependencyInjection;
@@ -34,10 +36,19 @@ public class TimetableReportsPdfService : ITransientDependency
 
     public async Task<byte[]> GenerateAsync(AcademicReportPreviewDto report)
     {
-        return await Task.FromResult(GenerateInternal(report));
+        return await Task.FromResult(CreateDocument(report).GeneratePdf());
     }
 
-    private byte[] GenerateInternal(AcademicReportPreviewDto report)
+    public void WriteReportPdf(AcademicReportPreviewDto report, Stream destination)
+    {
+        CreateDocument(report).GeneratePdf(destination);
+    }
+
+    internal void WriteReportPdf(AcademicReportPreviewDto report, IEnumerable<Dictionary<string, string?>> rows,
+        int rowCount, Stream destination) => CreateDocument(report, rows, rowCount).GeneratePdf(destination);
+
+    private static IDocument CreateDocument(AcademicReportPreviewDto report,
+        IEnumerable<Dictionary<string, string?>>? rows = null, int? rowCount = null)
     {
         return Document.Create(container =>
         {
@@ -52,12 +63,12 @@ public class TimetableReportsPdfService : ITransientDependency
                     col.Spacing(10);
                     col.Item().Element(c => ComposeHeader(c, report));
                     col.Item().Element(c => ComposeSummaryBar(c, report));
-                    col.Item().Element(c => ComposeTable(c, report));
+                    col.Item().Element(c => ComposeTable(c, report, rows ?? report.Rows, rowCount ?? report.Rows.Count));
                 });
 
                 page.Footer().Element(ComposeFooter);
             });
-        }).GeneratePdf();
+        });
     }
 
     private static void ComposeHeader(IContainer container, AcademicReportPreviewDto report)
@@ -97,9 +108,10 @@ public class TimetableReportsPdfService : ITransientDependency
             .FontSize(8).FontColor(AccentColor).Italic();
     }
 
-    private static void ComposeTable(IContainer container, AcademicReportPreviewDto report)
+    private static void ComposeTable(IContainer container, AcademicReportPreviewDto report,
+        IEnumerable<Dictionary<string, string?>> rows, int rowCount)
     {
-        if (report.Rows.Count == 0)
+        if (rowCount == 0)
         {
             container.Background(AccentLight).Padding(20).AlignCenter()
                 .Text("No records found for the selected filters.")
@@ -131,7 +143,7 @@ public class TimetableReportsPdfService : ITransientDependency
 
             // Rows
             var rowIndex = 0;
-            foreach (var row in report.Rows)
+            foreach (var row in rows)
             {
                 var isAlt = rowIndex % 2 == 1;
                 var bg = isAlt ? AltRowBg : "#FFFFFF";

@@ -9,7 +9,7 @@ public class ExamMarkConfiguration : IEntityTypeConfiguration<ExamMark>
 {
 	public void Configure(EntityTypeBuilder<ExamMark> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamMarks", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamMarks", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.ExamId).IsRequired();

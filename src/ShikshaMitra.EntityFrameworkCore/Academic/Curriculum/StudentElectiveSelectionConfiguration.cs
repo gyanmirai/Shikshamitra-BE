@@ -9,7 +9,7 @@ public class StudentElectiveSelectionConfiguration : IEntityTypeConfiguration<St
 {
 	public void Configure(EntityTypeBuilder<StudentElectiveSelection> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentElectiveSelections", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "StudentElectiveSelections", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.StudentId).IsRequired();

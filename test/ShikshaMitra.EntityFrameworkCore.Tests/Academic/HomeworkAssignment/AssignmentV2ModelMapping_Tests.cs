@@ -18,7 +18,7 @@ public class AssignmentV2ModelMapping_Tests : ShikshaMitraEntityFrameworkCoreTes
 		var dbContext = GetRequiredService<ShikshaMitraDbContext>();
 		var entityType = dbContext.Model.FindEntityType(typeof(AssignmentEntity));
 		entityType.ShouldNotBeNull();
-		entityType.GetTableName().ShouldBe("AppAssignments");
+		entityType.GetTableName().ShouldBe("academic_Assignments");
 		var table = StoreObjectIdentifier.Table(entityType.GetTableName()!, entityType.GetSchema());
 
 		var evaluationRequired = entityType.FindProperty(nameof(AssignmentEntity.EvaluationRequired));

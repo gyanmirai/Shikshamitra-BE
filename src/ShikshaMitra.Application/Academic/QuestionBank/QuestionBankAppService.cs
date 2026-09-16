@@ -368,15 +368,20 @@ public class QuestionBankAppService(
 
     public async Task<QuestionBankDashboardDto> GetDashboardAsync(Guid academicYearId)
     {
-        var rows = await questionRepository.GetListAsync(x => x.AcademicYearId == academicYearId && !x.IsArchived);
-        rows = (await userScopeAccessService.ApplyCurrentUserScopeAsync(rows.AsQueryable())).ToList();
-        var rowIds = rows.Select(r => r.Id).ToList();
-        var usageRows = await usageRepository.GetListAsync(x => rowIds.Contains(x.QuestionBankItemId));
-        var paperQuestionRows = await paperQuestionRepository.GetListAsync(x => rowIds.Contains(x.QuestionBankItemId));
-        var usedQuestionIds = usageRows
-            .Select(x => x.QuestionBankItemId)
-            .Concat(paperQuestionRows.Select(x => x.QuestionBankItemId))
-            .ToHashSet();
+        var query = await questionRepository.GetQueryableAsync();
+        query = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
+        query = query.Where(question => question.AcademicYearId == academicYearId && !question.IsArchived);
+        var rows = await asyncExecuter.ToListAsync(query);
+        var rowIds = query.Select(question => question.Id);
+        var usageQuery = await usageRepository.GetQueryableAsync();
+        var usedIds = await asyncExecuter.ToListAsync(usageQuery
+            .Where(usage => rowIds.Contains(usage.QuestionBankItemId))
+            .Select(usage => usage.QuestionBankItemId).Distinct());
+        var paperQuestionQuery = await paperQuestionRepository.GetQueryableAsync();
+        var paperUsedIds = await asyncExecuter.ToListAsync(paperQuestionQuery
+            .Where(question => rowIds.Contains(question.QuestionBankItemId))
+            .Select(question => question.QuestionBankItemId).Distinct());
+        var usedQuestionIds = usedIds.Concat(paperUsedIds).ToHashSet();
         var duplicateIds = GetDuplicateQuestionIds(rows);
         return new QuestionBankDashboardDto
         {

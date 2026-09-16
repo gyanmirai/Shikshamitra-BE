@@ -202,6 +202,8 @@ public class ShikshaMitraApplicationTestModule : AbpModule
             options.Configure(dbContextConfigurationContext =>
             {
                 dbContextConfigurationContext.DbContextOptions.UseSqlite(_sqliteConnection)
+                    // Query-count tests attach listeners after seeding; do not cache a disabled diagnostic listener.
+                    .ConfigureLoggingCacheTime(TimeSpan.Zero)
                     .ReplaceService<IMemberTranslatorProvider, SqliteApplicationTestMemberTranslatorProvider>();
             });
         });

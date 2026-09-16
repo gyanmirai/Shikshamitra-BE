@@ -8,7 +8,7 @@ public class ChapterProgressConfiguration : IEntityTypeConfiguration<ChapterProg
 {
     public void Configure(EntityTypeBuilder<ChapterProgress> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ChapterProgresses", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ChapterProgresses", ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
 

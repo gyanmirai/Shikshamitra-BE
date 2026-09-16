@@ -42,14 +42,28 @@ public class ExamResultAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_ResultCreation.View)]
     public async Task<ResultReadinessDto> GetReadinessAsync(Guid examId, Guid divisionId)
     {
-        var checks = new List<ReadinessCheckDto>();
-
         var exam = await GetScopedExamAsync(examId, divisionId);
+        var inputs = await LoadResultInputsAsync(exam, divisionId);
+        return await GetReadinessAsync(exam, divisionId, inputs);
+    }
+
+    private async Task<ResultInputs> LoadResultInputsAsync(Exam exam, Guid divisionId)
+    {
         var enrolledStudents = await studentRepository.GetListAsync(s =>
             s.DivisionId == divisionId &&
             s.Status == StudentLifeCycleStatusEnum.Enrolled &&
             !s.IsDeleted);
         var applicableSubjectIdsByStudent = await subjectApplicabilityResolver.ResolveAsync(exam, enrolledStudents);
+        var marks = await examMarkRepository.GetListAsync(
+            mark => mark.ExamId == exam.Id && mark.DivisionId == divisionId);
+        return new ResultInputs(enrolledStudents, applicableSubjectIdsByStudent, marks);
+    }
+
+    private async Task<ResultReadinessDto> GetReadinessAsync(Exam exam, Guid divisionId, ResultInputs inputs)
+    {
+        var examId = exam.Id;
+        var checks = new List<ReadinessCheckDto>();
+        var applicableSubjectIdsByStudent = inputs.ApplicableSubjectIdsByStudent;
         var requiredSubjectIds = applicableSubjectIdsByStudent.Values
             .SelectMany(subjectIds => subjectIds)
             .ToHashSet();
@@ -97,8 +111,7 @@ public class ExamResultAppService(
         });
 
         // Check 3: Marks entries exist
-        var marks = await examMarkRepository.GetListAsync(
-            m => m.ExamId == examId && m.DivisionId == divisionId);
+        var marks = inputs.Marks;
         var expectedMarkRows = applicableSubjectIdsByStudent.Values.Sum(subjectIds => subjectIds.Count);
         var markKeys = marks
             .Where(mark => applicableSubjectIdsByStudent.TryGetValue(mark.StudentId, out var subjectIds) &&
@@ -183,7 +196,8 @@ public class ExamResultAppService(
             }
         }
 
-        var readiness = await GetReadinessAsync(input.ExamId, input.DivisionId);
+        var resultInputs = await LoadResultInputsAsync(exam, input.DivisionId);
+        var readiness = await GetReadinessAsync(exam, input.DivisionId, resultInputs);
         if (!readiness.IsReady)
             throw new UserFriendlyException("Result cannot be generated until all blocking readiness checks pass.");
 
@@ -194,7 +208,7 @@ public class ExamResultAppService(
         if (scaleId.HasValue)
         {
             var scaleQuery = await gradingScaleRepository.WithDetailsAsync(s => s.GradeRanges);
-            var scale = scaleQuery.FirstOrDefault(s => s.Id == scaleId.Value);
+            var scale = await AsyncExecuter.FirstOrDefaultAsync(scaleQuery.Where(s => s.Id == scaleId.Value));
             gradeRanges = scale?.GradeRanges;
             if (scale != null && double.TryParse(scale.TotalMarks, out var parsedTotal))
             {
@@ -203,15 +217,11 @@ public class ExamResultAppService(
         }
 
         // Load marks
-        var marks = await examMarkRepository.GetListAsync(
-            m => m.ExamId == input.ExamId && m.DivisionId == input.DivisionId);
+        var marks = resultInputs.Marks;
         if (marks.Count == 0)
             throw new UserFriendlyException("No marks found for this exam and division.");
 
-        var enrolledStudents = await studentRepository.GetListAsync(s =>
-            s.DivisionId == input.DivisionId &&
-            s.Status == StudentLifeCycleStatusEnum.Enrolled &&
-            !s.IsDeleted);
+        var enrolledStudents = resultInputs.EnrolledStudents;
         if (enrolledStudents.Count == 0)
             throw new UserFriendlyException("No enrolled students found for this division.");
 
@@ -227,7 +237,7 @@ public class ExamResultAppService(
         var marksByStudent = marks
             .GroupBy(m => m.StudentId)
             .ToDictionary(g => g.Key, g => g.ToList());
-        var applicableSubjectIdsByStudent = await subjectApplicabilityResolver.ResolveAsync(exam, enrolledStudents);
+        var applicableSubjectIdsByStudent = resultInputs.ApplicableSubjectIdsByStudent;
 
         var studentResults = enrolledStudents
             .Select(g =>
@@ -605,9 +615,15 @@ public class ExamResultAppService(
         ICollection<GradeRange>? gradeRanges = null;
         double scaleTotal = 100.0;
 
-        // Load all grading scales with details to build a map
+        // Only the overall and applicable subject scales are needed for this student.
+        var scaleIds = applicableExamSubjects
+            .Where(subject => subject.GradeScalingId.HasValue)
+            .Select(subject => subject.GradeScalingId!.Value)
+            .ToHashSet();
+        if (defaultScaleId.HasValue)
+            scaleIds.Add(defaultScaleId.Value);
         var scaleQuery = await gradingScaleRepository.WithDetailsAsync(s => s.GradeRanges);
-        var allScales = await AsyncExecuter.ToListAsync(scaleQuery);
+        var allScales = await AsyncExecuter.ToListAsync(scaleQuery.Where(scale => scaleIds.Contains(scale.Id)));
         var scaleMap = allScales.ToDictionary(
             s => s.Id,
             s => {
@@ -743,6 +759,11 @@ public class ExamResultAppService(
             Subjects = subjectMarks
         };
     }
+
+    private sealed record ResultInputs(
+        List<Student> EnrolledStudents,
+        Dictionary<Guid, HashSet<Guid>> ApplicableSubjectIdsByStudent,
+        List<ExamMark> Marks);
 
     private static string GetRemarksFromGrade(string grade)
     {

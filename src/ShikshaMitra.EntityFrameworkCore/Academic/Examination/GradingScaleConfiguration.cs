@@ -17,7 +17,7 @@ public class GradingScaleConfiguration : IEntityTypeConfiguration<GradingScale>
 	{
 		// Table configuration
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "GradingScales",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "GradingScales",
 			ShikshaMitraConsts.DbSchema
 		);
 

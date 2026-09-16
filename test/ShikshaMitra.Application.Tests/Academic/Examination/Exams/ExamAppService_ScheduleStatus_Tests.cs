@@ -28,7 +28,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
-public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private static readonly Guid TestTenantId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 	private static readonly Guid FakeAdminUserId = Guid.Parse("2e701e62-0953-4dd3-910b-dc6cc93ccb0d");
@@ -243,7 +243,7 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 	}
 
 	[Fact]
-	public async Task GetListAsync_Should_Report_Future_Completed_Exam_As_Published()
+	public async Task GetListAsync_Should_Keep_Persisted_Completed_Status_Before_A_Future_Schedule()
 	{
 		await WithUnitOfWorkAsync(async () =>
 		{
@@ -255,6 +255,8 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 				{
 					AcademicMediumId = mediumId,
 					Status = ExamStatus.Published,
+					StartDate = DateTime.Today,
+					EndDate = DateTime.Today.AddDays(7),
 					MaxResultCount = 10
 				});
 
@@ -262,12 +264,13 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 				{
 					AcademicMediumId = mediumId,
 					Status = ExamStatus.Completed,
+					StartDate = DateTime.Today,
+					EndDate = DateTime.Today.AddDays(7),
 					MaxResultCount = 10
 				});
 
-				published.Items.Select(item => item.ExamId).ShouldContain(exam.Id);
-				published.Items.Single(item => item.ExamId == exam.Id).Status.ShouldBe(ExamStatus.Published);
-				completed.Items.Select(item => item.ExamId).ShouldNotContain(exam.Id);
+				published.Items.Select(item => item.ExamId).ShouldNotContain(exam.Id);
+				completed.Items.Single(item => item.ExamId == exam.Id).Status.ShouldBe(ExamStatus.Completed);
 			}
 		});
 	}
@@ -358,6 +361,7 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 		{
 			using (_currentTenant.Change(TestTenantId))
 			{
+				await EnsureDefaultExamTestScopeAsync();
 				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 				var stage = await _stageRepository.GetAsync(stageId);
 				var unique = Guid.NewGuid().ToString("N");
@@ -632,10 +636,21 @@ public class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicationTestBa
 		});
 	}
 
+	private async Task EnsureDefaultExamTestScopeAsync()
+	{
+		if (!await _scopeRepository.AnyAsync(scope => scope.UserId == FakeAdminUserId))
+		{
+			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId,
+				userId: FakeAdminUserId, description: "Exam schedule test operator scope"), autoSave: true);
+			await _userScopeService.InvalidateUserScopeCacheAsync(FakeAdminUserId);
+		}
+	}
+
 	private async Task<(Exam exam, Guid mediumId)> CreateScheduledExamAsync(
 		ExamStatus status,
 		bool activeToday = false)
 	{
+		await EnsureDefaultExamTestScopeAsync();
 		var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 		var stage = await _stageRepository.GetAsync(stageId);
 		var unique = Guid.NewGuid().ToString("N");

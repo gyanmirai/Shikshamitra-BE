@@ -14,7 +14,7 @@ public class AssignmentTypeConfiguration : IEntityTypeConfiguration<AssignmentTy
 	{
 		// Table configuration
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "AssignmentTypes",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "AssignmentTypes",
 			ShikshaMitraConsts.DbSchema
 		);
 

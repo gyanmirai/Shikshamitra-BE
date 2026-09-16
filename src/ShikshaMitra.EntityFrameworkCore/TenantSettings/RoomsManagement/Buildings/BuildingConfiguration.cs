@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -8,7 +8,7 @@ public class BuildingConfiguration : IEntityTypeConfiguration<Building>
 {
 	public void Configure(EntityTypeBuilder<Building> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Buildings", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "Buildings", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.BuildingName)

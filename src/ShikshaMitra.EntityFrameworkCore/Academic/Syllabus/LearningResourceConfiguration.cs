@@ -8,7 +8,7 @@ public class LearningResourceConfiguration : IEntityTypeConfiguration<LearningRe
 {
 	public void Configure(EntityTypeBuilder<LearningResource> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "LearningResources", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "LearningResources", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.Title).IsRequired().HasMaxLength(256);

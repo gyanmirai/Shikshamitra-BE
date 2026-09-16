@@ -44,26 +44,25 @@ public class ExaminationDynamicReportRowReader(
 
 		var exams = (await examRepository.GetQueryableAsync())
 			.Where(exam => filters.ClassIds.Contains(exam.StandardId));
-		var records = await asyncExecuter.ToListAsync(exams
-			.SelectMany(exam => exam.ExamDivisions
-				.Where(division => filters.DivisionIds.Contains(division.DivisionId))
-				.Select(division => new { Exam = exam, division.DivisionId }))
-			.SelectMany(item => item.Exam.ExamSubjects
-				.Where(subject => filters.SubjectIds.Contains(subject.SubjectId))
-				.Select(subject => new ScheduleProjection
+		var records = await asyncExecuter.ToListAsync((
+			from exam in exams
+			from division in exam.ExamDivisions
+			from subject in exam.ExamSubjects
+			where filters.DivisionIds.Contains(division.DivisionId) && filters.SubjectIds.Contains(subject.SubjectId)
+			select new ScheduleProjection
 				{
-					ExamName = item.Exam.ExamName,
-					StandardId = item.Exam.StandardId,
-					DivisionId = item.DivisionId,
+					ExamName = exam.ExamName,
+					StandardId = exam.StandardId,
+					DivisionId = division.DivisionId,
 					SubjectId = subject.SubjectId,
 					ExamDate = subject.ExamDate,
 					StartTime = subject.StartTime,
 					EndTime = subject.EndTime,
 					TotalMarks = subject.TotalMarks,
 					PassingMarks = subject.PassingMarks,
-					ExamStatus = (int)item.Exam.Status,
+					ExamStatus = (int)exam.Status,
 					Notes = subject.Notes
-				}))
+				})
 			.Take(maximumRows + 1));
 
 		var names = Names(snapshot);

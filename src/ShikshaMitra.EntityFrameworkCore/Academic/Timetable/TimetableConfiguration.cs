@@ -10,7 +10,7 @@ public class TimetableConfiguration : IEntityTypeConfiguration<Timetables.Timeta
     public void Configure(EntityTypeBuilder<Timetables.Timetable> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "Timetables",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "Timetables",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
@@ -30,7 +30,7 @@ public class TimetableSlotConfiguration : IEntityTypeConfiguration<TimetableSlot
     public void Configure(EntityTypeBuilder<TimetableSlot> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "TimetableSlots",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "TimetableSlots",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();
@@ -48,7 +48,7 @@ public class TimetableSlotSubjectConfiguration : IEntityTypeConfiguration<Timeta
     public void Configure(EntityTypeBuilder<TimetableSlotSubject> builder)
     {
         builder.ToTable(
-            ShikshaMitraConsts.DbTablePrefix + "TimetableSlotSubjects",
+            ShikshaMitraConsts.AcademicDbTablePrefix + "TimetableSlotSubjects",
             ShikshaMitraConsts.DbSchema);
 
         builder.ConfigureByConvention();

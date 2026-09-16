@@ -1,5 +1,4 @@
 using System;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -59,9 +58,13 @@ public class AcademicCalendarAuditWriter(
         Guid? academicCalendarDayId = null,
         string module = "CalendarManagement",
         string? subModule = null,
-        string? correlationId = null)
+        string? correlationId = null,
+        ActorSnapshot? actor = null)
     {
-        var (actorName, actorRole, actorEmail) = await ResolveActorAsync();
+        if (actor == null || actor.TenantId != currentTenant.Id || actor.UserId != currentUser.Id)
+        {
+            actor = await CaptureActorAsync();
+        }
         var changedFields = Diff(beforeJson, afterJson);
         var changedFieldsJson = changedFields.Count > 0 ? JsonSerializer.Serialize(changedFields, JsonOptions) : null;
 
@@ -82,9 +85,9 @@ public class AcademicCalendarAuditWriter(
             entityType: entityType,
             entityName: entityName,
             changedFieldsJson: changedFieldsJson,
-            actorNameSnapshot: actorName,
-            actorRoleSnapshot: actorRole,
-            actorEmailSnapshot: actorEmail,
+            actorNameSnapshot: actor.Name,
+            actorRoleSnapshot: actor.Role,
+            actorEmailSnapshot: actor.Email,
             source: source,
             ipAddress: ipAddress,
             device: device,
@@ -97,6 +100,15 @@ public class AcademicCalendarAuditWriter(
 
         await repository.InsertAsync(log);
     }
+
+    /// <summary>Captures one actor for a logical multi-row calendar operation.</summary>
+    public async Task<ActorSnapshot> CaptureActorAsync()
+    {
+        var (name, role, email) = await ResolveActorAsync();
+        return new ActorSnapshot(currentTenant.Id, currentUser.Id, name, role, email);
+    }
+
+    public sealed record ActorSnapshot(Guid? TenantId, Guid? UserId, string? Name, string? Role, string? Email);
 
     /// <summary>Diffs two JSON object snapshots. Returns no fields (rather than "everything changed")
     /// when either side is missing — that's a create/delete, not a field-level update.</summary>

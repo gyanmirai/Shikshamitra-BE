@@ -9,7 +9,7 @@ public class SubstitutionRequestConfiguration : IEntityTypeConfiguration<Substit
 {
     public void Configure(EntityTypeBuilder<SubstitutionRequest> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicSubstitutionRequests", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "SubstitutionRequests", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.HasIndex(x => new { x.AcademicYearId, x.Date, x.Status });
         builder.HasIndex(x => new { x.Date, x.TimetableSlotId, x.TimetableSlotSubjectId, x.OriginalTeacherId });
@@ -35,7 +35,7 @@ public class TeacherAvailabilityConfiguration : IEntityTypeConfiguration<Teacher
 {
     public void Configure(EntityTypeBuilder<TeacherAvailability> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicTeacherAvailabilities", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "TeacherAvailabilities", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.HasIndex(x => new { x.AcademicYearId, x.TeacherId, x.AvailabilityDate });
         builder.HasIndex(x => new { x.TeacherName, x.AvailabilityDate });
@@ -51,7 +51,7 @@ public class SubstitutionAuditLogConfiguration : IEntityTypeConfiguration<Substi
 {
     public void Configure(EntityTypeBuilder<SubstitutionAuditLog> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicSubstitutionAuditLogs", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "SubstitutionAuditLogs", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.HasIndex(x => new { x.SubstitutionRequestId, x.Timestamp });
         builder.Property(x => x.ActorName).HasMaxLength(256);
@@ -64,7 +64,7 @@ public class SubstitutionNotificationLogConfiguration : IEntityTypeConfiguration
 {
     public void Configure(EntityTypeBuilder<SubstitutionNotificationLog> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AcademicSubstitutionNotificationLogs", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "SubstitutionNotificationLogs", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
         builder.HasIndex(x => new { x.SubstitutionRequestId, x.CreationTime });
         builder.Property(x => x.EventName).HasMaxLength(128);

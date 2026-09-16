@@ -10,7 +10,7 @@ public class SubjectUsageCheckDto
     /// <summary>True if the subject is referenced by at least one other record.</summary>
     public bool HasUsages { get; set; }
 
-    /// <summary>Subject-allocation rows in AppStandardSubjectAssignments.</summary>
+    /// <summary>Subject-allocation rows in academic_StandardSubjectAssignments.</summary>
     public int Allocations { get; set; }
 
     /// <summary>Weekly lecture-slot configuration rows referencing this subject.</summary>

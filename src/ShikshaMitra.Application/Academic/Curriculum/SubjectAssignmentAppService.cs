@@ -249,7 +249,8 @@ public class SubjectAssignmentAppService(
 
 		// Non-admin users only see subjects they are personally assigned to teach.
 		var assignments = await AsyncExecuter.ToListAsync(query);
-		var readMetrics = await BuildSubjectAssignmentReadMetricsAsync(assignments, classId);
+		var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(classId);
+		var readMetrics = BuildSubjectAssignmentReadMetrics(assignments, weeklySlot);
 
 		// Group assignments
 		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
@@ -275,7 +276,6 @@ public class SubjectAssignmentAppService(
 								 .ToDictionary(g => g.Id);
 
 		// Fetch weekly lecture slot for this class to compute total/occupied/unoccupied slots
-		var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(classId);
 		// subjectId -> allocated weekly lectures
 		var weeklyLecturesBySubject = weeklySlot?.Subjects
 			.Where(s => s.SubjectId.HasValue)
@@ -293,6 +293,7 @@ public class SubjectAssignmentAppService(
 			.SelectMany(s => s.Subjects)
 			.GroupBy(ss => ss.SubjectId)
 			.ToDictionary(g => g.Key, g => g.Count());
+		var usage = await LoadAssignmentListUsageAsync(classId, subjectIds, electiveGroupIds, timetables);
 
 		// Bulk-load teachers for primary teacher display in list
 		var allAssignmentTeacherIds = assignments
@@ -321,8 +322,7 @@ public class SubjectAssignmentAppService(
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.ToList();
 			var primaryTeacherEntry = primaryTeacherEntries.FirstOrDefault();
-			var usageParts = await GetAssignmentUsagePartsAsync(
-				coreAssignment.StandardId,
+			var usageParts = BuildAssignmentUsageParts(usage,
 				new[] { coreAssignment.SubjectId },
 				coreAssignment.ElectiveGroupId,
 				coreAssignment.Chapters.Count);
@@ -382,8 +382,7 @@ public class SubjectAssignmentAppService(
 				.ToList();
 			var firstPrimary = primaryTeacherEntries.FirstOrDefault();
 			var subjectIdsInGroup = group.Select(a => a.SubjectId).ToList();
-			var usageParts = await GetAssignmentUsagePartsAsync(
-				first.StandardId,
+			var usageParts = BuildAssignmentUsageParts(usage,
 				subjectIdsInGroup,
 				first.ElectiveGroupId,
 				group.Sum(a => a.Chapters.Count));
@@ -1134,9 +1133,17 @@ public class SubjectAssignmentAppService(
 		var teacherUser = await userRepository.FindAsync(teacherId)
 			?? throw new UserFriendlyException("Teacher not found.");
 
-		var query = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Subject, a => a.Standard);
+		var query = await assignmentRepository.GetQueryableAsync();
 		var assignedSubjects = await AsyncExecuter.ToListAsync(
 			query.Where(a => a.Teachers.Any(t => t.TeacherId == teacherId && t.TeacherType == SubjectTeacherType.Primary))
+				.OrderBy(a => a.Id)
+				.Select(a => new TeacherSubjectSummaryDto
+				{
+					AssignedSubjectId = a.Id,
+					SubjectName = a.Subject != null ? a.Subject.Name : null,
+					ClassName = a.Standard != null ? a.Standard.Name : null,
+					WeeklyPeriods = a.WeeklyPeriods
+				})
 		);
 
 		var totalPeriods = assignedSubjects.Sum(a => a.WeeklyPeriods);
@@ -1155,32 +1162,39 @@ public class SubjectAssignmentAppService(
 			CurrentWeeklyPeriods = totalPeriods,
 			MaxAllowedWeeklyPeriods = MaxAllowedWeeklyPeriods,
 			LoadStatus = loadStatus,
-			AssignedSubjects = [.. assignedSubjects.Select(a => new TeacherSubjectSummaryDto
-			{
-				AssignedSubjectId = a.Id,
-				SubjectName = a.Subject?.Name,
-				ClassName = a.Standard?.Name,
-				WeeklyPeriods = a.WeeklyPeriods
-			})]
+			AssignedSubjects = assignedSubjects
 		};
 	}
 
 	public async Task<SubjectKpiDto> GetKpiAsync(Guid classId)
 	{
-		var query = await assignmentRepository.WithDetailsAsync(a => a.Teachers);
-		var assignments = await AsyncExecuter.ToListAsync(query.Where(a => a.StandardId == classId));
+		var query = await assignmentRepository.GetQueryableAsync();
+		var summary = await AsyncExecuter.FirstOrDefaultAsync(query.Where(assignment => assignment.StandardId == classId)
+			.GroupBy(_ => 1)
+			.Select(group => new
+			{
+				Total = group.Count(),
+				Core = group.Count(assignment => assignment.SubjectType == SubjectType.Core),
+				Elective = group.Count(assignment => assignment.SubjectType == SubjectType.Elective),
+				Optional = group.Count(assignment => assignment.SubjectType == SubjectType.Optional),
+				WithTeacher = group.Count(assignment => assignment.Teachers.Any(teacher => teacher.TeacherType == SubjectTeacherType.Primary)),
+				Published = group.Count(assignment => assignment.Status == SubjectStatus.Published),
+				Draft = group.Count(assignment => assignment.Status == SubjectStatus.Draft),
+				Health = group.Average(assignment => assignment.SetupHealthScore)
+			}));
+		if (summary == null) return new SubjectKpiDto();
 
 		return new SubjectKpiDto
 		{
-			TotalSubjects = assignments.Count,
-			CoreSubjects = assignments.Count(a => a.SubjectType == SubjectType.Core),
-			ElectiveSubjects = assignments.Count(a => a.SubjectType == SubjectType.Elective),
-			OptionalSubjects = assignments.Count(a => a.SubjectType == SubjectType.Optional),
-			SubjectsWithTeacher = assignments.Count(a => a.Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary)),
-			SubjectsMissingTeacher = assignments.Count(a => !a.Teachers.Any(t => t.TeacherType == SubjectTeacherType.Primary)),
-			PublishedSubjects = assignments.Count(a => a.Status == SubjectStatus.Published),
-			DraftSubjects = assignments.Count(a => a.Status == SubjectStatus.Draft),
-			OverallHealthScore = assignments.Count > 0 ? (int) assignments.Average(a => a.SetupHealthScore) : 0
+			TotalSubjects = summary.Total,
+			CoreSubjects = summary.Core,
+			ElectiveSubjects = summary.Elective,
+			OptionalSubjects = summary.Optional,
+			SubjectsWithTeacher = summary.WithTeacher,
+			SubjectsMissingTeacher = summary.Total - summary.WithTeacher,
+			PublishedSubjects = summary.Published,
+			DraftSubjects = summary.Draft,
+			OverallHealthScore = (int)summary.Health
 		};
 	}
 
@@ -1601,6 +1615,60 @@ public class SubjectAssignmentAppService(
 		}
 	}
 
+	private async Task<AssignmentListUsage> LoadAssignmentListUsageAsync(
+		Guid standardId,
+		List<Guid> subjectIds,
+		List<Guid> electiveGroupIds,
+		IReadOnlyCollection<ShikshaMitra.Academic.Timetable.Timetables.Timetable> timetables)
+	{
+		var subjectOrGroupIds = subjectIds.Concat(electiveGroupIds).Distinct().ToList();
+		var examQuery = await examRepository.GetQueryableAsync();
+		var examSubjects = await AsyncExecuter.ToListAsync(examQuery.Where(exam => exam.StandardId == standardId)
+			.SelectMany(exam => exam.ExamSubjects, (exam, subject) => new { ExamId = exam.Id, subject.SubjectId })
+			.Where(subject => subjectOrGroupIds.Contains(subject.SubjectId)).Distinct());
+		var homeworkQuery = await homeworkRepository.GetQueryableAsync();
+		var homeworkCounts = await AsyncExecuter.ToListAsync(homeworkQuery
+			.Where(homework => homework.StandardId == standardId && subjectIds.Contains(homework.SubjectId))
+			.GroupBy(homework => homework.SubjectId).Select(group => new { SubjectId = group.Key, Count = group.Count() }));
+		var assignmentQuery = await learningTaskAssignmentRepository.GetQueryableAsync();
+		var assignmentCounts = await AsyncExecuter.ToListAsync(assignmentQuery
+			.Where(assignment => assignment.StandardId == standardId && subjectIds.Contains(assignment.SubjectId))
+			.GroupBy(assignment => assignment.SubjectId).Select(group => new { SubjectId = group.Key, Count = group.Count() }));
+		var slots = timetables.SelectMany(timetable => timetable.Slots).ToList();
+		return new AssignmentListUsage(
+			slots.SelectMany(slot => slot.Subjects).GroupBy(subject => subject.SubjectId).ToDictionary(group => group.Key, group => group.Count()),
+			slots.Where(slot => slot.ElectiveGroupId.HasValue).GroupBy(slot => slot.ElectiveGroupId!.Value).ToDictionary(group => group.Key, group => group.Count()),
+			examSubjects.ToLookup(subject => subject.SubjectId, subject => subject.ExamId),
+			homeworkCounts.ToDictionary(group => group.SubjectId, group => group.Count),
+			assignmentCounts.ToDictionary(group => group.SubjectId, group => group.Count));
+	}
+
+	private static List<string> BuildAssignmentUsageParts(
+		AssignmentListUsage usage, IEnumerable<Guid> subjectIds, Guid? electiveGroupId, int chapterCount)
+	{
+		var ids = subjectIds.Distinct().ToList();
+		var parts = new List<string>();
+		if (chapterCount > 0) parts.Add($"{chapterCount} syllabus chapter(s)");
+		var slots = ids.Sum(id => usage.TimetableSubjects.GetValueOrDefault(id)) +
+			(electiveGroupId.HasValue ? usage.TimetableGroups.GetValueOrDefault(electiveGroupId.Value) : 0);
+		if (slots > 0) parts.Add($"{slots} timetable slot(s)");
+		var examSubjectIds = electiveGroupId.HasValue ? ids.Append(electiveGroupId.Value) : ids;
+		var exams = examSubjectIds.SelectMany(id => usage.ExamsBySubject[id]).Distinct().Count();
+		if (exams > 0) parts.Add($"{exams} exam(s)");
+		var homeworks = ids.Sum(id => usage.Homeworks.GetValueOrDefault(id));
+		if (homeworks > 0) parts.Add($"{homeworks} homework(s)");
+		var assignments = ids.Sum(id => usage.Assignments.GetValueOrDefault(id));
+		if (assignments > 0) parts.Add($"{assignments} assignment(s)");
+		return parts;
+	}
+
+	private sealed record AssignmentListUsage(
+		Dictionary<Guid, int> TimetableSubjects,
+		Dictionary<Guid, int> TimetableGroups,
+		ILookup<Guid, Guid> ExamsBySubject,
+		Dictionary<Guid, int> Homeworks,
+		Dictionary<Guid, int> Assignments);
+
 	private async Task<List<string>> GetAssignmentUsagePartsAsync(
 		Guid standardId,
 		IReadOnlyCollection<Guid> subjectIds,
@@ -1836,7 +1904,12 @@ public class SubjectAssignmentAppService(
 			return new Dictionary<Guid, SubjectAssignmentReadMetrics>();
 		}
 
-		var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(classId);
+		return BuildSubjectAssignmentReadMetrics(assignments, await weeklyLectureSlotRepository.FindByStandardIdAsync(classId));
+	}
+
+	private static Dictionary<Guid, SubjectAssignmentReadMetrics> BuildSubjectAssignmentReadMetrics(
+		IReadOnlyCollection<AssignedSubject> assignments, WeeklyLectureSlot? weeklySlot)
+	{
 		var weeklyLecturesBySubject = weeklySlot?.Subjects
 			.Where(s => s.SubjectId.HasValue)
 			.ToDictionary(s => s.SubjectId!.Value, s => s.WeeklyLectures)

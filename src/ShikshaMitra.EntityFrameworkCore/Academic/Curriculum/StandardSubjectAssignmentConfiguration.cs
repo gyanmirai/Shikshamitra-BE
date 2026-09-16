@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Curriculum.SubjectAssignment;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -9,7 +9,7 @@ public class StandardSubjectAssignmentConfiguration : IEntityTypeConfiguration<A
 {
 	public void Configure(EntityTypeBuilder<AssignedSubject> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StandardSubjectAssignments", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "StandardSubjectAssignments", ShikshaMitraConsts.DbSchema);
 
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();

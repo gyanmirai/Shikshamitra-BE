@@ -2343,10 +2343,11 @@ public class ExamSeatAllocationAppService(
             var subjectIds = (await GetPlanSubjectsAsync(plan.Id)).Select(s => s.SubjectId).Distinct().ToList();
             if (subjectIds.Count == 1)
             {
-                var selectedStudentIds = (await studentElectiveSelectionRepository.GetListAsync(s =>
-                    s.SelectedSubjectId == subjectIds[0])).Select(s => s.StudentId).ToHashSet();
-                if (selectedStudentIds.Count > 0)
-                    query = query.Where(s => selectedStudentIds.Contains(s.Id));
+                var selections = (await studentElectiveSelectionRepository.GetQueryableAsync())
+                    .Where(selection => selection.SelectedSubjectId == subjectIds[0]);
+                // Preserve the legacy core-subject fallback when no selections exist anywhere in the tenant.
+                if (await AsyncExecuter.AnyAsync(selections))
+                    query = query.Where(student => selections.Any(selection => selection.StudentId == student.Id));
             }
         }
 
@@ -2358,7 +2359,21 @@ public class ExamSeatAllocationAppService(
                 (s.LastName != null && s.LastName.ToLower().Contains(search)));
         }
 
-        var students = await AsyncExecuter.ToListAsync(query);
+        var totalCount = await AsyncExecuter.CountAsync(query);
+        var page = Math.Max(1, input.Page);
+        var totalPages = (int) Math.Ceiling(totalCount / (double) input.PageSize);
+        var students = await AsyncExecuter.ToListAsync(query
+            .Skip(Math.Max(0, (page - 1) * input.PageSize))
+            .Take(Math.Max(0, input.PageSize))
+            .Select(student => new
+            {
+                student.Id,
+                student.StandardId,
+                student.FirstName,
+                student.MiddleName,
+                student.LastName,
+                student.RollNo
+            }));
 
         // Check which students already have seat allocations for this exam
         var studentIds = students.Select(s => s.Id).ToList();
@@ -2389,14 +2404,9 @@ public class ExamSeatAllocationAppService(
             };
         }).ToList();
 
-        var totalCount = items.Count;
-        var page = Math.Max(1, input.Page);
-        var totalPages = (int) Math.Ceiling(totalCount / (double) input.PageSize);
-        var pagedItems = items.Skip((page - 1) * input.PageSize).Take(input.PageSize).ToList();
-
         return new SeatStudentPagedResponseDto
         {
-            Items = pagedItems,
+            Items = items,
             PageNumber = page,
             PageSize = input.PageSize,
             TotalPages = totalPages,
@@ -2460,7 +2470,7 @@ public class ExamSeatAllocationAppService(
         // Load by studentId (not roomId) to respect the unique index on {ExamId, StudentId}.
         // Disable the soft-delete filter so previously-deleted allocations are visible —
         // otherwise a soft-deleted row is hidden, the code tries to INSERT, and the
-        // unique constraint IX_AppExamSeatAllocations_ExamId_StudentId fires.
+        // the unique seating-plan/student constraint fires.
         List<ExamSeatAllocation> existingForStudents;
         using (dataFilter.Disable<ISoftDelete>())
         {
@@ -2562,9 +2572,32 @@ public class ExamSeatAllocationAppService(
 
     public async Task<SeatAllocationDashboardResponseDto> GetSeatAllocationTableAsync(GetSeatAllocationTableInput input)
     {
-        var examQuery = await examRepository.GetQueryableAsync();
-        var exams = await AsyncExecuter.ToListAsync(
-            examQuery.Where(e => e.StandardId == input.StandardId && e.Status == ExamStatus.Published));
+        if (!CurrentUser.Id.HasValue)
+            return new SeatAllocationDashboardResponseDto();
+
+        var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+        var examQuery = (await examRepository.GetQueryableAsync())
+            .Where(e => e.StandardId == input.StandardId && e.Status == ExamStatus.Published);
+        if (!(scope.IsAdmin || scope.HasTenantWideScope() || scope.StandardIds.Contains(input.StandardId) ||
+              scope.WildcardDivisionStandardIds.Contains(input.StandardId)))
+        {
+            var allowedDivisionIds = scope.DivisionIds.ToList();
+            examQuery = examQuery.Where(exam => exam.ExamDivisions.Any() &&
+                exam.ExamDivisions.All(division => allowedDivisionIds.Contains(division.DivisionId)));
+        }
+
+        var roomAssignedFilter = input.IsRoomAssigned == true;
+        if (roomAssignedFilter)
+        {
+            var allocationQuery = await seatAllocationRepository.GetQueryableAsync();
+            examQuery = examQuery.Where(exam => allocationQuery.Any(allocation =>
+                allocation.ExamId == exam.Id && allocation.IsRoomAssign));
+        }
+
+        // Preserve the CLR search rules and the identifier order used by the detailed query,
+        // while loading session graphs and supporting data only for the requested page.
+        var exams = await AsyncExecuter.ToListAsync(examQuery.OrderBy(exam => exam.Id)
+            .Select(exam => new { exam.Id, exam.ExamName }));
 
         if (!string.IsNullOrWhiteSpace(input.Search))
         {
@@ -2572,65 +2605,58 @@ public class ExamSeatAllocationAppService(
             exams = exams.Where(e => e.ExamName.ToLower().Contains(search)).ToList();
         }
 
-        // Fetch supporting data
-        var candidateExamIds = exams.Select(e => e.Id).ToList();
+        var totalCount = exams.Count;
+        var page = Math.Max(1, input.Page);
+        var totalPages = (int)Math.Ceiling(totalCount / (double)input.PageSize);
+        var candidateExamIds = exams.Skip((page - 1) * input.PageSize).Take(input.PageSize)
+            .Select(exam => exam.Id).ToList();
         var allExamsWithDetails = await examRepository.GetListAsync(
             e => candidateExamIds.Contains(e.Id), includeDetails: true);
-
-        if (!CurrentUser.Id.HasValue)
-        {
-            return new SeatAllocationDashboardResponseDto();
-        }
-
-        var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
-        allExamsWithDetails = allExamsWithDetails
-            .Where(exam => CanAccessExam(exam, scope))
-            .ToList();
+        var detailsById = allExamsWithDetails.ToDictionary(exam => exam.Id);
+        allExamsWithDetails = candidateExamIds.Where(detailsById.ContainsKey).Select(id => detailsById[id]).ToList();
 
         var examIds = allExamsWithDetails.Select(e => e.Id).ToList();
         var examTypeIds = allExamsWithDetails.Select(e => e.ExamTypeId).Distinct().ToList();
-        var examTypes = await examTypeRepository.GetListAsync(t => examTypeIds.Contains(t.Id));
+        var examTypes = await AsyncExecuter.ToListAsync((await examTypeRepository.GetQueryableAsync())
+            .Where(type => examTypeIds.Contains(type.Id)).Select(type => new { type.Id, type.Name }));
         var examTypesDict = examTypes.ToDictionary(t => t.Id);
         var subjectIds = allExamsWithDetails
             .SelectMany(exam => exam.ExamSubjects)
             .Select(subject => subject.SubjectId)
             .Distinct()
             .ToList();
-        var subjects = subjectIds.Count == 0
-            ? []
-            : await subjectRepository.GetListAsync(subject => subjectIds.Contains(subject.Id));
+        var subjects = await AsyncExecuter.ToListAsync((await subjectRepository.GetQueryableAsync())
+            .Where(subject => subjectIds.Contains(subject.Id)).Select(subject => new { subject.Id, subject.Name }));
         var subjectNamesById = subjects.ToDictionary(subject => subject.Id, subject => subject.Name);
 
-        var standard = await standardRepository.FindAsync(input.StandardId);
+        var standardName = await AsyncExecuter.FirstOrDefaultAsync((await standardRepository.GetQueryableAsync())
+            .Where(standard => standard.Id == input.StandardId).Select(standard => standard.Name));
         var allDivisionIds = allExamsWithDetails
             .SelectMany(exam => exam.ExamDivisions.Select(division => division.DivisionId)
                 .Concat(exam.ExamSubjects
                     .SelectMany(subject => subject.RoomAssignments)
                     .Select(assignment => assignment.DivisionId)))
             .Distinct().ToList();
-        var divisions = allDivisionIds.Count > 0
-            ? await divisionRepository.GetListAsync(d => allDivisionIds.Contains(d.Id))
-            : new List<Division>();
+        var divisions = await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+            .Where(division => allDivisionIds.Contains(division.Id)).Select(division => new { division.Id, division.Name }));
         var divisionsDict = divisions.ToDictionary(d => d.Id);
 
-        // Students per division — needed to compute accurate per-exam totals
-        var studentsInDivisions = allDivisionIds.Count > 0
-            ? await studentRepository.GetListAsync(s =>
-                s.StandardId == input.StandardId &&
-                s.DivisionId.HasValue &&
-                allDivisionIds.Contains(s.DivisionId!.Value))
-            : new List<Student>();
-        var studentCountByDivision = studentsInDivisions
-            .Where(s => s.DivisionId.HasValue)
-            .GroupBy(s => s.DivisionId!.Value)
-            .ToDictionary(g => g.Key, g => g.Count());
-        var studentDivisionById = studentsInDivisions
-            .Where(s => s.DivisionId.HasValue)
-            .ToDictionary(s => s.Id, s => s.DivisionId!.Value);
+        var allocCounts = await seatAllocationRepository.GetListAsync(a => examIds.Contains(a.ExamId));
+        var studentQuery = (await studentRepository.GetQueryableAsync()).Where(student =>
+            student.StandardId == input.StandardId && student.DivisionId.HasValue &&
+            allDivisionIds.Contains(student.DivisionId.Value));
+        var studentCounts = await AsyncExecuter.ToListAsync(studentQuery.GroupBy(student => student.DivisionId!.Value)
+            .Select(group => new { DivisionId = group.Key, Count = group.Count() }));
+        var studentCountByDivision = studentCounts.ToDictionary(row => row.DivisionId, row => row.Count);
+        // Progress needs individual division membership only for students already allocated on this page.
+        var allocatedStudentIds = allocCounts.Select(allocation => allocation.StudentId).Distinct().ToList();
+        var allocatedStudentsInDivisions = await AsyncExecuter.ToListAsync(studentQuery
+            .Where(student => allocatedStudentIds.Contains(student.Id))
+            .Select(student => new { student.Id, student.DivisionId }));
+        var studentDivisionById = allocatedStudentsInDivisions.ToDictionary(student => student.Id, student => student.DivisionId!.Value);
 
         // Session-level source data. The legacy exam summary is derived from these same rows so
         // old consumers remain compatible while the new inbox can render one truthful time slot.
-        var allocCounts = await seatAllocationRepository.GetListAsync(a => examIds.Contains(a.ExamId));
         var plans = await seatingPlanRepository.GetListAsync(p => examIds.Contains(p.ExamId));
         var planIds = plans.Select(plan => plan.Id).ToList();
         var planSubjects = planIds.Count == 0
@@ -2656,15 +2682,9 @@ public class ExamSeatAllocationAppService(
 
         // When IsRoomAssigned=true, restrict the exam list to only those with at least one
         // room-assigned allocation, and count only room-assigned allocations.
-        var roomAssignedFilter = input.IsRoomAssigned == true;
         var relevantAllocs = roomAssignedFilter
             ? allocCounts.Where(a => a.IsRoomAssign).ToList()
             : allocCounts;
-        var examsWithRoomAssign = roomAssignedFilter
-            ? relevantAllocs.Select(a => a.ExamId).ToHashSet()
-            : null;
-        if (examsWithRoomAssign != null)
-            allExamsWithDetails = allExamsWithDetails.Where(e => examsWithRoomAssign.Contains(e.Id)).ToList();
 
         var allocationsByPlan = relevantAllocs
             .GroupBy(allocation => allocation.SeatingPlanId)
@@ -2904,7 +2924,7 @@ public class ExamSeatAllocationAppService(
                 ExamId = exam.Id,
                 ExamName = exam.ExamName,
                 ExamTypeName = examType?.Name ?? string.Empty,
-                StandardName = standard?.Name ?? string.Empty,
+                StandardName = standardName ?? string.Empty,
                 Divisions = divisionNames,
                 DivisionProgress = divisionProgress,
                 TotalStudents = totalStudents,
@@ -2925,14 +2945,9 @@ public class ExamSeatAllocationAppService(
             };
         }).ToList();
 
-        var totalCount = items.Count;
-        var page = Math.Max(1, input.Page);
-        var totalPages = (int) Math.Ceiling(totalCount / (double) input.PageSize);
-        var paged = items.Skip((page - 1) * input.PageSize).Take(input.PageSize).ToList();
-
         return new SeatAllocationDashboardResponseDto
         {
-            Items = paged,
+            Items = items,
             TotalCount = totalCount,
             TotalPages = totalPages,
             PageSize = input.PageSize,

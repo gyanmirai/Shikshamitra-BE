@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -9,7 +9,7 @@ public class SubjectChapterConfiguration : IEntityTypeConfiguration<AssignedSubj
 {
 	public void Configure(EntityTypeBuilder<AssignedSubjectChapter> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "SubjectChapters", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "SubjectChapters", ShikshaMitraConsts.DbSchema);
 
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();

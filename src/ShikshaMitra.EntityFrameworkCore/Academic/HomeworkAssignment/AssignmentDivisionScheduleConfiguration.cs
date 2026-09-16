@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -15,7 +15,7 @@ public class AssignmentDivisionScheduleConfiguration
 	{
 		// Table configuration
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "AssignmentDivisionSchedules",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "AssignmentDivisionSchedules",
 			ShikshaMitraConsts.DbSchema
 		);
 

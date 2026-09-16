@@ -8,7 +8,7 @@ public class ExamTypeConfiguration : IEntityTypeConfiguration<ExamType>
 {
     public void Configure(EntityTypeBuilder<ExamType> builder)
     {
-        builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "ExamTypes", ShikshaMitraConsts.DbSchema);
+        builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ExamTypes", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention(); //auto configure for the base class props
 
         builder.Property(x => x.Name).IsRequired().HasMaxLength(128);

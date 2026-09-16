@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using Volo.Abp.BackgroundWorkers;
 using Volo.Abp.Threading;
-using Volo.Abp.Uow;
 
 namespace ShikshaMitra.BackgroundWorkers;
 
@@ -21,13 +20,11 @@ public class AssignmentScheduledPublicationWorker : AsyncPeriodicBackgroundWorke
 	{
 		var logger = workerContext.ServiceProvider.GetRequiredService<ILogger<AssignmentScheduledPublicationWorker>>();
 		var publicationService = workerContext.ServiceProvider.GetRequiredService<AssignmentScheduledPublicationService>();
-		var unitOfWorkManager = workerContext.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
 
 		try
 		{
-			using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
-			var publishedCount = await publicationService.PublishDueSchedulesAsync(DateTime.UtcNow);
-			await uow.CompleteAsync();
+			var publishedCount = await publicationService.PublishDueSchedulesAsync(
+				DateTime.UtcNow, workerContext.CancellationToken);
 
 			if (publishedCount > 0)
 			{
@@ -35,6 +32,10 @@ public class AssignmentScheduledPublicationWorker : AsyncPeriodicBackgroundWorke
 					"AssignmentScheduledPublicationWorker: published {Count} due division schedule(s).",
 					publishedCount);
 			}
+		}
+		catch (OperationCanceledException) when (workerContext.CancellationToken.IsCancellationRequested)
+		{
+			// Committed assignments stay published; remaining schedules are retried next run.
 		}
 		catch (Exception ex)
 		{

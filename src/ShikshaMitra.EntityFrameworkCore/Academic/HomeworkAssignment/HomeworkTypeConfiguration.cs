@@ -14,7 +14,7 @@ public class HomeworkTypeConfiguration : IEntityTypeConfiguration<HomeworkType>
 	{
 		// Table configuration
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "HomeworkTypes",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "HomeworkTypes",
 			ShikshaMitraConsts.DbSchema
 		);
 

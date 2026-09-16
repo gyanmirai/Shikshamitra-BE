@@ -10,6 +10,8 @@ using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.TenantSettings;
+using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
@@ -43,7 +45,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			BuildCreateDto(standardId, room.Id),
 			JsonOptions);
 
-		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var body = await response.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
 		body.ShouldNotBeNull();
 		var timeSlot = body.SlotConfigurations.Single().TimeSlots.Single();
@@ -79,7 +81,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			BaseUrl,
 			BuildCreateDto(sourceStandardId, room.Id),
 			JsonOptions);
-		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
 		var source = await createResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
 		source.ShouldNotBeNull();
 
@@ -87,11 +89,11 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			$"{BaseUrl}/{source.Id}/assign",
 			new AssignLectureSlotDto { SelectedStandardIds = [targetStandardId] },
 			JsonOptions);
-		assignResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		assignResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await assignResponse.Content.ReadAsStringAsync());
 
 		var targetConfigId = await GetLectureSlotConfigIdForStandardAsync(targetStandardId);
 		var targetResponse = await Client.GetAsync($"{BaseUrl}/{targetConfigId}");
-		targetResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		targetResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await targetResponse.Content.ReadAsStringAsync());
 		var target = await targetResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
 
 		target.ShouldNotBeNull();
@@ -113,7 +115,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			BaseUrl,
 			BuildCreateDto(standardId, room.Id),
 			JsonOptions);
-		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
 		var config = await createResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
 		config.ShouldNotBeNull();
 
@@ -130,7 +132,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 				new SlotConfigurationDto
 				{
 					TotalSlots = 1,
-					WeekRange = [1, 5],
+					WeekRange = [(int)TimetableDayOfWeek.Monday, (int)TimetableDayOfWeek.Friday],
 					TimeSlots =
 					[
 						new TimeSlotDto
@@ -150,7 +152,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			updateDto,
 			JsonOptions);
 
-		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateResponse.Content.ReadAsStringAsync());
 	}
 
 	[Fact]
@@ -166,7 +168,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			BaseUrl,
 			BuildCreateDto(standardId, room.Id),
 			JsonOptions);
-		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
 		var config = await createResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
 		config.ShouldNotBeNull();
 
@@ -184,7 +186,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 				new SlotConfigurationDto
 				{
 					TotalSlots = 1,
-					WeekRange = [1, 5],
+					WeekRange = [(int)TimetableDayOfWeek.Monday, (int)TimetableDayOfWeek.Friday],
 					TimeSlots =
 					[
 						new TimeSlotDto
@@ -226,7 +228,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			BaseUrl,
 			BuildCreateDto(standardId, room.Id),
 			JsonOptions);
-		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
 		var config = await createResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
 		config.ShouldNotBeNull();
 
@@ -244,7 +246,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 				new SlotConfigurationDto
 				{
 					TotalSlots = 2,
-					WeekRange = [1, 5],
+					WeekRange = [(int)TimetableDayOfWeek.Monday, (int)TimetableDayOfWeek.Friday],
 					TimeSlots =
 					[
 						new TimeSlotDto
@@ -271,7 +273,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			updateDto,
 			JsonOptions);
 
-		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateResponse.Content.ReadAsStringAsync());
 	}
 
 	private async Task CreateTimetableForStandardAsync(Guid standardId, bool hasActiveAssignments, Guid? subjectId = null)
@@ -323,7 +325,7 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 			new SlotConfigurationDto
 			{
 				TotalSlots = 1,
-				WeekRange = [1, 5],
+				WeekRange = [(int)TimetableDayOfWeek.Monday, (int)TimetableDayOfWeek.Friday],
 				TimeSlots =
 				[
 					new TimeSlotDto
@@ -364,6 +366,22 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 				.Skip(skip)
 				.Take(count)
 				.ToList();
+			// Lecture-slot templates require a class shift covering the fixture's time slots.
+			var shift = new ShiftManagement
+			{
+				ShiftName = $"Lecture room test {Guid.NewGuid():N}",
+				StartTime = new TimeOnly(8, 0),
+				EndTime = new TimeOnly(14, 0)
+			};
+			await scope.ServiceProvider.GetRequiredService<IRepository<ShiftManagement, Guid>>()
+				.InsertAsync(shift, autoSave: true);
+			var standardManager = scope.ServiceProvider.GetRequiredService<StandardManager>();
+			foreach (var standardId in standards)
+			{
+				var standard = await standardRepository.GetAsync(standardId);
+				await standardManager.UpdateAsync(standard, standard.Name, standard.AgeLowerLimit, shift.Id);
+				await standardRepository.UpdateAsync(standard);
+			}
 			await uow.CompleteAsync();
 			standards.Count.ShouldBeGreaterThanOrEqualTo(count);
 			return standards;

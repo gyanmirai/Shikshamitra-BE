@@ -3,7 +3,7 @@ module: institute-setup
 domain: architecture
 content_type: Conceptual
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-09-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,8 @@ audience: humans-and-agents
 
 TL;DR: Institute Setup Rooms Management lives under Tenant Settings.
 Controllers expose Institute Setup routes, while application services and domain entities remain in `TenantSettings/RoomsManagement`.
+Shared academic setup and room-management tables use the `academic_` prefix.
+See [academic performance and table naming](../examination/references/academic-performance-and-table-prefix.md) for the complete ownership boundary and migration deployment/rollback procedure.
 
 ## Layer map
 

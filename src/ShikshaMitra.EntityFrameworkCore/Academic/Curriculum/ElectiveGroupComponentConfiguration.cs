@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -10,7 +10,7 @@ public class ElectiveGroupComponentConfiguration : IEntityTypeConfiguration<Elec
 	public void Configure(EntityTypeBuilder<ElectiveGroupComponent> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "ElectiveGroupComponents",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "ElectiveGroupComponents",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();

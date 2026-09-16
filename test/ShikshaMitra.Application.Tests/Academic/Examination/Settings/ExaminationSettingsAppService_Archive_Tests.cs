@@ -111,6 +111,36 @@ public class ExaminationSettingsAppService_Archive_Tests : ShikshaMitraApplicati
 		});
 	}
 
+	[Fact]
+	public async Task Settings_Lists_Should_Count_Both_Exam_And_Subject_Usage_And_Keep_Unused_Settings()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var (examType, mediumId, gradingScale) = await CreateExamWithSettingsAsync();
+				var exam = await _examRepository.GetAsync(exam => exam.ExamTypeId == examType.Id, includeDetails: true);
+				exam.ExamSubjects.Single().UpdateSchedule(null, null, null, 100, 33, null, gradingScale.Id);
+				await _examRepository.UpdateAsync(exam, autoSave: true);
+				var unusedType = await _examTypeManager.CreateAsync($"Unused {Guid.NewGuid():N}"[..30], null, mediumId);
+				var unusedScale = new GradingScale(Guid.NewGuid(), TestTenantId, "Unused scale", "100", mediumId,
+					33, null, false, SettingStatus.Active);
+				await _gradingScaleRepository.InsertAsync(unusedScale, autoSave: true);
+
+				var scales = await _settingsAppService.GetAllGradingScalesAsync(mediumId);
+				scales.Data.Single(scale => scale.Id == gradingScale.Id).UsageCount.ShouldBe(2);
+				scales.Data.Single(scale => scale.Id == unusedScale.Id).UsageCount.ShouldBe(0);
+				var types = await _settingsAppService.GetExamTypesAsync(new GetExamTypesInput
+				{
+					AcademicMediumId = mediumId,
+					MaxResultCount = 100
+				});
+				types.Items.Single(type => type.Id == examType.Id).UsageCount.ShouldBe(1);
+				types.Items.Single(type => type.Id == unusedType.Id).UsageCount.ShouldBe(0);
+			}
+		});
+	}
+
 	private async Task<(ExamType examType, Guid mediumId, GradingScale gradingScale)> CreateExamWithSettingsAsync()
 	{
 		var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);

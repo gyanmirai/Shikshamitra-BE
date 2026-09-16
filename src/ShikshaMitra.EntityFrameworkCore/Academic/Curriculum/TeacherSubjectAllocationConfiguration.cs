@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -8,7 +8,7 @@ public class TeacherSubjectAllocationConfiguration : IEntityTypeConfiguration<Te
 {
 	public void Configure(EntityTypeBuilder<TeacherSubjectAllocation> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "TeacherSubjectAllocations", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "TeacherSubjectAllocations", ShikshaMitraConsts.DbSchema);
 
 		// Apply default configurations based on ABP conventions
 		builder.ConfigureByConvention();
@@ -16,7 +16,7 @@ public class TeacherSubjectAllocationConfiguration : IEntityTypeConfiguration<Te
 		// Configure the relationship with AllocatedTeacher as owned entities
 		builder.OwnsMany(x => x.Teachers, teachers =>
 		{
-			teachers.ToTable(ShikshaMitraConsts.DbTablePrefix + "AllocatedTeachers", ShikshaMitraConsts.DbSchema);
+			teachers.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "AllocatedTeachers", ShikshaMitraConsts.DbSchema);
 
 			// Configure composite key
 			teachers.HasKey(t => new { t.TeacherSubjectAllocationId, t.TeacherId });

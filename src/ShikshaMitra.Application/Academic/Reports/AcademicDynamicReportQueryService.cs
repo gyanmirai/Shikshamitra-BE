@@ -1,4 +1,5 @@
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Collections.Generic;
@@ -15,6 +16,7 @@ namespace ShikshaMitra.Academic.Reports;
 public class AcademicDynamicReportQueryService(
 	IAsyncQueryableExecuter asyncExecuter,
 	IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+	IRepository<Subject, Guid> subjectRepository,
 	IEmployeeRepository employeeRepository,
 	TimetableDynamicReportRowReader timetableRowReader,
 	StudentRecordsDynamicReportRowReader studentRecordsRowReader,
@@ -85,37 +87,32 @@ public class AcademicDynamicReportQueryService(
 		AcademicAiReportCatalogScope scope,
 		AcademicDynamicReportCatalogSnapshot snapshot)
 	{
-		var assignments = await LoadAssignmentsAsync(plan.Filters, scope, snapshot);
-		if (assignments.Count > MaximumRows)
+		var assignments = await GetAssignmentsQueryAsync(plan.Filters, scope, snapshot);
+		// Retain the existing parent-count guard, including for child datasets with no rows.
+		if (await asyncExecuter.CountAsync(assignments.Take(MaximumRows + 1)) > MaximumRows)
 		{
 			throw ResultTooLarge();
 		}
-		var teacherIds = assignments.SelectMany(subject => subject.Teachers).Select(teacher => teacher.TeacherId)
-			.Distinct().ToList();
-		var employees = teacherIds.Count == 0
-			? []
-			: await employeeRepository.GetListAsync(employee => teacherIds.Contains(employee.Id));
-		var employeeMap = employees.ToDictionary(employee => employee.Id);
 
 		return plan.Dataset switch
 		{
-			AcademicDynamicDatasets.CurriculumSubjects => BuildSubjectRows(assignments, employeeMap),
-			AcademicDynamicDatasets.CurriculumChapters => BuildChapterRows(assignments, plan.Filters, snapshot),
-			AcademicDynamicDatasets.CurriculumTeachers => BuildTeacherRows(assignments, employeeMap),
+			AcademicDynamicDatasets.CurriculumSubjects => await LoadSubjectRowsAsync(assignments),
+			AcademicDynamicDatasets.CurriculumChapters => await LoadChapterRowsAsync(assignments, plan.Filters, snapshot),
+			AcademicDynamicDatasets.CurriculumTeachers => await LoadTeacherRowsAsync(assignments),
 			_ => throw AcademicDynamicReportGuard.DatasetNotAllowed(plan.Dataset)
 		};
 	}
 
-	private async Task<List<AssignedSubject>> LoadAssignmentsAsync(
+	private async Task<IQueryable<AssignedSubject>> GetAssignmentsQueryAsync(
 		AcademicDynamicReportFilterDto filters,
 		AcademicAiReportCatalogScope scope,
 		AcademicDynamicReportCatalogSnapshot snapshot)
 	{
-		var query = await assignedSubjectRepository.WithDetailsAsync(
-			subject => subject.Subject,
-			subject => subject.Standard,
-			subject => subject.Chapters,
-			subject => subject.Teachers);
+		var assignmentQuery = await assignedSubjectRepository.GetQueryableAsync();
+		var subjectQuery = await subjectRepository.GetQueryableAsync();
+		var query = from assignment in assignmentQuery
+					join subject in subjectQuery on assignment.SubjectId equals subject.Id
+					select assignment;
 		query = query.Where(subject =>
 			subject.Standard.EducationMediumStage.EducationMediumId == scope.EducationMediumId);
 		if (scope.ClassIds is { Count: > 0 })
@@ -136,43 +133,97 @@ public class AcademicDynamicReportQueryService(
 		if (subjectIds.Count > 0) query = query.Where(subject => subjectIds.Contains(subject.SubjectId));
 		if (chapterIds.Count > 0) query = query.Where(subject => subject.Chapters.Any(chapter => chapterIds.Contains(chapter.Id)));
 
-		return await asyncExecuter.ToListAsync(query.Take(MaximumRows + 1));
+		return query;
 	}
 
-	private static List<Dictionary<string, string?>> BuildSubjectRows(
-		IEnumerable<AssignedSubject> assignments,
-		IReadOnlyDictionary<Guid, Employee> employees) =>
-		assignments.Select(subject =>
+	private async Task<List<Dictionary<string, string?>>> LoadSubjectRowsAsync(IQueryable<AssignedSubject> assignments)
+	{
+		var subjects = await asyncExecuter.ToListAsync(assignments.OrderBy(subject => subject.Id)
+			.Select(subject => new
+			{
+				subject.Id, ClassName = subject.Standard.Name, SubjectName = subject.Subject.Name,
+				subject.SubjectCode, subject.SubjectType, subject.Status, subject.WeeklyPeriods,
+				subject.DifficultyLevel, subject.SubjectGroup, subject.SetupHealthScore,
+				subject.LearningGoals, subject.Prerequisites, subject.Description,
+				ChapterCount = subject.Chapters.Count,
+				AverageProgress = subject.Chapters.Select(chapter => (double?)chapter.ProgressPercentage).Average() ?? 0
+			}).Take(MaximumRows + 1));
+		var rows = subjects.ToDictionary(subject => subject.Id, subject =>
 		{
-			var primary = subject.Teachers.FirstOrDefault(teacher => teacher.TeacherType == SubjectTeacherType.Primary);
-			var secondaryNames = subject.Teachers.Where(teacher => teacher.TeacherType == SubjectTeacherType.Secondary)
-				.Select(teacher => EmployeeName(employees.GetValueOrDefault(teacher.TeacherId)))
-				.Where(name => !string.IsNullOrWhiteSpace(name)).OrderBy(name => name).ToList();
-			var averageProgress = subject.Chapters.Count == 0 ? 0 : Math.Round(subject.Chapters.Average(chapter => chapter.ProgressPercentage), 2);
+			var averageProgress = Math.Round(subject.AverageProgress, 2);
 			return Row(
-				("class", subject.Standard?.Name), ("subject", subject.Subject?.Name), ("subjectCode", subject.SubjectCode),
+				("class", subject.ClassName), ("subject", subject.SubjectName), ("subjectCode", subject.SubjectCode),
 				("subjectType", subject.SubjectType.ToString()), ("status", subject.Status.ToString()),
 				("weeklyPeriods", subject.WeeklyPeriods.ToString(CultureInfo.InvariantCulture)),
 				("difficultyLevel", subject.DifficultyLevel.ToString()), ("subjectGroup", subject.SubjectGroup),
-				("primaryTeacher", primary == null ? null : EmployeeName(employees.GetValueOrDefault(primary.TeacherId))),
-				("secondaryTeachers", string.Join(", ", secondaryNames)),
-				("chapterCount", subject.Chapters.Count.ToString(CultureInfo.InvariantCulture)),
+				("primaryTeacher", null), ("secondaryTeachers", string.Empty),
+				("chapterCount", subject.ChapterCount.ToString(CultureInfo.InvariantCulture)),
 				("averageProgress", $"{averageProgress:0.##}%"),
 				("setupHealthScore", subject.SetupHealthScore.ToString(CultureInfo.InvariantCulture)),
 				("learningGoals", subject.LearningGoals), ("prerequisites", subject.Prerequisites),
 				("description", subject.Description));
-		}).ToList();
+		});
+		var selectedAssignmentIds = subjects.Select(subject => subject.Id).ToList();
+		var teachers = await GetCurriculumTeachersQueryAsync(assignments.Where(subject => selectedAssignmentIds.Contains(subject.Id)));
+		Guid? previousAssignment = null;
+		var secondaryNames = new List<string>();
+		var foundPrimary = false;
+		CurriculumTeacherProjection? cursor = null;
+		while (true)
+		{
+			var query = teachers;
+			if (cursor != null)
+			{
+				var assignmentId = cursor.AssignmentId;
+				var teacherId = cursor.TeacherId;
+				query = query.Where(teacher => teacher.AssignmentId.CompareTo(assignmentId) > 0 ||
+					(teacher.AssignmentId == assignmentId && teacher.TeacherId.CompareTo(teacherId) > 0));
+			}
+			var batch = await asyncExecuter.ToListAsync(query.OrderBy(teacher => teacher.AssignmentId)
+				.ThenBy(teacher => teacher.TeacherId).Take(256));
+			if (batch.Count == 0) break;
+			foreach (var teacher in batch)
+			{
+				if (previousAssignment != teacher.AssignmentId)
+				{
+					if (previousAssignment.HasValue) rows[previousAssignment.Value]["secondaryTeachers"] = string.Join(", ", secondaryNames.OrderBy(name => name));
+					previousAssignment = teacher.AssignmentId; secondaryNames.Clear(); foundPrimary = false;
+				}
+				var name = CurriculumTeacherName(teacher);
+				if (!foundPrimary && teacher.TeacherType == SubjectTeacherType.Primary)
+				{
+					rows[teacher.AssignmentId]["primaryTeacher"] = name;
+					foundPrimary = true;
+				}
+				if (teacher.TeacherType == SubjectTeacherType.Secondary && !string.IsNullOrWhiteSpace(name)) secondaryNames.Add(name);
+			}
+			cursor = batch[^1];
+		}
+		if (previousAssignment.HasValue) rows[previousAssignment.Value]["secondaryTeachers"] = string.Join(", ", secondaryNames.OrderBy(name => name));
+		return subjects.Select(subject => rows[subject.Id]).ToList();
+	}
 
-	private static List<Dictionary<string, string?>> BuildChapterRows(
-		IEnumerable<AssignedSubject> assignments,
+	private async Task<List<Dictionary<string, string?>>> LoadChapterRowsAsync(
+		IQueryable<AssignedSubject> assignments,
 		AcademicDynamicReportFilterDto filters,
 		AcademicDynamicReportCatalogSnapshot snapshot)
 	{
-		var selectedChapterIds = Resolve(filters.ChapterTokens, snapshot.Chapters, item => item.Token, item => item.Id).ToHashSet();
-		return assignments.SelectMany(subject => subject.Chapters
-			.Where(chapter => selectedChapterIds.Count == 0 || selectedChapterIds.Contains(chapter.Id))
-			.Select(chapter => Row(
-				("class", subject.Standard?.Name), ("subject", subject.Subject?.Name),
+		var selectedChapterIds = Resolve(filters.ChapterTokens, snapshot.Chapters, item => item.Token, item => item.Id).ToList();
+		var query = from subject in assignments
+					from chapter in subject.Chapters
+					where selectedChapterIds.Count == 0 || selectedChapterIds.Contains(chapter.Id)
+					select new
+			{
+				AssignmentId = subject.Id, chapter.Id, ClassName = subject.Standard.Name, SubjectName = subject.Subject.Name,
+				chapter.ChapterNumber, chapter.ChapterName, chapter.UnitName, chapter.TermName, chapter.Topic,
+				chapter.ChapterStartTime, chapter.ChapterEndTime, chapter.EstimatedTeachingDays, chapter.EstimatedPeriods,
+				chapter.RevisionDays, chapter.ProgressPercentage, chapter.CoverageStatus, chapter.PublishStatus, chapter.ReviewStatus,
+				chapter.HealthScore, chapter.MarksWeightage, chapter.DifficultyLevel, chapter.BloomLevel, chapter.Description
+			};
+		var chapters = await asyncExecuter.ToListAsync(query.OrderBy(chapter => chapter.AssignmentId)
+			.ThenBy(chapter => chapter.Id).Take(MaximumRows + 1));
+		return chapters.Select(chapter => Row(
+				("class", chapter.ClassName), ("subject", chapter.SubjectName),
 				("chapterNumber", chapter.ChapterNumber.ToString(CultureInfo.InvariantCulture)),
 				("chapterName", chapter.ChapterName), ("unitName", chapter.UnitName), ("termName", chapter.TermName),
 				("topic", chapter.Topic), ("plannedStart", chapter.ChapterStartTime.ToString("dd MMM yyyy")),
@@ -183,22 +234,58 @@ public class AcademicDynamicReportQueryService(
 				("publishStatus", chapter.PublishStatus), ("reviewStatus", chapter.ReviewStatus),
 				("healthScore", chapter.HealthScore.ToString(CultureInfo.InvariantCulture)),
 				("marksWeightage", FormatNumber(chapter.MarksWeightage)), ("difficultyLevel", chapter.DifficultyLevel),
-				("bloomLevel", chapter.BloomLevel), ("description", chapter.Description)))).ToList();
+				("bloomLevel", chapter.BloomLevel), ("description", chapter.Description))).ToList();
 	}
 
-	private static List<Dictionary<string, string?>> BuildTeacherRows(
-		IEnumerable<AssignedSubject> assignments,
-		IReadOnlyDictionary<Guid, Employee> employees) =>
-		assignments.SelectMany(subject => subject.Teachers.Select(teacher =>
-		{
-			var employee = employees.GetValueOrDefault(teacher.TeacherId);
-			return Row(
-				("class", subject.Standard?.Name), ("subject", subject.Subject?.Name), ("subjectCode", subject.SubjectCode),
-				("teacherName", EmployeeName(employee)), ("teacherCode", employee?.EmployeeCode),
+	private async Task<List<Dictionary<string, string?>>> LoadTeacherRowsAsync(IQueryable<AssignedSubject> assignments)
+	{
+		var teachers = await asyncExecuter.ToListAsync((await GetCurriculumTeachersQueryAsync(assignments))
+			.OrderBy(teacher => teacher.AssignmentId).ThenBy(teacher => teacher.TeacherId).Take(MaximumRows + 1));
+		return teachers.Select(teacher => Row(
+				("class", teacher.ClassName), ("subject", teacher.SubjectName), ("subjectCode", teacher.SubjectCode),
+				("teacherName", CurriculumTeacherName(teacher)), ("teacherCode", teacher.EmployeeCode),
 				("teacherType", teacher.TeacherType.ToString()),
-				("weeklyPeriods", subject.WeeklyPeriods.ToString(CultureInfo.InvariantCulture)),
-				("subjectStatus", subject.Status.ToString()));
-		})).ToList();
+				("weeklyPeriods", teacher.WeeklyPeriods.ToString(CultureInfo.InvariantCulture)),
+				("subjectStatus", teacher.Status.ToString()))).ToList();
+	}
+
+	private async Task<IQueryable<CurriculumTeacherProjection>> GetCurriculumTeachersQueryAsync(IQueryable<AssignedSubject> assignments)
+	{
+		var employees = await employeeRepository.GetQueryableAsync();
+		return from assignment in assignments
+			   from teacher in assignment.Teachers
+			   join employee in employees on teacher.TeacherId equals employee.Id into employeeGroup
+			   from employee in employeeGroup.DefaultIfEmpty()
+			   select new CurriculumTeacherProjection
+			   {
+				   AssignmentId = assignment.Id, TeacherId = teacher.TeacherId, TeacherType = teacher.TeacherType,
+				   ClassName = assignment.Standard.Name, SubjectName = assignment.Subject.Name, SubjectCode = assignment.SubjectCode,
+				   WeeklyPeriods = assignment.WeeklyPeriods, Status = assignment.Status,
+				   FirstName = employee == null ? null : employee.FirstName, LastName = employee == null ? null : employee.LastName,
+				   EmployeeCode = employee == null ? null : employee.EmployeeCode
+			   };
+	}
+
+	private static string? CurriculumTeacherName(CurriculumTeacherProjection teacher)
+	{
+		var name = string.Join(" ", new[] { teacher.FirstName, teacher.LastName }.Where(part => !string.IsNullOrWhiteSpace(part)));
+		return string.IsNullOrWhiteSpace(name) ? null : name;
+	}
+
+	private sealed class CurriculumTeacherProjection
+	{
+		public Guid AssignmentId { get; set; }
+		public Guid TeacherId { get; set; }
+		public SubjectTeacherType TeacherType { get; set; }
+		public string? ClassName { get; set; }
+		public string? SubjectName { get; set; }
+		public string? SubjectCode { get; set; }
+		public int WeeklyPeriods { get; set; }
+		public SubjectStatus Status { get; set; }
+		public string? FirstName { get; set; }
+		public string? LastName { get; set; }
+		public string? EmployeeCode { get; set; }
+	}
 
 	private static List<Dictionary<string, string?>> ApplySort(
 		List<Dictionary<string, string?>> rows,
@@ -351,9 +438,6 @@ public class AcademicDynamicReportQueryService(
 
 	private static Dictionary<string, string?> Row(params (string Key, string? Value)[] values) =>
 		values.ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
-
-	private static string? EmployeeName(Employee? employee) =>
-		employee == null || string.IsNullOrWhiteSpace(employee.EmployeeName) ? null : employee.EmployeeName;
 
 	private static string? FormatNumber(int? value) => value?.ToString(CultureInfo.InvariantCulture);
 

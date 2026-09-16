@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.SeatAllocation.Dtos;
@@ -26,7 +27,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Examination.SeatAllocation;
 
-public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 	private static readonly Guid FakeAdminUserId = Guid.Parse("2e701e62-0953-4dd3-910b-dc6cc93ccb0d");
@@ -970,6 +971,74 @@ public class ExamSeatAllocationAppService_Tests : ShikshaMitraApplicationTestBas
 				reopenedPlan.PublishedAt.ShouldBeNull();
 				(await _seatingPublicationRepository.GetListAsync(publication => publication.ExamId == exam.Id))
 					.ShouldBeEmpty();
+			}
+		});
+	}
+
+	[Fact]
+	public async Task GetStudentsForDivisionAsync_Should_Page_Students_And_Keep_Count_And_Seat_Details()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var (exam, planId, _, students) = await CreateAllocatedSessionPlanAsync();
+				var divisionId = exam.ExamDivisions.Single().DivisionId;
+				var input = new GetSeatStudentsInput { SeatingPlanId = planId, Page = 1, PageSize = 1 };
+				var firstPage = await _seatAllocationAppService.GetStudentsForDivisionAsync(exam.Id, divisionId, input);
+				input.Page = 2;
+				var secondPage = await _seatAllocationAppService.GetStudentsForDivisionAsync(exam.Id, divisionId, input);
+
+				firstPage.TotalCount.ShouldBe(2);
+				secondPage.TotalCount.ShouldBe(2);
+				firstPage.TotalPages.ShouldBe(2);
+				firstPage.Items.Count.ShouldBe(1);
+				secondPage.Items.Count.ShouldBe(1);
+				firstPage.Items.Concat(secondPage.Items).Select(item => item.StudentId).ToHashSet()
+					.SetEquals(students.Select(student => student.Id)).ShouldBeTrue();
+				firstPage.Items.Concat(secondPage.Items).ShouldAllBe(item => item.IsSeatAllocate && item.SeatNumber > 0);
+				input.Page = 1;
+				input.Search = "Seat2";
+				var searched = await _seatAllocationAppService.GetStudentsForDivisionAsync(exam.Id, divisionId, input);
+				searched.TotalCount.ShouldBe(1);
+				searched.Items.Single().StudentId.ShouldBe(students[1].Id);
+				searched.Items.Single().SeatNumber.ShouldBe(2);
+				input.Page = 2;
+				var emptyPage = await _seatAllocationAppService.GetStudentsForDivisionAsync(exam.Id, divisionId, input);
+				emptyPage.TotalCount.ShouldBe(1);
+				emptyPage.Items.ShouldBeEmpty();
+			}
+		});
+	}
+
+	[Fact]
+	public async Task GetStudentsForDivisionAsync_Should_Preserve_Single_Subject_Selection_And_Core_Fallback()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				await EnsureAdminUserExistsAsync();
+				var fixture = await CreateSameRoomSingleSubjectPlansAsync(secondSubjectOnDifferentDate: true);
+				var input = new GetSeatStudentsInput { SeatingPlanId = fixture.FirstPlanId, PageSize = 10 };
+				var coreFallback = await _seatAllocationAppService.GetStudentsForDivisionAsync(fixture.Exam.Id, fixture.DivisionId, input);
+				coreFallback.TotalCount.ShouldBe(2);
+
+				var planSubject = await _seatingPlanSubjectRepository.GetAsync(subject => subject.SeatingPlanId == fixture.FirstPlanId);
+				var standard = await _standardRepository.GetAsync(fixture.Exam.StandardId);
+				var stage = await _stageRepository.GetAsync(standard.EducationMediumStageId);
+				var group = new ElectiveGroup(Guid.NewGuid(), TestTenantId, "Picker elective", "#123456", stage.EducationMediumId);
+				group.AddSubject(planSubject.SubjectId);
+				await GetRequiredService<IRepository<ElectiveGroup, Guid>>().InsertAsync(group, autoSave: true);
+				// Seating's existing picker includes selections before they are locked.
+				await GetRequiredService<IRepository<StudentElectiveSelection, Guid>>().InsertAsync(
+					new StudentElectiveSelection(Guid.NewGuid(), TestTenantId, fixture.Students[1].Id,
+						group.Id, planSubject.SubjectId, stage.EducationMediumId), autoSave: true);
+
+				var selected = await _seatAllocationAppService.GetStudentsForDivisionAsync(fixture.Exam.Id, fixture.DivisionId, input);
+				selected.TotalCount.ShouldBe(1);
+				selected.Items.Single().StudentId.ShouldBe(fixture.Students[1].Id);
 			}
 		});
 	}

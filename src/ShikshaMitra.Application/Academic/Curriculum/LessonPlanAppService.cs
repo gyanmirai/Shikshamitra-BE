@@ -696,7 +696,7 @@ public class LessonPlanAppService(
             throw new UserFriendlyException("A teacher diary already exists for this lesson plan.");
         }
 
-        var diary = new TeacherDiary(GuidGenerator.Create(), CurrentTenant.Id, plan.Id, plan.TeacherId, input.ActualDate);
+        var diary = new TeacherDiary(GuidGenerator.Create(), CurrentTenant.Id, plan.Id, plan.TeacherId, input.ActualDate.UtcDateTime);
         ApplyDiaryInput(diary, input);
 
         var inserted = await teacherDiaryRepository.InsertAsync(diary, autoSave: true);
@@ -784,30 +784,46 @@ public class LessonPlanAppService(
             .Distinct()
             .ToList();
 
-        var teachers = await employeeRepository.GetListAsync(x => teacherIds.Contains(x.Id));
-        var standards = await standardRepository.GetListAsync(x => standardIds.Contains(x.Id));
-        var divisions = await divisionRepository.GetListAsync(x => divisionIds.Contains(x.Id));
-        var subjects = await subjectRepository.GetListAsync(x => subjectIds.Contains(x.Id));
-        var chapters = await chapterRepository.GetListAsync(x => chapterIds.Contains(x.Id));
-        var diaries = await teacherDiaryRepository.GetListAsync(x => lessonPlanIds.Contains(x.LessonPlanId));
+        // Name lookups must not materialize the setup graph: its auto-includes traverse
+        // the academic hierarchy and multiply rows even for a single class or subject.
+        var teachers = await AsyncExecuter.ToListAsync((await employeeRepository.GetQueryableAsync())
+            .Where(x => teacherIds.Contains(x.Id)).Select(x => new LessonEmployeeName(x.Id, x.UserId, x.FirstName, x.LastName)));
+        var standards = await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+            .Where(x => standardIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
+        var divisions = await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+            .Where(x => divisionIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
+        var subjects = await AsyncExecuter.ToListAsync((await subjectRepository.GetQueryableAsync())
+            .Where(x => subjectIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
+        var chapters = await AsyncExecuter.ToListAsync((await chapterRepository.GetQueryableAsync())
+            .Where(x => chapterIds.Contains(x.Id)).Select(x => new { x.Id, x.ChapterName }));
+        var diaries = await AsyncExecuter.ToListAsync((await teacherDiaryRepository.GetQueryableAsync())
+            .Where(x => lessonPlanIds.Contains(x.LessonPlanId))
+            .Select(x => new { x.Id, x.LessonPlanId, x.Status, x.ActualCompletionPercentage }));
         var reviewerIds = list
             .Where(x => x.ReviewedBy.HasValue)
             .Select(x => x.ReviewedBy!.Value)
             .Distinct()
             .ToList();
         var reviewers = reviewerIds.Count > 0
-            ? await employeeRepository.GetListAsync(x => x.UserId.HasValue && reviewerIds.Contains(x.UserId.Value))
-            : new List<Employee>();
+            ? await AsyncExecuter.ToListAsync((await employeeRepository.GetQueryableAsync())
+                .Where(x => x.UserId.HasValue && reviewerIds.Contains(x.UserId.Value))
+                .Select(x => new LessonEmployeeName(x.Id, x.UserId, x.FirstName, x.LastName)))
+            : new List<LessonEmployeeName>();
         var reviewerUsers = reviewerIds.Count > 0
-            ? await identityUserRepository.GetListAsync(x => reviewerIds.Contains(x.Id))
-            : new List<IdentityUser>();
-        var timetableSlots = new List<TimetableSlot>();
+            ? await AsyncExecuter.ToListAsync((await identityUserRepository.GetQueryableAsync())
+                .Where(x => reviewerIds.Contains(x.Id))
+                .Select(x => new LessonIdentityName(x.Id, x.Name, x.Surname, x.UserName)))
+            : new List<LessonIdentityName>();
+        var timetableSlots = new List<LessonSlotLookup>();
 
         if (timetableSlotIds.Count > 0)
         {
-            timetableSlots = await timetableSlotRepository.GetListAsync(x => timetableSlotIds.Contains(x.Id));
+            timetableSlots = await AsyncExecuter.ToListAsync((await timetableSlotRepository.GetQueryableAsync())
+                .Where(x => timetableSlotIds.Contains(x.Id))
+                .Select(x => new LessonSlotLookup(x.Id, x.Sequence, x.StartTime, x.EndTime)));
         }
 
+        var insights = await LoadLessonPlanInsightsAsync(list);
         foreach (var item in items)
         {
             var teacher = teachers.FirstOrDefault(x => x.Id == item.TeacherId);
@@ -841,12 +857,7 @@ public class LessonPlanAppService(
             item.ActualCompletionPercentage = diary?.ActualCompletionPercentage ?? 0;
             item.TeacherDiaryId = diary?.Id;
 
-            var insight = await ResolveLessonPlanInsightAsync(
-                item.TeacherId,
-                LessonPlanCalendarDate.FromStoredInstant(item.PlannedDate),
-                item.StandardId,
-                item.DivisionId
-            );
+            var insight = insights[item.Id];
             item.InsightType = insight.Type;
             item.InsightSeverity = insight.Severity;
             item.InsightMessage = insight.Message;
@@ -856,7 +867,15 @@ public class LessonPlanAppService(
         return items;
     }
 
-    private static string? GetIdentityUserDisplayName(IdentityUser? user)
+    private sealed record LessonEmployeeName(Guid Id, Guid? UserId, string? FirstName, string? LastName)
+    {
+        public string EmployeeName => string.Join(" ", new[] { FirstName, LastName }.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private sealed record LessonIdentityName(Guid Id, string? Name, string? Surname, string UserName);
+    private sealed record LessonSlotLookup(Guid Id, int Sequence, TimeOnly StartTime, TimeOnly EndTime);
+
+    private static string? GetIdentityUserDisplayName(LessonIdentityName? user)
     {
         if (user == null)
         {
@@ -876,7 +895,8 @@ public class LessonPlanAppService(
         var list = diaries.ToList();
         var items = ObjectMapper.Map<List<TeacherDiary>, List<TeacherDiaryDto>>(list);
         var teacherIds = list.Select(x => x.TeacherId).Distinct().ToList();
-        var teachers = await employeeRepository.GetListAsync(x => teacherIds.Contains(x.Id));
+        var teachers = await AsyncExecuter.ToListAsync((await employeeRepository.GetQueryableAsync())
+            .Where(x => teacherIds.Contains(x.Id)).Select(x => new LessonEmployeeName(x.Id, x.UserId, x.FirstName, x.LastName)));
 
         foreach (var item in items)
         {
@@ -889,7 +909,7 @@ public class LessonPlanAppService(
     private static void ApplyDiaryInput(TeacherDiary diary, CreateUpdateTeacherDiaryDto input)
     {
         diary.Update(
-            input.ActualDate,
+            input.ActualDate.UtcDateTime,
             input.ClassConducted,
             input.ActualTopicCovered,
             input.ActualContentSummary,
@@ -907,7 +927,7 @@ public class LessonPlanAppService(
             input.RemedialActionRequired,
             input.HomeworkAssigned,
             input.MissedReason,
-            input.RescheduledToDate,
+            input.RescheduledToDate?.UtcDateTime,
             input.IsBackdated,
             input.BackdatedReason,
             input.TeacherRemarks
@@ -1219,7 +1239,10 @@ public class LessonPlanAppService(
             throw new UserFriendlyException("Actual topic covered is required when class was conducted.");
         }
 
-        var calendarInsight = await ResolveLessonPlanInsightAsync(plan.TeacherId, input.ActualDate.Date, plan.StandardId, plan.DivisionId);
+        // Equivalent offset and UTC payloads must be checked against the same school day.
+        // Taking the UTC date directly turns midnight in India into the previous day.
+        var actualLocalDate = LessonPlanCalendarDate.FromStoredInstant(input.ActualDate.UtcDateTime);
+        var calendarInsight = await ResolveLessonPlanInsightAsync(plan.TeacherId, actualLocalDate, plan.StandardId, plan.DivisionId);
         if (calendarInsight.BlocksPlanCreation && !input.IsBackdated)
         {
             throw new UserFriendlyException(calendarInsight.Message ?? "Teacher diary cannot be submitted for this date.");
@@ -1309,6 +1332,55 @@ public class LessonPlanAppService(
         _ => null
     };
 
+    private async Task<Dictionary<Guid, LessonPlanInsight>> LoadLessonPlanInsightsAsync(IReadOnlyCollection<LessonPlan> plans)
+    {
+        if (plans.Count == 0)
+        {
+            return new Dictionary<Guid, LessonPlanInsight>();
+        }
+
+        var dates = plans.ToDictionary(plan => plan.Id, plan => LessonPlanCalendarDate.FromStoredInstant(plan.PlannedDate).Date);
+        var startDate = dates.Values.Min();
+        var endDate = dates.Values.Max();
+        var startDateOnly = DateOnly.FromDateTime(startDate);
+        var endDateOnly = DateOnly.FromDateTime(endDate);
+        var teacherIds = plans.Select(plan => plan.TeacherId).Distinct().ToList();
+        var standardIds = plans.Select(plan => plan.StandardId).Distinct().ToList();
+        var divisionIds = plans.Select(plan => plan.DivisionId).Distinct().ToList();
+        var leaves = await employeeLeaveRepository.GetListAsync(leave =>
+            teacherIds.Contains(leave.EmployeeId) && leave.Status == EmployeeLeaveStatusType.Approved &&
+            leave.StartDateOnly <= endDateOnly && leave.EndDateOnly >= startDateOnly);
+        var calendarDays = await calendarDayRepository.GetListAsync(day =>
+            day.Date.Date >= startDate && day.Date.Date <= endDate && day.Status == CalendarDayStatus.Active &&
+            (day.AppliesToAll ||
+             (day.StandardId.HasValue && standardIds.Contains(day.StandardId.Value)) ||
+             (day.DivisionId.HasValue && divisionIds.Contains(day.DivisionId.Value))));
+        var leavesByTeacher = leaves.ToLookup(leave => leave.EmployeeId);
+        var calendarDaysByDate = calendarDays.ToLookup(day => day.Date.Date);
+
+        return plans.ToDictionary(plan => plan.Id, plan =>
+        {
+            var date = dates[plan.Id];
+            var dateOnly = DateOnly.FromDateTime(date);
+            var approvedLeave = leavesByTeacher[plan.TeacherId]
+                .Where(leave => leave.StartDateOnly <= dateOnly && leave.EndDateOnly >= dateOnly)
+                .OrderByDescending(leave => leave.HalfDay)
+                .FirstOrDefault();
+            if (approvedLeave != null)
+            {
+                return CreateLeaveInsight(approvedLeave);
+            }
+
+            var calendarDay = calendarDaysByDate[date]
+                .Where(day => day.AppliesToAll ||
+                    (day.StandardId == plan.StandardId && (!day.DivisionId.HasValue || day.DivisionId == plan.DivisionId)) ||
+                    (day.DivisionId == plan.DivisionId && !day.StandardId.HasValue))
+                .OrderByDescending(day => day.DayType)
+                .FirstOrDefault(day => day.DayType != DayType.WorkingDay);
+            return CreateCalendarInsight(calendarDay);
+        });
+    }
+
     private async Task<LessonPlanInsight> ResolveLessonPlanInsightAsync(
         Guid teacherId,
         DateTime date,
@@ -1326,17 +1398,7 @@ public class LessonPlanAppService(
 
         if (approvedLeave != null)
         {
-            return approvedLeave.HalfDay
-                ? new LessonPlanInsight(
-                    "Leave",
-                    "warning",
-                    "Approved half-day leave exists for this date. Review the actual leave timing before creating this lesson plan.",
-                    false)
-                : new LessonPlanInsight(
-                    "Leave",
-                    "error",
-                    "Approved leave exists for this date. Lesson plan creation is blocked for this slot.",
-                    true);
+            return CreateLeaveInsight(approvedLeave);
         }
 
         var calendarDay = (await calendarDayRepository.GetListAsync(x =>
@@ -1348,6 +1410,26 @@ public class LessonPlanAppService(
             .OrderByDescending(x => x.DayType)
             .FirstOrDefault(x => x.DayType != DayType.WorkingDay);
 
+        return CreateCalendarInsight(calendarDay);
+    }
+
+    private static LessonPlanInsight CreateLeaveInsight(EmployeeLeave approvedLeave)
+    {
+        return approvedLeave.HalfDay
+            ? new LessonPlanInsight(
+                "Leave",
+                "warning",
+                "Approved half-day leave exists for this date. Review the actual leave timing before creating this lesson plan.",
+                false)
+            : new LessonPlanInsight(
+                "Leave",
+                "error",
+                "Approved leave exists for this date. Lesson plan creation is blocked for this slot.",
+                true);
+    }
+
+    private static LessonPlanInsight CreateCalendarInsight(AcademicCalendarDay? calendarDay)
+    {
         if (calendarDay == null)
         {
             return LessonPlanInsight.None;

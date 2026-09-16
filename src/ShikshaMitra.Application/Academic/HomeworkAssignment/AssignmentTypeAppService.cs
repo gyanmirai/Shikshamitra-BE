@@ -130,9 +130,21 @@ public class AssignmentTypeAppService : ApplicationService, IAssignmentTypeAppSe
 			// Map to DTOs
 			var dtos = ObjectMapper.Map<List<AssignmentType>, List<AssignmentTypeDto>>(types);
 
+			var typeIds = dtos.Select(dto => dto.Id).ToList();
+			var usageCounts = new Dictionary<Guid, int>();
+			if (typeIds.Count > 0)
+			{
+				var assignments = await _assignmentRepository.GetQueryableAsync();
+				var counts = await AsyncExecuter.ToListAsync(assignments
+					.Where(assignment => typeIds.Contains(assignment.AssignmentTypeId))
+					.GroupBy(assignment => assignment.AssignmentTypeId)
+					.Select(group => new { TypeId = group.Key, Count = group.Count() }));
+				usageCounts = counts.ToDictionary(item => item.TypeId, item => item.Count);
+			}
+
 			foreach (var dto in dtos)
 			{
-				dto.UsageCount = await _assignmentRepository.CountAsync(a => a.AssignmentTypeId == dto.Id);
+				dto.UsageCount = usageCounts.GetValueOrDefault(dto.Id);
 			}
 
 			_logger.LogDebug(

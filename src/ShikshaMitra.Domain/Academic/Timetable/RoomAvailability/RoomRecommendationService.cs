@@ -34,10 +34,11 @@ public class RoomRecommendationService : DomainService
     {
         var allRooms = await _roomRepository.GetListAsync();
         var suggestions = new List<SuggestedRoom>();
+        var availability = await _conflictService.CheckRoomsAsync(allRooms, date, startTime, endTime, standardId);
 
         foreach (var room in allRooms)
         {
-            var check = await _conflictService.CheckConflictsAsync(room.Id, date, startTime, endTime, null, null, standardId);
+            var check = availability[room.Id];
             
             if (check.OverallSeverity == "critical")
             {

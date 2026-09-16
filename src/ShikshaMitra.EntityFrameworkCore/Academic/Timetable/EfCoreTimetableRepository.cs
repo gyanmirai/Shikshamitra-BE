@@ -65,6 +65,45 @@ public class EfCoreTimetableRepository(
             .ToListAsync();
     }
 
+    public async Task<List<TimetableConflictCandidate>> GetConflictCandidatesAsync(
+        Guid standardId,
+        Guid divisionId,
+        IReadOnlyCollection<TimetableDayOfWeek> days,
+        TimeOnly startTime,
+        TimeOnly endTime,
+        IReadOnlyCollection<Guid> teacherIds,
+        IReadOnlyCollection<Guid> roomIds)
+    {
+        if (days.Count == 0 || (teacherIds.Count == 0 && roomIds.Count == 0))
+        {
+            return [];
+        }
+
+        // Child slot entities have no TenantId. Always begin at the ABP-filtered root;
+        // conflicts also include other classes outside the caller's display scope.
+        var dbSet = await GetDbSetAsync();
+        var query = from timetable in dbSet.AsNoTracking()
+                    where (timetable.StandardId != standardId || timetable.DivisionId != divisionId) &&
+                          timetable.Status != TimetableStatus.NotCreated
+                    from slot in timetable.Slots
+                    where days.Contains(slot.Day) && slot.StartTime < endTime && slot.EndTime > startTime
+                    from subject in slot.Subjects
+                    where (subject.TeacherId.HasValue && teacherIds.Contains(subject.TeacherId.Value)) ||
+                          (subject.RoomId.HasValue && roomIds.Contains(subject.RoomId.Value))
+                    orderby timetable.Id, slot.Id, subject.Id
+                    select new TimetableConflictCandidate(
+                        timetable.StandardId,
+                        timetable.DivisionId,
+                        subject.SubjectId,
+                        slot.Day,
+                        slot.StartTime,
+                        slot.EndTime,
+                        subject.TeacherId,
+                        subject.RoomId);
+
+        return await query.ToListAsync();
+    }
+
     public override async Task<IQueryable<Timetables.Timetable>> WithDetailsAsync()
     {
         return (await GetQueryableAsync())

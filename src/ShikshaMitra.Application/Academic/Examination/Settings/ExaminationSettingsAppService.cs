@@ -33,9 +33,8 @@ public class ExaminationSettingsAppService(
 		}
 
 		var queryable = await gradingScaleRepository.GetQueryableAsync();
-		var otherScales = queryable
-			.Where(gs => gs.AcademicMediumId == academicMediumId && gs.Id != currentScaleId && gs.IsDefault)
-			.ToList();
+		var otherScales = await AsyncExecuter.ToListAsync(queryable
+			.Where(gs => gs.AcademicMediumId == academicMediumId && gs.Id != currentScaleId && gs.IsDefault));
 
 		foreach (var scale in otherScales)
 		{
@@ -91,17 +90,33 @@ public class ExaminationSettingsAppService(
 	{
 		var queryable = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
 
-		var gradingScales = queryable
+		var gradingScales = await AsyncExecuter.ToListAsync(queryable
 			.Where(gs => gs.AcademicMediumId == academicMediumId)
 			.WhereIf(!includeArchived, gs => gs.Status != SettingStatus.Archived)
-			.OrderByDescending(gs => gs.CreationTime)
-			.ToList();
+			.OrderByDescending(gs => gs.CreationTime));
 
-		var gradingScaleDtos = new List<GradingScaleDto>();
-		foreach (var gs in gradingScales)
+		if (gradingScales.Count == 0)
 		{
-			gradingScaleDtos.Add(await MapGradingScaleAsync(gs));
+			return new GradingScaleListResponseDto(new List<GradingScaleDto>());
 		}
+
+		var scaleIds = gradingScales.Select(scale => scale.Id).ToList();
+		var exams = await examRepository.GetQueryableAsync();
+		var examCounts = await AsyncExecuter.ToListAsync(exams
+			.Where(exam => exam.GradingScaleId.HasValue && scaleIds.Contains(exam.GradingScaleId.Value))
+			.GroupBy(exam => exam.GradingScaleId!.Value)
+			.Select(group => new { Id = group.Key, Count = group.Count() }));
+		var subjects = await examSubjectRepository.GetQueryableAsync();
+		var subjectCounts = await AsyncExecuter.ToListAsync(subjects
+			.Where(subject => subject.GradeScalingId.HasValue && scaleIds.Contains(subject.GradeScalingId.Value))
+			.GroupBy(subject => subject.GradeScalingId!.Value)
+			.Select(group => new { Id = group.Key, Count = group.Count() }));
+		var usageCounts = examCounts.Concat(subjectCounts)
+			.GroupBy(row => row.Id)
+			.ToDictionary(group => group.Key, group => group.Sum(row => row.Count));
+		var gradingScaleDtos = gradingScales
+			.Select(scale => MapGradingScale(scale, usageCounts.GetValueOrDefault(scale.Id)))
+			.ToList();
 
 		return new GradingScaleListResponseDto(gradingScaleDtos);
 	}
@@ -110,8 +125,8 @@ public class ExaminationSettingsAppService(
 	{
 		var queryable = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
 
-		var gradingScale = queryable
-			.FirstOrDefault(gs => gs.Id == id && gs.AcademicMediumId == academicMediumId);
+		var gradingScale = await AsyncExecuter.FirstOrDefaultAsync(queryable
+			.Where(gs => gs.Id == id && gs.AcademicMediumId == academicMediumId));
 
 		if (gradingScale == null)
 		{
@@ -127,8 +142,8 @@ public class ExaminationSettingsAppService(
 	{
 		var queryable = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
 
-		var gradingScale = queryable
-			.FirstOrDefault(gs => gs.Id == id && gs.AcademicMediumId == academicMediumId);
+		var gradingScale = await AsyncExecuter.FirstOrDefaultAsync(queryable
+			.Where(gs => gs.Id == id && gs.AcademicMediumId == academicMediumId));
 
 		if (gradingScale == null)
 		{
@@ -240,9 +255,19 @@ public class ExaminationSettingsAppService(
 		);
 
 		var dtos = ObjectMapper.Map<List<ExamType>, List<ExamTypeDto>>(examTypes);
-		foreach (var dto in dtos)
+		if (dtos.Count > 0)
 		{
-			dto.UsageCount = await GetExamTypeUsageCountAsync(dto.Id);
+			var typeIds = dtos.Select(dto => dto.Id).ToList();
+			var exams = await examRepository.GetQueryableAsync();
+			var counts = await AsyncExecuter.ToListAsync(exams
+				.Where(exam => typeIds.Contains(exam.ExamTypeId))
+				.GroupBy(exam => exam.ExamTypeId)
+				.Select(group => new { Id = group.Key, Count = group.Count() }));
+			var usageCounts = counts.ToDictionary(row => row.Id, row => row.Count);
+			foreach (var dto in dtos)
+			{
+				dto.UsageCount = usageCounts.GetValueOrDefault(dto.Id);
+			}
 		}
 
 		return new ExamTypeListResponseDto
@@ -342,8 +367,8 @@ public class ExaminationSettingsAppService(
 	private async Task<GradingScale> GetGradingScaleEntityAsync(Guid id, Guid academicMediumId)
 	{
 		var queryable = await gradingScaleRepository.WithDetailsAsync(gs => gs.GradeRanges);
-		var gradingScale = queryable.FirstOrDefault(gs =>
-			gs.Id == id && gs.AcademicMediumId == academicMediumId);
+		var gradingScale = await AsyncExecuter.FirstOrDefaultAsync(queryable.Where(gs =>
+			gs.Id == id && gs.AcademicMediumId == academicMediumId));
 
 		if (gradingScale == null)
 		{
@@ -368,6 +393,11 @@ public class ExaminationSettingsAppService(
 
 	private async Task<GradingScaleDto> MapGradingScaleAsync(GradingScale gradingScale)
 	{
+		return MapGradingScale(gradingScale, await GetGradingScaleUsageCountAsync(gradingScale.Id));
+	}
+
+	private static GradingScaleDto MapGradingScale(GradingScale gradingScale, int usageCount)
+	{
 		return new GradingScaleDto
 		{
 			Id = gradingScale.Id,
@@ -377,7 +407,7 @@ public class ExaminationSettingsAppService(
 			Description = gradingScale.Description,
 			IsDefault = gradingScale.IsDefault,
 			Status = gradingScale.Status,
-			UsageCount = await GetGradingScaleUsageCountAsync(gradingScale.Id),
+			UsageCount = usageCount,
 			CreatedAt = gradingScale.CreationTime,
 			GradingScale = gradingScale.GradeRanges
 				.OrderBy(gr => gr.MinMarks)

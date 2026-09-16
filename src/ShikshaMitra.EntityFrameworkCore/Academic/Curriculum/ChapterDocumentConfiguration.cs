@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using ShikshaMitra.Academic.Curriculum;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -13,7 +13,7 @@ public class ChapterDocumentConfiguration : IEntityTypeConfiguration<AssignedSub
 	public void Configure(EntityTypeBuilder<AssignedSubjectDocument> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "ChapterDocuments",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "ChapterDocuments",
 			ShikshaMitraConsts.DbSchema
 		);
 

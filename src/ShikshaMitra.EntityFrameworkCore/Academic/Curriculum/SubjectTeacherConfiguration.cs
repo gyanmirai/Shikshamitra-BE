@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -8,7 +8,7 @@ public class SubjectTeacherConfiguration : IEntityTypeConfiguration<AssignedSubj
 {
 	public void Configure(EntityTypeBuilder<AssignedSubjectTeacher> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "SubjectTeachers", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "SubjectTeachers", ShikshaMitraConsts.DbSchema);
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 

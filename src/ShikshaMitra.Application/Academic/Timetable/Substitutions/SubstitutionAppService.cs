@@ -517,6 +517,12 @@ public class SubstitutionAppService(
         var entity = await substitutionRepository.GetAsync(id);
         await EnsureCanActAsSubstituteAsync(entity);
         EnsureSubstitutionWindowNotFinished(entity.Date, entity.EndTime, "Cannot acknowledge a substitution after the period has ended.");
+        if (entity.Status == SubstitutionStatus.Acknowledged &&
+            entity.AcknowledgementStatus == SubstitutionAcknowledgementStatus.Accepted)
+        {
+            return await GetAsync(id);
+        }
+
         var note = NormalizeOptionalActionReason(input?.Reason);
         entity.Acknowledge(note);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);

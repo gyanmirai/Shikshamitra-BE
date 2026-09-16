@@ -22,9 +22,6 @@ public class SubjectAppService(
 		IRepository<Subject, Guid> subjectRepository,
 		SubjectManager subjectManager,
 		IRepository<AssignedSubject, Guid> assignedSubjectRepository,
-		IRepository<WeeklyLectureSlotSubject, Guid> weeklyLectureSlotSubjectRepository,
-		IRepository<TimetableSlotSubject, Guid> timetableSlotSubjectRepository,
-		IRepository<ExamSubject, Guid> examSubjectRepository,
 		IRepository<ExamMark, Guid> examMarkRepository,
 		IRepository<HomeworkAssignmentEntity, Guid> homeworkAssignmentRepository,
 	IRepository<AssignmentEntity, Guid> assignmentRepository,
@@ -35,7 +32,10 @@ public class SubjectAppService(
 	ILogger<SubjectAppService> logger,
 	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
 	SubjectAuditWriter subjectAuditWriter,
-	IRepository<SubjectAuditLog, Guid> subjectAuditLogRepository
+	IRepository<SubjectAuditLog, Guid> subjectAuditLogRepository,
+	IRepository<WeeklyLectureSlot, Guid> weeklyLectureSlotRepository,
+	IRepository<ShikshaMitra.Academic.Timetable.Timetables.Timetable, Guid> timetableRepository,
+	IRepository<Exam, Guid> examRepository
 ) : ApplicationService, ISubjectAppService
 {
 	public async Task<SubjectDto> GetAsync(Guid id)
@@ -84,12 +84,8 @@ public class SubjectAppService(
 				queryable.OrderBy(x => x.SortOrder ?? int.MaxValue).ThenBy(x => x.Name)
 			);
 
-			var result = new List<SubjectDto>();
-			foreach (var subject in subjects)
-			{
-				result.Add(await MapSubjectAsync(subject));
-			}
-			return result;
+			var usageBySubject = await GetUsageCountsAsync(subjects.Select(subject => subject.Id).ToList());
+			return subjects.Select(subject => MapSubject(subject, usageBySubject[subject.Id])).ToList();
 		}
 		catch (UserFriendlyException ex)
 		{
@@ -360,15 +356,18 @@ public class SubjectAppService(
 			if (allocationCount > 0)
 				usageParts.Add($"{allocationCount} class allocation(s)");
 
-			var weeklySlotCount = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.SubjectId == id);
+			var weeklySlotCount = await AsyncExecuter.CountAsync((await weeklyLectureSlotRepository.GetQueryableAsync())
+				.SelectMany(slot => slot.Subjects).Where(subject => subject.SubjectId == id));
 			if (weeklySlotCount > 0)
 				usageParts.Add($"{weeklySlotCount} weekly lecture slot(s)");
 
-			var timetableSlotCount = await timetableSlotSubjectRepository.CountAsync(t => t.SubjectId == id);
+			var timetableSlotCount = await AsyncExecuter.CountAsync((await timetableRepository.GetQueryableAsync())
+				.SelectMany(timetable => timetable.Slots).SelectMany(slot => slot.Subjects).Where(subject => subject.SubjectId == id));
 			if (timetableSlotCount > 0)
 				usageParts.Add($"{timetableSlotCount} timetable slot(s)");
 
-			var examSubjectCount = await examSubjectRepository.CountAsync(e => e.SubjectId == id);
+			var examSubjectCount = await AsyncExecuter.CountAsync((await examRepository.GetQueryableAsync())
+				.SelectMany(exam => exam.ExamSubjects).Where(subject => subject.SubjectId == id));
 			if (examSubjectCount > 0)
 				usageParts.Add($"{examSubjectCount} exam(s)");
 
@@ -493,8 +492,13 @@ public class SubjectAppService(
 
 	private async Task<SubjectDto> MapSubjectAsync(Subject subject)
 	{
-		var dto = ObjectMapper.Map<Subject, SubjectDto>(subject);
 		var usage = await GetUsageCountsAsync(subject.Id);
+		return MapSubject(subject, usage);
+	}
+
+	private SubjectDto MapSubject(Subject subject, SubjectUsageCounts usage)
+	{
+		var dto = ObjectMapper.Map<Subject, SubjectDto>(subject);
 		dto.UsedInClassesCount = usage.Allocations;
 		dto.UsedInElectiveGroupsCount = usage.ElectiveGroups;
 		dto.IsUsed = usage.Total > 0;
@@ -506,28 +510,74 @@ public class SubjectAppService(
 
 	private async Task<SubjectUsageCounts> GetUsageCountsAsync(Guid subjectId)
 	{
-		var assignedSubjects = await assignedSubjectRepository.GetListAsync(a => a.SubjectId == subjectId);
-		var assignedSubjectIds = assignedSubjects.Select(a => a.Id).ToList();
-		var groups = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
-		var electiveGroups = groups.Count(eg => eg.Subjects.Any(s => s.SubjectId == subjectId));
+		return (await GetUsageCountsAsync(new List<Guid> { subjectId }))[subjectId];
+	}
 
-		var usage = new SubjectUsageCounts
+	private async Task<Dictionary<Guid, SubjectUsageCounts>> GetUsageCountsAsync(IReadOnlyCollection<Guid> subjectIds)
+	{
+		var result = subjectIds.Distinct().ToDictionary(id => id, _ => new SubjectUsageCounts());
+		if (result.Count == 0)
 		{
-			Allocations = assignedSubjects.Count,
-			ElectiveGroups = electiveGroups,
-			Chapters = assignedSubjectIds.Count == 0
-				? 0
-				: await chapterRepository.CountAsync(c => assignedSubjectIds.Contains(c.AssignedSubjectId)),
-			WeeklySlots = await weeklyLectureSlotSubjectRepository.CountAsync(w => w.SubjectId == subjectId),
-			TimetableSlots = await timetableSlotSubjectRepository.CountAsync(t => t.SubjectId == subjectId),
-			ExamSubjects = await examSubjectRepository.CountAsync(e => e.SubjectId == subjectId),
-			ExamResults = await examMarkRepository.CountAsync(m => m.SubjectId == subjectId),
-			Homeworks = await homeworkAssignmentRepository.CountAsync(h => h.SubjectId == subjectId),
-			Assignments = await assignmentRepository.CountAsync(a => a.SubjectId == subjectId),
-			TeacherMappings = await teacherSubjectAllocationRepository.CountAsync(t => t.SubjectId == subjectId),
-			LessonPlans = await lessonPlanRepository.CountAsync(l => l.SubjectId == subjectId)
-		};
-		return usage;
+			return result;
+		}
+
+		var assignments = (await assignedSubjectRepository.GetQueryableAsync())
+			.Where(assignment => subjectIds.Contains(assignment.SubjectId));
+		await PopulateUsageCountsAsync(assignments.Select(assignment => assignment.SubjectId), result,
+			(usage, count) => usage.Allocations = count);
+
+		var groups = await electiveGroupRepository.GetQueryableAsync();
+		var groupSubjects = groups.SelectMany(group => group.Subjects, (group, subject) => new { GroupId = group.Id, subject.SubjectId })
+			.Where(subject => subjectIds.Contains(subject.SubjectId)).Distinct();
+		await PopulateUsageCountsAsync(groupSubjects.Select(subject => subject.SubjectId), result,
+			(usage, count) => usage.ElectiveGroups = count);
+
+		var chapters = await chapterRepository.GetQueryableAsync();
+		var chapterSubjects = from chapter in chapters
+			join assignment in assignments on chapter.AssignedSubjectId equals assignment.Id
+			select assignment.SubjectId;
+		await PopulateUsageCountsAsync(chapterSubjects, result, (usage, count) => usage.Chapters = count);
+
+		// Child rows inherit tenant and soft-delete ownership from their aggregate.
+		var weeklySlots = (await weeklyLectureSlotRepository.GetQueryableAsync()).SelectMany(slot => slot.Subjects);
+		await PopulateUsageCountsAsync(weeklySlots.Where(slot => slot.SubjectId.HasValue && subjectIds.Contains(slot.SubjectId.Value))
+			.Select(slot => slot.SubjectId!.Value), result, (usage, count) => usage.WeeklySlots = count);
+		var timetableSlots = (await timetableRepository.GetQueryableAsync()).SelectMany(timetable => timetable.Slots)
+			.SelectMany(slot => slot.Subjects);
+		await PopulateUsageCountsAsync(timetableSlots.Where(slot => subjectIds.Contains(slot.SubjectId)).Select(slot => slot.SubjectId),
+			result, (usage, count) => usage.TimetableSlots = count);
+		var examSubjects = (await examRepository.GetQueryableAsync()).SelectMany(exam => exam.ExamSubjects);
+		await PopulateUsageCountsAsync(examSubjects.Where(subject => subjectIds.Contains(subject.SubjectId)).Select(subject => subject.SubjectId),
+			result, (usage, count) => usage.ExamSubjects = count);
+		var examMarks = await examMarkRepository.GetQueryableAsync();
+		await PopulateUsageCountsAsync(examMarks.Where(mark => subjectIds.Contains(mark.SubjectId)).Select(mark => mark.SubjectId),
+			result, (usage, count) => usage.ExamResults = count);
+		var homeworks = await homeworkAssignmentRepository.GetQueryableAsync();
+		await PopulateUsageCountsAsync(homeworks.Where(homework => subjectIds.Contains(homework.SubjectId)).Select(homework => homework.SubjectId),
+			result, (usage, count) => usage.Homeworks = count);
+		var learningTasks = await assignmentRepository.GetQueryableAsync();
+		await PopulateUsageCountsAsync(learningTasks.Where(assignment => subjectIds.Contains(assignment.SubjectId)).Select(assignment => assignment.SubjectId),
+			result, (usage, count) => usage.Assignments = count);
+		var teacherMappings = await teacherSubjectAllocationRepository.GetQueryableAsync();
+		await PopulateUsageCountsAsync(teacherMappings.Where(allocation => subjectIds.Contains(allocation.SubjectId)).Select(allocation => allocation.SubjectId),
+			result, (usage, count) => usage.TeacherMappings = count);
+		var lessonPlans = await lessonPlanRepository.GetQueryableAsync();
+		await PopulateUsageCountsAsync(lessonPlans.Where(plan => subjectIds.Contains(plan.SubjectId)).Select(plan => plan.SubjectId),
+			result, (usage, count) => usage.LessonPlans = count);
+		return result;
+	}
+
+	private async Task PopulateUsageCountsAsync(
+		IQueryable<Guid> subjectIds,
+		IReadOnlyDictionary<Guid, SubjectUsageCounts> usages,
+		Action<SubjectUsageCounts, int> applyCount)
+	{
+		var counts = await AsyncExecuter.ToListAsync(subjectIds.GroupBy(id => id)
+			.Select(group => new { SubjectId = group.Key, Count = group.Count() }));
+		foreach (var item in counts)
+		{
+			applyCount(usages[item.SubjectId], item.Count);
+		}
 	}
 
 	private static string NormalizeSubjectName(string name)

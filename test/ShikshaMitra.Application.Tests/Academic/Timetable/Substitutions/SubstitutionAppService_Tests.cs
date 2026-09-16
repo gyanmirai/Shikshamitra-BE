@@ -107,13 +107,96 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
     }
 
     [Fact]
-    public async Task AcknowledgeAsync_Should_Reject_User_Who_Is_Not_The_Assigned_Substitute()
+    public async Task AcknowledgeAsync_Should_Preserve_Original_Acceptance_When_Retried()
+    {
+        var substituteUserId = Guid.NewGuid();
+        var substitute = await CreateEmployeeAsync(substituteUserId, "Assigned", "Teacher");
+        var substitution = await CreateAssignedSubstitutionAsync(substitute);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(substituteUserId)))
+        {
+            var firstResult = await _substitutionAppService.AcknowledgeAsync(
+                substitution.Id,
+                new SubstitutionActionDto { Reason = "Original acceptance." });
+            var firstAudit = firstResult.AuditLog.ShouldHaveSingleItem();
+            var original = await _substitutionRepository.GetAsync(substitution.Id);
+            var acknowledgedAt = original.AcknowledgedAt;
+            var concurrencyStamp = original.ConcurrencyStamp;
+
+            var result = await _substitutionAppService.AcknowledgeAsync(
+                substitution.Id,
+                new SubstitutionActionDto { Reason = "Repeated acceptance." });
+
+            result.Status.ShouldBe("Acknowledged");
+            result.AcknowledgementStatus.ShouldBe("Accepted");
+            result.Remarks.ShouldBe("Original acceptance.");
+            var audit = result.AuditLog.ShouldHaveSingleItem();
+            audit.Id.ShouldBe(firstAudit.Id);
+            audit.Action.ShouldBe(firstAudit.Action);
+            audit.Details.ShouldBe(firstAudit.Details);
+
+            var persisted = await _substitutionRepository.GetAsync(substitution.Id);
+            persisted.AcknowledgedAt.ShouldBe(acknowledgedAt);
+            persisted.ConcurrencyStamp.ShouldBe(concurrencyStamp);
+            persisted.Remarks.ShouldBe("Original acceptance.");
+        }
+    }
+
+    [Fact]
+    public async Task AcknowledgeAsync_Should_Accept_Again_After_Reassignment()
+    {
+        var substituteUserId = Guid.NewGuid();
+        var substitute = await CreateEmployeeAsync(substituteUserId, "Assigned", "Teacher");
+        var substitution = await CreateAssignedSubstitutionAsync(substitute);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(substituteUserId)))
+        {
+            await _substitutionAppService.AcknowledgeAsync(
+                substitution.Id,
+                new SubstitutionActionDto { Reason = "Original acceptance." });
+
+            var reassigned = await _substitutionRepository.GetAsync(substitution.Id);
+            reassigned.Assign(
+                substitute.Id,
+                substitute.EmployeeName,
+                assignedRoomId: null,
+                assignedRoomName: null,
+                suggestionScore: null,
+                workloadStatus: "Low",
+                conflictStatus: SubstitutionConflictStatus.Clear,
+                conflictReason: null,
+                sendNotification: true);
+            await _substitutionRepository.UpdateAsync(reassigned, autoSave: true);
+
+            var result = await _substitutionAppService.AcknowledgeAsync(
+                substitution.Id,
+                new SubstitutionActionDto { Reason = "Reassigned duty accepted." });
+
+            result.Status.ShouldBe("Acknowledged");
+            result.AcknowledgementStatus.ShouldBe("Accepted");
+            result.Remarks.ShouldBe("Reassigned duty accepted.");
+            result.AuditLog.Count.ShouldBe(2);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AcknowledgeAsync_Should_Reject_User_Who_Is_Not_The_Assigned_Substitute(bool alreadyAccepted)
     {
         var assignedUserId = Guid.NewGuid();
         var assignedSubstitute = await CreateEmployeeAsync(assignedUserId, "Assigned", "Teacher");
         var otherUserId = Guid.NewGuid();
         await CreateEmployeeAsync(otherUserId, "Other", "Teacher");
         var substitution = await CreateAssignedSubstitutionAsync(assignedSubstitute);
+
+        if (alreadyAccepted)
+        {
+            using (_currentPrincipalAccessor.Change(BuildPrincipal(assignedUserId)))
+            {
+                await _substitutionAppService.AcknowledgeAsync(substitution.Id);
+            }
+        }
 
         using (_currentPrincipalAccessor.Change(BuildPrincipal(otherUserId)))
         {

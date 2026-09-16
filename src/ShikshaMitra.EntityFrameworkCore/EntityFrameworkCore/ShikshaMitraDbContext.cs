@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.HR.Employees;
@@ -75,7 +75,7 @@ public partial class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContex
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.Entity<TeacherDiary>(b =>
 		{
-			b.ToTable(ShikshaMitraConsts.DbTablePrefix + "TeacherDiaries", ShikshaMitraConsts.DbSchema);
+			b.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "TeacherDiaries", ShikshaMitraConsts.DbSchema);
 			b.ConfigureByConvention();
 			b.Property(x => x.ActualTopicCovered).HasMaxLength(256);
 			b.Property(x => x.ActualContentSummary).HasMaxLength(2048);

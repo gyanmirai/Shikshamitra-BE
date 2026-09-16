@@ -32,7 +32,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<AcademicYear> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "AcademicYears",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "Years",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -55,7 +55,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<EducationBoard> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "EducationBoards",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "EducationBoards",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -78,7 +78,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<EducationMedium> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "EducationMediums",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "EducationMediums",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -105,7 +105,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<EducationMediumStage> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "EducationMediumStages",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "EducationMediumStages",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -132,7 +132,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<Standard> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "Standards",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "Standards",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -160,7 +160,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<Division> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "Divisions",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "Divisions",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -182,7 +182,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<EducationBoardPermission> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "EducationBoardPermissions",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "EducationBoardPermissions",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -191,7 +191,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<EducationMediumStagePermission> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "EducationMediumStagePermissions",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "EducationMediumStagePermissions",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -200,7 +200,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<EducationMediumPermission> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "EducationMediumPermissions",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "EducationMediumPermissions",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -209,7 +209,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<AcademicYearPermission> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "AcademicYearPermissions",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "YearPermissions",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -218,7 +218,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<StandardPermission> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "StandardPermissions",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "StandardPermissions",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();
@@ -227,7 +227,7 @@ public class AcademicSetupsConfiguration
 	public void Configure(EntityTypeBuilder<DivisionPermission> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "DivisionPermissions",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "DivisionPermissions",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -9,7 +9,7 @@ public class StudentSubmissionConfiguration : IEntityTypeConfiguration<StudentSu
 	public void Configure(EntityTypeBuilder<StudentSubmissionEntity> builder)
 	{
 		builder.ToTable(
-			ShikshaMitraConsts.DbTablePrefix + "StudentHomeworkAssignmentSubmissions",
+			ShikshaMitraConsts.AcademicDbTablePrefix + "StudentHomeworkAssignmentSubmissions",
 			ShikshaMitraConsts.DbSchema
 		);
 		builder.ConfigureByConvention();

@@ -9,7 +9,7 @@ public class SubjectConfiguration : IEntityTypeConfiguration<Subject>
 {
 	public void Configure(EntityTypeBuilder<Subject> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "Subjects", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "Subjects", ShikshaMitraConsts.DbSchema);
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
 		builder.Property(x => x.DisplayName).HasMaxLength(SubjectConsts.MaxDisplayNameLength);
@@ -24,7 +24,7 @@ public class SubjectAuditLogConfiguration : IEntityTypeConfiguration<SubjectAudi
 {
 	public void Configure(EntityTypeBuilder<SubjectAuditLog> builder)
 	{
-		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "SubjectAuditLogs", ShikshaMitraConsts.DbSchema);
+		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "SubjectAuditLogs", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 		
 		builder.Property(x => x.Action).IsRequired().HasMaxLength(50);

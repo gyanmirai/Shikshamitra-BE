@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Data;
@@ -14,6 +15,26 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 	: IShikshaMitraDbSchemaMigrator, ITransientDependency
 {
 	internal const string LegacyBaselineMigrationId = "20260712225012_v1";
+	internal const string AcademicPrefixMigrationId = "20260916050346_PrefixAcademicTables";
+	internal const string AcademicNameNormalizationMigrationId = "20260916080050_NormalizeAcademicTableNames";
+	internal const string AcademicMaintenanceSetting = "ShikshaMitra:Deployment:AcademicRenameMaintenanceConfirmed";
+
+	internal static void EnsureAcademicRenameMaintenance(IEnumerable<string> availableMigrations,
+		IEnumerable<string> appliedMigrations, bool maintenanceConfirmed)
+	{
+		var applied = appliedMigrations.ToHashSet(StringComparer.Ordinal);
+		var pendingCoordinatedRename =
+			(availableMigrations.Contains(AcademicPrefixMigrationId, StringComparer.Ordinal) &&
+			 !applied.Contains(AcademicPrefixMigrationId)) ||
+			(availableMigrations.Contains(AcademicNameNormalizationMigrationId, StringComparer.Ordinal) &&
+			 !applied.Contains(AcademicNameNormalizationMigrationId));
+		if (applied.Count > 0 && pendingCoordinatedRename && !maintenanceConfirmed)
+			throw new InvalidOperationException(
+				"Academic table renaming requires a coordinated maintenance deployment. " +
+				"Migration stopped before schema changes: verify the backup, stop all old API and worker instances, " +
+				$"then set {AcademicMaintenanceSetting}=true for this migrator invocation and deploy the matching backend. " +
+				"Do not set this flag in the normal online deployment pipeline.");
+	}
 	internal static string GetCurrentBaselineMigrationId(IEnumerable<string> availableMigrations)
 	{
 		// EF returns migrations in application order; the consolidated baseline is the first one.
@@ -51,15 +72,11 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 		var dbContext = serviceProvider
 			.GetRequiredService<ShikshaMitraDbContext>();
 
-		// Ensure the public schema exists before running migrations.
-		// PostgreSQL requires a valid schema in the search_path to create tables
-		// (including the __EFMigrationsHistory table).
-		await dbContext.Database.ExecuteSqlRawAsync(
-			"CREATE SCHEMA IF NOT EXISTS public;");
-
 		var availableMigrations = dbContext.Database.GetMigrations().ToArray();
 		var currentBaselineMigrationId = GetCurrentBaselineMigrationId(availableMigrations);
 		var appliedMigrations = (await dbContext.Database.GetAppliedMigrationsAsync()).ToArray();
+		EnsureAcademicRenameMaintenance(availableMigrations, appliedMigrations,
+			serviceProvider.GetRequiredService<IConfiguration>().GetValue<bool>(AcademicMaintenanceSetting));
 		if (HasUnsupportedMigrationHistory(appliedMigrations, currentBaselineMigrationId))
 		{
 			throw new InvalidOperationException(
@@ -67,6 +84,9 @@ public class EntityFrameworkCoreShikshaMitraDbSchemaMigrator(IServiceProvider se
 				$"'{LegacyBaselineMigrationId}' nor the current EF baseline '{currentBaselineMigrationId}'. " +
 				"Automatic migration was stopped before changing the schema.");
 		}
+
+		// Only create the schema after all read-only compatibility checks have passed.
+		await dbContext.Database.ExecuteSqlRawAsync("CREATE SCHEMA IF NOT EXISTS public;");
 
 		if (RequiresLegacyBaselineBridge(appliedMigrations, currentBaselineMigrationId))
 		{

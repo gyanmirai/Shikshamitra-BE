@@ -3,7 +3,7 @@ module: examination
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-08-31
+updated_on: 2026-09-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,9 @@ audience: humans-and-agents
 # Locate Examination seating implementation
 
 TL;DR: contracts and validation live in Application.Contracts, subject ownership and workflow behavior in Application, plan lifecycle in Domain, and persistence mappings in EntityFrameworkCore.
+
+Academic tables, including seating children and audit rows, use the `academic_` prefix.
+See [academic performance and table naming](./references/academic-performance-and-table-prefix.md) for query changes, migration validation, and coordinated deployment/rollback.
 
 | Layer | Source | Ownership |
 |---|---|---|

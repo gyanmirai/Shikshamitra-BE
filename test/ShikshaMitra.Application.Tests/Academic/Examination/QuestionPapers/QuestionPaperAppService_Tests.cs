@@ -8,6 +8,7 @@ using ShikshaMitra.Academic.QuestionBank;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
+using Volo.Abp.Users;
 using Xunit;
 
 namespace ShikshaMitra.Academic.QuestionPapers;
@@ -37,6 +38,7 @@ public class QuestionPaperAppService_Tests : ShikshaMitraApplicationTestBase<Shi
 		using (_currentTenant.Change(null))
 		{
 			var academicYearId = Guid.NewGuid();
+			await SeedAcademicYearScopeAsync(GetRequiredService<ICurrentUser>().GetId(), academicYearId);
 			var standardId = Guid.NewGuid();
 			var subjectId = Guid.NewGuid();
 			var question = await _questionBankAppService.CreateQuestionAsync(new CreateUpdateQuestionDto
@@ -92,6 +94,7 @@ public class QuestionPaperAppService_Tests : ShikshaMitraApplicationTestBase<Shi
 		using (_currentTenant.Change(null))
 		{
 			var academicYearId = Guid.NewGuid();
+			await SeedAcademicYearScopeAsync(GetRequiredService<ICurrentUser>().GetId(), academicYearId);
 			var paper = await _questionPaperAppService.CreatePaperAsync(new CreateUpdateQuestionPaperDto
 			{
 				AcademicYearId = academicYearId,
@@ -124,6 +127,7 @@ public class QuestionPaperAppService_Tests : ShikshaMitraApplicationTestBase<Shi
 		using (_currentTenant.Change(null))
 		{
 			var academicYearId = Guid.NewGuid();
+			await SeedAcademicYearScopeAsync(GetRequiredService<ICurrentUser>().GetId(), academicYearId);
 			var standardId = Guid.NewGuid();
 			var subjectId = Guid.NewGuid();
 			const string questionText = "How might eating quickly affect digestion?";
@@ -230,6 +234,41 @@ public class QuestionPaperAppService_Tests : ShikshaMitraApplicationTestBase<Shi
 				updated.Sections[0].Id.ShouldBe(sectionId);
 				updated.Sections[0].SectionName.ShouldBe("Main Section");
 				updated.Sections[0].Instructions.ShouldBe("Answer every question.");
+			}
+		}
+	}
+
+	[Fact]
+	public async Task GetDashboardAsync_Should_Aggregate_Only_Papers_In_The_Users_Academic_Year_Scope()
+	{
+		using (_currentTenant.Change(null))
+		{
+			var userId = Guid.NewGuid();
+			var academicYearId = Guid.NewGuid();
+			var hiddenYearId = Guid.NewGuid();
+			await SeedAcademicYearScopeAsync(userId, academicYearId);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var repository = GetRequiredService<IRepository<QuestionPaper, Guid>>();
+				await repository.InsertManyAsync(
+				[
+					new QuestionPaper(Guid.NewGuid(), null, academicYearId, Guid.NewGuid(), Guid.NewGuid(), "Draft", 10, 30, "Manual"),
+					new QuestionPaper(Guid.NewGuid(), null, academicYearId, Guid.NewGuid(), Guid.NewGuid(), "Approved", 10, 30, "Manual")
+						{ Status = QuestionPaperStatus.Approved },
+					new QuestionPaper(Guid.NewGuid(), null, hiddenYearId, Guid.NewGuid(), Guid.NewGuid(), "Hidden", 10, 30, "Manual")
+				], autoSave: true);
+			});
+
+			using (_currentPrincipalAccessor.Change(BuildPrincipal(userId)))
+			{
+				var dashboard = await _questionPaperAppService.GetDashboardAsync(academicYearId);
+				dashboard.TotalPapers.ShouldBe(2);
+				dashboard.DraftPapers.ShouldBe(1);
+				dashboard.ApprovedPapers.ShouldBe(1);
+				dashboard.MissingQuestions.ShouldBe(2);
+				var hiddenDashboard = await _questionPaperAppService.GetDashboardAsync(hiddenYearId);
+				hiddenDashboard.TotalPapers.ShouldBe(0);
+				hiddenDashboard.MissingQuestions.ShouldBe(0);
 			}
 		}
 	}

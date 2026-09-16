@@ -7,6 +7,9 @@
 Before changing permissions, navigation guards, identity, scope, or security-related seeders, read [the canonical security standard](docs/common/security/permission-consistency.md).
 Follow its mandatory checklist and require the Security Regression PR job before merge.
 Never restore revoked grants through reseeding or treat screenshots as security sign-off.
+Use the .NET 9 SDK selected by `global.json` for local, CI, and deployment builds.
+Do not remove the SDK selection to make a missing installation pass; install the matching SDK instead.
+Keep `Enumerable.Contains` explicit for captured arrays inside EF expression trees so newer span overloads cannot change query behavior.
 
 1. **[docs/README.md](docs/README.md)** -- documentation map and folder taxonomy.
 2. **[docs/best-practices.md](docs/best-practices.md)** -- canonical engineering rules (DDD layers, folders, permissions). Prefer linking here instead of duplicating standards.

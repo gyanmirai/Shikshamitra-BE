@@ -39,6 +39,12 @@ jobs:
               with:
                   dotnet-version: ${{ env.DOTNET_VERSION }}
 
+            - name: Verify selected .NET SDK
+              run: |
+                  sdk_version=$(dotnet --version)
+                  echo "Selected .NET SDK: $sdk_version"
+                  [[ "$sdk_version" == 9.0.* ]]
+
             - name: Restore
               run: dotnet restore
 

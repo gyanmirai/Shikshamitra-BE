@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using Xunit;
 
 namespace ShikshaMitra.HR.Seeders;
@@ -18,6 +19,13 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.Matches(@"security:\s*uses: \./\.github/workflows/security-regression\.yml", workflow);
 		Assert.Matches(@"build-and-deploy:\s*needs: security", workflow);
 		Assert.Contains("workflow_call:", security);
+		using var globalJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory.FullName, "global.json")));
+		var sdk = globalJson.RootElement.GetProperty("sdk");
+		Assert.Equal("9.0.100", sdk.GetProperty("version").GetString());
+		Assert.Equal("latestFeature", sdk.GetProperty("rollForward").GetString());
+		Assert.False(sdk.GetProperty("allowPrerelease").GetBoolean());
+		Assert.Contains("[[ \"$sdk_version\" == 9.0.* ]]", security);
+		Assert.Contains("[[ \"$sdk_version\" == 9.0.* ]]", workflow);
 		Assert.Contains("--filter \"FullyQualifiedName~CanonicalStudentFeeAssignmentPostgres_Tests|FullyQualifiedName~LegacyMigrationBaselineBridge_Tests\"", security);
 		Assert.Contains("--filter \"FullyQualifiedName~EsiFullDemoConfigurationSeederContributor_Integration_Tests\"", security);
 		Assert.Contains("ShikshaMitra__Seeders__Profile: FullDemo", workflow);

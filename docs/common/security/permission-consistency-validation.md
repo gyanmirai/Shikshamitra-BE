@@ -182,6 +182,17 @@ The first frontend PR run also exposed a documentation reference to an ignored l
 The documentation now identifies it as generated local evidence rather than a required clean-checkout file.
 The documentation validator itself is unchanged.
 
+The subsequent Linux CI run exposed a compiler-dependent hierarchy-query failure: EF expression evaluation selected a span-based `Contains` overload and threw `ArgumentException` with an inner `TypeLoadException`.
+Two disposable local PostgreSQL runs passed, but a minimal .NET 10 compiler reproduction targeting .NET 9 confirmed that the implicit call binds to `System.MemoryExtensions` and fails in the expression interpreter while explicit `Enumerable.Contains` succeeds.
+The five hierarchy query predicates now select `Enumerable.Contains` explicitly.
+The repository also selects the already-declared .NET 9 SDK through `global.json`, and both security and deployment workflows assert the selected SDK before restore.
+This prevents preinstalled newer SDKs from silently changing the compiler behind `LangVersion=latest`.
+The [C# span specification](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/proposals/csharp-14.0/first-class-span-types) documents the overload/interpreter incompatibility, and the [.NET SDK selection documentation](https://learn.microsoft.com/en-us/dotnet/core/tools/global-json) documents the highest-installed-SDK default.
+Test-only hierarchy diagnostics record exception types, SQLSTATE, and method paths without messages, SQL parameters, credentials, or employee details.
+After the fix, five local scope/workflow tests passed, followed by the real PostgreSQL HTTP hierarchy gate with 100 measured requests after five warm-ups per size.
+For 35, 50, and 1,000 employees, warm p95 was 13.96 ms, 12.96 ms, and 16.81 ms respectively; every request used eleven queries.
+The first process-cold request was 581.08 ms; later fixture first requests reused the process.
+
 Latest PR checks and deployment outcomes must be read from backend PR #624 and frontend PR #1245 rather than inferred from this historical local report.
 
 ## Audit and deferred risks

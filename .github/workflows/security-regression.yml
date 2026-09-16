@@ -33,6 +33,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '9.0.x'
+      - name: Verify selected .NET SDK
+        run: |
+          sdk_version=$(dotnet --version)
+          echo "Selected .NET SDK: $sdk_version"
+          [[ "$sdk_version" == 9.0.* ]]
       - name: Restore
         run: dotnet restore
       - name: Scope and safe-seeding regressions

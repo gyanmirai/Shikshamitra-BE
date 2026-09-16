@@ -559,26 +559,27 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
             .Select(year => new { year.Id, year.Name, year.StartDate }), cancellationToken);
 
         // Six bounded projections. No navigation entities are materialized and no query runs inside a node loop.
+        // Keep Enumerable.Contains explicit: newer compilers prefer span overloads that EF cannot interpret.
         var yearIds = academicYears.Where(year => !isAdmin && !scopeContext.HasWildcardAcademicYear &&
             !fullAccessAnalysis.AcademicYearFullBoardAccess.Contains(year.Id)).Select(year => year.Id).ToArray();
         var boardRows = await AsyncExecuter.ToListAsync((await _educationBoardRepository.GetQueryableAsync())
-            .Where(board => yearIds.Contains(board.AcademicYearId))
+            .Where(board => Enumerable.Contains(yearIds, board.AcademicYearId))
             .Select(board => new { board.Id, board.AcademicYearId, board.Type }), cancellationToken);
         var boardIds = boardRows.Where(board => !fullAccessAnalysis.BoardFullMediumAccess.Contains(board.Id)).Select(board => board.Id).ToArray();
         var mediumRows = await AsyncExecuter.ToListAsync((await _educationMediumRepository.GetQueryableAsync())
-            .Where(medium => boardIds.Contains(medium.EducationBoardId))
+            .Where(medium => Enumerable.Contains(boardIds, medium.EducationBoardId))
             .Select(medium => new { medium.Id, medium.EducationBoardId, medium.Name }), cancellationToken);
         var mediumIds = mediumRows.Where(medium => !fullAccessAnalysis.MediumFullMediumStageAccess.Contains(medium.Id)).Select(medium => medium.Id).ToArray();
         var stageRows = await AsyncExecuter.ToListAsync((await _educationMediumStageRepository.GetQueryableAsync())
-            .Where(stage => mediumIds.Contains(stage.EducationMediumId))
+            .Where(stage => Enumerable.Contains(mediumIds, stage.EducationMediumId))
             .Select(stage => new { stage.Id, stage.EducationMediumId, stage.Name }), cancellationToken);
         var stageIds = stageRows.Where(stage => !fullAccessAnalysis.MediumStageFullStandardAccess.Contains(stage.Id)).Select(stage => stage.Id).ToArray();
         var standardRows = await AsyncExecuter.ToListAsync((await _standardRepository.GetQueryableAsync())
-            .Where(standard => stageIds.Contains(standard.EducationMediumStageId))
+            .Where(standard => Enumerable.Contains(stageIds, standard.EducationMediumStageId))
             .Select(standard => new { standard.Id, standard.EducationMediumStageId, standard.Name }), cancellationToken);
         var standardIds = standardRows.Where(standard => !fullAccessAnalysis.StandardFullDivisionAccess.Contains(standard.Id)).Select(standard => standard.Id).ToArray();
         var divisionRows = await AsyncExecuter.ToListAsync((await _divisionRepository.GetQueryableAsync())
-            .Where(division => standardIds.Contains(division.StandardId))
+            .Where(division => Enumerable.Contains(standardIds, division.StandardId))
             .Select(division => new { division.Id, division.StandardId, division.Name, division.RoomNumber }), cancellationToken);
         var boardsByYear = boardRows.ToLookup(board => board.AcademicYearId);
         var mediumsByBoard = mediumRows.ToLookup(medium => medium.EducationBoardId);

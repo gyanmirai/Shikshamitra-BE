@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-03
+updated_on: 2026-09-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -57,16 +57,19 @@ Payroll workflows depend on employee, attendance, leave, and policy data:
 The salary builder resolves full-month Gross directly, solves the lowest Gross that reaches a Take-home quote, or solves the highest Gross that stays within an Employer Cost quote.
 The solver partitions professional-tax slabs and ESI coverage boundaries and evaluates the same statutory calculators used by payroll.
 It calculates Basic and other earnings, assigns the balancing earning, calculates employee deductions, and returns employer-funded contributions separately.
-Salary Template settings starts with a blank draft and lets users compose variable earning and deduction rules from the active tenant component catalog.
-Draft validation allows incomplete structures but rejects malformed rows, duplicate components or special roles, invalid dependencies, and cycles.
-Publishing additionally requires exactly one Basic earning and one remainder earning.
-When a published template receives a new draft, employee onboarding continues to use the current published version until the draft is published.
-Users can save one reusable Draft compensation revision, update it, and submit it when ready.
-The revision records effective month, template, quote, and statutory provenance.
-A different authorized user must approve the revision before payroll can use it.
-Approved revisions are immutable, and a replacement approved for the same month supersedes the older revision.
-Later template or statutory changes do not silently change approved compensation.
-Approval recalculates the quote and rejects a stale draft when the result has changed.
+Salary Template settings opens one table of Active, Needs setup, and Archived templates.
+Selecting an editable row opens its URL-backed editor directly in edit mode.
+Create and Save changes require a complete valid template and atomically create the active immutable version.
+Saving an existing template creates version N+1 and marks version N as Replaced for future assignments only.
+Existing employee compensation stays pinned to the version used when salary was saved.
+New employees are created Inactive and may complete onboarding before salary is configured.
+Salary setup preselects the school default template, its quote defaults and PF defaults, and the employee joining month.
+The administrator calculates the salary and saves it directly as an effective immutable compensation revision.
+Saving another salary for the same month supersedes the older effective revision, while a future-effective revision remains scheduled.
+The revision records effective month, template, quote, permitted overrides, and statutory provenance.
+Employee activation is a separate action and uses the server activation-readiness check.
+The readiness check requires a valid effective revision covering the later of the joining month or current payroll month.
+Later template or statutory changes do not silently change saved compensation.
 One-time earnings and deductions remain separate employee salary components and do not become revision lines.
 ESI activation follows establishment details, earning-component wage mapping, employee enrollment review, tenant-wide impact preview, and explicit approval.
 HR can complete establishment details, earning classifications, and employee review in any order before approval.
@@ -78,9 +81,9 @@ ESI coverage above the entry ceiling continues only through the recorded contrib
 PwD employer-share relief applies only to the PwD wage-ceiling category with a recorded start date and disability evidence.
 The employee contribution remains a deduction, while an eligible employer share is recorded as government funded and excluded from employer cost.
 Users with override approval permission can review immutable exception history and add a dated exception with a mandatory reason and optional evidence reference.
-| Compensation revision | Quote recurring salary, submit for approval, approve or reject, and resolve by effective month | Template version, effective statutory rules, separate approver, stale calculation detection, locked payroll, and immutable approved snapshots |
+| Compensation revision | Quote recurring salary, calculate, save directly, and resolve by effective month | Template version, effective statutory rules, controlled overrides, idempotency, concurrency, locked payroll, and immutable effective snapshots |
 | One-time components | Assign temporary earning or deduction lines to employees | Active components, amount ranges, applicable month, and reload consistency |
-| Payroll preview | Resolve the approved revision, append one-time lines, read attendance and leave facts, compute basis days, and calculate gross, deductions, net pay, and employer cost | Month format, approved compensation readiness, policy basis, proration, statutory provenance, warning-only protected-target drift, and cached preview freshness |
+| Payroll preview | Resolve the effective revision, append one-time lines, read attendance and leave facts, compute basis days, and calculate gross, deductions, net pay, and employer cost | Month format, effective compensation readiness, policy basis, proration, statutory provenance, warning-only protected-target drift, and cached preview freshness |
 | Payroll review | Mark rows reviewed and add adjustments before lock | Permission checks, row state, audit, and adjustment totals |
 | Payroll lock | Finalize selected rows and create salary slip snapshots | Idempotency, already locked rows, snapshot basis, and error reporting |
 

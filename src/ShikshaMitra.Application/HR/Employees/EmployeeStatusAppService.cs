@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
-using ShikshaMitra.HR.Employees.Payroll;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,14 +15,20 @@ namespace ShikshaMitra.HR.Employees;
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 public class EmployeeStatusAppService(
 	IEmployeeRepository employeeRepository,
-	IEmployeePayrollComponentRepository payrollComponentRepository,
 	IEmployeeAuthorizationService employeeAuthorizationService,
+	EmployeeActivationReadinessService activationReadinessService,
 	IEmployeeCacheManager employeeCacheManager,
 	EmployeeManager employeeManager,
 	EmployeeStatusTransitionValidator statusTransitionValidator,
 	IDistributedEventBus distributedEventBus)
 	: ApplicationService, IEmployeeStatusAppService
 {
+	public async Task<EmployeeActivationReadinessDto> GetActivationReadinessAsync(Guid employeeId)
+	{
+		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+		return await activationReadinessService.GetAsync(employeeId);
+	}
+
 	public async Task<EmployeeStatusDeactivationCheckDto> GetDeactivationCheckAsync(Guid employeeId)
 	{
 		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
@@ -117,12 +122,13 @@ public class EmployeeStatusAppService(
 
 	private async Task EnsurePayrollStructureExistsAsync(Guid employeeId)
 	{
-		var payrollComponents = await payrollComponentRepository.GetByEmployeeIdAsync(employeeId);
-		if (payrollComponents.Count == 0)
+		var readiness = await activationReadinessService.GetAsync(employeeId);
+		if (!readiness.CanActivate)
 		{
 			throw new BusinessException(HRErrorCodes.EmployeePayrollStructureRequired)
 				.WithData("employeeId", employeeId)
-				.WithData("required", "salary-structure");
+				.WithData("requiredMonth", readiness.RequiredMonth.ToString("yyyy-MM"))
+				.WithData("blockerCodes", readiness.BlockerCodes);
 		}
 	}
 

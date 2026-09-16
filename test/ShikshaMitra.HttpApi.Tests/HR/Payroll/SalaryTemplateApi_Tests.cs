@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -28,19 +29,20 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_create_blank_salary_template_draft()
+	public async Task Should_create_a_complete_active_salary_template()
 	{
-		var response = await Client.PostAsJsonAsync(BaseUrl, new CreateSalaryTemplateDto
-		{
-			Name = $"Blank Composer {Guid.NewGuid():N}",
-			Description = "Created through the flexible composer"
-		}, JsonOptions);
+		var catalog = await Client.GetFromJsonAsync<SalaryTemplateComponentCatalogDto>(
+			$"{BaseUrl}/component-catalog", JsonOptions);
+		var basic = catalog!.Items.First(x => x.LineKind == "EARNING");
+		var response = await Client.PostAsJsonAsync(BaseUrl, Save(
+			$"Active Composer {Guid.NewGuid():N}", basic.ComponentId), JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Created);
 		var template = await response.Content.ReadFromJsonAsync<SalaryTemplateDto>(JsonOptions);
 		template.ShouldNotBeNull();
-		template.Status.ShouldBe("DRAFT");
-		template.Latest.Rules.ShouldBeEmpty();
+		template.Status.ShouldBe("ACTIVE");
+		template.ActiveVersion.ShouldBe(1);
+		template.EditableVersion.Status.ShouldBe("ACTIVE");
 	}
 
 	[Fact]
@@ -63,10 +65,8 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_require_authentication_for_component_catalog()
 	{
 		using var anonymousClient = CreateAnonymousClient();
-
-		var response = await anonymousClient.GetAsync($"{BaseUrl}/component-catalog");
-
-		response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		(await anonymousClient.GetAsync($"{BaseUrl}/component-catalog")).StatusCode
+			.ShouldBe(HttpStatusCode.Unauthorized);
 	}
 
 	[Fact]
@@ -77,20 +77,20 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 		using var viewClient = CreateClientWithPermissions(
 			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View);
 		var templateId = Guid.NewGuid();
-		var versionId = Guid.NewGuid();
 
 		(await deniedClient.GetAsync($"{BaseUrl}/component-catalog")).StatusCode
 			.ShouldBe(HttpStatusCode.Forbidden);
 		(await viewClient.GetAsync($"{BaseUrl}/component-catalog")).StatusCode
 			.ShouldBe(HttpStatusCode.OK);
-		(await viewClient.PostAsJsonAsync(BaseUrl, new CreateSalaryTemplateDto
-		{
-			Name = "Denied create"
-		})).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-		(await viewClient.PutAsJsonAsync($"{BaseUrl}/{templateId}/versions/{versionId}",
-			new UpdateSalaryTemplateDraftDto { Name = "Denied update" })).StatusCode
+		(await viewClient.GetAsync($"{BaseUrl}/active")).StatusCode
 			.ShouldBe(HttpStatusCode.Forbidden);
-		(await viewClient.PostAsync($"{BaseUrl}/{templateId}/versions/{versionId}/publish", null)).StatusCode
+		(await viewClient.PostAsJsonAsync(
+			$"{BaseUrl}/versions/{Guid.NewGuid()}/calculate",
+			new CalculateSalaryTemplateRequestDto())).StatusCode
+			.ShouldBe(HttpStatusCode.Forbidden);
+		(await viewClient.PostAsJsonAsync(BaseUrl, new SaveSalaryTemplateDto())).StatusCode
+			.ShouldBe(HttpStatusCode.Forbidden);
+		(await viewClient.PutAsJsonAsync($"{BaseUrl}/{templateId}", new SaveSalaryTemplateDto())).StatusCode
 			.ShouldBe(HttpStatusCode.Forbidden);
 		(await viewClient.PostAsync($"{BaseUrl}/{templateId}/set-default", null)).StatusCode
 			.ShouldBe(HttpStatusCode.Forbidden);
@@ -105,24 +105,24 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 		{
 			[nameof(SalaryTemplateController.GetListAsync)] =
 				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View,
+			[nameof(SalaryTemplateController.GetActiveListAsync)] =
+				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage,
 			[nameof(SalaryTemplateController.GetComponentCatalogAsync)] =
 				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View,
 			[nameof(SalaryTemplateController.GetAsync)] =
 				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View,
+			[nameof(SalaryTemplateController.GetVersionsAsync)] =
+				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View,
 			[nameof(SalaryTemplateController.CreateAsync)] =
 				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Add,
-			[nameof(SalaryTemplateController.CreateNextVersionAsync)] =
+			[nameof(SalaryTemplateController.UpdateAsync)] =
 				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Edit,
-			[nameof(SalaryTemplateController.UpdateDraftAsync)] =
-				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Edit,
-			[nameof(SalaryTemplateController.PublishAsync)] =
-				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Publish,
-			[nameof(SalaryTemplateController.CloneAsync)] =
-				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Add,
 			[nameof(SalaryTemplateController.SetDefaultAsync)] =
 				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.SetDefault,
 			[nameof(SalaryTemplateController.ArchiveAsync)] =
-				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Archive
+				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Archive,
+			[nameof(SalaryTemplateController.CalculateAsync)] =
+				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage
 		};
 
 		foreach (var (methodName, expectedPolicy) in expectedPolicies)
@@ -134,6 +134,26 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 				.Policy.ShouldBe(expectedPolicy);
 		}
 	}
+
+	private static SaveSalaryTemplateDto Save(string name, Guid basicComponentId) => new()
+	{
+		Name = name,
+		Description = "Complete active salary template",
+		DefaultSalaryBasis = "EMPLOYER_COST",
+		DefaultProtectionPolicy = "PROTECT_EMPLOYER_COST",
+		IdempotencyKey = Guid.NewGuid().ToString("N"),
+		Rules =
+		[
+			new SalaryTemplateRuleDto
+			{
+				ComponentId = basicComponentId,
+				LineKind = "EARNING",
+				SemanticType = "BASIC",
+				FormulaType = "PERCENTAGE_OF_GROSS",
+				Value = 100m
+			}
+		]
+	};
 
 	private HttpClient CreateClientWithPermissions(params string[] permissions)
 	{

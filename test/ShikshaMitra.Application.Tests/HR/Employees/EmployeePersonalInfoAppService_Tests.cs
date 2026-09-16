@@ -412,7 +412,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 	}
 
 	[Fact]
-	public async Task UpdateAsync_Should_Update_Basic_Info_Without_Requiring_Payroll_Structure()
+	public async Task UpdateAsync_Should_Update_Basic_Info_Without_Activating_Employee()
 	{
 		var created = await _personalInfoAppService.CreateAsync(
 			await BuildCreateDtoAsync($"basic.update.{Guid.NewGuid():N}@test.com"));
@@ -436,7 +436,7 @@ public class EmployeePersonalInfoAppService_Tests : ShikshaMitraApplicationTestB
 		result.Email.ShouldBe(created.Email);
 		result.PanNo.ShouldBe(created.PanNo);
 		result.AdharNo.ShouldBe(created.AdharNo);
-		result.EmployeeStatusType.ShouldBe(EmployeeStatusType.Active);
+		result.EmployeeStatusType.ShouldBe(EmployeeStatusType.Inactive);
 		result.EmployeeGroup.ShouldBe(created.EmployeeGroup);
 	}
 

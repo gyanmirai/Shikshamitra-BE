@@ -12,5 +12,6 @@ public enum CompensationRevisionStatus
 public enum CompensationLineSource
 {
 	Template = 0,
-	Manual = 1
+	Manual = 1,
+	Legacy = 2
 }

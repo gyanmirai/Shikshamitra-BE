@@ -71,6 +71,19 @@ public class EmployeeAuthorizationService(
 		await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeModifyAccessAsync));
 	}
 
+	public async Task CheckEmployeeScopeAccessAsync(Guid employeeId)
+	{
+		var employee = await employeeRepository.GetAsync(employeeId);
+		EnsureSameTenant(employee, "Access denied: Cross-tenant access not allowed.");
+
+		if (employee.UserId == currentUser.Id)
+		{
+			return;
+		}
+
+		await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeScopeAccessAsync));
+	}
+
 	private void EnsureSameTenant(Employee employee, string message)
 	{
 		// Employee lookups are ABP-filtered, but this explicit check protects reused IDOR paths.

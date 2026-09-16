@@ -33,28 +33,34 @@ public class SalaryTemplateComponentCatalogDto
 	public List<SalaryTemplateComponentCatalogItemDto> Items { get; set; } = [];
 }
 
-public class CreateSalaryTemplateDto
-{
-	public string Name { get; set; } = string.Empty;
-	public string? Description { get; set; }
-}
-
-public class UpdateSalaryTemplateDraftDto
+public class SaveSalaryTemplateDto
 {
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
 	public string DefaultSalaryBasis { get; set; } = "GROSS";
 	public string DefaultProtectionPolicy { get; set; } = "PROTECT_GROSS";
+	public bool DefaultPfApplicable { get; set; }
+	public Guid? DefaultPfRuleId { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
+	public string IdempotencyKey { get; set; } = string.Empty;
+	public Guid? ExpectedActiveVersionId { get; set; }
+	public string? ConcurrencyStamp { get; set; }
+}
+
+public class ArchiveSalaryTemplateDto
+{
+	public Guid? ReplacementDefaultTemplateId { get; set; }
 }
 
 public class SalaryTemplateVersionDto : EntityDto<Guid>
 {
 	public int VersionNumber { get; set; }
-	public string Status { get; set; } = "DRAFT";
-	public DateTime? PublishedAt { get; set; }
+	public string Status { get; set; } = "ACTIVE";
+	public DateTime? ActivatedAt { get; set; }
 	public string DefaultSalaryBasis { get; set; } = "GROSS";
 	public string DefaultProtectionPolicy { get; set; } = "PROTECT_GROSS";
+	public bool DefaultPfApplicable { get; set; }
+	public Guid? DefaultPfRuleId { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
 }
 
@@ -62,17 +68,31 @@ public class SalaryTemplateDto : EntityDto<Guid>
 {
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
-	public string Status { get; set; } = "DRAFT";
+	public string Status { get; set; } = "NEEDS_SETUP";
 	public bool IsDefault { get; set; }
-	public int LatestVersion { get; set; }
-	public int? PublishedVersion { get; set; }
-	public SalaryTemplateVersionDto Latest { get; set; } = new();
-	public SalaryTemplateVersionDto? Published { get; set; }
+	public int? ActiveVersion { get; set; }
+	public int VersionCount { get; set; }
+	public DateTime UpdatedAt { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public SalaryTemplateVersionDto EditableVersion { get; set; } = new();
 }
 
 public class SalaryTemplateListDto
 {
 	public List<SalaryTemplateDto> Items { get; set; } = [];
+}
+
+public class SalaryTemplateVersionListDto
+{
+	public List<SalaryTemplateVersionDto> Items { get; set; } = [];
+}
+
+public class SalaryRuleOverrideDto
+{
+	public Guid ComponentId { get; set; }
+	public string FormulaType { get; set; } = "FIXED_AMOUNT";
+	public decimal? Value { get; set; }
+	public Guid? BasisComponentId { get; set; }
 }
 
 public class CalculateSalaryTemplateRequestDto
@@ -82,8 +102,11 @@ public class CalculateSalaryTemplateRequestDto
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; } = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 	public Guid? EmployeeId { get; set; }
+	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
+	public List<SalaryRuleOverrideDto> Overrides { get; set; } = [];
+	public string? CustomizationReason { get; set; }
 }
 
 public class CalculatedSalaryLineDto
@@ -112,6 +135,7 @@ public class SalaryTemplateEsiPreviewDto
 	public bool IsConfigured { get; set; }
 	public bool IsCovered { get; set; }
 	public bool CanCalculate { get; set; }
+	public bool RegistrationPending { get; set; }
 	public string? CoverageDecision { get; set; }
 	public decimal StatutoryWages { get; set; }
 	public decimal WageCeiling { get; set; }
@@ -155,45 +179,33 @@ public class SalaryTemplateCalculationDto
 public interface ISalaryTemplateAppService : IApplicationService
 {
 	Task<SalaryTemplateListDto> GetListAsync();
-	Task<SalaryTemplateListDto> GetPublishedListAsync();
+	Task<SalaryTemplateListDto> GetActiveListAsync();
 	Task<SalaryTemplateComponentCatalogDto> GetComponentCatalogAsync();
 	Task<SalaryTemplateDto> GetAsync(Guid id);
-	Task<SalaryTemplateDto> CreateAsync(CreateSalaryTemplateDto input);
-	Task<SalaryTemplateDto> CreateNextVersionAsync(Guid id);
-	Task<SalaryTemplateDto> UpdateDraftAsync(Guid id, Guid versionId, UpdateSalaryTemplateDraftDto input);
-	Task<SalaryTemplateDto> PublishAsync(Guid id, Guid versionId);
-	Task<SalaryTemplateDto> CloneAsync(Guid id, string name);
-	Task ArchiveAsync(Guid id);
+	Task<SalaryTemplateVersionListDto> GetVersionsAsync(Guid id);
+	Task<SalaryTemplateDto> CreateAsync(SaveSalaryTemplateDto input);
+	Task<SalaryTemplateDto> UpdateAsync(Guid id, SaveSalaryTemplateDto input);
+	Task ArchiveAsync(Guid id, ArchiveSalaryTemplateDto input);
 	Task<SalaryTemplateDto> SetDefaultAsync(Guid id);
 	Task<SalaryTemplateCalculationDto> CalculateAsync(Guid templateVersionId, CalculateSalaryTemplateRequestDto input);
 }
 
-public class CreateSalaryTemplateDtoValidator : AbstractValidator<CreateSalaryTemplateDto>
+public class SaveSalaryTemplateDtoValidator : AbstractValidator<SaveSalaryTemplateDto>
 {
-	public CreateSalaryTemplateDtoValidator()
-	{
-		RuleFor(x => x.Name).NotEmpty().MaximumLength(160);
-		RuleFor(x => x.Description).MaximumLength(500);
-	}
-}
-
-public class UpdateSalaryTemplateDraftDtoValidator : AbstractValidator<UpdateSalaryTemplateDraftDto>
-{
-	public UpdateSalaryTemplateDraftDtoValidator()
+	public SaveSalaryTemplateDtoValidator()
 	{
 		RuleFor(x => x.Name).NotEmpty().MaximumLength(160);
 		RuleFor(x => x.Description).MaximumLength(500);
 		RuleFor(x => x.DefaultSalaryBasis).Must(BeSalaryBasis);
 		RuleFor(x => x.DefaultProtectionPolicy).Must(BeProtectionPolicy);
+		RuleFor(x => x.DefaultPfRuleId).NotEmpty().When(x => x.DefaultPfApplicable)
+			.WithMessage("Choose an effective PF rule when PF applies by default.");
+		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(100);
 		RuleForEach(x => x.Rules).SetValidator(new SalaryTemplateRuleDtoValidator());
 	}
 
-	private static bool BeSalaryBasis(string value) =>
-		Enum.TryParse<SalaryInputBasis>(Normalize(value), true, out _);
-
-	private static bool BeProtectionPolicy(string value) =>
-		Enum.TryParse<CompensationProtectionPolicy>(Normalize(value), true, out _);
-
+	private static bool BeSalaryBasis(string value) => Enum.TryParse<SalaryInputBasis>(Normalize(value), true, out _);
+	private static bool BeProtectionPolicy(string value) => Enum.TryParse<CompensationProtectionPolicy>(Normalize(value), true, out _);
 	private static string Normalize(string? value) => value?.Replace("_", string.Empty).Replace("-", string.Empty) ?? string.Empty;
 }
 
@@ -201,9 +213,7 @@ public class SalaryTemplateRuleDtoValidator : AbstractValidator<SalaryTemplateRu
 {
 	public SalaryTemplateRuleDtoValidator()
 	{
-		RuleFor(x => x.Code)
-			.MaximumLength(64)
-			.Matches("^[A-Z][A-Z0-9_]*$")
+		RuleFor(x => x.Code).MaximumLength(64).Matches("^[A-Z][A-Z0-9_]*$")
 			.When(x => !string.IsNullOrWhiteSpace(x.Code));
 		RuleFor(x => x.ComponentId).NotEmpty();
 		RuleFor(x => x.LineKind).NotEmpty().Must(BeLineKind).WithMessage("LineKind must be EARNING or DEDUCTION.");
@@ -212,16 +222,19 @@ public class SalaryTemplateRuleDtoValidator : AbstractValidator<SalaryTemplateRu
 		RuleFor(x => x.DisplayOrder).GreaterThanOrEqualTo(0);
 	}
 
-	private static bool BeLineKind(string value) =>
-		Enum.TryParse<SalaryTemplateLineKind>(Normalize(value), true, out _);
-
-	private static bool BeFormulaType(string value) =>
-		Enum.TryParse<SalaryTemplateFormulaType>(Normalize(value), true, out _);
-
-	private static bool BeSemanticType(string value) =>
-		Enum.TryParse<PayrollComponentSemanticType>(Normalize(value), true, out _);
-
+	private static bool BeLineKind(string value) => Enum.TryParse<SalaryTemplateLineKind>(Normalize(value), true, out _);
+	private static bool BeFormulaType(string value) => Enum.TryParse<SalaryTemplateFormulaType>(Normalize(value), true, out _);
+	private static bool BeSemanticType(string value) => Enum.TryParse<PayrollComponentSemanticType>(Normalize(value), true, out _);
 	private static string Normalize(string? value) => value?.Replace("_", string.Empty).Replace("-", string.Empty) ?? string.Empty;
+}
+
+public class SalaryRuleOverrideDtoValidator : AbstractValidator<SalaryRuleOverrideDto>
+{
+	public SalaryRuleOverrideDtoValidator()
+	{
+		RuleFor(x => x.ComponentId).NotEmpty();
+		RuleFor(x => x.FormulaType).NotEmpty();
+	}
 }
 
 public class CalculateSalaryTemplateRequestDtoValidator : AbstractValidator<CalculateSalaryTemplateRequestDto>
@@ -231,9 +244,10 @@ public class CalculateSalaryTemplateRequestDtoValidator : AbstractValidator<Calc
 		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
 		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_GROSS" or "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
-		RuleFor(x => x.EffectiveMonth)
-			.Must(x => x.Day == 1)
-			.WithMessage("EffectiveMonth must be the first day of a month.");
+		RuleFor(x => x.EffectiveMonth).Must(x => x.Day == 1).WithMessage("EffectiveMonth must be the first day of a month.");
+		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);
 		RuleFor(x => x.StatutoryProfile).Equal("IN-GJ");
+		RuleFor(x => x.CustomizationReason).NotEmpty().MaximumLength(500).When(x => x.Overrides.Count > 0);
+		RuleForEach(x => x.Overrides).SetValidator(new SalaryRuleOverrideDtoValidator());
 	}
 }

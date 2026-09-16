@@ -28,47 +28,65 @@ public class SalaryTemplateComposerAppService_Tests
 	}
 
 	[Fact]
-	public async Task Should_keep_blank_draft_unpublishable_and_publish_basic_100_without_balancer()
+	public async Task Should_create_an_active_default_and_replace_it_with_an_immutable_new_version()
 	{
 		var suffix = Guid.NewGuid().ToString("N")[..8];
 		var basic = await InsertEarningAsync($"Composer Basic {suffix}");
-		var template = await _appService.CreateAsync(new CreateSalaryTemplateDto
-		{
-			Name = $"Composer Template {suffix}",
-			Description = "Flexible salary template"
-		});
-
-		template.Status.ShouldBe("DRAFT");
-		template.Latest.Rules.ShouldBeEmpty();
-		(await Should.ThrowAsync<BusinessException>(() =>
-			_appService.PublishAsync(template.Id, template.Latest.Id))).Code.ShouldBe("HR:Payroll:SalaryTemplateRulesRequired");
-
-		var updated = await _appService.UpdateDraftAsync(
-			template.Id,
-			template.Latest.Id,
-			new UpdateSalaryTemplateDraftDto
+		var allowance = await InsertEarningAsync($"Composer Allowance {suffix}");
+		var created = await _appService.CreateAsync(Save(
+			$"Composer Template {suffix}",
+			[new SalaryTemplateRuleDto
 			{
-				Name = template.Name,
-				Description = template.Description,
-				Rules =
-				[
-					new SalaryTemplateRuleDto
-					{
-						Code = "CLIENT_CONTROLLED_CODE",
-						ComponentId = basic.Id,
-						LineKind = "EARNING",
-						SemanticType = "BASIC",
-						FormulaType = "PERCENTAGE_OF_GROSS",
-						Value = 100m,
-						DisplayOrder = 0
-					}
-				]
-			});
+				Code = "CLIENT_CONTROLLED_CODE",
+				ComponentId = basic.Id,
+				LineKind = "EARNING",
+				SemanticType = "BASIC",
+				FormulaType = "PERCENTAGE_OF_GROSS",
+				Value = 100m,
+				DisplayOrder = 0
+			}]));
 
-		updated.Latest.Rules.Single().Code.ShouldNotBe("CLIENT_CONTROLLED_CODE");
-		var published = await _appService.PublishAsync(template.Id, template.Latest.Id);
-		published.Status.ShouldBe("PUBLISHED");
-		published.Latest.Rules.Count.ShouldBe(1);
+		created.Status.ShouldBe("ACTIVE");
+		created.IsDefault.ShouldBeTrue();
+		created.ActiveVersion.ShouldBe(1);
+		created.EditableVersion.Rules.Single().Code.ShouldNotBe("CLIENT_CONTROLLED_CODE");
+
+		var update = Save(created.Name,
+		[
+			new SalaryTemplateRuleDto
+			{
+				ComponentId = basic.Id,
+				LineKind = "EARNING",
+				SemanticType = "BASIC",
+				FormulaType = "PERCENTAGE_OF_GROSS",
+				Value = 60m,
+				DisplayOrder = 0
+			},
+			new SalaryTemplateRuleDto
+			{
+				ComponentId = allowance.Id,
+				LineKind = "EARNING",
+				SemanticType = "BALANCING_EARNING",
+				FormulaType = "REMAINDER_OF_GROSS",
+				DisplayOrder = 1
+			}
+		]);
+		update.ExpectedActiveVersionId = created.EditableVersion.Id;
+		update.ConcurrencyStamp = created.ConcurrencyStamp;
+
+		var updated = await _appService.UpdateAsync(created.Id, update);
+		updated.ActiveVersion.ShouldBe(2);
+		updated.VersionCount.ShouldBe(2);
+		var history = await _appService.GetVersionsAsync(created.Id);
+		history.Items.Single(x => x.VersionNumber == 1).Status.ShouldBe("REPLACED");
+		history.Items.Single(x => x.VersionNumber == 1).Rules.Single().Value.ShouldBe(100m);
+		history.Items.Single(x => x.VersionNumber == 2).Status.ShouldBe("ACTIVE");
+
+		var stale = Save(created.Name, update.Rules.ToArray());
+		stale.ExpectedActiveVersionId = created.EditableVersion.Id;
+		stale.ConcurrencyStamp = created.ConcurrencyStamp;
+		(await Should.ThrowAsync<BusinessException>(() => _appService.UpdateAsync(created.Id, stale))).Code
+			.ShouldBe("HR:Payroll:SalaryTemplateSaveConflict");
 	}
 
 	[Fact]
@@ -80,140 +98,140 @@ public class SalaryTemplateComposerAppService_Tests
 		var deduction = await InsertDeductionAsync($"Catalog Deduction {suffix}");
 		var catalog = await _appService.GetComponentCatalogAsync();
 
-		catalog.Items.ShouldContain(x =>
-			x.ComponentId == basic.Id && x.Name == basic.Name && x.LineKind == "EARNING");
-		catalog.Items.ShouldContain(x =>
-			x.ComponentId == deduction.Id && x.Name == deduction.Name && x.LineKind == "DEDUCTION");
-
-		var template = await _appService.CreateAsync(new CreateSalaryTemplateDto
-		{
-			Name = $"Basis Template {suffix}"
-		});
-		var updated = await _appService.UpdateDraftAsync(
-			template.Id,
-			template.Latest.Id,
-			new UpdateSalaryTemplateDraftDto
+		catalog.Items.ShouldContain(x => x.ComponentId == basic.Id && x.LineKind == "EARNING");
+		catalog.Items.ShouldContain(x => x.ComponentId == deduction.Id && x.LineKind == "DEDUCTION");
+		var template = await _appService.CreateAsync(Save($"Basis Template {suffix}",
+		[
+			new SalaryTemplateRuleDto
 			{
-				Name = template.Name,
-				Rules =
-				[
-					new SalaryTemplateRuleDto
-					{
-						ComponentId = basic.Id,
-						LineKind = "EARNING",
-						SemanticType = "BASIC",
-						FormulaType = "PERCENTAGE_OF_GROSS",
-						Value = 60m,
-						DisplayOrder = 0
-					},
-					new SalaryTemplateRuleDto
-					{
-						ComponentId = allowance.Id,
-						LineKind = "EARNING",
-						SemanticType = "ORDINARY",
-						FormulaType = "PERCENTAGE_OF_COMPONENT",
-						Value = 10m,
-						BasisComponentId = basic.Id,
-						DisplayOrder = 1
-					}
-				]
-			});
+				ComponentId = basic.Id,
+				LineKind = "EARNING",
+				SemanticType = "BASIC",
+				FormulaType = "PERCENTAGE_OF_GROSS",
+				Value = 60m,
+				DisplayOrder = 0
+			},
+			new SalaryTemplateRuleDto
+			{
+				ComponentId = allowance.Id,
+				LineKind = "EARNING",
+				SemanticType = "ORDINARY",
+				FormulaType = "PERCENTAGE_OF_COMPONENT",
+				Value = 10m,
+				BasisComponentId = basic.Id,
+				DisplayOrder = 1
+			}
+		]));
 
-		updated.Latest.Rules.Single(x => x.ComponentId == allowance.Id)
+		template.EditableVersion.Rules.Single(x => x.ComponentId == allowance.Id)
 			.BasisComponentId.ShouldBe(basic.Id);
 	}
 
 	[Fact]
-	public async Task Component_catalog_should_be_tenant_isolated()
+	public async Task Component_catalog_and_saves_should_be_tenant_isolated()
 	{
 		var firstTenantId = Guid.NewGuid();
 		var secondTenantId = Guid.NewGuid();
-		var firstName = $"First Tenant Earning {Guid.NewGuid():N}";
-		var secondName = $"Second Tenant Earning {Guid.NewGuid():N}";
 		SalaryTemplateDto firstTemplate = null!;
 		EarningComponent secondTenantEarning = null!;
 
 		using (_currentTenant.Change(firstTenantId))
 		{
-			await WithUnitOfWorkAsync(() => InsertEarningAsync(firstName));
-			firstTemplate = await _appService.CreateAsync(new CreateSalaryTemplateDto
-			{
-				Name = $"First Tenant Template {Guid.NewGuid():N}"
-			});
+			var firstEarning = await WithUnitOfWorkAsync(() => InsertEarningAsync("First Tenant Basic"));
+			firstTemplate = await _appService.CreateAsync(Save("First Tenant Template",
+			[
+				new SalaryTemplateRuleDto
+				{
+					ComponentId = firstEarning.Id,
+					LineKind = "EARNING",
+					SemanticType = "BASIC",
+					FormulaType = "PERCENTAGE_OF_GROSS",
+					Value = 100m
+				}
+			]));
 		}
 
 		using (_currentTenant.Change(secondTenantId))
 		{
-			secondTenantEarning = await WithUnitOfWorkAsync(() => InsertEarningAsync(secondName));
+			secondTenantEarning = await WithUnitOfWorkAsync(() => InsertEarningAsync("Second Tenant Basic"));
 		}
 
 		using (_currentTenant.Change(firstTenantId))
 		{
-			var firstCatalog = await _appService.GetComponentCatalogAsync();
-			firstCatalog.Items.ShouldContain(x => x.Name == firstName);
-			firstCatalog.Items.ShouldNotContain(x => x.Name == secondName);
-			var exception = await Should.ThrowAsync<BusinessException>(() =>
-				_appService.UpdateDraftAsync(
-					firstTemplate.Id,
-					firstTemplate.Latest.Id,
-					new UpdateSalaryTemplateDraftDto
-					{
-						Name = firstTemplate.Name,
-						Rules =
-						[
-							new SalaryTemplateRuleDto
-							{
-								ComponentId = secondTenantEarning.Id,
-								LineKind = "EARNING",
-								SemanticType = "BASIC",
-								FormulaType = "PERCENTAGE_OF_GROSS",
-								Value = 60m,
-								DisplayOrder = 0
-							}
-						]
-					}));
-			exception.Code.ShouldBe("HR:Payroll:SalaryTemplateComponentMissing");
-		}
-
-		using (_currentTenant.Change(secondTenantId))
-		{
-			var secondCatalog = await _appService.GetComponentCatalogAsync();
-			secondCatalog.Items.ShouldContain(x => x.Name == secondName);
-			secondCatalog.Items.ShouldNotContain(x => x.Name == firstName);
+			var update = Save(firstTemplate.Name,
+			[
+				new SalaryTemplateRuleDto
+				{
+					ComponentId = secondTenantEarning.Id,
+					LineKind = "EARNING",
+					SemanticType = "BASIC",
+					FormulaType = "PERCENTAGE_OF_GROSS",
+					Value = 100m
+				}
+			]);
+			update.ExpectedActiveVersionId = firstTemplate.EditableVersion.Id;
+			update.ConcurrencyStamp = firstTemplate.ConcurrencyStamp;
+			(await Should.ThrowAsync<BusinessException>(() =>
+				_appService.UpdateAsync(firstTemplate.Id, update))).Code
+				.ShouldBe("HR:Payroll:SalaryTemplateComponentMissing");
 		}
 	}
+
+	[Fact]
+	public async Task Archiving_the_default_should_require_a_replacement_and_keep_history_visible()
+	{
+		var suffix = Guid.NewGuid().ToString("N")[..8];
+		var basic = await InsertEarningAsync($"Archive Basic {suffix}");
+		var rule = new SalaryTemplateRuleDto
+		{
+			ComponentId = basic.Id,
+			LineKind = "EARNING",
+			SemanticType = "BASIC",
+			FormulaType = "PERCENTAGE_OF_GROSS",
+			Value = 100m
+		};
+		var first = await _appService.CreateAsync(Save($"Archive First {suffix}", [rule]));
+		var second = await _appService.CreateAsync(Save($"Archive Second {suffix}", [rule]));
+
+		(await Should.ThrowAsync<BusinessException>(() =>
+			_appService.ArchiveAsync(first.Id, new ArchiveSalaryTemplateDto()))).Code
+			.ShouldBe("HR:Payroll:SalaryTemplateReplacementDefaultRequired");
+
+		await _appService.ArchiveAsync(first.Id, new ArchiveSalaryTemplateDto
+		{
+			ReplacementDefaultTemplateId = second.Id
+		});
+
+		var all = await _appService.GetListAsync();
+		all.Items.Single(x => x.Id == first.Id).Status.ShouldBe("ARCHIVED");
+		all.Items.Single(x => x.Id == second.Id).IsDefault.ShouldBeTrue();
+		var active = await _appService.GetActiveListAsync();
+		active.Items.ShouldNotContain(x => x.Id == first.Id);
+	}
+
+	private static SaveSalaryTemplateDto Save(string name, SalaryTemplateRuleDto[] rules) => new()
+	{
+		Name = name,
+		Description = "Reusable salary setup",
+		DefaultSalaryBasis = "EMPLOYER_COST",
+		DefaultProtectionPolicy = "PROTECT_EMPLOYER_COST",
+		Rules = rules.ToList(),
+		IdempotencyKey = Guid.NewGuid().ToString("N")
+	};
 
 	private async Task<EarningComponent> InsertEarningAsync(string name)
 	{
 		var component = new EarningComponent(
-			Guid.NewGuid(),
-			_currentTenant.Id,
-			name,
-			null,
-			EarningComponentType.Fixed,
-			CalculationType.Amount,
-			0m,
-			null,
-			null,
-			ComponentDependency.None,
-			true);
+			Guid.NewGuid(), _currentTenant.Id, name, null, EarningComponentType.Fixed,
+			CalculationType.Amount, 0m, null, null, ComponentDependency.None, true);
 		return await _earningRepository.InsertAsync(component, autoSave: true);
 	}
 
 	private async Task<DeductionComponent> InsertDeductionAsync(string name)
 	{
 		var component = new DeductionComponent(
-			Guid.NewGuid(),
-			_currentTenant.Id,
-			name,
-			null,
-			DeductionComponentType.Fixed,
-			CalculationType.Amount,
-			0m,
-			null,
-			null,
-			ComponentDependency.None,
-			true);
+			Guid.NewGuid(), _currentTenant.Id, name, null, DeductionComponentType.Fixed,
+			CalculationType.Amount, 0m, null, null, ComponentDependency.None, true);
 		return await _deductionRepository.InsertAsync(component, autoSave: true);
 	}
 }

@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-09-14
+updated_on: 2026-09-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -13,8 +13,8 @@ audience: humans-and-agents
 TL;DR: run the smallest command that proves the changed HR behavior, then run docs validation before handoff.
 Use broader API tests when a change touches contracts, permissions, payroll, attendance, leave, or policy resolution.
 
-Salary-template coverage must include blank and incomplete drafts, arbitrary active tenant components, exactly one Basic, zero or one balancing earning, exact rounded gross reconciliation, dependency cycles, cross-tenant component rejection, permission boundaries, percentage validation, two-decimal midpoint-away-from-zero rounding, PF ceilings, Gujarat professional-tax boundaries, and Gross, Take-home, and Employer Cost solving across discontinuities.
-Compensation coverage must prove effective-month revision resolution, maker-checker approval, self-approval denial, stale-draft rejection, approved immutability, same-month supersession, locked-payroll protection, separate one-time lines, and warning-only protected-target drift.
+Salary-template coverage must include complete active creation, Needs setup recovery, arbitrary active tenant components, exactly one Basic, zero or one balancing earning, exact rounded gross reconciliation, dependency cycles, cross-tenant component rejection, permission boundaries, concurrency conflicts, idempotent retries, PF defaults, percentage validation, two-decimal midpoint-away-from-zero rounding, PF ceilings, Gujarat professional-tax boundaries, and Gross, Take-home, and Employer Cost solving across discontinuities.
+Compensation coverage must prove direct effective saves, effective-month resolution, immutable history, same-month supersession, scheduled future revisions, idempotent retries, controlled overrides, activation readiness, locked-payroll protection, separate one-time lines, and warning-only protected-target drift.
 Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, ESI uses effective coverage and wages, eligible PwD relief is government funded, employer contributions remain outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
 
 ## Required docs checks
@@ -66,7 +66,7 @@ Without the corresponding environment variable, these PostgreSQL tests are skipp
 The release runner must provide both variables and verify nonzero executed test counts.
 An Application Control assembly-load failure may appear as no matching tests with a zero process exit code; treat that as blocked validation, never a pass.
 
-Salary-slip fixtures must create approved compensation revisions before calculating permanent earnings.
+Salary-slip fixtures must create effective compensation revisions before calculating permanent earnings.
 ESI regression tests must distinguish agreed monthly classified wages for coverage from attendance-adjusted wages for contributions, including above-ceiling employees with unpaid days and contribution-period continuation.
 
 ## Focused test map

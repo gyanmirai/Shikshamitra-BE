@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Payroll.Templates;
 using System;
 using System.Collections.Generic;
@@ -13,6 +14,7 @@ public partial class HRSeederContributor
 		const string templateName = "Gujarat Standard Salary";
 		if (await _salaryStructureTemplateRepository.FindAsync(x => x.Name == templateName) is not null)
 		{
+			await BackfillSalaryTemplatePfDefaultsAsync();
 			return;
 		}
 
@@ -22,6 +24,11 @@ public partial class HRSeederContributor
 		var specialAllowance = earnings.Single(x => x.Name == "Special Allowance");
 		var providentFund = deductions.Single(x => x.Name == "Provident Fund (PF)");
 		var professionalTax = deductions.Single(x => x.Name == "Professional Tax");
+		var today = _clock.Now.Date;
+		var effectivePfRules = (await _providentFundRepository.GetListAsync())
+			.Where(x => x.IsActive && x.EffectiveFrom <= today && (!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= today))
+			.ToList();
+		var defaultPfRule = effectivePfRules.Count == 1 ? effectivePfRules[0] : null;
 
 		var template = new SalaryStructureTemplate(
 			GuidGenerator.Create(),
@@ -44,7 +51,9 @@ public partial class HRSeederContributor
 			1,
 			rules,
 			SalaryInputBasis.EmployerCost,
-			CompensationProtectionPolicy.ProtectEmployerCost);
+			CompensationProtectionPolicy.ProtectEmployerCost,
+			defaultPfApplicable: defaultPfRule != null,
+			defaultPfRuleId: defaultPfRule?.Id);
 
 		version.Publish(new DateTime(2022, 4, 1));
 		template.MarkPublished(1);
@@ -52,6 +61,41 @@ public partial class HRSeederContributor
 
 		await _salaryStructureTemplateRepository.InsertAsync(template, autoSave: false);
 		await _salaryStructureTemplateVersionRepository.InsertAsync(version, autoSave: false);
+		await CurrentUnitOfWork.SaveChangesAsync();
+	}
+
+	private async Task BackfillSalaryTemplatePfDefaultsAsync()
+	{
+		var today = _clock.Now.Date;
+		var effectivePfRules = (await _providentFundRepository.GetListAsync())
+			.Where(x => x.IsActive && x.EffectiveFrom <= today && (!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= today))
+			.ToList();
+		var versions = await _salaryStructureTemplateVersionRepository.GetListAsync();
+		var unresolved = versions
+			.Where(x => !x.DefaultPfRuleId.HasValue &&
+				x.GetRules().Any(rule => rule.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund))
+			.ToList();
+		if (unresolved.Count == 0)
+		{
+			return;
+		}
+
+		if (effectivePfRules.Count != 1)
+		{
+			_logger.LogWarning(
+				"[SalaryTemplateMigrationException] TenantId={TenantId} unresolvedTemplates={Count} effectivePfRules={RuleCount}. Admin resolution is required.",
+				CurrentTenant.Id,
+				unresolved.Select(x => x.TemplateId).Distinct().Count(),
+				effectivePfRules.Count);
+			return;
+		}
+
+		foreach (var version in unresolved)
+		{
+			version.MigratePfDefaults(effectivePfRules[0].Id);
+			await _salaryStructureTemplateVersionRepository.UpdateAsync(version, autoSave: false);
+		}
+
 		await CurrentUnitOfWork.SaveChangesAsync();
 	}
 }

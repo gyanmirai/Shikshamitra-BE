@@ -21,5 +21,7 @@ public interface IEmployeeStatusAppService : IApplicationService
 	/// Checks whether an employee can be moved to a non-active status.
 	/// </summary>
 	Task<EmployeeStatusDeactivationCheckDto> GetDeactivationCheckAsync(Guid employeeId);
+
+	Task<EmployeeActivationReadinessDto> GetActivationReadinessAsync(Guid employeeId);
 }
 

@@ -9,7 +9,7 @@ public class SalaryTemplateBackfillSeederContributor_Tests
 	public void Should_have_a_dedicated_versioned_step_after_the_HR_catalog()
 	{
 		SalaryTemplateBackfillSeederContributor.StepName.ShouldBe("SalaryTemplateBackfillSeeder");
-		SalaryTemplateBackfillSeederContributor.StepVersion.ShouldBe("SalaryTemplateBackfillSeeder:v1");
+		SalaryTemplateBackfillSeederContributor.StepVersion.ShouldBe("SalaryTemplateBackfillSeeder:v3");
 		SalaryTemplateBackfillSeederContributor.StepOrder.ShouldBe(162);
 	}
 }

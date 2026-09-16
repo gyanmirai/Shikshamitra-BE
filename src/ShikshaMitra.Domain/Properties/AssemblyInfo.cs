@@ -2,3 +2,4 @@
 [assembly:InternalsVisibleToAttribute("ShikshaMitra.Domain.Tests")]
 [assembly:InternalsVisibleToAttribute("ShikshaMitra.TestBase")]
 [assembly:InternalsVisibleToAttribute("ShikshaMitra.Application.Tests")]
+[assembly:InternalsVisibleToAttribute("ShikshaMitra.EntityFrameworkCore.Tests")]

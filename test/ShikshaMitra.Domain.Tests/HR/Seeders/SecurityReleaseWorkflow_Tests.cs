@@ -18,6 +18,8 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.Matches(@"security:\s*uses: \./\.github/workflows/security-regression\.yml", workflow);
 		Assert.Matches(@"build-and-deploy:\s*needs: security", workflow);
 		Assert.Contains("workflow_call:", security);
+		Assert.Contains("--filter \"FullyQualifiedName~CanonicalStudentFeeAssignmentPostgres_Tests|FullyQualifiedName~LegacyMigrationBaselineBridge_Tests\"", security);
+		Assert.Contains("--filter \"FullyQualifiedName~EsiFullDemoConfigurationSeederContributor_Integration_Tests\"", security);
 		Assert.Contains("ShikshaMitra__Seeders__Profile: FullDemo", workflow);
 		Assert.Contains("- name: Run deployment startup regression gates", workflow);
 		Assert.Contains("- name: Validate Azure publish profile", workflow);

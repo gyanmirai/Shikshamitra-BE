@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -25,6 +26,24 @@ public class CanonicalStudentFeeAssignmentPostgres_Tests
 	private const string AssignmentMigration = "20260915122353_canonicalFeeAssignment";
 	private const string AssignmentId = "c0353d11-6bd6-43e2-a945-9241f14f5db1";
 	private const string DueId = "08c16064-f026-422f-a7e1-70515a75e988";
+
+	[Fact]
+	public void Latest_Migration_Snapshot_Matches_The_Current_Model()
+	{
+		// Match the design-time factory; CI runs this separately from ABP-starting fixtures.
+		AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", false);
+		ShikshaMitraEfCoreEntityExtensionMappings.Configure();
+		using var db = new ShikshaMitraDbContext(new DbContextOptionsBuilder<ShikshaMitraDbContext>()
+			.UseNpgsql("Host=127.0.0.1;Database=payroll_tests_model_only").Options);
+		var snapshot = db.GetService<IMigrationsAssembly>().ModelSnapshot!.Model;
+		var previous = db.GetService<IModelRuntimeInitializer>().Initialize(snapshot, designTime: true);
+		var current = db.GetService<IDesignTimeModel>().Model;
+		var differences = db.GetService<IMigrationsModelDiffer>()
+			.GetDifferences(previous.GetRelationalModel(), current.GetRelationalModel());
+		var pendingSql = db.GetService<IMigrationsSqlGenerator>().Generate(differences, current);
+		differences.ShouldBeEmpty(string.Join(Environment.NewLine, pendingSql.Select(command => command.CommandText)));
+		db.Database.HasPendingModelChanges().ShouldBeFalse();
+	}
 
 	[FinanceMigrationPostgresFact]
 	public async Task Upgrade_Preserves_Legacy_Records_And_Rollback_Protects_Each_New_Evidence_Field()

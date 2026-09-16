@@ -52,7 +52,13 @@ jobs:
           FINANCE_MIGRATION_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=payroll_tests_security_migration_ci;Username=security_test;Password=synthetic-ci-only
         run: >-
           dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests/ShikshaMitra.EntityFrameworkCore.Tests.csproj -c Release --no-restore
-          --filter "FullyQualifiedName~CanonicalStudentFeeAssignmentPostgres_Tests|FullyQualifiedName~LegacyMigrationBaselineBridge_Tests|FullyQualifiedName~EsiFullDemoConfigurationSeederContributor_Integration_Tests"
+          --filter "FullyQualifiedName~CanonicalStudentFeeAssignmentPostgres_Tests|FullyQualifiedName~LegacyMigrationBaselineBridge_Tests"
+      # ABP startup switches Npgsql's process-wide timestamp behavior to legacy.
+      # Keep the migration/model assertion in a separate process using design-time mappings.
+      - name: FullDemo ESI repeat-run regression
+        run: >-
+          dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests/ShikshaMitra.EntityFrameworkCore.Tests.csproj -c Release --no-build
+          --filter "FullyQualifiedName~EsiFullDemoConfigurationSeederContributor_Integration_Tests"
       - name: Permission, ESI, and Finance HTTP enforcement
         run: >-
           dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj -c Release --no-restore

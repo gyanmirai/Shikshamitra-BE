@@ -163,6 +163,27 @@ This uses test authentication in the HTTP pipeline, not deployed network/OpenIdd
 No scope index migration was introduced.
 The Finance schema migration is a separate dependency, not a hierarchy performance change.
 
+## Publication refresh on September 16
+
+The publication candidate also incorporates backend main `fca55adde62a29cb308c19d67468d1da1390d3d0` and frontend main `1f59f2a1b9ec6aa44db96724c80395c779cec81b`.
+The integration retains both employee-scope application methods and does not restore the upstream existing-role grant mirroring.
+Refreshed local checks passed 53 domain tests, 20 application tests, 48 HTTP tests, frontend TypeScript, and 633 frontend tests across 110 files.
+The earlier 35 browser cases are retained evidence from before this integration, not a newly executed browser matrix.
+
+The first backend PR run exposed test-process interference in the migration model assertion.
+The ABP fixture enables Npgsql legacy timestamp mappings process-wide, whereas the migration factory uses modern mappings.
+A standalone model comparison passed; explicitly reproducing the ABP switch produced 1,135 timestamp-only differences and no other SQL changes.
+The workflow now runs migration/model checks and the FullDemo ABP fixture in separate processes, with all previous assertions retained and an additional model-diff diagnostic assertion.
+The workflow regression test requires both independent invocations.
+The corrected local invocations passed seven migration/baseline/model cases and two FullDemo repeat-run cases, with zero failures or skips.
+This correction introduces no production timestamp change or database migration.
+
+The first frontend PR run also exposed a documentation reference to an ignored local browser report.
+The documentation now identifies it as generated local evidence rather than a required clean-checkout file.
+The documentation validator itself is unchanged.
+
+Latest PR checks and deployment outcomes must be read from backend PR #624 and frontend PR #1245 rather than inferred from this historical local report.
+
 ## Audit and deferred risks
 
 Earlier read-only DDVS grant/scope exports remain in restricted, ignored `.artifacts/security-local/restricted-audit`.

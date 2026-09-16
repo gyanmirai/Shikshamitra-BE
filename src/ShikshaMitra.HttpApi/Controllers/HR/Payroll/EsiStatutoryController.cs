@@ -48,7 +48,8 @@ public class EsiStatutoryController(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.View)]
 	public async Task<EmployeeStatutoryEnrollmentDto> GetEnrollmentAsync(Guid employeeId)
 	{
-		await employeeAuthorizationService.CheckEmployeeAccessAsync(employeeId, requireOwnership: true);
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId,
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.View);
 		return await appService.GetEnrollmentAsync(employeeId);
 	}
 
@@ -58,7 +59,8 @@ public class EsiStatutoryController(
 		Guid employeeId,
 		[FromBody] UpdateEmployeeStatutoryEnrollmentDto input)
 	{
-		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId,
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.ManageEnrollment);
 		return await appService.UpdateEnrollmentAsync(employeeId, input);
 	}
 
@@ -66,7 +68,8 @@ public class EsiStatutoryController(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.ApproveOverride)]
 	public async Task<IActionResult> CreateOverrideAsync(Guid employeeId, [FromBody] CreateStatutoryOverrideDto input)
 	{
-		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId,
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.ApproveOverride);
 		await appService.CreateOverrideAsync(employeeId, input);
 		return NoContent();
 	}
@@ -75,7 +78,8 @@ public class EsiStatutoryController(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.View)]
 	public async Task<List<StatutoryOverrideDto>> GetOverridesAsync(Guid employeeId)
 	{
-		await employeeAuthorizationService.CheckEmployeeAccessAsync(employeeId, requireOwnership: true);
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId,
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.View);
 		return await appService.GetOverridesAsync(employeeId);
 	}
 

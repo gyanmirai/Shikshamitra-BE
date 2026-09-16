@@ -23,6 +23,10 @@ public class StudentFeeAssignmentMigration_Tests
 		var fk = migration.UpOperations.OfType<AddForeignKeyOperation>().Single();
 		fk.Name.ShouldBe("FK_DueFees_StudentFeeAssignment");
 		fk.PrincipalTable.ShouldBe("Finance_StudentFeeStructures");
+		fk.OnDelete.ShouldBe(Microsoft.EntityFrameworkCore.Migrations.ReferentialAction.Restrict);
+		migration.UpOperations.OfType<AddColumnOperation>().Select(x => x.Name).Order()
+			.ShouldBe(new[] { "AllocationPercentage", "AssignmentSnapshotJson", "StudentFeeStructureId" });
+		migration.UpOperations.OfType<AddColumnOperation>().ShouldAllBe(x => x.IsNullable && x.DefaultValue == null);
 		var snapshotType = typeof(AddCanonicalStudentFeeAssignments).Assembly.GetTypes().Single(t => t.Name == "ShikshaMitraDbContextModelSnapshot");
 		var model = ((Microsoft.EntityFrameworkCore.Infrastructure.ModelSnapshot)Activator.CreateInstance(snapshotType, nonPublic: true)!).Model;
 		var assignment = model.FindEntityType(typeof(StudentFeeStructure).FullName!)!;
@@ -32,5 +36,18 @@ public class StudentFeeAssignmentMigration_Tests
 		due.FindProperty(nameof(DueFee.StudentFeeStructureId))!.IsNullable.ShouldBeTrue();
 		due.FindProperty(nameof(DueFee.AllocationPercentage))!.GetPrecision().ShouldBe(18);
 		due.GetForeignKeys().Single(x => x.Properties.Any(p => p.Name == nameof(DueFee.StudentFeeStructureId))).GetConstraintName().ShouldBe(fk.Name);
+	}
+
+	[Fact]
+	public void Rollback_Refuses_To_Discard_Evidence_Or_Invent_Concession_Ids()
+	{
+		var migration = new AddCanonicalStudentFeeAssignments { ActiveProvider = "Npgsql.EntityFrameworkCore.PostgreSQL" };
+		var guard = migration.DownOperations.First().ShouldBeOfType<SqlOperation>();
+		guard.SuppressTransaction.ShouldBeFalse();
+		guard.Sql.ShouldContain("IN ACCESS EXCLUSIVE MODE");
+		foreach (var column in new[] { "AssignmentSnapshotJson", "ConcessionPolicyId", "ConcessionPolicyVersionId", "StudentFeeStructureId", "AllocationPercentage" })
+			guard.Sql.ShouldContain(column);
+		guard.Sql.ShouldContain("RAISE EXCEPTION");
+		migration.DownOperations.OfType<AlterColumnOperation>().ShouldAllBe(x => x.DefaultValue == null);
 	}
 }

@@ -64,6 +64,26 @@ namespace ShikshaMitra.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Keep the evidence check and schema rollback in the same migration transaction.
+            migrationBuilder.Sql("""
+                LOCK TABLE "Finance_StudentFeeStructures", "Finance_DueFees" IN ACCESS EXCLUSIVE MODE;
+                DO $rollback$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM "Finance_StudentFeeStructures"
+                        WHERE "AssignmentSnapshotJson" IS NOT NULL
+                           OR "ConcessionPolicyId" IS NULL
+                           OR "ConcessionPolicyVersionId" IS NULL
+                    ) OR EXISTS (
+                        SELECT 1 FROM "Finance_DueFees"
+                        WHERE "StudentFeeStructureId" IS NOT NULL
+                           OR "AllocationPercentage" IS NOT NULL
+                    ) THEN
+                        RAISE EXCEPTION 'Canonical assignment evidence exists; use a forward fix instead of rolling back AddCanonicalStudentFeeAssignments.';
+                    END IF;
+                END $rollback$;
+                """);
+
             migrationBuilder.DropForeignKey(
                 name: "FK_DueFees_StudentFeeAssignment",
                 table: "Finance_DueFees");
@@ -89,7 +109,6 @@ namespace ShikshaMitra.Migrations
                 table: "Finance_StudentFeeStructures",
                 type: "uuid",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"),
                 oldClrType: typeof(Guid),
                 oldType: "uuid",
                 oldNullable: true);
@@ -99,7 +118,6 @@ namespace ShikshaMitra.Migrations
                 table: "Finance_StudentFeeStructures",
                 type: "uuid",
                 nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-000000000000"),
                 oldClrType: typeof(Guid),
                 oldType: "uuid",
                 oldNullable: true);

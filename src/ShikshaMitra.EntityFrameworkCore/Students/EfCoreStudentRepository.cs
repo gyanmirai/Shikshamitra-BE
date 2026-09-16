@@ -18,6 +18,14 @@ public class EfCoreStudentRepository(
     : EfCoreRepository<ShikshaMitraDbContext, Student, Guid>(dbContextProvider), IStudentRepository
 {
     /// <inheritdoc/>
+    public async Task<Student?> GetForFeeAssignmentAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+        return await dbSet.IgnoreAutoIncludes().AsTracking()
+            .FirstOrDefaultAsync(student => student.Id == id, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task<IQueryable<Student>> GetQueryableWithoutAutoIncludesAsync()
     {
         var dbSet = await GetDbSetAsync();

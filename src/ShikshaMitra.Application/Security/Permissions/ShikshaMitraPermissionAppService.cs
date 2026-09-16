@@ -1,5 +1,11 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using System.ComponentModel.DataAnnotations;
+using Volo.Abp.Domain.Entities;
+using Volo.Abp.Identity;
+using Volo.Abp.Uow;
+using Volo.Abp.Validation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,6 +29,10 @@ namespace ShikshaMitra.Security.Permissions;
 [ExposeServices(typeof(IPermissionAppService), typeof(IShikshaMitraPermissionAppService), typeof(ShikshaMitraPermissionAppService))]
 public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionAppService, IShikshaMitraPermissionAppService
 {
+	private readonly IIdentityRoleRepository _roles;
+	private readonly IIdentityUserRepository _users;
+	private readonly IUnitOfWorkManager _unitOfWorkManager;
+	private readonly IServiceProvider _services;
 	protected PermissionManagementOptions Options { get; }
 	protected IPermissionManager PermissionManager { get; }
 	protected IPermissionDefinitionManager PermissionDefinitionManager { get; }
@@ -36,8 +46,16 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		IOptions<PermissionManagementOptions> options,
 		IPermissionChecker permissionChecker,
 		ICurrentPrincipalAccessor currentPrincipalAccessor,
-		ISimpleStateCheckerManager<PermissionDefinition> simpleStateCheckerManager)
+		ISimpleStateCheckerManager<PermissionDefinition> simpleStateCheckerManager,
+		IIdentityRoleRepository roles,
+		IIdentityUserRepository users,
+		IUnitOfWorkManager unitOfWorkManager,
+		IServiceProvider services)
 	{
+		_roles = roles;
+		_users = users;
+		_unitOfWorkManager = unitOfWorkManager;
+		_services = services;
 		Options = options.Value;
 		PermissionManager = permissionManager;
 		PermissionDefinitionManager = permissionDefinitionManager;
@@ -66,19 +84,14 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 
 			var neededCheckPermissions = new List<PermissionDefinition>();
 
-			var permissions = group.GetPermissionsWithChildren()
-				.Where(x => x.IsEnabled)
-				.Where(x => !x.Providers.Any() || x.Providers.Contains(providerName))
-				.Where(x => x.MultiTenancySide.HasFlag(multiTenancySide));
+			var permissions = group.GetPermissionsWithChildren();
 
 			foreach (var permission in permissions)
 			{
-				if (permission.Parent != null && !neededCheckPermissions.Contains(permission.Parent))
-				{
-					continue;
-				}
-
-				if (await SimpleStateCheckerManager.IsEnabledAsync(permission))
+				var enabled = permission.MultiTenancySide.HasFlag(multiTenancySide);
+				for (var current = permission; current != null && enabled; current = current.Parent)
+					enabled = current.IsEnabled && await SimpleStateCheckerManager.IsEnabledAsync(current);
+				if (enabled)
 				{
 					neededCheckPermissions.Add(permission);
 				}
@@ -97,21 +110,12 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 			var effectiveGrantLookup = isCurrentUserRead
 				? await GetCurrentUserEffectivePermissionLookupAsync(permissionNames)
 				: null;
-			var multipleGrantInfo = effectiveGrantLookup == null
-				? await PermissionManager.GetAsync(permissionNames, providerName, providerKey)
-				: null;
+			var multipleGrantInfo = await PermissionManager.GetAsync(permissionNames, providerName, providerKey);
 
 			foreach (var grantInfoDto in grantInfoDtos)
 			{
-				if (effectiveGrantLookup != null)
-				{
-					grantInfoDto.IsGranted = effectiveGrantLookup.GetValueOrDefault(grantInfoDto.Name);
-					groupDto.Permissions.Add(grantInfoDto);
-					continue;
-				}
-
 				var grantInfo = multipleGrantInfo!.Result.First(x => x.Name == grantInfoDto.Name);
-				grantInfoDto.IsGranted = grantInfo.IsGranted;
+				grantInfoDto.IsGranted = effectiveGrantLookup?.GetValueOrDefault(grantInfoDto.Name) ?? grantInfo.IsGranted;
 
 				foreach (var provider in grantInfo.Providers)
 				{
@@ -164,51 +168,67 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 
 	public virtual async Task UpdateAsync(string providerName, string providerKey, UpdatePermissionsDto input)
 	{
-		await CheckProviderPolicy(providerName, providerKey);
-
-		foreach (var permissionDto in input.Permissions)
+		// Reuse the request transaction. A direct invocation still owns a transaction when needed.
+		using var ownedTransaction = _unitOfWorkManager.Current?.Options.IsTransactional == true
+			? null : _unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
+		var transaction = ownedTransaction ?? _unitOfWorkManager.Current!;
+		try
 		{
-			var permissionName = await ResolveCrudPermissionNameAsync(permissionDto.Name);
-			if (permissionName == null)
-			{
-				continue;
-			}
+			await CheckProviderPolicy(providerName, providerKey);
+			if (input?.Permissions == null || input.Permissions.Any(x => x == null || string.IsNullOrWhiteSpace(x.Name)) ||
+				input.Permissions.Select(x => x.Name).Distinct(StringComparer.Ordinal).Count() != input.Permissions.Length)
+				throw InvalidPermissions();
 
-			await PermissionManager.SetAsync(permissionName, providerName, providerKey, permissionDto.IsGranted);
+			// Validate the complete batch before the first write. Never infer an action from a CRUD alias.
+			foreach (var item in input.Permissions)
+			{
+				var definition = await PermissionDefinitionManager.GetOrNullAsync(item.Name);
+				if (definition == null || definition.Name != item.Name ||
+					!definition.MultiTenancySide.HasFlag(CurrentTenant.GetMultiTenancySide()) ||
+					(definition.Providers.Any() && !definition.Providers.Contains(providerName)))
+					throw InvalidPermissions();
+				for (var current = definition; current != null; current = current.Parent)
+					if (!current.IsEnabled || !await SimpleStateCheckerManager.IsEnabledAsync(current))
+						throw InvalidPermissions();
+			}
+			// ABP 9 PermissionManager.SetAsync compares effective access, so an inherited grant can
+			// suppress a requested direct grant. Use its registered management provider after validation.
+			var provider = Options.ManagementProviders
+				.Select(type => (IPermissionManagementProvider)_services.GetRequiredService(type))
+				.SingleOrDefault(candidate => candidate.Name == providerName)
+				?? throw new AbpException("The permission management provider is unavailable.");
+			foreach (var item in input.Permissions)
+				await provider.SetAsync(item.Name, providerKey, item.IsGranted);
+			if (ownedTransaction != null) await ownedTransaction.CompleteAsync();
+		}
+		catch
+		{
+			await transaction.RollbackAsync();
+			throw;
 		}
 	}
 
-	private async Task<string?> ResolveCrudPermissionNameAsync(string permissionName)
+	private static AbpValidationException InvalidPermissions() =>
+		new("One or more permissions are invalid or no longer available.",
+			new List<ValidationResult> { new("Choose permissions from the current catalogue.", new[] { "permissions" }) });
+
+	private async Task ValidateProviderAsync(string providerName, string providerKey)
 	{
-		if (await PermissionDefinitionManager.GetOrNullAsync(permissionName) != null)
+		if (providerName == "U" && Guid.TryParse(providerKey, out var userId))
 		{
-			return permissionName;
+			var user = await _users.FindAsync(userId);
+			if (user == null || user.TenantId != CurrentTenant.Id)
+				throw new EntityNotFoundException(typeof(IdentityUser), userId);
+			return;
 		}
-
-		var separator = permissionName.LastIndexOf('.');
-		if (separator < 0)
+		if (providerName == "R" && !string.IsNullOrWhiteSpace(providerKey))
 		{
-			return null;
+			var role = await _roles.FindByNormalizedNameAsync(providerKey.ToUpperInvariant());
+			if (role == null || role.TenantId != CurrentTenant.Id || role.Name != providerKey)
+				throw new EntityNotFoundException(typeof(IdentityRole), providerKey);
+			return;
 		}
-
-		var baseName = permissionName[..separator];
-		var action = permissionName[(separator + 1)..];
-		var candidates = action switch
-		{
-			"Add" => new[] { $"{baseName}.Create", $"{baseName}.Edit" },
-			"View" => new[] { baseName },
-			_ => Array.Empty<string>()
-		};
-
-		foreach (var candidate in candidates)
-		{
-			if (await PermissionDefinitionManager.GetOrNullAsync(candidate) != null)
-			{
-				return candidate;
-			}
-		}
-
-		return null;
+		throw InvalidPermissions();
 	}
 
 	protected virtual async Task CheckProviderPolicy(
@@ -216,8 +236,11 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		string providerKey,
 		bool allowCurrentUserRead = false)
 	{
+		if (!CurrentUser.IsAuthenticated) throw new AbpAuthorizationException();
+		if (providerName is not ("R" or "U")) throw InvalidPermissions();
 		if (allowCurrentUserRead && IsCurrentUserProvider(providerName, providerKey))
 		{
+			await ValidateProviderAsync(providerName, providerKey);
 			return;
 		}
 
@@ -233,6 +256,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		{
 			throw new AbpAuthorizationException();
 		}
+		await ValidateProviderAsync(providerName, providerKey);
 	}
 
 	private async Task<Dictionary<string, bool>> GetCurrentUserEffectivePermissionLookupAsync(string[] permissionNames)
@@ -298,137 +322,32 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 
 	public virtual async Task<GetNestedPermissionListResultDto> GetNestedAsync(string providerName, string providerKey)
 	{
-		await CheckProviderPolicy(providerName, providerKey, allowCurrentUserRead: true);
-
-		var result = new GetNestedPermissionListResultDto
+		// Both response shapes use the same validated catalogue and grant-source calculation.
+		var flat = await GetAsync(providerName, providerKey);
+		return new GetNestedPermissionListResultDto
 		{
-			EntityDisplayName = providerKey
-		};
-
-		var multiTenancySide = CurrentTenant.GetMultiTenancySide();
-
-		// Gather all permission definitions once
-		var allGroups = await PermissionDefinitionManager.GetGroupsAsync();
-
-		// Prepare to fetch all necessary permission names at once
-		var allPermissionDefinitions = new List<PermissionDefinition>();
-
-		foreach (var group in allGroups)
-		{
-			var definitions = group
-				.GetPermissionsWithChildren()
-				.Where(x => x.IsEnabled && (!x.Providers.Any() || x.Providers.Contains(providerName)) && x.MultiTenancySide.HasFlag(multiTenancySide))
-				.ToList();
-
-			allPermissionDefinitions.AddRange(definitions);
-		}
-
-		// Remove duplicates
-		allPermissionDefinitions = allPermissionDefinitions
-			.GroupBy(x => x.Name)
-			.Select(x => x.First())
-			.ToList();
-
-		// Query the grant info for these permissions
-		var multipleGrantInfo = await PermissionManager.GetAsync(
-			allPermissionDefinitions.Select(x => x.Name).ToArray(),
-			providerName,
-			providerKey
-		);
-
-		// Build a dictionary for quick lookup of grant results
-		Dictionary<string, PermissionWithGrantedProviders>? grantLookup = multipleGrantInfo.Result.ToDictionary(x => x.Name, x => x);
-
-		// Build the final result
-		foreach (var group in allGroups)
-		{
-			var groupDto = new NestedPermissionGroupDto
+			EntityDisplayName = flat.EntityDisplayName,
+			Groups = flat.Groups.Select(group =>
 			{
-				Name = group.Name,
-				DisplayName = group.DisplayName?.Localize(StringLocalizerFactory),
-				DisplayNameKey = (group.DisplayName as LocalizableString)?.Name,
-				DisplayNameResource = (group.DisplayName as LocalizableString)?.ResourceType != null
-					? LocalizationResourceNameAttribute.GetName((group.DisplayName as LocalizableString)?.ResourceType)
-					: null
-			};
-
-			// Get the permission definitions relevant to this group
-			var groupPermissionDefinitions = group
-				.GetPermissionsWithChildren()
-				.Where(x => x.IsEnabled)
-				.Where(x => !x.Providers.Any() || x.Providers.Contains(providerName))
-				.Where(x => x.MultiTenancySide.HasFlag(multiTenancySide))
-				.ToList();
-
-			// We only process top-level permissions here (Parent == null) or
-			// those with a parent that is not in this group.
-			// If you want to strictly nest within each group, we limit the nesting to that group's set.
-			var topLevelPermissions = groupPermissionDefinitions
-				.Where(p => p.Parent == null || !groupPermissionDefinitions.Contains(p.Parent))
-				.ToList();
-
-			foreach (var permission in topLevelPermissions)
-			{
-				// Build the node and its children recursively
-				var permissionDto = BuildPermissionWithChildrenDto(permission, groupPermissionDefinitions, grantLookup);
-				if (permissionDto != null)
+				var nodes = group.Permissions.ToDictionary(p => p.Name, p => new PermissionWithChildrenDto
 				{
-					groupDto.Permissions.Add(permissionDto);
+					Name = p.Name, DisplayName = p.DisplayName, IsGranted = p.IsGranted,
+					GrantedProviders = p.GrantedProviders
+				});
+				var roots = new List<PermissionWithChildrenDto>();
+				foreach (var permission in group.Permissions)
+				{
+					if (permission.ParentName != null && nodes.TryGetValue(permission.ParentName, out var parent))
+						parent.Children.Add(nodes[permission.Name]);
+					else roots.Add(nodes[permission.Name]);
 				}
-			}
-
-			if (groupDto.Permissions.Any())
-			{
-				result.Groups.Add(groupDto);
-			}
-		}
-
-		return result;
-	}
-
-	private PermissionWithChildrenDto? BuildPermissionWithChildrenDto(
-		PermissionDefinition permission,
-		List<PermissionDefinition> groupPermissions,
-		Dictionary<string, PermissionWithGrantedProviders> grantLookup)
-	{
-		// If this permission is not in the dictionary, we skip it
-		if (!grantLookup.TryGetValue(permission.Name, out var grantInfo))
-		{
-			// Not granted or not found, can decide if you want to include it or not
-			// Return null or build with IsGranted = false
-			return null;
-		}
-
-		var permissionDto = new PermissionWithChildrenDto
-		{
-			Name = permission.Name,
-			DisplayName = permission.DisplayName?.Localize(StringLocalizerFactory),
-			IsGranted = grantInfo.IsGranted
+				return new NestedPermissionGroupDto
+				{
+					Name = group.Name, DisplayName = group.DisplayName,
+					DisplayNameKey = group.DisplayNameKey, DisplayNameResource = group.DisplayNameResource,
+					Permissions = roots
+				};
+			}).ToList()
 		};
-
-		foreach (var provider in grantInfo.Providers)
-		{
-			permissionDto.GrantedProviders.Add(new ProviderInfoDto
-			{
-				ProviderName = provider.Name,
-				ProviderKey = provider.Key
-			});
-		}
-
-		// Find children in the same group
-		var childPermissions = groupPermissions
-			.Where(p => p.Parent == permission)
-			.ToList();
-
-		foreach (var child in childPermissions)
-		{
-			var childDto = BuildPermissionWithChildrenDto(child, groupPermissions, grantLookup);
-			if (childDto != null)
-			{
-				permissionDto.Children.Add(childDto);
-			}
-		}
-
-		return permissionDto;
 	}
 }

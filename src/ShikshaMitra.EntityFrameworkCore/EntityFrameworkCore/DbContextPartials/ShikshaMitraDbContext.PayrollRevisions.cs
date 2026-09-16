@@ -17,6 +17,7 @@ public partial class ShikshaMitraDbContext
 	public override int SaveChanges(bool acceptAllChangesOnSuccess)
 	{
 		ChangeTracker.DetectChanges();
+		using var authorizationScopeChange = InvalidateChangedAuthorizationScope();
 		var tenants = ChangeTracker.Entries().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
 			.Where(x => IsPayrollInput(x.Entity, x.Metadata.ClrType)).Select(x => x.Entity is IMultiTenant scoped ? scoped.TenantId : CurrentTenant.Id).Distinct().ToList();
 		if (tenants.Count == 0) return base.SaveChanges(acceptAllChangesOnSuccess);
@@ -35,6 +36,7 @@ public partial class ShikshaMitraDbContext
 	public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
 	{
 		ChangeTracker.DetectChanges();
+		using var authorizationScopeChange = InvalidateChangedAuthorizationScope();
 		var tenants = ChangeTracker.Entries().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
 			.Where(x => IsPayrollInput(x.Entity, x.Metadata.ClrType)).Select(x => x.Entity is IMultiTenant scoped ? scoped.TenantId : CurrentTenant.Id).Distinct().ToList();
 		if (tenants.Count == 0) return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);

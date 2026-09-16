@@ -210,7 +210,7 @@ public class AcademicPermissionUserScopeSyncer_Tests
 	}
 
 	[Fact]
-	public async Task SyncAsync_Should_Deactivate_Legacy_Demo_Scopes_Only()
+	public async Task SyncAsync_Should_Preserve_Legacy_And_Manual_Scopes_Until_Approved_Repair()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		{
@@ -222,7 +222,7 @@ public class AcademicPermissionUserScopeSyncer_Tests
 			await WithUnitOfWorkAsync(() => _syncer.SyncAsync());
 
 			var scopes = await _scopeRepository.GetListAsync(x => x.UserId == user.Id);
-			scopes.Single(x => x.Description!.StartsWith("Seeded full organization scope")).IsActive.ShouldBeFalse();
+			scopes.Single(x => x.Description!.StartsWith("Seeded full organization scope")).IsActive.ShouldBeTrue();
 			scopes.Single(x => x.Description == "Manual test scope").IsActive.ShouldBeTrue();
 		}
 	}

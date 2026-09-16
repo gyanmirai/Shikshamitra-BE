@@ -14,6 +14,12 @@ namespace ShikshaMitra.Students;
 public interface IStudentRepository : IRepository<Student, Guid>
 {
     /// <summary>
+    /// Gets the tracked student root for an already authorized fee-assignment update.
+    /// Academic and profile graphs are not needed to change the fee-structure reference.
+    /// </summary>
+    Task<Student?> GetForFeeAssignmentAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns a student query without configured automatic navigation includes.
     /// Use for list projections where loading the whole aggregate graph would be wasteful.
     /// </summary>

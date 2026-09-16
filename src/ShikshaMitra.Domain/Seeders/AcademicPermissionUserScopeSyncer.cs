@@ -46,7 +46,6 @@ public class AcademicPermissionUserScopeSyncer(
 	{
 		logger.LogInformation("[AcademicPermissionUserScopeSyncer] Starting sync.");
 		var existingScopes = await userScopeRepository.GetListAsync();
-		await DeactivateLegacySeededScopesAsync(existingScopes);
 		logger.LogInformation(
 			"[AcademicPermissionUserScopeSyncer] Loaded existing scopes. Count={ExistingScopeCount}",
 			existingScopes.Count);
@@ -58,6 +57,9 @@ public class AcademicPermissionUserScopeSyncer(
 		var changedUserIds = new HashSet<Guid>();
 		await DeactivateObsoleteDerivedScopesAsync(existingScopes, desiredScopes, changedUserIds);
 
+		// Manual assignments, including inactive records, are not synchronization-owned.
+		var manualKeys = existingScopes.Where(x => !x.IsDeleted && x.UserId.HasValue && !IsDerivedScope(x))
+			.Select(ScopeKey.FromAssignment).ToHashSet();
 		var existingKeys = existingScopes
 			.Where(x => x.IsActive && !x.IsDeleted && x.UserId.HasValue)
 			.Select(ScopeKey.FromAssignment)
@@ -74,7 +76,7 @@ public class AcademicPermissionUserScopeSyncer(
 
 		foreach (var desiredScope in desiredScopes.Distinct())
 		{
-			if (existingKeys.Contains(desiredScope))
+			if (existingKeys.Contains(desiredScope) || manualKeys.Contains(desiredScope))
 			{
 				continue;
 			}
@@ -145,30 +147,6 @@ public class AcademicPermissionUserScopeSyncer(
 			"[AcademicPermissionUserScopeSyncer] Deactivated obsolete derived scopes. Count={DeactivatedScopeCount}",
 			obsoleteScopes.Count);
 	}
-
-	private async Task DeactivateLegacySeededScopesAsync(IEnumerable<UserScopeAssignment> existingScopes)
-	{
-		var legacyScopes = existingScopes
-			.Where(x => x.IsActive && IsLegacySeededScope(x.Description))
-			.ToList();
-
-		foreach (var scope in legacyScopes)
-		{
-			scope.Deactivate();
-			await userScopeRepository.UpdateAsync(scope, autoSave: false);
-			if (scope.UserId.HasValue)
-			{
-				await userScopeService.InvalidateUserScopeCacheAsync(scope.UserId.Value);
-			}
-		}
-	}
-
-	private static bool IsLegacySeededScope(string? description) =>
-		!string.IsNullOrWhiteSpace(description) &&
-		(description.StartsWith("Seeded full organization scope", StringComparison.OrdinalIgnoreCase) ||
-		 description.StartsWith("Seeded GSEB board scope", StringComparison.OrdinalIgnoreCase) ||
-		 description.StartsWith("Seeded CBSE board scope", StringComparison.OrdinalIgnoreCase) ||
-		 description.StartsWith("Seeded academic scope for linked student login", StringComparison.OrdinalIgnoreCase));
 
 	private static bool IsDerivedScope(UserScopeAssignment assignment) =>
 		string.Equals(assignment.Description, DerivedScopeDescription, StringComparison.Ordinal) ||

@@ -79,8 +79,9 @@ All four families are registered in `ShikshaMitraSubmodulePermissions.Finance.Su
 
 If these actions are absent from the permission-management response, rebuild and restart the API with the current definitions before trying to assign grants.
 An existing definition returned with `isGranted=false` is a grant issue rather than a missing definition.
-`RolePermissionSeeder:v21` refreshes the existing baseline role grants for Account Heads and the separate Edit/ChangeStatus actions on the next applicable seed run.
-Run seeding in the intended tenant context and refresh the signed-in permission snapshot afterward; custom roles require explicit grants through permission management.
+Existing roles do not receive missing grants automatically on any seed rerun or version change.
+Approve and apply an exact permission-management delta in the intended tenant context, then refresh the signed-in permission snapshot.
+Follow the [security standard](../../common/security/permission-consistency.md) for direct/inherited access and audited repairs.
 Coverage is in `AccountSettingsPermissionContract_Tests`, `RolePermissionSeederContributor_Tests`, and `AccountSettingsPermissionApi_Tests`.
 
 ## Contract rule

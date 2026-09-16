@@ -55,7 +55,9 @@ public partial class HRSeederContributor
 		}
 
 		var employeeIds = employeesByEmail.Values.Select(x => x.Id).ToHashSet();
-		var existing = await _employeeOrganizationAssignmentRepository.GetListAsync(x => employeeIds.Contains(x.EmployeeId));
+		var existing = (await _employeeOrganizationAssignmentRepository.GetQueryableAsync())
+			.Where(x => employeeIds.Contains(x.EmployeeId))
+			.Select(x => new { x.EmployeeId, x.EducationMediumStageId }).ToList();
 		var existingKeys = existing.Select(x => (x.EmployeeId, x.EducationMediumStageId)).ToHashSet();
 		var assignments = new List<EmployeeOrganizationAssignment>();
 
@@ -105,16 +107,18 @@ public partial class HRSeederContributor
 
 		var employeeIds = employeesWithUsers.Select(x => x.Id).ToHashSet();
 		var userIdByEmployeeId = employeesWithUsers.ToDictionary(x => x.Id, x => x.UserId!.Value);
-		var assignments = await _employeeOrganizationAssignmentRepository.GetListAsync(x => employeeIds.Contains(x.EmployeeId));
+		var assignments = (await _employeeOrganizationAssignmentRepository.GetQueryableAsync())
+			.Where(x => employeeIds.Contains(x.EmployeeId))
+			.Select(x => new { x.EmployeeId, x.EducationMediumStageId }).ToList();
 		if (assignments.Count == 0)
 		{
 			return;
 		}
 
 		var userIds = userIdByEmployeeId.Values.ToHashSet();
-		var existingPermissions = await _educationMediumStagePermissionRepository.GetListAsync(x =>
-			x.UserId.HasValue &&
-			userIds.Contains(x.UserId.Value));
+		var existingPermissions = (await _educationMediumStagePermissionRepository.GetQueryableAsync())
+			.Where(x => x.UserId.HasValue && userIds.Contains(x.UserId.Value))
+			.Select(x => new { x.UserId, x.EducationMediumStageId }).ToList();
 		var existingKeys = existingPermissions
 			.Select(x => (x.UserId!.Value, x.EducationMediumStageId))
 			.ToHashSet();

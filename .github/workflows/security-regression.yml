@@ -1,0 +1,88 @@
+name: Security Regression
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-backend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: security_test
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: payroll_tests_security_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U security_test -d payroll_tests_security_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Verify selected .NET SDK
+        run: |
+          sdk_version=$(dotnet --version)
+          echo "Selected .NET SDK: $sdk_version"
+          [[ "$sdk_version" == 9.0.* ]]
+      - name: Restore
+        run: dotnet restore
+      - name: Scope and safe-seeding regressions
+        run: >-
+          dotnet test test/ShikshaMitra.Domain.Tests/ShikshaMitra.Domain.Tests.csproj -c Release --no-restore
+          --filter "FullyQualifiedName~UserScopeResolution_Tests|FullyQualifiedName~SecurityPermissionSeeder_Tests|FullyQualifiedName~SecurityReleaseWorkflow_Tests|FullyQualifiedName~RolePermissionSeederContributor_Tests|FullyQualifiedName~RolesSeederContributor_Tests"
+      - name: Academic scope ownership and Finance regressions
+        run: >-
+          dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj -c Release --no-restore
+          --filter "FullyQualifiedName~AcademicPermissionUserScopeSyncer_Tests|FullyQualifiedName~StudentFeeAssignmentMigration_Tests|FullyQualifiedName~LateFeeCollectionRuntime_Tests"
+      - name: Create separate disposable migration fixture
+        env:
+          PGPASSWORD: synthetic-ci-only
+        run: psql -h 127.0.0.1 -U security_test -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE payroll_tests_security_migration_ci;'
+      - name: PostgreSQL Finance upgrade and protected rollback
+        env:
+          FINANCE_MIGRATION_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=payroll_tests_security_migration_ci;Username=security_test;Password=synthetic-ci-only
+        run: >-
+          dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests/ShikshaMitra.EntityFrameworkCore.Tests.csproj -c Release --no-restore
+          --filter "FullyQualifiedName~CanonicalStudentFeeAssignmentPostgres_Tests|FullyQualifiedName~LegacyMigrationBaselineBridge_Tests"
+      # ABP startup switches Npgsql's process-wide timestamp behavior to legacy.
+      # Keep the migration/model assertion in a separate process using design-time mappings.
+      - name: FullDemo ESI repeat-run regression
+        run: >-
+          dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests/ShikshaMitra.EntityFrameworkCore.Tests.csproj -c Release --no-build
+          --filter "FullyQualifiedName~EsiFullDemoConfigurationSeederContributor_Integration_Tests"
+      - name: Permission, ESI, and Finance HTTP enforcement
+        run: >-
+          dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj -c Release --no-restore
+          --filter "FullyQualifiedName~PermissionConsistencyApi_Tests|FullyQualifiedName~EsiStatutoryApi_Tests|FullyQualifiedName~StudentFeeAssignmentApi_Tests"
+      - name: PostgreSQL grant and upgrade regressions
+        env:
+          SECURITY_INTEGRATION_POSTGRES: Host=127.0.0.1;Port=5432;Database=payroll_tests_security_ci;Username=security_test;Password=synthetic-ci-only
+        run: >-
+          dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj -c Release --no-build
+          --filter "FullyQualifiedName~PermissionConsistencyPostgres_Tests"
+      - name: Create separate disposable performance fixture
+        env:
+          PGPASSWORD: synthetic-ci-only
+        run: psql -h 127.0.0.1 -U security_test -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE payroll_tests_security_performance_ci;'
+      - name: Hierarchy query and latency gate
+        env:
+          SECURITY_TEST_POSTGRES: Host=127.0.0.1;Port=5432;Database=payroll_tests_security_performance_ci;Username=security_test;Password=synthetic-ci-only
+        run: >-
+          dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj -c Release --no-build
+          --filter "FullyQualifiedName~Hierarchy_meets_query_and_latency_budget"
+      - name: Diff whitespace
+        run: git diff --check

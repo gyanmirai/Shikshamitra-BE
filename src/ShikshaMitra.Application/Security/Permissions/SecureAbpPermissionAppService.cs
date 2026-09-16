@@ -12,9 +12,16 @@ public class SecureAbpPermissionAppService(
 	IPermissionDefinitionManager permissionDefinitionManager,
 	IOptions<PermissionManagementOptions> options,
 	ISimpleStateCheckerManager<PermissionDefinition> simpleStateCheckerManager,
-	IPermissionChecker permissionChecker)
+	IPermissionChecker permissionChecker,
+	ShikshaMitraPermissionAppService permissions)
 	: PermissionAppService(permissionManager, permissionDefinitionManager, options, simpleStateCheckerManager)
 {
+	public override Task<GetPermissionListResultDto> GetAsync(string providerName, string providerKey) =>
+		permissions.GetAsync(providerName, providerKey);
+
+	public override Task UpdateAsync(string providerName, string providerKey, UpdatePermissionsDto input) =>
+		permissions.UpdateAsync(providerName, providerKey, input);
+
 	protected override async Task CheckProviderPolicy(string providerName)
 	{
 		await base.CheckProviderPolicy(providerName);

@@ -12,7 +12,7 @@ namespace ShikshaMitra.Seeders;
 public class RolesSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "RolesSeeder";
-	internal const string StepVersion = "RolesSeeder:v4";
+	internal const string StepVersion = "RolesSeeder:v5";
 	internal const int StepOrder = 110;
 	internal const string AdminRoleName = "admin";
 	internal const string SuperAdminRoleName = "super-admin";
@@ -20,6 +20,7 @@ public class RolesSeederContributor : BaseSeederContributor
 	internal const string HodRoleName = "HOD";
 
 	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly IPermissionGrantSeedRepository _permissionGrants;
 
 	private static readonly Dictionary<string, string> DefaultRoleColors = new()
 	{
@@ -47,10 +48,12 @@ public class RolesSeederContributor : BaseSeederContributor
 		ICurrentTenant currentTenant,
 		IGuidGenerator guidGenerator,
 		IUnitOfWork unitOfWork,
-		IIdentityRoleRepository roleRepository)
+		IIdentityRoleRepository roleRepository,
+		IPermissionGrantSeedRepository permissionGrants)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
 		_roleRepository = roleRepository;
+		_permissionGrants = permissionGrants;
 	}
 
 	public override async Task SeedAsync(DataSeedContext context)
@@ -161,6 +164,9 @@ public class RolesSeederContributor : BaseSeederContributor
 				RoleEmployeeAudienceDefaults.ResolveEmployeeOnboardingAssignable(role.Name, null));
 
 			await _roleRepository.InsertAsync(role);
+			// Creation and defaults share this step's transaction. Existing roles are never repaired.
+			await _permissionGrants.InsertRoleGrantsIgnoringDuplicatesAsync(role.Name,
+				RolePermissionSeederContributor.GetInitialPermissions(role.Name, tenantId), tenantId);
 		}
 
 		await BackfillCustomEmployeeRoleGroupAudiencesAsync();

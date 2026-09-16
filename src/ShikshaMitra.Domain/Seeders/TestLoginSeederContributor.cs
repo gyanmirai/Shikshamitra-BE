@@ -80,7 +80,8 @@ public class TestLoginSeederContributor : BaseSeederContributor
 
 		foreach (var spec in credentialSpecs)
 		{
-			var user = await EnsureUserWithTempPasswordAsync(spec);
+			if (await FindUserAsync(spec) != null) continue;
+			var user = await CreateTestUserAsync(spec);
 			if (spec.RequiresAcademicYearWideScope)
 			{
 				await EnsureAcademicYearWidePermissionsAsync(user);
@@ -161,89 +162,15 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		}
 	}
 
-	private async Task<IdentityUser> EnsureUserWithTempPasswordAsync(TestLoginSpec spec)
+	private async Task<IdentityUser> CreateTestUserAsync(TestLoginSpec spec)
 	{
-		var user = await FindUserAsync(spec);
-
-		if (user == null)
-		{
-			user = new IdentityUser(
-				GuidGenerator.Create(),
-				spec.UserName,
-				spec.Email,
-				CurrentTenant.Id);
-			user.Name = spec.FirstName;
-			user.Surname = spec.LastName;
-			user.SetEmailConfirmed(true);
-
-			var createResult = await _userManager.CreateAsync(user, TempPassword);
-			if (!createResult.Succeeded)
-			{
-				throw new Exception(
-					$"Failed to create seeded test user '{spec.Email}': " +
-					string.Join(", ", createResult.Errors));
-			}
-		}
-		else
-		{
-			var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
-
-			if (!string.Equals(managedUser.UserName, spec.UserName, StringComparison.Ordinal))
-			{
-				var setUserNameResult = await _userManager.SetUserNameAsync(managedUser, spec.UserName);
-				if (!setUserNameResult.Succeeded)
-				{
-					throw new Exception(
-						$"Failed to update username for seeded test user '{spec.Email}': " +
-						string.Join(", ", setUserNameResult.Errors));
-				}
-			}
-
-			if (!string.Equals(managedUser.Email, spec.Email, StringComparison.OrdinalIgnoreCase))
-			{
-				var setEmailResult = await _userManager.SetEmailAsync(managedUser, spec.Email);
-				if (!setEmailResult.Succeeded)
-				{
-					throw new Exception(
-						$"Failed to update email for seeded test user '{spec.Email}': " +
-						string.Join(", ", setEmailResult.Errors));
-				}
-			}
-
-			var userChanged = false;
-			if (!managedUser.EmailConfirmed)
-			{
-				managedUser.SetEmailConfirmed(true);
-				userChanged = true;
-			}
-
-			if (!string.Equals(managedUser.Name, spec.FirstName, StringComparison.Ordinal))
-			{
-				managedUser.Name = spec.FirstName;
-				userChanged = true;
-			}
-
-			if (!string.Equals(managedUser.Surname, spec.LastName, StringComparison.Ordinal))
-			{
-				managedUser.Surname = spec.LastName;
-				userChanged = true;
-			}
-
-			if (userChanged)
-			{
-				var updateResult = await _userManager.UpdateAsync(managedUser);
-				if (!updateResult.Succeeded)
-				{
-					throw new Exception(
-						$"Failed to update seeded test user '{spec.Email}': " +
-						string.Join(", ", updateResult.Errors));
-				}
-			}
-
-			await ResetPasswordAsync(managedUser, TempPassword);
-		}
-
-		await EnsureExclusiveRoleMembershipAsync(user, spec.RoleName);
+		var user = new IdentityUser(GuidGenerator.Create(), spec.UserName, spec.Email, CurrentTenant.Id)
+		{ Name = spec.FirstName, Surname = spec.LastName };
+		user.SetEmailConfirmed(true);
+		var result = await _userManager.CreateAsync(user, TempPassword);
+		if (!result.Succeeded)
+			throw new Exception("Failed to initialize a synthetic test login: " + string.Join(", ", result.Errors));
+		await AssignInitialRoleAsync(user, spec.RoleName);
 		await LinkEmployeeAliasesToUserAsync(user, spec);
 		return user;
 	}
@@ -396,45 +323,7 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		return null;
 	}
 
-	private async Task ResetPasswordAsync(IdentityUser user, string password)
-	{
-		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
-		if (!string.IsNullOrWhiteSpace(managedUser.PasswordHash) &&
-		    await _userManager.CheckPasswordAsync(managedUser, password))
-		{
-			return;
-		}
-
-		IdentityResult result;
-		if (string.IsNullOrWhiteSpace(managedUser.PasswordHash))
-		{
-			result = await _userManager.AddPasswordAsync(managedUser, password);
-		}
-		else
-		{
-			// Avoid token-provider dependency in DbMigrator context.
-			// Some environments don't register the "Default" token provider, which breaks
-			// GeneratePasswordResetTokenAsync during seeding.
-			var removeResult = await _userManager.RemovePasswordAsync(managedUser);
-			if (!removeResult.Succeeded)
-			{
-				throw new Exception(
-					$"Failed to remove existing password for seeded test user '{managedUser.Email}': " +
-					string.Join(", ", removeResult.Errors));
-			}
-
-			result = await _userManager.AddPasswordAsync(managedUser, password);
-		}
-
-		if (!result.Succeeded)
-		{
-			throw new Exception(
-				$"Failed to set password for seeded test user '{managedUser.Email}': " +
-				string.Join(", ", result.Errors));
-		}
-	}
-
-	private async Task EnsureExclusiveRoleMembershipAsync(IdentityUser user, string roleName)
+	private async Task AssignInitialRoleAsync(IdentityUser user, string roleName)
 	{
 		var normalizedRoleName = _lookupNormalizer.NormalizeName(roleName);
 		var role = await _roleRepository.FindByNormalizedNameAsync(normalizedRoleName);
@@ -445,20 +334,6 @@ public class TestLoginSeederContributor : BaseSeederContributor
 		}
 
 		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
-		var staleRoles = (await _userManager.GetRolesAsync(managedUser))
-			.Where(currentRole => !string.Equals(currentRole, role.Name, StringComparison.OrdinalIgnoreCase))
-			.ToList();
-		if (staleRoles.Count > 0)
-		{
-			var removeResult = await _userManager.RemoveFromRolesAsync(managedUser, staleRoles);
-			if (!removeResult.Succeeded)
-			{
-				throw new Exception(
-					$"Failed to repair roles for seeded test user '{managedUser.Email}': " +
-					string.Join(", ", removeResult.Errors));
-			}
-		}
-
 		if (await _userManager.IsInRoleAsync(managedUser, role.Name))
 		{
 			return;

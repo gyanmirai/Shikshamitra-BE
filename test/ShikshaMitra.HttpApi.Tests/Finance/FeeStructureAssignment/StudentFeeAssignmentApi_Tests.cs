@@ -1,325 +1,250 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.ConcessionRequests;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
+using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
+using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Finance.Fees.Settings;
+using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
-using ShikshaMitra.Finance.FeeCollectionTests;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Students;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Security.Claims;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Finance.FeeStructureAssignment;
 
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Finance)]
-public class StudentFeeAssignmentApi_Tests : ShikshaMitraApiTestBase
+public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
-    private const string AssignUrl        = "/api/student-fee-structure/assign";
-    private const string GetByStudentUrl  = "/api/student-fee-structure/student";
-    private const string FeeStructuresUrl = "/api/fee-structures";
-    private const string MetadataUrl      = "/api/fee-structures-metadata";
-    private const string CollectFormUrl   = "/api/fee-collections";
+	private const string BaseUrl = "/api/student-fee-structure";
 
-    public StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
-    {
-        ConcessionRequestTestHelper.DefaultAcademicYearId = factory.SeededAcademicYearId;
-        ConcessionRequestTestHelper.DefaultMediumId       = factory.SeededMediumId;
-        ConcessionRequestTestHelper.DefaultStandardId     = factory.SeededStandardId;
-        ConcessionRequestTestHelper.DefaultDivisionId     = factory.SeededDivisionId;
-        FeeCollectionTestHelper.DefaultAcademicYearId     = factory.SeededAcademicYearId;
-        FeeCollectionTestHelper.DefaultMediumId           = factory.SeededMediumId;
-        FeeCollectionTestHelper.DefaultStandardId         = factory.SeededStandardId;
-        FeeCollectionTestHelper.DefaultDivisionId         = factory.SeededDivisionId;
-    }
+	// Enrollment is a synthetic prerequisite, not a call to the removed registration API.
+	// Publication, preview, assignment and collection reads use real HTTP endpoints.
+	private async Task<(AssignStudentFeeStructureDto Input, Guid[] Heads)> CreateFixtureAsync(bool optionalHeads = false)
+	{
+		var heads = new Guid[optionalHeads ? 3 : 1];
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var userId = Guid.Parse(TestAuthHandler.TestUserId);
+		Guid studentId;
+		Guid metadataId;
+		var candidate = new StandardFeeStructureRequest { Name = $"Synthetic assignment {Guid.NewGuid():N}" };
+		using (var services = Factory.Services.CreateScope())
+		using (services.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+		using (services.ServiceProvider.GetRequiredService<ICurrentPrincipalAccessor>().Change(
+			new ClaimsPrincipal(new ClaimsIdentity([new Claim(AbpClaimTypes.UserId, userId.ToString())], "Test"))))
+		using (var uow = services.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+		{
+			var provider = services.ServiceProvider;
+			var year = await provider.GetRequiredService<IRepository<AcademicYear, Guid>>().GetAsync(Factory.SeededAcademicYearId);
+			var account = new AccountHead(Guid.NewGuid(), tenantId, year.Id, candidate.Name, AccountHeadType.Income, null, null);
+			await provider.GetRequiredService<IRepository<AccountHead, Guid>>().InsertAsync(account, autoSave: true);
+			var income = new TransactionCategory(Guid.NewGuid(), tenantId, year.Id, TransactionType.Income,
+				candidate.Name, null, [], true, $"I-{Guid.NewGuid():N}"[..16], account.Id, DateTimeOffset.UtcNow.AddDays(-1), null);
+			await provider.GetRequiredService<IRepository<TransactionCategory, Guid>>().InsertAsync(income, autoSave: true);
+			var category = new FeeCategory(Guid.NewGuid(), tenantId, year.Id, candidate.Name, null);
+			await provider.GetRequiredService<IRepository<FeeCategory, Guid>>().InsertAsync(category, autoSave: true);
+			for (var i = 0; i < heads.Length; i++)
+			{
+				var head = new FeeHead(Guid.NewGuid(), tenantId, year.Id, category.Id, $"Synthetic head {i}", FeeHeadModule.Finance, true, null, income.Id);
+				await provider.GetRequiredService<IRepository<FeeHead, Guid>>().InsertAsync(head, autoSave: true);
+				heads[i] = head.Id;
+			}
+			var student = new Student(Guid.NewGuid(), tenantId, "Synthetic", null, "Assignment", year.Id,
+				Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededMediumStageId, Factory.SeededStandardId,
+				status: StudentLifeCycleStatusEnum.Enrolled);
+			await provider.GetRequiredService<IRepository<Student, Guid>>().InsertAsync(student, autoSave: true);
+			studentId = student.Id;
+			var metadata = new FeeStructureMetadata(Guid.NewGuid(), tenantId, year.Id, Factory.SeededBoardId,
+				Factory.SeededMediumId, null, candidate.Name);
+			await provider.GetRequiredService<IRepository<FeeStructureMetadata, Guid>>().InsertAsync(metadata, autoSave: true);
+			metadataId = metadata.Id;
+			var term = new PaymentTerm(Guid.NewGuid(), tenantId, year.Id, Factory.SeededBoardId, candidate.Name,
+				$"T-{Guid.NewGuid():N}"[..16], null, false, HolidayShiftingMethod.None, DemandGenerationRule.OnDueDate, null, InitialDemandStatus.Draft);
+			var version = new PaymentTermVersion(Guid.NewGuid(), tenantId, term.Id, 1, PaymentTermVersionStatus.Draft,
+				HolidayShiftingMethod.None, DemandGenerationRule.OnDueDate, null, null, null);
+			version.SetInstallments([new PaymentTermInstallment(Guid.NewGuid(), version.Id, 1, "Annual",
+				year.StartDate, year.EndDate, year.StartDate, year.StartDate, 100m, true, false)]);
+			version.Publish(year.StartDate, userId);
+			term.AddVersion(version);
+			await provider.GetRequiredService<IRepository<PaymentTerm, Guid>>().InsertAsync(term, autoSave: true);
+			var book = new ReceiptBook(Guid.NewGuid(), tenantId, year.Id, Factory.SeededBoardId, Factory.SeededMediumId,
+				Factory.SeededMediumStageId, candidate.Name, $"B-{Guid.NewGuid():N}"[..16], "", 1, 99999, "");
+			await provider.GetRequiredService<IRepository<ReceiptBook, Guid>>().InsertAsync(book, autoSave: true);
+			candidate.ReceiptBookId = book.Id;
+			var policy = await provider.GetRequiredService<ICollectionPolicyAppService>().CreateAsync(new CreateUpdateCollectionPolicyDto
+			{
+				AcademicYearId = year.Id, PolicyName = candidate.Name, PolicyCode = $"P-{Guid.NewGuid():N}"[..16],
+				Status = "Active", EnableLateFee = false, AllowOnlineCollection = true,
+				LateFeeType = "PerDay", PercentageBase = "OutstandingAmount", CompoundFrequency = "Daily", RoundingMethod = "None"
+			});
+			candidate.CollectionPolicyId = policy.Id;
+			for (var i = 0; i < heads.Length; i++)
+				candidate.FeeHeads.Add(new FeeHeadAssignmentRequest
+				{
+					FeeHeadId = heads[i], Amount = i == 0 ? 12_000m : i == 1 ? 6_000m : 2_000m,
+					IsOptional = i > 0, IsOneTime = i == 2,
+					PayableMonth = (MonthEnum)year.StartDate.Month, PayableYear = year.StartDate.Year,
+					PaymentTermId = term.Id, PaymentTermVersionId = version.Id
+				});
+			await uow.CompleteAsync();
+		}
+		var draft = await PostAndReadAsync<FeeStructureCreateResponse>($"/api/fee-structures?feeStructureMetadataId={metadataId}",
+			new StandardFeeStructureSaveRequest { StandardId = Factory.SeededStandardId, StandardFeeStructures = candidate });
+		var published = await PostAndReadAsync<FeeStructureCreateResponse>($"/api/fee-structures/{draft.Id}/publish",
+			new FeeStructurePublishRequest { ConcurrencyStamp = draft.ConcurrencyStamp });
+		return (new AssignStudentFeeStructureDto { StudentId = studentId, AcademicYearId = Factory.SeededAcademicYearId,
+			StandardFeeStructureId = published.Id }, heads);
+	}
 
-    // ── helpers ───────────────────────────────────────────────────────────────
+	private async Task<AssignmentCommitResultDto> PreviewAndAssignAsync(AssignStudentFeeStructureDto input)
+	{
+		var preview = await PostAndReadAsync<StudentFeeAssignmentPreviewDto>($"{BaseUrl}/preview", input);
+		preview.PreviewToken.ShouldNotBeNullOrWhiteSpace();
+		input.PreviewToken = preview.PreviewToken;
+		var result = await PostAndReadAsync<AssignmentCommitResultDto>($"{BaseUrl}/assign", input);
+		result.Outcome.ShouldBe("Assigned");
+		using var services = Factory.Services.CreateScope();
+		using var tenant = services.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
+		using var uow = services.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+		var students = await services.ServiceProvider.GetRequiredService<IStudentRepository>().GetQueryableAsync();
+		students.Where(student => student.Id == input.StudentId).Select(student => student.FeeStructureId).Single()
+			.ShouldBe(input.StandardFeeStructureId, "The narrow tracked lookup must persist the student assignment link.");
+		return result;
+	}
 
-    /// <summary>
-    /// Retrieves the first FeeStructureMetadata ID for the seeded academic year.
-    /// The fee-collection seeder creates metadata as part of its setup.
-    /// </summary>
-    private async Task<Guid> GetOrCreateFeeStructureMetadataIdAsync()
-    {
-        var academicYearId = Factory.SeededAcademicYearId;
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Assignment_Root_Lookup_Is_Tracked_Tenant_Scoped_And_Does_Not_Load_Academic_Graph()
+	{
+		var (input, _) = await CreateFixtureAsync();
+		using var services = Factory.Services.CreateScope();
+		var provider = services.ServiceProvider;
+		var tenant = provider.GetRequiredService<ICurrentTenant>();
+		var uows = provider.GetRequiredService<IUnitOfWorkManager>();
+		var students = provider.GetRequiredService<IStudentRepository>();
+		using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+		using (var uow = uows.Begin(requiresNew: true))
+		{
+			var student = await students.GetForFeeAssignmentAsync(input.StudentId);
+			student.ShouldNotBeNull();
+			var db = await provider.GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+			db.Entry(student).State.ShouldBe(EntityState.Unchanged);
+			db.Entry(student).Reference(x => x.AcademicBoard).IsLoaded.ShouldBeFalse();
+			db.Entry(student).Reference(x => x.Standard).IsLoaded.ShouldBeFalse();
+		}
+		using (tenant.Change(Guid.NewGuid()))
+		using (var uow = uows.Begin(requiresNew: true))
+			(await students.GetForFeeAssignmentAsync(input.StudentId)).ShouldBeNull();
+	}
 
-        var listResponse = await GetAndReadAsync<FeeStructureMetadataListResponse>(
-            $"{MetadataUrl}?academicYearId={academicYearId}");
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Assign_Fee_Structure_And_Collect_Form_Shows_Ledger()
+	{
+		var (input, _) = await CreateFixtureAsync();
+		await PreviewAndAssignAsync(input);
+		var form = await GetAndReadAsync<FeeCollectFormDto>($"/api/fee-collections/{input.StudentId}/collect-form?academicYearId={input.AcademicYearId}");
+		form.Ledger.ShouldNotBeEmpty();
+		form.Summary.TotalFee.ShouldBe(12_000d);
+		form.Summary.PendingFee.ShouldBe(12_000d);
+	}
 
-        if (listResponse.Items?.Count > 0)
-            return listResponse.Items[0].Id;
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Reuse_Identical_Assignment_And_Reject_A_Changed_Retry()
+	{
+		var (input, _) = await CreateFixtureAsync();
+		var first = await PreviewAndAssignAsync(input);
+		var repeat = await PostAndReadAsync<AssignmentCommitResultDto>($"{BaseUrl}/assign", input);
+		repeat.Outcome.ShouldBe("AlreadyAssigned");
+		repeat.AssignmentId.ShouldBe(first.AssignmentId);
+		input.OverrideReason = "Different synthetic reviewed command";
+		var different = await Client.PostAsJsonAsync($"{BaseUrl}/assign", input, JsonOptions);
+		// The deployed Finance business-error contract is 400 with an exact errorCode.
+		different.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var problem = await different.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		problem.GetProperty("errorCode").GetString().ShouldBe(AssignmentErrorCodes.AlreadyAssigned);
+		var form = await GetAndReadAsync<FeeCollectFormDto>($"/api/fee-collections/{input.StudentId}/collect-form?academicYearId={input.AcademicYearId}");
+		form.Summary.TotalFee.ShouldBe(12_000d, "Retries must not create additional obligations.");
+	}
 
-        // Fall back: generate metadata if seeder hasn't created it yet
-        var generateResponse = await Client.PostAsync(
-            $"{MetadataUrl}/generate?academicYearId={academicYearId}", null);
-        generateResponse.EnsureSuccessStatusCode();
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Return_Fee_Head_Summaries_After_Assignment()
+	{
+		var (input, _) = await CreateFixtureAsync();
+		await PreviewAndAssignAsync(input);
+		var details = await GetAndReadAsync<StudentFeeDetailsDto>($"/api/fee-collections/{input.StudentId}/fee-details?academicYearId={input.AcademicYearId}");
+		details.FeeHeads.ShouldNotBeEmpty();
+		details.FeeOverview.TotalFee.ShouldBe(12_000d);
+		details.FeeOverview.PendingFee.ShouldBe(12_000d);
+	}
 
-        var listAfter = await GetAndReadAsync<FeeStructureMetadataListResponse>(
-            $"{MetadataUrl}?academicYearId={academicYearId}");
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Get_Student_Fee_Structure_Returns_Fee_Heads_After_Assignment()
+	{
+		var (input, heads) = await CreateFixtureAsync();
+		await PreviewAndAssignAsync(input);
+		var result = await GetAndReadAsync<StudentFeeStructureResponseDto>($"{BaseUrl}/student/{input.StudentId}?academicYearId={input.AcademicYearId}");
+		result.StandardFeeStructureId.ShouldBe(input.StandardFeeStructureId);
+		result.FeeHeads.ShouldContain(x => x.FeeHeadId == heads[0]);
+		result.ConcessionPolicyId.ShouldBeNull();
+		result.Assignment.ShouldNotBeNull();
+		result.Assignment.Lines.Sum(x => x.ProratedAmount).ShouldBe(12_000m);
+	}
 
-        listAfter.Items.ShouldNotBeEmpty("Fee structure metadata should have been generated.");
-        return listAfter.Items[0].Id;
-    }
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Assign_Custom_Optional_Annual_And_OneTime_Amounts()
+	{
+		var (input, heads) = await CreateFixtureAsync(optionalHeads: true);
+		input.SelectedOptionalFeeHeadIds = [heads[1], heads[2]];
+		input.OverrideReason = "Synthetic approved total amount overrides";
+		input.FeeHeadDetails = [new() { FeeHeadId = heads[1], Amount = 1500m }, new() { FeeHeadId = heads[2], Amount = 2500m }];
+		await PreviewAndAssignAsync(input);
+		var result = await GetAndReadAsync<StudentFeeStructureResponseDto>($"{BaseUrl}/student/{input.StudentId}?academicYearId={input.AcademicYearId}");
+		result.FeeHeads.Single(x => x.FeeHeadId == heads[1]).SelectedAmount.ShouldBe(1500m);
+		result.FeeHeads.Single(x => x.FeeHeadId == heads[2]).SelectedAmount.ShouldBe(2500m);
+		result.Assignment.ShouldNotBeNull();
+		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[1]).Sum(x => x.ProratedAmount).ShouldBe(1500m);
+		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[2]).Sum(x => x.ProratedAmount).ShouldBe(2500m);
+		var form = await GetAndReadAsync<FeeCollectFormDto>($"/api/fee-collections/{input.StudentId}/collect-form?academicYearId={input.AcademicYearId}");
+		form.Summary.TotalFee.ShouldBe(16_000d, "Recurring overrides are annual totals, not unapproved per-month replacements.");
+	}
 
-    /// <summary>
-    /// Creates a fee structure with a single recurring fee head for the seeded standard.
-    /// Returns the fee structure ID.
-    /// </summary>
-    private async Task<Guid> CreateFeeStructureAsync(Guid feeStructureMetadataId, Guid feeHeadId)
-    {
-        var request = new StandardFeeStructureSaveRequest
-        {
-            StandardId = Factory.SeededStandardId,
-            StandardFeeStructures = new StandardFeeStructureRequest
-            {
-                Name = $"Test Structure {Guid.NewGuid():N}"[..24],
-                FeeHeads =
-                [
-                    new FeeHeadAssignmentRequest
-                    {
-                        FeeHeadId    = feeHeadId,
-                        Amount       = 12_000m,
-                        IsOneTime    = false,
-                        IsOptional   = false,
-                    },
-                ],
-            },
-        };
-
-        var response = await Client.PostAsJsonAsync(
-            $"{FeeStructuresUrl}?feeStructureMetadataId={feeStructureMetadataId}",
-            request, JsonOptions);
-        response.EnsureSuccessStatusCode();
-
-        var result = await response.Content.ReadFromJsonAsync<FeeStructureCreateResponse>(JsonOptions)
-            ?? throw new InvalidOperationException("Null FeeStructureCreateResponse");
-
-        return result.Id;
-    }
-
-    // ── tests ─────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Verifies that assigning a fee structure to a student creates the StudentFeeStructure
-    /// record and DueFee records so that the collect form returns a populated ledger.
-    /// </summary>
-    [Fact]
-    [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Assign_Fee_Structure_And_Collect_Form_Shows_Ledger()
-    {
-        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
-        var feeHeadId      = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
-        var metadataId     = await GetOrCreateFeeStructureMetadataIdAsync();
-        var feeStructureId = await CreateFeeStructureAsync(metadataId, feeHeadId);
-
-        var assignResponse = await Client.PostAsJsonAsync(AssignUrl, new
-        {
-            studentId,
-            standardFeeStructureId    = feeStructureId,
-            selectedOptionalFeeHeadIds = Array.Empty<Guid>(),
-        }, JsonOptions);
-
-        assignResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var form = await GetAndReadAsync<FeeCollectFormDto>(
-            $"{CollectFormUrl}/{studentId}/collect-form?academicYearId={Factory.SeededAcademicYearId}");
-
-        form.ShouldNotBeNull();
-        form.Ledger.ShouldNotBeNull();
-        form.Ledger.ShouldNotBeEmpty(
-            "Collect form ledger must have monthly entries after fee-structure assignment.");
-        form.Summary.TotalFee.ShouldBeGreaterThan(0d,
-            "TotalFee must reflect the assigned fee structure amount.");
-        form.Summary.PendingFee.ShouldBeGreaterThan(0d,
-            "PendingFee must be non-zero before any payment.");
-    }
-
-    /// <summary>
-    /// Verifies that assigning a fee structure twice on the same student is rejected.
-    /// </summary>
-    [Fact]
-    [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Reject_Duplicate_Fee_Structure_Assignment()
-    {
-        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
-        var feeHeadId      = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
-        var metadataId     = await GetOrCreateFeeStructureMetadataIdAsync();
-        var feeStructureId = await CreateFeeStructureAsync(metadataId, feeHeadId);
-
-        var assignBody = new
-        {
-            studentId,
-            standardFeeStructureId    = feeStructureId,
-            selectedOptionalFeeHeadIds = Array.Empty<Guid>(),
-        };
-
-        var first = await Client.PostAsJsonAsync(AssignUrl, assignBody, JsonOptions);
-        first.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var second = await Client.PostAsJsonAsync(AssignUrl, assignBody, JsonOptions);
-        second.StatusCode.ShouldBe(HttpStatusCode.BadRequest,
-            "Re-assigning a fee structure to the same student must be rejected.");
-    }
-
-    /// <summary>
-    /// Verifies that the student fee-details endpoint returns fee-head summaries with the
-    /// correct total and pending amounts after a fee structure is assigned.
-    /// </summary>
-    [Fact]
-    [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Return_Fee_Head_Summaries_After_Assignment()
-    {
-        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
-        var feeHeadId      = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
-        var metadataId     = await GetOrCreateFeeStructureMetadataIdAsync();
-        var feeStructureId = await CreateFeeStructureAsync(metadataId, feeHeadId);
-
-        await Client.PostAsJsonAsync(AssignUrl, new
-        {
-            studentId,
-            standardFeeStructureId    = feeStructureId,
-            selectedOptionalFeeHeadIds = Array.Empty<Guid>(),
-        }, JsonOptions);
-
-        var feeDetails = await GetAndReadAsync<StudentFeeDetailsDto>(
-            $"{CollectFormUrl}/{studentId}/fee-details?academicYearId={Factory.SeededAcademicYearId}");
-
-        feeDetails.ShouldNotBeNull();
-        feeDetails.FeeHeads.ShouldNotBeNull();
-        feeDetails.FeeHeads.ShouldNotBeEmpty("Fee heads must be present after assignment.");
-        feeDetails.FeeOverview.TotalFee.ShouldBe(12_000d,
-            "Total fee should equal the annual amount on the fee structure.");
-        feeDetails.FeeOverview.PendingFee.ShouldBe(12_000d,
-            "Full amount should be pending before any payment.");
-    }
-
-    [Fact]
-    [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Get_Student_Fee_Structure_Returns_Fee_Heads_After_Assignment()
-    {
-        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
-        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
-        var metadataId = await GetOrCreateFeeStructureMetadataIdAsync();
-        var feeStructureId = await CreateFeeStructureAsync(metadataId, feeHeadId);
-
-        await Client.PostAsJsonAsync(AssignUrl, new
-        {
-            studentId,
-            standardFeeStructureId = feeStructureId,
-            selectedOptionalFeeHeadIds = Array.Empty<Guid>(),
-        }, JsonOptions);
-
-        var response = await Client.GetAsync($"{GetByStudentUrl}/{studentId}");
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        var body = await response.Content.ReadFromJsonAsync<StudentFeeStructureResponseDto>(JsonOptions);
-        body.ShouldNotBeNull();
-        body!.FeeHeads.ShouldNotBeNull();
-        body.FeeHeads.ShouldNotBeEmpty();
-        body.FeeHeads.ShouldContain(h => h.FeeHeadId == feeHeadId);
-        body.StandardFeeStructureId.ShouldBe(feeStructureId);
-    }
-
-    /// <summary>
-    /// Verifies that assigning a fee structure with customized optional fee heads generates
-    /// due fees matching the custom amounts, one-time months, and recurring ranges.
-    /// </summary>
-    [Fact]
-    [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Assign_Fee_Structure_With_Custom_Optional_Fee_Heads()
-    {
-        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
-        var mainFeeHeadId    = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
-        var optionalRecId    = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
-        var optionalOneId    = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
-
-        var metadataId = await GetOrCreateFeeStructureMetadataIdAsync();
-
-        // Create a fee structure with 1 regular recurring fee, 1 optional recurring, and 1 optional one-time
-        var request = new StandardFeeStructureSaveRequest
-        {
-            StandardId = Factory.SeededStandardId,
-            StandardFeeStructures = new StandardFeeStructureRequest
-            {
-                Name = $"Test Custom {Guid.NewGuid():N}"[..24],
-                FeeHeads = new List<FeeHeadAssignmentRequest>
-                {
-                    new() { FeeHeadId = mainFeeHeadId, Amount = 12000m, IsOneTime = false, IsOptional = false },
-                    new() { FeeHeadId = optionalRecId, Amount = 6000m, IsOneTime = false, IsOptional = true },
-                    new() { FeeHeadId = optionalOneId, Amount = 2000m, IsOneTime = true, IsOptional = true }
-                }
-            }
-        };
-
-        var response = await Client.PostAsJsonAsync(
-            $"{FeeStructuresUrl}?feeStructureMetadataId={metadataId}",
-            request, JsonOptions);
-        response.EnsureSuccessStatusCode();
-        var result = await response.Content.ReadFromJsonAsync<FeeStructureCreateResponse>(JsonOptions);
-        var feeStructureId = result!.Id;
-
-        // Perform flexible optional fee assignment
-        var assignResponse = await Client.PostAsJsonAsync(AssignUrl, new AssignStudentFeeStructureDto
-        {
-            StudentId = studentId,
-            StandardFeeStructureId = feeStructureId,
-            SelectedOptionalFeeHeadIds = new List<Guid> { optionalRecId, optionalOneId },
-            FeeHeadDetails = new List<StudentFeeHeadDetailDto>
-            {
-                new()
-                {
-                    FeeHeadId = optionalRecId,
-                    Amount = 1500m, // 1500 per month
-                    StartPayableMonth = MonthEnum.July,
-                    StartPayableYear = 2026,
-                    EndPayableMonth = MonthEnum.November,
-                    EndPayableYear = 2026
-                },
-                new()
-                {
-                    FeeHeadId = optionalOneId,
-                    Amount = 2500m, // Custom amount
-                    PayableMonth = MonthEnum.August,
-                    PayableYear = 2026
-                }
-            }
-        }, JsonOptions);
-
-        assignResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-        // Fetch student's assigned fee structure and verify reconstructed values
-        var structureResponse = await Client.GetAsync($"{GetByStudentUrl}/{studentId}");
-        structureResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await structureResponse.Content.ReadFromJsonAsync<StudentFeeStructureResponseDto>(JsonOptions);
-        body.ShouldNotBeNull();
-        body.FeeHeads.ShouldNotBeEmpty();
-
-        var recHead = body.FeeHeads.Find(h => h.FeeHeadId == optionalRecId);
-        recHead.ShouldNotBeNull();
-        recHead.SelectedAmount.ShouldBe(1500m);
-        recHead.StartPayableMonth.ShouldBe(MonthEnum.July);
-        recHead.StartPayableYear.ShouldBe(2026);
-        recHead.EndPayableMonth.ShouldBe(MonthEnum.November);
-        recHead.EndPayableYear.ShouldBe(2026);
-
-        var oneHead = body.FeeHeads.Find(h => h.FeeHeadId == optionalOneId);
-        oneHead.ShouldNotBeNull();
-        oneHead.SelectedAmount.ShouldBe(2500m);
-        oneHead.PayableMonth.ShouldBe(MonthEnum.August);
-        oneHead.PayableYear.ShouldBe(2026);
-
-        // Get collect form ledger and verify totals
-        var form = await GetAndReadAsync<FeeCollectFormDto>(
-            $"{CollectFormUrl}/{studentId}/collect-form?academicYearId={Factory.SeededAcademicYearId}");
-        
-        form.ShouldNotBeNull();
-        form.Ledger.ShouldNotBeNull();
-
-        // 12000 (regular) + 5 * 1500 (optional recurring) + 2500 (optional one-time) = 22000
-        form.Summary.TotalFee.ShouldBe(22000d);
-    }
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Assignment_Without_Reviewed_Preview()
+	{
+		var (input, _) = await CreateFixtureAsync();
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/assign", input, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await response.Content.ReadAsStringAsync()).ShouldContain("Finance:Assignment:");
+	}
 }

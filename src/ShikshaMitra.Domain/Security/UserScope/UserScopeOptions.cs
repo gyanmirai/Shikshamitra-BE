@@ -9,14 +9,13 @@ namespace ShikshaMitra.Security.UserScope;
 public class UserScopeOptions
 {
     /// <summary>
-    /// Enables or disables caching of user scope contexts.
-    /// Default: true
+    /// Legacy configuration retained for compatibility, not an authorization cache switch.
+    /// Effective scope is always resolved from current data with unit-of-work-local reuse only.
     /// </summary>
     public bool CacheEnabled { get; set; } = true;
 
     /// <summary>
-    /// Duration in minutes for which user scope is cached.
-    /// Default: 15 minutes
+    /// Legacy configuration retained for compatibility and ignored by authorization resolution.
     /// </summary>
     public int CacheDurationMinutes { get; set; } = 15;
 

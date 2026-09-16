@@ -4,7 +4,6 @@ using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Statutory;
-using ShikshaMitra.Security.UserScope;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,7 +31,6 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 	private readonly IRepository<EmployeeStatutoryEnrollment, Guid> _enrollmentRepository;
 	private readonly IRepository<EmployeeCompensationRevision, Guid> _revisionRepository;
 	private readonly IRepository<EmployeeCompensationRevisionLine, Guid> _revisionLineRepository;
-	private readonly IRepository<UserScopeAssignment, Guid> _userScopeRepository;
 	private readonly HRSeederContributor _hrSeederContributor;
 	private readonly IUnitOfWorkManager _unitOfWorkManager;
 	private readonly IClock _clock;
@@ -50,7 +48,6 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 		IRepository<EmployeeStatutoryEnrollment, Guid> enrollmentRepository,
 		IRepository<EmployeeCompensationRevision, Guid> revisionRepository,
 		IRepository<EmployeeCompensationRevisionLine, Guid> revisionLineRepository,
-		IRepository<UserScopeAssignment, Guid> userScopeRepository,
 		HRSeederContributor hrSeederContributor,
 		IUnitOfWorkManager unitOfWorkManager,
 		IClock clock,
@@ -65,7 +62,6 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 		_enrollmentRepository = enrollmentRepository;
 		_revisionRepository = revisionRepository;
 		_revisionLineRepository = revisionLineRepository;
-		_userScopeRepository = userScopeRepository;
 		_hrSeederContributor = hrSeederContributor;
 		_unitOfWorkManager = unitOfWorkManager;
 		_clock = clock;
@@ -90,7 +86,6 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 				CurrentTenant.Id);
 			return;
 		}
-		await EnsureAuthorizedHrManagerScopeAsync();
 
 		var effectiveOn = _clock.Now.Date;
 		var rule = await ResolveRuleAsync(effectiveOn);
@@ -170,37 +165,6 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 				component.DisplayOrder);
 			await _earningComponentRepository.UpdateAsync(component, autoSave: false);
 		}
-	}
-
-	private async Task EnsureAuthorizedHrManagerScopeAsync()
-	{
-		const string roleName = "HR Manager";
-		var existingScope = await _userScopeRepository.FindAsync(x =>
-			x.RoleName == roleName &&
-			!x.AcademicYearId.HasValue &&
-			!x.EducationBoardId.HasValue &&
-			!x.EducationMediumId.HasValue &&
-			!x.EducationMediumStageId.HasValue &&
-			!x.StandardId.HasValue &&
-			!x.DivisionId.HasValue);
-		if (existingScope is not null)
-		{
-			if (!existingScope.IsActive)
-			{
-				existingScope.Activate();
-				await _userScopeRepository.UpdateAsync(existingScope, autoSave: false);
-			}
-
-			return;
-		}
-
-		await _userScopeRepository.InsertAsync(
-			new UserScopeAssignment(
-				GuidGenerator.Create(),
-				CurrentTenant.Id,
-				roleName: roleName,
-				description: "Synthetic FullDemo HR Manager tenant-wide scope for payroll activation"),
-			autoSave: false);
 	}
 
 	private async Task<StatutoryRuleVersion> ResolveRuleAsync(DateTime effectiveOn)

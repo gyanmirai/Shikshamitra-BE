@@ -21,4 +21,7 @@ public interface IEmployeeAuthorizationService
 	/// </summary>
 	/// <param name="employeeId">The employee ID to check access for.</param>
 	Task CheckEmployeeModifyAccessAsync(Guid employeeId);
+
+	/// <summary>Checks an exact action permission, tenant, and employee scope independently of profile editing.</summary>
+	Task CheckEmployeeScopedPermissionAsync(Guid employeeId, string permission);
 }

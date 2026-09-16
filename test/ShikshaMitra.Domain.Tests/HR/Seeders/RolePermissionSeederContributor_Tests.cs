@@ -21,7 +21,7 @@ public class RolePermissionSeederContributor_Tests
 	public void Permission_Grant_Changes_Should_Use_The_Current_Seeder_Marker_Version()
 	{
 		RolePermissionSeederContributor.StepName.ShouldBe("RolePermissionSeeder");
-		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v24");
+		RolePermissionSeederContributor.StepVersion.ShouldBe("RolePermissionSeeder:v25");
 		RolePermissionSeederContributor.StepOrder.ShouldBe(120);
 	}
 

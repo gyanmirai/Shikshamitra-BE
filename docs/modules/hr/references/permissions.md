@@ -3,7 +3,7 @@ module: hr
 domain: permissions
 content_type: Reference
 status: canonical
-updated_on: 2026-07-08
+updated_on: 2026-09-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -71,4 +71,22 @@ Use [api.md](../api.md) for endpoint-level permission requirements.
 ## Non-goals
 
 - Old Payroll Configuration and Attendance Configuration permission families are removed.
-- Existing DB role grants should be reseeded/migrated to the new policy and evaluation permissions.
+- Existing grants require an approved, audited repair, never automatic reseeding.
+
+## Exact payroll and ESI actions
+
+Use the [canonical security standard](../../../common/security/permission-consistency.md) for enforcement, seeding, scope, and review requirements.
+The mapping table above describes legacy route families, not permission aliases accepted by mutation APIs.
+Action checks use exact catalogue names.
+
+| Namespace | Independently grantable actions | Boundary |
+| --- | --- | --- |
+| `HR.Employee.EmployeeList` | `View`, `Add`, `Edit`, `Delete` | Employee profile operations and employee scope |
+| `HR.PayrollManagement.Settings.SalaryTemplates` | `View`, `Add`, `Edit`, `Publish`, `SetDefault`, `Archive` | Published template history remains immutable |
+| `HR.PayrollManagement.RunPayroll` | `View`, `Add`, `Lock`, `ViewAudit` | Payroll scope plus the exact action |
+| `HR.PayrollManagement.Settings.StatutorySchemes` | `View`, `Edit`, `ManageEnrollment`, `ApproveOverride`, `Activate` | Setup/activation retains HR-wide checks; employee operations also enforce employee scope |
+
+Enrollment changes require `ManageEnrollment` without requiring unrelated `HR.Employee.EmployeeList.Edit`.
+Overrides require `ApproveOverride` and the existing reason/audit rules.
+Controller and direct application-service calls enforce the same ESI action.
+Module visibility does not grant any of these actions.

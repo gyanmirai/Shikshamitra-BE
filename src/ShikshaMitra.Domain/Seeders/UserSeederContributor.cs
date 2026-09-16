@@ -45,7 +45,7 @@ public class UserSeederContributor : BaseSeederContributor
 			var existingUser = await FindExistingUserAsync(userInfo);
 			if (existingUser != null)
 			{
-				await UpdateExistingUserAsync(existingUser, userInfo);
+				// Clean-database initialization never repairs existing identities or memberships.
 				continue;
 			}
 
@@ -113,65 +113,6 @@ public class UserSeederContributor : BaseSeederContributor
 		}
 
 		return null;
-	}
-
-	private async Task UpdateExistingUserAsync(IdentityUser user, BaselineUserSpec userInfo)
-	{
-		var managedUser = await _userManager.FindByIdAsync(user.Id.ToString()) ?? user;
-
-		if (!string.Equals(managedUser.UserName, userInfo.UserName, System.StringComparison.Ordinal))
-		{
-			var setUserNameResult = await _userManager.SetUserNameAsync(managedUser, userInfo.UserName);
-			if (!setUserNameResult.Succeeded)
-			{
-				throw new System.Exception(
-					$"Failed to update username for seeded user '{userInfo.Email}': " +
-					string.Join(", ", setUserNameResult.Errors.Select(e => e.Description)));
-			}
-		}
-
-		if (!string.Equals(managedUser.Email, userInfo.Email, System.StringComparison.OrdinalIgnoreCase))
-		{
-			var setEmailResult = await _userManager.SetEmailAsync(managedUser, userInfo.Email);
-			if (!setEmailResult.Succeeded)
-			{
-				throw new System.Exception(
-					$"Failed to update email for seeded user '{userInfo.Email}': " +
-					string.Join(", ", setEmailResult.Errors.Select(e => e.Description)));
-			}
-		}
-
-		var userChanged = false;
-		if (!string.Equals(managedUser.Name, userInfo.Name, System.StringComparison.Ordinal))
-		{
-			managedUser.Name = userInfo.Name;
-			userChanged = true;
-		}
-
-		if (!string.Equals(managedUser.Surname, userInfo.Surname, System.StringComparison.Ordinal))
-		{
-			managedUser.Surname = userInfo.Surname;
-			userChanged = true;
-		}
-
-		if (!managedUser.EmailConfirmed)
-		{
-			managedUser.SetEmailConfirmed(true);
-			userChanged = true;
-		}
-
-		if (userChanged)
-		{
-			var updateResult = await _userManager.UpdateAsync(managedUser);
-			if (!updateResult.Succeeded)
-			{
-				throw new System.Exception(
-					$"Failed to update seeded user '{userInfo.Email}': " +
-					string.Join(", ", updateResult.Errors.Select(e => e.Description)));
-			}
-		}
-
-		await EnsureRoleMembershipAsync(managedUser, userInfo.RoleName);
 	}
 
 	private async Task EnsureRoleMembershipAsync(IdentityUser user, string roleName)

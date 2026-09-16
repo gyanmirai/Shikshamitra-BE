@@ -71,6 +71,15 @@ public class EmployeeAuthorizationService(
 		await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeModifyAccessAsync));
 	}
 
+	public async Task CheckEmployeeScopedPermissionAsync(Guid employeeId, string permission)
+	{
+		if (!currentUser.Id.HasValue || !await permissionChecker.IsGrantedAsync(permission))
+			throw new AbpAuthorizationException("Access denied: The required module permission is missing.");
+		var employee = await employeeRepository.GetAsync(employeeId);
+		EnsureSameTenant(employee, "Access denied: Cross-tenant access not allowed.");
+		await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeScopedPermissionAsync));
+	}
+
 	private void EnsureSameTenant(Employee employee, string message)
 	{
 		// Employee lookups are ABP-filtered, but this explicit check protects reused IDOR paths.
@@ -93,11 +102,6 @@ public class EmployeeAuthorizationService(
 
 	private async Task EnsureEmployeeInCurrentUserScopeAsync(Guid employeeId, string operation)
 	{
-		if (currentUser.IsInRole("admin"))
-		{
-			return;
-		}
-
 		var userId = currentUser.Id;
 		if (!userId.HasValue)
 		{

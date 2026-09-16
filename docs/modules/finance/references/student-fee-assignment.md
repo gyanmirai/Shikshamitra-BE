@@ -3,7 +3,7 @@ module: finance
 domain: student-fee-assignment
 content_type: Reference
 status: canonical
-updated_on: 2026-09-10
+updated_on: 2026-09-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -84,9 +84,21 @@ The normalized command fingerprint excludes the preview token. An identical retr
 
 ## Migration and deployment
 
-`20260910180000_AddCanonicalStudentFeeAssignments` targets the repository's actual PostgreSQL provider. It makes the two concession references nullable, adds `AssignmentSnapshotJson`, adds the nullable due-to-assignment FK and persisted allocation percentage, and creates the FK index. It does not backfill guessed history or alter financial amounts.
+`20260915122353_canonicalFeeAssignment` (class `AddCanonicalStudentFeeAssignments`) targets the repository's actual PostgreSQL provider.
+It makes the two concession references nullable, adds `AssignmentSnapshotJson`, adds the nullable due-to-assignment FK and persisted `numeric(18,6)` allocation percentage, and creates the FK index.
+This is the migration supplied by main; the earlier unpublished local duplicate is not part of the candidate.
+It does not backfill guessed history or alter financial amounts.
 
-Deploy the migration before the new API/client together. Existing clients that commit without a preview token must migrate. Rollback refuses to discard canonical assignment evidence or invent mandatory concession IDs; use a forward fix once new assignments exist. No migration has been applied by this implementation task.
+Deploy the migration before releasing the new API/client together.
+Existing clients that commit without a preview token must migrate.
+Rollback locks both affected tables in its migration transaction before checking for snapshot evidence, due links, allocation percentages, or missing concession IDs.
+It refuses rollback if any such record exists rather than discarding evidence or inventing concession IDs.
+Use a forward fix once new assignments exist.
+Local disposable PostgreSQL validation has applied this migration; no deployed database was changed.
+
+`CanonicalStudentFeeAssignmentPostgres_Tests` starts from the preceding migration, inserts synthetic legacy financial records, and proves upgrade preservation, legacy-only rollback, five independent rollback guards, nullable concession support, restricted deletion, foreign-key integrity, precision, and complete model migration coverage.
+Set `FINANCE_MIGRATION_TEST_POSTGRES` to an empty loopback `payroll_tests_*` database before running this test in `test/ShikshaMitra.EntityFrameworkCore.Tests`.
+It rejects nonlocal or populated databases and never resets or deletes a database.
 
 Legacy assignments remain readable with an explicit warning. Only their recorded dues and balances are displayed. Unknown historical selections, service sources and allocation percentages stay unknown. Missing referenced dues require reconciliation.
 

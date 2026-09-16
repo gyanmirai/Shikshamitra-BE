@@ -30,7 +30,7 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 [Authorize]
 [RemoteService(false)]
 public partial class StudentFeeStructureAppService(
-	IRepository<Student, Guid> studentRepository,
+	IStudentRepository studentRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
 	IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
@@ -110,7 +110,8 @@ public partial class StudentFeeStructureAppService(
 		assignment.CaptureAssignment(commandFingerprint, JsonSerializer.Serialize(prepared.Preview));
 		await studentFeeStructureRepository.InsertAsync(assignment, autoSave: false);
 		await dueFeeRepository.InsertManyAsync(prepared.Dues, autoSave: false);
-		var student = await studentRepository.GetAsync(input.StudentId);
+		var student = await studentRepository.GetForFeeAssignmentAsync(input.StudentId)
+			?? throw new BusinessException(AssignmentErrorCodes.EnrollmentRequired);
 		if (student.AcademicYearId == input.AcademicYearId) student.AssignFeeStructure(structure.Id);
 		await uow.CompleteAsync();
 		return new AssignmentCommitResultDto { AssignmentId = id, Assignment = prepared.Preview };

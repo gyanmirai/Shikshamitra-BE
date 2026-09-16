@@ -28,16 +28,22 @@ Do not use `CurrentUser.IsInRole(...)` to decide tenant API access.
 
 ## Permission Management
 
-Roles that should open permission-management screens need these grants:
+The configured ABP provider policy governs each target:
 
-- `AbpPermissionManagement.Permissions`
-- `AbpPermissionManagement.Permissions.Manage`
+- Role grants: `AbpIdentity.Roles.ManagePermissions`.
+- User grants: `AbpIdentity.Users.ManagePermissions`.
+
+Current-user effective reads do not permit self-granting.
+Follow the [canonical security standard](./permission-consistency.md) for validation and direct/inherited semantics.
 
 Do not add custom permission value providers to grant all permissions to operational roles. New roles should work by assigning the needed permissions in seed data or through the permission-management UI.
 
 ## Admin Access
 
-The seeded `admin` and `super-admin` roles should receive all application/platform permissions through `RolePermissionSeederContributor`.
+New built-in roles receive baseline defaults in their role-creation transaction through `RolesSeederContributor`.
+Existing roles never receive automatic restoration of revoked permissions.
+The compatibility `RolePermissionSeederContributor` is a no-op.
+Use an approved, audited grant delta to repair existing access, not a reseed.
 
 Admin access is still tenant-bound:
 

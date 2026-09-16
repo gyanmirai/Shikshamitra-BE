@@ -108,7 +108,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 	}
 
 	private async Task<(Guid AcademicYearId, Guid StudentId, Guid FeeHeadId, Guid DueFeeId, Guid FeeStructureId)>
-		SeedStudentWithOverdueDueFeeAsync(int daysOverdue, bool attachPolicy, double? maximumLateFeeAmount = null)
+		SeedStudentWithOverdueDueFeeAsync(int daysOverdue, bool attachPolicy, double? maximumLateFeeAmount = null, bool enableLateFee = true)
 	{
 		await EnsureAdminUserExistsAsync();
 
@@ -155,8 +155,8 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		var feeStructure = new FeeStructure(Guid.NewGuid(), TestTenantId, metadata.Id, Guid.NewGuid(), "Standard I Fee Structure");
 		await _feeStructureRepo.InsertAsync(feeStructure, autoSave: true);
 
-		await _studentFeeStructureRepo.InsertAsync(
-			new StudentFeeStructure(Guid.NewGuid(), TestTenantId, studentId, feeStructure.Id, yearId), autoSave: true);
+		Guid? collectionPolicyId = null;
+		Guid? collectionPolicyVersionId = null;
 
 		if (attachPolicy)
 		{
@@ -166,7 +166,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				PolicyName = "Overdue Test Policy",
 				PolicyCode = $"CP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
 				Status = "Active",
-				EnableLateFee = true,
+				EnableLateFee = enableLateFee,
 				GracePeriodDays = 0,
 				LateFeeApplyOnFeeHeads = new() { feeHeadId },
 				LateFeeType = "PerDay",
@@ -181,6 +181,10 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				MaximumWaiverPercentage = 100,
 				AllowOnlineCollection = true,
 			});
+			policy = await _collectionPolicies.GetAsync(policy.Id);
+			policy.CurrentVersionId.ShouldNotBeNull();
+			collectionPolicyId = policy.Id;
+			collectionPolicyVersionId = policy.CurrentVersionId;
 
 			using (_currentTenant.Change(TestTenantId))
 			{
@@ -190,22 +194,38 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 			}
 		}
 
+		// Existing collections must use the assignment's pinned policy, never current mutable settings.
+		var assignment = new StudentFeeStructure(Guid.NewGuid(), TestTenantId, studentId, feeStructure.Id, yearId,
+			null, null, ConcessionFeeHeadScope.EntireFeeStructure, [], collectionPolicyId, collectionPolicyVersionId);
+		await _studentFeeStructureRepo.InsertAsync(assignment, autoSave: true);
+
 		var dueDate = DateTime.UtcNow.Date.AddDays(-daysOverdue);
 		var dueFee = new DueFee(
 			id: Guid.NewGuid(), tenantId: TestTenantId, studentId: studentId, feeHeadId: feeHeadId,
 			month: MonthEnum.April, year: dueDate.Year, isOneTime: false, amount: 5000m, dueDate: dueDate);
+		dueFee.BindAssignment(assignment.Id);
 		await _dueFeeRepo.InsertAsync(dueFee, autoSave: true);
 
 		return (yearId, studentId, feeHeadId, dueFee.Id, feeStructure.Id);
 	}
 
 	[Fact]
-	public async Task Collect_Form_Shows_Zero_Late_Fee_When_No_Collection_Policy_Attached()
+	public async Task Collect_Form_Rejects_An_Assignment_Without_A_Pinned_Collection_Policy()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		{
-			var (academicYearId, studentId, _, dueFeeId, _) = await SeedStudentWithOverdueDueFeeAsync(daysOverdue: 30, attachPolicy: false);
+			var (academicYearId, studentId, _, _, _) = await SeedStudentWithOverdueDueFeeAsync(daysOverdue: 30, attachPolicy: false);
+			var error = await Should.ThrowAsync<BusinessException>(() => _feeCollections.GetCollectFormAsync(studentId, academicYearId));
+			error.Code.ShouldBe(CollectionPolicyErrorCodes.PolicyVersionNotFound);
+		}
+	}
 
+	[Fact]
+	public async Task Collect_Form_Shows_Zero_Late_Fee_When_The_Pinned_Policy_Disables_It()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (academicYearId, studentId, _, dueFeeId, _) = await SeedStudentWithOverdueDueFeeAsync(daysOverdue: 30, attachPolicy: true, enableLateFee: false);
 			var form = await _feeCollections.GetCollectFormAsync(studentId, academicYearId);
 
 			var line = form.Ledger.Should_ContainLine(dueFeeId);

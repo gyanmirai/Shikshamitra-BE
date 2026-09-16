@@ -15,22 +15,23 @@ public partial class StudentFeeDetailsQueryService
 {
 	private async Task<StudentSnapshot> GetStudentSnapshotAsync(Guid studentId, CancellationToken cancellationToken)
 	{
-		var student = await studentRepository.FindAsync(studentId)
-			?? throw new BusinessException("Student not found");
-		return new StudentSnapshot
+		var students = await studentRepository.GetQueryableAsync();
+		var snapshot = students.Where(student => student.Id == studentId).Select(student => new StudentSnapshot
 		{
 			Id = student.Id, FirstName = student.FirstName,
 			MiddleName = student.MiddleName, LastName = student.LastName,
-			AcademicBoardId = student.AcademicBoardId, BoardType = student.AcademicBoard?.Type,
+			AcademicBoardId = student.AcademicBoardId, BoardType = student.AcademicBoard == null ? null : student.AcademicBoard.Type,
 			AcademicMediumId = student.AcademicMediumId,
-			EducationMediumName = student.AcademicMedium?.Name ?? string.Empty,
-			StandardId = student.StandardId, StandardName = student.Standard?.Name ?? string.Empty,
-			DivisionId = student.DivisionId, DivisionName = student.Division?.Name ?? string.Empty,
+			EducationMediumName = student.AcademicMedium == null ? string.Empty : student.AcademicMedium.Name,
+			StandardId = student.StandardId, StandardName = student.Standard == null ? string.Empty : student.Standard.Name,
+			DivisionId = student.DivisionId, DivisionName = student.Division == null ? string.Empty : student.Division.Name,
 			GrNo = student.GrNo, RollNo = student.RollNo,
-			ContactNo = student.ContactDetail?.PrimaryContactNo ?? string.Empty,
-			Email = student.ContactDetail?.Email ?? string.Empty,
+			ContactNo = student.ContactDetail == null ? string.Empty : student.ContactDetail.PrimaryContactNo ?? string.Empty,
+			Email = student.ContactDetail == null ? string.Empty : student.ContactDetail.Email ?? string.Empty,
 			FeeStructureId = student.FeeStructureId,
-		};
+		});
+		return await AsyncExecuter.FirstOrDefaultAsync(snapshot, cancellationToken)
+			?? throw new BusinessException("Student not found");
 	}
 
 	private static StudentInfoDto BuildStudentInfo(StudentSnapshot student) => new()

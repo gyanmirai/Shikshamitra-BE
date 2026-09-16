@@ -15,13 +15,9 @@ namespace ShikshaMitra.Seeders;
 public class RolePermissionSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "RolePermissionSeeder";
-	// Re-run baseline grants after completing View, Add, and Delete for every Student submodule.
-	internal const string StepVersion = "RolePermissionSeeder:v24";
+	// Compatibility step only. Defaults belong to the new-role creation transaction.
+	internal const string StepVersion = "RolePermissionSeeder:v25";
 	internal const int StepOrder = 120;
-	private const string RoleProviderName = "R";
-
-	private readonly IIdentityRoleRepository _roleRepository;
-	private readonly IPermissionGrantSeedRepository _permissionGrantSeedRepository;
 
 	public RolePermissionSeederContributor(
 		ICurrentTenant currentTenant,
@@ -31,39 +27,14 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		IPermissionGrantSeedRepository permissionGrantSeedRepository)
 		: base(currentTenant, guidGenerator, unitOfWork)
 	{
-		_roleRepository = roleRepository;
-		_permissionGrantSeedRepository = permissionGrantSeedRepository;
 	}
 
-	public override async Task SeedAsync(DataSeedContext context)
+	public override Task SeedAsync(DataSeedContext context) => Task.CompletedTask;
+
+	internal static string[] GetInitialPermissions(string roleName, Guid? tenantId)
 	{
-		var rolePermissions = BuildRolePermissions();
-		var rolesByNormalizedName = (await _roleRepository.GetListAsync())
-			.Where(role => !string.IsNullOrWhiteSpace(role.Name))
-			.ToDictionary(
-				role => role.NormalizedName,
-				role => role,
-				StringComparer.OrdinalIgnoreCase);
-
-		foreach (var (roleName, permissions) in rolePermissions)
-		{
-			if (!rolesByNormalizedName.TryGetValue(roleName.ToUpperInvariant(), out var role))
-			{
-				throw new Exception($"Required seeded role '{roleName}' was not found while assigning baseline permissions.");
-			}
-
-			var effectivePermissions = GetEffectivePermissions(roleName, permissions);
-
-			await _permissionGrantSeedRepository.InsertRoleGrantsIgnoringDuplicatesAsync(
-				role.Name,
-				effectivePermissions,
-				CurrentTenant.Id);
-		}
-	}
-
-	private string[] GetEffectivePermissions(string roleName, string[] permissions)
-	{
-		if (CurrentTenant.Id != null || !IsHostAdministratorRole(roleName))
+		var permissions = BuildRolePermissions().GetValueOrDefault(roleName) ?? [];
+		if (tenantId != null || !IsHostAdministratorRole(roleName))
 		{
 			return permissions
 				.Distinct(StringComparer.OrdinalIgnoreCase)
@@ -96,10 +67,11 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 		var officeStaffPermissions = ModulePermissions(
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.Students,
-			ShikshaMitraModulePermissions.HR,
 			ShikshaMitraModulePermissions.Communication,
 			ShikshaMitraModulePermissions.Calendar,
-			ShikshaMitraModulePermissions.InstituteSetup);
+			ShikshaMitraModulePermissions.InstituteSetup)
+			.Concat(leaveSelfServicePermissions)
+			.ToArray();
 		var financeStaffPermissions = ModulePermissions(
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.Students,
@@ -141,8 +113,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Cancel,
 				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair
 			]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-		// Seed baseline access for deterministic staff personas. Tenant admins can still adjust
-		// grants through the Security module; this only inserts missing grants.
+		// Defaults apply only while creating a new built-in role, never to existing grants.
 		return new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
 		{
 			["admin"] = tenantAdminPermissions,

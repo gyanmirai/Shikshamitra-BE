@@ -124,15 +124,8 @@ public class EsiFullDemoConfigurationSeederContributor_Integration_Tests
 			establishment.EvidenceReference.ShouldContain("NOT-FOR-FILING");
 			establishment.ConfirmedByUserId.ShouldBeNull();
 			establishment.ConfirmedAt.ShouldBeNull();
-			var hrManagerScope = (await _userScopeRepository.GetListAsync(x => x.RoleName == "HR Manager"))
-				.ShouldHaveSingleItem();
-			hrManagerScope.IsActive.ShouldBeTrue();
-			hrManagerScope.AcademicYearId.ShouldBeNull();
-			hrManagerScope.EducationBoardId.ShouldBeNull();
-			hrManagerScope.EducationMediumId.ShouldBeNull();
-			hrManagerScope.EducationMediumStageId.ShouldBeNull();
-			hrManagerScope.StandardId.ShouldBeNull();
-			hrManagerScope.DivisionId.ShouldBeNull();
+			(await _userScopeRepository.GetListAsync(x => x.RoleName == "HR Manager"))
+				.ShouldBeEmpty("ESI demo configuration must not grant privileged scope; an administrator assigns scope deliberately.");
 
 			var components = (await _earningComponentRepository.GetListAsync())
 				.ToDictionary(x => x.Name, StringComparer.OrdinalIgnoreCase);

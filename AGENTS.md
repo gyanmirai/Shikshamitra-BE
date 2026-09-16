@@ -4,6 +4,10 @@
 
 ## Start here
 
+Before changing permissions, navigation guards, identity, scope, or security-related seeders, read [the canonical security standard](docs/common/security/permission-consistency.md).
+Follow its mandatory checklist and require the Security Regression PR job before merge.
+Never restore revoked grants through reseeding or treat screenshots as security sign-off.
+
 1. **[docs/README.md](docs/README.md)** -- documentation map and folder taxonomy.
 2. **[docs/best-practices.md](docs/best-practices.md)** -- canonical engineering rules (DDD layers, folders, permissions). Prefer linking here instead of duplicating standards.
 
@@ -29,7 +33,7 @@
 | Runtime | .NET 9, C# 14, file-scoped namespaces, primary constructors |
 | Framework | ABP Framework (DDD template), OpenIddict for auth |
 | ORM | Entity Framework Core (code-first migrations) |
-| Database | SQL Server (multi-tenant, per-tenant data isolation via ABP filters) |
+| Database | PostgreSQL/Npgsql (multi-tenant, per-tenant data isolation via ABP filters) |
 | Validation | FluentValidation (primary), DataAnnotations (secondary) |
 | PDF generation | QuestPDF |
 | Excel export | ClosedXML |
@@ -100,7 +104,7 @@ dotnet test
 
 | Variable | Purpose |
 |----------|---------|
-| `ConnectionStrings__Default` | SQL Server connection string |
+| `ConnectionStrings__Default` | PostgreSQL connection string |
 | `DB_CONNECTION_STRING` | Same, used in CI pipeline |
 
 ---
@@ -124,9 +128,11 @@ dotnet test
 ## Multi-tenancy & user scope
 
 - Every tenant-scoped entity implements `IMultiTenant`.
-- ABP automatic tenant filter handles query isolation — **never** manually filter by `TenantId`.
+- Keep ABP tenant filters enabled and validate tenant ownership at authorization boundaries.
+  Explicit tenant predicates are appropriate in focused authorization projections and must agree with the current server tenant.
 - Scope hierarchy: **Board → Medium → Stage → Class → Division**.
-- `NULL = ALL` principle: null scope value = unrestricted access at that level.
+- A null dimension within an authorized scope assignment is a wildcard only within that assignment's boundaries.
+  Missing assignments, missing identity, or database failures must never grant unrestricted access.
 - Entities needing hierarchical filtering implement `IUserScopedEntity`.
 
 ---

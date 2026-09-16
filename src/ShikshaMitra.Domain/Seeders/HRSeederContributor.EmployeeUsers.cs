@@ -23,8 +23,7 @@ public partial class HRSeederContributor
 		var existingUserByEmail = await FindUserByEmailAsync(email);
 		if (existingUserByEmail != null)
 		{
-			await UpdateSeededEmployeeUserAsync(existingUserByEmail, firstName, lastName, email, mobileNo);
-			await EnsureUserInRoleAsync(existingUserByEmail, roleName);
+			// An existing login belongs to its administrator, even when linked to seeded HR data.
 			return existingUserByEmail.Id;
 		}
 

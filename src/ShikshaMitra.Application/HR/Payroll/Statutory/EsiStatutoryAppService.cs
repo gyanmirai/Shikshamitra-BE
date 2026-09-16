@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.AspNetCore.Authorization;
+using EsiPermissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,6 +26,7 @@ public class EsiStatutoryAppService(
 	IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
 	IRepository<StatutoryOverride, Guid> overrideRepository,
 	IEmployeeRepository employeeRepository,
+	IEmployeeAuthorizationService employeeAuthorizationService,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
 	PayrollComponentVersionResolver componentVersionResolver,
 	PayrollScopedEmployeeResolver scopedEmployeeResolver,
@@ -36,22 +39,28 @@ public class EsiStatutoryAppService(
 	private const string JurisdictionCode = "IN-GJ";
 	private const string CanonicalEsiComponentName = "Employee State Insurance (ESI) - Auto";
 
+	[Authorize(EsiPermissions.View)]
 	public async Task<StatutoryRuleVersionDto> GetCurrentRuleAsync(DateTime? effectiveOn = null)
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.View);
 		var rule = await ResolveRuleAsync(effectiveOn ?? Clock.Now);
 		return MapRule(rule);
 	}
 
+	[Authorize(EsiPermissions.View)]
 	public async Task<StatutoryEstablishmentDto> GetEstablishmentAsync()
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.View);
 		var establishment = await FindEstablishmentAsync();
 		return establishment is null
 			? new StatutoryEstablishmentDto()
 			: MapEstablishment(establishment);
 	}
 
+	[Authorize(EsiPermissions.Edit)]
 	public async Task<StatutoryEstablishmentDto> ConfigureEstablishmentAsync(ConfigureStatutoryEstablishmentDto input)
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.Edit);
 		ArgumentNullException.ThrowIfNull(input);
 		await EnsureHrWideAccessAsync();
 		var establishment = await FindEstablishmentAsync();
@@ -73,9 +82,15 @@ public class EsiStatutoryAppService(
 		return MapEstablishment(establishment);
 	}
 
+	[Authorize(EsiPermissions.View)]
 	public async Task<List<PayrollComponentStatutoryTreatmentDto>> GetComponentTreatmentsAsync(DateTime? effectiveOn = null)
 	{
-		var effectiveDate = (effectiveOn ?? Clock.Now).Date;
+		await AuthorizationService.CheckAsync(EsiPermissions.View);
+		return await ReadComponentTreatmentsAsync((effectiveOn ?? Clock.Now).Date);
+	}
+
+	private async Task<List<PayrollComponentStatutoryTreatmentDto>> ReadComponentTreatmentsAsync(DateTime effectiveDate)
+	{
 		var componentCatalog = await GetWageComponentCatalogAsync(effectiveDate);
 		var componentIds = componentCatalog.Select(x => x.Id).ToList();
 		var treatments = await treatmentRepository.GetListAsync(x =>
@@ -102,9 +117,11 @@ public class EsiStatutoryAppService(
 		}).ToList();
 	}
 
+	[Authorize(EsiPermissions.Edit)]
 	public async Task<List<PayrollComponentStatutoryTreatmentDto>> UpdateComponentTreatmentsAsync(
 		UpdatePayrollComponentStatutoryTreatmentsDto input)
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.Edit);
 		ArgumentNullException.ThrowIfNull(input);
 		await EnsureHrWideAccessAsync();
 		var activeEarningIds = (await earningComponentRepository.GetListAsync(x => x.IsActive)).Select(x => x.Id).ToHashSet();
@@ -154,11 +171,15 @@ public class EsiStatutoryAppService(
 			await treatmentRepository.InsertAsync(newTreatment);
 		}
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		return await GetComponentTreatmentsAsync(input.Items.Min(x => x.EffectiveFrom));
+		// The edit response is part of the authorized mutation, not a separate View operation.
+		return await ReadComponentTreatmentsAsync(input.Items.Min(x => x.EffectiveFrom).Date);
 	}
 
+	[Authorize(EsiPermissions.View)]
 	public async Task<EmployeeStatutoryEnrollmentDto> GetEnrollmentAsync(Guid employeeId)
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.View);
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId, EsiPermissions.View);
 		await employeeRepository.GetAsync(employeeId);
 		var enrollment = await FindEnrollmentAsync(employeeId);
 		return enrollment is null
@@ -166,10 +187,13 @@ public class EsiStatutoryAppService(
 			: MapEnrollment(enrollment);
 	}
 
+	[Authorize(EsiPermissions.ManageEnrollment)]
 	public async Task<EmployeeStatutoryEnrollmentDto> UpdateEnrollmentAsync(
 		Guid employeeId,
 		UpdateEmployeeStatutoryEnrollmentDto input)
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.ManageEnrollment);
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId, EsiPermissions.ManageEnrollment);
 		ArgumentNullException.ThrowIfNull(input);
 		await employeeRepository.GetAsync(employeeId);
 		if (!Enum.TryParse<EmployeeStatutoryEnrollmentStatus>(input.Status, true, out var status) ||
@@ -193,8 +217,11 @@ public class EsiStatutoryAppService(
 		return MapEnrollment(enrollment);
 	}
 
+	[Authorize(EsiPermissions.ApproveOverride)]
 	public async Task CreateOverrideAsync(Guid employeeId, CreateStatutoryOverrideDto input)
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.ApproveOverride);
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId, EsiPermissions.ApproveOverride);
 		ArgumentNullException.ThrowIfNull(input);
 		await employeeRepository.GetAsync(employeeId);
 		if (!Enum.TryParse<StatutoryOverrideType>(input.OverrideType, true, out var overrideType) ||
@@ -210,8 +237,11 @@ public class EsiStatutoryAppService(
 		await overrideRepository.InsertAsync(statutoryOverride, autoSave: true);
 	}
 
+	[Authorize(EsiPermissions.View)]
 	public async Task<List<StatutoryOverrideDto>> GetOverridesAsync(Guid employeeId)
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.View);
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId, EsiPermissions.View);
 		await employeeRepository.GetAsync(employeeId);
 		return (await overrideRepository.GetListAsync(x =>
 				x.EmployeeId == employeeId && x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance))
@@ -234,15 +264,19 @@ public class EsiStatutoryAppService(
 			.ToList();
 	}
 
+	[Authorize(EsiPermissions.View)]
 	public async Task<StatutoryImpactPreviewDto> PreviewAsync(StatutoryImpactPreviewRequestDto input)
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.View);
 		ArgumentNullException.ThrowIfNull(input);
 		var calculation = await previewReader.CalculateAsync(input.MonthYear);
 		return EsiStatutoryPreviewReader.Project(calculation, input);
 	}
 
+	[Authorize(EsiPermissions.Activate)]
 	public async Task<StatutoryEstablishmentDto> ActivateAsync(ActivateStatutorySchemeDto input)
 	{
+		await AuthorizationService.CheckAsync(EsiPermissions.Activate);
 		ArgumentNullException.ThrowIfNull(input);
 		await EnsureHrWideAccessAsync();
 		var preview = await previewReader.CalculateAsync(input.MonthYear);

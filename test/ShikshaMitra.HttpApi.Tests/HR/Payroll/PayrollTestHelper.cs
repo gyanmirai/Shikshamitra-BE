@@ -4,8 +4,14 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Statutory;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Payroll;
 
@@ -121,6 +127,70 @@ public static class PayrollTestHelper
 		response.EnsureSuccessStatusCode();
 		return await response.Content.ReadFromJsonAsync<PfRuleCreateResponseDto>(JsonOptions)
 			?? throw new InvalidOperationException("Failed to create PF rule");
+	}
+
+	public static async Task EnsureActiveEsiTestSetupAsync(ShikshaMitraApiTestFactory factory)
+	{
+		using var scope = factory.Services.CreateScope();
+		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+		var unitOfWorkManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+		var establishmentRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<StatutoryEstablishment, Guid>>();
+		var treatmentRepository = scope.ServiceProvider
+			.GetRequiredService<IRepository<PayrollComponentStatutoryTreatment, Guid>>();
+		var earningRepository = scope.ServiceProvider.GetRequiredService<IEarningComponentRepository>();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+
+		using (currentTenant.Change(tenantId))
+		using (var unitOfWork = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			var establishment = await establishmentRepository.FirstOrDefaultAsync(x =>
+				x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance);
+			if (establishment is null)
+			{
+				establishment = new StatutoryEstablishment(
+					Guid.NewGuid(), tenantId, StatutorySchemeCodes.EmployeeStateInsurance, "IN-GJ");
+				await establishmentRepository.InsertAsync(establishment, autoSave: false);
+			}
+			establishment.Configure(
+				"IN-GJ",
+				"TEST-ESI-REGISTRATION",
+				50,
+				new DateTime(2020, 1, 1),
+				new DateTime(2020, 1, 1),
+				"HTTP API salary test setup");
+			establishment.Activate(Guid.Parse(TestAuthHandler.TestUserId), DateTime.UtcNow);
+			await establishmentRepository.UpdateAsync(establishment, autoSave: false);
+
+			var existingTreatments = await treatmentRepository.GetListAsync(x =>
+				x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance);
+			var currentMonth = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+			foreach (var earning in await earningRepository.GetListAsync(x => x.IsActive))
+			{
+				var currentTreatment = existingTreatments
+					.Where(x => x.ComponentId == earning.Id && x.EffectiveFrom <= currentMonth &&
+						(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= currentMonth))
+					.OrderByDescending(x => x.EffectiveFrom)
+					.FirstOrDefault();
+				if (currentTreatment is not null)
+				{
+					currentTreatment.Update(
+						StatutoryWageTreatment.Included,
+						currentTreatment.EffectiveFrom,
+						currentTreatment.EffectiveTo);
+					await treatmentRepository.UpdateAsync(currentTreatment, autoSave: false);
+					continue;
+				}
+				await treatmentRepository.InsertAsync(
+					new PayrollComponentStatutoryTreatment(
+						Guid.NewGuid(), tenantId, earning.Id,
+						StatutorySchemeCodes.EmployeeStateInsurance,
+						StatutoryWageTreatment.Included,
+						currentMonth),
+					autoSave: false);
+			}
+			await unitOfWork.CompleteAsync();
+		}
 	}
 
 	private static string BuildValidPfCode(string prefix)

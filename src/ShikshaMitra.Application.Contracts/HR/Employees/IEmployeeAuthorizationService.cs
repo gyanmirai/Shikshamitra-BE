@@ -21,4 +21,10 @@ public interface IEmployeeAuthorizationService
 	/// </summary>
 	/// <param name="employeeId">The employee ID to check access for.</param>
 	Task CheckEmployeeModifyAccessAsync(Guid employeeId);
+
+	/// <summary>
+	/// Checks tenant and organization scope without requiring employee-list permissions.
+	/// The calling payroll endpoint remains responsible for its own action permission.
+	/// </summary>
+	Task CheckEmployeeScopeAccessAsync(Guid employeeId);
 }

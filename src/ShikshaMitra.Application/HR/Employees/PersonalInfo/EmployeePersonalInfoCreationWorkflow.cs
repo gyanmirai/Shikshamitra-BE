@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
@@ -65,6 +66,8 @@ public class EmployeePersonalInfoCreationWorkflow(
 		byte[]? profilePictureContent,
 		bool useCurrentUnitOfWork)
 	{
+		// Every creation path enters the same activation gate. Imports and onboarding cannot bypass payroll readiness.
+		input.EmployeeStatusType = EmployeeStatusType.Inactive;
 		var contact = contactGuard.RequireContactDetails(input.Email, input.MobileNo);
 		input.Email = contact.Email;
 		input.MobileNo = contact.MobileNo;

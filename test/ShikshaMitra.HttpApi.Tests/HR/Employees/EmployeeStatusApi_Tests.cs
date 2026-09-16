@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -7,7 +7,8 @@ using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees.ReportingManagerInfo;
 using ShikshaMitra.HR.Employees.Status;
 using ShikshaMitra.HR.Payroll;
-using ShikshaMitra.HR.Payroll.SalaryStructure;
+using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.Templates;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -29,7 +30,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Employee_Status_To_Inactive()
 	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusInactive");
+		var empId = await CreateActiveEmployeeAsync("StatusInactive");
 
 		var request = new EmployeeStatusUpdateRequest
 		{
@@ -51,7 +52,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Reject_Non_Active_Status_Without_Effective_Date()
 	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusNoEffectiveDate");
+		var empId = await CreateActiveEmployeeAsync("StatusNoEffectiveDate");
 
 		var response = await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{empId}/status",
@@ -70,14 +71,11 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Block_Activating_Employee_Without_Salary_Structure()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusActiveNoPayroll");
-		var toInactive = new EmployeeStatusUpdateRequest
-		{
-			EmployeeStatusType = 1,
-			Remarks = "Seed inactive first",
-			EffectiveDate = TestEffectiveDate
-		};
-		(await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toInactive, JsonOptions))
-			.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var readiness = await Client.GetFromJsonAsync<EmployeeActivationReadinessResponse>(
+			$"{BaseUrl}/{empId}/activation-readiness", JsonOptions);
+		readiness.ShouldNotBeNull();
+		readiness.CanActivate.ShouldBeFalse();
+		readiness.BlockerCodes.ShouldContain("PAYROLL_SETUP_REQUIRED");
 
 		var toActive = new EmployeeStatusUpdateRequest
 		{
@@ -121,7 +119,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Update_Employee_Status_With_Empty_Remarks_String()
 	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusEmptyRemarks");
+		var empId = await CreateActiveEmployeeAsync("StatusEmptyRemarks");
 
 		var request = new EmployeeStatusUpdateRequest
 		{
@@ -161,7 +159,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_Be_Idempotent_For_Same_Status()
 	{
-		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusIdem");
+		var empId = await CreateActiveEmployeeAsync("StatusIdem");
 
 		var request = new EmployeeStatusUpdateRequest
 		{
@@ -187,42 +185,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		var r1 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", inactiveReq, JsonOptions);
 		r1.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "CycleEarn");
-		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "CycleDed");
-		var salaryStructure = new UpdateSalaryStructureDto
-		{
-			EarningComponents = new List<SalaryComponentDto>
-			{
-				new()
-				{
-					Id = Guid.NewGuid(),
-					ComponentId = earningComponent.Id,
-					Name = "Basic",
-					Amount = 20000m,
-					IsFixed = true,
-					IsTemp = false,
-					ApplicableMonth = null,
-				}
-			},
-			DeductionComponents = new List<SalaryComponentDto>
-			{
-				new()
-				{
-					Id = Guid.NewGuid(),
-					ComponentId = deductionComponent.Id,
-					Name = "PF",
-					Amount = 1200m,
-					IsFixed = true,
-					IsTemp = false,
-					ApplicableMonth = null,
-				}
-			},
-		};
-		var salaryResp = await Client.PutAsJsonAsync(
-			$"/api/payroll/employees/{empId}/salary-structure",
-			salaryStructure,
-			JsonOptions);
-		salaryResp.StatusCode.ShouldBe(HttpStatusCode.OK);
+		await SaveSalaryAsync(empId);
 
 		var activeReq = new EmployeeStatusUpdateRequest { EmployeeStatusType = 0, Remarks = "Reactivated" };
 		var r2 = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", activeReq, JsonOptions);
@@ -238,49 +201,11 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	public async Task Should_Allow_Activating_Employee_After_Salary_Structure_Is_Configured()
 	{
 		var empId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusActiveWithPayroll");
-
-		var earningComponent = await PayrollTestHelper.CreateEarningComponentAsync(Client, "StatusEarn");
-		var deductionComponent = await PayrollTestHelper.CreateDeductionComponentAsync(Client, "StatusDed");
-
-		var salaryStructure = new UpdateSalaryStructureDto
-		{
-			EarningComponents = new List<SalaryComponentDto>
-			{
-				new()
-				{
-					Id = Guid.NewGuid(),
-					ComponentId = earningComponent.Id,
-					Name = "Basic",
-					Amount = 20000m,
-					IsFixed = true,
-					IsTemp = false,
-					ApplicableMonth = null,
-				}
-			},
-			DeductionComponents = new List<SalaryComponentDto>
-			{
-				new()
-				{
-					Id = Guid.NewGuid(),
-					ComponentId = deductionComponent.Id,
-					Name = "PF",
-					Amount = 1200m,
-					IsFixed = true,
-					IsTemp = false,
-					ApplicableMonth = null,
-				}
-			},
-		};
-
-		var salaryResp = await Client.PutAsJsonAsync(
-			$"/api/payroll/employees/{empId}/salary-structure",
-			salaryStructure,
-			JsonOptions);
-		salaryResp.StatusCode.ShouldBe(HttpStatusCode.OK);
-
-		var toInactive = new EmployeeStatusUpdateRequest { EmployeeStatusType = 1, Remarks = "Inactive", EffectiveDate = TestEffectiveDate };
-		(await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toInactive, JsonOptions))
-			.StatusCode.ShouldBe(HttpStatusCode.OK);
+		await SaveSalaryAsync(empId);
+		var readiness = await Client.GetFromJsonAsync<EmployeeActivationReadinessResponse>(
+			$"{BaseUrl}/{empId}/activation-readiness", JsonOptions);
+		readiness.ShouldNotBeNull();
+		readiness.CanActivate.ShouldBeTrue();
 
 		var toActive = new EmployeeStatusUpdateRequest { EmployeeStatusType = 0, Remarks = "Active now" };
 		var response = await Client.PutAsJsonAsync($"{BaseUrl}/{empId}/status", toActive, JsonOptions);
@@ -313,8 +238,8 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Return_Deactivation_Check_For_Manager_With_Active_Direct_Reports()
 	{
-		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusCheckMgrBlock");
-		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusCheckReport");
+		var managerId = await CreateActiveEmployeeAsync("StatusCheckMgrBlock");
+		var reportId = await CreateActiveEmployeeAsync("StatusCheckReport");
 
 		(await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{reportId}/reporting-manager",
@@ -334,7 +259,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Return_Deactivation_Check_Allowed_When_Direct_Reports_Are_Not_Active()
 	{
-		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusCheckMgrAllow");
+		var managerId = await CreateActiveEmployeeAsync("StatusCheckMgrAllow");
 		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusCheckInactiveReport");
 
 		(await Client.PutAsJsonAsync(
@@ -360,8 +285,8 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Block_Non_Active_Status_For_Manager_With_Active_Direct_Reports()
 	{
-		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrBlock");
-		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrReport");
+		var managerId = await CreateActiveEmployeeAsync("StatusMgrBlock");
+		var reportId = await CreateActiveEmployeeAsync("StatusMgrReport");
 
 		var assignResponse = await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{reportId}/reporting-manager",
@@ -383,9 +308,9 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Allow_Non_Active_Status_After_Direct_Reports_Are_Reassigned()
 	{
-		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrSwapOld");
-		var newManagerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrSwapNew");
-		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "StatusMgrSwapReport");
+		var managerId = await CreateActiveEmployeeAsync("StatusMgrSwapOld");
+		var newManagerId = await CreateActiveEmployeeAsync("StatusMgrSwapNew");
+		var reportId = await CreateActiveEmployeeAsync("StatusMgrSwapReport");
 
 		(await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{reportId}/reporting-manager",
@@ -410,8 +335,8 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Block_Left_And_Retired_Status_For_Manager_With_Active_Direct_Reports(int status)
 	{
-		var managerId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, $"StatusMgrBlock{status}");
-		var reportId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, $"StatusMgrReport{status}");
+		var managerId = await CreateActiveEmployeeAsync($"StatusMgrBlock{status}");
+		var reportId = await CreateActiveEmployeeAsync($"StatusMgrReport{status}");
 
 		(await Client.PutAsJsonAsync(
 			$"{BaseUrl}/{reportId}/reporting-manager",
@@ -443,4 +368,43 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	#endregion
+
+	private async Task<Guid> CreateActiveEmployeeAsync(string suffix)
+	{
+		var employeeId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, suffix);
+		await SaveSalaryAsync(employeeId);
+		var response = await Client.PutAsJsonAsync(
+			$"{BaseUrl}/{employeeId}/status",
+			new EmployeeStatusUpdateRequest { EmployeeStatusType = 0, Remarks = "Test payroll setup complete" },
+			JsonOptions);
+		var payload = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+		return employeeId;
+	}
+
+	private async Task SaveSalaryAsync(Guid employeeId)
+	{
+		await PayrollTestHelper.EnsureActiveEsiTestSetupAsync(Factory);
+		var templates = await Client.GetFromJsonAsync<SalaryTemplateListDto>(
+			"/api/payroll/salary-templates/active", JsonOptions);
+		var template = templates!.Items.First(x => x.IsDefault);
+		var version = template.EditableVersion;
+		var now = DateTime.UtcNow;
+		var response = await Client.PutAsJsonAsync(
+			$"/api/payroll/employees/{employeeId}/compensation",
+			new SaveEmployeeCompensationDto
+			{
+				TemplateVersionId = version.Id,
+				SalaryBasis = version.DefaultSalaryBasis,
+				ProtectionPolicy = version.DefaultProtectionPolicy,
+				MonthlyAmount = 50000m,
+				EffectiveMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc),
+				PfApplicable = version.DefaultPfApplicable,
+				PfRuleId = version.DefaultPfRuleId,
+				IdempotencyKey = Guid.NewGuid().ToString("N")
+			},
+			JsonOptions);
+		var payload = await response.Content.ReadAsStringAsync();
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);
+	}
 }

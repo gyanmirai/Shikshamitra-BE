@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
@@ -36,6 +37,14 @@ public class SalaryStructureTemplate : FullAuditedAggregateRoot<Guid>, IMultiTen
 	}
 
 	public int ReserveNextVersion() => ++LatestVersion;
+
+	public void SetConcurrencyStamp(string? concurrencyStamp)
+	{
+		if (!string.IsNullOrWhiteSpace(concurrencyStamp))
+		{
+			ConcurrencyStamp = concurrencyStamp;
+		}
+	}
 
 	public void MarkPublished(int versionNumber)
 	{
@@ -74,6 +83,9 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 	public string RulesJson { get; private set; } = "[]";
 	public SalaryInputBasis DefaultSalaryBasis { get; private set; }
 	public CompensationProtectionPolicy DefaultProtectionPolicy { get; private set; }
+	public bool DefaultPfApplicable { get; private set; }
+	public Guid? DefaultPfRuleId { get; private set; }
+	public string SaveOperationKey { get; private set; } = string.Empty;
 	public DateTime? PublishedAt { get; private set; }
 
 	protected SalaryStructureTemplateVersion()
@@ -87,7 +99,10 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 		int versionNumber,
 		IReadOnlyList<SalaryTemplateRule> rules,
 		SalaryInputBasis defaultSalaryBasis = SalaryInputBasis.Gross,
-		CompensationProtectionPolicy defaultProtectionPolicy = CompensationProtectionPolicy.ProtectGross) : base(id)
+		CompensationProtectionPolicy defaultProtectionPolicy = CompensationProtectionPolicy.ProtectGross,
+		bool defaultPfApplicable = false,
+		Guid? defaultPfRuleId = null,
+		string? saveOperationKey = null) : base(id)
 	{
 		TenantId = tenantId;
 		TemplateId = templateId;
@@ -95,6 +110,8 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 		Status = SalaryTemplateStatus.Draft;
 		DefaultSalaryBasis = defaultSalaryBasis;
 		DefaultProtectionPolicy = defaultProtectionPolicy;
+		SetPfDefaults(defaultPfApplicable, defaultPfRuleId);
+		SaveOperationKey = string.IsNullOrWhiteSpace(saveOperationKey) ? Guid.NewGuid().ToString("N") : saveOperationKey.Trim();
 		SetRules(rules);
 	}
 
@@ -122,6 +139,44 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 
 		DefaultSalaryBasis = defaultSalaryBasis;
 		DefaultProtectionPolicy = defaultProtectionPolicy;
+	}
+
+	public void SetPfDefaults(bool defaultPfApplicable, Guid? defaultPfRuleId)
+	{
+		if (Status != SalaryTemplateStatus.Draft)
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateVersionImmutable");
+		}
+
+		if (defaultPfApplicable && !defaultPfRuleId.HasValue)
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplatePfRuleRequired");
+		}
+
+		DefaultPfApplicable = defaultPfApplicable;
+		DefaultPfRuleId = defaultPfRuleId;
+	}
+
+	public void MigratePfDefaults(Guid defaultPfRuleId)
+	{
+		if (defaultPfRuleId == Guid.Empty || DefaultPfRuleId.HasValue ||
+			!GetRules().Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund))
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplatePfMigrationInvalid");
+		}
+
+		DefaultPfApplicable = true;
+		DefaultPfRuleId = defaultPfRuleId;
+	}
+
+	public void SetSaveOperationKey(string saveOperationKey)
+	{
+		if (Status != SalaryTemplateStatus.Draft)
+		{
+			throw new BusinessException("HR:Payroll:SalaryTemplateVersionImmutable");
+		}
+
+		SaveOperationKey = Check.NotNullOrWhiteSpace(saveOperationKey, nameof(saveOperationKey), 100).Trim();
 	}
 
 	public void Publish(DateTime publishedAt)

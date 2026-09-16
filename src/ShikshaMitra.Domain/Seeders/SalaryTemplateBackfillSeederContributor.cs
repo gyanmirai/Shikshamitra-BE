@@ -13,7 +13,7 @@ namespace ShikshaMitra.Seeders;
 public class SalaryTemplateBackfillSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "SalaryTemplateBackfillSeeder";
-	internal const string StepVersion = "SalaryTemplateBackfillSeeder:v1";
+	internal const string StepVersion = "SalaryTemplateBackfillSeeder:v3";
 	internal const int StepOrder = 162;
 
 	private readonly HRSeederContributor _hrSeederContributor;
@@ -28,6 +28,9 @@ public class SalaryTemplateBackfillSeederContributor : BaseSeederContributor
 		_hrSeederContributor = hrSeederContributor;
 	}
 
-	public override Task SeedAsync(DataSeedContext context) =>
-		_hrSeederContributor.SeedSalaryStructureTemplatesAsync();
+	public override async Task SeedAsync(DataSeedContext context)
+	{
+		await _hrSeederContributor.SeedSalaryStructureTemplatesAsync();
+		await _hrSeederContributor.BackfillLegacyCompensationRevisionsAsync();
+	}
 }

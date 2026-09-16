@@ -11,7 +11,8 @@ namespace ShikshaMitra.HR.Payroll.Templates;
 
 internal sealed record SalaryTemplateEsiResolution(
 	SalaryTemplateEsiEvaluationContext? Context,
-	IReadOnlyList<string> Warnings);
+	IReadOnlyList<string> Warnings,
+	bool RegistrationPending);
 
 public class SalaryTemplateEsiContextResolver(
 	IRepository<StatutoryRuleVersion, Guid> ruleRepository,
@@ -42,7 +43,7 @@ public class SalaryTemplateEsiContextResolver(
 			.FirstOrDefault();
 		if (establishment == null)
 		{
-			return new SalaryTemplateEsiResolution(null, ["ESI_ESTABLISHMENT_INACTIVE"]);
+			return new SalaryTemplateEsiResolution(null, ["ESI_ESTABLISHMENT_INACTIVE"], false);
 		}
 
 		var rule = (await ruleRepository.GetListAsync(x =>
@@ -56,7 +57,7 @@ public class SalaryTemplateEsiContextResolver(
 			.FirstOrDefault();
 		if (rule == null)
 		{
-			return new SalaryTemplateEsiResolution(null, ["ESI_RULE_NOT_FOUND"]);
+			return new SalaryTemplateEsiResolution(null, ["ESI_RULE_NOT_FOUND"], false);
 		}
 
 		var treatments = (await treatmentRepository.GetListAsync(x =>
@@ -92,6 +93,11 @@ public class SalaryTemplateEsiContextResolver(
 			overrides,
 			canonicalDeduction?.Id ?? Guid.Empty,
 			canonicalDeduction?.Name ?? CanonicalEsiComponentName);
-		return new SalaryTemplateEsiResolution(context, []);
+		return new SalaryTemplateEsiResolution(
+			context,
+			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending
+				? ["ESI_REGISTRATION_PENDING"]
+				: [],
+			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending);
 	}
 }

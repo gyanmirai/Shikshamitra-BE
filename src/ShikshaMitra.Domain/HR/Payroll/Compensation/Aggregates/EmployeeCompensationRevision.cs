@@ -29,6 +29,9 @@ public class EmployeeCompensationRevision : FullAuditedAggregateRoot<Guid>, IMul
 	public Guid? PfRuleId { get; private set; }
 	public string StatutoryProfile { get; private set; } = "IN-GJ";
 	public string CalculationSnapshotJson { get; private set; } = "{}";
+	public string IdempotencyKey { get; private set; } = string.Empty;
+	public string OverridesJson { get; private set; } = "[]";
+	public string? CustomizationReason { get; private set; }
 	public Guid? SubmittedByUserId { get; private set; }
 	public DateTime? SubmittedAt { get; private set; }
 	public Guid? ApprovedByUserId { get; private set; }
@@ -46,7 +49,8 @@ public class EmployeeCompensationRevision : FullAuditedAggregateRoot<Guid>, IMul
 		Guid? tenantId,
 		Guid employeeId,
 		int revisionNumber,
-		DateTime effectiveMonth) : base(id)
+		DateTime effectiveMonth,
+		string? idempotencyKey = null) : base(id)
 	{
 		if (employeeId == Guid.Empty || revisionNumber <= 0 || effectiveMonth.Day != 1)
 		{
@@ -58,6 +62,7 @@ public class EmployeeCompensationRevision : FullAuditedAggregateRoot<Guid>, IMul
 		RevisionNumber = revisionNumber;
 		EffectiveMonth = DateTime.SpecifyKind(effectiveMonth.Date, DateTimeKind.Utc);
 		Status = CompensationRevisionStatus.Draft;
+		IdempotencyKey = string.IsNullOrWhiteSpace(idempotencyKey) ? Guid.NewGuid().ToString("N") : idempotencyKey.Trim();
 	}
 
 	public void ReplaceDraft(
@@ -74,7 +79,9 @@ public class EmployeeCompensationRevision : FullAuditedAggregateRoot<Guid>, IMul
 		int? sourceSalaryTemplateVersion,
 		Guid? pfRuleId,
 		string statutoryProfile,
-		string calculationSnapshotJson)
+		string calculationSnapshotJson,
+		string? overridesJson = null,
+		string? customizationReason = null)
 	{
 		EnsureDraft();
 		if (effectiveMonth.Day != 1 || quotedMonthlyAmount <= 0m || grossSalary <= 0m || protectedMonthlyAmount < 0m || netSalary < 0m || employerCost < grossSalary)
@@ -96,6 +103,26 @@ public class EmployeeCompensationRevision : FullAuditedAggregateRoot<Guid>, IMul
 		PfRuleId = pfRuleId;
 		StatutoryProfile = Check.NotNullOrWhiteSpace(statutoryProfile, nameof(statutoryProfile), 16);
 		CalculationSnapshotJson = Check.NotNullOrWhiteSpace(calculationSnapshotJson, nameof(calculationSnapshotJson));
+		OverridesJson = string.IsNullOrWhiteSpace(overridesJson) ? "[]" : overridesJson;
+		CustomizationReason = string.IsNullOrWhiteSpace(customizationReason) ? null : customizationReason.Trim();
+	}
+
+	public void MakeEffective(Guid userId, DateTime effectiveAt)
+	{
+		EnsureDraft();
+		Status = CompensationRevisionStatus.Approved;
+		SubmittedByUserId = userId;
+		SubmittedAt = effectiveAt;
+		ApprovedByUserId = userId;
+		ApprovedAt = effectiveAt;
+	}
+
+	public void MakeEffectiveFromLegacy(DateTime migratedAt)
+	{
+		EnsureDraft();
+		Status = CompensationRevisionStatus.Approved;
+		SubmittedAt = migratedAt;
+		ApprovedAt = migratedAt;
 	}
 
 	public void Submit(Guid submittedByUserId, DateTime submittedAt)

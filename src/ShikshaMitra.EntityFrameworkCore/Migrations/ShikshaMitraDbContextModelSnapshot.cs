@@ -15469,6 +15469,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<string>("CustomizationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
@@ -15496,6 +15500,11 @@ namespace ShikshaMitra.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -15513,6 +15522,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<decimal>("NetSalary")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("OverridesJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValue("[]");
 
                     b.Property<Guid?>("PfRuleId")
                         .HasColumnType("uuid");
@@ -15572,6 +15587,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "EmployeeId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false AND \"IdempotencyKey\" <> ''");
 
                     b.HasIndex("TenantId", "EmployeeId", "RevisionNumber")
                         .IsUnique()
@@ -17648,6 +17667,12 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<bool>("DefaultPfApplicable")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("DefaultPfRuleId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("DefaultProtectionPolicy")
                         .HasColumnType("integer");
 
@@ -17688,6 +17713,11 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("SaveOperationKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -17704,6 +17734,10 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("TemplateId");
+
+                    b.HasIndex("TenantId", "SaveOperationKey")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false AND \"SaveOperationKey\" <> ''");
 
                     b.HasIndex("TenantId", "TemplateId", "Status");
 

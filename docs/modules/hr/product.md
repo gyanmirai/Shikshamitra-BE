@@ -3,7 +3,7 @@ module: hr
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-09-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -42,10 +42,11 @@ Treat these rules as critical because HR feeds payroll and staff records:
 | Employee status changes require valid transitions | Left or retired employees cannot silently become active through unrelated updates |
 | Attendance locks protect payroll basis | Locked days or batches must block or control edits |
 | Leave policies separate paid and unpaid rules | Payroll impact depends on paid type and policy resolution |
-| Approved compensation revisions are the recurring salary source of truth | Draft, rejected, superseded, and legacy recurring rows cannot silently drive payroll |
-| One-time salary components remain separate | Temporary earnings and deductions cannot change the approved recurring compensation revision |
-| Recurring compensation requires maker-checker approval | The creator or submitter cannot approve the same revision |
-| Protected compensation drift is visible but non-mutating | Payroll warns without rewriting approved salary or blocking lock |
+| Effective compensation revisions are the recurring salary source of truth | Superseded and legacy non-effective records cannot silently drive payroll |
+| One-time salary components remain separate | Temporary earnings and deductions cannot change the effective recurring compensation revision |
+| Saving recurring compensation is direct and immutable | Every save is recalculated on the server and creates a new effective revision without an approval queue |
+| Employee activation requires payroll readiness | New employees remain Inactive until an effective salary covers the later of joining month or current payroll month |
+| Protected compensation drift is visible but non-mutating | Payroll warns without rewriting saved salary or blocking lock |
 | Earning component dependencies are tenant-scoped and acyclic | A percentage component cannot reference itself, another tenant, an inactive target, or a dependency chain that returns to itself |
 | Payroll preview and lock use the same policy basis | Salary slips must match the locked payroll snapshot |
 | Policy assignments resolve by specificity and date | Employee overrides beat group assignments, and defaults are fallback only |

@@ -206,21 +206,15 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleDisplayName = $"{DisplayName}.PayrollManagement.CompensationRevisions";
 
 			public const string View = $"{SubmoduleName}.View";
-			public const string Create = $"{SubmoduleName}.Create";
-			public const string Edit = $"{SubmoduleName}.Edit";
-			public const string Submit = $"{SubmoduleName}.Submit";
-			public const string Approve = $"{SubmoduleName}.Approve";
+			public const string Manage = $"{SubmoduleName}.Manage";
 			public const string ViewAudit = $"{SubmoduleName}.ViewAudit";
 
-			public static readonly string[] All = { View, Create, Edit, Submit, Approve, ViewAudit };
+			public static readonly string[] All = { View, Manage, ViewAudit };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
-				{ Create, $"{SubmoduleDisplayName}.Create" },
-				{ Edit, $"{SubmoduleDisplayName}.Edit" },
-				{ Submit, $"{SubmoduleDisplayName}.Submit" },
-				{ Approve, $"{SubmoduleDisplayName}.Approve" },
+				{ Manage, $"{SubmoduleDisplayName}.Manage" },
 				{ ViewAudit, $"{SubmoduleDisplayName}.ViewAudit" }
 			};
 		}

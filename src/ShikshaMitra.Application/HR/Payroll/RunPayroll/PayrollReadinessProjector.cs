@@ -66,7 +66,7 @@ internal static class PayrollReadinessProjector
 		if (items.Any(x => x.IssueCodes.Contains(IssueCodes.CompensationRevisionRequired)))
 		{
 			blockingIssues.Add(IssueCodes.CompensationRevisionRequired);
-			recommendedActions.Add("approve-compensation-revision");
+			recommendedActions.Add("set-up-salary");
 		}
 
 		return new RunPayrollReadinessSummary

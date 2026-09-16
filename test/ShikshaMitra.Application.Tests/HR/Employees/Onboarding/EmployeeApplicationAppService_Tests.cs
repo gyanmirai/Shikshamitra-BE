@@ -328,6 +328,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		{
 			PersonalInfo = personalInfo
 		});
+		result.Employee.EmployeeStatusType.ShouldBe(EmployeeStatusType.Inactive);
 
 		var assignments = await _assignmentRepository.GetListAsync(x =>
 			x.IsActive &&

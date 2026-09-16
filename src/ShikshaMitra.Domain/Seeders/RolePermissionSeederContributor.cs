@@ -16,7 +16,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "RolePermissionSeeder";
 	// Re-run baseline grants after completing View, Add, and Delete for every Student submodule.
-	internal const string StepVersion = "RolePermissionSeeder:v24";
+	internal const string StepVersion = "RolePermissionSeeder:v25";
 	internal const int StepOrder = 120;
 	private const string RoleProviderName = "R";
 
@@ -37,6 +37,16 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 
 	public override async Task SeedAsync(DataSeedContext context)
 	{
+		await _permissionGrantSeedRepository.MirrorRoleGrantsIgnoringDuplicatesAsync(
+			new Dictionary<string, IReadOnlyCollection<string>>
+			{
+				["HR.PayrollManagement.CompensationRevisions.Create"] =
+					[ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage],
+				["HR.PayrollManagement.CompensationRevisions.Edit"] =
+					[ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage]
+			},
+			CurrentTenant.Id);
+
 		var rolePermissions = BuildRolePermissions();
 		var rolesByNormalizedName = (await _roleRepository.GetListAsync())
 			.Where(role => !string.IsNullOrWhiteSpace(role.Name))

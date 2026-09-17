@@ -14,6 +14,14 @@ public class StudentAcademic360Controller(
     IStudentAcademic360AppService studentAcademic360AppService
 ) : ShikshaMitraController
 {
+    [HttpGet]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Dashboard.View)]
+    public async Task<StudentAcademic360ListResultDto> GetListAsync(
+        [FromQuery] GetStudentAcademic360ListInput input)
+    {
+        return await studentAcademic360AppService.GetListAsync(input);
+    }
+
     [HttpGet("{studentId:guid}")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Dashboard.View)]
     public async Task<StudentAcademic360Dto> GetAsync(

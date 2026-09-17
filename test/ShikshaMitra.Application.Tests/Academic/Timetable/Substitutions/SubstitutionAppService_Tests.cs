@@ -179,6 +179,33 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
         }
     }
 
+    [Fact]
+    public async Task RejectDutyAsync_Should_Return_The_Rejected_Duty_After_Clearing_The_Assignment()
+    {
+        var substituteUserId = Guid.NewGuid();
+        var substitute = await CreateEmployeeAsync(substituteUserId, "Assigned", "Teacher");
+        var substitution = await CreateAssignedSubstitutionAsync(substitute);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(substituteUserId)))
+        {
+            var result = await _substitutionAppService.RejectDutyAsync(
+                substitution.Id,
+                new SubstitutionActionDto { Reason = "Unable to cover this period." });
+
+            result.Status.ShouldBe("Rejected");
+            result.AcknowledgementStatus.ShouldBe("Rejected");
+            result.SubstituteTeacherId.ShouldBeNull();
+            result.SubstituteTeacherName.ShouldBeNull();
+            result.Remarks.ShouldBe("Unable to cover this period.");
+
+            var persisted = await _substitutionRepository.GetAsync(substitution.Id);
+            persisted.Status.ShouldBe(SubstitutionStatus.Rejected);
+            persisted.AcknowledgementStatus.ShouldBe(SubstitutionAcknowledgementStatus.Rejected);
+            persisted.SubstituteTeacherId.ShouldBeNull();
+            persisted.SubstituteTeacherName.ShouldBeNull();
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

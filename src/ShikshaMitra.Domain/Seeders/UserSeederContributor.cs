@@ -12,7 +12,10 @@ namespace ShikshaMitra.Seeders;
 
 public class UserSeederContributor : BaseSeederContributor
 {
-	private const string TempPassword = "Temp@123";
+	internal const string StepName = "UserSeeder";
+	internal const string StepVersion = "UserSeeder:v3";
+	internal const int StepOrder = 130;
+	internal const string DefaultPassword = "Temp@123";
 
 	private readonly IdentityUserManager _userManager;
 	private readonly IIdentityUserRepository _userRepository;
@@ -60,7 +63,7 @@ public class UserSeederContributor : BaseSeederContributor
 			user.Surname = userInfo.Surname;
 			user.SetEmailConfirmed(true);
 
-			var result = await _userManager.CreateAsync(user, TempPassword);
+			var result = await _userManager.CreateAsync(user, DefaultPassword);
 			if (!result.Succeeded)
 			{
 				// Another seeder may have created the same user between existence check and create.
@@ -79,6 +82,10 @@ public class UserSeederContributor : BaseSeederContributor
 			.Select(x => x.Email)
 			.ToList();
 
+	internal static IReadOnlyDictionary<string, string> BuildSeededLoginRolesByEmail() =>
+		BuildUserSpecs()
+			.ToDictionary(x => x.Email, x => x.RoleName, System.StringComparer.OrdinalIgnoreCase);
+
 	private static IReadOnlyList<BaselineUserSpec> BuildUserSpecs() =>
 		new List<BaselineUserSpec>
 		{
@@ -87,7 +94,9 @@ public class UserSeederContributor : BaseSeederContributor
 			new("teacher-demo-1", "teacher-demo-1@ddvs.com", "Teacher", "Demo 1", "Teacher", ["teacher1"], ["teacher1@school.com"]),
 			new("teacher-demo-2", "teacher-demo-2@ddvs.com", "Teacher", "Demo 2", "Teacher", ["teacher2"], ["teacher2@school.com"]),
 			new("principal-demo-gseb", "principal-demo-gseb@ddvs.com", "Principal", "Demo GSEB", "Principal", ["principal"], ["principal@school.com"]),
-			new("hr-manager", "hr-manager@ddvs.com", "HR", "Manager", "HR Manager", ["hr"], ["hr@school.com"])
+			new("hr-manager", "hr-manager@ddvs.com", "HR", "Manager", "HR Manager", ["hr"], ["hr@school.com"]),
+			new("student-demo", "student-demo@ddvs.com", "Student", "Demo", "Student", ["student1"], ["student1@ddvs.com"]),
+			new("parent-demo", "parent-demo@ddvs.com", "Parent", "Demo", "Parent", ["parent1"], ["parent1@ddvs.com"])
 		};
 
 	private async Task<IdentityUser?> FindExistingUserAsync(BaselineUserSpec userInfo)

@@ -121,7 +121,10 @@ public class SuggestedRoomDto
     public Guid RoomId { get; set; }
     public string RoomName { get; set; }
     public Guid BuildingId { get; set; }
+    public string BuildingName { get; set; } = string.Empty;
     public Guid FloorId { get; set; }
+    public string FloorName { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
     public int Capacity { get; set; }
     public List<string> Features { get; set; } = new();
     public int MatchScore { get; set; }

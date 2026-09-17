@@ -21,10 +21,12 @@ public static class CurriculumErrorCodes
     public const string DuplicateSubjectAssignment = "Academic:Curriculum:020001";
     public const string LessonPlanReassignmentConflict = "Academic:Curriculum:020002";
     public const string TimetableTeacherChanged = "Academic:Curriculum:020003";
+    public const string SubjectAssignmentTeacherMustBeActive = "Academic:Curriculum:020004";
 
     // ── Elective Group: 03xxxx ───────────────────────────────────
 
     public const string ElectiveGroupHasActiveAllocations = "Academic:Curriculum:030001";
+    public const string ElectiveGroupSubjectsLocked = "Academic:Curriculum:030002";
 
     // ── Chapter: 04xxxx ──────────────────────────────────────────
 

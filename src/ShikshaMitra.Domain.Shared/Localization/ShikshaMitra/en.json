@@ -463,6 +463,8 @@
     "Academic:Curriculum:010002": "A subject named '{Name}' already exists for this medium.",
     "Academic:Curriculum:010003": "The color '{Color}' is already used by subject '{ExistingSubjectName}'. Please choose a different color.",
     "Academic:Curriculum:010004": "Subject was not found.",
+    "Academic:Curriculum:020004": "Only active teaching employees can be assigned as primary or secondary teachers.",
+    "Academic:Curriculum:030002": "Subjects cannot be added to or removed from an elective group after it is used in academic records.",
 
     "Academic:Reports:AiNotConfigured": "ShikshaMitra AI is not configured. Ask an administrator to configure the AI provider API key.",
     "Academic:Reports:AiServiceUnavailable": "ShikshaMitra AI is temporarily unavailable. Please try again.",

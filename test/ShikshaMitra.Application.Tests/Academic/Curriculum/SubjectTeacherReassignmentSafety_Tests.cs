@@ -3,6 +3,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.Timetables;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
@@ -13,6 +15,32 @@ namespace ShikshaMitra.Academic.Curriculum;
 
 public class SubjectTeacherReassignmentSafety_Tests : SubjectTeacherReassignmentTestBase
 {
+	[Fact]
+	public async Task Inactive_Employee_Cannot_Be_Assigned_As_A_Subject_Teacher()
+	{
+		using (AsAdmin())
+		using (Tenant.Change(TenantId))
+		await WithUnitOfWorkAsync(async () =>
+		{
+			await SeedAllocationAsync();
+			var employees = GetRequiredService<IRepository<Employee, Guid>>();
+			var inactiveTeacher = await employees.GetAsync(NewTeacher);
+			inactiveTeacher.UpdateEmployeeStatus(
+				EmployeeStatusType.Inactive,
+				"Test inactive assignment protection",
+				DateOnly.FromDateTime(DateTime.UtcNow),
+				DateTimeOffset.UtcNow);
+			await employees.UpdateAsync(inactiveTeacher, autoSave: true);
+
+			var error = await Should.ThrowAsync<BusinessException>(() => ChangeTeacherAsync());
+
+			error.Code.ShouldBe(CurriculumErrorCodes.SubjectAssignmentTeacherMustBeActive);
+			var assignment = await GetRequiredService<IRepository<AssignedSubject, Guid>>().GetAsync(AssignmentId);
+			assignment.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Primary)
+				.TeacherId.ShouldBe(OldTeacher);
+		});
+	}
+
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]

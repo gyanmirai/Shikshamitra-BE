@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.Timetables;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.Identity;
@@ -46,6 +48,16 @@ public abstract class SubjectTeacherReassignmentTestBase : LessonPlanProgressTes
 			new IdentityUser(ActorId, $"allocation-admin-{ActorId:N}", $"{ActorId:N}@example.test", TenantId), autoSave: true);
 		await GetRequiredService<IUserScopeAssignmentRepository>().InsertAsync(
 			new UserScopeAssignment(Guid.NewGuid(), TenantId, ActorId), autoSave: true);
+		var teacherRoleId = Guid.NewGuid();
+		await GetRequiredService<IRepository<IdentityRole, Guid>>().InsertAsync(
+			new IdentityRole(teacherRoleId, $"allocation-teacher-{teacherRoleId:N}", TenantId), autoSave: true);
+		await GetRequiredService<IRepository<Employee, Guid>>().InsertManyAsync(
+			[
+				CreateTeacher(OldTeacher, teacherRoleId, "Old", 1),
+				CreateTeacher(NewTeacher, teacherRoleId, "New", 2),
+				CreateTeacher(OtherTeacher, teacherRoleId, "Other", 3)
+			],
+			autoSave: true);
 		var repository = GetRequiredService<IRepository<AssignedSubject, Guid>>();
 		var assignment = (await repository.GetListAsync(a => a.StandardId == StandardId)).Single();
 		assignment.SetPrimaryTeacher(OldTeacher);
@@ -53,6 +65,49 @@ public abstract class SubjectTeacherReassignmentTestBase : LessonPlanProgressTes
 		AssignmentId = assignment.Id;
 		await repository.UpdateAsync(assignment, autoSave: true);
 	}
+
+	private static Employee CreateTeacher(Guid id, Guid roleId, string firstName, int sequence) =>
+		new(
+			id,
+			TenantId,
+			null,
+			$"ALLOC{sequence:D3}",
+			new EmployeeBasicInfo(
+				ProfilePictureBlobName: null,
+				LastName: "Teacher",
+				FirstName: firstName,
+				MiddleName: null,
+				ShortName: firstName,
+				EmployeeStatusType: EmployeeStatusType.Active,
+				DateOfBirth: new DateOnly(1990, 1, sequence),
+				FamilyCast: null,
+				CastType: null,
+				GenderType: null,
+				Religion: null,
+				MaritalStatus: null,
+				BloodGroup: null,
+				MobileNo: null,
+				SecondaryMobileNo: null,
+				Email: $"allocation-{id:N}@example.test",
+				PanNo: $"ABCDE{sequence:D4}F",
+				AdharNo: $"100000000{sequence:D3}",
+				Address1: null,
+				Address2: null,
+				Address3: null,
+				Department: "Academics",
+				Designation: "Teacher",
+				DateOfJoining: new DateOnly(2025, 1, 1),
+				EmployeeGroup: EmployeeGroupType.Teaching,
+				Qualification: null,
+				RoleId: roleId,
+				IdentificationMark1: null,
+				City: null,
+				State: null,
+				Country: null,
+				PinCode: null,
+				ShiftId: null),
+			new BankDetails(null, null, null, null, null),
+			null);
 
 	protected Task<SubjectAssignmentDto> ChangeTeacherAsync(SubjectStatus status = SubjectStatus.Published) =>
 		Allocations.UpdateAsync(AssignmentId, Guid.Empty, new CreateUpdateSubjectAssignmentDto

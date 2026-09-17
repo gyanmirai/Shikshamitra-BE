@@ -18,7 +18,7 @@ These are created by `TenantSeederContributor` when tenants are created.
 | SSVM | `admin-ssvm@ddvs.com` | admin | Seeded all application/platform permissions; tenant-bound to SSVM. |
 | Forgot | `admin-forgot@ddvs.com` | admin | Seeded all application/platform permissions; tenant-bound to Forgot. |
 
-## Baseline Staff Accounts
+## Baseline Accounts
 
 These are seeded for every tenant by `UserSeederContributor`.
 
@@ -28,6 +28,8 @@ These are seeded for every tenant by `UserSeederContributor`.
 | `teacher-demo-2@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
 | `principal-demo-gseb@ddvs.com` | Principal | Principal module permissions; GSEB board data scope only. |
 | `hr-manager@ddvs.com` | HR Manager | Dashboard, HR, Calendar, Institute Setup; full organization data scope. |
+| `student-demo@ddvs.com` | Student | Dashboard, Students, Calendar; no staff-wide organization scope. |
+| `parent-demo@ddvs.com` | Parent | Dashboard, Students, Calendar; no staff-wide organization scope. |
 
 ## DDVS Test Login Accounts
 
@@ -42,7 +44,6 @@ These are seeded only for the DDVS tenant when `SeedTestLogins=true`.
 | `teacher-gseb@ddvs.com` | Teacher | Dashboard, Students, Academics, Class Management, Calendar; full organization data scope. |
 | `clerk-office@ddvs.com` | Clerk | Dashboard, Students, HR, Communication, Calendar, Institute Setup; full organization data scope. |
 | `finance-officer@ddvs.com` | Finance Officer | Dashboard, Students, Finance; full organization data scope. |
-| `student-demo@ddvs.com` | Student | Dashboard, Students, Calendar; no staff-wide organization scope. |
 
 ## HR Seeder Employee Accounts
 
@@ -98,7 +99,7 @@ These are seeded only for the DDVS tenant when `SeedHrManualTestData=true`.
 - HR manual test users are designed for HR payroll, attendance, leave, and reporting workflows.
 - Director seeded employee accounts are full-access tenant staff accounts and are linked to employee records, so `/api/employees/me` resolves for them.
 - `principal-gseb@ddvs.com` is linked to the seeded principal employee record and can see the seeded reporting chain in Employee List.
-- Student accounts are linked to seeded student records and are not staff users.
+- Student and parent accounts are not staff users and receive no staff-wide organization scope.
 - Student seed data cycles through the fun-name list as middle names so student rows expose parent-style names in testing.
 
 ## Legacy Aliases Repaired By Seeders
@@ -114,6 +115,7 @@ teacher1@ddvs.com
 clerk1@ddvs.com
 finance1@ddvs.com
 student1@ddvs.com
+parent1@ddvs.com
 teacher1@school.com
 teacher2@school.com
 principal@school.com

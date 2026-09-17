@@ -59,10 +59,14 @@ public class ClassTeacherAssignmentAppService(
 		string? search = null
 	)
 	{
-		var context = await LoadContextAsync(organizationId);
+		var context = await LoadContextAsync(organizationId, activeTeachingEmployeesOnly: true);
 		var normalizedSearch = search?.Trim().ToLowerInvariant();
 
 		return context.Employees
+			.Where(employee =>
+				employee.EmployeeStatusType == EmployeeStatusType.Active &&
+				employee.EmployeeGroup == EmployeeGroupType.Teaching
+			)
 			.Where(employee =>
 				string.IsNullOrWhiteSpace(normalizedSearch) ||
 				employee.EmployeeName.ToLowerInvariant().Contains(normalizedSearch) ||
@@ -247,7 +251,10 @@ public class ClassTeacherAssignmentAppService(
 		}
 	}
 
-	private async Task<ClassTeacherAssignmentContext> LoadContextAsync(Guid organizationId)
+	private async Task<ClassTeacherAssignmentContext> LoadContextAsync(
+		Guid organizationId,
+		bool activeTeachingEmployeesOnly = false
+	)
 	{
 		var standards = await standardRepository.GetListAsync(
 			standard => standard.EducationMediumStageId == organizationId
@@ -259,7 +266,11 @@ public class ClassTeacherAssignmentAppService(
 		var classTeachers = standardIds.Any()
 			? await classTeacherRepository.GetListAsync(assignment => standardIds.Contains(assignment.StandardId))
 			: new List<ClassTeacher.ClassTeacher>();
-		var employees = await employeeRepository.GetListAsync();
+		var employees = activeTeachingEmployeesOnly
+			? await employeeRepository.GetListAsync(employee =>
+				employee.EmployeeStatusType == EmployeeStatusType.Active &&
+				employee.EmployeeGroup == EmployeeGroupType.Teaching)
+			: await employeeRepository.GetListAsync();
 
 		return new ClassTeacherAssignmentContext(
 			organizationId,
@@ -456,7 +467,8 @@ public class ClassTeacherAssignmentAppService(
 			  assignment.StandardId == excludeClassId.Value &&
 			  assignment.DivisionId == excludeDivisionId.Value)
 		);
-		var isActive = (employee.EmployeeStatusType ?? EmployeeStatusType.Active) == EmployeeStatusType.Active;
+		var isActive = employee.EmployeeStatusType == EmployeeStatusType.Active;
+		var isTeachingStaff = employee.EmployeeGroup == EmployeeGroupType.Teaching;
 		var isOverLimit = classTeacherCount >= MaximumClassTeacherAssignments;
 		var reasons = new List<string>();
 
@@ -465,13 +477,18 @@ public class ClassTeacherAssignmentAppService(
 			reasons.Add("Teacher is not active.");
 		}
 
+		if (!isTeachingStaff)
+		{
+			reasons.Add("Employee is not categorized as teaching staff.");
+		}
+
 		if (isOverLimit)
 		{
 			reasons.Add($"Teacher already has {classTeacherCount} class teacher responsibilities.");
 		}
 
 		var score = 100 - Math.Min(classTeacherCount * 25, 75);
-		if (!isActive)
+		if (!isActive || !isTeachingStaff)
 		{
 			score = 0;
 		}
@@ -487,10 +504,14 @@ public class ClassTeacherAssignmentAppService(
 			CurrentClassTeacherCount = classTeacherCount,
 			MaximumClassTeacherCount = MaximumClassTeacherAssignments,
 			IsActive = isActive,
-			IsEligible = isActive && !isOverLimit,
+			IsEligible = isActive && isTeachingStaff && !isOverLimit,
 			HasTimetableConflict = false,
 			IsOnLeave = false,
-			AvailabilityStatus = isActive ? "Available" : "Inactive",
+			AvailabilityStatus = !isActive
+				? "Inactive"
+				: isTeachingStaff
+					? "Available"
+					: "Ineligible",
 			WorkloadStatus = isOverLimit
 				? "Exceeded"
 				: classTeacherCount == MaximumClassTeacherAssignments - 1
@@ -623,7 +644,8 @@ public class ClassTeacherAssignmentAppService(
 	)
 	{
 		var issues = new List<ClassTeacherValidationIssueDto>();
-		var isActive = (employee.EmployeeStatusType ?? EmployeeStatusType.Active) == EmployeeStatusType.Active;
+		var isActive = employee.EmployeeStatusType == EmployeeStatusType.Active;
+		var isTeachingStaff = employee.EmployeeGroup == EmployeeGroupType.Teaching;
 		// Exclude the current assignment so a teacher is not flagged for having the
 		// assignment that already belongs to this class-division.
 		var classTeacherCount = context.ClassTeachers.Count(assignment =>
@@ -642,6 +664,20 @@ public class ClassTeacherAssignmentAppService(
 				TeacherId = employee.Id,
 				Message = $"{employee.EmployeeName} is not active and cannot be assigned as class teacher.",
 				SuggestedFix = "Select an active teacher or update the employee status first."
+			});
+		}
+
+		if (!isTeachingStaff)
+		{
+			issues.Add(new ClassTeacherValidationIssueDto
+			{
+				Severity = "Critical",
+				Code = "NON_TEACHING_EMPLOYEE",
+				ClassId = classId,
+				DivisionId = divisionId,
+				TeacherId = employee.Id,
+				Message = $"{employee.EmployeeName} is not categorized as teaching staff and cannot be assigned as class teacher.",
+				SuggestedFix = "Select an active teaching staff member."
 			});
 		}
 

@@ -20,9 +20,8 @@ Common password for all accounts in this list:
 | DDVS | Teacher | `teacher-gseb@ddvs.com` | `Temp@123` | Teacher persona for GSEB testing. |
 | DDVS | Clerk | `clerk-office@ddvs.com` | `Temp@123` | Office clerk persona. |
 | DDVS | Finance Manager | `finance-officer@ddvs.com` | `Temp@123` | Uses existing role `Finance Officer`. |
-| DDVS | Student | `student-demo@ddvs.com` | `Temp@123` | Linked to an actual seeded student profile by email and assigned role `Student`. |
 
-These baseline staff logins are seeded for every tenant, including DDVS, SSVM, and Forgot:
+These baseline logins are seeded for every tenant, including DDVS, SSVM, and Forgot:
 
 | Role | Email / Login | Password |
 |---|---|---|
@@ -30,6 +29,8 @@ These baseline staff logins are seeded for every tenant, including DDVS, SSVM, a
 | Teacher | `teacher-demo-2@ddvs.com` | `Temp@123` |
 | Principal | `principal-demo-gseb@ddvs.com` | `Temp@123` |
 | HR Manager | `hr-manager@ddvs.com` | `Temp@123` |
+| Student | `student-demo@ddvs.com` | `Temp@123` |
+| Parent | `parent-demo@ddvs.com` | `Temp@123` |
 
 ## Expected access
 
@@ -50,6 +51,7 @@ The seeders grant two separate kinds of access:
 | Clerk | Dashboard, Students, HR, Communication, Calendar, and Institute Setup permissions; full organization scope for seeded demo data. |
 | Finance Manager | Dashboard, Students, and Finance permissions; full organization scope for seeded demo data. |
 | Student | Dashboard, Students, and Calendar permissions; no staff-wide organization scope. |
+| Parent | Dashboard, Students, and Calendar permissions; no staff-wide organization scope. |
 
 ## Usage
 

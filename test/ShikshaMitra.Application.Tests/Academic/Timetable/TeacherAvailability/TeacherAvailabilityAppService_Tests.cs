@@ -4,8 +4,12 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Shouldly;
 using ShikshaMitra.Academic.Timetable.Substitutions;
+using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.Security.Claims;
 using Xunit;
 
@@ -18,12 +22,20 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
 
     private readonly ITeacherAvailabilityAppService _teacherAvailabilityAppService;
     private readonly IRepository<TeacherAvailability, Guid> _availabilityRepository;
+    private readonly IRepository<Employee, Guid> _employeeRepository;
+    private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
+    private readonly IRepository<IdentityRole, Guid> _roleRepository;
+    private readonly IRepository<IdentityUser, Guid> _identityUserRepository;
     private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 
     public TeacherAvailabilityAppService_Tests()
     {
         _teacherAvailabilityAppService = GetRequiredService<ITeacherAvailabilityAppService>();
         _availabilityRepository = GetRequiredService<IRepository<TeacherAvailability, Guid>>();
+        _employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
+        _employeeAttendanceRepository = GetRequiredService<IEmployeeAttendanceRepository>();
+        _roleRepository = GetRequiredService<IRepository<IdentityRole, Guid>>();
+        _identityUserRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
         _currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
     }
 
@@ -95,6 +107,128 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
             persisted.AcademicYearId.ShouldBe(academicYearId);
             persisted.AvailabilityDate.ShouldBe(availabilityDate);
         }
+    }
+
+    [Fact]
+    public async Task GetListAsync_Should_Sync_And_Return_Reportee_Absence_Only()
+    {
+        var managerUserId = Guid.NewGuid();
+        var manager = await CreateEmployeeAsync(managerUserId, "Jignesh", "Jinjala");
+        var reportee = await CreateEmployeeAsync(
+            Guid.NewGuid(),
+            "Akshay",
+            "Patel",
+            manager.Id);
+        var unrelatedEmployee = await CreateEmployeeAsync(
+            Guid.NewGuid(),
+            "Unrelated",
+            "Teacher");
+        var attendanceDate = new DateOnly(2026, 9, 17);
+
+        await _employeeAttendanceRepository.InsertAsync(
+            new EmployeeAttendance
+            {
+                EmployeeId = reportee.Id,
+                AttendanceDate = attendanceDate,
+                StatusType = EmployeeAttendanceStatusType.FullDayLeave,
+                Source = AttendanceRecordSource.Manual,
+                Remarks = "Approved leave"
+            },
+            autoSave: true);
+        await _employeeAttendanceRepository.InsertAsync(
+            new EmployeeAttendance
+            {
+                EmployeeId = unrelatedEmployee.Id,
+                AttendanceDate = attendanceDate,
+                StatusType = EmployeeAttendanceStatusType.FullDayLeave,
+                Source = AttendanceRecordSource.Manual,
+                Remarks = "Unrelated leave"
+            },
+            autoSave: true);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(managerUserId, "teacher")))
+        {
+            var result = await _teacherAvailabilityAppService.GetListAsync(
+                new GetTeacherAvailabilityInput
+                {
+                    Date = attendanceDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                    MaxResultCount = 50
+                });
+
+            result.TotalCount.ShouldBe(1);
+            var availability = result.Items.ShouldHaveSingleItem();
+            availability.TeacherId.ShouldBe(reportee.Id);
+            availability.TeacherName.ShouldBe("Akshay Patel");
+            availability.SourceType.ShouldBe(TeacherAvailabilitySource.Attendance.ToString());
+
+            var syncedRows = await _availabilityRepository.GetListAsync(
+                row => row.SourceType == TeacherAvailabilitySource.Attendance);
+            syncedRows.ShouldHaveSingleItem().TeacherId.ShouldBe(reportee.Id);
+        }
+    }
+
+    private async Task<Employee> CreateEmployeeAsync(
+        Guid userId,
+        string firstName,
+        string lastName,
+        Guid? reportingManagerId = null)
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var roleId = Guid.NewGuid();
+        await _identityUserRepository.InsertAsync(
+            new IdentityUser(userId, $"availability-{suffix[..8]}", $"{suffix[..12]}@test.local", tenantId: null),
+            autoSave: true);
+        await _roleRepository.InsertAsync(
+            new IdentityRole(roleId, $"availability-{suffix[..8]}", tenantId: null),
+            autoSave: true);
+
+        var employee = new Employee(
+            Guid.NewGuid(),
+            tenantId: null,
+            userId: userId,
+            employeeCode: $"AVL{suffix[..10]}",
+            basicInfo: new EmployeeBasicInfo(
+                ProfilePictureBlobName: null,
+                LastName: lastName,
+                FirstName: firstName,
+                MiddleName: null,
+                ShortName: firstName,
+                EmployeeStatusType: EmployeeStatusType.Active,
+                DateOfBirth: new DateOnly(1990, 1, 1),
+                FamilyCast: null,
+                CastType: null,
+                GenderType: null,
+                Religion: null,
+                MaritalStatus: null,
+                BloodGroup: null,
+                MobileNo: null,
+                SecondaryMobileNo: null,
+                Email: $"{suffix[..12]}@test.local",
+                PanNo: $"ABCDE{suffix[..4].ToUpperInvariant()}F",
+                AdharNo: $"1{Math.Abs((long)suffix.GetHashCode()):D11}"[..12],
+                Address1: null,
+                Address2: null,
+                Address3: null,
+                Department: "Academics",
+                Designation: "Teacher",
+                DateOfJoining: new DateOnly(2025, 1, 1),
+                EmployeeGroup: null,
+                Qualification: null,
+                RoleId: roleId,
+                IdentificationMark1: null,
+                City: null,
+                State: null,
+                Country: null,
+                PinCode: null,
+                ShiftId: null),
+            bankDetails: new BankDetails(null, null, null, null, null),
+            workExperiences: null);
+        if (reportingManagerId.HasValue)
+        {
+            employee.AssignReportingManager(reportingManagerId.Value);
+        }
+
+        return await _employeeRepository.InsertAsync(employee, autoSave: true);
     }
 
     private ClaimsPrincipal BuildPrincipal(Guid userId, string roleName)

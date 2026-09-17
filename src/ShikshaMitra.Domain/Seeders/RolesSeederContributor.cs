@@ -12,7 +12,7 @@ namespace ShikshaMitra.Seeders;
 public class RolesSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "RolesSeeder";
-	internal const string StepVersion = "RolesSeeder:v5";
+	internal const string StepVersion = "RolesSeeder:v6";
 	internal const int StepOrder = 110;
 	internal const string AdminRoleName = "admin";
 	internal const string SuperAdminRoleName = "super-admin";

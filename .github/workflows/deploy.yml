@@ -35,7 +35,13 @@ jobs:
               run: dotnet restore
 
             - name: Install ABP CLI
-              run: dotnet tool install -g Volo.Abp.Cli
+              run: dotnet tool install --global Volo.Abp.Cli --version 9.0.0
+
+            - name: Verify .NET and ABP versions
+              run: |
+                dotnet --version
+                dotnet --list-sdks
+                abp --version
 
             - name: Download ABP libraries
               run: abp install-libs

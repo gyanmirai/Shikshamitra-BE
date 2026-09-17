@@ -4,6 +4,10 @@ on:
     push:
         branches: ['main']
 
+concurrency:
+    group: staging-backend-release
+    cancel-in-progress: false
+
 env:
     AZURE_WEBAPP_NAME: stg-gyanmirai-be
     DOTNET_VERSION: '9.0.x'
@@ -13,7 +17,11 @@ env:
     SeedTestLogins: 'true'
 
 jobs:
+    security:
+        uses: ./.github/workflows/security-regression.yml
+
     build-and-deploy:
+        needs: security
         runs-on: ubuntu-latest
 
         steps:
@@ -30,6 +38,12 @@ jobs:
               uses: actions/setup-dotnet@v4
               with:
                   dotnet-version: ${{ env.DOTNET_VERSION }}
+
+            - name: Verify selected .NET SDK
+              run: |
+                  sdk_version=$(dotnet --version)
+                  echo "Selected .NET SDK: $sdk_version"
+                  [[ "$sdk_version" == 9.0.* ]]
 
             - name: Restore
               run: dotnet restore
@@ -48,16 +62,6 @@ jobs:
 
             - name: Build
               run: dotnet build --configuration Release
-
-            # ⭐ Run ABP DbMigrator
-            - name: Run DbMigrator
-              env:
-                  ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
-                  ShikshaMitra__Seeders__Enabled: 'true'
-                  ShikshaMitra__Seeders__Profile: FullDemo
-              run: |
-                  cd src/ShikshaMitra.DbMigrator
-                  dotnet run --configuration Release --no-launch-profile
 
             - name: Run deployment startup regression gates
               run: |
@@ -92,6 +96,16 @@ jobs:
                   }
 
                   Write-Output "Publish profile XML is valid; deployment endpoint: $publishUrl"
+
+            # Run schema changes and seed data only after tests and publish validation succeed.
+            - name: Run DbMigrator
+              env:
+                  ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
+                  ShikshaMitra__Seeders__Enabled: 'true'
+                  ShikshaMitra__Seeders__Profile: FullDemo
+              run: |
+                  cd src/ShikshaMitra.DbMigrator
+                  dotnet run --configuration Release --no-launch-profile
 
             # ⭐ Deploy using Publish Profile
             - name: Deploy to Azure Web App

@@ -146,6 +146,12 @@ public class ShikshaMitraSeederContributor : IDataSeedContributor, ITransientDep
 		TenantStep<Seeders.CommunicationProviderSeederContributor>(serviceProvider, "CommunicationProviderSeeder", "CommunicationProviderSeeder:v1", 135, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.AcademicSetupSeederContributor>(serviceProvider, "AcademicSetupSeeder", "AcademicSetupSeeder:v2", 140, Seeders.ShikshaMitraSeederProfile.All),
 		TenantStep<Seeders.DemoAcademicAndInstituteSeederContributor>(serviceProvider, "DemoAcademicAndInstituteSeeder", "DemoAcademicAndInstituteSeeder:v2", 150, Seeders.ShikshaMitraSeederProfile.Demo),
+		TenantStep<Seeders.PaymentTermDemoSeederContributor>(
+			serviceProvider,
+			Seeders.PaymentTermDemoSeederContributor.StepName,
+			Seeders.PaymentTermDemoSeederContributor.StepVersion,
+			Seeders.PaymentTermDemoSeederContributor.StepOrder,
+			Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.AdmissionWorkflowDemoRepairSeederContributor>(serviceProvider, "AdmissionWorkflowDemoRepairSeeder", "AdmissionWorkflowDemoRepairSeeder:v1", 155, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.HRSeederContributor>(serviceProvider, "HRSeeder", "HRSeeder:v8", 160, Seeders.ShikshaMitraSeederProfile.Demo),
 		TenantStep<Seeders.PayrollStatutorySettingsBackfillSeederContributor>(

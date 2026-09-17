@@ -36,25 +36,38 @@ public class ConcessionRequestManager(
 		Guid studentId,
 		Guid concessionTypeId,
 		string? remarks,
-		IReadOnlyList<FeeHeadConcessionInput> feeHeadConcessions)
+		IReadOnlyList<FeeHeadConcessionInput> feeHeadConcessions,
+		Guid? studentFeeStructureId = null,
+		Guid? sourceRequestId = null,
+		Guid? actorId = null,
+		string? idempotencyKey = null,
+		string? payloadHash = null,
+		bool allowIncomplete = false,
+		bool enforcePendingUniqueness = true)
 	{
 		var student = await LoadStudentAsync(studentId);
 		var concessionType = await LoadConcessionTypeAsync(concessionTypeId, academicYearId);
-		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
-			x.StudentId == studentId && x.AcademicYearId == academicYearId)
-			?? await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
-				x.StudentId == studentId && x.AcademicYearId == Guid.Empty)
-			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
-		await EnsureAssignmentPolicySnapshotAsync(assignment, academicYearId);
+		var assignment = await ResolveAssignmentAsync(studentId, academicYearId, studentFeeStructureId);
 		var policy = await LoadPolicySnapshotAsync(assignment);
 
-		if (await concessionRequestRepository.HasPendingForStudentAndTypeAsync(
+		if (enforcePendingUniqueness && await concessionRequestRepository.HasPendingForStudentAndTypeAsync(
 			studentId, concessionTypeId, academicYearId))
 		{
 			throw new BusinessException(FinanceConcessionErrorCodes.DuplicatePendingRequest);
 		}
+		if (sourceRequestId.HasValue)
+		{
+			var source = await concessionRequestRepository.FindAsync(sourceRequestId.Value)
+				?? throw new BusinessException(FinanceConcessionErrorCodes.ScopeMismatch);
+			if (source.StudentId != studentId || source.AcademicYearId != academicYearId ||
+				source.ConcessionTypeId != concessionTypeId ||
+				!actorId.HasValue || source.CreatorId != actorId ||
+				source.Status is not (ConcessionRequestStatus.Rejected or ConcessionRequestStatus.Cancelled))
+				throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition);
+		}
 
-		var dueFees = await dueFeeRepository.GetListAsync(df => df.StudentId == studentId);
+		var dueFees = await dueFeeRepository.GetListAsync(df =>
+			df.StudentId == studentId && df.StudentFeeStructureId == assignment.Id);
 
 		var requestId = guidGenerator.Create();
 		var request = new ConcessionRequest(
@@ -70,14 +83,25 @@ public class ConcessionRequestManager(
 			student.AcademicMediumId,
 			student.StandardId!.Value,
 			student.DivisionId!.Value,
-			remarks);
+			remarks,
+			ConcessionRequestStatus.Draft,
+			sourceRequestId,
+			idempotencyKey,
+			payloadHash);
 
-		foreach (var m in BuildFeeHeadMappings(
-			tenantId, requestId, feeHeadConcessions, dueFees, policy,
-			assignment.GetConcessionApplicableFeeHeadIds()))
+		if (feeHeadConcessions.Count == 0 && !allowIncomplete)
+			throw new BusinessException(FinanceConcessionErrorCodes.DiscountExceedsBase)
+				.WithData("Message", "At least one fee head concession is required");
+		foreach (var m in feeHeadConcessions.Count == 0
+			? []
+			: BuildFeeHeadMappings(
+				tenantId, requestId, feeHeadConcessions, dueFees, policy,
+				assignment.GetConcessionApplicableFeeHeadIds(), allowIncomplete))
 		{
 			request.ConcessionFeeHeadMappings.Add(m);
 		}
+		if (request.ConcessionFeeHeadMappings.Count > 0)
+			PrepareSubmissionEvidence(request, concessionType, dueFees, policy);
 
 		await concessionRequestRepository.InsertAsync(request, autoSave: false);
 		logger.LogDebug("Concession request {RequestId} created for student {StudentId}", request.Id, studentId);
@@ -89,18 +113,15 @@ public class ConcessionRequestManager(
 		Guid academicYearId,
 		Guid studentId,
 		Guid concessionTypeId,
-		IReadOnlyList<FeeHeadConcessionInput> feeHeadConcessions)
+		IReadOnlyList<FeeHeadConcessionInput> feeHeadConcessions,
+		Guid? studentFeeStructureId = null)
 	{
 		await LoadStudentAsync(studentId);
 		await LoadConcessionTypeAsync(concessionTypeId, academicYearId);
-		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
-			x.StudentId == studentId && x.AcademicYearId == academicYearId)
-			?? await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
-				x.StudentId == studentId && x.AcademicYearId == Guid.Empty)
-			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
-		await EnsureAssignmentPolicySnapshotAsync(assignment, academicYearId);
+		var assignment = await ResolveAssignmentAsync(studentId, academicYearId, studentFeeStructureId);
 		var policy = await LoadPolicySnapshotAsync(assignment);
-		var dueFees = await dueFeeRepository.GetListAsync(df => df.StudentId == studentId);
+		var dueFees = await dueFeeRepository.GetListAsync(df =>
+			df.StudentId == studentId && df.StudentFeeStructureId == assignment.Id);
 		var mappings = BuildFeeHeadMappings(
 			tenantId,
 			Guid.Empty,
@@ -108,25 +129,117 @@ public class ConcessionRequestManager(
 			dueFees,
 			policy,
 			assignment.GetConcessionApplicableFeeHeadIds());
-		return new ConcessionRequestPreviewResult(assignment, policy, mappings);
+		return new ConcessionRequestPreviewResult(
+			assignment,
+			policy,
+			mappings,
+			GetSelectedEligibleDueFees(dueFees, policy, mappings.Select(x => x.FeeHeadId)).ToList());
 	}
 
 	public async Task ReplaceFeeHeadMappingsAsync(
 		ConcessionRequest request,
-		IReadOnlyList<FeeHeadConcessionInput> feeHeadConcessions)
+		IReadOnlyList<FeeHeadConcessionInput> feeHeadConcessions,
+		bool allowIncomplete = false)
 	{
-		request.EnsurePending();
-		var dueFees = await dueFeeRepository.GetListAsync(df => df.StudentId == request.StudentId);
+		request.EnsureDraft();
+		if (feeHeadConcessions.Count == 0)
+		{
+			request.ReplaceFeeHeadMappings([]);
+			request.ClearSubmissionEvidence();
+			return;
+		}
 		var assignment = await studentFeeStructureRepository.GetAsync(request.StudentFeeStructureId);
-		var policy = await LoadPolicySnapshotAsync(assignment);
+		var dueFees = await dueFeeRepository.GetListAsync(df =>
+			df.StudentId == request.StudentId && df.StudentFeeStructureId == assignment.Id);
+		var policy = await LoadPolicySnapshotAsync(
+			assignment, request.ConcessionPolicyId, request.ConcessionPolicyVersionId);
 		var mappings = BuildFeeHeadMappings(
 			request.TenantId,
 			request.Id,
 			feeHeadConcessions,
 			dueFees,
 			policy,
-			assignment.GetConcessionApplicableFeeHeadIds());
+			assignment.GetConcessionApplicableFeeHeadIds(), allowIncomplete);
 		request.ReplaceFeeHeadMappings(mappings);
+		var type = await LoadConcessionTypeAsync(request.ConcessionTypeId, request.AcademicYearId);
+		PrepareSubmissionEvidence(request, type, dueFees, policy);
+	}
+
+	public Task RefreshDraftAsync(ConcessionRequest request)
+	{
+		request.EnsureDraft();
+		var inputs = request.ConcessionFeeHeadMappings.Select(x => new FeeHeadConcessionInput(
+			x.FeeHeadId,
+			x.UserSpecifiedConcessionAmountType,
+			x.UserSpecifiedConcessionAmountValue)).ToList();
+		return ReplaceFeeHeadMappingsAsync(request, inputs, allowIncomplete: false);
+	}
+
+	public async Task<ConcessionRequestContextResult> GetContextAsync(
+		Guid academicYearId,
+		Guid studentId,
+		Guid? studentFeeStructureId = null)
+	{
+		var student = await LoadStudentAsync(studentId);
+		var assignment = await ResolveAssignmentAsync(studentId, academicYearId, studentFeeStructureId);
+		var policy = await LoadPolicySnapshotAsync(assignment);
+		var feeStructure = await feeStructureRepository.GetAsync(assignment.FeeStructureStandardId);
+		var applicableIds = assignment.GetConcessionApplicableFeeHeadIds().ToHashSet();
+		var dueFees = await dueFeeRepository.GetListAsync(df =>
+			df.StudentId == studentId &&
+			df.StudentFeeStructureId == assignment.Id &&
+			applicableIds.Contains(df.FeeHeadId));
+		var eligibleDueFees = GetEligibleDueFees(dueFees, policy.ApplyOn);
+		return new ConcessionRequestContextResult(student, assignment, feeStructure, policy, eligibleDueFees);
+	}
+
+	public async Task<ConcessionRequestLiveEvaluation> EvaluateSubmittedAsync(ConcessionRequest request)
+	{
+		var assignment = await studentFeeStructureRepository.GetAsync(request.StudentFeeStructureId);
+		if (assignment.StudentId != request.StudentId || assignment.AcademicYearId != request.AcademicYearId)
+			throw new BusinessException(FinanceConcessionErrorCodes.ScopeMismatch);
+		var policy = await LoadPolicySnapshotAsync(assignment, request.ConcessionPolicyId, request.ConcessionPolicyVersionId);
+		var submittedDueIds = request.GetSelectedDueFeeIds().ToHashSet();
+		if (submittedDueIds.Count == 0)
+			throw new BusinessException(FinanceConcessionErrorCodes.ConfigurationSnapshotInvalid);
+		var dueFees = await dueFeeRepository.GetListAsync(df =>
+			df.StudentId == request.StudentId &&
+			df.StudentFeeStructureId == assignment.Id &&
+			submittedDueIds.Contains(df.Id));
+		if (dueFees.Count != submittedDueIds.Count)
+			throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged);
+
+		var inputs = request.ConcessionFeeHeadMappings
+			.Where(mapping => dueFees.Any(dueFee =>
+				dueFee.FeeHeadId == mapping.FeeHeadId && dueFee.OutstandingAmount > 0m))
+			.Select(x => new FeeHeadConcessionInput(
+				x.FeeHeadId,
+				x.UserSpecifiedConcessionAmountType,
+				x.UserSpecifiedConcessionAmountValue))
+			.ToList();
+		var mappings = inputs.Count == 0
+			? []
+			: BuildFeeHeadMappings(
+				request.TenantId,
+				request.Id,
+				inputs,
+				dueFees,
+				policy,
+				assignment.GetConcessionApplicableFeeHeadIds());
+		var evaluatedHeadIds = mappings.Select(x => x.FeeHeadId).ToHashSet();
+		mappings.AddRange(request.ConcessionFeeHeadMappings
+			.Where(x => !evaluatedHeadIds.Contains(x.FeeHeadId))
+			.Select(x => new ConcessionFeeHeadMapping(
+				guidGenerator.Create(),
+				request.TenantId,
+				request.Id,
+				x.FeeHeadId,
+				0m,
+				0m,
+				0m,
+				x.UserSpecifiedConcessionAmountType,
+				x.UserSpecifiedConcessionAmountValue)));
+		return new ConcessionRequestLiveEvaluation(assignment, policy, mappings, dueFees);
 	}
 
 	public List<ConcessionDueFeeAllocation> BuildDueFeeAllocations(
@@ -134,7 +247,8 @@ public class ConcessionRequestManager(
 		Guid concessionRequestId,
 		IReadOnlyList<FeeHeadApprovalInput> feeHeadApprovals,
 		List<DueFee> studentDueFees,
-		IReadOnlyList<ConcessionFeeHeadMapping>? requestedMappings = null)
+		IReadOnlyList<ConcessionFeeHeadMapping>? requestedMappings = null,
+		IReadOnlyList<ConcessionFeeHeadMapping>? liveMaximumMappings = null)
 	{
 		var allocations = new List<ConcessionDueFeeAllocation>();
 		var seenDueFeeIds = new HashSet<Guid>();
@@ -151,7 +265,15 @@ public class ConcessionRequestManager(
 			if (requested is not null && group.ApprovedConcessionAmount > requested.FeeHeadConcessionAmount)
 				throw new BusinessException(ConcessionPolicyErrorCodes.LimitExceeded)
 					.WithData("FeeHeadId", group.FeeHeadId);
-			var allocatedForHead = 0m;
+			var liveMaximum = liveMaximumMappings?.FirstOrDefault(x => x.FeeHeadId == group.FeeHeadId);
+			if (liveMaximumMappings is not null && liveMaximum is null)
+				throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged)
+					.WithData("FeeHeadId", group.FeeHeadId);
+			if (liveMaximum is not null && group.ApprovedConcessionAmount > liveMaximum.FeeHeadConcessionAmount)
+				throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged)
+					.WithData("FeeHeadId", group.FeeHeadId)
+					.WithData("LiveMaximum", liveMaximum.FeeHeadConcessionAmount);
+			var selectedDues = new List<DueFee>();
 			foreach (var line in group.DueFeeAllocations)
 			{
 				if (!seenDueFeeIds.Add(line.DueFeeId))
@@ -172,30 +294,33 @@ public class ConcessionRequestManager(
 					throw new BusinessException(FinanceConcessionErrorCodes.DueFeeWrongFeeHead);
 				}
 
-				if (line.ConcessionAmount <= 0)
-				{
-					continue;
-				}
-
 				if (dueFee.OutstandingAmount <= 0)
 				{
 					throw new BusinessException(FinanceConcessionErrorCodes.ConcessionOnFullyPaidDueFee)
 						.WithData("DueFeeId", line.DueFeeId);
 				}
-				if (line.ConcessionAmount > (decimal)dueFee.OutstandingAmount)
-					throw new BusinessException(FinanceConcessionErrorCodes.DiscountExceedsBase)
-						.WithData("DueFeeId", line.DueFeeId);
-				allocatedForHead += line.ConcessionAmount;
+				selectedDues.Add(dueFee);
+			}
 
+			if (selectedDues.Count == 0 ||
+				group.ApprovedConcessionAmount > selectedDues.Sum(x => x.OutstandingAmount))
+				throw new BusinessException(FinanceConcessionErrorCodes.DiscountExceedsBase)
+					.WithData("FeeHeadId", group.FeeHeadId);
+
+			var shares = ConcessionAmountAllocator.AllocateProportionally(
+				selectedDues.Select(x => new ConcessionAmountCapacity(x.Id, x.OutstandingAmount)).ToList(),
+				group.ApprovedConcessionAmount);
+			foreach (var share in shares.Where(x => x.Amount > 0m))
+			{
 				allocations.Add(new ConcessionDueFeeAllocation(
 					guidGenerator.Create(),
 					tenantId,
 					concessionRequestId,
-					line.DueFeeId,
+					share.Key,
 					group.FeeHeadId,
-					line.ConcessionAmount));
+					share.Amount));
 			}
-			if (allocatedForHead != group.ApprovedConcessionAmount)
+			if (shares.Sum(x => x.Amount) != group.ApprovedConcessionAmount)
 				throw new BusinessException(ConcessionPolicyErrorCodes.InvalidCalculationRule)
 					.WithData("FeeHeadId", group.FeeHeadId);
 		}
@@ -262,7 +387,8 @@ public class ConcessionRequestManager(
 		IReadOnlyList<FeeHeadConcessionInput> inputs,
 		List<DueFee> dueFees,
 		ConcessionPolicySnapshot policy,
-		IReadOnlyCollection<Guid> applicableFeeHeadIds)
+		IReadOnlyCollection<Guid> applicableFeeHeadIds,
+		bool allowIncomplete = false)
 	{
 		if (inputs.Count == 0)
 		{
@@ -282,7 +408,8 @@ public class ConcessionRequestManager(
 			policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount;
 		var policyFixedTotal = policy.ValueSource == ConcessionValueSource.PolicyFixed &&
 			policy.CalculationMethod == ConcessionCalculationMethod.FixedAmount;
-		if (requestEnteredFixed && inputs.Any(x => x.BasedOn != DiscountBasis.FlatAmount || x.Amount <= 0m))
+		if (requestEnteredFixed && inputs.Any(x =>
+			x.BasedOn != DiscountBasis.FlatAmount || (!allowIncomplete && x.Amount <= 0m)))
 			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
 		var candidates = new List<(FeeHeadConcessionInput Input, decimal Base, decimal Amount)>();
 		foreach (var input in inputs)
@@ -299,6 +426,10 @@ public class ConcessionRequestManager(
 			var baseAmount = headDueFees.Sum(df => (decimal)df.OutstandingAmount);
 			var amount = policyFixedTotal || requestEnteredFixed
 				? 0m
+				: allowIncomplete &&
+				  policy.ValueSource == ConcessionValueSource.RequestEnteredWithinLimits &&
+				  input.Amount <= 0m
+					? 0m
 				: concessionPolicyCalculationService.Calculate(
 					policy,
 					baseAmount,
@@ -311,11 +442,13 @@ public class ConcessionRequestManager(
 		if (policyFixedTotal || requestEnteredFixed)
 		{
 			var requestedTotal = requestEnteredFixed ? inputs.Sum(x => x.Amount) : (decimal?)null;
-			var totalFixed = concessionPolicyCalculationService.Calculate(
-				policy,
-				totalBase,
-				requestEnteredFixed ? DiscountBasis.FlatAmount : null,
-				requestedTotal);
+			var totalFixed = allowIncomplete && requestEnteredFixed && requestedTotal <= 0m
+				? 0m
+				: concessionPolicyCalculationService.Calculate(
+					policy,
+					totalBase,
+					requestEnteredFixed ? DiscountBasis.FlatAmount : null,
+					requestedTotal);
 			candidates = AllocateTotal(candidates, totalFixed);
 		}
 
@@ -348,64 +481,134 @@ public class ConcessionRequestManager(
 
 	public static List<DueFee> GetEligibleDueFees(List<DueFee> dueFees, ConcessionApplyOn applyOn)
 	{
-		var outstanding = dueFees.Where(x => x.OutstandingAmount > 0).OrderBy(x => x.Year).ThenBy(x => x.Month).ToList();
+		var outstanding = dueFees
+			.Where(x => x.OutstandingAmount > 0)
+			.OrderBy(x => x.InstallmentSequence.HasValue ? 0 : 1)
+			.ThenBy(x => x.InstallmentSequence ?? int.MaxValue)
+			.ThenBy(x => x.DemandDate ?? x.CoverageStartDate ?? x.ScheduleDueDate ?? x.DueDate)
+			.ThenBy(x => x.Year)
+			.ThenBy(x => x.Month)
+			.ThenBy(x => x.Id)
+			.ToList();
 		if (outstanding.Count == 0 || applyOn == ConcessionApplyOn.AllOutstanding) return outstanding;
 		var first = outstanding[0];
 		return applyOn == ConcessionApplyOn.CurrentInstallment
-			? outstanding.Where(x => x.Year == first.Year && x.Month == first.Month).ToList()
-			: outstanding.Where(x => x.Year > first.Year || (x.Year == first.Year && x.Month > first.Month)).ToList();
+			? outstanding.Where(x => IsSameInstallmentCohort(x, first)).ToList()
+			: outstanding.Where(x => !IsSameInstallmentCohort(x, first)).ToList();
+	}
+
+	private static bool IsSameInstallmentCohort(DueFee candidate, DueFee first)
+	{
+		if (first.PaymentTermInstallmentId.HasValue)
+			return candidate.PaymentTermInstallmentId == first.PaymentTermInstallmentId;
+		if (first.PaymentTermVersionId.HasValue && first.InstallmentSequence.HasValue)
+			return candidate.PaymentTermVersionId == first.PaymentTermVersionId &&
+				candidate.InstallmentSequence == first.InstallmentSequence;
+		return candidate.Year == first.Year && candidate.Month == first.Month;
 	}
 
 	private static List<(FeeHeadConcessionInput Input, decimal Base, decimal Amount)> AllocateTotal(
 		List<(FeeHeadConcessionInput Input, decimal Base, decimal Amount)> items,
 		decimal total)
 	{
-		var baseTotal = items.Sum(x => x.Base);
-		if (baseTotal <= 0) throw new BusinessException(ConcessionPolicyErrorCodes.InvalidCalculationRule);
-		var remaining = Math.Min(total, baseTotal);
-		var result = new List<(FeeHeadConcessionInput, decimal, decimal)>();
-		for (var i = 0; i < items.Count; i++)
-		{
-			var amount = i == items.Count - 1
-				? remaining
-				: Math.Min(items[i].Base, Math.Round(total * items[i].Base / baseTotal, 2, MidpointRounding.AwayFromZero));
-			remaining -= amount;
-			result.Add((items[i].Input, items[i].Base, amount));
-		}
-		return result;
+		var shares = ConcessionAmountAllocator.AllocateProportionally(
+			items.Select(x => new ConcessionAmountCapacity(x.Input.FeeHeadId, x.Base)).ToList(), total)
+			.ToDictionary(x => x.Key, x => x.Amount);
+		return items
+			.OrderBy(x => x.Input.FeeHeadId)
+			.Select(x => (x.Input, x.Base, shares[x.Input.FeeHeadId]))
+			.ToList();
 	}
 
-	private async Task<ConcessionPolicySnapshot> LoadPolicySnapshotAsync(StudentFeeStructure assignment)
+	private async Task<ConcessionPolicySnapshot> LoadPolicySnapshotAsync(
+		StudentFeeStructure assignment,
+		Guid? expectedPolicyId = null,
+		Guid? expectedPolicyVersionId = null)
 	{
-		var version = await financePolicyVersionRepository.FindAsync(assignment.ConcessionPolicyVersionId ?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached))
+		var policyId = expectedPolicyId ?? assignment.ConcessionPolicyId
+			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
+		var versionId = expectedPolicyVersionId ?? assignment.ConcessionPolicyVersionId
+			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
+		var version = await financePolicyVersionRepository.FindAsync(versionId)
 			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
-		if (version.PolicyType != "concession" || version.PolicyId != assignment.ConcessionPolicyId)
+		if (version.PolicyType != "concession" || version.PolicyId != policyId ||
+			version.AcademicYearId != assignment.AcademicYearId)
 			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
 		return JsonSerializer.Deserialize<ConcessionPolicySnapshot>(version.SnapshotJson)
 			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
 	}
 
-	private async Task EnsureAssignmentPolicySnapshotAsync(StudentFeeStructure assignment, Guid academicYearId)
+	private async Task<StudentFeeStructure> ResolveAssignmentAsync(
+		Guid studentId,
+		Guid academicYearId,
+		Guid? requestedAssignmentId)
 	{
-		if (assignment.AcademicYearId != Guid.Empty &&
-			assignment.ConcessionPolicyId.HasValue && assignment.ConcessionPolicyId != Guid.Empty &&
-			assignment.ConcessionPolicyVersionId.HasValue && assignment.ConcessionPolicyVersionId != Guid.Empty)
-			return;
+		var assignments = await studentFeeStructureRepository.GetListAsync(x =>
+			x.StudentId == studentId && x.AcademicYearId == academicYearId);
+		StudentFeeStructure assignment;
+		if (requestedAssignmentId.HasValue)
+		{
+			assignment = assignments.SingleOrDefault(x => x.Id == requestedAssignmentId.Value)
+				?? throw new BusinessException(FinanceConcessionErrorCodes.ScopeMismatch);
+		}
+		else
+		{
+			if (assignments.Count == 0)
+			{
+				var hasLegacyAssignment = await studentFeeStructureRepository.AnyAsync(x =>
+					x.StudentId == studentId && x.AcademicYearId == Guid.Empty);
+				throw new BusinessException(hasLegacyAssignment
+					? FinanceConcessionErrorCodes.LegacyRepairRequired
+					: ConcessionPolicyErrorCodes.PolicyNotAttached);
+			}
+			if (assignments.Count > 1)
+				throw new BusinessException(FinanceConcessionErrorCodes.AmbiguousAssignment);
+			assignment = assignments[0];
+		}
 
-		var feeStructure = await feeStructureRepository.GetAsync(assignment.FeeStructureStandardId);
-		if (!feeStructure.ConcessionPolicyId.HasValue || !feeStructure.ConcessionPolicyVersionId.HasValue)
-			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotAttached);
-		var version = await financePolicyVersionRepository.FindAsync(feeStructure.ConcessionPolicyVersionId.Value)
-			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
-		if (version.PolicyType != "concession" ||
-			version.PolicyId != feeStructure.ConcessionPolicyId.Value ||
-			version.AcademicYearId != academicYearId)
-			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+		if (!assignment.ConcessionPolicyId.HasValue || assignment.ConcessionPolicyId == Guid.Empty ||
+			!assignment.ConcessionPolicyVersionId.HasValue || assignment.ConcessionPolicyVersionId == Guid.Empty)
+			throw new BusinessException(FinanceConcessionErrorCodes.LegacyRepairRequired);
+		return assignment;
+	}
 
-		assignment.RefreshConcessionPolicySnapshot(
-			academicYearId, version.PolicyId, version.Id,
-			feeStructure.ConcessionFeeHeadScope, feeStructure.GetConcessionApplicableFeeHeadIds());
-		await studentFeeStructureRepository.UpdateAsync(assignment, autoSave: true);
+	private static IEnumerable<DueFee> GetSelectedEligibleDueFees(
+		IEnumerable<DueFee> dueFees,
+		ConcessionPolicySnapshot policy,
+		IEnumerable<Guid> selectedFeeHeadIds)
+	{
+		var selected = selectedFeeHeadIds.ToHashSet();
+		return GetEligibleDueFees(dueFees.Where(x => selected.Contains(x.FeeHeadId)).ToList(), policy.ApplyOn);
+	}
+
+	private static void PrepareSubmissionEvidence(
+		ConcessionRequest request,
+		ConcessionType concessionType,
+		IEnumerable<DueFee> dueFees,
+		ConcessionPolicySnapshot policy)
+	{
+		var selectedDues = GetSelectedEligibleDueFees(
+			dueFees,
+			policy,
+			request.ConcessionFeeHeadMappings.Select(x => x.FeeHeadId)).Select(x => x.Id);
+		var inputSnapshot = JsonSerializer.Serialize(request.ConcessionFeeHeadMappings
+			.OrderBy(x => x.FeeHeadId)
+			.Select(x => new
+			{
+				x.FeeHeadId,
+				BasedOn = x.UserSpecifiedConcessionAmountType,
+				Value = x.UserSpecifiedConcessionAmountValue,
+				RequestedAmount = x.FeeHeadConcessionAmount
+			}));
+		var requirementsSnapshot = JsonSerializer.Serialize(concessionType.ConcessionTypeDocuments
+			.OrderBy(x => x.Id)
+			.Select(x => new ConcessionTypeRequirementSnapshot(
+				x.Id,
+				x.DocumentName,
+				x.IsRequired,
+				x.MaxFileSizeBytes,
+				x.AcceptedFormats.Select(y => y.DocumentType).OrderBy(y => y).ToList())));
+		request.PrepareSubmissionEvidence(selectedDues, inputSnapshot, requirementsSnapshot);
 	}
 
 	private async Task<Student> LoadStudentAsync(Guid studentId)
@@ -448,7 +651,28 @@ public record FeeHeadConcessionInput(Guid FeeHeadId, DiscountBasis BasedOn, deci
 public record ConcessionRequestPreviewResult(
 	StudentFeeStructure Assignment,
 	ConcessionPolicySnapshot Policy,
-	IReadOnlyList<ConcessionFeeHeadMapping> Mappings);
+	IReadOnlyList<ConcessionFeeHeadMapping> Mappings,
+	IReadOnlyList<DueFee> EligibleDueFees);
+
+public record ConcessionRequestLiveEvaluation(
+	StudentFeeStructure Assignment,
+	ConcessionPolicySnapshot Policy,
+	IReadOnlyList<ConcessionFeeHeadMapping> Mappings,
+	IReadOnlyList<DueFee> DueFees);
+
+public record ConcessionRequestContextResult(
+	Student Student,
+	StudentFeeStructure Assignment,
+	FeeStructure FeeStructure,
+	ConcessionPolicySnapshot Policy,
+	IReadOnlyList<DueFee> EligibleDueFees);
+
+public sealed record ConcessionTypeRequirementSnapshot(
+	Guid DocumentId,
+	string DocumentName,
+	bool IsRequired,
+	long MaxFileSizeBytes,
+	IReadOnlyList<ShikshaMitra.Common.DocumentType> AcceptedFormats);
 
 public record DueFeeAllocationInput(Guid DueFeeId, decimal ConcessionAmount, string ConcurrencyStamp);
 

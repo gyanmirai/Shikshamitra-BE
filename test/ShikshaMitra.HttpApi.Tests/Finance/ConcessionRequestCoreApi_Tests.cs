@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
@@ -29,6 +30,7 @@ public class ConcessionRequestCoreApi_Tests : ConcessionRequestApiTestsBase
 		var feeHeadId = await ConcessionRequestTestHelper.CreateFeeHeadAsync(Client, feeCategoryId);
 
 		var input = ConcessionRequestTestHelper.BuildCreateDto(studentId, typeId, feeHeadId);
+		await ConcessionRequestTestHelper.PrepareForSubmissionAsync(Client, input);
 		var response = await Client.PostAsJsonAsync(
 			$"{BaseUrl}?academicYearId={ConcessionRequestTestHelper.DefaultAcademicYearId}",
 			input,
@@ -67,11 +69,25 @@ public class ConcessionRequestCoreApi_Tests : ConcessionRequestApiTestsBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Delete_Pending_Request_Returns_204()
+	public async Task Should_Delete_Draft_Request_Returns_204()
 	{
-		var requestId = await CreatePendingRequestWithFeeHeadAsync();
+		var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+		var typeId = await ConcessionRequestTestHelper.CreateConcessionTypeAsync(Client);
+		var draft = await ConcessionRequestTestHelper.CreateDraftAsync(Client, new CreateConcessionDraftDto
+		{
+			StudentId = studentId,
+			ConcessionTypeId = typeId,
+		});
 
-		var response = await Client.DeleteAsync($"{BaseUrl}/{requestId}");
+		using var request = new HttpRequestMessage(HttpMethod.Delete, $"{BaseUrl}/{draft.ConcessionRequestId}")
+		{
+			Content = JsonContent.Create(new DeleteConcessionRequestDto
+			{
+				RequestConcurrencyStamp = draft.ConcurrencyStamp,
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
+			}, options: JsonOptions),
+		};
+		var response = await Client.SendAsync(request);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 	}

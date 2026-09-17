@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using ShikshaMitra.Finance.Fees.Concessions;
 using Volo.Abp;
 using Volo.Abp.Data;
@@ -34,6 +35,16 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? Remarks { get; private set; }
 	public string? RejectionReason { get; private set; }
 	public string? ApproverMessage { get; private set; }
+	public string? CancellationReason { get; private set; }
+	public Guid? CancelledBy { get; private set; }
+	public DateTime? CancelledOn { get; private set; }
+	public DateTime? SubmittedOn { get; private set; }
+	public Guid? SourceRequestId { get; private set; }
+	public string SelectedDueFeeIdsJson { get; private set; } = "[]";
+	public string? RequestInputSnapshotJson { get; private set; }
+	public string? TypeRequirementsSnapshotJson { get; private set; }
+	public string? CreationIdempotencyKey { get; private set; }
+	public string? CreationPayloadHash { get; private set; }
 
 	public virtual ICollection<ConcessionFeeHeadMapping> ConcessionFeeHeadMappings { get; private set; } = [];
 	public virtual ICollection<ConcessionRequestDocument> ConcessionRequestDocuments { get; private set; } = [];
@@ -55,7 +66,11 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid educationMediumId,
 		Guid standardId,
 		Guid divisionId,
-		string? remarks)
+		string? remarks,
+		ConcessionRequestStatus initialStatus = ConcessionRequestStatus.Pending,
+		Guid? sourceRequestId = null,
+		string? creationIdempotencyKey = null,
+		string? creationPayloadHash = null)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -64,9 +79,59 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ConcessionPolicyId = concessionPolicyId;
 		ConcessionPolicyVersionId = concessionPolicyVersionId;
 		ConcessionTypeId = concessionTypeId;
-		Status = ConcessionRequestStatus.Pending;
+		if (initialStatus is not (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending))
+			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition);
+		Status = initialStatus;
 		Remarks = remarks;
+		SourceRequestId = sourceRequestId;
+		CreationIdempotencyKey = NormalizeOptional(creationIdempotencyKey, 128);
+		CreationPayloadHash = NormalizeOptional(creationPayloadHash, 64);
 		SetAcademicScope(academicYearId, boardId, educationMediumId, standardId, divisionId);
+	}
+
+	public IReadOnlyCollection<Guid> GetSelectedDueFeeIds()
+	{
+		try
+		{
+			return JsonSerializer.Deserialize<List<Guid>>(SelectedDueFeeIdsJson) ?? [];
+		}
+		catch (JsonException)
+		{
+			throw new BusinessException(FinanceConcessionErrorCodes.ConfigurationSnapshotInvalid);
+		}
+	}
+
+	public void PrepareSubmissionEvidence(
+		IEnumerable<Guid> selectedDueFeeIds,
+		string requestInputSnapshotJson,
+		string typeRequirementsSnapshotJson)
+	{
+		EnsureDraft();
+		var dueFeeIds = selectedDueFeeIds.Where(x => x != Guid.Empty).Distinct().OrderBy(x => x).ToList();
+		if (dueFeeIds.Count == 0 || string.IsNullOrWhiteSpace(requestInputSnapshotJson) ||
+			string.IsNullOrWhiteSpace(typeRequirementsSnapshotJson))
+			throw new BusinessException(FinanceConcessionErrorCodes.ConfigurationSnapshotInvalid);
+		SelectedDueFeeIdsJson = JsonSerializer.Serialize(dueFeeIds);
+		RequestInputSnapshotJson = requestInputSnapshotJson;
+		TypeRequirementsSnapshotJson = typeRequirementsSnapshotJson;
+	}
+
+	public void ClearSubmissionEvidence()
+	{
+		EnsureDraft();
+		SelectedDueFeeIdsJson = "[]";
+		RequestInputSnapshotJson = null;
+		TypeRequirementsSnapshotJson = null;
+	}
+
+	public void Submit(DateTime submittedOn)
+	{
+		EnsureDraft();
+		if (GetSelectedDueFeeIds().Count == 0 || string.IsNullOrWhiteSpace(RequestInputSnapshotJson) ||
+			string.IsNullOrWhiteSpace(TypeRequirementsSnapshotJson))
+			throw new BusinessException(FinanceConcessionErrorCodes.ConfigurationSnapshotInvalid);
+		Status = ConcessionRequestStatus.Pending;
+		SubmittedOn = submittedOn;
 	}
 
 	public Guid GetAcademicYearId() => AcademicYearId;
@@ -105,7 +170,7 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void ReplaceFeeHeadMappings(IEnumerable<ConcessionFeeHeadMapping> mappings)
 	{
-		EnsurePending();
+		EnsureDraft();
 
 		var incoming = mappings.ToList();
 		var incomingFeeHeadIds = incoming.Select(m => m.FeeHeadId).ToHashSet();
@@ -139,7 +204,7 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void ReplaceDocuments(IEnumerable<ConcessionRequestDocument> documents)
 	{
-		EnsurePending();
+		EnsureDraft();
 		ConcessionRequestDocuments.Clear();
 		foreach (var doc in documents)
 		{
@@ -149,18 +214,18 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void UpdateRemarks(string? remarks)
 	{
-		EnsurePending();
+		EnsureDraft();
 		Remarks = remarks;
 	}
 
-	public void Approve(Guid approverId, string? message, IEnumerable<ConcessionDueFeeAllocation> allocations)
+	public void Approve(Guid approverId, string? message, IEnumerable<ConcessionDueFeeAllocation> allocations, DateTime approvedOn)
 	{
 		EnsurePending();
 
 		Status = ConcessionRequestStatus.Approved;
 		ApproverMessage = message;
 		this.SetProperty(ApprovedByProperty, approverId);
-		this.SetProperty(ApprovedOnProperty, DateTime.UtcNow);
+		this.SetProperty(ApprovedOnProperty, approvedOn);
 
 		ConcessionDueFeeAllocations.Clear();
 		foreach (var allocation in allocations)
@@ -169,7 +234,7 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
-	public void Reject(Guid rejectorId, string reason)
+	public void Reject(Guid rejectorId, string reason, DateTime rejectedOn)
 	{
 		EnsurePending();
 
@@ -181,7 +246,7 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Status = ConcessionRequestStatus.Rejected;
 		RejectionReason = reason.Trim();
 		this.SetProperty(ApprovedByProperty, rejectorId);
-		this.SetProperty(ApprovedOnProperty, DateTime.UtcNow);
+		this.SetProperty(ApprovedOnProperty, rejectedOn);
 	}
 
 	public void RecordReversals(IEnumerable<ConcessionReversal> reversals)
@@ -203,15 +268,28 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			: ConcessionRequestStatus.PartiallyReversed;
 	}
 
-	public void Cancel()
+	public void Cancel(Guid actorId, string reason, DateTime cancelledOn)
 	{
-		if (Status != ConcessionRequestStatus.Pending)
+		if (Status is not (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending))
 		{
-			throw new BusinessException(FinanceConcessionErrorCodes.CannotApproveOrRejectNonPending)
+			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition)
 				.WithData("Status", Status.ToString());
 		}
+		var normalizedReason = reason?.Trim();
+		if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length is < 10 or > 2000)
+			throw new BusinessException(FinanceConcessionErrorCodes.CancellationReasonRequired);
 
 		Status = ConcessionRequestStatus.Cancelled;
+		CancellationReason = normalizedReason;
+		CancelledBy = actorId;
+		CancelledOn = cancelledOn;
+	}
+
+	public void EnsureDraft()
+	{
+		if (Status != ConcessionRequestStatus.Draft)
+			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition)
+				.WithData("Status", Status.ToString());
 	}
 
 	public void EnsurePending()
@@ -223,5 +301,14 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
-	public void EnsureCanDelete() => EnsurePending();
+	public void EnsureCanDelete() => EnsureDraft();
+
+	private static string? NormalizeOptional(string? value, int maxLength)
+	{
+		var normalized = value?.Trim();
+		if (string.IsNullOrWhiteSpace(normalized)) return null;
+		if (normalized.Length > maxLength)
+			throw new BusinessException(FinanceConcessionErrorCodes.IdempotencyKeyConflict);
+		return normalized;
+	}
 }

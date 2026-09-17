@@ -15,4 +15,9 @@ public interface IFileStorageAppService : IApplicationService
 	/// Retrieves a previously uploaded file by its unique identifier.
 	/// </summary>
 	Task<FileDownloadResult> GetAsync(string uniqueFileName);
+
+	/// <summary>
+	/// Deletes a stored file. Missing files are treated as already deleted.
+	/// </summary>
+	Task DeleteAsync(string uniqueFileName);
 }

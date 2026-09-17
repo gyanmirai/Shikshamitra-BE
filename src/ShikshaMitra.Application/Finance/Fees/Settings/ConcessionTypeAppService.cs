@@ -35,6 +35,8 @@ public class ConcessionTypeAppService(
 	IRepository<IdentityUser, Guid> userRepository
 ) : ApplicationService, IConcessionTypeAppService
 {
+	private const int MaxPageSize = 1000;
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ConcessionType.Add)]
 	public async Task CreateAsync(Guid academicYearId, ConcessionTypeRequest input)
 	{
@@ -62,7 +64,7 @@ public class ConcessionTypeAppService(
 		bool includeInactive = false,
 		bool? isActive = null)
 	{
-		if (academicYearId == Guid.Empty || skipCount < 0 || maxResultCount is < 1 or > 100)
+		if (academicYearId == Guid.Empty || skipCount < 0 || maxResultCount is < 1 or > MaxPageSize)
 			throw new BusinessException("Finance:ConcessionType:InvalidPaging");
 		var query = await concessionTypeRepository.GetQueryableAsync();
 		query = query.Where(x => x.AcademicYearId == academicYearId);
@@ -86,7 +88,7 @@ public class ConcessionTypeAppService(
 		var result = await AsyncExecuter.ToListAsync(
 			query.OrderBy(x => x.Name)
 				.Skip(Math.Max(0, skipCount))
-				.Take(Math.Clamp(maxResultCount, 1, 1000)));
+				.Take(Math.Clamp(maxResultCount, 1, MaxPageSize)));
 		var usedIds = await GetUsedIdsAsync(result.Select(x => x.Id));
 
 		return new PagedResultDto<ConcessionTypeResponse>(

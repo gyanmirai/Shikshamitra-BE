@@ -31,9 +31,7 @@ public class FileStorageAppService(
 
 	public async Task<FileDownloadResult> GetAsync(string uniqueFileName)
 	{
-		// Reject anything that looks like a path traversal
-		if (uniqueFileName.Contains('/') || uniqueFileName.Contains('\\') || uniqueFileName.Contains(".."))
-			throw new UserFriendlyException("Invalid file identifier.");
+		EnsureValidFileIdentifier(uniqueFileName);
 
 		var blobName = BuildBlobName(uniqueFileName);
 		var stream = await blobContainer.GetOrNullAsync(blobName);
@@ -46,6 +44,20 @@ public class FileStorageAppService(
 
 		var contentType = GetContentType(Path.GetExtension(uniqueFileName));
 		return new FileDownloadResult(ms.ToArray(), contentType, uniqueFileName);
+	}
+
+	public async Task DeleteAsync(string uniqueFileName)
+	{
+		EnsureValidFileIdentifier(uniqueFileName);
+		await blobContainer.DeleteAsync(BuildBlobName(uniqueFileName));
+	}
+
+	private static void EnsureValidFileIdentifier(string uniqueFileName)
+	{
+		// Reject anything that looks like a path traversal.
+		if (string.IsNullOrWhiteSpace(uniqueFileName) || uniqueFileName.Contains('/') ||
+			uniqueFileName.Contains('\\') || uniqueFileName.Contains(".."))
+			throw new UserFriendlyException("Invalid file identifier.");
 	}
 
 	private string BuildBlobName(string uniqueFileName)

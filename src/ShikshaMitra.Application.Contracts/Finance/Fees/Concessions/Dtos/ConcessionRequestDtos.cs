@@ -15,13 +15,29 @@ public class FeeHeadConcessionDto
 public class CreateConcessionRequestDto
 {
 	public Guid StudentId { get; set; }
+	public Guid? StudentFeeStructureId { get; set; }
 	public Guid ConcessionTypeId { get; set; }
+	public Guid? SourceRequestId { get; set; }
+	public string? IdempotencyKey { get; set; }
+	public string? PreviewFingerprint { get; set; }
 	public string? Remarks { get; set; }
 	public List<FeeHeadConcessionDto> FeeHeadConcessions { get; set; } = [];
 	public List<UploadConcessionDocumentEntryDto> Documents { get; set; } = [];
 }
 
-public class UpdateConcessionRequestDto : CreateConcessionRequestDto;
+public class CreateConcessionDraftDto : CreateConcessionRequestDto;
+
+public class UpdateConcessionRequestDto : CreateConcessionRequestDto
+{
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+}
+
+public class SubmitConcessionRequestDto
+{
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public string? PreviewFingerprint { get; set; }
+	public string? IdempotencyKey { get; set; }
+}
 
 public class FeeHeadConcessionDetailDto
 {
@@ -56,6 +72,7 @@ public class ConcessionSubmittedDocumentDto
 public class ConcessionRequestDetailDto
 {
 	public Guid ConcessionRequestId { get; set; }
+	public Guid AcademicYearId { get; set; }
 	public Guid StudentId { get; set; }
 	public string StudentName { get; set; } = string.Empty;
 	public Guid ConcessionTypeId { get; set; }
@@ -68,6 +85,13 @@ public class ConcessionRequestDetailDto
 	public string ConcessionTypeName { get; set; } = string.Empty;
 	public ConcessionRequestStatus Status { get; set; }
 	public string StatusName { get; set; } = string.Empty;
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public Guid? RequesterId { get; set; }
+	public Guid? SubmittedById { get; set; }
+	public Guid? DecidedById { get; set; }
+	public Guid? SourceRequestId { get; set; }
+	public DateTime? SubmittedAt { get; set; }
+	public string? CancellationReason { get; set; }
 	public decimal TotalConcessionAmount { get; set; }
 	public decimal TotalRequestedConcessionAmount { get; set; }
 	public decimal TotalApprovedConcessionAmount { get; set; }
@@ -84,6 +108,8 @@ public class ConcessionRequestDetailDto
 	public string DocumentSubmissionState { get; set; } = string.Empty;
 	public List<Guid> MissingDocumentIds { get; set; } = [];
 	public DateTime CreatedAt { get; set; }
+	public List<string> AvailableActions { get; set; } = [];
+	public List<ConcessionTimelineEventDto> Timeline { get; set; } = [];
 
 	/// <summary>Alias for legacy FE field name.</summary>
 	public Guid StudentConcessionTypeRequestId => ConcessionRequestId;
@@ -99,6 +125,8 @@ public class UploadConcessionDocumentEntryDto
 public class UploadConcessionDocumentsDto
 {
 	public List<UploadConcessionDocumentEntryDto> Documents { get; set; } = [];
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public string? IdempotencyKey { get; set; }
 }
 
 public class UploadConcessionDocumentFileDto
@@ -117,22 +145,29 @@ public class ConcessionApplicationItemDto
 {
 	public Guid Id { get; set; }
 	public Guid StudentId { get; set; }
+	public Guid ConcessionTypeId { get; set; }
 	public string StudentName { get; set; } = string.Empty;
 	public string GrNumber { get; set; } = string.Empty;
 	public string RollNo { get; set; } = string.Empty;
 	public string StandardName { get; set; } = string.Empty;
 	public string DivisionName { get; set; } = string.Empty;
 	public string ConcessionTypeName { get; set; } = string.Empty;
+	public string ConcessionPolicyCode { get; set; } = string.Empty;
+	public int ConcessionPolicyVersion { get; set; }
+	public string DocumentSubmissionState { get; set; } = string.Empty;
 	public decimal ConcessionAmount { get; set; }
 	public decimal RequestedConcessionAmount { get; set; }
 	public decimal ApprovedConcessionAmount { get; set; }
 	public ConcessionRequestStatus Status { get; set; }
 	public string StatusName { get; set; } = string.Empty;
 	public DateTime CreatedAt { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public List<string> AvailableActions { get; set; } = [];
 }
 
 public class ConcessionApplicationsDto
 {
+	public int DraftCount { get; set; }
 	public int PendingCount { get; set; }
 	public int ApprovedCount { get; set; }
 	public int RejectedCount { get; set; }
@@ -164,12 +199,55 @@ public class ApproveConcessionRequestDto
 {
 	public string? Message { get; set; }
 	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	public string? PreviewFingerprint { get; set; }
+	public string? IdempotencyKey { get; set; }
 	public List<FeeHeadApprovalDto>? FeeHeadApprovals { get; set; }
 }
 
 public class RejectConcessionRequestDto
 {
 	public string Message { get; set; } = string.Empty;
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	public string? IdempotencyKey { get; set; }
+}
+
+public class CancelConcessionRequestDto
+{
+	public string Reason { get; set; } = string.Empty;
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	public string? IdempotencyKey { get; set; }
+}
+
+public class ConcessionTimelineEventDto
+{
+	public string Action { get; set; } = string.Empty;
+	public ConcessionRequestStatus Status { get; set; }
+	public Guid? ActorId { get; set; }
+	public DateTime OccurredAt { get; set; }
+	public string? Reason { get; set; }
+	public decimal? Amount { get; set; }
+}
+
+public class PreviewConcessionApprovalDto
+{
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	public string PreviewFingerprint { get; set; } = string.Empty;
+	public List<FeeHeadApprovalDto> FeeHeadApprovals { get; set; } = [];
+}
+
+public class ConcessionApprovalPreviewDto
+{
+	public Guid ConcessionRequestId { get; set; }
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	public string PreviewFingerprint { get; set; } = string.Empty;
+	public decimal TotalApprovedAmount { get; set; }
+	public List<ApprovedDueFeeAllocationDto> DueFeeAllocations { get; set; } = [];
+}
+
+public class DeleteConcessionRequestDto
+{
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	public string? IdempotencyKey { get; set; }
 }
 
 public class DueFeeApprovalLineDto
@@ -186,6 +264,7 @@ public class DueFeeApprovalLineDto
 	public string Status { get; set; } = string.Empty;
 	public bool IsSelectable { get; set; }
 	public decimal MaxConcessionAmount { get; set; }
+	public decimal SuggestedConcessionAmount { get; set; }
 	public decimal AppliedConcessionAmount { get; set; }
 	public decimal ReversedConcessionAmount { get; set; }
 	public decimal ReversibleConcessionAmount { get; set; }
@@ -197,6 +276,9 @@ public class FeeHeadApprovalGroupDto
 	public Guid FeeHeadId { get; set; }
 	public string FeeHeadName { get; set; } = string.Empty;
 	public decimal RequestedConcessionAmount { get; set; }
+	public decimal LiveMaximumConcessionAmount { get; set; }
+	public decimal SuggestedConcessionAmount { get; set; }
+	public bool HasChangedSinceSubmission { get; set; }
 	public List<DueFeeApprovalLineDto> DueFeeLines { get; set; } = [];
 }
 
@@ -209,12 +291,16 @@ public class ConcessionApprovalContextDto
 	public int ConcessionPolicyVersion { get; set; }
 	public string RequestConcurrencyStamp { get; set; } = string.Empty;
 	public decimal TotalRequestedConcessionAmount { get; set; }
+	public decimal TotalLiveMaximumConcessionAmount { get; set; }
+	public bool HasChangedSinceSubmission { get; set; }
+	public string PreviewFingerprint { get; set; } = string.Empty;
 	public List<FeeHeadApprovalGroupDto> FeeHeadGroups { get; set; } = [];
 }
 
 public class ConcessionRequestPreviewInputDto
 {
 	public Guid StudentId { get; set; }
+	public Guid? StudentFeeStructureId { get; set; }
 	public Guid ConcessionTypeId { get; set; }
 	public List<FeeHeadConcessionDto> FeeHeadConcessions { get; set; } = [];
 }
@@ -228,10 +314,78 @@ public class ConcessionRequestPreviewDto
 	public string ConcessionPolicyCode { get; set; } = string.Empty;
 	public int ConcessionPolicyVersion { get; set; }
 	public string ApplyOn { get; set; } = string.Empty;
+	public string ValueSource { get; set; } = string.Empty;
+	public string CalculationMethod { get; set; } = string.Empty;
+	public decimal? MaximumPercentage { get; set; }
+	public decimal? MaximumFixedAmount { get; set; }
 	public decimal TotalEligibleBase { get; set; }
 	public decimal TotalConcessionAmount { get; set; }
 	public decimal NetPayable { get; set; }
 	public List<FeeHeadConcessionDetailDto> FeeHeadConcessions { get; set; } = [];
+	public List<ConcessionEligibleDueFeeDto> EligibleDueFees { get; set; } = [];
+	public string PreviewFingerprint { get; set; } = string.Empty;
+	public DateTime GeneratedAt { get; set; }
+}
+
+public class ConcessionEligibleDueFeeDto
+{
+	public Guid DueFeeId { get; set; }
+	public Guid FeeHeadId { get; set; }
+	public string FeeHeadName { get; set; } = string.Empty;
+	public int Month { get; set; }
+	public int Year { get; set; }
+	public string InstallmentLabel { get; set; } = string.Empty;
+	public decimal OriginalAmount { get; set; }
+	public decimal PaidAmount { get; set; }
+	public decimal ConcessionAmount { get; set; }
+	public decimal AdjustmentCreditAmount { get; set; }
+	public decimal OutstandingAmount { get; set; }
+	public string Status { get; set; } = string.Empty;
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+}
+
+public class ConcessionRequestContextDto
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid StudentId { get; set; }
+	public string StudentName { get; set; } = string.Empty;
+	public Guid StudentFeeStructureId { get; set; }
+	public string FeeStructureName { get; set; } = string.Empty;
+	public Guid ConcessionPolicyId { get; set; }
+	public Guid ConcessionPolicyVersionId { get; set; }
+	public string ConcessionPolicyName { get; set; } = string.Empty;
+	public string ConcessionPolicyCode { get; set; } = string.Empty;
+	public int ConcessionPolicyVersion { get; set; }
+	public string ValueSource { get; set; } = string.Empty;
+	public string CalculationMethod { get; set; } = string.Empty;
+	public decimal? PercentageValue { get; set; }
+	public decimal? FixedAmount { get; set; }
+	public decimal? MaximumPercentage { get; set; }
+	public decimal? MaximumFixedAmount { get; set; }
+	public string ApplyOn { get; set; } = string.Empty;
+	public string RoundingMethod { get; set; } = string.Empty;
+	public string Currency { get; set; } = "INR";
+	public bool AssignmentSelectionRequired { get; set; }
+	public List<ConcessionAssignmentOptionDto> Assignments { get; set; } = [];
+	public List<string> Blockers { get; set; } = [];
+	public List<ConcessionEligibleFeeHeadDto> FeeHeads { get; set; } = [];
+	public List<ConcessionEligibleDueFeeDto> EligibleDueFees { get; set; } = [];
+	public List<ConcessionTypeOptionDto> ConcessionTypes { get; set; } = [];
+}
+
+public class ConcessionEligibleFeeHeadDto
+{
+	public Guid FeeHeadId { get; set; }
+	public string FeeHeadName { get; set; } = string.Empty;
+	public decimal EligibleOutstanding { get; set; }
+}
+
+public class ConcessionTypeOptionDto
+{
+	public Guid ConcessionTypeId { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public string? Description { get; set; }
+	public List<ConcessionDocumentRequirementDto> Documents { get; set; } = [];
 }
 
 public class ApprovedDueFeeAllocationDto
@@ -276,6 +430,7 @@ public class ConcessionCancellationResponseDto
 public class ConcessionReversalLineInputDto
 {
 	public Guid ConcessionDueFeeAllocationId { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 
 	[Range(typeof(decimal), "0.01", "9999999999999999")]
 	public decimal Amount { get; set; }
@@ -288,6 +443,8 @@ public class ReverseConcessionRequestDto
 
 	[Required, MinLength(1)]
 	public List<ConcessionReversalLineInputDto> Lines { get; set; } = [];
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	public string? IdempotencyKey { get; set; }
 }
 
 public class ConcessionReversalLineDto
@@ -330,6 +487,45 @@ public class StudentConcessionRequestItemDto
 	public DateTime? UpdatedAt { get; set; }
 	public string? Message { get; set; }
 	public DateTime? ApprovedAt { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public List<string> AvailableActions { get; set; } = [];
+	public List<ConcessionTimelineEventDto> Timeline { get; set; } = [];
+}
+
+public class PreviewConcessionReversalDto
+{
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	public List<ConcessionReversalLineInputDto> Lines { get; set; } = [];
+}
+
+public class ConcessionReversalPreviewLineDto
+{
+	public Guid ConcessionDueFeeAllocationId { get; set; }
+	public Guid DueFeeId { get; set; }
+	public Guid FeeHeadId { get; set; }
+	public decimal ReversalAmount { get; set; }
+	public decimal OutstandingBefore { get; set; }
+	public decimal OutstandingAfter { get; set; }
+}
+
+public class ConcessionReversalPreviewDto
+{
+	public Guid ConcessionRequestId { get; set; }
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	public decimal TotalApprovedAmount { get; set; }
+	public decimal TotalPreviouslyReversedAmount { get; set; }
+	public decimal TotalReversalAmount { get; set; }
+	public decimal NetApprovedAfterReversal { get; set; }
+	public List<ConcessionReversalPreviewLineDto> Lines { get; set; } = [];
+}
+
+public class ConcessionAssignmentOptionDto
+{
+	public Guid StudentFeeStructureId { get; set; }
+	public Guid FeeStructureId { get; set; }
+	public string FeeStructureName { get; set; } = string.Empty;
+	public DateTime ChargeStartDate { get; set; }
+	public DateTime ChargeEndDate { get; set; }
 }
 
 public class StudentBasicDetailDto

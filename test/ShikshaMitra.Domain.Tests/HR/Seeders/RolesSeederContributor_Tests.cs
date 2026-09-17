@@ -12,7 +12,7 @@ public class RolesSeederContributor_Tests
 	public void Employee_Role_Metadata_Changes_Should_Use_A_New_Seeder_Marker_Version()
 	{
 		RolesSeederContributor.StepName.ShouldBe("RolesSeeder");
-		RolesSeederContributor.StepVersion.ShouldBe("RolesSeeder:v5");
+		RolesSeederContributor.StepVersion.ShouldBe("RolesSeeder:v6");
 		RolesSeederContributor.StepOrder.ShouldBe(110);
 	}
 

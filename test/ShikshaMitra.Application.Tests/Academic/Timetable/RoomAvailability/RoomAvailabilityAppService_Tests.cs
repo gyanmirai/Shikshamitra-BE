@@ -501,6 +501,10 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
             RequiredCapacity = 20
         });
         resultAll.Count.ShouldBeGreaterThanOrEqualTo(10);
+        var namedSuggestion = resultAll.Single(result => result.RoomName == "Room-1");
+        namedSuggestion.BuildingName.ShouldBe("Suggestion Building");
+        namedSuggestion.FloorName.ShouldBe("1st Floor");
+        namedSuggestion.Type.ShouldBe("Classroom");
 
         // Act & Assert 2: Limit parameter = 3
         var resultLimited = await _roomAvailabilityAppService.SuggestRoomsAsync(new SuggestedRoomRequestDto

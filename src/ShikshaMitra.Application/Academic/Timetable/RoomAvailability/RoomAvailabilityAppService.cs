@@ -215,7 +215,34 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             input.Limit
         );
 
-        return ObjectMapper.Map<List<SuggestedRoom>, List<SuggestedRoomDto>>(result);
+        var suggestions = ObjectMapper.Map<List<SuggestedRoom>, List<SuggestedRoomDto>>(result);
+        if (suggestions.Count == 0)
+        {
+            return suggestions;
+        }
+
+        var rooms = await _roomRepository.GetListAsync();
+        var buildings = await _buildingRepository.GetListAsync();
+        var floors = await _floorRepository.GetListAsync();
+        var roomTypes = await _roomTypeRepository.GetListAsync();
+
+        var roomLookup = rooms.ToDictionary(room => room.Id);
+        var buildingLookup = buildings.ToDictionary(building => building.Id, building => building.BuildingName);
+        var floorLookup = floors.ToDictionary(floor => floor.Id, floor => floor.FloorName);
+        var roomTypeLookup = roomTypes.ToDictionary(roomType => roomType.Id, roomType => roomType.RoomTypeName);
+
+        foreach (var suggestion in suggestions)
+        {
+            suggestion.BuildingName = buildingLookup.GetValueOrDefault(suggestion.BuildingId, string.Empty);
+            suggestion.FloorName = floorLookup.GetValueOrDefault(suggestion.FloorId, string.Empty);
+
+            if (roomLookup.TryGetValue(suggestion.RoomId, out var room))
+            {
+                suggestion.Type = roomTypeLookup.GetValueOrDefault(room.RoomTypeId, string.Empty);
+            }
+        }
+
+        return suggestions;
     }
 
     public async Task<RoomReservationDto> CreateReservationAsync(CreateRoomReservationDto input)

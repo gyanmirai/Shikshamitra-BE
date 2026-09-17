@@ -30,7 +30,8 @@ public class TeacherAvailabilityAppService(
     IRepository<Employee, Guid> employeeRepository,
     IEmployeeAttendanceRepository employeeAttendanceRepository,
     IRepository<AcademicYear, Guid> academicYearRepository,
-    IUserScopeAccessService userScopeAccessService
+    IUserScopeAccessService userScopeAccessService,
+    IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, ITeacherAvailabilityAppService
 {
     private const string AvailabilityOverlapMessage =
@@ -38,16 +39,19 @@ public class TeacherAvailabilityAppService(
 
     public async Task<PagedResultDto<TeacherAvailabilityDto>> GetListAsync(GetTeacherAvailabilityInput input)
     {
-        await SyncAttendanceAvailabilityRowsAsync(input);
+        var visibility = IsAdminUser()
+            ? null
+            : await GetVisibleTeachersAsync();
+
+        await SyncAttendanceAvailabilityRowsAsync(input, visibility?.EmployeeIds);
 
         var rows = await availabilityRepository.GetListAsync(x => !x.IsCancelled);
         var filtered = rows.AsEnumerable();
 
-        if (!IsAdminUser())
+        if (visibility != null)
         {
-            var visibleTeacherIds = await GetScopeVisibleTeacherReferenceIdsAsync();
             filtered = filtered.Where(x =>
-                x.TeacherId.HasValue && visibleTeacherIds.Contains(x.TeacherId.Value));
+                x.TeacherId.HasValue && visibility.ReferenceIds.Contains(x.TeacherId.Value));
         }
 
         if (input.AcademicYearId.HasValue) filtered = filtered.Where(x => x.AcademicYearId == input.AcademicYearId);
@@ -75,7 +79,9 @@ public class TeacherAvailabilityAppService(
         return new PagedResultDto<TeacherAvailabilityDto>(total, dtoRows);
     }
 
-    private async Task SyncAttendanceAvailabilityRowsAsync(GetTeacherAvailabilityInput input)
+    private async Task SyncAttendanceAvailabilityRowsAsync(
+        GetTeacherAvailabilityInput input,
+        IReadOnlySet<Guid>? visibleEmployeeIds)
     {
         var rangeStart = input.Date ?? input.FromDate;
         var rangeEnd = input.Date ?? input.ToDate;
@@ -86,7 +92,19 @@ public class TeacherAvailabilityAppService(
 
         var from = DateOnly.FromDateTime(rangeStart.Value.Date);
         var to = DateOnly.FromDateTime(rangeEnd.Value.Date);
+        if (visibleEmployeeIds is { Count: 0 })
+        {
+            return;
+        }
+
         var attendanceQuery = await employeeAttendanceRepository.GetQueryableAsync();
+        if (visibleEmployeeIds != null)
+        {
+            var visibleEmployeeIdArray = visibleEmployeeIds.ToArray();
+            attendanceQuery = attendanceQuery.Where(attendance =>
+                Enumerable.Contains(visibleEmployeeIdArray, attendance.EmployeeId));
+        }
+
         var attendanceRows = await AsyncExecuter.ToListAsync(
             attendanceQuery.Where(x =>
                 x.AttendanceDate >= from &&
@@ -98,8 +116,9 @@ public class TeacherAvailabilityAppService(
             return;
         }
 
-        var employeeIds = attendanceRows.Select(x => x.EmployeeId).Distinct().ToList();
-        var employees = await employeeRepository.GetListAsync(x => employeeIds.Contains(x.Id));
+        var attendanceEmployeeIds = attendanceRows.Select(x => x.EmployeeId).Distinct().ToArray();
+        var employees = await employeeRepository.GetListAsync(employee =>
+            Enumerable.Contains(attendanceEmployeeIds, employee.Id));
         var employeeById = employees.ToDictionary(x => x.Id);
 
         var availabilityStart = NormalizeDate(rangeStart.Value);
@@ -136,7 +155,7 @@ public class TeacherAvailabilityAppService(
             }
 
             var isFullDay = attendance.StatusType == EmployeeAttendanceStatusType.FullDayLeave;
-            await CreateAsync(new CreateTeacherAvailabilityDto
+            await CreateAvailabilityAsync(new CreateTeacherAvailabilityDto
             {
                 TeacherId = employee.Id,
                 TeacherName = string.IsNullOrWhiteSpace(employee.EmployeeName)
@@ -166,6 +185,11 @@ public class TeacherAvailabilityAppService(
             throw new UserFriendlyException("Only administrators can create unavailability.");
         }
 
+        return await CreateAvailabilityAsync(input);
+    }
+
+    private async Task<TeacherAvailabilityDto> CreateAvailabilityAsync(CreateTeacherAvailabilityDto input)
+    {
         if (string.IsNullOrWhiteSpace(input.TeacherName) && !input.TeacherId.HasValue)
         {
             throw new UserFriendlyException("Teacher is required.");
@@ -588,31 +612,54 @@ public class TeacherAvailabilityAppService(
             string.Equals(role, "administrator", StringComparison.OrdinalIgnoreCase));
     }
 
-    private async Task<HashSet<Guid>> GetScopeVisibleTeacherReferenceIdsAsync()
+    private async Task<TeacherVisibility> GetVisibleTeachersAsync()
     {
+        var referenceIds = new HashSet<Guid>();
+        var employeeIds = new HashSet<Guid>();
         var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-        if (!scope.HasAnyAccess)
+        if (scope.HasAnyAccess)
         {
-            return [];
+            var timetables = await timetableRepository.GetAllWithSlotsAsync();
+            var scopedTimetables = timetables.FilterByUserScope(scope);
+            referenceIds.UnionWith(scopedTimetables
+                .SelectMany(timetable => timetable.Slots)
+                .SelectMany(slot => slot.Subjects)
+                .Where(subject => subject.TeacherId.HasValue)
+                .Select(subject => subject.TeacherId!.Value));
         }
 
-        var timetables = await timetableRepository.GetAllWithSlotsAsync();
-        var scopedTimetables = timetables.FilterByUserScope(scope);
-        var teacherIds = scopedTimetables
-            .SelectMany(timetable => timetable.Slots)
-            .SelectMany(slot => slot.Subjects)
-            .Where(subject => subject.TeacherId.HasValue)
-            .Select(subject => subject.TeacherId!.Value)
-            .ToHashSet();
-        if (teacherIds.Count == 0)
+        if (CurrentUser.Id.HasValue)
         {
-            return [];
+            var currentUserId = CurrentUser.Id.Value;
+            var reporteeIds = await reportingManagerAccessService
+                .GetReporteeEmployeeIdsAsync(currentUserId);
+            employeeIds.UnionWith(reporteeIds);
+            referenceIds.UnionWith(reporteeIds);
         }
 
-        var employees = await employeeRepository.GetListAsync(employee => teacherIds.Contains(employee.Id));
-        return employees
-            .SelectMany(employee => new[] { employee.Id, employee.UserId ?? Guid.Empty })
-            .Where(id => id != Guid.Empty)
-            .ToHashSet();
+        var candidateIds = referenceIds.Concat(employeeIds).Distinct().ToArray();
+        if (candidateIds.Length == 0)
+        {
+            return new TeacherVisibility(referenceIds, employeeIds);
+        }
+
+        var employees = await employeeRepository.GetListAsync(employee =>
+            Enumerable.Contains(candidateIds, employee.Id) ||
+            (employee.UserId.HasValue && Enumerable.Contains(candidateIds, employee.UserId.Value)));
+        foreach (var employee in employees)
+        {
+            employeeIds.Add(employee.Id);
+            referenceIds.Add(employee.Id);
+            if (employee.UserId.HasValue)
+            {
+                referenceIds.Add(employee.UserId.Value);
+            }
+        }
+
+        return new TeacherVisibility(referenceIds, employeeIds);
     }
+
+    private sealed record TeacherVisibility(
+        HashSet<Guid> ReferenceIds,
+        HashSet<Guid> EmployeeIds);
 }

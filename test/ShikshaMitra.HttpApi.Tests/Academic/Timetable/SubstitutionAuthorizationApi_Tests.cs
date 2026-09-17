@@ -32,6 +32,8 @@ public class SubstitutionAuthorizationApi_Tests : ShikshaMitraApiTestBase
 		yield return [HttpMethod.Post, BaseUrl, new CreateSubstitutionDto()];
 		yield return [HttpMethod.Put, $"{BaseUrl}/{id}", new UpdateSubstitutionDto()];
 		yield return [HttpMethod.Post, $"{BaseUrl}/{id}/acknowledge", null!];
+		yield return [HttpMethod.Post, $"{BaseUrl}/{id}/request-change", new SubstitutionActionDto()];
+		yield return [HttpMethod.Post, $"{BaseUrl}/{id}/reject-duty", new SubstitutionActionDto()];
 		yield return [HttpMethod.Post, $"{BaseUrl}/{id}/cancel", new SubstitutionActionDto()];
 	}
 
@@ -66,14 +68,13 @@ public class SubstitutionAuthorizationApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
-	public async Task Substitution_Mutations_Should_Reject_View_Only_Users()
+	public async Task Administrative_Substitution_Mutations_Should_Reject_View_Only_Users()
 	{
 		using var client = CreateClientWithPermissions(
 			ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View);
 		var id = Guid.NewGuid().ToString("D");
 
 		var createResponse = await client.PostAsJsonAsync(BaseUrl, new CreateSubstitutionDto());
-		var acknowledgeResponse = await client.PostAsync($"{BaseUrl}/{id}/acknowledge", null);
 		var cancelResponse = await client.PostAsJsonAsync(
 			$"{BaseUrl}/{id}/cancel",
 			new SubstitutionActionDto());
@@ -81,12 +82,27 @@ public class SubstitutionAuthorizationApi_Tests : ShikshaMitraApiTestBase
 		createResponse.StatusCode.ShouldBe(
 			HttpStatusCode.Forbidden,
 			await createResponse.Content.ReadAsStringAsync());
-		acknowledgeResponse.StatusCode.ShouldBe(
-			HttpStatusCode.Forbidden,
-			await acknowledgeResponse.Content.ReadAsStringAsync());
 		cancelResponse.StatusCode.ShouldBe(
 			HttpStatusCode.Forbidden,
 			await cancelResponse.Content.ReadAsStringAsync());
+	}
+
+	[Theory]
+	[InlineData("acknowledge")]
+	[InlineData("request-change")]
+	[InlineData("reject-duty")]
+	public async Task Teacher_Duty_Actions_Should_Accept_View_Permission_At_The_Http_Boundary(
+		string action)
+	{
+		using var client = CreateClientWithPermissions(
+			ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View);
+		var response = await client.PostAsJsonAsync(
+			$"{BaseUrl}/{Guid.NewGuid():D}/{action}",
+			new SubstitutionActionDto { Reason = "Unable to cover this period." });
+
+		response.StatusCode.ShouldNotBe(
+			HttpStatusCode.Forbidden,
+			await response.Content.ReadAsStringAsync());
 	}
 
 	[Fact]
@@ -110,9 +126,9 @@ public class SubstitutionAuthorizationApi_Tests : ShikshaMitraApiTestBase
 			[nameof(SubstitutionController.CompleteAsync)] = add,
 			[nameof(SubstitutionController.CancelAsync)] = delete,
 			[nameof(SubstitutionController.RejectAsync)] = delete,
-			[nameof(SubstitutionController.AcknowledgeAsync)] = add,
-			[nameof(SubstitutionController.RequestChangeAsync)] = add,
-			[nameof(SubstitutionController.RejectDutyAsync)] = add,
+			[nameof(SubstitutionController.AcknowledgeAsync)] = view,
+			[nameof(SubstitutionController.RequestChangeAsync)] = view,
+			[nameof(SubstitutionController.RejectDutyAsync)] = view,
 			[nameof(SubstitutionController.GetSuggestedTeachersAsync)] = view,
 			[nameof(SubstitutionController.GetAuditLogsAsync)] = view,
 			[nameof(SubstitutionController.GetDailySheetAsync)] = view,

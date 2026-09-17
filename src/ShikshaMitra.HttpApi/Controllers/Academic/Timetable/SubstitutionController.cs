@@ -110,7 +110,7 @@ public class SubstitutionController(ISubstitutionAppService substitutionAppServi
     }
 
     [HttpPost("{id:guid}/acknowledge")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public Task<SubstitutionDto> AcknowledgeAsync(
         [FromRoute] Guid id,
         [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] SubstitutionActionDto? input)
@@ -119,14 +119,14 @@ public class SubstitutionController(ISubstitutionAppService substitutionAppServi
     }
 
     [HttpPost("{id:guid}/request-change")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public Task<SubstitutionDto> RequestChangeAsync([FromRoute] Guid id, [FromBody] SubstitutionActionDto input)
     {
         return substitutionAppService.RequestChangeAsync(id, input);
     }
 
     [HttpPost("{id:guid}/reject-duty")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public Task<SubstitutionDto> RejectDutyAsync([FromRoute] Guid id, [FromBody] SubstitutionActionDto input)
     {
         return substitutionAppService.RejectDutyAsync(id, input);

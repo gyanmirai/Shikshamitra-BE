@@ -17,6 +17,7 @@ using Volo.Abp.Identity;
 using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.HomeworkAssignment;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings.Divisions;
 
 namespace ShikshaMitra.Academic.Curriculum;
@@ -56,6 +57,7 @@ public class SubjectAssignmentAppService(
 		try
 		{
 			EnsureSubjectAssignmentInputIsConsistent(createSubjectAssignmentDto);
+			await EnsureNewTeacherAssignmentsAreActiveAsync(createSubjectAssignmentDto.Subjects, []);
 			await EnsureSubjectsAreNotAlreadyAssignedAsync(
 				createSubjectAssignmentDto.ClassId,
 				createSubjectAssignmentDto.Subjects.Select(s => s.SubjectId),
@@ -672,6 +674,8 @@ public class SubjectAssignmentAppService(
 		{
 			existingGroup = new List<AssignedSubject> { existingEntity };
 		}
+
+		await EnsureNewTeacherAssignmentsAreActiveAsync(input.Subjects, existingGroup);
 
 		// 2. Process updates
 		// We match existing subjects with input subjects by SubjectId
@@ -1586,6 +1590,61 @@ public class SubjectAssignmentAppService(
 					.WithData("SubjectId", subject.SubjectId)
 					.WithData("TeacherId", subject.PrimaryTeacherId.Value);
 			}
+		}
+	}
+
+	private async Task EnsureNewTeacherAssignmentsAreActiveAsync(
+		IEnumerable<SubjectAssignmentDetailDto> subjects,
+		IReadOnlyCollection<AssignedSubject> existingAssignments)
+	{
+		var existingBySubjectId = existingAssignments.ToDictionary(assignment => assignment.SubjectId);
+		var newTeacherIds = new HashSet<Guid>();
+		foreach (var subject in subjects)
+		{
+			existingBySubjectId.TryGetValue(subject.SubjectId, out var existingAssignment);
+			var existingPrimaryTeacherId = existingAssignment?.Teachers
+				.FirstOrDefault(teacher => teacher.TeacherType == SubjectTeacherType.Primary)?.TeacherId;
+			if (subject.PrimaryTeacherId.HasValue &&
+				subject.PrimaryTeacherId.Value != Guid.Empty &&
+				subject.PrimaryTeacherId.Value != existingPrimaryTeacherId)
+			{
+				newTeacherIds.Add(subject.PrimaryTeacherId.Value);
+			}
+
+			var existingSecondaryTeacherIds = existingAssignment?.Teachers
+				.Where(teacher => teacher.TeacherType == SubjectTeacherType.Secondary)
+				.Select(teacher => teacher.TeacherId)
+				.ToHashSet() ?? [];
+			foreach (var secondaryTeacherId in subject.SecondaryTeacherIds ?? [])
+			{
+				if (secondaryTeacherId != Guid.Empty && !existingSecondaryTeacherIds.Contains(secondaryTeacherId))
+				{
+					newTeacherIds.Add(secondaryTeacherId);
+				}
+			}
+		}
+
+		if (newTeacherIds.Count == 0)
+		{
+			return;
+		}
+
+		var today = DateOnly.FromDateTime(Clock.Now);
+		var activeTeacherIds = (await employeeRepository.GetListAsync(employee =>
+			Enumerable.Contains(newTeacherIds, employee.Id) &&
+			employee.EmployeeGroup == EmployeeGroupType.Teaching &&
+			employee.EmployeeStatusType == EmployeeStatusType.Active &&
+			(employee.DateOfJoining == null || employee.DateOfJoining <= today)))
+			.Select(employee => employee.Id)
+			.ToHashSet();
+		var invalidTeacherIds = newTeacherIds
+			.Where(teacherId => !activeTeacherIds.Contains(teacherId))
+			.ToList();
+
+		if (invalidTeacherIds.Count > 0)
+		{
+			throw new BusinessException(CurriculumErrorCodes.SubjectAssignmentTeacherMustBeActive)
+				.WithData("TeacherIds", JsonSerializer.Serialize(invalidTeacherIds));
 		}
 	}
 

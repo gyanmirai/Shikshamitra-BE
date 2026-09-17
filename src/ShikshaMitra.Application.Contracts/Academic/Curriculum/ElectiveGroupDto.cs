@@ -47,6 +47,7 @@ public class ElectiveGroupDto : EntityDto<Guid>
 	public int TimetablePeriodsCount { get; set; }
 	public int ExamSchedulesCount { get; set; }
 	public bool IsUsed { get; set; }
+	public bool CanModifySubjects { get; set; }
 	public bool CanDelete { get; set; }
 	public DateTime? LastUpdatedAt { get; set; }
 	public string? LastUpdatedBy { get; set; }

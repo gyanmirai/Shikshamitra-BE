@@ -12,6 +12,7 @@ using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
@@ -27,6 +28,74 @@ namespace ShikshaMitra.Academic.StudentAcademic360;
 public class StudentAcademic360Read_Tests : SubjectTeacherReassignmentTestBase
 {
 	private IStudentAcademic360AppService Academic360 => GetRequiredService<IStudentAcademic360AppService>();
+
+	[Fact]
+	public async Task List_Should_Return_One_Scoped_Page_With_Server_Summary_Search_And_Smart_Filters()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (Tenant.Change(TenantId))
+			using (AsAdmin())
+			{
+				await SeedAllocationAsync();
+				var standard = await GetRequiredService<IRepository<Standard, Guid>>().GetAsync(StandardId);
+				var medium = await GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(AcademicMediumId);
+				var board = await GetRequiredService<IRepository<EducationBoard, Guid>>().GetAsync(medium.EducationBoardId);
+				var contextYearId = board.AcademicYearId;
+				await GetRequiredService<IUserScopeAssignmentRepository>().InsertAsync(new UserScopeAssignment(Guid.NewGuid(),
+					TenantId, ActorId, academicYearId: contextYearId, educationBoardId: medium.EducationBoardId,
+					educationMediumId: AcademicMediumId, educationMediumStageId: standard.EducationMediumStageId,
+					standardId: StandardId, divisionId: DivisionId), autoSave: true);
+				var repository = GetRequiredService<IRepository<Student, Guid>>();
+				var lowAttendance = await repository.InsertAsync(new Student(Guid.NewGuid(), TenantId, "Low", null, "Attendance",
+					contextYearId, medium.EducationBoardId, AcademicMediumId, standard.EducationMediumStageId, StandardId, DivisionId,
+					grNo: 1001, rollNo: 1, status: StudentLifeCycleStatusEnum.Enrolled), autoSave: true);
+				var fullAttendance = await repository.InsertAsync(new Student(Guid.NewGuid(), TenantId, "Full", null, "Attendance",
+					contextYearId, medium.EducationBoardId, AcademicMediumId, standard.EducationMediumStageId, StandardId, DivisionId,
+					grNo: 1002, rollNo: 2, status: StudentLifeCycleStatusEnum.Enrolled), autoSave: true);
+				await repository.InsertAsync(new Student(Guid.NewGuid(), TenantId, "No", null, "Data",
+					contextYearId, medium.EducationBoardId, AcademicMediumId, standard.EducationMediumStageId, StandardId, DivisionId,
+					grNo: 1003, rollNo: 3, status: StudentLifeCycleStatusEnum.Enrolled), autoSave: true);
+
+				for (var index = 0; index < 4; index++)
+				{
+					var day = new AttendanceDay(Guid.NewGuid(), TenantId, contextYearId, StandardId, DivisionId,
+						DateTime.UtcNow.Date.AddDays(-index), ActorId);
+					await GetRequiredService<IRepository<AttendanceDay, Guid>>().InsertAsync(day, autoSave: true);
+					await GetRequiredService<IRepository<AttendanceEntry, Guid>>().InsertAsync(new AttendanceEntry(Guid.NewGuid(),
+						TenantId, day.Id, lowAttendance.Id, index < 2 ? AttendanceStatus.Present : AttendanceStatus.Absent, ActorId), autoSave: true);
+					await GetRequiredService<IRepository<AttendanceEntry, Guid>>().InsertAsync(new AttendanceEntry(Guid.NewGuid(),
+						TenantId, day.Id, fullAttendance.Id, AttendanceStatus.Present, ActorId), autoSave: true);
+				}
+
+				var input = new GetStudentAcademic360ListInput
+				{
+					AcademicYearId = contextYearId,
+					BoardId = medium.EducationBoardId,
+					EducationMediumId = AcademicMediumId,
+					SkipCount = 0,
+					MaxResultCount = 2
+				};
+				var page = await Academic360.GetListAsync(input);
+				page.TotalCount.ShouldBe(3);
+				page.Items.Count.ShouldBe(2);
+				page.Summary.TotalStudents.ShouldBe(3);
+				page.Summary.AverageAttendance.ShouldBe(75);
+				page.Items.First().StudentName.ShouldBe("Low Attendance");
+
+				input.SearchTerm = "1002";
+				var searched = await Academic360.GetListAsync(input);
+				searched.TotalCount.ShouldBe(1);
+				searched.Items.Single().StudentId.ShouldBe(fullAttendance.Id);
+
+				input.SearchTerm = null;
+				input.SmartFilter = StudentAcademic360SmartFilter.LowAttendance;
+				var filtered = await Academic360.GetListAsync(input);
+				filtered.TotalCount.ShouldBe(1);
+				filtered.Items.Single().StudentId.ShouldBe(lowAttendance.Id);
+			}
+		});
+	}
 
 	[Fact]
 	public async Task Profile_Should_Preserve_Additional_And_Contact_Values_Without_Loading_Organization_Graphs()

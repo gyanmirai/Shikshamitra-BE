@@ -29,7 +29,7 @@ namespace ShikshaMitra.Academic.StudentAcademic360;
 
 [Authorize]
 [RemoteService(false)]
-public class StudentAcademic360AppService(
+public partial class StudentAcademic360AppService(
     StudentScopeAccessService studentScopeAccessService,
     IStudentRepository studentRepository,
     IRepository<AttendanceEntry, Guid> attendanceEntryRepository,

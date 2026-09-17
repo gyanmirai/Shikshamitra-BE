@@ -164,7 +164,8 @@ public class ElectiveGroupAppService(
 	{
 		try
 		{
-			await EnsureSubjectRemovalIsAllowedAsync(id, input.SubjectIds);
+			var existingGroup = await GetGroupForMediumAsync(academicMediumId, id);
+			await EnsureSubjectMembershipChangeIsAllowedAsync(existingGroup, input.SubjectIds);
 
 			var electiveGroup = await ElectiveGroupManager.UpdateAsync(
 				id,
@@ -433,31 +434,33 @@ public class ElectiveGroupAppService(
 			TimetablePeriodsCount = usage.WeeklySlots + usage.TimetableSlots,
 			ExamSchedulesCount = usage.ExamSubjects,
 			IsUsed = usage.Total > 0,
+			CanModifySubjects = usage.Total == 0,
 			CanDelete = usage.Total == 0,
 			LastUpdatedAt = electiveGroup.LastModificationTime ?? electiveGroup.CreationTime,
 			LastUpdatedBy = (electiveGroup.LastModifierId ?? electiveGroup.CreatorId)?.ToString()
 		};
 	}
 
-	private async Task EnsureSubjectRemovalIsAllowedAsync(Guid groupId, List<Guid> incomingSubjectIds)
+	private async Task EnsureSubjectMembershipChangeIsAllowedAsync(
+		ElectiveGroup existingGroup,
+		IEnumerable<Guid> incomingSubjectIds)
 	{
-		var existingGroup = await ElectiveGroupRepository.GetAsync(groupId, includeDetails: true);
-		var removedSubjectIds = existingGroup.Subjects
-			.Select(x => x.SubjectId)
-			.Except(incomingSubjectIds)
-			.ToList();
-		if (removedSubjectIds.Count == 0)
+		var existingSubjectIds = existingGroup.Subjects.Select(x => x.SubjectId).ToHashSet();
+		var requestedSubjectIds = incomingSubjectIds.ToHashSet();
+		if (existingSubjectIds.SetEquals(requestedSubjectIds))
 		{
 			return;
 		}
 
-		var selectedRemovedSubjects = await studentElectiveSelectionRepository.CountAsync(x =>
-			x.ElectiveGroupId == groupId && removedSubjectIds.Contains(x.SelectedSubjectId)
-		);
-		if (selectedRemovedSubjects > 0)
+		var usage = await GetUsageCountsAsync(existingGroup.Id);
+		if (usage.Total > 0)
 		{
-			throw new BusinessException(CurriculumErrorCodes.ElectiveGroupHasActiveAllocations)
-				.WithData("message", "This group already has student selections. Direct subject removal is blocked to protect academic history. Please create a new group or manage changes through allocation rules.");
+			throw new BusinessException(CurriculumErrorCodes.ElectiveGroupSubjectsLocked)
+				.WithData("ElectiveGroupId", existingGroup.Id)
+				.WithData(
+					"message",
+					$"Subjects cannot be added to or removed from elective group '{existingGroup.Name}' because it is already used in academic records. Create a new elective group to use a different subject combination."
+				);
 		}
 	}
 

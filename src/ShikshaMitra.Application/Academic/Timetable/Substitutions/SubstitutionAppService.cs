@@ -553,7 +553,10 @@ public class SubstitutionAppService(
         entity.Reject(reason);
         await substitutionRepository.UpdateAsync(entity, autoSave: true);
         await WriteAuditAsync(id, "Rejected", reason);
-        return await GetAsync(id);
+
+        // Rejecting a duty deliberately clears the substitute assignment. Mapping the entity
+        // directly avoids re-running ownership authorization after that valid state transition.
+        return await MapAsync(entity, await GetAuditLogsAsync(id));
     }
 
     public async Task<List<SuggestedTeacherDto>> GetSuggestedTeachersAsync(Guid id)

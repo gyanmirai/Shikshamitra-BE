@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Curriculum.Settings;
@@ -7,6 +8,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Xunit;
@@ -88,12 +90,135 @@ public class ElectiveGroupAppService_Tests
 		});
 	}
 
+	[Fact]
+	public async Task Used_Group_Should_Lock_Subject_Membership_But_Allow_Other_Detail_Updates()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+				var stage = await _stageRepository.GetAsync(stageId);
+				var unique = Guid.NewGuid().ToString("N");
+				var standard = await _standardManager.CreateAsync(
+					stageId,
+					$"Locked Std {unique}"[..30],
+					11,
+					shiftId: null);
+				await _standardRepository.InsertAsync(standard, autoSave: true);
+
+				var firstSubject = await CreateSubjectAsync(stage.EducationMediumId, $"English {unique}"[..30]);
+				var secondSubject = await CreateSubjectAsync(stage.EducationMediumId, $"Computer {unique}"[..30]);
+				var replacementSubject = await CreateSubjectAsync(stage.EducationMediumId, $"Science {unique}"[..30]);
+				var electiveGroup = new ElectiveGroup(
+					Guid.NewGuid(),
+					TestTenantId,
+					$"Locked Group {unique}"[..30],
+					"#8E33FF",
+					stage.EducationMediumId,
+					groupType: "Language");
+				electiveGroup.AddSubject(firstSubject.Id);
+				electiveGroup.AddSubject(secondSubject.Id);
+				await _electiveGroupRepository.InsertAsync(electiveGroup, autoSave: true);
+				await _assignedSubjectRepository.InsertAsync(
+					CreateAssignment(standard.Id, firstSubject.Id, electiveGroup.Id, "LOCK01"),
+					autoSave: true);
+
+				var listItem = (await _electiveGroupAppService.GetListAsync(stage.EducationMediumId))
+					.Single(item => item.Id == electiveGroup.Id);
+				listItem.IsUsed.ShouldBeTrue();
+				listItem.CanModifySubjects.ShouldBeFalse();
+
+				var subjectChange = CreateUpdateInput(
+					electiveGroup.Name,
+					[firstSubject.Id, replacementSubject.Id]);
+				var exception = await Should.ThrowAsync<BusinessException>(() =>
+					_electiveGroupAppService.UpdateAsync(
+						stage.EducationMediumId,
+						electiveGroup.Id,
+						subjectChange));
+				exception.Code.ShouldBe(CurriculumErrorCodes.ElectiveGroupSubjectsLocked);
+
+				var detailsUpdate = CreateUpdateInput(
+					$"Updated Group {unique}"[..30],
+					[firstSubject.Id, secondSubject.Id]);
+				detailsUpdate.Color = "#00A76F";
+				detailsUpdate.GroupType = "Skill Subject";
+				detailsUpdate.Description = "Updated without changing subjects";
+				var updated = await _electiveGroupAppService.UpdateAsync(
+					stage.EducationMediumId,
+					electiveGroup.Id,
+					detailsUpdate);
+
+				updated.Name.ShouldBe(detailsUpdate.Name);
+				updated.Color.ShouldBe(detailsUpdate.Color);
+				updated.GroupType.ShouldBe(detailsUpdate.GroupType);
+				updated.Subjects.Select(subject => subject.Id).ShouldBe(
+					[firstSubject.Id, secondSubject.Id],
+					ignoreOrder: true);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task Unused_Group_Should_Allow_Subject_Membership_Changes()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+				var stage = await _stageRepository.GetAsync(stageId);
+				var unique = Guid.NewGuid().ToString("N");
+				var firstSubject = await CreateSubjectAsync(stage.EducationMediumId, $"Philosophy {unique}"[..30]);
+				var secondSubject = await CreateSubjectAsync(stage.EducationMediumId, $"Sanskrit {unique}"[..30]);
+				var replacementSubject = await CreateSubjectAsync(stage.EducationMediumId, $"Gujarati {unique}"[..30]);
+				var electiveGroup = new ElectiveGroup(
+					Guid.NewGuid(),
+					TestTenantId,
+					$"Editable Group {unique}"[..30],
+					"#8E33FF",
+					stage.EducationMediumId);
+				electiveGroup.AddSubject(firstSubject.Id);
+				electiveGroup.AddSubject(secondSubject.Id);
+				await _electiveGroupRepository.InsertAsync(electiveGroup, autoSave: true);
+
+				var beforeUpdate = (await _electiveGroupAppService.GetListAsync(stage.EducationMediumId))
+					.Single(item => item.Id == electiveGroup.Id);
+				beforeUpdate.CanModifySubjects.ShouldBeTrue();
+
+				var updated = await _electiveGroupAppService.UpdateAsync(
+					stage.EducationMediumId,
+					electiveGroup.Id,
+					CreateUpdateInput(
+						electiveGroup.Name,
+						[secondSubject.Id, replacementSubject.Id]));
+
+				updated.Subjects.Select(subject => subject.Id).ShouldBe(
+					[secondSubject.Id, replacementSubject.Id],
+					ignoreOrder: true);
+				updated.CanModifySubjects.ShouldBeTrue();
+			}
+		});
+	}
+
 	private async Task<Subject> CreateSubjectAsync(Guid mediumId, string name)
 	{
 		var subject = new Subject(Guid.NewGuid(), TestTenantId, name, "#00A76F", mediumId);
 		await _subjectRepository.InsertAsync(subject, autoSave: true);
 		return subject;
 	}
+
+	private static CreateUpdateElectiveGroupDto CreateUpdateInput(
+		string name,
+		List<Guid> subjectIds) =>
+		new()
+		{
+			Name = name,
+			Color = "#8E33FF",
+			GroupType = "Language",
+			SubjectIds = subjectIds
+		};
 
 	private static AssignedSubject CreateAssignment(
 		Guid standardId,

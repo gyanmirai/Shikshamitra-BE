@@ -14,6 +14,7 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
@@ -821,6 +822,9 @@ public class UserScopeAppService_BulkAssign_Tests
         {
             var suffix = Guid.NewGuid().ToString("N")[..8];
             var role = new IdentityRole(Guid.NewGuid(), $"scope-employee-role-{suffix}", TestTenantId);
+            role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
+            role.SetProperty(EmployeeGroupAudience.ExtraPropertyName, EmployeeGroupAudience.Teaching);
+            role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
             var result = await _roleManager.CreateAsync(role);
             result.Succeeded.ShouldBeTrue(string.Join(", ", result.Errors.Select(x => x.Description)));
             return role.Id;

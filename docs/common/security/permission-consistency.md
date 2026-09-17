@@ -19,24 +19,30 @@ The existing configured administrator data-scope exception remains server-contro
 
 The current security release retains the old frontend UI at the user's request.
 The replacement-editor redesign remains withdrawn.
-The user subsequently approved fixing hidden actions, bundled toggles, incomplete bulk removal, and draft/inheritance behavior within the existing layout and separate dialogs.
-Do not restore legacy behavior or silently replace the approved layout.
+The user's September 17 correction makes the deployed staging UI and grouped behavior the frontend reference.
+Retain expandable navigation groups, compact View/Add/Delete controls, Student action bundles, Accounts Settings exceptions, and separate Module Permission and Set Module Visibility dialogs.
+Do not add individual backend action tiles, catalogue search, or a replacement editor.
 
 The backend permission definitions are authoritative for names, hierarchy, display labels, allowed providers, and tenancy side.
-Show every enabled server-defined entry, including unfamiliar future actions.
-Provider-ineligible entries may be shown read-only with their allowed providers.
-A missing navigation mapping or visibility grant must not hide configuration from an authorized permission administrator.
+Retain the complete server catalogue in the draft and preserve entries outside the displayed navigation groups.
+Grouped frontend controls may only submit names present in that catalogue and eligible for the selected provider.
+A missing visibility grant must not lock an authorized administrator out of configuring a known module.
 
-Toggle exactly one permission at a time.
-Do not imply View, Add, Edit, or Delete, and do not bundle actions by their suffix.
+Frontend grouping follows the staging mappings and dependencies; it does not change backend permission definitions or endpoint enforcement.
+The user-approved Statutory Schemes exception retains the same UI with View/Edit/Delete controls.
+Edit groups the existing Edit, Activate, ManageEnrollment, and ApproveOverride permissions; View remains independent.
+Delete is disabled unless the server defines that action; this permission-editor change does not add a deletion operation.
+Statutory Schemes Revoke All clears every provider-eligible direct grant at or beneath its exact feature namespace, including undisplayed actions, without touching neighboring features or inherited role grants.
+It remains available for partial direct grants, while Grant All only grants explicitly mapped catalogue actions.
+The API continues to accept exact permission names without normalizing aliases or inferring additional grants.
 Existing domain constants that intentionally share one permission ID remain one capability until an explicitly approved domain change separates them.
 The editor must not invent distinct grants for those aliases.
 
-Bulk operations use the complete selected catalogue subtree, deduplicate names, and include collapsed and search-hidden entries.
-Show the count and pending delta before saving.
+Bulk operations use the complete mapped navigation subtree, deduplicate names, and include collapsed descendants.
+Expanding or collapsing a group never changes a grant.
 Only changed direct grants are submitted.
 Role-inherited grants remain effective after a direct user grant is removed.
-Display the remaining provider and do not describe that result as access fully revoked.
+Explain remaining inherited providers in control tooltips and do not describe removal of direct grants as revocation of role access.
 
 Retain drafts across loading failures, background refetches, and provider changes.
 Never submit one provider's draft to another provider.
@@ -115,7 +121,7 @@ Never use a database reset or blanket reseed as an access repair.
 ## Mandatory change checklist
 
 - Catalogue, editor, route/action guards, and API enforcement agree.
-- No fixed CRUD assumptions, implicit action bundles, role-name action bypasses, development bypasses, or blanket reseeding.
+- Preserve approved frontend grouping without inventing API permission names, role-name action bypasses, development bypasses, or blanket reseeding.
 - Allowed and denied action tests, direct/inherited grant round trips, invalid-batch rollback, tenant/scope tests, and upgrade-seeding tests pass.
 - Direct application calls are covered where controllers duplicate a security boundary.
 - Revocations and membership changes take effect on subsequent requests.

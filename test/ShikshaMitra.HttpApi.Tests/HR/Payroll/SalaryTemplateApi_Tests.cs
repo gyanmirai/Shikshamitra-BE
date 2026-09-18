@@ -28,6 +28,29 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	public async Task Should_reject_circular_remainder_earning_before_saving_template()
+	{
+		var catalog = await Client.GetFromJsonAsync<SalaryTemplateComponentCatalogDto>($"{BaseUrl}/component-catalog", JsonOptions);
+		var earnings = catalog!.Items.Where(x => x.LineKind == "EARNING").Take(3).ToArray();
+		earnings.Length.ShouldBe(3);
+		var request = Save($"Circular Gross {Guid.NewGuid():N}", earnings[0].ComponentId);
+		request.Rules[0].Value = 60m;
+		request.Rules.Add(new SalaryTemplateRuleDto
+		{
+			ComponentId = earnings[1].ComponentId, LineKind = "EARNING", SemanticType = "BALANCING_EARNING",
+			FormulaType = "REMAINDER_OF_GROSS", DisplayOrder = 1
+		});
+		request.Rules.Add(new SalaryTemplateRuleDto
+		{
+			ComponentId = earnings[2].ComponentId, LineKind = "EARNING", SemanticType = "ORDINARY",
+			FormulaType = "PERCENTAGE_OF_COMPONENT", Value = 10m, BasisComponentId = earnings[1].ComponentId, DisplayOrder = 2
+		});
+		var response = await Client.PostAsJsonAsync(BaseUrl, request, JsonOptions);
+		response.IsSuccessStatusCode.ShouldBeFalse(await response.Content.ReadAsStringAsync());
+		(await response.Content.ReadAsStringAsync()).ShouldContain("HR:Payroll:SalaryTemplateDependencyCycle");
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_create_a_complete_active_salary_template()
 	{

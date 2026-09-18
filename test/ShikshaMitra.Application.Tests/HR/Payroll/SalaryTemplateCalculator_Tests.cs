@@ -1,3 +1,6 @@
+using System.Text.Json;
+using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -14,6 +17,31 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class SalaryTemplateCalculator_Tests
 {
+	[Fact]
+	public void Should_reject_an_earning_that_depends_on_the_gross_remainder()
+	{
+		var basicId = Guid.NewGuid();
+		var remainderId = Guid.NewGuid();
+		var dependentId = Guid.NewGuid();
+		var rules = new List<SalaryTemplateRule>
+		{
+			new("BASIC", basicId, SalaryTemplateLineKind.Earning, SalaryTemplateFormulaType.PercentageOfGross, PayrollComponentSemanticType.Basic, 60m, null, 0),
+			new("REMAINDER", remainderId, SalaryTemplateLineKind.Earning, SalaryTemplateFormulaType.RemainderOfGross, PayrollComponentSemanticType.BalancingEarning, null, null, 1),
+			new("DEPENDENT", dependentId, SalaryTemplateLineKind.Earning, SalaryTemplateFormulaType.PercentageOfComponent, PayrollComponentSemanticType.Ordinary, 10m, "REMAINDER", 2)
+		};
+		Should.Throw<BusinessException>(() => SalaryTemplateCalculator.ValidateDraftRules(rules))
+			.Code.ShouldBe("HR:Payroll:SalaryTemplateDependencyCycle");
+		// A deduction does not allocate gross, so it may legitimately reference the remainder.
+		rules[2] = rules[2] with { LineKind = SalaryTemplateLineKind.Deduction };
+		var result = SalaryTemplateCalculator.Calculate(SalaryInputBasis.Gross, 20000m, rules,
+			new Dictionary<Guid, SalaryTemplateComponent>
+			{
+				[basicId] = new(basicId, "Basic"), [remainderId] = new(remainderId, "Remainder"),
+				[dependentId] = new(dependentId, "Deduction")
+			}, null, []);
+		result.Deductions.Single().Amount.ShouldBe(800m);
+	}
+
 	[Fact]
 	public void Should_calculate_gross_template_and_employer_pf()
 	{
@@ -375,6 +403,48 @@ public class SalaryTemplateCalculator_Tests
 		var exception = Should.Throw<BusinessException>(() => SalaryTemplateCalculator.ValidateRules(fixture.Rules));
 
 		exception.Code.ShouldBe("HR:Payroll:SalaryTemplateFormulaLineKindMismatch");
+	}
+
+	[Theory]
+	[InlineData(SalaryInputBasis.Gross, 20000, 30, 20000, 12000, 19500)]
+	[InlineData(SalaryInputBasis.TakeHome, 19000, 15, 10000, 6000, 10000)]
+	[InlineData(SalaryInputBasis.EmployerCost, 20000, 0, 0, 0, 500)]
+	public void Should_rehydrate_gross_formulas_from_saved_compensation_and_copy_payslip_inputs(
+		SalaryInputBasis basis, decimal input, decimal days, decimal gross, decimal basic, decimal net)
+	{
+		var fixture = BuildFixture(0m, 0m, null);
+		fixture.Rules.RemoveAll(x => x.LineKind == SalaryTemplateLineKind.Deduction);
+		var deductionId = Guid.NewGuid();
+		fixture.Components[deductionId] = new(deductionId, "Gross deduction");
+		fixture.Rules.Add(new("GROSS_DEDUCTION", deductionId, SalaryTemplateLineKind.Deduction,
+			SalaryTemplateFormulaType.PercentageOfGross, PayrollComponentSemanticType.Ordinary, 5m, null, 3));
+		var quote = SalaryTemplateCalculator.Calculate(basis, input, fixture.Rules, fixture.Components, null, []);
+		quote.Gross.ShouldBe(20000m);
+		var employeeId = Guid.NewGuid();
+		var revision = new EmployeeCompensationRevision(Guid.NewGuid(), null, employeeId, 1, new DateTime(2026, 1, 1));
+		revision.ReplaceDraft(new DateTime(2026, 1, 1), basis, CompensationProtectionPolicy.ProtectGross,
+			input, quote.Gross, quote.Gross, quote.Net, quote.EmployerCost, null, null, null, null, "IN-GJ", JsonSerializer.Serialize(quote));
+		var components = quote.Earnings.Concat(quote.Deductions).Select(line =>
+		{
+			PayrollComponentSemanticTypeCodes.TryParse(line.SemanticType, out var semantic);
+			return new EmployeePayrollComponent(Guid.NewGuid(), employeeId, line.Name, line.ComponentId, null,
+				line.Amount, true, false, null, SalaryComponentType.Fixed, SalaryComponentDependency.None,
+				quote.Earnings.Contains(line), false, semantic);
+		}).ToList();
+		PayrollCompensationRevisionResolver.ApplySnapshotFormulas(revision, components);
+		components.Add(new EmployeePayrollComponent(Guid.NewGuid(), employeeId, "Bonus", Guid.NewGuid(), null,
+			500m, true, true, new DateTime(2026, 1, 1), SalaryComponentType.Fixed, SalaryComponentDependency.None, true));
+		var result = PayrollComputation.Calculate(0, 0, days, 30m, components);
+		result.FullGrossSalary.ShouldBe(20000m);
+		result.GrossSalary.ShouldBe(gross);
+		result.BasicSalary.ShouldBe(basic);
+		result.AdditionalEarnings.ShouldBe(500m);
+		result.NetPay.ShouldBe(net);
+		var basicSlipLine = PayrollComputation.ToSalarySlipLineItem(result.Earnings.Single(x => x.Source.SemanticType == PayrollComponentSemanticType.Basic));
+		var restored = JsonSerializer.Deserialize<ShikshaMitra.HR.Payroll.SalarySlips.SalarySlipLineItem>(JsonSerializer.Serialize(basicSlipLine))!;
+		restored.FullMonthAmount.ShouldBe(12000m);
+		restored.FormulaValue.ShouldBe(60m);
+		restored.Amount.ShouldBe(basic);
 	}
 
 	private static EmployeePayrollComponent BuildComponent(

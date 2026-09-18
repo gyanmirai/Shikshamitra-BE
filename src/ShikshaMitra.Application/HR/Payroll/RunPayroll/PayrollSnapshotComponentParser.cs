@@ -22,7 +22,13 @@ internal static class PayrollSnapshotComponentParser
 				x.IsFixed,
 				x.IsTemp,
 				ParseSalaryComponentType(x.ComponentType),
-				ParseSalaryComponentDependency(x.DependOn)))
+				ParseSalaryComponentDependency(x.DependOn))
+			{
+				FullMonthAmount = x.FullMonthAmount,
+				FormulaType = x.FormulaType,
+				FormulaValue = x.FormulaValue,
+				BasisComponentId = x.BasisComponentId
+			})
 			.ToList();
 	}
 

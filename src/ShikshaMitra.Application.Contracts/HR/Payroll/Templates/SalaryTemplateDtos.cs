@@ -22,6 +22,10 @@ public class SalaryTemplateRuleDto
 
 public class SalaryTemplateComponentCatalogItemDto
 {
+	public string CalculationType { get; set; } = "AMOUNT";
+	public string? CalculationBase { get; set; }
+	public decimal? DefaultValue { get; set; }
+	public Guid? BasisComponentId { get; set; }
 	public Guid ComponentId { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
@@ -111,6 +115,8 @@ public class CalculateSalaryTemplateRequestDto
 
 public class CalculatedSalaryLineDto
 {
+	public decimal? FormulaValue { get; set; }
+	public Guid? BasisComponentId { get; set; }
 	public Guid ComponentId { get; set; }
 	public string Code { get; set; } = string.Empty;
 	public string Name { get; set; } = string.Empty;

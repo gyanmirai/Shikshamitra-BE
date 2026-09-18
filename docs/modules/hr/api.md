@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-09-17
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -257,3 +257,13 @@ Do not use old generated exports as the source for response shape.
 ## Source inspection rule
 
 Inspect controllers and DTOs when this page does not include enough request or response detail.
+
+## Gross Salary calculation base
+
+Earning and deduction component create/update requests accept `calculationBase: "GROSS"` for percentage calculations, with the selected component ID omitted.
+Use `calculationBase: "COMPONENT"` with a selected component ID for ordinary component references.
+Responses return this discriminator so the editor can reopen system-based formulas without inventing a component ID.
+Salary-template calculation lines include `formulaValue` and `basisComponentId`, preserved in compensation calculation JSON and consumed during payroll.
+Run payroll returns regular `fullGrossSalary` and attendance-adjusted `grossSalary`, plus `additionalEarnings` and `totalEarnings`.
+Payslips return `fullGrossSalary`, `grossSalary`, `additionalEarnings`, and the existing `totalEarning`, deduction, and net totals.
+Gross is a summary and is never added again to its earning breakdown.

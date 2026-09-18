@@ -65,7 +65,7 @@ public class EsiFullDemoSeedCatalog_Tests
 	[Theory]
 	[InlineData(EsiFullDemoSeedCatalog.AdmissionsReceptionEmail, 18000, 12800, 96, 416)]
 	[InlineData(EsiFullDemoSeedCatalog.AdmissionsCounselorEmail, 20000, 14400, 108, 468)]
-	[InlineData(EsiFullDemoSeedCatalog.ClerkOfficeEmail, 30000, 22400, 168, 728)]
+	[InlineData(EsiFullDemoSeedCatalog.ClerkOfficeEmail, 30000, 25400, 191, 826)]
 	public void Salary_scenarios_should_reconcile_and_calculate_expected_ESI(
 		string email,
 		int grossSalary,
@@ -81,7 +81,7 @@ public class EsiFullDemoSeedCatalog_Tests
 			salaryScenario.SuppressVariablePay);
 
 		salary.GrossSalary.ShouldBe(grossSalary);
-		salary.Earnings.Values.Sum().ShouldBe(grossSalary);
+		salary.Earnings.Where(x => x.Key is not "Performance Bonus" and not "Incentive").Sum(x => x.Value).ShouldBe(grossSalary);
 		if (salaryScenario.SuppressVariablePay)
 		{
 			salary.Earnings["Performance Bonus"].ShouldBe(0m);

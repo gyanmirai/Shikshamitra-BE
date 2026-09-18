@@ -10,6 +10,8 @@ namespace ShikshaMitra.HR.Employees.Payroll;
 /// </summary>
 public class EmployeePayrollComponent : Entity<Guid>
 {
+	[System.ComponentModel.DataAnnotations.Schema.NotMapped]
+	public ShikshaMitra.HR.Payroll.Services.PayrollComponentFormula? Formula { get; set; }
 	public Guid EmployeeId { get; set; }
 
 	/// <summary>

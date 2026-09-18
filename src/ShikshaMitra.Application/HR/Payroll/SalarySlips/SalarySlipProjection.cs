@@ -34,6 +34,10 @@ internal static class SalarySlipProjection
 			SlipNumber = BuildSlipNumber(employee.EmployeeCode, salarySlip.MonthYear),
 			MonthYear = salarySlip.MonthYear,
 			TotalEarning = salarySlip.TotalEarning,
+			FullGrossSalary = salarySlip.Earnings.Where(x => !x.IsTemp).All(x => x.FullMonthAmount.HasValue)
+				? salarySlip.Earnings.Where(x => !x.IsTemp).Sum(x => x.FullMonthAmount) : snapshot?.FullGrossSalary,
+			GrossSalary = salarySlip.Earnings.Where(x => !x.IsTemp).Sum(x => x.Amount),
+			AdditionalEarnings = salarySlip.Earnings.Where(x => x.IsTemp).Sum(x => x.Amount),
 			TotalDeduction = salarySlip.TotalDeduction,
 			NetSalary = salarySlip.NetSalary,
 			Status = salarySlip.Status,
@@ -117,7 +121,12 @@ internal static class SalarySlipProjection
 			TotalDeductions: dto.TotalDeduction,
 			NetPay: dto.NetSalary,
 			NetPayInWords: dto.NetPayInWords ?? IndianCurrencyWords.Format(dto.NetSalary),
-			Remarks: dto.Remarks);
+			Remarks: dto.Remarks)
+		{
+			FullGrossSalary = dto.FullGrossSalary,
+			GrossSalary = dto.GrossSalary,
+			AdditionalEarnings = dto.AdditionalEarnings
+		};
 	}
 
 	private static SalarySlipLineItemDto ToLineItemDto(SalarySlipLineItem lineItem)

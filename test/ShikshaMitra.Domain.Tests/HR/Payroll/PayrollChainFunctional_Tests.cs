@@ -49,8 +49,9 @@ public class PayrollChainFunctional_Tests
 		result.PayableDays.ShouldBe(22m);
 		result.ProrationFactor.ShouldBe(1m);
 		result.BasicSalary.ShouldBe(30000m);
-		result.FullGrossSalary.ShouldBe(52000m);
-		result.GrossSalary.ShouldBe(52000m);
+		result.FullGrossSalary.ShouldBe(51500m);
+		result.GrossSalary.ShouldBe(51500m);
+		result.TotalEarnings.ShouldBe(52000m);
 		result.TotalDeduction.ShouldBe(2600m);
 		result.NetPay.ShouldBe(49400m);
 	}
@@ -68,7 +69,8 @@ public class PayrollChainFunctional_Tests
 		result.PayableDays.ShouldBe(21m);
 		result.ProrationFactor.ShouldBe(21m / 22m);
 		result.BasicSalary.ShouldBe(28636.36m);
-		result.GrossSalary.ShouldBe(49659.09m);
+		result.GrossSalary.ShouldBe(49159.09m);
+		result.TotalEarnings.ShouldBe(49659.09m);
 		result.TotalDeduction.ShouldBe(2509.09m);
 		result.NetPay.ShouldBe(47150.00m);
 		result.Earnings.ShouldContain(x => x.Source.Name == "One Time Bonus" && x.Amount == 500m);

@@ -137,6 +137,14 @@ internal static class SalaryTemplateCalculator
 				throw new BusinessException("HR:Payroll:SalaryTemplateInvalidBasis").WithData("code", rule.Code);
 			}
 
+			// Remainder already depends on every other earning, so this edge closes a cycle.
+			if (rule.LineKind == SalaryTemplateLineKind.Earning &&
+				rule.FormulaType == SalaryTemplateFormulaType.PercentageOfComponent &&
+				rulesByCode[rule.BasisCode!.Trim()].FormulaType == SalaryTemplateFormulaType.RemainderOfGross)
+			{
+				throw new BusinessException("HR:Payroll:SalaryTemplateDependencyCycle").WithData("code", rule.Code);
+			}
+
 			if (rule.FormulaType == SalaryTemplateFormulaType.PercentageOfComponent &&
 			    rulesByCode[rule.BasisCode!.Trim()].DisplayOrder >= rule.DisplayOrder)
 			{
@@ -477,6 +485,13 @@ internal static class SalaryTemplateCalculator
 			}
 		}
 
+		foreach (var line in earnings.Concat(deductions))
+		{
+			var sourceRule = rules.FirstOrDefault(x => x.ComponentId == line.ComponentId);
+			if (sourceRule?.BasisCode != null)
+				line.BasisComponentId = rules.First(x => x.Code.Equals(sourceRule.BasisCode, StringComparison.OrdinalIgnoreCase)).ComponentId;
+		}
+
 		var totalDeductions = Round(deductions.Sum(x => x.Amount));
 		var displayOrderByCode = rules.ToDictionary(x => x.Code, x => x.DisplayOrder, StringComparer.OrdinalIgnoreCase);
 		return new SalaryTemplateEvaluation(
@@ -624,6 +639,7 @@ internal static class SalaryTemplateCalculator
 		Amount = amount,
 		SemanticType = ToContractEnum(rule.SemanticType.ToString()),
 		FormulaType = ToContractEnum(rule.FormulaType.ToString()),
+		FormulaValue = rule.Value,
 		IsStatutory = false
 	};
 

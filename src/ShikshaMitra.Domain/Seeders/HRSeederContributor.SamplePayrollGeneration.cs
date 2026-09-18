@@ -95,6 +95,7 @@ public partial class HRSeederContributor
 		{
 			var amount = seededSalary.GetEarningAmount(master.Name);
 			var isFixed = master.CalculationType == CalculationType.Amount;
+			var isAdditional = IsAdditionalSeedEarning(master.Name);
 			var existing = FindExistingSeedPayrollComponent(
 				existingComponentsById,
 				existingComponentsByName,
@@ -113,12 +114,13 @@ public partial class HRSeederContributor
 				if (forceRepairSeededDemoPayroll || existing.UsesMasterValue || existing.Amount == master.Amount)
 				{
 					existing.ComponentId = master.Id;
+					existing.ApplicableMonth = isAdditional ? new DateTime(_clock.Now.Year, _clock.Now.Month, 1) : null;
 					existing.UpdateComponent(
 						master.Name,
 						master.Description,
 						amount,
 						isFixed,
-						isTemp: false,
+						isTemp: isAdditional,
 						master.CalculationType == CalculationType.Amount
 							? SalaryComponentType.Fixed
 							: SalaryComponentType.Percentage,
@@ -154,8 +156,8 @@ public partial class HRSeederContributor
 				master.Description,
 				amount,
 				isFixed,
-				isTemp: false,
-				applicableMonth: null,
+				isTemp: isAdditional,
+				applicableMonth: isAdditional ? new DateTime(_clock.Now.Year, _clock.Now.Month, 1) : null,
 				master.CalculationType == CalculationType.Amount
 					? SalaryComponentType.Fixed
 					: SalaryComponentType.Percentage,
@@ -284,6 +286,16 @@ public partial class HRSeederContributor
 			new DateTime(2022, 4, 1, 0, 0, 0, DateTimeKind.Utc));
 		var snapshot = JsonSerializer.Serialize(new
 		{
+			Gross = seededSalary.GrossSalary,
+			Earnings = earningMasters.Where(x => !IsAdditionalSeedEarning(x.Name) && seededSalary.GetEarningAmount(x.Name) > 0m).Select(x => new
+			{
+				ComponentId = x.Id,
+				x.Name,
+				Amount = seededSalary.GetEarningAmount(x.Name),
+				FormulaType = "FIXED_AMOUNT",
+				FormulaValue = seededSalary.GetEarningAmount(x.Name),
+				SemanticType = PayrollComponentSemanticTypeCodes.ToCode(ResolveSeededSemanticType(x.Name))
+			}),
 			Deductions = new object[]
 			{
 				new
@@ -324,7 +336,7 @@ public partial class HRSeederContributor
 		await _compensationRevisionRepository.InsertAsync(revision, autoSave: false);
 
 		var lines = new List<EmployeeCompensationRevisionLine>();
-		foreach (var master in earningMasters)
+		foreach (var master in earningMasters.Where(x => !IsAdditionalSeedEarning(x.Name)))
 		{
 			var amount = seededSalary.GetEarningAmount(master.Name);
 			if (amount <= 0m)
@@ -355,6 +367,8 @@ public partial class HRSeederContributor
 		await _compensationRevisionLineRepository.InsertManyAsync(lines, autoSave: false);
 		return true;
 	}
+
+	private static bool IsAdditionalSeedEarning(string name) => name is "Performance Bonus" or "Incentive";
 
 	private static PayrollComponentSemanticType ResolveSeededSemanticType(string componentName) =>
 		componentName switch

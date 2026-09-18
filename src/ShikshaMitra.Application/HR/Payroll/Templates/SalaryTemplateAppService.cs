@@ -76,14 +76,22 @@ public class SalaryTemplateAppService(
 					ComponentId = x.Id,
 					Name = x.Name,
 					Description = x.Description,
-					LineKind = "EARNING"
+					LineKind = "EARNING",
+					CalculationType = x.CalculationType.ToString().ToUpperInvariant(),
+					CalculationBase = x.DependOn == ComponentDependency.Gross ? "GROSS" : "COMPONENT",
+					DefaultValue = x.CalculationType == CalculationType.Percentage ? x.Percentage : x.Amount,
+					BasisComponentId = x.SelectedEarningComponentId
 				})
 				.Concat(deductions.Select(x => new SalaryTemplateComponentCatalogItemDto
 				{
 					ComponentId = x.Id,
 					Name = x.Name,
 					Description = x.Description,
-					LineKind = "DEDUCTION"
+					LineKind = "DEDUCTION",
+					CalculationType = x.CalculationType.ToString().ToUpperInvariant(),
+					CalculationBase = x.DependOn == ComponentDependency.Gross ? "GROSS" : "COMPONENT",
+					DefaultValue = x.CalculationType == CalculationType.Percentage ? x.Percentage : x.Amount,
+					BasisComponentId = x.SelectedDeductionComponentId
 				}))
 				.ToList()
 		};

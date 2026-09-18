@@ -71,6 +71,7 @@ public class PayrollCompensationRevisionResolver(
 					usesMasterValue: false,
 					x.SemanticType))
 				.ToList();
+			ApplySnapshotFormulas(revision, components);
 			components.AddRange(existingComponentsByEmployee[employeeId]
 				.Where(x => x.IsTemp && PayrollComponentMonthScope.AppliesToMonth(x, year, month)));
 			AddStatutorySourceComponents(revision, components);
@@ -78,6 +79,30 @@ public class PayrollCompensationRevisionResolver(
 		}
 
 		return result;
+	}
+
+	internal static void ApplySnapshotFormulas(EmployeeCompensationRevision revision, List<EmployeePayrollComponent> components)
+	{
+		if (components.Where(x => x.IsEarning).Sum(x => x.Amount) != revision.GrossSalary)
+			throw new BusinessException(HRErrorCodes.SalaryTemplateAllocationMismatch).WithData("revisionId", revision.Id);
+		SalaryTemplateCalculationDto snapshot;
+		try
+		{
+			snapshot = JsonSerializer.Deserialize<SalaryTemplateCalculationDto>(revision.CalculationSnapshotJson)
+				?? throw new JsonException("Compensation snapshot is empty.");
+		}
+		catch (JsonException ex)
+		{
+			throw new BusinessException("HR:Payroll:CompensationRevisionSnapshotInvalid", innerException: ex);
+		}
+		var lines = snapshot.Earnings.Concat(snapshot.Deductions).ToDictionary(x => x.ComponentId);
+		foreach (var component in components)
+		{
+			if (!component.ComponentId.HasValue || !lines.TryGetValue(component.ComponentId.Value, out var line) || line.IsStatutory) continue;
+			if (!Enum.TryParse<SalaryTemplateFormulaType>(line.FormulaType.Replace("_", string.Empty), true, out var type))
+				throw new BusinessException("HR:Payroll:CompensationRevisionSnapshotInvalid");
+			component.Formula = new PayrollComponentFormula(type, line.FormulaValue, line.BasisComponentId);
+		}
 	}
 
 	private static void AddStatutorySourceComponents(

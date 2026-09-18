@@ -17,7 +17,7 @@ public static class PayrollSnapshotTotalGuard
 		var totalEarnings = Math.Round(earnings.Sum(x => x.Amount), 2, MidpointRounding.AwayFromZero);
 		var totalDeductions = Math.Round(deductions.Sum(x => x.Amount), 2, MidpointRounding.AwayFromZero);
 		var netPay = Math.Round(totalEarnings - totalDeductions, 2, MidpointRounding.AwayFromZero);
-		if (totalEarnings != Math.Round(snapshot.GrossSalary, 2, MidpointRounding.AwayFromZero) ||
+		if (Math.Round(earnings.Where(x => !x.IsTemp).Sum(x => x.Amount), 2, MidpointRounding.AwayFromZero) != Math.Round(snapshot.GrossSalary, 2, MidpointRounding.AwayFromZero) ||
 		    totalDeductions != Math.Round(snapshot.TotalDeduction, 2, MidpointRounding.AwayFromZero) ||
 		    netPay != Math.Round(snapshot.NetPay, 2, MidpointRounding.AwayFromZero))
 		{

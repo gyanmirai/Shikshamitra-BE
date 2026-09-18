@@ -19,6 +19,7 @@ public class DeductionComponentResponseDto
 	public string? Description { get; set; }
 	public string DeductionType { get; set; } = string.Empty;
 	public string CalculationType { get; set; } = string.Empty;
+	public string? CalculationBase { get; set; }
 	public decimal? Amount { get; set; }
 	public decimal? Percentage { get; set; }
 	public Guid? SelectedDeductionComponentId { get; set; }

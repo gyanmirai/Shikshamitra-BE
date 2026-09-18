@@ -96,6 +96,7 @@ internal static class PayslipPdfSections
 		container.Border(1).BorderColor(Border).Padding(10).Column(column =>
 		{
 			column.Item().Text("Pay Basis").Bold().FontColor(Ink);
+			column.Item().PaddingTop(4).Text($"Full-month gross: {(model.FullGrossSalary.HasValue ? FormatCurrency(model.FullGrossSalary.Value) : "-")} | Gross Salary: {FormatCurrency(model.GrossSalary)} | Additional earnings: {FormatCurrency(model.AdditionalEarnings)}").FontSize(8);
 			column.Item().PaddingTop(2).Text("Attendance and proration values").FontSize(8).FontColor(Muted);
 			column.Item().PaddingTop(7).Row(row =>
 			{

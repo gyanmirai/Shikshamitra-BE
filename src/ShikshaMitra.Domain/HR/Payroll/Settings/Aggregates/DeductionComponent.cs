@@ -53,7 +53,7 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 		Description = description;
 		ComponentType = componentType;
-		SetCalculationFields(componentType, calculationType, amount, percentage, selectedDeductionComponentId);
+		SetCalculationFields(componentType, calculationType, amount, percentage, selectedDeductionComponentId, dependOn);
 		DependOn = dependOn;
 		VisibleInPayslip = visibleInPayslip;
 		DisplayOrder = displayOrder;
@@ -75,7 +75,7 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 		Description = description;
 		ComponentType = componentType;
-		SetCalculationFields(componentType, calculationType, amount, percentage, selectedDeductionComponentId);
+		SetCalculationFields(componentType, calculationType, amount, percentage, selectedDeductionComponentId, dependOn);
 		DependOn = dependOn;
 		VisibleInPayslip = visibleInPayslip;
 		DisplayOrder = displayOrder;
@@ -98,7 +98,8 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		CalculationType calculationType,
 		decimal? amount,
 		decimal? percentage,
-		Guid? selectedDeductionComponentId)
+		Guid? selectedDeductionComponentId,
+		ComponentDependency dependOn)
 	{
 		CalculationType = calculationType;
 
@@ -128,10 +129,16 @@ public class DeductionComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 					.WithData("message", "Percentage must be between 0 and 100.");
 			}
 
-			if (!selectedDeductionComponentId.HasValue)
+			if (dependOn != ComponentDependency.Gross && !selectedDeductionComponentId.HasValue)
 			{
 				throw new BusinessException(HRErrorCodes.PayrollComponentMissingSelectedComponent)
 					.WithData("message", "selectedDeductionComponentId is required when calculationType is PERCENTAGE.");
+			}
+
+			if (dependOn == ComponentDependency.Gross && selectedDeductionComponentId.HasValue)
+			{
+				throw new BusinessException(HRErrorCodes.PayrollComponentMissingSelectedComponent)
+					.WithData("message", "Gross Salary cannot reference a component.");
 			}
 
 			Percentage = percentage.Value;

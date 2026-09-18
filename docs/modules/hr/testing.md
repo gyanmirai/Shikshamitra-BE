@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-09-17
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -143,3 +143,13 @@ Check these gaps before claiming full coverage:
 | HR events and holidays share Calendar ownership | A route can exist without active HR menu navigation |
 | TDS and professional tax are partial surfaces | Pages or domain objects can exist without shipped backend API behavior |
 | Shift management permission mapping needs confirmation | Frontend constants and backend constants may not have one-to-one names |
+
+## Built-in Gross Salary regression checks
+
+Run `BuiltInGrossSalary_Tests`, `SalaryTemplateCalculator_Tests`, and `GrossSalaryComponentApi_Tests`.
+Cover full, half, zero, fractional, and varying salary-basis days; fixed and variable percentage masters; all compensation bases; explicit remainder; invalid references; dependency cycles; and incomplete allocation.
+Verify serialized compensation formulas are restored for payroll and copied into payslip line snapshots.
+Run `SalarySlipGrossSnapshot_Tests` to verify drafts refresh when full-month amounts or formula inputs change without changing paid amounts.
+Cover rounding residue with a zero remainder after proration, and reject earnings that depend on that remainder while allowing deduction references.
+Verify a separate bonus leaves regular gross and gross-based Basic unchanged while increasing total earnings and net pay.
+In the authenticated browser, create and reopen a Gross-based component, inherit its formula in a template, generate a salary structure, and inspect payroll and payslip summaries.

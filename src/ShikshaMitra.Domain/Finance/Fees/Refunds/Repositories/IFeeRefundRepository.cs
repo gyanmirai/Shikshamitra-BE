@@ -33,6 +33,19 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
     /// <summary>Loads a single request with its <see cref="FeeRefundRequest.Lines"/> collection.</summary>
     Task<FeeRefundRequest?> FindWithLinesAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<Dictionary<Guid, decimal>> GetActiveReservedAmountsAsync(
+        IReadOnlyCollection<Guid> dueFeeIds,
+        Guid? excludingRequestId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<Dictionary<Guid, decimal>> GetCommittedAllocationAmountsAsync(
+        IReadOnlyCollection<Guid> allocationIds,
+        Guid? excludingRequestId = null,
+        CancellationToken cancellationToken = default);
+
+    Task<decimal> GetStudentYearCommittedAmountAsync(Guid studentId, Guid academicYearId,
+        Guid? excludingRequestId = null, CancellationToken cancellationToken = default);
+
     /// <summary>Total count of all refund requests (used for voucher number generation).</summary>
     new Task<long> GetCountAsync(CancellationToken cancellationToken = default);
 }

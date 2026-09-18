@@ -127,6 +127,7 @@ public static class ReconciliationTestHelper
 
         return new CollectFeeInput
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = studentId,
             AcademicYearId = academicYearId,
             Notes = "Reconciliation test payment",

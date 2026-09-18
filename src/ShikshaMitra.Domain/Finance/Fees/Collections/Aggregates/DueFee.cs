@@ -253,6 +253,20 @@ public DueFee(
 		RecalculateBalancesAndStatus();
 	}
 
+	public void ReverseRefund(decimal amount)
+	{
+		if (amount <= 0m)
+			throw new BusinessException(DueFeeErrorCodes.ReverseAmountMustBePositive)
+				.WithData("Amount", amount);
+		if (amount > RefundedAmount)
+			throw new BusinessException(DueFeeErrorCodes.ReverseExceedsPaidAmount)
+				.WithData("Requested", amount)
+				.WithData("Available", RefundedAmount);
+
+		RefundedAmount -= amount;
+		RecalculateBalancesAndStatus();
+	}
+
 	public decimal RefundableBalance => Math.Max(0m, PaidAmount - RefundedAmount);
 
 	public decimal AdjustableBalance => Math.Max(0m, OutstandingAmount);

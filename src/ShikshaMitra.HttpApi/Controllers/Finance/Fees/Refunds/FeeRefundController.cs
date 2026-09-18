@@ -37,6 +37,11 @@ public class FeeRefundController(
         [FromQuery] Guid academicYearId)
         => feeRefundAppService.GetEligibilityAsync(studentId, academicYearId);
 
+    [HttpPost("preview")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
+    public Task<FeeRefundPreviewDto> PreviewAsync([FromBody] CreateFeeRefundRequestDto input)
+        => feeRefundAppService.PreviewAsync(input);
+
     [HttpPost]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
     [ProducesResponseType(typeof(FeeRefundRequestDto), StatusCodes.Status201Created)]
@@ -47,7 +52,7 @@ public class FeeRefundController(
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Edit)]
     [ProducesResponseType(typeof(FeeRefundRequestDto), StatusCodes.Status200OK)]
     public Task<FeeRefundRequestDto> UpdateAsync(
         [FromRoute] Guid id,
@@ -64,10 +69,38 @@ public class FeeRefundController(
     }
 
     [HttpPatch("{id:guid}/status")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     [ProducesResponseType(typeof(FeeRefundRequestDto), StatusCodes.Status200OK)]
     public Task<FeeRefundRequestDto> UpdateStatusAsync(
         [FromRoute] Guid id,
         [FromBody] UpdateFeeRefundStatusDto input)
         => feeRefundAppService.UpdateStatusAsync(id, input);
+
+    [HttpPost("{id:guid}/submit")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Submit)]
+    public Task<FeeRefundRequestDto> SubmitAsync(Guid id) => feeRefundAppService.SubmitAsync(id);
+
+    [HttpPost("{id:guid}/start-review")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.StartReview)]
+    public Task<FeeRefundRequestDto> StartReviewAsync(Guid id) => feeRefundAppService.StartReviewAsync(id);
+
+    [HttpPost("{id:guid}/approve")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)]
+    public Task<FeeRefundRequestDto> ApproveAsync(Guid id, [FromBody] FeeRefundActionDto input) => feeRefundAppService.ApproveAsync(id, input);
+
+    [HttpPost("{id:guid}/reject")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject)]
+    public Task<FeeRefundRequestDto> RejectAsync(Guid id, [FromBody] RejectFeeRefundDto input) => feeRefundAppService.RejectAsync(id, input);
+
+    [HttpPost("{id:guid}/cancel")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Cancel)]
+    public Task<FeeRefundRequestDto> CancelAsync(Guid id, [FromBody] FeeRefundActionDto input) => feeRefundAppService.CancelAsync(id, input);
+
+    [HttpPost("{id:guid}/process")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
+    public Task<FeeRefundRequestDto> ProcessAsync(Guid id, [FromBody] ProcessFeeRefundDto input) => feeRefundAppService.ProcessAsync(id, input);
+
+    [HttpPost("{id:guid}/reverse")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reverse)]
+    public Task<FeeRefundRequestDto> ReverseAsync(Guid id, [FromBody] ReverseFeeRefundDto input) => feeRefundAppService.ReverseAsync(id, input);
 }

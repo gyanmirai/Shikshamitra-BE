@@ -357,6 +357,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     {
         return new CollectFeeInput
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId           = studentId,
             AcademicYearId      = academicYearId,
             PaymentConfirmed = bankReceiptConfirmed,

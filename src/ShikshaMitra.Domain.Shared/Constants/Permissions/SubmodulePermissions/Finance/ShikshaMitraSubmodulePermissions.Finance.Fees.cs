@@ -54,19 +54,43 @@ public static partial class ShikshaMitraSubmodulePermissions
 			private const string SubmoduleName = $"{ModuleName}.Fees.Refund";
 			private const string SubmoduleDisplayName = $"{DisplayName}.Fees.Refund";
 
-			public const string View    = $"{SubmoduleName}.View";
-			public const string Add     = $"{SubmoduleName}.Add";
-			public const string Delete  = $"{SubmoduleName}.Delete";
+			public const string View = $"{SubmoduleName}.View";
+			public const string Add = $"{SubmoduleName}.Add";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string Submit = $"{SubmoduleName}.Submit";
+			public const string StartReview = $"{SubmoduleName}.StartReview";
+			public const string Delete = $"{SubmoduleName}.Delete";
+			public const string Cancel = $"{SubmoduleName}.Cancel";
 			public const string Approve = $"{SubmoduleName}.Approve";
+			public const string Reject = $"{SubmoduleName}.Reject";
+			public const string Process = $"{SubmoduleName}.Process";
+			public const string RetryProcessing = $"{SubmoduleName}.RetryProcessing";
+			public const string Reverse = $"{SubmoduleName}.Reverse";
+			public const string OverrideMakerChecker = $"{SubmoduleName}.OverrideMakerChecker";
+			public const string ViewSensitivePaymentDetails = $"{SubmoduleName}.ViewSensitivePaymentDetails";
 
-			public static readonly string[] All = { View, Add, Delete, Approve };
+			public static readonly string[] All =
+			{
+				View, Add, Edit, Submit, StartReview, Delete, Cancel, Approve, Reject,
+				Process, RetryProcessing, Reverse, OverrideMakerChecker, ViewSensitivePaymentDetails
+			};
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
-				{ View,    $"{SubmoduleDisplayName}.View" },
-				{ Add,     $"{SubmoduleDisplayName}.Add" },
-				{ Delete,  $"{SubmoduleDisplayName}.Delete" },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ Submit, $"{SubmoduleDisplayName}.Submit" },
+				{ StartReview, $"{SubmoduleDisplayName}.StartReview" },
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ Cancel, $"{SubmoduleDisplayName}.Cancel" },
 				{ Approve, $"{SubmoduleDisplayName}.Approve" },
+				{ Reject, $"{SubmoduleDisplayName}.Reject" },
+				{ Process, $"{SubmoduleDisplayName}.Process" },
+				{ RetryProcessing, $"{SubmoduleDisplayName}.RetryProcessing" },
+				{ Reverse, $"{SubmoduleDisplayName}.Reverse" },
+				{ OverrideMakerChecker, $"{SubmoduleDisplayName}.OverrideMakerChecker" },
+				{ ViewSensitivePaymentDetails, $"{SubmoduleDisplayName}.ViewSensitivePaymentDetails" },
 			};
 		}
 

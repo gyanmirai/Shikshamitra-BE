@@ -1,8 +1,10 @@
 using ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Students;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund;
@@ -20,6 +22,8 @@ public partial class FeeRefundAppService
 	private static FeeRefundRequestDto MapToDto(FeeRefundRequest r, Dictionary<Guid, Student> studentMap)
 	{
 		studentMap.TryGetValue(r.StudentId, out var student);
+		var isLegacy = !r.RefundPolicyVersionId.HasValue;
+		var legacyFinancialAmount = isLegacy && r.Status == FeeRefundStatus.Approved ? r.TotalAmount : 0m;
 		var fullName = student is null ? string.Empty
 			: string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
 				.Where(p => !string.IsNullOrWhiteSpace(p)));
@@ -28,11 +32,31 @@ public partial class FeeRefundAppService
 		{
 			Id = r.Id, StudentId = r.StudentId, AcademicYearId = r.AcademicYearId,
 			Status = r.Status, VoucherNumber = r.VoucherNumber, TotalAmount = r.TotalAmount,
-			RefundMethod = r.RefundMethod, PaymentDetails = MapRefundPaymentDetailsToDict(r.RefundPaymentDetails),
+			CalculatedAmount = isLegacy ? r.TotalAmount : r.CalculatedAmount,
+			StudentFeeStructureId = r.StudentFeeStructureId, RefundPolicyId = r.RefundPolicyId,
+			RefundPolicyVersionId = r.RefundPolicyVersionId, RefundPolicyName = GetPolicyName(r.PolicySnapshotJson),
+			OriginalReceiptId = r.OriginalReceiptId,
+			OriginalReceiptNumber = r.OriginalReceiptNumber, Currency = string.IsNullOrWhiteSpace(r.Currency) ? "INR" : r.Currency,
+			ApprovedAmount = isLegacy ? legacyFinancialAmount : r.ApprovedAmount,
+			ProcessedAmount = isLegacy ? legacyFinancialAmount : r.ProcessedAmount, ReversedAmount = r.ReversedAmount,
+			RefundMethod = r.RefundMethod, PaymentDetails = MaskPaymentDetails(MapRefundPaymentDetailsToDict(r.RefundPaymentDetails)),
 			Reason = r.Reason, ApproverNotes = r.ApproverNotes,
 			ProcessedByUserId = r.ProcessedByUserId, ProcessedAt = r.ProcessedAt,
-			CreationTime = r.CreationTime,
-			Lines = r.Lines.Select(l => new FeeRefundLineDto { Id = l.Id, DueFeeId = l.DueFeeId, Amount = l.Amount }).ToList(),
+			CreationTime = r.CreationTime, SubmittedAt = r.SubmittedAt, ReviewStartedAt = r.ReviewStartedAt,
+			ReversedAt = r.ReversedAt, FailureReason = r.FailureReason, ReversalReason = r.ReversalReason,
+			AvailableActions = isLegacy ? [] : GetAvailableActions(r.Status),
+			Lines = r.Lines.Select(l => new FeeRefundLineDto { Id = l.Id, DueFeeId = l.DueFeeId,
+				SourceAllocationId = l.SourceAllocationId, SourceReceiptId = l.SourceReceiptId,
+				FeeHeadId = l.FeeHeadId, FeeHeadName = l.FeeHeadName, InstallmentLabel = l.InstallmentLabel,
+				SettledPaidAmount = l.SettledPaidAmount, Amount = l.Amount,
+				CalculatedAmount = isLegacy ? l.Amount : l.CalculatedAmount,
+				ApprovedAmount = isLegacy && r.Status == FeeRefundStatus.Approved ? l.Amount : l.ApprovedAmount,
+				ProcessedAmount = isLegacy && r.Status == FeeRefundStatus.Approved ? l.Amount : l.ProcessedAmount,
+				ReversedAmount = l.ReversedAmount }).ToList(),
+			Settlements = r.Settlements.OrderBy(x => x.AttemptNumber).Select(x => new FeeRefundSettlementDto
+			{ Id = x.Id, AttemptNumber = x.AttemptNumber, Status = x.Status, Method = x.Method,
+				Amount = x.Amount, SettlementDate = x.SettlementDate, ExternalReference = x.ExternalReference,
+				FailureReason = x.FailureReason }).ToList(),
 			StudentName = fullName, StudentGrNo = student?.GrNo, StudentRollNo = student?.RollNo,
 			StandardId = student?.StandardId, DivisionId = student?.DivisionId,
 			StandardName = student?.Standard?.Name, DivisionName = student?.Division?.Name,
@@ -41,6 +65,35 @@ public partial class FeeRefundAppService
 			EducationMediumId = student?.AcademicMediumId, EducationMediumName = student?.AcademicMedium?.Name,
 		};
 	}
+
+	private static string? GetPolicyName(string? snapshotJson)
+	{
+		if (string.IsNullOrWhiteSpace(snapshotJson)) return null;
+		try { return JsonSerializer.Deserialize<RefundPolicySnapshot>(snapshotJson)?.PolicyName; }
+		catch (JsonException) { return null; }
+	}
+
+	private static List<string> GetAvailableActions(FeeRefundStatus status) => status switch
+	{
+		FeeRefundStatus.Draft => ["edit", "delete", "submit", "cancel"],
+		FeeRefundStatus.Submitted => ["startReview", "approve", "reject", "cancel"],
+		FeeRefundStatus.UnderReview => ["approve", "reject", "cancel"],
+		FeeRefundStatus.Approved => ["process", "cancel"],
+		FeeRefundStatus.Failed => ["retryProcessing", "cancel"],
+		FeeRefundStatus.Processed => ["reverse"],
+		_ => []
+	};
+
+	private static Dictionary<string, object?>? MaskPaymentDetails(Dictionary<string, object?>? source)
+	{
+		if (source == null) return null;
+		var sensitive = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+		{ "beneficiaryAccountNumber", "upiId", "chequeNumber", "ddNumber" };
+		return source.ToDictionary(x => x.Key, x => sensitive.Contains(x.Key) && x.Value is not null
+			? Mask(x.Value.ToString()!) : x.Value);
+	}
+
+	private static string Mask(string value) => value.Length <= 4 ? "****" : new string('*', value.Length - 4) + value[^4..];
 
 	private static Dictionary<string, object?>? MapRefundPaymentDetailsToDict(RefundPaymentDetails? details) =>
 		details switch
@@ -108,7 +161,7 @@ public partial class FeeRefundAppService
 					{
 						InstallmentId = df.Id, Month = df.Month.ToString(),
 						Total = (double)df.OriginalAmount, Paid = (double)df.PaidAmount,
-						RefundAmount = lineMap.TryGetValue(df.Id, out var amt) ? amt : 0,
+						RefundAmount = lineMap.TryGetValue(df.Id, out var amt) ? Convert.ToDouble(amt) : 0,
 						Status = (int)df.Status
 					}).ToList();
 				return new RefundFeeHeadDto
@@ -127,6 +180,4 @@ public partial class FeeRefundAppService
 		dto.TotalRefundedAmount = grouped.Sum(fh => fh.TotalRefunded);
 	}
 
-	private bool IsPrivilegedUser() =>
-		CurrentUser.IsInRole("admin") || CurrentUser.IsInRole("Finance Officer");
 }

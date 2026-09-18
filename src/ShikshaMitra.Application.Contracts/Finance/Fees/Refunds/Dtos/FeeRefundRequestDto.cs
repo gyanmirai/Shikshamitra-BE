@@ -15,10 +15,21 @@ public class FeeRefundRequestDto
 	public Guid? DivisionId { get; set; }
 
 	public FeeRefundStatus Status { get; set; }
+	public Guid? StudentFeeStructureId { get; set; }
+	public Guid? RefundPolicyId { get; set; }
+	public Guid? RefundPolicyVersionId { get; set; }
+	public string? RefundPolicyName { get; set; }
+	public Guid? OriginalReceiptId { get; set; }
+	public string? OriginalReceiptNumber { get; set; }
+	public string Currency { get; set; } = "INR";
 
     public string VoucherNumber { get; set; } = default!;
 
-    public double TotalAmount { get; set; }
+    public decimal TotalAmount { get; set; }
+    public decimal CalculatedAmount { get; set; }
+    public decimal ApprovedAmount { get; set; }
+    public decimal ProcessedAmount { get; set; }
+    public decimal ReversedAmount { get; set; }
 
     public string? RefundMethod { get; set; }
 
@@ -38,6 +49,13 @@ public class FeeRefundRequestDto
     public DateTimeOffset? ProcessedAt { get; set; }
 
     public DateTimeOffset CreationTime { get; set; }
+	public DateTimeOffset? SubmittedAt { get; set; }
+	public DateTimeOffset? ReviewStartedAt { get; set; }
+	public DateTimeOffset? ReversedAt { get; set; }
+	public string? FailureReason { get; set; }
+	public string? ReversalReason { get; set; }
+	public List<string> AvailableActions { get; set; } = [];
+	public List<FeeRefundSettlementDto> Settlements { get; set; } = [];
 
     public List<FeeRefundLineDto> Lines { get; set; } = [];
 
@@ -89,7 +107,29 @@ public class FeeRefundLineDto
 
     public Guid DueFeeId { get; set; }
 
-    public double Amount { get; set; }
+    public Guid? SourceAllocationId { get; set; }
+    public Guid? SourceReceiptId { get; set; }
+    public Guid FeeHeadId { get; set; }
+    public string FeeHeadName { get; set; } = string.Empty;
+    public string InstallmentLabel { get; set; } = string.Empty;
+    public decimal SettledPaidAmount { get; set; }
+    public decimal Amount { get; set; }
+    public decimal CalculatedAmount { get; set; }
+    public decimal ApprovedAmount { get; set; }
+    public decimal ProcessedAmount { get; set; }
+    public decimal ReversedAmount { get; set; }
+}
+
+public class FeeRefundSettlementDto
+{
+    public Guid Id { get; set; }
+    public int AttemptNumber { get; set; }
+    public FeeRefundSettlementStatus Status { get; set; }
+    public string Method { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public DateTimeOffset SettlementDate { get; set; }
+    public string? ExternalReference { get; set; }
+    public string? FailureReason { get; set; }
 }
 
 public class RefundFeeHeadDto

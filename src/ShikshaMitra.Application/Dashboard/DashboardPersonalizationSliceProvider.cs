@@ -23,6 +23,7 @@ using static ShikshaMitra.Dashboard.DashboardTemplates;
 using static ShikshaMitra.Dashboard.DashboardWidgetCatalog;
 using static ShikshaMitra.Dashboard.DashboardZones;
 using ClassTeacherAssignment = ShikshaMitra.Academic.ClassTeacher.ClassTeacher;
+using ClassTeacherAssignmentStatus = ShikshaMitra.Academic.ClassTeacher.ClassTeacherAssignmentStatus;
 using DocumentTypeEntity = ShikshaMitra.Students.StudentEnrollments.Settings.DocumentType;
 
 namespace ShikshaMitra.Dashboard;
@@ -204,7 +205,9 @@ public class DashboardPersonalizationSliceProvider(
 		var query = await classTeacherRepository.GetQueryableAsync();
 		var scopedQuery = await userScopeAccessService.ApplyCurrentUserScopeAsync(query);
 		var assignments = await asyncExecuter.ToListAsync(scopedQuery
-			.Where(assignment => assignment.TeacherId == teacherId)
+			.Where(assignment =>
+				assignment.TeacherId == teacherId &&
+				assignment.Status == ClassTeacherAssignmentStatus.Active)
 			.Select(assignment => new
 			{
 				assignment.StandardId,

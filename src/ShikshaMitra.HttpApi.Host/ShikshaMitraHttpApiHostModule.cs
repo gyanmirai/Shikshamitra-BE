@@ -125,7 +125,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		ConfigureUrls(configuration);
 		ConfigureConventionalControllers();
 		ConfigureVirtualFileSystem(context);
-		ConfigureCors(context, configuration);
+		ConfigureCors(context, configuration, hostingEnvironment);
 
 		ConfigureFormOptions(context, configuration);
 
@@ -430,7 +430,10 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			});
 	}
 
-	private void ConfigureCors(ServiceConfigurationContext context, IConfiguration configuration)
+	private void ConfigureCors(
+		ServiceConfigurationContext context,
+		IConfiguration configuration,
+		IWebHostEnvironment hostingEnvironment)
 	{
 		context.Services.AddCors(options =>
 		{
@@ -450,10 +453,18 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			});
 		});
 
+		var allowInsecureLocalAuth =
+			hostingEnvironment.IsDevelopment() &&
+			configuration.GetValue<bool>("AuthServer:DisableTransportSecurityRequirement");
+
 		context.Services.ConfigureApplicationCookie(options =>
 		{
-			options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-			options.Cookie.SameSite = SameSiteMode.None;
+			options.Cookie.SecurePolicy = allowInsecureLocalAuth
+				? CookieSecurePolicy.SameAsRequest
+				: CookieSecurePolicy.Always;
+			options.Cookie.SameSite = allowInsecureLocalAuth
+				? SameSiteMode.Lax
+				: SameSiteMode.None;
 		});
 	}
 	private X509Certificate2 GetEncryptionCertificate(IWebHostEnvironment environment, IConfiguration config)

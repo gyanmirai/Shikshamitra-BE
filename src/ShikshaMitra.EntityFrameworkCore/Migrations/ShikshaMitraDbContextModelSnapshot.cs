@@ -834,6 +834,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("StandardId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<Guid>("TeacherId")
                         .HasColumnType("uuid");
 

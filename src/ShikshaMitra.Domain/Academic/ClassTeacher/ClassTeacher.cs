@@ -27,6 +27,11 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserS
 	public Guid TeacherId { get; set; }
 
 	/// <summary>
+	/// Gets the workflow state of the assignment.
+	/// </summary>
+	public ClassTeacherAssignmentStatus Status { get; private set; }
+
+	/// <summary>
 	/// Gets or sets the identifier of the academic medium (e.g., English, Hindi).
 	/// </summary>
 	public Guid AcademicMediumId { get; private set; }
@@ -77,7 +82,8 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserS
 		Guid? academicYearId = null,
 		Guid? educationBoardId = null,
 		Guid? educationMediumId = null,
-		Guid? educationMediumStageId = null
+		Guid? educationMediumStageId = null,
+		ClassTeacherAssignmentStatus status = ClassTeacherAssignmentStatus.Active
 	)
 	{
 		Id = id;
@@ -85,6 +91,7 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserS
 		StandardId = standardId;
 		DivisionId = divisionId;
 		TeacherId = teacherId;
+		Status = status;
 		AcademicMediumId = academicMediumId;
 		AcademicYearId = academicYearId;
 		EducationBoardId = educationBoardId;
@@ -94,6 +101,15 @@ public class ClassTeacher : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserS
 	#endregion
 
 	#region Methods
+	public void MarkAsDraft()
+	{
+		Status = ClassTeacherAssignmentStatus.Draft;
+	}
+
+	public void Activate()
+	{
+		Status = ClassTeacherAssignmentStatus.Active;
+	}
 	#endregion
 }
 

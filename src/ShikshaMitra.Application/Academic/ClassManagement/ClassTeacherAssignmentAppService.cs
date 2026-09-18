@@ -49,7 +49,10 @@ public class ClassTeacherAssignmentAppService(
 	public async Task<ClassTeacherSummaryDto> GetClassTeacherAssignmentSummaryAsync(Guid organizationId)
 	{
 		var rows = await GetClassTeacherAssignmentsAsync(organizationId);
-		return BuildSummary(rows, pendingChanges: 0);
+		return BuildSummary(
+			rows,
+			pendingChanges: rows.Count(row => row.AssignmentStatus == "Changed")
+		);
 	}
 
 	public async Task<List<ClassTeacherEligibleTeacherDto>> GetEligibleTeachersAsync(
@@ -191,6 +194,9 @@ public class ClassTeacherAssignmentAppService(
 			var existingAssignments = await classTeacherRepository.GetListAsync(
 				assignment => orgStandardIds.Contains(assignment.StandardId)
 			);
+			var existingAssignmentsByKey = existingAssignments
+				.GroupBy(assignment => (assignment.StandardId, assignment.DivisionId))
+				.ToDictionary(group => group.Key, group => group.Last());
 			var affectedTeacherIds = existingAssignments
 				.Select(assignment => assignment.TeacherId)
 				.Concat(input.Assignments.Select(assignment => assignment.TeacherId))
@@ -211,6 +217,16 @@ public class ClassTeacherAssignmentAppService(
 			{
 				var standard = standardById[assignment.ClassId];
 				var stage = stageById[standard.EducationMediumStageId];
+				var status = ClassTeacherAssignmentStatus.Active;
+				if (input.SaveAsDraft &&
+					(!existingAssignmentsByKey.TryGetValue(
+						(assignment.ClassId, assignment.DivisionId),
+						out var existingAssignment) ||
+					 existingAssignment.TeacherId != assignment.TeacherId ||
+					 existingAssignment.Status == ClassTeacherAssignmentStatus.Draft))
+				{
+					status = ClassTeacherAssignmentStatus.Draft;
+				}
 
 				var newAssignment = new ClassTeacher.ClassTeacher(
 					guidGenerator.Create(),
@@ -219,7 +235,8 @@ public class ClassTeacherAssignmentAppService(
 					assignment.DivisionId,
 					assignment.TeacherId,
 					stage.EducationMediumId,
-					educationMediumStageId: stage.Id
+					educationMediumStageId: stage.Id,
+					status: status
 				);
 
 				await classTeacherRepository.InsertAsync(newAssignment);
@@ -229,8 +246,11 @@ public class ClassTeacherAssignmentAppService(
 			// the replacement set before synchronizing so the synchronizer sees both
 			// additions and removals in the same transaction.
 			await CurrentUnitOfWork.SaveChangesAsync();
-			await academicPermissionUserScopeSyncer.SyncAsync();
-			await classTeacherAccessService.InvalidateAsync(affectedUserIds);
+			if (!input.SaveAsDraft)
+			{
+				await academicPermissionUserScopeSyncer.SyncAsync();
+				await classTeacherAccessService.InvalidateAsync(affectedUserIds);
+			}
 
 			return new ApiSuccessResponseDto
 			{
@@ -305,6 +325,19 @@ public class ClassTeacherAssignmentAppService(
 					{
 						assignedTeacher = BuildAssignedTeacher(employee, context, standard.Id, division.Id);
 						issues.AddRange(BuildTeacherIssues(employee, context, standard.Id, division.Id));
+						if (assignment.Status == ClassTeacherAssignmentStatus.Draft)
+						{
+							issues.Add(new ClassTeacherValidationIssueDto
+							{
+								Severity = "Warning",
+								Code = "DRAFT_ASSIGNMENT",
+								ClassId = standard.Id,
+								DivisionId = division.Id,
+								TeacherId = employee.Id,
+								Message = $"{standard.Name} {division.Name} has a saved class-teacher draft awaiting confirmation.",
+								SuggestedFix = "Review and confirm the draft assignment."
+							});
+						}
 					}
 					else
 					{
@@ -328,10 +361,16 @@ public class ClassTeacherAssignmentAppService(
 						StudentCount = division.Strength,
 						AssignmentStatus = assignedTeacher == null
 							? "Unassigned"
+							: assignment!.Status == ClassTeacherAssignmentStatus.Draft
+								? "Changed"
 							: issues.Any(issue => issue.Severity == "Critical")
 								? "Conflict"
 								: "Active",
-						ApprovalStatus = assignedTeacher == null ? "Not Submitted" : "Approved",
+						ApprovalStatus = assignedTeacher == null
+							? "Not Submitted"
+							: assignment!.Status == ClassTeacherAssignmentStatus.Draft
+								? "Pending"
+								: "Approved",
 						AcknowledgmentStatus = assignedTeacher == null ? "Not Sent" : "Pending",
 						HandoverStatus = assignedTeacher == null ? "Not Required" : "Pending",
 						AssignmentType = "Permanent",

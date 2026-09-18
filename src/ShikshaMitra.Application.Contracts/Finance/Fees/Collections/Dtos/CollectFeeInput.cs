@@ -63,6 +63,14 @@ namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 /// </summary>
 public class CollectFeeInput
 {
+    /// <summary>
+    /// Client-generated retry key. Reusing the key with the same payload returns the
+    /// original collection result; reusing it with a different payload is rejected.
+    /// </summary>
+    [Required]
+    [MaxLength(100)]
+    public string IdempotencyKey { get; set; } = string.Empty;
+
     /// <summary>Unique identifier of the student paying fees.</summary>
     [Required]
     public Guid StudentId { get; set; }

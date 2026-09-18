@@ -115,6 +115,7 @@ public static class FeeCollectionTestHelper
     {
         return new CollectFeeInput
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = studentId,
             AcademicYearId = academicYearId,
             Notes = "Test payment",

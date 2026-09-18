@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Common;
+using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
 using System;
 using Volo.Abp;
@@ -25,7 +28,13 @@ public partial class FeeRefundAppService(
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<Student, Guid> studentRepository,
 	IRepository<FeePaymentReceipt, Guid> feePaymentReceiptRepository,
+	IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
+	IRepository<FeeRecordMetadata, Guid> collectionRepository,
+	IRepository<StudentFeeStructure, Guid> assignmentRepository,
+	IRepository<FinancePolicyVersion, Guid> policyVersionRepository,
 	FeeRefundManager feeRefundManager,
+	RefundPolicyCalculationService refundPolicyCalculationService,
+	FinanceAuditWriter financeAuditWriter,
 	FinanceScopeAccessService financeScopeAccessService,
 	ICurrentUser currentUser,
 	IUnitOfWorkManager unitOfWorkManager,

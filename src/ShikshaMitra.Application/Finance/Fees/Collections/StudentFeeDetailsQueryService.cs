@@ -239,11 +239,14 @@ public partial class StudentFeeDetailsQueryService(
 
 	private async Task<Dictionary<Guid, (double Amount, string Description)>> GetRefundsByDueFeeAsync(Guid studentId)
 	{
-		var refunds = await feeRefundRepository.GetListAsync(r => r.StudentId == studentId && r.Status == FeeRefundStatus.Approved);
-		return refunds.SelectMany(r => r.Lines.Select(l => new { l.DueFeeId, l.Amount, r.Reason }))
+		var refunds = await feeRefundRepository.GetListAsync(r => r.StudentId == studentId &&
+			(r.Status == FeeRefundStatus.Processed ||
+			 (r.Status == FeeRefundStatus.Approved && r.RefundPolicyVersionId == null)));
+		return refunds.SelectMany(r => r.Lines.Select(l => new
+			{ l.DueFeeId, Amount = r.RefundPolicyVersionId == null ? l.Amount : l.ProcessedAmount - l.ReversedAmount, r.Reason }))
 			.GroupBy(x => x.DueFeeId)
 			.ToDictionary(g => g.Key, g => (
-				Amount: g.Sum(x => x.Amount),
+				Amount: Convert.ToDouble(g.Sum(x => x.Amount)),
 				Description: string.Join("; ", g.Select(x => x.Reason).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct())
 			));
 	}

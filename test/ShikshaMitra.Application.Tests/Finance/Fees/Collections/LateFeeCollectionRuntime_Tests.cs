@@ -333,6 +333,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 
 			var output = await _feeCollections.CollectFeeAsync(new CollectFeeInput
 			{
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
 				StudentId = studentId,
 				AcademicYearId = academicYearId,
 				DueFeePayments = [new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 1000d }],
@@ -355,6 +356,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 
 			var ex = await Should.ThrowAsync<BusinessException>(() => _feeCollections.CollectFeeAsync(new CollectFeeInput
 			{
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
 				StudentId = studentId,
 				AcademicYearId = academicYearId,
 				DueFeePayments = [new() { DueFeeId = dueFeeId, FeeHeadId = feeHeadId, Amount = 1000d }],

@@ -38,19 +38,14 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Get_Eligibility_Returns_200_With_Empty_FeeHeads_For_Unpaid_Student()
+    public async Task Should_Get_Eligibility_Returns_Error_When_No_Refund_Policy_Is_Assigned()
     {
         var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
 
         var response = await Client.GetAsync(
             $"{BaseUrl}/eligibility?studentId={studentId}&academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}");
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<RefundEligibilityDto>(JsonOptions);
-        body.ShouldNotBeNull();
-        body.StudentId.ShouldBe(studentId);
-        body.TotalRefundable.ShouldBe(0d);
-        body.FeeHeads.ShouldBeEmpty();
+        response.IsSuccessStatusCode.ShouldBeFalse();
     }
 
     [Fact]
@@ -66,7 +61,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<RefundEligibilityDto>(JsonOptions);
         body.ShouldNotBeNull();
-        body.TotalRefundable.ShouldBeGreaterThan(0d);
+        body.TotalRefundable.ShouldBeGreaterThan(0m);
         body.FeeHeads.ShouldNotBeEmpty();
     }
 
@@ -87,20 +82,27 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Create_Refund_Returns_201_With_Pending_Status()
+    public async Task Should_Create_Refund_Returns_201_With_Draft_Status()
     {
         var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 1500d);
         if (dueFeeId == Guid.Empty) return;
+        var eligible = await FeeRefundTestHelper.GetEligibleLineAsync(Client, studentId, dueFeeId);
 
         var input = new CreateFeeRefundRequestDto
         {
             StudentId = studentId,
             AcademicYearId = FeeRefundTestHelper.DefaultAcademicYearId,
+            OriginalReceiptId = eligible.SourceReceiptId,
             RefundMethod = "Cash",
+            PaymentDetails = new System.Collections.Generic.Dictionary<string, object?>
+            {
+                ["refundDate"] = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                ["receivedBy"] = "Test parent",
+            },
             Reason = "TC issued",
             Lines = new System.Collections.Generic.List<CreateFeeRefundLineDto>
             {
-                new() { DueFeeId = dueFeeId, Amount = 500d },
+                new() { DueFeeId = dueFeeId, SourceAllocationId = eligible.SourceAllocationId, Amount = 500m },
             },
         };
 
@@ -109,8 +111,8 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         var body = await response.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
         body.ShouldNotBeNull();
-        body.Status.ShouldBe(FeeRefundStatus.Pending);
-        body.TotalAmount.ShouldBe(500d);
+        body.Status.ShouldBe(FeeRefundStatus.Draft);
+        body.TotalAmount.ShouldBe(500m);
         body.VoucherNumber.ShouldNotBeNullOrWhiteSpace();
         body.Lines.Count.ShouldBe(1);
     }
@@ -121,14 +123,22 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     {
         var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 1000d);
         if (dueFeeId == Guid.Empty) return;
+        var eligible = await FeeRefundTestHelper.GetEligibleLineAsync(Client, studentId, dueFeeId);
 
         var input = new CreateFeeRefundRequestDto
         {
             StudentId = studentId,
             AcademicYearId = FeeRefundTestHelper.DefaultAcademicYearId,
+            OriginalReceiptId = eligible.SourceReceiptId,
+            RefundMethod = "Cash",
+            PaymentDetails = new System.Collections.Generic.Dictionary<string, object?>
+            {
+                ["refundDate"] = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                ["receivedBy"] = "Test parent",
+            },
             Lines = new System.Collections.Generic.List<CreateFeeRefundLineDto>
             {
-                new() { DueFeeId = dueFeeId, Amount = 99999d },
+                new() { DueFeeId = dueFeeId, SourceAllocationId = eligible.SourceAllocationId, Amount = 99999m },
             },
         };
 
@@ -141,7 +151,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Approve_Refund_Reduces_DueFee_Refundable_Balance()
+    public async Task Should_Approve_Refund_Reserves_The_Refundable_Balance()
     {
         var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 2000d);
         if (dueFeeId == Guid.Empty) return;
@@ -161,14 +171,14 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         approved.ShouldNotBeNull();
         approved.Status.ShouldBe(FeeRefundStatus.Approved);
 
-        // Eligibility should show reduced balance
+        // Approval reserves the allocation, so another request cannot consume it.
         var eligResp = await Client.GetAsync(
             $"{BaseUrl}/eligibility?studentId={studentId}&academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}");
         eligResp.EnsureSuccessStatusCode();
         var elig = await eligResp.Content.ReadFromJsonAsync<RefundEligibilityDto>(JsonOptions);
         elig.ShouldNotBeNull();
-        elig.TotalRefunded.ShouldBeGreaterThanOrEqualTo(600d);
-        elig.TotalRefundable.ShouldBeLessThanOrEqualTo(2000d - 600d);
+        elig.TotalRefunded.ShouldBeGreaterThanOrEqualTo(600m);
+        elig.TotalRefundable.ShouldBeLessThanOrEqualTo(1400m);
     }
 
     [Fact]
@@ -198,7 +208,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         eligResp.EnsureSuccessStatusCode();
         var elig = await eligResp.Content.ReadFromJsonAsync<RefundEligibilityDto>(JsonOptions);
         elig.ShouldNotBeNull();
-        elig.TotalRefunded.ShouldBe(0d);
+        elig.TotalRefunded.ShouldBe(0m);
     }
 
     [Fact]
@@ -257,7 +267,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         body.RefundRequestId.ShouldBe(refundDto.Id);
         body.TotalFeeHeads.ShouldBeGreaterThan(0);
         body.TotalPaidAmount.ShouldBe(2000d);
-        body.TotalRefundedAmount.ShouldBe(0d); // Pending refund should not affect refunded totals
+        body.TotalRefundedAmount.ShouldBe(0d); // Submitted refund should not mutate the fee ledger
 
         body.FeeHeads.ShouldNotBeEmpty();
         var head = body.FeeHeads.Find(fh => fh.Items.Any(item => item.InstallmentId == dueFeeId));

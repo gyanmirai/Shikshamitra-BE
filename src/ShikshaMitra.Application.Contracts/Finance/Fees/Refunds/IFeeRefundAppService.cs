@@ -24,6 +24,8 @@ public interface IFeeRefundAppService : IApplicationService
     /// </summary>
     Task<RefundEligibilityDto> GetEligibilityAsync(Guid studentId, Guid academicYearId);
 
+    Task<FeeRefundPreviewDto> PreviewAsync(CreateFeeRefundRequestDto input);
+
     /// <summary>Creates a new refund request in Pending status.</summary>
     Task<FeeRefundRequestDto> CreateAsync(CreateFeeRefundRequestDto input);
 
@@ -42,4 +44,11 @@ public interface IFeeRefundAppService : IApplicationService
 
     /// <summary>Transitions a refund request status (Approve / Reject / Cancel / UnderReview).</summary>
     Task<FeeRefundRequestDto> UpdateStatusAsync(Guid id, UpdateFeeRefundStatusDto input);
+    Task<FeeRefundRequestDto> SubmitAsync(Guid id);
+    Task<FeeRefundRequestDto> StartReviewAsync(Guid id);
+    Task<FeeRefundRequestDto> ApproveAsync(Guid id, FeeRefundActionDto input);
+    Task<FeeRefundRequestDto> RejectAsync(Guid id, RejectFeeRefundDto input);
+    Task<FeeRefundRequestDto> CancelAsync(Guid id, FeeRefundActionDto input);
+    Task<FeeRefundRequestDto> ProcessAsync(Guid id, ProcessFeeRefundDto input);
+    Task<FeeRefundRequestDto> ReverseAsync(Guid id, ReverseFeeRefundDto input);
 }

@@ -71,6 +71,8 @@ public partial class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContex
 		builder.Ignore<EmployeeDocument>();
 		builder.Ignore<AllocatedTeacher>();
 		builder.Ignore<FeeRefundLine>();
+		builder.Ignore<FeeRefundReservation>();
+		builder.Ignore<FeeRefundSettlement>();
 
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.Entity<TeacherDiary>(b =>

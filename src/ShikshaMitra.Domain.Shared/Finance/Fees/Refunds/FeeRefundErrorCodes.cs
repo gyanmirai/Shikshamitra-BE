@@ -15,4 +15,20 @@ public static class FeeRefundErrorCodes
 
     /// <summary>Thrown when an update or delete is attempted on a non-Pending refund request.</summary>
     public const string CannotModifyNonPendingRefund = Prefix + "010009";
+    public const string PolicyNotAssigned            = Prefix + "010010";
+    public const string PolicyVersionInvalid         = Prefix + "010011";
+    public const string FeeHeadNotEligible            = Prefix + "010012";
+    public const string RequestDeadlineExpired        = Prefix + "010013";
+    public const string PayoutMethodNotAllowed        = Prefix + "010014";
+    public const string MakerCheckerViolation         = Prefix + "010015";
+    public const string ReservationConflict           = Prefix + "010016";
+    public const string SettlementNotFound            = Prefix + "010017";
+    public const string SettlementAlreadyProcessed    = Prefix + "010018";
+    public const string ReversalNotAllowed             = Prefix + "010019";
+    public const string SourceReceiptRequired          = Prefix + "010020";
+    public const string SourceReceiptInvalid           = Prefix + "010021";
+    public const string IdempotencyConflict            = Prefix + "010022";
+    public const string RefundExceedsPolicyAmount      = Prefix + "010023";
+    public const string AssignmentMismatch             = Prefix + "010024";
+    public const string PaymentNotSettled               = Prefix + "010025";
 }

@@ -167,6 +167,100 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
         }
     }
 
+    [Fact]
+    public async Task GetListAsync_Should_Not_Fail_When_Attendance_Overlaps_Manual_Availability()
+    {
+        var teacher = await CreateEmployeeAsync(
+            Guid.NewGuid(),
+            "Existing",
+            "Teacher");
+        var attendanceDate = new DateOnly(2026, 9, 18);
+        var availabilityDate = attendanceDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
+        await _availabilityRepository.InsertAsync(
+            new TeacherAvailability(
+                Guid.NewGuid(),
+                null,
+                teacher.EmployeeName,
+                availabilityDate,
+                new TimeOnly(9, 0),
+                new TimeOnly(14, 15),
+                TeacherAvailabilityStatus.Unavailable,
+                TeacherAvailabilitySource.Manual,
+                "Already marked unavailable",
+                true,
+                true,
+                teacherId: teacher.Id),
+            autoSave: true);
+        await _employeeAttendanceRepository.InsertAsync(
+            new EmployeeAttendance
+            {
+                EmployeeId = teacher.Id,
+                AttendanceDate = attendanceDate,
+                StatusType = EmployeeAttendanceStatusType.FullDayLeave,
+                Source = AttendanceRecordSource.Manual,
+                Remarks = "Approved leave"
+            },
+            autoSave: true);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var result = await _teacherAvailabilityAppService.GetListAsync(
+                new GetTeacherAvailabilityInput
+                {
+                    Date = availabilityDate,
+                    MaxResultCount = 50
+                });
+
+            result.TotalCount.ShouldBe(1);
+            result.Items.ShouldHaveSingleItem().SourceType
+                .ShouldBe(TeacherAvailabilitySource.Manual.ToString());
+
+            var attendanceRows = await _availabilityRepository.GetListAsync(
+                row => row.SourceType == TeacherAvailabilitySource.Attendance);
+            attendanceRows.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task GetListAsync_Should_Not_Fail_When_Attendance_Sync_Encounters_A_Late_Overlap()
+    {
+        var teacher = await CreateEmployeeAsync(
+            Guid.NewGuid(),
+            "Duplicate",
+            "Attendance");
+        var attendanceDate = new DateOnly(2026, 9, 19);
+        var availabilityDate = attendanceDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
+        foreach (var remarks in new[] { "First attendance row", "Legacy duplicate attendance row" })
+        {
+            await _employeeAttendanceRepository.InsertAsync(
+                new EmployeeAttendance
+                {
+                    EmployeeId = teacher.Id,
+                    AttendanceDate = attendanceDate,
+                    StatusType = EmployeeAttendanceStatusType.FullDayLeave,
+                    Source = AttendanceRecordSource.Manual,
+                    Remarks = remarks
+                },
+                autoSave: true);
+        }
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var result = await _teacherAvailabilityAppService.GetListAsync(
+                new GetTeacherAvailabilityInput
+                {
+                    Date = availabilityDate,
+                    MaxResultCount = 50
+                });
+
+            result.TotalCount.ShouldBe(1);
+            result.Items.ShouldHaveSingleItem().SourceType
+                .ShouldBe(TeacherAvailabilitySource.Attendance.ToString());
+        }
+    }
+
     private async Task<Employee> CreateEmployeeAsync(
         Guid userId,
         string firstName,

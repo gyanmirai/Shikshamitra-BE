@@ -125,7 +125,6 @@ public class TeacherAvailabilityAppService(
         var availabilityEnd = NormalizeDate(rangeEnd.Value);
         var existingRows = await availabilityRepository.GetListAsync(x =>
             !x.IsCancelled &&
-            x.SourceType == TeacherAvailabilitySource.Attendance &&
             x.AvailabilityDate >= availabilityStart &&
             x.AvailabilityDate <= availabilityEnd);
 
@@ -138,8 +137,9 @@ public class TeacherAvailabilityAppService(
 
             var availabilityDate = NormalizeDate(attendance.AttendanceDate.ToDateTime(TimeOnly.MinValue));
             var existingRow = existingRows.FirstOrDefault(x =>
-                x.SourceEntityId == attendance.Id ||
-                (x.TeacherId == attendance.EmployeeId && x.AvailabilityDate == availabilityDate));
+                x.SourceType == TeacherAvailabilitySource.Attendance &&
+                (x.SourceEntityId == attendance.Id ||
+                 (x.TeacherId == attendance.EmployeeId && x.AvailabilityDate == availabilityDate)));
 
             if (existingRow != null)
             {
@@ -155,16 +155,30 @@ public class TeacherAvailabilityAppService(
             }
 
             var isFullDay = attendance.StatusType == EmployeeAttendanceStatusType.FullDayLeave;
+            var startTime = new TimeOnly(9, 0);
+            var endTime = isFullDay ? new TimeOnly(14, 15) : new TimeOnly(12, 0);
+            var teacherName = string.IsNullOrWhiteSpace(employee.EmployeeName)
+                ? employee.EmployeeCode
+                : employee.EmployeeName;
+            var hasOverlappingAvailability = existingRows.Any(existing =>
+                existing.AvailabilityDate == availabilityDate &&
+                IsSameTeacher(existing, employee.Id, teacherName) &&
+                existing.StartTime < endTime &&
+                startTime < existing.EndTime);
+
+            if (hasOverlappingAvailability)
+            {
+                continue;
+            }
+
             await CreateAvailabilityAsync(new CreateTeacherAvailabilityDto
             {
                 TeacherId = employee.Id,
-                TeacherName = string.IsNullOrWhiteSpace(employee.EmployeeName)
-                    ? employee.EmployeeCode
-                    : employee.EmployeeName,
+                TeacherName = teacherName,
                 DepartmentName = employee.Department ?? "Academic",
                 AvailabilityDate = availabilityDate,
-                StartTime = isFullDay ? "09:00" : "09:00",
-                EndTime = isFullDay ? "14:15" : "12:00",
+                StartTime = startTime.ToString("HH:mm"),
+                EndTime = endTime.ToString("HH:mm"),
                 AvailabilityStatus = TeacherAvailabilityStatus.Unavailable,
                 SourceType = TeacherAvailabilitySource.Attendance,
                 SourceEntityId = attendance.Id,
@@ -174,7 +188,7 @@ public class TeacherAvailabilityAppService(
                 IsFullDay = isFullDay,
                 NotifyLeadership = true,
                 Remarks = attendance.Remarks
-            });
+            }, skipIfOverlapping: true);
         }
     }
 
@@ -188,7 +202,9 @@ public class TeacherAvailabilityAppService(
         return await CreateAvailabilityAsync(input);
     }
 
-    private async Task<TeacherAvailabilityDto> CreateAvailabilityAsync(CreateTeacherAvailabilityDto input)
+    private async Task<TeacherAvailabilityDto> CreateAvailabilityAsync(
+        CreateTeacherAvailabilityDto input,
+        bool skipIfOverlapping = false)
     {
         if (string.IsNullOrWhiteSpace(input.TeacherName) && !input.TeacherId.HasValue)
         {
@@ -206,13 +222,18 @@ public class TeacherAvailabilityAppService(
         var existingRows = await availabilityRepository.GetListAsync(x =>
             !x.IsCancelled && x.AvailabilityDate == availabilityDate);
         var teacherName = input.TeacherName?.Trim() ?? string.Empty;
-        var hasOverlappingAvailability = existingRows.Any(existing =>
+        var overlappingAvailability = existingRows.FirstOrDefault(existing =>
             IsSameTeacher(existing, input.TeacherId, teacherName) &&
             existing.StartTime < endTime &&
             startTime < existing.EndTime);
 
-        if (hasOverlappingAvailability)
+        if (overlappingAvailability != null)
         {
+            if (skipIfOverlapping)
+            {
+                return Map(overlappingAvailability);
+            }
+
             throw new UserFriendlyException(AvailabilityOverlapMessage);
         }
 

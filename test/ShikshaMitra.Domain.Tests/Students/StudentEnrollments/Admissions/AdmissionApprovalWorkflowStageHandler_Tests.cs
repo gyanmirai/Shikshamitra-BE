@@ -11,22 +11,25 @@ public class AdmissionApprovalWorkflowStageHandler_Tests
 	private readonly AdmissionWorkflowStageHandlerRegistry _registry = new(
 		[new ApprovalAdmissionWorkflowStageHandler()]);
 
-	[Fact]
-	public async Task Approval_Stage_Should_Complete_After_The_Application_Is_Approved()
+	[Theory]
+	[InlineData(AdmissionApplicationStatus.Approved)]
+	[InlineData(AdmissionApplicationStatus.Waitlisted)]
+	[InlineData(AdmissionApplicationStatus.Rejected)]
+	public async Task Admission_Decision_Stage_Should_Complete_After_A_Decision(
+		AdmissionApplicationStatus status)
 	{
 		await Should.NotThrowAsync(() =>
 			_registry.EnsureCanCompleteAsync(
 				AdmissionWorkflowStageType.Approval,
-				Context(AdmissionApplicationStatus.Approved)));
+				Context(status)));
 	}
 
 	[Theory]
 	[InlineData(AdmissionApplicationStatus.Draft)]
 	[InlineData(AdmissionApplicationStatus.Submitted)]
 	[InlineData(AdmissionApplicationStatus.InReview)]
-	[InlineData(AdmissionApplicationStatus.Waitlisted)]
-	[InlineData(AdmissionApplicationStatus.Rejected)]
-	public async Task Approval_Stage_Should_Wait_For_An_Approved_Decision(
+	[InlineData(AdmissionApplicationStatus.OfferAccepted)]
+	public async Task Admission_Decision_Stage_Should_Wait_For_A_Decision(
 		AdmissionApplicationStatus status)
 	{
 		await Should.ThrowAsync<BusinessException>(() =>

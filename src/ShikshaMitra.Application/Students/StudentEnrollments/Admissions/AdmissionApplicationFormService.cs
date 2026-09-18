@@ -128,14 +128,16 @@ public class AdmissionApplicationFormService(
 		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
 		var cycle = await cycleRepository.FindAsync(application.AdmissionCycleId) ??
 			throw new EntityNotFoundException(typeof(AdmissionCycle), application.AdmissionCycleId);
+		var definition = await formRepository.GetAsync(instance.FormDefinitionId);
+		var experience = AdmissionFormMetadataStore.ReadExperience(definition);
 		var sections = await sectionRepository.GetListAsync(section => section.FormDefinitionId == instance.FormDefinitionId);
 		var values = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
 		var valueMap = values.ToDictionary(
 			value => value.FieldCode,
 			value => AdmissionApplicationValueConverter.Unwrap(value.ValueJson),
 			StringComparer.OrdinalIgnoreCase);
-		var validation = formValidator.Validate(fields, sections, valueMap);
-		await ValidateMasterDataOptionsAsync(fields, sections, valueMap, cycle.AcademicYearId, validation);
+		var validation = formValidator.Validate(fields, sections, valueMap, experience);
+		await ValidateMasterDataOptionsAsync(fields, sections, valueMap, cycle.AcademicYearId, validation, experience);
 		if (validation.Errors.Count > 0)
 		{
 			return new AdmissionApplicationSubmitResultDto
@@ -207,7 +209,8 @@ public class AdmissionApplicationFormService(
 		IEnumerable<AdmissionFormSectionDefinition> sections,
 		IReadOnlyDictionary<string, string> values,
 		Guid academicYearId,
-		AdmissionFormValidationResult validation)
+		AdmissionFormValidationResult validation,
+		AdmissionFormExperienceMetadata experience)
 	{
 		var visibleFieldCodes = formValidator.GetVisibleFieldCodes(fields, sections, values);
 		foreach (var field in fields.Where(field => visibleFieldCodes.Contains(field.Code) && field.FieldType is (AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio)))
@@ -215,7 +218,17 @@ public class AdmissionApplicationFormService(
 			if (string.IsNullOrWhiteSpace(field.OptionsJson) || !TryReadSource(field.OptionsJson, out var sourceKey, out var parentField)) continue;
 			var parentId = parentField != null && Guid.TryParse(values.GetValueOrDefault(parentField), out var parsedParentId) ? parsedParentId : (Guid?)null;
 			var allowedValues = (await dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId)).Select(option => option.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
-			IReadOnlyList<string> submitted = field.FieldType == AdmissionFormFieldType.MultiSelect
+			var section = sections.First(item => item.Id == field.SectionId);
+			var repeated = experience.Sections.GetValueOrDefault(section.Code)?.IsRepeatable == true;
+			IReadOnlyList<string> submitted;
+			if (repeated)
+			{
+				var entries = ReadMultipleValues(values.GetValueOrDefault(field.Code));
+				submitted = field.FieldType == AdmissionFormFieldType.MultiSelect
+					? entries.SelectMany(ReadMultipleValues).ToList()
+					: entries;
+			}
+			else submitted = field.FieldType == AdmissionFormFieldType.MultiSelect
 				? ReadMultipleValues(values.GetValueOrDefault(field.Code))
 				: new[] { values.GetValueOrDefault(field.Code) ?? string.Empty };
 			if (submitted.Any(value => !string.IsNullOrWhiteSpace(value) && !allowedValues.Contains(value)))
@@ -259,45 +272,46 @@ public class AdmissionApplicationFormService(
 	private static AdmissionFormDto MapDefinition(
 		AdmissionFormDefinition definition,
 		IEnumerable<AdmissionFormSectionDefinition> sections,
-		IReadOnlyCollection<AdmissionFormFieldDefinition> fields) => new()
+		IReadOnlyCollection<AdmissionFormFieldDefinition> fields)
 	{
-		Id = definition.Id,
-		Name = definition.Name,
-		Code = definition.Code,
-		Description = definition.Description,
-		Version = definition.Version,
-		Status = definition.Status,
-		LayoutType = definition.LayoutType,
-		FieldsPerRow = definition.FieldsPerRow,
-		ParentVersionId = definition.ParentVersionId,
-		PublishedAt = definition.PublishedAt,
-		PublishedBy = definition.PublishedBy,
-		ConcurrencyStamp = definition.ConcurrencyStamp,
-		Sections = sections.OrderBy(section => section.DisplayOrder).Select(section => new AdmissionFormSectionDto
+		var experience = AdmissionFormMetadataStore.ReadExperience(definition);
+		return new AdmissionFormDto
 		{
-			Id = section.Id,
-			FormDefinitionId = section.FormDefinitionId,
-			Code = section.Code,
-			Name = section.Name,
-			DisplayOrder = section.DisplayOrder,
-			VisibilityRuleJson = section.VisibilityRuleJson,
-			StepId = section.StepId,
-			StepCode = section.StepCode,
-			StepName = section.StepName,
-			StepDisplayOrder = section.StepDisplayOrder,
-			StepVisibilityRuleJson = section.StepVisibilityRuleJson,
-			Fields = fields.Where(field => field.SectionId == section.Id).OrderBy(field => field.DisplayOrder)
-				.Select(MapField).ToList()
-		}).ToList()
-	};
+			Id = definition.Id, Name = definition.Name, Code = definition.Code, Description = definition.Description,
+			Version = definition.Version, Status = definition.Status, LayoutType = definition.LayoutType,
+			FieldsPerRow = definition.FieldsPerRow, DefaultLanguage = experience.DefaultLanguage,
+			SupportedLanguages = experience.SupportedLanguages, ParentVersionId = definition.ParentVersionId,
+			PublishedAt = definition.PublishedAt, PublishedBy = definition.PublishedBy,
+			ConcurrencyStamp = definition.ConcurrencyStamp,
+			Sections = sections.OrderBy(section => section.DisplayOrder).Select(section =>
+			{
+				experience.Sections.TryGetValue(section.Code, out var sectionExperience);
+				return new AdmissionFormSectionDto
+				{
+					Id = section.Id, FormDefinitionId = section.FormDefinitionId, Code = section.Code,
+					Name = section.Name, DisplayOrder = section.DisplayOrder, VisibilityRuleJson = section.VisibilityRuleJson,
+					StepId = section.StepId, StepCode = section.StepCode, StepName = section.StepName,
+					StepDisplayOrder = section.StepDisplayOrder, StepVisibilityRuleJson = section.StepVisibilityRuleJson,
+					IsRepeatable = sectionExperience?.IsRepeatable ?? false,
+					MinEntries = sectionExperience?.MinEntries ?? 1,
+					MaxEntries = sectionExperience?.MaxEntries ?? 1,
+					EntryLabel = sectionExperience?.EntryLabel,
+					Translations = sectionExperience?.Translations ?? new(StringComparer.OrdinalIgnoreCase),
+					Fields = fields.Where(field => field.SectionId == section.Id).OrderBy(field => field.DisplayOrder)
+						.Select(field => MapField(field, sectionExperience?.Fields.GetValueOrDefault(field.Code))).ToList()
+				};
+			}).ToList()
+		};
+	}
 
-	private static AdmissionFormFieldDto MapField(AdmissionFormFieldDefinition field) => new()
+	private static AdmissionFormFieldDto MapField(AdmissionFormFieldDefinition field, Dictionary<string, AdmissionFormTranslationDto>? translations) => new()
 	{
 		Id = field.Id, FormDefinitionId = field.FormDefinitionId, SectionId = field.SectionId,
 		Code = field.Code, Label = field.Label, FieldType = field.FieldType, BindingType = field.BindingType,
 		BindingKey = field.BindingKey, Placeholder = field.Placeholder, HelpText = field.HelpText,
 		DefaultValue = field.DefaultValue, OptionsJson = field.OptionsJson, Required = field.Required, ReadOnly = field.ReadOnly,
 		DisplayOrder = field.DisplayOrder, ValidationJson = field.ValidationJson,
-		VisibilityRuleJson = field.VisibilityRuleJson, RequiredRuleJson = field.RequiredRuleJson
+		VisibilityRuleJson = field.VisibilityRuleJson, RequiredRuleJson = field.RequiredRuleJson,
+		Translations = translations ?? new(StringComparer.OrdinalIgnoreCase)
 	};
 }

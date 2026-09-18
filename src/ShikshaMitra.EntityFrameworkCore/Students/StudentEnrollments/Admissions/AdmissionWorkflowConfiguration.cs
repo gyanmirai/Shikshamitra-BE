@@ -21,6 +21,7 @@ public class AdmissionWorkflowConfiguration : IEntityTypeConfiguration<Admission
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(AdmissionWorkflowConsts.MaxNameLength);
 		builder.Property(x => x.Code).IsRequired().HasMaxLength(AdmissionWorkflowConsts.MaxCodeLength);
 		builder.Property(x => x.Description).HasMaxLength(AdmissionWorkflowConsts.MaxDescriptionLength);
+		builder.Property(x => x.ChangeReason).HasMaxLength(AdmissionWorkflowConsts.MaxReasonLength);
 		builder.HasIndex(x => new { x.TenantId, x.Code, x.Version })
 			.IsUnique()
 			.HasFilter("\"IsDeleted\" = false");
@@ -72,5 +73,44 @@ public class AdmissionWorkflowConfiguration : IEntityTypeConfiguration<Admission
 			.WithMany()
 			.HasForeignKey(x => x.ToStageId)
 			.OnDelete(DeleteBehavior.Restrict);
+	}
+}
+
+public class AdmissionWorkflowGovernanceSettingConfiguration : IEntityTypeConfiguration<AdmissionWorkflowGovernanceSetting>
+{
+	public void Configure(EntityTypeBuilder<AdmissionWorkflowGovernanceSetting> builder)
+	{
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionWorkflowGovernanceSettings", ShikshaMitraConsts.DbSchema);
+		builder.ConfigureByConvention();
+		builder.HasIndex(x => x.TenantId).IsUnique();
+	}
+}
+
+public class AdmissionWorkflowGovernanceHistoryConfiguration : IEntityTypeConfiguration<AdmissionWorkflowGovernanceHistory>
+{
+	public void Configure(EntityTypeBuilder<AdmissionWorkflowGovernanceHistory> builder)
+	{
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionWorkflowGovernanceHistories", ShikshaMitraConsts.DbSchema);
+		builder.ConfigureByConvention();
+		builder.Property(x => x.Action).HasConversion<int>().IsRequired();
+		builder.Property(x => x.FromStatus).HasConversion<int>();
+		builder.Property(x => x.ToStatus).HasConversion<int>().IsRequired();
+		builder.Property(x => x.Reason).HasMaxLength(AdmissionWorkflowConsts.MaxReasonLength);
+		builder.HasIndex(x => new { x.TenantId, x.WorkflowDefinitionId, x.OccurredAt });
+		builder.HasOne<AdmissionWorkflowDefinition>().WithMany().HasForeignKey(x => x.WorkflowDefinitionId).OnDelete(DeleteBehavior.Cascade);
+	}
+}
+
+public class AdmissionWorkflowNotificationConfiguration : IEntityTypeConfiguration<AdmissionWorkflowNotification>
+{
+	public void Configure(EntityTypeBuilder<AdmissionWorkflowNotification> builder)
+	{
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionWorkflowNotifications", ShikshaMitraConsts.DbSchema);
+		builder.ConfigureByConvention();
+		builder.Property(x => x.Type).HasConversion<int>().IsRequired();
+		builder.Property(x => x.Title).IsRequired().HasMaxLength(AdmissionWorkflowConsts.MaxNotificationTitleLength);
+		builder.Property(x => x.Message).IsRequired().HasMaxLength(AdmissionWorkflowConsts.MaxNotificationMessageLength);
+		builder.HasIndex(x => new { x.TenantId, x.RecipientUserId, x.IsRead, x.CreationTime });
+		builder.HasOne<AdmissionWorkflowDefinition>().WithMany().HasForeignKey(x => x.WorkflowDefinitionId).OnDelete(DeleteBehavior.Cascade);
 	}
 }

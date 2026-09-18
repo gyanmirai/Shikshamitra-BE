@@ -27,7 +27,9 @@ public class AdmissionAssessmentSessionService(
 			.Select(item => new { item.AdmissionOfferingId, item.WorkflowDefinitionId }).Distinct());
 		var workflowIds = offerings.Where(item => item.WorkflowDefinitionId.HasValue).Select(item => item.WorkflowDefinitionId!.Value)
 			.Concat(pinned.Select(item => item.WorkflowDefinitionId)).Distinct().ToList();
-		var workflowRows = (await workflows.GetListAsync(item => workflowIds.Contains(item.Id) && item.Status != AdmissionWorkflowStatus.Draft)).ToDictionary(item => item.Id);
+		var workflowRows = (await workflows.GetListAsync(item => workflowIds.Contains(item.Id) &&
+			(item.Status == AdmissionWorkflowStatus.Published || item.Status == AdmissionWorkflowStatus.Superseded ||
+			 item.Status == AdmissionWorkflowStatus.Archived))).ToDictionary(item => item.Id);
 		var stageRows = await definitions.GetListAsync(item => workflowIds.Contains(item.WorkflowDefinitionId) && item.StageType == AdmissionWorkflowStageType.Assessment);
 		var result = new List<AdmissionAssessmentScopeDto>();
 		foreach (var offering in offerings)

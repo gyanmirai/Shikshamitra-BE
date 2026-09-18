@@ -15,27 +15,107 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 		IEnumerable<AdmissionFormFieldDefinition> fields,
 		IEnumerable<AdmissionFormSectionDefinition> sections,
 		IReadOnlyDictionary<string, string> values)
+		=> Validate(fields, sections, values, null);
+
+	internal AdmissionFormValidationResult Validate(
+		IEnumerable<AdmissionFormFieldDefinition> fields,
+		IEnumerable<AdmissionFormSectionDefinition> sections,
+		IReadOnlyDictionary<string, string> values,
+		AdmissionFormExperienceMetadata? experience)
 	{
-		var sectionRules = sections.ToDictionary(section => section.Id, section => section.VisibilityRuleJson);
+		var sectionList = sections.ToList();
+		var fieldList = fields.ToList();
+		var sectionRules = sectionList.ToDictionary(section => section.Id, section => section.VisibilityRuleJson);
 		var errors = new List<string>();
 		var fieldErrors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-		foreach (var field in fields)
+		foreach (var section in sectionList)
 		{
-			if (field.FieldType == AdmissionFormFieldType.Static) continue;
-			var visible = IsVisible(field.VisibilityRuleJson, values) &&
-				IsVisible(sectionRules.GetValueOrDefault(field.SectionId), values);
-			var value = values.GetValueOrDefault(field.Code, string.Empty);
-			var conditionallyRequired = visible && !string.IsNullOrWhiteSpace(field.RequiredRuleJson) && IsVisible(field.RequiredRuleJson, values);
-			if (visible && (field.Required || conditionallyRequired) && string.IsNullOrWhiteSpace(value))
-				AddError(field, "required", $"{field.Code} is required.", errors, fieldErrors);
-			if (!visible || string.IsNullOrWhiteSpace(value)) continue;
-			foreach (var error in ValidateValue(field, value))
+			var sectionFields = fieldList.Where(field => field.SectionId == section.Id).ToList();
+			var repeatable = experience?.Sections.GetValueOrDefault(section.Code);
+			if (repeatable?.IsRepeatable == true)
 			{
-				errors.Add(error);
-				fieldErrors.TryAdd(field.Code, error);
+				ValidateRepeatableSection(section, sectionFields, repeatable, values, errors, fieldErrors);
+				continue;
 			}
+			foreach (var field in sectionFields) ValidateField(field, sectionRules.GetValueOrDefault(field.SectionId), values, errors, fieldErrors);
 		}
 		return new AdmissionFormValidationResult(errors, fieldErrors);
+	}
+
+	private void ValidateRepeatableSection(
+		AdmissionFormSectionDefinition section,
+		IReadOnlyCollection<AdmissionFormFieldDefinition> fields,
+		AdmissionFormSectionExperienceMetadata repeatable,
+		IReadOnlyDictionary<string, string> values,
+		ICollection<string> errors,
+		IDictionary<string, string> fieldErrors)
+	{
+		var rows = fields.ToDictionary(
+			field => field.Code,
+			field => ReadArray(values.GetValueOrDefault(field.Code)),
+			StringComparer.OrdinalIgnoreCase);
+		var count = rows.Count == 0 ? 0 : rows.Values.Max(items => items.Count);
+		if (count < repeatable.MinEntries)
+		{
+			var message = $"{section.Code} requires at least {repeatable.MinEntries} entries.";
+			errors.Add(message);
+			fieldErrors.TryAdd(section.Code, message);
+		}
+		if (count > repeatable.MaxEntries)
+		{
+			var message = $"{section.Code} allows at most {repeatable.MaxEntries} entries.";
+			errors.Add(message);
+			fieldErrors.TryAdd(section.Code, message);
+		}
+		for (var index = 0; index < count; index++)
+		{
+			var rowValues = values.ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
+			foreach (var field in fields) rowValues[field.Code] = rows[field.Code].ElementAtOrDefault(index) ?? string.Empty;
+			foreach (var field in fields)
+			{
+				var key = $"{field.Code}[{index}]";
+				ValidateField(field, section.VisibilityRuleJson, rowValues, errors, fieldErrors, key);
+			}
+		}
+	}
+
+	private void ValidateField(
+		AdmissionFormFieldDefinition field,
+		string? sectionRule,
+		IReadOnlyDictionary<string, string> values,
+		ICollection<string> errors,
+		IDictionary<string, string> fieldErrors,
+		string? errorKey = null)
+	{
+		if (field.FieldType == AdmissionFormFieldType.Static) return;
+		var visible = IsVisible(field.VisibilityRuleJson, values) && IsVisible(sectionRule, values);
+		var value = values.GetValueOrDefault(field.Code, string.Empty);
+		var conditionallyRequired = visible && !string.IsNullOrWhiteSpace(field.RequiredRuleJson) && IsVisible(field.RequiredRuleJson, values);
+		if (visible && (field.Required || conditionallyRequired) && string.IsNullOrWhiteSpace(value))
+		{
+			var message = Message(field, "required", $"{field.Code} is required.");
+			errors.Add(message);
+			fieldErrors.TryAdd(errorKey ?? field.Code, message);
+		}
+		if (!visible || string.IsNullOrWhiteSpace(value)) return;
+		foreach (var error in ValidateValue(field, value))
+		{
+			errors.Add(error);
+			fieldErrors.TryAdd(errorKey ?? field.Code, error);
+		}
+	}
+
+	private static List<string> ReadArray(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value)) return [];
+		try
+		{
+			using var document = JsonDocument.Parse(value);
+			return document.RootElement.ValueKind == JsonValueKind.Array
+				? document.RootElement.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() ?? string.Empty : item.ToString()).ToList()
+				: [];
+		}
+		catch (JsonException) { return []; }
 	}
 
 	public IReadOnlySet<string> GetVisibleFieldCodes(

@@ -58,7 +58,8 @@ public class AdmissionInquiryPolicyAndManagement_Tests
 		state.QualificationDueAt.ShouldBe(now.AddDays(7));
 		state.RecordContact(now.AddHours(1));
 		state.ContactCount.ShouldBe(1);
-		state.RecordOutcome(AdmissionInquiryQualificationOutcome.Qualified, "[]", "  Ready to apply  ", Guid.NewGuid(), now.AddHours(2));
+		state.RecordOutcome(AdmissionInquiryQualificationOutcome.Qualified, "[]", null,
+			"  Ready to apply  ", Guid.NewGuid(), now.AddHours(2));
 		state.Outcome.ShouldBe(AdmissionInquiryQualificationOutcome.Qualified);
 		state.OutcomeReason.ShouldBe("Ready to apply");
 		typeof(AdmissionInquiryManagement).GetProperties().Where(item => item.DeclaringType == typeof(AdmissionInquiryManagement))

@@ -26,6 +26,7 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 	public bool IsActive { get; set; }
 	public AdmissionOfferingAvailabilityStatus AvailabilityStatus { get; set; }
 	public AdmissionOfferingConfigurationStatus ConfigurationStatus { get; set; }
+	public bool CanActivate => ConfigurationStatus == AdmissionOfferingConfigurationStatus.Ready;
 	public int ApplicationCount { get; set; }
 	public bool CanEditIdentity => ApplicationCount == 0;
 	public bool CanDelete => ApplicationCount == 0;
@@ -159,6 +160,8 @@ public class BulkAdmissionOfferingResultItemDto
 	public string Code { get; set; } = string.Empty;
 	public Guid? OfferingId { get; set; }
 	public bool IsValid { get; set; }
+	public bool CanSaveInactive { get; set; }
+	public bool CanActivate { get; set; }
 	public List<AdmissionOfferingValidationErrorDto> Errors { get; set; } = [];
 }
 

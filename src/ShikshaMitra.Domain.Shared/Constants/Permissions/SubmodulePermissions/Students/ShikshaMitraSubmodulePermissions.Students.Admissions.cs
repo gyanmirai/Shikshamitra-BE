@@ -91,12 +91,19 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Publish = Add;
 			public const string Archive = Delete;
 			public const string ViewUsage = View;
-			public static readonly string[] All = { View, Add, Delete };
+			public const string SubmitForApproval = Add;
+			public const string Approve = $"{SubmoduleName}.Approve";
+			public const string ManageGovernance = $"{SubmoduleName}.ManageGovernance";
+			public const string Rollback = $"{SubmoduleName}.Rollback";
+			public static readonly string[] All = { View, Add, Delete, Approve, ManageGovernance, Rollback };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" }
+				{ Delete, $"{SubmoduleDisplayName}.Delete" },
+				{ Approve, $"{SubmoduleDisplayName}.Approve" },
+				{ ManageGovernance, $"{SubmoduleDisplayName}.Manage governance" },
+				{ Rollback, $"{SubmoduleDisplayName}.Rollback" }
 			};
 		}
 

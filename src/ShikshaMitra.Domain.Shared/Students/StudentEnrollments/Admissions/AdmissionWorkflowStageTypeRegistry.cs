@@ -15,7 +15,10 @@ public sealed record AdmissionWorkflowStageTypeMetadata(
 	bool CanBeTerminalStage,
 	bool SupportsFormAttachment,
 	bool SupportsConditions,
-	bool IsRuntimeReady);
+	bool IsRuntimeReady,
+	bool IsSelectable,
+	bool IsDeprecated,
+	string? ReplacementGuidance);
 
 public static class AdmissionWorkflowStageTypeRegistry
 {
@@ -28,12 +31,12 @@ public static class AdmissionWorkflowStageTypeRegistry
 		Metadata(AdmissionWorkflowStageType.Payment, "Payment", "Collect, verify, waive, or reverse an admission payment.", "mdi:cash-check", "#F59E0B", false, false, false, true, true, "PaymentStageHandler", ["payment"]),
 		Metadata(AdmissionWorkflowStageType.DocumentVerification, "Document verification", "Review required applicant documents.", "mdi:file-check-outline", "#06B6D4", false, false, false, true, true, "DocumentVerificationStageHandler", ["documentVerification"]),
 		Metadata(AdmissionWorkflowStageType.Review, "Review", "Record an assigned review and an explicit admission decision.", "mdi:account-search-outline", "#64748B", false, true, false, true, true, "ReviewStageHandler", ["review"]),
-		Metadata(AdmissionWorkflowStageType.Approval, "Approval", "Record an authorized admission decision.", "mdi:check-decagram-outline", "#22C55E", false, true, false, true, true, "ApprovalStageHandler"),
+		Metadata(AdmissionWorkflowStageType.Approval, "Admission decision", "Record an authorized approve, waitlist, or reject decision.", "mdi:check-decagram-outline", "#22C55E", false, true, false, true, true, "ApprovalStageHandler"),
 		Metadata(AdmissionWorkflowStageType.Offer, "Offer", "Issue, respond to, extend, withdraw, or reissue an admission offer.", "mdi:email-seal-outline", "#10B981", false, true, false, true, true, "OfferStageHandler", ["offer"]),
-		Metadata(AdmissionWorkflowStageType.Seat, "Seat", "Reserve, confirm, release, or waitlist admission capacity.", "mdi:seat-outline", "#F97316", false, true, false, true, true, "SeatStageHandler", ["seat"]),
-		Metadata(AdmissionWorkflowStageType.Enrollment, "Enrollment", "Complete the admission workflow after the enrollment decision is recorded.", "mdi:account-school-outline", "#16A34A", false, true, false, false, true, "EnrollmentStageHandler"),
-		Metadata(AdmissionWorkflowStageType.Custom, "Custom", "Configure a school-specific manual stage.", "mdi:puzzle-outline", "#475569", true, true, false, true, true, "CustomStageHandler"),
-		Metadata(AdmissionWorkflowStageType.Appointment, "Appointment", "Schedule and complete an applicant appointment.", "mdi:calendar-clock-outline", "#EC4899", false, false, false, true, false, "AppointmentStageHandler")
+		Metadata(AdmissionWorkflowStageType.Seat, "Seat (legacy)", "Legacy workflow stage for admission capacity.", "mdi:seat-outline", "#F97316", false, true, false, true, true, "SeatStageHandler", ["seat"], false, true, "This stage is unavailable for new workflows. Existing published workflows continue to run while capacity setup moves to Admission Offering."),
+		Metadata(AdmissionWorkflowStageType.Enrollment, "Enrollment (legacy)", "Legacy workflow stage for completing enrollment.", "mdi:account-school-outline", "#16A34A", false, true, false, false, true, "EnrollmentStageHandler", null, false, true, "Use Admission decision and Finalize admission. Student Onboarding owns the post-admission handoff."),
+		Metadata(AdmissionWorkflowStageType.Custom, "Custom (legacy)", "Legacy school-specific manual stage.", "mdi:puzzle-outline", "#475569", true, true, false, true, true, "CustomStageHandler", null, false, true, "Replace it with Form, Review, Assessment, Appointment, or Admission decision so requirements and outcomes remain structured."),
+		Metadata(AdmissionWorkflowStageType.Appointment, "Appointment", "Schedule and complete an applicant appointment.", "mdi:calendar-clock-outline", "#EC4899", false, false, false, true, false, "AppointmentStageHandler", null, false, false, "Appointment will become selectable after its runtime scheduling and completion flow is available.")
 	];
 
 	public static AdmissionWorkflowStageTypeMetadata? Find(AdmissionWorkflowStageType type)
@@ -61,7 +64,10 @@ public static class AdmissionWorkflowStageTypeRegistry
 		bool supportsConditions,
 		bool isRuntimeReady,
 		string runtimeHandler,
-		IReadOnlyList<string>? supportedConfiguration = null) =>
+		IReadOnlyList<string>? supportedConfiguration = null,
+		bool isSelectable = true,
+		bool isDeprecated = false,
+		string? replacementGuidance = null) =>
 		new(
 			type,
 			displayName,
@@ -75,7 +81,10 @@ public static class AdmissionWorkflowStageTypeRegistry
 			canBeTerminalStage,
 			supportsFormAttachment,
 			supportsConditions,
-			isRuntimeReady);
+			isRuntimeReady,
+			isSelectable,
+			isDeprecated,
+			replacementGuidance);
 
 	private static string GetNextRequiredAction(AdmissionWorkflowStageType type) => type switch
 	{
@@ -86,7 +95,7 @@ public static class AdmissionWorkflowStageTypeRegistry
 		AdmissionWorkflowStageType.Payment => "Collect or verify the required payment",
 		AdmissionWorkflowStageType.DocumentVerification => "Verify the required documents",
 		AdmissionWorkflowStageType.Review => "Complete the assigned review",
-		AdmissionWorkflowStageType.Approval => "Record the approval decision",
+		AdmissionWorkflowStageType.Approval => "Record the admission decision",
 		AdmissionWorkflowStageType.Offer => "Issue or respond to the admission offer",
 		AdmissionWorkflowStageType.Seat => "Reserve or confirm the seat",
 		AdmissionWorkflowStageType.Enrollment => "Complete student enrollment",

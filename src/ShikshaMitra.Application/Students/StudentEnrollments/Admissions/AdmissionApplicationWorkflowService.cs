@@ -86,6 +86,9 @@ public class AdmissionApplicationWorkflowService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.InvalidCurrentStage);
 		var definition = await stageDefinitionRepository.FindAsync(current.DefinitionStageId) ??
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), current.DefinitionStageId);
+		if (input.SkipCurrentStage && definition.IsRequired && !input.AdminOverride)
+			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed)
+				.WithData("Reason", "Required stages can only be bypassed through the emergency override.");
 		var managedForm = current.StageType == AdmissionWorkflowStageType.Form && AdmissionFormStageAccessService.ReadPolicy(definition) != null;
 		var managedInquiry = current.StageType == AdmissionWorkflowStageType.Inquiry && AdmissionInquiryPolicyResolver.Read(definition) != null;
 		if (managedInquiry && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);

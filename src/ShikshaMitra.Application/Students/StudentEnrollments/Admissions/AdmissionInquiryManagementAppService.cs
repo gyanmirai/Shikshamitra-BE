@@ -37,14 +37,16 @@ public class AdmissionInquiryManagementAppService(
 		var (inquiry, state, policy) = await GetMutableAsync(inquiryId, input.ConcurrencyStamp);
 		EnsureActor(policy, inquiry);
 		var contactedAt = input.ContactedAt?.UtcDateTime ?? Clock.Now;
+		ValidateContact(input);
 		if (contactedAt > Clock.Now.AddMinutes(5) || contactedAt < inquiry.CreationTime.AddDays(-1))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Choose a valid contact time.");
 		state.RecordContact(contactedAt);
 		inquiry.MarkContacted(contactedAt);
 		await inquiries.UpdateAsync(inquiry, false);
 		await management.UpdateAsync(state, false);
-		await AddActivityAsync(inquiry, "InquiryContactRecorded", "Inquiry contact recorded",
-			new { input.Note, ContactedAt = contactedAt, Actor = CurrentUser.Id });
+		await AddActivityAsync(inquiry, "InquiryContactRecorded",
+			$"{DisplayCode(input.Direction)} {DisplayCode(input.Channel)} contact: {DisplayCode(input.Outcome)}",
+			new { input.Channel, input.Direction, input.Outcome, input.Note, ContactedAt = contactedAt, Actor = CurrentUser.Id });
 		return await MapAsync(inquiry, state);
 	}
 
@@ -102,12 +104,16 @@ public class AdmissionInquiryManagementAppService(
 		{
 			Code = answer.Code.Trim().ToUpperInvariant(), answer.Passed, Notes = answer.Notes?.Trim()
 		}), JsonOptions);
-		state.RecordOutcome(input.Outcome, answersJson, input.Reason, actor, Clock.Now);
+		var reasonCode = NormalizeReasonCode(input.Outcome, input.ReasonCode);
+		state.RecordOutcome(input.Outcome, answersJson, reasonCode, input.Reason, actor, Clock.Now);
 		inquiry.SetStatus(MapStatus(input.Outcome), input.DuplicateOfId);
 		await inquiries.UpdateAsync(inquiry, false);
 		await management.UpdateAsync(state, false);
-		await AddActivityAsync(inquiry, "InquiryQualificationRecorded", $"Inquiry outcome recorded: {input.Outcome}",
-			new { input.Outcome, input.Reason, input.DuplicateOfId, Answers = input.Answers, PolicyVersion = policy.Version, Actor = actor });
+		var qualificationDescription = reasonCode == null
+			? $"Inquiry outcome recorded: {DisplayCode(input.Outcome.ToString())}"
+			: $"Inquiry outcome recorded: {DisplayCode(input.Outcome.ToString())} ({DisplayCode(reasonCode)})";
+		await AddActivityAsync(inquiry, "InquiryQualificationRecorded", qualificationDescription,
+			new { input.Outcome, ReasonCode = reasonCode, input.Reason, input.DuplicateOfId, Answers = input.Answers, PolicyVersion = policy.Version, Actor = actor });
 		return await MapAsync(inquiry, state);
 	}
 
@@ -206,6 +212,7 @@ public class AdmissionInquiryManagementAppService(
 			AssignedCounsellorId = inquiry.AssignedCounsellorId, FirstContactDueAt = state.FirstContactDueAt,
 			QualificationDueAt = state.QualificationDueAt, LastContactAt = state.LastContactAt,
 			ContactCount = state.ContactCount, Outcome = state.Outcome, OutcomeReason = state.OutcomeReason,
+			OutcomeReasonCode = state.OutcomeReasonCode,
 			OutcomeAt = state.OutcomeAt, OutcomeBy = state.OutcomeBy,
 			IsOverdue = AdmissionInquiryRuntimeService.IsOverdue(state, Clock.Now), IsLocked = isLocked,
 			CanStartApplication = !isLocked && blockers.Count == 0,
@@ -244,4 +251,37 @@ public class AdmissionInquiryManagementAppService(
 		AdmissionInquiryQualificationOutcome.Duplicate => AdmissionInquiryStatus.Duplicate,
 		_ => throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput)
 	};
+
+	private static string? NormalizeReasonCode(AdmissionInquiryQualificationOutcome outcome, string? reasonCode)
+	{
+		if (outcome is not (AdmissionInquiryQualificationOutcome.NotInterested or
+			AdmissionInquiryQualificationOutcome.Lost or AdmissionInquiryQualificationOutcome.Duplicate))
+			return null;
+		var normalized = reasonCode?.Trim().ToUpperInvariant();
+		var allowed = new[]
+		{
+			"TIMING", "BUDGET", "NO_RESPONSE", "CHANGED_PLAN", "JOINED_OTHER_SCHOOL",
+			"SEAT_UNAVAILABLE", "FEES", "LOCATION", "ACADEMIC_FIT", "DUPLICATE", "OTHER"
+		};
+		if (string.IsNullOrWhiteSpace(normalized) || !allowed.Contains(normalized))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
+				"Choose a valid closure reason.");
+		return normalized;
+	}
+
+	private static void ValidateContact(RecordAdmissionInquiryContactDto input)
+	{
+		var channels = new[] { "PHONE", "WHATSAPP", "SMS", "EMAIL", "IN_PERSON", "VIDEO" };
+		var directions = new[] { "OUTBOUND", "INBOUND" };
+		var outcomes = new[] { "CONNECTED", "NO_ANSWER", "CALL_BACK", "INFORMATION_SHARED", "VISIT_PLANNED", "OTHER" };
+		if (!channels.Contains(input.Channel.Trim().ToUpperInvariant()) ||
+			!directions.Contains(input.Direction.Trim().ToUpperInvariant()) ||
+			!outcomes.Contains(input.Outcome.Trim().ToUpperInvariant()))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
+				"Choose a valid contact channel, direction, and outcome.");
+	}
+
+	private static string DisplayCode(string value) => string.Join(" ", value.Trim()
+		.Split('_', StringSplitOptions.RemoveEmptyEntries)
+		.Select(word => char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant()));
 }

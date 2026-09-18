@@ -1,5 +1,6 @@
 using System;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -7,6 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionInquiryManagement : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const string OutcomeReasonCodeProperty = "OutcomeReasonCode";
 	public Guid? TenantId { get; private set; }
 	public Guid InquiryId { get; private set; }
 	public Guid StageDefinitionId { get; private set; }
@@ -18,6 +20,7 @@ public class AdmissionInquiryManagement : FullAuditedAggregateRoot<Guid>, IMulti
 	public AdmissionInquiryQualificationOutcome? Outcome { get; private set; }
 	public string? QualificationAnswersJson { get; private set; }
 	public string? OutcomeReason { get; private set; }
+	public string? OutcomeReasonCode => this.GetProperty<string>(OutcomeReasonCodeProperty);
 	public DateTime? OutcomeAt { get; private set; }
 	public Guid? OutcomeBy { get; private set; }
 	public int Revision { get; private set; }
@@ -44,7 +47,7 @@ public class AdmissionInquiryManagement : FullAuditedAggregateRoot<Guid>, IMulti
 
 	public void Touch() => Revision++;
 
-	public void RecordOutcome(AdmissionInquiryQualificationOutcome outcome, string answersJson, string reason,
+	public void RecordOutcome(AdmissionInquiryQualificationOutcome outcome, string answersJson, string? reasonCode, string reason,
 		Guid actor, DateTime decidedAt)
 	{
 		if (!Enum.IsDefined(outcome) || actor == Guid.Empty || string.IsNullOrWhiteSpace(answersJson) ||
@@ -53,6 +56,8 @@ public class AdmissionInquiryManagement : FullAuditedAggregateRoot<Guid>, IMulti
 		Outcome = outcome;
 		QualificationAnswersJson = answersJson;
 		OutcomeReason = reason.Trim();
+		if (string.IsNullOrWhiteSpace(reasonCode)) ExtraProperties.Remove(OutcomeReasonCodeProperty);
+		else this.SetProperty(OutcomeReasonCodeProperty, reasonCode.Trim().ToUpperInvariant());
 		OutcomeBy = actor;
 		OutcomeAt = decidedAt.ToUniversalTime();
 		Revision++;
@@ -64,6 +69,7 @@ public class AdmissionInquiryManagement : FullAuditedAggregateRoot<Guid>, IMulti
 		Outcome = null;
 		QualificationAnswersJson = null;
 		OutcomeReason = null;
+		ExtraProperties.Remove(OutcomeReasonCodeProperty);
 		OutcomeAt = null;
 		OutcomeBy = null;
 		Revision++;

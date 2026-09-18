@@ -20,7 +20,7 @@
     "ShikshaMitra.HttpApi.Host (Development)": {
       "commandName": "Project",
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:44332",
+      "applicationUrl": "https://localhost:44332;http://0.0.0.0:5000",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "SeedTestLogins": "true",

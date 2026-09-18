@@ -212,7 +212,9 @@ public class AcademicPermissionUserScopeSyncer(
 			}
 		}
 
-		var classTeacherAssignments = await classTeacherRepository.GetListAsync();
+		var classTeacherAssignments = await classTeacherRepository.GetListAsync(
+			assignment => assignment.Status == ClassTeacherAssignmentStatus.Active
+		);
 		var classTeacherEmployeeIds = classTeacherAssignments
 			.Select(x => x.TeacherId)
 			.Distinct()

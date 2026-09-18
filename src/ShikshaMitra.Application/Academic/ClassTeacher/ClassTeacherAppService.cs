@@ -50,6 +50,7 @@ public class ClassTeacherAppService(
 				else
 				{
 					assignment.TeacherId = item.TeacherId;
+					assignment.Activate();
 					await assignmentRepository.UpdateAsync(assignment);
 				}
 			}
@@ -65,7 +66,8 @@ public class ClassTeacherAppService(
 		try
 		{
 			var classTeachers = await assignmentRepository.GetListAsync(x =>
-				x.AcademicMediumId == educationMediumId
+				x.AcademicMediumId == educationMediumId &&
+				x.Status == ClassTeacherAssignmentStatus.Active
 			);
 
 			var result = new List<ClassTeacherDto>();

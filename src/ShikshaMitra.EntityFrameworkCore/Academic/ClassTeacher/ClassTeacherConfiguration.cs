@@ -11,5 +11,8 @@ public class ClassTeacherConfiguration : IEntityTypeConfiguration<ClassTeacher>
 		builder.ToTable(ShikshaMitraConsts.AcademicDbTablePrefix + "ClassTeachers", ShikshaMitraConsts.DbSchema);
 		// Apply default configurations based on ABP conventions.
 		builder.ConfigureByConvention();
+		builder.Property(assignment => assignment.Status)
+			.HasDefaultValue(ClassTeacherAssignmentStatus.Active)
+			.ValueGeneratedNever();
 	}
 }

@@ -176,12 +176,14 @@ public class OpenIddictDataSeedContributor(
 				grantTypes: new List<string>
 				{
 			OpenIddictConstants.GrantTypes.AuthorizationCode,
+			OpenIddictConstants.GrantTypes.Password,
 			OpenIddictConstants.GrantTypes.RefreshToken
 				},
 				scopes: commonScopes,
 				redirectUri: $"{flutterClientRootUrl}/callback",
 				clientUri: flutterClientRootUrl,
-				postLogoutRedirectUri: $"{flutterClientRootUrl}/logout"
+				postLogoutRedirectUri: $"{flutterClientRootUrl}/logout",
+				requireProofKeyForCodeExchange: true
 			);
 		}
 
@@ -217,7 +219,8 @@ public class OpenIddictDataSeedContributor(
 		string? clientUri = null,
 		string? redirectUri = null,
 		string? postLogoutRedirectUri = null,
-		List<string>? permissions = null)
+		List<string>? permissions = null,
+		bool requireProofKeyForCodeExchange = false)
 	{
 		if (!string.IsNullOrEmpty(secret) && string.Equals(type, OpenIddictConstants.ClientTypes.Public,
 				StringComparison.OrdinalIgnoreCase))
@@ -242,6 +245,11 @@ public class OpenIddictDataSeedContributor(
 			DisplayName = displayName,
 			ClientUri = clientUri,
 		};
+
+		if (requireProofKeyForCodeExchange)
+		{
+			application.Requirements.Add(OpenIddictConstants.Requirements.Features.ProofKeyForCodeExchange);
+		}
 
 		Check.NotNullOrEmpty(grantTypes, nameof(grantTypes));
 		Check.NotNullOrEmpty(scopes, nameof(scopes));
@@ -418,19 +426,31 @@ public class OpenIddictDataSeedContributor(
 			return;
 		}
 
+		var clientChanged = false;
+
 		if (!HasSameRedirectUris(client, application))
 		{
 			client.RedirectUris =
 				JsonSerializer.Serialize(application.RedirectUris.Select(q => q.ToString().TrimEnd('/')));
 			client.PostLogoutRedirectUris =
 				JsonSerializer.Serialize(application.PostLogoutRedirectUris.Select(q => q.ToString().TrimEnd('/')));
-
-			await applicationManager.UpdateAsync(client.ToModel());
+			clientChanged = true;
 		}
 
 		if (!HasSameScopes(client, application))
 		{
 			client.Permissions = JsonSerializer.Serialize(application.Permissions.Select(q => q));
+			clientChanged = true;
+		}
+
+		if (!HasSameRequirements(client, application))
+		{
+			client.Requirements = JsonSerializer.Serialize(application.Requirements.Select(q => q));
+			clientChanged = true;
+		}
+
+		if (clientChanged)
+		{
 			await applicationManager.UpdateAsync(client.ToModel());
 		}
 	}
@@ -442,5 +462,11 @@ public class OpenIddictDataSeedContributor(
 	{
 		return existingClient.Permissions ==
 			   JsonSerializer.Serialize(application.Permissions.Select(q => q.ToString().TrimEnd('/')));
+	}
+
+	private bool HasSameRequirements(OpenIddictApplication existingClient, AbpApplicationDescriptor application)
+	{
+		return existingClient.Requirements ==
+			   JsonSerializer.Serialize(application.Requirements.Select(q => q.ToString().TrimEnd('/')));
 	}
 }

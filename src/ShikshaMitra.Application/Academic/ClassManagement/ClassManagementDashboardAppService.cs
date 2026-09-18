@@ -60,7 +60,9 @@ public class ClassManagementDashboardAppService(
 
 		var students = await studentRepository.GetListAsync(s => s.AcademicMediumId == academicMediumId);
 		var employees = await employeeRepository.GetListAsync();
-		var classTeachers = (await classTeacherRepository.GetListAsync(ct => ct.AcademicMediumId == academicMediumId))
+		var classTeachers = (await classTeacherRepository.GetListAsync(ct =>
+			ct.AcademicMediumId == academicMediumId &&
+			ct.Status == ClassTeacherAssignmentStatus.Active))
 			.Where(ct => standardIds.Contains(ct.StandardId) && divisionIds.Contains(ct.DivisionId))
 			.ToList();
 		var teacherAllocations = (await teacherAllocationRepository.GetListAsync(includeDetails: true))

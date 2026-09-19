@@ -8,6 +8,5 @@ public class StudentElectiveUpdateDto
 	[Required]
 	public Guid StudentId { get; set; }
 
-	[Required]
-	public Guid SelectedSubjectId { get; set; }
+	public Guid? SelectedSubjectId { get; set; }
 }

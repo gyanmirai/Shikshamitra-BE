@@ -80,10 +80,7 @@ public class ChapterAppService(
 
 	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId, Guid? divisionId = null)
 	{
-		var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync(
-			a => a.Chapters,
-			a => a.Teachers
-		);
+		var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync();
 		var assignedSubject = await AsyncExecuter.FirstOrDefaultAsync(
 			assignedSubjectQuery.Where(a => a.StandardId == standardId && a.SubjectId == subjectId)
 		)

@@ -32,6 +32,9 @@ public class SubjectAssignmentGroupDto
 	/// <summary>All primary teacher names assigned to the subjects in this row.</summary>
 	public List<string> PrimaryTeacherNames { get; set; } = new();
 
+	/// <summary>All assigned teachers, formatted as employee code and name for display.</summary>
+	public List<string> TeacherNames { get; set; } = new();
+
     /// <summary>Primary teacher id</summary>
 	public string? PrimaryTeacherId { get; set; }
 

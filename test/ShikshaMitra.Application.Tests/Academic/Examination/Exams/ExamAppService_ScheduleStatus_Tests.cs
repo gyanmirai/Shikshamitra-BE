@@ -300,6 +300,34 @@ public partial class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicati
 	}
 
 	[Fact]
+	public async Task GetListAsync_Should_Apply_Explicit_Date_Range_To_Pending_Rows_And_Summary_Counts()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var (pendingExam, mediumId) = await CreateScheduledExamAsync(ExamStatus.Pending);
+				await CreateScheduledExamAsync(ExamStatus.Completed);
+				var outsideScheduleStart = DateTime.Today.AddDays(20);
+
+				var result = await _examAppService.GetListAsync(new GetExamsInput
+				{
+					AcademicMediumId = mediumId,
+					Status = ExamStatus.Pending,
+					StartDate = outsideScheduleStart,
+					EndDate = outsideScheduleStart.AddDays(6),
+					MaxResultCount = 10
+				});
+
+				result.Items.Select(item => item.ExamId).ShouldNotContain(pendingExam.Id);
+				result.TotalCount.ShouldBe(0);
+				result.PendingCount.ShouldBe(0);
+				result.CompletedCount.ShouldBe(0);
+			}
+		});
+	}
+
+	[Fact]
 	public async Task GetListAsync_Should_Return_Undated_Pending_Exam_When_Explicit_Date_Range_Is_Used()
 	{
 		await WithUnitOfWorkAsync(async () =>
@@ -532,14 +560,7 @@ public partial class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicati
 		{
 			using (_currentTenant.Change(TestTenantId))
 			{
-				await _scopeRepository.InsertAsync(
-					new UserScopeAssignment(
-						Guid.NewGuid(),
-						TestTenantId,
-						userId: FakeAdminUserId,
-						description: "Tenant-wide elective schedule projection test scope"),
-					autoSave: true);
-				await _userScopeService.InvalidateUserScopeCacheAsync(FakeAdminUserId);
+				await EnsureDefaultExamTestScopeAsync();
 
 				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
 				var stage = await _stageRepository.GetAsync(stageId);
@@ -638,12 +659,38 @@ public partial class ExamAppService_ScheduleStatus_Tests : ShikshaMitraApplicati
 
 	private async Task EnsureDefaultExamTestScopeAsync()
 	{
-		if (!await _scopeRepository.AnyAsync(scope => scope.UserId == FakeAdminUserId))
+		var adminRole = (await _identityRoleRepository.GetListAsync(role => role.Name == "admin"))
+			.FirstOrDefault();
+		if (adminRole is null)
+		{
+			adminRole = new IdentityRole(Guid.NewGuid(), "admin", TestTenantId);
+			await _identityRoleRepository.InsertAsync(adminRole, autoSave: true);
+		}
+
+		var adminUser = await _identityUserRepository.FindAsync(FakeAdminUserId);
+		if (adminUser is null)
+		{
+			adminUser = new IdentityUser(FakeAdminUserId, "admin", "admin@test.local", TestTenantId);
+			adminUser.AddRole(adminRole.Id);
+			await _identityUserRepository.InsertAsync(adminUser, autoSave: true);
+		}
+
+		var hasTenantWideScope = await _scopeRepository.AnyAsync(scope =>
+			scope.UserId == FakeAdminUserId &&
+			scope.IsActive &&
+			!scope.AcademicYearId.HasValue &&
+			!scope.EducationBoardId.HasValue &&
+			!scope.EducationMediumId.HasValue &&
+			!scope.EducationMediumStageId.HasValue &&
+			!scope.StandardId.HasValue &&
+			!scope.DivisionId.HasValue);
+		if (!hasTenantWideScope)
 		{
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId,
 				userId: FakeAdminUserId, description: "Exam schedule test operator scope"), autoSave: true);
-			await _userScopeService.InvalidateUserScopeCacheAsync(FakeAdminUserId);
 		}
+
+		await _userScopeService.InvalidateUserScopeCacheAsync(FakeAdminUserId);
 	}
 
 	private async Task<(Exam exam, Guid mediumId)> CreateScheduledExamAsync(

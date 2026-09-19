@@ -89,6 +89,17 @@ public class SubjectAssignmentController(
 		return Result.Success(result);
 	}
 
+	/// <summary>Gets the saved lecture schedule for a subject assignment across divisions.</summary>
+	[HttpGet("subject-assignments/{assignmentId}/schedule-breakdown")]
+	[ProducesResponseType(typeof(SubjectScheduleBreakdownDto), 200)]
+	[ProducesResponseType(404)]
+	public async Task<Result<SubjectScheduleBreakdownDto>> GetScheduleBreakdownAsync(
+		[FromRoute] Guid assignmentId)
+	{
+		var result = await subjectAssignmentAppService.GetScheduleBreakdownAsync(assignmentId);
+		return Result.Success(result);
+	}
+
 	/// <summary>
 	/// Updates an existing subject assignment group
 	/// </summary>

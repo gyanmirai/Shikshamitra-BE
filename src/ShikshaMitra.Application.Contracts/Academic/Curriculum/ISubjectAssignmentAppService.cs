@@ -48,6 +48,11 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	Task<SubjectAssignmentDto> GetAsync(Guid assignmentId);
 
 	/// <summary>
+	/// Gets the saved timetable slots for a subject assignment across class divisions.
+	/// </summary>
+	Task<SubjectScheduleBreakdownDto> GetScheduleBreakdownAsync(Guid assignmentId);
+
+	/// <summary>
 	/// Updates an existing subject assignment group
 	/// </summary>
 	/// <param name="assignmentId">Assignment group ID</param>

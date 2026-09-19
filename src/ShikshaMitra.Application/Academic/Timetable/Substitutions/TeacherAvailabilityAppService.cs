@@ -8,13 +8,13 @@ using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
-using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
 
@@ -42,8 +42,6 @@ public class TeacherAvailabilityAppService(
         var visibility = IsAdminUser()
             ? null
             : await GetVisibleTeachersAsync();
-
-        await SyncAttendanceAvailabilityRowsAsync(input, visibility?.EmployeeIds);
 
         var rows = await availabilityRepository.GetListAsync(x => !x.IsCancelled);
         var filtered = rows.AsEnumerable();

@@ -19,6 +19,88 @@ namespace ShikshaMitra.Academic.Curriculum;
 public class SubjectAssignmentReadBatching_Tests : SubjectTeacherReassignmentTestBase
 {
 	[Fact]
+	public async Task Create_Should_Map_Unified_Teachers_To_Internal_Storage()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (Tenant.Change(TenantId))
+			using (AsAdmin())
+			{
+				await SeedAllocationAsync();
+				var subject = new Subject(Guid.NewGuid(), TenantId, "Science", "#112233", AcademicMediumId);
+				await GetRequiredService<IRepository<Subject, Guid>>().InsertAsync(subject, autoSave: true);
+
+				await Allocations.CreateAsync(AcademicMediumId, new CreateUpdateSubjectAssignmentDto
+				{
+					ClassId = StandardId,
+					Status = SubjectStatus.Draft,
+					Subjects =
+					[
+						new SubjectAssignmentDetailDto
+						{
+							SubjectId = subject.Id,
+							SubjectCode = "SCI",
+							TeacherIds = [NewTeacher, OldTeacher]
+						}
+					]
+				});
+
+				var stored = (await GetRequiredService<IRepository<AssignedSubject, Guid>>()
+					.GetListAsync(assignment => assignment.SubjectId == subject.Id)).Single();
+				stored.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Primary)
+					.TeacherId.ShouldBe(NewTeacher);
+				stored.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Secondary)
+					.TeacherId.ShouldBe(OldTeacher);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task Unified_Teacher_List_Should_Preserve_Existing_Internal_Primary_And_Return_Codes()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (Tenant.Change(TenantId))
+			using (AsAdmin())
+			{
+				await SeedAllocationAsync();
+				var result = await Allocations.UpdateAsync(AssignmentId, AcademicMediumId,
+					new CreateUpdateSubjectAssignmentDto
+					{
+						ClassId = StandardId,
+						Status = SubjectStatus.Draft,
+						Subjects =
+						[
+							new SubjectAssignmentDetailDto
+							{
+								SubjectId = SubjectId,
+								SubjectCode = "MATH",
+								TeacherIds = [NewTeacher, OldTeacher]
+							}
+						]
+					});
+
+				var stored = await GetRequiredService<IRepository<AssignedSubject, Guid>>()
+					.GetAsync(AssignmentId);
+				stored.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Primary)
+					.TeacherId.ShouldBe(OldTeacher);
+				stored.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Secondary)
+					.TeacherId.ShouldBe(NewTeacher);
+
+				var teachers = result.Subjects.Single().Teachers;
+				teachers.Select(teacher => teacher.Id).ShouldBe([
+					OldTeacher.ToString(),
+					NewTeacher.ToString()
+				]);
+				teachers.Select(teacher => teacher.EmployeeCode).ShouldBe(["ALLOC001", "ALLOC002"]);
+				var listItem = (await Allocations.GetListAsync(StandardId, 0, 100, includeArchived: true))
+					.Items.Single(item => item.Id == AssignmentId);
+				listItem.TeacherNames.ShouldBe(["ALLOC001 - Old Teacher", "ALLOC002 - New Teacher"]);
+			}
+		});
+	}
+
+	[Fact]
 	public async Task Kpi_And_Workload_Should_Preserve_Stored_Values_And_Not_Track_Assignment_Graphs()
 	{
 		await WithUnitOfWorkAsync(async () =>

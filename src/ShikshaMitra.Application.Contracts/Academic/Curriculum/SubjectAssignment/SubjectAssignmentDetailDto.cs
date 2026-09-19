@@ -20,12 +20,18 @@ public class SubjectAssignmentDetailDto
 	public Guid? ElectiveGroupId { get; set; }
 
 	/// <summary>
-	/// Primary teacher ID (can be string "teacherId_123" from FE)
+	/// All teachers assigned to the subject. The order has no user-facing role or priority.
+	/// When supplied, this replaces the legacy primary/secondary input fields.
+	/// </summary>
+	public List<Guid>? TeacherIds { get; set; }
+
+	/// <summary>
+	/// Legacy compatibility field. New clients should use <see cref="TeacherIds"/>.
 	/// </summary>
 	public Guid? PrimaryTeacherId { get; set; }
 
 	/// <summary>
-	/// Secondary teacher IDs
+	/// Legacy compatibility field. New clients should use <see cref="TeacherIds"/>.
 	/// </summary>
 	public List<Guid>? SecondaryTeacherIds { get; set; } = new List<Guid>();
 

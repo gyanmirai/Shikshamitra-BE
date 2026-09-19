@@ -109,7 +109,7 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUs
 	public bool IsAiSuggested { get; set; } = false;
 
 	/// <summary>
-	/// Whether this subject was copied from a previous academic year
+	/// Transient marker shown until a copied subject is first edited or published.
 	/// </summary>
 	public bool IsCopiedFromPreviousYear { get; set; } = false;
 
@@ -188,6 +188,11 @@ public class AssignedSubject : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUs
 	public void ChangeStatus(SubjectStatus status)
 	{
 		Status = status;
+	}
+
+	public void ClearCopiedFromPreviousYearMarker()
+	{
+		IsCopiedFromPreviousYear = false;
 	}
 
 	public void SetPrimaryTeacher(Guid teacherId)

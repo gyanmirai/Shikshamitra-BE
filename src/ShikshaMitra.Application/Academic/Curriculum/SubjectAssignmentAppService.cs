@@ -46,7 +46,8 @@ public class SubjectAssignmentAppService(
 	IRepository<Employee, Guid> employeeRepository,
 	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
 	IReportingManagerAccessService reportingManagerAccessService,
-	SubjectTeacherReassignmentManager teacherReassignmentManager
+	SubjectTeacherReassignmentManager teacherReassignmentManager,
+	SubjectScheduleBreakdownQueryService scheduleBreakdownQueryService
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -56,6 +57,7 @@ public class SubjectAssignmentAppService(
 	{
 		try
 		{
+			NormalizeUnifiedTeacherAssignments(createSubjectAssignmentDto.Subjects, []);
 			EnsureSubjectAssignmentInputIsConsistent(createSubjectAssignmentDto);
 			await EnsureNewTeacherAssignmentsAreActiveAsync(createSubjectAssignmentDto.Subjects, []);
 			await EnsureSubjectsAreNotAlreadyAssignedAsync(
@@ -297,16 +299,23 @@ public class SubjectAssignmentAppService(
 			.ToDictionary(g => g.Key, g => g.Count());
 		var usage = await LoadAssignmentListUsageAsync(classId, subjectIds, electiveGroupIds, timetables);
 
-		// Bulk-load teachers for primary teacher display in list
+		// Bulk-load every assigned teacher once for the flat teacher list and legacy primary fields.
 		var allAssignmentTeacherIds = assignments
 			.SelectMany(a => a.Teachers)
-			.Where(t => t.TeacherType == SubjectTeacherType.Primary)
 			.Select(t => t.TeacherId)
 			.Distinct()
 			.ToList();
 		var teacherNamesDict = allAssignmentTeacherIds.Count > 0
 			? (await userRepository.GetListByIdsAsync(allAssignmentTeacherIds))
 				.ToDictionary(u => u.Id, u => $"{u.Name} {u.Surname}".Trim())
+			: new Dictionary<Guid, string>();
+		var teacherDisplayNamesDict = allAssignmentTeacherIds.Count > 0
+			? (await employeeRepository.GetListAsync(employee => allAssignmentTeacherIds.Contains(employee.Id)))
+				.ToDictionary(
+					employee => employee.Id,
+					employee => string.IsNullOrWhiteSpace(employee.EmployeeCode)
+						? employee.EmployeeName
+						: $"{employee.EmployeeCode} - {employee.EmployeeName}")
 			: new Dictionary<Guid, string>();
 
 		foreach (var coreAssignment in coreSubjects)
@@ -324,6 +333,12 @@ public class SubjectAssignmentAppService(
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.ToList();
 			var primaryTeacherEntry = primaryTeacherEntries.FirstOrDefault();
+			var teacherNames = coreAssignment.Teachers
+				.Select(teacher => teacherDisplayNamesDict.GetValueOrDefault(teacher.TeacherId)
+					?? teacherNamesDict.GetValueOrDefault(teacher.TeacherId))
+				.Where(name => !string.IsNullOrWhiteSpace(name))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToList();
 			var usageParts = BuildAssignmentUsageParts(usage,
 				new[] { coreAssignment.SubjectId },
 				coreAssignment.ElectiveGroupId,
@@ -344,6 +359,7 @@ public class SubjectAssignmentAppService(
 				PrimaryTeacherId = primaryTeacherEntry?.TeacherId.ToString(),
 				PrimaryTeacherName = primaryTeacherNames.FirstOrDefault(),
 				PrimaryTeacherNames = primaryTeacherNames,
+				TeacherNames = teacherNames,
 				LastUpdatedAt = coreAssignment.LastModificationTime ?? coreAssignment.CreationTime,
 				IsAiSuggested = coreAssignment.IsAiSuggested,
 				IsCopiedFromPreviousYear = coreAssignment.IsCopiedFromPreviousYear,
@@ -383,6 +399,13 @@ public class SubjectAssignmentAppService(
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.ToList();
 			var firstPrimary = primaryTeacherEntries.FirstOrDefault();
+			var teacherNames = group
+				.SelectMany(assignment => assignment.Teachers)
+				.Select(teacher => teacherDisplayNamesDict.GetValueOrDefault(teacher.TeacherId)
+					?? teacherNamesDict.GetValueOrDefault(teacher.TeacherId))
+				.Where(name => !string.IsNullOrWhiteSpace(name))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.ToList();
 			var subjectIdsInGroup = group.Select(a => a.SubjectId).ToList();
 			var usageParts = BuildAssignmentUsageParts(usage,
 				subjectIdsInGroup,
@@ -406,6 +429,7 @@ public class SubjectAssignmentAppService(
 				PrimaryTeacherId = firstPrimary?.TeacherId.ToString(),
 				PrimaryTeacherName = primaryTeacherNames.FirstOrDefault(),
 				PrimaryTeacherNames = primaryTeacherNames,
+				TeacherNames = teacherNames,
 				LastUpdatedAt = first.LastModificationTime ?? first.CreationTime,
 				IsAiSuggested = first.IsAiSuggested,
 				IsCopiedFromPreviousYear = first.IsCopiedFromPreviousYear,
@@ -433,8 +457,8 @@ public class SubjectAssignmentAppService(
 		{
 			groupedAssignments = groupedAssignments
 				.Where(a =>
-					a.PrimaryTeacherNames.Any(name =>
-					name.Contains(normalizedTeacherSearch, StringComparison.OrdinalIgnoreCase)))
+					a.TeacherNames.Concat(a.PrimaryTeacherNames).Any(name =>
+						name.Contains(normalizedTeacherSearch, StringComparison.OrdinalIgnoreCase)))
 				.ToList();
 		}
 
@@ -524,6 +548,15 @@ public class SubjectAssignmentAppService(
 				var metrics = GetReadMetrics(readMetrics, a);
 				var primaryTeacherEntry = a.Teachers.FirstOrDefault(t => t.TeacherType == SubjectTeacherType.Primary);
 				var secondaryTeacherEntries = a.Teachers.Where(t => t.TeacherType == SubjectTeacherType.Secondary).ToList();
+				var teachers = a.Teachers
+					.OrderBy(teacher => teacher.TeacherType)
+					.ThenBy(teacher => teacher.TeacherId)
+					.Select(teacher => BuildTeacherInfo(
+						teacher.TeacherId,
+						employeesById,
+						identityUsersById,
+						experienceAsOf))
+					.ToList();
 				return new SubjectAssignmentDetailResponseDto
 				{
 					AssignedSubjectId = a.Id,
@@ -533,6 +566,7 @@ public class SubjectAssignmentAppService(
 					Color = a.Subject?.Color,
 					SubjectType = a.SubjectType,
 					ElectiveGroupId = a.ElectiveGroupId,
+					Teachers = teachers,
 					PrimaryTeacher = primaryTeacherEntry == null
 						? null
 						: BuildTeacherInfo(
@@ -564,6 +598,42 @@ public class SubjectAssignmentAppService(
 		};
 	}
 
+	public async Task<SubjectScheduleBreakdownDto> GetScheduleBreakdownAsync(Guid assignmentId)
+	{
+		var query = await assignmentRepository.WithDetailsAsync(assignment => assignment.Teachers);
+		var assignment = await AsyncExecuter.FirstOrDefaultAsync(
+			query.Where(candidate => candidate.Id == assignmentId))
+			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(
+				typeof(AssignedSubject), assignmentId);
+
+		await EnsureCurrentUserCanAccessAssignmentAsync(
+			assignment,
+			operation: "subject-assignment-read");
+
+		if (await userScopeAccessService.CurrentUserHasTenantWideScopeAsync())
+		{
+			return await scheduleBreakdownQueryService.GetAsync(assignment);
+		}
+
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		var allowedTeacherIds = new HashSet<Guid>();
+		if (CurrentUser.Id.HasValue)
+		{
+			allowedTeacherIds.UnionWith(
+				await reportingManagerAccessService.GetReporteeEmployeeIdsAsync(CurrentUser.Id.Value));
+		}
+		var currentEmployeeId = await GetCurrentEmployeeIdAsync();
+		if (currentEmployeeId.HasValue)
+		{
+			allowedTeacherIds.Add(currentEmployeeId.Value);
+		}
+
+		return await scheduleBreakdownQueryService.GetAsync(
+			assignment,
+			scope.DivisionIds,
+			allowedTeacherIds);
+	}
+
 	private static TeacherInfoDto BuildTeacherInfo(
 		Guid teacherId,
 		IReadOnlyDictionary<Guid, Employee> employeesById,
@@ -581,6 +651,7 @@ public class SubjectAssignmentAppService(
 			Name = !string.IsNullOrWhiteSpace(employeeName)
 				? employeeName
 				: $"{identityUser?.Name} {identityUser?.Surname}".Trim(),
+			EmployeeCode = employee?.EmployeeCode,
 			Email = !string.IsNullOrWhiteSpace(employee?.Email)
 				? employee.Email
 				: identityUser?.Email,
@@ -652,8 +723,6 @@ public class SubjectAssignmentAppService(
 		CreateUpdateSubjectAssignmentDto input
 	)
 	{
-		EnsureSubjectAssignmentInputIsConsistent(input);
-
 		// 1. Identify the group being updated (with navigation properties loaded)
 		var baseQuery = await assignmentRepository.WithDetailsAsync(a => a.Teachers, a => a.Documents);
 
@@ -675,6 +744,8 @@ public class SubjectAssignmentAppService(
 			existingGroup = new List<AssignedSubject> { existingEntity };
 		}
 
+		NormalizeUnifiedTeacherAssignments(input.Subjects, existingGroup);
+		EnsureSubjectAssignmentInputIsConsistent(input);
 		await EnsureNewTeacherAssignmentsAreActiveAsync(input.Subjects, existingGroup);
 
 		// 2. Process updates
@@ -709,6 +780,7 @@ public class SubjectAssignmentAppService(
 				existingSubject.WeeklyPeriods = inputSubject.WeeklyPeriods;
 				existingSubject.DifficultyLevel = inputSubject.DifficultyLevel;
 				existingSubject.SubjectGroup = inputSubject.SubjectGroup;
+				existingSubject.ClearCopiedFromPreviousYearMarker();
 
 				// Update Teachers
 				if (inputSubject.PrimaryTeacherId.HasValue)
@@ -865,6 +937,7 @@ public class SubjectAssignmentAppService(
 			if (status == SubjectStatus.Published)
 			{
 				groupAssignment.PublishedAt = DateTimeOffset.UtcNow;
+				groupAssignment.ClearCopiedFromPreviousYearMarker();
 			}
 		}
 
@@ -906,6 +979,7 @@ public class SubjectAssignmentAppService(
 				EnsureSubjectAssignmentReadyToPublish(assignment);
 				assignment.ChangeStatus(SubjectStatus.Published);
 				assignment.PublishedAt = DateTimeOffset.UtcNow;
+				assignment.ClearCopiedFromPreviousYearMarker();
 			}
 
 			await assignmentRepository.UpdateManyAsync(assignments, autoSave: true);
@@ -1590,6 +1664,49 @@ public class SubjectAssignmentAppService(
 					.WithData("SubjectId", subject.SubjectId)
 					.WithData("TeacherId", subject.PrimaryTeacherId.Value);
 			}
+		}
+	}
+
+	private static void NormalizeUnifiedTeacherAssignments(
+		IEnumerable<SubjectAssignmentDetailDto> subjects,
+		IReadOnlyCollection<AssignedSubject> existingAssignments)
+	{
+		var existingBySubjectId = existingAssignments.ToDictionary(assignment => assignment.SubjectId);
+		foreach (var subject in subjects)
+		{
+			if (subject.TeacherIds == null)
+			{
+				continue;
+			}
+
+			var suppliedTeacherIds = subject.TeacherIds
+				.Where(teacherId => teacherId != Guid.Empty)
+				.ToList();
+			var duplicateTeacherIds = suppliedTeacherIds
+				.GroupBy(teacherId => teacherId)
+				.Where(group => group.Count() > 1)
+				.Select(group => group.Key)
+				.ToList();
+			if (duplicateTeacherIds.Count > 0)
+			{
+				throw new BusinessException("SubjectAssignment:DuplicateTeacher")
+					.WithData("SubjectId", subject.SubjectId)
+					.WithData("TeacherIds", JsonSerializer.Serialize(duplicateTeacherIds));
+			}
+
+			existingBySubjectId.TryGetValue(subject.SubjectId, out var existingAssignment);
+			var existingPrimaryTeacherId = existingAssignment?.Teachers
+				.FirstOrDefault(teacher => teacher.TeacherType == SubjectTeacherType.Primary)
+				?.TeacherId;
+			var internalPrimaryTeacherId = existingPrimaryTeacherId.HasValue &&
+				suppliedTeacherIds.Contains(existingPrimaryTeacherId.Value)
+					? existingPrimaryTeacherId
+					: suppliedTeacherIds.Cast<Guid?>().FirstOrDefault();
+
+			subject.PrimaryTeacherId = internalPrimaryTeacherId;
+			subject.SecondaryTeacherIds = suppliedTeacherIds
+				.Where(teacherId => teacherId != internalPrimaryTeacherId)
+				.ToList();
 		}
 	}
 

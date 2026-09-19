@@ -37,18 +37,38 @@ public class AdmissionInquiryPeopleService(
 			standardDivisions.AsQueryable(), await scopes.GetUserScopeAsync(userId)).Any();
 	}
 
-	public async Task<List<AdmissionInquiryCounsellorDto>> GetCounsellorsAsync(string? filter)
+	public async Task<List<AdmissionInquiryCounsellorDto>> GetCounsellorsAsync(
+		string? filter,
+		Guid? admissionOfferingId = null)
 	{
 		if (filter?.Length > 128) throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidPolicy);
 		var query = (await users.GetQueryableAsync()).Where(user => user.IsActive);
 		if (!string.IsNullOrWhiteSpace(filter))
 			query = query.Where(user => user.UserName.Contains(filter) || user.Name.Contains(filter) || user.Surname.Contains(filter));
-		var rows = await AsyncExecuter.ToListAsync(query.OrderBy(user => user.UserName).Take(50));
 		var result = new List<AdmissionInquiryCounsellorDto>();
-		foreach (var user in rows)
-			if ((await scopes.GetUserScopeAsync(user.Id)).HasAnyAccess)
-				result.Add(new() { Id = user.Id, UserName = user.UserName, Name = Display(user) });
+		const int batchSize = 100;
+		for (var offset = 0; result.Count < 50; offset += batchSize)
+		{
+			var rows = await AsyncExecuter.ToListAsync(query.OrderBy(user => user.UserName)
+				.Skip(offset).Take(batchSize));
+			foreach (var user in rows)
+			{
+				if ((await scopes.GetUserScopeAsync(user.Id)).HasAnyAccess &&
+					(!admissionOfferingId.HasValue || await CanAccessOfferingAsync(user.Id, admissionOfferingId.Value)))
+					result.Add(new() { Id = user.Id, UserName = user.UserName, Name = Display(user) });
+				if (result.Count == 50) break;
+			}
+			if (rows.Count < batchSize) break;
+		}
 		return result;
+	}
+
+	public async Task<Dictionary<Guid, string>> GetNamesAsync(IEnumerable<Guid> userIds)
+	{
+		var ids = userIds.Where(id => id != Guid.Empty).Distinct().ToList();
+		if (ids.Count == 0) return [];
+		var rows = await users.GetListAsync(user => ids.Contains(user.Id));
+		return rows.ToDictionary(user => user.Id, Display);
 	}
 
 	private async Task<bool> CanAccessOfferingAsync(Guid userId, Guid offeringId)

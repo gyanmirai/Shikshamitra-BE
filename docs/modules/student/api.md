@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-09-11
+updated_on: 2026-09-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -14,9 +14,38 @@ TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings`
 
 ## Permission catalog
 
-Every Student submodule registered in the backend exposes exactly three assignable permissions: `View`, `Add`, and `Delete`.
+Student submodules normally expose `View`, `Add`, and `Delete`. Workflow Builder additionally
+exposes `Approve`, `ManageGovernance`, and `Rollback` so maker-checker decisions, tenant policy,
+and recovery actions can be assigned independently.
 Module visibility permissions under `ShikshaMitra.Module.Students.*` remain separate and only control whether the corresponding module or submodule is visible.
 Student Dashboard reads require `Students.Dashboard.View`; an explicit dashboard refresh requires `Students.Dashboard.Add`.
+
+## Admission Cycle endpoints
+
+Base route: `/api/student/enrollment/admissions/cycles`.
+
+| Method | Route | Permission | Purpose |
+|---|---|---|---|
+| GET | `/` | `Students.Admissions.View` | Server-paged search and Academic Year, lifecycle, or window filtering |
+| GET | `/{id}` | `Students.Admissions.View` | Details with lifecycle, window, schedules, and usage counts |
+| GET | `/{id}/impact` | `Students.Admissions.View` | Offering and Application dependency counts |
+| GET | `/{id}/history` | `Students.Admissions.View` | Immutable lifecycle/activity history |
+| POST | `/` | `Students.Admissions.Add` | Create Draft |
+| PUT | `/{id}` | `Students.Admissions.Add` | Edit Draft using concurrency stamp |
+| POST | `/{id}/validate` | `Students.Admissions.Add` | Return publish errors and warnings |
+| POST | `/{id}/publish` | `Students.Admissions.Add` | Publish a ready Draft |
+| POST | `/{id}/reopen` | `Students.Admissions.Add` | Reopen Closed cycle with reason and optional new end date |
+| PUT | `/{id}/window` | `Students.Admissions.Add` | Revise Published/Closed dates with reason |
+| PUT | `/{id}/schedule` | `Students.Admissions.Add` | Set future publish and/or close action |
+| POST | `/clone` | `Students.Admissions.Add` | Create independent Draft copy |
+| POST | `/{id}/close` | `Students.Admissions.Delete` | Stop new applications with reason and dependency acknowledgement |
+| POST | `/{id}/archive` | `Students.Admissions.Delete` | Archive a Closed cycle with reason |
+| DELETE | `/{id}` | `Students.Admissions.Delete` | Permanently remove only an unused Draft |
+
+List results include `status`, computed `windowStatus`, `isAcceptingApplications`, Academic Year
+name, schedule timestamps, and usage counts. All action DTOs carry the current concurrency stamp.
+Close, reopen, archive, and window revision require a reason of at most 500 characters. Cycle
+description is optional and limited to 1000 characters.
 
 ## Offering endpoints
 
@@ -46,10 +75,27 @@ The compatibility create route accepts `POST /api/student/enrollment/admissions/
 | POST | `/api/student/enrollment/admissions/workflows/{id}/new-version` | `Students.Admissions.Workflows.Add` |
 | POST | `/api/student/enrollment/admissions/workflows/{id}/validate` | `Students.Admissions.Workflows.Add` |
 | POST | `/api/student/enrollment/admissions/workflows/{id}/publish` | `Students.Admissions.Workflows.Add` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/governance/publish` | `Students.Admissions.Workflows.Add` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/submit-for-approval` | `Students.Admissions.Workflows.Add` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/approve` | `Students.Admissions.Workflows.Approve` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/reject` | `Students.Admissions.Workflows.Approve` |
+| POST | `/api/student/enrollment/admissions/workflows/{id}/rollback-draft` | `Students.Admissions.Workflows.Rollback` |
 | POST | `/api/student/enrollment/admissions/workflows/{id}/archive` | `Students.Admissions.Workflows.Delete` |
 | GET | `/api/student/enrollment/admissions/workflows/{id}/versions` | `Students.Admissions.Workflows.View` |
 | GET | `/api/student/enrollment/admissions/workflows/{id}/usage` | `Students.Admissions.Workflows.View` |
+| GET | `/api/student/enrollment/admissions/workflows/{id}/governance/history` | `Students.Admissions.Workflows.View` |
+| GET/PUT | `/api/student/enrollment/admissions/workflows/governance/settings` | Workflow `View` or `ManageGovernance` |
+| GET | `/api/student/enrollment/admissions/workflows/governance/approvers` | `Students.Admissions.Workflows.View` |
+| GET | `/api/student/enrollment/admissions/workflows/governance/notifications` | `Students.Admissions.Workflows.View` |
+| POST | `/api/student/enrollment/admissions/workflows/governance/notifications/{notificationId}/read` | `Students.Admissions.Workflows.View` |
 | GET | `/api/student/enrollment/admissions/workflows/stage-types` | `Students.Admissions.Workflows.View` |
+
+When maker-checker is enabled, the legacy publish route is rejected and the workflow must follow
+Validated, Submitted, Approved, and Published/Scheduled states. Submission requires a different
+active approver who has the workflow `Approve` permission and a change reason. Governed publication
+accepts an optional future effective time. Rollback always creates a new Draft copied from the
+selected historical version; it never
+rewrites an Offering or Application reference.
 
 ## Runtime workflow endpoint
 
@@ -113,22 +159,58 @@ Unknown policy versions, stale stamps, unavailable capacity, missing evidence, a
 
 ## Inquiry management APIs
 
+The inquiry collection route prefix is `/api/student/enrollment/admissions/inquiries`.
+
+| Method | Route | Permission | Purpose |
+| --- | --- | --- | --- |
+| `GET` | none | `Students.Admissions.Inquiries.View` | Page and server-sort the CRM queue; filters include cycle, offering, status, source, `assignedCounsellorId`, `isAssigned`, `workQueue`, and search |
+| `GET` | `export` | `Students.Admissions.Inquiries.View` | Export the complete filtered/sorted queue as injection-safe UTF-8 CSV, capped at 50,000 rows |
+| `GET` | `{inquiryId}` | `Students.Admissions.Inquiries.View` | Read one scoped inquiry, including language and concurrency stamp |
+| `GET` | `{inquiryId}/timeline` | `Students.Admissions.Inquiries.View` | Read up to 200 most recent inquiry audit and communication activities |
+| `PUT` | `{inquiryId}` | `Students.Admissions.Inquiries.Manage` | Update pre-application identity, contact, source, and preferred language using the concurrency stamp |
+| `GET` | `counsellors` | `Students.Admissions.Inquiries.Assign` | Find up to 50 active counsellors; an optional `admissionOfferingId` limits results to staff with access to that offering |
+| `POST` | `{inquiryId}/assign` | `Students.Admissions.Inquiries.Assign` | Assign manually or through the configured candidate pool after rechecking active status and offering scope |
+| `POST` | `bulk/assign` | `Students.Admissions.Inquiries.Assign` | Atomically apply one validated assignment to up to 100 scoped inquiries |
+| `POST` | `{inquiryId}/communications` | `Students.Admissions.Inquiries.Manage` plus Communication permissions | Create a family-facing Communication campaign linked to the inquiry; `Communication.Campaigns.Add` is always required and `Communication.Campaigns.Send` is additionally required for immediate delivery |
+| `POST` | `duplicate-check` | `Students.Admissions.Inquiries.Manage` | Find applicant or family matches inside the requested admission cycle before creation |
+
+`isAssigned=false` is the authoritative Unassigned queue. Combining `isAssigned=true` with `assignedCounsellorId` produces a specific counsellor queue without loading and filtering all inquiries in the browser.
+
+`workQueue` is server-filtered before counting and paging: `1` Overdue, `2` Needs first contact, `3` Needs qualification, and `4` Open follow-ups. List rows include cycle/offering labels, assigned-counsellor name, management state, optional SLA deadlines, qualification outcome, next scheduled follow-up, open-follow-up count, and overdue flags so clients do not issue one management request per row.
+
+Inquiry communications accept WhatsApp, SMS, and Email only. Email requires both an inquiry email address and a subject. The command creates an explicit one-recipient Communication campaign with Student source metadata, preferred language, and the cycle's academic year. Provider availability, consent, approval, delivery attempts, retries, and usage remain owned by the Communication module. A failed immediate publish returns the preserved draft plus `deliveryErrorCode`; the CRM does not hide the failed handoff or create parallel delivery records. Scheduling is intentionally absent until the Communication publisher supports scheduled execution end to end.
+
 The route prefix is `/api/student/enrollment/admissions/inquiries/{inquiryId}/management`.
 
 | Method | Route suffix | Permission | Purpose |
 | --- | --- | --- | --- |
 | `GET` | none | `Students.Admissions.Inquiries.View` | Read safe policy, deadlines, blockers, capabilities, qualification, and follow-ups |
-| `POST` | `contact` | `Students.Admissions.Inquiries.Add` | Record a contact note and advance contact readiness |
-| `POST` | `follow-ups` | `Students.Admissions.Inquiries.Add` | Schedule a bounded future follow-up |
-| `POST` | `follow-ups/{followUpId}/complete` | `Students.Admissions.Inquiries.Add` | Complete an open follow-up with an optional note |
-| `POST` | `follow-ups/{followUpId}/cancel` | `Students.Admissions.Inquiries.Add` | Cancel an open follow-up with a reason |
-| `POST` | `qualification` | `Students.Admissions.Inquiries.Add` | Record a checklist-backed qualification outcome |
-| `POST` | `reopen` | `Students.Admissions.Inquiries.Add` | Reopen a non-converted qualification with a reason |
+| `POST` | `contact` | `Students.Admissions.Inquiries.Manage` | Record a structured contact channel, direction, outcome, and note; advance contact readiness |
+| `POST` | `follow-ups` | `Students.Admissions.Inquiries.Manage` | Schedule a bounded future follow-up |
+| `POST` | `follow-ups/{followUpId}/complete` | `Students.Admissions.Inquiries.Manage` | Complete an open follow-up with an optional note |
+| `POST` | `follow-ups/{followUpId}/cancel` | `Students.Admissions.Inquiries.Manage` | Cancel an open follow-up with a reason |
+| `POST` | `qualification` | `Students.Admissions.Inquiries.Manage` | Record a checklist-backed qualification outcome and standard closure code when closed |
+| `POST` | `reopen` | `Students.Admissions.Inquiries.Manage` | Reopen a non-converted qualification with a reason |
 
-Counsellor choices use `GET /api/student/enrollment/admissions/inquiry-settings/counsellors`, require workflow view permission, and return only active users compatible with the requested offering scope.
+Workflow setup continues to use `GET /api/student/enrollment/admissions/inquiry-settings/counsellors` with workflow view permission. Runtime assignment uses the inquiry collection `counsellors` route with the dedicated Inquiry Assign permission.
 Every management command requires the current management concurrency stamp.
 Internal policy snapshot JSON and qualification-answer JSON are never returned directly.
 Create Inquiry accepts `duplicateOverrideReason`; enabled policies can block duplicates or require this reason when staff explicitly create a separate family.
+
+## Applicant 360 APIs
+
+The Applicant 360 route prefix is `/api/student/enrollment/admissions/applicants`.
+
+| Method | Route | Permission | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `{applicantId}` | `Students.Admissions.Applicants.View` | Read the applicant, family, primary guardian, applications, ordered workflow stages, recent activity, and staff notes as one workspace response |
+| `PUT` | `{applicantId}/profile` | `Students.Admissions.Applicants.Add` | Correct the applicant identity before enrollment or finalization locks the Admissions copy |
+| `GET` | `{applicantId}/activities` | `Students.Admissions.Applicants.View` | Read the 200 most recent applicant activities, newest first |
+| `GET` | `{applicantId}/notes` | `Students.Admissions.Applicants.View` | Read internal staff notes, newest first |
+| `POST` | `{applicantId}/notes` | `Students.Admissions.Applicants.Add` | Add an internal staff note and append the related activity |
+| `PUT` | `{applicantId}/notes/{noteId}` | `Students.Admissions.Applicants.Add` | Update a note that belongs to the same applicant and append the related activity |
+
+Application rows include creation, last-save, and submission times. Each workflow stage includes `EnteredAt` and `CompletedAt`, allowing the client to explain the current admission position without reconstructing timestamps from activity text. The activity cap is applied in the database query so the Applicant 360 response remains bounded for long-running schools.
 
 ## List conventions
 

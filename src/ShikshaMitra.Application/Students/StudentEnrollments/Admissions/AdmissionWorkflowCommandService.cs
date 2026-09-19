@@ -13,19 +13,23 @@ public class AdmissionWorkflowCommandService(
 	IRepository<AdmissionOffering, Guid> offeringRepository,
 	AdmissionWorkflowDefinitionStore definitionStore,
 	AdmissionWorkflowReadService readService,
-	AdmissionWorkflowValidationService validationService)
+	AdmissionWorkflowValidationService validationService,
+	AdmissionWorkflowGovernanceService governanceService)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionWorkflowDto> CreateAsync(CreateUpdateAdmissionWorkflowDto input)
 	{
 		await EnsureCodeVersionAvailableAsync(input.Code, 1);
 		var workflow = new AdmissionWorkflowDefinition(
-			GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code, description: input.Description);
+			GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code, description: input.Description,
+			ownerUserId: CurrentUser.Id);
 		// Keep the value explicit at the application boundary as a safeguard for
 		// databases where the repair migration has not been applied yet.
 		workflow.IsDeleted = false;
 		await workflowRepository.InsertAsync(workflow, autoSave: true);
 		await definitionStore.ReplaceChildrenAsync(workflow.Id, input);
+		await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Created,
+			null, CurrentUser.Id);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await definitionStore.GetDtoAsync(workflow);
 	}
@@ -33,7 +37,7 @@ public class AdmissionWorkflowCommandService(
 	public async Task<AdmissionWorkflowDto> UpdateAsync(Guid id, CreateUpdateAdmissionWorkflowDto input)
 	{
 		var workflow = await definitionStore.GetAsync(id);
-		workflow.EnsureDraft();
+		workflow.PrepareForEdit();
 		EnsureConcurrency(workflow, input.ConcurrencyStamp);
 		if (workflow.ParentVersionId.HasValue &&
 			!string.Equals(workflow.Code, NormalizeCode(input.Code), StringComparison.Ordinal))
@@ -67,54 +71,207 @@ public class AdmissionWorkflowCommandService(
 		var source = await definitionStore.GetAsync(id);
 		await EnsureCodeVersionAvailableAsync(input.Code, 1);
 		var clone = new AdmissionWorkflowDefinition(
-			GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code, description: input.Description);
+			GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code, description: input.Description,
+			ownerUserId: CurrentUser.Id);
 		clone.IsDeleted = false;
 		await workflowRepository.InsertAsync(clone, autoSave: true);
 		await definitionStore.CopyChildrenAsync(source.Id, clone.Id);
+		await governanceService.RecordAsync(clone, AdmissionWorkflowGovernanceAction.Created,
+			null, CurrentUser.Id, "Cloned from an existing workflow.");
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await definitionStore.GetDtoAsync(clone);
 	}
 
 	public async Task<AdmissionWorkflowDto> CreateNewVersionAsync(Guid id)
 	{
 		var source = await definitionStore.GetAsync(id);
-		if (source.Status == AdmissionWorkflowStatus.Draft)
+		if (IsPending(source.Status))
 			throw new BusinessException(AdmissionWorkflowErrorCodes.DraftRequired,
 				"Publish the current draft before creating another version.");
 		var query = await workflowRepository.GetQueryableAsync();
 		var versions = await AsyncExecuter.ToListAsync(query.Where(workflow => workflow.Code == source.Code));
-		if (versions.Any(workflow => workflow.Status == AdmissionWorkflowStatus.Draft))
+		if (versions.Any(workflow => IsPending(workflow.Status)))
 			throw new BusinessException(AdmissionWorkflowErrorCodes.DraftRequired,
 				"This workflow already has a draft version.");
 		var version = new AdmissionWorkflowDefinition(
 			GuidGenerator.Create(), CurrentTenant.Id, source.Name, source.Code,
-			versions.Max(workflow => workflow.Version) + 1, source.Id, source.Description);
+			versions.Max(workflow => workflow.Version) + 1, source.Id, source.Description,
+			CurrentUser.Id);
 		version.IsDeleted = false;
 		version.RecordVersionCreated(source.Id);
 		await workflowRepository.InsertAsync(version, autoSave: true);
 		await definitionStore.CopyChildrenAsync(source.Id, version.Id);
+		await governanceService.RecordAsync(version, AdmissionWorkflowGovernanceAction.Created,
+			null, CurrentUser.Id, $"Created from version {source.Version}.");
+		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await definitionStore.GetDtoAsync(version);
 	}
 
-	public Task<AdmissionWorkflowValidationResultDto> ValidateAsync(Guid id) =>
-		validationService.ValidateAsync(id);
+	public async Task<AdmissionWorkflowValidationResultDto> ValidateAsync(Guid id)
+	{
+		var workflow = await definitionStore.GetAsync(id);
+		var validation = await validationService.ValidateAsync(id);
+		if (!validation.IsValid || workflow.Status != AdmissionWorkflowStatus.Draft) return validation;
+		var fromStatus = workflow.Status;
+		workflow.MarkValidated(CurrentUser.Id, Clock.Now);
+		await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Validated,
+			fromStatus, CurrentUser.Id);
+		await workflowRepository.UpdateAsync(workflow, autoSave: true);
+		return validation;
+	}
 
 	public async Task<AdmissionWorkflowDto> PublishAsync(Guid id, string? concurrencyStamp)
+	{
+		if ((await governanceService.GetSettingsAsync()).MakerCheckerEnabled)
+			throw new BusinessException(AdmissionWorkflowErrorCodes.MakerCheckerRequired,
+				"Submit this workflow for approval before publishing it.");
+		return await PublishWithGovernanceAsync(id, new PublishAdmissionWorkflowDto
+		{
+			ConcurrencyStamp = concurrencyStamp,
+			ChangeReason = "Direct publication"
+		});
+	}
+
+	public async Task<AdmissionWorkflowDto> SubmitForApprovalAsync(Guid id, SubmitAdmissionWorkflowDto input)
+	{
+		if (!(await governanceService.GetSettingsAsync()).MakerCheckerEnabled)
+			throw new BusinessException(AdmissionWorkflowErrorCodes.MakerCheckerDisabled,
+				"Maker-checker governance is not enabled for this school.");
+		var actorId = CurrentUser.Id ?? throw new BusinessException(AdmissionWorkflowErrorCodes.ApproverUnavailable);
+		var workflow = await definitionStore.GetAsync(id);
+		EnsureConcurrency(workflow, input.ConcurrencyStamp);
+		await governanceService.EnsureApproverAsync(input.ApproverUserId);
+		await EnsureValidAsync(workflow);
+		if (workflow.Status == AdmissionWorkflowStatus.Draft)
+		{
+			var validationFrom = workflow.Status;
+			workflow.MarkValidated(actorId, Clock.Now);
+			await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Validated,
+				validationFrom, actorId);
+		}
+		var fromStatus = workflow.Status;
+		workflow.SubmitForApproval(actorId, input.ApproverUserId, input.ChangeReason, Clock.Now);
+		await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Submitted,
+			fromStatus, actorId, input.ChangeReason, input.ApproverUserId);
+		await workflowRepository.UpdateAsync(workflow, autoSave: false);
+		await governanceService.NotifyAsync(workflow, input.ApproverUserId,
+			AdmissionWorkflowNotificationType.ApprovalRequested,
+			"Workflow approval requested",
+			$"{workflow.Name} v{workflow.Version} is ready for your approval. Reason: {input.ChangeReason.Trim()}");
+		await CurrentUnitOfWork!.SaveChangesAsync();
+		return await definitionStore.GetDtoAsync(workflow);
+	}
+
+	public async Task<AdmissionWorkflowDto> ApproveAsync(Guid id, DecideAdmissionWorkflowDto input)
+	{
+		var actorId = CurrentUser.Id ?? throw new BusinessException(AdmissionWorkflowErrorCodes.ApproverUnavailable);
+		var workflow = await definitionStore.GetAsync(id);
+		EnsureConcurrency(workflow, input.ConcurrencyStamp);
+		var fromStatus = workflow.Status;
+		workflow.Approve(actorId, Clock.Now);
+		await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Approved,
+			fromStatus, actorId, input.Reason);
+		await workflowRepository.UpdateAsync(workflow, autoSave: false);
+		if (workflow.SubmittedBy.HasValue)
+			await governanceService.NotifyAsync(workflow, workflow.SubmittedBy.Value,
+				AdmissionWorkflowNotificationType.Approved, "Workflow approved",
+				$"{workflow.Name} v{workflow.Version} was approved and can now be published or scheduled.");
+		await CurrentUnitOfWork!.SaveChangesAsync();
+		return await definitionStore.GetDtoAsync(workflow);
+	}
+
+	public async Task<AdmissionWorkflowDto> RejectAsync(Guid id, DecideAdmissionWorkflowDto input)
+	{
+		var actorId = CurrentUser.Id ?? throw new BusinessException(AdmissionWorkflowErrorCodes.ApproverUnavailable);
+		var workflow = await definitionStore.GetAsync(id);
+		EnsureConcurrency(workflow, input.ConcurrencyStamp);
+		var submitterId = workflow.SubmittedBy;
+		var fromStatus = workflow.Status;
+		workflow.Reject(actorId, RequireReason(input.Reason));
+		await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Rejected,
+			fromStatus, actorId, input.Reason);
+		await workflowRepository.UpdateAsync(workflow, autoSave: false);
+		if (submitterId.HasValue)
+			await governanceService.NotifyAsync(workflow, submitterId.Value,
+				AdmissionWorkflowNotificationType.Rejected, "Workflow changes requested",
+				$"{workflow.Name} v{workflow.Version} was returned to draft. Reason: {input.Reason!.Trim()}");
+		await CurrentUnitOfWork!.SaveChangesAsync();
+		return await definitionStore.GetDtoAsync(workflow);
+	}
+
+	public async Task<AdmissionWorkflowDto> PublishWithGovernanceAsync(Guid id, PublishAdmissionWorkflowDto input)
 	{
 		var workflow = await definitionStore.GetAsync(id);
 		if (workflow.Status == AdmissionWorkflowStatus.Published)
 			return await definitionStore.GetDtoAsync(workflow);
-		workflow.EnsureDraft();
-		EnsureConcurrency(workflow, concurrencyStamp);
-		var validation = await validationService.ValidateAsync(id);
-		if (!validation.IsValid)
+		EnsureConcurrency(workflow, input.ConcurrencyStamp);
+		var settings = await governanceService.GetSettingsAsync();
+		if (settings.MakerCheckerEnabled && workflow.Status != AdmissionWorkflowStatus.Approved)
+			throw new BusinessException(AdmissionWorkflowErrorCodes.MakerCheckerRequired,
+				"An approved workflow is required before publication.");
+		if (!settings.MakerCheckerEnabled && workflow.Status is not (AdmissionWorkflowStatus.Draft or
+			AdmissionWorkflowStatus.Validated or AdmissionWorkflowStatus.Approved))
+			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidGovernanceTransition);
+		await EnsureValidAsync(workflow);
+		var reason = RequireReason(input.ChangeReason);
+		if (workflow.Status == AdmissionWorkflowStatus.Draft)
 		{
-			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidTransition,
-				"Workflow validation failed.")
-				.WithData("ValidationIssues", validation.Issues.Select(issue => issue.Code).ToArray());
+			var validationFrom = workflow.Status;
+			workflow.MarkValidated(CurrentUser.Id, Clock.Now);
+			await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Validated,
+				validationFrom, CurrentUser.Id);
 		}
-		workflow.Publish(CurrentUser.Id);
-		await workflowRepository.UpdateAsync(workflow, autoSave: true);
+		if (input.EffectiveAt.HasValue && input.EffectiveAt.Value.ToUniversalTime() > Clock.Now.ToUniversalTime())
+		{
+			var fromStatus = workflow.Status;
+			workflow.Schedule(input.EffectiveAt.Value);
+			await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Scheduled,
+				fromStatus, CurrentUser.Id, reason, effectiveAt: input.EffectiveAt);
+			await workflowRepository.UpdateAsync(workflow, autoSave: false);
+			if (workflow.SubmittedBy.HasValue && workflow.SubmittedBy != CurrentUser.Id)
+				await governanceService.NotifyAsync(workflow, workflow.SubmittedBy.Value,
+					AdmissionWorkflowNotificationType.Scheduled, "Workflow publication scheduled",
+					$"{workflow.Name} v{workflow.Version} will publish at {workflow.ScheduledPublishAt:O}.");
+			await CurrentUnitOfWork!.SaveChangesAsync();
+			return await definitionStore.GetDtoAsync(workflow);
+		}
+		await PublishNowAsync(workflow, CurrentUser.Id, reason);
 		return await definitionStore.GetDtoAsync(workflow);
+	}
+
+	public async Task<AdmissionWorkflowDto> CreateRollbackDraftAsync(Guid sourceId, RollbackAdmissionWorkflowDto input)
+	{
+		var source = await definitionStore.GetAsync(sourceId);
+		if (IsPending(source.Status))
+			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidGovernanceTransition,
+				"Rollback can only start from a historical published, superseded, or archived version.");
+		var reason = RequireReason(input.ChangeReason);
+		var query = await workflowRepository.GetQueryableAsync();
+		var versions = await AsyncExecuter.ToListAsync(query.Where(workflow => workflow.Code == source.Code));
+		if (versions.Any(workflow => IsPending(workflow.Status)))
+			throw new BusinessException(AdmissionWorkflowErrorCodes.DraftRequired,
+				"Complete or remove the existing pending version before creating a rollback draft.");
+		var rollback = new AdmissionWorkflowDefinition(GuidGenerator.Create(), CurrentTenant.Id, source.Name, source.Code,
+			versions.Max(workflow => workflow.Version) + 1, source.Id, source.Description, CurrentUser.Id);
+		rollback.IsDeleted = false;
+		rollback.RecordVersionCreated(source.Id);
+		rollback.RecordRollbackSource(source.Id, reason);
+		await workflowRepository.InsertAsync(rollback, autoSave: true);
+		await definitionStore.CopyChildrenAsync(source.Id, rollback.Id);
+		await governanceService.RecordAsync(rollback, AdmissionWorkflowGovernanceAction.RollbackDraftCreated,
+			null, CurrentUser.Id, reason);
+		await CurrentUnitOfWork!.SaveChangesAsync();
+		return await definitionStore.GetDtoAsync(rollback);
+	}
+
+	public async Task PublishScheduledAsync(Guid id)
+	{
+		var workflow = await definitionStore.GetAsync(id);
+		if (workflow.Status != AdmissionWorkflowStatus.Scheduled || !workflow.ScheduledPublishAt.HasValue ||
+			workflow.ScheduledPublishAt.Value > Clock.Now) return;
+		await EnsureValidAsync(workflow);
+		await PublishNowAsync(workflow, workflow.ApprovedBy ?? workflow.SubmittedBy ?? workflow.OwnerUserId,
+			workflow.ChangeReason ?? "Scheduled publication");
 	}
 
 	public async Task<AdmissionWorkflowDto> ArchiveAsync(Guid id, string? concurrencyStamp = null)
@@ -127,9 +284,44 @@ public class AdmissionWorkflowCommandService(
 			throw new BusinessException(AdmissionWorkflowErrorCodes.WorkflowInUse,
 				"Deactivate offerings that use this workflow before archiving it.");
 		}
+		var fromStatus = workflow.Status;
 		workflow.Archive();
+		await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Archived,
+			fromStatus, CurrentUser.Id);
 		await workflowRepository.UpdateAsync(workflow, autoSave: true);
 		return await definitionStore.GetDtoAsync(workflow);
+	}
+
+	private async Task PublishNowAsync(AdmissionWorkflowDefinition workflow, Guid? actorId, string reason)
+	{
+		var fromStatus = workflow.Status;
+		var query = await workflowRepository.GetQueryableAsync();
+		var previous = await AsyncExecuter.ToListAsync(query.Where(item => item.Code == workflow.Code &&
+			item.Id != workflow.Id && item.Status == AdmissionWorkflowStatus.Published));
+		foreach (var published in previous)
+		{
+			published.Supersede();
+			await governanceService.RecordAsync(published, AdmissionWorkflowGovernanceAction.Superseded,
+				AdmissionWorkflowStatus.Published, actorId, $"Superseded by version {workflow.Version}.");
+			await workflowRepository.UpdateAsync(published, autoSave: false);
+		}
+		workflow.Publish(actorId, Clock.Now, reason);
+		await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Published,
+			fromStatus, actorId, reason);
+		await workflowRepository.UpdateAsync(workflow, autoSave: false);
+		if (workflow.SubmittedBy.HasValue && workflow.SubmittedBy != actorId)
+			await governanceService.NotifyAsync(workflow, workflow.SubmittedBy.Value,
+				AdmissionWorkflowNotificationType.Published, "Workflow published",
+				$"{workflow.Name} v{workflow.Version} is now published.");
+		await CurrentUnitOfWork!.SaveChangesAsync();
+	}
+
+	private async Task EnsureValidAsync(AdmissionWorkflowDefinition workflow)
+	{
+		var validation = await validationService.ValidateAsync(workflow.Id);
+		if (!validation.IsValid)
+			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidTransition, "Workflow validation failed.")
+				.WithData("ValidationIssues", validation.Issues.Select(issue => issue.Code).ToArray());
 	}
 
 	private async Task EnsureCodeVersionAvailableAsync(string code, int version, Guid? excludingId = null)
@@ -156,4 +348,16 @@ public class AdmissionWorkflowCommandService(
 	}
 
 	private static string NormalizeCode(string code) => code.Trim().ToUpperInvariant();
+
+	private static bool IsPending(AdmissionWorkflowStatus status) => status is AdmissionWorkflowStatus.Draft or
+		AdmissionWorkflowStatus.Validated or AdmissionWorkflowStatus.SubmittedForApproval or
+		AdmissionWorkflowStatus.Approved or AdmissionWorkflowStatus.Scheduled;
+
+	private static string RequireReason(string? reason)
+	{
+		if (string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(AdmissionWorkflowErrorCodes.ChangeReasonRequired,
+				"Enter a change reason before continuing.");
+		return Check.Length(reason.Trim(), nameof(reason), AdmissionWorkflowConsts.MaxReasonLength)!;
+	}
 }

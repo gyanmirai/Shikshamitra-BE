@@ -29,6 +29,66 @@ public class AdmissionApplicationFormValidator_Tests
 		validator.Validate([field], [Section(field.SectionId)], new Dictionary<string, string> { ["HAS_PREVIOUS_SCHOOL"] = "true" }).FieldErrors.ShouldContainKey("PREVIOUS_SCHOOL");
 	}
 
+	[Fact]
+	public void Repeatable_section_validates_each_entry_and_configured_range()
+	{
+		var validator = new AdmissionApplicationFormValidator(new AdmissionWorkflowConditionEvaluator());
+		var field = Field("SIBLING_NAME", required: true);
+		var section = Section(field.SectionId);
+		var experience = new AdmissionFormExperienceMetadata
+		{
+			Sections = new Dictionary<string, AdmissionFormSectionExperienceMetadata>(StringComparer.OrdinalIgnoreCase)
+			{
+				[section.Code] = new() { IsRepeatable = true, MinEntries = 2, MaxEntries = 3 }
+			}
+		};
+
+		var missing = validator.Validate([field], [section], new Dictionary<string, string>
+		{
+			[field.Code] = "[\"Aarav\",\"\"]"
+		}, experience);
+		missing.FieldErrors.ShouldContainKey("SIBLING_NAME[1]");
+
+		var valid = validator.Validate([field], [section], new Dictionary<string, string>
+		{
+			[field.Code] = "[\"Aarav\",\"Diya\"]"
+		}, experience);
+		valid.Errors.ShouldBeEmpty();
+	}
+
+	[Fact]
+	public void Experience_metadata_round_trips_languages_repetition_and_translations()
+	{
+		var form = new AdmissionFormDefinition(Guid.NewGuid(), null, "Admission", "ADMISSION", AdmissionFormLayoutType.SinglePage);
+		var input = new CreateUpdateAdmissionFormDto
+		{
+			Name = "Admission",
+			Code = "ADMISSION",
+			DefaultLanguage = "gu",
+			SupportedLanguages = ["en", "gu"],
+			Sections =
+			[
+				new CreateUpdateAdmissionFormSectionDto
+				{
+					Code = "SIBLINGS", Name = "Siblings", IsRepeatable = true, MinEntries = 0, MaxEntries = 5,
+					Translations = new Dictionary<string, AdmissionFormTranslationDto>
+					{
+						["gu"] = new() { Label = "ભાઈ બહેન" }
+					}
+				}
+			]
+		};
+
+		AdmissionFormMetadataStore.WriteExperience(form, input);
+		var stored = AdmissionFormMetadataStore.ReadExperience(form);
+
+		stored.DefaultLanguage.ShouldBe("gu");
+		stored.SupportedLanguages.ShouldContain("en");
+		stored.Sections["SIBLINGS"].IsRepeatable.ShouldBeTrue();
+		stored.Sections["SIBLINGS"].MaxEntries.ShouldBe(5);
+		stored.Sections["SIBLINGS"].Translations["gu"].Label.ShouldBe("ભાઈ બહેન");
+	}
+
 	private static AdmissionFormFieldDefinition Field(string code, bool required, string? requiredRuleJson = null)
 	{
 		return new AdmissionFormFieldDefinition(Guid.NewGuid(), Guid.NewGuid(), SectionId, code, code,

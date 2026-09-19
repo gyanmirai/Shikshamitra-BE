@@ -99,7 +99,10 @@ public sealed class ApprovalAdmissionWorkflowStageHandler : SubmittedApplication
 	public override AdmissionWorkflowStageType StageType => AdmissionWorkflowStageType.Approval;
 
 	public override Task<bool> CanCompleteAsync(AdmissionWorkflowStageRuntimeContext context) =>
-		Task.FromResult(context.ApplicationStatus == AdmissionApplicationStatus.Approved);
+		Task.FromResult(context.ApplicationStatus is
+			AdmissionApplicationStatus.Approved or
+			AdmissionApplicationStatus.Waitlisted or
+			AdmissionApplicationStatus.Rejected);
 }
 
 public sealed class OfferAdmissionWorkflowStageHandler : SubmittedApplicationAdmissionWorkflowStageHandler

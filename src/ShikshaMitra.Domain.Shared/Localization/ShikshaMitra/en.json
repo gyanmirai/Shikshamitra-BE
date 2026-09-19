@@ -1,6 +1,8 @@
 {
   "Culture": "en",
   "Texts": {
+	"Admissions.FormMakerCheckerRequired": "A different authorized user must review this form. The user who requested approval cannot approve or reject the same form.",
+	"Admissions.FormAdminOverrideReasonRequired": "Enter a reason to use the administrator self-review override.",
 	"Admissions:Offer:InvalidPolicy": "Review the offer content, response rules, validity limits and completion outcomes.",
 	"Admissions:Offer:InvalidState": "This offer action is unavailable in the current application or stage state.",
 	"Admissions:Offer:ConcurrencyConflict": "This application changed. Refresh the offer workspace before saving.",

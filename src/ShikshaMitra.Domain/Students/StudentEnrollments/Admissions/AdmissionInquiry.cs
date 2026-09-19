@@ -10,6 +10,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	private const string FormResponseSnapshotProperty = "AdmissionFormResponseSnapshot";
+	private const string PreferredLanguageCodeProperty = "PreferredLanguageCode";
 	public Guid? TenantId { get; private set; }
 	public string InquiryNumber { get; private set; }
 	public Guid AdmissionCycleId { get; private set; }
@@ -20,6 +21,7 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string ApplicantName { get; private set; }
 	public string NormalizedPhone { get; private set; }
 	public string? Email { get; private set; }
+	public string PreferredLanguageCode => this.GetProperty<string>(PreferredLanguageCodeProperty) ?? "en";
 	public AdmissionInquirySource Source { get; private set; }
 	public string? SourceDetail { get; private set; }
 	public AdmissionInquiryStatus Status { get; private set; }
@@ -46,6 +48,30 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SourceDetail = NormalizeNullable(sourceDetail);
 		Status = AdmissionInquiryStatus.New;
 		LastActivityAt = DateTime.UtcNow;
+		SetPreferredLanguage("en");
+	}
+
+	public void UpdateDetails(string applicantName, string phone, string? email,
+		AdmissionInquirySource source, string? sourceDetail, string preferredLanguageCode)
+	{
+		ApplicantName = Check.NotNullOrWhiteSpace(applicantName, nameof(applicantName)).Trim();
+		NormalizedPhone = NormalizePhone(phone);
+		Email = NormalizeNullable(email)?.ToLowerInvariant();
+		Source = source;
+		SourceDetail = NormalizeNullable(sourceDetail);
+		SetPreferredLanguage(preferredLanguageCode);
+		LastActivityAt = DateTime.UtcNow;
+	}
+
+	public void SetPreferredLanguage(string preferredLanguageCode)
+	{
+		var normalized = Check.NotNullOrWhiteSpace(preferredLanguageCode, nameof(preferredLanguageCode))
+			.Trim().ToLowerInvariant();
+		if (normalized.Length is < 2 or > 16 || !normalized.All(character =>
+			char.IsLetterOrDigit(character) || character == '-'))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
+				"Choose a valid preferred language code.");
+		this.SetProperty(PreferredLanguageCodeProperty, normalized);
 	}
 
 	public void MarkContacted(DateTime contactedAt)

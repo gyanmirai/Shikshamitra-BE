@@ -31,4 +31,20 @@ public class AdmissionInquiry_Tests
 		inquiry.InquiryNumber.ShouldStartWith("INQ/");
 		inquiry.InquiryNumber.Length.ShouldBeLessThanOrEqualTo(64);
 	}
+
+	[Fact]
+	public void UpdatesEditableDetailsAndPreferredLanguage()
+	{
+		var inquiry = new AdmissionInquiry(Guid.NewGuid(), null, Guid.NewGuid(), null, "Asha",
+			"987654", null, AdmissionInquirySource.Manual, null);
+
+		inquiry.UpdateDetails(" Asha Rao ", "+91 999-888", " FAMILY@EXAMPLE.COM ",
+			AdmissionInquirySource.Referral, " Parent referral ", "HI");
+
+		inquiry.ApplicantName.ShouldBe("Asha Rao");
+		inquiry.NormalizedPhone.ShouldBe("91999888");
+		inquiry.Email.ShouldBe("family@example.com");
+		inquiry.SourceDetail.ShouldBe("Parent referral");
+		inquiry.PreferredLanguageCode.ShouldBe("hi");
+	}
 }

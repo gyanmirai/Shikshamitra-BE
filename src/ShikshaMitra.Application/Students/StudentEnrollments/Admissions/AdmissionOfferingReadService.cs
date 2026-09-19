@@ -21,7 +21,6 @@ public class AdmissionOfferingReadService(
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
-	IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository,
 	IRepository<AdmissionApplication, Guid> applicationRepository,
 	IRepository<EducationBoard, Guid> boardRepository,
 	IRepository<EducationMedium, Guid> mediumRepository,
@@ -86,7 +85,6 @@ public class AdmissionOfferingReadService(
 		var standards = await standardRepository.GetQueryableAsync();
 		var workflows = await workflowRepository.GetQueryableAsync();
 		var forms = await formRepository.GetQueryableAsync();
-		var formFields = await formFieldRepository.GetQueryableAsync();
 		var applications = await applicationRepository.GetQueryableAsync();
 		var divisions = await divisionRepository.GetQueryableAsync();
 
@@ -128,13 +126,6 @@ public class AdmissionOfferingReadService(
 				Workflow = workflow,
 				InquiryForm = inquiryForm,
 				ApplicationForm = applicationForm,
-				ApplicationFormIdentityReady = applicationForm != null &&
-					formFields.Any(field => field.FormDefinitionId == applicationForm.Id && field.Required &&
-						field.BindingType == AdmissionFormBindingType.System && field.BindingKey == "Applicant.FirstName") &&
-					formFields.Any(field => field.FormDefinitionId == applicationForm.Id && field.Required &&
-						field.BindingType == AdmissionFormBindingType.System && field.BindingKey == "Applicant.DateOfBirth") &&
-					formFields.Any(field => field.FormDefinitionId == applicationForm.Id && field.Required &&
-						field.BindingType == AdmissionFormBindingType.System && field.BindingKey == "Applicant.Gender"),
 				ApplicationCount = applications.Count(application => application.AdmissionOfferingId == offering.Id)
 			};
 
@@ -218,10 +209,11 @@ public class AdmissionOfferingReadService(
 			(!row.Offering.CloseDate.HasValue || row.Offering.CloseDate.Value.Date <= row.Cycle.EndDate.Date) &&
 			(!row.Offering.OpenDate.HasValue || !row.Offering.CloseDate.HasValue ||
 				row.Offering.OpenDate.Value.Date <= row.Offering.CloseDate.Value.Date) &&
-			row.Workflow != null && row.Workflow.Status == AdmissionWorkflowStatus.Published &&
+			row.Workflow != null &&
+			(row.Workflow.Status == AdmissionWorkflowStatus.Published ||
+				row.Workflow.Status == AdmissionWorkflowStatus.Superseded) &&
 			row.InquiryForm != null && row.InquiryForm.Status == AdmissionFormStatus.Published &&
-			row.ApplicationForm != null && row.ApplicationForm.Status == AdmissionFormStatus.Published &&
-			row.ApplicationFormIdentityReady);
+			row.ApplicationForm != null && row.ApplicationForm.Status == AdmissionFormStatus.Published);
 
 	private static IQueryable<AdmissionOfferingReadRow> ApplyConfigurationIncompleteFilter(
 		IQueryable<AdmissionOfferingReadRow> query, List<Guid> incompatibleOfferingIds) => query.Where(row =>
@@ -236,10 +228,11 @@ public class AdmissionOfferingReadService(
 			(row.Offering.CloseDate.HasValue && row.Offering.CloseDate.Value.Date > row.Cycle.EndDate.Date) ||
 			(row.Offering.OpenDate.HasValue && row.Offering.CloseDate.HasValue &&
 				row.Offering.OpenDate.Value.Date > row.Offering.CloseDate.Value.Date) ||
-			row.Workflow == null || row.Workflow.Status != AdmissionWorkflowStatus.Published ||
+			row.Workflow == null ||
+			(row.Workflow.Status != AdmissionWorkflowStatus.Published &&
+				row.Workflow.Status != AdmissionWorkflowStatus.Superseded) ||
 			row.InquiryForm == null || row.InquiryForm.Status != AdmissionFormStatus.Published ||
-			row.ApplicationForm == null || row.ApplicationForm.Status != AdmissionFormStatus.Published ||
-			!row.ApplicationFormIdentityReady);
+			row.ApplicationForm == null || row.ApplicationForm.Status != AdmissionFormStatus.Published);
 
 	private AdmissionOfferingListDto MapList(AdmissionOfferingReadRow row, List<AdmissionOfferingValidationError>? eligibilityErrors)
 	{
@@ -337,7 +330,7 @@ public class AdmissionOfferingReadService(
 			errors.Add(new(AdmissionOfferingValidationCodes.DateRangeInvalid, "Offering dates must fall inside the Admission Cycle."));
 		if (row.Workflow == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.WorkflowMissing, "Published Admission Workflow is required."));
-		else if (row.Workflow.Status != AdmissionWorkflowStatus.Published)
+		else if (!row.Workflow.Status.CanConfigureOffering())
 			errors.Add(new(AdmissionOfferingValidationCodes.WorkflowNotPublished, "Admission Workflow is not published."));
 		if (row.InquiryForm == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormMissing, "Published Inquiry Form is required."));
@@ -347,9 +340,6 @@ public class AdmissionOfferingReadService(
 			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormMissing, "Published Application Form is required."));
 		else if (row.ApplicationForm.Status != AdmissionFormStatus.Published)
 			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormNotPublished, "Application Form is not published."));
-		else if (!row.ApplicationFormIdentityReady)
-			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete,
-				"Application Form must require Applicant first name, date of birth, and gender system fields."));
 		return new AdmissionOfferingValidationResult(errors);
 	}
 
@@ -418,7 +408,6 @@ public class AdmissionOfferingReadService(
 		public AdmissionWorkflowDefinition? Workflow { get; init; }
 		public AdmissionFormDefinition? InquiryForm { get; init; }
 		public AdmissionFormDefinition? ApplicationForm { get; init; }
-		public bool ApplicationFormIdentityReady { get; init; }
 		public int ApplicationCount { get; init; }
 	}
 }

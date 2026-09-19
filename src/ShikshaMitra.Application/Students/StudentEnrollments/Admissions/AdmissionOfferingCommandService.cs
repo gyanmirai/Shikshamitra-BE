@@ -126,11 +126,15 @@ public class AdmissionOfferingCommandService(
 		{
 			var createInput = ToCreateDto(input, item);
 			var validation = await configurationValidator.ValidateAsync(admissionCycleId, createInput);
+			var canSaveInactive = AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: false);
+			var canActivate = validation.IsValid;
 			result.Items.Add(new BulkAdmissionOfferingResultItemDto
 			{
 				StandardId = item.StandardId,
 				Code = item.Code,
-				IsValid = validation.IsValid,
+				IsValid = input.IsActive ? canActivate : canSaveInactive,
+				CanSaveInactive = canSaveInactive,
+				CanActivate = canActivate,
 				Errors = AdmissionOfferingReadService.MapValidation(validation).Errors
 			});
 			pending.Add((item, createInput));

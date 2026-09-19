@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-11
+updated_on: 2026-09-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,11 +12,35 @@ audience: humans-and-agents
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
 
+## Operate an Admission Cycle
+
+1. Create a Draft with name, unique code, Academic Year, open/close dates, and optional description.
+2. Edit and save until ready. Drafts cannot accept inquiries or applications.
+3. Run publication validation. Resolve every error; an expired application window must be extended
+   before publication.
+4. Publish immediately or schedule a future publish time.
+5. Monitor lifecycle, live window, linked Offering count, and Application count independently.
+6. If dates must change after publishing, revise the window with a reason. Existing Offering date
+   overrides must remain inside it.
+7. Close immediately or schedule closure. Before immediate closure, review impact counts, enter a
+   reason, and explicitly acknowledge any active Offerings. Existing applications are retained.
+8. Reopen only a Closed cycle. Enter a reason and extend the end date when the old window has ended.
+9. Archive only after closure and after active Offerings are removed or deactivated. Delete only an
+   unused Draft; otherwise retain the cycle as history.
+10. Use View details and history to audit actors, timestamps, reasons, schedules, and transitions.
+
+A scheduled publication is also rechecked when it becomes due. If its Academic Year is no longer
+available or its application window has ended, the schedule is cancelled and the reason is added to
+history for staff follow-up.
+
+For annual reuse, clone the old cycle into a new Academic Year. The clone starts as Draft and does
+not inherit Offering/Application records, preventing accidental exposure of last year's setup.
+
 ## Create or edit an offering
 
 1. The controller authorizes the granular operation.
 2. FluentValidation checks request shape and date presence.
-3. `AdmissionOfferingConfigurationValidator` checks cycle, hierarchy, UserScope, dates, published references, and uniqueness.
+3. `AdmissionOfferingConfigurationValidator` checks cycle, hierarchy, UserScope, dates, published references, and full Offering-identity uniqueness. The operational code is not used as an identity key.
 4. Active offerings require complete readiness; inactive offerings may save missing runtime references for later completion.
 5. The command service persists through the aggregate and returns a scoped detail projection.
 6. Update compares the concurrency stamp and locks academic identity after an application exists.
@@ -31,42 +55,64 @@ Delete compares concurrency and succeeds only when no application references the
 
 Clone copies dates, workflow, inquiry form, application form, and default active state from the source.
 The caller supplies a new cycle and academic identity, and the backend revalidates uniqueness and scope.
-Bulk preview validates each standard and returns structured row errors.
-Bulk commit inserts every row in one unit of work only when the preview-equivalent request is entirely valid.
+Bulk preview validates each standard and returns structured row errors together with separate
+`CanSaveInactive` and `CanActivate` decisions. Bulk commit inserts every row in one unit of work only
+when every row is valid for the requested inactive or active state.
 
 ## Run a managed Inquiry
 
 1. Enable the Inquiry policy in a draft workflow and choose the application-start requirement.
 2. Configure allowed sources, required source detail, duplicate behavior, identity requirements, counsellor assignment, deadlines, follow-up defaults, and qualification checklist as needed.
 3. Validate and publish the workflow, then attach it to an offering whose forms and counsellor scope are compatible.
-4. Create an inquiry; the server snapshots policy and deadlines, assigns a counsellor when configured, and records duplicate-override context in audit activity.
-5. Record meaningful contacts and schedule, complete, or cancel follow-ups from the management workspace.
-6. Record the checklist-backed qualification outcome and reason.
-7. Start an application only after the linked Inquiry satisfies its pinned start requirement.
-8. Read historical management after application start; mutable Inquiry management closes when the inquiry reaches application-started or converted state.
+4. Create an inquiry; the server validates the selected source and required source detail, stores the preferred language, checks duplicates inside the selected admission cycle, snapshots policy and deadlines, assigns a counsellor when configured, and records duplicate-override context in audit activity.
+5. Work from All, My inquiries, Unassigned, a specific counsellor, Overdue, Awaiting first contact, Awaiting qualification, or Open follow-ups. Operational queues are filtered before server paging, URL-backed clients can restore the same view, and each row carries its next-action and SLA summary.
+6. Assign one inquiry or atomically assign up to 100 inquiries. Manual assignment lists only active staff who can access the inquiry's offering and rechecks that scope on save; default and round-robin workflow policies remain the automatic assignment path.
+7. Edit identity, contact, source, source detail, or language before application start. The concurrency stamp rejects stale edits, and the activity timeline preserves the change.
+8. Compose a preferred-language family communication from the Inquiry list or Pipeline. Staff with Communication Add permission can create a draft; staff with Communication Send permission can request immediate delivery. Existing Communication approval, provider, consent, tracking, retry, and usage rules stay authoritative.
+9. Record structured contact channel, direction, and outcome; schedule, complete, or cancel follow-ups; then record the checklist-backed qualification outcome and standard closure reason where required.
+10. Start an application only after the exact linked Inquiry satisfies its pinned start requirement.
+11. Read the unified historical timeline after application start; mutable Inquiry details and management close when the inquiry reaches application-started or converted state.
 
 Basic workflows retain the existing inquiry commands and do not create managed records.
 
 ## Inquiry and application runtime
 
-Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values.
+Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values. Duplicate precheck and create-time duplicate enforcement both use the selected admission cycle.
 Application start checks the same availability service, validates any linked inquiry, and freezes the offering's published workflow and application form references.
 Later changes to offering defaults affect only future runtime records.
 
 ## Configure and publish a workflow
 
 1. Create a draft identity.
-2. Add stages from the server stage-type registry.
+2. Add selectable stages from the server stage-type registry. Seat, Enrollment, and Custom remain registered for immutable historical workflows but are deprecated and not selectable for new stages. Appointment remains non-selectable until its runtime scheduling and completion flow is available. The Approval enum value is retained for compatibility and is presented to schools as **Admission decision**.
 3. Mark exactly one entry stage and at least one terminal stage.
-4. Add controlled conditional transitions and at most one default route per source stage. Condition fields must use the server allowlist (`application`, `inquiry`, `assessment`, `documents`, `payment`, `eligibility`, `approval`, `offer`, `seat`, `enrollment`, or `appointment`).
+4. Add controlled conditional transitions and at most one default route per source stage. Each conditional route from a stage uses a unique non-negative priority; a route without a condition is always the single default route. Condition fields must use the server allowlist (`application`, `inquiry`, `assessment`, `documents`, `payment`, `eligibility`, `approval`, `offer`, `seat`, `enrollment`, or `appointment`).
+   A required stage cannot enable ordinary manual skip. Stage types without a runtime-ready handler are publication errors, not advisory warnings.
 
 Admission forms use the same controlled rule foundation for section visibility, field visibility, and conditional requiredness. The form runtime also supports canonical Applicant, Guardian, and Address bindings; these values remain domain-owned and are written back through the binding registry.
-5. Validate reachability, dead ends, duplicate routes, cycles, terminal reachability, stage configuration, and published form references.
-6. Publish only a valid draft.
-7. Create a new immutable version for later edits.
-8. Archive a published version only when no active offering uses it.
+5. Validate reachability, dead ends, duplicate routes, cycles, terminal reachability, published form references, and every enabled managed-stage policy. Form, Review, Payment, Offer, and Seat policies are parsed with the same domain validators used by runtime, so malformed or out-of-range settings cannot pass publication validation.
+6. If school maker-checker governance is disabled, publish the validated version directly with a
+   change reason. If it is enabled, submit it with a change reason and select a different active
+   user who has the workflow `Approve` permission.
+7. The assigned approver reviews validation, impact, and version comparison, then approves or
+   requests changes. A request for changes records the reason and returns the version to Draft.
+8. Publish an approved version immediately or set a future effective time. A scheduled worker
+   publishes due versions; the previously current version becomes Superseded.
+9. Create a new immutable version for later edits. Existing Offerings and Applications continue to
+   use their pinned Published, Superseded, or Archived version.
+10. For rollback, select a historical Published, Superseded, or Archived version and create a new
+    Draft with a required reason. Validate and govern that Draft normally; never repoint existing
+    runtime records silently.
+11. Archive a Published or Superseded version only when the usage rule permits it. Use governance
+    history and notifications to audit actors, decisions, reasons, and effective times.
 
-Visual display order never determines the entry stage or runtime routing.
+Publication and Offering activation validate different scopes. Workflow publication owns graph, runtime-handler, managed-policy, and SLA/deadline-range validation. People assignments cannot be fully checked until the workflow is attached to an Offering with a concrete academic hierarchy. Activation therefore verifies that configured Inquiry counsellors are active and can access that hierarchy, and that a default Review assignee is active, has the configured role, and can access the same hierarchy. A reusable published workflow is not coupled to one campus, but an Offering with unusable staff assignments cannot become active.
+
+Version-history reads include every version's complete stages and transitions plus Offering, distinct Campus, and Application usage counts. School-wide offerings with no Campus are reported as school-wide scope rather than being invented as a Campus. This lets authorized clients compare historical configuration and copy a selected immutable version into the next Draft without changing published versions or applications already pinned to them.
+
+The permission-protected workflow Usage read derives runtime analytics from the selected version's workflow and stage instances. It reports started, active, completed, completion-rate, duration, stage throughput, skips, and oldest active timestamps without combining metrics across immutable versions.
+
+The frontend presents routes under **What happens next?** on their source stage instead of exposing a separate technical Transitions workspace. The persisted transition graph remains authoritative: visual display order never determines the entry stage or runtime routing, and existing published definitions are not rewritten.
 
 ## Advance an application workflow
 
@@ -74,10 +120,12 @@ Visual display order never determines the entry stage or runtime routing.
 2. A transition command supplies the expected current stage, application concurrency stamp, and an idempotency key.
 3. The stage handler verifies that the current stage can complete.
 4. Conditional routes are evaluated by priority, followed by the default route.
-5. Completion or an authorized skip updates the current stage and next stage in one unit of work.
+5. Completion or an authorized skip updates the current stage and next stage in one unit of work. Required stages reject ordinary skip at runtime; only the separately permissioned emergency override with a reason can bypass them.
 6. Reaching an explicit terminal stage completes the workflow instance.
 7. Every transition creates immutable history and an Applicant 360 activity entry.
 8. The response derives a deterministic next required action from the active stage type; completed workflows return no next action.
+
+An **Admission decision** stage is the structured terminal decision point. Its retained enum value is `Approval` for API and database compatibility, but the stage can complete after an authorized Approved, Waitlisted, or Rejected decision. This lets negative decisions end at the same governed stage without adding fake Rejected or Waitlisted stages.
 
 ## Run a managed entrance assessment
 
@@ -166,14 +214,10 @@ Transition rules may use only `payment.status`, `payment.settledAmount`, and `pa
 
 The application card shows the current version, type, expiry, conditions, blockers, available actions, and permanent event history. This workflow records staff-mediated responses; communication delivery and applicant self-service are separate integrations.
 
-## Run a managed Seat stage
+## Run a legacy managed Seat stage
 
-1. Add Seat to a draft workflow and enable managed capacity and reservation.
-2. Set the offering capacity, reservation timing and duration, renewal and waitlist rules, authorized exceptions, release reason, completion outcomes, and confirmation continuation.
-3. Add an explicit `seat.status` transition for every enabled waitlisted, released, or expired completion outcome. Confirmation may use the default route.
-4. Validate and publish the workflow. Existing applications and basic Seat stages keep their pinned behavior.
-5. Reserve manually, or let stage entry reserve automatically. A full offering can place the applicant on the FIFO waitlist when enabled.
-6. Confirm, renew, release, promote, or adjust capacity only when the returned server capability permits it. Every action records immutable history.
-7. Continue after a permitted outcome. A confirmed allocation remains visible and releasable after advancement until admission finalization.
+Seat is not selectable in new workflow drafts. Published workflow versions and applications already pinned to a Seat stage continue to use the existing capacity, reservation, renewal, waitlist, exception, release, and completion policy without mutation.
 
-Capacity, expiry, and waitlist facts are computed by the server. Staff should refresh and retry after a concurrency conflict instead of overwriting a newer allocation decision.
+For those historical journeys, capacity, expiry, and waitlist facts remain server-computed. Confirm, renew, release, promote, or adjust capacity only when the returned server capability permits it; every action records immutable history. Staff should refresh and retry after a concurrency conflict instead of overwriting a newer allocation decision.
+
+New offering-level capacity and waitlist configuration is a separate Admission Offering contract. Do not expose placeholder fields in Workflow Builder or claim the migration is complete until that persisted contract, validation, permissions, and finalization gate are implemented end to end.

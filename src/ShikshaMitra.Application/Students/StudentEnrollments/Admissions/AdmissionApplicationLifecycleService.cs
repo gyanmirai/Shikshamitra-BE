@@ -44,7 +44,7 @@ public class AdmissionApplicationLifecycleService(
 		await inquiryRuntime.EnsureCanStartApplicationAsync(offering.Id, inquiry);
 		var workflow = await workflowRepository.FindAsync(offering.WorkflowDefinitionId!.Value);
 		var form = await formRepository.FindAsync(offering.ApplicationFormDefinitionId!.Value);
-		if (workflow?.Status != AdmissionWorkflowStatus.Published || form?.Status != AdmissionFormStatus.Published)
+		if (workflow == null || !workflow.Status.IsRuntimeVersion() || form?.Status != AdmissionFormStatus.Published)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
 
 		var application = new AdmissionApplication(

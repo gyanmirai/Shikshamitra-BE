@@ -28,6 +28,7 @@ public class AdmissionWorkflowValidationService(
 			.ToList();
 		foreach (var stage in stages.Where(stage => stage.StageType == AdmissionWorkflowStageType.Form))
 		{
+			if (issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)) continue;
 			if (!TryReadGuid(stage.ConfigurationJson, "formDefinitionId", out var formId)) continue;
 			var form = await formRepository.FindAsync(formId);
 			if (form == null || form.Status != AdmissionFormStatus.Published)
@@ -77,6 +78,7 @@ public class AdmissionWorkflowValidationService(
 		}
 		foreach (var stage in stages.Where(stage => stage.StageType == AdmissionWorkflowStageType.Payment))
 		{
+			if (issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)) continue;
 			try
 			{
 				var policy = AdmissionPaymentAccessService.ReadPolicy(stage);
@@ -98,6 +100,7 @@ public class AdmissionWorkflowValidationService(
 		}
 		foreach (var stage in stages.Where(stage => stage.StageType == AdmissionWorkflowStageType.Offer))
 		{
+			if (issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)) continue;
 			try { _ = AdmissionOfferAccessService.ReadPolicy(stage); }
 			catch (Volo.Abp.BusinessException exception)
 			{
@@ -112,6 +115,7 @@ public class AdmissionWorkflowValidationService(
 		}
 		foreach (var stage in stages.Where(stage => stage.StageType == AdmissionWorkflowStageType.Seat))
 		{
+			if (issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)) continue;
 			try { _ = AdmissionSeatAccessService.ReadPolicy(stage); }
 			catch (Volo.Abp.BusinessException exception)
 			{

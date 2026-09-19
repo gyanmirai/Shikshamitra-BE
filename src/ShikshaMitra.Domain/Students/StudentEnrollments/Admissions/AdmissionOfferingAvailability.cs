@@ -59,7 +59,7 @@ public static class AdmissionOfferingAvailabilityEvaluator
 				AdmissionErrorCodes.OfferingNotOpenYet, "The Admission Cycle has not been published.");
 		}
 
-		var today = now.Date;
+		var today = AdmissionCycleWindowEvaluator.GetInstitutionDate(now.UtcDateTime);
 		if (today < offering.GetEffectiveOpenDate(cycle.StartDate).Date)
 		{
 			return Unavailable(AdmissionOfferingAvailabilityStatus.NotOpenYet,

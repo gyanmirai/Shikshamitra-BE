@@ -30,7 +30,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				ExpectedCurrentStageInstanceId = fixture.StageId, IdempotencyKey = Guid.NewGuid().ToString(), ConcurrencyStamp = state.ConcurrencyStamp,
 				SkipCurrentStage = mode == "skip", AdminOverride = mode == "override", Reason = "Must not bypass evidence"
 			}));
-			exception.Code.ShouldBe(AdmissionDocumentErrorCodes.EvidenceRequired);
+			exception.Code.ShouldBe(mode == "skip"
+				? AdmissionApplicationErrorCodes.ManualSkipNotAllowed
+				: AdmissionDocumentErrorCodes.EvidenceRequired);
 		}
 		var originalStamp = state.ConcurrencyStamp;
 		state = await UploadDocumentAsync(service, fixture.Application.Id, fixture.StageId, state);

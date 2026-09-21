@@ -15,12 +15,52 @@ namespace ShikshaMitra.Controllers.Academic.Dashboard;
 [Authorize]
 public class AcademicDashboardController(IAcademicDashboardAppService dashboardAppService) : AbpControllerBase
 {
+    [HttpGet("context")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    [ProducesResponseType(typeof(AcademicDashboardContextDto), StatusCodes.Status200OK)]
+    public virtual async Task<AcademicDashboardContextDto> GetContextAsync()
+    {
+        return await dashboardAppService.GetContextAsync();
+    }
+
     [HttpGet("admin")]
     [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
     [ProducesResponseType(typeof(AdminAcademicDashboardDto), StatusCodes.Status200OK)]
     public virtual async Task<AdminAcademicDashboardDto> GetAdminDashboardAsync()
     {
         return await dashboardAppService.GetAdminDashboardAsync();
+    }
+
+    [HttpGet("admin/curriculum")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    [ProducesResponseType(typeof(AdminAcademicDashboardCurriculumDto), StatusCodes.Status200OK)]
+    public virtual async Task<AdminAcademicDashboardCurriculumDto> GetAdminCurriculumAsync()
+    {
+        return await dashboardAppService.GetAdminCurriculumAsync();
+    }
+
+    [HttpGet("admin/timetable")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    [ProducesResponseType(typeof(AdminAcademicDashboardTimetableDto), StatusCodes.Status200OK)]
+    public virtual async Task<AdminAcademicDashboardTimetableDto> GetAdminTimetableAsync()
+    {
+        return await dashboardAppService.GetAdminTimetableAsync();
+    }
+
+    [HttpGet("admin/assessment")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    [ProducesResponseType(typeof(AdminAcademicDashboardAssessmentDto), StatusCodes.Status200OK)]
+    public virtual async Task<AdminAcademicDashboardAssessmentDto> GetAdminAssessmentAsync()
+    {
+        return await dashboardAppService.GetAdminAssessmentAsync();
+    }
+
+    [HttpGet("admin/analytics")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    [ProducesResponseType(typeof(AdminAcademicDashboardAnalyticsDto), StatusCodes.Status200OK)]
+    public virtual async Task<AdminAcademicDashboardAnalyticsDto> GetAdminAnalyticsAsync()
+    {
+        return await dashboardAppService.GetAdminAnalyticsAsync();
     }
 
     [HttpGet("principal")]

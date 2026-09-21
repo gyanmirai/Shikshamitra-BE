@@ -191,7 +191,8 @@ public class SubjectAssignmentAppService(
 		int pageSize,
 		SubjectStatus? status = null,
 		bool includeArchived = false,
-		string? teacherSearch = null
+		string? teacherSearch = null,
+		Guid? divisionId = null
 	)
 	{
 		var query = await assignmentRepository.WithDetailsAsync(a => a.Chapters, a => a.Teachers);
@@ -205,7 +206,7 @@ public class SubjectAssignmentAppService(
 		// AssignedSubjectTeacher.TeacherId is an HR Employee ID, not an identity User ID.
 		// A subject teacher may read their own assignments even when they have no broader
 		// class/division scope; all other records still use the normal scope filter.
-		if (!hasTenantWideScope && !hasClassTeacherAccess)
+		if (!hasTenantWideScope)
 		{
 			currentEmployeeId = await GetCurrentEmployeeIdAsync();
 			var eligibleTeacherIds = reportingEmployeeIds.ToHashSet();
@@ -213,27 +214,45 @@ public class SubjectAssignmentAppService(
 			{
 				eligibleTeacherIds.Add(currentEmployeeId.Value);
 			}
-			if (eligibleTeacherIds.Count == 0)
-			{
-				query = query.Where(_ => false);
-			}
-			else
+			var allocatedSubjectIds = new List<Guid>();
+			if (eligibleTeacherIds.Count > 0)
 			{
 				// Teacher Assignment stores the effective class/division/subject allocation
 				// separately from the optional teacher list on AssignedSubject. Both sources
 				// must grant read access to the assigned subject.
 				var allocationQuery = await teacherSubjectAllocationRepository.GetQueryableAsync();
-				var allocatedSubjectIds = await AsyncExecuter.ToListAsync(
+				allocatedSubjectIds = await AsyncExecuter.ToListAsync(
 					allocationQuery
 						.Where(allocation =>
 							allocation.StandardId == classId &&
-							allocation.Teachers.Any(teacher => eligibleTeacherIds.Contains(teacher.TeacherId)))
+							(!divisionId.HasValue || allocation.DivisionId == divisionId.Value) &&
+							allocation.Teachers.Any(teacher =>
+								Enumerable.Contains(eligibleTeacherIds, teacher.TeacherId)))
 						.Select(allocation => allocation.SubjectId)
 						.Distinct());
+			}
+
+			if (!hasClassTeacherAccess)
+			{
+				query = query.Where(assignment =>
+					assignment.Teachers.Any(teacher =>
+						Enumerable.Contains(eligibleTeacherIds, teacher.TeacherId)) ||
+					Enumerable.Contains(allocatedSubjectIds, assignment.SubjectId));
+			}
+			else
+			{
+				// A teacher can simultaneously own a class and teach a subject in another
+				// class. Class-teacher access and subject-teacher access are additive; a
+				// class-teacher assignment must not hide explicitly allocated subjects.
+				var classTeacherQuery = await ApplyCurrentUserAssignmentScopeAsync(query);
+				var classTeacherAssignmentIds = await AsyncExecuter.ToListAsync(
+					classTeacherQuery.Select(assignment => assignment.Id));
 
 				query = query.Where(assignment =>
-					assignment.Teachers.Any(teacher => eligibleTeacherIds.Contains(teacher.TeacherId)) ||
-					allocatedSubjectIds.Contains(assignment.SubjectId));
+					Enumerable.Contains(classTeacherAssignmentIds, assignment.Id) ||
+					assignment.Teachers.Any(teacher =>
+						Enumerable.Contains(eligibleTeacherIds, teacher.TeacherId)) ||
+					Enumerable.Contains(allocatedSubjectIds, assignment.SubjectId));
 			}
 		}
 		else

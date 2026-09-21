@@ -52,7 +52,7 @@ public class AcademicDashboardAggregation_Tests : ShikshaMitraApplicationTestBas
 				diaryReadiness.CompletedCount.ShouldBe(0);
 				diaryReadiness.MissingCount.ShouldBe(3);
 				result.ReadinessItems.Single(item => item.Key == "calendar-rules").Status.ShouldBe("complete");
-				result.SyllabusProgress.ShouldBe(82);
+				result.SyllabusProgress.ShouldBe(0);
 				db.ChangeTracker.Entries<LessonPlan>().ShouldBeEmpty();
 				db.ChangeTracker.Entries<AcademicCalendarSetting>().ShouldBeEmpty();
 			}

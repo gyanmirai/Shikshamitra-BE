@@ -19,8 +19,8 @@ public class AdmissionAssessmentSessionInput
 	public Guid AdmissionOfferingId { get; set; }
 	public Guid WorkflowStageDefinitionId { get; set; }
 	public string Name { get; set; } = string.Empty;
-	public DateTime StartsAt { get; set; }
-	public DateTime EndsAt { get; set; }
+	public DateTimeOffset StartsAt { get; set; }
+	public DateTimeOffset EndsAt { get; set; }
 	public string Location { get; set; } = string.Empty;
 	public int Capacity { get; set; }
 	public string? ConcurrencyStamp { get; set; }
@@ -39,8 +39,8 @@ public class AdmissionAssessmentAttemptDto
 	public int AttemptNumber { get; set; }
 	public Guid? SessionId { get; set; }
 	public string? SessionName { get; set; }
-	public DateTime? SessionStartsAt { get; set; }
-	public DateTime? SessionEndsAt { get; set; }
+	public DateTimeOffset? SessionStartsAt { get; set; }
+	public DateTimeOffset? SessionEndsAt { get; set; }
 	public string? SessionLocation { get; set; }
 	public string Attendance { get; set; } = "pending";
 	public string Status { get; set; } = "pending";

@@ -6,6 +6,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionOfferingListDto : EntityDto<Guid>
 {
+	public string Name { get; set; } = string.Empty;
 	public Guid AdmissionCycleId { get; set; }
 	public string AdmissionCycleName { get; set; } = string.Empty;
 	public Guid? CampusId { get; set; }
@@ -54,6 +55,7 @@ public class AdmissionOfferingDto : AdmissionOfferingListDto
 
 public abstract class AdmissionOfferingWriteDto
 {
+	public string? Name { get; set; }
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid MediumId { get; set; }
@@ -84,6 +86,7 @@ public class ValidateAdmissionOfferingDto : AdmissionOfferingWriteDto
 
 public class CloneAdmissionOfferingDto
 {
+	public string? Name { get; set; }
 	public Guid AdmissionCycleId { get; set; }
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
@@ -133,6 +136,7 @@ public class AdmissionOfferingListInput : PagedAndSortedResultRequestDto
 
 public class BulkAdmissionOfferingItemDto
 {
+	public string? Name { get; set; }
 	public Guid StandardId { get; set; }
 	public string Code { get; set; } = string.Empty;
 }

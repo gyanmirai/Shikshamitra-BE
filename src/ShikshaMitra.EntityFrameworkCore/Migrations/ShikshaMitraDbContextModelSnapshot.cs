@@ -25478,6 +25478,11 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("MediumId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<DateTimeOffset?>("OpenDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -25528,6 +25533,45 @@ namespace ShikshaMitra.Migrations
                         .HasFilter("\"IsDeleted\" = false AND \"CampusId\" IS NOT NULL");
 
                     b.ToTable("AppAdmissionOfferings", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionReferenceSequence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("NextValue")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("StoredTenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoredTenantId", "Year", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AdmissionReferenceSequences_Tenant_Year_Kind");
+
+                    b.ToTable("AppAdmissionReferenceSequences", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionReviewDecision", b =>

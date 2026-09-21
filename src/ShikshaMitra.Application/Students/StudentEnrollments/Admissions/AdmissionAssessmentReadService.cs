@@ -71,7 +71,8 @@ public class AdmissionAssessmentReadService(
 	private static AdmissionAssessmentAttemptDto MapAttempt(AdmissionAssessmentAttempt item, AdmissionAssessmentSession? session) => new()
 	{
 		Id = item.Id, AttemptNumber = item.AttemptNumber, SessionId = item.SessionId, SessionName = session?.Name,
-		SessionStartsAt = session?.StartsAt, SessionEndsAt = session?.EndsAt, SessionLocation = session?.Location,
+		SessionStartsAt = session == null ? null : AdmissionAssessmentSessionService.ToUtcOffset(session.StartsAt),
+		SessionEndsAt = session == null ? null : AdmissionAssessmentSessionService.ToUtcOffset(session.EndsAt), SessionLocation = session?.Location,
 		Attendance = item.Attendance, Status = item.Status, Outcome = item.Outcome, Marks = item.Marks, Notes = item.Notes,
 		ReviewNotes = item.ReviewNotes, RecordedBy = item.RecordedBy, ReviewedBy = item.ReviewedBy, ReviewedAt = item.ReviewedAt,
 		CreatedAt = item.CreationTime, ConcurrencyStamp = item.ConcurrencyStamp

@@ -38,6 +38,8 @@ public class AdmissionInquiryManagementApiContract_Tests
 		typeof(AdmissionInquiryManagementDto).GetProperty("QualificationAnswersJson").ShouldBeNull();
 		var metadata = AdmissionWorkflowStageTypeRegistry.Find(AdmissionWorkflowStageType.Inquiry)!;
 		metadata.IsRuntimeReady.ShouldBeTrue();
+		metadata.IsSelectable.ShouldBeFalse();
+		metadata.IsDeprecated.ShouldBeTrue();
 		metadata.SupportedConfiguration.ShouldContain("inquiry");
 	}
 
@@ -68,6 +70,12 @@ public class AdmissionInquiryManagementApiContract_Tests
 
 		typeof(AdmissionInquiryListInput).GetProperty("IsAssigned").ShouldNotBeNull();
 		typeof(AdmissionInquiryListInput).GetProperty("WorkQueue").ShouldNotBeNull();
+		typeof(AdmissionInquiryListInput).GetProperty("InquiryNumber").ShouldNotBeNull();
+		typeof(AdmissionInquiryListInput).GetProperty("ApplicantName").ShouldNotBeNull();
+		typeof(AdmissionInquiryListInput).GetProperty("Phone").ShouldNotBeNull();
+		typeof(AdmissionInquiryListInput).GetProperty("Email").ShouldNotBeNull();
+		typeof(AdmissionInquiryListInput).GetProperty("PipelineGroup").ShouldNotBeNull();
+		typeof(AdmissionInquiryListInput).GetProperty("ExcludePostApplication").ShouldNotBeNull();
 		typeof(AdmissionInquiryDto).GetProperty("NextFollowUpAt").ShouldNotBeNull();
 		typeof(AdmissionInquiryDto).GetProperty("NeedsFirstContact").ShouldNotBeNull();
 		typeof(AdmissionInquiryDto).GetProperty("NeedsQualification").ShouldNotBeNull();
@@ -121,6 +129,9 @@ public class AdmissionInquiryManagementApiContract_Tests
 	[Fact]
 	public void Inquiry_contract_exposes_language_concurrency_timeline_and_bulk_results()
 	{
+		typeof(CreateAdmissionInquiryDto).GetProperty("BoardId").ShouldNotBeNull();
+		typeof(CreateAdmissionInquiryDto).GetProperty("MediumId").ShouldNotBeNull();
+		typeof(CreateAdmissionInquiryDto).GetProperty("StandardId").ShouldNotBeNull();
 		typeof(AdmissionInquiryDto).GetProperty("PreferredLanguageCode").ShouldNotBeNull();
 		typeof(AdmissionInquiryDto).GetProperty("ConcurrencyStamp").ShouldNotBeNull();
 		typeof(UpdateAdmissionInquiryDto).GetProperty("ConcurrencyStamp").ShouldNotBeNull();

@@ -215,6 +215,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{
 				AdmissionCycleId = offering.AdmissionCycleId,
 				AdmissionOfferingId = offering.Id,
+				BoardId = offering.BoardId,
+				MediumId = offering.MediumId,
+				StandardId = offering.StandardId,
 				ApplicantName = "Fallback Applicant",
 				Phone = "9000000000",
 				Source = AdmissionInquirySource.Website,
@@ -242,6 +245,40 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var form = await _applicationAppService.GetFormAsync(application.Id);
 			form.Values.Single(value => value.FieldCode == "LEARNING_NOTES").ValueJson
 				.ShouldBe("\"Benefits from visual learning prompts\"");
+
+			var exactInquiry = await inquiryService.GetListAsync(new AdmissionInquiryListInput
+			{
+				InquiryNumber = inquiry.InquiryNumber,
+				InquiryNumberFilterType = "equals",
+				MaxResultCount = 10
+			});
+			exactInquiry.Items.ShouldContain(item => item.Id == inquiry.Id);
+
+			var mainInquiryQueue = await inquiryService.GetListAsync(new AdmissionInquiryListInput
+			{
+				InquiryNumber = inquiry.InquiryNumber,
+				InquiryNumberFilterType = "equals",
+				ExcludePostApplication = true,
+				MaxResultCount = 10
+			});
+			mainInquiryQueue.Items.ShouldNotContain(item => item.Id == inquiry.Id);
+
+			var activePipeline = await inquiryService.GetListAsync(new AdmissionInquiryListInput
+			{
+				InquiryNumber = inquiry.InquiryNumber,
+				InquiryNumberFilterType = "equals",
+				PipelineGroup = "active",
+				MaxResultCount = 10
+			});
+			activePipeline.Items.ShouldNotContain(item => item.Id == inquiry.Id);
+			var handoffPipeline = await inquiryService.GetListAsync(new AdmissionInquiryListInput
+			{
+				InquiryNumber = inquiry.InquiryNumber,
+				InquiryNumberFilterType = "equals",
+				PipelineGroup = "handoff",
+				MaxResultCount = 10
+			});
+			handoffPipeline.Items.ShouldContain(item => item.Id == inquiry.Id);
 		}
 	}
 
@@ -263,6 +300,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				{
 					AdmissionCycleId = offering.AdmissionCycleId,
 					AdmissionOfferingId = offering.Id,
+					BoardId = offering.BoardId,
+					MediumId = offering.MediumId,
+					StandardId = offering.StandardId,
 					ApplicantName = "Riya Mehta",
 					ApplicantFirstName = "Riya",
 					Phone = "9876501011",

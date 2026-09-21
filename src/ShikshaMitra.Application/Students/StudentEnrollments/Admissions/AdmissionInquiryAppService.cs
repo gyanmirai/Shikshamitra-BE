@@ -30,6 +30,7 @@ public class AdmissionInquiryAppService(
 	IRepository<AdmissionActivity, Guid> activityRepository,
 	IRepository<AdmissionInquiryManagement, Guid> managementRepository,
 	IRepository<AdmissionInquiryFollowUp, Guid> followUpRepository,
+	IAdmissionReferenceSequenceRepository referenceSequenceRepository,
 	AdmissionInquiryScopeAccessService scopeAccess,
 	AdmissionInquiryPolicyResolver policyResolver,
 	AdmissionInquiryRuntimeService inquiryRuntime,
@@ -120,37 +121,25 @@ public class AdmissionInquiryAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Create)]
 	public async Task<AdmissionInquiryDto> CreateAsync(CreateAdmissionInquiryDto input)
 	{
-		var cycle = await cycleRepository.FindAsync(input.AdmissionCycleId);
-		if (cycle == null)
-			throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound);
+		if (!input.AdmissionOfferingId.HasValue)
+			throw new BusinessException(AdmissionErrorCodes.InquiryOfferingRequired,
+				"Choose an admission offering for the selected board, medium, and class.");
+
+		var runtime = await offeringRuntimeService.GetAvailableAsync(input.AdmissionOfferingId.Value);
+		var offering = runtime.Offering;
+		var cycle = runtime.Cycle;
+		await scopeAccess.EnsureOfferingAccessAsync(offering.Id);
+		AdmissionInquiryAcademicSelectionValidator.EnsureMatches(input, offering);
+
 		var values = input.FormValues.ToDictionary(x => x.FieldCode, x => UnwrapValue(x.ValueJson), StringComparer.OrdinalIgnoreCase);
 		var inquiryFields = new List<AdmissionFormFieldDefinition>();
-		AdmissionInquiryPolicyContext? managedPolicy = null;
-		if (input.AdmissionOfferingId.HasValue)
+		var managedPolicy = await policyResolver.ResolveAsync(offering.Id);
+		if (offering.InquiryFormDefinitionId is Guid inquiryFormId)
 		{
-			var runtime = await offeringRuntimeService.GetAvailableAsync(input.AdmissionOfferingId.Value);
-			var offering = runtime.Offering;
-			await scopeAccess.EnsureOfferingAccessAsync(offering.Id);
-			managedPolicy = await policyResolver.ResolveAsync(offering.Id);
-			if (offering.AdmissionCycleId != input.AdmissionCycleId)
-			{
-				throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound,
-					"The selected Admission Offering does not belong to the selected Admission Cycle.");
-			}
-			if (offering.InquiryFormDefinitionId is Guid inquiryFormId)
-			{
-				var form = await formRepository.FindAsync(inquiryFormId); var fields = await formFieldRepository.GetListAsync(x => x.FormDefinitionId == inquiryFormId); inquiryFields = fields;
-				if (form == null || form.Status != AdmissionFormStatus.Published) throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
-				var missing = fields.Where(x => x.Required && IsVisible(x.VisibilityRuleJson, values) && (!values.TryGetValue(x.Code, out var value) || string.IsNullOrWhiteSpace(value)) && string.IsNullOrWhiteSpace(x.DefaultValue)).Select(x => x.Code).ToList();
-				if (missing.Count > 0) throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed).WithData("Fields", string.Join(", ", missing));
-			}
-		}
-		else if (cycle.Status != AdmissionCycleStatus.Published ||
-			AdmissionCycleWindowEvaluator.Evaluate(cycle.Status, cycle.StartDate, cycle.EndDate, Clock.Now) !=
-			AdmissionCycleWindowStatus.Open)
-		{
-			throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotOpen,
-				"The admission cycle is not currently accepting inquiries.");
+			var form = await formRepository.FindAsync(inquiryFormId); var fields = await formFieldRepository.GetListAsync(x => x.FormDefinitionId == inquiryFormId); inquiryFields = fields;
+			if (form == null || form.Status != AdmissionFormStatus.Published) throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
+			var missing = fields.Where(x => x.Required && IsVisible(x.VisibilityRuleJson, values) && (!values.TryGetValue(x.Code, out var value) || string.IsNullOrWhiteSpace(value)) && string.IsNullOrWhiteSpace(x.DefaultValue)).Select(x => x.Code).ToList();
+			if (missing.Count > 0) throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed).WithData("Fields", string.Join(", ", missing));
 		}
 		input.ApplicantName = AdmissionInquiryIdentityFieldResolver.Resolve(values, inquiryFields,
 			"Applicant.Name", input.ApplicantName) ?? input.ApplicantName;
@@ -187,8 +176,6 @@ public class AdmissionInquiryAppService(
 			var policy = managedPolicy.Policy;
 			if (policy.AllowedSources.Count > 0 && !policy.AllowedSources.Contains(input.Source))
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceNotAllowed);
-			if (policy.RequireSourceDetailFor.Contains(input.Source) && string.IsNullOrWhiteSpace(input.SourceDetail))
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceDetailRequired);
 			if (policy.RequireGuardianEmail && string.IsNullOrWhiteSpace(input.GuardianEmail))
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Guardian email is required by the Inquiry policy.");
 			if (policy.RequireApplicantDateOfBirth && !input.ApplicantDateOfBirth.HasValue)
@@ -197,7 +184,7 @@ public class AdmissionInquiryAppService(
 		var phone = string.Concat((string.IsNullOrWhiteSpace(input.Phone) ? input.GuardianPhone : input.Phone).Where(char.IsDigit));
 		var query = await inquiryRepository.GetQueryableAsync();
 		var duplicateExists = !input.ExistingFamilyId.HasValue && await AsyncExecuter.AnyAsync(query.Where(x =>
-			x.AdmissionCycleId == input.AdmissionCycleId && x.NormalizedPhone == phone));
+			x.AdmissionCycleId == cycle.Id && x.NormalizedPhone == phone));
 		if (duplicateExists)
 		{
 			if (!input.CreateSeparateFamily) throw new BusinessException(AdmissionErrorCodes.InquiryDuplicate);
@@ -207,9 +194,20 @@ public class AdmissionInquiryAppService(
 				string.IsNullOrWhiteSpace(input.DuplicateOverrideReason))
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.DuplicateReasonRequired);
 		}
+		var referenceYear = Clock.Now.ToUniversalTime().Year;
+		var inquiryNumber = AdmissionReferenceNumber.Format(
+			AdmissionReferenceKind.Inquiry,
+			referenceYear,
+			await referenceSequenceRepository.IncrementAndGetAsync(referenceYear, AdmissionReferenceKind.Inquiry));
+		var familyNumber = input.ExistingFamilyId.HasValue
+			? null
+			: AdmissionReferenceNumber.Format(
+				AdmissionReferenceKind.Family,
+				referenceYear,
+				await referenceSequenceRepository.IncrementAndGetAsync(referenceYear, AdmissionReferenceKind.Family));
 		var family = input.ExistingFamilyId.HasValue ? await familyRepository.FindAsync(input.ExistingFamilyId.Value) : null;
 		if (input.ExistingFamilyId.HasValue && family == null) throw new BusinessException(AdmissionApplicantErrorCodes.ApplicantFamilyNotFound);
-		family ??= new AdmissionFamily(GuidGenerator.Create(), CurrentTenant.Id, $"FAM/{DateTime.UtcNow:yyyy}/{GuidGenerator.Create():N}"[..20]);
+		family ??= new AdmissionFamily(GuidGenerator.Create(), CurrentTenant.Id, familyNumber!);
 		var guardian = family.PrimaryGuardianId.HasValue ? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
 		var newGuardian = guardian == null;
 		if (newGuardian) { guardian = new AdmissionGuardian(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.GuardianFirstName, input.GuardianLastName, input.GuardianPhone, input.GuardianEmail, AdmissionGuardianRelationship.Parent, true); family.SetPrimaryGuardian(guardian.Id); }
@@ -225,12 +223,12 @@ public class AdmissionInquiryAppService(
 		if (!input.ExistingFamilyId.HasValue) await familyRepository.InsertAsync(family, autoSave: false);
 		if (newGuardian) await guardianRepository.InsertAsync(guardian!, autoSave: false);
 		await applicantRepository.InsertAsync(applicant, autoSave: false);
-		var inquiry = new AdmissionInquiry(GuidGenerator.Create(), CurrentTenant.Id, input.AdmissionCycleId, input.AdmissionOfferingId,
+		var inquiry = new AdmissionInquiry(GuidGenerator.Create(), CurrentTenant.Id, inquiryNumber, cycle.Id, offering.Id,
 			input.ApplicantName, phone, input.Email, input.Source, input.SourceDetail);
 		inquiry.SetPreferredLanguage(input.PreferredLanguageCode);
 		inquiry.LinkIdentity(family.Id, applicant.Id);
-		if (managedPolicy != null && input.AdmissionOfferingId.HasValue &&
-			await assignmentService.ResolvePolicyAssignmentAsync(managedPolicy.Policy, input.AdmissionOfferingId.Value) is Guid counsellorId)
+		if (managedPolicy != null &&
+			await assignmentService.ResolvePolicyAssignmentAsync(managedPolicy.Policy, offering.Id) is Guid counsellorId)
 			inquiry.AssignCounsellor(counsellorId);
 		if (input.FormValues.Count > 0)
 		{
@@ -535,8 +533,11 @@ public class AdmissionInquiryAppService(
 		var followUpQuery = await followUpRepository.GetQueryableAsync();
 		var now = Clock.Now.ToUniversalTime();
 		var normalizedSearch = input.Search?.Trim();
+		var pipelineGroup = NormalizePipelineGroup(input.PipelineGroup);
 		query = query.Where(x => (!input.AdmissionCycleId.HasValue || x.AdmissionCycleId == input.AdmissionCycleId) &&
 			(!input.AdmissionOfferingId.HasValue || x.AdmissionOfferingId == input.AdmissionOfferingId) &&
+			(!input.ExcludePostApplication ||
+				(x.Status != AdmissionInquiryStatus.ApplicationStarted && x.Status != AdmissionInquiryStatus.Converted)) &&
 			(!input.Status.HasValue || x.Status == input.Status) &&
 			(!input.Source.HasValue || x.Source == input.Source) &&
 			(!input.AssignedCounsellorId.HasValue || x.AssignedCounsellorId == input.AssignedCounsellorId) &&
@@ -545,6 +546,61 @@ public class AdmissionInquiryAppService(
 			(string.IsNullOrWhiteSpace(normalizedSearch) || x.ApplicantName.Contains(normalizedSearch) ||
 				x.NormalizedPhone.Contains(normalizedSearch) || x.InquiryNumber.Contains(normalizedSearch) ||
 				(x.Email != null && x.Email.Contains(normalizedSearch))));
+		if (pipelineGroup == "active")
+			query = query.Where(x => x.Status == AdmissionInquiryStatus.New ||
+				x.Status == AdmissionInquiryStatus.Contacted ||
+				x.Status == AdmissionInquiryStatus.Interested ||
+				x.Status == AdmissionInquiryStatus.FollowUp);
+		if (pipelineGroup == "handoff")
+			query = query.Where(x => x.Status == AdmissionInquiryStatus.ApplicationStarted ||
+				x.Status == AdmissionInquiryStatus.Converted ||
+				x.Status == AdmissionInquiryStatus.NotInterested ||
+				x.Status == AdmissionInquiryStatus.Lost ||
+				x.Status == AdmissionInquiryStatus.Duplicate);
+		var inquiryNumber = input.InquiryNumber?.Trim();
+		if (!string.IsNullOrWhiteSpace(inquiryNumber))
+		{
+			query = NormalizeTextFilterType(input.InquiryNumberFilterType) switch
+			{
+				"equals" => query.Where(x => x.InquiryNumber == inquiryNumber),
+				"startsWith" => query.Where(x => x.InquiryNumber.StartsWith(inquiryNumber)),
+				"endsWith" => query.Where(x => x.InquiryNumber.EndsWith(inquiryNumber)),
+				_ => query.Where(x => x.InquiryNumber.Contains(inquiryNumber))
+			};
+		}
+		var applicantName = input.ApplicantName?.Trim();
+		if (!string.IsNullOrWhiteSpace(applicantName))
+		{
+			query = NormalizeTextFilterType(input.ApplicantNameFilterType) switch
+			{
+				"equals" => query.Where(x => x.ApplicantName == applicantName),
+				"startsWith" => query.Where(x => x.ApplicantName.StartsWith(applicantName)),
+				"endsWith" => query.Where(x => x.ApplicantName.EndsWith(applicantName)),
+				_ => query.Where(x => x.ApplicantName.Contains(applicantName))
+			};
+		}
+		var phone = string.Concat((input.Phone ?? string.Empty).Where(char.IsDigit));
+		if (!string.IsNullOrWhiteSpace(phone))
+		{
+			query = NormalizeTextFilterType(input.PhoneFilterType) switch
+			{
+				"equals" => query.Where(x => x.NormalizedPhone == phone),
+				"startsWith" => query.Where(x => x.NormalizedPhone.StartsWith(phone)),
+				"endsWith" => query.Where(x => x.NormalizedPhone.EndsWith(phone)),
+				_ => query.Where(x => x.NormalizedPhone.Contains(phone))
+			};
+		}
+		var email = input.Email?.Trim();
+		if (!string.IsNullOrWhiteSpace(email))
+		{
+			query = NormalizeTextFilterType(input.EmailFilterType) switch
+			{
+				"equals" => query.Where(x => x.Email == email),
+				"startsWith" => query.Where(x => x.Email != null && x.Email.StartsWith(email)),
+				"endsWith" => query.Where(x => x.Email != null && x.Email.EndsWith(email)),
+				_ => query.Where(x => x.Email != null && x.Email.Contains(email))
+			};
+		}
 		if (input.WorkQueue.HasValue && !Enum.IsDefined(input.WorkQueue.Value))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose a valid Inquiry work queue.");
@@ -566,6 +622,22 @@ public class AdmissionInquiryAppService(
 			_ => query
 		};
 	}
+
+	private static string NormalizeTextFilterType(string? value) => value?.Trim() switch
+	{
+		null or "" => "contains",
+		"contains" or "equals" or "startsWith" or "endsWith" => value.Trim(),
+		_ => throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
+			"Choose a valid Inquiry column filter type.")
+	};
+	private static string? NormalizePipelineGroup(string? value) => value?.Trim().ToLowerInvariant() switch
+	{
+		null or "" => null,
+		"active" => "active",
+		"handoff" => "handoff",
+		_ => throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
+			"Choose a valid Inquiry pipeline group.")
+	};
 	private static AdmissionInquiryDto Map(AdmissionInquiry x, AdmissionInquiryManagement? management = null,
 		IReadOnlyList<AdmissionInquiryFollowUp>? openFollowUps = null, string? cycleName = null,
 		string? offeringCode = null, string? counsellorName = null, DateTime? now = null)

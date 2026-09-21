@@ -220,6 +220,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		AdmissionCycleId = offering.AdmissionCycleId,
 		AdmissionOfferingId = offering.Id,
+		BoardId = offering.BoardId,
+		MediumId = offering.MediumId,
+		StandardId = offering.StandardId,
 		ApplicantName = "Aanya Patel",
 		Phone = $"9{Random.Shared.Next(100000000, 999999999)}",
 		Source = AdmissionInquirySource.Website,

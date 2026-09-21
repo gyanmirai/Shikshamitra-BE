@@ -121,7 +121,13 @@ public class AdmissionApplicationFormService(
 	{
 		var application = await applicationReadService.GetEntityAsync(applicationId);
 		if (application.Status == AdmissionApplicationStatus.Submitted)
+		{
+			// A legacy workflow can enter its Form stage only after the same submit request
+			// completes an older Inquiry entry stage. Retrying a successful submission must
+			// therefore repair the workflow handoff instead of returning the stuck record.
+			await workflowService.AdvanceAfterSubmitAsync(application);
 			return new AdmissionApplicationSubmitResultDto { Application = AdmissionApplicationMapper.ToDto(application) };
+		}
 		application.SaveDraft();
 		await formStageRuntime.EnsureCanSubmitAsync(applicationId);
 		var instance = await GetInstanceAsync(applicationId);

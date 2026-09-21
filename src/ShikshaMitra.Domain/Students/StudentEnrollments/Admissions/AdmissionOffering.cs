@@ -14,6 +14,7 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid MediumId { get; private set; }
 	public Guid StageId { get; private set; }
 	public Guid StandardId { get; private set; }
+	public string Name { get; private set; } = string.Empty;
 	public string Code { get; private set; } = string.Empty;
 	public DateTimeOffset? OpenDate { get; private set; }
 	public DateTimeOffset? CloseDate { get; private set; }
@@ -36,13 +37,14 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string code,
 		bool useCycleDates,
 		DateTimeOffset? openDate,
-		DateTimeOffset? closeDate)
+		DateTimeOffset? closeDate,
+		string? name = null)
 		: base(id)
 	{
 		TenantId = tenantId;
 		AdmissionCycleId = Check.NotDefaultOrNull<Guid>(admissionCycleId, nameof(admissionCycleId));
 		UpdateIdentity(campusId, boardId, mediumId, stageId, standardId, identityLocked: false);
-		UpdateOperationalDetails(code, useCycleDates, openDate, closeDate);
+		UpdateOperationalDetails(code, useCycleDates, openDate, closeDate, name);
 		IsActive = true;
 	}
 
@@ -72,7 +74,8 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string code,
 		bool useCycleDates,
 		DateTimeOffset? openDate,
-		DateTimeOffset? closeDate)
+		DateTimeOffset? closeDate,
+		string? name = null)
 	{
 		if (!useCycleDates && (!openDate.HasValue || !closeDate.HasValue))
 		{
@@ -85,6 +88,9 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 
 		Code = Check.NotNullOrWhiteSpace(code, nameof(code), AdmissionOfferingConsts.MaxCodeLength).Trim().ToUpperInvariant();
+		Name = string.IsNullOrWhiteSpace(name)
+			? Code
+			: Check.NotNullOrWhiteSpace(name, nameof(name), AdmissionOfferingConsts.MaxNameLength).Trim();
 		OpenDate = useCycleDates ? null : NormalizeDate(openDate!.Value);
 		CloseDate = useCycleDates ? null : NormalizeDate(closeDate!.Value);
 	}

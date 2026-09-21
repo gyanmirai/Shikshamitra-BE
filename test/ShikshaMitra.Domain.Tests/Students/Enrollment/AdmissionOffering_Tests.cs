@@ -16,7 +16,20 @@ public class AdmissionOffering_Tests
 			new DateTimeOffset(2027, 3, 31, 0, 0, 0, TimeSpan.FromHours(5.5)));
 
 		offering.Code.ShouldBe("GRADE-5");
+		offering.Name.ShouldBe("GRADE-5");
 		offering.IsActive.ShouldBeTrue();
+	}
+
+	[Fact]
+	public void Offering_persists_a_user_friendly_name()
+	{
+		var offering = new AdmissionOffering(
+			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null,
+			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), " grade-5 ",
+			true, null, null, "  Grade 5 General Admission  ");
+
+		offering.Name.ShouldBe("Grade 5 General Admission");
+		offering.Code.ShouldBe("GRADE-5");
 	}
 
 	[Fact]

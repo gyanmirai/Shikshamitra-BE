@@ -50,6 +50,9 @@ public class CreateAdmissionInquiryDto
 	public string? DuplicateOverrideReason { get; set; }
 	public Guid AdmissionCycleId { get; set; }
 	public Guid? AdmissionOfferingId { get; set; }
+	public Guid BoardId { get; set; }
+	public Guid MediumId { get; set; }
+	public Guid StandardId { get; set; }
 	public string ApplicantName { get; set; } = string.Empty;
 	public string Phone { get; set; } = string.Empty;
 	public string? Email { get; set; }
@@ -71,10 +74,29 @@ public class AdmissionInquiryListInput : PagedAndSortedResultRequestDto
 {
 	public Guid? AdmissionCycleId { get; set; }
 	public Guid? AdmissionOfferingId { get; set; }
+	[StringLength(64)]
+	public string? InquiryNumber { get; set; }
+	[StringLength(16)]
+	public string? InquiryNumberFilterType { get; set; }
+	[StringLength(256)]
+	public string? ApplicantName { get; set; }
+	[StringLength(16)]
+	public string? ApplicantNameFilterType { get; set; }
+	[StringLength(32)]
+	public string? Phone { get; set; }
+	[StringLength(16)]
+	public string? PhoneFilterType { get; set; }
+	[StringLength(256)]
+	public string? Email { get; set; }
+	[StringLength(16)]
+	public string? EmailFilterType { get; set; }
 	public AdmissionInquiryStatus? Status { get; set; }
+	[StringLength(16)]
+	public string? PipelineGroup { get; set; }
 	public AdmissionInquirySource? Source { get; set; }
 	public Guid? AssignedCounsellorId { get; set; }
 	public bool? IsAssigned { get; set; }
+	public bool ExcludePostApplication { get; set; }
 	public AdmissionInquiryWorkQueue? WorkQueue { get; set; }
 	public string? Search { get; set; }
 }

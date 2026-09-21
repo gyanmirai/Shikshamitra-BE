@@ -17,6 +17,9 @@ public class AdmissionOfferingModelMapping_Tests : ShikshaMitraEntityFrameworkCo
 		entity.ShouldNotBeNull();
 		entity.GetTableName().ShouldBe("AppAdmissionOfferings");
 
+		entity.FindProperty(nameof(AdmissionOffering.Name))!.IsNullable.ShouldBeFalse();
+		entity.FindProperty(nameof(AdmissionOffering.Name))!.GetMaxLength()
+			.ShouldBe(AdmissionOfferingConsts.MaxNameLength);
 		entity.FindProperty(nameof(AdmissionOffering.OpenDate))!.IsNullable.ShouldBeTrue();
 		entity.FindProperty(nameof(AdmissionOffering.CloseDate))!.IsNullable.ShouldBeTrue();
 		entity.FindProperty(nameof(AdmissionOffering.IsActive))!.GetDefaultValue().ShouldBe(true);

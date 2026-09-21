@@ -69,6 +69,7 @@ public class AdmissionOfferingConfigurationValidator(
 	public Task<AdmissionOfferingValidationResult> ValidateStoredAsync(AdmissionOffering offering) =>
 		ValidateAsync(offering.AdmissionCycleId, new CreateAdmissionOfferingDto
 		{
+			Name = offering.Name,
 			CampusId = offering.CampusId,
 			BoardId = offering.BoardId,
 			MediumId = offering.MediumId,

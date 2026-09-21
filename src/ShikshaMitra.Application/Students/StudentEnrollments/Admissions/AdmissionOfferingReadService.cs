@@ -111,7 +111,7 @@ public class AdmissionOfferingReadService(
 				(!input.StageId.HasValue || offering.StageId == input.StageId.Value) &&
 				(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value) &&
 				(!input.IsActive.HasValue || offering.IsActive == input.IsActive.Value) &&
-				(string.IsNullOrWhiteSpace(input.Search) || offering.Code.Contains(input.Search) ||
+				(string.IsNullOrWhiteSpace(input.Search) || offering.Name.Contains(input.Search) || offering.Code.Contains(input.Search) ||
 					cycle.Name.Contains(input.Search) || (campus != null && campus.Name.Contains(input.Search)) || medium.Name.Contains(input.Search) ||
 					stage.Name.Contains(input.Search) || standard.Name.Contains(input.Search))
 			select new AdmissionOfferingReadRow
@@ -242,6 +242,7 @@ public class AdmissionOfferingReadService(
 		return new AdmissionOfferingListDto
 		{
 			Id = row.Offering.Id,
+			Name = row.Offering.Name,
 			AdmissionCycleId = row.Cycle.Id,
 			AdmissionCycleName = row.Cycle.Name,
 			CampusId = row.Offering.CampusId,
@@ -272,6 +273,7 @@ public class AdmissionOfferingReadService(
 		return new AdmissionOfferingDto
 		{
 			Id = list.Id,
+			Name = list.Name,
 			AdmissionCycleId = list.AdmissionCycleId,
 			AdmissionCycleName = list.AdmissionCycleName,
 			CampusId = list.CampusId,
@@ -362,6 +364,7 @@ public class AdmissionOfferingReadService(
 		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
 		return field switch
 		{
+			"name" => descending ? query.OrderByDescending(x => x.Offering.Name) : query.OrderBy(x => x.Offering.Name),
 			"code" => descending ? query.OrderByDescending(x => x.Offering.Code) : query.OrderBy(x => x.Offering.Code),
 			"boardname" => descending ? query.OrderByDescending(x => x.Board.Type) : query.OrderBy(x => x.Board.Type),
 			"mediumname" => descending ? query.OrderByDescending(x => x.Medium.Name) : query.OrderBy(x => x.Medium.Name),

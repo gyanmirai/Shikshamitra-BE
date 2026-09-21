@@ -44,6 +44,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<AdmissionCycleHistory> AdmissionCycleHistories { get; set; }
 	public DbSet<AdmissionCampus> AdmissionCampuses { get; set; }
 	public DbSet<AdmissionOffering> AdmissionOfferings { get; set; }
+	public DbSet<AdmissionReferenceSequence> AdmissionReferenceSequences { get; set; }
 	public DbSet<AdmissionInquiry> AdmissionInquiries { get; set; }
 	public DbSet<AdmissionWorkflowDefinition> AdmissionWorkflowDefinitions { get; set; }
 	public DbSet<AdmissionWorkflowStageDefinition> AdmissionWorkflowStageDefinitions { get; set; }

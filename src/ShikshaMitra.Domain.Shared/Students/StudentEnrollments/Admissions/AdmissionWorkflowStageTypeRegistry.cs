@@ -24,7 +24,7 @@ public static class AdmissionWorkflowStageTypeRegistry
 {
 	public static IReadOnlyList<AdmissionWorkflowStageTypeMetadata> All { get; } =
 	[
-		Metadata(AdmissionWorkflowStageType.Inquiry, "Inquiry", "Capture and qualify an admission inquiry.", "mdi:account-question-outline", "#0EA5E9", true, false, false, true, true, "InquiryStageHandler", ["inquiry"]),
+		Metadata(AdmissionWorkflowStageType.Inquiry, "Inquiry (legacy)", "Historical workflow stage for inquiry qualification.", "mdi:account-question-outline", "#0EA5E9", true, false, false, true, true, "InquiryStageHandler", ["inquiry"], false, true, "Manage inquiry capture and qualification in Admissions > Inquiries. Start new admission processes with Application Form or another application-stage step."),
 		Metadata(AdmissionWorkflowStageType.Form, "Form", "Collect, submit, verify, and correct a published dynamic form.", "mdi:form-select", "#6366F1", true, false, true, true, true, "FormStageHandler", ["formDefinitionId", "form"]),
 		Metadata(AdmissionWorkflowStageType.Assessment, "Assessment", "Record an entrance exam, interaction, or other assessment.", "mdi:clipboard-text-outline", "#8B5CF6", false, false, false, true, true, "AssessmentStageHandler", ["assessment"]),
 		Metadata(AdmissionWorkflowStageType.Eligibility, "Eligibility", "Evaluate configured admission eligibility criteria.", "mdi:shield-check-outline", "#14B8A6", false, true, false, true, true, "EligibilityStageHandler", ["eligibility"]),

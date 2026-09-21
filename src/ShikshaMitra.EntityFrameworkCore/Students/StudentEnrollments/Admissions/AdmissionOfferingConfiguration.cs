@@ -14,6 +14,7 @@ public class AdmissionOfferingConfiguration : IEntityTypeConfiguration<Admission
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionOfferings", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.Property(x => x.Name).IsRequired().HasMaxLength(AdmissionOfferingConsts.MaxNameLength);
 		builder.Property(x => x.Code).IsRequired().HasMaxLength(AdmissionOfferingConsts.MaxCodeLength);
 		builder.Property(x => x.OpenDate).IsRequired(false);
 		builder.Property(x => x.CloseDate).IsRequired(false);

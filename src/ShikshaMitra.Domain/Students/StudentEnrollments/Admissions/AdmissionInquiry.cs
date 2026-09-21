@@ -33,12 +33,12 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	protected AdmissionInquiry() { }
 
-	public AdmissionInquiry(Guid id, Guid? tenantId, Guid admissionCycleId, Guid? admissionOfferingId,
+	public AdmissionInquiry(Guid id, Guid? tenantId, string inquiryNumber, Guid admissionCycleId, Guid? admissionOfferingId,
 		string applicantName, string phone, string? email, AdmissionInquirySource source, string? sourceDetail)
 		: base(id)
 	{
 		TenantId = tenantId;
-		InquiryNumber = $"INQ/{DateTime.UtcNow:yyyy}/{Guid.NewGuid():N}"[..20];
+		InquiryNumber = Check.NotNullOrWhiteSpace(inquiryNumber, nameof(inquiryNumber)).Trim();
 		AdmissionCycleId = Check.NotDefaultOrNull<Guid>(admissionCycleId, nameof(admissionCycleId));
 		AdmissionOfferingId = admissionOfferingId;
 		ApplicantName = Check.NotNullOrWhiteSpace(applicantName, nameof(applicantName)).Trim();

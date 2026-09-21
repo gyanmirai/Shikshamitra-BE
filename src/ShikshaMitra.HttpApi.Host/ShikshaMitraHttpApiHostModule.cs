@@ -493,8 +493,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 
 		QuestPDF.Settings.License = LicenseType.Community;
 
-		ConfigureSmtpPassword(context.ServiceProvider);
-
 		if (env.IsDevelopment())
 		{
 			app.UseDeveloperExceptionPage();
@@ -558,20 +556,24 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseConfiguredEndpoints();
 	}
 
-	private void ConfigureSmtpPassword(IServiceProvider serviceProvider)
+	private async Task ConfigureSmtpPasswordAsync(IServiceProvider serviceProvider)
 	{
 		var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-		var smtpPassword = configuration["Settings:Abp.Mailing.Smtp.Password"];
+		var smtpPassword = configuration["Settings:SmtpPassword"];
 		if (!string.IsNullOrEmpty(smtpPassword))
 		{
 			var settingManager = serviceProvider.GetService<SettingManager>();
-			settingManager?.SetGlobalAsync(EmailSettingNames.Smtp.Password, smtpPassword);
+			if (settingManager is not null)
+			{
+				await settingManager.SetGlobalAsync(EmailSettingNames.Smtp.Password, smtpPassword);
+			}
 		}
 	}
 
 	public override async Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
 	{
 		OnApplicationInitialization(context);
+		await ConfigureSmtpPasswordAsync(context.ServiceProvider);
 		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionCycleScheduleWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionWorkflowScheduleWorker>();

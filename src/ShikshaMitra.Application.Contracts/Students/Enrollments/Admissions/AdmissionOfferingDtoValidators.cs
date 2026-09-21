@@ -9,6 +9,7 @@ public abstract class AdmissionOfferingWriteDtoValidator<T> : AbstractValidator<
 {
 	protected AdmissionOfferingWriteDtoValidator()
 	{
+		RuleFor(x => x.Name).MaximumLength(AdmissionOfferingConsts.MaxNameLength);
 		RuleFor(x => x.BoardId).NotEmpty();
 		RuleFor(x => x.MediumId).NotEmpty();
 		RuleFor(x => x.StageId).NotEmpty();
@@ -53,6 +54,7 @@ public sealed class CloneAdmissionOfferingDtoValidator : AbstractValidator<Clone
 {
 	public CloneAdmissionOfferingDtoValidator()
 	{
+		RuleFor(x => x.Name).MaximumLength(AdmissionOfferingConsts.MaxNameLength);
 		RuleFor(x => x.AdmissionCycleId).NotEmpty();
 		RuleFor(x => x.BoardId).NotEmpty();
 		RuleFor(x => x.MediumId).NotEmpty();
@@ -73,6 +75,7 @@ public sealed class BulkCreateAdmissionOfferingsDtoValidator : AbstractValidator
 			.WithMessage("Between 1 and 100 Admission Offerings can be created in one request.");
 		RuleForEach(x => x.Items).ChildRules(item =>
 		{
+			item.RuleFor(x => x.Name).MaximumLength(AdmissionOfferingConsts.MaxNameLength);
 			item.RuleFor(x => x.StandardId).NotEmpty();
 			item.RuleFor(x => x.Code).NotEmpty().MaximumLength(AdmissionOfferingConsts.MaxCodeLength);
 		});

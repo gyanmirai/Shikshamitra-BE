@@ -30,6 +30,7 @@ public interface ISubjectAssignmentAppService : IApplicationService
 	/// <param name="status">Optional assignment status filter. Defaults to Published when omitted.</param>
 	/// <param name="includeArchived">Return every status, including archived, when no status filter is supplied.</param>
 	/// <param name="teacherSearch">Optional primary teacher name search.</param>
+	/// <param name="divisionId">Optional division used to scope teacher-subject allocations.</param>
 	/// <returns>Paginated list of assignment groups</returns>
 	Task<SubjectAssignmentPagedResponse> GetListAsync(
 		Guid classId,
@@ -37,7 +38,8 @@ public interface ISubjectAssignmentAppService : IApplicationService
 		int pageSize,
 		SubjectStatus? status = null,
 		bool includeArchived = false,
-		string? teacherSearch = null
+		string? teacherSearch = null,
+		Guid? divisionId = null
 	);
 
 	/// <summary>

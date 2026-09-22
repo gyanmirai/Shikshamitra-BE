@@ -75,6 +75,7 @@
     "Finance:Assignment:SourceUnavailable": "The service period could not be verified from the selected source.",
     "Finance:Assignment:ConfigurationInvalid": "Review the published payment terms and policy versions for every included fee head.",
     "Finance:Assignment:CommitFailed": "The assignment could not be completed. Retry to check its final status.",
+    "Finance:Concession:010029": "No fee structure is assigned to this student for the selected academic year. Assign a fee structure before creating a concession request.",
     "Menu:Home": "Home",
     "Welcome": "Welcome",
     "LongWelcomeMessage": "Welcome to the application. This is a startup project based on the ABP framework. For more information, visit abp.io.",

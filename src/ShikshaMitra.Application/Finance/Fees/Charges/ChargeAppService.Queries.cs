@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -11,8 +12,11 @@ public partial class ChargeAppService
 {
 	public async Task<ChargeListResponse> GetAllAsync(GetChargesRequest input)
 	{
+		if (input.AcademicYearId == Guid.Empty)
+			throw new Volo.Abp.Validation.AbpValidationException("academicYearId is required.");
+
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
-			null, input.BoardId, input.EducationMediumId, null, null))
+			input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId))
 		{
 			return new ChargeListResponse
 			{
@@ -22,17 +26,30 @@ public partial class ChargeAppService
 			};
 		}
 
-		var pageSize = Math.Min(input.PageSize, MaxPageSize);
+		var page = Math.Max(1, input.Page);
+		var pageSize = Math.Clamp(input.PageSize, 1, MaxPageSize);
+		var scopedStudentIds = await GetScopedStudentIdsAsync(input.AcademicYearId);
 		var (items, totalCount) = await chargeRequestRepository.GetChargeRequestsPagedAsync(
-			input.Status, input.Page, pageSize,
-			input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId, input.Search);
+			input.AcademicYearId, input.Status, page, pageSize,
+			input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId, input.Search,
+			input.SortBy, input.SortOrder, scopedStudentIds);
 		var statusCounts = await chargeRequestRepository.GetStatusCountsAsync(
-			input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId);
+			input.AcademicYearId, input.BoardId, input.EducationMediumId,
+			input.StandardId, input.DivisionId, scopedStudentIds);
+		var mappedItems = new System.Collections.Generic.List<ChargeListItem>();
+		foreach (var item in items)
+		{
+			var dto = MapToListItem(item);
+			dto.AvailableActions = await GetAvailableActionsAsync(
+				item.Request.RequestorId, item.PendingCount > 0, item.PendingCount == item.StudentCount,
+				item.ProcessedCount > 0);
+			mappedItems.Add(dto);
+		}
 
 		return new ChargeListResponse
 		{
-			Success = true, Items = items.Select(MapToListItem).ToList(),
-			TotalCount = totalCount, CurrentPage = input.Page, PageSize = pageSize,
+			Success = true, Items = mappedItems,
+			TotalCount = totalCount, CurrentPage = page, PageSize = pageSize,
 			TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
 			PendingCount = statusCounts.Pending, ProcessedCount = statusCounts.Processed,
 			Message = "Charges retrieved successfully"
@@ -41,11 +58,12 @@ public partial class ChargeAppService
 
 	public async Task<ChargeLineListResponse> GetLinesAsync(Guid academicYearId, GetChargeLinesRequest input)
 	{
+		await EnsureAcademicYearExistsAsync(academicYearId);
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
 
 		var pageSize = Math.Min(input.PageSize, MaxPageSize);
 		var query = (await chargeRequestRepository.GetChargeLinesQueryAsync(
-			input.Status, input.BoardId, input.EducationMediumId))
+			academicYearId, input.Status, input.BoardId, input.EducationMediumId))
 			.Where(x => scopedStudentIds.Contains(x.Student.Id));
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
@@ -57,6 +75,7 @@ public partial class ChargeAppService
 		var categories = categoryIds.Count > 0
 			? await chargeCategoryRepository.GetListAsync(c => categoryIds.Contains(c.Id)) : [];
 		var categoryMap = categories.ToDictionary(c => c.Id);
+		var collectedAmounts = await GetCollectedAmountsAsync(lines.Select(line => line.Charge.Id));
 
 		return new ChargeLineListResponse
 		{
@@ -64,7 +83,11 @@ public partial class ChargeAppService
 			Items = lines.Select(line =>
 			{
 				categoryMap.TryGetValue(line.Charge.ChargeCategoryId, out var category);
-				return MapToLineListItem(line, category);
+				var item = MapToLineListItem(line, category);
+				item.CollectedAmount = collectedAmounts.GetValueOrDefault(line.Charge.Id);
+				item.OutstandingAmount = line.Charge.Status == ChargeStatus.Approved
+					? Math.Max(0m, line.Charge.Amount - item.CollectedAmount) : 0m;
+				return item;
 			}).ToList(),
 			TotalCount = totalCount,
 			Message = "Charge lines retrieved successfully"
@@ -74,6 +97,7 @@ public partial class ChargeAppService
 	public async Task<ChargeDetailResponse> GetByIdAsync(Guid chargeId)
 	{
 		var detail = await GetChargeRequestDetailsOrThrowAsync(chargeId);
+		await EnsureLinesAccessibleAsync(detail.Lines.Select(x => x.Charge.StudentId));
 		var audience = ChargeAudienceMapper.DeserializeSnapshot(detail.Request.AudienceSnapshot);
 
 		Volo.Abp.Identity.IdentityUser? lastActor = null;
@@ -83,6 +107,21 @@ public partial class ChargeAppService
 			.FirstOrDefault();
 		if (lastLine?.ApprovedBy is Guid actorId)
 			lastActor = await userRepository.FindAsync(actorId);
+
+		var allPending = detail.Lines.Count == 0 || detail.Lines.All(x => x.Charge.Status == ChargeStatus.Pending);
+		var hasPending = detail.Lines.Any(x => x.Charge.Status == ChargeStatus.Pending);
+		var hasApproved = detail.Lines.Any(x => x.Charge.Status == ChargeStatus.Approved);
+		var availableActions = await GetAvailableActionsAsync(
+			detail.Request.RequestorId, hasPending, allPending, hasApproved);
+		var collectedAmounts = await GetCollectedAmountsAsync(detail.Lines.Select(line => line.Charge.Id));
+		var studentLines = detail.Lines.Select(line =>
+		{
+			var item = MapToStudentLine(line);
+			item.CollectedAmount = collectedAmounts.GetValueOrDefault(line.Charge.Id);
+			item.OutstandingAmount = line.Charge.Status == ChargeStatus.Approved
+				? Math.Max(0m, line.Charge.Amount - item.CollectedAmount) : 0m;
+			return item;
+		}).ToList();
 
 		return new ChargeDetailResponse
 		{
@@ -98,7 +137,7 @@ public partial class ChargeAppService
 				AdditionalNotes = detail.Request.AdditionalNotes, Audience = audience,
 				AppliedCount = detail.Lines.Count(l => l.Charge.Status == ChargeStatus.Approved),
 				IsApprovalRequired = detail.Category.IsApprovalRequired,
-				Students = detail.Lines.Select(MapToStudentLine).ToList(),
+				Students = studentLines,
 				Requestor = new RequestorInfo
 				{
 					RequestorId = detail.Requestor.Id,
@@ -111,7 +150,9 @@ public partial class ChargeAppService
 					ApprovedOn = lastLine?.ApprovedOn, ApprovalNotes = lastLine?.ApprovalNotes
 				},
 				AcademicYearId = detail.Request.AcademicYearId,
-				AcademicYearName = detail.AcademicYear.Name
+				AcademicYearName = detail.AcademicYear.Name,
+				ConcurrencyStamp = detail.Request.ConcurrencyStamp,
+				AvailableActions = availableActions
 			},
 			Message = "Charge details retrieved successfully"
 		};

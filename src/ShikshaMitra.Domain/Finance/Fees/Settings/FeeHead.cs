@@ -72,7 +72,12 @@ public class FeeHead : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public void SetActiveStatus(bool isActive, string? deactivationReason)
     {
+        if (!isActive && string.IsNullOrWhiteSpace(deactivationReason))
+        {
+            throw new ArgumentException("A deactivation reason is required.", nameof(deactivationReason));
+        }
+
         IsActive = isActive;
-        DeactivationReason = isActive ? null : deactivationReason;
+        DeactivationReason = isActive ? null : deactivationReason!.Trim();
     }
 }

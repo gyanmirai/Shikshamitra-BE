@@ -3,7 +3,7 @@ module: finance
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-15
+updated_on: 2026-09-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -16,8 +16,8 @@ TL;DR: use this page to understand how Finance changes affect due rows, approval
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
-| Charge create and approve | Create a pending or auto-approved charge, then approve or reject through maker-checker rules | Student scope derivation, active charge category, pending-only update and delete, approver not creator |
-| Concession request | Resolve assignment policy, preview, save a draft, attach evidence, submit, independently approve/reject, withdraw, or reverse | Frozen submission evidence, allocation totals, exact assignment dues, concurrency/idempotency, maker-checker, and balance updates |
+| Charge create, approve, collect, and correct | Create per-student lines, approve/reject pending lines, collect approved balances, issue a charge receipt, and preserve linked corrections | Academic-year/user scope, exact permissions, atomic outstanding checks, maker-checker, idempotency/concurrency, category account mapping, and immutable correction history; see [Charge management end to end](./references/charge-management-end-to-end.md) |
+| Concession request | Select an active policy/version on the request, preview, save a draft, attach evidence, submit, independently approve/reject, withdraw, or reverse | Request-pinned policy snapshot, frozen submission evidence, allocation totals, exact assignment dues, concurrency/idempotency, maker-checker, and balance updates |
 | Fee adjustment | Create credit pool from paid due rows, approve and apply to pending due rows, reject, or cancel pending request | Paid source rows, pending target rows, idempotency key, and maker-checker rule |
 | Fee collection | Load student fee details, collect payment, allocate to due rows, and create receipt records | Payment amount, due allocation, receipt numbering, and audit trail |
 | Fee refund | Check eligibility, create refund request, update status, and preserve receipt/payment history | Refund eligibility and non-overlap with adjustment flow |
@@ -50,16 +50,19 @@ TL;DR: use this page to understand how Finance changes affect due rows, approval
 |---|---|
 | Student to Finance | Student identity and academic scope are source data for fee and charge workflows |
 | Library to Finance | Library charge settlement is not assumed unless a Finance integration explicitly maps it |
+| Fee Structure to Charges | Scheduled demand remains a Fee Structure/assignment concern; ad hoc charges join it only in collection, receipts, accounts, audit, and reports |
+| Policies to Charges | Concession, proration, refund, and late-fee policy applicability is never inferred; use only an explicit versioned product contract |
+| Source modules to Charges | Use stable source identity, correlation, and idempotency; retries must not duplicate student obligations |
 | Reports to Fees | Reports must use the same due, paid, concession, adjustment, refund, and receipt data as operational screens |
 ## Payment Term to collection flow
 
-Payment Terms are versioned schedule templates. They own installment coverage dates, due dates, allocation percentages, and the rule used to calculate when a bill becomes collectable. Partial-payment, reminder, concession, refund, and late-fee behavior remains owned by the corresponding Finance policies.
+Payment Terms are versioned schedule templates. They own installment coverage dates, due dates, allocation percentages, and the rule used to calculate when a bill is generated. Partial-payment, reminder, concession, refund, and late-fee behavior remains owned by the corresponding Finance policies.
 
 1. Create and edit accept only the user-editable states `Draft` and `Active`; archive is a separate guarded workflow, matching HR policy status management.
 2. `Draft` saves an editable version. `Active` atomically validates and publishes that exact immutable version. The server derives the next valid activation date inside the selected board period; clients do not provide it.
 3. A Fee Structure may explicitly attach a published or superseded version of an active Payment Term; draft and archived versions are rejected. Existing pins remain stable. See [Fee Structure publication](./references/fee-structure-workspace.md).
 4. Student assignment snapshots all installment rows into DueFee records so later term edits cannot rewrite issued student schedules.
-5. A snapshot is collectable when `DemandDate <= today`. This also provides the late-assignment catch-up rule: already-reached installments become available immediately, while future installments remain hidden from collection.
+5. Every assigned snapshot is visible in Fee Collection and may receive a direct advance-payment allocation. `DemandDate <= today` determines whether the installment's bill has been generated; it does not hide or block a future scheduled installment. Due date and collection policy continue to govern late-fee evaluation.
 6. A board can have only one selected default Payment Term per academic year. The default flag can be selected while a term is still a draft, although the term remains unavailable to Fee Structures until it is published. Selecting a different default clears the previous flag before save, with a filtered unique index as the concurrency guard.
 7. List and detail responses expose one top-level lifecycle `status`: `Draft`, `Active`, or `Archived`. Version-specific states remain inside version history. Archiving preserves the underlying version state, so restore returns the term to `Draft` or `Active` without rewriting history.
 

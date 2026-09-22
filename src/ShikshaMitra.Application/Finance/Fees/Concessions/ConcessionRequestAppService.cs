@@ -32,6 +32,7 @@ public partial class ConcessionRequestAppService(
 	IRepository<ConcessionType, Guid> concessionTypeRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<DueFee, Guid> dueFeeRepository,
+	IRepository<ConcessionPolicy, Guid> concessionPolicyRepository,
 	IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,

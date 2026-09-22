@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
+using System;
+
 namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 public class CreateChargeCategoryRequest
@@ -11,6 +13,9 @@ public class CreateChargeCategoryRequest
     public bool IsApprovalRequired { get; set; }
 
     public string? Description { get; set; }
+
+	[Required]
+	public Guid IncomeCategoryId { get; set; }
 }
 
 public class UpdateChargeCategoryRequest
@@ -21,4 +26,16 @@ public class UpdateChargeCategoryRequest
     public bool? IsApprovalRequired { get; set; } // Marked optional in docs example but could be treated as update-if-present or required logic. Let's make it nullable to support partial updates if needed, though docs imply full object. Actually docs say required: false for Update.
 
     public string? Description { get; set; }
+
+	[Required]
+	public Guid IncomeCategoryId { get; set; }
+}
+
+public class UpdateChargeCategoryStatusRequest
+{
+	public bool IsActive { get; set; }
+
+	[MinLength(10)]
+	[MaxLength(500)]
+	public string? Reason { get; set; }
 }

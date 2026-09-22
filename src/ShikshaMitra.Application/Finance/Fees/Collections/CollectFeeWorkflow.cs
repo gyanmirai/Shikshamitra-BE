@@ -19,12 +19,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.Data;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EventBus.Distributed;
 using Volo.Abp.Timing;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.Fees.Collections;
 
@@ -49,12 +51,15 @@ public partial class CollectFeeWorkflow(
 	IFeeReceiptPdfGenerator pdfGenerator,
 	FeeReceiptBlobManager blobManager,
 	IDistributedEventBus eventBus,
-	IClock clock
+	IClock clock,
+	IUnitOfWorkManager unitOfWorkManager
 ) : ApplicationService, ITransientDependency
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.Add)]
 	public async Task<CollectFeeOutput> CollectFeeAsync(CollectFeeInput input)
 	{
+		using var serializableUow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+			{ IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
 		var idempotencyKey = input.IdempotencyKey.Trim();
 		var commandFingerprint = ComputeCommandFingerprint(input);
 		var replay = await feeRecordMetadataRepository.FirstOrDefaultAsync(x =>
@@ -68,11 +73,14 @@ public partial class CollectFeeWorkflow(
 			if (string.IsNullOrWhiteSpace(replay.CommandResultJson))
 				throw new UserFriendlyException("This fee collection request is still being processed. Please retry shortly.");
 
-			return JsonSerializer.Deserialize<CollectFeeOutput>(replay.CommandResultJson)
+			var replayOutput = JsonSerializer.Deserialize<CollectFeeOutput>(replay.CommandResultJson)
 				?? throw new UserFriendlyException("The saved fee collection result could not be read.");
+			await serializableUow.CompleteAsync();
+			return replayOutput;
 		}
 
 		var (student, academicYear) = await ValidateAndLoadStudentForCollectionAsync(input);
+		await ValidatePaymentChannelPolicyAsync(input);
 		var dueFeeContext = await LoadAndValidateDueFeesContextAsync(input);
 		var chargeContext = await LoadAndValidateChargesContextAsync(input);
 		await ValidateLateFeePaymentsAsync(input);
@@ -182,6 +190,7 @@ public partial class CollectFeeWorkflow(
 			"Fee collected for student {StudentId}: receipt {ReceiptNumber}, amount {Amount}, receipts created {ReceiptCount}",
 			input.StudentId, transaction.ReceiptNumber, received, transaction.Receipts.Count);
 
+		await serializableUow.CompleteAsync();
 		return output;
 	}
 

@@ -16,6 +16,23 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 
 public partial class CollectFeeWorkflow
 {
+	private async Task ValidatePaymentChannelPolicyAsync(CollectFeeInput input)
+	{
+		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
+			x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
+		if (assignment is null) return;
+
+		var effectiveRules = await policyResolver.ResolveEffectiveRulesForStudentAsync(
+			input.StudentId, assignment.FeeStructureStandardId);
+		if (effectiveRules.Policy?.AllowOnlineCollection != false) return;
+
+		var containsOnlineMethod = input.Payments.Any(payment => payment.PaymentMethod is
+			PaymentMethodEnum.BankTransfer or PaymentMethodEnum.CreditCard or
+			PaymentMethodEnum.DebitCard or PaymentMethodEnum.UPI);
+		if (containsOnlineMethod)
+			throw new BusinessException(FinanceChargeErrorCodes.OnlineCollectionNotAllowed);
+	}
+
 	private async Task<(Student Student, AcademicYear AcademicYear)> ValidateAndLoadStudentForCollectionAsync(
 		CollectFeeInput input)
 	{
@@ -54,10 +71,6 @@ public partial class CollectFeeWorkflow
 			var df = dueFeeMap[dfp.DueFeeId];
 			if (df.StudentId != input.StudentId) throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
 			if (df.FeeHeadId != dfp.FeeHeadId) throw new BusinessException(FeeCollectionErrorCodes.InvalidFeeHead);
-			if (!df.IsBillGeneratedOn(clock.Now.Date))
-				throw new BusinessException(DueFeeErrorCodes.BillNotGeneratedYet)
-					.WithData("DueFeeId", df.Id)
-					.WithData("DemandDate", df.DemandDate);
 			if ((decimal)dfp.Amount > df.OutstandingAmount)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
 					.WithData("DueFeeId", df.Id).WithData("Outstanding", df.OutstandingAmount).WithData("Amount", dfp.Amount);

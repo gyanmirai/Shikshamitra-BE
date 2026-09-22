@@ -62,6 +62,7 @@ public class EfCoreChargeRequestRepository(
 	}
 
 	public async Task<(List<ChargeRequestJoinResult> Items, int TotalCount)> GetChargeRequestsPagedAsync(
+		Guid academicYearId,
 		int status,
 		int page,
 		int pageSize,
@@ -70,9 +71,13 @@ public class EfCoreChargeRequestRepository(
 		Guid? standardId = null,
 		Guid? divisionId = null,
 		string? search = null,
+		string? sortBy = null,
+		string? sortOrder = null,
+		IReadOnlyCollection<Guid>? scopedStudentIds = null,
 		CancellationToken cancellationToken = default)
 	{
 		var chargeQuery = await GetQueryableAsync();
+		chargeQuery = chargeQuery.Where(r => r.AcademicYearId == academicYearId);
 
 		chargeQuery = boardId.HasValue
 			? chargeQuery.Where(r => r.BoardId == boardId.Value)
@@ -83,6 +88,22 @@ public class EfCoreChargeRequestRepository(
 			chargeQuery.Where(r => r.EducationMediumId != Guid.Empty);
 
 		var chargeLineQuery = await chargeRepository.GetQueryableAsync();
+		chargeLineQuery = chargeLineQuery.Where(c => c.AcademicYearId == academicYearId);
+		if (scopedStudentIds is not null)
+		{
+			if (scopedStudentIds.Count == 0)
+				return ([], 0);
+			chargeLineQuery = chargeLineQuery.Where(c => scopedStudentIds.Contains(c.StudentId));
+			chargeQuery = chargeQuery.Where(r => chargeLineQuery.Any(c => c.ChargeRequestId == r.Id));
+		}
+
+		if (!string.IsNullOrWhiteSpace(search))
+		{
+			var term = search.Trim().ToLower();
+			chargeQuery = chargeQuery.Where(r =>
+				r.ChargeName.ToLower().Contains(term) ||
+				r.PurposeDescription.ToLower().Contains(term));
+		}
 
 		if (standardId.HasValue || divisionId.HasValue)
 		{
@@ -107,19 +128,24 @@ public class EfCoreChargeRequestRepository(
 		else
 		{
 			// if status is 1, means get all charges whose all lines are processed.
-			var processedRequestIds = await chargeLineQuery.Where(c => c.Status != ChargeStatus.Pending)
-				.Select(c => c.ChargeRequestId)
-				.Distinct()
-				.ToListAsync(cancellationToken);
-			chargeQuery = chargeQuery.Where(r => processedRequestIds.Contains(r.Id));
+			chargeQuery = chargeQuery.Where(r => chargeLineQuery.Any(c => c.ChargeRequestId == r.Id)
+				&& !chargeLineQuery.Any(c => c.ChargeRequestId == r.Id && c.Status == ChargeStatus.Pending));
 		}
 
 		// get total count before applying pagination.
 		var totalCount = await chargeQuery.CountAsync(cancellationToken);
 
 		// get actual data with pagination using abp code structure
-		var charges = await chargeQuery
-			.OrderByDescending(r => r.CreationTime)
+		var descending = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
+		var ordered = (sortBy ?? string.Empty).Trim().ToLowerInvariant() switch
+		{
+			"chargename" => descending ? chargeQuery.OrderByDescending(r => r.ChargeName) : chargeQuery.OrderBy(r => r.ChargeName),
+			"amount" => descending ? chargeQuery.OrderByDescending(r => r.Amount) : chargeQuery.OrderBy(r => r.Amount),
+			"duedate" => descending ? chargeQuery.OrderByDescending(r => r.DueDate) : chargeQuery.OrderBy(r => r.DueDate),
+			"priority" => descending ? chargeQuery.OrderByDescending(r => r.Priority) : chargeQuery.OrderBy(r => r.Priority),
+			_ => chargeQuery.OrderByDescending(r => r.CreationTime)
+		};
+		var charges = await ordered
 			.Skip((page - 1) * pageSize)
 			.Take(pageSize)
 			.ToListAsync(cancellationToken);
@@ -133,11 +159,12 @@ public class EfCoreChargeRequestRepository(
 		var requestorIds = charges.Select(c => c.RequestorId).Distinct().ToList();
 		var academicYearIds = charges.Select(c => c.AcademicYearId).Distinct().ToList();
 
-		var requestors = await GetDbContextAsync().Result.Set<IdentityUser>().AsNoTracking()
+		var db = await GetDbContextAsync();
+		var requestors = await db.Set<IdentityUser>().AsNoTracking()
 			.Where(u => requestorIds.Contains(u.Id))
 			.ToDictionaryAsync(u => u.Id, cancellationToken);
 
-		var academicYears = await GetDbContextAsync().Result.Set<AcademicYear>().AsNoTracking()
+		var academicYears = await db.Set<AcademicYear>().AsNoTracking()
 			.Where(a => academicYearIds.Contains(a.Id))
 			.ToDictionaryAsync(a => a.Id, cancellationToken);
 
@@ -160,6 +187,7 @@ public class EfCoreChargeRequestRepository(
 	}
 
 	public async Task<IQueryable<ChargeLineJoinResult>> GetChargeLinesQueryAsync(
+		Guid academicYearId,
 		int? status = null,
 		Guid? boardId = null,
 		Guid? educationMediumId = null)
@@ -170,6 +198,7 @@ public class EfCoreChargeRequestRepository(
 			join student in db.Set<Student>().AsNoTracking() on charge.StudentId equals student.Id
 			join standard in db.Set<Standard>().AsNoTracking() on charge.StandardId equals standard.Id
 			join division in db.Set<Division>().AsNoTracking() on charge.DivisionId equals division.Id
+			where charge.AcademicYearId == academicYearId
 			where !status.HasValue || charge.Status == (ChargeStatus)status.Value
 			where !boardId.HasValue || charge.BoardId == boardId.Value
 			where !educationMediumId.HasValue || charge.EducationMediumId == educationMediumId.Value
@@ -177,16 +206,19 @@ public class EfCoreChargeRequestRepository(
 	}
 
 	public async Task<ChargeRequestStatusCounts> GetStatusCountsAsync(
+		Guid academicYearId,
 		Guid? boardId = null,
 		Guid? educationMediumId = null,
 		Guid? standardId = null,
 		Guid? divisionId = null,
+		IReadOnlyCollection<Guid>? scopedStudentIds = null,
 		CancellationToken cancellationToken = default)
 	{
 		var db = await GetDbContextAsync();
 
 		// Build a base query of charge requests in scope.
-		var requestQuery = db.Set<ChargeRequest>().AsNoTracking();
+		var requestQuery = db.Set<ChargeRequest>().AsNoTracking()
+			.Where(r => r.AcademicYearId == academicYearId);
 
 		if (boardId.HasValue)
 			requestQuery = requestQuery.Where(r => r.BoardId == boardId.Value);
@@ -194,7 +226,16 @@ public class EfCoreChargeRequestRepository(
 		if (educationMediumId.HasValue)
 			requestQuery = requestQuery.Where(r => r.EducationMediumId == educationMediumId.Value);
 
-		var chargeLines = db.Set<Charge>().AsNoTracking();
+		var chargeLines = db.Set<Charge>().AsNoTracking()
+			.Where(c => c.AcademicYearId == academicYearId);
+
+		if (scopedStudentIds is not null)
+		{
+			if (scopedStudentIds.Count == 0)
+				return new ChargeRequestStatusCounts(0, 0);
+			chargeLines = chargeLines.Where(c => scopedStudentIds.Contains(c.StudentId));
+			requestQuery = requestQuery.Where(r => chargeLines.Any(c => c.ChargeRequestId == r.Id));
+		}
 
 		if (standardId.HasValue)
 			requestQuery = requestQuery.Where(r =>

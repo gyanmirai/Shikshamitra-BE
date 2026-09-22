@@ -48,6 +48,12 @@ public class FeeHeadStatusUpdateRequestValidator : AbstractValidator<FeeHeadStat
     public FeeHeadStatusUpdateRequestValidator()
     {
         RuleFor(x => x.DeactivationReason)
-            .MaximumLength(500);
+            .Must(reason => !string.IsNullOrWhiteSpace(reason))
+            .When(x => !x.IsActive)
+            .WithMessage("A deactivation reason is required when a fee head is inactive.");
+
+        RuleFor(x => x.DeactivationReason)
+            .MaximumLength(500)
+            .When(x => !string.IsNullOrWhiteSpace(x.DeactivationReason));
     }
 }

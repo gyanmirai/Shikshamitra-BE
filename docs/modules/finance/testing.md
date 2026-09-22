@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-09-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -25,7 +25,7 @@ git diff --check
 
 | Change area | First tests |
 |---|---|
-| Charges | `ChargeAppService_Tests`, `ChargeCoreApi_Tests`, `ChargeValidationApi_Tests`, `ChargeWorkflowApi_Tests` |
+| Charges | `ChargeAppService_Tests`, `ChargeCoreApi_Tests`, `ChargeValidationApi_Tests`, `ChargeWorkflowApi_Tests`; add the missing isolation, mixed-batch, concurrency, idempotency, source-replay, receipt/account, and correction cases from [Charge management end to end](./references/charge-management-end-to-end.md) |
 | Concessions | `ConcessionTypeLifecycle_Tests`, `ConcessionRequestCoreApi_Tests`, `ConcessionRequestValidationApi_Tests`, `ConcessionRequestWorkflowApi_Tests` |
 | Fee adjustments | `FeeAdjustmentApi_Tests` |
 | Fee collection | `FeeCollectionAppServiceV2_Tests`, `FeeCollectionV2Api_Tests`, `CollectFeeInputValidator_Tests` |
@@ -49,6 +49,7 @@ dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~Finance"
 | Permission safety | Backend permissions protect read and write actions |
 | Tenant isolation | Finance data cannot cross schools |
 | Auditability | Approval and payment actions are traceable |
+| Charge integrity | Academic year and caller scope are enforced; mixed batches, concurrent collection, retries, source replay, correction/refund, receipt, account, and report totals reconcile |
 | Docs | `validate-docs.ps1 -Module finance` passes |
 
 ## Student fee assignment

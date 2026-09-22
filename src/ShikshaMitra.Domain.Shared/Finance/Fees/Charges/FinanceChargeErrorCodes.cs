@@ -25,6 +25,15 @@ public static class FinanceChargeErrorCodes
 	public const string CannotRemoveAppliedChargeLine = "Finance:Charge:010013";
 	public const string InvalidChargeLineSubset = "Finance:Charge:010014";
 	public const string ChargeRequestNotFullyPending = "Finance:Charge:010015";
+	public const string ConcurrencyStampRequired = "Finance:Charge:010016";
+	public const string ConcurrencyConflict = "Finance:Charge:010017";
+	public const string ChargeAlreadyCollected = "Finance:Charge:010018";
+	public const string ChargeCannotBeVoided = "Finance:Charge:010019";
+	public const string OnlineCollectionNotAllowed = "Finance:Charge:010020";
+	public const string ChargeCategoryAcademicYearMismatch = "Finance:Charge:010021";
+	public const string ChargeCategoryAccountingNotConfigured = "Finance:Charge:010022";
+	public const string ChargeCategoryAccountingInvalid = "Finance:Charge:010023";
+	public const string ChargeCategoryAccountingLocked = "Finance:Charge:010024";
 
 	// ── Reference data: 02xxxx ────────────────────────────────────
 

@@ -11,6 +11,8 @@ public class CreateConcessionRequestValidator : AbstractValidator<CreateConcessi
 	{
 		RuleFor(x => x.StudentId).NotEmpty();
 		RuleFor(x => x.StudentFeeStructureId).NotEmpty().When(x => x.StudentFeeStructureId.HasValue);
+		RuleFor(x => x.ConcessionPolicyId).NotEmpty();
+		RuleFor(x => x.ConcessionPolicyVersionId).NotEmpty();
 		RuleFor(x => x.ConcessionTypeId).NotEmpty();
 		RuleFor(x => x.Remarks).MaximumLength(2000).When(x => x.Remarks != null);
 		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(128);
@@ -30,6 +32,8 @@ public class UpdateConcessionRequestValidator : AbstractValidator<UpdateConcessi
 	{
 		RuleFor(x => x.StudentId).NotEmpty();
 		RuleFor(x => x.StudentFeeStructureId).NotEmpty().When(x => x.StudentFeeStructureId.HasValue);
+		RuleFor(x => x.ConcessionPolicyId).NotEmpty();
+		RuleFor(x => x.ConcessionPolicyVersionId).NotEmpty();
 		RuleFor(x => x.ConcessionTypeId).NotEmpty();
 		RuleFor(x => x.Remarks).MaximumLength(2000).When(x => x.Remarks != null);
 		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
@@ -51,6 +55,22 @@ public class FeeHeadConcessionValidator : AbstractValidator<FeeHeadConcessionDto
 		// Policy-fixed modes do not have a caller-entered amount; the domain evaluator
 		// enforces a positive value only when the assigned policy permits input.
 		RuleFor(x => x.Amount).GreaterThanOrEqualTo(0);
+	}
+}
+
+public class ConcessionRequestPreviewInputValidator : AbstractValidator<ConcessionRequestPreviewInputDto>
+{
+	public ConcessionRequestPreviewInputValidator()
+	{
+		RuleFor(x => x.StudentId).NotEmpty();
+		RuleFor(x => x.StudentFeeStructureId).NotEmpty().When(x => x.StudentFeeStructureId.HasValue);
+		RuleFor(x => x.ConcessionPolicyId).NotEmpty();
+		RuleFor(x => x.ConcessionPolicyVersionId).NotEmpty();
+		RuleFor(x => x.ConcessionTypeId).NotEmpty();
+		RuleFor(x => x.FeeHeadConcessions).NotEmpty()
+			.Must(x => x.Select(y => y.FeeHeadId).Distinct().Count() == x.Count)
+			.WithMessage("Duplicate fee heads are not allowed.");
+		RuleForEach(x => x.FeeHeadConcessions).SetValidator(new FeeHeadConcessionValidator());
 	}
 }
 
@@ -142,6 +162,8 @@ public class CreateConcessionDraftValidator : AbstractValidator<CreateConcession
 	{
 		RuleFor(x => x.StudentId).NotEmpty();
 		RuleFor(x => x.StudentFeeStructureId).NotEmpty().When(x => x.StudentFeeStructureId.HasValue);
+		RuleFor(x => x.ConcessionPolicyId).NotEmpty();
+		RuleFor(x => x.ConcessionPolicyVersionId).NotEmpty();
 		RuleFor(x => x.ConcessionTypeId).NotEmpty();
 		RuleFor(x => x.Remarks).MaximumLength(2000).When(x => x.Remarks != null);
 		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(128);

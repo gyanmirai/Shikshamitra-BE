@@ -112,7 +112,7 @@ public class DueFeeManager(
 				feeHeadId: detail.FeeHeadId, month: ToMonthEnum(dueDate.Month), year: dueDate.Year,
 				isOneTime: detail.IsOneTime, amount: obligations[i], dueDate: dueDate,
 				feeStructureDetailId: detail.Id, paymentTermId: schedule.PaymentTermId,
-				paymentTermVersionId: schedule.PaymentTermVersionId, paymentTermInstallmentId: null,
+				paymentTermVersionId: schedule.PaymentTermVersionId, paymentTermInstallmentId: installment.PaymentTermInstallmentId,
 				installmentSequence: installment.Sequence, installmentName: installment.Name,
 				coverageStartDate: installment.CoverageStartDate, coverageEndDate: installment.CoverageEndDate,
 				demandDate: installment.DemandDate, scheduleDueDate: installment.DueDate,

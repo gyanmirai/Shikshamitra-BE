@@ -51,6 +51,7 @@ public class ChargeController(IChargeAppService chargeAppService) : AbpControlle
 	{
 		var request = new GetChargesRequest
 		{
+			AcademicYearId = academicYearId,
 			Page = page,
 			PageSize = Math.Min(pageSize, MaxChargePageSize),
 			Search = search,
@@ -137,6 +138,18 @@ public class ChargeController(IChargeAppService chargeAppService) : AbpControlle
 	public Task<RejectionResponse> RejectAsync(Guid chargeId, [FromBody] RejectChargeRequest input)
 	{
 		return chargeAppService.RejectAsync(chargeId, input);
+	}
+
+	/// <summary>
+	/// Void approved, unpaid charge lines while preserving their audit history.
+	/// </summary>
+	[HttpPost("{chargeId}/void")]
+	[ProducesResponseType(typeof(ApprovalResponse), StatusCodes.Status200OK)]
+	[ProducesResponseType(StatusCodes.Status400BadRequest)]
+	[ProducesResponseType(StatusCodes.Status403Forbidden)]
+	public Task<ApprovalResponse> VoidAsync(Guid chargeId, [FromBody] VoidChargeRequest input)
+	{
+		return chargeAppService.VoidAsync(chargeId, input);
 	}
 
 	/// <summary>

@@ -183,6 +183,77 @@ public class FeeCategoryApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Reject_Deactivation_When_Reason_Is_Whitespace()
+    {
+        var created = await CreateCategoryAsync();
+        var statusInput = new FeeCategoryStatusUpdateRequest
+        {
+            IsActive = false,
+            DeactivationReason = " \t "
+        };
+
+        var response = await Client.PatchAsJsonAsync($"{BaseUrl}/{created.Id}/status", statusInput, JsonOptions);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Activate_Without_A_Deactivation_Reason()
+    {
+        var created = await CreateCategoryAsync();
+        var deactivateResponse = await Client.PatchAsJsonAsync(
+            $"{BaseUrl}/{created.Id}/status",
+            new FeeCategoryStatusUpdateRequest
+            {
+                IsActive = false,
+                DeactivationReason = "No longer needed"
+            },
+            JsonOptions);
+        deactivateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var activateResponse = await Client.PatchAsJsonAsync(
+            $"{BaseUrl}/{created.Id}/status",
+            new FeeCategoryStatusUpdateRequest { IsActive = true },
+            JsonOptions);
+
+        activateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await activateResponse.Content.ReadFromJsonAsync<FeeCategoryResponse>(JsonOptions);
+        body.ShouldNotBeNull();
+        body!.IsActive.ShouldBeTrue();
+        body.DeactivationReason.ShouldBeNull();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Activate_FeeHead_Without_A_Deactivation_Reason()
+    {
+        var created = await CreateCategoryAsync();
+        var feeHeadId = created.FeeHeads[0].Id;
+        var deactivateResponse = await Client.PatchAsJsonAsync(
+            $"/api/fee-heads/{feeHeadId}/status",
+            new FeeHeadStatusUpdateRequest
+            {
+                IsActive = false,
+                DeactivationReason = "No longer needed"
+            },
+            JsonOptions);
+        deactivateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        var activateResponse = await Client.PatchAsJsonAsync(
+            $"/api/fee-heads/{feeHeadId}/status",
+            new FeeHeadStatusUpdateRequest { IsActive = true },
+            JsonOptions);
+
+        activateResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await activateResponse.Content.ReadFromJsonAsync<FeeHeadResponse>(JsonOptions);
+        body.ShouldNotBeNull();
+        body!.IsActive.ShouldBeTrue();
+        body.DeactivationReason.ShouldBeNull();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Delete_FeeCategory_When_Not_In_Use()
     {
         var created = await CreateCategoryAsync();

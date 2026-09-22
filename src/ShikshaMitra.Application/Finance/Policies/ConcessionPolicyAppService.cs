@@ -21,8 +21,6 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 public class ConcessionPolicyAppService(
 	IRepository<ConcessionPolicy, Guid> repository,
 	IRepository<FinancePolicyVersion, Guid> versionRepository,
-	IRepository<FeeStructure, Guid> feeStructureRepository,
-	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<ConcessionRequest, Guid> concessionRequestRepository,
 	IRepository<IdentityUser, Guid> userRepository,
 	ConcessionPolicyCalculationService calculationService)
@@ -86,8 +84,8 @@ public class ConcessionPolicyAppService(
 			PolicyName = entity.PolicyName,
 			Status = entity.Status.ToString(),
 			CurrentVersion = entity.Version,
-			AttachedFeeStructureCount = await feeStructureRepository.CountAsync(x => x.ConcessionPolicyId == id),
-			StudentAssignmentCount = await studentFeeStructureRepository.CountAsync(x => x.ConcessionPolicyId == id),
+			AttachedFeeStructureCount = 0,
+			StudentAssignmentCount = 0,
 			ConcessionRequestCount = await concessionRequestRepository.CountAsync(x => x.ConcessionPolicyId == id),
 			ChangeReasonRequired = entity.Status == ConcessionPolicyStatus.Active,
 		};
@@ -240,10 +238,10 @@ public class ConcessionPolicyAppService(
 	private async Task<HashSet<Guid>> GetUsedIdsAsync(List<Guid> ids)
 	{
 		if (ids.Count == 0) return [];
-		var query = await feeStructureRepository.GetQueryableAsync();
+		var query = await concessionRequestRepository.GetQueryableAsync();
 		return (await AsyncExecuter.ToListAsync(query
-			.Where(x => x.ConcessionPolicyId.HasValue && ids.Contains(x.ConcessionPolicyId.Value))
-			.Select(x => x.ConcessionPolicyId!.Value).Distinct())).ToHashSet();
+			.Where(x => ids.Contains(x.ConcessionPolicyId))
+			.Select(x => x.ConcessionPolicyId).Distinct())).ToHashSet();
 	}
 
 	private async Task ReplaceExistingDefaultAsync(

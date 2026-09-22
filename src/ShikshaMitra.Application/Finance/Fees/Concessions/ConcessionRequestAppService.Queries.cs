@@ -80,6 +80,18 @@ public partial class ConcessionRequestAppService
 		var feeHeadNames = feeHeads.ToDictionary(x => x.Id, x => x.Name);
 		var concessionTypes = await concessionTypeRepository.GetListAsync(x =>
 			x.AcademicYearId == academicYearId && x.IsActive);
+		var activePolicies = await concessionPolicyRepository.GetListAsync(x =>
+			x.AcademicYearId == academicYearId && x.Status == ConcessionPolicyStatus.Active);
+		var activePolicyIds = activePolicies.Select(x => x.Id).ToList();
+		var policyVersions = activePolicyIds.Count == 0
+			? []
+			: await financePolicyVersionRepository.GetListAsync(x =>
+				x.PolicyType == "concession" && activePolicyIds.Contains(x.PolicyId));
+		var currentVersionByPolicyId = policyVersions
+			.GroupBy(x => x.PolicyId)
+			.ToDictionary(
+				group => group.Key,
+				group => group.OrderByDescending(x => x.VersionNumber).First());
 
 		return new ConcessionRequestContextDto
 		{
@@ -88,19 +100,6 @@ public partial class ConcessionRequestAppService
 			StudentName = FormatStudentName(context.Student),
 			StudentFeeStructureId = context.Assignment.Id,
 			FeeStructureName = context.FeeStructure.Name,
-			ConcessionPolicyId = context.Assignment.ConcessionPolicyId!.Value,
-			ConcessionPolicyVersionId = context.Assignment.ConcessionPolicyVersionId!.Value,
-			ConcessionPolicyName = context.Policy.PolicyName,
-			ConcessionPolicyCode = context.Policy.PolicyCode,
-			ConcessionPolicyVersion = context.Policy.Version,
-			ValueSource = context.Policy.ValueSource.ToString(),
-			CalculationMethod = context.Policy.CalculationMethod.ToString(),
-			PercentageValue = context.Policy.PercentageValue,
-			FixedAmount = context.Policy.FixedAmount,
-			MaximumPercentage = context.Policy.MaximumPercentage,
-			MaximumFixedAmount = context.Policy.MaximumFixedAmount,
-			ApplyOn = context.Policy.ApplyOn.ToString(),
-			RoundingMethod = context.Policy.RoundingMethod.ToString(),
 			Assignments = assignmentOptions,
 			FeeHeads = context.EligibleDueFees
 				.GroupBy(x => x.FeeHeadId)
@@ -113,6 +112,28 @@ public partial class ConcessionRequestAppService
 				.OrderBy(x => x.FeeHeadName)
 				.ToList(),
 			EligibleDueFees = MapEligibleDueFees(context.EligibleDueFees, feeHeadNames),
+			ConcessionPolicies = activePolicies
+				.Where(policy => currentVersionByPolicyId.ContainsKey(policy.Id))
+				.OrderByDescending(policy => policy.IsDefault)
+				.ThenBy(policy => policy.PolicyName)
+				.Select(policy => new ConcessionPolicyOptionDto
+				{
+					ConcessionPolicyId = policy.Id,
+					ConcessionPolicyVersionId = currentVersionByPolicyId[policy.Id].Id,
+					PolicyName = policy.PolicyName,
+					PolicyCode = policy.PolicyCode,
+					Version = policy.Version,
+					IsDefault = policy.IsDefault,
+					ValueSource = policy.ValueSource.ToString(),
+					CalculationMethod = policy.CalculationMethod.ToString(),
+					PercentageValue = policy.PercentageValue,
+					FixedAmount = policy.FixedAmount,
+					MaximumPercentage = policy.MaximumPercentage,
+					MaximumFixedAmount = policy.MaximumFixedAmount,
+					ApplyOn = policy.ApplyOn.ToString(),
+					RoundingMethod = policy.RoundingMethod.ToString(),
+				})
+				.ToList(),
 			ConcessionTypes = concessionTypes.OrderBy(x => x.Name).Select(type => new ConcessionTypeOptionDto
 			{
 				ConcessionTypeId = type.Id,

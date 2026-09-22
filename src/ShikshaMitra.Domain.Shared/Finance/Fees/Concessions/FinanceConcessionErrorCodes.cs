@@ -26,6 +26,7 @@ public static class FinanceConcessionErrorCodes
 	public const string CancellationReasonRequired = "Finance:Concession:010026";
 	public const string ApprovalReductionReasonRequired = "Finance:Concession:010027";
 	public const string StagedDocumentExpired = "Finance:Concession:010028";
+	public const string FeeStructureAssignmentRequired = "Finance:Concession:010029";
 
 	public const string StudentNotFound = "Finance:Concession:020002";
 	public const string ConcessionTypeNotFound = "Finance:Concession:020003";

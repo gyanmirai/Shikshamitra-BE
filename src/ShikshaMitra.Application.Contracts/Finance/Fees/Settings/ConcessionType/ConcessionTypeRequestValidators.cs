@@ -34,6 +34,7 @@ public class ConcessionTypeRequestValidator : AbstractValidator<ConcessionTypeRe
 		RuleFor(x => x.Description)
 			.MaximumLength(ConcessionTypeConsts.MaxDescriptionLength);
 		RuleFor(x => x.Documents)
+			.Cascade(CascadeMode.Stop)
 			.NotNull()
 			.Must(documents => documents
 				.Select(document => ConcessionTypeConsts.NormalizeNameKey(document.DocumentName))

@@ -21,5 +21,7 @@ public interface IChargeAppService : IApplicationService
 
 	Task<RejectionResponse> RejectAsync(Guid chargeId, RejectChargeRequest input);
 
+	Task<ApprovalResponse> VoidAsync(Guid chargeId, VoidChargeRequest input);
+
 	Task DeleteAsync(Guid chargeId);
 }

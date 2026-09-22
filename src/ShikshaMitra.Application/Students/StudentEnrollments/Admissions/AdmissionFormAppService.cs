@@ -455,7 +455,7 @@ public class AdmissionFormAppService(
 		catch (JsonException) { result.Errors.Add($"InvalidJson:{owner}"); }
 	}
 
-	private static void ValidateValidationJson(string? json, string code, HashSet<string> knownFields, AdmissionFormValidationResultDto result)
+	internal static void ValidateValidationJson(string? json, string code, HashSet<string> knownFields, AdmissionFormValidationResultDto result)
 	{
 		if (string.IsNullOrWhiteSpace(json)) return;
 		try
@@ -481,7 +481,7 @@ public class AdmissionFormAppService(
 		if (!root.TryGetProperty("format", out var formatProperty)) return;
 		if (formatProperty.ValueKind != JsonValueKind.String) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}"); return; }
 		var format = formatProperty.GetString();
-		if (!new[] { "phone", "aadhaar", "pan", "pincode", "country", "state", "city" }.Contains(format, StringComparer.OrdinalIgnoreCase))
+		if (!new[] { "email", "phone", "aadhaar", "pan", "pincode", "country", "state", "city" }.Contains(format, StringComparer.OrdinalIgnoreCase))
 		{
 			result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}");
 			return;

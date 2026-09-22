@@ -898,9 +898,11 @@ public class StudentOnboardingAppService(
 			: [];
 		var satisfied = steps.Count(step => IsSatisfied(step.Status));
 		var primaryBlocker = steps.OrderBy(step => step.DisplayOrder)
-			.FirstOrDefault(step => step.Status == StudentOnboardingStepStatus.Blocked)?.Label ??
+			.FirstOrDefault(step => step.Key != StudentOnboardingStepKeys.FinalReadiness &&
+				step.Status == StudentOnboardingStepStatus.Blocked)?.Label ??
 			steps.OrderBy(step => step.DisplayOrder)
-				.FirstOrDefault(step => step.Required && !IsSatisfied(step.Status))?.Label;
+				.FirstOrDefault(step => step.Key != StudentOnboardingStepKeys.FinalReadiness &&
+					step.Required && !IsSatisfied(step.Status))?.Label;
 		return new StudentOnboardingCaseDto
 		{
 			Id = onboardingCase.Id,

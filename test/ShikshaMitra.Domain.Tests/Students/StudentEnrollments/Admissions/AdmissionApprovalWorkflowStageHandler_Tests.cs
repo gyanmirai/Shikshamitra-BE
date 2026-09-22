@@ -32,8 +32,12 @@ public class AdmissionApprovalWorkflowStageHandler_Tests
 	public async Task Admission_Decision_Stage_Should_Wait_For_A_Decision(
 		AdmissionApplicationStatus status)
 	{
-		await Should.ThrowAsync<BusinessException>(() =>
+		var exception = await Should.ThrowAsync<BusinessException>(() =>
 			_registry.EnsureCanCompleteAsync(AdmissionWorkflowStageType.Approval, Context(status)));
+
+		exception.Code.ShouldBe(AdmissionApplicationErrorCodes.StageCannotAdvance);
+		exception.Data["StageType"].ShouldBe(nameof(AdmissionWorkflowStageType.Approval));
+		exception.Data["ApplicationStatus"].ShouldBe(status.ToString());
 	}
 
 	private static AdmissionWorkflowStageRuntimeContext Context(AdmissionApplicationStatus status) =>

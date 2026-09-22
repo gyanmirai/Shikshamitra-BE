@@ -139,7 +139,9 @@ public class AdmissionWorkflowStageHandlerRegistry(
 		{
 			throw new BusinessException(
 				AdmissionApplicationErrorCodes.StageCannotAdvance,
-				$"The {stageType} stage cannot be completed in the current application state.");
+				$"The {stageType} stage cannot be completed while the application status is {context.ApplicationStatus}.")
+				.WithData("StageType", stageType.ToString())
+				.WithData("ApplicationStatus", context.ApplicationStatus.ToString());
 		}
 	}
 

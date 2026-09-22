@@ -227,12 +227,25 @@ public static class ConcessionRequestTestHelper
 		HttpClient client,
 		CreateConcessionRequestDto input)
 	{
+		var contextUrl = $"{ConcessionRequestUrl}/context?studentId={input.StudentId}" +
+			$"&academicYearId={DefaultAcademicYearId}" +
+			(input.StudentFeeStructureId.HasValue
+				? $"&studentFeeStructureId={input.StudentFeeStructureId.Value}" : string.Empty);
+		var context = await client.GetFromJsonAsync<ConcessionRequestContextDto>(contextUrl, JsonOptions)
+			?? throw new InvalidOperationException("Null concession request context");
+		var policy = context.ConcessionPolicies.FirstOrDefault(x => x.IsDefault)
+			?? context.ConcessionPolicies.FirstOrDefault()
+			?? throw new InvalidOperationException("No active concession policy available for the request");
+		input.ConcessionPolicyId = policy.ConcessionPolicyId;
+		input.ConcessionPolicyVersionId = policy.ConcessionPolicyVersionId;
 		var previewResponse = await client.PostAsJsonAsync(
 			$"{ConcessionRequestUrl}/preview?academicYearId={DefaultAcademicYearId}",
 			new ConcessionRequestPreviewInputDto
 			{
 				StudentId = input.StudentId,
 				StudentFeeStructureId = input.StudentFeeStructureId,
+				ConcessionPolicyId = input.ConcessionPolicyId,
+				ConcessionPolicyVersionId = input.ConcessionPolicyVersionId,
 				ConcessionTypeId = input.ConcessionTypeId,
 				FeeHeadConcessions = input.FeeHeadConcessions,
 			},
@@ -250,6 +263,20 @@ public static class ConcessionRequestTestHelper
 		HttpClient client,
 		CreateConcessionDraftDto input)
 	{
+		if (input.ConcessionPolicyId == Guid.Empty || input.ConcessionPolicyVersionId == Guid.Empty)
+		{
+			var contextUrl = $"{ConcessionRequestUrl}/context?studentId={input.StudentId}" +
+				$"&academicYearId={DefaultAcademicYearId}" +
+				(input.StudentFeeStructureId.HasValue
+					? $"&studentFeeStructureId={input.StudentFeeStructureId.Value}" : string.Empty);
+			var context = await client.GetFromJsonAsync<ConcessionRequestContextDto>(contextUrl, JsonOptions)
+				?? throw new InvalidOperationException("Null concession request context");
+			var policy = context.ConcessionPolicies.FirstOrDefault(x => x.IsDefault)
+				?? context.ConcessionPolicies.FirstOrDefault()
+				?? throw new InvalidOperationException("No active concession policy available for the request");
+			input.ConcessionPolicyId = policy.ConcessionPolicyId;
+			input.ConcessionPolicyVersionId = policy.ConcessionPolicyVersionId;
+		}
 		input.IdempotencyKey ??= Guid.NewGuid().ToString("N");
 		var response = await client.PostAsJsonAsync(
 			$"{ConcessionRequestUrl}/drafts?academicYearId={DefaultAcademicYearId}", input, JsonOptions);

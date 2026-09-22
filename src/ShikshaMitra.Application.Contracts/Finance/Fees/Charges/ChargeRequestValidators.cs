@@ -47,6 +47,7 @@ public class UpdateChargeRequestValidator : AbstractValidator<UpdateChargeReques
 {
 	public UpdateChargeRequestValidator()
 	{
+		RuleFor(x => x.ConcurrencyStamp).NotEmpty().MaximumLength(40);
 		RuleFor(x => x.ChargeName)
 			.MinimumLength(3)
 			.MaximumLength(100)
@@ -83,6 +84,7 @@ public class ApproveChargeRequestValidator : AbstractValidator<ApproveChargeRequ
 {
 	public ApproveChargeRequestValidator()
 	{
+		RuleFor(x => x.ConcurrencyStamp).NotEmpty().MaximumLength(40);
 		RuleFor(x => x.ApprovalNotes)
 			.MaximumLength(2000)
 			.When(x => x.ApprovalNotes != null);
@@ -93,9 +95,19 @@ public class RejectChargeRequestValidator : AbstractValidator<RejectChargeReques
 {
 	public RejectChargeRequestValidator()
 	{
+		RuleFor(x => x.ConcurrencyStamp).NotEmpty().MaximumLength(40);
 		RuleFor(x => x.RejectionReason)
 			.NotEmpty()
 			.MinimumLength(10)
 			.MaximumLength(2000);
+	}
+}
+
+public class VoidChargeRequestValidator : AbstractValidator<VoidChargeRequest>
+{
+	public VoidChargeRequestValidator()
+	{
+		RuleFor(x => x.ConcurrencyStamp).NotEmpty().MaximumLength(40);
+		RuleFor(x => x.Reason).NotEmpty().MinimumLength(10).MaximumLength(2000);
 	}
 }

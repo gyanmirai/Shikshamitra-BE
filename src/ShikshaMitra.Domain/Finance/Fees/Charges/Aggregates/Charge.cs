@@ -3,6 +3,7 @@ using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Data;
 
 namespace ShikshaMitra.Finance.Fees.Charges;
 
@@ -11,6 +12,11 @@ namespace ShikshaMitra.Finance.Fees.Charges;
 /// </summary>
 public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const string VoidedByProperty = "ChargeVoidedBy";
+	private const string VoidedOnProperty = "ChargeVoidedOn";
+	private const string VoidReasonProperty = "ChargeVoidReason";
+	private const string IncomeCategoryIdProperty = "ChargeIncomeCategoryId";
+	private const string IncomeAccountHeadIdProperty = "ChargeIncomeAccountHeadId";
 	public Guid? TenantId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public Guid ChargeRequestId { get; private set; }
@@ -32,6 +38,11 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? ApprovedBy { get; private set; }
 	public DateTimeOffset? ApprovedOn { get; private set; }
 	public string? ApprovalNotes { get; private set; }
+	public Guid? VoidedBy => this.GetProperty<Guid?>(VoidedByProperty);
+	public DateTimeOffset? VoidedOn => this.GetProperty<DateTimeOffset?>(VoidedOnProperty);
+	public string? VoidReason => this.GetProperty<string>(VoidReasonProperty);
+	public Guid? IncomeCategoryId => this.GetProperty<Guid?>(IncomeCategoryIdProperty);
+	public Guid? IncomeAccountHeadId => this.GetProperty<Guid?>(IncomeAccountHeadIdProperty);
 
 	private Charge()
 	{
@@ -185,6 +196,32 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		Status = ChargeStatus.Approved;
 		ApprovedOn = DateTimeOffset.UtcNow;
+	}
+
+	/// <summary>
+	/// Voids an approved obligation that has not been collected. Collection state is
+	/// checked by the application service in the same serializable transaction.
+	/// </summary>
+	public void Void(Guid voidedBy, string reason)
+	{
+		if (Status != ChargeStatus.Approved)
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeCannotBeVoided)
+				.WithData("Status", Status.ToString());
+		var normalizedReason = reason?.Trim();
+		if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length < 10)
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeCannotBeVoided)
+				.WithData("Message", "Void reason must be at least 10 characters");
+
+		Status = ChargeStatus.Voided;
+		this.SetProperty(VoidedByProperty, voidedBy);
+		this.SetProperty(VoidedOnProperty, DateTimeOffset.UtcNow);
+		this.SetProperty(VoidReasonProperty, normalizedReason);
+	}
+
+	public void SetAccountingSnapshot(Guid incomeCategoryId, Guid incomeAccountHeadId)
+	{
+		this.SetProperty(IncomeCategoryIdProperty, incomeCategoryId);
+		this.SetProperty(IncomeAccountHeadIdProperty, incomeAccountHeadId);
 	}
 
 	/// <summary>

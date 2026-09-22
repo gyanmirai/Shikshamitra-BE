@@ -83,7 +83,8 @@ public class FeeCategoryAppService(
 
 		if (!string.IsNullOrWhiteSpace(search))
 		{
-			query = query.Where(x => x.Name.Contains(search));
+			var normalizedSearch = search.Trim().ToLower();
+			query = query.Where(x => x.Name.ToLower().Contains(normalizedSearch));
 		}
 
 		var totalCount = await feeCategoryRepository.AsyncExecuter.CountAsync(query);
@@ -138,6 +139,15 @@ public class FeeCategoryAppService(
 
 		var existingHeads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
 		var existingHeadsById = existingHeads.ToDictionary(x => x.Id);
+		var unknownHeadIds = input.FeeHeads
+			.Where(x => x.Id.HasValue && !existingHeadsById.ContainsKey(x.Id.Value))
+			.Select(x => x.Id!.Value)
+			.ToList();
+		if (unknownHeadIds.Count > 0)
+		{
+			throw new BusinessException(FinanceFeeCategoryErrorCodes.InvalidFeeHeadReference)
+				.WithData("Ids", string.Join(",", unknownHeadIds));
+		}
 		var incomingIds = input.FeeHeads.Where(x => x.Id.HasValue).Select(x => x.Id!.Value).ToHashSet();
 		var usedFeeHeadIds = await GetUsedFeeHeadIdsAsync(existingHeads.Select(x => x.Id).ToList());
 
@@ -270,8 +280,7 @@ public class FeeCategoryAppService(
 
 		var structureQuery = await feeStructureRepository.GetQueryableAsync();
 		var usedIds = await feeStructureRepository.AsyncExecuter.ToListAsync(
-			structureQuery.Where(fs => fs.IsLocked)
-						  .SelectMany(fs => fs.FeeStructureDetails)
+			structureQuery.SelectMany(fs => fs.FeeStructureDetails)
 						  .Where(fsd => feeHeadIds.Contains(fsd.FeeHeadId))
 						  .Select(fsd => fsd.FeeHeadId)
 						  .Distinct()

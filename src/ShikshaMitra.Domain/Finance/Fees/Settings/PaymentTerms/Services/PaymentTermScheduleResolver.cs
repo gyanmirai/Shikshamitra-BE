@@ -100,6 +100,7 @@ public class PaymentTermScheduleResolver(
 			}
 
 			installments.Add(new ResolvedInstallment(
+				masterInstallment.Id,
 				masterInstallment.Sequence,
 				masterInstallment.Name,
 				coverageStart,
@@ -194,6 +195,7 @@ public sealed class ResolvedFeeHeadSchedule
 
 public sealed class ResolvedInstallment
 {
+	public Guid PaymentTermInstallmentId { get; }
 	public int Sequence { get; }
 	public string Name { get; }
 	public DateTime CoverageStartDate { get; }
@@ -206,6 +208,7 @@ public sealed class ResolvedInstallment
 	public int? GracePeriodDaysOverride { get; }
 
 	public ResolvedInstallment(
+		Guid paymentTermInstallmentId,
 		int sequence,
 		string name,
 		DateTime coverageStartDate,
@@ -217,6 +220,7 @@ public sealed class ResolvedInstallment
 		bool? allowPartialOverride,
 		int? gracePeriodDaysOverride)
 	{
+		PaymentTermInstallmentId = paymentTermInstallmentId;
 		Sequence = sequence;
 		Name = name;
 		CoverageStartDate = coverageStartDate;

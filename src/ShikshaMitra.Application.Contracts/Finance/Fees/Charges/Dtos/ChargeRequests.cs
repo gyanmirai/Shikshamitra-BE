@@ -27,6 +27,8 @@ public class CreateChargeRequest
 
 public class UpdateChargeRequest
 {
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+
 	public string? ChargeName { get; set; }
 
 	public Guid? ChargeCategoryId { get; set; }
@@ -35,7 +37,7 @@ public class UpdateChargeRequest
 
 	public decimal? Amount { get; set; }
 
-	public DateTime? DueDate { get; set; }
+	public DateTimeOffset? DueDate { get; set; }
 
 	public int? Priority { get; set; }
 
@@ -46,6 +48,8 @@ public class UpdateChargeRequest
 
 public class ApproveChargeRequest
 {
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+
 	public List<Guid>? StudentIds { get; set; }
 
 	public string? ApprovalNotes { get; set; }
@@ -53,6 +57,8 @@ public class ApproveChargeRequest
 
 public class RejectChargeRequest
 {
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+
 	public List<Guid>? StudentIds { get; set; }
 
 	public string RejectionReason { get; set; } = string.Empty;
@@ -60,6 +66,8 @@ public class RejectChargeRequest
 
 public class GetChargesRequest
 {
+	public Guid AcademicYearId { get; set; }
+
 	public int Page { get; set; } = 1;
 
 	public int PageSize { get; set; } = 20;
@@ -82,6 +90,15 @@ public class GetChargesRequest
 
 	/// <summary>Filter by a specific division. Only requests with at least one student in this division are returned.</summary>
 	public Guid? DivisionId { get; set; }
+}
+
+public class VoidChargeRequest
+{
+	public List<Guid>? StudentIds { get; set; }
+
+	public string Reason { get; set; } = string.Empty;
+
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class GetChargeLinesRequest

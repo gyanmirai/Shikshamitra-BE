@@ -24,7 +24,12 @@ public abstract class ChargeAppService_Tests<TStartupModule> : ShikshaMitraAppli
 	{
 		// Arrange — use a dummy academic year ID; in-memory DB returns empty list
 		var academicYearId = Guid.NewGuid();
-		var request = new GetChargesRequest { Page = 1, PageSize = 10 };
+		var request = new GetChargesRequest
+		{
+			AcademicYearId = academicYearId,
+			Page = 1,
+			PageSize = 10
+		};
 
 		// Act
 		var result = await _chargeAppService.GetAllAsync(request);
@@ -40,7 +45,12 @@ public abstract class ChargeAppService_Tests<TStartupModule> : ShikshaMitraAppli
 	public virtual async Task GetAllAsync_PageSize_Should_Be_Capped_At_100()
 	{
 		var academicYearId = Guid.NewGuid();
-		var request = new GetChargesRequest { Page = 1, PageSize = 999 };
+		var request = new GetChargesRequest
+		{
+			AcademicYearId = academicYearId,
+			Page = 1,
+			PageSize = 999
+		};
 
 		var result = await _chargeAppService.GetAllAsync(request);
 

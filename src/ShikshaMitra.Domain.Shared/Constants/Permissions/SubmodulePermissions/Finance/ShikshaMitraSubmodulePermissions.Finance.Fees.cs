@@ -35,8 +35,11 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Delete = $"{SubmoduleName}.Delete";
 			public const string Approve = $"{SubmoduleName}.Approve";
 			public const string Reject = $"{SubmoduleName}.Reject";
+			public const string Void = $"{SubmoduleName}.Void";
+			public const string Export = $"{SubmoduleName}.Export";
+			public const string ViewAudit = $"{SubmoduleName}.ViewAudit";
 
-			public static readonly string[] All = { View, Add, Update, Delete, Approve, Reject };
+			public static readonly string[] All = { View, Add, Update, Delete, Approve, Reject, Void, Export, ViewAudit };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
@@ -45,7 +48,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Update, $"{SubmoduleDisplayName}.Update" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" },
 				{ Approve, $"{SubmoduleDisplayName}.Approve" },
-				{ Reject, $"{SubmoduleDisplayName}.Reject" }
+				{ Reject, $"{SubmoduleDisplayName}.Reject" },
+				{ Void, $"{SubmoduleDisplayName}.Void" },
+				{ Export, $"{SubmoduleDisplayName}.Export" },
+				{ ViewAudit, $"{SubmoduleDisplayName}.ViewAudit" }
 			};
 		}
 
@@ -317,14 +323,18 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public const string ChangeStatus = $"{SubmoduleName}.ChangeStatus";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { View, Add, Delete };
+			public static readonly string[] All = { View, Add, Edit, ChangeStatus, Delete };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" },
+				{ ChangeStatus, $"{SubmoduleDisplayName}.ChangeStatus" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}

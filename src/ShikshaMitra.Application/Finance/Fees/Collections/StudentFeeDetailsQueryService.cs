@@ -84,14 +84,16 @@ public partial class StudentFeeDetailsQueryService(
 				.ThenBy(d => d.Year).ThenBy(d => d.Month)
 				.ToList();
 			var today = clock.Now.Date;
-			var generatedDueFees = dueFees.Where(d => d.IsBillGeneratedOn(today)).ToList();
 
-			var feeHeadIds = generatedDueFees.Select(d => d.FeeHeadId).Distinct().ToList();
+			// The collect form exposes the complete assigned schedule so a cashier can accept
+			// an advance payment against a specific future installment. DemandDate still controls
+			// bill generation and late-fee timing; it is not a collection-eligibility boundary.
+			var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
 			var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
 			var feeHeadNameMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
 			var reconByDueFee = await GetInReconciliationByDueFeeAsync(studentId);
 
-			var grouped = generatedDueFees.GroupBy(d => (d.Year, d.Month))
+			var grouped = dueFees.GroupBy(d => (d.Year, d.Month))
 				.OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month);
 
 			var concessions = await concessionRequestRepository.GetListAsync(c => c.StudentId == studentId
@@ -108,9 +110,9 @@ public partial class StudentFeeDetailsQueryService(
 				studentId, feeStructureAssignment.FeeStructureStandardId);
 			allowOnlineCollection = effectiveRules.Policy?.AllowOnlineCollection ?? true;
 
-			var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(generatedDueFees.Select(d => d.Id).ToList());
-			var generatedDueFeeIds = generatedDueFees.Select(d => d.Id).ToList();
-			var paidLateFeeAllocations = await lateFeeAllocationRepository.GetListAsync(x => generatedDueFeeIds.Contains(x.DueFeeId));
+			var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFees.Select(d => d.Id).ToList());
+			var dueFeeIds = dueFees.Select(d => d.Id).ToList();
+			var paidLateFeeAllocations = await lateFeeAllocationRepository.GetListAsync(x => dueFeeIds.Contains(x.DueFeeId));
 			var lateFeeTransactionIds = paidLateFeeAllocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
 			var reversedLateFeeTransactionIds = (await feeRecordMetadataRepository.GetListAsync(x =>
 				lateFeeTransactionIds.Contains(x.Id) && x.Status == FeeCollectionStatus.Reversed))
@@ -193,7 +195,7 @@ public partial class StudentFeeDetailsQueryService(
 			{
 				TotalFee = (double)dueFees.Sum(d => d.OriginalAmount),
 				PaidFee = (double)dueFees.Sum(d => d.PaidAmount),
-				PendingFee = (double)generatedDueFees.Sum(d => d.OutstandingAmount),
+				PendingFee = (double)dueFees.Sum(d => d.OutstandingAmount),
 				ReconciliationAmount = reconByDueFee.Values.Sum(),
 			};
 		}

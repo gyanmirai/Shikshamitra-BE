@@ -7,6 +7,7 @@ namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
 
 public class ResolvedInstallmentDto
 {
+public Guid PaymentTermInstallmentId { get; set; }
 public int Sequence { get; set; }
 public string Name { get; set; } = string.Empty;
 public DateTime CoverageStartDate { get; set; }

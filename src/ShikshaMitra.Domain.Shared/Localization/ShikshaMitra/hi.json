@@ -71,6 +71,7 @@
     "HR:Payroll:030019": "Payroll snapshot schema लागू नहीं है। नवीनतम database migration चलाएँ और पुनः प्रयास करें।",
     "HR:Payroll:030027": "Payroll adjustment केवल payroll row reviewed होने के बाद और lock होने से पहले बदला जा सकता है।",
     "HR:Payroll:030028": "Payroll row से review हटाने से पहले payroll-only adjustments हटाएँ।",
-    "HR:Calendar:040005": "आईडी '{itemId}' वाला कैलेंडर आइटम नहीं मिला।"
+    "HR:Calendar:040005": "आईडी '{itemId}' वाला कैलेंडर आइटम नहीं मिला।",
+    "Finance:Concession:010029": "चयनित शैक्षणिक वर्ष के लिए इस विद्यार्थी को कोई शुल्क संरचना निर्धारित नहीं है। रियायत अनुरोध बनाने से पहले शुल्क संरचना निर्धारित करें।"
   }
 }

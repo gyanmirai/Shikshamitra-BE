@@ -18,5 +18,10 @@ public enum ChargeStatus
 	/// <summary>
 	/// Charge has been rejected
 	/// </summary>
-	Rejected = 2
+	Rejected = 2,
+
+	/// <summary>
+	/// An approved, unpaid charge was voided with an auditable reason.
+	/// </summary>
+	Voided = 3
 }

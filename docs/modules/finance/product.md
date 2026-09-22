@@ -3,7 +3,7 @@ module: finance
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-09-09
+updated_on: 2026-09-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -21,8 +21,8 @@ Treat incorrect Finance reports or due balances as production defects.
 | Student fee assignment | Implemented | Assign fee structures to students and expose fee head details |
 | Fee collection | Implemented | Collect fees, allocate payments to due rows, expose student fee details, summaries, and exports |
 | Receipts | Implemented | Read receipt lists and receipt details after payment activity |
-| Charges | Implemented | Create ad hoc charges with maker-checker approval and derived student scope |
-| Concession policy and requests | Implemented | Attach academic-year policy versions to fee structures, snapshot them at student assignment, then request and approve allocations to eligible due fee rows; see [the end-to-end reference](./references/concession-policy-end-to-end.md) |
+| Charges | Partial | Create ad hoc per-student charges, approve/reject them, collect approved balances, and issue charge receipts. Release-critical scope, concurrency, correction/refund, policy, accounting, and frontend-permission gaps are tracked in [Charge management end to end](./references/charge-management-end-to-end.md) |
+| Concession policy and requests | Implemented | Select an active academic-year policy while creating the request, pin that exact version on the request, then calculate and approve allocations against the student's assigned outstanding due rows; fee structures do not own concession-policy selection; see [the end-to-end reference](./references/concession-policy-end-to-end.md) |
 | Fee adjustments | Implemented | Create credit pools from paid due rows and apply them to pending obligations |
 | Refunds | Implemented | Request and process fee refunds separately from adjustments |
 | Accounts | Implemented | Income, expense, bank account, transaction categories, transactions, and reconciliation |
@@ -38,6 +38,7 @@ Treat incorrect Finance reports or due balances as production defects.
 | Cash returned to parents uses refunds | Fee adjustments are not cash refunds |
 | Maker-checker rules protect approvals | Creators cannot approve or reject their own charge, concession, or adjustment where the domain enforces it |
 | Receipt numbers and payment records must remain auditable | Do not silently mutate payment history |
+| Charges are not Fee Structure demand | Use charges for exceptional obligations; connect them through collection, receipt, accounts, audit, and reports rather than duplicating recurring fees |
 | Concession type names are unique per tenant and academic year after normalization | Duplicate labels cannot create ambiguous request classifications |
 | Concession types are lifecycle-controlled master data | Active types cannot be deleted; inactive unused types may be deleted, while used types remain resolvable in requests, reports, and version history |
 | Concession evidence definitions are server-enforced | Each document declares mandatory/optional, maximum bytes, and accepted formats; only mandatory evidence blocks approval |

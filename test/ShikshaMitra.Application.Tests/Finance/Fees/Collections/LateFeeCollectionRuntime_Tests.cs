@@ -6,6 +6,7 @@ using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
+using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -108,7 +109,8 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 	}
 
 	private async Task<(Guid AcademicYearId, Guid StudentId, Guid FeeHeadId, Guid DueFeeId, Guid FeeStructureId)>
-		SeedStudentWithOverdueDueFeeAsync(int daysOverdue, bool attachPolicy, double? maximumLateFeeAmount = null, bool enableLateFee = true)
+		SeedStudentWithOverdueDueFeeAsync(int daysOverdue, bool attachPolicy, double? maximumLateFeeAmount = null,
+			bool enableLateFee = true, bool futurePaymentTerm = false)
 	{
 		await EnsureAdminUserExistsAsync();
 
@@ -199,10 +201,15 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 			null, null, ConcessionFeeHeadScope.EntireFeeStructure, [], collectionPolicyId, collectionPolicyVersionId);
 		await _studentFeeStructureRepo.InsertAsync(assignment, autoSave: true);
 
-		var dueDate = DateTime.UtcNow.Date.AddDays(-daysOverdue);
+		var demandDate = futurePaymentTerm ? DateTime.UtcNow.Date.AddMonths(1) : (DateTime?)null;
+		var dueDate = demandDate?.AddDays(10) ?? DateTime.UtcNow.Date.AddDays(-daysOverdue);
 		var dueFee = new DueFee(
 			id: Guid.NewGuid(), tenantId: TestTenantId, studentId: studentId, feeHeadId: feeHeadId,
-			month: MonthEnum.April, year: dueDate.Year, isOneTime: false, amount: 5000m, dueDate: dueDate);
+			month: (MonthEnum)(dueDate.Month - 1), year: dueDate.Year, isOneTime: false, amount: 5000m, dueDate: dueDate,
+			installmentSequence: futurePaymentTerm ? 1 : null,
+			installmentName: futurePaymentTerm ? "Future installment" : null,
+			demandDate: demandDate, scheduleDueDate: futurePaymentTerm ? dueDate : null,
+			scheduleSource: futurePaymentTerm ? ScheduleSource.PaymentTerm : ScheduleSource.Legacy);
 		dueFee.BindAssignment(assignment.Id);
 		await _dueFeeRepo.InsertAsync(dueFee, autoSave: true);
 
@@ -231,6 +238,33 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 			var line = form.Ledger.Should_ContainLine(dueFeeId);
 			line.LateFeeAmount.ShouldBe(0);
 			form.AllowOnlineCollection.ShouldBeTrue();
+		}
+	}
+
+	[Fact]
+	public async Task Collect_Form_Includes_Future_Payment_Term_Installments_For_Advance_Collection()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (academicYearId, studentId, _, futureDueFeeId, _) = await SeedStudentWithOverdueDueFeeAsync(
+				daysOverdue: 0, attachPolicy: true, enableLateFee: false, futurePaymentTerm: true);
+
+			var form = await _feeCollections.GetCollectFormAsync(studentId, academicYearId);
+
+			var line = form.Ledger.Should_ContainLine(futureDueFeeId);
+			line.Due.ShouldBe(5_000d);
+			line.LateFeeAmount.ShouldBe(0d);
+			form.Summary.PendingFee.ShouldBe(5_000d);
+
+			var output = await _feeCollections.CollectFeeAsync(new CollectFeeInput
+			{
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
+				StudentId = studentId,
+				AcademicYearId = academicYearId,
+				DueFeePayments = [new() { DueFeeId = futureDueFeeId, FeeHeadId = line.FeeHeadId, Amount = 5_000d }],
+				Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 5_000d }],
+			});
+			output.PaidDueFees.ShouldContain(x => x.DueFeeId == futureDueFeeId && x.AmountPaid == 5_000d);
 		}
 	}
 

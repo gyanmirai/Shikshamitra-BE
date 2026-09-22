@@ -13,6 +13,26 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class BuiltInGrossSalary_Tests
 {
+	[Theory]
+	[InlineData(30)]
+	[InlineData(15)]
+	[InlineData(0)]
+	public void Component_deductions_use_finalized_earnings_and_bonus_stays_separate(int days)
+	{
+		var basic = Component("Basic", 10000m, true, 50m, PayrollComponentSemanticType.Basic);
+		var allowance = Component("Allowance", 10000.01m, true, 50m);
+		var deduction = Component("Deduction", 500m, false);
+		deduction.Formula = new PayrollComponentFormula(SalaryTemplateFormulaType.PercentageOfComponent, 5m, allowance.ComponentId);
+		var bonus = Component("Bonus", 500m, true);
+		bonus.IsTemp = true;
+		var result = PayrollComputation.Calculate(days, 0, days, 30m, [allowance, deduction, basic, bonus]);
+		var finalAllowance = result.Earnings.Single(x => x.Source == allowance).Amount;
+		result.TotalDeduction.ShouldBe(Math.Round(finalAllowance * 0.05m, 2, MidpointRounding.AwayFromZero));
+		result.Earnings.Where(x => !x.Source.IsTemp).Sum(x => x.Amount).ShouldBe(result.GrossSalary);
+		result.AdditionalEarnings.ShouldBe(500m);
+		result.NetPay.ShouldBe(result.GrossSalary + 500m - result.TotalDeduction);
+	}
+
 	[Fact]
 	public void Remainder_does_not_hide_a_genuine_earning_overallocation()
 	{

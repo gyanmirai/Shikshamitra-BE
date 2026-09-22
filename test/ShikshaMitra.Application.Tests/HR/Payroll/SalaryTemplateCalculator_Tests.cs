@@ -17,6 +17,25 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class SalaryTemplateCalculator_Tests
 {
+	[Theory]
+	[InlineData(SalaryInputBasis.Gross)]
+	[InlineData(SalaryInputBasis.TakeHome)]
+	[InlineData(SalaryInputBasis.EmployerCost)]
+	public void Odd_paise_split_keeps_gross_and_awards_tie_to_ordinary_earning(SalaryInputBasis basis)
+	{
+		var basicId = Guid.NewGuid();
+		var otherId = Guid.NewGuid();
+		SalaryTemplateRule[] rules = [
+			new("BASIC", basicId, SalaryTemplateLineKind.Earning, SalaryTemplateFormulaType.PercentageOfGross, PayrollComponentSemanticType.Basic, 50m, null, 0),
+			new("OTHER", otherId, SalaryTemplateLineKind.Earning, SalaryTemplateFormulaType.PercentageOfGross, PayrollComponentSemanticType.Ordinary, 50m, null, 1)];
+		var result = SalaryTemplateCalculator.Calculate(basis, 20000.01m, rules,
+			new Dictionary<Guid, SalaryTemplateComponent> { [basicId] = new(basicId, "Basic"), [otherId] = new(otherId, "Other") }, null, []);
+		result.Gross.ShouldBe(20000.01m);
+		result.Basic.ShouldBe(10000m);
+		result.Earnings.Single(x => x.ComponentId == otherId).Amount.ShouldBe(10000.01m);
+		result.Earnings.Sum(x => x.Amount).ShouldBe(result.Gross);
+	}
+
 	[Fact]
 	public void Should_reject_an_earning_that_depends_on_the_gross_remainder()
 	{

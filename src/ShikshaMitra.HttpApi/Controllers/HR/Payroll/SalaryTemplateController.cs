@@ -76,4 +76,8 @@ public class SalaryTemplateController(
 
 		return await appService.CalculateAsync(templateVersionId, input);
 	}
+
+	[HttpPost("preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
+	public Task<SalaryTemplatePreviewDto> PreviewAsync(PreviewSalaryTemplateRequestDto input) => appService.PreviewAsync(input);
 }

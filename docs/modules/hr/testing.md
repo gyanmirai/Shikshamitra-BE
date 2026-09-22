@@ -13,7 +13,7 @@ audience: humans-and-agents
 TL;DR: run the smallest command that proves the changed HR behavior, then run docs validation before handoff.
 Use broader API tests when a change touches contracts, permissions, payroll, attendance, leave, or policy resolution.
 
-Salary-template coverage must include complete active creation, Needs setup recovery, arbitrary active tenant components, exactly one Basic, zero or one balancing earning, exact rounded gross reconciliation, dependency cycles, cross-tenant component rejection, permission boundaries, concurrency conflicts, idempotent retries, PF defaults, percentage validation, two-decimal midpoint-away-from-zero rounding, PF ceilings, Gujarat professional-tax boundaries, and Gross, Take-home, and Employer Cost solving across discontinuities.
+Salary-template coverage must include complete active creation, Needs setup recovery, arbitrary active tenant components, exactly one Basic, zero or one balancing earning, exact rounded gross reconciliation, dependency cycles, cross-tenant component rejection, permission boundaries, concurrency conflicts, idempotent retries, PF defaults, percentage validation, largest fractional remainder allocation and existing statutory rounding, PF ceilings, Gujarat professional-tax boundaries, and Gross, Take-home, and Employer Cost solving across discontinuities.
 Compensation coverage must prove direct effective saves, effective-month resolution, immutable history, same-month supersession, scheduled future revisions, idempotent retries, controlled overrides, activation readiness, locked-payroll protection, separate one-time lines, and warning-only protected-target drift.
 Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, ESI uses effective coverage and wages, eligible PwD relief is government funded, employer contributions remain outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
 
@@ -147,9 +147,28 @@ Check these gaps before claiming full coverage:
 ## Built-in Gross Salary regression checks
 
 Run `BuiltInGrossSalary_Tests`, `SalaryTemplateCalculator_Tests`, and `GrossSalaryComponentApi_Tests`.
+Run `GrossEarningAllocation_Tests`, `SalaryTemplatePreviewProof_Tests`, `SalaryTemplateComposerAppService_Tests`, and `SalaryTemplateApi_Tests` for raw allocation, odd-paisa ties, fixed/mixed rules, read-only previews, proof expiry/binding, concurrency, and idempotent retries.
+Build HTTP API tests with `dotnet test test/ShikshaMitra.HttpApi.Tests --artifacts-path .artifacts/payroll-api-tests --filter FullyQualifiedName~SalaryTemplateApi` while the local API server is running to avoid locked host DLLs.
 Cover full, half, zero, fractional, and varying salary-basis days; fixed and variable percentage masters; all compensation bases; explicit remainder; invalid references; dependency cycles; and incomplete allocation.
 Verify serialized compensation formulas are restored for payroll and copied into payslip line snapshots.
 Run `SalarySlipGrossSnapshot_Tests` to verify drafts refresh when full-month amounts or formula inputs change without changing paid amounts.
 Cover rounding residue with a zero remainder after proration, and reject earnings that depend on that remainder while allowing deduction references.
 Verify a separate bonus leaves regular gross and gross-based Basic unchanged while increasing total earnings and net pay.
 In the authenticated browser, create and reopen a Gross-based component, inherit its formula in a template, generate a salary structure, and inspect payroll and payslip summaries.
+
+## Development and staging salary-template data
+
+There is no schema migration or historical-template repair for the preview contract.
+The trusted demo seeder retains Basic at 60 percent plus an explicit remainder and checks its earnings with the shared allocator before publishing.
+API fixtures must obtain a preview proof rather than post an unvalidated active template.
+
+For a fresh development database, create a separate PostgreSQL database owned by the application account, set `ConnectionStrings__Default` through the local secret provider, and run `dotnet run --no-launch-profile --project src/ShikshaMitra.DbMigrator` with the approved demo seeder profile.
+Do not point this procedure at an existing shared database or reset unrelated school data.
+Verify the seeded template through preview at whole and odd-paisa amounts, then create a disposable template through preview/save/reopen and archive it after verification.
+
+For staging, update the backend and frontend together when deployment is separately authorized.
+Keep seed completion markers and all existing grants intact; do not force-rerun blanket seeders.
+Use an authorized staging administrator to list affected development templates, open each intended fixture, select a compatible sample amount/month, Calculate, and save the resulting active version.
+Replace invalid disposable fixtures through the same preview/save contract and explicitly select a replacement before archiving a default template.
+Only recreate employee test structures intentionally included in that staging fixture; existing employee revisions and payroll snapshots remain unchanged.
+Record template/version IDs and confirm sample, employee structure, payroll preview, and payslip totals after the data update.

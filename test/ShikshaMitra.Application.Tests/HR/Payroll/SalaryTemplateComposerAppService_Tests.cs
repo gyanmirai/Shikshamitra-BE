@@ -28,12 +28,42 @@ public class SalaryTemplateComposerAppService_Tests
 	}
 
 	[Fact]
+	public async Task Preview_does_not_persist_and_save_requires_the_current_sample()
+	{
+		var basic = await InsertEarningAsync($"Preview Basic {Guid.NewGuid():N}");
+		var input = Save($"Preview {Guid.NewGuid():N}", [new SalaryTemplateRuleDto
+		{
+			ComponentId = basic.Id, LineKind = "EARNING", SemanticType = "BASIC",
+			FormulaType = "PERCENTAGE_OF_GROSS", Value = 100m
+		}]);
+		var before = (await _appService.GetListAsync()).Items.Count;
+		await AttachPreviewAsync(input);
+		(await _appService.GetListAsync()).Items.Count.ShouldBe(before);
+		var validToken = input.PreviewToken;
+		input.PreviewToken = "";
+		(await Should.ThrowAsync<BusinessException>(() => _appService.CreateAsync(input))).Code
+			.ShouldBe("HR:Payroll:SalaryTemplatePreviewRequired");
+		input.PreviewToken = validToken;
+		input.Rules[0].Value = 60m;
+		(await Should.ThrowAsync<BusinessException>(() => _appService.CreateAsync(input))).Code
+			.ShouldBe("HR:Payroll:SalaryTemplatePreviewRequired");
+		(await Should.ThrowAsync<BusinessException>(() => AttachPreviewAsync(input))).Code
+			.ShouldBe("HR:Payroll:CompensationTargetNotSolvable");
+		input.Rules[0].Value = 100m;
+		input.Name += " renamed";
+		var saved = await _appService.CreateAsync(input);
+		var replay = await _appService.CreateAsync(input);
+		replay.Id.ShouldBe(saved.Id);
+		replay.VersionCount.ShouldBe(1);
+	}
+
+	[Fact]
 	public async Task Should_create_an_active_default_and_replace_it_with_an_immutable_new_version()
 	{
 		var suffix = Guid.NewGuid().ToString("N")[..8];
 		var basic = await InsertEarningAsync($"Composer Basic {suffix}");
 		var allowance = await InsertEarningAsync($"Composer Allowance {suffix}");
-		var created = await _appService.CreateAsync(Save(
+		var created = await CreatePreviewedAsync(Save(
 			$"Composer Template {suffix}",
 			[new SalaryTemplateRuleDto
 			{
@@ -74,7 +104,7 @@ public class SalaryTemplateComposerAppService_Tests
 		update.ExpectedActiveVersionId = created.EditableVersion.Id;
 		update.ConcurrencyStamp = created.ConcurrencyStamp;
 
-		var updated = await _appService.UpdateAsync(created.Id, update);
+		var updated = await UpdatePreviewedAsync(created.Id, update);
 		updated.ActiveVersion.ShouldBe(2);
 		updated.VersionCount.ShouldBe(2);
 		var history = await _appService.GetVersionsAsync(created.Id);
@@ -85,7 +115,7 @@ public class SalaryTemplateComposerAppService_Tests
 		var stale = Save(created.Name, update.Rules.ToArray());
 		stale.ExpectedActiveVersionId = created.EditableVersion.Id;
 		stale.ConcurrencyStamp = created.ConcurrencyStamp;
-		(await Should.ThrowAsync<BusinessException>(() => _appService.UpdateAsync(created.Id, stale))).Code
+		(await Should.ThrowAsync<BusinessException>(() => UpdatePreviewedAsync(created.Id, stale))).Code
 			.ShouldBe("HR:Payroll:SalaryTemplateSaveConflict");
 	}
 
@@ -100,7 +130,7 @@ public class SalaryTemplateComposerAppService_Tests
 
 		catalog.Items.ShouldContain(x => x.ComponentId == basic.Id && x.LineKind == "EARNING");
 		catalog.Items.ShouldContain(x => x.ComponentId == deduction.Id && x.LineKind == "DEDUCTION");
-		var template = await _appService.CreateAsync(Save($"Basis Template {suffix}",
+		var template = await CreatePreviewedAsync(Save($"Basis Template {suffix}",
 		[
 			new SalaryTemplateRuleDto
 			{
@@ -108,7 +138,7 @@ public class SalaryTemplateComposerAppService_Tests
 				LineKind = "EARNING",
 				SemanticType = "BASIC",
 				FormulaType = "PERCENTAGE_OF_GROSS",
-				Value = 60m,
+				Value = 50m,
 				DisplayOrder = 0
 			},
 			new SalaryTemplateRuleDto
@@ -117,7 +147,7 @@ public class SalaryTemplateComposerAppService_Tests
 				LineKind = "EARNING",
 				SemanticType = "ORDINARY",
 				FormulaType = "PERCENTAGE_OF_COMPONENT",
-				Value = 10m,
+				Value = 100m,
 				BasisComponentId = basic.Id,
 				DisplayOrder = 1
 			}
@@ -138,7 +168,7 @@ public class SalaryTemplateComposerAppService_Tests
 		using (_currentTenant.Change(firstTenantId))
 		{
 			var firstEarning = await WithUnitOfWorkAsync(() => InsertEarningAsync("First Tenant Basic"));
-			firstTemplate = await _appService.CreateAsync(Save("First Tenant Template",
+			firstTemplate = await CreatePreviewedAsync(Save("First Tenant Template",
 			[
 				new SalaryTemplateRuleDto
 				{
@@ -172,7 +202,7 @@ public class SalaryTemplateComposerAppService_Tests
 			update.ExpectedActiveVersionId = firstTemplate.EditableVersion.Id;
 			update.ConcurrencyStamp = firstTemplate.ConcurrencyStamp;
 			(await Should.ThrowAsync<BusinessException>(() =>
-				_appService.UpdateAsync(firstTemplate.Id, update))).Code
+				UpdatePreviewedAsync(firstTemplate.Id, update))).Code
 				.ShouldBe("HR:Payroll:SalaryTemplateComponentMissing");
 		}
 	}
@@ -190,8 +220,8 @@ public class SalaryTemplateComposerAppService_Tests
 			FormulaType = "PERCENTAGE_OF_GROSS",
 			Value = 100m
 		};
-		var first = await _appService.CreateAsync(Save($"Archive First {suffix}", [rule]));
-		var second = await _appService.CreateAsync(Save($"Archive Second {suffix}", [rule]));
+		var first = await CreatePreviewedAsync(Save($"Archive First {suffix}", [rule]));
+		var second = await CreatePreviewedAsync(Save($"Archive Second {suffix}", [rule]));
 
 		(await Should.ThrowAsync<BusinessException>(() =>
 			_appService.ArchiveAsync(first.Id, new ArchiveSalaryTemplateDto()))).Code
@@ -207,6 +237,32 @@ public class SalaryTemplateComposerAppService_Tests
 		all.Items.Single(x => x.Id == second.Id).IsDefault.ShouldBeTrue();
 		var active = await _appService.GetActiveListAsync();
 		active.Items.ShouldNotContain(x => x.Id == first.Id);
+	}
+
+	private async Task<SalaryTemplateDto> CreatePreviewedAsync(SaveSalaryTemplateDto input)
+	{
+		await AttachPreviewAsync(input);
+		return await _appService.CreateAsync(input);
+	}
+
+	private async Task<SalaryTemplateDto> UpdatePreviewedAsync(Guid id, SaveSalaryTemplateDto input)
+	{
+		await AttachPreviewAsync(input, id);
+		return await _appService.UpdateAsync(id, input);
+	}
+
+	private async Task AttachPreviewAsync(SaveSalaryTemplateDto input, Guid? id = null)
+	{
+		input.SampleMonthlyAmount = 20000m;
+		input.SampleEffectiveMonth = new DateTime(2026, 9, 1);
+		var preview = await _appService.PreviewAsync(new PreviewSalaryTemplateRequestDto
+		{
+			TemplateId = id, ExpectedActiveVersionId = input.ExpectedActiveVersionId, ConcurrencyStamp = input.ConcurrencyStamp,
+			Rules = input.Rules, SalaryBasis = input.DefaultSalaryBasis, ProtectionPolicy = input.DefaultProtectionPolicy,
+			MonthlyAmount = input.SampleMonthlyAmount, EffectiveMonth = input.SampleEffectiveMonth,
+			PfApplicable = input.DefaultPfApplicable, PfRuleId = input.DefaultPfRuleId
+		});
+		input.PreviewToken = preview.PreviewToken;
 	}
 
 	private static SaveSalaryTemplateDto Save(string name, SalaryTemplateRuleDto[] rules) => new()

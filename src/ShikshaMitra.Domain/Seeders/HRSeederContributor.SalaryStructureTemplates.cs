@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -43,6 +44,12 @@ public partial class HRSeederContributor
 			new("EMPLOYEE_PF", providentFund.Id, SalaryTemplateLineKind.Deduction, SalaryTemplateFormulaType.EmployeeProvidentFund, PayrollComponentSemanticType.EmployeeProvidentFund, null, "BASIC", 10),
 			new("PROFESSIONAL_TAX", professionalTax.Id, SalaryTemplateLineKind.Deduction, SalaryTemplateFormulaType.ProfessionalTax, PayrollComponentSemanticType.ProfessionalTax, null, null, 11)
 		};
+
+		// Trusted demo bootstrap does not use a user preview token, but must obey the same allocation invariant.
+		var earningRules = rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning)
+			.Select(x => new GrossEarningRule(x.ComponentId, x.SemanticType == PayrollComponentSemanticType.Basic,
+				x.FormulaType, x.Value)).ToList();
+		GrossEarningAllocation.Calculate(20000.01m, earningRules);
 
 		var version = new SalaryStructureTemplateVersion(
 			GuidGenerator.Create(),

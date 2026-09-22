@@ -147,7 +147,9 @@ Finalized employees are excluded before recalculation.
 
 Salary structure templates are tenant-scoped, versioned calculation definitions.
 Exactly one Basic earning is required, while an explicitly designated balancing earning is optional.
-Without a balancing earning, rounded earnings must exactly reconcile to gross; `HR:Payroll:SalaryTemplateAllocationMismatch` includes gross, allocated earnings, difference, and a readable explanation.
+Underlying earnings must allocate gross before rounding; `HR:Payroll:SalaryTemplateAllocationMismatch` includes gross, allocated earnings, difference, and a readable explanation.
+Salary generation and payroll share `GrossEarningAllocation`, evaluating earning dependencies at decimal precision and distributing fractional paise by largest remainder, with ties ordered by ordinary earnings before Basic and then component ID.
+Fixed monthly inputs are normalized to two decimals, attendance is applied once, and deductions use finalized earnings.
 Basic at 100 percent with PF does not require Special Allowance, and ESI remains system-managed.
 Active versions are immutable and carry a default quote basis, protection policy, PF applicability, and PF rule.
 The calculate endpoint accepts Gross, Take-home, or Employer Cost, an effective month, a protection policy, and optional employee context.
@@ -156,7 +158,15 @@ It returns earnings, employee deductions, employer contributions, ESI coverage a
 The settings list returns Active, Needs setup, and Archived templates to Salary Template View users.
 `GET /api/payroll/salary-templates/component-catalog` returns active tenant earning and deduction components to Salary Template View users.
 `POST /api/payroll/salary-templates` creates a complete active template, and `PUT /api/payroll/salary-templates/{id}` atomically creates the next active immutable version.
-Each save carries an idempotency key, expected active version, and concurrency stamp.
+`POST /api/payroll/salary-templates/preview` accepts current rules, salary basis, protection policy, monthly amount, effective month, PF selection, and optional template/version/concurrency context under Salary Templates View permission.
+It is employee-independent and does not persist templates, versions, employee structures, or payroll records.
+It returns `isSample`, `calculation`, `previewToken`, and `expiresAt`.
+Each create/update carries `previewToken`, `sampleMonthlyAmount`, `sampleEffectiveMonth`, an idempotency key, expected active version, and concurrency stamp.
+The protected preview expires after 30 minutes and binds tenant, user, normalized inputs, version context, and calculation results.
+Save recalculates using current configuration and rejects a missing, changed, mismatched, or expired preview with `SalaryTemplatePreviewRequired`, `SalaryTemplatePreviewChanged`, or `SalaryTemplatePreviewExpired` under the `HR:Payroll:` prefix.
+Completed idempotent retries retain their result and require a proof bound to the same identity and inputs, without requiring an unexpired preview.
+Name and description changes do not invalidate the calculation proof.
+A successful sample establishes validity only for its amount and effective month; employee salary generation still validates actual compensation and eligibility.
 The first valid template becomes the tenant default, and archiving the default requires a replacement.
 Payroll preview recalculates employee PF from prorated eligible wages and Gujarat professional tax from actual monthly gross.
 Payroll preview evaluates ESI independently from salary templates after the tenant activates its establishment profile.

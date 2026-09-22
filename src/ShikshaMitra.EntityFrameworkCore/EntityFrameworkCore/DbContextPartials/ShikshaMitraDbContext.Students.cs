@@ -41,12 +41,17 @@ public partial class ShikshaMitraDbContext
     public DbSet<EntranceExamSlot> EntranceExamSlots { get; set; }
 	public DbSet<DocumentType> DocumentTypes { get; set; }
 	public DbSet<AdmissionCycle> AdmissionCycles { get; set; }
+	public DbSet<AdmissionCycleHistory> AdmissionCycleHistories { get; set; }
 	public DbSet<AdmissionCampus> AdmissionCampuses { get; set; }
 	public DbSet<AdmissionOffering> AdmissionOfferings { get; set; }
+	public DbSet<AdmissionReferenceSequence> AdmissionReferenceSequences { get; set; }
 	public DbSet<AdmissionInquiry> AdmissionInquiries { get; set; }
 	public DbSet<AdmissionWorkflowDefinition> AdmissionWorkflowDefinitions { get; set; }
 	public DbSet<AdmissionWorkflowStageDefinition> AdmissionWorkflowStageDefinitions { get; set; }
 	public DbSet<AdmissionWorkflowTransitionDefinition> AdmissionWorkflowTransitionDefinitions { get; set; }
+	public DbSet<AdmissionWorkflowGovernanceSetting> AdmissionWorkflowGovernanceSettings { get; set; }
+	public DbSet<AdmissionWorkflowGovernanceHistory> AdmissionWorkflowGovernanceHistories { get; set; }
+	public DbSet<AdmissionWorkflowNotification> AdmissionWorkflowNotifications { get; set; }
 	public DbSet<AdmissionFormDefinition> AdmissionFormDefinitions { get; set; }
 	public DbSet<AdmissionFormSectionDefinition> AdmissionFormSectionDefinitions { get; set; }
 	public DbSet<AdmissionFormFieldDefinition> AdmissionFormFieldDefinitions { get; set; }

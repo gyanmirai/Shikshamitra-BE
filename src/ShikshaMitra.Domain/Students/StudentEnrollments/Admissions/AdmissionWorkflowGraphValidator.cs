@@ -81,6 +81,14 @@ public class AdmissionWorkflowGraphValidator : DomainService
 
 		foreach (var stage in stages)
 		{
+			if (stage.IsRequired && stage.AllowManualSkip)
+			{
+				issues.Add(Error(
+					AdmissionWorkflowErrorCodes.RequiredStageCannotAllowSkip,
+					$"Required stage '{stage.Name}' cannot allow an ordinary manual skip. Use the emergency override when an exception is necessary.",
+					stage.Id));
+			}
+
 			var metadata = AdmissionWorkflowStageTypeRegistry.Find(stage.StageType);
 			if (metadata == null)
 			{
@@ -100,10 +108,9 @@ public class AdmissionWorkflowGraphValidator : DomainService
 
 			if (!metadata.IsRuntimeReady)
 			{
-				issues.Add(new AdmissionWorkflowValidationIssue(
+				issues.Add(Error(
 					AdmissionWorkflowErrorCodes.RuntimeHandlerUnavailable,
-					$"Stage '{stage.Name}' can be configured, but its runtime handler is not available yet.",
-					AdmissionWorkflowValidationSeverity.Warning,
+					$"Stage '{stage.Name}' cannot be published because its runtime handler is not available yet.",
 					stage.Id));
 			}
 
@@ -129,6 +136,18 @@ public class AdmissionWorkflowGraphValidator : DomainService
 			issues.Add(Error(AdmissionWorkflowErrorCodes.DuplicateDefaultTransition, "A stage can have only one default transition.", defaults.Key, defaults.First().Id));
 		}
 
+		foreach (var duplicatePriority in transitions
+			.Where(transition => !transition.IsDefault)
+			.GroupBy(transition => new { transition.FromStageId, transition.Priority })
+			.Where(group => group.Count() > 1))
+		{
+			issues.Add(Error(
+				AdmissionWorkflowErrorCodes.DuplicateTransitionPriority,
+				$"Conditional routes leaving this stage must use unique priorities. Priority {duplicatePriority.Key.Priority} is used more than once.",
+				duplicatePriority.Key.FromStageId,
+				duplicatePriority.First().Id));
+		}
+
 		foreach (var transition in transitions)
 		{
 			if (!stageIds.Contains(transition.FromStageId) || !stageIds.Contains(transition.ToStageId))
@@ -146,6 +165,16 @@ public class AdmissionWorkflowGraphValidator : DomainService
 			if (transition.IsDefault && !string.IsNullOrWhiteSpace(transition.ConditionRuleJson))
 			{
 				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidCondition, "A default transition cannot also have a condition.", transition.FromStageId, transition.Id));
+			}
+
+			if (!transition.IsDefault && string.IsNullOrWhiteSpace(transition.ConditionRuleJson))
+			{
+				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidCondition, "A conditional transition requires a condition. Otherwise, make it the default route.", transition.FromStageId, transition.Id));
+			}
+
+			if (transition.Priority < 0)
+			{
+				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidTransition, "Transition priority cannot be negative.", transition.FromStageId, transition.Id));
 			}
 
 			ValidateCondition(transition, issues);
@@ -231,24 +260,45 @@ public class AdmissionWorkflowGraphValidator : DomainService
 		AdmissionWorkflowStageTypeMetadata metadata,
 		ICollection<AdmissionWorkflowValidationIssue> issues)
 	{
-		if (stage.StageType == AdmissionWorkflowStageType.Inquiry)
+		try
 		{
-			try { AdmissionInquiryPolicy.Read(stage.ConfigurationJson); }
-			catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+			switch (stage.StageType)
 			{
-				issues.Add(Error(AdmissionInquiryManagementErrorCodes.InvalidPolicy, exception.Message, stage.Id));
-				return;
+				case AdmissionWorkflowStageType.Inquiry:
+					AdmissionInquiryPolicy.Read(stage.ConfigurationJson);
+					break;
+				case AdmissionWorkflowStageType.Form:
+					AdmissionFormStagePolicy.Read(stage.ConfigurationJson);
+					break;
+				case AdmissionWorkflowStageType.Assessment:
+					AdmissionAssessmentPolicy.Read(stage.ConfigurationJson);
+					break;
+				case AdmissionWorkflowStageType.Eligibility:
+					AdmissionEligibilityPolicy.Read(stage.ConfigurationJson);
+					break;
+				case AdmissionWorkflowStageType.DocumentVerification:
+					AdmissionDocumentPolicy.Read(stage.ConfigurationJson);
+					break;
+				case AdmissionWorkflowStageType.Review:
+					AdmissionReviewPolicy.Read(stage.ConfigurationJson);
+					break;
+				case AdmissionWorkflowStageType.Payment:
+					AdmissionPaymentStagePolicy.Read(stage.ConfigurationJson);
+					break;
+				case AdmissionWorkflowStageType.Offer:
+					AdmissionOfferStagePolicy.Read(stage.ConfigurationJson);
+					break;
+				case AdmissionWorkflowStageType.Seat:
+					AdmissionSeatStagePolicy.Read(stage.ConfigurationJson);
+					break;
 			}
 		}
-		if (stage.StageType == AdmissionWorkflowStageType.Assessment)
+		catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
 		{
-			try { AdmissionAssessmentPolicy.Read(stage.ConfigurationJson); }
-			catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
-			{
-				issues.Add(Error(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message, stage.Id));
-				return;
-			}
+			issues.Add(Error(ManagedPolicyErrorCode(stage.StageType), exception.Message, stage.Id));
+			return;
 		}
+
 		if (string.IsNullOrWhiteSpace(stage.ConfigurationJson))
 		{
 			if (metadata.SupportedConfiguration.Count > 0 && !UsesOptionalManagedConfiguration(stage.StageType))
@@ -261,24 +311,6 @@ public class AdmissionWorkflowGraphValidator : DomainService
 
 		try
 		{
-			if (stage.StageType == AdmissionWorkflowStageType.Eligibility)
-			{
-				try { AdmissionEligibilityPolicy.Read(stage.ConfigurationJson); }
-				catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
-				{
-					issues.Add(Error(AdmissionEligibilityErrorCodes.InvalidPolicy, exception.Message, stage.Id));
-					return;
-				}
-			}
-			if (stage.StageType == AdmissionWorkflowStageType.DocumentVerification)
-			{
-				try { AdmissionDocumentPolicy.Read(stage.ConfigurationJson); }
-				catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
-				{
-					issues.Add(Error(AdmissionDocumentErrorCodes.InvalidPolicy, exception.Message, stage.Id));
-					return;
-				}
-			}
 			using var document = JsonDocument.Parse(stage.ConfigurationJson);
 			if (document.RootElement.ValueKind != JsonValueKind.Object)
 			{
@@ -299,6 +331,20 @@ public class AdmissionWorkflowGraphValidator : DomainService
 			issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidTransition, $"Stage '{stage.Name}' has invalid configuration JSON.", stage.Id));
 		}
 	}
+
+	private static string ManagedPolicyErrorCode(AdmissionWorkflowStageType type) => type switch
+	{
+		AdmissionWorkflowStageType.Inquiry => AdmissionInquiryManagementErrorCodes.InvalidPolicy,
+		AdmissionWorkflowStageType.Form => AdmissionFormStageErrorCodes.InvalidPolicy,
+		AdmissionWorkflowStageType.Assessment => AdmissionAssessmentErrorCodes.InvalidPolicy,
+		AdmissionWorkflowStageType.Eligibility => AdmissionEligibilityErrorCodes.InvalidPolicy,
+		AdmissionWorkflowStageType.DocumentVerification => AdmissionDocumentErrorCodes.InvalidPolicy,
+		AdmissionWorkflowStageType.Review => AdmissionReviewErrorCodes.InvalidPolicy,
+		AdmissionWorkflowStageType.Payment => AdmissionPaymentStageErrorCodes.InvalidPolicy,
+		AdmissionWorkflowStageType.Offer => AdmissionOfferStageErrorCodes.InvalidPolicy,
+		AdmissionWorkflowStageType.Seat => AdmissionSeatStageErrorCodes.InvalidPolicy,
+		_ => AdmissionWorkflowErrorCodes.InvalidTransition
+	};
 
 	private static bool UsesOptionalManagedConfiguration(AdmissionWorkflowStageType type) => type is
 		AdmissionWorkflowStageType.Inquiry or AdmissionWorkflowStageType.Assessment or

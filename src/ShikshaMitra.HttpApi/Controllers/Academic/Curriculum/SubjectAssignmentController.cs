@@ -48,6 +48,7 @@ public class SubjectAssignmentController(
 	/// <param name="status">Optional assignment status filter. Defaults to Published when omitted.</param>
 	/// <param name="includeArchived">Return every status, including archived, when no status filter is supplied.</param>
 	/// <param name="teacherSearch">Optional primary teacher name search.</param>
+	/// <param name="divisionId">Optional division used to scope teacher-subject allocations.</param>
 	/// <returns>Paginated list of assignment groups</returns>
 	/// <response code="200">Subject assignments fetched</response>
 	[HttpGet("{standardId}/subject-assignments")]
@@ -58,7 +59,8 @@ public class SubjectAssignmentController(
 		[FromQuery] int pageSize = 10,
 		[FromQuery] SubjectStatus? status = null,
 		[FromQuery] bool includeArchived = false,
-		[FromQuery] string? teacherSearch = null
+		[FromQuery] string? teacherSearch = null,
+		[FromQuery] Guid? divisionId = null
 	)
 	{
 		var result = await subjectAssignmentAppService.GetListAsync(
@@ -67,7 +69,8 @@ public class SubjectAssignmentController(
 			pageSize,
 			status,
 			includeArchived,
-			teacherSearch
+			teacherSearch,
+			divisionId
 		);
 
 		return Result.Success(result);
@@ -86,6 +89,17 @@ public class SubjectAssignmentController(
 	public async Task<Result<SubjectAssignmentDto>> GetAsync([FromRoute] Guid assignmentId)
 	{
 		var result = await subjectAssignmentAppService.GetAsync(assignmentId);
+		return Result.Success(result);
+	}
+
+	/// <summary>Gets the saved lecture schedule for a subject assignment across divisions.</summary>
+	[HttpGet("subject-assignments/{assignmentId}/schedule-breakdown")]
+	[ProducesResponseType(typeof(SubjectScheduleBreakdownDto), 200)]
+	[ProducesResponseType(404)]
+	public async Task<Result<SubjectScheduleBreakdownDto>> GetScheduleBreakdownAsync(
+		[FromRoute] Guid assignmentId)
+	{
+		var result = await subjectAssignmentAppService.GetScheduleBreakdownAsync(assignmentId);
 		return Result.Success(result);
 	}
 

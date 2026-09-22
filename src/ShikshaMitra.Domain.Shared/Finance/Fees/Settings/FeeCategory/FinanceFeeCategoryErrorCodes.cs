@@ -9,4 +9,5 @@ public static class FinanceFeeCategoryErrorCodes
 	public const string NotFound = $"{Prefix}:010003";
 	public const string DuplicateFeeHeadName = $"{Prefix}:010004";
 	public const string AtLeastOneFeeHeadRequired = $"{Prefix}:010005";
+	public const string InvalidFeeHeadReference = $"{Prefix}:010006";
 }

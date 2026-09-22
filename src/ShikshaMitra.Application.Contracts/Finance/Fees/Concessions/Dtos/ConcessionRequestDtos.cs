@@ -16,6 +16,8 @@ public class CreateConcessionRequestDto
 {
 	public Guid StudentId { get; set; }
 	public Guid? StudentFeeStructureId { get; set; }
+	public Guid ConcessionPolicyId { get; set; }
+	public Guid ConcessionPolicyVersionId { get; set; }
 	public Guid ConcessionTypeId { get; set; }
 	public Guid? SourceRequestId { get; set; }
 	public string? IdempotencyKey { get; set; }
@@ -301,6 +303,8 @@ public class ConcessionRequestPreviewInputDto
 {
 	public Guid StudentId { get; set; }
 	public Guid? StudentFeeStructureId { get; set; }
+	public Guid ConcessionPolicyId { get; set; }
+	public Guid ConcessionPolicyVersionId { get; set; }
 	public Guid ConcessionTypeId { get; set; }
 	public List<FeeHeadConcessionDto> FeeHeadConcessions { get; set; } = [];
 }
@@ -351,11 +355,24 @@ public class ConcessionRequestContextDto
 	public string StudentName { get; set; } = string.Empty;
 	public Guid StudentFeeStructureId { get; set; }
 	public string FeeStructureName { get; set; } = string.Empty;
+	public string Currency { get; set; } = "INR";
+	public bool AssignmentSelectionRequired { get; set; }
+	public List<ConcessionAssignmentOptionDto> Assignments { get; set; } = [];
+	public List<string> Blockers { get; set; } = [];
+	public List<ConcessionEligibleFeeHeadDto> FeeHeads { get; set; } = [];
+	public List<ConcessionEligibleDueFeeDto> EligibleDueFees { get; set; } = [];
+	public List<ConcessionPolicyOptionDto> ConcessionPolicies { get; set; } = [];
+	public List<ConcessionTypeOptionDto> ConcessionTypes { get; set; } = [];
+}
+
+public class ConcessionPolicyOptionDto
+{
 	public Guid ConcessionPolicyId { get; set; }
 	public Guid ConcessionPolicyVersionId { get; set; }
-	public string ConcessionPolicyName { get; set; } = string.Empty;
-	public string ConcessionPolicyCode { get; set; } = string.Empty;
-	public int ConcessionPolicyVersion { get; set; }
+	public string PolicyName { get; set; } = string.Empty;
+	public string PolicyCode { get; set; } = string.Empty;
+	public int Version { get; set; }
+	public bool IsDefault { get; set; }
 	public string ValueSource { get; set; } = string.Empty;
 	public string CalculationMethod { get; set; } = string.Empty;
 	public decimal? PercentageValue { get; set; }
@@ -364,13 +381,6 @@ public class ConcessionRequestContextDto
 	public decimal? MaximumFixedAmount { get; set; }
 	public string ApplyOn { get; set; } = string.Empty;
 	public string RoundingMethod { get; set; } = string.Empty;
-	public string Currency { get; set; } = "INR";
-	public bool AssignmentSelectionRequired { get; set; }
-	public List<ConcessionAssignmentOptionDto> Assignments { get; set; } = [];
-	public List<string> Blockers { get; set; } = [];
-	public List<ConcessionEligibleFeeHeadDto> FeeHeads { get; set; } = [];
-	public List<ConcessionEligibleDueFeeDto> EligibleDueFees { get; set; } = [];
-	public List<ConcessionTypeOptionDto> ConcessionTypes { get; set; } = [];
 }
 
 public class ConcessionEligibleFeeHeadDto

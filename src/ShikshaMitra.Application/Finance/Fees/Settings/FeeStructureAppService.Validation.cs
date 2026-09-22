@@ -102,6 +102,7 @@ public partial class FeeStructureAppService
 					PaymentTermVersionId = version.Id, VersionNumber = version.VersionNumber, ScheduleMode = line.ScheduleMode, IsValid = true,
 					Installments = resolved.Installments.Select(x => new ResolvedInstallmentDto
 					{
+						PaymentTermInstallmentId = x.PaymentTermInstallmentId,
 						Sequence = x.Sequence, Name = x.Name, CoverageStartDate = x.CoverageStartDate, CoverageEndDate = x.CoverageEndDate,
 						DemandDate = x.DemandDate, DueDate = x.DueDate, AllocationPercentage = x.AllocationPercentage, CalculatedAmount = x.CalculatedAmount
 					}).ToList()

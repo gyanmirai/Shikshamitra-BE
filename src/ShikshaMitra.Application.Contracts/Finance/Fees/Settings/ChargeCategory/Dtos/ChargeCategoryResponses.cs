@@ -9,6 +9,13 @@ public class ChargeCategoryResponse
     public string Name { get; set; }
     public bool IsApprovalRequired { get; set; }
     public string? Description { get; set; }
+	public Guid? IncomeCategoryId { get; set; }
+	public Guid? IncomeAccountHeadId { get; set; }
+	public string? IncomeCategoryName { get; set; }
+	public string? IncomeAccountHeadName { get; set; }
+	public bool IsAccountingReady { get; set; }
+	public bool IsActive { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
 public class PaginatedChargeCategoryResponse

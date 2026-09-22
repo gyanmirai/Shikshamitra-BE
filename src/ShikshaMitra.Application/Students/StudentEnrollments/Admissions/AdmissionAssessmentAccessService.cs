@@ -70,7 +70,7 @@ public class AdmissionAssessmentAccessService(
 		var offering = await GetOfferingAsync(offeringId);
 		var definition = await definitions.FindAsync(definitionId) ?? throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), definitionId);
 		var workflow = await workflows.FindAsync(definition.WorkflowDefinitionId);
-		if (workflow == null || workflow.Status == AdmissionWorkflowStatus.Draft)
+		if (workflow == null || !workflow.Status.IsRuntimeVersion())
 			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Assessment sessions require a published workflow version.");
 		if (workflow.Status == AdmissionWorkflowStatus.Archived && !await applications.AnyAsync(application =>
 			application.AdmissionOfferingId == offeringId && application.WorkflowDefinitionId == workflow.Id))

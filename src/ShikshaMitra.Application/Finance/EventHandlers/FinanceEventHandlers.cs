@@ -89,7 +89,7 @@ public class FeeRefundApprovedEventHandler(ILogger<FeeRefundApprovedEventHandler
     public Task HandleEventAsync(FeeRefundApprovedEto eventData)
     {
         logger.LogInformation(
-            "[Finance] Refund approved: StudentId={StudentId}, RequestId={RequestId}, Amount={Amount}",
+            "[Finance] Refund processed: StudentId={StudentId}, RequestId={RequestId}, Amount={Amount}",
             eventData.StudentId, eventData.RefundRequestId, eventData.TotalRefundAmount);
         return Task.CompletedTask;
     }

@@ -21,6 +21,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var inquiry = await GetRequiredService<IAdmissionInquiryAppService>().CreateAsync(new()
 			{
 				AdmissionCycleId = fixture.Offering.AdmissionCycleId, AdmissionOfferingId = fixture.Offering.Id,
+				BoardId = fixture.Offering.BoardId, MediumId = fixture.Offering.MediumId,
+				StandardId = fixture.Offering.StandardId,
 				ApplicantName = "Fallback Patel", ApplicantFirstName = "Fallback", ApplicantLastName = "Patel",
 				GuardianFirstName = "Meera", GuardianPhone = "9876512345", Phone = "9876512345", Source = AdmissionInquirySource.Website,
 				FormValues =

@@ -7,7 +7,6 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Timetables;
-using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -34,7 +33,6 @@ public class SubstitutionAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Room, Guid> roomRepository,
     IRepository<Employee, Guid> employeeRepository,
-    TakeAttendanceTeacherAvailabilitySyncService teacherAvailabilitySyncService,
     IRepository<AcademicYear, Guid> academicYearRepository,
     IUserScopeAccessService userScopeAccessService,
     IClassTeacherAccessService classTeacherAccessService
@@ -105,7 +103,6 @@ public class SubstitutionAppService(
     public async Task<SubstitutionDashboardDto> GetDashboardAsync(DateTimeOffset date, Guid? academicYearId = null, Guid? academicMediumId = null)
     {
         var target = NormalizeDate(date);
-        await teacherAvailabilitySyncService.SyncDateRangeAsync(target, target);
 
         var substitutions = await substitutionRepository.GetListAsync(x => x.Date == target);
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();

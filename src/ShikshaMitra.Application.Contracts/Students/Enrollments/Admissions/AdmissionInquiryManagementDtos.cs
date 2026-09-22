@@ -24,6 +24,7 @@ public class AdmissionInquiryManagementDto
 	public int ContactCount { get; set; }
 	public AdmissionInquiryQualificationOutcome? Outcome { get; set; }
 	public string? OutcomeReason { get; set; }
+	public string? OutcomeReasonCode { get; set; }
 	public DateTime? OutcomeAt { get; set; }
 	public Guid? OutcomeBy { get; set; }
 	public bool IsOverdue { get; set; }
@@ -61,6 +62,9 @@ public class AdmissionInquiryManagementCommandDto
 
 public class RecordAdmissionInquiryContactDto : AdmissionInquiryManagementCommandDto
 {
+	[Required, MaxLength(32)] public string Channel { get; set; } = string.Empty;
+	[Required, MaxLength(32)] public string Direction { get; set; } = string.Empty;
+	[Required, MaxLength(32)] public string Outcome { get; set; } = string.Empty;
 	[Required, MaxLength(1024)] public string Note { get; set; } = string.Empty;
 	public DateTimeOffset? ContactedAt { get; set; }
 }
@@ -83,6 +87,7 @@ public class CancelAdmissionInquiryFollowUpDto : CompleteAdmissionInquiryFollowU
 public class QualifyAdmissionInquiryDto : AdmissionInquiryManagementCommandDto
 {
 	public AdmissionInquiryQualificationOutcome Outcome { get; set; }
+	[MaxLength(64)] public string? ReasonCode { get; set; }
 	[Required, MaxLength(1024)] public string Reason { get; set; } = string.Empty;
 	public Guid? DuplicateOfId { get; set; }
 	public List<AdmissionInquiryQualificationAnswerDto> Answers { get; set; } = [];

@@ -39,10 +39,18 @@ public class ChargeCategoryController(
 	}
 
 	[HttpPut("{chargeCategoryId}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ChargeCategory.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ChargeCategory.Edit)]
 	public Task<ChargeCategoryResponse> UpdateAsync(Guid chargeCategoryId, [FromBody] UpdateChargeCategoryRequest input)
 	{
 		return chargeCategoryAppService.UpdateAsync(chargeCategoryId, input);
+	}
+
+	[HttpPatch("{chargeCategoryId}/status")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ChargeCategory.ChangeStatus)]
+	public Task<ChargeCategoryResponse> UpdateStatusAsync(
+		Guid chargeCategoryId, [FromBody] UpdateChargeCategoryStatusRequest input)
+	{
+		return chargeCategoryAppService.UpdateStatusAsync(chargeCategoryId, input);
 	}
 
 	[HttpDelete("{chargeCategoryId}")]

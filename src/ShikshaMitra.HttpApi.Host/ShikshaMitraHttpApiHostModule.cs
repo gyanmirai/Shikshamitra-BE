@@ -125,7 +125,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		ConfigureUrls(configuration);
 		ConfigureConventionalControllers();
 		ConfigureVirtualFileSystem(context);
-		ConfigureCors(context, configuration);
+		ConfigureCors(context, configuration, hostingEnvironment);
 
 		ConfigureFormOptions(context, configuration);
 
@@ -430,7 +430,10 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			});
 	}
 
-	private void ConfigureCors(ServiceConfigurationContext context, IConfiguration configuration)
+	private void ConfigureCors(
+		ServiceConfigurationContext context,
+		IConfiguration configuration,
+		IWebHostEnvironment hostingEnvironment)
 	{
 		context.Services.AddCors(options =>
 		{
@@ -450,10 +453,18 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 			});
 		});
 
+		var allowInsecureLocalAuth =
+			hostingEnvironment.IsDevelopment() &&
+			configuration.GetValue<bool>("AuthServer:DisableTransportSecurityRequirement");
+
 		context.Services.ConfigureApplicationCookie(options =>
 		{
-			options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-			options.Cookie.SameSite = SameSiteMode.None;
+			options.Cookie.SecurePolicy = allowInsecureLocalAuth
+				? CookieSecurePolicy.SameAsRequest
+				: CookieSecurePolicy.Always;
+			options.Cookie.SameSite = allowInsecureLocalAuth
+				? SameSiteMode.Lax
+				: SameSiteMode.None;
 		});
 	}
 	private X509Certificate2 GetEncryptionCertificate(IWebHostEnvironment environment, IConfiguration config)
@@ -481,8 +492,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
 
 		QuestPDF.Settings.License = LicenseType.Community;
-
-		ConfigureSmtpPassword(context.ServiceProvider);
 
 		if (env.IsDevelopment())
 		{
@@ -547,21 +556,27 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseConfiguredEndpoints();
 	}
 
-	private void ConfigureSmtpPassword(IServiceProvider serviceProvider)
+	private async Task ConfigureSmtpPasswordAsync(IServiceProvider serviceProvider)
 	{
 		var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-		var smtpPassword = configuration["Settings:Abp.Mailing.Smtp.Password"];
+		var smtpPassword = configuration["Settings:SmtpPassword"];
 		if (!string.IsNullOrEmpty(smtpPassword))
 		{
 			var settingManager = serviceProvider.GetService<SettingManager>();
-			settingManager?.SetGlobalAsync(EmailSettingNames.Smtp.Password, smtpPassword);
+			if (settingManager is not null)
+			{
+				await settingManager.SetGlobalAsync(EmailSettingNames.Smtp.Password, smtpPassword);
+			}
 		}
 	}
 
 	public override async Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
 	{
 		OnApplicationInitialization(context);
+		await ConfigureSmtpPasswordAsync(context.ServiceProvider);
 		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
+		await context.AddBackgroundWorkerAsync<AdmissionCycleScheduleWorker>();
+		await context.AddBackgroundWorkerAsync<AdmissionWorkflowScheduleWorker>();
 		await context.AddBackgroundWorkerAsync<ExamAutoCompleteWorker>();
 		await context.AddBackgroundWorkerAsync<HrDashboardPreviewRefreshWorker>();
 		await context.AddBackgroundWorkerAsync<StudentDashboardPreviewRefreshWorker>();

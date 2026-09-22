@@ -201,8 +201,9 @@ public DueFee(
 
 	/// <summary>
 	/// A Payment Term row is created as an immutable schedule snapshot when the
-	/// structure is assigned, but it becomes a collectable bill only on its
-	/// demand date. Legacy rows remain immediately collectable.
+	/// structure is assigned, but it becomes a generated bill only on its demand
+	/// date. A scheduled row may still accept an explicitly allocated advance payment.
+	/// Legacy rows remain generated immediately.
 	/// </summary>
 	public bool IsBillGeneratedOn(DateTime date) =>
 		ScheduleSource == ScheduleSource.Legacy || !DemandDate.HasValue || DemandDate.Value.Date <= date.Date;
@@ -250,6 +251,20 @@ public DueFee(
 				.WithData("Available", available);
 
 		RefundedAmount += amount;
+		RecalculateBalancesAndStatus();
+	}
+
+	public void ReverseRefund(decimal amount)
+	{
+		if (amount <= 0m)
+			throw new BusinessException(DueFeeErrorCodes.ReverseAmountMustBePositive)
+				.WithData("Amount", amount);
+		if (amount > RefundedAmount)
+			throw new BusinessException(DueFeeErrorCodes.ReverseExceedsPaidAmount)
+				.WithData("Requested", amount)
+				.WithData("Available", RefundedAmount);
+
+		RefundedAmount -= amount;
 		RecalculateBalancesAndStatus();
 	}
 

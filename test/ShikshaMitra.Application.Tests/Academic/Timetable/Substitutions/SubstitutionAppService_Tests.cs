@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using Shouldly;
 using Volo.Abp;
@@ -17,6 +18,8 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
 {
     private readonly ISubstitutionAppService _substitutionAppService;
     private readonly IRepository<SubstitutionRequest, Guid> _substitutionRepository;
+    private readonly IRepository<TeacherAvailability, Guid> _availabilityRepository;
+    private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
     private readonly IRepository<Employee, Guid> _employeeRepository;
     private readonly IRepository<IdentityRole, Guid> _roleRepository;
     private readonly IRepository<IdentityUser, Guid> _identityUserRepository;
@@ -26,10 +29,34 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
     {
         _substitutionAppService = GetRequiredService<ISubstitutionAppService>();
         _substitutionRepository = GetRequiredService<IRepository<SubstitutionRequest, Guid>>();
+        _availabilityRepository = GetRequiredService<IRepository<TeacherAvailability, Guid>>();
+        _employeeAttendanceRepository = GetRequiredService<IEmployeeAttendanceRepository>();
         _employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
         _roleRepository = GetRequiredService<IRepository<IdentityRole, Guid>>();
         _identityUserRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
         _currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
+    }
+
+    [Fact]
+    public async Task GetDashboardAsync_Should_Not_Create_Availability_From_Attendance()
+    {
+        var employee = await CreateEmployeeAsync(Guid.NewGuid(), "Dashboard", "Teacher");
+        var attendanceDate = new DateOnly(2026, 9, 18);
+        await _employeeAttendanceRepository.InsertAsync(
+            new EmployeeAttendance
+            {
+                EmployeeId = employee.Id,
+                AttendanceDate = attendanceDate,
+                StatusType = EmployeeAttendanceStatusType.FullDayLeave,
+                Source = AttendanceRecordSource.Manual,
+                Remarks = "Approved leave"
+            },
+            autoSave: true);
+
+        await _substitutionAppService.GetDashboardAsync(
+            new DateTimeOffset(attendanceDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero));
+
+        (await _availabilityRepository.GetCountAsync()).ShouldBe(0);
     }
 
     [Fact]

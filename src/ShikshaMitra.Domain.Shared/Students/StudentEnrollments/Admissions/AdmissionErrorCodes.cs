@@ -7,6 +7,11 @@ public static class AdmissionErrorCodes
 	public const string CycleDateRangeInvalid = "Admissions.CycleDateRangeInvalid";
 	public const string CycleOutsideAcademicYear = "Admissions.CycleOutsideAcademicYear";
 	public const string CycleConcurrencyConflict = "Admissions.CycleConcurrencyConflict";
+	public const string CycleHasActiveOfferings = "Admissions.CycleHasActiveOfferings";
+	public const string CycleDeleteNotAllowed = "Admissions.CycleDeleteNotAllowed";
+	public const string CycleReopenDateExpired = "Admissions.CycleReopenDateExpired";
+	public const string CycleReasonRequired = "Admissions.CycleReasonRequired";
+	public const string CycleScheduleInvalid = "Admissions.CycleScheduleInvalid";
 	public const string OfferingDateRangeInvalid = "Admissions.OfferingDateRangeInvalid";
 	public const string OfferingDuplicate = "Admissions.OfferingDuplicate";
 	public const string OfferingCycleNotFound = "Admissions.OfferingCycleNotFound";

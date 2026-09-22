@@ -27,6 +27,7 @@ public class AdmissionApplicationLifecycleService(
 	IRepository<AdmissionFormFieldValue, Guid> valueRepository,
 	IRepository<AdmissionFormChangeHistory, Guid> historyRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository,
+	IAdmissionReferenceSequenceRepository referenceSequenceRepository,
 	AdmissionOfferingRuntimeService offeringRuntimeService,
 	AdmissionInquiryRuntimeService inquiryRuntime,
 	AdmissionWorkflowStageHandlerRegistry stageHandlerRegistry)
@@ -44,11 +45,16 @@ public class AdmissionApplicationLifecycleService(
 		await inquiryRuntime.EnsureCanStartApplicationAsync(offering.Id, inquiry);
 		var workflow = await workflowRepository.FindAsync(offering.WorkflowDefinitionId!.Value);
 		var form = await formRepository.FindAsync(offering.ApplicationFormDefinitionId!.Value);
-		if (workflow?.Status != AdmissionWorkflowStatus.Published || form?.Status != AdmissionFormStatus.Published)
+		if (workflow == null || !workflow.Status.IsRuntimeVersion() || form?.Status != AdmissionFormStatus.Published)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
 
+		var referenceYear = Clock.Now.ToUniversalTime().Year;
+		var applicationNumber = AdmissionReferenceNumber.Format(
+			AdmissionReferenceKind.Application,
+			referenceYear,
+			await referenceSequenceRepository.IncrementAndGetAsync(referenceYear, AdmissionReferenceKind.Application));
 		var application = new AdmissionApplication(
-			GuidGenerator.Create(), CurrentTenant.Id, CreateApplicationNumber(), applicantId, inquiryId,
+			GuidGenerator.Create(), CurrentTenant.Id, applicationNumber, applicantId, inquiryId,
 			offering.AdmissionCycleId, offeringId, workflow.Id, form.Id);
 		var workflowInstance = new AdmissionApplicationWorkflowInstance(
 			GuidGenerator.Create(), CurrentTenant.Id, application.Id, workflow.Id);
@@ -180,5 +186,4 @@ public class AdmissionApplicationLifecycleService(
 			"ApplicationStarted", "Application started", application.ApplicantId, application.Id, inquiryId), true);
 	}
 
-	private string CreateApplicationNumber() => $"APP/{DateTime.UtcNow:yyyy}/{GuidGenerator.Create():N}"[..20];
 }

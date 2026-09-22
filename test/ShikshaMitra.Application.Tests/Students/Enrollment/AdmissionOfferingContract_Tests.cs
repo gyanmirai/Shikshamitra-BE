@@ -35,13 +35,63 @@ public class AdmissionOfferingContract_Tests
 		new BulkCreateAdmissionOfferingsDtoValidator().Validate(input).IsValid.ShouldBeFalse();
 	}
 
+	[Fact]
+	public void Incomplete_configuration_can_be_saved_inactive_but_cannot_be_activated()
+	{
+		var validation = new AdmissionOfferingValidationResult(
+			[new AdmissionOfferingValidationError(
+				AdmissionOfferingValidationCodes.WorkflowMissing,
+				"Published Admission Workflow is required.")]);
+
+		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: false).ShouldBeTrue();
+		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: true).ShouldBeFalse();
+	}
+
+	[Theory]
+	[InlineData(AdmissionOfferingConfigurationStatus.Incomplete, false)]
+	[InlineData(AdmissionOfferingConfigurationStatus.Ready, true)]
+	public void Offering_contract_exposes_activation_readiness(
+		AdmissionOfferingConfigurationStatus status,
+		bool expected)
+	{
+		new AdmissionOfferingListDto { ConfigurationStatus = status }.CanActivate.ShouldBe(expected);
+	}
+
+	[Fact]
+	public void Invalid_scope_cannot_be_saved_even_when_inactive()
+	{
+		var validation = new AdmissionOfferingValidationResult(
+			[new AdmissionOfferingValidationError(
+				AdmissionOfferingValidationCodes.HierarchyInvalid,
+				"The academic hierarchy is invalid.")]);
+
+		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: false).ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Offering_actions_are_exposed_through_only_view_add_and_delete_permissions()
+	{
+		ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.All.ShouldBe([
+			ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View,
+			ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add,
+			ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Delete
+		]);
+		ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Clone
+			.ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
+		ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Deactivate
+			.ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Delete);
+	}
+
 	[Theory]
 	[InlineData(nameof(AdmissionOfferingAppService.CreateAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Create)]
 	[InlineData(nameof(AdmissionOfferingAppService.UpdateAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Edit)]
 	[InlineData(nameof(AdmissionOfferingAppService.ActivateAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Activate)]
+	[InlineData(nameof(AdmissionOfferingAppService.DeactivateAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Deactivate)]
 	[InlineData(nameof(AdmissionOfferingAppService.DeleteAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Delete)]
+	[InlineData(nameof(AdmissionOfferingAppService.CloneAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Clone)]
+	[InlineData(nameof(AdmissionOfferingAppService.ValidateAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Validate)]
 	[InlineData(nameof(AdmissionOfferingAppService.BulkCreateAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.BulkCreate)]
-	public void Command_endpoints_require_granular_permission(string methodName, string permission)
+	public void Command_endpoints_require_the_expected_three_permission_alias(string methodName, string permission)
 	{
 		var method = typeof(AdmissionOfferingAppService).GetMethods().Single(value => value.Name == methodName);
 

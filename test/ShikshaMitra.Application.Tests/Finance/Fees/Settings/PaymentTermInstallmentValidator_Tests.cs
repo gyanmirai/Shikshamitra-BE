@@ -57,6 +57,23 @@ public class PaymentTermInstallmentValidator_Tests
 			BoardEnd));
 	}
 
+	[Fact]
+	public void Due_Date_Outside_Board_Period_Is_Rejected()
+	{
+		var installments = BuildInstallments(BoardStart, BoardEnd);
+		installments[0].DueDate = BoardEnd.AddDays(1);
+
+		var exception = Should.Throw<BusinessException>(() =>
+			PaymentTermInstallmentValidator.PrepareAndValidate(
+				DemandGenerationRule.OnInstallmentStartDate,
+				null,
+				installments,
+				BoardStart,
+				BoardEnd));
+
+		exception.Code.ShouldBe(PaymentTermErrorCodes.InstallmentDateOutsideBoardPeriod);
+	}
+
 	private static List<CreatePaymentTermInstallmentDto> BuildInstallments(DateTime start, DateTime end) =>
 	[
 		new()

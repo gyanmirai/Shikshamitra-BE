@@ -11,7 +11,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [Authorize]
 public class AdmissionWorkflowAppService(
 	AdmissionWorkflowReadService readService,
-	AdmissionWorkflowCommandService commandService)
+	AdmissionWorkflowCommandService commandService,
+	AdmissionWorkflowGovernanceService governanceService)
 	: ApplicationService, IAdmissionWorkflowAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
@@ -48,6 +49,26 @@ public class AdmissionWorkflowAppService(
 	public Task<AdmissionWorkflowDto> PublishAsync(Guid id, string? concurrencyStamp = null) =>
 		commandService.PublishAsync(id, concurrencyStamp);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Publish)]
+	public Task<AdmissionWorkflowDto> PublishWithGovernanceAsync(Guid id, PublishAdmissionWorkflowDto input) =>
+		commandService.PublishWithGovernanceAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.SubmitForApproval)]
+	public Task<AdmissionWorkflowDto> SubmitForApprovalAsync(Guid id, SubmitAdmissionWorkflowDto input) =>
+		commandService.SubmitForApprovalAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Approve)]
+	public Task<AdmissionWorkflowDto> ApproveAsync(Guid id, DecideAdmissionWorkflowDto input) =>
+		commandService.ApproveAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Approve)]
+	public Task<AdmissionWorkflowDto> RejectAsync(Guid id, DecideAdmissionWorkflowDto input) =>
+		commandService.RejectAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Rollback)]
+	public Task<AdmissionWorkflowDto> CreateRollbackDraftAsync(Guid id, RollbackAdmissionWorkflowDto input) =>
+		commandService.CreateRollbackDraftAsync(id, input);
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Archive)]
 	public Task<AdmissionWorkflowDto> ArchiveAsync(Guid id, string? concurrencyStamp = null) => commandService.ArchiveAsync(id, concurrencyStamp);
 
@@ -61,4 +82,28 @@ public class AdmissionWorkflowAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public Task<IReadOnlyList<AdmissionWorkflowStageTypeMetadataDto>> GetStageTypesAsync() =>
 		Task.FromResult(readService.GetStageTypes());
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
+	public Task<AdmissionWorkflowGovernanceSettingDto> GetGovernanceSettingsAsync() =>
+		governanceService.GetSettingsAsync();
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.ManageGovernance)]
+	public Task<AdmissionWorkflowGovernanceSettingDto> UpdateGovernanceSettingsAsync(UpdateAdmissionWorkflowGovernanceSettingDto input) =>
+		governanceService.UpdateSettingsAsync(input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
+	public Task<List<AdmissionWorkflowApproverDto>> GetApproversAsync(string? filter = null) =>
+		governanceService.GetApproversAsync(filter);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
+	public Task<List<AdmissionWorkflowGovernanceHistoryDto>> GetGovernanceHistoryAsync(Guid id) =>
+		governanceService.GetHistoryAsync(id);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
+	public Task<List<AdmissionWorkflowNotificationDto>> GetNotificationsAsync(bool unreadOnly = false) =>
+		governanceService.GetNotificationsAsync(unreadOnly);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
+	public Task MarkNotificationReadAsync(Guid notificationId) =>
+		governanceService.MarkNotificationReadAsync(notificationId);
 }

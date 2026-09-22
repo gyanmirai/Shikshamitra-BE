@@ -70,6 +70,12 @@ public class FeeCategoryStatusUpdateRequestValidator : AbstractValidator<FeeCate
     public FeeCategoryStatusUpdateRequestValidator()
     {
         RuleFor(x => x.DeactivationReason)
-            .MaximumLength(500);
+            .Must(reason => !string.IsNullOrWhiteSpace(reason))
+            .When(x => !x.IsActive)
+            .WithMessage("A deactivation reason is required when a fee category is inactive.");
+
+        RuleFor(x => x.DeactivationReason)
+            .MaximumLength(500)
+            .When(x => !string.IsNullOrWhiteSpace(x.DeactivationReason));
     }
 }

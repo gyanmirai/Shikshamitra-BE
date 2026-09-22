@@ -89,6 +89,12 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		List<DocumentType> acceptedFormats,
 		bool isRequired = true)
 	{
+		EnsureDocumentNameIsUnique(documentName);
+		if (acceptedFormats is null || acceptedFormats.Count == 0)
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.InvalidDocument);
+		}
+
 		var document = new ConcessionTypeDocument(
 			Guid.NewGuid(), Id, documentName, documentSize, isRequired);
 
@@ -103,6 +109,16 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void ReplaceDocuments(
 		List<(string DocumentName, long DocumentSize, List<DocumentType> AcceptedFormats, bool IsRequired)> documents)
 	{
+		var normalizedNames = new HashSet<string>(StringComparer.Ordinal);
+		foreach (var d in documents)
+		{
+			if (d.AcceptedFormats is null || d.AcceptedFormats.Count == 0 ||
+				!normalizedNames.Add(ConcessionTypeConsts.NormalizeNameKey(d.DocumentName)))
+			{
+				throw new BusinessException(ConcessionTypeErrorCodes.InvalidDocument);
+			}
+		}
+
 		ConcessionTypeDocuments.Clear();
 		foreach (var d in documents)
 		{
@@ -113,6 +129,17 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				doc.AddAcceptedFormat(format);
 			}
 			ConcessionTypeDocuments.Add(doc);
+		}
+	}
+
+	private void EnsureDocumentNameIsUnique(string documentName)
+	{
+		var normalizedName = ConcessionTypeConsts.NormalizeNameKey(documentName);
+		if (string.IsNullOrWhiteSpace(normalizedName) ||
+			ConcessionTypeDocuments.Any(document =>
+				ConcessionTypeConsts.NormalizeNameKey(document.DocumentName) == normalizedName))
+		{
+			throw new BusinessException(ConcessionTypeErrorCodes.InvalidDocument);
 		}
 	}
 

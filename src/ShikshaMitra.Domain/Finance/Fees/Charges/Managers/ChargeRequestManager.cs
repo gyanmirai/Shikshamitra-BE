@@ -35,7 +35,7 @@ public class ChargeRequestManager(
 		Guid requestorId,
 		string? additionalNotes = null)
 	{
-		var category = await GetActiveCategoryAsync(chargeCategoryId);
+		var category = await GetActiveCategoryAsync(chargeCategoryId, academicYearId);
 		var studentIds = await audienceResolver.ResolveAsync(audience, academicYearId);
 		var initialStatus = category.IsApprovalRequired ? ChargeStatus.Pending : ChargeStatus.Approved;
 
@@ -58,7 +58,7 @@ public class ChargeRequestManager(
 		await chargeRequestRepository.InsertAsync(request, autoSave: false);
 
 		var lines = await CreateLinesAsync(
-			request, studentIds, initialStatus, requestorId, autoApprove: !category.IsApprovalRequired);
+			request, studentIds, initialStatus, requestorId, category, autoApprove: !category.IsApprovalRequired);
 
 		logger.LogInformation(
 			"Charge request created: RequestId={RequestId}, LineCount={LineCount}, Status={Status}",
@@ -75,7 +75,7 @@ public class ChargeRequestManager(
 		Guid? chargeCategoryId,
 		string? purposeDescription,
 		decimal? amount,
-		DateTime? dueDate,
+		DateTimeOffset? dueDate,
 		ChargePriority? priority,
 		string? additionalNotes,
 		Guid academicYearId)
@@ -113,7 +113,7 @@ public class ChargeRequestManager(
 			additionalNotes,
 			audienceSnapshot);
 
-		var category = await chargeCategoryRepository.GetAsync(request.ChargeCategoryId);
+		var category = await GetActiveCategoryAsync(request.ChargeCategoryId, academicYearId);
 		var existingStudentIds = existingLines.Select(l => l.StudentId).ToHashSet();
 		var newStudentIds = resolvedIds.Where(id => !existingStudentIds.Contains(id)).ToList();
 
@@ -123,6 +123,7 @@ public class ChargeRequestManager(
 			newStudentIds,
 			initialStatus,
 			request.RequestorId,
+			category,
 			autoApprove: !category.IsApprovalRequired);
 
 		foreach (var line in existingLines.Where(l => l.Status == ChargeStatus.Pending))
@@ -134,6 +135,8 @@ public class ChargeRequestManager(
 				request.DueDate,
 				request.Priority,
 				request.AdditionalNotes);
+			if (category.IncomeCategoryId.HasValue && category.IncomeAccountHeadId.HasValue)
+				line.SetAccountingSnapshot(category.IncomeCategoryId.Value, category.IncomeAccountHeadId.Value);
 		}
 
 		if (!category.IsApprovalRequired)
@@ -186,6 +189,7 @@ public class ChargeRequestManager(
 		IReadOnlyList<Guid> studentIds,
 		ChargeStatus initialStatus,
 		Guid requestorId,
+		ChargeCategory category,
 		bool autoApprove)
 	{
 		var lines = new List<Charge>();
@@ -237,6 +241,10 @@ public class ChargeRequestManager(
 				initialStatus,
 				requestorId,
 				request.AdditionalNotes);
+			if (!category.IncomeCategoryId.HasValue || !category.IncomeAccountHeadId.HasValue)
+				throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryAccountingNotConfigured)
+					.WithData("ChargeCategoryId", category.Id);
+			line.SetAccountingSnapshot(category.IncomeCategoryId.Value, category.IncomeAccountHeadId.Value);
 
 			if (autoApprove)
 			{
@@ -250,7 +258,7 @@ public class ChargeRequestManager(
 		return lines;
 	}
 
-	private async Task<ChargeCategory> GetActiveCategoryAsync(Guid chargeCategoryId)
+	private async Task<ChargeCategory> GetActiveCategoryAsync(Guid chargeCategoryId, Guid academicYearId)
 	{
 		var category = await chargeCategoryRepository.FindAsync(chargeCategoryId)
 			?? throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryNotFound)
@@ -260,6 +268,13 @@ public class ChargeRequestManager(
 		{
 			throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryInactive)
 				.WithData("ChargeCategoryId", chargeCategoryId);
+		}
+
+		if (category.AcademicYearId != academicYearId)
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryAcademicYearMismatch)
+				.WithData("ChargeCategoryId", chargeCategoryId)
+				.WithData("AcademicYearId", academicYearId);
 		}
 
 		return category;

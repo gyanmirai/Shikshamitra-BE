@@ -138,14 +138,6 @@ public partial class FeeStructureAppService
 
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add);
 
-		if (input.ConcessionPolicyId != old?.ConcessionPolicyId || input.ConcessionPolicyVersionId != old?.ConcessionPolicyVersionId ||
-
-			(old != null && (input.ConcessionFeeHeadScope != old.ConcessionFeeHeadScope ||
-
-			(input.ConcessionFeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads && !input.ConcessionApplicableFeeHeadIds.Order().SequenceEqual(old.GetConcessionApplicableFeeHeadIds().Order())))))
-
-			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Add);
-
 		if (input.RefundPolicyId != old?.RefundPolicyId || input.RefundPolicyVersionId != old?.RefundPolicyVersionId)
 
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add);
@@ -166,9 +158,10 @@ public partial class FeeStructureAppService
 
 		entity.AttachCollectionPolicy(input.CollectionPolicyId, input.CollectionPolicyVersionId);
 
-		entity.AttachConcessionPolicy(input.ConcessionPolicyId, input.ConcessionPolicyVersionId,
-
-			input.ConcessionFeeHeadScope, input.ConcessionApplicableFeeHeadIds);
+		// Concession policy is selected and version-pinned by the concession request,
+		// never by the fee structure.
+		entity.AttachConcessionPolicy(
+			null, null, ConcessionFeeHeadScope.EntireFeeStructure, System.Array.Empty<Guid>());
 
 		entity.AttachRefundPolicy(input.RefundPolicyId, input.RefundPolicyVersionId);
 

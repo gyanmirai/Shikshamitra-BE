@@ -36,7 +36,9 @@ public class ClassTeacherAccessService(
 			.Select(x => x.Id)
 			.ToList();
 		var hasAssignment = employeeIds.Count > 0 &&
-			await classTeacherRepository.AnyAsync(x => employeeIds.Contains(x.TeacherId));
+			await classTeacherRepository.AnyAsync(x =>
+				employeeIds.Contains(x.TeacherId) &&
+				x.Status == ClassTeacherAssignmentStatus.Active);
 
 		await cache.SetAsync(cacheKey, new ClassTeacherAccessCacheItem { HasAssignment = hasAssignment }, CacheOptions);
 		return hasAssignment;

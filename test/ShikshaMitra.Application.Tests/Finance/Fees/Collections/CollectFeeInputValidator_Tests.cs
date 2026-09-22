@@ -18,6 +18,7 @@ public class CollectFeeInputValidator_Tests
         var feeHeadId = Guid.NewGuid();
         return new CollectFeeInput
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = Guid.NewGuid(),
             AcademicYearId = Guid.NewGuid(),
             DueFeePayments = new List<DueFeePaymentDto>
@@ -114,6 +115,23 @@ public class CollectFeeInputValidator_Tests
     }
 
     [Fact]
+    public void Should_Pass_For_LateFee_Only_Payment()
+    {
+        var input = ValidInput();
+        input.DueFeePayments = [];
+        input.LateFeePayments =
+        [
+            new LateFeePaymentDto { DueFeeId = Guid.NewGuid(), Amount = 100d },
+        ];
+        input.Payments[0].Amount = 100d;
+
+        var result = _validator.Validate(input);
+
+        var errors = string.Join("; ", result.Errors.Select(e => $"{e.PropertyName}: {e.ErrorMessage}"));
+        result.IsValid.ShouldBeTrue(errors);
+    }
+
+    [Fact]
     public void Should_Reject_Duplicate_DueFeeId()
     {
         var input = ValidInput();
@@ -186,7 +204,7 @@ public class CollectFeeInputValidator_Tests
         var result = _validator.Validate(input);
 
         result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.PropertyName == "BankReceiptConfirmed");
+        result.Errors.ShouldContain(e => e.PropertyName == "PaymentConfirmed");
     }
 
     [Theory]
@@ -230,7 +248,7 @@ public class CollectFeeInputValidator_Tests
         var result = _validator.Validate(input);
 
         result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.PropertyName == "BankReceiptConfirmed");
+        result.Errors.ShouldContain(e => e.PropertyName == "PaymentConfirmed");
     }
 
     [Fact]

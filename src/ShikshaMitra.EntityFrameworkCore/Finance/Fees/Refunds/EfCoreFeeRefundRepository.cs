@@ -32,7 +32,7 @@ public class EfCoreFeeRefundRepository(
     {
         var dbContext = await GetDbContextAsync();
         var dbSet = dbContext.Set<FeeRefundRequest>();
-        var query = dbSet.Include(r => r.Lines).AsQueryable();
+        var query = dbSet.Include(r => r.Lines).Include(r => r.Reservations).Include(r => r.Settlements).AsQueryable();
 
         if (studentId.HasValue)
             query = query.Where(r => r.StudentId == studentId.Value);
@@ -90,7 +90,57 @@ public class EfCoreFeeRefundRepository(
         var dbSet = await GetDbSetAsync();
         return await dbSet
             .Include(r => r.Lines)
+            .Include(r => r.Reservations)
+            .Include(r => r.Settlements)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+    }
+
+    public async Task<Dictionary<Guid, decimal>> GetActiveReservedAmountsAsync(
+        IReadOnlyCollection<Guid> dueFeeIds,
+        Guid? excludingRequestId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (dueFeeIds.Count == 0) return [];
+        var dbSet = await GetDbSetAsync();
+        var query = dbSet.Where(r => !excludingRequestId.HasValue || r.Id != excludingRequestId.Value)
+            .SelectMany(r => r.Reservations)
+            .Where(r => dueFeeIds.Contains(r.DueFeeId) && r.Status == FeeRefundReservationStatus.Active);
+        return await query.GroupBy(r => r.DueFeeId)
+            .ToDictionaryAsync(g => g.Key, g => g.Sum(x => x.Amount), cancellationToken);
+    }
+
+    public async Task<Dictionary<Guid, decimal>> GetCommittedAllocationAmountsAsync(
+        IReadOnlyCollection<Guid> allocationIds, Guid? excludingRequestId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (allocationIds.Count == 0) return [];
+        var dbSet = await GetDbSetAsync();
+        var requests = dbSet.Where(r => !excludingRequestId.HasValue || r.Id != excludingRequestId.Value);
+        var processed = await requests.SelectMany(r => r.Lines)
+            .Where(x => x.SourceAllocationId.HasValue && allocationIds.Contains(x.SourceAllocationId.Value))
+            .GroupBy(x => x.SourceAllocationId!.Value)
+            .Select(g => new { g.Key, Amount = g.Sum(x => x.ProcessedAmount - x.ReversedAmount) })
+            .ToDictionaryAsync(x => x.Key, x => x.Amount, cancellationToken);
+        var reserved = await requests.SelectMany(r => r.Reservations)
+            .Where(x => x.SourceAllocationId.HasValue && allocationIds.Contains(x.SourceAllocationId.Value) && x.Status == FeeRefundReservationStatus.Active)
+            .GroupBy(x => x.SourceAllocationId!.Value)
+            .Select(g => new { g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToDictionaryAsync(x => x.Key, x => x.Amount, cancellationToken);
+        foreach (var item in reserved) processed[item.Key] = processed.GetValueOrDefault(item.Key) + item.Value;
+        return processed;
+    }
+
+    public async Task<decimal> GetStudentYearCommittedAmountAsync(Guid studentId, Guid academicYearId,
+        Guid? excludingRequestId = null, CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+        var requests = dbSet.Where(r => r.StudentId == studentId && r.AcademicYearId == academicYearId &&
+            (!excludingRequestId.HasValue || r.Id != excludingRequestId.Value));
+        var processed = await requests.SumAsync(r => r.ProcessedAmount - r.ReversedAmount, cancellationToken);
+        var activeReserved = await requests.SelectMany(r => r.Reservations)
+            .Where(x => x.Status == FeeRefundReservationStatus.Active)
+            .SumAsync(x => x.Amount, cancellationToken);
+        return processed + activeReserved;
     }
 
     public override async Task<long> GetCountAsync(CancellationToken cancellationToken = default)

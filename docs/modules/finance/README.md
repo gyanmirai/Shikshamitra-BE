@@ -3,7 +3,7 @@ module: finance
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-08
+updated_on: 2026-09-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -29,6 +29,9 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 | 8 | [Collection policy end-to-end](./references/collection-policy-end-to-end.md) | Follow the target staff, frontend, backend, runtime, and rollout flow for collection policies |
 | 9 | [Refund Policy flow](./references/refund-policy-flow.md) | Review the proposed policy, receipt-linked request, approval reservation, settlement, accounting, reversal, and reporting design |
 | 10 | [Proration Policy end-to-end](./references/proration-policy-end-to-end.md) | Review the current gap and implement policy versioning, fee attachment, charge periods, demand calculation, downstream integrations, and rollout |
+| 11 | [Concession flow review](./references/concession-flow-end-to-end-review.md) | Review the current cross-stack verdict, defects, edge cases, test gaps, remediation priorities, and release gates |
+| 12 | [Charge management end to end](./references/charge-management-end-to-end.md) | Review the shipped charge, collection, receipt, source-integration flow, release gaps, target contract, and phased delivery gates |
+| 13 | [Late-fee waiver end to end](./references/late-fee-waiver-end-to-end.md) | Implement policy-governed waiver request, approval, collection, correction, audit, reporting, and adjustment separation |
 
 ## Source of truth
 
@@ -57,6 +60,9 @@ Use this table before searching code:
 | How should collection policy work end to end? | [Collection policy end-to-end](./references/collection-policy-end-to-end.md) |
 | How should Refund Policy integrate with payments, receipts, settlement, accounts, and reports? | [Refund Policy flow](./references/refund-policy-flow.md) |
 | How should Proration Policy connect fee structures, assignments, demands, and downstream Finance modules? | [Proration Policy end-to-end](./references/proration-policy-end-to-end.md) |
+| Is the current concession flow production-ready, and which scenarios must be covered? | [Concession flow review](./references/concession-flow-end-to-end-review.md) |
+| How does Charge Management connect to fee structures, policies, collections, receipts, accounts, and source modules? | [Charge management end to end](./references/charge-management-end-to-end.md) |
+| How should late-fee waiver work, and how is it different from adjustment? | [Late-fee waiver end to end](./references/late-fee-waiver-end-to-end.md) |
 
 ## Validation
 

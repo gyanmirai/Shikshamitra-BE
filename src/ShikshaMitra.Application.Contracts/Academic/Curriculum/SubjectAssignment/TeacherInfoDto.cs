@@ -16,6 +16,11 @@ public class TeacherInfoDto
 	public string Name { get; set; }
 
 	/// <summary>
+	/// Stable employee identifier shown with the teacher name to disambiguate similar names.
+	/// </summary>
+	public string? EmployeeCode { get; set; }
+
+	/// <summary>
 	/// Teacher email address from the linked employee or identity user.
 	/// </summary>
 	public string? Email { get; set; }

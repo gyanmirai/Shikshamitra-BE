@@ -19,6 +19,10 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
 
     public CollectFeeInputValidator()
     {
+        RuleFor(x => x.IdempotencyKey)
+            .NotEmpty()
+            .MaximumLength(100);
+
         RuleFor(x => x.StudentId)
             .NotEmpty();
 
@@ -46,8 +50,8 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
 
         // ── Line-level collections (At least one is required) ──────────────────
         RuleFor(x => x)
-            .Must(x => x.DueFeePayments.Count + x.ChargePayments.Count >= 1)
-            .WithMessage("At least one due fee or charge payment is required.");
+            .Must(x => x.DueFeePayments.Count + x.ChargePayments.Count + x.LateFeePayments.Count >= 1)
+            .WithMessage("At least one due fee, late fee, or charge payment is required.");
 
         RuleFor(x => x.DueFeePayments)
             .Must(x => x.Count <= 200)

@@ -13,6 +13,7 @@ public class AdmissionCycleConfiguration : IEntityTypeConfiguration<AdmissionCyc
 		builder.ConfigureByConvention();
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(AdmissionCycleConsts.MaxNameLength);
 		builder.Property(x => x.Code).IsRequired().HasMaxLength(AdmissionCycleConsts.MaxCodeLength);
+		builder.Property(x => x.Description).HasMaxLength(AdmissionCycleConsts.MaxDescriptionLength);
 		builder.Property(x => x.IsDeleted)
 			.IsRequired()
 			.ValueGeneratedNever()
@@ -22,5 +23,20 @@ public class AdmissionCycleConfiguration : IEntityTypeConfiguration<AdmissionCyc
 		builder.Property(x => x.EndDate).IsRequired();
 		builder.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Status });
+	}
+}
+
+public class AdmissionCycleHistoryConfiguration : IEntityTypeConfiguration<AdmissionCycleHistory>
+{
+	public void Configure(EntityTypeBuilder<AdmissionCycleHistory> builder)
+	{
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionCycleHistories", ShikshaMitraConsts.DbSchema);
+		builder.ConfigureByConvention();
+		builder.Property(x => x.Action).IsRequired().HasConversion<int>();
+		builder.Property(x => x.FromStatus).HasConversion<int>();
+		builder.Property(x => x.ToStatus).HasConversion<int>();
+		builder.Property(x => x.Description).IsRequired().HasMaxLength(AdmissionCycleConsts.MaxDescriptionLength);
+		builder.Property(x => x.Reason).HasMaxLength(AdmissionCycleConsts.MaxReasonLength);
+		builder.HasIndex(x => new { x.TenantId, x.AdmissionCycleId, x.OccurredAt });
 	}
 }

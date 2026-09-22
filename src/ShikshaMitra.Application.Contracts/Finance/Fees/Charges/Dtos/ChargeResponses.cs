@@ -31,6 +31,8 @@ public class ChargeData
 	public DateTimeOffset RequestedOn { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string AcademicYearName { get; set; } = string.Empty;
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public List<string> AvailableActions { get; set; } = [];
 }
 
 public class ChargeListResponse
@@ -71,6 +73,8 @@ public class ChargeListItem
 	public string RequestorName { get; set; } = string.Empty;
 	public DateTimeOffset RequestedOn { get; set; }
 	public string? AdditionalNotes { get; set; }
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public List<string> AvailableActions { get; set; } = [];
 }
 
 public class ChargeLineListResponse
@@ -98,6 +102,8 @@ public class ChargeLineListItem
 	public string PurposeDescription { get; set; } = string.Empty;
 	public DateTimeOffset DueDate { get; set; }
 	public int Status { get; set; }
+	public decimal CollectedAmount { get; set; }
+	public decimal OutstandingAmount { get; set; }
 }
 
 public class ChargeDetailResponse
@@ -128,10 +134,13 @@ public class ChargeDetailData
 	public ApprovalDetails ApprovalDetails { get; set; } = new();
 	public Guid AcademicYearId { get; set; }
 	public string AcademicYearName { get; set; } = string.Empty;
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public List<string> AvailableActions { get; set; } = [];
 }
 
 public class ChargeStudentLineDto
 {
+	public Guid ChargeLineId { get; set; }
 	public Guid StudentId { get; set; }
 	public string StudentName { get; set; } = string.Empty;
 	public string GrNumber { get; set; } = string.Empty;
@@ -139,6 +148,8 @@ public class ChargeStudentLineDto
 	public string StandardName { get; set; } = string.Empty;
 	public string DivisionName { get; set; } = string.Empty;
 	public int Status { get; set; }
+	public decimal CollectedAmount { get; set; }
+	public decimal OutstandingAmount { get; set; }
 }
 
 public class RequestorInfo

@@ -67,6 +67,21 @@ internal static class PaymentTermInstallmentValidator
 				demandOffsetDays,
 				installment.DemandDate);
 
+			// Coverage may intentionally end before a later due date, but every
+			// schedule event still belongs to the academic board period. Keeping
+			// this invariant on the server prevents API callers from creating dates
+			// the date pickers can never represent.
+			if (installment.DemandDate.Value.Date < boardStart.Date ||
+				installment.DemandDate.Value.Date > boardEnd.Date ||
+				installment.DueDate.Date < boardStart.Date ||
+				installment.DueDate.Date > boardEnd.Date)
+			{
+				throw new BusinessException(PaymentTermErrorCodes.InstallmentDateOutsideBoardPeriod)
+					.WithData("Installment", installment.Name)
+					.WithData("BoardStart", boardStart.Date)
+					.WithData("BoardEnd", boardEnd.Date);
+			}
+
 			// Demand/due may fall before coverage begins (common billing practice).
 			// They must not fall after each other.
 			if (installment.DemandDate.Value.Date > installment.DueDate.Date)

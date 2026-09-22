@@ -276,6 +276,7 @@ public class PaymentTermAppService(
 			throw new BusinessException(PaymentTermErrorCodes.DeleteWithReferences)
 				.WithData("ReferencedStructureCount", referenceCount);
 		}
+		await EnsureDefaultReplacementAvailableAsync(term);
 
 		await paymentTermRepository.DeleteAsync(term);
 	}
@@ -383,6 +384,7 @@ public class PaymentTermAppService(
 			throw new BusinessException(PaymentTermErrorCodes.ArchiveInUse)
 				.WithData("ReferencedStructureCount", referenceCount);
 		}
+		await EnsureDefaultReplacementAvailableAsync(term);
 		term.Archive(input.Reason);
 		await paymentTermRepository.UpdateAsync(term, autoSave: true);
 	}
@@ -552,6 +554,7 @@ public class PaymentTermAppService(
 			IsValid = s.IsValid,
 			Installments = s.Installments.Select(i => new ResolvedInstallmentDto
 			{
+				PaymentTermInstallmentId = i.PaymentTermInstallmentId,
 				Sequence = i.Sequence,
 				Name = i.Name,
 				CoverageStartDate = i.CoverageStartDate,
@@ -621,6 +624,27 @@ public class PaymentTermAppService(
 		{
 			item.SetDefault(false);
 			await paymentTermRepository.UpdateAsync(item, autoSave: true);
+		}
+	}
+
+	private async Task EnsureDefaultReplacementAvailableAsync(PaymentTerm term)
+	{
+		if (!term.IsDefault)
+		{
+			return;
+		}
+
+		var hasReplacement = await paymentTermRepository.AnyAsync(item =>
+			item.Id != term.Id &&
+			item.AcademicYearId == term.AcademicYearId &&
+			item.BoardId == term.BoardId &&
+			item.IsDefault &&
+			item.Status != PaymentTermStatus.Archived);
+		if (!hasReplacement)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.DefaultTermRequired)
+				.WithData("PaymentTermId", term.Id)
+				.WithData("BoardId", term.BoardId);
 		}
 	}
 

@@ -16,10 +16,11 @@ public class FeeCategoryManager(
 	public async Task EnsureNameIsUniqueAsync(Guid academicYearId, string name, Guid? excludeId = null)
 	{
 		var normalizedName = name.Trim();
+		var comparisonName = normalizedName.ToUpperInvariant();
 
 		var existing = await feeCategoryRepository.FirstOrDefaultAsync(x =>
 			x.AcademicYearId == academicYearId &&
-			x.Name == normalizedName &&
+			x.Name.ToUpper() == comparisonName &&
 			(!excludeId.HasValue || x.Id != excludeId.Value));
 
 		if (existing != null)
@@ -32,11 +33,12 @@ public class FeeCategoryManager(
 	public async Task EnsureFeeHeadNameIsUniqueAsync(Guid academicYearId, Guid feeCategoryId, string name, Guid? excludeId = null)
 	{
 		var normalizedName = name.Trim();
+		var comparisonName = normalizedName.ToUpperInvariant();
 
 		var existing = await feeHeadRepository.FirstOrDefaultAsync(x =>
 			x.AcademicYearId == academicYearId &&
 			x.FeeCategoryId == feeCategoryId &&
-			x.Name == normalizedName &&
+			x.Name.ToUpper() == comparisonName &&
 			(!excludeId.HasValue || x.Id != excludeId.Value));
 
 		if (existing != null)

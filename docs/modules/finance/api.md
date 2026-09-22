@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-09-15
+updated_on: 2026-09-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -24,7 +24,7 @@ Mutations must enforce backend permissions and audit important financial actions
 
 | Family | Controller path | Main routes or base route |
 |---|---|---|
-| Charges | `Controllers/Finance/Fees/Charges/ChargeController.cs` | `api/app/charges` |
+| Charges | `Controllers/Finance/Fees/Charges/ChargeController.cs` | `api/charges` |
 | Concession requests | `Controllers/Finance/Fees/Concessions/ConcessionRequestController.cs` | `api/concession-request`, `api/concession-requests` |
 | Fee adjustments | `Controllers/Finance/Fees/Adjustments/FeeAdjustmentController.cs` | `api/fee-adjustments` |
 | Fee collection | `Controllers/Finance/Fees/Collections/FeeCollectionController.cs` | Fee collection routes |
@@ -35,13 +35,15 @@ Mutations must enforce backend permissions and audit important financial actions
 
 Fee-category and fee-head create/update contracts accept `module` as an optional numeric `FeeHeadModule` enum value. Send `null` or omit the property when no module applies. The fee-head module lookup returns numeric `value` fields with user-facing `displayName` labels. Every standalone or nested Fee Head request must also send `incomeCategoryId`. Responses return the Income Category plus its resolved default Income Account Head ID and name. The backend accepts only active Income Categories from the Fee Head's academic year whose default account is an active Income head.
 
+Charge endpoints and exact permissions are documented in [Charge management end to end](./references/charge-management-end-to-end.md). The current base route is `api/charges`, with Add, View, Update, Approve, Reject, and Delete action permissions. The reference also records current contract defects: academic-year filtering is not consistently applied, row-level caller scope is incomplete, and the API has no charge-specific correction/refund or command concurrency contract. Do not treat those gaps as supported behavior.
+
 Payment-term requests and responses serialize lifecycle, version, holiday-shifting, demand-generation, and initial-demand enums by name. For example, `demandGenerationRule` uses `OnInstallmentStartDate`, `XDaysBeforeDue`, `OnDueDate`, or `SpecificDate`; numeric enum values are not the canonical wire representation.
 
 Payment-term version history is exposed separately from the full detail snapshot through `GET api/finance/payment-terms/{paymentTermId}/versions`. It accepts the standard `skipCount` and `maxResultCount` paging parameters and returns version number, lifecycle status, change action/reason, creation time, creator id, and hydrated creator name for the history drawer.
 
 Concession Type settings use `GET/POST api/{academicYearId}/concession-types`, `GET/PUT/DELETE api/concession-types/{id}`, `PATCH api/concession-types/{id}/status`, `GET api/concession-types/{id}/versions`, and `GET api/concession-types/document-defaults`. The paged versions endpoint returns the audited action, actor, timestamp, version number, and changed business fields. Administrative lists pass `includeInactive=true`; request creation omits it so only active types are returned. Document contracts use `documentName`, `maxFileSizeBytes`, `acceptedFormats`, and `isRequired`. Active records and used records cannot be deleted; deletion is allowed only after deactivation and while unused. Duplicate normalized names, edits to used document definitions, and missing deactivation reasons return stable business errors. `POST api/concession-request/types/{concessionTypeId}/documents/{documentId}/file` accepts multipart `File` and validates the selected definition's size, extension, MIME type, and file signature before storage. It returns an opaque staged route; `GET api/concession-request/staged-documents/{uploadId}/file` works only for the uploader while the receipt remains unattached and unexpired. Attached evidence is downloaded through `GET api/concession-request/{id}/documents/{documentId}/file`, which requires `ViewDocument` and repeats student-scope validation. Concession responses never expose the underlying shared-storage identifier.
 
-Concession requests resolve their policy from the student's exact fee-structure assignment. `GET api/concession-request/context` returns the pinned policy/version, eligible heads, outstanding due rows, types, and evidence requirements. If more than one current assignment matches, it returns `assignmentSelectionRequired=true` plus scoped assignment choices; the caller repeats the query with one `studentFeeStructureId`. It never selects an ambiguous assignment. `POST api/concession-request/preview` returns server-calculated values and a 64-character fingerprint. An incomplete draft may omit fee selections and required evidence, but Submit always reruns strict policy, value, due-row, and evidence validation.
+Concession requests select their policy at request time. `GET api/concession-request/context` returns active academic-year policy/version options, eligible heads, outstanding due rows, types, and evidence requirements. If more than one current assignment matches, it returns `assignmentSelectionRequired=true` plus scoped assignment choices; the caller repeats the query with one `studentFeeStructureId`. It never selects an ambiguous assignment. Preview, draft, create, and update inputs carry `concessionPolicyId` plus `concessionPolicyVersionId`; the backend verifies that they identify the current active version and pins both values on the request. `POST api/concession-request/preview` returns server-calculated values and a 64-character fingerprint. An incomplete draft may omit fee selections and required evidence, but Submit always reruns strict policy, value, due-row, and evidence validation.
 
 Drafts use `POST api/concession-request/drafts`, `PUT api/concession-request/{id}`, and `POST api/concession-request/{id}/submit`; the compatibility `POST api/concession-request` performs create-and-submit and requires both Add and Submit. `POST api/concession-requests/{id}/approval-preview` is the authoritative pre-commit approval calculation, and `POST api/concession-requests/{id}/reversal-preview` returns the balance impact before reversal. Approve repeats approval validation using the preview fingerprint and request/due stamps. Reverse repeats reversal validation using request and allocation due-row stamps. Detail and list responses expose state-derived `availableActions`; detail and student applications also expose the stored lifecycle `timeline` so clients do not infer legal transitions from labels.
 

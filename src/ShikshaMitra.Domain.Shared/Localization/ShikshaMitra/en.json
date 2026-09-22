@@ -1,6 +1,9 @@
 {
   "Culture": "en",
   "Texts": {
+	"Admissions.FormMakerCheckerRequired": "A different authorized user must review this form. The user who requested approval cannot approve or reject the same form.",
+	"Admissions.FormAdminOverrideReasonRequired": "Enter a reason to use the administrator self-review override.",
+	"Admissions:ApplicationStageCannotAdvance": "The {StageType} stage cannot be completed while the application status is {ApplicationStatus}. Complete the required submission or decision first, then try again.",
 	"Admissions:Offer:InvalidPolicy": "Review the offer content, response rules, validity limits and completion outcomes.",
 	"Admissions:Offer:InvalidState": "This offer action is unavailable in the current application or stage state.",
 	"Admissions:Offer:ConcurrencyConflict": "This application changed. Refresh the offer workspace before saving.",
@@ -72,6 +75,7 @@
     "Finance:Assignment:SourceUnavailable": "The service period could not be verified from the selected source.",
     "Finance:Assignment:ConfigurationInvalid": "Review the published payment terms and policy versions for every included fee head.",
     "Finance:Assignment:CommitFailed": "The assignment could not be completed. Retry to check its final status.",
+    "Finance:Concession:010029": "No fee structure is assigned to this student for the selected academic year. Assign a fee structure before creating a concession request.",
     "Menu:Home": "Home",
     "Welcome": "Welcome",
     "LongWelcomeMessage": "Welcome to the application. This is a startup project based on the ABP framework. For more information, visit abp.io.",

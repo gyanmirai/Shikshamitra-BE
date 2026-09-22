@@ -110,7 +110,38 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
     }
 
     [Fact]
-    public async Task GetListAsync_Should_Sync_And_Return_Reportee_Absence_Only()
+    public async Task GetListAsync_Should_Not_Create_Availability_From_Attendance()
+    {
+        var employee = await CreateEmployeeAsync(Guid.NewGuid(), "Akshay", "Patel");
+        var attendanceDate = new DateOnly(2026, 9, 17);
+
+        await _employeeAttendanceRepository.InsertAsync(
+            new EmployeeAttendance
+            {
+                EmployeeId = employee.Id,
+                AttendanceDate = attendanceDate,
+                StatusType = EmployeeAttendanceStatusType.FullDayLeave,
+                Source = AttendanceRecordSource.Manual,
+                Remarks = "Approved leave"
+            },
+            autoSave: true);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var result = await _teacherAvailabilityAppService.GetListAsync(
+                new GetTeacherAvailabilityInput
+                {
+                    Date = attendanceDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                    MaxResultCount = 50
+                });
+
+            result.TotalCount.ShouldBe(0);
+            (await _availabilityRepository.GetCountAsync()).ShouldBe(0);
+        }
+    }
+
+    [Fact]
+    public async Task GetListAsync_Should_Return_Reportee_Availability_Only()
     {
         var managerUserId = Guid.NewGuid();
         var manager = await CreateEmployeeAsync(managerUserId, "Jignesh", "Jinjala");
@@ -125,25 +156,36 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
             "Teacher");
         var attendanceDate = new DateOnly(2026, 9, 17);
 
-        await _employeeAttendanceRepository.InsertAsync(
-            new EmployeeAttendance
-            {
-                EmployeeId = reportee.Id,
-                AttendanceDate = attendanceDate,
-                StatusType = EmployeeAttendanceStatusType.FullDayLeave,
-                Source = AttendanceRecordSource.Manual,
-                Remarks = "Approved leave"
-            },
-            autoSave: true);
-        await _employeeAttendanceRepository.InsertAsync(
-            new EmployeeAttendance
-            {
-                EmployeeId = unrelatedEmployee.Id,
-                AttendanceDate = attendanceDate,
-                StatusType = EmployeeAttendanceStatusType.FullDayLeave,
-                Source = AttendanceRecordSource.Manual,
-                Remarks = "Unrelated leave"
-            },
+        var availabilityDate = attendanceDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        await _availabilityRepository.InsertManyAsync(
+            [
+                new TeacherAvailability(
+                    Guid.NewGuid(),
+                    null,
+                    "Akshay Patel",
+                    availabilityDate,
+                    new TimeOnly(9, 0),
+                    new TimeOnly(14, 15),
+                    TeacherAvailabilityStatus.Unavailable,
+                    TeacherAvailabilitySource.Attendance,
+                    "Approved leave",
+                    true,
+                    true,
+                    teacherId: reportee.Id),
+                new TeacherAvailability(
+                    Guid.NewGuid(),
+                    null,
+                    "Unrelated Teacher",
+                    availabilityDate,
+                    new TimeOnly(9, 0),
+                    new TimeOnly(14, 15),
+                    TeacherAvailabilityStatus.Unavailable,
+                    TeacherAvailabilitySource.Attendance,
+                    "Unrelated leave",
+                    true,
+                    true,
+                    teacherId: unrelatedEmployee.Id)
+            ],
             autoSave: true);
 
         using (_currentPrincipalAccessor.Change(BuildPrincipal(managerUserId, "teacher")))
@@ -161,9 +203,101 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
             availability.TeacherName.ShouldBe("Akshay Patel");
             availability.SourceType.ShouldBe(TeacherAvailabilitySource.Attendance.ToString());
 
-            var syncedRows = await _availabilityRepository.GetListAsync(
+            (await _availabilityRepository.GetCountAsync()).ShouldBe(2);
+        }
+    }
+
+    [Fact]
+    public async Task GetListAsync_Should_Not_Fail_When_Attendance_Overlaps_Manual_Availability()
+    {
+        var teacher = await CreateEmployeeAsync(
+            Guid.NewGuid(),
+            "Existing",
+            "Teacher");
+        var attendanceDate = new DateOnly(2026, 9, 18);
+        var availabilityDate = attendanceDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
+        await _availabilityRepository.InsertAsync(
+            new TeacherAvailability(
+                Guid.NewGuid(),
+                null,
+                teacher.EmployeeName,
+                availabilityDate,
+                new TimeOnly(9, 0),
+                new TimeOnly(14, 15),
+                TeacherAvailabilityStatus.Unavailable,
+                TeacherAvailabilitySource.Manual,
+                "Already marked unavailable",
+                true,
+                true,
+                teacherId: teacher.Id),
+            autoSave: true);
+        await _employeeAttendanceRepository.InsertAsync(
+            new EmployeeAttendance
+            {
+                EmployeeId = teacher.Id,
+                AttendanceDate = attendanceDate,
+                StatusType = EmployeeAttendanceStatusType.FullDayLeave,
+                Source = AttendanceRecordSource.Manual,
+                Remarks = "Approved leave"
+            },
+            autoSave: true);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var result = await _teacherAvailabilityAppService.GetListAsync(
+                new GetTeacherAvailabilityInput
+                {
+                    Date = availabilityDate,
+                    MaxResultCount = 50
+                });
+
+            result.TotalCount.ShouldBe(1);
+            result.Items.ShouldHaveSingleItem().SourceType
+                .ShouldBe(TeacherAvailabilitySource.Manual.ToString());
+
+            var attendanceRows = await _availabilityRepository.GetListAsync(
                 row => row.SourceType == TeacherAvailabilitySource.Attendance);
-            syncedRows.ShouldHaveSingleItem().TeacherId.ShouldBe(reportee.Id);
+            attendanceRows.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task GetListAsync_Should_Not_Fail_When_Attendance_Sync_Encounters_A_Late_Overlap()
+    {
+        var teacher = await CreateEmployeeAsync(
+            Guid.NewGuid(),
+            "Duplicate",
+            "Attendance");
+        var attendanceDate = new DateOnly(2026, 9, 19);
+        var availabilityDate = attendanceDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
+        foreach (var remarks in new[] { "First attendance row", "Legacy duplicate attendance row" })
+        {
+            await _employeeAttendanceRepository.InsertAsync(
+                new EmployeeAttendance
+                {
+                    EmployeeId = teacher.Id,
+                    AttendanceDate = attendanceDate,
+                    StatusType = EmployeeAttendanceStatusType.FullDayLeave,
+                    Source = AttendanceRecordSource.Manual,
+                    Remarks = remarks
+                },
+                autoSave: true);
+        }
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var result = await _teacherAvailabilityAppService.GetListAsync(
+                new GetTeacherAvailabilityInput
+                {
+                    Date = availabilityDate,
+                    MaxResultCount = 50
+                });
+
+            result.TotalCount.ShouldBe(1);
+            result.Items.ShouldHaveSingleItem().SourceType
+                .ShouldBe(TeacherAvailabilitySource.Attendance.ToString());
         }
     }
 

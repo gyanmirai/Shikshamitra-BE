@@ -48,7 +48,7 @@ public class AdmissionOfferingCommandService(
 		AdmissionOfferingConfigurationValidator.EnsureCanSave(validation, offering.IsActive);
 		var hasApplications = await applicationRepository.AnyAsync(application => application.AdmissionOfferingId == offering.Id);
 		offering.UpdateIdentity(input.CampusId, input.BoardId, input.MediumId, input.StageId, input.StandardId, hasApplications);
-		offering.UpdateOperationalDetails(input.Code, input.UseCycleDates, input.OpenDate, input.CloseDate);
+		offering.UpdateOperationalDetails(input.Code, input.UseCycleDates, input.OpenDate, input.CloseDate, input.Name);
 		offering.ConfigureReferences(input.WorkflowDefinitionId, input.InquiryFormDefinitionId, input.ApplicationFormDefinitionId);
 		await offeringRepository.UpdateAsync(offering, autoSave: true);
 		return await readService.GetAsync(offering.Id);
@@ -92,6 +92,7 @@ public class AdmissionOfferingCommandService(
 		var source = await GetOfferingAsync(id);
 		var cloneInput = new CreateAdmissionOfferingDto
 		{
+			Name = input.Name ?? source.Name,
 			CampusId = input.CampusId,
 			BoardId = input.BoardId,
 			MediumId = input.MediumId,
@@ -126,11 +127,15 @@ public class AdmissionOfferingCommandService(
 		{
 			var createInput = ToCreateDto(input, item);
 			var validation = await configurationValidator.ValidateAsync(admissionCycleId, createInput);
+			var canSaveInactive = AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: false);
+			var canActivate = validation.IsValid;
 			result.Items.Add(new BulkAdmissionOfferingResultItemDto
 			{
 				StandardId = item.StandardId,
 				Code = item.Code,
-				IsValid = validation.IsValid,
+				IsValid = input.IsActive ? canActivate : canSaveInactive,
+				CanSaveInactive = canSaveInactive,
+				CanActivate = canActivate,
 				Errors = AdmissionOfferingReadService.MapValidation(validation).Errors
 			});
 			pending.Add((item, createInput));
@@ -166,7 +171,7 @@ public class AdmissionOfferingCommandService(
 		var offering = new AdmissionOffering(
 			GuidGenerator.Create(), CurrentTenant.Id, admissionCycleId, input.CampusId,
 			input.BoardId, input.MediumId, input.StageId, input.StandardId, input.Code,
-			input.UseCycleDates, input.OpenDate, input.CloseDate);
+			input.UseCycleDates, input.OpenDate, input.CloseDate, input.Name);
 		offering.ConfigureReferences(
 			input.WorkflowDefinitionId, input.InquiryFormDefinitionId, input.ApplicationFormDefinitionId);
 		if (input.IsActive)
@@ -191,6 +196,7 @@ public class AdmissionOfferingCommandService(
 
 	private static CreateAdmissionOfferingDto ToWriteDto(AdmissionOffering offering) => new()
 	{
+		Name = offering.Name,
 		CampusId = offering.CampusId,
 		BoardId = offering.BoardId,
 		MediumId = offering.MediumId,
@@ -222,6 +228,7 @@ public class AdmissionOfferingCommandService(
 		BulkCreateAdmissionOfferingsDto input,
 		BulkAdmissionOfferingItemDto item) => new()
 	{
+		Name = item.Name,
 		CampusId = input.CampusId,
 		BoardId = input.BoardId,
 		MediumId = input.MediumId,

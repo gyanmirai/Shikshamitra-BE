@@ -6,6 +6,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionOfferingListDto : EntityDto<Guid>
 {
+	public string Name { get; set; } = string.Empty;
 	public Guid AdmissionCycleId { get; set; }
 	public string AdmissionCycleName { get; set; } = string.Empty;
 	public Guid? CampusId { get; set; }
@@ -26,6 +27,7 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 	public bool IsActive { get; set; }
 	public AdmissionOfferingAvailabilityStatus AvailabilityStatus { get; set; }
 	public AdmissionOfferingConfigurationStatus ConfigurationStatus { get; set; }
+	public bool CanActivate => ConfigurationStatus == AdmissionOfferingConfigurationStatus.Ready;
 	public int ApplicationCount { get; set; }
 	public bool CanEditIdentity => ApplicationCount == 0;
 	public bool CanDelete => ApplicationCount == 0;
@@ -53,6 +55,7 @@ public class AdmissionOfferingDto : AdmissionOfferingListDto
 
 public abstract class AdmissionOfferingWriteDto
 {
+	public string? Name { get; set; }
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid MediumId { get; set; }
@@ -83,6 +86,7 @@ public class ValidateAdmissionOfferingDto : AdmissionOfferingWriteDto
 
 public class CloneAdmissionOfferingDto
 {
+	public string? Name { get; set; }
 	public Guid AdmissionCycleId { get; set; }
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
@@ -132,6 +136,7 @@ public class AdmissionOfferingListInput : PagedAndSortedResultRequestDto
 
 public class BulkAdmissionOfferingItemDto
 {
+	public string? Name { get; set; }
 	public Guid StandardId { get; set; }
 	public string Code { get; set; } = string.Empty;
 }
@@ -159,6 +164,8 @@ public class BulkAdmissionOfferingResultItemDto
 	public string Code { get; set; } = string.Empty;
 	public Guid? OfferingId { get; set; }
 	public bool IsValid { get; set; }
+	public bool CanSaveInactive { get; set; }
+	public bool CanActivate { get; set; }
 	public List<AdmissionOfferingValidationErrorDto> Errors { get; set; } = [];
 }
 

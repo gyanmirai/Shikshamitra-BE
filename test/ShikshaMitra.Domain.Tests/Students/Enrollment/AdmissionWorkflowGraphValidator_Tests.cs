@@ -12,6 +12,25 @@ public class AdmissionWorkflowGraphValidator_Tests
 	private readonly AdmissionWorkflowGraphValidator _validator = new();
 
 	[Fact]
+	public void New_workflows_offer_only_supported_structured_stage_types()
+	{
+		var selectable = AdmissionWorkflowStageTypeRegistry.All
+			.Where(stage => stage.IsSelectable)
+			.Select(stage => stage.Type)
+			.ToList();
+
+		selectable.ShouldNotContain(AdmissionWorkflowStageType.Seat);
+		selectable.ShouldNotContain(AdmissionWorkflowStageType.Enrollment);
+		selectable.ShouldNotContain(AdmissionWorkflowStageType.Custom);
+		selectable.ShouldNotContain(AdmissionWorkflowStageType.Appointment);
+		selectable.ShouldContain(AdmissionWorkflowStageType.Form);
+		selectable.ShouldContain(AdmissionWorkflowStageType.Review);
+		selectable.ShouldContain(AdmissionWorkflowStageType.Approval);
+		AdmissionWorkflowStageTypeRegistry.Find(AdmissionWorkflowStageType.Approval)!
+			.DisplayName.ShouldBe("Admission decision");
+	}
+
+	[Fact]
 	public void ValidLinearWorkflowPassesWithoutUsingDisplayOrderAsBusinessLogic()
 	{
 		var workflowId = Guid.NewGuid();
@@ -104,6 +123,46 @@ public class AdmissionWorkflowGraphValidator_Tests
 	}
 
 	[Fact]
+	public void Rejects_ambiguous_priority_and_unconditional_non_default_routes()
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
+		var approved = Stage(workflowId, "APPROVED", 1, isTerminal: true);
+		var rejected = Stage(workflowId, "REJECTED", 2, isTerminal: true);
+		var condition = """{ "field": "review.decision", "operator": "Equals", "value": "approve" }""";
+		var conditional = Transition(workflowId, entry.Id, approved.Id, 0, condition);
+		var duplicatePriority = Transition(workflowId, entry.Id, rejected.Id, 0, condition);
+		var unconditional = new AdmissionWorkflowTransitionDefinition(
+			Guid.NewGuid(), workflowId, entry.Id, rejected.Id, 1, null, false);
+
+		var issues = _validator.Validate(
+			[entry, approved, rejected],
+			[conditional, duplicatePriority, unconditional]);
+
+		issues.ShouldContain(issue =>
+			issue.Code == AdmissionWorkflowErrorCodes.DuplicateTransitionPriority &&
+			issue.StageId == entry.Id);
+		issues.ShouldContain(issue =>
+			issue.Code == AdmissionWorkflowErrorCodes.InvalidCondition &&
+			issue.TransitionId == unconditional.Id);
+	}
+
+	[Fact]
+	public void Rejects_negative_transition_priority()
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
+		var terminal = Stage(workflowId, "TERMINAL", 1, isTerminal: true);
+		var transition = Transition(workflowId, entry.Id, terminal.Id, -1, isDefault: true);
+
+		var issues = _validator.Validate([entry, terminal], [transition]);
+
+		issues.ShouldContain(issue =>
+			issue.Code == AdmissionWorkflowErrorCodes.InvalidTransition &&
+			issue.TransitionId == transition.Id);
+	}
+
+	[Fact]
 	public void AcceptsControlledNestedConditions()
 	{
 		var workflowId = Guid.NewGuid();
@@ -158,14 +217,88 @@ public class AdmissionWorkflowGraphValidator_Tests
 		issues.ShouldNotContain(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error);
 	}
 
+	[Theory]
+	[InlineData(AdmissionWorkflowStageType.Form,
+		"{\"form\":{\"enabled\":true,\"version\":1,\"responsibility\":\"nobody\"}}",
+		AdmissionFormStageErrorCodes.InvalidPolicy)]
+	[InlineData(AdmissionWorkflowStageType.Review,
+		"{\"review\":{\"enabled\":true,\"version\":2}}",
+		AdmissionReviewErrorCodes.InvalidPolicy)]
+	[InlineData(AdmissionWorkflowStageType.Payment,
+		"{\"payment\":{\"enabled\":true,\"version\":1}}",
+		AdmissionPaymentStageErrorCodes.InvalidPolicy)]
+	[InlineData(AdmissionWorkflowStageType.Offer,
+		"{\"offer\":{\"enabled\":true,\"version\":1,\"validityDays\":0}}",
+		AdmissionOfferStageErrorCodes.InvalidPolicy)]
+	[InlineData(AdmissionWorkflowStageType.Seat,
+		"{\"seat\":{\"enabled\":true,\"version\":1,\"defaultCapacity\":0}}",
+		AdmissionSeatStageErrorCodes.InvalidPolicy)]
+	public void Rejects_managed_configuration_that_runtime_would_reject(
+		AdmissionWorkflowStageType type,
+		string configurationJson,
+		string expectedCode)
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
+		var managed = Stage(workflowId, type.ToString().ToUpperInvariant(), 1,
+			type: type, configurationJson: configurationJson);
+		var terminal = Stage(workflowId, "TERMINAL", 2, isTerminal: true);
+
+		var issues = _validator.Validate([entry, managed, terminal],
+			[Transition(workflowId, entry.Id, managed.Id, 1), Transition(workflowId, managed.Id, terminal.Id, 1)]);
+
+		issues.ShouldContain(issue =>
+			issue.Code == expectedCode &&
+			issue.StageId == managed.Id &&
+			issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+	}
+
+	[Fact]
+	public void Required_stage_cannot_allow_an_ordinary_manual_skip()
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true, allowManualSkip: true);
+		var terminal = Stage(workflowId, "TERMINAL", 1, isTerminal: true);
+
+		var issues = _validator.Validate(
+			[entry, terminal],
+			[Transition(workflowId, entry.Id, terminal.Id, 1)]);
+
+		issues.ShouldContain(issue =>
+			issue.Code == AdmissionWorkflowErrorCodes.RequiredStageCannotAllowSkip &&
+			issue.StageId == entry.Id &&
+			issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+	}
+
+	[Fact]
+	public void Runtime_unavailable_stage_blocks_publication()
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "ENTRY", 0, isEntry: true);
+		var appointment = Stage(workflowId, "APPOINTMENT", 1,
+			isTerminal: true, type: AdmissionWorkflowStageType.Appointment);
+
+		var issues = _validator.Validate(
+			[entry, appointment],
+			[Transition(workflowId, entry.Id, appointment.Id, 1)]);
+
+		issues.ShouldContain(issue =>
+			issue.Code == AdmissionWorkflowErrorCodes.RuntimeHandlerUnavailable &&
+			issue.StageId == appointment.Id &&
+			issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+	}
+
 	private static AdmissionWorkflowStageDefinition Stage(
 		Guid workflowId,
 		string code,
 		int displayOrder,
 		bool isEntry = false,
 		bool isTerminal = false,
-		AdmissionWorkflowStageType type = AdmissionWorkflowStageType.Custom) =>
-		new(Guid.NewGuid(), workflowId, code, code, type, displayOrder, true, false, null, null,
+		AdmissionWorkflowStageType type = AdmissionWorkflowStageType.Custom,
+		bool isRequired = true,
+		bool allowManualSkip = false,
+		string? configurationJson = null) =>
+		new(Guid.NewGuid(), workflowId, code, code, type, displayOrder, isRequired, allowManualSkip, null, configurationJson,
 			isEntry, isTerminal);
 
 	private static AdmissionWorkflowTransitionDefinition Transition(
@@ -175,5 +308,6 @@ public class AdmissionWorkflowGraphValidator_Tests
 		int priority,
 		string? condition = null,
 		bool isDefault = false) =>
-		new(Guid.NewGuid(), workflowId, fromStageId, toStageId, priority, condition, isDefault);
+		new(Guid.NewGuid(), workflowId, fromStageId, toStageId, priority, condition,
+			isDefault || string.IsNullOrWhiteSpace(condition));
 }

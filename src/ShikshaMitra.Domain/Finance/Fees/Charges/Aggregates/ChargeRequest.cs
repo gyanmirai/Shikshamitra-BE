@@ -131,6 +131,11 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
+	public void AdvanceWorkflowRevision()
+	{
+		ConcurrencyStamp = Guid.NewGuid().ToString("N");
+	}
+
 	private void ValidateAmount()
 	{
 		if (Amount <= 0)

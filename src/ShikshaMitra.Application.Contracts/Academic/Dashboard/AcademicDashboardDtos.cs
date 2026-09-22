@@ -3,6 +3,25 @@ using System.Collections.Generic;
 
 namespace ShikshaMitra.Academic.Dashboard;
 
+public class AcademicDashboardContextDto
+{
+    public string DefaultMode { get; set; } = "common";
+    public List<string> AvailableModes { get; set; } = [];
+    public string DisplayName { get; set; } = string.Empty;
+    public List<AcademicDashboardClassAssignmentDto> ClassAssignments { get; set; } = [];
+}
+
+public class AcademicDashboardClassAssignmentDto
+{
+    public Guid Id { get; set; }
+    public Guid? AcademicYearId { get; set; }
+    public Guid StandardId { get; set; }
+    public string StandardName { get; set; } = string.Empty;
+    public Guid DivisionId { get; set; }
+    public string DivisionName { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+}
+
 public class AdminAcademicDashboardDto
 {
     public int CurriculumCompletion { get; set; }
@@ -28,6 +47,46 @@ public class AdminAcademicDashboardDto
     public List<AcademicDashboardDataHealthItemDto> DataHealthItems { get; set; } = [];
     public AcademicDashboardPassFailChartDto SubjectPassFailChart { get; set; } = new();
     public AcademicDashboardPlannedVsActualChartDto PlannedVsActualProgressChart { get; set; } = new();
+}
+
+public class AdminAcademicDashboardCurriculumDto
+{
+    public int CurriculumCompletion { get; set; }
+    public int TotalStudents { get; set; }
+    public int TotalTeachers { get; set; }
+    public int AssignedSubjects { get; set; }
+    public int ElectiveGroups { get; set; }
+    public int PendingElectiveGroups { get; set; }
+    public List<AcademicDashboardInsightDto> Insights { get; set; } = [];
+    public List<AcademicDashboardConfigItemDto> ConfigurationStatus { get; set; } = [];
+}
+
+public class AdminAcademicDashboardTimetableDto
+{
+    public int TimetableRate { get; set; }
+    public int ActiveTimetables { get; set; }
+    public int PendingTimetables { get; set; }
+    public int ConflictsCount { get; set; }
+    public List<AcademicDashboardInsightDto> Insights { get; set; } = [];
+    public List<AcademicDashboardConfigItemDto> ConfigurationStatus { get; set; } = [];
+    public List<AcademicDashboardOperationItemDto> OperationalStatus { get; set; } = [];
+}
+
+public class AdminAcademicDashboardAssessmentDto
+{
+    public int ReadinessRate { get; set; }
+    public int PendingGradeEntries { get; set; }
+    public int PendingEvaluations { get; set; }
+    public int UpcomingExams { get; set; }
+    public List<AcademicDashboardInsightDto> Insights { get; set; } = [];
+    public List<AcademicDashboardOperationItemDto> OperationalStatus { get; set; } = [];
+}
+
+public class AdminAcademicDashboardAnalyticsDto
+{
+    public List<AcademicDashboardActivityDto> RecentActivities { get; set; } = [];
+    public AcademicDashboardPassFailChartDto SubjectPassFailChart { get; set; } = new();
+    public AcademicDashboardClassProgressChartDto ClassSyllabusProgressChart { get; set; } = new();
 }
 
 public class PrincipalAcademicDashboardDto
@@ -183,6 +242,12 @@ public class AcademicDashboardPlannedVsActualChartDto
     public List<int> ActualPercentages { get; set; } = [];
 }
 
+public class AcademicDashboardClassProgressChartDto
+{
+    public List<string> ClassNames { get; set; } = [];
+    public List<int> CompletionPercentages { get; set; } = [];
+}
+
 public class AcademicDashboardChapterCompletionChartDto
 {
     public List<string> StandardNames { get; set; } = [];
@@ -240,7 +305,7 @@ public class AcademicDashboardAttentionStudentDto
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string ClassDivision { get; set; } = string.Empty;
-    public int Attendance { get; set; }
+    public int? Attendance { get; set; }
     public int Performance { get; set; }
     public string Warning { get; set; } = string.Empty;
     public string AvatarUrl { get; set; } = string.Empty;

@@ -159,6 +159,25 @@ public class RubricAssessmentAppService(
 			throw new BusinessException("AssessmentRubric:TemplateWorkTypeMismatch");
 		}
 
+		var currentTaskRubrics = await rubricRepository.GetListAsync(rubric =>
+			!rubric.IsTemplate &&
+			rubric.Status != RubricStatus.Archived &&
+			((hasHomework && rubric.HomeworkId == input.HomeworkId) ||
+			 (hasAssignment && rubric.AssignmentId == input.AssignmentId)));
+		var matchingTaskRubric = currentTaskRubrics.FirstOrDefault(rubric =>
+			rubric.SourceTemplateId == template.Id);
+		if (matchingTaskRubric != null)
+		{
+			foreach (var obsoleteRubric in currentTaskRubrics.Where(rubric => rubric.Id != matchingTaskRubric.Id))
+			{
+				obsoleteRubric.Archive();
+				await rubricRepository.UpdateAsync(obsoleteRubric, autoSave: true);
+			}
+
+			await LoadCriteriaAsync([matchingTaskRubric]);
+			return MapRubric(matchingTaskRubric);
+		}
+
 		var cloneInput = new CreateUpdateRubricDto
 		{
 			StandardId = input.StandardId,
@@ -217,6 +236,11 @@ public class RubricAssessmentAppService(
 		rubric.ReplaceCriteria(BuildCriteria(rubric.Id, cloneInput.Criteria));
 		rubric.Publish();
 		await rubricRepository.InsertAsync(rubric, autoSave: true);
+		foreach (var obsoleteRubric in currentTaskRubrics)
+		{
+			obsoleteRubric.Archive();
+			await rubricRepository.UpdateAsync(obsoleteRubric, autoSave: true);
+		}
 		await LoadCriteriaAsync([rubric]);
 		return MapRubric(rubric);
 	}

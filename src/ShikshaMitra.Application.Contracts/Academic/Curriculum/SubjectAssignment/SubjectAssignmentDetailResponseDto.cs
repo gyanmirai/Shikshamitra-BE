@@ -15,7 +15,10 @@ public class SubjectAssignmentDetailResponseDto
         public string? Color { get; set; }
         public SubjectType SubjectType { get; set; }
         public Guid? ElectiveGroupId { get; set; }
+        public List<TeacherInfoDto> Teachers { get; set; } = [];
+        /// <summary>Legacy compatibility field. New clients should use <see cref="Teachers"/>.</summary>
         public TeacherInfoDto? PrimaryTeacher { get; set; }
+        /// <summary>Legacy compatibility field. New clients should use <see cref="Teachers"/>.</summary>
         public List<TeacherInfoDto> SecondaryTeachers { get; set; } = [];
         public string? LearningGoals { get; set; }
         public string? Prerequisites { get; set; }

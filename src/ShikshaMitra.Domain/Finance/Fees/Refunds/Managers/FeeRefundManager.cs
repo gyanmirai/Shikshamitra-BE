@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,251 +10,152 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
-/// <summary>
-/// Domain service that owns the creation and approval orchestration of <see cref="FeeRefundRequest"/>.
-/// Application services must delegate domain logic here — never mutate entities directly from AppService.
-/// </summary>
-public class FeeRefundManager(
-    IFeeRefundRepository feeRefundRepository,
-    IDueFeeRepository dueFeeRepository,
-	ICurrentTenant currentTenant
-) : DomainService
+public sealed record RefundLineSpec(Guid DueFeeId, Guid? SourceAllocationId, Guid? SourceReceiptId,
+    Guid FeeHeadId, string FeeHeadName, string InstallmentLabel, decimal SettledPaidAmount,
+    decimal Amount, decimal CalculatedAmount);
+
+public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository dueFeeRepository,
+    ICurrentTenant currentTenant) : DomainService
 {
-    /// <summary>
-    /// Creates and persists a new <see cref="FeeRefundRequest"/> in <see cref="FeeRefundStatus.Pending"/>
-    /// after validating each line's refundable balance.
-    /// </summary>
-    public async Task<FeeRefundRequest> CreateAsync(
-        Guid studentId,
-        Guid academicYearId,
-        List<(Guid DueFeeId, double Amount)> lines,
-        string? refundMethod,
-        RefundPaymentDetails? refundPaymentDetails,
-        string? reason)
+    public async Task<FeeRefundRequest> CreateDraftAsync(Guid studentId, Guid academicYearId,
+        Guid assignmentId, Guid policyId, Guid policyVersionId, Guid receiptId, string receiptNumber,
+        IReadOnlyCollection<RefundLineSpec> lines, string? method, RefundPaymentDetails? details,
+        string? reason, string policySnapshot, string calculationSnapshot, string calculationHash)
     {
-        if (lines == null || lines.Count == 0)
-            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
-
-        // Validate each DueFee line and check refundable balance
-        var dueFeeIds = lines.Select(l => l.DueFeeId).ToList();
-        var dueFees = await dueFeeRepository.GetListAsync(df => dueFeeIds.Contains(df.Id));
-
-        if (dueFees.Count != dueFeeIds.Count)
-            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound)
-                .WithData("Missing", dueFeeIds.Except(dueFees.Select(df => df.Id)).ToList());
-
-        var dueFeeMap = dueFees.ToDictionary(df => df.Id);
-        foreach (var (dueFeeId, amount) in lines)
-        {
-            var dueFee = dueFeeMap[dueFeeId];
-			if ((decimal)amount > dueFee.RefundableBalance)
-                throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance)
-                    .WithData("DueFeeId", dueFeeId)
-                    .WithData("Requested", amount)
-                    .WithData("Available", dueFee.RefundableBalance);
-        }
-
-        var voucherNumber = await GenerateVoucherNumberAsync();
-        var totalAmount = lines.Sum(l => l.Amount);
-
-        var request = new FeeRefundRequest(
-            id: GuidGenerator.Create(),
-            tenantId: currentTenant.Id,
-            studentId: studentId,
-            academicYearId: academicYearId,
-            voucherNumber: voucherNumber,
-            totalAmount: totalAmount,
-            refundMethod: refundMethod,
-            refundPaymentDetails: refundPaymentDetails,
-            reason: reason);
-
-        foreach (var (dueFeeId, amount) in lines)
-        {
-            request.AddLine(new FeeRefundLine(
-                id: GuidGenerator.Create(),
-                feeRefundRequestId: request.Id,
-                dueFeeId: dueFeeId,
-                amount: amount));
-        }
-
-        return await feeRefundRepository.InsertAsync(request, autoSave: false);
+        await ValidateLinesAsync(studentId, assignmentId, lines, null);
+        var request = new FeeRefundRequest(GuidGenerator.Create(), currentTenant.Id, studentId,
+            academicYearId, GenerateVoucherNumber(), method, details, reason);
+        request.PinPolicy(assignmentId, policyId, policyVersionId, receiptId, receiptNumber,
+            policySnapshot, calculationSnapshot, calculationHash);
+        foreach (var line in lines)
+            request.AddLine(ToEntity(request.Id, line));
+        return await repository.InsertAsync(request, autoSave: false);
     }
 
-    /// <summary>
-    /// Validates and applies an in-place update to a <see cref="FeeRefundStatus.Pending"/> refund request.
-    /// Replaces all lines, recomputes the total, and updates payment details and reason.
-    /// </summary>
-    /// <remarks>
-    /// Refundable-balance validation re-excludes amounts already held by this same request,
-    /// so the requester can freely adjust amounts without being blocked by their own prior reservation.
-    /// </remarks>
-    public async Task UpdateAsync(
-        FeeRefundRequest request,
-        List<(Guid DueFeeId, double Amount)> lines,
-        string? refundMethod,
-        RefundPaymentDetails? refundPaymentDetails,
-        string? reason)
+    public async Task UpdateDraftAsync(FeeRefundRequest request, IReadOnlyCollection<RefundLineSpec> lines,
+        string? method, RefundPaymentDetails? details, string? reason,
+        string calculationSnapshot, string calculationHash)
     {
-        if (request.Status != FeeRefundStatus.Pending)
-            throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund)
-                .WithData("VoucherNumber", request.VoucherNumber)
-                .WithData("CurrentStatus", request.Status);
-
-        if (lines == null || lines.Count == 0)
-            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
-
-        var dueFeeIds = lines.Select(l => l.DueFeeId).ToList();
-        var dueFees = await dueFeeRepository.GetListAsync(df => dueFeeIds.Contains(df.Id));
-
-        if (dueFees.Count != dueFeeIds.Count)
-            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound)
-                .WithData("Missing", dueFeeIds.Except(dueFees.Select(df => df.Id)).ToList());
-
-        // Build a map of amounts already held by this request so we don't double-count them
-        // when re-validating the refundable balance.
-        var existingLineAmounts = request.Lines
-            .ToDictionary(l => l.DueFeeId, l => l.Amount);
-
-        var dueFeeMap = dueFees.ToDictionary(df => df.Id);
-        foreach (var (dueFeeId, amount) in lines)
-        {
-            var dueFee = dueFeeMap[dueFeeId];
-
-            // Available = stored RefundableBalance + amount already reserved by this request
-            var alreadyReserved = existingLineAmounts.TryGetValue(dueFeeId, out var prev) ? prev : 0d;
-			var available = dueFee.RefundableBalance + (decimal)alreadyReserved;
-
-			if ((decimal)amount > available)
-                throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance)
-                    .WithData("DueFeeId", dueFeeId)
-                    .WithData("Requested", amount)
-                    .WithData("Available", available);
-        }
-
-        var totalAmount = lines.Sum(l => l.Amount);
-
-        var newLines = lines
-            .Select(l => new FeeRefundLine(
-                id: request.Lines.FirstOrDefault(existing => existing.DueFeeId == l.DueFeeId)?.Id ?? GuidGenerator.Create(),
-                feeRefundRequestId: request.Id,
-                dueFeeId: l.DueFeeId,
-                amount: l.Amount))
-            .ToList();
-
-        request.ReplaceLines(newLines, totalAmount);
-        request.UpdatePaymentDetails(refundMethod, refundPaymentDetails);
+        if (request.Status != FeeRefundStatus.Draft)
+            throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund);
+        if (!request.StudentFeeStructureId.HasValue)
+            throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
+        await ValidateLinesAsync(request.StudentId, request.StudentFeeStructureId.Value, lines, request.Id);
+        request.ReplaceLines(lines.Select(x => ToEntity(request.Id, x)).ToList());
+        request.UpdatePaymentDetails(method, details);
         request.UpdateReason(reason);
+        request.UpdateEvidence(calculationSnapshot, calculationHash);
     }
 
-	/// <summary>
-	/// Approves a refund request and applies <see cref="DueFee.ApplyRefund"/>
-	/// to each referenced DueFee row inside the caller's transaction.
-	/// The caller must wrap this in a unit-of-work and call <see cref="IFeeRefundRepository.UpdateAsync"/>.
-	/// </summary>
-	public async Task ApproveAsync(FeeRefundRequest request, Guid approverUserId, string? notes = null)
+    public async Task ApproveAsync(FeeRefundRequest request, Guid userId, string? notes)
     {
-		if (request.Status == FeeRefundStatus.Approved)
-            throw new BusinessException(FeeRefundErrorCodes.RefundAlreadyProcessed)
-                .WithData("VoucherNumber", request.VoucherNumber);
-
-        // Load and mutate DueFee rows
-        var dueFeeIds = request.Lines.Select(l => l.DueFeeId).ToList();
-        var dueFees = await dueFeeRepository.GetListAsync(df => dueFeeIds.Contains(df.Id));
-        var dueFeeMap = dueFees.ToDictionary(df => df.Id);
-
+        var dueIds = request.Lines.Select(x => x.DueFeeId).Distinct().ToList();
+        var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
+        var reserved = await repository.GetActiveReservedAmountsAsync(dueIds, request.Id);
+        var allocationIds = request.Lines.Where(x => x.SourceAllocationId.HasValue)
+            .Select(x => x.SourceAllocationId!.Value).Distinct().ToList();
+        var allocationCommitted = await repository.GetCommittedAllocationAmountsAsync(allocationIds, request.Id);
+        var reservations = new List<FeeRefundReservation>();
         foreach (var line in request.Lines)
         {
-            if (!dueFeeMap.TryGetValue(line.DueFeeId, out var dueFee))
-                throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound)
-                    .WithData("DueFeeId", line.DueFeeId);
-
-			dueFee.ApplyRefund((decimal)line.Amount);
+            if (!dues.TryGetValue(line.DueFeeId, out var due))
+                throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+            var available = due.RefundableBalance - reserved.GetValueOrDefault(line.DueFeeId);
+            if (line.CalculatedAmount > available)
+                throw new BusinessException(FeeRefundErrorCodes.ReservationConflict)
+                    .WithData("DueFeeId", line.DueFeeId).WithData("Requested", line.CalculatedAmount).WithData("Available", available);
+            if (line.SourceAllocationId.HasValue)
+            {
+                var allocationAvailable = Math.Max(0m, line.SettledPaidAmount -
+                    allocationCommitted.GetValueOrDefault(line.SourceAllocationId.Value));
+                if (line.CalculatedAmount > allocationAvailable)
+                    throw new BusinessException(FeeRefundErrorCodes.ReservationConflict)
+                        .WithData("SourceAllocationId", line.SourceAllocationId.Value)
+                        .WithData("Requested", line.CalculatedAmount).WithData("Available", allocationAvailable);
+            }
+            reservations.Add(new FeeRefundReservation(GuidGenerator.Create(), request.Id, line.Id,
+                line.DueFeeId, line.SourceAllocationId, line.CalculatedAmount));
         }
-
-        await dueFeeRepository.UpdateManyAsync(dueFees, autoSave: false);
-
-        request.Approve(approverUserId, notes);
+        request.Approve(userId, reservations, notes);
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
-
-    private async Task<string> GenerateVoucherNumberAsync()
+    public async Task<FeeRefundSettlement> ProcessAsync(FeeRefundRequest request, Guid userId,
+        string idempotencyKey, string method, decimal amount, DateTimeOffset date,
+        string? reference, string? paymentDetailsJson)
     {
-        var year = DateTime.UtcNow.Year;
-        var count = await feeRefundRepository.GetCountAsync();
-        return $"REF-{year}-{count + 1:D6}";
-    }
-
-    // ── Payment details factory ───────────────────────────────────────────────
-
-    /// <summary>
-    /// Maps the raw details dictionary from the API request into the appropriate
-    /// strongly-typed <see cref="RefundPaymentDetails"/> value object.
-    /// Returns <c>null</c> for Cash — the only required field (received-by) is
-    /// captured separately; pass it explicitly via the <paramref name="details"/> dict.
-    /// </summary>
-    /// <param name="refundMethod">The string method key sent by the frontend (e.g., "Cash", "Cheque").</param>
-    /// <param name="details">Flat key/value dictionary matching the frontend <c>paymentDetails</c> object.</param>
-    public static RefundPaymentDetails? MapRefundPaymentDetails(
-        string? refundMethod,
-        Dictionary<string, object?>? details)
-    {
-        if (string.IsNullOrWhiteSpace(refundMethod))
-            return null;
-
-        details ??= [];
-
-        string Get(string key) =>
-            details.TryGetValue(key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
-
-        string? GetOpt(string key) =>
-            details.TryGetValue(key, out var v) ? v?.ToString() : null;
-
-        DateOnly ParseDate(string key) =>
-            DateOnly.TryParse(Get(key), out var d) ? d : DateOnly.FromDateTime(DateTime.UtcNow);
-
-        return refundMethod switch
+        var existing = request.Settlements.FirstOrDefault(x => x.IdempotencyKey == idempotencyKey);
+        if (existing?.Status == FeeRefundSettlementStatus.Processed) return existing;
+        var settlement = request.StartProcessing(GuidGenerator.Create(), userId, idempotencyKey,
+            method, amount, date, reference, paymentDetailsJson);
+        if (settlement.Status == FeeRefundSettlementStatus.Processed) return settlement;
+        var dueIds = request.Lines.Select(x => x.DueFeeId).Distinct().ToList();
+        var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
+        foreach (var line in request.Lines)
         {
-            "Cash" => new CashRefundDetails(
-                refundDate: ParseDate("refundDate"),
-                receivedBy: Get("receivedBy"),
-                remarks:    GetOpt("remarks")),
+            if (!dues.TryGetValue(line.DueFeeId, out var due)) throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+            due.ApplyRefund(line.ApprovedAmount);
+        }
+        await dueFeeRepository.UpdateManyAsync(dues.Values, autoSave: false);
+        request.CompleteSettlement(settlement.Id, userId);
+        return settlement;
+    }
 
-            "Cheque" => new ChequeRefundDetails(
-                chequeIssueDate:   ParseDate("refundDate"),
-                chequeNumber:      Get("chequeNumber"),
-                payeeName:         Get("payeeName"),
-                sourceBankAccount: Get("sourceBankAccount"),
-                remarks:           GetOpt("remarks")),
+    public async Task ReverseAsync(FeeRefundRequest request, Guid settlementId, Guid userId, string reason)
+    {
+        var dueIds = request.Lines.Select(x => x.DueFeeId).Distinct().ToList();
+        var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
+        foreach (var line in request.Lines)
+        {
+            if (!dues.TryGetValue(line.DueFeeId, out var due)) throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+            due.ReverseRefund(line.ProcessedAmount);
+        }
+        await dueFeeRepository.UpdateManyAsync(dues.Values, autoSave: false);
+        request.Reverse(settlementId, userId, reason);
+    }
 
-            "Demand Draft (DD)" => new DemandDraftRefundDetails(
-                issueDate:         ParseDate("issueDate"),
-                ddNumber:          Get("ddNumber"),
-                bankName:          Get("bankName"),
-                branchName:        Get("branchName"),
-                payeeName:         Get("payeeName"),
-                sourceBankAccount: Get("sourceBankAccount"),
-                remarks:           GetOpt("remarks")),
+    private async Task ValidateLinesAsync(Guid studentId, Guid assignmentId,
+        IReadOnlyCollection<RefundLineSpec> lines, Guid? requestId)
+    {
+        if (lines.Count == 0 || lines.Any(x => x.Amount <= 0 || x.CalculatedAmount <= 0 || x.CalculatedAmount > x.Amount) ||
+            lines.GroupBy(x => x.DueFeeId).Any(g => g.Count() > 1))
+            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+        var ids = lines.Select(x => x.DueFeeId).ToList();
+        var dues = await dueFeeRepository.GetListAsync(x => ids.Contains(x.Id));
+        if (dues.Count != ids.Count) throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+        var reserved = await repository.GetActiveReservedAmountsAsync(ids, requestId);
+        foreach (var line in lines)
+        {
+            var due = dues.Single(x => x.Id == line.DueFeeId);
+            if (due.StudentId != studentId || due.StudentFeeStructureId != assignmentId)
+                throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
+            var available = Math.Min(due.RefundableBalance - reserved.GetValueOrDefault(due.Id), line.SettledPaidAmount);
+            if (line.Amount > available)
+                throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance)
+                    .WithData("DueFeeId", due.Id).WithData("Requested", line.Amount).WithData("Available", available);
+        }
+    }
 
-            "Bank Transfer (NEFT/RTGS/IMPS)" => new BankTransferRefundDetails(
-                transferDate:             ParseDate("refundDate"),
-                sourceBankAccount:        Get("sourceBankAccount"),
-                beneficiaryName:          Get("beneficiaryName"),
-                beneficiaryBankName:      Get("beneficiaryBankName"),
-                beneficiaryAccountNumber: Get("beneficiaryAccountNumber"),
-                ifscCode:                 Get("ifscCode"),
-                transactionId:            GetOpt("transactionId"),
-                remarks:                  GetOpt("remarks")),
+    private FeeRefundLine ToEntity(Guid requestId, RefundLineSpec line) => new(GuidGenerator.Create(), requestId,
+        line.DueFeeId, line.SourceAllocationId, line.SourceReceiptId, line.FeeHeadId,
+        line.FeeHeadName, line.InstallmentLabel, line.SettledPaidAmount, line.Amount, line.CalculatedAmount);
 
-            "UPI" => new UpiRefundDetails(
-                refundDate:        ParseDate("refundDate"),
-                sourceBankAccount: Get("sourceBankAccount"),
-                beneficiaryName:   Get("beneficiaryName"),
-                upiId:             Get("upiId"),
-                transactionId:     GetOpt("transactionId"),
-                remarks:           GetOpt("remarks")),
+    private static string GenerateVoucherNumber() => $"REF-{DateTime.UtcNow:yyyy}-{Guid.NewGuid():N}"[..21].ToUpperInvariant();
 
-            _ => null,
+    public static RefundPaymentDetails? MapRefundPaymentDetails(string? method, Dictionary<string, object?>? details)
+    {
+        if (string.IsNullOrWhiteSpace(method)) return null;
+        details ??= [];
+        string Get(string key) => details.TryGetValue(key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
+        string? GetOpt(string key) => details.TryGetValue(key, out var v) ? v?.ToString() : null;
+        DateOnly Date(string key) => DateOnly.TryParse(Get(key), out var d) ? d : DateOnly.FromDateTime(DateTime.UtcNow);
+        return method switch
+        {
+            "Cash" => new CashRefundDetails(Date("refundDate"), Get("receivedBy"), GetOpt("remarks")),
+            "Cheque" => new ChequeRefundDetails(Date("refundDate"), Get("chequeNumber"), Get("payeeName"), Get("sourceBankAccount"), GetOpt("remarks")),
+            "Demand Draft (DD)" => new DemandDraftRefundDetails(Date("issueDate"), Get("ddNumber"), Get("bankName"), Get("branchName"), Get("payeeName"), Get("sourceBankAccount"), GetOpt("remarks")),
+            "Bank Transfer (NEFT/RTGS/IMPS)" => new BankTransferRefundDetails(Date("refundDate"), Get("sourceBankAccount"), Get("beneficiaryName"), Get("beneficiaryBankName"), Get("beneficiaryAccountNumber"), Get("ifscCode"), GetOpt("transactionId"), GetOpt("remarks")),
+            "UPI" => new UpiRefundDetails(Date("refundDate"), Get("sourceBankAccount"), Get("beneficiaryName"), Get("upiId"), GetOpt("transactionId"), GetOpt("remarks")),
+            _ => throw new BusinessException(FeeRefundErrorCodes.PayoutMethodNotAllowed),
         };
     }
 }

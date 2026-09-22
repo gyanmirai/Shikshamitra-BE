@@ -50,6 +50,7 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 	/// status: 0 = Pending (any pending line), 1 = Processed (all lines actioned).
 	/// </summary>
 	Task<(List<ChargeRequestJoinResult> Items, int TotalCount)> GetChargeRequestsPagedAsync(
+		Guid academicYearId,
 		int status,
 		int page,
 		int pageSize,
@@ -58,18 +59,24 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 		Guid? standardId = null,
 		Guid? divisionId = null,
 		string? search = null,
+		string? sortBy = null,
+		string? sortOrder = null,
+		IReadOnlyCollection<Guid>? scopedStudentIds = null,
 		CancellationToken cancellationToken = default);
 
 	Task<IQueryable<ChargeLineJoinResult>> GetChargeLinesQueryAsync(
+		Guid academicYearId,
 		int? status = null,
 		Guid? boardId = null,
 		Guid? educationMediumId = null);
 
 	Task<ChargeRequestStatusCounts> GetStatusCountsAsync(
+		Guid academicYearId,
 		Guid? boardId = null,
 		Guid? educationMediumId = null,
 		Guid? standardId = null,
 		Guid? divisionId = null,
+		IReadOnlyCollection<Guid>? scopedStudentIds = null,
 		CancellationToken cancellationToken = default);
 }
 

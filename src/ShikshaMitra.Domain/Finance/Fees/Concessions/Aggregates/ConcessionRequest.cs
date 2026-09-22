@@ -292,6 +292,15 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("Status", Status.ToString());
 	}
 
+	public void ChangePolicySnapshot(Guid concessionPolicyId, Guid concessionPolicyVersionId)
+	{
+		EnsureDraft();
+		if (concessionPolicyId == Guid.Empty || concessionPolicyVersionId == Guid.Empty)
+			throw new BusinessException(FinanceConcessionErrorCodes.ConfigurationSnapshotInvalid);
+		ConcessionPolicyId = concessionPolicyId;
+		ConcessionPolicyVersionId = concessionPolicyVersionId;
+	}
+
 	public void EnsurePending()
 	{
 		if (Status != ConcessionRequestStatus.Pending)

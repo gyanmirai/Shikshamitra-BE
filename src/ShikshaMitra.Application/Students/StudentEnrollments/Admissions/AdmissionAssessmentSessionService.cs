@@ -27,7 +27,9 @@ public class AdmissionAssessmentSessionService(
 			.Select(item => new { item.AdmissionOfferingId, item.WorkflowDefinitionId }).Distinct());
 		var workflowIds = offerings.Where(item => item.WorkflowDefinitionId.HasValue).Select(item => item.WorkflowDefinitionId!.Value)
 			.Concat(pinned.Select(item => item.WorkflowDefinitionId)).Distinct().ToList();
-		var workflowRows = (await workflows.GetListAsync(item => workflowIds.Contains(item.Id) && item.Status != AdmissionWorkflowStatus.Draft)).ToDictionary(item => item.Id);
+		var workflowRows = (await workflows.GetListAsync(item => workflowIds.Contains(item.Id) &&
+			(item.Status == AdmissionWorkflowStatus.Published || item.Status == AdmissionWorkflowStatus.Superseded ||
+			 item.Status == AdmissionWorkflowStatus.Archived))).ToDictionary(item => item.Id);
 		var stageRows = await definitions.GetListAsync(item => workflowIds.Contains(item.WorkflowDefinitionId) && item.StageType == AdmissionWorkflowStageType.Assessment);
 		var result = new List<AdmissionAssessmentScopeDto>();
 		foreach (var offering in offerings)
@@ -38,7 +40,7 @@ public class AdmissionAssessmentSessionService(
 			if (policy == null || !workflowRows.TryGetValue(stage.WorkflowDefinitionId, out var workflow)) continue;
 			result.Add(new AdmissionAssessmentScopeDto
 			{
-				AdmissionOfferingId = offering.Id, OfferingName = offering.Code, WorkflowStageDefinitionId = stage.Id,
+				AdmissionOfferingId = offering.Id, OfferingName = offering.Name, WorkflowStageDefinitionId = stage.Id,
 				StageName = stage.Name, WorkflowDefinitionId = workflow.Id, WorkflowVersion = workflow.Version,
 				SchedulingEnabled = policy.SchedulingEnabled
 			});
@@ -58,7 +60,7 @@ public class AdmissionAssessmentSessionService(
 		await access.GetSessionDefinitionAsync(input.AdmissionOfferingId, input.WorkflowStageDefinitionId);
 		EnsureFuture(input.StartsAt);
 		var session = new AdmissionAssessmentSession(GuidGenerator.Create(), CurrentTenant.Id, input.AdmissionOfferingId,
-			input.WorkflowStageDefinitionId, input.Name, input.StartsAt, input.EndsAt, input.Location, input.Capacity);
+			input.WorkflowStageDefinitionId, input.Name, input.StartsAt.UtcDateTime, input.EndsAt.UtcDateTime, input.Location, input.Capacity);
 		await sessions.InsertAsync(session, true);
 		return Map(session);
 	}
@@ -69,9 +71,9 @@ public class AdmissionAssessmentSessionService(
 		AdmissionAssessmentAccessService.EnsureConcurrency(session, input.ConcurrencyStamp);
 		if (session.AdmissionOfferingId != input.AdmissionOfferingId || session.WorkflowStageDefinitionId != input.WorkflowStageDefinitionId)
 			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "The session offering and workflow stage cannot change.");
-		EnsureFuture(session.StartsAt);
+		EnsureFuture(ToUtcOffset(session.StartsAt));
 		EnsureFuture(input.StartsAt);
-		session.Update(input.Name, input.StartsAt, input.EndsAt, input.Location, input.Capacity);
+		session.Update(input.Name, input.StartsAt.UtcDateTime, input.EndsAt.UtcDateTime, input.Location, input.Capacity);
 		await sessions.UpdateAsync(session, true);
 		return Map(session);
 	}
@@ -91,15 +93,17 @@ public class AdmissionAssessmentSessionService(
 		await access.GetOfferingAsync(session.AdmissionOfferingId);
 		return session;
 	}
-	private static void EnsureFuture(DateTime value)
+	private static void EnsureFuture(DateTimeOffset value)
 	{
-		if (value.ToUniversalTime() <= DateTime.UtcNow)
+		if (value.UtcDateTime <= DateTime.UtcNow)
 			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "The assessment session must start in the future.");
 	}
+	internal static DateTimeOffset ToUtcOffset(DateTime value) =>
+		new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
 	public static AdmissionAssessmentSessionDto Map(AdmissionAssessmentSession item) => new()
 	{
 		Id = item.Id, AdmissionOfferingId = item.AdmissionOfferingId, WorkflowStageDefinitionId = item.WorkflowStageDefinitionId,
-		Name = item.Name, StartsAt = item.StartsAt, EndsAt = item.EndsAt, Location = item.Location, Capacity = item.Capacity,
+		Name = item.Name, StartsAt = ToUtcOffset(item.StartsAt), EndsAt = ToUtcOffset(item.EndsAt), Location = item.Location, Capacity = item.Capacity,
 		BookedCount = item.BookedCount, IsCancelled = item.IsCancelled, ConcurrencyStamp = item.ConcurrencyStamp
 	};
 }

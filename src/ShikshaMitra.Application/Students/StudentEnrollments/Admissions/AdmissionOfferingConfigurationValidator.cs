@@ -19,7 +19,6 @@ public class AdmissionOfferingConfigurationValidator(
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
-	IRepository<AdmissionFormFieldDefinition, Guid> formFieldRepository,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
 	IEducationBoardRepository boardRepository,
 	IEducationMediumRepository mediumRepository,
@@ -36,8 +35,7 @@ public class AdmissionOfferingConfigurationValidator(
 		AdmissionOfferingValidationCodes.CycleUnavailable,
 		AdmissionOfferingValidationCodes.WorkflowMissing,
 		AdmissionOfferingValidationCodes.InquiryFormMissing,
-		AdmissionOfferingValidationCodes.ApplicationFormMissing,
-		AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete
+		AdmissionOfferingValidationCodes.ApplicationFormMissing
 	];
 
 	public async Task<AdmissionOfferingValidationResult> ValidateAsync(
@@ -71,6 +69,7 @@ public class AdmissionOfferingConfigurationValidator(
 	public Task<AdmissionOfferingValidationResult> ValidateStoredAsync(AdmissionOffering offering) =>
 		ValidateAsync(offering.AdmissionCycleId, new CreateAdmissionOfferingDto
 		{
+			Name = offering.Name,
 			CampusId = offering.CampusId,
 			BoardId = offering.BoardId,
 			MediumId = offering.MediumId,
@@ -88,9 +87,7 @@ public class AdmissionOfferingConfigurationValidator(
 
 	public static void EnsureCanSave(AdmissionOfferingValidationResult validation, bool isActive)
 	{
-		var blockingErrors = validation.Errors
-			.Where(error => isActive || !IncompleteConfigurationCodes.Contains(error.Code))
-			.ToList();
+		var blockingErrors = GetBlockingErrors(validation, isActive);
 		if (blockingErrors.Count == 0)
 		{
 			return;
@@ -100,6 +97,15 @@ public class AdmissionOfferingConfigurationValidator(
 		throw new BusinessException(ToBusinessErrorCode(first.Code), first.Message)
 			.WithData("ValidationErrors", blockingErrors.Select(error => error.Code).ToArray());
 	}
+
+	public static IReadOnlyList<AdmissionOfferingValidationError> GetBlockingErrors(
+		AdmissionOfferingValidationResult validation,
+		bool isActive) => validation.Errors
+			.Where(error => isActive || !IncompleteConfigurationCodes.Contains(error.Code))
+			.ToList();
+
+	public static bool CanSave(AdmissionOfferingValidationResult validation, bool isActive) =>
+		GetBlockingErrors(validation, isActive).Count == 0;
 
 	private async Task ValidateHierarchyAsync(
 		AdmissionCycle cycle,
@@ -175,7 +181,7 @@ public class AdmissionOfferingConfigurationValidator(
 		else
 		{
 			var workflow = await workflowRepository.FindAsync(input.WorkflowDefinitionId.Value);
-			if (workflow == null || workflow.Status != AdmissionWorkflowStatus.Published)
+			if (workflow == null || !workflow.Status.CanConfigureOffering())
 			{
 				errors.Add(Error(AdmissionOfferingValidationCodes.WorkflowNotPublished,
 					"The selected Admission Workflow must be a published version."));
@@ -190,7 +196,6 @@ public class AdmissionOfferingConfigurationValidator(
 			AdmissionOfferingValidationCodes.ApplicationFormMissing,
 			AdmissionOfferingValidationCodes.ApplicationFormNotPublished,
 			"Application Form", errors);
-		await ValidateApplicationFormIdentityAsync(input.ApplicationFormDefinitionId, errors);
 		await ValidateWorkflowFormCompatibilityAsync(input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, errors);
 		foreach (var error in await eligibilityValidator.ValidateAsync(input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, input.InquiryFormDefinitionId))
 			errors.Add(error);
@@ -208,31 +213,6 @@ public class AdmissionOfferingConfigurationValidator(
 			.Any(configured => configured.HasValue && configured.Value != formId.Value))
 			errors.Add(Error(AdmissionOfferingValidationCodes.WorkflowFormMismatch,
 				"Every Form stage in the workflow must use the same published Application Form selected for this offering."));
-	}
-
-	private async Task ValidateApplicationFormIdentityAsync(
-		Guid? formId,
-		ICollection<AdmissionOfferingValidationError> errors)
-	{
-		if (!formId.HasValue)
-			return;
-		var form = await formRepository.FindAsync(formId.Value);
-		if (form?.Status != AdmissionFormStatus.Published)
-			return;
-
-		var fields = await formFieldRepository.GetListAsync(field => field.FormDefinitionId == formId.Value);
-		var requiredBindings = fields
-			.Where(field => field.Required && field.BindingType == AdmissionFormBindingType.System)
-			.Select(field => field.BindingKey)
-			.Where(key => !string.IsNullOrWhiteSpace(key))
-			.ToHashSet(StringComparer.OrdinalIgnoreCase);
-		if (!requiredBindings.Contains("Applicant.FirstName") ||
-			!requiredBindings.Contains("Applicant.DateOfBirth") ||
-			!requiredBindings.Contains("Applicant.Gender"))
-		{
-			errors.Add(Error(AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete,
-				"Application Form must require Applicant first name, date of birth, and gender system fields."));
-		}
 	}
 
 	private async Task ValidateFormAsync(

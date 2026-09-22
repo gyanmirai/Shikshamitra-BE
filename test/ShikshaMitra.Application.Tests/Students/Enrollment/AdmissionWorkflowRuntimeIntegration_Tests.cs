@@ -32,6 +32,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	private readonly IAdmissionFormAppService _formAppService;
 	private readonly IRepository<AdmissionCycle, Guid> _cycleRepository;
 	private readonly IRepository<AdmissionOffering, Guid> _offeringRepository;
+	private readonly IRepository<AdmissionCampus, Guid> _campusRepository;
 	private readonly IRepository<AdmissionFormDefinition, Guid> _formRepository;
 	private readonly IRepository<AdmissionFormSectionDefinition, Guid> _formSectionRepository;
 	private readonly IRepository<AdmissionFormFieldDefinition, Guid> _formFieldRepository;
@@ -61,6 +62,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		_formAppService = GetRequiredService<IAdmissionFormAppService>();
 		_cycleRepository = GetRequiredService<IRepository<AdmissionCycle, Guid>>();
 		_offeringRepository = GetRequiredService<IRepository<AdmissionOffering, Guid>>();
+		_campusRepository = GetRequiredService<IRepository<AdmissionCampus, Guid>>();
 		_formRepository = GetRequiredService<IRepository<AdmissionFormDefinition, Guid>>();
 		_formSectionRepository = GetRequiredService<IRepository<AdmissionFormSectionDefinition, Guid>>();
 		_formFieldRepository = GetRequiredService<IRepository<AdmissionFormFieldDefinition, Guid>>();
@@ -141,12 +143,23 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					ConcurrencyStamp = (await _applicationAppService.GetAsync(aaravApplication.Id)).ConcurrencyStamp
 				});
 			(await CountHistoryAsync(aaravApplication.Id)).ShouldBe(historyCount);
+			await CreateCampusScopedImpactOfferingAsync(offering, workflowV1.Id, "NORTH");
+			await CreateCampusScopedImpactOfferingAsync(offering, workflowV1.Id, "SOUTH");
 
 			var workflowV2 = await _workflowAppService.CreateNewVersionAsync(workflowV1.Id);
 			var v2Input = ToUpdateInput(workflowV2);
 			v2Input.Stages.Single(stage => stage.Code == "ADMISSION").Name = "Enrollment Decision";
 			workflowV2 = await _workflowAppService.UpdateAsync(workflowV2.Id, v2Input);
 			workflowV2 = await _workflowAppService.PublishAsync(workflowV2.Id, workflowV2.ConcurrencyStamp);
+			var versionHistory = await _workflowAppService.GetVersionHistoryAsync(workflowV2.Id);
+			versionHistory.Count.ShouldBe(2);
+			var versionOneHistory = versionHistory.Single(version => version.Version == 1);
+			versionOneHistory.Stages.Count.ShouldBe(2);
+			versionOneHistory.Transitions.Count.ShouldBe(1);
+			versionOneHistory.OfferingCount.ShouldBe(3);
+			versionOneHistory.CampusCount.ShouldBe(2);
+			versionHistory.Single(version => version.Version == 2).Stages
+				.Single(stage => stage.Code == "ADMISSION").Name.ShouldBe("Enrollment Decision");
 
 			await WithUnitOfWorkAsync(async () =>
 			{
@@ -167,6 +180,22 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				.ShouldBe("Enrollment Decision");
 			(await _applicationAppService.GetWorkflowAsync(aaravApplication.Id)).WorkflowDefinitionId
 				.ShouldBe(workflowV1.Id);
+
+			var v1Usage = await _workflowAppService.GetUsageAsync(workflowV1.Id);
+			v1Usage.OfferingCount.ShouldBe(2);
+			v1Usage.CampusCount.ShouldBe(2);
+			v1Usage.Offerings.Select(item => item.CampusId).ShouldAllBe(campusId => campusId.HasValue);
+			v1Usage.RuntimeAnalytics.StartedCount.ShouldBe(1);
+			v1Usage.RuntimeAnalytics.CompletedCount.ShouldBe(1);
+			v1Usage.RuntimeAnalytics.CompletionRatePercent.ShouldBe(100m);
+			v1Usage.RuntimeAnalytics.Stages.Count.ShouldBe(2);
+			v1Usage.RuntimeAnalytics.Stages.ShouldAllBe(stage => stage.CompletedCount == 1);
+			var v2Usage = await _workflowAppService.GetUsageAsync(workflowV2.Id);
+			v2Usage.OfferingCount.ShouldBe(1);
+			v2Usage.CampusCount.ShouldBe(0);
+			v2Usage.RuntimeAnalytics.StartedCount.ShouldBe(1);
+			v2Usage.RuntimeAnalytics.ActiveCount.ShouldBe(1);
+			v2Usage.RuntimeAnalytics.Stages.Single().Code.ShouldBe("INQUIRY");
 		}
 	}
 
@@ -186,6 +215,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{
 				AdmissionCycleId = offering.AdmissionCycleId,
 				AdmissionOfferingId = offering.Id,
+				BoardId = offering.BoardId,
+				MediumId = offering.MediumId,
+				StandardId = offering.StandardId,
 				ApplicantName = "Fallback Applicant",
 				Phone = "9000000000",
 				Source = AdmissionInquirySource.Website,
@@ -213,6 +245,40 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var form = await _applicationAppService.GetFormAsync(application.Id);
 			form.Values.Single(value => value.FieldCode == "LEARNING_NOTES").ValueJson
 				.ShouldBe("\"Benefits from visual learning prompts\"");
+
+			var exactInquiry = await inquiryService.GetListAsync(new AdmissionInquiryListInput
+			{
+				InquiryNumber = inquiry.InquiryNumber,
+				InquiryNumberFilterType = "equals",
+				MaxResultCount = 10
+			});
+			exactInquiry.Items.ShouldContain(item => item.Id == inquiry.Id);
+
+			var mainInquiryQueue = await inquiryService.GetListAsync(new AdmissionInquiryListInput
+			{
+				InquiryNumber = inquiry.InquiryNumber,
+				InquiryNumberFilterType = "equals",
+				ExcludePostApplication = true,
+				MaxResultCount = 10
+			});
+			mainInquiryQueue.Items.ShouldNotContain(item => item.Id == inquiry.Id);
+
+			var activePipeline = await inquiryService.GetListAsync(new AdmissionInquiryListInput
+			{
+				InquiryNumber = inquiry.InquiryNumber,
+				InquiryNumberFilterType = "equals",
+				PipelineGroup = "active",
+				MaxResultCount = 10
+			});
+			activePipeline.Items.ShouldNotContain(item => item.Id == inquiry.Id);
+			var handoffPipeline = await inquiryService.GetListAsync(new AdmissionInquiryListInput
+			{
+				InquiryNumber = inquiry.InquiryNumber,
+				InquiryNumberFilterType = "equals",
+				PipelineGroup = "handoff",
+				MaxResultCount = 10
+			});
+			handoffPipeline.Items.ShouldContain(item => item.Id == inquiry.Id);
 		}
 	}
 
@@ -234,6 +300,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				{
 					AdmissionCycleId = offering.AdmissionCycleId,
 					AdmissionOfferingId = offering.Id,
+					BoardId = offering.BoardId,
+					MediumId = offering.MediumId,
+					StandardId = offering.StandardId,
 					ApplicantName = "Riya Mehta",
 					ApplicantFirstName = "Riya",
 					Phone = "9876501011",
@@ -287,7 +356,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	[Fact]
-	public async Task Active_Offering_Should_Reject_Application_Form_Without_Required_Identity()
+	public async Task Offering_Should_Not_Require_Application_Identity_Fields_For_Readiness()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -296,7 +365,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Offering identity test"),
 				autoSave: true);
 			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateAvailableOfferingAsync(workflow.Id, assertValid: false);
 			var incompleteForm = await WithUnitOfWorkAsync(async () =>
 			{
 				var form = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Incomplete form",
@@ -305,11 +374,19 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				await _formRepository.InsertAsync(form, autoSave: true);
 				return form;
 			});
-			offering.ConfigureReferences(workflow.Id, incompleteForm.Id, incompleteForm.Id);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var stored = await _offeringRepository.GetAsync(offering.Id);
+				stored.ConfigureReferences(workflow.Id, incompleteForm.Id, incompleteForm.Id);
+				await _offeringRepository.UpdateAsync(stored, autoSave: true);
+			});
 
-			var validation = await WithUnitOfWorkAsync(() => _offeringValidator.ValidateStoredAsync(offering));
-
-			validation.Errors.ShouldContain(error =>
+			var validation = await WithUnitOfWorkAsync(async () =>
+			{
+				var stored = await _offeringRepository.GetAsync(offering.Id);
+				return await _offeringValidator.ValidateStoredAsync(stored);
+			});
+			validation.Errors.ShouldNotContain(error =>
 				error.Code == AdmissionOfferingValidationCodes.ApplicationFormIdentityIncomplete);
 		}
 	}
@@ -504,7 +581,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
 	}
 
-	private Task<AdmissionOffering> CreateAvailableOfferingAsync(Guid workflowId) =>
+	private Task<AdmissionOffering> CreateAvailableOfferingAsync(Guid workflowId, bool assertValid = true) =>
 		WithUnitOfWorkAsync(async () =>
 	{
 		var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
@@ -575,10 +652,29 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			null);
 		offering.ConfigureReferences(workflowId, form.Id, form.Id);
 		await _offeringRepository.InsertAsync(offering, autoSave: true);
-		var validation = await _offeringValidator.ValidateStoredAsync(offering);
-		validation.Errors.ShouldBeEmpty(string.Join(" | ", validation.Errors.Select(error =>
-			$"{error.Code}: {error.Message}")));
+		if (assertValid)
+		{
+			var validation = await _offeringValidator.ValidateStoredAsync(offering);
+			validation.Errors.ShouldBeEmpty(string.Join(" | ", validation.Errors.Select(error =>
+				$"{error.Code}: {error.Message}")));
+		}
 		return offering;
+	});
+
+	private Task CreateCampusScopedImpactOfferingAsync(
+		AdmissionOffering source,
+		Guid workflowId,
+		string campusCode) => WithUnitOfWorkAsync(async () =>
+	{
+		var campus = new AdmissionCampus(
+			Guid.NewGuid(), TestTenantId, $"{campusCode}_{Guid.NewGuid():N}"[..24], $"{campusCode} Campus");
+		await _campusRepository.InsertAsync(campus, autoSave: true);
+		var offering = new AdmissionOffering(
+			Guid.NewGuid(), TestTenantId, source.AdmissionCycleId, campus.Id, source.BoardId, source.MediumId,
+			source.StageId, source.StandardId, $"{campusCode}_{Guid.NewGuid():N}"[..20], true, null, null);
+		offering.ConfigureReferences(
+			workflowId, source.InquiryFormDefinitionId, source.ApplicationFormDefinitionId);
+		await _offeringRepository.InsertAsync(offering, autoSave: true);
 	});
 
 	private async Task<AdmissionApplicant> CreateApplicantAsync(string firstName)

@@ -54,22 +54,30 @@ public class AdmissionApplicationWorkflowService(
 
 	public async Task AdvanceAfterSubmitAsync(AdmissionApplication application)
 	{
-		if (!application.CurrentStageInstanceId.HasValue) return;
-		var current = await stageRepository.GetAsync(application.CurrentStageInstanceId.Value);
-		if (current.StageType == AdmissionWorkflowStageType.Form &&
-			AdmissionFormStageAccessService.ReadPolicy(await stageDefinitionRepository.GetAsync(current.DefinitionStageId)) != null &&
-			!await formRuntime.ShouldAdvanceAfterSubmitAsync(application.Id)) return;
-		if (current.StageType == AdmissionWorkflowStageType.Eligibility &&
-			AdmissionEligibilityAccessService.ReadPolicy(await stageDefinitionRepository.GetAsync(current.DefinitionStageId)) != null) return;
-		if (current.StageType == AdmissionWorkflowStageType.Review &&
-			AdmissionReviewAccessService.ReadPolicy(await stageDefinitionRepository.GetAsync(current.DefinitionStageId)) != null) return;
 		var workflow = await workflowRepository.FindAsync(instance => instance.ApplicationId == application.Id);
 		if (workflow == null) return;
-		await AdvanceInternalAsync(application, workflow, new AdvanceAdmissionWorkflowDto
+
+		// Current workflows start at Form, while older published workflows can still
+		// contain Inquiry -> Form. A form submission must consume both legacy handoff
+		// stages in one idempotent operation, then stop before the first operational
+		// stage (assessment, documents, review, and so on).
+		while (application.CurrentStageInstanceId is Guid currentStageId)
 		{
-			ExpectedCurrentStageInstanceId = application.CurrentStageInstanceId.Value,
-			IdempotencyKey = $"submit:{application.Id:N}"
-		});
+			var current = await stageRepository.GetAsync(currentStageId);
+			if (current.StageType is not (AdmissionWorkflowStageType.Inquiry or AdmissionWorkflowStageType.Form))
+				return;
+			if (current.StageType == AdmissionWorkflowStageType.Form &&
+				AdmissionFormStageAccessService.ReadPolicy(await stageDefinitionRepository.GetAsync(current.DefinitionStageId)) != null &&
+				!await formRuntime.ShouldAdvanceAfterSubmitAsync(application.Id)) return;
+
+			await AdvanceInternalAsync(application, workflow, new AdvanceAdmissionWorkflowDto
+			{
+				ExpectedCurrentStageInstanceId = currentStageId,
+				IdempotencyKey = $"submit:{application.Id:N}:{currentStageId:N}"
+			});
+
+			if (workflow.Status != AdmissionWorkflowInstanceStatus.Active) return;
+		}
 	}
 
 	private async Task AdvanceInternalAsync(
@@ -86,6 +94,9 @@ public class AdmissionApplicationWorkflowService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.InvalidCurrentStage);
 		var definition = await stageDefinitionRepository.FindAsync(current.DefinitionStageId) ??
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), current.DefinitionStageId);
+		if (input.SkipCurrentStage && definition.IsRequired && !input.AdminOverride)
+			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed)
+				.WithData("Reason", "Required stages can only be bypassed through the emergency override.");
 		var managedForm = current.StageType == AdmissionWorkflowStageType.Form && AdmissionFormStageAccessService.ReadPolicy(definition) != null;
 		var managedInquiry = current.StageType == AdmissionWorkflowStageType.Inquiry && AdmissionInquiryPolicyResolver.Read(definition) != null;
 		if (managedInquiry && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);

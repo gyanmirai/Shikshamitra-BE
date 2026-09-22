@@ -140,8 +140,8 @@ public class StudentElectiveAssignmentAppService(
 
 				// Validate all selected subjects belong to the elective group
 				var invalidSubjects = input.Assignments
-					.Where(a => !subjectIds.Contains(a.SelectedSubjectId))
-					.Select(a => a.SelectedSubjectId)
+					.Where(a => a.SelectedSubjectId.HasValue && !subjectIds.Contains(a.SelectedSubjectId.Value))
+					.Select(a => a.SelectedSubjectId!.Value)
 					.Distinct()
 					.ToList();
 
@@ -166,20 +166,29 @@ public class StudentElectiveAssignmentAppService(
 
 				var selectionsToUpdate = new List<StudentElectiveSelection>();
 				var selectionsToInsert = new List<StudentElectiveSelection>();
+				var selectionsToDelete = new List<StudentElectiveSelection>();
 
 				foreach (var assignment in input.Assignments)
 				{
+					var existingSelection = existingSelections.FirstOrDefault(s =>
+						s.StudentId == assignment.StudentId
+					);
+
+					if (!assignment.SelectedSubjectId.HasValue)
+					{
+						if (existingSelection != null)
+						{
+							selectionsToDelete.Add(existingSelection);
+						}
+						continue;
+					}
+
 					// Validate subject exists
-					if (!subjectLookup.TryGetValue(assignment.SelectedSubjectId, out var selectedSubject))
+					if (!subjectLookup.TryGetValue(assignment.SelectedSubjectId.Value, out var selectedSubject))
 					{
 						throw new BusinessException("ClassManagement:SubjectNotFound")
 							.WithData("SubjectId", assignment.SelectedSubjectId);
 					}
-
-					// Check if selection already exists
-					var existingSelection = existingSelections.FirstOrDefault(s =>
-						s.StudentId == assignment.StudentId
-					);
 
 					if (existingSelection != null)
 					{
@@ -203,6 +212,10 @@ public class StudentElectiveAssignmentAppService(
 				}
 
 				// Batch operations
+				if (selectionsToDelete.Any())
+				{
+					await selectionRepository.DeleteManyAsync(selectionsToDelete);
+				}
 				if (selectionsToUpdate.Any())
 				{
 					await selectionRepository.UpdateManyAsync(selectionsToUpdate);
@@ -215,7 +228,7 @@ public class StudentElectiveAssignmentAppService(
 				return new ApiSuccessResponseDto
 				{
 					Success = true,
-					Message = $"Successfully saved {input.Assignments.Count} student elective assignments."
+					Message = $"Successfully saved {input.Assignments.Count} student elective assignment changes."
 				};
 			}
 		catch (BusinessException)

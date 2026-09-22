@@ -39,7 +39,8 @@ public partial class ConcessionRequestAppService
 				await MapDetailAsync(replay));
 		}
 		var request = await concessionRequestManager.CreatePendingAsync(
-			CurrentTenant.Id, academicYearId, input.StudentId, input.ConcessionTypeId,
+			CurrentTenant.Id, academicYearId, input.StudentId,
+			input.ConcessionPolicyId, input.ConcessionPolicyVersionId, input.ConcessionTypeId,
 			input.Remarks, MapFeeHeadInputs(input.FeeHeadConcessions), input.StudentFeeStructureId,
 			input.SourceRequestId, currentUser.GetId(), input.IdempotencyKey, ComputeCommandHash(input));
 		var evaluation = await concessionRequestManager.EvaluateSubmittedAsync(request);
@@ -80,7 +81,8 @@ public partial class ConcessionRequestAppService
 				await MapDetailAsync(replay));
 		}
 		var request = await concessionRequestManager.CreatePendingAsync(
-			CurrentTenant.Id, academicYearId, input.StudentId, input.ConcessionTypeId,
+			CurrentTenant.Id, academicYearId, input.StudentId,
+			input.ConcessionPolicyId, input.ConcessionPolicyVersionId, input.ConcessionTypeId,
 			input.Remarks, MapFeeHeadInputs(input.FeeHeadConcessions), input.StudentFeeStructureId,
 			input.SourceRequestId, currentUser.GetId(), input.IdempotencyKey, ComputeCommandHash(input),
 			allowIncomplete: true, enforcePendingUniqueness: false);
@@ -148,6 +150,8 @@ public partial class ConcessionRequestAppService
 			CurrentTenant.Id,
 			academicYearId,
 			input.StudentId,
+			input.ConcessionPolicyId,
+			input.ConcessionPolicyVersionId,
 			input.ConcessionTypeId,
 			MapFeeHeadInputs(input.FeeHeadConcessions),
 			input.StudentFeeStructureId);
@@ -159,8 +163,8 @@ public partial class ConcessionRequestAppService
 		return new ConcessionRequestPreviewDto
 		{
 			StudentFeeStructureId = preview.Assignment.Id,
-			ConcessionPolicyId = preview.Assignment.ConcessionPolicyId!.Value,
-			ConcessionPolicyVersionId = preview.Assignment.ConcessionPolicyVersionId!.Value,
+			ConcessionPolicyId = input.ConcessionPolicyId,
+			ConcessionPolicyVersionId = input.ConcessionPolicyVersionId,
 			ConcessionPolicyName = preview.Policy.PolicyName,
 			ConcessionPolicyCode = preview.Policy.PolicyCode,
 			ConcessionPolicyVersion = preview.Policy.Version,
@@ -184,7 +188,7 @@ public partial class ConcessionRequestAppService
 			}).ToList(),
 			EligibleDueFees = MapEligibleDueFees(preview.EligibleDueFees, feeHeadNames),
 			PreviewFingerprint = ComputePreviewFingerprint(
-				preview.Assignment.ConcessionPolicyVersionId!.Value, preview.EligibleDueFees, preview.Mappings),
+				input.ConcessionPolicyVersionId, preview.EligibleDueFees, preview.Mappings),
 			GeneratedAt = Clock.Now,
 		};
 	}
@@ -214,7 +218,8 @@ public partial class ConcessionRequestAppService
 			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition);
 
 		await concessionRequestManager.ReplaceFeeHeadMappingsAsync(
-			request, MapFeeHeadInputs(input.FeeHeadConcessions), allowIncomplete: true);
+			request, input.ConcessionPolicyId, input.ConcessionPolicyVersionId,
+			MapFeeHeadInputs(input.FeeHeadConcessions), allowIncomplete: true);
 		request.UpdateRemarks(input.Remarks);
 		var updatedDocuments = await ValidateAndBuildDocumentsAsync(request, input.Documents);
 		var replacementDocuments = await PreserveHiddenDocumentsAsync(request, updatedDocuments);

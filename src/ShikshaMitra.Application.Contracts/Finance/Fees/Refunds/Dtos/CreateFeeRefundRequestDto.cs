@@ -14,6 +14,9 @@ public class CreateFeeRefundRequestDto
     [Required]
     public Guid AcademicYearId { get; set; }
 
+    [Required]
+    public Guid OriginalReceiptId { get; set; }
+
     /// <summary>At least one refund line is required.</summary>
     [Required]
     [MinLength(1)]
@@ -45,8 +48,11 @@ public class CreateFeeRefundLineDto
     [Required]
     public Guid DueFeeId { get; set; }
 
-    [Range(0.01, double.MaxValue)]
-    public double Amount { get; set; }
+    [Required]
+    public Guid SourceAllocationId { get; set; }
+
+    [Range(typeof(decimal), "0.01", "9999999999999999")]
+    public decimal Amount { get; set; }
 }
 
 // ── FluentValidation validator ────────────────────────────────────────────────
@@ -66,6 +72,7 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
     {
         RuleFor(x => x.StudentId).NotEmpty();
         RuleFor(x => x.AcademicYearId).NotEmpty();
+        RuleFor(x => x.OriginalReceiptId).NotEmpty();
 
         RuleFor(x => x.Lines)
             .NotNull()
@@ -75,6 +82,7 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
         RuleForEach(x => x.Lines).ChildRules(line =>
         {
             line.RuleFor(l => l.DueFeeId).NotEmpty();
+            line.RuleFor(l => l.SourceAllocationId).NotEmpty();
             line.RuleFor(l => l.Amount).GreaterThan(0);
         });
 
@@ -83,15 +91,15 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
             .When(x => x.Reason != null);
 
         RuleFor(x => x.RefundMethod)
+            .NotEmpty()
             .MaximumLength(100)
-            .Must(m => m == null || AllowedMethods.Contains(m))
-            .WithMessage($"RefundMethod must be one of: {string.Join(", ", AllowedMethods)}.")
-            .When(x => x.RefundMethod != null);
+            .Must(m => m != null && AllowedMethods.Contains(m))
+            .WithMessage($"RefundMethod must be one of: {string.Join(", ", AllowedMethods)}.");
 
         // Non-Cash methods require payment details
         RuleFor(x => x.PaymentDetails)
             .NotNull()
             .WithMessage("PaymentDetails are required for the selected refund method.")
-            .When(x => x.RefundMethod != null && x.RefundMethod != "Cash");
+            .When(x => !string.IsNullOrWhiteSpace(x.RefundMethod));
     }
 }

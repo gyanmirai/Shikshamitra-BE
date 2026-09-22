@@ -587,21 +587,13 @@ public class ExamAppService(
 
 	public async Task<ExamListResultDto> GetListAsync(GetExamsInput input)
 	{
-		var isPendingStatus = input.Status == ExamStatus.Pending;
-		if (!isPendingStatus && input.StartDate.HasValue && input.EndDate.HasValue && input.StartDate > input.EndDate)
+		if (input.StartDate.HasValue && input.EndDate.HasValue && input.StartDate > input.EndDate)
 			throw new UserFriendlyException("StartDate cannot be greater than EndDate.");
 
-		// Pending is the planning queue. It must not be constrained by a
-		// schedule-date range because step 2 may not have supplied dates yet.
-		var isDefaultDateRange = !isPendingStatus && !input.StartDate.HasValue && !input.EndDate.HasValue;
+		var isDefaultDateRange = !input.StartDate.HasValue && !input.EndDate.HasValue;
 		var filterStartDate = input.StartDate?.DateTime;
 		var filterEndDate = input.EndDate?.DateTime;
-		if (isPendingStatus)
-		{
-			filterStartDate = DateTime.MinValue;
-			filterEndDate = DateTime.MaxValue;
-		}
-		else if (isDefaultDateRange)
+		if (isDefaultDateRange)
 		{
 			var today = DateTime.Now.Date;
 			var daysFromMonday = ((int)today.DayOfWeek + 6) % 7;

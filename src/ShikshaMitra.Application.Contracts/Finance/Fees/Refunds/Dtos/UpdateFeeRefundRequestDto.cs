@@ -23,6 +23,8 @@ public class UpdateFeeRefundRequestDto
     /// <summary>Accepted for payload symmetry with create; the route id is authoritative.</summary>
     public Guid AcademicYearId { get; set; }
 
+    public Guid OriginalReceiptId { get; set; }
+
     /// <summary>Full replacement of refund lines — at least one is required.</summary>
     [Required]
     [MinLength(1)]
@@ -67,6 +69,7 @@ public class UpdateFeeRefundRequestDtoValidator : AbstractValidator<UpdateFeeRef
         RuleForEach(x => x.Lines).ChildRules(line =>
         {
             line.RuleFor(l => l.DueFeeId).NotEmpty();
+            line.RuleFor(l => l.SourceAllocationId).NotEmpty();
             line.RuleFor(l => l.Amount).GreaterThan(0);
         });
 
@@ -75,14 +78,14 @@ public class UpdateFeeRefundRequestDtoValidator : AbstractValidator<UpdateFeeRef
             .When(x => x.Reason != null);
 
         RuleFor(x => x.RefundMethod)
+            .NotEmpty()
             .MaximumLength(100)
-            .Must(m => m == null || AllowedMethods.Contains(m))
-            .WithMessage($"RefundMethod must be one of: {string.Join(", ", AllowedMethods)}.")
-            .When(x => x.RefundMethod != null);
+            .Must(m => m != null && AllowedMethods.Contains(m))
+            .WithMessage($"RefundMethod must be one of: {string.Join(", ", AllowedMethods)}.");
 
         RuleFor(x => x.PaymentDetails)
             .NotNull()
             .WithMessage("PaymentDetails are required for the selected refund method.")
-            .When(x => x.RefundMethod != null && x.RefundMethod != "Cash");
+            .When(x => !string.IsNullOrWhiteSpace(x.RefundMethod));
     }
 }

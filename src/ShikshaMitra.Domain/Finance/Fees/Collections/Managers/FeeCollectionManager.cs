@@ -51,7 +51,9 @@ public class FeeCollectionManager(
 		IReadOnlyList<(Guid ChargeId, double Amount)> ChargePayments,
 		IReadOnlyList<(Guid DueFeeId, double Amount)> DueFeeAllocations,
 		IReadOnlyList<(PaymentMethodEnum Method, double Amount, PaymentDetails? Details)> Payments,
-		IReadOnlyList<(Guid DueFeeId, double Amount)>? LateFeeAllocations = null);
+		IReadOnlyList<(Guid DueFeeId, double Amount)>? LateFeeAllocations = null,
+		string? IdempotencyKey = null,
+		string? CommandFingerprint = null);
 
 	public sealed record CollectFeeTransactionResult(
 		FeeRecordMetadata Metadata,
@@ -73,7 +75,9 @@ public class FeeCollectionManager(
 			command.ReceivedAmount,
 			command.Status,
 			receiptNumber,
-			command.Notes);
+			command.Notes,
+			command.IdempotencyKey,
+			command.CommandFingerprint);
 		await feeRecordMetadataRepository.InsertAsync(metadata, autoSave: false);
 
 		var feeCollectionRecords = CreateFeeCollectionRecords(
@@ -205,7 +209,9 @@ public class FeeCollectionManager(
 		double received,
 		FeeCollectionStatus status,
 		string receiptNumber,
-		string? remarks)
+		string? remarks,
+		string? idempotencyKey = null,
+		string? commandFingerprint = null)
 	{
 		return new FeeRecordMetadata(
 			GuidGenerator.Create(),
@@ -215,7 +221,9 @@ public class FeeCollectionManager(
 			received,
 			receiptNumber,
 			status,
-			remarks);
+			remarks,
+			idempotencyKey,
+			commandFingerprint);
 	}
 
 	/// <summary>

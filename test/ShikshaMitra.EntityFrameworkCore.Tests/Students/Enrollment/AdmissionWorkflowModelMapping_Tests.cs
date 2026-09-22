@@ -63,4 +63,23 @@ public class AdmissionWorkflowModelMapping_Tests : ShikshaMitraEntityFrameworkCo
 			key.Properties.Single().Name == nameof(AdmissionApplicationStageInstance.DefinitionStageId) &&
 			key.DeleteBehavior == DeleteBehavior.Restrict);
 	}
+
+	[Fact]
+	public void Governance_models_are_tenant_scoped_and_indexed()
+	{
+		var model = GetRequiredService<ShikshaMitraDbContext>().Model;
+		var settings = model.FindEntityType(typeof(AdmissionWorkflowGovernanceSetting));
+		var history = model.FindEntityType(typeof(AdmissionWorkflowGovernanceHistory));
+		var notification = model.FindEntityType(typeof(AdmissionWorkflowNotification));
+		settings.ShouldNotBeNull();
+		history.ShouldNotBeNull();
+		notification.ShouldNotBeNull();
+
+		settings.GetIndexes().ShouldContain(index => index.IsUnique &&
+			index.Properties.Select(property => property.Name).SequenceEqual(new[] { "TenantId" }));
+		history.GetIndexes().ShouldContain(index => index.Properties.Select(property => property.Name)
+			.SequenceEqual(new[] { "TenantId", "WorkflowDefinitionId", "OccurredAt" }));
+		notification.GetIndexes().ShouldContain(index => index.Properties.Select(property => property.Name)
+			.SequenceEqual(new[] { "TenantId", "RecipientUserId", "IsRead", "CreationTime" }));
+	}
 }

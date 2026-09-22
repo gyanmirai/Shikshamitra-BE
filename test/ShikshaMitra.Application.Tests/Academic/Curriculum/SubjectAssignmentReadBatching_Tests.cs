@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum.Settings;
@@ -8,16 +9,104 @@ using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.Identity;
+using Volo.Abp.Security.Claims;
 using Xunit;
+using ClassTeacherEntity = ShikshaMitra.Academic.ClassTeacher.ClassTeacher;
 
 namespace ShikshaMitra.Academic.Curriculum;
 
 public class SubjectAssignmentReadBatching_Tests : SubjectTeacherReassignmentTestBase
 {
+	[Fact]
+	public async Task Create_Should_Map_Unified_Teachers_To_Internal_Storage()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (Tenant.Change(TenantId))
+			using (AsAdmin())
+			{
+				await SeedAllocationAsync();
+				var subject = new Subject(Guid.NewGuid(), TenantId, "Science", "#112233", AcademicMediumId);
+				await GetRequiredService<IRepository<Subject, Guid>>().InsertAsync(subject, autoSave: true);
+
+				await Allocations.CreateAsync(AcademicMediumId, new CreateUpdateSubjectAssignmentDto
+				{
+					ClassId = StandardId,
+					Status = SubjectStatus.Draft,
+					Subjects =
+					[
+						new SubjectAssignmentDetailDto
+						{
+							SubjectId = subject.Id,
+							SubjectCode = "SCI",
+							TeacherIds = [NewTeacher, OldTeacher]
+						}
+					]
+				});
+
+				var stored = (await GetRequiredService<IRepository<AssignedSubject, Guid>>()
+					.GetListAsync(assignment => assignment.SubjectId == subject.Id)).Single();
+				stored.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Primary)
+					.TeacherId.ShouldBe(NewTeacher);
+				stored.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Secondary)
+					.TeacherId.ShouldBe(OldTeacher);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task Unified_Teacher_List_Should_Preserve_Existing_Internal_Primary_And_Return_Codes()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (Tenant.Change(TenantId))
+			using (AsAdmin())
+			{
+				await SeedAllocationAsync();
+				var result = await Allocations.UpdateAsync(AssignmentId, AcademicMediumId,
+					new CreateUpdateSubjectAssignmentDto
+					{
+						ClassId = StandardId,
+						Status = SubjectStatus.Draft,
+						Subjects =
+						[
+							new SubjectAssignmentDetailDto
+							{
+								SubjectId = SubjectId,
+								SubjectCode = "MATH",
+								TeacherIds = [NewTeacher, OldTeacher]
+							}
+						]
+					});
+
+				var stored = await GetRequiredService<IRepository<AssignedSubject, Guid>>()
+					.GetAsync(AssignmentId);
+				stored.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Primary)
+					.TeacherId.ShouldBe(OldTeacher);
+				stored.Teachers.Single(teacher => teacher.TeacherType == SubjectTeacherType.Secondary)
+					.TeacherId.ShouldBe(NewTeacher);
+
+				var teachers = result.Subjects.Single().Teachers;
+				teachers.Select(teacher => teacher.Id).ShouldBe([
+					OldTeacher.ToString(),
+					NewTeacher.ToString()
+				]);
+				teachers.Select(teacher => teacher.EmployeeCode).ShouldBe(["ALLOC001", "ALLOC002"]);
+				var listItem = (await Allocations.GetListAsync(StandardId, 0, 100, includeArchived: true))
+					.Items.Single(item => item.Id == AssignmentId);
+				listItem.TeacherNames.ShouldBe(["ALLOC001 - Old Teacher", "ALLOC002 - New Teacher"]);
+			}
+		});
+	}
+
 	[Fact]
 	public async Task Kpi_And_Workload_Should_Preserve_Stored_Values_And_Not_Track_Assignment_Graphs()
 	{
@@ -138,6 +227,91 @@ public class SubjectAssignmentReadBatching_Tests : SubjectTeacherReassignmentTes
 				var searched = await Allocations.GetListAsync(StandardId, 0, 100, includeArchived: true, teacherSearch: "  ADA  ");
 				searched.Items.Single().Id.ShouldBe(AssignmentId);
 				(await GetRequiredService<IRepository<AssignedSubject, Guid>>().GetAsync(AssignmentId)).WeeklyPeriods.ShouldBe(0);
+			}
+		});
+	}
+
+	[Fact]
+	public async Task List_Should_Keep_Subject_Teacher_Access_When_User_Is_Also_A_Class_Teacher()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (Tenant.Change(TenantId))
+			{
+				await SeedContextAsync();
+				await SeedLessonPlanOwnerAsync();
+
+				var assignmentRepository = GetRequiredService<IRepository<AssignedSubject, Guid>>();
+				var assignedSubject = (await assignmentRepository.GetListAsync(
+					assignment => assignment.StandardId == StandardId)).Single();
+				assignedSubject.Status = SubjectStatus.Published;
+				await assignmentRepository.UpdateAsync(assignedSubject, autoSave: true);
+
+				var secondDivision = await GetRequiredService<DivisionManager>()
+					.CreateAsync(StandardId, "C", 35);
+				await GetRequiredService<IRepository<Division, Guid>>()
+					.InsertAsync(secondDivision, autoSave: true);
+				var otherDivisionSubject = await AddAssignmentAsync("Other Division Subject");
+				otherDivisionSubject.Status = SubjectStatus.Published;
+				await assignmentRepository.UpdateAsync(otherDivisionSubject, autoSave: true);
+
+				var allocationRepository = GetRequiredService<IRepository<TeacherSubjectAllocation, Guid>>();
+				var targetAllocation = new TeacherSubjectAllocation(
+					Guid.NewGuid(), StandardId, DivisionId, SubjectId);
+				targetAllocation.Teachers.Add(new AllocatedTeacher(targetAllocation.Id, TeacherEmployeeId));
+				var otherAllocation = new TeacherSubjectAllocation(
+					Guid.NewGuid(), StandardId, secondDivision.Id, otherDivisionSubject.SubjectId);
+				otherAllocation.Teachers.Add(new AllocatedTeacher(otherAllocation.Id, TeacherEmployeeId));
+				await allocationRepository.InsertManyAsync(
+					[targetAllocation, otherAllocation], autoSave: true);
+
+				var currentStandard = await GetRequiredService<IRepository<Standard, Guid>>()
+					.GetAsync(StandardId);
+				var classTeacherStandard = await GetRequiredService<StandardManager>()
+					.CreateAsync(currentStandard.EducationMediumStageId, $"Owned Class {Guid.NewGuid():N}", 13, null);
+				await GetRequiredService<IRepository<Standard, Guid>>()
+					.InsertAsync(classTeacherStandard, autoSave: true);
+				var classTeacherDivision = await GetRequiredService<DivisionManager>()
+					.CreateAsync(classTeacherStandard.Id, "A", 35);
+				await GetRequiredService<IRepository<Division, Guid>>()
+					.InsertAsync(classTeacherDivision, autoSave: true);
+				await GetRequiredService<IRepository<ClassTeacherEntity, Guid>>().InsertAsync(
+					new ClassTeacherEntity(
+						Guid.NewGuid(),
+						TenantId,
+						classTeacherStandard.Id,
+						classTeacherDivision.Id,
+						TeacherEmployeeId,
+						AcademicMediumId),
+					autoSave: true);
+				await GetRequiredService<IUserScopeAssignmentRepository>().InsertAsync(
+					new UserScopeAssignment(
+						Guid.NewGuid(),
+						TenantId,
+						userId: TeacherUserId,
+						standardId: classTeacherStandard.Id,
+						divisionId: classTeacherDivision.Id),
+					autoSave: true);
+
+				using (GetRequiredService<ICurrentPrincipalAccessor>().Change(
+					new ClaimsPrincipal(new ClaimsIdentity(
+					[
+						new Claim(AbpClaimTypes.UserId, TeacherUserId.ToString()),
+						new Claim(AbpClaimTypes.Role, "teacher"),
+						new Claim(AbpClaimTypes.TenantId, TenantId.ToString())
+					],
+					"Test"))))
+				{
+					var result = await Allocations.GetListAsync(
+						StandardId,
+						0,
+						10,
+						SubjectStatus.Published,
+						divisionId: DivisionId);
+
+					result.Items.Single().Id.ShouldBe(assignedSubject.Id);
+					result.Items.ShouldNotContain(item => item.Id == otherDivisionSubject.Id);
+				}
 			}
 		});
 	}

@@ -26,7 +26,9 @@ public class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		double totalPaidFee,
 		string receiptNumber,
 		FeeCollectionStatus status,
-		string? remarks = null) : base(id)
+		string? remarks = null,
+		string? idempotencyKey = null,
+		string? commandFingerprint = null) : base(id)
 	{
 		TenantId = tenantId;
 		StudentId = studentId;
@@ -35,6 +37,8 @@ public class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ReceiptNumber = receiptNumber;
 		Status = status;
 		Remarks = remarks;
+		IdempotencyKey = idempotencyKey;
+		CommandFingerprint = commandFingerprint;
 	}
 
 	public Guid? TenantId { get; private set; }
@@ -49,6 +53,22 @@ public class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public FeeCollectionStatus Status { get; private set; }
 
 	public string? Remarks { get; private set; }
+
+	/// <summary>Client retry key for this collection command.</summary>
+	public string? IdempotencyKey { get; private set; }
+
+	/// <summary>SHA-256 fingerprint of the command bound to the retry key.</summary>
+	public string? CommandFingerprint { get; private set; }
+
+	/// <summary>Serialized successful response returned for safe command replays.</summary>
+	public string? CommandResultJson { get; private set; }
+
+	public void SetCommandResult(string resultJson)
+	{
+		if (string.IsNullOrWhiteSpace(resultJson))
+			throw new ArgumentException("Command result is required.", nameof(resultJson));
+		CommandResultJson = resultJson;
+	}
 
 	/// <summary>
 	/// Marks this collection transaction as reversed after instrument rejection

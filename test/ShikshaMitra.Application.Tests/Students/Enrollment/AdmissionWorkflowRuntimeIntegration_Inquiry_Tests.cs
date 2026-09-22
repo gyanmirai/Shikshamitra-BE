@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Communication;
 using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp;
@@ -78,6 +80,120 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 	}
 
+	[Fact]
+	public async Task Inquiry_list_should_support_unassigned_and_counsellor_queues()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		using (_principalAccessor.Change(BuildAdminPrincipal()))
+		{
+			await _scopeRepository.InsertAsync(new UserScopeAssignment(
+				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Inquiry owner queue"), autoSave: true);
+			var counsellorId = await CreateReviewUserAsync();
+			var workflow = await CreateAndPublishManagedInquiryWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
+			var inquiryInput = ManagedInquiryInput(offering);
+			inquiryInput.Email = "family@example.com";
+			var inquiry = await inquiries.CreateAsync(inquiryInput);
+			(await inquiries.GetAssignableCounsellorsAsync(offering.Id))
+				.ShouldContain(item => item.Id == counsellorId);
+
+			var unassigned = await inquiries.GetListAsync(new() { IsAssigned = false, MaxResultCount = 50 });
+			unassigned.Items.ShouldContain(item => item.Id == inquiry.Id);
+			var firstContactQueue = await inquiries.GetListAsync(new()
+			{
+				WorkQueue = AdmissionInquiryWorkQueue.NeedsFirstContact,
+				MaxResultCount = 50
+			});
+			var queueItem = firstContactQueue.Items.Single(item => item.Id == inquiry.Id);
+			queueItem.Managed.ShouldBeTrue();
+			queueItem.NeedsFirstContact.ShouldBeTrue();
+			queueItem.NeedsQualification.ShouldBeTrue();
+			queueItem.AdmissionCycleName.ShouldNotBeNullOrWhiteSpace();
+			queueItem.AdmissionOfferingCode.ShouldBe(offering.Code);
+
+			await inquiries.AssignCounsellorAsync(inquiry.Id, new()
+			{
+				Mode = AdmissionCounsellorAssignmentMode.Manual,
+				CounsellorId = counsellorId
+			});
+
+			var assigned = await inquiries.GetListAsync(new()
+			{
+				IsAssigned = true,
+				AssignedCounsellorId = counsellorId,
+				MaxResultCount = 50
+			});
+			assigned.Items.ShouldContain(item => item.Id == inquiry.Id);
+			(await inquiries.GetListAsync(new() { IsAssigned = false, MaxResultCount = 50 }))
+				.Items.ShouldNotContain(item => item.Id == inquiry.Id);
+
+			var management = GetRequiredService<IAdmissionInquiryManagementAppService>();
+			var state = await management.GetAsync(inquiry.Id);
+			await management.ScheduleFollowUpAsync(inquiry.Id, new()
+			{
+				ConcurrencyStamp = state.ConcurrencyStamp,
+				ScheduledAt = DateTimeOffset.UtcNow.AddDays(1),
+				Purpose = "Confirm the campus visit",
+				AssignedCounsellorId = counsellorId
+			});
+			var followUpQueue = await inquiries.GetListAsync(new()
+			{
+				WorkQueue = AdmissionInquiryWorkQueue.OpenFollowUps,
+				MaxResultCount = 50
+			});
+			var followUpItem = followUpQueue.Items.Single(item => item.Id == inquiry.Id);
+			followUpItem.OpenFollowUpCount.ShouldBe(1);
+			followUpItem.NextFollowUpAt.ShouldNotBeNull();
+			followUpItem.AssignedCounsellorName.ShouldNotBeNullOrWhiteSpace();
+		}
+	}
+
+	[Fact]
+	public async Task Inquiry_communication_should_create_a_traceable_draft_for_the_family_recipient()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		using (_principalAccessor.Change(BuildAdminPrincipal()))
+		{
+			await _scopeRepository.InsertAsync(new UserScopeAssignment(
+				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Inquiry communication"),
+				autoSave: true);
+			var workflow = await CreateAndPublishManagedInquiryWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
+			var inquiry = await inquiries.CreateAsync(ManagedInquiryInput(offering));
+
+			var result = await inquiries.CreateCommunicationAsync(inquiry.Id, new()
+			{
+				Title = "Campus visit follow-up",
+				Body = "Please reply if you would like us to reserve a campus visit slot.",
+				Channels = [CommunicationChannelType.Sms],
+				ImportanceLevel = CommunicationImportanceLevel.Normal,
+				PublishImmediately = false
+			});
+
+			result.CampaignId.ShouldNotBe(Guid.Empty);
+			result.Status.ShouldBeOneOf(CommunicationCampaignStatus.Draft,
+				CommunicationCampaignStatus.PendingApproval);
+			result.DeliveryStarted.ShouldBeFalse();
+			result.RecipientCount.ShouldBe(1);
+			result.DeliveryErrorCode.ShouldBeNull();
+			(await GetRequiredService<Volo.Abp.Domain.Repositories.IRepository<AdmissionActivity, Guid>>()
+				.GetListAsync(activity => activity.InquiryId == inquiry.Id))
+				.ShouldContain(activity => activity.ActivityType == "InquiryCommunicationDraftCreated" &&
+					activity.MetadataJson!.Contains(result.CampaignId.ToString(), StringComparison.OrdinalIgnoreCase));
+
+			var invalidEmail = await Should.ThrowAsync<BusinessException>(() =>
+				inquiries.CreateCommunicationAsync(inquiry.Id, new()
+				{
+					Title = "Email follow-up",
+					Body = "Email body",
+					Channels = [CommunicationChannelType.Email]
+				}));
+			invalidEmail.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.InvalidInput);
+		}
+	}
+
 	private async Task<AdmissionWorkflowDto> CreateAndPublishManagedInquiryWorkflowAsync()
 	{
 		var entryId = Guid.NewGuid();
@@ -104,6 +220,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		AdmissionCycleId = offering.AdmissionCycleId,
 		AdmissionOfferingId = offering.Id,
+		BoardId = offering.BoardId,
+		MediumId = offering.MediumId,
+		StandardId = offering.StandardId,
 		ApplicantName = "Aanya Patel",
 		Phone = $"9{Random.Shared.Next(100000000, 999999999)}",
 		Source = AdmissionInquirySource.Website,

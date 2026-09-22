@@ -197,6 +197,7 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
 
         var input = new CollectFeeInput
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
             Notes = "UPI payment test",
@@ -383,6 +384,7 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
 
         var input = new CollectFeeInput
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
             PaymentConfirmed = true,
@@ -411,6 +413,7 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
 
         var input = new CollectFeeInput
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
             DueFeePayments = new List<DueFeePaymentDto>
@@ -438,6 +441,7 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
 
         var input = new CollectFeeInput
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = studentId,
             AcademicYearId = FeeCollectionTestHelper.DefaultAcademicYearId,
             DueFeePayments = new List<DueFeePaymentDto>

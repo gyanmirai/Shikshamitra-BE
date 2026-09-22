@@ -13,7 +13,10 @@ env:
     SeedTestLogins: 'true'
 
 jobs:
+    security:
+        uses: ./.github/workflows/security-regression.yml
     build-and-deploy:
+        needs: security
         runs-on: ubuntu-latest
 
         steps:
@@ -39,7 +42,9 @@ jobs:
 
             - name: Verify .NET and ABP versions
               run: |
-                dotnet --version
+                sdk_version=$(dotnet --version)
+                echo "Selected .NET SDK: $sdk_version"
+                [[ "$sdk_version" == 9.0.* ]]
                 dotnet --list-sdks
                 abp --version
 
@@ -48,16 +53,6 @@ jobs:
 
             - name: Build
               run: dotnet build --configuration Release
-
-            # ⭐ Run ABP DbMigrator
-            - name: Run DbMigrator
-              env:
-                  ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
-                  ShikshaMitra__Seeders__Enabled: 'true'
-                  ShikshaMitra__Seeders__Profile: FullDemo
-              run: |
-                  cd src/ShikshaMitra.DbMigrator
-                  dotnet run --configuration Release --no-launch-profile
 
             - name: Run deployment startup regression gates
               run: |
@@ -94,6 +89,15 @@ jobs:
                   Write-Output "Publish profile XML is valid; deployment endpoint: $publishUrl"
 
             # ⭐ Deploy using Publish Profile
+            - name: Run DbMigrator
+              env:
+                  ConnectionStrings__Default: ${{ secrets.DB_CONNECTION_STRING }}
+                  ShikshaMitra__Seeders__Enabled: 'true'
+                  ShikshaMitra__Seeders__Profile: FullDemo
+              run: |
+                  cd src/ShikshaMitra.DbMigrator
+                  dotnet run --configuration Release --no-launch-profile
+
             - name: Deploy to Azure Web App
               id: deploy
               uses: azure/webapps-deploy@v3

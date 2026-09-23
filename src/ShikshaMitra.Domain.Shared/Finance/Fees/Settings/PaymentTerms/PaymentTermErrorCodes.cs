@@ -39,4 +39,5 @@ public static class PaymentTermErrorCodes
 	public const string EffectiveDateRequired = $"{Prefix}:000036";
 	public const string DefaultTermRequired = $"{Prefix}:000037";
 	public const string DefaultTermMustBeActive = $"{Prefix}:000038";
+	public const string InvalidTemplateConfiguration = $"{Prefix}:000039";
 }

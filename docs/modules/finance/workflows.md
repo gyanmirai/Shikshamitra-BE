@@ -78,6 +78,8 @@ Demand dates are server-derived:
 
 Every installment requires a unique name and sequence, a non-overlapping period inside the selected Education Board's `StartDate`/`EndDate`, a due date inside its period, and a positive allocation. The board window, not the wider academic-year window, is authoritative. Allocations across the term must total 100%.
 
+During authoring, staff may request a non-persisting installment-template preview. Annual, half-yearly, quarterly, monthly, and bounded custom-count templates are expanded on the server against the selected board window. The final percentage remainder is assigned deterministically to the last installment. Applying a preview only replaces the form's local rows; create/update still revalidates and versions the complete resulting schedule.
+
 ## Student fee assignment
 
 The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.

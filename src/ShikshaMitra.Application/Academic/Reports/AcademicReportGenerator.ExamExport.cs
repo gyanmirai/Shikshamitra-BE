@@ -193,6 +193,9 @@ public partial class AcademicReportGenerator
         or AcademicReportTypes.BrightStudentAnalysis or AcademicReportTypes.BrightStudentListSubjectWise
         or AcademicReportTypes.WeakStudentAnalysis or AcademicReportTypes.WeakStudentAnalysisSubjectWise;
 
+    internal static bool IsExamScopedReport(string type) =>
+        IsExamDetailExport(type) || IsExamSummaryExport(type);
+
     private static int CompareExamExportRows(ExamExportRow left, ExamExportRow right, string type, IReadOnlyDictionary<Guid, long> subjectOrder)
     {
         var strings = Comparer<string?>.Default;

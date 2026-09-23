@@ -35,4 +35,5 @@ public static class CurriculumErrorCodes
     // ── Lesson Plan: 05xxxx ──────────────────────────────────────
 
     public const string LessonPlanRevisionRequired = "Academic:Curriculum:050001";
+    public const string LessonPlanNotEditable = "Academic:Curriculum:050002";
 }

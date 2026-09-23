@@ -77,9 +77,9 @@ public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserSco
         string? resourcesRequired,
         int plannedCompletionPercentage)
     {
-        if (Status == LessonPlanStatus.Approved)
+        if (Status is LessonPlanStatus.Approved or LessonPlanStatus.Rejected)
         {
-            throw new InvalidOperationException("Approved lesson plans cannot be modified.");
+            throw new LessonPlanNotEditableException(Status);
         }
 
         var hasMeaningfulChanges =
@@ -117,6 +117,11 @@ public class LessonPlan : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserSco
 
     public void Submit()
     {
+        if (Status is LessonPlanStatus.Approved or LessonPlanStatus.Rejected)
+        {
+            throw new LessonPlanNotEditableException(Status);
+        }
+
         if (Status == LessonPlanStatus.NeedsChanges)
         {
             throw new LessonPlanRevisionRequiredException();

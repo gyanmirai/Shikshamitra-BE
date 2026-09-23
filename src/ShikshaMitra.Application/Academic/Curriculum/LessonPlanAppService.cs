@@ -150,6 +150,27 @@ public class LessonPlanAppService(
         }
 
         var lessonPlans = await AsyncExecuter.ToListAsync(lessonPlansQuery);
+
+        // A rejected plan remains available in list/history views, but once its
+        // timetable slot has a replacement it must not compete with the active
+        // plan for the single daily-timeline card.
+        var supersededRejectedPlanIds = lessonPlans
+            .Where(plan =>
+                plan.Status == LessonPlanStatus.Rejected &&
+                plan.TimetableSlotId.HasValue &&
+                lessonPlans.Any(replacement =>
+                    replacement.Id != plan.Id &&
+                    replacement.Status != LessonPlanStatus.Rejected &&
+                    replacement.TimetableSlotId == plan.TimetableSlotId &&
+                    replacement.StandardId == plan.StandardId &&
+                    replacement.DivisionId == plan.DivisionId &&
+                    replacement.SubjectId == plan.SubjectId))
+            .Select(plan => plan.Id)
+            .ToHashSet();
+        lessonPlans = lessonPlans
+            .Where(plan => !supersededRejectedPlanIds.Contains(plan.Id))
+            .ToList();
+
         var mappedPlans = await MapLessonPlansAsync(lessonPlans);
         var mappedById = mappedPlans.ToDictionary(x => x.Id);
         var matchedPlanIds = new HashSet<Guid>();
@@ -1172,22 +1193,32 @@ public class LessonPlanAppService(
 
     private static void EnsureLessonPlanEditable(LessonPlan lessonPlan)
     {
-        if (lessonPlan.Status is not (LessonPlanStatus.Draft or LessonPlanStatus.Rejected or LessonPlanStatus.NeedsChanges))
+        if (lessonPlan.Status is LessonPlanStatus.Approved or LessonPlanStatus.Rejected)
         {
-            throw new UserFriendlyException("Lesson plans can be edited only while draft, rejected, or changes requested.");
+            throw new LessonPlanNotEditableException(lessonPlan.Status);
+        }
+
+        if (lessonPlan.Status is not (LessonPlanStatus.Draft or LessonPlanStatus.NeedsChanges))
+        {
+            throw new UserFriendlyException("Lesson plans can be edited only while draft or changes requested.");
         }
     }
 
     private static void EnsureLessonPlanSubmittable(LessonPlan lessonPlan)
     {
+        if (lessonPlan.Status is LessonPlanStatus.Approved or LessonPlanStatus.Rejected)
+        {
+            throw new LessonPlanNotEditableException(lessonPlan.Status);
+        }
+
         if (lessonPlan.Status == LessonPlanStatus.NeedsChanges)
         {
             throw new LessonPlanRevisionRequiredException();
         }
 
-        if (lessonPlan.Status is not (LessonPlanStatus.Draft or LessonPlanStatus.Rejected))
+        if (lessonPlan.Status != LessonPlanStatus.Draft)
         {
-            throw new UserFriendlyException("Only draft or rejected lesson plans can be submitted.");
+            throw new UserFriendlyException("Only draft lesson plans can be submitted.");
         }
     }
 
@@ -1262,6 +1293,7 @@ public class LessonPlanAppService(
             query.Where(plan =>
                 plan.TeacherId == teacherId &&
                 plan.PlannedDate.Date == plannedDate.Date &&
+                plan.Status != LessonPlanStatus.Rejected &&
                 (!excludedLessonPlanId.HasValue || plan.Id != excludedLessonPlanId.Value))
         );
 

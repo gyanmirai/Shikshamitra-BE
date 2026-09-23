@@ -33,7 +33,8 @@ public class ExamResultAppService(
     StudentExamSubjectApplicabilityResolver subjectApplicabilityResolver,
     IRepository<Standard, Guid> standardRepository,
     IRepository<Division, Guid> divisionRepository,
-    IUserScopeService userScopeService) : ApplicationService, IExamResultAppService
+    IUserScopeService userScopeService,
+    ExamPrimaryTeacherAccessService examPrimaryTeacherAccessService) : ApplicationService, IExamResultAppService
 {
     // ─────────────────────────────────────────────────────────────────────────
     // Readiness check
@@ -457,7 +458,8 @@ public class ExamResultAppService(
         var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
         if (scope.IsAdmin || scope.HasTenantWideScope() ||
             scope.StandardIds.Contains(exam.StandardId) ||
-            scope.WildcardDivisionStandardIds.Contains(exam.StandardId))
+            scope.WildcardDivisionStandardIds.Contains(exam.StandardId) ||
+            await examPrimaryTeacherAccessService.HasAccessAsync(CurrentUser.Id.Value, exam))
         {
             return exam;
         }

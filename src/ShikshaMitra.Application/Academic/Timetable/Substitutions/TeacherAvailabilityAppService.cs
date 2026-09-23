@@ -520,23 +520,7 @@ public class TeacherAvailabilityAppService(
             AttachmentName = row.AttachmentName,
             Remarks = row.Remarks
         });
-        dto.CanCreateSubstitution = affected.Items.Any(x => x.CanCreateSubstitution);
-        dto.ActiveSubstitutionStatuses = affected.Items
-            .Where(x => x.ExistingSubstitutionId.HasValue && !string.IsNullOrWhiteSpace(x.ExistingSubstitutionStatus))
-            .Select(x => x.ExistingSubstitutionStatus!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        dto.ActiveSubstitutionIds = affected.Items
-            .Where(x => x.ExistingSubstitutionId.HasValue)
-            .Select(x => x.ExistingSubstitutionId!.Value)
-            .Distinct()
-            .ToList();
-        dto.PendingSubstitutionIds = affected.Items
-            .Where(x => x.ExistingSubstitutionId.HasValue &&
-                        string.Equals(x.ExistingSubstitutionStatus, SubstitutionStatus.Pending.ToString(), StringComparison.OrdinalIgnoreCase))
-            .Select(x => x.ExistingSubstitutionId!.Value)
-            .Distinct()
-            .ToList();
+        TeacherAvailabilityCoverage.Apply(dto, affected.Items);
         return dto;
     }
 
@@ -554,6 +538,8 @@ public class TeacherAvailabilityAppService(
         Reason = row.Reason,
         IsFullDay = row.IsFullDay,
         AffectedLectureCount = row.AffectedLectureCount,
+        CoveredLectureCount = 0,
+        UncoveredLectureCount = row.AffectedLectureCount,
         NotifyLeadership = row.NotifyLeadership,
         CanCreateSubstitution = row.AffectedLectureCount > 0,
         ActiveSubstitutionStatuses = [],

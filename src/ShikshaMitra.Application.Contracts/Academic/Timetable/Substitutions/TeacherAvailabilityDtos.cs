@@ -28,6 +28,8 @@ public class TeacherAvailabilityDto : EntityDto<Guid>
     public string Reason { get; set; } = string.Empty;
     public bool IsFullDay { get; set; }
     public int AffectedLectureCount { get; set; }
+    public int CoveredLectureCount { get; set; }
+    public int UncoveredLectureCount { get; set; }
     public bool NotifyLeadership { get; set; }
     public bool CanCreateSubstitution { get; set; }
     public List<string> ActiveSubstitutionStatuses { get; set; } = new();

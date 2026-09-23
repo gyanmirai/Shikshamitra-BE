@@ -329,12 +329,12 @@ public class RubricAssessmentAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
-	public async Task<RubricEvaluationDto> GetStudentAssignmentEvaluationAsync(Guid studentId, Guid assignmentId)
+	public async Task<RubricEvaluationDto?> GetStudentAssignmentEvaluationAsync(Guid studentId, Guid assignmentId)
 	{
 		var submission = await submissionRepository.GetSubmissionByStudentAndAssignmentAsync(studentId, assignmentId);
 		if (submission == null)
 		{
-			throw new EntityNotFoundException(typeof(StudentSubmissionEntity), studentId);
+			return null;
 		}
 
 		await EnsureCurrentUserCanAccessSubmissionAsync(submission, nameof(GetStudentAssignmentEvaluationAsync));
@@ -342,7 +342,7 @@ public class RubricAssessmentAppService(
 			e.StudentSubmissionId == submission.Id && e.StudentId == studentId);
 		if (evaluation == null)
 		{
-			throw new EntityNotFoundException(typeof(RubricEvaluation), submission.Id);
+			return null;
 		}
 
 		await LoadScoresAsync([evaluation]);

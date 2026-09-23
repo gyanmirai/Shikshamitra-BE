@@ -9,6 +9,99 @@ namespace ShikshaMitra.Academic.Curriculum;
 
 public class LessonPlanProgress_Tests : LessonPlanProgressTestBase
 {
+    [Theory]
+    [InlineData(LessonPlanStatus.Approved)]
+    [InlineData(LessonPlanStatus.Rejected)]
+    public async Task Terminal_Plan_Should_Reject_Teacher_Update_And_Resubmission(LessonPlanStatus status)
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            using (Tenant.Change(TenantId))
+            {
+                await SeedContextAsync();
+                await SeedLessonPlanOwnerAsync();
+                var plan = await InsertPlanAsync(Input(30));
+                using (AsLessonPlanOwner())
+                {
+                    await Service.SubmitAsync(plan.Id);
+                }
+
+                if (status == LessonPlanStatus.Approved)
+                {
+                    await Service.ApproveAsync(plan.Id, new ReviewRemarksDto { Comment = "Approved." });
+                }
+                else
+                {
+                    await Service.RejectAsync(plan.Id, new ReviewRemarksDto
+                    {
+                        Comment = "Create a replacement plan."
+                    });
+                }
+
+                using (AsLessonPlanOwner())
+                {
+                    var update = new UpdateLessonPlanDto
+                    {
+                        ChapterId = ChapterId,
+                        Topic = "Replacement attempt",
+                        PlannedCompletionPercentage = 30
+                    };
+                    var updateError = await Should.ThrowAsync<LessonPlanNotEditableException>(
+                        () => Service.UpdateAsync(plan.Id, update));
+                    var submitError = await Should.ThrowAsync<LessonPlanNotEditableException>(
+                        () => Service.SubmitAsync(plan.Id));
+
+                    updateError.Code.ShouldBe(CurriculumErrorCodes.LessonPlanNotEditable);
+                    submitError.Code.ShouldBe(CurriculumErrorCodes.LessonPlanNotEditable);
+                }
+
+                (await Plans.GetAsync(plan.Id)).Status.ShouldBe(status);
+            }
+        });
+    }
+
+    [Fact]
+    public async Task Rejected_Plan_Should_Not_Block_Creating_A_Replacement()
+    {
+        await WithUnitOfWorkAsync(async () =>
+        {
+            using (Tenant.Change(TenantId))
+            {
+                await SeedContextAsync();
+                await SeedLessonPlanOwnerAsync();
+                var input = Input(30);
+                input.TimetableSlotId = Guid.NewGuid();
+                var rejected = await InsertPlanAsync(input);
+                using (AsLessonPlanOwner())
+                {
+                    await Service.SubmitAsync(rejected.Id);
+                }
+                await Service.RejectAsync(rejected.Id, new ReviewRemarksDto
+                {
+                    Comment = "Create a replacement plan."
+                });
+
+                using (AsLessonPlanOwner())
+                {
+                    var replacement = await Service.CreateAsync(input);
+
+                    replacement.Id.ShouldNotBe(rejected.Id);
+                    replacement.Status.ShouldBe(LessonPlanStatus.Draft);
+                }
+
+                var timeline = await Service.GetTimelineAsync(
+                    input.PlannedDate,
+                    TeacherEmployeeId,
+                    AcademicMediumId);
+                var timelinePlan = timeline.Slots.ShouldHaveSingleItem().LessonPlan;
+
+                timelinePlan.ShouldNotBeNull();
+                timelinePlan!.Id.ShouldNotBe(rejected.Id);
+                timelinePlan.Status.ShouldBe(LessonPlanStatus.Draft);
+            }
+        });
+    }
+
     [Fact]
     public async Task Create_And_GetList_Should_Use_The_Selected_Local_Date_Not_The_Previous_Utc_Date()
     {

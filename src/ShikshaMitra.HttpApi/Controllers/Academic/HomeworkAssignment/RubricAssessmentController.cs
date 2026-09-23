@@ -91,8 +91,8 @@ public class RubricAssessmentController(IRubricAssessmentAppService service) : A
 	[HttpGet("evaluations/student/{studentId:guid}/assignment/{assignmentId:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
 	[ProducesResponseType(typeof(RubricEvaluationDto), 200)]
-	[ProducesResponseType(404)]
-	public Task<RubricEvaluationDto> GetStudentAssignmentEvaluationAsync(Guid studentId, Guid assignmentId)
+	[ProducesResponseType(204)]
+	public Task<RubricEvaluationDto?> GetStudentAssignmentEvaluationAsync(Guid studentId, Guid assignmentId)
 	{
 		return service.GetStudentAssignmentEvaluationAsync(studentId, assignmentId);
 	}

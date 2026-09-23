@@ -74,7 +74,8 @@ public abstract class LessonPlanProgressTestBase : ShikshaMitraApplicationTestBa
         input ??= Input(90);
         return await Plans.InsertAsync(new LessonPlan(Guid.NewGuid(), Tenant.Id, input.AcademicYearId,
             input.TeacherId, input.StandardId, input.DivisionId, input.SubjectId, input.ChapterId,
-            input.PlannedDate.UtcDateTime, input.Topic, input.PlannedCompletionPercentage), autoSave: true);
+            input.PlannedDate.UtcDateTime, input.Topic, input.PlannedCompletionPercentage,
+            input.TimetableSlotId), autoSave: true);
     }
 
     protected async Task AddDiaryAsync(LessonPlan plan, int progress, bool submitted = true, bool conducted = true)

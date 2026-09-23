@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.HR.Reports;
 using ShikshaMitra.Reporting.Agent;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -38,6 +39,8 @@ public class AcademicReportAppService(
     IGuidGenerator guidGenerator,
     IUserScopeService userScopeService,
     IClassTeacherAccessService classTeacherAccessService,
+    IExamRepository examRepository,
+    ExamPrimaryTeacherAccessService examPrimaryTeacherAccessService,
     IRepository<Division, Guid> divisionRepository,
     IRepository<Standard, Guid> standardRepository,
     IRepository<EducationBoard, Guid> educationBoardRepository,
@@ -388,6 +391,11 @@ public class AcademicReportAppService(
 
     private async Task ApplyClassTeacherScopeAsync(AcademicReportRequestDto input, Guid userId)
     {
+        if (await TryApplyPrimaryTeacherExamScopeAsync(input, userId))
+        {
+            return;
+        }
+
         var hasClassTeacherAssignment = await classTeacherAccessService.HasAssignmentAsync(userId);
         if (!hasClassTeacherAssignment)
         {
@@ -434,6 +442,47 @@ public class AcademicReportAppService(
 
         input.Filters.DivisionIds = visibleDivisionIds;
         input.Filters.ClassIds = visibleClassIds;
+    }
+
+    private async Task<bool> TryApplyPrimaryTeacherExamScopeAsync(
+        AcademicReportRequestDto input,
+        Guid userId)
+    {
+        if (!AcademicReportGenerator.IsExamScopedReport(input.ReportType) ||
+            !input.Filters.ExamId.HasValue)
+        {
+            return false;
+        }
+
+        var exam = await examRepository.GetAsync(input.Filters.ExamId.Value, includeDetails: true);
+        if (!await examPrimaryTeacherAccessService.HasAccessAsync(userId, exam))
+        {
+            return false;
+        }
+
+        var requestedClassIds = input.Filters.ClassIds;
+        if (requestedClassIds is { Count: > 0 } &&
+            requestedClassIds.All(classId => classId != exam.StandardId))
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+        }
+
+        var examDivisionIds = exam.ExamDivisions
+            .Select(division => division.DivisionId)
+            .Distinct()
+            .ToList();
+        var requestedDivisionIds = input.Filters.DivisionIds;
+        var visibleDivisionIds = requestedDivisionIds is { Count: > 0 }
+            ? requestedDivisionIds.Where(examDivisionIds.Contains).Distinct().ToList()
+            : examDivisionIds;
+        if (visibleDivisionIds.Count == 0)
+        {
+            throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+        }
+
+        input.Filters.ClassIds = [exam.StandardId];
+        input.Filters.DivisionIds = visibleDivisionIds;
+        return true;
     }
 
     internal static bool ShouldApplyClassTeacherRestriction(

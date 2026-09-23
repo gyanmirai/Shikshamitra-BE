@@ -178,6 +178,20 @@ public class ClonePaymentTermsDto
 	public List<Guid> PaymentTermIds { get; set; } = new();
 }
 
+public class PreviewPaymentTermTemplateDto
+{
+	public Guid BoardId { get; set; }
+	public PaymentTermTemplateKind TemplateKind { get; set; }
+	[Range(1, 36)]
+	public int? CustomInstallmentCount { get; set; }
+	public PaymentTermTemplateDueDateRule DueDateRule { get; set; } = PaymentTermTemplateDueDateRule.CoverageEnd;
+	[Range(0, 365)]
+	public int? DueDaysAfterCoverageStart { get; set; }
+	public DemandGenerationRule DemandGenerationRule { get; set; } = DemandGenerationRule.OnInstallmentStartDate;
+	[Range(1, 365)]
+	public int? DemandOffsetDays { get; set; }
+}
+
 public class ArchivePaymentTermDto
 {
 	[Required, StringLength(500)]
@@ -191,6 +205,15 @@ public class ClonePaymentTermsResultDto
 	public List<Guid> ClonedTermIds { get; set; } = new();
 	public List<string> ConflictedCodes { get; set; } = new();
 	public List<string> DateRangesRequiringReview { get; set; } = new();
+}
+
+public class PaymentTermTemplatePreviewDto
+{
+	public PaymentTermTemplateKind TemplateKind { get; set; }
+	public DateTime BoardStartDate { get; set; }
+	public DateTime BoardEndDate { get; set; }
+	public int InstallmentCount { get; set; }
+	public List<CreatePaymentTermInstallmentDto> Installments { get; set; } = new();
 }
 
 public class ImpactPreviewDto

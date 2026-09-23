@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
@@ -95,6 +96,51 @@ public class PaymentTermAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 
 		updated.Status.ShouldBe(PaymentTermLifecycleStatus.Draft);
 		updated.IsDefault.ShouldBeFalse();
+	}
+
+	[Fact]
+	public async Task Quarterly_Template_Previews_A_Complete_Valid_Schedule()
+	{
+		var (_, boardId, _) = await SeedAcademicContextAsync();
+
+		var preview = await _paymentTerms.PreviewTemplateAsync(new PreviewPaymentTermTemplateDto
+		{
+			BoardId = boardId,
+			TemplateKind = PaymentTermTemplateKind.Quarterly,
+			DueDateRule = PaymentTermTemplateDueDateRule.CoverageEnd,
+			DemandGenerationRule = DemandGenerationRule.OnInstallmentStartDate
+		});
+
+		preview.InstallmentCount.ShouldBe(4);
+		preview.Installments.Sum(item => item.AllocationPercentage).ShouldBe(100m);
+		preview.Installments[0].CoverageStartDate.ShouldBe(preview.BoardStartDate);
+		preview.Installments[0].CoverageEndDate.ShouldBe(new DateTime(2026, 6, 30));
+		preview.Installments[^1].CoverageEndDate.ShouldBe(preview.BoardEndDate);
+		for (var index = 1; index < preview.Installments.Count; index++)
+		{
+			preview.Installments[index].CoverageStartDate.ShouldBe(
+				preview.Installments[index - 1].CoverageEndDate.AddDays(1));
+		}
+	}
+
+	[Fact]
+	public async Task Custom_Template_Uses_Requested_Count_And_Stable_Remainder()
+	{
+		var (_, boardId, _) = await SeedAcademicContextAsync();
+
+		var preview = await _paymentTerms.PreviewTemplateAsync(new PreviewPaymentTermTemplateDto
+		{
+			BoardId = boardId,
+			TemplateKind = PaymentTermTemplateKind.Custom,
+			CustomInstallmentCount = 3,
+			DueDateRule = PaymentTermTemplateDueDateRule.DaysAfterCoverageStart,
+			DueDaysAfterCoverageStart = 10,
+			DemandGenerationRule = DemandGenerationRule.SpecificDate
+		});
+
+		preview.Installments.Select(item => item.AllocationPercentage)
+			.ShouldBe([33.33m, 33.33m, 33.34m]);
+		preview.Installments.ShouldAllBe(item => item.DemandDate == item.CoverageStartDate);
 	}
 
 	private async Task<(Guid YearId, Guid FirstBoardId, Guid SecondBoardId)> SeedAcademicContextAsync()

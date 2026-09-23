@@ -80,6 +80,11 @@ public class PaymentTermController(
 	public async Task<ClonePaymentTermsResultDto> CloneAsync(ClonePaymentTermsDto input)
 		=> await paymentTermAppService.CloneAsync(input);
 
+	[HttpPost("templates/preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.Add)]
+	public async Task<PaymentTermTemplatePreviewDto> PreviewTemplateAsync(PreviewPaymentTermTemplateDto input)
+		=> await paymentTermAppService.PreviewTemplateAsync(input);
+
 	[HttpGet("{paymentTermId}/impact-preview")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.View)]
 	public async Task<ImpactPreviewDto> GetImpactPreviewAsync(Guid paymentTermId)

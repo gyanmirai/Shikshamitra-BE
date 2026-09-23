@@ -32,6 +32,8 @@ public interface IPaymentTermAppService : IApplicationService
 
 	Task<ClonePaymentTermsResultDto> CloneAsync(ClonePaymentTermsDto input);
 
+	Task<PaymentTermTemplatePreviewDto> PreviewTemplateAsync(PreviewPaymentTermTemplateDto input);
+
 	Task<ImpactPreviewDto> GetImpactPreviewAsync(Guid paymentTermId);
 
 	Task<FeeStructureSchedulePreviewDto> GetFeeStructureSchedulePreviewAsync(Guid feeStructureId);

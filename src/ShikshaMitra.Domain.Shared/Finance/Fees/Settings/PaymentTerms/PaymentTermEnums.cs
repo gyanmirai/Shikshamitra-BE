@@ -82,6 +82,30 @@ public enum DemandGenerationRule
 }
 
 /// <summary>
+/// Built-in schedule shapes available when generating a Payment Term draft.
+/// Templates are authoring helpers only; generated installments remain the
+/// canonical versioned schedule.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PaymentTermTemplateKind
+{
+	Annual = 0,
+	HalfYearly = 1,
+	Quarterly = 2,
+	Monthly = 3,
+	Custom = 4
+}
+
+/// <summary>Determines the due date inside each generated coverage period.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PaymentTermTemplateDueDateRule
+{
+	CoverageStart = 0,
+	CoverageEnd = 1,
+	DaysAfterCoverageStart = 2
+}
+
+/// <summary>
 /// User-selectable state when a Payment Term is saved. Archive is deliberately
 /// excluded because it is a guarded lifecycle action, not a form value.
 /// </summary>

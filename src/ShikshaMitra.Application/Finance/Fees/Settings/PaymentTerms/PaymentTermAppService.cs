@@ -76,6 +76,20 @@ public class PaymentTermAppService(
 		return await MapDetailDtoAsync(term, referenceCount);
 	}
 
+	public async Task<PaymentTermTemplatePreviewDto> PreviewTemplateAsync(PreviewPaymentTermTemplateDto input)
+	{
+		var board = await boardRepository.GetAsync(input.BoardId);
+		var installments = PaymentTermTemplateGenerator.Generate(board.StartDate, board.EndDate, input);
+		return new PaymentTermTemplatePreviewDto
+		{
+			TemplateKind = input.TemplateKind,
+			BoardStartDate = board.StartDate.Date,
+			BoardEndDate = board.EndDate.Date,
+			InstallmentCount = installments.Count,
+			Installments = installments
+		};
+	}
+
 	public async Task<PagedResultDto<PaymentTermVersionHistoryDto>> GetVersionHistoryAsync(
 		Guid paymentTermId,
 		PagedAndSortedResultRequestDto input)

@@ -34,6 +34,7 @@ public class SlotConfigurationDetailDto
 {
     public int TotalSlots { get; set; }
     public List<int> WeekRange { get; set; } = [];
+    public List<int> ActiveDays { get; set; } = [];
     public List<TimeSlotDetailDto> TimeSlots { get; set; } = [];
 }
 

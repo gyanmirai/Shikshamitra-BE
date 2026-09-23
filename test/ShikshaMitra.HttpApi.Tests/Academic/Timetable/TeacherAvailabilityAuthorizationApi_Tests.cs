@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using NSubstitute;
 using ShikshaMitra.Academic.Timetable.Substitutions;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Controllers.Academic.Timetable;
@@ -119,6 +120,33 @@ public class TeacherAvailabilityAuthorizationApi_Tests : ShikshaMitraApiTestBase
 
 		remoteService.ShouldNotBeNull();
 		remoteService.IsEnabled.ShouldBeFalse();
+	}
+
+	[Fact]
+	public async Task Affected_Lectures_Query_Should_Forward_The_Selected_Academic_Year()
+	{
+		var academicYearId = Guid.NewGuid();
+		var teacherId = Guid.NewGuid();
+		var service = Substitute.For<ITeacherAvailabilityAppService>();
+		service.GetAffectedLecturesAsync(Arg.Any<CreateTeacherAvailabilityDto>())
+			.Returns(new AffectedLectureResultDto());
+		var controller = new TeacherAvailabilityController(service);
+
+		await controller.GetAffectedLecturesFromQueryAsync(
+			academicYearId,
+			teacherId.ToString(),
+			"Akshay Patel",
+			new DateTime(2026, 9, 23),
+			"07:00",
+			"17:30",
+			true,
+			"Unavailable");
+
+		await service.Received(1).GetAffectedLecturesAsync(
+			Arg.Is<CreateTeacherAvailabilityDto>(input =>
+				input.AcademicYearId == academicYearId &&
+				input.TeacherId == teacherId &&
+				input.AvailabilityDate == new DateTime(2026, 9, 23)));
 	}
 
 	private HttpClient CreateClientWithPermissions(params string[] permissions)

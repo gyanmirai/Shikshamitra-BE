@@ -2184,9 +2184,13 @@ public class SubjectAssignmentAppService(
 		AssignedSubject assignment,
 		string operation)
 	{
-		if (!await userScopeAccessService.CurrentUserHasTenantWideScopeAsync() &&
-			!await HasClassTeacherAccessAsync() &&
-			operation == "subject-assignment-read")
+		var hasTenantWideScope = await userScopeAccessService.CurrentUserHasTenantWideScopeAsync();
+		var hasClassTeacherAccess = await HasClassTeacherAccessAsync();
+
+		// Subject-teacher ownership remains valid even when the same employee also owns a
+		// class. The list query combines these access paths, so detail reads must use the
+		// same additive rule instead of treating class-teacher access as an exclusive mode.
+		if (!hasTenantWideScope && operation == "subject-assignment-read")
 		{
 			var currentEmployeeId = await GetCurrentEmployeeIdAsync();
 			if (currentEmployeeId.HasValue && await IsTeacherAssignedToSubjectAsync(assignment, currentEmployeeId.Value))
@@ -2207,7 +2211,7 @@ public class SubjectAssignmentAppService(
 			}
 		}
 
-		if (!await HasClassTeacherAccessAsync())
+		if (!hasClassTeacherAccess)
 		{
 			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignment, operation: operation);
 			return;

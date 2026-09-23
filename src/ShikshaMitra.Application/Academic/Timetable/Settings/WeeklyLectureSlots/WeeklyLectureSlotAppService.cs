@@ -128,7 +128,7 @@ public class WeeklyLectureSlotAppService(
         return configs.ToDictionary(
             c => c.StandardId,
             c => TimetableCapacityCalculator.GetWeeklyTeachingCapacity(
-                c.SlotGroups.Select(g => (g.TimeSlots.Count(ts => ts.SlotType == SlotType.Period), g.WeekRangeEnd - g.WeekRangeStart + 1))));
+                c.SlotGroups.Select(g => (g.TimeSlots.Count(ts => ts.SlotType == SlotType.Period), g.ActiveDays.Count))));
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsWeeklyLectures.View)]

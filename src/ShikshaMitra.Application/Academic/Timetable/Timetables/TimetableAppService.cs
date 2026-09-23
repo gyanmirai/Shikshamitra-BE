@@ -111,7 +111,7 @@ public class TimetableAppService(
         {
             foreach (var group in slotConfig.SlotGroups)
             {
-                for (var dayIdx = group.WeekRangeStart; dayIdx <= group.WeekRangeEnd; dayIdx++)
+                foreach (var dayIdx in group.ActiveDays)
                 {
                     var groupDay = (TimetableDayOfWeek) dayIdx;
                     foreach (var ts in group.TimeSlots)
@@ -130,7 +130,7 @@ public class TimetableAppService(
             var dayIndex = (int)day;
 
             var slotGroup = slotConfig?.SlotGroups
-                .FirstOrDefault(g => g.WeekRangeStart <= dayIndex && dayIndex <= g.WeekRangeEnd);
+                .FirstOrDefault(g => g.AppliesToDay(dayIndex));
             var configTimeSlots = slotGroup?.TimeSlots.OrderBy(ts => ts.StartTime).ToList();
 
             if (configTimeSlots != null && configTimeSlots.Count > 0)
@@ -606,7 +606,7 @@ public class TimetableAppService(
         {
             foreach (var group in lectureSlotConfig.SlotGroups)
             {
-                int numDays = group.WeekRangeEnd - group.WeekRangeStart + 1;
+                int numDays = group.ActiveDays.Count;
                 int lectureSlotsInGroup = group.TimeSlots.Count(ts => ts.SlotType == SlotType.Period);
                 weeklySlots += numDays * lectureSlotsInGroup;
             }
@@ -1347,7 +1347,7 @@ public class TimetableAppService(
             StandardId = standardId,
             Items = config.SlotGroups.Select(group => new SlotConfigItemDto
             {
-                ApplicableDays = Enumerable.Range(group.WeekRangeStart, group.WeekRangeEnd - group.WeekRangeStart + 1)
+                ApplicableDays = group.ActiveDays
                     .Where(i => i < dayNames.Length)
                     .Select(i => dayNames[i])
                     .ToList(),

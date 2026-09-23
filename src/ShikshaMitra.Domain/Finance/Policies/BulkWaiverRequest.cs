@@ -28,7 +28,7 @@ public enum BulkWaiverStatus
 /// A request to waive the outstanding late fee for every due line matching a scope (a class,
 /// section, fee structure, or the whole school) — implementation plan §4d. Always requires
 /// approval before it can be applied: a bulk scope can span multiple Collection Policies at
-/// once, each with its own approvalThresholdAmount, so there is no single policy-level threshold
+/// once. Approval is all-or-nothing per resolved policy, so there is no amount threshold
 /// to check against the way an individual waiver has one; requiring approval unconditionally is
 /// the conservative default rather than guessing which policy's threshold should govern.
 /// </summary>

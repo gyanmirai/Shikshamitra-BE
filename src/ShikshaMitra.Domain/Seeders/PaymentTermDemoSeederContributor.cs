@@ -111,7 +111,7 @@ public class PaymentTermDemoSeederContributor : BaseSeederContributor
 			template.Name,
 			code,
 			template.Description,
-			isDefault,
+			isDefault: false,
 			HolidayShiftingMethod.NextWorkingDay,
 			DemandGenerationRule.OnInstallmentStartDate,
 			demandOffsetDays: null,
@@ -132,6 +132,10 @@ public class PaymentTermDemoSeederContributor : BaseSeederContributor
 		version.SetInstallments(BuildInstallments(versionId, board, template));
 		version.Publish(board.StartDate, Guid.Empty);
 		term.AddVersion(version);
+		if (isDefault)
+		{
+			term.SetDefault(true);
+		}
 		return term;
 	}
 

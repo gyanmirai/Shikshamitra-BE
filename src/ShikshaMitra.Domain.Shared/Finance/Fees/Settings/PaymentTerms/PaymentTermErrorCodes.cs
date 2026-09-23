@@ -38,4 +38,5 @@ public static class PaymentTermErrorCodes
 	public const string InstallmentDateOutsideBoardPeriod = $"{Prefix}:000035";
 	public const string EffectiveDateRequired = $"{Prefix}:000036";
 	public const string DefaultTermRequired = $"{Prefix}:000037";
+	public const string DefaultTermMustBeActive = $"{Prefix}:000038";
 }

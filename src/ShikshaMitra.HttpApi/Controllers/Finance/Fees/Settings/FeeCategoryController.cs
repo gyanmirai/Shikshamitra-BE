@@ -27,9 +27,9 @@ public class FeeCategoryController(
 
     [HttpGet]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeCategory.View)]
-    public Task<FeeCategoryListResponse> GetListAsync([FromQuery] Guid academicYearId, [FromQuery] string search = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public Task<FeeCategoryListResponse> GetListAsync([FromQuery] Guid academicYearId, [FromQuery] string? search = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, [FromQuery] bool? isActive = null)
     {
-        return feeCategoryAppService.GetListAsync(academicYearId, search, page, pageSize);
+        return feeCategoryAppService.GetListAsync(academicYearId, search, page, pageSize, isActive);
     }
 
     [HttpGet("{id}")]

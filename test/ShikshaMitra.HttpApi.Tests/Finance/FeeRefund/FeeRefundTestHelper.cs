@@ -96,8 +96,8 @@ public static class FeeRefundTestHelper
         var policy = new RefundPolicy(policyId, tenantId, DefaultAcademicYearId,
             new RefundPolicyUpdateModel(
                 $"Refund policy {policyId:N}", $"RP-{policyId:N}", "API test policy",
-                RefundPolicyStatus.Active, false, RefundEligiblePaymentState.PartialAndFullPayment,
-                RefundFeeHeadScope.AllFeeHeads, [], false, false, null, true,
+                RefundPolicyStatus.Active, false, RefundFeeHeadScope.AllFeeHeads,
+                [], false, false, true,
                 RefundAmountMode.ManualUpToEligible, null, null, null, null,
                 RoundingMethodType.None, RefundDeductionType.None, null, null, null,
                 [RefundPayoutMethod.Cash], 2));

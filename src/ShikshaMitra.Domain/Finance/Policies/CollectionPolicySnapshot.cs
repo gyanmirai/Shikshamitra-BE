@@ -45,13 +45,9 @@ public sealed class CollectionPolicySnapshot
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 	public bool EnableWaiver { get; set; }
-	public List<Guid> WaiverApplyOnFeeHeads { get; set; } = [];
-	public decimal? MaximumWaiverAmount { get; set; }
-	public decimal? MaximumWaiverPercentage { get; set; }
-	public DateTime? WaiverExpiry { get; set; }
+	public bool EnableChargeWaiver { get; set; }
 	public bool RequiresApproval { get; set; }
 	public List<Guid> ApprovalRoleIds { get; set; } = [];
-	public decimal? ApprovalThresholdAmount { get; set; }
 	public bool AllowOnlineCollection { get; set; }
 
 	public string Serialize() => JsonSerializer.Serialize(this, JsonOptions);
@@ -66,6 +62,5 @@ public sealed class CollectionPolicySnapshot
 		FlatAmount, Percentage, PercentageBase, AmountPerDay, AmountPerWeek, AmountPerMonth,
 		CompoundFrequency, EscalationRules, FeeHeadOverrides, RoundingMethod, ConsiderAsIncome,
 		LateFeeIncomeHeadId, MaximumLateFeeAmount, MaximumChargingDays, EnableWaiver,
-		WaiverApplyOnFeeHeads, MaximumWaiverAmount, MaximumWaiverPercentage, WaiverExpiry,
-		RequiresApproval, ApprovalRoleIds, ApprovalThresholdAmount, AllowOnlineCollection);
+		EnableChargeWaiver, RequiresApproval, ApprovalRoleIds, AllowOnlineCollection);
 }

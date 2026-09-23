@@ -52,13 +52,18 @@ public class ChargeCategoryAppService(
 		return await ToResponseAsync(chargeCategory);
     }
 
-    public async Task<PaginatedChargeCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
+    public async Task<PaginatedChargeCategoryResponse> GetListAsync(Guid academicYearId, int page = 1, int pageSize = 10, string? search = null, bool? isActive = null)
     {
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null))
 			return new PaginatedChargeCategoryResponse { CurrentPage = page, PageSize = pageSize, Items = [] };
         var query = await chargeCategoryRepository.GetQueryableAsync();
 
         query = query.Where(x => x.AcademicYearId == academicYearId);
+
+        if (isActive.HasValue)
+        {
+            query = query.Where(x => x.IsActive == isActive.Value);
+        }
 
         if (!search.IsNullOrWhiteSpace())
         {
@@ -136,8 +141,8 @@ public class ChargeCategoryAppService(
 	{
 		var category = await chargeCategoryRepository.GetAsync(id);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(category.AcademicYearId, null, null, null, null);
-		if (!input.IsActive && (string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Trim().Length < 10))
-			throw new UserFriendlyException("A deactivation reason of at least 10 characters is required.");
+		if (!input.IsActive && string.IsNullOrWhiteSpace(input.Reason))
+			throw new UserFriendlyException("A deactivation reason is required.");
 		if (input.IsActive)
 			await ValidateAccountingMappingAsync(category.AcademicYearId,
 				category.IncomeCategoryId ?? Guid.Empty);

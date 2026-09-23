@@ -26,9 +26,10 @@ public class ChargeCategoryController(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] int page = 1,
 		[FromQuery] int pageSize = 10,
-		[FromQuery] string? search = null)
+		[FromQuery] string? search = null,
+		[FromQuery] bool? isActive = null)
 	{
-		return chargeCategoryAppService.GetListAsync(academicYearId, page, pageSize, search);
+		return chargeCategoryAppService.GetListAsync(academicYearId, page, pageSize, search, isActive);
 	}
 
 	[HttpGet("{chargeCategoryId}")]
@@ -46,6 +47,7 @@ public class ChargeCategoryController(
 	}
 
 	[HttpPatch("{chargeCategoryId}/status")]
+	[HttpPut("{chargeCategoryId}/status")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ChargeCategory.ChangeStatus)]
 	public Task<ChargeCategoryResponse> UpdateStatusAsync(
 		Guid chargeCategoryId, [FromBody] UpdateChargeCategoryStatusRequest input)

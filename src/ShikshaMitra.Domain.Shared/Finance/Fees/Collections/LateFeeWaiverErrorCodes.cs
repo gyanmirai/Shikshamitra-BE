@@ -9,4 +9,6 @@ public static class LateFeeWaiverErrorCodes
 	public const string DueFeeNotFound = Prefix + "010003";
 	public const string NoCollectionPolicyResolved = Prefix + "010004";
 	public const string RequestedAmountMustBePositive = Prefix + "010005";
+	public const string DecisionReasonRequired = Prefix + "010006";
+	public const string MakerCheckerRequired = Prefix + "010007";
 }

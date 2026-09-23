@@ -35,7 +35,6 @@ public class UpdateChargeCategoryStatusRequest
 {
 	public bool IsActive { get; set; }
 
-	[MinLength(10)]
 	[MaxLength(500)]
 	public string? Reason { get; set; }
 }

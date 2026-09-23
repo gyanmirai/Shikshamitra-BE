@@ -178,9 +178,6 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				RoundingMethod = "None",
 				MaximumLateFeeAmount = maximumLateFeeAmount.HasValue ? (decimal)maximumLateFeeAmount.Value : null,
 				EnableWaiver = true,
-				WaiverApplyOnFeeHeads = new() { feeHeadId },
-				MaximumWaiverAmount = 100,
-				MaximumWaiverPercentage = 100,
 				AllowOnlineCollection = true,
 			});
 			policy = await _collectionPolicies.GetAsync(policy.Id);
@@ -339,21 +336,20 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 	}
 
 	[Fact]
-	public async Task Waiver_Exceeding_Policy_Cap_Is_Silently_Capped_Not_Rejected()
+	public async Task Waiver_Is_Limited_Only_By_The_Remaining_Late_Fee()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		{
-			// Policy fixture caps MaximumWaiverAmount at 100.
 			var (_, _, _, dueFeeId, _) = await SeedStudentWithOverdueDueFeeAsync(daysOverdue: 15, attachPolicy: true);
 
 			var result = await _waivers.ApplyWaiverAsync(new ApplyLateFeeWaiverInput
 			{
 				DueFeeId = dueFeeId,
-				RequestedAmount = 300, // computed late fee is 300; policy caps waiver at 100
+				RequestedAmount = 300,
 				Reason = "Requesting full waiver.",
 			});
 
-			result.EffectiveAmount.ShouldBe(100);
+			result.EffectiveAmount.ShouldBe(300);
 			result.RequestedAmount.ShouldBe(300);
 		}
 	}

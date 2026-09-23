@@ -65,14 +65,10 @@ public partial class FeeRefundAppService
         var collections = await collectionRepository.GetListAsync(x => x.StudentId == studentId &&
             x.AcademicYearId == academicYearId && x.Status != FeeCollectionStatus.Reversed &&
             x.Status != FeeCollectionStatus.InReconciliation);
-        if (policy.EligiblePaymentState == RefundEligiblePaymentState.FullyPaidOnly)
-            collections = collections.Where(x => x.Status == FeeCollectionStatus.Paid).ToList();
         var collectionIds = collections.Select(x => x.Id).ToList();
         var receipts = await feePaymentReceiptRepository.GetListAsync(x => collectionIds.Contains(x.FeeCollectionTransactionId) &&
             x.ReceiptScope == FeeReceiptScope.Fee && (x.ReceiptKind == FeeReceiptKind.FinalFee ||
             (x.ReceiptKind == FeeReceiptKind.ProvisionalFee && x.VerificationStatus == FeeReceiptVerificationStatus.Verified)));
-        if (policy.RequestDeadlineDays.HasValue)
-            receipts = receipts.Where(x => x.ReceiptDate.AddDays(policy.RequestDeadlineDays.Value) >= DateOnly.FromDateTime(Clock.Now)).ToList();
         var receiptByCollection = receipts.GroupBy(x => x.FeeCollectionTransactionId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.ReceiptKind == FeeReceiptKind.FinalFee).ThenByDescending(x => x.CreationTime).First());
         var eligibleCollectionIds = receiptByCollection.Keys.ToList();

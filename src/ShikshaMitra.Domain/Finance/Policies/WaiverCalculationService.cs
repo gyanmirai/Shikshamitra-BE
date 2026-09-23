@@ -4,8 +4,8 @@ using Volo.Abp.DependencyInjection;
 namespace ShikshaMitra.Domain.Finance.Policies;
 
 /// <summary>
-/// effective waiver = min(requested, maxWaiverAmount, lateFee × maxWaiverPercentage / 100),
-/// with expiry check — per collection-policy-flow.md §6 and implementation plan Phase 2.
+/// A late-fee waiver inherits the late-fee fee-head scope and is limited only by the
+/// current remaining late fee. Policy caps, expiry, and approval thresholds are retired.
 /// </summary>
 public class WaiverCalculationService : ITransientDependency
 {
@@ -21,40 +21,13 @@ public class WaiverCalculationService : ITransientDependency
 			return new WaiverCalculationResult(0, false, false, "This fee head is outside the policy's waiver scope.");
 		}
 
-		var isExpired = policy.WaiverExpiry is { } expiry && input.AsOfDate.Date > expiry.Date;
-		if (isExpired)
-		{
-			return new WaiverCalculationResult(0, true, false, $"Waiver expired on {policy.WaiverExpiry:yyyy-MM-dd}.");
-		}
+		var effective = Math.Max(0, Math.Min(input.RequestedAmount, input.LateFeeAmount));
 
-		var effective = input.RequestedAmount;
-		string? cappedBy = null;
+		var requiresApproval = policy.RequiresApproval && !input.WaiverPreApproved;
 
-		if (policy.MaximumWaiverAmount is { } maxAmount && maxAmount < effective)
-		{
-			effective = maxAmount;
-			cappedBy = "maximumWaiverAmount";
-		}
-
-		if (policy.MaximumWaiverPercentage is { } maxPercentage)
-		{
-			var percentageCap = input.LateFeeAmount * maxPercentage / 100m;
-			if (percentageCap < effective)
-			{
-				effective = percentageCap;
-				cappedBy = "maximumWaiverPercentage";
-			}
-		}
-
-		effective = Math.Max(0, effective);
-
-		var requiresApproval = policy.RequiresApproval &&
-			!input.WaiverPreApproved &&
-			(policy.ApprovalThresholdAmount is null || effective > policy.ApprovalThresholdAmount);
-
-		var explanation = cappedBy is not null
-			? $"₹{effective} (requested ₹{input.RequestedAmount}, capped by {cappedBy})"
-			: $"₹{effective} (full requested amount)";
+		var explanation = effective < input.RequestedAmount
+			? $"₹{effective} (requested ₹{input.RequestedAmount}, limited to the remaining late fee)"
+			: $"₹{effective} (requested amount)";
 
 		return new WaiverCalculationResult(effective, false, requiresApproval, explanation);
 	}

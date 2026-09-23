@@ -125,6 +125,26 @@ public partial class ConcessionRequestAppService
 			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ConcurrencyConflict);
 	}
 
+	private static void EnsurePendingDecisionStatus(ConcessionRequest request)
+	{
+		if (request.Status is not (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending))
+			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.NotPending)
+				.WithData("Status", request.Status.ToString());
+	}
+
+	private async Task PromoteDraftToPendingAsync(ConcessionRequest request)
+	{
+		if (request.Status == ConcessionRequestStatus.Pending) return;
+
+		request.EnsureDraft();
+		await concessionRequestManager.RefreshDraftAsync(request);
+		if (await concessionRequestRepository.HasPendingForStudentAndTypeAsync(
+			request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id))
+			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.DuplicatePendingRequest);
+
+		request.Submit(Clock.Now);
+	}
+
 	private static bool IsConstraintViolation(Exception exception, string constraintName)
 	{
 		for (var current = exception; current is not null; current = current.InnerException)
@@ -415,9 +435,8 @@ public partial class ConcessionRequestAppService
 		var isOwner = request.CreatorId.HasValue && request.CreatorId == currentUser.Id;
 		return request.Status switch
 		{
-			ConcessionRequestStatus.Draft when isOwner =>
-				["view", "edit", "submit", "cancel", "delete", "upload-document"],
-			ConcessionRequestStatus.Pending when isOwner => ["view", "cancel"],
+			ConcessionRequestStatus.Draft =>
+				["view", "edit", "approve", "reject", "delete", "upload-document"],
 			ConcessionRequestStatus.Pending => ["view", "approve", "reject"],
 			ConcessionRequestStatus.Rejected or ConcessionRequestStatus.Cancelled when isOwner =>
 				["view", "create-replacement"],

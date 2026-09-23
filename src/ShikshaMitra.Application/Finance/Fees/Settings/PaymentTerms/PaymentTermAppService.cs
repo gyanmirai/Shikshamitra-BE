@@ -126,11 +126,8 @@ public class PaymentTermAppService(
 			board.StartDate,
 			board.EndDate);
 		EnsureSaveStatus(input.Status);
+		EnsureDefaultIsActive(input.IsDefault, input.Status);
 		await EnsureUniqueCodeAsync(input.AcademicYearId, input.Code, excludeId: null);
-		if (input.IsDefault)
-		{
-			await ClearDefaultForYearBoardAsync(input.AcademicYearId, input.BoardId, excludeId: null);
-		}
 
 		if (input.DemandGenerationRule == DemandGenerationRule.XDaysBeforeDue &&
 			(!input.DemandOffsetDays.HasValue || input.DemandOffsetDays.Value < 1))
@@ -146,7 +143,7 @@ public class PaymentTermAppService(
 			input.Name,
 			input.Code,
 			input.Description,
-			input.IsDefault,
+			isDefault: false,
 			input.HolidayShiftingMethod,
 			input.DemandGenerationRule,
 			input.DemandOffsetDays,
@@ -170,6 +167,11 @@ public class PaymentTermAppService(
 		{
 			await PublishDraftAsync(term, version, board);
 		}
+		if (input.IsDefault)
+		{
+			await ReplaceDefaultForBoardAsync(input.AcademicYearId, input.BoardId, excludeId: null);
+			term.SetDefault(true);
+		}
 
 		await paymentTermRepository.InsertAsync(term, autoSave: true);
 		return await GetAsync(term.Id);
@@ -183,22 +185,6 @@ public class PaymentTermAppService(
 			throw new BusinessException(PaymentTermErrorCodes.ArchiveInUse)
 				.WithData("PaymentTermId", paymentTermId);
 		}
-		if (term.IsDefault && !input.IsDefault)
-		{
-			var hasOtherDefault = await paymentTermRepository.AnyAsync(item =>
-				item.Id != term.Id &&
-				item.AcademicYearId == term.AcademicYearId &&
-				item.BoardId == term.BoardId &&
-				item.IsDefault &&
-				item.Status != PaymentTermStatus.Archived);
-			if (!hasOtherDefault)
-			{
-				throw new BusinessException(PaymentTermErrorCodes.DefaultTermRequired)
-					.WithData("PaymentTermId", paymentTermId)
-					.WithData("BoardId", term.BoardId);
-			}
-		}
-
 		var board = await boardRepository.GetAsync(term.BoardId);
 		PaymentTermInstallmentValidator.PrepareAndValidate(
 			input.DemandGenerationRule,
@@ -207,6 +193,7 @@ public class PaymentTermAppService(
 			board.StartDate,
 			board.EndDate);
 		EnsureSaveStatus(input.Status);
+		EnsureDefaultIsActive(input.IsDefault, input.Status);
 
 		await EnsureUniqueCodeAsync(term.AcademicYearId, input.Code, paymentTermId);
 
@@ -248,15 +235,15 @@ public class PaymentTermAppService(
 			input.DemandGenerationRule,
 			input.DemandOffsetDays);
 		draft.SetInstallments(BuildInstallments(draft.Id, input.Installments));
-		if (input.IsDefault)
-		{
-			await ClearDefaultForYearBoardAsync(term.AcademicYearId, term.BoardId, term.Id);
-		}
-		term.SetDefault(input.IsDefault);
 		if (input.Status == PaymentTermSaveStatus.Active)
 		{
 			await PublishDraftAsync(term, draft, board);
 		}
+		if (input.IsDefault)
+		{
+			await ReplaceDefaultForBoardAsync(term.AcademicYearId, term.BoardId, term.Id);
+		}
+		term.SetDefault(input.IsDefault);
 
 		await paymentTermRepository.UpdateAsync(term, autoSave: true);
 		return await GetAsync(term.Id);
@@ -276,8 +263,6 @@ public class PaymentTermAppService(
 			throw new BusinessException(PaymentTermErrorCodes.DeleteWithReferences)
 				.WithData("ReferencedStructureCount", referenceCount);
 		}
-		await EnsureDefaultReplacementAvailableAsync(term);
-
 		await paymentTermRepository.DeleteAsync(term);
 	}
 
@@ -384,7 +369,6 @@ public class PaymentTermAppService(
 			throw new BusinessException(PaymentTermErrorCodes.ArchiveInUse)
 				.WithData("ReferencedStructureCount", referenceCount);
 		}
-		await EnsureDefaultReplacementAvailableAsync(term);
 		term.Archive(input.Reason);
 		await paymentTermRepository.UpdateAsync(term, autoSave: true);
 	}
@@ -612,7 +596,7 @@ public class PaymentTermAppService(
 		}
 	}
 
-	private async Task ClearDefaultForYearBoardAsync(Guid academicYearId, Guid boardId, Guid? excludeId)
+	private async Task ReplaceDefaultForBoardAsync(Guid academicYearId, Guid boardId, Guid? excludeId)
 	{
 		var defaults = await paymentTermRepository.GetListAsync(t =>
 			t.AcademicYearId == academicYearId &&
@@ -624,27 +608,6 @@ public class PaymentTermAppService(
 		{
 			item.SetDefault(false);
 			await paymentTermRepository.UpdateAsync(item, autoSave: true);
-		}
-	}
-
-	private async Task EnsureDefaultReplacementAvailableAsync(PaymentTerm term)
-	{
-		if (!term.IsDefault)
-		{
-			return;
-		}
-
-		var hasReplacement = await paymentTermRepository.AnyAsync(item =>
-			item.Id != term.Id &&
-			item.AcademicYearId == term.AcademicYearId &&
-			item.BoardId == term.BoardId &&
-			item.IsDefault &&
-			item.Status != PaymentTermStatus.Archived);
-		if (!hasReplacement)
-		{
-			throw new BusinessException(PaymentTermErrorCodes.DefaultTermRequired)
-				.WithData("PaymentTermId", term.Id)
-				.WithData("BoardId", term.BoardId);
 		}
 	}
 
@@ -716,7 +679,15 @@ public class PaymentTermAppService(
 		}
 	}
 
-	private async Task PublishDraftAsync(
+	private static void EnsureDefaultIsActive(bool isDefault, PaymentTermSaveStatus status)
+	{
+		if (isDefault && status != PaymentTermSaveStatus.Active)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.DefaultTermMustBeActive);
+		}
+	}
+
+	private Task PublishDraftAsync(
 		PaymentTerm term,
 		PaymentTermVersion draft,
 		EducationBoard board)
@@ -727,10 +698,7 @@ public class PaymentTermAppService(
 		draft.Publish(effectiveFrom, CurrentUser.Id ?? Guid.Empty);
 		previousPublished?.Supersede(effectiveFrom.AddDays(-1));
 		term.SetCurrentVersion(draft.Id);
-		if (term.IsDefault)
-		{
-			await ClearDefaultForYearBoardAsync(term.AcademicYearId, term.BoardId, term.Id);
-		}
+		return Task.CompletedTask;
 	}
 
 	private DateTime ResolveActivationDate(PaymentTerm term, EducationBoard board)

@@ -53,16 +53,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
 			public const string EditStudentOverride = $"{SubmoduleName}.EditStudentOverride";
+			public const string ViewWaivers = $"{SubmoduleName}.ViewWaivers";
+			public const string RequestWaiver = $"{SubmoduleName}.RequestWaiver";
 			public const string ApproveWaiver = $"{SubmoduleName}.ApproveWaiver";
-			/// <summary>Phase 4a: required in addition to ApproveWaiver when a waiver's requested amount exceeds the resolved policy's ApprovalThresholdAmount — lets schools have a two-tier approver structure (e.g. Accountant approves small waivers, Principal approves large ones).</summary>
-			public const string ApproveWaiverAboveThreshold = $"{SubmoduleName}.ApproveWaiverAboveThreshold";
+			public const string RejectWaiver = $"{SubmoduleName}.RejectWaiver";
 			public const string ManageBulkWaiver = $"{SubmoduleName}.ManageBulkWaiver";
 			public const string ManageExceptionWindow = $"{SubmoduleName}.ManageExceptionWindow";
 			public const string ViewReports = $"{SubmoduleName}.ViewReports";
 
 			public static readonly string[] All = { View, Add, Delete };
 			// Transaction permissions retain their existing keys and grants independently of configuration.
-			public static readonly string[] OperationalAll = { EditStudentOverride, ApproveWaiver, ApproveWaiverAboveThreshold, ManageBulkWaiver, ManageExceptionWindow, ViewReports };
+			public static readonly string[] OperationalAll = { EditStudentOverride, ViewWaivers, RequestWaiver, ApproveWaiver, RejectWaiver, ManageBulkWaiver, ManageExceptionWindow, ViewReports };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
@@ -70,8 +71,10 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" },
 				{ EditStudentOverride, $"{SubmoduleDisplayName}.EditStudentOverride" },
+				{ ViewWaivers, $"{SubmoduleDisplayName}.ViewWaivers" },
+				{ RequestWaiver, $"{SubmoduleDisplayName}.RequestWaiver" },
 				{ ApproveWaiver, $"{SubmoduleDisplayName}.ApproveWaiver" },
-				{ ApproveWaiverAboveThreshold, $"{SubmoduleDisplayName}.ApproveWaiverAboveThreshold" },
+				{ RejectWaiver, $"{SubmoduleDisplayName}.RejectWaiver" },
 				{ ManageBulkWaiver, $"{SubmoduleDisplayName}.ManageBulkWaiver" },
 				{ ManageExceptionWindow, $"{SubmoduleDisplayName}.ManageExceptionWindow" },
 				{ ViewReports, $"{SubmoduleDisplayName}.ViewReports" }

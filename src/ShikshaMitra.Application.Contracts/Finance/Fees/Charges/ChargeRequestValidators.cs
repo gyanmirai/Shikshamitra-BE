@@ -20,7 +20,11 @@ public class CreateChargeRequestValidator : AbstractValidator<CreateChargeReques
 			.MaximumLength(1000);
 
 		RuleFor(x => x.Amount)
-			.GreaterThan(0);
+			.GreaterThan(0)
+			.LessThanOrEqualTo(FinanceChargeAmountRules.MaximumAmount)
+			.WithMessage($"Amount cannot exceed {FinanceChargeAmountRules.MaximumAmount}.")
+			.Must(FinanceChargeAmountRules.HasSupportedScale)
+			.WithMessage("Amount must have at most two decimal places.");
 
 		RuleFor(x => x.DueDate)
 			.Must(d => d.Date >= System.DateTime.UtcNow.Date)
@@ -60,6 +64,10 @@ public class UpdateChargeRequestValidator : AbstractValidator<UpdateChargeReques
 
 		RuleFor(x => x.Amount)
 			.GreaterThan(0)
+			.LessThanOrEqualTo(FinanceChargeAmountRules.MaximumAmount)
+			.WithMessage($"Amount cannot exceed {FinanceChargeAmountRules.MaximumAmount}.")
+			.Must(amount => !amount.HasValue || FinanceChargeAmountRules.HasSupportedScale(amount.Value))
+			.WithMessage("Amount must have at most two decimal places.")
 			.When(x => x.Amount.HasValue);
 
 		RuleFor(x => x.DueDate)

@@ -69,7 +69,11 @@ public class PaymentTerm : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AcademicYearId = academicYearId;
 		BoardId = boardId;
 		SetIdentity(name, code, description);
-		IsDefault = isDefault;
+		if (isDefault)
+		{
+			throw new BusinessException(ErrorCodes.DefaultTermMustBeActive);
+		}
+		IsDefault = false;
 		HolidayShiftingMethod = holidayShiftingMethod;
 		DemandGenerationRule = demandGenerationRule;
 		DemandOffsetDays = demandOffsetDays;
@@ -117,6 +121,11 @@ public class PaymentTerm : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void SetDefault(bool isDefault)
 	{
+		if (isDefault && (Status == PaymentTermStatus.Archived || GetPublishedVersion() == null))
+		{
+			throw new BusinessException(ErrorCodes.DefaultTermMustBeActive);
+		}
+
 		IsDefault = isDefault;
 	}
 

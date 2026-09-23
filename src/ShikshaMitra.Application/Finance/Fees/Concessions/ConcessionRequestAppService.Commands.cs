@@ -394,9 +394,7 @@ public partial class ConcessionRequestAppService
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
-		request.EnsurePending();
-		if (currentUser.Id == request.CreatorId)
-			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
+		EnsurePendingDecisionStatus(request);
 		EnsureRequiredDocumentsPresent(request);
 
 		var evaluation = await concessionRequestManager.EvaluateSubmittedAsync(request);
@@ -473,16 +471,13 @@ public partial class ConcessionRequestAppService
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
-		request.EnsurePending();
+		await PromoteDraftToPendingAsync(request);
 		var evaluation = await concessionRequestManager.EvaluateSubmittedAsync(request);
 		var dueFees = evaluation.DueFees.ToList();
 		var fingerprint = ComputePreviewFingerprint(
 			request.ConcessionPolicyVersionId, dueFees, evaluation.Mappings);
 		if (!string.Equals(input.PreviewFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
 			throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged);
-
-		if (currentUser.Id == request.CreatorId)
-			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
 
 		EnsureRequiredDocumentsPresent(request);
 
@@ -584,9 +579,7 @@ public partial class ConcessionRequestAppService
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
 
-		if (currentUser.Id == request.CreatorId)
-			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
-
+		await PromoteDraftToPendingAsync(request);
 		request.Reject(currentUser.Id!.Value, input.Message, Clock.Now);
 		await concessionRequestRepository.UpdateAsync(request, autoSave: false);
 		await RecordCommandReceiptAsync("reject", input.IdempotencyKey, input, request.Id);

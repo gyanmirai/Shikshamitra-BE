@@ -69,7 +69,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 			IsDefault = isDefault,
 			EnableLateFee = true,
 			GracePeriodDays = 7,
-			LateFeeApplyOnFeeHeads = new() { lateFeeHeadId },
+			LateFeeApplyOnFeeHeads = new() { lateFeeHeadId, waiverFeeHeadId },
 			LateFeeType = "PerDay",
 			AmountPerDay = 20,
 			PercentageBase = "OutstandingAmount",
@@ -77,9 +77,6 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 			RoundingMethod = "RoundUp",
 			MaximumLateFeeAmount = 2000,
 			EnableWaiver = true,
-			WaiverApplyOnFeeHeads = new() { waiverFeeHeadId },
-			MaximumWaiverAmount = 500,
-			MaximumWaiverPercentage = 50,
 			AllowOnlineCollection = true
 		};
 	}
@@ -226,7 +223,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	{
 		var academicYearId = _guidGenerator.Create();
 		var input = await BuildInputAsync(academicYearId, "Inactive category policy");
-		var head = await _feeHeadRepository.GetAsync(input.LateFeeApplyOnFeeHeads.Single());
+		var head = await _feeHeadRepository.GetAsync(input.LateFeeApplyOnFeeHeads.First());
 		var category = await _feeCategoryRepository.GetAsync(head.FeeCategoryId);
 		category.SetStatus(false, "Not selectable");
 		await _feeCategoryRepository.UpdateAsync(category, autoSave: true);
@@ -374,13 +371,12 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		{
 			DaysLate = 15,
 			OutstandingAmount = 5000,
-			// Late fee here is 160 (see the PerDay fixture above). Requesting 1000 exceeds both
-			// BuildInput's MaximumWaiverAmount (500) and MaximumWaiverPercentage (50% of 160 = 80)
-			// — the tighter of the two, 80, is the one that actually binds.
+			// Late fee here is 160 (see the PerDay fixture above). The remaining late fee is
+			// the only limit applied to the requested waiver.
 			RequestedWaiverAmount = 1000
 		});
 
-		result.EffectiveWaiverAmount.ShouldBe(80);
+		result.EffectiveWaiverAmount.ShouldBe(160);
 		result.WaiverExplanation.ShouldNotBeNullOrWhiteSpace();
 	}
 
@@ -391,9 +387,8 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	{
 		var academicYearId = _guidGenerator.Create();
 		var input = await BuildInputAsync(academicYearId, "Policy With Overrides");
-		var transportFeeHeadId = input.LateFeeApplyOnFeeHeads.Single();
-		var libraryFeeHeadId = input.WaiverApplyOnFeeHeads.Single();
-		input.LateFeeApplyOnFeeHeads.Add(libraryFeeHeadId);
+		var transportFeeHeadId = input.LateFeeApplyOnFeeHeads.First();
+		var libraryFeeHeadId = input.LateFeeApplyOnFeeHeads.Last();
 		input.FeeHeadOverrides = new()
 		{
 			new CollectionPolicyFeeHeadOverrideDto
@@ -434,7 +429,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task Duplicate_FeeHeadId_In_Overrides_Is_Rejected()
 	{
 		var input = await BuildInputAsync(_guidGenerator.Create(), "Duplicate Override Policy");
-		var feeHeadId = input.LateFeeApplyOnFeeHeads.Single();
+		var feeHeadId = input.LateFeeApplyOnFeeHeads.First();
 		input.FeeHeadOverrides = new()
 		{
 			new CollectionPolicyFeeHeadOverrideDto { FeeHeadId = feeHeadId, OverrideMode = "NoLateFee" },
@@ -454,7 +449,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		{
 			new CollectionPolicyFeeHeadOverrideDto
 			{
-				FeeHeadId = input.LateFeeApplyOnFeeHeads.Single(),
+				FeeHeadId = input.LateFeeApplyOnFeeHeads.First(),
 				OverrideMode = "CustomRule",
 				LateFeeRule = null
 			}
@@ -472,9 +467,8 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		// set to NoLateFee produces zero late fee on transport dues and the normal calculated
 		// amount on tuition dues.
 		var input = await BuildInputAsync(_guidGenerator.Create(), "Acceptance Scenario Policy");
-		var tuitionFeeHeadId = input.LateFeeApplyOnFeeHeads.Single();
-		var transportFeeHeadId = input.WaiverApplyOnFeeHeads.Single();
-		input.LateFeeApplyOnFeeHeads.Add(transportFeeHeadId);
+		var tuitionFeeHeadId = input.LateFeeApplyOnFeeHeads.First();
+		var transportFeeHeadId = input.LateFeeApplyOnFeeHeads.Last();
 		input.FeeHeadOverrides = new()
 		{
 			new CollectionPolicyFeeHeadOverrideDto { FeeHeadId = transportFeeHeadId, OverrideMode = "NoLateFee" }

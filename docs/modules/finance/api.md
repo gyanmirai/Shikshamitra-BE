@@ -39,6 +39,8 @@ Charge endpoints and exact permissions are documented in [Charge management end 
 
 Payment-term requests and responses serialize lifecycle, version, holiday-shifting, demand-generation, and initial-demand enums by name. For example, `demandGenerationRule` uses `OnInstallmentStartDate`, `XDaysBeforeDue`, `OnDueDate`, or `SpecificDate`; numeric enum values are not the canonical wire representation.
 
+`isDefault: true` is valid only when the same create/update request uses `status: Active`. At most one Active Payment Term may be default per tenant, academic year, and Education Board. Selecting another default atomically removes the previous flag for that board; other boards retain their own defaults. Draft and Archived terms cannot retain the flag. List requests accept `boardId` to filter the workspace to one board.
+
 Payment-term version history is exposed separately from the full detail snapshot through `GET api/finance/payment-terms/{paymentTermId}/versions`. It accepts the standard `skipCount` and `maxResultCount` paging parameters and returns version number, lifecycle status, change action/reason, creation time, creator id, and hydrated creator name for the history drawer.
 
 Concession Type settings use `GET/POST api/{academicYearId}/concession-types`, `GET/PUT/DELETE api/concession-types/{id}`, `PATCH api/concession-types/{id}/status`, `GET api/concession-types/{id}/versions`, and `GET api/concession-types/document-defaults`. The paged versions endpoint returns the audited action, actor, timestamp, version number, and changed business fields. Administrative lists pass `includeInactive=true`; request creation omits it so only active types are returned. Document contracts use `documentName`, `maxFileSizeBytes`, `acceptedFormats`, and `isRequired`. Active records and used records cannot be deleted; deletion is allowed only after deactivation and while unused. Duplicate normalized names, edits to used document definitions, and missing deactivation reasons return stable business errors. `POST api/concession-request/types/{concessionTypeId}/documents/{documentId}/file` accepts multipart `File` and validates the selected definition's size, extension, MIME type, and file signature before storage. It returns an opaque staged route; `GET api/concession-request/staged-documents/{uploadId}/file` works only for the uploader while the receipt remains unattached and unexpired. Attached evidence is downloaded through `GET api/concession-request/{id}/documents/{documentId}/file`, which requires `ViewDocument` and repeats student-scope validation. Concession responses never expose the underlying shared-storage identifier.
@@ -70,6 +72,10 @@ Staged concession uploads are tenant- and uploader-bound. Their stored receipt r
 | Finance audit trail | `Controllers/Finance/Audit/FinanceAuditTrailController.cs` |
 
 ## Permission families
+
+Current individual late-fee waivers use `Finance.Policies.CollectionPolicy.ViewWaivers`, `RequestWaiver`, `ApproveWaiver`, and `RejectWaiver` with the scoped `GET /api/finance/late-fee-waivers/list` queue.
+The approved but unshipped target removes that queue and approval lifecycle.
+It adds `AllowWaiver` to each effective late-fee rule and charge, then applies an eligible waiver immediately from Fee Collection through the proposed `Finance.Fees.FeeCollections.ApplyWaiver` permission and one amount-plus-reason command documented in [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md).
 
 Use backend constants as the security source of truth.
 Known Finance families include `Finance.Fees.Charges.*`, `Finance.Fees.Concession.*`, `Finance.Fees.Adjustment.*`, and related Fees, Accounts, Reports, and Audit permissions.
@@ -113,7 +119,8 @@ Fee Structure and each of the four policy configuration families expose exactly 
 
 Canonical roots are `Finance.Settings.FeeStructure` and `Finance.Policies.{CollectionPolicy,ConcessionPolicy,RefundPolicy,ProrationPolicy}`. Menu/module visibility grants do not authorize these API actions. Structure attachment changes require both structure Add and the changed policy family's Add. Context capability flags named `edit` and `publish` both derive from structure Add.
 
-Operational waiver approvals, approval thresholds, student overrides, exception windows and charge-period overrides retain their existing permission keys and grants. They are registered separately from each configuration family's three-action `All` collection; configuration Add does not grant financial approval authority.
+Student overrides, exception windows, and charge-period overrides retain their existing permission keys and grants.
+The target retires waiver approval and threshold permissions, replacing them with one dedicated Fee Collection apply-waiver permission; configuration Add does not grant authority to reduce receivables.
 
 Deployment: rebuild/restart the API so its permission definitions and permission-list responses reflect this contract, then reload the role editor and application permission state. Existing View/Add/Delete grants keep the same names. Retired fine-grained configuration grants are not promoted automatically: a role that had only Edit/Archive/Publish must be explicitly reviewed and granted Add/Delete as appropriate. Concession and Refund now have canonical Delete grants; an old Archive grant alone does not imply Delete. No permission-grant data migration or tenant grant update is performed by this code change.
 

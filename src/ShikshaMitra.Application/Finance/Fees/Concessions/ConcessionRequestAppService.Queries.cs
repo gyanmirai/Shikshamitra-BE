@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -253,13 +253,13 @@ public partial class ConcessionRequestAppService
 
 		var queryable = await concessionRequestRepository.GetQueryableAsync();
 		var scopedQuery = queryable.Where(x =>
-			x.StudentId == studentId && x.AcademicYearId == academicYearId &&
-			(x.Status != ConcessionRequestStatus.Draft || x.CreatorId == currentUser.Id));
+			x.StudentId == studentId && x.AcademicYearId == academicYearId);
 
 		var pageSize = Math.Min(input.MaxResultCount, 100);
 		var skip     = input.SkipCount;
 		var total = await AsyncExecuter.CountAsync(scopedQuery);
-		var pending = await AsyncExecuter.CountAsync(scopedQuery.Where(x => x.Status == ConcessionRequestStatus.Pending));
+		var pending = await AsyncExecuter.CountAsync(scopedQuery.Where(x =>
+			x.Status == ConcessionRequestStatus.Draft || x.Status == ConcessionRequestStatus.Pending));
 		var approved = await AsyncExecuter.CountAsync(scopedQuery.Where(x => x.Status == ConcessionRequestStatus.Approved));
 		var rejected = await AsyncExecuter.CountAsync(scopedQuery.Where(x => x.Status == ConcessionRequestStatus.Rejected));
 		var page = await AsyncExecuter.ToListAsync(scopedQuery
@@ -324,7 +324,7 @@ public partial class ConcessionRequestAppService
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 		ConcessionRequestLiveEvaluation? evaluation = null;
 		List<DueFee> dueFees;
-		if (request.Status == ConcessionRequestStatus.Pending)
+		if (request.Status is ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending)
 		{
 			evaluation = await concessionRequestManager.EvaluateSubmittedAsync(request);
 			dueFees = evaluation.DueFees.ToList();

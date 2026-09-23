@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -52,6 +54,10 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Waiver
 	public bool EnableWaiver { get; protected set; }
+	/// <summary>
+	/// Legacy persisted fields retained for database compatibility. New waiver rules always
+	/// inherit the late-fee fee-head scope and do not use caps, thresholds, or expiry.
+	/// </summary>
 	public string WaiverApplyOnFeeHeadsJson { get; protected set; } = "[]";
 	public decimal? MaximumWaiverAmount { get; protected set; }
 	public decimal? MaximumWaiverPercentage { get; protected set; }
@@ -59,6 +65,9 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public bool RequiresApproval { get; protected set; }
 	public string ApprovalRoleIdsJson { get; protected set; } = "[]";
 	public decimal? ApprovalThresholdAmount { get; protected set; }
+	private const string EnableChargeWaiverProperty = "EnableChargeWaiver";
+	[NotMapped]
+	public bool EnableChargeWaiver => this.GetProperty<bool>(EnableChargeWaiverProperty, false);
 
 	// Online Collection
 	public bool AllowOnlineCollection { get; protected set; }
@@ -144,13 +153,17 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MaximumChargingDays = model.MaximumChargingDays;
 
 		EnableWaiver = model.EnableWaiver;
-		WaiverApplyOnFeeHeadsJson = SerializeGuids(model.WaiverApplyOnFeeHeads);
-		MaximumWaiverAmount = model.MaximumWaiverAmount;
-		MaximumWaiverPercentage = model.MaximumWaiverPercentage;
-		WaiverExpiry = model.WaiverExpiry?.Date;
-		RequiresApproval = model.RequiresApproval;
-		ApprovalRoleIdsJson = SerializeGuids(model.ApprovalRoleIds);
-		ApprovalThresholdAmount = model.ApprovalThresholdAmount;
+		// Late-fee waiver eligibility follows the late-fee scope. Keep the legacy column
+		// synchronized so existing reports/snapshots cannot observe a contradictory scope.
+		WaiverApplyOnFeeHeadsJson = SerializeGuids(model.LateFeeApplyOnFeeHeads);
+		MaximumWaiverAmount = null;
+		MaximumWaiverPercentage = null;
+		WaiverExpiry = null;
+		var hasWaiverCapability = model.EnableWaiver || model.EnableChargeWaiver;
+		RequiresApproval = hasWaiverCapability && model.RequiresApproval;
+		ApprovalRoleIdsJson = SerializeGuids(RequiresApproval ? model.ApprovalRoleIds : Array.Empty<Guid>());
+		ApprovalThresholdAmount = null;
+		this.SetProperty(EnableChargeWaiverProperty, model.EnableChargeWaiver);
 
 		AllowOnlineCollection = model.AllowOnlineCollection;
 
@@ -189,10 +202,10 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EnableLateFee && GetLateFeeApplyOnFeeHeads().Contains(feeHeadId);
 
 	public bool AppliesWaiverTo(Guid feeHeadId) =>
-		EnableWaiver && GetWaiverApplyOnFeeHeads().Contains(feeHeadId);
+		EnableWaiver && AppliesLateFeeTo(feeHeadId);
 
 	public IReadOnlyList<Guid> GetLateFeeApplyOnFeeHeads() => DeserializeGuids(LateFeeApplyOnFeeHeadsJson);
-	public IReadOnlyList<Guid> GetWaiverApplyOnFeeHeads() => DeserializeGuids(WaiverApplyOnFeeHeadsJson);
+	public IReadOnlyList<Guid> GetWaiverApplyOnFeeHeads() => GetLateFeeApplyOnFeeHeads();
 	public IReadOnlyList<Guid> GetApprovalRoleIds() => DeserializeGuids(ApprovalRoleIdsJson);
 
 	public IReadOnlyList<CollectionPolicyEscalationRule> GetEscalationRules() =>
@@ -276,13 +289,9 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MaximumLateFeeAmount = MaximumLateFeeAmount,
 		MaximumChargingDays = MaximumChargingDays,
 		EnableWaiver = EnableWaiver,
-		WaiverApplyOnFeeHeads = GetWaiverApplyOnFeeHeads().ToList(),
-		MaximumWaiverAmount = MaximumWaiverAmount,
-		MaximumWaiverPercentage = MaximumWaiverPercentage,
-		WaiverExpiry = WaiverExpiry,
+		EnableChargeWaiver = EnableChargeWaiver,
 		RequiresApproval = RequiresApproval,
 		ApprovalRoleIds = GetApprovalRoleIds().ToList(),
-		ApprovalThresholdAmount = ApprovalThresholdAmount,
 		AllowOnlineCollection = AllowOnlineCollection
 	};
 
@@ -351,19 +360,21 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			}
 		}
 
-		if (model.MaximumWaiverAmount is < 0 || model.MaximumWaiverPercentage is < 0 or > 100 ||
-			model.ApprovalThresholdAmount is < 0)
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
-		}
-
 		if (model.EnableWaiver && requireComplete)
 		{
-			if (model.WaiverApplyOnFeeHeads.Count == 0 ||
-				(model.RequiresApproval && model.ApprovalRoleIds.Count == 0))
+			if (!model.EnableLateFee ||
+				model.LateFeeApplyOnFeeHeads.Count == 0)
 			{
 				throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
 			}
+		}
+
+		if (requireComplete &&
+			(model.EnableWaiver || model.EnableChargeWaiver) &&
+			model.RequiresApproval &&
+			model.ApprovalRoleIds.Count == 0)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
 		}
 
 		ValidateFeeHeadOverrides(model.FeeHeadOverrides);
@@ -428,11 +439,7 @@ public sealed record CollectionPolicyUpdateModel(
 	decimal? MaximumLateFeeAmount,
 	int? MaximumChargingDays,
 	bool EnableWaiver,
-	IReadOnlyList<Guid> WaiverApplyOnFeeHeads,
-	decimal? MaximumWaiverAmount,
-	decimal? MaximumWaiverPercentage,
-	DateTime? WaiverExpiry,
+	bool EnableChargeWaiver,
 	bool RequiresApproval,
 	IReadOnlyList<Guid> ApprovalRoleIds,
-	decimal? ApprovalThresholdAmount,
 	bool AllowOnlineCollection);

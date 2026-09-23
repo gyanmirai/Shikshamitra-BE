@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
 
 namespace ShikshaMitra.Controllers.Finance.Fees.Collections;
@@ -15,6 +16,10 @@ namespace ShikshaMitra.Controllers.Finance.Fees.Collections;
 [Authorize]
 public class LateFeeWaiversController(ILateFeeWaiverAppService appService) : AbpControllerBase
 {
+	[HttpGet("list")]
+	public Task<PagedResultDto<LateFeeWaiverApplicationDto>> GetListAsync([FromQuery] GetLateFeeWaiversInput input) =>
+		appService.GetListAsync(input);
+
 	[HttpGet]
 	public Task<List<LateFeeWaiverApplicationDto>> GetForDueFeeAsync([FromQuery] Guid dueFeeId) =>
 		appService.GetWaiversForDueFeeAsync(dueFeeId);
@@ -28,6 +33,6 @@ public class LateFeeWaiversController(ILateFeeWaiverAppService appService) : Abp
 		appService.ApproveAsync(id);
 
 	[HttpPost("{id:guid}/reject")]
-	public Task<LateFeeWaiverApplicationDto> RejectAsync(Guid id) =>
-		appService.RejectAsync(id);
+	public Task<LateFeeWaiverApplicationDto> RejectAsync(Guid id, [FromBody] RejectLateFeeWaiverInput input) =>
+		appService.RejectAsync(id, input);
 }

@@ -1,5 +1,7 @@
 using System;
+using System.ComponentModel.DataAnnotations.Schema;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -22,6 +24,7 @@ public enum LateFeeWaiverStatus
 /// </summary>
 public class LateFeeWaiverApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const string DecisionReasonProperty = "DecisionReason";
 	public Guid? TenantId { get; private set; }
 	public Guid StudentId { get; private set; }
 	public Guid DueFeeId { get; private set; }
@@ -35,6 +38,8 @@ public class LateFeeWaiverApplication : FullAuditedAggregateRoot<Guid>, IMultiTe
 	public Guid AppliedByUserId { get; private set; }
 	public Guid? ApprovedByUserId { get; private set; }
 	public DateTime? ApprovedAt { get; private set; }
+	[NotMapped]
+	public string? DecisionReason => this.GetProperty<string?>(DecisionReasonProperty, null);
 	/// <summary>Set when this waiver was created by applying a BulkWaiverRequest (Phase 4d) —
 	/// lets every individual waiver produced by one bulk action be queried/rolled up together,
 	/// reusing this per-due-line audit mechanism rather than inventing a parallel one.</summary>
@@ -88,17 +93,23 @@ public class LateFeeWaiverApplication : FullAuditedAggregateRoot<Guid>, IMultiTe
 		Status = LateFeeWaiverStatus.Applied;
 		ApprovedByUserId = approvedByUserId;
 		ApprovedAt = approvedAt;
+		this.SetProperty(DecisionReasonProperty, null);
 	}
 
-	public void Reject(Guid approvedByUserId, DateTime approvedAt)
+	public void Reject(Guid approvedByUserId, DateTime approvedAt, string reason)
 	{
 		if (Status != LateFeeWaiverStatus.PendingApproval)
 		{
 			throw new BusinessException(LateFeeWaiverErrorCodes.NotPendingApproval);
 		}
+		if (string.IsNullOrWhiteSpace(reason))
+		{
+			throw new BusinessException(LateFeeWaiverErrorCodes.DecisionReasonRequired);
+		}
 
 		Status = LateFeeWaiverStatus.Rejected;
 		ApprovedByUserId = approvedByUserId;
 		ApprovedAt = approvedAt;
+		this.SetProperty(DecisionReasonProperty, reason.Trim());
 	}
 }

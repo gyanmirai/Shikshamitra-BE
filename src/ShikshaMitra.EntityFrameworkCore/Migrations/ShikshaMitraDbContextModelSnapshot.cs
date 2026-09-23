@@ -9707,9 +9707,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<int>("EligiblePaymentState")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -9772,9 +9769,6 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("character varying(128)");
 
                     b.Property<int?>("ProcessingTargetDays")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("RequestDeadlineDays")
                         .HasColumnType("integer");
 
                     b.Property<int>("RoundingMethod")

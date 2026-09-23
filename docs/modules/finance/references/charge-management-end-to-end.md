@@ -3,7 +3,7 @@ module: finance
 domain: charge-management
 content_type: Reference
 status: active
-updated_on: 2026-09-21
+updated_on: 2026-09-22
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -13,6 +13,7 @@ audience: humans-and-agents
 TL;DR: the implemented flow creates scoped per-student ad hoc charges, supports maker-checker approval with optimistic concurrency, exposes approved balances to transaction-safe Fee Collection, creates charge receipts, and supports audited voiding of uncollected obligations. Charge categories now require a stable income-category/account-head snapshot. Paid charge refunds, automatic ledger posting, source-command idempotency, outbox notifications, and full reporting parity remain release gaps.
 
 The frontend companion is [Charge Management frontend flow](../../../../../Shikshamitra-FE/docs/finance/references/charge-management-frontend-flow.md).
+The executable QA matrix is [Charge Management end-to-end test plan](./charge-management-e2e-test-plan.md).
 
 ## Product boundary
 
@@ -24,7 +25,7 @@ Charge Management owns exceptional or source-system obligations that are not par
 | Ad hoc student obligation | Charge Management | Create one immutable student line per resolved student |
 | Late fee and collection rules | Collection Policy | Current rules apply to `DueFee`, not charge principal; any future applicability must be explicit and versioned |
 | Concession and proration | Their policy modules | Do not reduce charges by default |
-| Charge waiver or correction | Charge Management | Add an explicit audited workflow; do not disguise it as a concession or edit paid history |
+| Charge waiver eligibility/application | Charge Management and Fee Collection | Charge captures `AllowWaiver`; Fee Collection applies amount plus reason immediately against an eligible outstanding student line |
 | Cash return | Refunds | Current refund scope excludes charge receipts; a charge-refund contract is required |
 | Settlement | Fee Collection | Collect approved outstanding charge lines and issue a separate charge receipt |
 | Revenue classification | Accounts | Every category needs a stable income-category/account mapping before automatic posting is reliable |
@@ -128,6 +129,7 @@ Add or preserve these fields:
 | Origin | `sourceModule`, `sourceEntityType`, `sourceEntityId`, `externalReference`, `correlationId` |
 | Command safety | idempotency key, request fingerprint, concurrency stamp |
 | Obligation | original amount, effective/due date, priority, purpose, notes |
+| Waiver eligibility | charge-level `AllowWaiver`, default OFF, copied immutably to generated student lines at approval |
 | Lifecycle | creator, submitter, checker, reasons, timestamps, immutable timeline |
 | Settlement | collected, outstanding, adjusted/waived, refunded/reversed amounts derived from linked records |
 
@@ -151,12 +153,13 @@ The current API begins at Pending or Approved. Introduce Draft/Submit only if th
 ### Monetary invariants
 
 ```text
-effective obligation = approved principal - approved waivers/voids
+effective obligation = approved principal - applied waivers/voids
 cleared collection   = non-reversed cleared charge allocations
 outstanding          = effective obligation - cleared collection + charge-refund reinstatement
 ```
 
-- All values use the platform's decimal currency precision and rounding policy.
+- Charge principal must be greater than zero, must not exceed `9,999,999.00`, and supports at most two decimal places. The API rejects excess precision rather than rounding it implicitly.
+- All downstream values use the platform's decimal currency precision and rounding policy.
 - `0 <= collection allocation <= outstanding` is checked in the same transaction that writes it.
 - The sum of receipt charge allocations equals the charge portion of the transaction.
 - Reversal and refund records reference the original allocation; they do not delete it.
@@ -169,9 +172,9 @@ outstanding          = effective obligation - cleared collection + charge-refund
 3. **Create safely.** Frontend sends the preview fingerprint and one idempotency key. Backend re-resolves scope, validates category year/status, enforces the maximum batch size, and creates one line per student atomically.
 4. **Review.** Detail shows immutable scope, origin, amount, line states, creator, and timeline. Update is allowed only when the server returns Edit and the submitted concurrency stamp matches.
 5. **Approve or reject.** The checker selects pending lines and submits a reason where required. Backend enforces the exact action permission, maker-checker without role-name exceptions, scope, line stamps, and one legal transition per line.
-6. **Collect.** Student collection reads approved outstanding charge lines with due date, category, origin, and account classification. The backend rechecks payment-channel policy and atomically allocates the entered amount. Fees and charges remain separate receipt scopes even when paid in one user journey.
+6. **Collect or waive.** Student collection reads approved outstanding charge lines with due date, category, origin, account classification, and captured waiver eligibility. It atomically allocates payment or, when `AllowWaiver` is ON and the user has the dedicated permission, immediately applies a waiver amount plus reason. Fees and charges remain separate receipt scopes even when paid in one user journey.
 7. **Post and receipt.** After commit, an outbox publishes collection/account/audit/notification events. The charge receipt lists the exact allocations and links to the source charge.
-8. **Correct.** Unpaid obligations use void/waiver rules; paid obligations use linked reversal/refund commands. UI previews the monetary impact and requires reason, permission, stamp, and idempotency key.
+8. **Correct.** Incorrect unpaid obligations use void rules; paid obligations use linked reversal/refund commands. An incorrect posted waiver uses a linked reversal rather than editing history. UI previews the monetary impact and requires reason, permission, stamp, and idempotency key.
 9. **Report.** Operational view, audit, receipt, accounts, reconciliation, and export derive from the same immutable lines and allocations.
 
 ## Required product decisions
@@ -183,6 +186,7 @@ These are stop conditions for money-changing implementation, not frontend defaul
 | Do Collection Policy late fees apply to charges? | No; create an explicit Charge Category rule if needed |
 | Does `allowOnlineCollection` apply to charges? | Yes at transaction/payment-channel level, enforced by backend |
 | Can concessions or proration reduce charges? | No |
+| Can a charge be waived? | Only when that charge captured `AllowWaiver = true`; amount plus reason is applied immediately in Fee Collection with no approval queue |
 | Are partial charge payments allowed? | Yes, with atomic outstanding checks |
 | Can an author approve their own request? | No; use a dedicated audited override permission only if legally required |
 | What happens after incorrect unpaid approval? | Void/cancel with checker and reason |

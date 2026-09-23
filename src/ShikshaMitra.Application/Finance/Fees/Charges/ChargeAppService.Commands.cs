@@ -91,7 +91,6 @@ public partial class ChargeAppService
 			}
 		}
 
-		request.AdvanceWorkflowRevision();
 		await chargeRequestRepository.UpdateAsync(request, autoSave: true);
 		var autoApprovedLines = await chargeRepository.GetListAsync(
 			c => c.ChargeRequestId == request.Id && c.Status == ChargeStatus.Approved);
@@ -123,7 +122,6 @@ public partial class ChargeAppService
 			: pendingLines;
 		var (processed, remaining) = await chargeRequestManager.ApproveLinesAsync(
 			request, input.StudentIds, currentUser.Id!.Value, input.ApprovalNotes);
-		request.AdvanceWorkflowRevision();
 		await chargeRequestRepository.UpdateAsync(request, autoSave: false);
 
 		await CurrentUnitOfWork!.SaveChangesAsync();
@@ -167,7 +165,6 @@ public partial class ChargeAppService
 
 		var (processed, remaining) = await chargeRequestManager.RejectLinesAsync(
 			request, input.StudentIds, currentUser.Id!.Value, input.RejectionReason);
-		request.AdvanceWorkflowRevision();
 		await chargeRequestRepository.UpdateAsync(request, autoSave: false);
 
 		await CurrentUnitOfWork!.SaveChangesAsync();
@@ -228,7 +225,6 @@ public partial class ChargeAppService
 
 		foreach (var line in approvedLines)
 			line.Void(currentUser.Id!.Value, input.Reason);
-		request.AdvanceWorkflowRevision();
 		await chargeRequestRepository.UpdateAsync(request, autoSave: false);
 		await financeAuditWriter.WriteAsync(
 			request.AcademicYearId, FinanceAuditEntityTypes.FeeCharge, request.Id, request.ChargeName,

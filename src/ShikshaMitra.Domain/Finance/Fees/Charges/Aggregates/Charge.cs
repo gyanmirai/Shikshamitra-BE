@@ -245,6 +245,21 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("Amount", Amount)
 				.WithData("Message", "Charge amount must be greater than 0");
 		}
+
+		if (!FinanceChargeAmountRules.HasSupportedScale(Amount))
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.InvalidChargeAmountScale)
+				.WithData("Amount", Amount)
+				.WithData("Message", "Charge amount must have at most two decimal places");
+		}
+
+		if (Amount > FinanceChargeAmountRules.MaximumAmount)
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeAmountExceedsMaximum)
+				.WithData("Amount", Amount)
+				.WithData("MaximumAmount", FinanceChargeAmountRules.MaximumAmount)
+				.WithData("Message", "Charge amount exceeds the supported maximum");
+		}
 	}
 
 	private void ValidateDueDate()

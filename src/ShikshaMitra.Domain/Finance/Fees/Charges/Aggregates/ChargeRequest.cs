@@ -131,17 +131,27 @@ public class ChargeRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
-	public void AdvanceWorkflowRevision()
-	{
-		ConcurrencyStamp = Guid.NewGuid().ToString("N");
-	}
-
 	private void ValidateAmount()
 	{
 		if (Amount <= 0)
 		{
 			throw new BusinessException(FinanceChargeErrorCodes.InvalidChargeAmount)
 				.WithData("Amount", Amount);
+		}
+
+		if (!FinanceChargeAmountRules.HasSupportedScale(Amount))
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.InvalidChargeAmountScale)
+				.WithData("Amount", Amount)
+				.WithData("Message", "Charge amount must have at most two decimal places");
+		}
+
+		if (Amount > FinanceChargeAmountRules.MaximumAmount)
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeAmountExceedsMaximum)
+				.WithData("Amount", Amount)
+				.WithData("MaximumAmount", FinanceChargeAmountRules.MaximumAmount)
+				.WithData("Message", "Charge amount exceeds the supported maximum");
 		}
 	}
 

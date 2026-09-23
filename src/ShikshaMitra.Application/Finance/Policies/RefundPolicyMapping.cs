@@ -14,13 +14,6 @@ internal static class RefundPolicyMapping
 		_ => throw new BusinessException(RefundPolicyErrorCodes.InvalidStatus)
 	};
 
-	public static RefundEligiblePaymentState ParsePaymentState(string? value) => Normalize(value) switch
-	{
-		"fullypaidonly" => RefundEligiblePaymentState.FullyPaidOnly,
-		"partialandfullpayment" => RefundEligiblePaymentState.PartialAndFullPayment,
-		_ => throw new BusinessException(RefundPolicyErrorCodes.InvalidAmountRule)
-	};
-
 	public static RefundFeeHeadScope ParseFeeHeadScope(string? value) => Normalize(value) switch
 	{
 		"allfeeheads" => RefundFeeHeadScope.AllFeeHeads,
@@ -70,12 +63,10 @@ internal static class RefundPolicyMapping
 		input.Description,
 		ParseStatus(input.Status),
 		input.IsDefault,
-		ParsePaymentState(input.EligiblePaymentState),
 		ParseFeeHeadScope(input.FeeHeadScope),
 		input.ApplicableFeeHeadIds,
 		input.IncludePaidCharges,
 		input.IncludePaidLateFee,
-		input.RequestDeadlineDays,
 		input.AllowPartialRefund,
 		ParseAmountMode(input.AmountMode),
 		input.PercentageValue,
@@ -99,12 +90,10 @@ internal static class RefundPolicyMapping
 		Description = entity.Description,
 		Status = entity.Status.ToString(),
 		IsDefault = entity.IsDefault,
-		EligiblePaymentState = entity.EligiblePaymentState.ToString(),
 		FeeHeadScope = entity.FeeHeadScope.ToString(),
 		ApplicableFeeHeadIds = [.. entity.GetApplicableFeeHeadIds()],
 		IncludePaidCharges = entity.IncludePaidCharges,
 		IncludePaidLateFee = entity.IncludePaidLateFee,
-		RequestDeadlineDays = entity.RequestDeadlineDays,
 		AllowPartialRefund = entity.AllowPartialRefund,
 		AmountMode = entity.AmountMode.ToString(),
 		PercentageValue = entity.PercentageValue,

@@ -14,6 +14,8 @@ TL;DR: use focused Finance tests for changed financial behavior, then run module
 
 Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
 
+Charge Management browser, API, Fee Collection, receipt, reversal, security, and edge-case coverage: [end-to-end test plan](./references/charge-management-e2e-test-plan.md).
+
 ## Required docs checks
 
 ```powershell
@@ -29,6 +31,7 @@ git diff --check
 | Concessions | `ConcessionTypeLifecycle_Tests`, `ConcessionRequestCoreApi_Tests`, `ConcessionRequestValidationApi_Tests`, `ConcessionRequestWorkflowApi_Tests` |
 | Fee adjustments | `FeeAdjustmentApi_Tests` |
 | Fee collection | `FeeCollectionAppServiceV2_Tests`, `FeeCollectionV2Api_Tests`, `CollectFeeInputValidator_Tests` |
+| Fee Collection waivers | Cover per-rule/per-charge toggle capture, both source types, amount/reason validation, dedicated apply permission, student scope, live-balance recalculation, immediate application, idempotency, and non-cash ledger evidence; use the [target acceptance scenarios](./references/fee-collection-waiver-end-to-end.md#team-acceptance-scenarios) |
 | Refunds and receipts | `FeeRefundApi_Tests`, `FeeReceiptApi_Tests`, receipt domain tests |
 | Accounts and reconciliation | `TransactionAppService_Tests`, `ReconciliationAppService_Tests`, `ReconciliationApi_Tests` |
 | Audit | `FinanceAuditTrailAppService_Tests` |

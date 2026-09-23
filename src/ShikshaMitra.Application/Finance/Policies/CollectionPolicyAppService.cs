@@ -179,13 +179,9 @@ public class CollectionPolicyAppService(
 			MaximumLateFeeAmount = sourceDto.MaximumLateFeeAmount,
 			MaximumChargingDays = sourceDto.MaximumChargingDays,
 			EnableWaiver = sourceDto.EnableWaiver,
-			WaiverApplyOnFeeHeads = sameAcademicYear ? sourceDto.WaiverApplyOnFeeHeads : new List<Guid>(),
-			MaximumWaiverAmount = sourceDto.MaximumWaiverAmount,
-			MaximumWaiverPercentage = sourceDto.MaximumWaiverPercentage,
-			WaiverExpiry = sourceDto.WaiverExpiry,
+			EnableChargeWaiver = sourceDto.EnableChargeWaiver,
 			RequiresApproval = sourceDto.RequiresApproval,
 			ApprovalRoleIds = sourceDto.ApprovalRoleIds,
-			ApprovalThresholdAmount = sourceDto.ApprovalThresholdAmount,
 			AllowOnlineCollection = sourceDto.AllowOnlineCollection
 		};
 
@@ -413,14 +409,7 @@ public class CollectionPolicyAppService(
 		var year = await academicYearRepository.FindAsync(input.AcademicYearId)
 			?? throw new BusinessException(CollectionPolicyErrorCodes.AcademicYearRequired);
 		var model = CollectionPolicyMapping.ToUpdateModel(input, year.StartDate.Date, year.EndDate.Date);
-		if (input.WaiverExpiry.HasValue &&
-			(input.WaiverExpiry.Value.Date < year.StartDate.Date || input.WaiverExpiry.Value.Date > year.EndDate.Date))
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.InvalidEffectiveDates);
-		}
-
 		var feeHeadIds = model.LateFeeApplyOnFeeHeads
-			.Concat(model.WaiverApplyOnFeeHeads)
 			.Concat(model.FeeHeadOverrides.Select(x => x.FeeHeadId))
 			.Distinct().ToList();
 		if (feeHeadIds.Count > 0)

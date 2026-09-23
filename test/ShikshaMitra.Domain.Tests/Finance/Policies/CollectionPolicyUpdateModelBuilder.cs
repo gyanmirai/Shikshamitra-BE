@@ -14,7 +14,6 @@ public sealed class CollectionPolicyUpdateModelBuilder
 	{
 		var defaultFeeHeadId = Guid.NewGuid();
 		LateFeeApplyOnFeeHeads = new[] { defaultFeeHeadId };
-		WaiverApplyOnFeeHeads = new[] { defaultFeeHeadId };
 		ApprovalRoleIds = new[] { Guid.NewGuid() };
 	}
 
@@ -45,13 +44,9 @@ public sealed class CollectionPolicyUpdateModelBuilder
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 	public bool EnableWaiver { get; set; } = true;
-	public IReadOnlyList<Guid> WaiverApplyOnFeeHeads { get; set; } = Array.Empty<Guid>();
-	public decimal? MaximumWaiverAmount { get; set; }
-	public decimal? MaximumWaiverPercentage { get; set; }
-	public DateTime? WaiverExpiry { get; set; }
+	public bool EnableChargeWaiver { get; set; }
 	public bool RequiresApproval { get; set; }
 	public IReadOnlyList<Guid> ApprovalRoleIds { get; set; } = Array.Empty<Guid>();
-	public decimal? ApprovalThresholdAmount { get; set; }
 	public bool AllowOnlineCollection { get; set; } = true;
 
 	public CollectionPolicyUpdateModel Build() => new(
@@ -59,7 +54,6 @@ public sealed class CollectionPolicyUpdateModelBuilder
 		EnableLateFee, GracePeriodDays, GracePeriodType, LateFeeApplyOnFeeHeads, LateFeeType,
 		FlatAmount, Percentage, PercentageBase, AmountPerDay, AmountPerWeek, AmountPerMonth,
 		CompoundFrequency, EscalationRules, FeeHeadOverrides, RoundingMethod, ConsiderAsIncome, LateFeeIncomeHeadId,
-		MaximumLateFeeAmount, MaximumChargingDays, EnableWaiver, WaiverApplyOnFeeHeads,
-		MaximumWaiverAmount, MaximumWaiverPercentage, WaiverExpiry, RequiresApproval,
-		ApprovalRoleIds, ApprovalThresholdAmount, AllowOnlineCollection);
+		MaximumLateFeeAmount, MaximumChargingDays, EnableWaiver, EnableChargeWaiver,
+		RequiresApproval, ApprovalRoleIds, AllowOnlineCollection);
 }

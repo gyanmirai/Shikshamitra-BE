@@ -47,9 +47,26 @@ public class ChargeLifecycle_Tests
 		charge.IncomeAccountHeadId.ShouldBe(accountHeadId);
 	}
 
-	private static Charge CreateCharge(ChargeStatus status) => new(
+	[Fact]
+	public void Charge_rejects_amount_with_more_than_two_decimal_places()
+	{
+		var exception = Should.Throw<BusinessException>(() => CreateCharge(ChargeStatus.Pending, 1.005m));
+
+		exception.Code.ShouldBe(FinanceChargeErrorCodes.InvalidChargeAmountScale);
+	}
+
+	[Fact]
+	public void Charge_rejects_amount_above_supported_maximum()
+	{
+		var exception = Should.Throw<BusinessException>(() =>
+			CreateCharge(ChargeStatus.Pending, FinanceChargeAmountRules.MaximumAmount + 0.01m));
+
+		exception.Code.ShouldBe(FinanceChargeErrorCodes.ChargeAmountExceedsMaximum);
+	}
+
+	private static Charge CreateCharge(ChargeStatus status, decimal amount = 250m) => new(
 		Guid.NewGuid(), null, Guid.NewGuid(), Guid.NewGuid(), "Transport damage",
 		Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
-		Guid.NewGuid(), "Damage recovery charge", 250m, DateTimeOffset.UtcNow.AddDays(7),
+		Guid.NewGuid(), "Damage recovery charge", amount, DateTimeOffset.UtcNow.AddDays(7),
 		ChargePriority.Medium, status, Guid.NewGuid());
 }

@@ -74,13 +74,9 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public int? MaximumChargingDays { get; set; }
 
 	public bool EnableWaiver { get; set; }
-	public List<Guid> WaiverApplyOnFeeHeads { get; set; } = new();
-	public decimal? MaximumWaiverAmount { get; set; }
-	public decimal? MaximumWaiverPercentage { get; set; }
-	public DateTime? WaiverExpiry { get; set; }
+	public bool EnableChargeWaiver { get; set; }
 	public bool RequiresApproval { get; set; }
 	public List<Guid> ApprovalRoleIds { get; set; } = new();
-	public decimal? ApprovalThresholdAmount { get; set; }
 
 	public bool AllowOnlineCollection { get; set; }
 
@@ -123,13 +119,9 @@ public class CreateUpdateCollectionPolicyDto
 	public int? MaximumChargingDays { get; set; }
 
 	public bool EnableWaiver { get; set; }
-	public List<Guid> WaiverApplyOnFeeHeads { get; set; } = new();
-	public decimal? MaximumWaiverAmount { get; set; }
-	public decimal? MaximumWaiverPercentage { get; set; }
-	public DateTime? WaiverExpiry { get; set; }
+	public bool EnableChargeWaiver { get; set; }
 	public bool RequiresApproval { get; set; }
 	public List<Guid> ApprovalRoleIds { get; set; } = new();
-	public decimal? ApprovalThresholdAmount { get; set; }
 
 	public bool AllowOnlineCollection { get; set; } = true;
 }

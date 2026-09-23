@@ -1,6 +1,8 @@
 {
   "Culture": "en",
   "Texts": {
+	"Finance:LateFeeWaiver:010006": "Enter a reason for rejecting the waiver request.",
+	"Finance:LateFeeWaiver:010007": "The user who submitted this waiver request cannot approve or reject it.",
 	"Admissions.FormMakerCheckerRequired": "A different authorized user must review this form. The user who requested approval cannot approve or reject the same form.",
 	"Admissions.FormAdminOverrideReasonRequired": "Enter a reason to use the administrator self-review override.",
 	"Admissions:ApplicationStageCannotAdvance": "The {StageType} stage cannot be completed while the application status is {ApplicationStatus}. Complete the required submission or decision first, then try again.",
@@ -76,6 +78,8 @@
     "Finance:Assignment:ConfigurationInvalid": "Review the published payment terms and policy versions for every included fee head.",
     "Finance:Assignment:CommitFailed": "The assignment could not be completed. Retry to check its final status.",
     "Finance:Concession:010029": "No fee structure is assigned to this student for the selected academic year. Assign a fee structure before creating a concession request.",
+    "Finance:Concession:030002": "A current concurrency stamp is required to submit this concession request.",
+    "Finance:Concession:030003": "This concession request was changed elsewhere. Refresh the request and try again.",
     "Menu:Home": "Home",
     "Welcome": "Welcome",
     "LongWelcomeMessage": "Welcome to the application. This is a startup project based on the ABP framework. For more information, visit abp.io.",
@@ -440,6 +444,7 @@
     "ShikshaMitra:DueFee:10001": "Due fees have already been generated for this student.",
     "ShikshaMitra:DefaultAttendancePolicyRequired": "This attendance policy is the only active default for the selected academic year. Set another active attendance policy as default before clearing this policy's default status or archiving it.",
     "Finance:PaymentTerm:000037": "This payment term is the current board default. Set another payment term as default before clearing this term's default status.",
+    "Finance:PaymentTerm:000038": "Only an Active payment term can be selected as the board default.",
     "ShikshaMitra:HrPolicyAssignmentOverlap": "Policy assignment conflicts with active assignment {conflictingAssignmentId} for {targetDisplayName} ({effectiveRange}). Payroll: {payrollPolicyName}; attendance: {attendancePolicyName}; leave: {leavePolicyName}. Adjust the dates or deactivate or edit the conflicting assignment.",
 
     "Academic:HomeworkAssignment:010001": "Assignment type '{Name}' already exists. Please use a different name.",

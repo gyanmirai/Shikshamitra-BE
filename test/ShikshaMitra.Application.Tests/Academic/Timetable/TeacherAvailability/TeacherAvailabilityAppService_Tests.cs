@@ -3,13 +3,22 @@ using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Shouldly;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Substitutions;
+using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
 using Xunit;
 
@@ -106,6 +115,59 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
 
             persisted.AcademicYearId.ShouldBe(academicYearId);
             persisted.AvailabilityDate.ShouldBe(availabilityDate);
+        }
+    }
+
+    [Fact]
+    public async Task GetAffectedLecturesAsync_Should_Infer_The_Date_Academic_Year()
+    {
+        var tenantId = Guid.NewGuid();
+        var currentTenant = GetRequiredService<ICurrentTenant>();
+        var availabilityDate = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc);
+
+        using (currentTenant.Change(tenantId))
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var teacher = await CreateEmployeeAsync(
+                Guid.NewGuid(),
+                "Academic",
+                "Year Teacher",
+                tenantId: tenantId);
+            await SeedTimetableContextAsync(
+                tenantId,
+                teacher.Id,
+                "2026-2027",
+                new DateTime(2026, 6, 1),
+                new DateTime(2027, 5, 31),
+                "Current Class",
+                new TimeOnly(8, 0),
+                new TimeOnly(8, 45));
+            await SeedTimetableContextAsync(
+                tenantId,
+                teacher.Id,
+                "2025-2026",
+                new DateTime(2025, 6, 1),
+                new DateTime(2026, 5, 31),
+                "Historical Class",
+                new TimeOnly(12, 30),
+                new TimeOnly(13, 0));
+
+            var result = await _teacherAvailabilityAppService.GetAffectedLecturesAsync(
+                new CreateTeacherAvailabilityDto
+                {
+                    TeacherId = teacher.Id,
+                    TeacherName = teacher.EmployeeName,
+                    AvailabilityDate = availabilityDate,
+                    StartTime = "07:00",
+                    EndTime = "17:30",
+                    IsFullDay = true,
+                    Reason = "Academic year scope regression"
+                });
+
+            var lecture = result.Items.ShouldHaveSingleItem();
+            lecture.ClassName.ShouldBe("Current Class");
+            lecture.StartTime.ShouldBe("08:00");
+            lecture.EndTime.ShouldBe("08:45");
         }
     }
 
@@ -305,20 +367,21 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
         Guid userId,
         string firstName,
         string lastName,
-        Guid? reportingManagerId = null)
+        Guid? reportingManagerId = null,
+        Guid? tenantId = null)
     {
         var suffix = Guid.NewGuid().ToString("N");
         var roleId = Guid.NewGuid();
         await _identityUserRepository.InsertAsync(
-            new IdentityUser(userId, $"availability-{suffix[..8]}", $"{suffix[..12]}@test.local", tenantId: null),
+            new IdentityUser(userId, $"availability-{suffix[..8]}", $"{suffix[..12]}@test.local", tenantId),
             autoSave: true);
         await _roleRepository.InsertAsync(
-            new IdentityRole(roleId, $"availability-{suffix[..8]}", tenantId: null),
+            new IdentityRole(roleId, $"availability-{suffix[..8]}", tenantId),
             autoSave: true);
 
         var employee = new Employee(
             Guid.NewGuid(),
-            tenantId: null,
+            tenantId,
             userId: userId,
             employeeCode: $"AVL{suffix[..10]}",
             basicInfo: new EmployeeBasicInfo(
@@ -363,6 +426,76 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
         }
 
         return await _employeeRepository.InsertAsync(employee, autoSave: true);
+    }
+
+    private async Task SeedTimetableContextAsync(
+        Guid tenantId,
+        Guid teacherId,
+        string academicYearName,
+        DateTime academicYearStart,
+        DateTime academicYearEnd,
+        string standardName,
+        TimeOnly slotStart,
+        TimeOnly slotEnd)
+    {
+        var academicYearId = Guid.NewGuid();
+        var boardId = Guid.NewGuid();
+        var mediumId = Guid.NewGuid();
+        var stageId = Guid.NewGuid();
+        var standardId = Guid.NewGuid();
+        var divisionId = Guid.NewGuid();
+        var subjectId = Guid.NewGuid();
+
+        await GetRequiredService<IRepository<AcademicYear, Guid>>().InsertAsync(
+            new AcademicYear(academicYearId, tenantId, academicYearName, academicYearStart, academicYearEnd),
+            autoSave: true);
+        await GetRequiredService<IRepository<EducationBoard, Guid>>().InsertAsync(
+            new EducationBoard(
+                boardId,
+                tenantId,
+                EducationBoardType.CBSE,
+                academicYearId,
+                academicYearStart,
+                academicYearEnd),
+            autoSave: true);
+        await GetRequiredService<IRepository<EducationMedium, Guid>>().InsertAsync(
+            new EducationMedium(mediumId, tenantId, $"English {academicYearName}", boardId),
+            autoSave: true);
+        await GetRequiredService<IRepository<EducationMediumStage, Guid>>().InsertAsync(
+            new EducationMediumStage(stageId, tenantId, $"Stage {academicYearName}", null, mediumId),
+            autoSave: true);
+        await GetRequiredService<IRepository<Standard, Guid>>().InsertAsync(
+            new Standard(standardId, tenantId, standardName, 6, stageId, null),
+            autoSave: true);
+        await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(
+            new Division(divisionId, tenantId, "A", standardId, 30, $"R-{academicYearName}"),
+            autoSave: true);
+        await GetRequiredService<IRepository<Subject, Guid>>().InsertAsync(
+            new Subject(subjectId, tenantId, $"Subject {academicYearName}", "#00A76F", mediumId),
+            autoSave: true);
+
+        var timetable = new ShikshaMitra.Academic.Timetable.Timetables.Timetable(
+            Guid.NewGuid(),
+            tenantId,
+            standardId,
+            divisionId);
+        var slot = new TimetableSlot(
+            Guid.NewGuid(),
+            timetable.Id,
+            TimetableDayOfWeek.Wednesday,
+            1,
+            slotStart,
+            slotEnd,
+            SlotType.Period);
+        slot.AddSubject(new TimetableSlotSubject(
+            Guid.NewGuid(),
+            slot.Id,
+            subjectId,
+            teacherId));
+        timetable.AddSlot(slot);
+        timetable.Publish();
+
+        await GetRequiredService<ITimetableRepository>().InsertAsync(timetable, autoSave: true);
     }
 
     private ClaimsPrincipal BuildPrincipal(Guid userId, string roleName)

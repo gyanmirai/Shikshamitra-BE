@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Academic.Timetable;
 using ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
+using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.TenantSettings;
@@ -100,6 +101,45 @@ public class LectureSlotRoomApi_Tests : ShikshaMitraApiTestBase
 		var targetTimeSlot = target.SlotConfigurations.Single().TimeSlots.Single();
 		targetTimeSlot.RoomId.ShouldBe(room.Id);
 		targetTimeSlot.RoomName.ShouldBe(room.RoomName);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Persist_NonContiguous_Active_Days()
+	{
+		var standardIds = await GetAvailableStandardIdsAsync(1, skip: 25);
+		var standardId = standardIds[0];
+		var room = await GetSeededRoomAsync();
+		var input = BuildCreateDto(standardId, room.Id);
+		input.SlotConfigurations[0].WeekRange =
+			[(int)TimetableDayOfWeek.Monday, (int)TimetableDayOfWeek.Saturday];
+		input.SlotConfigurations[0].ActiveDays =
+			[(int)TimetableDayOfWeek.Monday, (int)TimetableDayOfWeek.Wednesday, (int)TimetableDayOfWeek.Saturday];
+
+		var createResponse = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+
+		createResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createResponse.Content.ReadAsStringAsync());
+		var created = await createResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
+		created.ShouldNotBeNull();
+		created.SlotConfigurations.Single().ActiveDays.ShouldBe(
+			[(int)TimetableDayOfWeek.Monday, (int)TimetableDayOfWeek.Wednesday, (int)TimetableDayOfWeek.Saturday]);
+		created.ActiveDaysCount.ShouldBe(3);
+		created.WeeklyTeachingCapacity.ShouldBe(3);
+
+		var readResponse = await Client.GetAsync($"{BaseUrl}/{created.Id}");
+		readResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await readResponse.Content.ReadAsStringAsync());
+		var reloaded = await readResponse.Content.ReadFromJsonAsync<LectureSlotDto>(JsonOptions);
+		reloaded.ShouldNotBeNull();
+		reloaded.SlotConfigurations.Single().ActiveDays.ShouldBe(created.SlotConfigurations.Single().ActiveDays);
+
+		var timetableConfigResponse = await Client.GetAsync(
+			$"/api/academics/timetable/slot-config/by-standard/{standardId}");
+		timetableConfigResponse.StatusCode.ShouldBe(
+			HttpStatusCode.OK,
+			await timetableConfigResponse.Content.ReadAsStringAsync());
+		var timetableConfig = await timetableConfigResponse.Content.ReadFromJsonAsync<SlotConfigResponseDto>(JsonOptions);
+		timetableConfig.ShouldNotBeNull();
+		timetableConfig.Items.Single().ApplicableDays.ShouldBe(["MONDAY", "WEDNESDAY", "SATURDAY"]);
 	}
 
 	[Fact]

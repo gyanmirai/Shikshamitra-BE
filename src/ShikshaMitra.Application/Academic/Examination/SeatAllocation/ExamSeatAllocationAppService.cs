@@ -10,6 +10,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Common.Excel;
 using ShikshaMitra.Common.Excel.Elements;
 using ShikshaMitra.Common.PDF;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -40,6 +41,8 @@ public class ExamSeatAllocationAppService(
     IRepository<Standard, Guid> standardRepository,
     IRepository<ExamType, Guid> examTypeRepository,
     IRepository<Subject, Guid> subjectRepository,
+    IRepository<AssignedSubject, Guid> assignedSubjectRepository,
+    IRepository<Employee, Guid> employeeRepository,
     IGuidGenerator guidGenerator,
     IDataFilter dataFilter,
     IPdfService pdfService,
@@ -78,7 +81,7 @@ public class ExamSeatAllocationAppService(
         }
 
         var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
-        if (CanAccessExam(exam, scope))
+        if (CanAccessExam(exam, scope) || await CurrentUserIsPrimaryTeacherForAllExamSubjectsAsync(exam))
         {
             return exam;
         }
@@ -97,6 +100,45 @@ public class ExamSeatAllocationAppService(
 
         var examDivisionIds = exam.ExamDivisions.Select(row => row.DivisionId).Distinct().ToList();
         return examDivisionIds.Count > 0 && examDivisionIds.All(scope.DivisionIds.Contains);
+    }
+
+    private async Task<List<Guid>> GetCurrentPrimaryTeacherSubjectIdsAsync(Guid standardId)
+    {
+        if (!CurrentUser.Id.HasValue)
+        {
+            return [];
+        }
+
+        var currentEmployee = await employeeRepository.FirstOrDefaultAsync(
+            employee => employee.UserId == CurrentUser.Id.Value);
+        if (currentEmployee == null)
+        {
+            return [];
+        }
+
+        var assignmentsWithTeachers = await assignedSubjectRepository.WithDetailsAsync(
+            assignment => assignment.Teachers);
+        return await AsyncExecuter.ToListAsync(assignmentsWithTeachers
+            .Where(assignment =>
+                assignment.StandardId == standardId &&
+                assignment.Status == SubjectStatus.Published &&
+                assignment.Teachers.Any(teacher =>
+                    teacher.TeacherType == SubjectTeacherType.Primary &&
+                    teacher.TeacherId == currentEmployee.Id))
+            .Select(assignment => assignment.SubjectId)
+            .Distinct());
+    }
+
+    private async Task<bool> CurrentUserIsPrimaryTeacherForAllExamSubjectsAsync(Exam exam)
+    {
+        var examSubjectIds = exam.ExamSubjects.Select(subject => subject.SubjectId).ToHashSet();
+        if (examSubjectIds.Count == 0)
+        {
+            return false;
+        }
+
+        var primaryTeacherSubjectIds = await GetCurrentPrimaryTeacherSubjectIdsAsync(exam.StandardId);
+        return examSubjectIds.IsSubsetOf(primaryTeacherSubjectIds);
     }
 
     /// <summary>
@@ -2582,8 +2624,12 @@ public class ExamSeatAllocationAppService(
               scope.WildcardDivisionStandardIds.Contains(input.StandardId)))
         {
             var allowedDivisionIds = scope.DivisionIds.ToList();
-            examQuery = examQuery.Where(exam => exam.ExamDivisions.Any() &&
-                exam.ExamDivisions.All(division => allowedDivisionIds.Contains(division.DivisionId)));
+            var primaryTeacherSubjectIds = await GetCurrentPrimaryTeacherSubjectIdsAsync(input.StandardId);
+            examQuery = examQuery.Where(exam =>
+                (exam.ExamDivisions.Any() && exam.ExamDivisions.All(division =>
+                    Enumerable.Contains(allowedDivisionIds, division.DivisionId))) ||
+                (exam.ExamSubjects.Any() && exam.ExamSubjects.All(subject =>
+                    Enumerable.Contains(primaryTeacherSubjectIds, subject.SubjectId))));
         }
 
         var roomAssignedFilter = input.IsRoomAssigned == true;

@@ -171,7 +171,8 @@ public class LectureSlotAppService(
                         existing.Id,
                         group.TotalSlots,
                         group.WeekRangeStart,
-                        group.WeekRangeEnd);
+                        group.WeekRangeEnd,
+                        group.ActiveDays);
 
                     foreach (var timeSlot in group.TimeSlots)
                     {
@@ -206,7 +207,8 @@ public class LectureSlotAppService(
                         clone.Id,
                         group.TotalSlots,
                         group.WeekRangeStart,
-                        group.WeekRangeEnd);
+                        group.WeekRangeEnd,
+                        group.ActiveDays);
 
                     foreach (var timeSlot in group.TimeSlots)
                     {
@@ -252,8 +254,7 @@ public class LectureSlotAppService(
         {
             var dayValue = (int)activeSlot.Day;
             var matchingGroup = newConfigurations.FirstOrDefault(g =>
-                g.WeekRange.Count >= 2 &&
-                g.WeekRange[0] <= dayValue && dayValue <= g.WeekRange[1]);
+                ResolveActiveDays(g).Contains(dayValue));
 
             if (matchingGroup == null)
             {
@@ -300,7 +301,7 @@ public class LectureSlotAppService(
         {
             var dayValue = (int)activeSlot.Day;
             var matchingGroup = sourceConfig.SlotGroups.FirstOrDefault(g =>
-                g.WeekRangeStart <= dayValue && dayValue <= g.WeekRangeEnd);
+                g.AppliesToDay(dayValue));
 
             if (matchingGroup == null)
             {
@@ -327,12 +328,14 @@ public class LectureSlotAppService(
     {
         foreach (var slotConfig in configurations)
         {
+            var activeDays = ResolveActiveDays(slotConfig);
             var group = new LectureSlotGroup(
                 GuidGenerator.Create(),
                 config.Id,
                 slotConfig.TotalSlots,
-                slotConfig.WeekRange.Count > 0 ? slotConfig.WeekRange[0] : 0,
-                slotConfig.WeekRange.Count > 1 ? slotConfig.WeekRange[1] : 5);
+                activeDays.Min(),
+                activeDays.Max(),
+                activeDays);
 
             foreach (var ts in slotConfig.TimeSlots)
             {
@@ -348,6 +351,18 @@ public class LectureSlotAppService(
 
             config.AddSlotGroup(group);
         }
+    }
+
+    private static List<int> ResolveActiveDays(SlotConfigurationDto slotConfig)
+    {
+        if (slotConfig.ActiveDays.Count > 0)
+        {
+            return slotConfig.ActiveDays.Distinct().OrderBy(day => day).ToList();
+        }
+
+        var start = slotConfig.WeekRange.Count > 0 ? slotConfig.WeekRange[0] : TimetableConsts.MinWeekRangeValue;
+        var end = slotConfig.WeekRange.Count > 1 ? slotConfig.WeekRange[1] : TimetableConsts.MaxWeekRangeValue;
+        return Enumerable.Range(start, end - start + 1).ToList();
     }
 
     private async Task EnsureRoomsExistAsync(List<SlotConfigurationDto> configurations)
@@ -530,10 +545,10 @@ public class LectureSlotAppService(
         var nonTeachingSlotsPerDay = totalSlotsPerDay - teachingSlotsPerDay;
 
         var activeDaysCount = TimetableCapacityCalculator.GetActiveDaysCount(
-            groups.Select(g => (g.WeekRangeStart, g.WeekRangeEnd)));
+            groups.Select(g => g.ActiveDays.Count));
 
         var weeklyTeachingCapacity = TimetableCapacityCalculator.GetWeeklyTeachingCapacity(
-            groups.Select(g => (g.TimeSlots.Count(ts => ts.SlotType == SlotType.Period), g.WeekRangeEnd - g.WeekRangeStart + 1)));
+            groups.Select(g => (g.TimeSlots.Count(ts => ts.SlotType == SlotType.Period), g.ActiveDays.Count)));
 
         var difference = TimetableCapacityCalculator.GetCapacityDifference(weeklyTeachingCapacity, requiredWeeklyLectures);
 
@@ -572,6 +587,7 @@ public class LectureSlotAppService(
                 {
                     TotalSlots = g.TotalSlots,
                     WeekRange = [g.WeekRangeStart, g.WeekRangeEnd],
+                    ActiveDays = g.ActiveDays.ToList(),
                     TimeSlots = g.TimeSlots
                         .OrderBy(ts => ts.StartTime)
                         .Select(ts => new TimeSlotDetailDto
@@ -617,6 +633,7 @@ public class LectureSlotAppService(
                 {
                     FromDay = g.WeekRangeStart,
                     ToDay = g.WeekRangeEnd,
+                    ActiveDays = g.ActiveDays.ToList(),
                     TotalSlots = g.TotalSlots,
                     TimeSlots = g.TimeSlots
                         .OrderBy(ts => ts.StartTime)

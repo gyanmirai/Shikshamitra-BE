@@ -38,6 +38,7 @@ public class TeacherAvailabilityController(ITeacherAvailabilityAppService teache
     [HttpGet("affected-lectures")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public Task<AffectedLectureResultDto> GetAffectedLecturesFromQueryAsync(
+        [FromQuery] Guid? academicYearId,
         [FromQuery] string? teacherId,
         [FromQuery] string? teacherName,
         [FromQuery] DateTime availabilityDate,
@@ -54,6 +55,7 @@ public class TeacherAvailabilityController(ITeacherAvailabilityAppService teache
 
         var input = new CreateTeacherAvailabilityDto
         {
+            AcademicYearId = academicYearId,
             TeacherId = parsedTeacherId,
             TeacherName = teacherName ?? string.Empty,
             AvailabilityDate = availabilityDate,

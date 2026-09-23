@@ -40,6 +40,13 @@ public class LectureSlotGroupConfiguration : IEntityTypeConfiguration<LectureSlo
 
         builder.ConfigureByConvention();
 
+        builder.Property(x => x.ActiveDaysJson)
+            .IsRequired()
+            .HasColumnType("jsonb")
+            .HasDefaultValue("[]");
+
+        builder.Ignore(x => x.ActiveDays);
+
         builder.HasMany(x => x.TimeSlots)
             .WithOne()
             .HasForeignKey(x => x.LectureSlotGroupId)

@@ -30,6 +30,7 @@ public class SlotConfigurationSummaryDto
 {
     public int FromDay { get; set; }
     public int ToDay { get; set; }
+    public List<int> ActiveDays { get; set; } = [];
     public int TotalSlots { get; set; }
     public List<TimeSlotDetailDto> TimeSlots { get; set; } = [];
 }

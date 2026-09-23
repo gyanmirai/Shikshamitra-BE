@@ -298,13 +298,14 @@ public class TeacherAvailabilityAppService(
 
         var start = ParseTime(input.StartTime, "startTime");
         var end = ParseTime(input.EndTime, "endTime");
+        var academicYearId = input.AcademicYearId ?? await ResolveAcademicYearIdAsync(availabilityDate);
         var teacherReferenceIds = GetTeacherReferenceIds(employee, teacherId);
         var timetables = new List<Timetables.Timetable>();
         foreach (var teacherReferenceId in teacherReferenceIds)
         {
             timetables.AddRange(await timetableRepository.GetByEmployeeIdAsync(
                 teacherReferenceId,
-                input.AcademicYearId));
+                academicYearId));
         }
 
         timetables = timetables

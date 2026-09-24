@@ -1,7 +1,9 @@
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NSubstitute;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Shouldly;
@@ -11,6 +13,18 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 
 public class AdmissionWorkflowApiContract_Tests
 {
+	[Fact]
+	public async Task Missing_application_detail_returns_not_found_without_throwing()
+	{
+		var id = System.Guid.NewGuid();
+		var service = Substitute.For<IAdmissionApplicationAppService>();
+		service.FindAsync(id).Returns((AdmissionApplicationDto?)null);
+
+		var response = await new AdmissionApplicationsController(service).GetAsync(id);
+
+		response.Result.ShouldBeOfType<NotFoundResult>();
+	}
+
 	[Fact]
 	public void Workflow_controller_exposes_version_validation_usage_and_runtime_routes()
 	{

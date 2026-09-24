@@ -84,6 +84,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<StudentOnboardingStep> StudentOnboardingSteps { get; set; }
 	public DbSet<StudentOnboardingEvent> StudentOnboardingEvents { get; set; }
 	public DbSet<StudentOnboardingPolicy> StudentOnboardingPolicies { get; set; }
+	public DbSet<StudentOnboardingSettings> StudentOnboardingSettings { get; set; }
 	public DbSet<StudentSeatReservation> StudentSeatReservations { get; set; }
 	public DbSet<StudentIdentifierSeries> StudentIdentifierSeries { get; set; }
 	public DbSet<StudentIdentifierAllocation> StudentIdentifierAllocations { get; set; }

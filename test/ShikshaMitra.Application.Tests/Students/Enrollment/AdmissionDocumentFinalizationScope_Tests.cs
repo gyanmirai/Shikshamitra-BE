@@ -41,12 +41,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				new Claim(AbpClaimTypes.UserId, staffId.ToString()),
 				new Claim(AbpClaimTypes.UserName, "scoped-admission-staff")
 			], "Test")));
+			(await _applicationAppService.FindAsync(denied.Id)).ShouldBeNull();
+			(await _applicationAppService.FindAsync(Guid.NewGuid())).ShouldBeNull();
 			await Should.ThrowAsync<EntityNotFoundException>(() => _applicationAppService.GetAsync(denied.Id));
 			await Should.ThrowAsync<EntityNotFoundException>(() => _applicationAppService.GetWorkflowAsync(denied.Id));
 			await Should.ThrowAsync<EntityNotFoundException>(() => _applicationAppService.GetFinalizationPreviewAsync(denied.Id));
 			await Should.ThrowAsync<EntityNotFoundException>(() => _applicationAppService.MarkInReviewAsync(denied.Id,
 				Decision(denied, "Unauthorized decision")));
 			await Should.ThrowAsync<EntityNotFoundException>(() => FinalizeAsync(denied, true, "denied-standard-finalization"));
+			(await _applicationAppService.FindAsync(allowed.Application.Id)).ShouldNotBeNull();
 			var accepted = await _applicationAppService.AcceptOfferAsync(allowed.Application.Id,
 				Decision(allowed.Application, "Authorized guardian acceptance"));
 			(await _applicationAppService.GetFinalizationPreviewAsync(accepted.Id)).IsReady.ShouldBeTrue();

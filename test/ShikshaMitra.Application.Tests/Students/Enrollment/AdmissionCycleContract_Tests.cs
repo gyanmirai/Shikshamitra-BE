@@ -15,6 +15,7 @@ public class AdmissionCycleContract_Tests
 	[InlineData(nameof(AdmissionCycleAppService.GetAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
 	[InlineData(nameof(AdmissionCycleAppService.GetImpactAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
 	[InlineData(nameof(AdmissionCycleAppService.GetHistoryAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
+	[InlineData(nameof(AdmissionCycleAppService.GetCapacityAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
 	[InlineData(nameof(AdmissionCycleAppService.CreateAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCycleAppService.UpdateAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCycleAppService.PublishAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
@@ -23,6 +24,7 @@ public class AdmissionCycleContract_Tests
 	[InlineData(nameof(AdmissionCycleAppService.UpdateWindowAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCycleAppService.ScheduleAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCycleAppService.ValidateAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
+	[InlineData(nameof(AdmissionCycleAppService.UpdateOfferingCapacityAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCycleAppService.CloseAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
 	[InlineData(nameof(AdmissionCycleAppService.ArchiveAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
 	[InlineData(nameof(AdmissionCycleAppService.DeleteAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
@@ -63,6 +65,23 @@ public class AdmissionCycleContract_Tests
 		new ScheduleAdmissionCycleDtoValidator().Validate(new ScheduleAdmissionCycleDto
 		{
 			ConcurrencyStamp = "stamp"
+		}).IsValid.ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Capacity_change_requires_a_valid_limit_and_reason()
+	{
+		var validator = new UpdateAdmissionCycleOfferingCapacityDtoValidator();
+		validator.Validate(new UpdateAdmissionCycleOfferingCapacityDto()).IsValid.ShouldBeFalse();
+		validator.Validate(new UpdateAdmissionCycleOfferingCapacityDto
+		{
+			Capacity = 40,
+			Reason = "Approved intake for the admission period."
+		}).IsValid.ShouldBeTrue();
+		validator.Validate(new UpdateAdmissionCycleOfferingCapacityDto
+		{
+			Capacity = 100001,
+			Reason = "Invalid upper limit."
 		}).IsValid.ShouldBeFalse();
 	}
 

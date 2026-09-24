@@ -19,7 +19,11 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 
 	[HttpGet("{id:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public async Task<Result<AdmissionApplicationDto>> GetAsync(Guid id) => Result.Success(await service.GetAsync(id));
+	public async Task<ActionResult<Result<AdmissionApplicationDto>>> GetAsync(Guid id)
+	{
+		var application = await service.FindAsync(id);
+		return application == null ? NotFound() : Result.Success(application);
+	}
 
 	[HttpPost("start")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]

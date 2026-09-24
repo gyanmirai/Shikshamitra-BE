@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,6 +35,14 @@ public class PermissionConsistencyApi_Tests(ShikshaMitraApiTestFactory factory) 
     private const string Activate = ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.Activate;
     private static string Url(string provider, string key) =>
         $"/api/permission-management/permissions?providerName={provider}&providerKey={Uri.EscapeDataString(key)}";
+
+    [Fact]
+    public void Permission_service_requires_authentication_at_the_interceptor_boundary()
+    {
+        typeof(ShikshaMitraPermissionAppService)
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .ShouldNotBeEmpty();
+    }
 
     [Fact]
     public async Task Role_and_user_round_trips_preserve_independent_and_inherited_grants()

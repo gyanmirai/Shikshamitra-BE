@@ -112,6 +112,24 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 	public async Task<Result<StudentOnboardingPolicyDto>> UpdatePolicyAsync(
 		Guid id, UpsertStudentOnboardingPolicyDto input) => Result.Success(await service.UpdatePolicyAsync(id, input));
 
+	[HttpGet("settings/configurations")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task<Result<IReadOnlyList<StudentOnboardingSettingsDto>>> GetSettingsAsync(
+		[FromQuery] Guid? academicYearId) => Result.Success(await service.GetSettingsAsync(academicYearId));
+
+	[HttpPut("settings/configurations")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	public async Task<Result<StudentOnboardingSettingsDto>> SaveSettingsAsync(
+		SaveStudentOnboardingSettingsDto input) => Result.Success(await service.SaveSettingsAsync(input));
+
+	[HttpDelete("settings/configurations/{id:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	public async Task<Result> DeleteSettingsAsync(Guid id, [FromQuery] string? concurrencyStamp)
+	{
+		await service.DeleteSettingsAsync(id, concurrencyStamp);
+		return Result.Success();
+	}
+
 	[HttpGet("settings/identifier-series")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	public async Task<Result<IReadOnlyList<StudentIdentifierSeriesDto>>> GetIdentifierSeriesAsync(

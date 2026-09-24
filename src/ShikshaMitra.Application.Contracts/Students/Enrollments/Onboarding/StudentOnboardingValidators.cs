@@ -1,4 +1,5 @@
 using FluentValidation;
+using System.Text.Json;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
@@ -99,5 +100,31 @@ public class UpsertStudentOnboardingPolicyDtoValidator : AbstractValidator<Upser
 			.WithMessage("An override must identify both an offering and its standard.");
 		RuleFor(x => x.SeatReservationMinutes).InclusiveBetween(5, 10080);
 		RuleFor(x => x.SlaHours).InclusiveBetween(1, 8760);
+	}
+}
+
+public class SaveStudentOnboardingSettingsDtoValidator : AbstractValidator<SaveStudentOnboardingSettingsDto>
+{
+	public SaveStudentOnboardingSettingsDtoValidator()
+	{
+		RuleFor(x => x.SchemaVersion).Equal(StudentOnboardingSettingsConsts.CurrentSchemaVersion);
+		RuleFor(x => x.ConfigurationJson)
+			.NotEmpty()
+			.MaximumLength(StudentOnboardingSettingsConsts.MaxConfigurationLength)
+			.Must(BeValidJson)
+			.WithMessage("The onboarding configuration must be valid JSON.");
+	}
+
+	private static bool BeValidJson(string configurationJson)
+	{
+		try
+		{
+			using var document = JsonDocument.Parse(configurationJson);
+			return document.RootElement.ValueKind == JsonValueKind.Object;
+		}
+		catch (JsonException)
+		{
+			return false;
+		}
 	}
 }

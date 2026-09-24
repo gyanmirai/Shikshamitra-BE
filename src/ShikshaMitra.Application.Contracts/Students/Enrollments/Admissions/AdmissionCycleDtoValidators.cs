@@ -62,3 +62,12 @@ public class CloneAdmissionCycleDtoValidator : AbstractValidator<CloneAdmissionC
 		RuleFor(x => x.SourceCycleId).NotEmpty();
 	}
 }
+
+public class UpdateAdmissionCycleOfferingCapacityDtoValidator : AbstractValidator<UpdateAdmissionCycleOfferingCapacityDto>
+{
+	public UpdateAdmissionCycleOfferingCapacityDtoValidator()
+	{
+		RuleFor(x => x.Capacity).InclusiveBetween(1, 100000);
+		RuleFor(x => x.Reason).NotEmpty().MaximumLength(AdmissionCycleConsts.MaxReasonLength);
+	}
+}

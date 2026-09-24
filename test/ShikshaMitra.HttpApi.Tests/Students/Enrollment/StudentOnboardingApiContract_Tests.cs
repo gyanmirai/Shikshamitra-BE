@@ -27,6 +27,10 @@ public class StudentOnboardingApiContract_Tests
 		Post(nameof(StudentOnboardingController.ActivateAsync)).ShouldBe("{id:guid}/activate");
 		Post(nameof(StudentOnboardingController.CancelAsync)).ShouldBe("{id:guid}/cancel");
 		Post(nameof(StudentOnboardingController.CreatePolicyAsync)).ShouldBe("settings/policies");
+		Get(nameof(StudentOnboardingController.GetSettingsAsync)).ShouldBe("settings/configurations");
+		Put(nameof(StudentOnboardingController.SaveSettingsAsync)).ShouldBe("settings/configurations");
+		Delete(nameof(StudentOnboardingController.DeleteSettingsAsync))
+			.ShouldBe("settings/configurations/{id:guid}");
 		Post(nameof(StudentOnboardingController.CreateIdentifierSeriesAsync)).ShouldBe("settings/identifier-series");
 		Post(nameof(StudentOnboardingController.DeactivateIdentifierSeriesAsync))
 			.ShouldBe("settings/identifier-series/{id:guid}/deactivate");
@@ -49,6 +53,9 @@ public class StudentOnboardingApiContract_Tests
 	[InlineData(nameof(StudentOnboardingAppService.ActivateAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate)]
 	[InlineData(nameof(StudentOnboardingAppService.CancelAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Cancel)]
 	[InlineData(nameof(StudentOnboardingAppService.CreatePolicyAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[InlineData(nameof(StudentOnboardingAppService.GetSettingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	[InlineData(nameof(StudentOnboardingAppService.SaveSettingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[InlineData(nameof(StudentOnboardingAppService.DeleteSettingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	[InlineData(nameof(StudentOnboardingAppService.GetHistoricalReconciliationAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair)]
 	[InlineData(nameof(StudentOnboardingAppService.BackfillHistoricalAdmissionsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair)]
 	public void Operations_require_granular_permissions(string methodName, string permission)
@@ -65,4 +72,10 @@ public class StudentOnboardingApiContract_Tests
 
 	private static string? Post(string methodName) => typeof(StudentOnboardingController).GetMethods()
 		.Single(method => method.Name == methodName).GetCustomAttribute<HttpPostAttribute>()?.Template;
+
+	private static string? Put(string methodName) => typeof(StudentOnboardingController).GetMethods()
+		.Single(method => method.Name == methodName).GetCustomAttribute<HttpPutAttribute>()?.Template;
+
+	private static string? Delete(string methodName) => typeof(StudentOnboardingController).GetMethods()
+		.Single(method => method.Name == methodName).GetCustomAttribute<HttpDeleteAttribute>()?.Template;
 }

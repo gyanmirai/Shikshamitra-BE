@@ -130,10 +130,12 @@ Never use a database reset or blanket reseed as an access repair.
 - Performance evidence states fixture size, cold latency, warm-up count, sample count, query counts, and p95.
 - Security sign-off uses executable and runtime evidence, not screenshots or documentation alone.
 
-## Required PR checks and release
+## Required local checks and main release gates
 
-The backend `Security Regression / security-backend` and frontend `Security Regression / security-frontend` jobs run on pull requests.
-Merge guidance requires both repository checks and coordinated contract review when a change spans repositories.
+Run the backend and frontend Security Regression checks locally before merging feature work.
+GitHub Actions runs these jobs only on `main`, through reusable deployment gates triggered by pushes after merge.
+Do not add pull-request triggers or require PR workflow runs; every job must guard `github.ref == 'refs/heads/main'`.
+Cross-repository changes still require both repositories' local checks and coordinated contract review.
 Branch-protection configuration needs separate authorization.
 Document Passed, Failed, and Not run cases explicitly.
 Local synthetic tests do not prove deployed acceptance.

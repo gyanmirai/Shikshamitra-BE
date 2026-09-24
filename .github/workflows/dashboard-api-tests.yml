@@ -1,13 +1,14 @@
 name: Dashboard API Tests
 
 on:
-  workflow_dispatch:
+  workflow_call:
 
 env:
   DOTNET_VERSION: '9.0.x'
 
 jobs:
   dashboard-api:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

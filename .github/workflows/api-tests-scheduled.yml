@@ -1,17 +1,16 @@
-name: API Tests (Scheduled / Full Suite)
+name: API Tests (Reusable / Full Suite)
 
 on:
-  schedule:
-    # Nightly at 02:00 UTC
-    - cron: "0 2 * * *"
-  workflow_dispatch:
+  workflow_call:
     inputs:
       tiers:
         description: "Tiers to run (Critical,Important,Extended or All)"
+        type: string
         required: false
         default: "All"
       module:
         description: "Module filter (e.g., HR) or leave empty for all"
+        type: string
         required: false
         default: ""
 
@@ -21,6 +20,7 @@ env:
 jobs:
   full-suite:
     name: Full API Test Suite
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -42,8 +42,8 @@ jobs:
         id: filter
         run: |
           FILTER="Tier!=Smoke"
-          TIERS="${{ github.event.inputs.tiers || 'All' }}"
-          MODULE="${{ github.event.inputs.module || '' }}"
+          TIERS="${{ inputs.tiers || 'All' }}"
+          MODULE="${{ inputs.module || '' }}"
 
           if [ "$TIERS" != "All" ] && [ -n "$TIERS" ]; then
             IFS=',' read -ra TIER_ARRAY <<< "$TIERS"

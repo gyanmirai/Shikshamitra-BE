@@ -2,10 +2,27 @@
 
 **ShikshaMitra** is a multi-tenant **school management / CRM backend** built with **ABP Framework** and **.NET 9**.
 
+## Publishing approval
+
+Commits and feature-branch pushes for authorized work do not require a separate permission request.
+Always obtain explicit user approval before merging a pull request into `main`.
+Approval to push is not approval to merge; do not bypass this requirement with a direct push to `main`.
+Approval applies only to the specific pull requests and scope the user approved.
+
+## GitHub Actions policy
+
+GitHub Actions jobs must run only for `refs/heads/main` to conserve credits.
+Only pushes to `main`, normally after a merge, may start CI and deployment.
+Do not add pull-request, feature-branch, tag, scheduled, or manual-dispatch triggers.
+Every job, including reusable workflow callers and called jobs, must have `if: github.ref == 'refs/heads/main'` to reject calls from every other ref.
+Keep optional validation workflows reusable-only; do not add standalone triggers.
+Keep security and release gates on `main`, and run relevant checks locally before merging feature work.
+Do not restore PR build requirements or broaden workflow triggers without explicit user authorization.
+
 ## Start here
 
 Before changing permissions, navigation guards, identity, scope, or security-related seeders, read [the canonical security standard](docs/common/security/permission-consistency.md).
-Follow its mandatory checklist and require the Security Regression PR job before merge.
+Follow its mandatory checklist, run security checks locally before merge, and require the reusable Security Regression gate on `main` before deployment.
 Never restore revoked grants through reseeding or treat screenshots as security sign-off.
 Use the .NET 9 SDK selected by `global.json` for local, CI, and deployment builds.
 Do not remove the SDK selection to make a missing installation pass; install the matching SDK instead.

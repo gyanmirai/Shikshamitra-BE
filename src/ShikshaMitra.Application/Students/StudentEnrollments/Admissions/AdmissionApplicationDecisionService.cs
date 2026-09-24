@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Mail;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
@@ -324,7 +325,8 @@ public class AdmissionApplicationDecisionService(
 			!string.IsNullOrWhiteSpace(applicant.LastName) && applicant.DateOfBirth.HasValue &&
 			Enum.TryParse<GenderEnum>(applicant.Gender, true, out _);
 		var guardianReady = context.Guardian != null &&
-			(!string.IsNullOrWhiteSpace(context.Guardian.Mobile) || !string.IsNullOrWhiteSpace(context.Guardian.Email));
+			(AdmissionInquiryPhoneValidator.IsValidIndianMobile(context.Guardian.Mobile) ||
+			 MailAddress.TryCreate(context.Guardian.Email, out _));
 		var workflowReady = context.Workflow?.Status == AdmissionWorkflowInstanceStatus.Completed &&
 			!application.CurrentStageInstanceId.HasValue;
 		return
@@ -332,7 +334,7 @@ public class AdmissionApplicationDecisionService(
 			Item("offer", "Accepted, unexpired offer", offerReady, offerReady ? "Ready" : "Offer must be accepted and unexpired."),
 			Item("workflow", "Admission workflow completed", workflowReady, workflowReady ? "Ready" : "Complete the admission workflow first."),
 			Item("identity", "Core identity complete", identityReady, identityReady ? "Ready" : "Name, date of birth, and gender are required."),
-			Item("guardian", "Primary guardian contact available", guardianReady, guardianReady ? "Verification confirmation is required when finalizing." : "A primary guardian phone or email is required."),
+			Item("guardian", "Primary guardian contact valid", guardianReady, guardianReady ? "Verification confirmation is required when finalizing." : "Enter a valid 10-digit Indian mobile number or email for the primary guardian."),
 			Item("duplicate_resolution", "Student identity resolved", applicant.ExistingStudentId.HasValue || matches.Count == 0,
 				applicant.ExistingStudentId.HasValue ? "Existing Student is already linked." : matches.Count == 0 ? "No exact identity matches found." : $"{matches.Count} possible match(es) require a staff decision.")
 		];

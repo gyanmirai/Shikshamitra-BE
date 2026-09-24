@@ -30,6 +30,12 @@ public static class StudentOnboardingErrorCodes
 	public const string OwnerInvalid = "Students.Onboarding.OwnerInvalid";
 }
 
+public static class StudentOnboardingSettingsConsts
+{
+	public const int CurrentSchemaVersion = 1;
+	public const int MaxConfigurationLength = 200000;
+}
+
 public static class StudentOnboardingStepKeys
 {
 	public const string Identity = "identity";

@@ -121,3 +121,47 @@ public class AdmissionCycleHistoryDto : CreationAuditedEntityDto<Guid>
 	public string? Reason { get; set; }
 	public DateTime OccurredAt { get; set; }
 }
+
+public class AdmissionCycleCapacitySummaryDto
+{
+	public Guid AdmissionCycleId { get; set; }
+	public int OfferingCount { get; set; }
+	public int ActiveOfferingCount { get; set; }
+	public int SeatManagedOfferingCount { get; set; }
+	public int ConfiguredOfferingCount { get; set; }
+	public int UnconfiguredOfferingCount { get; set; }
+	public int NotSeatManagedOfferingCount => OfferingCount - SeatManagedOfferingCount;
+	public int TotalCapacity { get; set; }
+	public int ReservedCount { get; set; }
+	public int ConfirmedCount { get; set; }
+	public int WaitlistedCount { get; set; }
+	public int OccupiedCount => ReservedCount + ConfirmedCount;
+	public int RemainingCapacity { get; set; }
+	public int OverCapacityOfferingCount { get; set; }
+	public List<AdmissionCycleOfferingCapacityDto> Offerings { get; set; } = [];
+}
+
+public class AdmissionCycleOfferingCapacityDto
+{
+	public Guid AdmissionOfferingId { get; set; }
+	public string OfferingName { get; set; } = string.Empty;
+	public string OfferingCode { get; set; } = string.Empty;
+	public bool IsActive { get; set; }
+	public bool IsSeatManaged { get; set; }
+	public bool IsConfigured { get; set; }
+	public int? Capacity { get; set; }
+	public int ReservedCount { get; set; }
+	public int ConfirmedCount { get; set; }
+	public int WaitlistedCount { get; set; }
+	public int? RemainingCapacity { get; set; }
+	public bool IsOverCapacity { get; set; }
+	public string? PoolConcurrencyStamp { get; set; }
+}
+
+public class UpdateAdmissionCycleOfferingCapacityDto
+{
+	public int Capacity { get; set; }
+	public string? PoolConcurrencyStamp { get; set; }
+	[StringLength(AdmissionCycleConsts.MaxReasonLength)]
+	public string Reason { get; set; } = string.Empty;
+}

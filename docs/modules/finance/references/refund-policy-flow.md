@@ -141,12 +141,9 @@ Explicit attachment to a fee-structure version avoids hidden fallback behavior.
 
 | Field | Values and owner | Required and validation | Downstream meaning |
 |---|---|---|---|
-| Eligible Payment State | Fully Paid Only / Partially or Fully Paid; evaluated from Collection allocation and DueFee state. | Required. Partially paid never permits more than its settled allocation. | Filters eligible receipt allocations. |
 | Fee Head Scope | All Refundable Heads / Selected Heads; fee heads come from Finance Fee Setup. | Required. Selected IDs must be active, same-year, refundable, and present in every compatible attached structure. | Filters policy attachment, preview, request lines, posting, and reports. |
 | Include Paid Charges | Boolean controlled by Refund Policy and sourced from paid Charge allocations. | Required; default false. | Includes only settled, verified, non-reversed charge money. |
 | Include Paid Late Fee | Boolean controlled by Refund Policy and sourced from paid late-fee allocations. | Required; default false. | Includes only settled late-fee money and replaces the ambiguous late-fee-clawback field. |
-| Request Deadline Days | Maximum calendar days after the configured deadline basis. | Optional non-negative integer; null means no deadline and zero means same day. | Blocks preview/submission after the deadline; does not describe processing SLA. |
-| Request Deadline Basis | Receipt Date or Payment Settlement Date. | Required when Request Deadline Days is present. | Makes the deadline calculation explicit and reportable. |
 | Allow Partial Request | Whether staff may request less than the server-calculated remaining amount. | Required boolean. Manual amount mode requires true. | Controls request input and validation, not payment state. |
 | Per Request Maximum | Maximum final refund for one request. | Optional positive decimal in tenant currency. | Applied after deduction and before final rounding/cap result. |
 | Per Student/Year Maximum | Maximum active reservation plus processed refund, net of reversals, for one student/year. | Optional positive decimal and must be at least the per-request maximum when both exist. | Enforced at preview, approval, settlement retry, and concurrent reservation. |
@@ -213,7 +210,7 @@ This mapping prevents old compatibility fields from surviving without a business
 | `refundOn` | Rename to `eligiblePaymentState`. |
 | `enableRefundForCharge` | Rename to `includePaidCharges`. |
 | `lateFeeClawback` | Replace with `includePaidLateFee`; clawback is not the correct refund meaning. |
-| `refundDueWithin` | Split into `requestDeadlineDays` for eligibility and `processingTargetDays` for SLA; never use one field for both. |
+| `refundDueWithin` | Remove from Refund Policy. A processing target may describe operational SLA, but policy setup does not impose a request deadline. |
 | `bankDetailsRequired` | Remove; required details are derived from the selected allowed payout method. |
 | `refundMethod` | Replace with the multi-select `allowedPayoutMethods`. |
 | `allowPartialRefund` | Keep as `allowPartialRequest` and validate it against Amount Mode. |
@@ -726,7 +723,7 @@ Required views and exports include:
 - Draft/Active create and update, Active-to-Draft impact guard, dedicated archive, Unarchive-to-Draft, clone, and immutable version history matching Concession Policy.
 - Fee-structure attachment and assignment snapshot behavior.
 - Remaining, manual, fixed, percentage, deductions, caps, and rounding.
-- Partial payment, full payment, charges, late fee, and request deadline rules.
+- Fee-head, charge, late-fee, and refund-amount rules.
 - Concession and adjustment amounts do not inflate refundable money.
 
 ### Integrity and workflow

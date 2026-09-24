@@ -44,17 +44,32 @@ public class AdmissionApplicationReadService(
 	public async Task<AdmissionApplicationDto> GetAsync(Guid id)
 	{
 		var application = await GetEntityAsync(id);
+		return await MapAsync(application);
+	}
+
+	public async Task<AdmissionApplicationDto?> FindAsync(Guid id)
+	{
+		var application = await FindEntityAsync(id);
+		return application == null ? null : await MapAsync(application);
+	}
+
+	public async Task<AdmissionApplication?> FindEntityAsync(Guid id)
+	{
+		var application = await applicationRepository.FindAsync(id);
+		if (application == null || !await scopeAccess.CanAccessAsync(application))
+			return null;
+		return application;
+	}
+
+	public async Task<AdmissionApplication> GetEntityAsync(Guid id) =>
+		await FindEntityAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), id);
+
+	private async Task<AdmissionApplicationDto> MapAsync(AdmissionApplication application)
+	{
 		var applicant = await applicantRepository.FindAsync(application.ApplicantId);
 		var result = AdmissionApplicationMapper.ToDto(application, applicant == null ? string.Empty : GetName(applicant));
 		result.ReviewDecision = await reviewGuard.GetCapabilitiesAsync(application);
 		return result;
-	}
-
-	public async Task<AdmissionApplication> GetEntityAsync(Guid id)
-	{
-		var application = await applicationRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), id);
-		await scopeAccess.EnsureCanAccessAsync(application);
-		return application;
 	}
 
 	private async Task<List<Guid>?> GetMatchingApplicantIdsAsync(string? search)

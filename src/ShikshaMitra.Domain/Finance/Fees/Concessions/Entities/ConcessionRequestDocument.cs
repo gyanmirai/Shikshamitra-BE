@@ -29,4 +29,10 @@ public class ConcessionRequestDocument : FullAuditedEntity<Guid>, IMultiTenant
 		Url = url;
 		Status = status;
 	}
+
+	public void UpdateSubmission(string url, int status)
+	{
+		Url = url;
+		Status = status;
+	}
 }

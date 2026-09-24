@@ -26,8 +26,11 @@ public class FeeConfigurationPermissionContract_Tests
 	{
 		var definitions = ShikshaMitraSubmodulePermissions.Finance.Submodules.Values.SelectMany(x => x.Permissions).ToArray();
 		definitions.Distinct().Count().ShouldBe(definitions.Length);
+		definitions.ShouldContain("Finance.Policies.CollectionPolicy.ViewWaivers");
+		definitions.ShouldContain("Finance.Policies.CollectionPolicy.RequestWaiver");
 		definitions.ShouldContain("Finance.Policies.CollectionPolicy.ApproveWaiver");
-		definitions.ShouldContain("Finance.Policies.CollectionPolicy.ApproveWaiverAboveThreshold");
+		definitions.ShouldContain("Finance.Policies.CollectionPolicy.RejectWaiver");
+		definitions.ShouldNotContain("Finance.Policies.CollectionPolicy.ApproveWaiverAboveThreshold");
 		definitions.ShouldContain("Finance.Policies.ProrationPolicy.OverrideChargePeriod");
 		definitions.ShouldNotContain("Finance.Settings.FeeStructure.Publish");
 		definitions.ShouldNotContain("Finance.Policies.CollectionPolicy.ManageAttachment");

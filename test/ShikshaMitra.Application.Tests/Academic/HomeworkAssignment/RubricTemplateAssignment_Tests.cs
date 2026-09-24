@@ -32,6 +32,22 @@ public class RubricTemplateAssignment_Tests : ShikshaMitraApplicationTestBase<Sh
 	}
 
 	[Fact]
+	public async Task GetStudentAssignmentEvaluation_Should_Return_Null_When_No_Submission_Exists()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (currentTenant.Change(TestTenantId))
+			{
+				var evaluation = await rubricService.GetStudentAssignmentEvaluationAsync(
+					Guid.NewGuid(),
+					Guid.NewGuid());
+
+				evaluation.ShouldBeNull();
+			}
+		});
+	}
+
+	[Fact]
 	public async Task CopyToTask_Should_Be_Idempotent_And_Replace_The_Previous_Template()
 	{
 		await WithUnitOfWorkAsync(async () =>

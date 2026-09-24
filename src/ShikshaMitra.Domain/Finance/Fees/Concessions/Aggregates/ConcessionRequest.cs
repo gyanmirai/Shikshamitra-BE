@@ -205,10 +205,29 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void ReplaceDocuments(IEnumerable<ConcessionRequestDocument> documents)
 	{
 		EnsureDraft();
-		ConcessionRequestDocuments.Clear();
-		foreach (var doc in documents)
+
+		var replacements = documents.ToList();
+		var replacementDocumentIds = replacements.Select(x => x.DocumentId).ToHashSet();
+
+		foreach (var stale in ConcessionRequestDocuments
+			.Where(x => !replacementDocumentIds.Contains(x.DocumentId))
+			.ToList())
 		{
-			ConcessionRequestDocuments.Add(doc);
+			ConcessionRequestDocuments.Remove(stale);
+		}
+
+		foreach (var replacement in replacements)
+		{
+			var existing = ConcessionRequestDocuments
+				.FirstOrDefault(x => x.DocumentId == replacement.DocumentId);
+			if (existing is not null)
+			{
+				existing.UpdateSubmission(replacement.Url, replacement.Status);
+			}
+			else
+			{
+				ConcessionRequestDocuments.Add(replacement);
+			}
 		}
 	}
 

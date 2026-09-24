@@ -47,6 +47,13 @@ public class DivisionAppService(
 		return dto;
 	}
 
+	public override async Task<DivisionDto> GetAsync(Guid id)
+	{
+		var dto = await base.GetAsync(id);
+		await scopeAccessService.ResolveRoomIdsAsync(new[] { dto });
+		return dto;
+	}
+
 	public override async Task<PagedResultDto<DivisionDto>> GetListAsync(
 		PagedAndSortedResultRequestDto input)
 	{

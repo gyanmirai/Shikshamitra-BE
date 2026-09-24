@@ -298,13 +298,14 @@ public class TeacherAvailabilityAppService(
 
         var start = ParseTime(input.StartTime, "startTime");
         var end = ParseTime(input.EndTime, "endTime");
+        var academicYearId = input.AcademicYearId ?? await ResolveAcademicYearIdAsync(availabilityDate);
         var teacherReferenceIds = GetTeacherReferenceIds(employee, teacherId);
         var timetables = new List<Timetables.Timetable>();
         foreach (var teacherReferenceId in teacherReferenceIds)
         {
             timetables.AddRange(await timetableRepository.GetByEmployeeIdAsync(
                 teacherReferenceId,
-                input.AcademicYearId));
+                academicYearId));
         }
 
         timetables = timetables
@@ -312,6 +313,16 @@ public class TeacherAvailabilityAppService(
             .GroupBy(x => x.Id)
             .Select(x => x.First())
             .ToList();
+
+        if (input.AcademicMediumId.HasValue)
+        {
+            var scopedStandardIds = await AsyncExecuter.ToListAsync(
+                (await standardRepository.GetQueryableAsync())
+                    .Where(standard => standard.EducationMediumStage.EducationMediumId == input.AcademicMediumId.Value)
+                    .Select(standard => standard.Id));
+            var allowedStandardIds = scopedStandardIds.ToHashSet();
+            timetables = timetables.Where(timetable => allowedStandardIds.Contains(timetable.StandardId)).ToList();
+        }
 
         var lectureRows = timetables
             .SelectMany(timetable => timetable.Slots
@@ -423,6 +434,7 @@ public class TeacherAvailabilityAppService(
              x.StartTime < slot.EndTime &&
              x.EndTime > slot.StartTime));
 
+        var isPastWindow = IsPastWindow(availabilityDate, slot.EndTime);
         return new AffectedLectureDto
         {
             TimetableId = timetable.Id,
@@ -444,7 +456,10 @@ public class TeacherAvailabilityAppService(
             TeacherName = teacher?.EmployeeName ?? string.Empty,
             ExistingSubstitutionId = existingRow?.Id,
             ExistingSubstitutionStatus = existingRow?.Status.ToString(),
-            CanCreateSubstitution = existingRow == null && !IsPastWindow(availabilityDate, slot.EndTime)
+            CanCreateSubstitution = existingRow == null && !isPastWindow,
+            CreateSubstitutionBlockReason = existingRow != null
+                ? "Already assigned"
+                : isPastWindow ? "Lecture ended" : null
         };
     }
 
@@ -520,23 +535,7 @@ public class TeacherAvailabilityAppService(
             AttachmentName = row.AttachmentName,
             Remarks = row.Remarks
         });
-        dto.CanCreateSubstitution = affected.Items.Any(x => x.CanCreateSubstitution);
-        dto.ActiveSubstitutionStatuses = affected.Items
-            .Where(x => x.ExistingSubstitutionId.HasValue && !string.IsNullOrWhiteSpace(x.ExistingSubstitutionStatus))
-            .Select(x => x.ExistingSubstitutionStatus!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        dto.ActiveSubstitutionIds = affected.Items
-            .Where(x => x.ExistingSubstitutionId.HasValue)
-            .Select(x => x.ExistingSubstitutionId!.Value)
-            .Distinct()
-            .ToList();
-        dto.PendingSubstitutionIds = affected.Items
-            .Where(x => x.ExistingSubstitutionId.HasValue &&
-                        string.Equals(x.ExistingSubstitutionStatus, SubstitutionStatus.Pending.ToString(), StringComparison.OrdinalIgnoreCase))
-            .Select(x => x.ExistingSubstitutionId!.Value)
-            .Distinct()
-            .ToList();
+        TeacherAvailabilityCoverage.Apply(dto, affected.Items);
         return dto;
     }
 
@@ -554,6 +553,8 @@ public class TeacherAvailabilityAppService(
         Reason = row.Reason,
         IsFullDay = row.IsFullDay,
         AffectedLectureCount = row.AffectedLectureCount,
+        CoveredLectureCount = 0,
+        UncoveredLectureCount = row.AffectedLectureCount,
         NotifyLeadership = row.NotifyLeadership,
         CanCreateSubstitution = row.AffectedLectureCount > 0,
         ActiveSubstitutionStatuses = [],
@@ -607,11 +608,8 @@ public class TeacherAvailabilityAppService(
         return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
     }
 
-    private static DateTime CombineDateAndTime(DateTime date, TimeOnly time) =>
-        DateTime.SpecifyKind(date.Date.Add(time.ToTimeSpan()), DateTimeKind.Utc);
-
-    private static bool IsPastWindow(DateTime date, TimeOnly endTime) =>
-        DateTime.UtcNow > CombineDateAndTime(date, endTime);
+    private static bool IsPastWindow(DateTime date, TimeOnly endTime)
+        => !SubstitutionTimeWindow.IsOpen(date, endTime, DateTime.UtcNow, GetInstitutionTimeZone());
 
     private static TimetableDayOfWeek? ToTimetableDay(DayOfWeek dayOfWeek) => dayOfWeek switch
     {

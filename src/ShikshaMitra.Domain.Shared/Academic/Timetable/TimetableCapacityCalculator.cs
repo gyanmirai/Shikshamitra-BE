@@ -9,8 +9,7 @@ namespace ShikshaMitra.Academic.Timetable;
 /// </summary>
 public static class TimetableCapacityCalculator
 {
-    public static int GetActiveDaysCount(IEnumerable<(int WeekRangeStart, int WeekRangeEnd)> groups) =>
-        groups.Sum(g => g.WeekRangeEnd - g.WeekRangeStart + 1);
+    public static int GetActiveDaysCount(IEnumerable<int> groupDayCounts) => groupDayCounts.Sum();
 
     public static int GetWeeklyTeachingCapacity(IEnumerable<(int TeachingSlotsPerDay, int DaysCount)> groups) =>
         groups.Sum(g => g.TeachingSlotsPerDay * g.DaysCount);

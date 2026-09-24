@@ -14,6 +14,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.Identity;
@@ -232,7 +233,7 @@ public class SubjectAssignmentReadBatching_Tests : SubjectTeacherReassignmentTes
 	}
 
 	[Fact]
-	public async Task List_Should_Keep_Subject_Teacher_Access_When_User_Is_Also_A_Class_Teacher()
+	public async Task List_And_Detail_Should_Keep_Subject_Teacher_Access_When_User_Is_Also_A_Class_Teacher()
 	{
 		await WithUnitOfWorkAsync(async () =>
 		{
@@ -245,6 +246,7 @@ public class SubjectAssignmentReadBatching_Tests : SubjectTeacherReassignmentTes
 				var assignedSubject = (await assignmentRepository.GetListAsync(
 					assignment => assignment.StandardId == StandardId)).Single();
 				assignedSubject.Status = SubjectStatus.Published;
+				assignedSubject.SetPrimaryTeacher(TeacherEmployeeId);
 				await assignmentRepository.UpdateAsync(assignedSubject, autoSave: true);
 
 				var secondDivision = await GetRequiredService<DivisionManager>()
@@ -253,7 +255,10 @@ public class SubjectAssignmentReadBatching_Tests : SubjectTeacherReassignmentTes
 					.InsertAsync(secondDivision, autoSave: true);
 				var otherDivisionSubject = await AddAssignmentAsync("Other Division Subject");
 				otherDivisionSubject.Status = SubjectStatus.Published;
-				await assignmentRepository.UpdateAsync(otherDivisionSubject, autoSave: true);
+				var unrelatedSubject = await AddAssignmentAsync("Unrelated Subject");
+				unrelatedSubject.Status = SubjectStatus.Published;
+				await assignmentRepository.UpdateManyAsync(
+					[otherDivisionSubject, unrelatedSubject], autoSave: true);
 
 				var allocationRepository = GetRequiredService<IRepository<TeacherSubjectAllocation, Guid>>();
 				var targetAllocation = new TeacherSubjectAllocation(
@@ -311,6 +316,14 @@ public class SubjectAssignmentReadBatching_Tests : SubjectTeacherReassignmentTes
 
 					result.Items.Single().Id.ShouldBe(assignedSubject.Id);
 					result.Items.ShouldNotContain(item => item.Id == otherDivisionSubject.Id);
+					result.Items.ShouldNotContain(item => item.Id == unrelatedSubject.Id);
+
+					var detail = await Allocations.GetAsync(assignedSubject.Id);
+					detail.Subjects.Single().Teachers.Single().Id.ShouldBe(TeacherEmployeeId.ToString());
+
+					var denied = await Should.ThrowAsync<BusinessException>(
+						() => Allocations.GetAsync(unrelatedSubject.Id));
+					denied.Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
 				}
 			}
 		});

@@ -7,12 +7,6 @@ public enum RefundPolicyStatus
 	Archived = 2
 }
 
-public enum RefundEligiblePaymentState
-{
-	FullyPaidOnly = 0,
-	PartialAndFullPayment = 1
-}
-
 public enum RefundFeeHeadScope
 {
 	AllFeeHeads = 0,

@@ -28,6 +28,8 @@ public class TeacherAvailabilityDto : EntityDto<Guid>
     public string Reason { get; set; } = string.Empty;
     public bool IsFullDay { get; set; }
     public int AffectedLectureCount { get; set; }
+    public int CoveredLectureCount { get; set; }
+    public int UncoveredLectureCount { get; set; }
     public bool NotifyLeadership { get; set; }
     public bool CanCreateSubstitution { get; set; }
     public List<string> ActiveSubstitutionStatuses { get; set; } = new();
@@ -40,6 +42,7 @@ public class TeacherAvailabilityDto : EntityDto<Guid>
 public class CreateTeacherAvailabilityDto
 {
     public Guid? AcademicYearId { get; set; }
+    public Guid? AcademicMediumId { get; set; }
     public Guid? TeacherId { get; set; }
     public string TeacherName { get; set; } = string.Empty;
     public string? DepartmentName { get; set; }
@@ -78,6 +81,7 @@ public class AffectedLectureDto
     public Guid? ExistingSubstitutionId { get; set; }
     public string? ExistingSubstitutionStatus { get; set; }
     public bool CanCreateSubstitution { get; set; } = true;
+    public string? CreateSubstitutionBlockReason { get; set; }
 }
 
 public class AffectedLectureResultDto

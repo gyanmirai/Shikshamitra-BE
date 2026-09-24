@@ -9,7 +9,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionNoteDto { public Guid Id { get; set; } public Guid ApplicantId { get; set; } public string Text { get; set; } = string.Empty; public DateTime CreationTime { get; set; } public DateTime? LastEditedAt { get; set; } public Guid? CreatorId { get; set; } }
 public class CreateAdmissionNoteDto { public string Text { get; set; } = string.Empty; }
 public class UpdateAdmissionNoteDto { public string Text { get; set; } = string.Empty; }
-public class UpdateAdmissionApplicantProfileDto { public string FirstName { get; set; } = string.Empty; public string? MiddleName { get; set; } public string? LastName { get; set; } public DateTime DateOfBirth { get; set; } public string Gender { get; set; } = string.Empty; }
+public class UpdateAdmissionApplicantProfileDto { public string FirstName { get; set; } = string.Empty; public string? MiddleName { get; set; } public string? LastName { get; set; } public DateTime DateOfBirth { get; set; } public string Gender { get; set; } = string.Empty; public string? GuardianMobile { get; set; } public string? GuardianEmail { get; set; } }
 public class UpdateAdmissionApplicantProfileDtoValidator : AbstractValidator<UpdateAdmissionApplicantProfileDto>
 {
 	public UpdateAdmissionApplicantProfileDtoValidator()
@@ -20,6 +20,11 @@ public class UpdateAdmissionApplicantProfileDtoValidator : AbstractValidator<Upd
 		RuleFor(input => input.DateOfBirth).NotEmpty().LessThanOrEqualTo(DateTime.UtcNow.Date);
 		RuleFor(input => input.Gender).Must(value => value is "Male" or "Female")
 			.WithMessage("Gender must be Male or Female.");
+		RuleFor(input => input.GuardianMobile).Matches("^[6-9][0-9]{9}$")
+			.When(input => input.GuardianMobile != null)
+			.WithMessage("Guardian mobile must be a valid 10-digit Indian mobile number.");
+		RuleFor(input => input.GuardianEmail).EmailAddress()
+			.When(input => !string.IsNullOrWhiteSpace(input.GuardianEmail));
 	}
 }
 public class AdmissionApplicantApplicationDto : AdmissionApplicationDto { public List<AdmissionApplicantStageProgressDto> Stages { get; set; } = []; }

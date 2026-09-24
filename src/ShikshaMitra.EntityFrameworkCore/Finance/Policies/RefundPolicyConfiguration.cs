@@ -17,7 +17,6 @@ public class RefundPolicyConfiguration : IEntityTypeConfiguration<RefundPolicy>
 		builder.Property(x => x.Description).HasMaxLength(500);
 		builder.Property(x => x.Status).IsRequired().HasConversion<int>();
 		builder.Property(x => x.IsDefault).IsRequired();
-		builder.Property(x => x.EligiblePaymentState).IsRequired().HasConversion<int>();
 		builder.Property(x => x.FeeHeadScope).IsRequired().HasConversion<int>();
 		builder.Property(x => x.ApplicableFeeHeadIdsJson).HasColumnType("text").IsRequired();
 		builder.Property(x => x.AmountMode).IsRequired().HasConversion<int>();

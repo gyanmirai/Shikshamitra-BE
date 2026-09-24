@@ -1,16 +1,29 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Shouldly;
+using ShikshaMitra.Academic.ClassManagement.TeacherAssignment;
+using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Substitutions;
+using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
@@ -21,6 +34,8 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
         "Teacher is already marked unavailable for the selected date and time. Please choose a different time slot.";
 
     private readonly ITeacherAvailabilityAppService _teacherAvailabilityAppService;
+    private readonly ITimetableAppService _timetableAppService;
+    private readonly ITeacherAssignmentAppService _teacherAssignmentAppService;
     private readonly IRepository<TeacherAvailability, Guid> _availabilityRepository;
     private readonly IRepository<Employee, Guid> _employeeRepository;
     private readonly IEmployeeAttendanceRepository _employeeAttendanceRepository;
@@ -31,6 +46,8 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
     public TeacherAvailabilityAppService_Tests()
     {
         _teacherAvailabilityAppService = GetRequiredService<ITeacherAvailabilityAppService>();
+        _timetableAppService = GetRequiredService<ITimetableAppService>();
+        _teacherAssignmentAppService = GetRequiredService<ITeacherAssignmentAppService>();
         _availabilityRepository = GetRequiredService<IRepository<TeacherAvailability, Guid>>();
         _employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
         _employeeAttendanceRepository = GetRequiredService<IEmployeeAttendanceRepository>();
@@ -106,6 +123,237 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
 
             persisted.AcademicYearId.ShouldBe(academicYearId);
             persisted.AvailabilityDate.ShouldBe(availabilityDate);
+        }
+    }
+
+    [Fact]
+    public async Task GetAffectedLecturesAsync_Should_Infer_The_Date_Academic_Year()
+    {
+        var tenantId = Guid.NewGuid();
+        var currentTenant = GetRequiredService<ICurrentTenant>();
+        var availabilityDate = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc);
+
+        using (currentTenant.Change(tenantId))
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var teacher = await CreateEmployeeAsync(
+                Guid.NewGuid(),
+                "Academic",
+                "Year Teacher",
+                tenantId: tenantId);
+            await SeedTimetableContextAsync(
+                tenantId,
+                teacher.Id,
+                "2026-2027",
+                new DateTime(2026, 6, 1),
+                new DateTime(2027, 5, 31),
+                "Current Class",
+                new TimeOnly(8, 0),
+                new TimeOnly(8, 45));
+            await SeedTimetableContextAsync(
+                tenantId,
+                teacher.Id,
+                "2025-2026",
+                new DateTime(2025, 6, 1),
+                new DateTime(2026, 5, 31),
+                "Historical Class",
+                new TimeOnly(12, 30),
+                new TimeOnly(13, 0));
+
+            var result = await _teacherAvailabilityAppService.GetAffectedLecturesAsync(
+                new CreateTeacherAvailabilityDto
+                {
+                    TeacherId = teacher.Id,
+                    TeacherName = teacher.EmployeeName,
+                    AvailabilityDate = availabilityDate,
+                    StartTime = "07:00",
+                    EndTime = "17:30",
+                    IsFullDay = true,
+                    Reason = "Academic year scope regression"
+                });
+
+            var lecture = result.Items.ShouldHaveSingleItem();
+            lecture.ClassName.ShouldBe("Current Class");
+            lecture.StartTime.ShouldBe("08:00");
+            lecture.EndTime.ShouldBe("08:45");
+        }
+    }
+
+    [Fact]
+    public async Task GetAffectedLecturesAsync_Should_Only_Include_The_Selected_Medium()
+    {
+        var tenantId = Guid.NewGuid();
+        var currentTenant = GetRequiredService<ICurrentTenant>();
+        var availabilityDate = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc);
+
+        using (currentTenant.Change(tenantId))
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var teacher = await CreateEmployeeAsync(Guid.NewGuid(), "Medium", "Teacher", tenantId: tenantId);
+            var selected = await SeedTimetableContextAsync(
+                tenantId, teacher.Id, "2026-2027", new DateTime(2026, 6, 1),
+                new DateTime(2027, 5, 31), "Selected Class", new TimeOnly(8, 0), new TimeOnly(8, 45));
+            await SeedTimetableContextAsync(
+                tenantId, teacher.Id, "2026-2027", new DateTime(2026, 6, 1),
+                new DateTime(2027, 5, 31), "Other Medium Class", new TimeOnly(9, 0),
+                new TimeOnly(9, 45), selected.AcademicYearId);
+
+            var result = await _teacherAvailabilityAppService.GetAffectedLecturesAsync(
+                new CreateTeacherAvailabilityDto
+                {
+                    AcademicYearId = selected.AcademicYearId,
+                    AcademicMediumId = selected.AcademicMediumId,
+                    TeacherId = teacher.Id,
+                    AvailabilityDate = availabilityDate,
+                    StartTime = "07:00",
+                    EndTime = "17:30"
+                });
+
+            result.Items.ShouldHaveSingleItem().ClassName.ShouldBe("Selected Class");
+        }
+    }
+
+    [Fact]
+    public async Task GetAffectedLecturesAsync_Should_Return_No_Lectures_For_An_Unscheduled_Teacher()
+    {
+        var tenantId = Guid.NewGuid();
+        var currentTenant = GetRequiredService<ICurrentTenant>();
+        var availabilityDate = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc);
+
+        using (currentTenant.Change(tenantId))
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var scheduledTeacher = await CreateEmployeeAsync(
+                Guid.NewGuid(), "Scheduled", "Teacher", tenantId: tenantId);
+            var unscheduledTeacher = await CreateEmployeeAsync(
+                Guid.NewGuid(), "Unscheduled", "Teacher", tenantId: tenantId);
+            var context = await SeedTimetableContextAsync(
+                tenantId, scheduledTeacher.Id, "2026-2027", new DateTime(2026, 6, 1),
+                new DateTime(2027, 5, 31), "Scheduled Class", new TimeOnly(8, 0),
+                new TimeOnly(8, 45));
+
+            var result = await _teacherAvailabilityAppService.GetAffectedLecturesAsync(
+                new CreateTeacherAvailabilityDto
+                {
+                    AcademicYearId = context.AcademicYearId,
+                    AcademicMediumId = context.AcademicMediumId,
+                    TeacherId = unscheduledTeacher.Id,
+                    AvailabilityDate = availabilityDate,
+                    StartTime = "07:00",
+                    EndTime = "17:30"
+                });
+
+            result.Items.ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task Teacher_Timetable_And_Affected_Lectures_Should_Resolve_The_Same_User_Id_Slots()
+    {
+        var tenantId = Guid.NewGuid();
+        var currentTenant = GetRequiredService<ICurrentTenant>();
+        var userId = Guid.NewGuid();
+        var availabilityDate = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc);
+
+        using (currentTenant.Change(tenantId))
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var teacher = await CreateEmployeeAsync(userId, "Legacy", "Teacher", tenantId: tenantId);
+            var context = await SeedTimetableContextAsync(
+                tenantId, userId, "2026-2027", new DateTime(2026, 6, 1),
+                new DateTime(2027, 5, 31), "Legacy Class", new TimeOnly(8, 0), new TimeOnly(8, 45));
+
+            using (var unitOfWork = GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+            {
+                await _roleRepository.InsertAsync(new IdentityRole(Guid.NewGuid(), "admin", tenantId), autoSave: true);
+                var identityUser = await _identityUserRepository.GetAsync(userId);
+                var roleResult = await GetRequiredService<IdentityUserManager>().AddToRoleAsync(identityUser, "admin");
+                roleResult.Succeeded.ShouldBeTrue();
+                await unitOfWork.CompleteAsync();
+            }
+
+            using (_currentPrincipalAccessor.Change(BuildPrincipal(userId, "admin")))
+            {
+                var affected = await _teacherAvailabilityAppService.GetAffectedLecturesAsync(
+                    new CreateTeacherAvailabilityDto
+                    {
+                        AcademicYearId = context.AcademicYearId,
+                        AcademicMediumId = context.AcademicMediumId,
+                        TeacherId = teacher.Id,
+                        AvailabilityDate = availabilityDate,
+                        StartTime = "07:00",
+                        EndTime = "17:30"
+                    });
+                var timetable = await _timetableAppService.GetByEmployeeAsync(teacher.Id, context.AcademicYearId);
+
+                affected.Items.ShouldHaveSingleItem().ClassName.ShouldBe("Legacy Class");
+                timetable.Days["WEDNESDAY"].ShouldHaveSingleItem().StandardName.ShouldBe("Legacy Class");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task SaveTeacherAssignmentsForClassAsync_Should_Clear_An_Explicitly_Empty_Teacher_List()
+    {
+        var tenantId = Guid.NewGuid();
+        var currentTenant = GetRequiredService<ICurrentTenant>();
+
+        using (currentTenant.Change(tenantId))
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var teacher = await CreateEmployeeAsync(Guid.NewGuid(), "Allocation", "Teacher", tenantId: tenantId);
+            var context = await SeedTimetableContextAsync(
+                tenantId, teacher.Id, "2026-2027", new DateTime(2026, 6, 1),
+                new DateTime(2027, 5, 31), "Allocation Class", new TimeOnly(8, 0), new TimeOnly(8, 45));
+            var allocationId = Guid.NewGuid();
+            var allocation = new TeacherSubjectAllocation(
+                allocationId, context.StandardId, context.DivisionId, context.SubjectId);
+            allocation.Teachers.Add(new AllocatedTeacher(allocationId, teacher.Id));
+            var allocations = GetRequiredService<IRepository<TeacherSubjectAllocation, Guid>>();
+            await allocations.InsertAsync(allocation, autoSave: true);
+
+            var result = await _teacherAssignmentAppService.SaveTeacherAssignmentsForClassAsync(
+                new SaveTeacherAssignmentsDto
+                {
+                    AcademicMediumId = context.AcademicMediumId,
+                    ClassId = context.StandardId,
+                    Assignments = [new TeacherAssignmentUpdateDto
+                    {
+                        DivisionId = context.DivisionId,
+                        SubjectId = context.SubjectId,
+                        TeacherIds = []
+                    }]
+                });
+
+            result.Success.ShouldBeTrue();
+            result.Message.ShouldContain("1 updated");
+            using (var verificationUnitOfWork = GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+            {
+                var persisted = await allocations.GetAsync(allocationId, includeDetails: true);
+                persisted.Teachers.Where(teacher => !teacher.IsDeleted).ShouldBeEmpty();
+                await verificationUnitOfWork.CompleteAsync();
+            }
+
+            await _teacherAssignmentAppService.SaveTeacherAssignmentsForClassAsync(
+                new SaveTeacherAssignmentsDto
+                {
+                    AcademicMediumId = context.AcademicMediumId,
+                    ClassId = context.StandardId,
+                    Assignments = [new TeacherAssignmentUpdateDto
+                    {
+                        DivisionId = context.DivisionId,
+                        SubjectId = context.SubjectId,
+                        TeacherIds = [teacher.Id]
+                    }]
+                });
+
+            using (var verificationUnitOfWork = GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+            {
+                var persisted = await allocations.GetAsync(allocationId, includeDetails: true);
+                persisted.Teachers.Where(item => !item.IsDeleted)
+                    .ShouldHaveSingleItem().TeacherId.ShouldBe(teacher.Id);
+                await verificationUnitOfWork.CompleteAsync();
+            }
         }
     }
 
@@ -305,20 +553,21 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
         Guid userId,
         string firstName,
         string lastName,
-        Guid? reportingManagerId = null)
+        Guid? reportingManagerId = null,
+        Guid? tenantId = null)
     {
         var suffix = Guid.NewGuid().ToString("N");
         var roleId = Guid.NewGuid();
         await _identityUserRepository.InsertAsync(
-            new IdentityUser(userId, $"availability-{suffix[..8]}", $"{suffix[..12]}@test.local", tenantId: null),
+            new IdentityUser(userId, $"availability-{suffix[..8]}", $"{suffix[..12]}@test.local", tenantId),
             autoSave: true);
         await _roleRepository.InsertAsync(
-            new IdentityRole(roleId, $"availability-{suffix[..8]}", tenantId: null),
+            new IdentityRole(roleId, $"availability-{suffix[..8]}", tenantId),
             autoSave: true);
 
         var employee = new Employee(
             Guid.NewGuid(),
-            tenantId: null,
+            tenantId,
             userId: userId,
             employeeCode: $"AVL{suffix[..10]}",
             basicInfo: new EmployeeBasicInfo(
@@ -363,6 +612,81 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
         }
 
         return await _employeeRepository.InsertAsync(employee, autoSave: true);
+    }
+
+    private async Task<(Guid AcademicYearId, Guid AcademicMediumId, Guid StandardId, Guid DivisionId, Guid SubjectId)> SeedTimetableContextAsync(
+        Guid tenantId,
+        Guid teacherId,
+        string academicYearName,
+        DateTime academicYearStart,
+        DateTime academicYearEnd,
+        string standardName,
+        TimeOnly slotStart,
+        TimeOnly slotEnd,
+        Guid? existingAcademicYearId = null)
+    {
+        var academicYearId = existingAcademicYearId ?? Guid.NewGuid();
+        var boardId = Guid.NewGuid();
+        var mediumId = Guid.NewGuid();
+        var stageId = Guid.NewGuid();
+        var standardId = Guid.NewGuid();
+        var divisionId = Guid.NewGuid();
+        var subjectId = Guid.NewGuid();
+
+        if (!existingAcademicYearId.HasValue)
+        {
+            await GetRequiredService<IRepository<AcademicYear, Guid>>().InsertAsync(
+                new AcademicYear(academicYearId, tenantId, academicYearName, academicYearStart, academicYearEnd),
+                autoSave: true);
+        }
+        await GetRequiredService<IRepository<EducationBoard, Guid>>().InsertAsync(
+            new EducationBoard(
+                boardId,
+                tenantId,
+                EducationBoardType.CBSE,
+                academicYearId,
+                academicYearStart,
+                academicYearEnd),
+            autoSave: true);
+        await GetRequiredService<IRepository<EducationMedium, Guid>>().InsertAsync(
+            new EducationMedium(mediumId, tenantId, $"English {academicYearName}", boardId),
+            autoSave: true);
+        await GetRequiredService<IRepository<EducationMediumStage, Guid>>().InsertAsync(
+            new EducationMediumStage(stageId, tenantId, $"Stage {academicYearName}", null, mediumId),
+            autoSave: true);
+        await GetRequiredService<IRepository<Standard, Guid>>().InsertAsync(
+            new Standard(standardId, tenantId, standardName, 6, stageId, null),
+            autoSave: true);
+        await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(
+            new Division(divisionId, tenantId, "A", standardId, 30, $"R-{academicYearName}"),
+            autoSave: true);
+        await GetRequiredService<IRepository<Subject, Guid>>().InsertAsync(
+            new Subject(subjectId, tenantId, $"Subject {academicYearName}", "#00A76F", mediumId),
+            autoSave: true);
+
+        var timetable = new ShikshaMitra.Academic.Timetable.Timetables.Timetable(
+            Guid.NewGuid(),
+            tenantId,
+            standardId,
+            divisionId);
+        var slot = new TimetableSlot(
+            Guid.NewGuid(),
+            timetable.Id,
+            TimetableDayOfWeek.Wednesday,
+            1,
+            slotStart,
+            slotEnd,
+            SlotType.Period);
+        slot.AddSubject(new TimetableSlotSubject(
+            Guid.NewGuid(),
+            slot.Id,
+            subjectId,
+            teacherId));
+        timetable.AddSlot(slot);
+        timetable.Publish();
+
+        await GetRequiredService<ITimetableRepository>().InsertAsync(timetable, autoSave: true);
+        return (academicYearId, mediumId, standardId, divisionId, subjectId);
     }
 
     private ClaimsPrincipal BuildPrincipal(Guid userId, string roleName)

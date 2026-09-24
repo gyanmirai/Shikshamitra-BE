@@ -75,11 +75,16 @@ public class FeeCategoryAppService(
 		return await MapToResponseAsync(feeCategory, feeHeads);
 	}
 
-	public async Task<FeeCategoryListResponse> GetListAsync(Guid academicYearId, string search = null, int page = 1, int pageSize = 10)
+	public async Task<FeeCategoryListResponse> GetListAsync(Guid academicYearId, string? search = null, int page = 1, int pageSize = 10, bool? isActive = null)
 	{
 		var query = await feeCategoryRepository.GetQueryableAsync();
 
 		query = query.Where(x => x.AcademicYearId == academicYearId);
+
+		if (isActive.HasValue)
+		{
+			query = query.Where(x => x.IsActive == isActive.Value);
+		}
 
 		if (!string.IsNullOrWhiteSpace(search))
 		{

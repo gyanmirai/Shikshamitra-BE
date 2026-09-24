@@ -20,6 +20,7 @@ TL;DR: use this page to understand how Finance changes affect due rows, approval
 | Concession request | Select an active policy/version on the request, preview, save a draft, attach evidence, submit, independently approve/reject, withdraw, or reverse | Request-pinned policy snapshot, frozen submission evidence, allocation totals, exact assignment dues, concurrency/idempotency, maker-checker, and balance updates |
 | Fee adjustment | Create credit pool from paid due rows, approve and apply to pending due rows, reject, or cancel pending request | Paid source rows, pending target rows, idempotency key, and maker-checker rule |
 | Fee collection | Load student fee details, collect payment, allocate to due rows, and create receipt records | Payment amount, due allocation, receipt numbering, and audit trail |
+| Fee Collection waiver target | Capture `Allow waiver` on each effective late-fee rule and Charge Management charge, then enter amount plus reason and apply immediately from Fee Collection | Dedicated action permission, student scope, captured source eligibility, live balance, idempotency, concurrency, and separate non-cash ledger evidence; see [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) |
 | Fee refund | Check eligibility, create refund request, update status, and preserve receipt/payment history | Refund eligibility and non-overlap with adjustment flow |
 | Reconciliation | Create or review reconciliation records, approve, or reject | Bank/account consistency and approval audit |
 | Finance reports | Select report filters, preview, export, and audit output | Preview/export parity and tenant isolation |
@@ -63,7 +64,7 @@ Payment Terms are versioned schedule templates. They own installment coverage da
 3. A Fee Structure may explicitly attach a published or superseded version of an active Payment Term; draft and archived versions are rejected. Existing pins remain stable. See [Fee Structure publication](./references/fee-structure-workspace.md).
 4. Student assignment snapshots all installment rows into DueFee records so later term edits cannot rewrite issued student schedules.
 5. Every assigned snapshot is visible in Fee Collection and may receive a direct advance-payment allocation. `DemandDate <= today` determines whether the installment's bill has been generated; it does not hide or block a future scheduled installment. Due date and collection policy continue to govern late-fee evaluation.
-6. A board can have only one selected default Payment Term per academic year. The default flag can be selected while a term is still a draft, although the term remains unavailable to Fee Structures until it is published. Selecting a different default clears the previous flag before save, with a filtered unique index as the concurrency guard.
+6. Each Education Board can have only one selected default Payment Term for an academic year, and that term must be Active. Draft and Archived terms cannot be defaults. Selecting a different Active default clears the previous flag only for the same board, with a filtered unique index as the concurrency guard.
 7. List and detail responses expose one top-level lifecycle `status`: `Draft`, `Active`, or `Archived`. Version-specific states remain inside version history. Archiving preserves the underlying version state, so restore returns the term to `Draft` or `Active` without rewriting history.
 
 Demand dates are server-derived:
@@ -76,6 +77,8 @@ Demand dates are server-derived:
 | On a specific date | Required date supplied for that installment |
 
 Every installment requires a unique name and sequence, a non-overlapping period inside the selected Education Board's `StartDate`/`EndDate`, a due date inside its period, and a positive allocation. The board window, not the wider academic-year window, is authoritative. Allocations across the term must total 100%.
+
+During authoring, staff may request a non-persisting installment-template preview. Annual, half-yearly, quarterly, monthly, and bounded custom-count templates are expanded on the server against the selected board window. The final percentage remainder is assigned deterministically to the last installment. Applying a preview only replaces the form's local rows; create/update still revalidates and versions the complete resulting schedule.
 
 ## Student fee assignment
 

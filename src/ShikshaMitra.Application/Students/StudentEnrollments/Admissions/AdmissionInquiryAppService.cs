@@ -171,6 +171,8 @@ public class AdmissionInquiryAppService(
 			throw new BusinessException(AdmissionErrorCodes.InquiryIdentityIncomplete,
 				"Applicant and primary guardian identity is incomplete.")
 				.WithData("Fields", string.Join(", ", missingIdentity));
+		var guardianPhone = AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(
+			input.GuardianPhone);
 		if (managedPolicy != null)
 		{
 			var policy = managedPolicy.Policy;
@@ -181,7 +183,7 @@ public class AdmissionInquiryAppService(
 			if (policy.RequireApplicantDateOfBirth && !input.ApplicantDateOfBirth.HasValue)
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Applicant date of birth is required by the Inquiry policy.");
 		}
-		var phone = string.Concat((string.IsNullOrWhiteSpace(input.Phone) ? input.GuardianPhone : input.Phone).Where(char.IsDigit));
+		var phone = guardianPhone;
 		var query = await inquiryRepository.GetQueryableAsync();
 		var duplicateExists = !input.ExistingFamilyId.HasValue && await AsyncExecuter.AnyAsync(query.Where(x =>
 			x.AdmissionCycleId == cycle.Id && x.NormalizedPhone == phone));
@@ -266,7 +268,7 @@ public class AdmissionInquiryAppService(
 		if (!Enum.IsDefined(input.Source))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose a valid inquiry source.");
-		var normalizedPhone = string.Concat((input.Phone ?? string.Empty).Where(char.IsDigit));
+		var normalizedPhone = AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(input.Phone);
 		var duplicate = await AsyncExecuter.AnyAsync((await inquiryRepository.GetQueryableAsync()).Where(candidate =>
 			candidate.Id != inquiry.Id && candidate.AdmissionCycleId == inquiry.AdmissionCycleId &&
 			candidate.NormalizedPhone == normalizedPhone));
@@ -282,7 +284,7 @@ public class AdmissionInquiryAppService(
 			inquiry.SourceDetail,
 			inquiry.PreferredLanguageCode
 		};
-		inquiry.UpdateDetails(input.ApplicantName, input.Phone ?? string.Empty, input.Email, input.Source,
+		inquiry.UpdateDetails(input.ApplicantName, normalizedPhone, input.Email, input.Source,
 			input.SourceDetail, input.PreferredLanguageCode);
 		await inquiryRepository.UpdateAsync(inquiry, autoSave: false);
 		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,

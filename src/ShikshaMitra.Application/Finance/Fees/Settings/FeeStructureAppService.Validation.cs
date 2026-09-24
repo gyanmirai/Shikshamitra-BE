@@ -157,7 +157,7 @@ public partial class FeeStructureAppService
 			var cn = concession == null ? null : JsonSerializer.Deserialize<ConcessionPolicySnapshot>(concession.SnapshotJson, SnapshotOptions);
 			var rp = refund == null ? null : JsonSerializer.Deserialize<RefundPolicySnapshot>(refund.SnapshotJson, SnapshotOptions);
 			var pp = proration == null ? null : JsonSerializer.Deserialize<ProrationPolicySnapshot>(proration.SnapshotJson, SnapshotOptions);
-			if (collection != null && (cp == null || string.IsNullOrWhiteSpace(cp.PolicyCode) || cp.LateFeeApplyOnFeeHeads == null || cp.WaiverApplyOnFeeHeads == null) ||
+			if (collection != null && (cp == null || string.IsNullOrWhiteSpace(cp.PolicyCode) || cp.LateFeeApplyOnFeeHeads == null) ||
 				concession != null && (cn == null || cn.PolicyId != concession.PolicyId || cn.AcademicYearId != year.Id) ||
 				refund != null && (rp == null || rp.PolicyId != refund.PolicyId || rp.AcademicYearId != year.Id || rp.ApplicableFeeHeadIds == null) ||
 				proration != null && (pp == null || pp.PolicyId != proration.PolicyId || pp.AcademicYearId != year.Id || pp.Rules == null || pp.Rules.Select(x => x.FeeHeadId).Distinct().Count() != pp.Rules.Count))
@@ -179,7 +179,7 @@ public partial class FeeStructureAppService
 			foreach (var row in result.Coverage)
 			{
 				row.Collection = cp is { EnableLateFee: true } && cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId) ? "Late fee applies" : "No late fee";
-				if (cp is { EnableWaiver: true } && cp.WaiverApplyOnFeeHeads.Contains(row.FeeHeadId)) row.Collection += "; waiver eligible";
+				if (cp is { EnableWaiver: true, EnableLateFee: true } && cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId)) row.Collection += "; waiver eligible";
 				row.Concession = cn != null && candidate.ConcessionApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Eligible on approval" : "Not eligible";
 				row.Refund = rp == null ? "No refund policy attached" : rp.FeeHeadScope != RefundFeeHeadScope.SelectedFeeHeads || rp.ApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Policy eligible" : "Excluded";
 				var rule = pp?.Rules.SingleOrDefault(x => x.FeeHeadId == row.FeeHeadId);
@@ -187,7 +187,7 @@ public partial class FeeStructureAppService
 				if (rule != null && rule.RuleType != ProrationRuleType.FullCharge && candidate.FeeHeads.Any(x => x.FeeHeadId == row.FeeHeadId && x.IsOneTime))
 					result.Errors.Add($"{row.Name}: a one-time fee cannot use a recurring proration rule.");
 			}
-			var unused = (cp?.LateFeeApplyOnFeeHeads ?? []).Concat(cp?.WaiverApplyOnFeeHeads ?? [])
+			var unused = (cp?.LateFeeApplyOnFeeHeads ?? [])
 				.Concat(rp?.ApplicableFeeHeadIds ?? []).Concat(pp?.Rules.Select(x => x.FeeHeadId) ?? []).Distinct().Except(ids).Count();
 			if (unused > 0) result.Warnings.Add($"{unused} policy Fee Head(s) are absent from this structure and will not create charges.");
 			if (cp is { EnableLateFee: true } && !cp.LateFeeApplyOnFeeHeads.Any(ids.Contains))
@@ -228,8 +228,10 @@ public partial class FeeStructureAppService
 		{
 			PolicyId = version.PolicyId, PolicyVersionId = version.Id, PolicyName = version.PolicyName, PolicyCode = policy.PolicyCode, IsAttachable = true,
 			CoveredLateFeeHeadIds = ids.Intersect(policy.LateFeeApplyOnFeeHeads).ToList(), StructureHeadsWithoutLateFee = ids.Except(policy.LateFeeApplyOnFeeHeads).ToList(),
-			PolicyLateFeeHeadsNotInStructure = policy.LateFeeApplyOnFeeHeads.Except(ids).ToList(), CoveredWaiverHeadIds = ids.Intersect(policy.WaiverApplyOnFeeHeads).ToList(),
-			StructureHeadsWithoutWaiver = ids.Except(policy.WaiverApplyOnFeeHeads).ToList(), PolicyWaiverHeadsNotInStructure = policy.WaiverApplyOnFeeHeads.Except(ids).ToList()
+			PolicyLateFeeHeadsNotInStructure = policy.LateFeeApplyOnFeeHeads.Except(ids).ToList(),
+			CoveredWaiverHeadIds = policy.EnableWaiver ? ids.Intersect(policy.LateFeeApplyOnFeeHeads).ToList() : [],
+			StructureHeadsWithoutWaiver = policy.EnableWaiver ? ids.Except(policy.LateFeeApplyOnFeeHeads).ToList() : ids,
+			PolicyWaiverHeadsNotInStructure = policy.EnableWaiver ? policy.LateFeeApplyOnFeeHeads.Except(ids).ToList() : []
 		};
 		if (policy.EnableLateFee && result.CoveredLateFeeHeadIds.Count == 0) result.Warnings.Add("No late fee will be charged: no policy late-fee heads overlap this structure.");
 		if (result.PolicyLateFeeHeadsNotInStructure.Count > 0) result.Warnings.Add("Some policy Fee Heads are absent from this structure.");

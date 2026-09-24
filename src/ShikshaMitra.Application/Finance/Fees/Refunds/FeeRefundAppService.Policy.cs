@@ -184,10 +184,6 @@ public partial class FeeRefundAppService
     private void ValidatePolicyContext(RefundPolicySnapshot policy, FeePaymentReceipt receipt,
         FeeRecordMetadata collection, string? method, IReadOnlyCollection<DueFee> dues)
     {
-        if (policy.RequestDeadlineDays.HasValue && receipt.ReceiptDate.AddDays(policy.RequestDeadlineDays.Value) < DateOnly.FromDateTime(Clock.Now))
-            throw new BusinessException(FeeRefundErrorCodes.RequestDeadlineExpired);
-        if (policy.EligiblePaymentState == RefundEligiblePaymentState.FullyPaidOnly && collection.Status != FeeCollectionStatus.Paid)
-            throw new BusinessException(FeeRefundErrorCodes.PaymentNotSettled);
         if (policy.FeeHeadScope == RefundFeeHeadScope.SelectedFeeHeads && dues.Any(x => !policy.ApplicableFeeHeadIds.Contains(x.FeeHeadId)))
             throw new BusinessException(FeeRefundErrorCodes.FeeHeadNotEligible);
         if (!TryMapPayoutMethod(method, out var payout) || !policy.AllowedPayoutMethods.Contains(payout))

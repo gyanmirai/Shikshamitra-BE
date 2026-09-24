@@ -17,12 +17,10 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Description { get; protected set; } = string.Empty;
 	public RefundPolicyStatus Status { get; protected set; }
 	public bool IsDefault { get; protected set; }
-	public RefundEligiblePaymentState EligiblePaymentState { get; protected set; }
 	public RefundFeeHeadScope FeeHeadScope { get; protected set; }
 	public string ApplicableFeeHeadIdsJson { get; protected set; } = "[]";
 	public bool IncludePaidCharges { get; protected set; }
 	public bool IncludePaidLateFee { get; protected set; }
-	public int? RequestDeadlineDays { get; protected set; }
 	public bool AllowPartialRefund { get; protected set; }
 	public RefundAmountMode AmountMode { get; protected set; }
 	public decimal? PercentageValue { get; protected set; }
@@ -72,7 +70,6 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;
 		IsDefault = model.IsDefault;
-		EligiblePaymentState = model.EligiblePaymentState;
 		FeeHeadScope = model.FeeHeadScope;
 		ApplicableFeeHeadIdsJson = JsonSerializer.Serialize(
 			model.FeeHeadScope == RefundFeeHeadScope.SelectedFeeHeads
@@ -80,7 +77,6 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				: []);
 		IncludePaidCharges = model.IncludePaidCharges;
 		IncludePaidLateFee = model.IncludePaidLateFee;
-		RequestDeadlineDays = model.RequestDeadlineDays;
 		AllowPartialRefund = model.AllowPartialRefund;
 		AmountMode = model.AmountMode;
 		PercentageValue = model.AmountMode == RefundAmountMode.Percentage ? model.PercentageValue : null;
@@ -135,12 +131,10 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PolicyCode,
 		Status,
 		IsDefault,
-		EligiblePaymentState,
 		FeeHeadScope,
 		GetApplicableFeeHeadIds(),
 		IncludePaidCharges,
 		IncludePaidLateFee,
-		RequestDeadlineDays,
 		AllowPartialRefund,
 		AmountMode,
 		PercentageValue,
@@ -162,7 +156,7 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(RefundPolicyErrorCodes.FeeHeadRequired);
 		if (model.AllowedPayoutMethods.Count == 0)
 			throw new BusinessException(RefundPolicyErrorCodes.PayoutMethodRequired);
-		if (model.RequestDeadlineDays is < 0 || model.ProcessingTargetDays is < 0)
+		if (model.ProcessingTargetDays is < 0)
 			throw new BusinessException(RefundPolicyErrorCodes.InvalidDayRule);
 		if (model.MaximumPerRequest is <= 0 || model.MaximumPerStudentYear is <= 0)
 			throw new BusinessException(RefundPolicyErrorCodes.InvalidLimit);
@@ -193,12 +187,10 @@ public sealed record RefundPolicyUpdateModel(
 	string? Description,
 	RefundPolicyStatus Status,
 	bool IsDefault,
-	RefundEligiblePaymentState EligiblePaymentState,
 	RefundFeeHeadScope FeeHeadScope,
 	IReadOnlyCollection<Guid> ApplicableFeeHeadIds,
 	bool IncludePaidCharges,
 	bool IncludePaidLateFee,
-	int? RequestDeadlineDays,
 	bool AllowPartialRefund,
 	RefundAmountMode AmountMode,
 	decimal? PercentageValue,
@@ -220,12 +212,10 @@ public sealed record RefundPolicySnapshot(
 	string PolicyCode,
 	RefundPolicyStatus Status,
 	bool IsDefault,
-	RefundEligiblePaymentState EligiblePaymentState,
 	RefundFeeHeadScope FeeHeadScope,
 	IReadOnlyList<Guid> ApplicableFeeHeadIds,
 	bool IncludePaidCharges,
 	bool IncludePaidLateFee,
-	int? RequestDeadlineDays,
 	bool AllowPartialRefund,
 	RefundAmountMode AmountMode,
 	decimal? PercentageValue,

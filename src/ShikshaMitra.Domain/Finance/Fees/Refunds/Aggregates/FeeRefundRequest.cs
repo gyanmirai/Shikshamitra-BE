@@ -70,13 +70,15 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     }
 
     internal FeeRefundRequest(Guid id, Guid? tenantId, Guid studentId, Guid academicYearId,
-        string voucherNumber, double totalAmount, string? refundMethod,
+        string voucherNumber, IReadOnlyCollection<FeeRefundLine> lines, string? refundMethod,
         RefundPaymentDetails? refundPaymentDetails, string? reason)
         : this(id, tenantId, studentId, academicYearId, voucherNumber, refundMethod,
             refundPaymentDetails, reason, createAsDraft: false)
     {
-        TotalAmount = Convert.ToDecimal(totalAmount);
-        CalculatedAmount = TotalAmount;
+        if (lines.Count == 0 || lines.Any(line => line.FeeRefundRequestId != id))
+            throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+        _lines.AddRange(lines);
+        Recalculate();
     }
 
     internal void PinPolicy(Guid assignmentId, Guid policyId, Guid policyVersionId, Guid receiptId,

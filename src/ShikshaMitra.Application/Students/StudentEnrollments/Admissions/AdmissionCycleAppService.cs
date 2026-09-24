@@ -8,6 +8,7 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 
@@ -19,6 +20,9 @@ public class AdmissionCycleAppService(
 	IRepository<AdmissionCycleHistory, Guid> historyRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
 	IRepository<AdmissionApplication, Guid> applicationRepository,
+	IRepository<AdmissionSeatPool, Guid> seatPoolRepository,
+	IRepository<AdmissionSeatReservation, Guid> seatReservationRepository,
+	IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository) : ApplicationService, IAdmissionCycleAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
@@ -274,6 +278,151 @@ public class AdmissionCycleAppService(
 		}).ToList();
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
+	public async Task<AdmissionCycleCapacitySummaryDto> GetCapacityAsync(Guid id)
+	{
+		await GetCycleAsync(id);
+		return await BuildCapacitySummaryAsync(id);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
+	public async Task<AdmissionCycleCapacitySummaryDto> UpdateOfferingCapacityAsync(Guid id, Guid offeringId,
+		UpdateAdmissionCycleOfferingCapacityDto input)
+	{
+		var cycle = await GetCycleAsync(id);
+		if (cycle.Status is AdmissionCycleStatus.Closed or AdmissionCycleStatus.Archived)
+			throw new BusinessException(AdmissionErrorCodes.CycleCannotBeModified,
+				"Seat capacity can only be changed while the admission cycle is draft or published.");
+
+		var offering = await offeringRepository.FindAsync(offeringId);
+		if (offering == null || offering.AdmissionCycleId != id)
+			throw new EntityNotFoundException(typeof(AdmissionOffering), offeringId);
+		if (!offering.WorkflowDefinitionId.HasValue ||
+			await workflowStageRepository.FindAsync(x => x.WorkflowDefinitionId == offering.WorkflowDefinitionId.Value &&
+				x.StageType == AdmissionWorkflowStageType.Seat) == null)
+			throw new BusinessException(AdmissionErrorCodes.OfferingConfigurationIncomplete,
+				"Assign a published admission process with a Seat stage before configuring capacity.");
+
+		var reason = input.Reason.Trim();
+		var pool = await seatPoolRepository.FindAsync(x => x.AdmissionOfferingId == offeringId);
+		var previousCapacity = pool?.Capacity;
+		if (pool == null)
+		{
+			if (!string.IsNullOrWhiteSpace(input.PoolConcurrencyStamp))
+				throw new BusinessException(AdmissionErrorCodes.CycleConcurrencyConflict,
+					"Seat capacity was configured after this view was opened. Refresh and try again.");
+			pool = new AdmissionSeatPool(GuidGenerator.Create(), CurrentTenant.Id, offeringId, input.Capacity);
+			await seatPoolRepository.InsertAsync(pool, autoSave: false);
+		}
+		else
+		{
+			EnsurePoolConcurrency(pool, input.PoolConcurrencyStamp);
+			await ReconcileExpiredReservationsAsync(pool);
+			pool.SetCapacity(input.Capacity, allowBelowOccupied: false);
+			await seatPoolRepository.UpdateAsync(pool, autoSave: false);
+		}
+
+		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Updated, cycle.Status, cycle.Status,
+			previousCapacity.HasValue
+				? $"Seat capacity for {offering.Code} changed from {previousCapacity.Value} to {input.Capacity}."
+				: $"Seat capacity for {offering.Code} set to {input.Capacity}.", reason);
+		try { await CurrentUnitOfWork.SaveChangesAsync(); }
+		catch (AbpDbConcurrencyException)
+		{
+			throw new BusinessException(AdmissionErrorCodes.CycleConcurrencyConflict,
+				"Seat capacity changed after this view was opened. Refresh and try again.");
+		}
+		return await BuildCapacitySummaryAsync(id);
+	}
+
+	private async Task<AdmissionCycleCapacitySummaryDto> BuildCapacitySummaryAsync(Guid id)
+	{
+		var offerings = (await offeringRepository.GetListAsync(x => x.AdmissionCycleId == id))
+			.OrderByDescending(x => x.IsActive).ThenBy(x => x.Name).ToList();
+		var offeringIds = offerings.Select(x => x.Id).ToHashSet();
+		var workflowIds = offerings.Where(x => x.WorkflowDefinitionId.HasValue)
+			.Select(x => x.WorkflowDefinitionId!.Value).ToHashSet();
+		var seatStages = workflowIds.Count == 0
+			? []
+			: await workflowStageRepository.GetListAsync(x => workflowIds.Contains(x.WorkflowDefinitionId) &&
+				x.StageType == AdmissionWorkflowStageType.Seat);
+		var seatManagedWorkflowIds = seatStages.Select(x => x.WorkflowDefinitionId).ToHashSet();
+		var pools = offeringIds.Count == 0
+			? []
+			: await seatPoolRepository.GetListAsync(x => offeringIds.Contains(x.AdmissionOfferingId));
+		var poolsByOffering = pools.ToDictionary(x => x.AdmissionOfferingId);
+		var poolIds = pools.Select(x => x.Id).ToHashSet();
+		var reservations = poolIds.Count == 0
+			? []
+			: await seatReservationRepository.GetListAsync(x => poolIds.Contains(x.PoolId));
+		var now = Clock.Now;
+		var rows = offerings.Select(offering =>
+		{
+			var isSeatManaged = offering.WorkflowDefinitionId.HasValue &&
+				seatManagedWorkflowIds.Contains(offering.WorkflowDefinitionId.Value);
+			if (!poolsByOffering.TryGetValue(offering.Id, out var pool))
+				return new AdmissionCycleOfferingCapacityDto
+				{
+					AdmissionOfferingId = offering.Id,
+					OfferingName = offering.Name,
+					OfferingCode = offering.Code,
+					IsActive = offering.IsActive,
+					IsSeatManaged = isSeatManaged
+				};
+			var poolReservations = reservations.Where(x => x.PoolId == pool.Id).ToList();
+			var reserved = poolReservations.Count(x => x.Status == AdmissionSeatReservationStatus.Reserved && x.ExpiresAt > now);
+			var confirmed = poolReservations.Count(x => x.Status == AdmissionSeatReservationStatus.Confirmed);
+			var waitlisted = poolReservations.Count(x => x.Status == AdmissionSeatReservationStatus.Waitlisted);
+			var occupied = reserved + confirmed;
+			return new AdmissionCycleOfferingCapacityDto
+			{
+				AdmissionOfferingId = offering.Id,
+				OfferingName = offering.Name,
+				OfferingCode = offering.Code,
+				IsActive = offering.IsActive,
+				IsSeatManaged = isSeatManaged,
+				IsConfigured = true,
+				Capacity = pool.Capacity,
+				ReservedCount = reserved,
+				ConfirmedCount = confirmed,
+				WaitlistedCount = waitlisted,
+				RemainingCapacity = Math.Max(0, pool.Capacity - occupied),
+				IsOverCapacity = occupied > pool.Capacity,
+				PoolConcurrencyStamp = pool.ConcurrencyStamp
+			};
+		}).ToList();
+		var seatManagedRows = rows.Where(x => x.IsSeatManaged).ToList();
+		return new AdmissionCycleCapacitySummaryDto
+		{
+			AdmissionCycleId = id,
+			OfferingCount = offerings.Count,
+			ActiveOfferingCount = offerings.Count(x => x.IsActive),
+			SeatManagedOfferingCount = seatManagedRows.Count,
+			ConfiguredOfferingCount = seatManagedRows.Count(x => x.IsConfigured),
+			UnconfiguredOfferingCount = seatManagedRows.Count(x => !x.IsConfigured),
+			TotalCapacity = seatManagedRows.Sum(x => x.Capacity ?? 0),
+			ReservedCount = seatManagedRows.Sum(x => x.ReservedCount),
+			ConfirmedCount = seatManagedRows.Sum(x => x.ConfirmedCount),
+			WaitlistedCount = seatManagedRows.Sum(x => x.WaitlistedCount),
+			RemainingCapacity = seatManagedRows.Sum(x => x.RemainingCapacity ?? 0),
+			OverCapacityOfferingCount = seatManagedRows.Count(x => x.IsOverCapacity),
+			Offerings = rows
+		};
+	}
+
+	private async Task ReconcileExpiredReservationsAsync(AdmissionSeatPool pool)
+	{
+		var expired = await seatReservationRepository.GetListAsync(x => x.PoolId == pool.Id &&
+			x.Status == AdmissionSeatReservationStatus.Reserved && x.ExpiresAt <= Clock.Now);
+		if (expired.Count == 0) return;
+		pool.ExpireReserved(expired.Count);
+		foreach (var reservation in expired)
+		{
+			reservation.Expire(Clock.Now);
+			await seatReservationRepository.UpdateAsync(reservation, autoSave: false);
+		}
+	}
+
 	private async Task<AdmissionCycleValidationDto> ValidateCycleAsync(AdmissionCycle cycle)
 	{
 		var result = new AdmissionCycleValidationDto();
@@ -423,6 +572,15 @@ public class AdmissionCycleAppService(
 		{
 			throw new BusinessException(AdmissionErrorCodes.CycleConcurrencyConflict,
 				"The admission cycle changed after it was opened. Reload and try again.");
+		}
+	}
+
+	private static void EnsurePoolConcurrency(AdmissionSeatPool pool, string? stamp)
+	{
+		if (string.IsNullOrWhiteSpace(stamp) || !string.Equals(pool.ConcurrencyStamp, stamp, StringComparison.Ordinal))
+		{
+			throw new BusinessException(AdmissionErrorCodes.CycleConcurrencyConflict,
+				"Seat capacity changed after this view was opened. Refresh and try again.");
 		}
 	}
 

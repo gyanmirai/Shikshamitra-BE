@@ -9,6 +9,23 @@ namespace ShikshaMitra.Domain.Finance.Fees;
 public class FeeRefundRequestLifecycle_Tests
 {
     [Fact]
+    public void Legacy_request_is_initialized_with_lines_before_entering_submitted_state()
+    {
+        var requestId = Guid.NewGuid();
+        var request = new FeeRefundRequest(
+            requestId, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "REF-SEED-TEST",
+            [
+                new FeeRefundLine(Guid.NewGuid(), requestId, Guid.NewGuid(), 500d)
+            ],
+            "Cash", null, "Seeded legacy refund");
+
+        Assert.Equal(FeeRefundStatus.Submitted, request.Status);
+        Assert.Single(request.Lines);
+        Assert.Equal(500m, request.TotalAmount);
+        Assert.Equal(500m, request.CalculatedAmount);
+    }
+
+    [Fact]
     public void Approval_reserves_the_refund_without_marking_it_processed()
     {
         var request = CreateSubmittedRequest();

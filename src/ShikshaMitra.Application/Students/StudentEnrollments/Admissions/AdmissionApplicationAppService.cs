@@ -25,6 +25,9 @@ public class AdmissionApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<AdmissionApplicationDto> GetAsync(Guid id) => readService.GetAsync(id);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public Task<AdmissionApplicationDto?> FindAsync(Guid id) => readService.FindAsync(id);
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	public Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId = null) =>
 		lifecycleService.StartAsync(applicantId, offeringId, inquiryId);

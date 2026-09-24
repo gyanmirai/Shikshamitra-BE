@@ -280,6 +280,10 @@ This endpoint does not add a Student write or change lifecycle behavior, and it 
 
 GET/POST `/api/student/onboarding/{caseId}/documents` requires `Students.Onboarding.View`; POST also requires `Students.Onboarding.Add`. Uploads validate the scoped active case, permitted Student lifecycle, tenant document type, file evidence, and concurrency, then refresh readiness. Replacing an existing file preserves its old private blob until the transaction commits successfully.
 
+### Onboarding configuration
+
+GET `/api/student/onboarding/settings/configurations` requires `Students.Onboarding.View` and returns the school configuration plus the requested academic-year override. PUT on the same route requires `Students.Onboarding.Add` and creates or updates one schema-versioned JSON configuration per scope with a concurrency stamp. DELETE `/api/student/onboarding/settings/configurations/{id}` requires the same configuration permission and concurrency stamp and removes only that scoped override. These records persist Readiness, GR, Roll, and Division guidance; operational policy, capacity, identifier allocation, activation, and service-handoff endpoints remain authoritative for Student changes.
+
 ## Eligibility APIs
 
 Base: `/api/student/enrollment/admissions/eligibility`. Responses use `Result<T>`. All applicant endpoints require `Students.Admissions.Eligibility.View`; mutations additionally require the action permission below and the current application `concurrencyStamp`.

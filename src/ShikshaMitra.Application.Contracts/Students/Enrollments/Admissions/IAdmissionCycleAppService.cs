@@ -23,4 +23,7 @@ public interface IAdmissionCycleAppService : IApplicationService
 	Task<AdmissionCycleValidationDto> ValidateAsync(Guid id);
 	Task<AdmissionCycleImpactDto> GetImpactAsync(Guid id);
 	Task<List<AdmissionCycleHistoryDto>> GetHistoryAsync(Guid id);
+	Task<AdmissionCycleCapacitySummaryDto> GetCapacityAsync(Guid id);
+	Task<AdmissionCycleCapacitySummaryDto> UpdateOfferingCapacityAsync(Guid id, Guid offeringId,
+		UpdateAdmissionCycleOfferingCapacityDto input);
 }

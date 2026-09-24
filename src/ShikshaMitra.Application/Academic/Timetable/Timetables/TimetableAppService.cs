@@ -111,7 +111,7 @@ public class TimetableAppService(
         {
             foreach (var group in slotConfig.SlotGroups)
             {
-                for (var dayIdx = group.WeekRangeStart; dayIdx <= group.WeekRangeEnd; dayIdx++)
+                foreach (var dayIdx in group.ActiveDays)
                 {
                     var groupDay = (TimetableDayOfWeek) dayIdx;
                     foreach (var ts in group.TimeSlots)
@@ -130,7 +130,7 @@ public class TimetableAppService(
             var dayIndex = (int)day;
 
             var slotGroup = slotConfig?.SlotGroups
-                .FirstOrDefault(g => g.WeekRangeStart <= dayIndex && dayIndex <= g.WeekRangeEnd);
+                .FirstOrDefault(g => g.AppliesToDay(dayIndex));
             var configTimeSlots = slotGroup?.TimeSlots.OrderBy(ts => ts.StartTime).ToList();
 
             if (configTimeSlots != null && configTimeSlots.Count > 0)
@@ -363,7 +363,18 @@ public class TimetableAppService(
     public async Task<EmployeeTimetableResponseDto> GetByEmployeeAsync(Guid employeeId, Guid? academicYearId = null)
     {
         var employee = await employeeRepository.FindAsync(employeeId);
-        var timetables = await timetableRepository.GetByEmployeeIdAsync(employeeId, academicYearId);
+        var teacherReferenceIds = new HashSet<Guid> { employeeId };
+        if (employee?.UserId is { } userId)
+        {
+            teacherReferenceIds.Add(userId);
+        }
+
+        var timetables = new List<Timetable>();
+        foreach (var teacherReferenceId in teacherReferenceIds)
+        {
+            timetables.AddRange(await timetableRepository.GetByEmployeeIdAsync(teacherReferenceId, academicYearId));
+        }
+        timetables = timetables.DistinctBy(timetable => timetable.Id).ToList();
         var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
         timetables = timetables.FilterByUserScope(scope).ToList();
 
@@ -372,20 +383,20 @@ public class TimetableAppService(
         var subjectIds = timetables
             .SelectMany(t => t.Slots)
             .SelectMany(s => s.Subjects)
-            .Where(s => s.TeacherId == employeeId)
+            .Where(s => s.TeacherId.HasValue && teacherReferenceIds.Contains(s.TeacherId.Value))
             .Select(s => s.SubjectId)
             .Distinct()
             .ToList();
         var roomIds = timetables
             .SelectMany(t => t.Slots)
             .SelectMany(s => s.Subjects)
-            .Where(s => s.TeacherId == employeeId && s.RoomId.HasValue)
+            .Where(s => s.TeacherId.HasValue && teacherReferenceIds.Contains(s.TeacherId.Value) && s.RoomId.HasValue)
             .Select(s => s.RoomId!.Value)
             .Distinct()
             .ToList();
         var electiveGroupIds = timetables
             .SelectMany(t => t.Slots)
-            .Where(s => s.ElectiveGroupId.HasValue && s.Subjects.Any(subject => subject.TeacherId == employeeId))
+            .Where(s => s.ElectiveGroupId.HasValue && s.Subjects.Any(subject => subject.TeacherId.HasValue && teacherReferenceIds.Contains(subject.TeacherId.Value)))
             .Select(s => s.ElectiveGroupId!.Value)
             .Distinct()
             .ToList();
@@ -431,7 +442,7 @@ public class TimetableAppService(
             var division = divisions.FirstOrDefault(d => d.Id == timetable.DivisionId);
 
             foreach (var slot in timetable.Slots
-                .Where(s => s.Subjects.Any(subject => subject.TeacherId == employeeId))
+                .Where(s => s.Subjects.Any(subject => subject.TeacherId.HasValue && teacherReferenceIds.Contains(subject.TeacherId.Value)))
                 .OrderBy(s => s.Day)
                 .ThenBy(s => s.Sequence)
                 .ThenBy(s => s.StartTime))
@@ -441,7 +452,7 @@ public class TimetableAppService(
                     ? electiveGroups.FirstOrDefault(g => g.Id == slot.ElectiveGroupId.Value)
                     : null;
 
-                foreach (var slotSubject in slot.Subjects.Where(s => s.TeacherId == employeeId))
+                foreach (var slotSubject in slot.Subjects.Where(s => s.TeacherId.HasValue && teacherReferenceIds.Contains(s.TeacherId.Value)))
                 {
                     var subject = subjects.FirstOrDefault(s => s.Id == slotSubject.SubjectId);
                     var room = slotSubject.RoomId.HasValue
@@ -606,7 +617,7 @@ public class TimetableAppService(
         {
             foreach (var group in lectureSlotConfig.SlotGroups)
             {
-                int numDays = group.WeekRangeEnd - group.WeekRangeStart + 1;
+                int numDays = group.ActiveDays.Count;
                 int lectureSlotsInGroup = group.TimeSlots.Count(ts => ts.SlotType == SlotType.Period);
                 weeklySlots += numDays * lectureSlotsInGroup;
             }
@@ -1347,7 +1358,7 @@ public class TimetableAppService(
             StandardId = standardId,
             Items = config.SlotGroups.Select(group => new SlotConfigItemDto
             {
-                ApplicableDays = Enumerable.Range(group.WeekRangeStart, group.WeekRangeEnd - group.WeekRangeStart + 1)
+                ApplicableDays = group.ActiveDays
                     .Where(i => i < dayNames.Length)
                     .Select(i => dayNames[i])
                     .ToList(),

@@ -24,6 +24,7 @@ using Volo.Abp.SimpleStateChecking;
 
 namespace ShikshaMitra.Security.Permissions;
 
+[Authorize]
 [RemoteService(false)]
 [Dependency(ReplaceServices = true)]
 [ExposeServices(typeof(IPermissionAppService), typeof(IShikshaMitraPermissionAppService), typeof(ShikshaMitraPermissionAppService))]

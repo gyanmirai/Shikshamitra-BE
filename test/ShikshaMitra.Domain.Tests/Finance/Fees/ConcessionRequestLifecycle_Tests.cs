@@ -115,6 +115,46 @@ public class ConcessionRequestLifecycle_Tests
 			upload.Attach(requestId, ownerId, typeId, documentId, now.AddMinutes(1)));
 	}
 
+	[Fact]
+	public void Replacing_existing_document_updates_tracked_row_without_duplicate()
+	{
+		var request = CreateDraft();
+		var documentId = Guid.NewGuid();
+		var existing = new ConcessionRequestDocument(
+			Guid.NewGuid(), request.TenantId, request.Id, documentId, "/api/files/original.pdf", 1);
+		request.ReplaceDocuments([existing]);
+
+		var replacement = new ConcessionRequestDocument(
+			Guid.NewGuid(), request.TenantId, request.Id, documentId, "/api/files/replacement.pdf", 1);
+		request.ReplaceDocuments([replacement]);
+
+		var saved = Assert.Single(request.ConcessionRequestDocuments);
+		Assert.Same(existing, saved);
+		Assert.Equal("/api/files/replacement.pdf", saved.Url);
+		Assert.Equal(1, saved.Status);
+	}
+
+	[Fact]
+	public void Replacing_documents_removes_stale_rows_and_adds_new_requirements()
+	{
+		var request = CreateDraft();
+		var staleDocumentId = Guid.NewGuid();
+		request.ReplaceDocuments([
+			new ConcessionRequestDocument(
+				Guid.NewGuid(), request.TenantId, request.Id, staleDocumentId, "/api/files/stale.pdf", 1)
+		]);
+
+		var newDocumentId = Guid.NewGuid();
+		request.ReplaceDocuments([
+			new ConcessionRequestDocument(
+				Guid.NewGuid(), request.TenantId, request.Id, newDocumentId, "/api/files/new.pdf", 1)
+		]);
+
+		var saved = Assert.Single(request.ConcessionRequestDocuments);
+		Assert.Equal(newDocumentId, saved.DocumentId);
+		Assert.DoesNotContain(request.ConcessionRequestDocuments, x => x.DocumentId == staleDocumentId);
+	}
+
 	private static ConcessionRequest CreateDraft() => new(
 		Guid.NewGuid(),
 		Guid.NewGuid(),

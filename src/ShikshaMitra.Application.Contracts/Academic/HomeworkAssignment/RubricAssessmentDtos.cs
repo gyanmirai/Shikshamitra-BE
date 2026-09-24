@@ -161,7 +161,7 @@ public interface IRubricAssessmentAppService
 	Task ArchiveAsync(Guid id);
 	Task<RubricEvaluationDto> UpsertEvaluationAsync(Guid rubricId, UpsertRubricEvaluationDto input);
 	Task<List<RubricEvaluationDto>> GetEvaluationsAsync(Guid rubricId);
-	Task<RubricEvaluationDto> GetStudentAssignmentEvaluationAsync(Guid studentId, Guid assignmentId);
+	Task<RubricEvaluationDto?> GetStudentAssignmentEvaluationAsync(Guid studentId, Guid assignmentId);
 	Task SubmitEvaluationAsync(Guid evaluationId);
 	Task ApproveEvaluationAsync(Guid evaluationId);
 }

@@ -26,6 +26,7 @@ public class StudentOnboardingAppService(
 	IRepository<StudentOnboardingStep, Guid> stepRepository,
 	IRepository<StudentOnboardingEvent, Guid> eventRepository,
 	IRepository<StudentOnboardingPolicy, Guid> policyRepository,
+	IRepository<StudentOnboardingSettings, Guid> settingsRepository,
 	IRepository<StudentSeatReservation, Guid> reservationRepository,
 	IRepository<StudentIdentifierSeries, Guid> seriesRepository,
 	IRepository<StudentIdentifierAllocation, Guid> allocationRepository,
@@ -608,6 +609,49 @@ public class StudentOnboardingAppService(
 		return MapPolicy(policy);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task<IReadOnlyList<StudentOnboardingSettingsDto>> GetSettingsAsync(Guid? academicYearId)
+	{
+		var settings = await settingsRepository.GetListAsync(item =>
+			!item.AcademicYearId.HasValue || academicYearId.HasValue && item.AcademicYearId == academicYearId);
+		return settings.OrderBy(item => item.AcademicYearId.HasValue).Select(MapSettings).ToList();
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	public async Task<StudentOnboardingSettingsDto> SaveSettingsAsync(SaveStudentOnboardingSettingsDto input)
+	{
+		if (input.AcademicYearId.HasValue &&
+		    !await academicYearRepository.AnyAsync(item => item.Id == input.AcademicYearId.Value))
+			throw new BusinessException(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+
+		var settings = await settingsRepository.FindAsync(item => item.AcademicYearId == input.AcademicYearId);
+		if (settings == null)
+		{
+			if (!string.IsNullOrWhiteSpace(input.ConcurrencyStamp))
+				throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
+			settings = new StudentOnboardingSettings(GuidGenerator.Create(), CurrentTenant.Id,
+				input.AcademicYearId, input.SchemaVersion, input.ConfigurationJson);
+			await settingsRepository.InsertAsync(settings, true);
+		}
+		else
+		{
+			EnsureConcurrency(settings, input.ConcurrencyStamp);
+			settings.Update(input.SchemaVersion, input.ConfigurationJson);
+			await settingsRepository.UpdateAsync(settings, true);
+		}
+
+		return MapSettings(settings);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	public async Task DeleteSettingsAsync(Guid id, string? concurrencyStamp)
+	{
+		var settings = await settingsRepository.FindAsync(id) ??
+			throw new EntityNotFoundException(typeof(StudentOnboardingSettings), id);
+		EnsureConcurrency(settings, concurrencyStamp);
+		await settingsRepository.DeleteAsync(settings, true);
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	public async Task<IReadOnlyList<StudentIdentifierSeriesDto>> GetIdentifierSeriesAsync(Guid academicYearId) =>
 		(await seriesRepository.GetListAsync(item => item.AcademicYearId == academicYearId))
@@ -979,6 +1023,15 @@ public class StudentOnboardingAppService(
 		SeatReservationMinutes = policy.SeatReservationMinutes, SlaHours = policy.SlaHours, IsActive = policy.IsActive
 	};
 
+	private static StudentOnboardingSettingsDto MapSettings(StudentOnboardingSettings settings) => new()
+	{
+		Id = settings.Id,
+		ConcurrencyStamp = settings.ConcurrencyStamp,
+		AcademicYearId = settings.AcademicYearId,
+		SchemaVersion = settings.SchemaVersion,
+		ConfigurationJson = settings.ConfigurationJson
+	};
+
 	private static StudentIdentifierSeriesDto MapSeries(StudentIdentifierSeries series) => new()
 	{
 		Id = series.Id, ConcurrencyStamp = series.ConcurrencyStamp, AcademicYearId = series.AcademicYearId,
@@ -1014,6 +1067,13 @@ public class StudentOnboardingAppService(
 	private static void EnsureConcurrency(StudentOnboardingPolicy policy, string? stamp)
 	{
 		if (string.IsNullOrWhiteSpace(stamp) || !string.Equals(stamp, policy.ConcurrencyStamp, StringComparison.Ordinal))
+			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
+	}
+
+	private static void EnsureConcurrency(StudentOnboardingSettings settings, string? stamp)
+	{
+		if (string.IsNullOrWhiteSpace(stamp) ||
+		    !string.Equals(stamp, settings.ConcurrencyStamp, StringComparison.Ordinal))
 			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
 	}
 }

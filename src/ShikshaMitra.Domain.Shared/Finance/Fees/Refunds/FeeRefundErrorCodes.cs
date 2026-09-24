@@ -18,7 +18,6 @@ public static class FeeRefundErrorCodes
     public const string PolicyNotAssigned            = Prefix + "010010";
     public const string PolicyVersionInvalid         = Prefix + "010011";
     public const string FeeHeadNotEligible            = Prefix + "010012";
-    public const string RequestDeadlineExpired        = Prefix + "010013";
     public const string PayoutMethodNotAllowed        = Prefix + "010014";
     public const string MakerCheckerViolation         = Prefix + "010015";
     public const string ReservationConflict           = Prefix + "010016";

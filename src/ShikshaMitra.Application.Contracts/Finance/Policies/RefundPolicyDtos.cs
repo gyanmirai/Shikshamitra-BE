@@ -18,12 +18,10 @@ public class RefundPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string Status { get; set; } = "Draft";
 	public bool IsDefault { get; set; }
 	public string PolicyType { get; set; } = "refund";
-	public string EligiblePaymentState { get; set; } = "PartialAndFullPayment";
 	public string FeeHeadScope { get; set; } = "AllFeeHeads";
 	public List<Guid> ApplicableFeeHeadIds { get; set; } = [];
 	public bool IncludePaidCharges { get; set; }
 	public bool IncludePaidLateFee { get; set; }
-	public int? RequestDeadlineDays { get; set; }
 	public bool AllowPartialRefund { get; set; }
 	public string AmountMode { get; set; } = "ManualUpToEligible";
 	public decimal? PercentageValue { get; set; }
@@ -54,12 +52,10 @@ public class CreateUpdateRefundPolicyDto
 	public string? Description { get; set; }
 	public string Status { get; set; } = "Draft";
 	public bool IsDefault { get; set; }
-	public string EligiblePaymentState { get; set; } = "PartialAndFullPayment";
 	public string FeeHeadScope { get; set; } = "AllFeeHeads";
 	public List<Guid> ApplicableFeeHeadIds { get; set; } = [];
 	public bool IncludePaidCharges { get; set; }
 	public bool IncludePaidLateFee { get; set; }
-	public int? RequestDeadlineDays { get; set; }
 	public bool AllowPartialRefund { get; set; } = true;
 	public string AmountMode { get; set; } = "ManualUpToEligible";
 	public decimal? PercentageValue { get; set; }
@@ -92,12 +88,10 @@ public class CreateUpdateRefundPolicyDtoValidator : AbstractValidator<CreateUpda
 			.WithMessage("Status must be Draft or Active. Use the archive action for Archived.");
 		RuleFor(x => x).Must(x => !x.IsDefault || EnumValue(x.Status, "Active"))
 			.WithMessage("Only an Active refund policy can be the default.");
-		RuleFor(x => x.EligiblePaymentState).Must(x => EnumValue(x, "FullyPaidOnly", "PartialAndFullPayment"));
 		RuleFor(x => x.FeeHeadScope).Must(x => EnumValue(x, "AllFeeHeads", "SelectedFeeHeads"));
 		RuleFor(x => x.AmountMode).Must(x => EnumValue(x, "RemainingPaidAmount", "ManualUpToEligible", "FixedAmount", "Percentage"));
 		RuleFor(x => x.RoundingMethod).Must(x => EnumValue(x, "None", "RoundUp", "RoundDown", "NearestRupee"));
 		RuleFor(x => x.DeductionType).Must(x => EnumValue(x, "None", "FixedAmount", "Percentage"));
-		RuleFor(x => x.RequestDeadlineDays).GreaterThanOrEqualTo(0).When(x => x.RequestDeadlineDays.HasValue);
 		RuleFor(x => x.ProcessingTargetDays).GreaterThanOrEqualTo(0).When(x => x.ProcessingTargetDays.HasValue);
 		RuleFor(x => x.MaximumPerRequest).GreaterThan(0).When(x => x.MaximumPerRequest.HasValue);
 		RuleFor(x => x.MaximumPerStudentYear).GreaterThan(0).When(x => x.MaximumPerStudentYear.HasValue);

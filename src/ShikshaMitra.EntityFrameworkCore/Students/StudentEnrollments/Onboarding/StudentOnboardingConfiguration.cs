@@ -17,6 +17,7 @@ public class StudentOnboardingConfiguration :
 	IEntityTypeConfiguration<StudentOnboardingStep>,
 	IEntityTypeConfiguration<StudentOnboardingEvent>,
 	IEntityTypeConfiguration<StudentOnboardingPolicy>,
+	IEntityTypeConfiguration<StudentOnboardingSettings>,
 	IEntityTypeConfiguration<StudentSeatReservation>,
 	IEntityTypeConfiguration<StudentIdentifierSeries>,
 	IEntityTypeConfiguration<StudentIdentifierAllocation>,
@@ -90,6 +91,22 @@ public class StudentOnboardingConfiguration :
 			.HasDatabaseName("IX_OnboardingPolicy_OfferingStandardOverride")
 			.HasFilter("\"IsDeleted\" = false AND \"OfferingId\" IS NOT NULL AND \"StandardId\" IS NOT NULL");
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsActive });
+	}
+
+	void IEntityTypeConfiguration<StudentOnboardingSettings>.Configure(EntityTypeBuilder<StudentOnboardingSettings> builder)
+	{
+		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StudentOnboardingSettings", ShikshaMitraConsts.DbSchema);
+		builder.ConfigureByConvention();
+		builder.Property(x => x.SchemaVersion).IsRequired();
+		builder.Property(x => x.ConfigurationJson).IsRequired().HasColumnType("text");
+		builder.HasIndex(x => x.TenantId).IsUnique()
+			.HasDatabaseName("IX_OnboardingSettings_SchoolDefault")
+			.HasFilter("\"IsDeleted\" = false AND \"AcademicYearId\" IS NULL");
+		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId }).IsUnique()
+			.HasDatabaseName("IX_OnboardingSettings_AcademicYear")
+			.HasFilter("\"IsDeleted\" = false AND \"AcademicYearId\" IS NOT NULL");
+		builder.HasOne<AcademicYear>().WithMany().HasForeignKey(x => x.AcademicYearId)
+			.OnDelete(DeleteBehavior.Restrict);
 	}
 
 	void IEntityTypeConfiguration<StudentSeatReservation>.Configure(EntityTypeBuilder<StudentSeatReservation> builder)

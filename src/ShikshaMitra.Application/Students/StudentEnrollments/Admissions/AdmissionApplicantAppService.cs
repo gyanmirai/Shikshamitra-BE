@@ -15,7 +15,35 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> applicantRepository, IRepository<AdmissionFamily, Guid> familyRepository, IRepository<AdmissionGuardian, Guid> guardianRepository, IRepository<AdmissionApplication, Guid> applicationRepository, IRepository<AdmissionApplicationWorkflowInstance, Guid> workflowInstanceRepository, IRepository<AdmissionApplicationStageInstance, Guid> stageInstanceRepository, IRepository<AdmissionActivity, Guid> activityRepository, IRepository<AdmissionNote, Guid> noteRepository) : ApplicationService, IAdmissionApplicantAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View)] public async Task<AdmissionApplicant360Dto> GetAsync(Guid id) { var applicant = await GetApplicantAsync(id); var family = await familyRepository.FindAsync(applicant.FamilyId); var guardian = family?.PrimaryGuardianId.HasValue == true ? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null; var applications = (await applicationRepository.GetListAsync(x => x.ApplicantId == id)).OrderByDescending(x => x.CreationTime).ToList(); var workflows = await workflowInstanceRepository.GetListAsync(x => applications.Select(a => a.Id).Contains(x.ApplicationId)); var stages = await stageInstanceRepository.GetListAsync(x => workflows.Select(w => w.Id).Contains(x.WorkflowInstanceId)); return new AdmissionApplicant360Dto { Applicant = Map(applicant), Family = family == null ? null : new AdmissionFamilyDto { Id = family.Id, FamilyNumber = family.FamilyNumber, PrimaryGuardianId = family.PrimaryGuardianId, Status = family.Status }, PrimaryGuardian = guardian == null ? null : Map(guardian), Applications = applications.Select(a => Map(a, stages.Where(s => workflows.FirstOrDefault(w => w.ApplicationId == a.Id)?.Id == s.WorkflowInstanceId))).ToList(), Activities = (await GetActivitiesAsync(id)), Notes = (await GetNotesAsync(id)) }; }
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.Edit)] public async Task<AdmissionApplicantDto> UpdateProfileAsync(Guid id, UpdateAdmissionApplicantProfileDto input) { var applicant = await GetApplicantAsync(id); var applications = await applicationRepository.GetListAsync(x => x.ApplicantId == id); if (applicant.ExistingStudentId.HasValue || applications.Any(x => x.Status is AdmissionApplicationStatus.Enrolled or AdmissionApplicationStatus.AdmissionFinalized)) throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionInvalidState, "A finalized applicant profile must be updated from the Student record."); applicant.UpdateProfile(input.FirstName, input.MiddleName, input.LastName, input.DateOfBirth, input.Gender, applicant.AddressLine1, applicant.AddressLine2, applicant.City, applicant.State, applicant.Country, applicant.PostalCode); await applicantRepository.UpdateAsync(applicant, false); await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "ApplicantProfileUpdated", "Applicant identity profile updated", id, null, null), true); return Map(applicant); }
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.Edit)]
+	public async Task<AdmissionApplicantDto> UpdateProfileAsync(Guid id, UpdateAdmissionApplicantProfileDto input)
+	{
+		var applicant = await GetApplicantAsync(id);
+		var applications = await applicationRepository.GetListAsync(x => x.ApplicantId == id);
+		if (applicant.ExistingStudentId.HasValue || applications.Any(x => x.Status is AdmissionApplicationStatus.Enrolled or AdmissionApplicationStatus.AdmissionFinalized))
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionInvalidState,
+				"A finalized applicant profile must be updated from the Student record.");
+		applicant.UpdateProfile(input.FirstName, input.MiddleName, input.LastName, input.DateOfBirth, input.Gender,
+			applicant.AddressLine1, applicant.AddressLine2, applicant.City, applicant.State, applicant.Country,
+			applicant.PostalCode);
+		if (input.GuardianMobile != null || input.GuardianEmail != null)
+		{
+			var family = await familyRepository.FindAsync(applicant.FamilyId);
+			var guardian = family?.PrimaryGuardianId.HasValue == true
+				? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value)
+				: null;
+			if (guardian == null)
+				throw new BusinessException(AdmissionErrorCodes.InquiryIdentityIncomplete,
+					"A primary guardian is required before updating guardian contact details.");
+			guardian.UpdateContact(guardian.FirstName, guardian.LastName,
+				input.GuardianMobile ?? guardian.Mobile, input.GuardianEmail);
+			await guardianRepository.UpdateAsync(guardian, false);
+		}
+		await applicantRepository.UpdateAsync(applicant, false);
+		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
+			"ApplicantProfileUpdated", "Applicant identity and guardian contact updated", id, null, null), true);
+		return Map(applicant);
+	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View)]
 	public async Task<List<AdmissionActivityDto>> GetActivitiesAsync(Guid id)
 	{

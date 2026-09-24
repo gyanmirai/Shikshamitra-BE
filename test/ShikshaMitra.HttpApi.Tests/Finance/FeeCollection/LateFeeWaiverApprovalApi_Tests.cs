@@ -17,6 +17,7 @@ using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Application.Dtos;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -24,10 +25,9 @@ using Xunit;
 namespace ShikshaMitra.Finance.FeeCollections;
 
 /// <summary>
-/// Phase 4e (collection-policy-implementation-plan.md §4e) — verifies the threshold-aware
-/// waiver-approval permission actually gates at the HTTP layer: ApproveWaiver alone only
-/// covers waivers up to the resolved policy's own approvalThresholdAmount; above it, the
-/// caller also needs ApproveWaiverAboveThreshold or gets a 403, not a silent pass-through.
+/// Verifies that a policy configured to require approval creates a pending waiver and that
+/// the normal ApproveWaiver permission gates the approval endpoint. Amount thresholds were
+/// intentionally removed from the collection-policy model.
 /// Uses HttpApi.Tests (not Application.Tests) deliberately — Application.Tests runs under
 /// AddAlwaysAllowAuthorization(), which bypasses every permission check, so this behavior is
 /// only observable through a real HTTP request carrying a restricted permission set.
@@ -57,11 +57,9 @@ public class LateFeeWaiverApprovalApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	/// <summary>
-	/// Seeds a student with an overdue due line against a Collection Policy carrying the given
-	/// ApprovalThresholdAmount, then requests (but does not approve) a waiver for the given
-	/// amount. Returns the waiver's ID for the test to approve via HTTP with varying permissions.
+	/// Seeds a student with an overdue due line and requests a waiver that requires approval.
 	/// </summary>
-	private async Task<Guid> SeedPendingWaiverAsync(decimal? approvalThresholdAmount, decimal requestedWaiverAmount)
+	private async Task<Guid> SeedPendingWaiverAsync(decimal requestedWaiverAmount)
 	{
 		var feeCategoryId = await ConcessionRequestTestHelper.CreateFeeCategoryAsync(Client);
 		var feeHeadId = await ConcessionRequestTestHelper.CreateFeeHeadAsync(Client, feeCategoryId);
@@ -93,9 +91,9 @@ public class LateFeeWaiverApprovalApi_Tests : ShikshaMitraApiTestBase
 				CompoundFrequency = "Daily",
 				RoundingMethod = "None",
 				EnableWaiver = true,
-				MaximumWaiverAmount = 10000,
-				MaximumWaiverPercentage = 100,
-				ApprovalThresholdAmount = approvalThresholdAmount,
+				LateFeeApplyOnFeeHeads = [feeHeadId],
+				RequiresApproval = true,
+				ApprovalRoleIds = [Guid.NewGuid()],
 				AllowOnlineCollection = true,
 			});
 
@@ -127,9 +125,9 @@ public class LateFeeWaiverApprovalApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task ApproveWaiver_Alone_Approves_A_Waiver_At_Or_Below_The_Policy_Threshold()
+	public async Task ApproveWaiver_Permission_Approves_A_Pending_Waiver_Regardless_Of_Amount()
 	{
-		var waiverId = await SeedPendingWaiverAsync(approvalThresholdAmount: 2000, requestedWaiverAmount: 500);
+		var waiverId = await SeedPendingWaiverAsync(requestedWaiverAmount: 500);
 
 		using var client = CreateClientWithPermissions(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ApproveWaiver);
@@ -139,17 +137,16 @@ public class LateFeeWaiverApprovalApi_Tests : ShikshaMitraApiTestBase
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var dto = await response.Content.ReadFromJsonAsync<LateFeeWaiverApplicationDto>(JsonOptions);
 		dto.ShouldNotBeNull();
-		dto!.Status.ShouldBe("Approved");
+		dto!.Status.ShouldBe("Applied");
 	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task ApproveWaiver_Alone_Is_Blocked_Above_The_Policy_Threshold()
+	public async Task Approval_Is_Blocked_Without_ApproveWaiver_Permission()
 	{
-		var waiverId = await SeedPendingWaiverAsync(approvalThresholdAmount: 100, requestedWaiverAmount: 5000);
+		var waiverId = await SeedPendingWaiverAsync(requestedWaiverAmount: 500);
 
-		using var client = CreateClientWithPermissions(
-			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ApproveWaiver);
+		using var client = CreateClientWithPermissions();
 
 		var response = await client.PostAsync($"/api/finance/late-fee-waivers/{waiverId}/approve", null);
 
@@ -158,35 +155,39 @@ public class LateFeeWaiverApprovalApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task ApproveWaiverAboveThreshold_Permits_Approving_Above_The_Policy_Threshold()
+	public async Task ViewWaivers_Lists_A_Pending_Request()
 	{
-		var waiverId = await SeedPendingWaiverAsync(approvalThresholdAmount: 100, requestedWaiverAmount: 5000);
-
+		var waiverId = await SeedPendingWaiverAsync(requestedWaiverAmount: 125);
 		using var client = CreateClientWithPermissions(
-			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ApproveWaiver,
-			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ApproveWaiverAboveThreshold);
+			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ViewWaivers);
 
-		var response = await client.PostAsync($"/api/finance/late-fee-waivers/{waiverId}/approve", null);
+		var response = await client.GetAsync("/api/finance/late-fee-waivers/list?status=PendingApproval&maxResultCount=25");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-		var dto = await response.Content.ReadFromJsonAsync<LateFeeWaiverApplicationDto>(JsonOptions);
-		dto.ShouldNotBeNull();
-		dto!.Status.ShouldBe("Approved");
+		var page = await response.Content.ReadFromJsonAsync<PagedResultDto<LateFeeWaiverApplicationDto>>(JsonOptions);
+		page.ShouldNotBeNull();
+		page!.Items.ShouldContain(x => x.Id == waiverId && x.Status == "PendingApproval");
 	}
 
 	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task No_Threshold_Set_On_The_Policy_Never_Requires_The_Higher_Permission()
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task RejectWaiver_Requires_Reason_And_Reject_Permission()
 	{
-		// approvalThresholdAmount left null (no threshold configured) — ApproveWaiver alone
-		// must always suffice, no matter how large the requested amount is.
-		var waiverId = await SeedPendingWaiverAsync(approvalThresholdAmount: null, requestedWaiverAmount: 999999);
+		var waiverId = await SeedPendingWaiverAsync(requestedWaiverAmount: 125);
+		using var unauthorizedClient = CreateClientWithPermissions();
+		var forbidden = await unauthorizedClient.PostAsJsonAsync(
+			$"/api/finance/late-fee-waivers/{waiverId}/reject", new { reason = "Not approved." });
+		forbidden.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await forbidden.Content.ReadAsStringAsync());
 
-		using var client = CreateClientWithPermissions(
-			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.ApproveWaiver);
+		using var reviewerClient = CreateClientWithPermissions(
+			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.RejectWaiver);
+		var rejected = await reviewerClient.PostAsJsonAsync(
+			$"/api/finance/late-fee-waivers/{waiverId}/reject", new { reason = "Supporting evidence is insufficient." });
 
-		var response = await client.PostAsync($"/api/finance/late-fee-waivers/{waiverId}/approve", null);
-
-		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		rejected.StatusCode.ShouldBe(HttpStatusCode.OK, await rejected.Content.ReadAsStringAsync());
+		var dto = await rejected.Content.ReadFromJsonAsync<LateFeeWaiverApplicationDto>(JsonOptions);
+		dto.ShouldNotBeNull();
+		dto!.Status.ShouldBe("Rejected");
+		dto.DecisionReason.ShouldBe("Supporting evidence is insufficient.");
 	}
 }

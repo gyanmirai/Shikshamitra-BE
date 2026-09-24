@@ -126,6 +126,7 @@ public class TeacherAvailabilityAuthorizationApi_Tests : ShikshaMitraApiTestBase
 	public async Task Affected_Lectures_Query_Should_Forward_The_Selected_Academic_Year()
 	{
 		var academicYearId = Guid.NewGuid();
+		var academicMediumId = Guid.NewGuid();
 		var teacherId = Guid.NewGuid();
 		var service = Substitute.For<ITeacherAvailabilityAppService>();
 		service.GetAffectedLecturesAsync(Arg.Any<CreateTeacherAvailabilityDto>())
@@ -134,6 +135,7 @@ public class TeacherAvailabilityAuthorizationApi_Tests : ShikshaMitraApiTestBase
 
 		await controller.GetAffectedLecturesFromQueryAsync(
 			academicYearId,
+			academicMediumId,
 			teacherId.ToString(),
 			"Akshay Patel",
 			new DateTime(2026, 9, 23),
@@ -145,6 +147,7 @@ public class TeacherAvailabilityAuthorizationApi_Tests : ShikshaMitraApiTestBase
 		await service.Received(1).GetAffectedLecturesAsync(
 			Arg.Is<CreateTeacherAvailabilityDto>(input =>
 				input.AcademicYearId == academicYearId &&
+				input.AcademicMediumId == academicMediumId &&
 				input.TeacherId == teacherId &&
 				input.AvailabilityDate == new DateTime(2026, 9, 23)));
 	}

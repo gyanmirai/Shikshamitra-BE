@@ -203,7 +203,7 @@ public class TeacherAssignmentAppService(
 			// Get all teacher IDs
 			var teacherIds = allocations
 				.Where(a => a.Teachers != null)
-				.SelectMany(a => a.Teachers.Select(t => t.TeacherId))
+				.SelectMany(a => a.Teachers.Where(t => !t.IsDeleted).Select(t => t.TeacherId))
 				.Distinct()
 				.ToList();
 
@@ -267,9 +267,9 @@ public class TeacherAssignmentAppService(
 
 							var assignedTeachers = new List<TeacherInfoDto>();
 
-							if (allocation != null && allocation.Teachers != null && allocation.Teachers.Any())
+							if (allocation != null && allocation.Teachers != null && allocation.Teachers.Any(t => !t.IsDeleted))
 							{
-								assignedTeachers = allocation.Teachers.Select(t =>
+								assignedTeachers = allocation.Teachers.Where(t => !t.IsDeleted).Select(t =>
 								{
 									employeeLookup.TryGetValue(t.TeacherId, out var employee);
 									IdentityUser? user = null;
@@ -549,11 +549,11 @@ public class TeacherAssignmentAppService(
 			{
 				try
 				{
-					// Validate assignment has teacher IDs
-					if (assignment.TeacherIds == null || !assignment.TeacherIds.Any())
+					// Null means this allocation was not supplied; an empty list explicitly clears it.
+					if (assignment.TeacherIds == null)
 					{
 						logger.LogDebug(
-							"Skipping assignment for Division {DivisionId} and Subject {SubjectId} - no teachers assigned",
+							"Skipping assignment for Division {DivisionId} and Subject {SubjectId} - teachers not supplied",
 							assignment.DivisionId,
 							assignment.SubjectId
 						);
@@ -569,12 +569,15 @@ public class TeacherAssignmentAppService(
 					if (existingAllocation != null)
 					{
 						// Update existing allocation - remove old teachers and add new ones
-						var currentTeacherIds = existingAllocation.Teachers?.Select(t => t.TeacherId).ToHashSet() ?? new HashSet<Guid>();
+						var currentTeacherIds = existingAllocation.Teachers?
+							.Where(t => !t.IsDeleted)
+							.Select(t => t.TeacherId)
+							.ToHashSet() ?? new HashSet<Guid>();
 						var newTeacherIds = assignment.TeacherIds.ToHashSet();
 
 						// Remove teachers that are no longer assigned
 						var teachersToRemove = existingAllocation.Teachers?
-							.Where(t => !newTeacherIds.Contains(t.TeacherId))
+							.Where(t => !t.IsDeleted && !newTeacherIds.Contains(t.TeacherId))
 							.ToList() ?? new List<AllocatedTeacher>();
 
 						foreach (var teacher in teachersToRemove)
@@ -586,10 +589,21 @@ public class TeacherAssignmentAppService(
 						var teachersToAdd = newTeacherIds.Except(currentTeacherIds);
 						foreach (var teacherId in teachersToAdd)
 						{
-							existingAllocation.Teachers?.Add(new AllocatedTeacher(
-								existingAllocation.Id,
-								teacherId
-							));
+							var deletedTeacher = existingAllocation.Teachers?
+								.FirstOrDefault(t => t.TeacherId == teacherId && t.IsDeleted);
+							if (deletedTeacher != null)
+							{
+								deletedTeacher.IsDeleted = false;
+								deletedTeacher.DeletionTime = null;
+								deletedTeacher.DeleterId = null;
+							}
+							else
+							{
+								existingAllocation.Teachers?.Add(new AllocatedTeacher(
+									existingAllocation.Id,
+									teacherId
+								));
+							}
 						}
 
 						await allocationRepository.UpdateAsync(existingAllocation);
@@ -603,6 +617,11 @@ public class TeacherAssignmentAppService(
 					}
 					else
 					{
+						if (assignment.TeacherIds.Count == 0)
+						{
+							continue;
+						}
+
 						// Create new allocation with proper constructor
 						var allocationId = guidGenerator.Create();
 						var newAllocation = new TeacherSubjectAllocation(

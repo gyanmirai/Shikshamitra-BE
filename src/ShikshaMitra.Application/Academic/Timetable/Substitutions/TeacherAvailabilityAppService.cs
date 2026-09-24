@@ -314,6 +314,16 @@ public class TeacherAvailabilityAppService(
             .Select(x => x.First())
             .ToList();
 
+        if (input.AcademicMediumId.HasValue)
+        {
+            var scopedStandardIds = await AsyncExecuter.ToListAsync(
+                (await standardRepository.GetQueryableAsync())
+                    .Where(standard => standard.EducationMediumStage.EducationMediumId == input.AcademicMediumId.Value)
+                    .Select(standard => standard.Id));
+            var allowedStandardIds = scopedStandardIds.ToHashSet();
+            timetables = timetables.Where(timetable => allowedStandardIds.Contains(timetable.StandardId)).ToList();
+        }
+
         var lectureRows = timetables
             .SelectMany(timetable => timetable.Slots
                 .Where(slot => slot.Day == timetableDay.Value && slot.StartTime < end && slot.EndTime > start)
@@ -424,6 +434,7 @@ public class TeacherAvailabilityAppService(
              x.StartTime < slot.EndTime &&
              x.EndTime > slot.StartTime));
 
+        var isPastWindow = IsPastWindow(availabilityDate, slot.EndTime);
         return new AffectedLectureDto
         {
             TimetableId = timetable.Id,
@@ -445,7 +456,10 @@ public class TeacherAvailabilityAppService(
             TeacherName = teacher?.EmployeeName ?? string.Empty,
             ExistingSubstitutionId = existingRow?.Id,
             ExistingSubstitutionStatus = existingRow?.Status.ToString(),
-            CanCreateSubstitution = existingRow == null && !IsPastWindow(availabilityDate, slot.EndTime)
+            CanCreateSubstitution = existingRow == null && !isPastWindow,
+            CreateSubstitutionBlockReason = existingRow != null
+                ? "Already assigned"
+                : isPastWindow ? "Lecture ended" : null
         };
     }
 
@@ -594,11 +608,8 @@ public class TeacherAvailabilityAppService(
         return DateTime.SpecifyKind(localTime.Date, DateTimeKind.Utc);
     }
 
-    private static DateTime CombineDateAndTime(DateTime date, TimeOnly time) =>
-        DateTime.SpecifyKind(date.Date.Add(time.ToTimeSpan()), DateTimeKind.Utc);
-
-    private static bool IsPastWindow(DateTime date, TimeOnly endTime) =>
-        DateTime.UtcNow > CombineDateAndTime(date, endTime);
+    private static bool IsPastWindow(DateTime date, TimeOnly endTime)
+        => !SubstitutionTimeWindow.IsOpen(date, endTime, DateTime.UtcNow, GetInstitutionTimeZone());
 
     private static TimetableDayOfWeek? ToTimetableDay(DayOfWeek dayOfWeek) => dayOfWeek switch
     {

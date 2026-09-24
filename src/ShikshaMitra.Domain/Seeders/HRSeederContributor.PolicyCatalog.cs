@@ -219,7 +219,7 @@ public partial class HRSeederContributor
 	internal static IReadOnlyList<SeedEarningComponentSpec> BuildSeedEarningComponentSpecs() =>
 	[
 		// Positive template amounts: employee payroll resolution rejects <= 0 when line amount is omitted (see EmployeePayrollAppService).
-		new("Basic Salary", "Base salary component", EarningComponentType.Fixed, CalculationType.Amount, 30_000m, null, ComponentDependency.None, true, 1),
+		new("Basic Salary", "Percentage of full-month gross, adjusted once for attendance", EarningComponentType.Fixed, CalculationType.Percentage, null, 60m, ComponentDependency.Gross, true, 1),
 		new("House Rent Allowance (HRA)", "Housing allowance - typically 40% of Basic", EarningComponentType.Fixed, CalculationType.Amount, 12_000m, null, ComponentDependency.Basic, true, 2),
 		new("Dearness Allowance (DA)", "Cost of living adjustment", EarningComponentType.Fixed, CalculationType.Amount, 6_000m, null, ComponentDependency.Basic, true, 3),
 		new("Transport Allowance", "Conveyance allowance", EarningComponentType.Fixed, CalculationType.Amount, 1600m, null, ComponentDependency.None, true, 4),

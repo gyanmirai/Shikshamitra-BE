@@ -39,10 +39,20 @@ public class EarningComponentCreateRequestDtoValidator : AbstractValidator<Earni
 			.When(x => IsPercentageCalculation(x.CalculationType))
 			.WithMessage("Percentage must be between 0 and 100 when calculationType is PERCENTAGE.");
 
-		RuleFor(x => x.SelectedEarningComponentId)
-			.NotNull()
+		RuleFor(x => x.CalculationBase)
+			.Must(x => x is "GROSS" or "COMPONENT")
 			.When(x => IsPercentageCalculation(x.CalculationType))
-			.WithMessage("selectedEarningComponentId is required when calculationType is PERCENTAGE.");
+			.WithMessage("Calculation base must be GROSS or COMPONENT.");
+
+		RuleFor(x => x.SelectedEarningComponentId)
+			.NotEmpty()
+			.When(x => IsPercentageCalculation(x.CalculationType) && x.CalculationBase == "COMPONENT")
+			.WithMessage("Select a component for a component-based percentage.");
+
+		RuleFor(x => x.SelectedEarningComponentId)
+			.Null()
+			.When(x => IsPercentageCalculation(x.CalculationType) && x.CalculationBase == "GROSS")
+			.WithMessage("Gross Salary is a system base and cannot reference a component.");
 	}
 
 	private static bool IsValidEarningType(string? value) =>

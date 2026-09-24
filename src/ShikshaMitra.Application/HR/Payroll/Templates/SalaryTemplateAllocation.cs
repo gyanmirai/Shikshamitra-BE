@@ -6,7 +6,7 @@ namespace ShikshaMitra.HR.Payroll.Templates;
 
 internal static class SalaryTemplateAllocation
 {
-	// Bound every rounding operation, including chained percentage dependencies.
+	// Dependencies are evaluated without intermediate rounding.
 	// Gross values outside this interval cannot reconcile and must not enter the target solver.
 	public static (decimal Minimum, decimal Maximum) GetGrossBounds(IReadOnlyList<SalaryTemplateRule> rules, decimal maximum)
 	{
@@ -21,8 +21,8 @@ internal static class SalaryTemplateAllocation
 			values[rule.Code] = rule.FormulaType switch
 			{
 				SalaryTemplateFormulaType.FixedAmount => (0m, Math.Round(rule.Value ?? 0m, 2, MidpointRounding.AwayFromZero), 0m),
-				SalaryTemplateFormulaType.PercentageOfGross => (rate, 0m, 0.005m),
-				_ => (basis.Slope * rate, basis.Fixed * rate, basis.Error * rate + 0.005m)
+				SalaryTemplateFormulaType.PercentageOfGross => (rate, 0m, 0m),
+				_ => (basis.Slope * rate, basis.Fixed * rate, 0m)
 			};
 		}
 		var divisor = 1m - values.Values.Sum(x => x.Slope);

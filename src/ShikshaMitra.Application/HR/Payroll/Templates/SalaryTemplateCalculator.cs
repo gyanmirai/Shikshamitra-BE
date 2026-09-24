@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Statutory;
 using Volo.Abp;
 
@@ -137,6 +138,14 @@ internal static class SalaryTemplateCalculator
 				throw new BusinessException("HR:Payroll:SalaryTemplateInvalidBasis").WithData("code", rule.Code);
 			}
 
+			// Remainder already depends on every other earning, so this edge closes a cycle.
+			if (rule.LineKind == SalaryTemplateLineKind.Earning &&
+				rule.FormulaType == SalaryTemplateFormulaType.PercentageOfComponent &&
+				rulesByCode[rule.BasisCode!.Trim()].FormulaType == SalaryTemplateFormulaType.RemainderOfGross)
+			{
+				throw new BusinessException("HR:Payroll:SalaryTemplateDependencyCycle").WithData("code", rule.Code);
+			}
+
 			if (rule.FormulaType == SalaryTemplateFormulaType.PercentageOfComponent &&
 			    rulesByCode[rule.BasisCode!.Trim()].DisplayOrder >= rule.DisplayOrder)
 			{
@@ -203,6 +212,8 @@ internal static class SalaryTemplateCalculator
 		SalaryTemplateEsiEvaluationContext? esiContext = null)
 	{
 		ValidateRules(rules);
+		monthlyAmount = Round(monthlyAmount);
+		if (monthlyAmount <= 0m) throw new BusinessException("HR:Payroll:SalaryTemplateInvalidAmount");
 		var gross = inputBasis == SalaryInputBasis.Gross
 			? Round(monthlyAmount)
 			: SolveGross(inputBasis, monthlyAmount, rules, components, pfRule, professionalTaxSlabs, esiContext);
@@ -339,33 +350,17 @@ internal static class SalaryTemplateCalculator
 		var orderedRules = rules.OrderBy(x => x.DisplayOrder).ToList();
 		var basicRule = orderedRules.Single(x => x.LineKind == SalaryTemplateLineKind.Earning && x.SemanticType == PayrollComponentSemanticType.Basic);
 
-		foreach (var rule in orderedRules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning && x.FormulaType != SalaryTemplateFormulaType.RemainderOfGross))
+		var earningRules = orderedRules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning).ToList();
+		var finalized = GrossEarningAllocation.Calculate(gross, earningRules.Select(rule => new GrossEarningRule(
+			rule.ComponentId, rule.SemanticType == PayrollComponentSemanticType.Basic, rule.FormulaType, rule.Value,
+			rule.BasisCode == null ? null : rules.Single(x => x.Code.Equals(rule.BasisCode, StringComparison.OrdinalIgnoreCase)).ComponentId)).ToList(),
+			allowUnallocatedProbe: allowUnallocated);
+		foreach (var rule in earningRules)
 		{
-			var amount = CalculateOrdinaryAmount(rule, gross, values.GetValueOrDefault(basicRule.Code), values);
+			var amount = finalized[rule.ComponentId];
 			values[rule.Code] = amount;
 			earnings.Add(ToLine(rule, components, amount));
 			trace.Add($"{GetName(rule, components)} = {Describe(rule, amount)}");
-		}
-
-		var remainderRule = orderedRules.SingleOrDefault(x => x.LineKind == SalaryTemplateLineKind.Earning && x.FormulaType == SalaryTemplateFormulaType.RemainderOfGross);
-		var remainder = Round(gross - earnings.Sum(x => x.Amount));
-		if (remainderRule == null && remainder != 0m && !allowUnallocated)
-		{
-			throw new BusinessException(HRErrorCodes.SalaryTemplateAllocationMismatch)
-				.WithData("gross", gross).WithData("allocated", earnings.Sum(x => x.Amount))
-				.WithData("difference", remainder)
-				.WithData("message", FormattableString.Invariant($"Earnings must exactly equal gross salary. Gross: INR {gross:0.00}; allocated earnings: INR {earnings.Sum(x => x.Amount):0.00}; difference: INR {remainder:0.00}. Adjust the earning rules or explicitly choose a balancing earning."));
-		}
-		if (remainderRule != null && remainder < 0m)
-		{
-			throw new BusinessException("HR:Payroll:SalaryTemplateEarningsExceedGross").WithData("gross", gross);
-		}
-
-		if (remainderRule != null)
-		{
-			values[remainderRule.Code] = remainder;
-			earnings.Add(ToLine(remainderRule, components, remainder));
-			trace.Add($"{GetName(remainderRule, components)} = gross remainder = {remainder:0.00}");
 		}
 		var basic = values[basicRule.Code];
 
@@ -475,6 +470,13 @@ internal static class SalaryTemplateCalculator
 				});
 				trace.Add($"Employee ESI = {esiResult.EmployeeContribution:0.00}; employer ESI = {esiResult.EmployerContribution:0.00}");
 			}
+		}
+
+		foreach (var line in earnings.Concat(deductions))
+		{
+			var sourceRule = rules.FirstOrDefault(x => x.ComponentId == line.ComponentId);
+			if (sourceRule?.BasisCode != null)
+				line.BasisComponentId = rules.First(x => x.Code.Equals(sourceRule.BasisCode, StringComparison.OrdinalIgnoreCase)).ComponentId;
 		}
 
 		var totalDeductions = Round(deductions.Sum(x => x.Amount));
@@ -624,6 +626,7 @@ internal static class SalaryTemplateCalculator
 		Amount = amount,
 		SemanticType = ToContractEnum(rule.SemanticType.ToString()),
 		FormulaType = ToContractEnum(rule.FormulaType.ToString()),
+		FormulaValue = rule.FormulaType == SalaryTemplateFormulaType.FixedAmount && rule.Value.HasValue ? Round(rule.Value.Value) : rule.Value,
 		IsStatutory = false
 	};
 

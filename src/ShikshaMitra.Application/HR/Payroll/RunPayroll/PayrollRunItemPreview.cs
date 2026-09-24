@@ -135,7 +135,7 @@ internal sealed record PayrollRunItemPreview(
 			return null;
 		}
 
-		var fullGrossSalary = components.Where(c => c.IsEarning).Sum(c => c.Amount);
+		var fullGrossSalary = components.Where(c => c.IsEarning && !c.IsTemp).Sum(c => c.Amount);
 		if (fullGrossSalary <= 0m)
 		{
 			return null;

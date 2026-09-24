@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-09-17
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -133,3 +133,13 @@ The worker persists a current owner-scope snapshot before generating any legacy 
 
 If a workflow depends on a commented menu item or unconfirmed route, mark it partial in docs and tests.
 Do not present partial routes as shipped navigation until frontend `hr-menus.ts` confirms visibility.
+
+## Built-in Gross Salary
+
+Full-month gross is resolved from the employee compensation basis and saved with the immutable revision.
+The attendance-adjusted Gross Salary equals full-month gross multiplied by payable days divided by salary basis days, using the existing school policies.
+Regular earnings must allocate this value completely, with an optional explicit remainder earning.
+Gross-based earning and deduction formulas run against this value and receive no second attendance reduction.
+One-time bonuses and incentives are additional earnings, excluded from this base and included in total earnings and net pay.
+Statutory calculators retain their existing wage treatment and effective rules.
+Payroll snapshots and payslip lines retain monthly amounts, formula types, formula values, and component dependencies.

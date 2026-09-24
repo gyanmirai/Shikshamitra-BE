@@ -22,6 +22,10 @@ public class SalaryTemplateRuleDto
 
 public class SalaryTemplateComponentCatalogItemDto
 {
+	public string CalculationType { get; set; } = "AMOUNT";
+	public string? CalculationBase { get; set; }
+	public decimal? DefaultValue { get; set; }
+	public Guid? BasisComponentId { get; set; }
 	public Guid ComponentId { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
@@ -35,6 +39,10 @@ public class SalaryTemplateComponentCatalogDto
 
 public class SaveSalaryTemplateDto
 {
+	public string PreviewToken { get; set; } = string.Empty;
+	public decimal SampleMonthlyAmount { get; set; }
+	public DateTime SampleEffectiveMonth { get; set; }
+
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
 	public string DefaultSalaryBasis { get; set; } = "GROSS";
@@ -109,8 +117,46 @@ public class CalculateSalaryTemplateRequestDto
 	public string? CustomizationReason { get; set; }
 }
 
+public class PreviewSalaryTemplateRequestDto
+{
+	public Guid? TemplateId { get; set; }
+	public Guid? ExpectedActiveVersionId { get; set; }
+	public string? ConcurrencyStamp { get; set; }
+	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
+	public string SalaryBasis { get; set; } = "GROSS";
+	public string ProtectionPolicy { get; set; } = "PROTECT_GROSS";
+	public decimal MonthlyAmount { get; set; }
+	public DateTime EffectiveMonth { get; set; }
+	public bool PfApplicable { get; set; }
+	public Guid? PfRuleId { get; set; }
+}
+
+public class SalaryTemplatePreviewDto
+{
+	public bool IsSample { get; set; } = true;
+	public string PreviewToken { get; set; } = string.Empty;
+	public DateTime ExpiresAt { get; set; }
+	public SalaryTemplateCalculationDto Calculation { get; set; } = new();
+}
+
+public class PreviewSalaryTemplateRequestDtoValidator : AbstractValidator<PreviewSalaryTemplateRequestDto>
+{
+	public PreviewSalaryTemplateRequestDtoValidator()
+	{
+		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
+		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_GROSS" or "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
+		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
+		RuleFor(x => x.EffectiveMonth).Must(x => x.Year >= 1900 && x.Day == 1);
+		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);
+		RuleFor(x => x.Rules).NotEmpty();
+		RuleForEach(x => x.Rules).SetValidator(new SalaryTemplateRuleDtoValidator());
+	}
+}
+
 public class CalculatedSalaryLineDto
 {
+	public decimal? FormulaValue { get; set; }
+	public Guid? BasisComponentId { get; set; }
 	public Guid ComponentId { get; set; }
 	public string Code { get; set; } = string.Empty;
 	public string Name { get; set; } = string.Empty;
@@ -178,6 +224,7 @@ public class SalaryTemplateCalculationDto
 
 public interface ISalaryTemplateAppService : IApplicationService
 {
+	Task<SalaryTemplatePreviewDto> PreviewAsync(PreviewSalaryTemplateRequestDto input);
 	Task<SalaryTemplateListDto> GetListAsync();
 	Task<SalaryTemplateListDto> GetActiveListAsync();
 	Task<SalaryTemplateComponentCatalogDto> GetComponentCatalogAsync();

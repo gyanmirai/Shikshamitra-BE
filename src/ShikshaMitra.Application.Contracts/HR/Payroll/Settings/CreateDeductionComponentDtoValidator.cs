@@ -43,8 +43,13 @@ public class CreateDeductionComponentDtoValidator : AbstractValidator<CreateDedu
 			.WithMessage("Percentage must be between 0 and 100 when calculationType is PERCENTAGE.");
 
 		RuleFor(x => x.SelectedDeductionComponentId)
-			.NotNull()
-			.When(x => x.CalculationType == Settings.CalculationType.Percentage)
-			.WithMessage("selectedDeductionComponentId is required when calculationType is PERCENTAGE.");
+			.NotEmpty()
+			.When(x => x.CalculationType == Settings.CalculationType.Percentage && x.DependOn != ComponentDependency.Gross)
+			.WithMessage("Select a component for a component-based percentage.");
+
+		RuleFor(x => x.SelectedDeductionComponentId)
+			.Null()
+			.When(x => x.CalculationType == Settings.CalculationType.Percentage && x.DependOn == ComponentDependency.Gross)
+			.WithMessage("Gross Salary cannot reference a component.");
 	}
 }

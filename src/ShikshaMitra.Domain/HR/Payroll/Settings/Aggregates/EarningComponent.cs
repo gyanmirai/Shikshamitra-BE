@@ -53,7 +53,7 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 		Description = description;
 		ComponentType = componentType;
-		SetCalculationFields(calculationType, amount, percentage, selectedEarningComponentId);
+		SetCalculationFields(calculationType, amount, percentage, selectedEarningComponentId, dependOn);
 		DependOn = dependOn;
 		VisibleInPayslip = visibleInPayslip;
 		DisplayOrder = displayOrder;
@@ -75,7 +75,7 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SetName(name);
 		Description = description;
 		ComponentType = componentType;
-		SetCalculationFields(calculationType, amount, percentage, selectedEarningComponentId);
+		SetCalculationFields(calculationType, amount, percentage, selectedEarningComponentId, dependOn);
 		DependOn = dependOn;
 		VisibleInPayslip = visibleInPayslip;
 		DisplayOrder = displayOrder;
@@ -97,7 +97,8 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		CalculationType calculationType,
 		decimal? amount,
 		decimal? percentage,
-		Guid? selectedEarningComponentId)
+		Guid? selectedEarningComponentId,
+		ComponentDependency dependOn)
 	{
 		CalculationType = calculationType;
 
@@ -121,10 +122,16 @@ public class EarningComponent : FullAuditedAggregateRoot<Guid>, IMultiTenant
 					.WithData("message", "Percentage must be between 0 and 100.");
 			}
 
-			if (!selectedEarningComponentId.HasValue)
+			if (dependOn != ComponentDependency.Gross && !selectedEarningComponentId.HasValue)
 			{
 				throw new BusinessException(HRErrorCodes.PayrollComponentMissingSelectedComponent)
 					.WithData("message", "selectedEarningComponentId is required when calculationType is PERCENTAGE.");
+			}
+
+			if (dependOn == ComponentDependency.Gross && selectedEarningComponentId.HasValue)
+			{
+				throw new BusinessException(HRErrorCodes.PayrollComponentMissingSelectedComponent)
+					.WithData("message", "Gross Salary cannot reference a component.");
 			}
 
 			Percentage = percentage.Value;

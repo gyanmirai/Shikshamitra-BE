@@ -35,7 +35,7 @@ internal static class SalarySlipSnapshotMatcher
 		PayrollRunItemSnapshot snapshot,
 		IReadOnlyList<SalarySlipLineItem> snapshotEarnings,
 		IReadOnlyList<SalarySlipLineItem> snapshotDeductions) =>
-		Math.Round(salarySlip.TotalEarning, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.GrossSalary, 2, MidpointRounding.AwayFromZero) &&
+		Math.Round(salarySlip.TotalEarning, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.NetPay + snapshot.TotalDeduction, 2, MidpointRounding.AwayFromZero) &&
 		Math.Round(salarySlip.TotalDeduction, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.TotalDeduction, 2, MidpointRounding.AwayFromZero) &&
 		Math.Round(salarySlip.NetSalary, 2, MidpointRounding.AwayFromZero) == Math.Round(snapshot.NetPay, 2, MidpointRounding.AwayFromZero) &&
 		LineItemsMatch(salarySlip.Earnings, snapshotEarnings) &&
@@ -100,7 +100,11 @@ internal static class SalarySlipSnapshotMatcher
 			item.IsFixed,
 			item.IsTemp,
 			item.ComponentType,
-			item.DependOn);
+			item.DependOn,
+			item.FullMonthAmount,
+			item.FormulaType,
+			item.FormulaValue,
+			item.BasisComponentId);
 
 	private readonly record struct SalarySlipLineComparisonKey(
 		string Name,
@@ -109,5 +113,9 @@ internal static class SalarySlipSnapshotMatcher
 		bool IsFixed,
 		bool IsTemp,
 		SalaryComponentType ComponentType,
-		SalaryComponentDependency DependOn);
+		SalaryComponentDependency DependOn,
+		decimal? FullMonthAmount,
+		string? FormulaType,
+		decimal? FormulaValue,
+		Guid? BasisComponentId);
 }

@@ -9,6 +9,9 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 /// </summary>
 public class SalarySlipDto
 {
+	public decimal? FullGrossSalary { get; set; }
+	public decimal GrossSalary { get; set; }
+	public decimal AdditionalEarnings { get; set; }
 	/// <summary>
 	/// Salary slip identifier
 	/// </summary>

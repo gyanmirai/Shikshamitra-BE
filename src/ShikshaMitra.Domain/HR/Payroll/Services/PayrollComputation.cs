@@ -29,33 +29,22 @@ public static class PayrollComputation
 		PayrollStatutoryRuleSet? statutoryRules = null)
 	{
 		var factor = PayrollProrationCalculator.CalculateProrationFactor(basisDays, payableDays);
-		var earnings = new List<PayrollComputedLineItem>();
 		var deductions = new List<PayrollComputedLineItem>();
-		var fullGrossSalary = components
-			.Where(c => c.IsEarning)
-			.Sum(c => c.Amount);
-		var grossSalary = 0m;
-
-		foreach (var component in components.Where(x => x.IsEarning))
-		{
-			var proratedAmount = PayrollProrationCalculator.ProrateAmount(component.Amount, component.IsTemp, factor);
-			var lineItem = new PayrollComputedLineItem(component, proratedAmount);
-			earnings.Add(lineItem);
-			grossSalary += proratedAmount;
-		}
-
-		var basicSalaryBase = components
-			.Where(c => c.IsEarning &&
-				(c.SemanticType == Templates.PayrollComponentSemanticType.Basic || IsBasicSalaryComponentName(c.Name)))
-			.Sum(c => c.Amount);
-		var basicSalary = PayrollProrationCalculator.ProrateAmount(basicSalaryBase, isTemp: false, factor);
+		var fullGrossSalary = components.Where(c => c.IsEarning && !c.IsTemp).Sum(c => c.Amount);
+		var grossSalary = Round(fullGrossSalary * factor);
+		var calculator = new PayrollOrdinaryComponentCalculator(components, grossSalary, factor);
+		var earnings = calculator.CalculateEarnings();
+		var totalEarnings = earnings.Sum(x => x.Amount);
+		var basicSalary = earnings.Where(x => !x.Source.IsTemp &&
+			(x.Source.SemanticType == Templates.PayrollComponentSemanticType.Basic || IsBasicSalaryComponentName(x.Source.Name)))
+			.Sum(x => x.Amount);
 
 		foreach (var component in components.Where(x => !x.IsEarning &&
 			x.SemanticType is not (Templates.PayrollComponentSemanticType.EmployeeProvidentFund or
 				Templates.PayrollComponentSemanticType.ProfessionalTax or
 				Templates.PayrollComponentSemanticType.EmployeeStateInsurance)))
 		{
-			var amount = PayrollProrationCalculator.ProrateAmount(component.Amount, component.IsTemp, factor);
+			var amount = calculator.Calculate(component);
 			deductions.Add(new PayrollComputedLineItem(component, amount));
 		}
 
@@ -76,7 +65,7 @@ public static class PayrollComputation
 			}
 			if (contributionBase <= 0m)
 			{
-				contributionBase = grossSalary;
+				contributionBase = totalEarnings;
 			}
 			if (pfRule.WageCeiling.HasValue)
 			{
@@ -109,8 +98,8 @@ public static class PayrollComputation
 			var slab = statutoryRules?.ProfessionalTaxSlabs
 				.Where(x => x.IsActive &&
 					(!statutoryRules.IsEmploymentCessationMonth || x.DeductInCessationMonth) &&
-					grossSalary >= x.FromSalary &&
-					(!x.ToSalary.HasValue || grossSalary <= x.ToSalary.Value))
+					totalEarnings >= x.FromSalary &&
+					(!x.ToSalary.HasValue || totalEarnings <= x.ToSalary.Value))
 				.OrderByDescending(x => x.EffectiveFrom)
 				.ThenByDescending(x => x.Version)
 				.FirstOrDefault();
@@ -196,7 +185,7 @@ public static class PayrollComputation
 			grossSalary,
 			totalDeduction,
 			employerContributionTotal,
-			grossSalary - totalDeduction,
+			totalEarnings - totalDeduction,
 			earnings,
 			deductions,
 			employerContributions,
@@ -223,7 +212,13 @@ public static class PayrollComputation
 			item.Source.IsFixed,
 			item.Source.IsTemp,
 			item.Source.ComponentType,
-			item.Source.DependOn ?? SalaryComponentDependency.None);
+			item.Source.DependOn ?? SalaryComponentDependency.None)
+		{
+			FullMonthAmount = item.Source.IsTemp ? null : item.Source.Amount,
+			FormulaType = item.Source.Formula?.Type.ToString(),
+			FormulaValue = item.Source.Formula?.Value,
+			BasisComponentId = item.Source.Formula?.BasisComponentId
+		};
 
 	private static bool IsBasicSalaryComponentName(string? name)
 	{

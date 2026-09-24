@@ -58,7 +58,11 @@ public sealed record PayrollComputationResult(
 	string? EmployeeStateInsuranceNumber,
 	DateTime? EmployeeStateInsuranceContributionPeriodStart,
 	DateTime? EmployeeStateInsuranceContributionPeriodEnd,
-	List<string> StatutoryIssueCodes);
+	List<string> StatutoryIssueCodes)
+{
+	public decimal TotalEarnings => NetPay + TotalDeduction;
+	public decimal AdditionalEarnings => TotalEarnings - GrossSalary;
+}
 
 public sealed record PayrollAttendancePayableDays(
 	int PresentDays,

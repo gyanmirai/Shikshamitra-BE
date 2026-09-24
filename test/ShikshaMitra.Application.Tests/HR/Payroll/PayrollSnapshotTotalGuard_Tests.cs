@@ -33,6 +33,18 @@ public class PayrollSnapshotTotalGuard_Tests
 		exception.Code.ShouldBe(HRErrorCodes.PayrollBlockingIssuesBeforeLock);
 	}
 
+	[Fact]
+	public void Additional_earnings_increase_net_but_not_regular_gross()
+	{
+		var snapshot = CreateSnapshot();
+		snapshot.NetPay = 115m;
+		var earnings = new List<SalarySlipLineItem> { new("Basic", 100m), new("Bonus", 25m, isTemp: true) };
+		var deductions = new List<SalarySlipLineItem> { new("Tax", 10m) };
+		PayrollSnapshotTotalGuard.EnsureMatchesLineItems(snapshot, earnings, deductions);
+		snapshot.GrossSalary = 125m;
+		Should.Throw<BusinessException>(() => PayrollSnapshotTotalGuard.EnsureMatchesLineItems(snapshot, earnings, deductions));
+	}
+
 	private static PayrollRunItemSnapshot CreateSnapshot() =>
 		new(Guid.NewGuid(), null, "2026-05", Guid.NewGuid())
 		{

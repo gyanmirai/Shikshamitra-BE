@@ -217,6 +217,10 @@ internal static class PayrollRunProjection
 		{
 			Name = item.Source.Name,
 			Amount = (double)item.Amount,
+			FullMonthAmount = item.Source.IsTemp ? null : item.Source.Amount,
+			FormulaType = item.Source.Formula?.Type.ToString(),
+			FormulaValue = item.Source.Formula?.Value,
+			BasisComponentId = item.Source.Formula?.BasisComponentId,
 			Description = item.Source.Description,
 			IsFixed = item.Source.IsFixed,
 			IsTemp = item.Source.IsTemp,

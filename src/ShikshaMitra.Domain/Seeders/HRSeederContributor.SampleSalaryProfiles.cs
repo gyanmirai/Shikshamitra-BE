@@ -79,7 +79,7 @@ public partial class HRSeederContributor
 		var incentive = suppressVariablePay
 			? 0m
 			: seed % 4 == 0 ? 2_000m : seed % 5 == 0 ? 1_000m : 0m;
-		var specialAllowance = grossSalary - basic - hra - da - transport - medical - performanceBonus - incentive;
+		var specialAllowance = grossSalary - basic - hra - da - transport - medical;
 		if (specialAllowance < 0)
 		{
 			specialAllowance = 0;

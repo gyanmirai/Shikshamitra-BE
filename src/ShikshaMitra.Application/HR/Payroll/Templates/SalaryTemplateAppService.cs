@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Statutory;
 using Volo.Abp;
@@ -19,9 +22,8 @@ public class SalaryTemplateAppService(
 	IRepository<SalaryStructureTemplateVersion, Guid> versionRepository,
 	IEarningComponentRepository earningComponentRepository,
 	IDeductionComponentRepository deductionComponentRepository,
-	IProvidentFundRepository providentFundRepository,
-	IProfessionalTaxRepository professionalTaxRepository,
-	SalaryTemplateEsiContextResolver esiContextResolver,
+	SalaryTemplateCalculationService calculationService,
+	SalaryTemplatePreviewProofService previewProofService,
 	IAsyncQueryableExecuter asyncExecuter,
 	IClock clock) : ApplicationService, ISalaryTemplateAppService
 {
@@ -76,14 +78,22 @@ public class SalaryTemplateAppService(
 					ComponentId = x.Id,
 					Name = x.Name,
 					Description = x.Description,
-					LineKind = "EARNING"
+					LineKind = "EARNING",
+					CalculationType = x.CalculationType.ToString().ToUpperInvariant(),
+					CalculationBase = x.DependOn == ComponentDependency.Gross ? "GROSS" : "COMPONENT",
+					DefaultValue = x.CalculationType == CalculationType.Percentage ? x.Percentage : x.Amount,
+					BasisComponentId = x.SelectedEarningComponentId
 				})
 				.Concat(deductions.Select(x => new SalaryTemplateComponentCatalogItemDto
 				{
 					ComponentId = x.Id,
 					Name = x.Name,
 					Description = x.Description,
-					LineKind = "DEDUCTION"
+					LineKind = "DEDUCTION",
+					CalculationType = x.CalculationType.ToString().ToUpperInvariant(),
+					CalculationBase = x.DependOn == ComponentDependency.Gross ? "GROSS" : "COMPONENT",
+					DefaultValue = x.CalculationType == CalculationType.Percentage ? x.Percentage : x.Amount,
+					BasisComponentId = x.SelectedDeductionComponentId
 				}))
 				.ToList()
 		};
@@ -105,17 +115,19 @@ public class SalaryTemplateAppService(
 		};
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Add)]
 	public async Task<SalaryTemplateDto> CreateAsync(SaveSalaryTemplateDto input)
 	{
 		var replay = await FindIdempotentSaveAsync(input.IdempotencyKey);
 		if (replay != null)
 		{
+			previewProofService.Validate(input.PreviewToken, PreviewBinding(ToPreview(input)), replay: true);
 			return await GetAsync(replay.TemplateId);
 		}
 
 		await EnsureNameAvailableAsync(input.Name);
 		var rules = MapRules(input.Rules);
-		await ValidateSaveAsync(rules, input.DefaultPfApplicable, input.DefaultPfRuleId);
+		await ValidateSaveAsync(input);
 
 		var template = new SalaryStructureTemplate(GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Description);
 		var version = NewVersion(template, 1, rules, input);
@@ -133,6 +145,7 @@ public class SalaryTemplateAppService(
 		return Map(template, [version]);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.Edit)]
 	public async Task<SalaryTemplateDto> UpdateAsync(Guid id, SaveSalaryTemplateDto input)
 	{
 		var template = await templateRepository.GetAsync(id);
@@ -140,6 +153,7 @@ public class SalaryTemplateAppService(
 		var replay = await FindIdempotentSaveAsync(input.IdempotencyKey, id);
 		if (replay != null)
 		{
+			previewProofService.Validate(input.PreviewToken, PreviewBinding(ToPreview(input, id)), replay: true);
 			return await GetAsync(id);
 		}
 
@@ -157,7 +171,7 @@ public class SalaryTemplateAppService(
 
 		await EnsureNameAvailableAsync(input.Name, template.Id);
 		var rules = MapRules(input.Rules);
-		await ValidateSaveAsync(rules, input.DefaultPfApplicable, input.DefaultPfRuleId);
+		await ValidateSaveAsync(input, id);
 		template.SetDetails(input.Name, input.Description);
 
 		SalaryStructureTemplateVersion version;
@@ -204,6 +218,8 @@ public class SalaryTemplateAppService(
 			}
 
 			template.SetDefault(false);
+			// Release the filtered unique default key before assigning its replacement.
+			await templateRepository.UpdateAsync(template, autoSave: true);
 			replacement.SetDefault(true);
 			await templateRepository.UpdateAsync(replacement, autoSave: false);
 		}
@@ -230,6 +246,9 @@ public class SalaryTemplateAppService(
 			currentDefault.SetDefault(false);
 			await templateRepository.UpdateAsync(currentDefault, autoSave: false);
 		}
+		// Both saves remain in the request transaction; EF batch ordering cannot
+		// assign the new default before the previous unique key has been released.
+		await UnitOfWorkManager.Current!.SaveChangesAsync();
 		template.SetDefault(true);
 		await templateRepository.UpdateAsync(template, autoSave: true);
 		return await GetAsync(id);
@@ -247,103 +266,7 @@ public class SalaryTemplateAppService(
 
 		var sourceRules = version.GetRules();
 		var rules = ApplyOverrides(sourceRules, input.Overrides);
-		var components = await LoadComponentsAsync(rules);
-		var effectiveMonth = new DateTime(input.EffectiveMonth.Year, input.EffectiveMonth.Month, 1);
-		var effectiveMonthEnd = effectiveMonth.AddMonths(1).AddDays(-1);
-		var pfRule = input.PfApplicable && input.PfRuleId.HasValue
-			? await providentFundRepository.FindAsync(input.PfRuleId.Value)
-			: null;
-		if (input.PfApplicable && pfRule == null)
-		{
-			throw new BusinessException("HR:Payroll:PfRuleNotFound")
-				.WithData("pfRuleId", input.PfRuleId?.ToString() ?? "missing");
-		}
-		if (pfRule != null && (!pfRule.IsActive || pfRule.EffectiveFrom > effectiveMonthEnd || pfRule.EffectiveTo < effectiveMonth))
-		{
-			throw new BusinessException("HR:Payroll:PfRuleNotEffective").WithData("pfRuleId", pfRule.Id);
-		}
-
-		var professionalTaxSlabs = await asyncExecuter.ToListAsync(
-			(await professionalTaxRepository.GetQueryableAsync()).Where(x =>
-				x.IsActive && x.JurisdictionCode == input.StatutoryProfile && x.EffectiveFrom <= effectiveMonthEnd &&
-				(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= effectiveMonth)));
-		if (rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.ProfessionalTax) && professionalTaxSlabs.Count == 0)
-		{
-			throw new BusinessException("HR:Payroll:ProfessionalTaxRuleNotEffective")
-				.WithData("effectiveMonth", effectiveMonth.ToString("yyyy-MM"));
-		}
-
-		var basis = ParseSalaryBasis(input.SalaryBasis);
-		var protectionPolicy = ParseProtectionPolicy(input.ProtectionPolicy);
-		var esiResolution = await esiContextResolver.ResolveAsync(effectiveMonth, input.StatutoryProfile, input.EmployeeId);
-		var evaluation = SalaryTemplateCalculator.Calculate(
-			basis, input.MonthlyAmount, rules, components, pfRule, professionalTaxSlabs, esiResolution.Context);
-		MarkCustomizedLines(evaluation.Earnings, input.Overrides);
-		MarkCustomizedLines(evaluation.Deductions, input.Overrides);
-		var protectedAmount = protectionPolicy switch
-		{
-			CompensationProtectionPolicy.ProtectTakeHome => evaluation.Net,
-			CompensationProtectionPolicy.ProtectEmployerCost => evaluation.EmployerCost,
-			_ => evaluation.Gross
-		};
-		var achievedTarget = basis switch
-		{
-			SalaryInputBasis.TakeHome => evaluation.Net,
-			SalaryInputBasis.EmployerCost => evaluation.EmployerCost,
-			_ => evaluation.Gross
-		};
-		var esiResult = evaluation.EmployeeStateInsurance;
-		var issueCodes = esiResult?.IssueCodes.ToList() ?? [];
-
-		return new SalaryTemplateCalculationDto
-		{
-			TemplateId = template.Id,
-			TemplateVersionId = version.Id,
-			TemplateVersion = version.VersionNumber,
-			SalaryBasis = ToContractEnum(basis.ToString()),
-			ProtectionPolicy = ToContractEnum(protectionPolicy.ToString()),
-			QuotedMonthlyAmount = input.MonthlyAmount,
-			EffectiveMonth = effectiveMonth,
-			GrossSalary = evaluation.Gross,
-			BasicSalary = evaluation.Basic,
-			TotalDeductions = evaluation.TotalDeductions,
-			NetSalary = evaluation.Net,
-			EmployerContributionTotal = evaluation.EmployerContributionTotal,
-			EmployerCost = evaluation.EmployerCost,
-			ProtectedMonthlyAmount = protectedAmount,
-			TargetResult = new SalaryTemplateTargetResultDto
-			{
-				Requested = input.MonthlyAmount,
-				Achieved = achievedTarget,
-				Difference = achievedTarget - input.MonthlyAmount,
-				IsExact = Math.Abs(achievedTarget - input.MonthlyAmount) <= 0.01m
-			},
-			EmployeeStateInsurance = new SalaryTemplateEsiPreviewDto
-			{
-				IsConfigured = esiResolution.Context != null,
-				IsCovered = esiResult?.IsCovered ?? false,
-				CanCalculate = esiResult?.CanCalculate ?? false,
-				RegistrationPending = esiResolution.RegistrationPending,
-				CoverageDecision = esiResult?.CoverageDecision,
-				StatutoryWages = esiResult?.StatutoryWages ?? 0m,
-				WageCeiling = esiResult?.WageCeiling ?? 0m,
-				EmployeeContribution = esiResult?.EmployeeContribution ?? 0m,
-				EmployerContribution = esiResult?.EmployerContribution ?? 0m,
-				GovernmentContribution = esiResult?.GovernmentContribution ?? 0m,
-				RuleId = esiResolution.Context?.Rule.Id,
-				RuleVersion = esiResolution.Context?.Rule.Version,
-				IssueCodes = issueCodes
-			},
-			Earnings = evaluation.Earnings,
-			Deductions = evaluation.Deductions,
-			EmployerContributions = evaluation.EmployerContributions,
-			FormulaTrace = evaluation.Trace,
-			Warnings = esiResolution.Warnings.Concat(issueCodes).Distinct().ToList(),
-			PfRuleId = pfRule?.Id,
-			PfRuleVersion = pfRule?.Version,
-			ProfessionalTaxProfile = input.StatutoryProfile,
-			GeneratedAt = clock.Now
-		};
+		return await calculationService.CalculateAsync(rules, input, template.Id, version.Id, version.VersionNumber);
 	}
 
 	private SalaryStructureTemplateVersion NewVersion(
@@ -355,33 +278,80 @@ public class SalaryTemplateAppService(
 		ParseSalaryBasis(input.DefaultSalaryBasis), ParseProtectionPolicy(input.DefaultProtectionPolicy),
 		input.DefaultPfApplicable, input.DefaultPfRuleId, input.IdempotencyKey);
 
-	private async Task ValidateSaveAsync(
-		IReadOnlyList<SalaryTemplateRule> rules,
-		bool defaultPfApplicable,
-		Guid? defaultPfRuleId)
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
+	public async Task<SalaryTemplatePreviewDto> PreviewAsync(PreviewSalaryTemplateRequestDto input)
 	{
-		SalaryTemplateCalculator.ValidateRules(rules);
-		await LoadComponentsAsync(rules);
-		var hasPfFormula = rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund);
-		if (defaultPfApplicable && !hasPfFormula)
+		ValidatePreviewInput(input);
+		if (input.TemplateId.HasValue)
 		{
-			throw new BusinessException("HR:Payroll:SalaryTemplatePfFormulaRequired");
+			var template = await templateRepository.GetAsync(input.TemplateId.Value);
+			EnsureNotArchived(template);
+			var active = FindActive(template, await LoadVersionsAsync(template.Id));
+			if (input.ExpectedActiveVersionId != active?.Id || input.ConcurrencyStamp != template.ConcurrencyStamp)
+				throw new BusinessException("HR:Payroll:SalaryTemplateSaveConflict");
 		}
-		if (!hasPfFormula)
-		{
-			return;
-		}
-		if (!defaultPfRuleId.HasValue)
-		{
-			throw new BusinessException("HR:Payroll:SalaryTemplatePfRuleRequired");
-		}
-		var pfRule = await providentFundRepository.FindAsync(defaultPfRuleId.Value);
-		var today = clock.Now.Date;
-		if (pfRule == null || !pfRule.IsActive || pfRule.EffectiveFrom > today || pfRule.EffectiveTo < today)
-		{
-			throw new BusinessException("HR:Payroll:PfRuleNotEffective").WithData("pfRuleId", defaultPfRuleId.Value);
-		}
+		else if (input.ExpectedActiveVersionId.HasValue || input.ConcurrencyStamp != null)
+			throw new BusinessException("HR:Payroll:SalaryTemplateSaveConflict");
+		var result = await CalculatePreviewAsync(input);
+		EnsureSampleCanActivate(result);
+		return previewProofService.Issue(PreviewBinding(input), result);
 	}
+
+	private async Task ValidateSaveAsync(SaveSalaryTemplateDto input, Guid? templateId = null)
+	{
+		var preview = ToPreview(input, templateId);
+		ValidatePreviewInput(preview);
+		SalaryTemplateCalculator.ValidateRules(MapRules(preview.Rules));
+		previewProofService.Validate(input.PreviewToken, PreviewBinding(preview));
+		var result = await CalculatePreviewAsync(preview);
+		EnsureSampleCanActivate(result);
+		previewProofService.Validate(input.PreviewToken, PreviewBinding(preview), result);
+	}
+
+	private static void EnsureSampleCanActivate(SalaryTemplateCalculationDto result)
+	{
+		if (result.EmployeeStateInsurance.IsConfigured && !result.EmployeeStateInsurance.CanCalculate)
+			throw new BusinessException("HR:Payroll:SalaryTemplateSampleBlocked")
+				.WithData("issues", result.EmployeeStateInsurance.IssueCodes)
+				.WithData("message", "Resolve the statutory blockers before calculating this sample.");
+	}
+
+	private Task<SalaryTemplateCalculationDto> CalculatePreviewAsync(PreviewSalaryTemplateRequestDto input) =>
+		calculationService.CalculateAsync(MapRules(input.Rules), new CalculateSalaryTemplateRequestDto
+		{
+			SalaryBasis = input.SalaryBasis, ProtectionPolicy = input.ProtectionPolicy,
+			MonthlyAmount = GrossEarningAllocation.Money(input.MonthlyAmount), EffectiveMonth = input.EffectiveMonth.Date,
+			PfApplicable = input.PfApplicable, PfRuleId = input.PfRuleId
+		});
+
+	private static void ValidatePreviewInput(PreviewSalaryTemplateRequestDto input)
+	{
+		var validation = new PreviewSalaryTemplateRequestDtoValidator().Validate(input);
+		if (!validation.IsValid)
+			throw new BusinessException("HR:Payroll:SalaryTemplateSampleInvalid")
+				.WithData("message", string.Join(" ", validation.Errors.Select(x => x.ErrorMessage)));
+	}
+
+	private static PreviewSalaryTemplateRequestDto ToPreview(SaveSalaryTemplateDto input, Guid? templateId = null) => new()
+	{
+		TemplateId = templateId, ExpectedActiveVersionId = input.ExpectedActiveVersionId, ConcurrencyStamp = input.ConcurrencyStamp,
+		Rules = input.Rules, SalaryBasis = input.DefaultSalaryBasis, ProtectionPolicy = input.DefaultProtectionPolicy,
+		MonthlyAmount = input.SampleMonthlyAmount, EffectiveMonth = input.SampleEffectiveMonth,
+		PfApplicable = input.DefaultPfApplicable, PfRuleId = input.DefaultPfRuleId
+	};
+
+	private static object PreviewBinding(PreviewSalaryTemplateRequestDto input) => new
+	{
+		input.TemplateId, input.ExpectedActiveVersionId, input.ConcurrencyStamp,
+		Rules = MapRules(input.Rules).OrderBy(x => x.DisplayOrder).Select(x => x with
+		{
+			Value = x.FormulaType == SalaryTemplateFormulaType.FixedAmount && x.Value.HasValue
+				? GrossEarningAllocation.Money(x.Value.Value) : x.Value
+		}).ToArray(),
+		SalaryBasis = ParseSalaryBasis(input.SalaryBasis), ProtectionPolicy = ParseProtectionPolicy(input.ProtectionPolicy),
+		MonthlyAmount = GrossEarningAllocation.Money(input.MonthlyAmount), EffectiveMonth = input.EffectiveMonth.ToString("yyyy-MM"),
+		input.PfApplicable, input.PfRuleId
+	};
 
 	private static List<SalaryTemplateRule> ApplyOverrides(
 		IReadOnlyList<SalaryTemplateRule> source,
@@ -426,32 +396,6 @@ public class SalaryTemplateAppService(
 					: null
 			};
 		}).ToList();
-	}
-
-	private static void MarkCustomizedLines(List<CalculatedSalaryLineDto> lines, IReadOnlyList<SalaryRuleOverrideDto> overrides)
-	{
-		var ids = overrides.Select(x => x.ComponentId).ToHashSet();
-		foreach (var line in lines.Where(x => ids.Contains(x.ComponentId)))
-		{
-			line.LineSource = "CUSTOMIZED";
-		}
-	}
-
-	private async Task<Dictionary<Guid, SalaryTemplateComponent>> LoadComponentsAsync(IReadOnlyList<SalaryTemplateRule> rules)
-	{
-		var earningIds = rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning).Select(x => x.ComponentId).Distinct().ToList();
-		var deductionIds = rules.Where(x => x.LineKind == SalaryTemplateLineKind.Deduction).Select(x => x.ComponentId).Distinct().ToList();
-		var earnings = earningIds.Count == 0 ? [] : await asyncExecuter.ToListAsync(
-			(await earningComponentRepository.GetQueryableAsync()).Where(x => earningIds.Contains(x.Id) && x.IsActive));
-		var deductions = deductionIds.Count == 0 ? [] : await asyncExecuter.ToListAsync(
-			(await deductionComponentRepository.GetQueryableAsync()).Where(x => deductionIds.Contains(x.Id) && x.IsActive));
-		var components = earnings.Select(x => new SalaryTemplateComponent(x.Id, x.Name))
-			.Concat(deductions.Select(x => new SalaryTemplateComponent(x.Id, x.Name))).ToDictionary(x => x.Id);
-		if (components.Count != earningIds.Count + deductionIds.Count)
-		{
-			throw new BusinessException("HR:Payroll:SalaryTemplateComponentMissing");
-		}
-		return components;
 	}
 
 	private async Task EnsureNameAvailableAsync(string name, Guid? excludedId = null)
@@ -531,7 +475,8 @@ public class SalaryTemplateAppService(
 			ParseEnum<PayrollComponentSemanticType>(x.SemanticType, nameof(x.SemanticType)),
 			x.Value,
 			x.BasisComponentId.HasValue ? codesByComponentId.GetValueOrDefault(x.BasisComponentId.Value) : null,
-			x.DisplayOrder)).ToList();
+			x.DisplayOrder)).Select(rule => rule.FormulaType == SalaryTemplateFormulaType.FixedAmount && rule.Value.HasValue
+			? rule with { Value = GrossEarningAllocation.Money(rule.Value.Value) } : rule).ToList();
 	}
 
 	private static List<SalaryTemplateRuleDto> MapRulesForContract(IReadOnlyList<SalaryTemplateRule> rules)

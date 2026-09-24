@@ -14,7 +14,7 @@ public static class DeductionComponentContractMapper
     {
         var componentType = ParseDeductionType(request.DeductionType);
         var calculationType = ParseCalculationType(request.CalculationType);
-        var dependOn = InferDependency(calculationType, request.SelectedDeductionComponentId);
+        var dependOn = InferDependency(calculationType, request.CalculationBase, request.SelectedDeductionComponentId);
 
         return new CreateDeductionComponentDto
         {
@@ -35,7 +35,7 @@ public static class DeductionComponentContractMapper
     {
         var componentType = ParseDeductionType(request.DeductionType);
         var calculationType = ParseCalculationType(request.CalculationType);
-        var dependOn = InferDependency(calculationType, request.SelectedDeductionComponentId);
+        var dependOn = InferDependency(calculationType, request.CalculationBase, request.SelectedDeductionComponentId);
 
         return new UpdateDeductionComponentDto
         {
@@ -81,6 +81,8 @@ public static class DeductionComponentContractMapper
             Description = dto.Description,
             DeductionType = dto.ComponentType.ToString().ToUpperInvariant(),
             CalculationType = dto.CalculationType.ToString().ToUpperInvariant(),
+            CalculationBase = dto.CalculationType == CalculationType.Percentage
+                ? (dto.DependOn == ComponentDependency.Gross ? "GROSS" : "COMPONENT") : null,
             Amount = dto.Amount,
             Percentage = dto.Percentage,
             SelectedDeductionComponentId = dto.SelectedDeductionComponentId,
@@ -135,8 +137,11 @@ public static class DeductionComponentContractMapper
             });
     }
 
-    private static ComponentDependency InferDependency(CalculationType calculationType, Guid? selectedComponentId)
+    private static ComponentDependency InferDependency(CalculationType calculationType, string calculationBase, Guid? selectedComponentId)
     {
+        if (calculationType == CalculationType.Percentage && string.Equals(calculationBase, "GROSS", StringComparison.OrdinalIgnoreCase))
+            return ComponentDependency.Gross;
+
         if (calculationType == CalculationType.Percentage && selectedComponentId.HasValue)
             return ComponentDependency.CustomComponent;
 

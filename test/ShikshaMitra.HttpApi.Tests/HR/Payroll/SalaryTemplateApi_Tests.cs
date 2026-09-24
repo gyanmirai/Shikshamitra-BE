@@ -28,14 +28,40 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	public async Task Should_reject_circular_remainder_earning_before_saving_template()
+	{
+		var catalog = await Client.GetFromJsonAsync<SalaryTemplateComponentCatalogDto>($"{BaseUrl}/component-catalog", JsonOptions);
+		var earnings = catalog!.Items.Where(x => x.LineKind == "EARNING").Take(3).ToArray();
+		earnings.Length.ShouldBe(3);
+		var request = Save($"Circular Gross {Guid.NewGuid():N}", earnings[0].ComponentId);
+		request.Rules[0].Value = 60m;
+		request.Rules.Add(new SalaryTemplateRuleDto
+		{
+			ComponentId = earnings[1].ComponentId, LineKind = "EARNING", SemanticType = "BALANCING_EARNING",
+			FormulaType = "REMAINDER_OF_GROSS", DisplayOrder = 1
+		});
+		request.Rules.Add(new SalaryTemplateRuleDto
+		{
+			ComponentId = earnings[2].ComponentId, LineKind = "EARNING", SemanticType = "ORDINARY",
+			FormulaType = "PERCENTAGE_OF_COMPONENT", Value = 10m, BasisComponentId = earnings[1].ComponentId, DisplayOrder = 2
+		});
+		var response = await Client.PostAsJsonAsync(BaseUrl, request, JsonOptions);
+		response.IsSuccessStatusCode.ShouldBeFalse(await response.Content.ReadAsStringAsync());
+		(await response.Content.ReadAsStringAsync()).ShouldContain("HR:Payroll:SalaryTemplateDependencyCycle");
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_create_a_complete_active_salary_template()
 	{
 		var catalog = await Client.GetFromJsonAsync<SalaryTemplateComponentCatalogDto>(
 			$"{BaseUrl}/component-catalog", JsonOptions);
 		var basic = catalog!.Items.First(x => x.LineKind == "EARNING");
-		var response = await Client.PostAsJsonAsync(BaseUrl, Save(
-			$"Active Composer {Guid.NewGuid():N}", basic.ComponentId), JsonOptions);
+		var input = Save($"Active Composer {Guid.NewGuid():N}", basic.ComponentId);
+		var previewResponse = await Client.PostAsJsonAsync($"{BaseUrl}/preview", Preview(input), JsonOptions);
+		previewResponse.IsSuccessStatusCode.ShouldBeTrue(await previewResponse.Content.ReadAsStringAsync());
+		input.PreviewToken = (await previewResponse.Content.ReadFromJsonAsync<SalaryTemplatePreviewDto>(JsonOptions))!.PreviewToken;
+		var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.Created);
 		var template = await response.Content.ReadFromJsonAsync<SalaryTemplateDto>(JsonOptions);
@@ -61,6 +87,37 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_switch_defaults_in_both_directions_and_archive_with_replacement()
+	{
+		var catalog = await Client.GetFromJsonAsync<SalaryTemplateComponentCatalogDto>($"{BaseUrl}/component-catalog", JsonOptions);
+		var earning = catalog!.Items.First(x => x.LineKind == "EARNING");
+		async Task<SalaryTemplateDto> CreateAsync()
+		{
+			var input = Save($"Default switch {Guid.NewGuid():N}", earning.ComponentId);
+			var preview = await Client.PostAsJsonAsync($"{BaseUrl}/preview", Preview(input), JsonOptions);
+			preview.EnsureSuccessStatusCode();
+			input.PreviewToken = (await preview.Content.ReadFromJsonAsync<SalaryTemplatePreviewDto>(JsonOptions))!.PreviewToken;
+			var response = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+			response.EnsureSuccessStatusCode();
+			return (await response.Content.ReadFromJsonAsync<SalaryTemplateDto>(JsonOptions))!;
+		}
+		var first = await CreateAsync();
+		var second = await CreateAsync();
+		foreach (var id in new[] { first.Id, second.Id, first.Id })
+		{
+			var response = await Client.PostAsync($"{BaseUrl}/{id}/set-default", null);
+			response.IsSuccessStatusCode.ShouldBeTrue(await response.Content.ReadAsStringAsync());
+			var result = await Client.GetFromJsonAsync<SalaryTemplateDto>($"{BaseUrl}/{id}", JsonOptions);
+			result!.IsDefault.ShouldBeTrue();
+		}
+		var archive = await Client.DeleteAsync($"{BaseUrl}/{first.Id}?replacementDefaultTemplateId={second.Id}");
+		archive.IsSuccessStatusCode.ShouldBeTrue(await archive.Content.ReadAsStringAsync());
+		(await Client.GetFromJsonAsync<SalaryTemplateDto>($"{BaseUrl}/{first.Id}", JsonOptions))!.Status.ShouldBe("ARCHIVED");
+		(await Client.GetFromJsonAsync<SalaryTemplateDto>($"{BaseUrl}/{second.Id}", JsonOptions))!.IsDefault.ShouldBeTrue();
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Should_require_authentication_for_component_catalog()
 	{
@@ -80,6 +137,10 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 
 		(await deniedClient.GetAsync($"{BaseUrl}/component-catalog")).StatusCode
 			.ShouldBe(HttpStatusCode.Forbidden);
+		(await deniedClient.PostAsJsonAsync($"{BaseUrl}/preview", new PreviewSalaryTemplateRequestDto())).StatusCode
+			.ShouldBe(HttpStatusCode.Forbidden);
+		(await viewClient.PostAsJsonAsync($"{BaseUrl}/preview", new PreviewSalaryTemplateRequestDto())).StatusCode
+			.ShouldBe(HttpStatusCode.BadRequest);
 		(await viewClient.GetAsync($"{BaseUrl}/component-catalog")).StatusCode
 			.ShouldBe(HttpStatusCode.OK);
 		(await viewClient.GetAsync($"{BaseUrl}/active")).StatusCode
@@ -103,6 +164,8 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 	{
 		var expectedPolicies = new Dictionary<string, string>
 		{
+			[nameof(SalaryTemplateController.PreviewAsync)] =
+				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View,
 			[nameof(SalaryTemplateController.GetListAsync)] =
 				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View,
 			[nameof(SalaryTemplateController.GetActiveListAsync)] =
@@ -137,6 +200,8 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 
 	private static SaveSalaryTemplateDto Save(string name, Guid basicComponentId) => new()
 	{
+		SampleMonthlyAmount = 20000m,
+		SampleEffectiveMonth = new DateTime(2026, 9, 1),
 		Name = name,
 		Description = "Complete active salary template",
 		DefaultSalaryBasis = "EMPLOYER_COST",
@@ -153,6 +218,12 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 				Value = 100m
 			}
 		]
+	};
+
+	private static PreviewSalaryTemplateRequestDto Preview(SaveSalaryTemplateDto input) => new()
+	{
+		Rules = input.Rules, SalaryBasis = input.DefaultSalaryBasis, ProtectionPolicy = input.DefaultProtectionPolicy,
+		MonthlyAmount = input.SampleMonthlyAmount, EffectiveMonth = input.SampleEffectiveMonth
 	};
 
 	private HttpClient CreateClientWithPermissions(params string[] permissions)

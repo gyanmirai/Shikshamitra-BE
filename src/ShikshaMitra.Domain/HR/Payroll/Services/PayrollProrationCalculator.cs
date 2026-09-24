@@ -14,7 +14,7 @@ public static class PayrollProrationCalculator
 			return 0m;
 		}
 
-		return Math.Min(1m, payableDays / basisDays);
+		return Math.Clamp(payableDays / basisDays, 0m, 1m);
 	}
 
 	public static decimal ProrateAmount(decimal amount, bool isTemp, decimal factor)

@@ -8,6 +8,8 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 /// </summary>
 public class RunPayrollItem
 {
+	public double TotalEarnings => Math.Round(NetPay + TotalDeduction, 2, MidpointRounding.AwayFromZero);
+	public double AdditionalEarnings => Math.Round(TotalEarnings - GrossSalary, 2, MidpointRounding.AwayFromZero);
 	/// <summary>
 	/// Employee identifier (UUID)
 	/// </summary>
@@ -54,7 +56,7 @@ public class RunPayrollItem
 	public double BasicSalary { get; set; }
 
 	/// <summary>
-	/// Gross salary (sum of all earnings)
+	/// Attendance-adjusted regular Gross Salary, excluding additional earnings.
 	/// </summary>
 	public double GrossSalary { get; set; }
 
@@ -184,6 +186,10 @@ public class RunPayrollItem
 /// </summary>
 public class RunPayrollComponentItem
 {
+	public decimal? FullMonthAmount { get; set; }
+	public string? FormulaType { get; set; }
+	public decimal? FormulaValue { get; set; }
+	public Guid? BasisComponentId { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public double Amount { get; set; }
 	public string? Description { get; set; }

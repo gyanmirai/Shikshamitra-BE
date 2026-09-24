@@ -188,7 +188,9 @@ public class HRSeederContributor_Tests
 
 		earningComponents.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(earningComponents.Count);
 		deductionComponents.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count().ShouldBe(deductionComponents.Count);
-		earningComponents.ShouldAllBe(x => x.CalculationType == CalculationType.Amount && x.Amount.HasValue && x.Amount.Value > 0m);
+		earningComponents.Where(x => x.Name != "Basic Salary").ShouldAllBe(x => x.CalculationType == CalculationType.Amount && x.Amount > 0m);
+		earningComponents.Single(x => x.Name == "Basic Salary").Percentage.ShouldBe(60m);
+		earningComponents.Single(x => x.Name == "Basic Salary").DependOn.ShouldBe(ComponentDependency.Gross);
 		deductionComponents.ShouldAllBe(x => x.CalculationType == CalculationType.Amount && x.Amount.HasValue && x.Amount.Value > 0m);
 
 		foreach (var name in new[]

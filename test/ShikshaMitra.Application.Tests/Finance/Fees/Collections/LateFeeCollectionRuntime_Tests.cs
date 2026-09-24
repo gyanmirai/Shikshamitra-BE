@@ -177,7 +177,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				CompoundFrequency = "Daily",
 				RoundingMethod = "None",
 				MaximumLateFeeAmount = maximumLateFeeAmount.HasValue ? (decimal)maximumLateFeeAmount.Value : null,
-				EnableWaiver = true,
+				EnableWaiver = enableLateFee,
 				AllowOnlineCollection = true,
 			});
 			policy = await _collectionPolicies.GetAsync(policy.Id);

@@ -23,11 +23,17 @@ public class AdmissionApplicationScopeAccessService(
 		AdmissionOfferingScopeQuery.Apply(await offerings.GetQueryableAsync(), await cycles.GetQueryableAsync(),
 			await divisions.GetQueryableAsync(), await userScopes.GetCurrentUserScopeAsync());
 
+	public async Task<bool> CanAccessAsync(AdmissionApplication application)
+	{
+		if (application.TenantId != CurrentTenant.Id)
+			return false;
+		var query = await GetScopedOfferingsAsync();
+		return await AsyncExecuter.AnyAsync(query.Where(item => item.Id == application.AdmissionOfferingId));
+	}
+
 	public async Task EnsureCanAccessAsync(AdmissionApplication application)
 	{
-		var query = await GetScopedOfferingsAsync();
-		if (application.TenantId != CurrentTenant.Id ||
-			!await AsyncExecuter.AnyAsync(query.Where(item => item.Id == application.AdmissionOfferingId)))
+		if (!await CanAccessAsync(application))
 			throw new EntityNotFoundException(typeof(AdmissionApplication), application.Id);
 	}
 }

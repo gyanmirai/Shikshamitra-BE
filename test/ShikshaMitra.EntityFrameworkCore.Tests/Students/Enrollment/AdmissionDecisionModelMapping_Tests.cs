@@ -45,6 +45,7 @@ public class AdmissionDecisionModelMapping_Tests : ShikshaMitraEntityFrameworkCo
 		var reservation = model.FindEntityType(typeof(StudentSeatReservation));
 		var allocation = model.FindEntityType(typeof(StudentIdentifierAllocation));
 		var policy = model.FindEntityType(typeof(StudentOnboardingPolicy));
+		var settings = model.FindEntityType(typeof(StudentOnboardingSettings));
 
 		onboardingCase.ShouldNotBeNull();
 		onboardingCase.FindProperty(nameof(StudentOnboardingCase.DueAt)).ShouldNotBeNull();
@@ -62,5 +63,9 @@ public class AdmissionDecisionModelMapping_Tests : ShikshaMitraEntityFrameworkCo
 			index.Properties.Select(property => property.Name)
 				.SequenceEqual(new[] { "TenantId", "IdentifierType", "Value" }));
 		policy!.GetIndexes().Count(index => index.IsUnique).ShouldBe(2);
+		settings.ShouldNotBeNull();
+		settings.FindProperty(nameof(StudentOnboardingSettings.ConfigurationJson))!.GetColumnType()
+			.ShouldBe("text");
+		settings.GetIndexes().Count(index => index.IsUnique).ShouldBe(2);
 	}
 }

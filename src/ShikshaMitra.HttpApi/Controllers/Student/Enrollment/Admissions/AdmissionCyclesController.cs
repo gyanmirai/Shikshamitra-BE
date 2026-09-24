@@ -91,4 +91,15 @@ public class AdmissionCyclesController(IAdmissionCycleAppService appService) : A
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
 	public async Task<Result<List<AdmissionCycleHistoryDto>>> GetHistory(Guid id) =>
 		Result.Success(await appService.GetHistoryAsync(id));
+
+	[HttpGet("{id:guid}/capacity")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
+	public async Task<Result<AdmissionCycleCapacitySummaryDto>> GetCapacity(Guid id) =>
+		Result.Success(await appService.GetCapacityAsync(id));
+
+	[HttpPut("{id:guid}/offerings/{offeringId:guid}/capacity")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
+	public async Task<Result<AdmissionCycleCapacitySummaryDto>> UpdateOfferingCapacity(Guid id, Guid offeringId,
+		[FromBody] UpdateAdmissionCycleOfferingCapacityDto input) =>
+		Result.Success(await appService.UpdateOfferingCapacityAsync(id, offeringId, input));
 }

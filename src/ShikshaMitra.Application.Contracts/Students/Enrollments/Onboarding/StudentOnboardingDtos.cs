@@ -208,6 +208,22 @@ public class StudentOnboardingPolicyDto : EntityDto<Guid>
 	public bool IsActive { get; set; }
 }
 
+public class SaveStudentOnboardingSettingsDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public Guid? AcademicYearId { get; set; }
+	public int SchemaVersion { get; set; } = StudentOnboardingSettingsConsts.CurrentSchemaVersion;
+	public string ConfigurationJson { get; set; } = "{}";
+}
+
+public class StudentOnboardingSettingsDto : EntityDto<Guid>
+{
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public Guid? AcademicYearId { get; set; }
+	public int SchemaVersion { get; set; }
+	public string ConfigurationJson { get; set; } = "{}";
+}
+
 public class CreateStudentIdentifierSeriesDto
 {
 	public Guid AcademicYearId { get; set; }

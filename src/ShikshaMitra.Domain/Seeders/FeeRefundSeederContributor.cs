@@ -314,10 +314,9 @@ public class FeeRefundSeederContributor : BaseSeederContributor
             studentId:     studentId,
             academicYearId: academicYearId,
             reason:        "Student transferred to another school",
-            refundMethod:  "Cash");
-
-        pending.AddLine(MakeLine(pending.Id, dueFeeMap[MonthEnum.June],      1_500d));
-        pending.AddLine(MakeLine(pending.Id, dueFeeMap[MonthEnum.July],      2_000d));
+            refundMethod:  "Cash",
+            (dueFeeMap[MonthEnum.June], 1_500d),
+            (dueFeeMap[MonthEnum.July], 2_000d));
         // Status stays Pending (default)
 
         await _feeRefundRepository.InsertAsync(pending, autoSave: false);
@@ -330,9 +329,8 @@ public class FeeRefundSeederContributor : BaseSeederContributor
             studentId:     studentId,
             academicYearId: academicYearId,
             reason:        "Fee charged in error for absent month",
-            refundMethod:  "Bank Transfer");
-
-        underReview.AddLine(MakeLine(underReview.Id, dueFeeMap[MonthEnum.August], 1_500d));
+            refundMethod:  "Bank Transfer",
+            (dueFeeMap[MonthEnum.August], 1_500d));
         underReview.MarkUnderReview();
 
         await _feeRefundRepository.InsertAsync(underReview, autoSave: false);
@@ -345,16 +343,15 @@ public class FeeRefundSeederContributor : BaseSeederContributor
             studentId:     studentId,
             academicYearId: academicYearId,
             reason:        "Excess amount collected during admission",
-            refundMethod:  "UPI");
+            refundMethod:  "UPI",
+            (dueFeeMap[MonthEnum.September], 1_800d));
 
-        approved.AddLine(MakeLine(approved.Id, dueFeeMap[MonthEnum.September], 1_800d));
-
-        // Approve: transition status and stamp processor (Guid.Empty = system/seeder)
-        approved.Approve(Guid.Empty, notes: "Verified by finance admin. Auto-approved during seed.");
-
-        // Reflect the approval on the DueFee ledger so RefundableBalance is consistent
-		dueFeeMap[MonthEnum.September].ApplyRefund(1_800m);
-        await _dueFeeRepository.UpdateAsync(dueFeeMap[MonthEnum.September], autoSave: false);
+        // Approval reserves the refundable balance. The ledger changes only when settlement completes.
+        var reservations = approved.Lines.Select(line => new FeeRefundReservation(
+            GuidGenerator.Create(), approved.Id, line.Id, line.DueFeeId,
+            line.SourceAllocationId, line.CalculatedAmount));
+        approved.Approve(Guid.Empty, reservations,
+            notes: "Verified by finance admin. Auto-approved during seed.");
 
         await _feeRefundRepository.InsertAsync(approved, autoSave: false);
 
@@ -368,17 +365,21 @@ public class FeeRefundSeederContributor : BaseSeederContributor
         Guid studentId,
         Guid academicYearId,
         string? reason,
-        string? refundMethod)
-        => new(
-            id:                   GuidGenerator.Create(),
+        string? refundMethod,
+        params (DueFee DueFee, double Amount)[] lines)
+    {
+        var requestId = GuidGenerator.Create();
+        return new FeeRefundRequest(
+            id:                   requestId,
             tenantId:             CurrentTenant.Id,
             studentId:            studentId,
             academicYearId:       academicYearId,
             voucherNumber:        voucherNumber,
-            totalAmount:          0d,   // updated by AddLine / not enforced by domain for seeded data
+            lines:                lines.Select(line => MakeLine(requestId, line.DueFee, line.Amount)).ToList(),
             refundMethod:         refundMethod,
             refundPaymentDetails: null,
             reason:               reason);
+    }
 
     private FeeRefundLine MakeLine(Guid requestId, DueFee dueFee, double amount)
         => new(

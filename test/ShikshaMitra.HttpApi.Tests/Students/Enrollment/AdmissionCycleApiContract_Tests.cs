@@ -27,17 +27,22 @@ public class AdmissionCycleApiContract_Tests
 		PostTemplate(nameof(AdmissionCyclesController.Validate)).ShouldBe("{id:guid}/validate");
 		GetTemplate(nameof(AdmissionCyclesController.GetImpact)).ShouldBe("{id:guid}/impact");
 		GetTemplate(nameof(AdmissionCyclesController.GetHistory)).ShouldBe("{id:guid}/history");
+		GetTemplate(nameof(AdmissionCyclesController.GetCapacity)).ShouldBe("{id:guid}/capacity");
+		PutTemplate(nameof(AdmissionCyclesController.UpdateOfferingCapacity))
+			.ShouldBe("{id:guid}/offerings/{offeringId:guid}/capacity");
 	}
 
 	[Theory]
 	[InlineData(nameof(AdmissionCyclesController.GetList), ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
 	[InlineData(nameof(AdmissionCyclesController.GetImpact), ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
 	[InlineData(nameof(AdmissionCyclesController.GetHistory), ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
+	[InlineData(nameof(AdmissionCyclesController.GetCapacity), ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
 	[InlineData(nameof(AdmissionCyclesController.Create), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCyclesController.Publish), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCyclesController.Reopen), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCyclesController.UpdateWindow), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCyclesController.Schedule), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
+	[InlineData(nameof(AdmissionCyclesController.UpdateOfferingCapacity), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCyclesController.Close), ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
 	[InlineData(nameof(AdmissionCyclesController.Archive), ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
 	[InlineData(nameof(AdmissionCyclesController.Delete), ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
@@ -65,4 +70,8 @@ public class AdmissionCycleApiContract_Tests
 	private static string? GetTemplate(string methodName) =>
 		typeof(AdmissionCyclesController).GetMethods().Single(method => method.Name == methodName)
 			.GetCustomAttribute<HttpGetAttribute>()?.Template;
+
+	private static string? PutTemplate(string methodName) =>
+		typeof(AdmissionCyclesController).GetMethods().Single(method => method.Name == methodName)
+			.GetCustomAttribute<HttpPutAttribute>()?.Template;
 }

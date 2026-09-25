@@ -277,3 +277,19 @@ Salary-template calculation lines include `formulaValue` and `basisComponentId`,
 Run payroll returns regular `fullGrossSalary` and attendance-adjusted `grossSalary`, plus `additionalEarnings` and `totalEarnings`.
 Payslips return `fullGrossSalary`, `grossSalary`, `additionalEarnings`, and the existing `totalEarning`, deduction, and net totals.
 Gross is a summary and is never added again to its earning breakdown.
+
+### Salary protection migration
+
+Both routes require HR.PayrollManagement.CompensationRevisions.Manage and employee scope access.
+
+| Route suffix under /api/payroll/employees/{employeeId}/compensation | Request | Result |
+|---|---|---|
+| POST protection-migration/preview | sourceRevisionId, effectiveMonth | Previous amounts and a signed preview of the new package |
+| POST protection-migration/apply | sourceRevisionId, effectiveMonth, previewToken | New effective revision; repeated application returns the same revision |
+
+Only the currently effective approved source at the requested month can migrate.
+Locked payroll at or after the effective month rejects migration.
+Preview validity is 30 minutes, and calculation changes invalidate it.
+ProtectionMigrationSnapshotRequired identifies missing approved calculation evidence.
+New salary writes accept PROTECT_EMPLOYER_COST or PROTECT_TAKE_HOME.
+SalaryProtection on payroll and salary-slip responses contains period target, achieved amount, difference, gross adjustment, excluded deductions and additional statutory effects.

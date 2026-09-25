@@ -45,8 +45,8 @@ public class SaveSalaryTemplateDto
 
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
-	public string DefaultSalaryBasis { get; set; } = "GROSS";
-	public string DefaultProtectionPolicy { get; set; } = "PROTECT_GROSS";
+	public string DefaultSalaryBasis { get; set; } = "EMPLOYER_COST";
+	public string DefaultProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
 	public bool DefaultPfApplicable { get; set; }
 	public Guid? DefaultPfRuleId { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
@@ -65,8 +65,8 @@ public class SalaryTemplateVersionDto : EntityDto<Guid>
 	public int VersionNumber { get; set; }
 	public string Status { get; set; } = "ACTIVE";
 	public DateTime? ActivatedAt { get; set; }
-	public string DefaultSalaryBasis { get; set; } = "GROSS";
-	public string DefaultProtectionPolicy { get; set; } = "PROTECT_GROSS";
+	public string DefaultSalaryBasis { get; set; } = "EMPLOYER_COST";
+	public string DefaultProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
 	public bool DefaultPfApplicable { get; set; }
 	public Guid? DefaultPfRuleId { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
@@ -105,8 +105,8 @@ public class SalaryRuleOverrideDto
 
 public class CalculateSalaryTemplateRequestDto
 {
-	public string SalaryBasis { get; set; } = "GROSS";
-	public string ProtectionPolicy { get; set; } = "PROTECT_GROSS";
+	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
+	public string ProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; } = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 	public Guid? EmployeeId { get; set; }
@@ -123,8 +123,8 @@ public class PreviewSalaryTemplateRequestDto
 	public Guid? ExpectedActiveVersionId { get; set; }
 	public string? ConcurrencyStamp { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
-	public string SalaryBasis { get; set; } = "GROSS";
-	public string ProtectionPolicy { get; set; } = "PROTECT_GROSS";
+	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
+	public string ProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; }
 	public bool PfApplicable { get; set; }
@@ -144,7 +144,7 @@ public class PreviewSalaryTemplateRequestDtoValidator : AbstractValidator<Previe
 	public PreviewSalaryTemplateRequestDtoValidator()
 	{
 		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
-		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_GROSS" or "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
+		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Year >= 1900 && x.Day == 1);
 		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);
@@ -195,11 +195,12 @@ public class SalaryTemplateEsiPreviewDto
 
 public class SalaryTemplateCalculationDto
 {
+	public int ProtectionCalculationVersion { get; set; }
 	public Guid TemplateId { get; set; }
 	public Guid TemplateVersionId { get; set; }
 	public int TemplateVersion { get; set; }
-	public string SalaryBasis { get; set; } = "GROSS";
-	public string ProtectionPolicy { get; set; } = "PROTECT_GROSS";
+	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
+	public string ProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
 	public decimal QuotedMonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; }
 	public decimal GrossSalary { get; set; }
@@ -252,7 +253,7 @@ public class SaveSalaryTemplateDtoValidator : AbstractValidator<SaveSalaryTempla
 	}
 
 	private static bool BeSalaryBasis(string value) => Enum.TryParse<SalaryInputBasis>(Normalize(value), true, out _);
-	private static bool BeProtectionPolicy(string value) => Enum.TryParse<CompensationProtectionPolicy>(Normalize(value), true, out _);
+	private static bool BeProtectionPolicy(string value) => value is "PROTECT_EMPLOYER_COST" or "PROTECT_TAKE_HOME";
 	private static string Normalize(string? value) => value?.Replace("_", string.Empty).Replace("-", string.Empty) ?? string.Empty;
 }
 
@@ -289,7 +290,7 @@ public class CalculateSalaryTemplateRequestDtoValidator : AbstractValidator<Calc
 	public CalculateSalaryTemplateRequestDtoValidator()
 	{
 		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
-		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_GROSS" or "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
+		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Day == 1).WithMessage("EffectiveMonth must be the first day of a month.");
 		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);

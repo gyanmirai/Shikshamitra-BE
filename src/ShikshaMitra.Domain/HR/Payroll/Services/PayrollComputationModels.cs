@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -9,7 +10,10 @@ namespace ShikshaMitra.HR.Payroll.Services;
 
 public sealed record PayrollComputedLineItem(
 	EmployeePayrollComponent Source,
-	decimal Amount);
+	decimal Amount)
+{
+	public decimal? FullMonthAmount { get; init; }
+}
 
 public sealed record PayrollComputedEmployerContribution(
 	string Name,
@@ -62,6 +66,12 @@ public sealed record PayrollComputationResult(
 {
 	public decimal TotalEarnings => NetPay + TotalDeduction;
 	public decimal AdditionalEarnings => TotalEarnings - GrossSalary;
+	public EsiStatutoryCalculationResult? EmployeeStateInsurance { get; init; }
+	public Templates.SalaryProtectionResult? Protection { get; init; }
+	public decimal StatutoryTakeHome => GrossSalary - Deductions.Where(x => x.Source.SemanticType is
+		Templates.PayrollComponentSemanticType.ProfessionalTax or
+		Templates.PayrollComponentSemanticType.EmployeeProvidentFund or
+		Templates.PayrollComponentSemanticType.EmployeeStateInsurance).Sum(x => x.Amount);
 }
 
 public sealed record PayrollAttendancePayableDays(

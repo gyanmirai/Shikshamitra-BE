@@ -426,7 +426,7 @@ public class SalaryTemplateCalculator_Tests
 
 	[Theory]
 	[InlineData(SalaryInputBasis.Gross, 20000, 30, 20000, 12000, 19500)]
-	[InlineData(SalaryInputBasis.TakeHome, 19000, 15, 10000, 6000, 10000)]
+	[InlineData(SalaryInputBasis.TakeHome, 20000, 15, 10000, 6000, 10000)]
 	[InlineData(SalaryInputBasis.EmployerCost, 20000, 0, 0, 0, 500)]
 	public void Should_rehydrate_gross_formulas_from_saved_compensation_and_copy_payslip_inputs(
 		SalaryInputBasis basis, decimal input, decimal days, decimal gross, decimal basic, decimal net)

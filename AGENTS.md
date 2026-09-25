@@ -240,3 +240,10 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "Module=HR"
 | Backend docs stale-review gate | `powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules -MaxAgeDays 365` |
 
 When in doubt, search `docs/` for the module name and open the nearest `README.md`.
+
+## Salary protection contract
+
+Before changing salary templates, compensation, payroll, or payslips, read [Salary package protection](docs/modules/hr/product.md#salary-package-protection).
+Use one package policy: employer cost by default, or take-home protected against PT and employee PF/ESI only.
+Keep preview and payroll on the shared calculation engine, prorate the target once, and preserve locked snapshots.
+PT selection is a template rule; never add an independent tax-bearer flag or silently migrate legacy gross protection.

@@ -17,7 +17,7 @@ namespace ShikshaMitra.HR.Payroll;
 
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.HR)]
-public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
+public partial class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 {
 	public CompensationRevisionApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
 	{

@@ -498,7 +498,13 @@ public class SalaryTemplateAppService(
 
 	private static string BuildRuleCode(Guid componentId) => $"COMPONENT_{componentId:N}".ToUpperInvariant();
 	private static SalaryInputBasis ParseSalaryBasis(string value) => ParseEnum<SalaryInputBasis>(value, nameof(value));
-	private static CompensationProtectionPolicy ParseProtectionPolicy(string value) => ParseEnum<CompensationProtectionPolicy>(value, nameof(value));
+	private static CompensationProtectionPolicy ParseProtectionPolicy(string value) => value switch
+	{
+		"PROTECT_EMPLOYER_COST" => CompensationProtectionPolicy.ProtectEmployerCost,
+		"PROTECT_TAKE_HOME" => CompensationProtectionPolicy.ProtectTakeHome,
+		_ => throw new BusinessException("HR:Payroll:ProtectionPolicyRequired")
+			.WithData("message", "Choose school cost (CTC) or employee take-home protection for new salary configurations.")
+	};
 	private static string NormalizeEnum(string? value) => value?.Replace("_", string.Empty).Replace("-", string.Empty) ?? string.Empty;
 
 	private static TEnum ParseEnum<TEnum>(string value, string fieldName) where TEnum : struct, Enum

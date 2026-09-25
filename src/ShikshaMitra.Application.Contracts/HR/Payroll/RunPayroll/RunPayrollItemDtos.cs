@@ -71,6 +71,7 @@ public class RunPayrollItem
 	public double TotalDeduction { get; set; }
 	public double EmployerContributionTotal { get; set; }
 	public double EmployerCost { get; set; }
+	public ShikshaMitra.HR.Payroll.Templates.SalaryProtectionResult? SalaryProtection { get; set; }
 	public Guid? CompensationRevisionId { get; set; }
 	public int? CompensationRevisionNumber { get; set; }
 	public string? CompensationSalaryBasis { get; set; }

@@ -73,7 +73,7 @@ Do not treat these as fully shipped without checking frontend navigation and bac
 |---|---|
 | HR events and holidays | Pages and contracts exist, but active navigation may belong to Calendar instead of HR |
 | TDS | Payroll setting pages exist, but active product status depends on menu and backend route verification |
-| Professional tax | Domain and data transfer objects exist, but no canonical HTTP controller is documented |
+| Professional tax | Effective slabs are exposed by the professional-taxes controller and enabled by the template PT rule |
 | Training | Pages exist outside the main HR menu model, so confirm ownership before extending |
 | Older performance routes | Prefer professional-management routes and verify `/hr/performance` before reuse |
 
@@ -82,3 +82,35 @@ Do not treat these as fully shipped without checking frontend navigation and bac
 Use [api.md](./api.md) for current endpoint behavior.
 Use current source files for behavior that is not covered here.
 Do not restore old generated exports or old planning docs under `docs/`.
+
+## Salary package protection
+
+A package has one protection policy: school cost (CTC), the default, or employee take-home.
+Gross, Employer Cost and Take-home remain input bases; the protected amount is saved separately from the entered quote.
+Take-home protection covers PT and employee PF/ESI only.
+TDS, loans, penalties and other ordinary deductions reduce payout.
+Recurring CTC includes regular earnings and modeled employer contributions.
+One-time earnings and their additional statutory effects are recorded outside the recurring target.
+For partial months, prorate the protected target once by payable days; calculate statutory deductions using actual period wages and applicable rules.
+
+| Example, PT INR 200 and no PF/ESI | Regular gross | Net before other deductions |
+|---|---:|---:|
+| Monthly CTC target INR 20,000 | 20,000 | 19,800 |
+| Monthly take-home target INR 20,000 | 20,200 | 20,000 |
+| CTC target INR 20,000, payable fraction 13/26 | 10,000 | 9,800 |
+| Take-home target INR 20,000, payable fraction 13/26 | 10,200 | 10,000 |
+
+PT is selected through a PROFESSIONAL_TAX template rule, without a separate applicability flag or duplicated deduction.
+PF uses the selected effective rule; ESI remains system-managed.
+Unlocked payroll recalculates against the approved target and effective statutory configuration.
+An unreachable target or incomplete statutory configuration blocks locking through COMPENSATION_TARGET_VARIANCE.
+Fixed earning rules are never silently replaced with an invented balancing allowance.
+Saved period evidence includes target, achieved amount, gross adjustment and additional statutory effects.
+Locked or paid history retains its snapshot.
+
+Legacy PROTECT_GROSS is readable but rejected for new template, preview and compensation writes.
+The explicit protection migration preview converts a legacy gross package to CTC using its approved employer-cost snapshot.
+It creates an effective-dated revision only after applying the reviewed preview.
+Missing or inconsistent approved snapshots require an explicit reviewed salary revision.
+The preview is bound to employee, tenant, user, source revision, selected month and calculated result; stale inputs require another preview.
+Migration never runs from a startup seeder.

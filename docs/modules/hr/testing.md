@@ -14,7 +14,7 @@ TL;DR: run the smallest command that proves the changed HR behavior, then run do
 Use broader API tests when a change touches contracts, permissions, payroll, attendance, leave, or policy resolution.
 
 Salary-template coverage must include complete active creation, Needs setup recovery, arbitrary active tenant components, exactly one Basic, zero or one balancing earning, exact rounded gross reconciliation, dependency cycles, cross-tenant component rejection, permission boundaries, concurrency conflicts, idempotent retries, PF defaults, percentage validation, largest fractional remainder allocation and existing statutory rounding, PF ceilings, Gujarat professional-tax boundaries, and Gross, Take-home, and Employer Cost solving across discontinuities.
-Compensation coverage must prove direct effective saves, effective-month resolution, immutable history, same-month supersession, scheduled future revisions, idempotent retries, controlled overrides, activation readiness, locked-payroll protection, separate one-time lines, and warning-only protected-target drift.
+Compensation coverage must prove direct effective saves, effective-month resolution, immutable history, same-month supersession, scheduled future revisions, idempotent retries, controlled overrides, activation readiness, locked-payroll protection, separate one-time lines, and protected-target recalculation, unresolved-target lock blocking and reviewed migration.
 Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, ESI uses effective coverage and wages, eligible PwD relief is government funded, employer contributions remain outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
 
 ## Required docs checks
@@ -172,3 +172,8 @@ Use an authorized staging administrator to list affected development templates, 
 Replace invalid disposable fixtures through the same preview/save contract and explicitly select a replacement before archiving a default template.
 Only recreate employee test structures intentionally included in that staging fixture; existing employee revisions and payroll snapshots remain unchanged.
 Record template/version IDs and confirm sample, employee structure, payroll preview, and payslip totals after the data update.
+
+Salary protection regression coverage lives in PayrollSalaryProtectionTests, EsiStatutoryCalculator_Tests, SalaryTemplateCalculator_Tests, RunPayrollSalaryProtection_Tests and ProtectionMigrationApi_Tests.
+Run the PostgreSQL workflow test against a new disposable loopback payroll_tests_* database with PAYROLL_WORKFLOW_TEST_POSTGRES.
+It verifies partial-month take-home protection and review reset after an effective PT slab change.
+Do not point test factories at an existing application database.

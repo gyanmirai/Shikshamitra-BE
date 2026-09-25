@@ -6,6 +6,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Payroll;
+using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Policies;
@@ -33,7 +34,8 @@ internal sealed record PayrollRunItemPreview(
 		DateOnly? employmentStartDate,
 		ShiftManagement? shift = null,
 		AttendancePolicy? attendancePolicy = null,
-		PayrollStatutoryRuleSet? statutoryRules = null)
+		PayrollStatutoryRuleSet? statutoryRules = null,
+		EmployeeCompensationRevision? compensationRevision = null)
 	{
 		var attendanceSummary = PayrollAttendanceCalculator.CalculatePayableDays(
 			attendanceRecords,
@@ -60,13 +62,16 @@ internal sealed record PayrollRunItemPreview(
 			allComponents.Add(overtimeComponent);
 		}
 
-		var computation = PayrollComputation.Calculate(
+		var computation = compensationRevision == null ? PayrollComputation.Calculate(
 			attendanceSummary.PresentDays,
 			attendanceSummary.HalfWorkingDays,
 			attendanceSummary.PayableDays,
 			basis.BasisDays,
 			allComponents,
-			statutoryRules);
+			statutoryRules) : PayrollSalaryProtection.Calculate(
+			attendanceSummary.PresentDays, attendanceSummary.HalfWorkingDays, attendanceSummary.PayableDays,
+			basis.BasisDays, allComponents, statutoryRules, compensationRevision.ProtectionPolicy,
+			compensationRevision.ProtectedMonthlyAmount);
 		var netPayDelta = previousMonthNetPay.HasValue
 			? computation.NetPay - previousMonthNetPay.Value
 			: (decimal?) null;

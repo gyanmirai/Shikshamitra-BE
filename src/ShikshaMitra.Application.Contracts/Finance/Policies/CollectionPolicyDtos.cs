@@ -73,11 +73,6 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 
-	public bool EnableWaiver { get; set; }
-	public bool EnableChargeWaiver { get; set; }
-	public bool RequiresApproval { get; set; }
-	public List<Guid> ApprovalRoleIds { get; set; } = new();
-
 	public bool AllowOnlineCollection { get; set; }
 
 	public int Version { get; set; }
@@ -117,11 +112,6 @@ public class CreateUpdateCollectionPolicyDto
 	public Guid? LateFeeIncomeHeadId { get; set; }
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
-
-	public bool EnableWaiver { get; set; }
-	public bool EnableChargeWaiver { get; set; }
-	public bool RequiresApproval { get; set; }
-	public List<Guid> ApprovalRoleIds { get; set; } = new();
 
 	public bool AllowOnlineCollection { get; set; } = true;
 }
@@ -163,8 +153,6 @@ public class CollectionPolicySimulateRequestDto
 	public Guid? FeeStructureId { get; set; }
 	public bool IsLateFeeExempt { get; set; }
 	public int? CustomGracePeriodDays { get; set; }
-	public decimal? RequestedWaiverAmount { get; set; }
-	public decimal? RequestedWaiverPercentage { get; set; }
 }
 
 public class CollectionPolicySimulateResponseDto
@@ -180,8 +168,4 @@ public class CollectionPolicySimulateResponseDto
 	public string RoundingApplied { get; set; } = "None";
 	public string Explanation { get; set; } = string.Empty;
 
-	public decimal? EffectiveWaiverAmount { get; set; }
-	public bool? WaiverIsExpired { get; set; }
-	public bool? WaiverRequiresApproval { get; set; }
-	public string? WaiverExplanation { get; set; }
 }

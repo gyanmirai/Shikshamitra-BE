@@ -193,6 +193,9 @@ public partial class FeeCollectionSummaryQueryService
 			cancellationToken);
 
 		var paidDict = paidPerCharge.ToDictionary(x => x.ChargeId, x => x.Paid);
+		var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
+			.GroupBy(x => x.ChargeId)
+			.ToDictionary(x => x.Key, x => x.Sum(w => (double)w.EffectiveAmount));
 
 		foreach (var group in approvedCharges.GroupBy(c => c.StudentId))
 		{
@@ -201,7 +204,8 @@ public partial class FeeCollectionSummaryQueryService
 			foreach (var charge in group)
 			{
 				total   += charge.Amount;
-				pending += Math.Max(0d, charge.Amount - paidDict.GetValueOrDefault(charge.Id, 0d));
+				pending += Math.Max(0d, charge.Amount - paidDict.GetValueOrDefault(charge.Id, 0d)
+					- waivedPerCharge.GetValueOrDefault(charge.Id, 0d));
 			}
 			result[group.Key] = new StudentChargeAggregate(total, pending);
 		}

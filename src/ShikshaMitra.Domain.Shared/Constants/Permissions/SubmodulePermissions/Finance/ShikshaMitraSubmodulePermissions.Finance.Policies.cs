@@ -63,7 +63,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 			public static readonly string[] All = { View, Add, Delete };
 			// Transaction permissions retain their existing keys and grants independently of configuration.
-			public static readonly string[] OperationalAll = { EditStudentOverride, ViewWaivers, RequestWaiver, ApproveWaiver, RejectWaiver, ManageBulkWaiver, ManageExceptionWindow, ViewReports };
+			public static readonly string[] OperationalAll = { EditStudentOverride, ManageExceptionWindow, ViewReports };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
@@ -71,11 +71,6 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" },
 				{ EditStudentOverride, $"{SubmoduleDisplayName}.EditStudentOverride" },
-				{ ViewWaivers, $"{SubmoduleDisplayName}.ViewWaivers" },
-				{ RequestWaiver, $"{SubmoduleDisplayName}.RequestWaiver" },
-				{ ApproveWaiver, $"{SubmoduleDisplayName}.ApproveWaiver" },
-				{ RejectWaiver, $"{SubmoduleDisplayName}.RejectWaiver" },
-				{ ManageBulkWaiver, $"{SubmoduleDisplayName}.ManageBulkWaiver" },
 				{ ManageExceptionWindow, $"{SubmoduleDisplayName}.ManageExceptionWindow" },
 				{ ViewReports, $"{SubmoduleDisplayName}.ViewReports" }
 			};

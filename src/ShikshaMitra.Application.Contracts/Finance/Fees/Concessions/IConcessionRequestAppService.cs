@@ -14,7 +14,9 @@ public interface IConcessionRequestAppService : IApplicationService
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(Guid academicYearId, CreateConcessionRequestDto input);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateDraftAsync(Guid academicYearId, CreateConcessionDraftDto input);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> SubmitAsync(Guid id, SubmitConcessionRequestDto input);
-	Task<ConcessionRequestContextDto> GetContextAsync(Guid academicYearId, Guid studentId, Guid? studentFeeStructureId = null);
+	Task<ConcessionRequestContextDto> GetContextAsync(Guid academicYearId, Guid studentId,
+		Guid? studentFeeStructureId = null, Guid? concessionTypeId = null,
+		Guid? concessionPolicyId = null, Guid? concessionPolicyVersionId = null);
 	Task<ConcessionRequestPreviewDto> PreviewAsync(Guid academicYearId, ConcessionRequestPreviewInputDto input);
 	Task<ApiDataResponseDto<ConcessionRequestDetailDto>> UpdateAsync(Guid id, Guid academicYearId, UpdateConcessionRequestDto input);
 	Task DeleteAsync(Guid id, DeleteConcessionRequestDto input);

@@ -27,6 +27,9 @@ public class ConcessionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string ApplyOn { get; set; } = "AllOutstanding";
 	public string RoundingMethod { get; set; } = "None";
 	public int Version { get; set; }
+	public List<Guid> ApplicableConcessionTypeIds { get; set; } = [];
+	public string FeeHeadScope { get; set; } = "EntireFeeStructure";
+	public List<Guid> ApplicableFeeHeadIds { get; set; } = [];
 	public bool IsUsedInDownstream { get; set; }
 	public DateTime CreationTime { get; set; }
 	public Guid? CreatorId { get; set; }
@@ -51,6 +54,9 @@ public class CreateUpdateConcessionPolicyDto
 	public decimal? MaximumFixedAmount { get; set; }
 	public string ApplyOn { get; set; } = "AllOutstanding";
 	public string RoundingMethod { get; set; } = "None";
+	public List<Guid> ApplicableConcessionTypeIds { get; set; } = [];
+	public string FeeHeadScope { get; set; } = "EntireFeeStructure";
+	public List<Guid> ApplicableFeeHeadIds { get; set; } = [];
 	public string? ChangeReason { get; set; }
 	public string? ConcurrencyStamp { get; set; }
 }

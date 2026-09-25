@@ -31,13 +31,52 @@ public partial class ConcessionRequestAppService
 	public async Task<ConcessionRequestContextDto> GetContextAsync(
 		Guid academicYearId,
 		Guid studentId,
-		Guid? studentFeeStructureId = null)
+		Guid? studentFeeStructureId = null,
+		Guid? concessionTypeId = null,
+		Guid? concessionPolicyId = null,
+		Guid? concessionPolicyVersionId = null)
 	{
 		await EnsureAnyPermissionAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Add,
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Edit,
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Submit);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
+		var activePolicies = await concessionPolicyRepository.GetListAsync(x =>
+			x.AcademicYearId == academicYearId && x.Status == ConcessionPolicyStatus.Active);
+		var activePolicyIds = activePolicies.Select(x => x.Id).ToList();
+		var policyVersions = activePolicyIds.Count == 0
+			? []
+			: await financePolicyVersionRepository.GetListAsync(x =>
+				x.PolicyType == "concession" && activePolicyIds.Contains(x.PolicyId));
+		var currentVersionByPolicyId = policyVersions
+			.GroupBy(x => x.PolicyId)
+			.ToDictionary(group => group.Key,
+				group => group.OrderByDescending(x => x.VersionNumber).First());
+		var policyOptions = activePolicies
+			.Where(policy => currentVersionByPolicyId.ContainsKey(policy.Id))
+			.OrderByDescending(policy => policy.IsDefault)
+			.ThenBy(policy => policy.PolicyName)
+			.Select(policy => new ConcessionPolicyOptionDto
+			{
+				ConcessionPolicyId = policy.Id,
+				ConcessionPolicyVersionId = currentVersionByPolicyId[policy.Id].Id,
+				PolicyName = policy.PolicyName,
+				PolicyCode = policy.PolicyCode,
+				Version = currentVersionByPolicyId[policy.Id].VersionNumber,
+				IsDefault = policy.IsDefault,
+				ValueSource = policy.ValueSource.ToString(),
+				CalculationMethod = policy.CalculationMethod.ToString(),
+				PercentageValue = policy.PercentageValue,
+				FixedAmount = policy.FixedAmount,
+				MaximumPercentage = policy.MaximumPercentage,
+				MaximumFixedAmount = policy.MaximumFixedAmount,
+				ApplyOn = policy.ApplyOn.ToString(),
+				RoundingMethod = policy.RoundingMethod.ToString(),
+				ApplicableConcessionTypeIds = policy.ApplicableConcessionTypeIds.ToList(),
+				FeeHeadScope = policy.FeeHeadScope.ToString(),
+				ApplicableFeeHeadIds = policy.ApplicableFeeHeadIds.ToList(),
+			})
+			.ToList();
 		var assignments = await studentFeeStructureRepository.GetListAsync(x =>
 			x.StudentId == studentId && x.AcademicYearId == academicYearId);
 		var feeStructureIds = assignments.Select(x => x.FeeStructureStandardId).Distinct().ToList();
@@ -68,6 +107,7 @@ public partial class ConcessionRequestAppService
 				StudentName = FormatStudentName(student),
 				AssignmentSelectionRequired = true,
 				Assignments = assignmentOptions,
+				ConcessionPolicies = policyOptions,
 				Blockers = ["Select the fee assignment for this concession request."],
 			};
 		}
@@ -78,20 +118,40 @@ public partial class ConcessionRequestAppService
 			? []
 			: await feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id));
 		var feeHeadNames = feeHeads.ToDictionary(x => x.Id, x => x.Name);
+		var concessionEnabledHeadIds = feeHeads.Where(x => x.AcademicYearId == academicYearId &&
+			x.IsActive && x.IsConcessionApplied).Select(x => x.Id).ToHashSet();
+		var hasConcessionEnabledHeads = concessionEnabledHeadIds.Count > 0;
+		if (context.Assignment.ConcessionFeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads)
+			concessionEnabledHeadIds.IntersectWith(context.Assignment.GetConcessionApplicableFeeHeadIds());
+		var eligibleDues = context.EligibleDueFees.Where(x => concessionEnabledHeadIds.Contains(x.FeeHeadId)).ToList();
 		var concessionTypes = await concessionTypeRepository.GetListAsync(x =>
 			x.AcademicYearId == academicYearId && x.IsActive);
-		var activePolicies = await concessionPolicyRepository.GetListAsync(x =>
-			x.AcademicYearId == academicYearId && x.Status == ConcessionPolicyStatus.Active);
-		var activePolicyIds = activePolicies.Select(x => x.Id).ToList();
-		var policyVersions = activePolicyIds.Count == 0
-			? []
-			: await financePolicyVersionRepository.GetListAsync(x =>
-				x.PolicyType == "concession" && activePolicyIds.Contains(x.PolicyId));
-		var currentVersionByPolicyId = policyVersions
-			.GroupBy(x => x.PolicyId)
-			.ToDictionary(
-				group => group.Key,
-				group => group.OrderByDescending(x => x.VersionNumber).First());
+		if (concessionPolicyId.HasValue || concessionPolicyVersionId.HasValue)
+		{
+			var selected = activePolicies.FirstOrDefault(x => x.Id == concessionPolicyId);
+			if (selected is null || !currentVersionByPolicyId.TryGetValue(selected.Id, out var version) ||
+				version.Id != concessionPolicyVersionId)
+				throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+			eligibleDues = ConcessionRequestManager.GetEligibleDueFees(eligibleDues, selected.ApplyOn);
+		}
+		var blockers = new List<string>();
+		if (eligibleDues.Count == 0)
+		{
+			if (context.EligibleDueFees.Count == 0)
+				blockers.Add("This fee assignment has no outstanding installment dues to discount.");
+			else if (!hasConcessionEnabledHeads)
+			{
+				var blockedHeadNames = feeHeads
+					.Select(x => x.Name)
+					.OrderBy(x => x)
+					.ToList();
+				blockers.Add($"Outstanding fee heads are not eligible for concessions: {string.Join(", ", blockedHeadNames)}. Check 'Enable concessions', active status, and academic year for the intended heads in Finance > Fees > Settings > Fee Head.");
+			}
+			else if (concessionEnabledHeadIds.Count == 0)
+				blockers.Add("This fee assignment excludes all concession-enabled fee heads. Review concession eligibility on its fee structure.");
+			else
+				blockers.Add("No outstanding installments match this policy's application rule.");
+		}
 
 		return new ConcessionRequestContextDto
 		{
@@ -101,7 +161,8 @@ public partial class ConcessionRequestAppService
 			StudentFeeStructureId = context.Assignment.Id,
 			FeeStructureName = context.FeeStructure.Name,
 			Assignments = assignmentOptions,
-			FeeHeads = context.EligibleDueFees
+			Blockers = blockers,
+			FeeHeads = eligibleDues
 				.GroupBy(x => x.FeeHeadId)
 				.Select(group => new ConcessionEligibleFeeHeadDto
 				{
@@ -111,29 +172,8 @@ public partial class ConcessionRequestAppService
 				})
 				.OrderBy(x => x.FeeHeadName)
 				.ToList(),
-			EligibleDueFees = MapEligibleDueFees(context.EligibleDueFees, feeHeadNames),
-			ConcessionPolicies = activePolicies
-				.Where(policy => currentVersionByPolicyId.ContainsKey(policy.Id))
-				.OrderByDescending(policy => policy.IsDefault)
-				.ThenBy(policy => policy.PolicyName)
-				.Select(policy => new ConcessionPolicyOptionDto
-				{
-					ConcessionPolicyId = policy.Id,
-					ConcessionPolicyVersionId = currentVersionByPolicyId[policy.Id].Id,
-					PolicyName = policy.PolicyName,
-					PolicyCode = policy.PolicyCode,
-					Version = policy.Version,
-					IsDefault = policy.IsDefault,
-					ValueSource = policy.ValueSource.ToString(),
-					CalculationMethod = policy.CalculationMethod.ToString(),
-					PercentageValue = policy.PercentageValue,
-					FixedAmount = policy.FixedAmount,
-					MaximumPercentage = policy.MaximumPercentage,
-					MaximumFixedAmount = policy.MaximumFixedAmount,
-					ApplyOn = policy.ApplyOn.ToString(),
-					RoundingMethod = policy.RoundingMethod.ToString(),
-				})
-				.ToList(),
+			EligibleDueFees = MapEligibleDueFees(eligibleDues, feeHeadNames),
+			ConcessionPolicies = policyOptions,
 			ConcessionTypes = concessionTypes.OrderBy(x => x.Name).Select(type => new ConcessionTypeOptionDto
 			{
 				ConcessionTypeId = type.Id,
@@ -344,6 +384,8 @@ public partial class ConcessionRequestAppService
 		var policy = JsonSerializer.Deserialize<ConcessionPolicySnapshot>(version.SnapshotJson)
 			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
 		var isReversal = request.Status is ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed;
+		var requestedDueAmounts = ConcessionRequestManager.ReadDueFeeEvidence(request)
+			.ToDictionary(x => x.DueFeeId, x => x.RequestedAmount);
 
 		var groups = request.ConcessionFeeHeadMappings.Select(m =>
 		{
@@ -353,7 +395,9 @@ public partial class ConcessionRequestAppService
 			var eligibleHeadDues = dueFees
 				.Where(df => df.FeeHeadId == m.FeeHeadId && df.OutstandingAmount > 0m)
 				.ToList();
-			var suggestedByDue = isReversal || eligibleHeadDues.Count == 0
+			var suggestedByDue = !isReversal && requestedDueAmounts.Count > 0
+				? eligibleHeadDues.ToDictionary(x => x.Id, x => requestedDueAmounts.GetValueOrDefault(x.Id))
+				: isReversal || eligibleHeadDues.Count == 0
 				? new Dictionary<Guid, decimal>()
 				: ConcessionAmountAllocator.AllocateProportionally(
 					eligibleHeadDues.Select(x => new ConcessionAmountCapacity(x.Id, x.OutstandingAmount)).ToList(),
@@ -397,7 +441,9 @@ public partial class ConcessionRequestAppService
 				RequestedConcessionAmount = m.FeeHeadConcessionAmount,
 				LiveMaximumConcessionAmount = liveMaximum,
 				SuggestedConcessionAmount = suggestedTotal,
-				HasChangedSinceSubmission = liveMaximum != m.FeeHeadConcessionAmount,
+				HasChangedSinceSubmission = liveMaximum < m.FeeHeadConcessionAmount ||
+					dueFees.Where(x => x.FeeHeadId == m.FeeHeadId)
+						.Any(x => requestedDueAmounts.GetValueOrDefault(x.Id) > x.OutstandingAmount),
 				DueFeeLines = lines,
 			};
 		}).ToList();

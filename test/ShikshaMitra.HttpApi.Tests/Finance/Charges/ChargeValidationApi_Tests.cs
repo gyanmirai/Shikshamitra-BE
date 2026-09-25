@@ -1,7 +1,9 @@
 using System;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
@@ -18,6 +20,24 @@ public class ChargeValidationApi_Tests : ChargeApiTestsBase
 	}
 
 	#region Tier 2 — Extended
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Extended)]
+	public async Task Should_Reject_Charge_When_Student_Has_No_Fee_Structure_Assignment()
+	{
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(
+			Client, Factory, assignFeeStructure: false);
+		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client);
+		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
+
+		var response = await Client.PostAsJsonAsync(
+			$"{BaseUrl}?academicYearId={ChargeTestHelper.DefaultAcademicYearId}", request, JsonOptions);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		var problem = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		problem.GetProperty("errorCode").GetString()
+			.ShouldBe(FinanceChargeErrorCodes.StudentFeeStructureNotAssigned);
+	}
 
 	// ── Maker-checker rule ────────────────────────────────────────────────────
 
@@ -70,7 +90,7 @@ public class ChargeValidationApi_Tests : ChargeApiTestsBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Return_Error_Create_With_Nonexistent_AcademicYearId()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 
@@ -84,7 +104,7 @@ public class ChargeValidationApi_Tests : ChargeApiTestsBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Return_Error_Create_With_Nonexistent_ChargeCategoryId()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, Guid.NewGuid());
 
 		var response = await Client.PostAsJsonAsync(
@@ -99,7 +119,7 @@ public class ChargeValidationApi_Tests : ChargeApiTestsBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Return_400_Create_With_Zero_Amount()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 		request.Amount = 0m;
@@ -114,7 +134,7 @@ public class ChargeValidationApi_Tests : ChargeApiTestsBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Return_400_Create_With_Negative_Amount()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 		request.Amount = -1m;
@@ -131,7 +151,7 @@ public class ChargeValidationApi_Tests : ChargeApiTestsBase
 	[TestTier(TestTraits.Tiers.Extended)]
 	public async Task Should_Return_400_Create_With_Empty_PurposeDescription()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 		request.PurposeDescription = string.Empty;

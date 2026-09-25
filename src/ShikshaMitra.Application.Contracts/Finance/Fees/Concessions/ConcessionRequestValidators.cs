@@ -17,11 +17,13 @@ public class CreateConcessionRequestValidator : AbstractValidator<CreateConcessi
 		RuleFor(x => x.Remarks).MaximumLength(2000).When(x => x.Remarks != null);
 		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(128);
 		RuleFor(x => x.PreviewFingerprint).NotEmpty().Length(64);
-		RuleFor(x => x.FeeHeadConcessions).NotEmpty();
+		RuleFor(x => x).Must(x => x.FeeHeadConcessions.Count > 0 || x.DueFeeConcessions.Count > 0)
+			.WithMessage("At least one concession line is required.");
 		RuleFor(x => x.FeeHeadConcessions)
 			.Must(x => x.Select(y => y.FeeHeadId).Distinct().Count() == x.Count)
 			.WithMessage("Duplicate fee heads are not allowed.");
 		RuleForEach(x => x.FeeHeadConcessions).SetValidator(new FeeHeadConcessionValidator());
+		RuleForEach(x => x.DueFeeConcessions).SetValidator(new DueFeeConcessionValidator());
 		RuleForEach(x => x.Documents).SetValidator(new UploadConcessionDocumentEntryValidator());
 	}
 }
@@ -42,6 +44,7 @@ public class UpdateConcessionRequestValidator : AbstractValidator<UpdateConcessi
 			.Must(x => x.Select(y => y.FeeHeadId).Distinct().Count() == x.Count)
 			.WithMessage("Duplicate fee heads are not allowed.");
 		RuleForEach(x => x.FeeHeadConcessions).SetValidator(new FeeHeadConcessionValidator());
+		RuleForEach(x => x.DueFeeConcessions).SetValidator(new DueFeeConcessionValidator());
 		RuleForEach(x => x.Documents).SetValidator(new UploadConcessionDocumentEntryValidator());
 	}
 }
@@ -58,6 +61,16 @@ public class FeeHeadConcessionValidator : AbstractValidator<FeeHeadConcessionDto
 	}
 }
 
+public class DueFeeConcessionValidator : AbstractValidator<DueFeeConcessionDto>
+{
+	public DueFeeConcessionValidator()
+	{
+		RuleFor(x => x.DueFeeId).NotEmpty();
+		RuleFor(x => x.FeeHeadId).NotEmpty();
+		RuleFor(x => x.Amount).GreaterThan(0m);
+	}
+}
+
 public class ConcessionRequestPreviewInputValidator : AbstractValidator<ConcessionRequestPreviewInputDto>
 {
 	public ConcessionRequestPreviewInputValidator()
@@ -67,10 +80,13 @@ public class ConcessionRequestPreviewInputValidator : AbstractValidator<Concessi
 		RuleFor(x => x.ConcessionPolicyId).NotEmpty();
 		RuleFor(x => x.ConcessionPolicyVersionId).NotEmpty();
 		RuleFor(x => x.ConcessionTypeId).NotEmpty();
-		RuleFor(x => x.FeeHeadConcessions).NotEmpty()
+		RuleFor(x => x).Must(x => x.FeeHeadConcessions.Count > 0 || x.DueFeeConcessions.Count > 0)
+			.WithMessage("At least one concession line is required.");
+		RuleFor(x => x.FeeHeadConcessions)
 			.Must(x => x.Select(y => y.FeeHeadId).Distinct().Count() == x.Count)
 			.WithMessage("Duplicate fee heads are not allowed.");
 		RuleForEach(x => x.FeeHeadConcessions).SetValidator(new FeeHeadConcessionValidator());
+		RuleForEach(x => x.DueFeeConcessions).SetValidator(new DueFeeConcessionValidator());
 	}
 }
 
@@ -218,10 +234,6 @@ public class PreviewConcessionApprovalValidator : AbstractValidator<PreviewConce
 	{
 		RuleFor(x => x.RequestConcurrencyStamp).NotEmpty();
 		RuleFor(x => x.PreviewFingerprint).NotEmpty().Length(64);
-		RuleFor(x => x.FeeHeadApprovals).NotEmpty()
-			.Must(x => x.Select(y => y.FeeHeadId).Distinct().Count() == x.Count)
-			.WithMessage("Duplicate fee-head approval groups are not allowed.");
-		RuleForEach(x => x.FeeHeadApprovals).SetValidator(new FeeHeadApprovalValidator());
 	}
 }
 

@@ -98,11 +98,11 @@ public class ConcessionPolicyAppService(
 			? $"CON-{GuidGenerator.Create():N}"[..16].ToUpperInvariant()
 			: input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, null);
-		if (input.IsDefault)
-			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
 		var entity = new ConcessionPolicy(
 			GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId,
 			ConcessionPolicyMapping.ToUpdateModel(input, code));
+		if (input.IsDefault)
+			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
 		await repository.InsertAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "created");
 		return ConcessionPolicyMapping.ToDto(entity);
@@ -126,9 +126,9 @@ public class ConcessionPolicyAppService(
 
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode) ? entity.PolicyCode : input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, id);
+		entity.Update(ConcessionPolicyMapping.ToUpdateModel(input, code));
 		if (input.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
-		entity.Update(ConcessionPolicyMapping.ToUpdateModel(input, code));
 		await repository.UpdateAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "edited", input.ChangeReason);
 		return ConcessionPolicyMapping.ToDto(entity);
@@ -153,7 +153,10 @@ public class ConcessionPolicyAppService(
 			MaximumPercentage = source.MaximumPercentage,
 			MaximumFixedAmount = source.MaximumFixedAmount,
 			ApplyOn = source.ApplyOn.ToString(),
-			RoundingMethod = source.RoundingMethod.ToString()
+			RoundingMethod = source.RoundingMethod.ToString(),
+			ApplicableConcessionTypeIds = [],
+			FeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure.ToString(),
+			ApplicableFeeHeadIds = []
 		};
 		return await CreateAsync(dto);
 	}
@@ -221,6 +224,7 @@ public class ConcessionPolicyAppService(
 
 	private async Task<ConcessionPolicy> GetRequiredAsync(Guid id) =>
 		await repository.FindAsync(id) ?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyNotFound).WithData("id", id);
+
 
 	private async Task EnsureUniqueAsync(Guid yearId, string name, string code, Guid? excludeId)
 	{

@@ -36,6 +36,7 @@ public partial class CollectFeeWorkflow(
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,

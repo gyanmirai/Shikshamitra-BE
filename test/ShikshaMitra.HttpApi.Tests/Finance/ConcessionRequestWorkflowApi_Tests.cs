@@ -38,27 +38,12 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 			return;
 		}
 
-		var perLine = group.RequestedConcessionAmount / selectable.Count;
 		var approval = new ApproveConcessionRequestDto
 		{
 			Message = "Approved for tests",
 			RequestConcurrencyStamp = context.RequestConcurrencyStamp,
 			PreviewFingerprint = context.PreviewFingerprint,
 			IdempotencyKey = Guid.NewGuid().ToString("N"),
-			FeeHeadApprovals =
-			[
-				new FeeHeadApprovalDto
-				{
-					FeeHeadId = group.FeeHeadId,
-					ApprovedConcessionAmount = group.RequestedConcessionAmount,
-					DueFeeAllocations = selectable.Select(l => new DueFeeAllocationDto
-					{
-						DueFeeId = l.DueFeeId,
-						ConcessionAmount = perLine,
-						ConcurrencyStamp = l.ConcurrencyStamp,
-					}).ToList(),
-				},
-			],
 		};
 
 		var response = await Client.PostAsJsonAsync(
@@ -110,7 +95,6 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		var group = context!.FeeHeadGroups.First();
 		var selectable = group.DueFeeLines.Where(line => line.IsSelectable).ToList();
 		selectable.ShouldNotBeEmpty();
-		var perLine = group.RequestedConcessionAmount / selectable.Count;
 
 		var approveResp = await Client.PostAsJsonAsync(
 			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve",
@@ -120,20 +104,6 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 				RequestConcurrencyStamp = context.RequestConcurrencyStamp,
 				PreviewFingerprint = context.PreviewFingerprint,
 				IdempotencyKey = Guid.NewGuid().ToString("N"),
-				FeeHeadApprovals =
-				[
-					new FeeHeadApprovalDto
-					{
-						FeeHeadId = group.FeeHeadId,
-						ApprovedConcessionAmount = group.RequestedConcessionAmount,
-						DueFeeAllocations = selectable.Select(line => new DueFeeAllocationDto
-						{
-							DueFeeId = line.DueFeeId,
-							ConcessionAmount = perLine,
-							ConcurrencyStamp = line.ConcurrencyStamp,
-						}).ToList(),
-					},
-				],
 			},
 			JsonOptions);
 		approveResp.StatusCode.ShouldBe(HttpStatusCode.OK, await approveResp.Content.ReadAsStringAsync());
@@ -186,31 +156,12 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 		var context = await contextResp.Content.ReadFromJsonAsync<ConcessionApprovalContextDto>(JsonOptions);
 		context.ShouldNotBeNull();
 
-		var group = context!.FeeHeadGroups.First();
-		var line = group.DueFeeLines.First(candidate => candidate.IsSelectable);
 		var approval = new ApproveConcessionRequestDto
 		{
 			Message = "Attempt with stale request state",
 			RequestConcurrencyStamp = "stale-request-stamp",
 			PreviewFingerprint = context.PreviewFingerprint,
 			IdempotencyKey = Guid.NewGuid().ToString("N"),
-			FeeHeadApprovals =
-			[
-				new FeeHeadApprovalDto
-				{
-					FeeHeadId = group.FeeHeadId,
-					ApprovedConcessionAmount = Math.Min(group.RequestedConcessionAmount, line.OutstandingAmount),
-					DueFeeAllocations =
-					[
-						new DueFeeAllocationDto
-						{
-							DueFeeId = line.DueFeeId,
-							ConcessionAmount = Math.Min(group.RequestedConcessionAmount, line.OutstandingAmount),
-							ConcurrencyStamp = line.ConcurrencyStamp,
-						},
-					],
-				},
-			],
 		};
 
 		var response = await Client.PostAsJsonAsync(
@@ -222,7 +173,7 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
-	public async Task Should_Reject_Approval_When_DueFee_ConcurrencyStamp_Is_Stale()
+	public async Task Should_Reject_Client_Approval_Amount_Overrides()
 	{
 		var pendingId = await CreatePendingRequestWithFeeHeadAsync();
 		var contextResp = await Client.GetAsync($"{BaseUrl}/{pendingId}/approval-context");
@@ -262,6 +213,7 @@ public class ConcessionRequestWorkflowApi_Tests : ConcessionRequestApiTestsBase
 			$"{ConcessionRequestsBaseUrl}/{pendingId}/approve", approval, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		(await response.Content.ReadAsStringAsync()).ShouldContain(FinanceConcessionErrorCodes.ConcurrencyConflict);
+		(await response.Content.ReadAsStringAsync()).ShouldContain(
+			ShikshaMitra.Domain.Finance.Policies.ConcessionPolicyErrorCodes.InputNotAllowed);
 	}
 }

@@ -27,7 +27,7 @@ public abstract class ChargeApiTestsBase : ShikshaMitraApiTestBase
 	/// </summary>
 	protected async Task<(Guid ChargeId, Guid BoardId, Guid EducationMediumId)> CreatePendingChargeAsync()
 	{
-		var (studentId, boardId) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, boardId) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: true);
 		var chargeId = await ChargeTestHelper.CreateChargeAsync(Client, studentId, categoryId);
 		return (chargeId, boardId, ChargeTestHelper.DefaultMediumId);
@@ -38,7 +38,7 @@ public abstract class ChargeApiTestsBase : ShikshaMitraApiTestBase
 	/// </summary>
 	protected async Task<Guid> CreateAutoApprovedChargeAsync()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: false);
 		return await ChargeTestHelper.CreateChargeAsync(Client, studentId, categoryId);
 	}

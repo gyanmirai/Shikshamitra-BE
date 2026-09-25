@@ -2,13 +2,16 @@
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Finance.ConcessionRequests;
 
@@ -137,5 +140,26 @@ public class ConcessionRequestCoreApi_Tests : ConcessionRequestApiTestsBase
 		body.ShouldNotBeNull();
 		body!.ConcessionRequestId.ShouldBe(requestId);
 		body.FeeHeadGroups.ShouldNotBeEmpty();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Request_context_lists_every_active_policy_for_the_academic_year()
+	{
+		var requestId = await CreatePendingRequestWithFeeHeadAsync();
+		var detail = await Client.GetFromJsonAsync<ApiDataResponseDto<ConcessionRequestDetailDto>>(
+			$"{BaseUrl}/{requestId}", JsonOptions);
+		var studentId = detail!.Data!.StudentId;
+		var yearId = ConcessionRequestTestHelper.DefaultAcademicYearId;
+		var context = await Client.GetFromJsonAsync<ConcessionRequestContextDto>(
+			$"{BaseUrl}/context?academicYearId={yearId}&studentId={studentId}", JsonOptions);
+		var policies = await Client.GetFromJsonAsync<PagedResultDto<ConcessionPolicyDto>>(
+			$"/api/finance/concession-policies?academicYearId={yearId}&status=Active&maxResultCount=100",
+			JsonOptions);
+
+		context.ShouldNotBeNull();
+		policies.ShouldNotBeNull();
+		context.ConcessionPolicies.Select(x => x.ConcessionPolicyId).OrderBy(x => x)
+			.ShouldBe(policies.Items.Select(x => x.Id).OrderBy(x => x));
 	}
 }

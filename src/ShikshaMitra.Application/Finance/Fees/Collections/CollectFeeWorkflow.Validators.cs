@@ -182,6 +182,9 @@ public partial class CollectFeeWorkflow
 			.GroupBy(r => r.ChargeId)
 			.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) })
 			.ToDictionary(x => x.ChargeId, x => x.Paid);
+		var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
+			.GroupBy(x => x.ChargeId)
+			.ToDictionary(x => x.Key, x => x.Sum(w => (double)w.EffectiveAmount));
 
 		foreach (var cp in input.ChargePayments)
 		{
@@ -189,7 +192,8 @@ public partial class CollectFeeWorkflow
 			if (charge.StudentId != input.StudentId || charge.AcademicYearId != input.AcademicYearId)
 				throw new BusinessException(FeeCollectionErrorCodes.InvalidCharge);
 			var paid = paidPerCharge.GetValueOrDefault(cp.ChargeId, 0d);
-			var pending = Math.Max(0d, (double)charge.Amount - paid);
+			var pending = Math.Max(0d, (double)charge.Amount - paid
+				- waivedPerCharge.GetValueOrDefault(cp.ChargeId, 0d));
 			pendingChargeMap[cp.ChargeId] = pending;
 			if (cp.Amount > pending)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)

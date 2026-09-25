@@ -41,6 +41,7 @@ public partial class StudentFeeDetailsQueryService(
 	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<Charge, Guid> chargeRepository,
+	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
 	IRepository<FeeRefundRequest, Guid> feeRefundRepository,
@@ -72,6 +73,7 @@ public partial class StudentFeeDetailsQueryService(
 			x => x.StudentId == studentId && x.AcademicYearId == academicYearId);
 
 		var ledger = new List<FeeLedgerMonthDto>();
+		var systemLateFeeCharges = new List<ChargeDetailDto>();
 		var feeSummary = new FeeSummaryDto();
 		var allowOnlineCollection = true;
 
@@ -130,10 +132,32 @@ public partial class StudentFeeDetailsQueryService(
 			foreach (var group in grouped)
 			{
 				var lines = group.Select(d =>
-				{
-					var lateFee = ComputeLateFeeForLine(
-						effectiveRules, d, today, waivedByDueFee, paidLateFeeByDueFee, activeWindow);
-					return new FeeLedgerLineDto
+					{
+						var lateFee = ComputeLateFeeForLine(
+							effectiveRules, d, today, waivedByDueFee, paidLateFeeByDueFee, activeWindow);
+						if (lateFee.Amount > 0)
+						{
+							var feeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty);
+							var installmentLabel = d.GetDisplayInstallmentLabel();
+							systemLateFeeCharges.Add(new ChargeDetailDto
+							{
+								ChargeId = d.Id,
+								SourceType = "LateFee",
+								SourceId = d.Id,
+								IsSystemGenerated = true,
+								Name = $"Late Fee - {feeHeadName} ({installmentLabel})",
+								Amount = lateFee.Amount + lateFee.PaidAmount + lateFee.WaivedAmount,
+								PaidAmount = lateFee.PaidAmount,
+								PendingAmount = lateFee.Amount,
+								WaivedAmount = lateFee.WaivedAmount,
+								CanWaive = true,
+								Explanation = lateFee.Explanation,
+								Status = lateFee.PaidAmount > 0
+									? FeeCollectionStatus.Partial
+									: FeeCollectionStatus.Pending,
+							});
+						}
+						return new FeeLedgerLineDto
 					{
 						DueFeeId = d.Id, FeeHeadId = d.FeeHeadId,
 						FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
@@ -162,9 +186,10 @@ public partial class StudentFeeDetailsQueryService(
 						RefundDescription = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Description,
 						Status = d.OutstandingAmount <= 0m ? FeeCollectionStatus.Paid
 							: (d.PaidAmount > 0m ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
-						LateFeeAmount = lateFee.Amount,
-						LateFeeExplanation = lateFee.Explanation,
-						LateFeeWaivedAmount = lateFee.WaivedAmount,
+						LateFeeAmount = 0,
+						LateFeeExplanation = string.Empty,
+						LateFeeWaivedAmount = 0,
+						CanWaive = false,
 					};
 				}).ToList();
 
@@ -204,9 +229,13 @@ public partial class StudentFeeDetailsQueryService(
 		var approvedCharges = chargesQ.Where(c => c.StudentId == studentId
 			&& c.AcademicYearId == academicYearId && c.Status == ChargeStatus.Approved).ToList();
 
-		var chargeDtos = new List<ChargeDetailDto>();
+		var chargeDtos = new List<ChargeDetailDto>(systemLateFeeCharges);
 		if (approvedCharges.Count > 0)
 		{
+			var chargeIds = approvedCharges.Select(c => c.Id).ToList();
+			var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
+				.GroupBy(x => x.ChargeId)
+				.ToDictionary(x => x.Key, x => x.Sum(w => (double)w.EffectiveAmount));
 			var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
 			var chargeMetaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 			var reversedTxIds = chargeMetaQ.Where(m => m.Status == FeeCollectionStatus.Reversed).Select(m => m.Id);
@@ -216,19 +245,22 @@ public partial class StudentFeeDetailsQueryService(
 				.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) })
 				.ToDictionary(x => x.ChargeId, x => x.Paid);
 
-			chargeDtos = approvedCharges.Select(c =>
+			chargeDtos.AddRange(approvedCharges.Select(c =>
 			{
 				var net = (double)c.Amount;
 				var paid = paidPerCharge.GetValueOrDefault(c.Id, 0d);
-				var pending = Math.Max(0d, net - paid);
+				var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0d);
+				var pending = Math.Max(0d, net - paid - waived);
 				return new ChargeDetailDto
 				{
-					ChargeId = c.Id, Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
-					Amount = net, PaidAmount = paid, PendingAmount = pending,
+					ChargeId = c.Id, SourceId = c.Id, SourceType = "Charge", IsSystemGenerated = false,
+					Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
+					Amount = net, PaidAmount = paid, PendingAmount = pending, WaivedAmount = waived,
+					CanWaive = pending > 0,
 					Status = pending <= 0d ? FeeCollectionStatus.Paid
 						: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				};
-			}).ToList();
+			}));
 		}
 
 		return new FeeCollectFormDto
@@ -253,14 +285,14 @@ public partial class StudentFeeDetailsQueryService(
 			));
 	}
 
-	private (double Amount, string Explanation, double WaivedAmount) ComputeLateFeeForLine(
+	private (double Amount, string Explanation, double WaivedAmount, double PaidAmount) ComputeLateFeeForLine(
 		EffectiveCollectionRules effectiveRules, DueFee dueFee, DateTime today, Dictionary<Guid, decimal> waivedByDueFee,
 		Dictionary<Guid, decimal> paidByDueFee,
 		ActiveExceptionWindow? activeWindow)
 	{
 		if (effectiveRules.Policy is null || dueFee.OutstandingAmount <= 0)
 		{
-			return (0, string.Empty, 0);
+			return (0, string.Empty, 0, 0);
 		}
 
 		var daysLate = (today - dueFee.DueDate.Date).Days;
@@ -279,6 +311,7 @@ public partial class StudentFeeDetailsQueryService(
 		var waived = waivedByDueFee.GetValueOrDefault(dueFee.Id, 0m);
 		var net = Math.Max(0, result.LateFee - waived - paidByDueFee.GetValueOrDefault(dueFee.Id, 0m));
 
-		return ((double)net, net > 0 ? result.Explanation : string.Empty, (double)waived);
+		return ((double)net, net > 0 ? result.Explanation : string.Empty, (double)waived,
+			(double)paidByDueFee.GetValueOrDefault(dueFee.Id, 0m));
 	}
 }

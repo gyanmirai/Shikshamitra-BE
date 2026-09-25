@@ -28,6 +28,7 @@ public partial class FeeCollectionSummaryQueryService(
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<ConcessionRequest, Guid> concessionRequestRepository,
 	FinanceScopeAccessService financeScopeAccessService,

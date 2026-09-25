@@ -3,7 +3,7 @@ module: finance
 domain: charge-management
 content_type: Reference
 status: active
-updated_on: 2026-09-22
+updated_on: 2026-09-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -25,12 +25,12 @@ Charge Management owns exceptional or source-system obligations that are not par
 | Ad hoc student obligation | Charge Management | Create one immutable student line per resolved student |
 | Late fee and collection rules | Collection Policy | Current rules apply to `DueFee`, not charge principal; any future applicability must be explicit and versioned |
 | Concession and proration | Their policy modules | Do not reduce charges by default |
-| Charge waiver eligibility/application | Charge Management and Fee Collection | Charge captures `AllowWaiver`; Fee Collection applies amount plus reason immediately against an eligible outstanding student line |
+| Charge waiver | Fee Collection | Charge Management stores no waiver setting; an authorized collector may waive a qualifying approved outstanding line in full with a mandatory reason |
 | Cash return | Refunds | Current refund scope excludes charge receipts; a charge-refund contract is required |
 | Settlement | Fee Collection | Collect approved outstanding charge lines and issue a separate charge receipt |
 | Revenue classification | Accounts | Every category needs a stable income-category/account mapping before automatic posting is reliable |
 
-Fee Structures and Charge Management meet in the student collection experience, receipts, accounts, audit, and reports. A charge must not be attached to a Fee Structure merely to make it collectible.
+Fee Structures and Charge Management meet at student eligibility and in the collection experience, receipts, accounts, audit, and reports. A student must have a fee-structure assignment for the charge's academic year before an ad hoc charge can be created, but the charge itself is not attached to that Fee Structure.
 
 ## Current shipped flow
 
@@ -81,7 +81,7 @@ The remaining items are deliberately not simulated in the UI. Collected lines ar
 |---|---|---|
 | Charge Category | Active category and approval flag are resolved | Also enforce same academic year, lifecycle/version, and revenue mapping |
 | Student scope | Audience is resolved to active students at create time | Intersect every list/read/mutation with the caller's server-owned scope and retain the audience snapshot |
-| Fee Structure | No direct link | Keep no direct link; share collection, receipt, account, audit, and report projections only |
+| Fee Structure | Same-year student assignment is required for charge eligibility | Filter audience candidates and revalidate create/update against the canonical assignment; do not attach the charge line to the Fee Structure |
 | Collection Policy | Late-fee rules operate on `DueFee`; `allowOnlineCollection` is surfaced through fee assignment | Decide and document charge applicability; enforce payment-channel eligibility on the server |
 | Concession/Proration | Operate on scheduled fee dues | Keep charges excluded unless a new versioned rule explicitly includes them |
 | Fee Collection | Approved charge lines can be partially or fully collected | Add atomic outstanding checks, concurrency protection, idempotency, and clear allocation ordering |
@@ -129,7 +129,6 @@ Add or preserve these fields:
 | Origin | `sourceModule`, `sourceEntityType`, `sourceEntityId`, `externalReference`, `correlationId` |
 | Command safety | idempotency key, request fingerprint, concurrency stamp |
 | Obligation | original amount, effective/due date, priority, purpose, notes |
-| Waiver eligibility | charge-level `AllowWaiver`, default OFF, copied immutably to generated student lines at approval |
 | Lifecycle | creator, submitter, checker, reasons, timestamps, immutable timeline |
 | Settlement | collected, outstanding, adjusted/waived, refunded/reversed amounts derived from linked records |
 
@@ -168,11 +167,11 @@ outstanding          = effective obligation - cleared collection + charge-refund
 ## Target frontend/backend flow
 
 1. **Open workspace.** Frontend requires `Finance.Fees.Charges.View`, selected academic year, and server-owned academic scope. Backend returns typed filters, category options, permissions, and allowed actions.
-2. **Resolve audience.** The author selects an explicit mode: all students in scope or selected students. A server preview returns the resolved count, exclusions, category/account/policy snapshot, total amount, and fingerprint. Empty selection never silently changes to all students.
+2. **Resolve audience.** The author selects an explicit mode: all eligible students in scope or selected students. Eligible students are enrolled in the selected academic scope and have a fee-structure assignment for that academic year. A server preview returns the resolved count, exclusions, category/account/policy snapshot, total amount, and fingerprint. Empty selection never silently changes to all students.
 3. **Create safely.** Frontend sends the preview fingerprint and one idempotency key. Backend re-resolves scope, validates category year/status, enforces the maximum batch size, and creates one line per student atomically.
 4. **Review.** Detail shows immutable scope, origin, amount, line states, creator, and timeline. Update is allowed only when the server returns Edit and the submitted concurrency stamp matches.
 5. **Approve or reject.** The checker selects pending lines and submits a reason where required. Backend enforces the exact action permission, maker-checker without role-name exceptions, scope, line stamps, and one legal transition per line.
-6. **Collect or waive.** Student collection reads approved outstanding charge lines with due date, category, origin, account classification, and captured waiver eligibility. It atomically allocates payment or, when `AllowWaiver` is ON and the user has the dedicated permission, immediately applies a waiver amount plus reason. Fees and charges remain separate receipt scopes even when paid in one user journey.
+6. **Collect or waive.** Student collection reads approved outstanding charge lines with due date, category, origin, and account classification. It atomically allocates payment or, when the user has the dedicated permission, uses a reason-only row toggle to waive the full live remaining balance. Fees and charges remain separate receipt scopes even when paid in one user journey.
 7. **Post and receipt.** After commit, an outbox publishes collection/account/audit/notification events. The charge receipt lists the exact allocations and links to the source charge.
 8. **Correct.** Incorrect unpaid obligations use void rules; paid obligations use linked reversal/refund commands. An incorrect posted waiver uses a linked reversal rather than editing history. UI previews the monetary impact and requires reason, permission, stamp, and idempotency key.
 9. **Report.** Operational view, audit, receipt, accounts, reconciliation, and export derive from the same immutable lines and allocations.
@@ -186,7 +185,7 @@ These are stop conditions for money-changing implementation, not frontend defaul
 | Do Collection Policy late fees apply to charges? | No; create an explicit Charge Category rule if needed |
 | Does `allowOnlineCollection` apply to charges? | Yes at transaction/payment-channel level, enforced by backend |
 | Can concessions or proration reduce charges? | No |
-| Can a charge be waived? | Only when that charge captured `AllowWaiver = true`; amount plus reason is applied immediately in Fee Collection with no approval queue |
+| Can a charge be waived? | Any qualifying approved positive outstanding student line may be waived in full from Fee Collection with a mandatory reason; Charge Management has no waiver setting |
 | Are partial charge payments allowed? | Yes, with atomic outstanding checks |
 | Can an author approve their own request? | No; use a dedicated audited override permission only if legally required |
 | What happens after incorrect unpaid approval? | Void/cancel with checker and reason |

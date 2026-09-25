@@ -90,6 +90,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<ReceiptNumberSequence> ReceiptNumberSequences { get; set; }
 	public DbSet<LateFeeCollectionAllocation> LateFeeCollectionAllocations { get; set; }
 	public DbSet<LateFeeWaiverApplication> LateFeeWaiverApplications { get; set; }
+	public DbSet<ChargeWaiverApplication> ChargeWaiverApplications { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Fee Refunds

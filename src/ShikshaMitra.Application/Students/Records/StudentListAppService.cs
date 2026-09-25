@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments;
@@ -27,6 +28,7 @@ public class StudentListAppService(
 	IAttendanceDayRepository attendanceDayRepository,
 	IRepository<StudentDocument, Guid> studentDocumentRepository,
 	IRepository<DocumentTypeEntity, Guid> documentTypeRepository,
+	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository,
 	IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
 	IBlobContainer blobContainer,
@@ -433,6 +435,14 @@ public class StudentListAppService(
 		if (divisionIdSet is { Count: > 0 })
 		{
 			query = query.Where(s => s.DivisionId != null && divisionIdSet.Contains(s.DivisionId.Value));
+		}
+
+		if (input.OnlyWithFeeStructureAssignment)
+		{
+			var assignments = await studentFeeStructureRepository.GetQueryableAsync();
+			query = query.Where(student => assignments.Any(assignment =>
+				assignment.StudentId == student.Id
+				&& assignment.AcademicYearId == input.AcademicYearId));
 		}
 
 		// 4. Enforce row-level query filtering based on user scope

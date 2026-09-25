@@ -329,6 +329,9 @@ public partial class ConcessionRequestAppService
     private static List<FeeHeadConcessionInput> MapFeeHeadInputs(IEnumerable<FeeHeadConcessionDto> items) =>
         items.Select(i => new FeeHeadConcessionInput(i.FeeHeadId, (DiscountBasis)i.BasedOn, i.Amount)).ToList();
 
+    private static List<DueFeeConcessionInput> MapDueFeeInputs(IEnumerable<DueFeeConcessionDto> items) =>
+        items.Select(i => new DueFeeConcessionInput(i.DueFeeId, i.FeeHeadId, i.Amount)).ToList();
+
     private async Task<ConcessionRequestDetailDto> MapDetailAsync(ConcessionRequest request)
     {
 		var canViewDocuments = await AuthorizationService.IsGrantedAsync(
@@ -411,6 +414,11 @@ public partial class ConcessionRequestAppService
                 Amount = m.UserSpecifiedConcessionAmountValue, DiscountAmount = m.FeeHeadConcessionAmount,
                 NetAmount = m.PostConcessionFeeHeadAmount,
             }).ToList(),
+            DueFeeConcessions = ConcessionRequestManager.ReadDueFeeEvidence(request)
+                .Select(x => new DueFeeConcessionDto
+                {
+                    DueFeeId = x.DueFeeId, FeeHeadId = x.FeeHeadId, Amount = x.Amount,
+                }).ToList(),
             RequiredDocuments = requiredDocs,
             SubmittedDocuments = request.ConcessionRequestDocuments.Select(d => new ConcessionSubmittedDocumentDto
             {

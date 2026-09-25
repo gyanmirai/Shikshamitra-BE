@@ -228,7 +228,7 @@ public static class ConcessionRequestTestHelper
 		CreateConcessionRequestDto input)
 	{
 		var contextUrl = $"{ConcessionRequestUrl}/context?studentId={input.StudentId}" +
-			$"&academicYearId={DefaultAcademicYearId}" +
+			$"&academicYearId={DefaultAcademicYearId}&concessionTypeId={input.ConcessionTypeId}" +
 			(input.StudentFeeStructureId.HasValue
 				? $"&studentFeeStructureId={input.StudentFeeStructureId.Value}" : string.Empty);
 		var context = await client.GetFromJsonAsync<ConcessionRequestContextDto>(contextUrl, JsonOptions)
@@ -266,7 +266,7 @@ public static class ConcessionRequestTestHelper
 		if (input.ConcessionPolicyId == Guid.Empty || input.ConcessionPolicyVersionId == Guid.Empty)
 		{
 			var contextUrl = $"{ConcessionRequestUrl}/context?studentId={input.StudentId}" +
-				$"&academicYearId={DefaultAcademicYearId}" +
+				$"&academicYearId={DefaultAcademicYearId}&concessionTypeId={input.ConcessionTypeId}" +
 				(input.StudentFeeStructureId.HasValue
 					? $"&studentFeeStructureId={input.StudentFeeStructureId.Value}" : string.Empty);
 			var context = await client.GetFromJsonAsync<ConcessionRequestContextDto>(contextUrl, JsonOptions)

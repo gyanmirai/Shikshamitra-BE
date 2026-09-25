@@ -26,9 +26,7 @@ public class CollectionPolicyAppService(
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<FeeCategory, Guid> feeCategoryRepository,
 	IAcademicYearRepository academicYearRepository,
-	IRepository<IdentityRole, Guid> roleRepository,
 	LateFeeCalculationService lateFeeCalculationService,
-	WaiverCalculationService waiverCalculationService,
 	ExceptionWindowResolver exceptionWindowResolver,
 	IClock clock)
 	: ApplicationService, ICollectionPolicyAppService
@@ -178,10 +176,6 @@ public class CollectionPolicyAppService(
 			LateFeeIncomeHeadId = sourceDto.LateFeeIncomeHeadId,
 			MaximumLateFeeAmount = sourceDto.MaximumLateFeeAmount,
 			MaximumChargingDays = sourceDto.MaximumChargingDays,
-			EnableWaiver = sourceDto.EnableWaiver,
-			EnableChargeWaiver = sourceDto.EnableChargeWaiver,
-			RequiresApproval = sourceDto.RequiresApproval,
-			ApprovalRoleIds = sourceDto.ApprovalRoleIds,
 			AllowOnlineCollection = sourceDto.AllowOnlineCollection
 		};
 
@@ -338,23 +332,6 @@ public class CollectionPolicyAppService(
 			Explanation = lateFeeResult.Explanation
 		};
 
-		if (input.RequestedWaiverAmount is { } requestedAmount)
-		{
-			var requestedFromPercentage = input.RequestedWaiverPercentage is { } pct
-				? lateFeeResult.LateFee * pct / 100m
-				: (decimal?)null;
-			var waiverResult = waiverCalculationService.Calculate(policy, new WaiverCalculationInput(
-				requestedFromPercentage ?? requestedAmount,
-				lateFeeResult.LateFee,
-				Clock.Now,
-				FeeHeadId: input.FeeHeadId));
-
-			response.EffectiveWaiverAmount = waiverResult.EffectiveWaiverAmount;
-			response.WaiverIsExpired = waiverResult.IsExpired;
-			response.WaiverRequiresApproval = waiverResult.RequiresApproval;
-			response.WaiverExplanation = waiverResult.Explanation;
-		}
-
 		return response;
 	}
 
@@ -430,12 +407,6 @@ public class CollectionPolicyAppService(
 				throw new BusinessException(CollectionPolicyErrorCodes.InvalidFeeHeadReference)
 					.WithData("reason", "inactive_fee_category");
 			}
-		}
-
-		var roleIds = model.ApprovalRoleIds.Distinct().ToList();
-		if (roleIds.Count > 0 && (await roleRepository.GetListAsync(x => roleIds.Contains(x.Id))).Count != roleIds.Count)
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule).WithData("field", "approvalRoleIds");
 		}
 
 		return model;

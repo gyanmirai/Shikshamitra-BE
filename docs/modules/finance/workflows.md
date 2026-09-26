@@ -3,7 +3,7 @@ module: finance
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-21
+updated_on: 2026-09-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -20,7 +20,7 @@ TL;DR: use this page to understand how Finance changes affect due rows, approval
 | Concession request | Select an active policy/version on the request, preview, save a draft, attach evidence, submit, independently approve/reject, withdraw, or reverse | Request-pinned policy snapshot, frozen submission evidence, allocation totals, exact assignment dues, concurrency/idempotency, maker-checker, and balance updates |
 | Fee adjustment | Create credit pool from paid due rows, approve and apply to pending due rows, reject, or cancel pending request | Paid source rows, pending target rows, idempotency key, and maker-checker rule |
 | Fee collection | Load student fee details, collect payment, allocate to due rows, and create receipt records | Payment amount, due allocation, receipt numbering, and audit trail |
-| Fee Collection waiver target | Capture `Allow waiver` on each effective late-fee rule and Charge Management charge, then enter amount plus reason and apply immediately from Fee Collection | Dedicated action permission, student scope, captured source eligibility, live balance, idempotency, concurrency, and separate non-cash ledger evidence; see [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) |
+| Fee Collection waiver target | Show a waiver toggle on each eligible late-fee and approved charge row, require only a reason, and waive the full live remaining balance immediately | Dedicated action permission, student scope, source status, server-derived amount, idempotency, concurrency, and separate non-cash ledger evidence; see [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) |
 | Fee refund | Check eligibility, create refund request, update status, and preserve receipt/payment history | Refund eligibility and non-overlap with adjustment flow |
 | Reconciliation | Create or review reconciliation records, approve, or reject | Bank/account consistency and approval audit |
 | Finance reports | Select report filters, preview, export, and audit output | Preview/export parity and tenant isolation |

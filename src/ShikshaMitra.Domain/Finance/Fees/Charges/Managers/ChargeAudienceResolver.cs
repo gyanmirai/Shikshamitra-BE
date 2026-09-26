@@ -4,14 +4,19 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 namespace ShikshaMitra.Finance.Fees.Charges;
 
 /// <summary>
-/// Resolves a <see cref="ChargeAudience"/> to distinct enrolled student IDs.
+/// Resolves a <see cref="ChargeAudience"/> to distinct enrolled student IDs that have a
+/// fee-structure assignment for the requested academic year.
 /// </summary>
-public class ChargeAudienceResolver(IStudentRepository studentRepository) : DomainService
+public class ChargeAudienceResolver(
+	IStudentRepository studentRepository,
+	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository) : DomainService
 {
 	public const int MaxBatchSize = 500;
 
@@ -30,18 +35,24 @@ public class ChargeAudienceResolver(IStudentRepository studentRepository) : Doma
 				.WithData("Message", "No enrolled students match the selected academic scope");
 		}
 
-		var candidateIds = candidates.Select(s => s.Id).ToHashSet();
+		var scopedCandidateIds = candidates.Select(s => s.Id).ToHashSet();
+		var assignedStudentIds = (await studentFeeStructureRepository.GetListAsync(assignment =>
+			assignment.AcademicYearId == academicYearId
+			&& scopedCandidateIds.Contains(assignment.StudentId)))
+			.Select(assignment => assignment.StudentId)
+			.ToHashSet();
+		var eligibleCandidates = candidates.Where(student => assignedStudentIds.Contains(student.Id)).ToList();
 
 		IReadOnlyList<Guid> resolved;
 
 		if (audience.Selection.Mode == StudentSelectionMode.AllInScope)
 		{
-			resolved = candidateIds.ToList();
+			resolved = assignedStudentIds.ToList();
 		}
 		else
 		{
 			var explicitIds = audience.Selection.StudentIds!;
-			var invalid = explicitIds.Where(id => !candidateIds.Contains(id)).ToList();
+			var invalid = explicitIds.Where(id => !scopedCandidateIds.Contains(id)).ToList();
 			if (invalid.Count > 0)
 			{
 				throw new BusinessException(FinanceChargeErrorCodes.StudentNotInChargeScope)
@@ -49,7 +60,22 @@ public class ChargeAudienceResolver(IStudentRepository studentRepository) : Doma
 					.WithData("Message", "One or more selected students are outside the academic scope");
 			}
 
+			var unassigned = explicitIds.Where(id => !assignedStudentIds.Contains(id)).ToList();
+			if (unassigned.Count > 0)
+			{
+				throw new BusinessException(FinanceChargeErrorCodes.StudentFeeStructureNotAssigned)
+					.WithData("StudentIds", string.Join(",", unassigned))
+					.WithData("AcademicYearId", academicYearId)
+					.WithData("Message", "A fee structure must be assigned before a charge can be created for the student");
+			}
+
 			resolved = explicitIds.Distinct().ToList();
+		}
+
+		if (resolved.Count == 0)
+		{
+			throw new BusinessException(FinanceChargeErrorCodes.EmptyChargeAudience)
+				.WithData("Message", "No students with an assigned fee structure match the selected academic scope");
 		}
 
 		if (resolved.Count > MaxBatchSize)
@@ -59,7 +85,7 @@ public class ChargeAudienceResolver(IStudentRepository studentRepository) : Doma
 				.WithData("Max", MaxBatchSize);
 		}
 
-		foreach (var student in candidates.Where(s => resolved.Contains(s.Id)))
+		foreach (var student in eligibleCandidates.Where(s => resolved.Contains(s.Id)))
 		{
 			if (student.StandardId is null || student.DivisionId is null)
 			{

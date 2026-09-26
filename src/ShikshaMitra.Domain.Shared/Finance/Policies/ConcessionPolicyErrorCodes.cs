@@ -26,4 +26,7 @@ public static class ConcessionPolicyErrorCodes
 	public const string ConcurrencyConflict = Prefix + "010020";
 	public const string ChangeReasonRequired = Prefix + "010021";
 	public const string DefaultPolicyMustBeActive = Prefix + "010022";
+	public const string ApplicabilityRequired = Prefix + "010023";
+	public const string InvalidApplicability = Prefix + "010024";
+	public const string PolicyNotApplicable = Prefix + "010025";
 }

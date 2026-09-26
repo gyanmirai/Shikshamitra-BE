@@ -23,7 +23,7 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_Charge_With_Approval_Required_Category_Returns_Pending_Status()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: true);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 
@@ -45,7 +45,7 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_Charge_With_No_Approval_Category_Returns_Approved_Status_Immediately()
 	{
-		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: false);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 
@@ -63,7 +63,7 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_Charge_Response_Has_All_Scope_Fields_Populated()
 	{
-		var (studentId, boardId) = await ChargeTestHelper.CreateStudentAsync(Client);
+		var (studentId, boardId) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: true);
 		var request = ChargeTestHelper.BuildCreateDto(studentId, categoryId);
 

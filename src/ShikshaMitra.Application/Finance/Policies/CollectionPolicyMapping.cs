@@ -189,10 +189,10 @@ internal static class CollectionPolicyMapping
 			input.LateFeeIncomeHeadId,
 			input.MaximumLateFeeAmount,
 			input.MaximumChargingDays,
-			input.EnableWaiver,
-			input.EnableChargeWaiver,
-			input.RequiresApproval,
-			input.ApprovalRoleIds,
+			false,
+			false,
+			false,
+			Array.Empty<Guid>(),
 			input.AllowOnlineCollection);
 
 	public static CollectionPolicyDto ToDto(CollectionPolicy entity) => new()
@@ -223,10 +223,6 @@ internal static class CollectionPolicyMapping
 		LateFeeIncomeHeadId = entity.LateFeeIncomeHeadId,
 		MaximumLateFeeAmount = entity.MaximumLateFeeAmount,
 		MaximumChargingDays = entity.MaximumChargingDays,
-		EnableWaiver = entity.EnableWaiver,
-		EnableChargeWaiver = entity.EnableChargeWaiver,
-		RequiresApproval = entity.RequiresApproval,
-		ApprovalRoleIds = entity.GetApprovalRoleIds().ToList(),
 		AllowOnlineCollection = entity.AllowOnlineCollection,
 		Version = entity.Version,
 		CreationTime = entity.CreationTime,

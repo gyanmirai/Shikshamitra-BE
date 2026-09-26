@@ -179,7 +179,6 @@ public partial class FeeStructureAppService
 			foreach (var row in result.Coverage)
 			{
 				row.Collection = cp is { EnableLateFee: true } && cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId) ? "Late fee applies" : "No late fee";
-				if (cp is { EnableWaiver: true, EnableLateFee: true } && cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId)) row.Collection += "; waiver eligible";
 				row.Concession = cn != null && candidate.ConcessionApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Eligible on approval" : "Not eligible";
 				row.Refund = rp == null ? "No refund policy attached" : rp.FeeHeadScope != RefundFeeHeadScope.SelectedFeeHeads || rp.ApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Policy eligible" : "Excluded";
 				var rule = pp?.Rules.SingleOrDefault(x => x.FeeHeadId == row.FeeHeadId);
@@ -229,9 +228,6 @@ public partial class FeeStructureAppService
 			PolicyId = version.PolicyId, PolicyVersionId = version.Id, PolicyName = version.PolicyName, PolicyCode = policy.PolicyCode, IsAttachable = true,
 			CoveredLateFeeHeadIds = ids.Intersect(policy.LateFeeApplyOnFeeHeads).ToList(), StructureHeadsWithoutLateFee = ids.Except(policy.LateFeeApplyOnFeeHeads).ToList(),
 			PolicyLateFeeHeadsNotInStructure = policy.LateFeeApplyOnFeeHeads.Except(ids).ToList(),
-			CoveredWaiverHeadIds = policy.EnableWaiver ? ids.Intersect(policy.LateFeeApplyOnFeeHeads).ToList() : [],
-			StructureHeadsWithoutWaiver = policy.EnableWaiver ? ids.Except(policy.LateFeeApplyOnFeeHeads).ToList() : ids,
-			PolicyWaiverHeadsNotInStructure = policy.EnableWaiver ? policy.LateFeeApplyOnFeeHeads.Except(ids).ToList() : []
 		};
 		if (policy.EnableLateFee && result.CoveredLateFeeHeadIds.Count == 0) result.Warnings.Add("No late fee will be charged: no policy late-fee heads overlap this structure.");
 		if (result.PolicyLateFeeHeadsNotInStructure.Count > 0) result.Warnings.Add("Some policy Fee Heads are absent from this structure.");

@@ -48,8 +48,12 @@ public class ConcessionRequestController(IConcessionRequestAppService concession
 	public Task<ConcessionRequestContextDto> GetContextAsync(
 		[FromQuery] Guid academicYearId,
 		[FromQuery] Guid studentId,
-		[FromQuery] Guid? studentFeeStructureId = null) =>
-		concessionRequestAppService.GetContextAsync(academicYearId, studentId, studentFeeStructureId);
+		[FromQuery] Guid? studentFeeStructureId = null,
+		[FromQuery] Guid? concessionTypeId = null,
+		[FromQuery] Guid? concessionPolicyId = null,
+		[FromQuery] Guid? concessionPolicyVersionId = null) =>
+		concessionRequestAppService.GetContextAsync(academicYearId, studentId, studentFeeStructureId,
+			concessionTypeId, concessionPolicyId, concessionPolicyVersionId);
 
 	[HttpPost("preview")]
 	[ProducesResponseType(typeof(ConcessionRequestPreviewDto), StatusCodes.Status200OK)]

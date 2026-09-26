@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text.Json;
 using ShikshaMitra.Finance.Fees.Concessions;
 using Volo.Abp;
@@ -53,6 +54,13 @@ internal static class ConcessionPolicyMapping
 		_ => null
 	};
 
+	public static ConcessionFeeHeadScope ParseFeeHeadScope(string? value) => Normalize(value) switch
+	{
+		"entirefeestructure" => ConcessionFeeHeadScope.EntireFeeStructure,
+		"selectedfeeheads" => ConcessionFeeHeadScope.SelectedFeeHeads,
+		_ => throw new BusinessException(ConcessionPolicyErrorCodes.InvalidApplicability)
+	};
+
 	public static ConcessionPolicyUpdateModel ToUpdateModel(CreateUpdateConcessionPolicyDto input, string policyCode) => new(
 		input.PolicyName,
 		policyCode,
@@ -66,7 +74,10 @@ internal static class ConcessionPolicyMapping
 		input.MaximumPercentage,
 		input.MaximumFixedAmount,
 		ParseApplyOn(input.ApplyOn),
-		ParseRounding(input.RoundingMethod));
+		ParseRounding(input.RoundingMethod),
+		[],
+		ConcessionFeeHeadScope.EntireFeeStructure,
+		[]);
 
 	public static ConcessionPolicyDto ToDto(ConcessionPolicy entity) => new()
 	{
@@ -85,6 +96,9 @@ internal static class ConcessionPolicyMapping
 		MaximumFixedAmount = entity.MaximumFixedAmount,
 		ApplyOn = entity.ApplyOn.ToString(),
 		RoundingMethod = entity.RoundingMethod.ToString(),
+		ApplicableConcessionTypeIds = entity.ApplicableConcessionTypeIds.ToList(),
+		FeeHeadScope = entity.FeeHeadScope.ToString(),
+		ApplicableFeeHeadIds = entity.ApplicableFeeHeadIds.ToList(),
 		Version = entity.Version,
 		CreationTime = entity.CreationTime,
 		CreatorId = entity.CreatorId,

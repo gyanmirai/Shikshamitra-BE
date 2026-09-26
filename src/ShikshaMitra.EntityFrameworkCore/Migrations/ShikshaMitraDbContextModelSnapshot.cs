@@ -9316,6 +9316,18 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ApplicableConcessionTypeIdsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]");
+
+                    b.Property<string>("ApplicableFeeHeadIdsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]");
+
                     b.Property<int>("ApplyOn")
                         .HasColumnType("integer");
 
@@ -9354,6 +9366,9 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
+
+                    b.Property<int>("FeeHeadScope")
+                        .HasColumnType("integer");
 
                     b.Property<decimal?>("FixedAmount")
                         .HasPrecision(18, 2)
@@ -11282,6 +11297,75 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Finance_ChargeCollectionRecords", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.ChargeWaiverApplication", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AppliedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ChargeAmount")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("ChargeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<decimal>("EffectiveAmount")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChargeId")
+                        .HasDatabaseName("IX_ChargeWaiverApplications_ChargeId");
+
+                    b.HasIndex("AppliedByUserId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_ChargeWaiverApplications_Actor_IdempotencyKey");
+
+                    b.ToTable("Finance_ChargeWaiverApplications", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeCollection.DueFee", b =>
                 {
                     b.Property<Guid>("Id")
@@ -11827,6 +11911,10 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -11863,6 +11951,11 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("DueFeeId")
                         .HasDatabaseName("IX_LateFeeWaiverApplications_DueFeeId");
+
+                    b.HasIndex("AppliedByUserId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UX_LateFeeWaiverApplications_Actor_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "Status")
                         .HasDatabaseName("IX_LateFeeWaiverApplications_Tenant_Status");

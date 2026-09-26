@@ -177,7 +177,6 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				CompoundFrequency = "Daily",
 				RoundingMethod = "None",
 				MaximumLateFeeAmount = maximumLateFeeAmount.HasValue ? (decimal)maximumLateFeeAmount.Value : null,
-				EnableWaiver = enableLateFee,
 				AllowOnlineCollection = true,
 			});
 			policy = await _collectionPolicies.GetAsync(policy.Id);
@@ -275,8 +274,14 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 			var form = await _feeCollections.GetCollectFormAsync(studentId, academicYearId);
 
 			var line = form.Ledger.Should_ContainLine(dueFeeId);
-			line.LateFeeAmount.ShouldBe(300); // 15 days * ₹20/day, 0-day grace
-			line.LateFeeExplanation.ShouldNotBeNullOrWhiteSpace();
+			line.DueFeeId.ShouldBe(dueFeeId);
+			line.LateFeeAmount.ShouldBe(0); // late fees are projected as system charges, not ledger columns
+			line.CanWaive.ShouldBeFalse();
+			var lateFeeCharge = form.Charges.Single(x => x.SourceType == "LateFee" && x.SourceId == dueFeeId);
+			lateFeeCharge.PendingAmount.ShouldBe(300); // 15 days * ₹20/day, 0-day grace
+			lateFeeCharge.IsSystemGenerated.ShouldBeTrue();
+			lateFeeCharge.CanWaive.ShouldBeTrue();
+			lateFeeCharge.Explanation.ShouldNotBeNullOrWhiteSpace();
 		}
 	}
 
@@ -290,8 +295,8 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 
 			var form = await _feeCollections.GetCollectFormAsync(studentId, academicYearId);
 
-			var line = form.Ledger.Should_ContainLine(dueFeeId);
-			line.LateFeeAmount.ShouldBe(500); // raw would be 2000, capped
+			var lateFeeCharge = form.Charges.Single(x => x.SourceType == "LateFee" && x.SourceId == dueFeeId);
+			lateFeeCharge.PendingAmount.ShouldBe(500); // raw would be 2000, capped
 		}
 	}
 
@@ -310,10 +315,10 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 			});
 
 			var form = await _feeCollections.GetCollectFormAsync(studentId, academicYearId);
-			var line = form.Ledger.Should_ContainLine(dueFeeId);
+			var lateFeeCharge = form.Charges.Single(x => x.SourceType == "LateFee" && x.SourceId == dueFeeId);
 
-			line.LateFeeAmount.ShouldBe(150); // 200 computed - 50 waived
-			line.LateFeeWaivedAmount.ShouldBe(50);
+			lateFeeCharge.PendingAmount.ShouldBe(150); // 200 computed - 50 waived
+			lateFeeCharge.WaivedAmount.ShouldBe(50);
 		}
 	}
 

@@ -12,6 +12,13 @@ public class FeeHeadConcessionDto
 	public decimal Amount { get; set; }
 }
 
+public class DueFeeConcessionDto
+{
+	public Guid DueFeeId { get; set; }
+	public Guid FeeHeadId { get; set; }
+	public decimal Amount { get; set; }
+}
+
 public class CreateConcessionRequestDto
 {
 	public Guid StudentId { get; set; }
@@ -24,6 +31,7 @@ public class CreateConcessionRequestDto
 	public string? PreviewFingerprint { get; set; }
 	public string? Remarks { get; set; }
 	public List<FeeHeadConcessionDto> FeeHeadConcessions { get; set; } = [];
+	public List<DueFeeConcessionDto> DueFeeConcessions { get; set; } = [];
 	public List<UploadConcessionDocumentEntryDto> Documents { get; set; } = [];
 }
 
@@ -105,6 +113,7 @@ public class ConcessionRequestDetailDto
 	public Guid StandardId { get; set; }
 	public Guid DivisionId { get; set; }
 	public List<FeeHeadConcessionDetailDto> FeeHeadConcessions { get; set; } = [];
+	public List<DueFeeConcessionDto> DueFeeConcessions { get; set; } = [];
 	public List<ConcessionDocumentRequirementDto> RequiredDocuments { get; set; } = [];
 	public List<ConcessionSubmittedDocumentDto> SubmittedDocuments { get; set; } = [];
 	public string DocumentSubmissionState { get; set; } = string.Empty;
@@ -307,6 +316,7 @@ public class ConcessionRequestPreviewInputDto
 	public Guid ConcessionPolicyVersionId { get; set; }
 	public Guid ConcessionTypeId { get; set; }
 	public List<FeeHeadConcessionDto> FeeHeadConcessions { get; set; } = [];
+	public List<DueFeeConcessionDto> DueFeeConcessions { get; set; } = [];
 }
 
 public class ConcessionRequestPreviewDto
@@ -381,6 +391,9 @@ public class ConcessionPolicyOptionDto
 	public decimal? MaximumFixedAmount { get; set; }
 	public string ApplyOn { get; set; } = string.Empty;
 	public string RoundingMethod { get; set; } = string.Empty;
+	public List<Guid> ApplicableConcessionTypeIds { get; set; } = [];
+	public string FeeHeadScope { get; set; } = string.Empty;
+	public List<Guid> ApplicableFeeHeadIds { get; set; } = [];
 }
 
 public class ConcessionEligibleFeeHeadDto

@@ -76,7 +76,6 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 			CompoundFrequency = "Daily",
 			RoundingMethod = "RoundUp",
 			MaximumLateFeeAmount = 2000,
-			EnableWaiver = true,
 			AllowOnlineCollection = true
 		};
 	}
@@ -360,24 +359,6 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 
 		result.LateFee.ShouldBe(0);
 		result.IsExempt.ShouldBeTrue();
-	}
-
-	[Fact]
-	public async Task Simulate_Includes_A_Waiver_Breakdown_When_A_Requested_Amount_Is_Given()
-	{
-		var policy = await _collectionPolicies.CreateAsync(await BuildInputAsync(_guidGenerator.Create(), "Simulate Waiver Policy"));
-
-		var result = await _collectionPolicies.SimulateAsync(policy.Id, new CollectionPolicySimulateRequestDto
-		{
-			DaysLate = 15,
-			OutstandingAmount = 5000,
-			// Late fee here is 160 (see the PerDay fixture above). The remaining late fee is
-			// the only limit applied to the requested waiver.
-			RequestedWaiverAmount = 1000
-		});
-
-		result.EffectiveWaiverAmount.ShouldBe(160);
-		result.WaiverExplanation.ShouldNotBeNullOrWhiteSpace();
 	}
 
 	// ── Per-fee-head overrides (Phase 4a) ────────────────────────────────────

@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -23,6 +26,11 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public ConcessionApplyOn ApplyOn { get; protected set; }
 	public RoundingMethodType RoundingMethod { get; protected set; }
 	public int Version { get; protected set; }
+	public string ApplicableConcessionTypeIdsJson { get; protected set; } = "[]";
+	public ConcessionFeeHeadScope FeeHeadScope { get; protected set; }
+	public string ApplicableFeeHeadIdsJson { get; protected set; } = "[]";
+	public IReadOnlyList<Guid> ApplicableConcessionTypeIds => ReadIds(ApplicableConcessionTypeIdsJson);
+	public IReadOnlyList<Guid> ApplicableFeeHeadIds => ReadIds(ApplicableFeeHeadIdsJson);
 
 	protected ConcessionPolicy() { }
 
@@ -72,6 +80,10 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			model.CalculationMethod == ConcessionCalculationMethod.FixedAmount ? model.MaximumFixedAmount : null;
 		ApplyOn = model.ApplyOn;
 		RoundingMethod = model.RoundingMethod;
+		ApplicableConcessionTypeIdsJson = JsonSerializer.Serialize(NormalizeIds(model.ApplicableConcessionTypeIds));
+		FeeHeadScope = model.FeeHeadScope;
+		ApplicableFeeHeadIdsJson = JsonSerializer.Serialize(model.FeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads
+			? NormalizeIds(model.ApplicableFeeHeadIds) : []);
 		Version++;
 	}
 
@@ -113,7 +125,16 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		MaximumFixedAmount,
 		ApplyOn,
 		RoundingMethod,
-		Version);
+		Version,
+		ApplicableConcessionTypeIds.ToList(),
+		FeeHeadScope,
+		ApplicableFeeHeadIds.ToList());
+
+	private static List<Guid> NormalizeIds(IReadOnlyList<Guid>? ids) =>
+		(ids ?? []).Where(id => id != Guid.Empty).Distinct().OrderBy(id => id).ToList();
+
+	private static List<Guid> ReadIds(string? json) =>
+		string.IsNullOrWhiteSpace(json) ? [] : JsonSerializer.Deserialize<List<Guid>>(json) ?? [];
 
 	private static void ValidateRules(ConcessionPolicyUpdateModel model)
 	{
@@ -156,7 +177,10 @@ public sealed record ConcessionPolicyUpdateModel(
 	decimal? MaximumPercentage,
 	decimal? MaximumFixedAmount,
 	ConcessionApplyOn ApplyOn,
-	RoundingMethodType RoundingMethod);
+	RoundingMethodType RoundingMethod,
+	IReadOnlyList<Guid>? ApplicableConcessionTypeIds = null,
+	ConcessionFeeHeadScope FeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure,
+	IReadOnlyList<Guid>? ApplicableFeeHeadIds = null);
 
 public sealed record ConcessionPolicySnapshot(
 	Guid PolicyId,
@@ -173,4 +197,7 @@ public sealed record ConcessionPolicySnapshot(
 	decimal? MaximumFixedAmount,
 	ConcessionApplyOn ApplyOn,
 	RoundingMethodType RoundingMethod,
-	int Version);
+	int Version,
+	List<Guid>? ApplicableConcessionTypeIds = null,
+	ConcessionFeeHeadScope FeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure,
+	List<Guid>? ApplicableFeeHeadIds = null);

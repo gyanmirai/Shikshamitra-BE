@@ -113,6 +113,10 @@ public partial class StudentFeeDetailsQueryService
 			&& c.AcademicYearId == academicYearId && c.Status == ChargeStatus.Approved).ToList();
 
 		if (studentCharges.Count == 0) return null;
+		var chargeIds = studentCharges.Select(c => c.Id).ToList();
+		var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
+			.GroupBy(x => x.ChargeId)
+			.ToDictionary(x => x.Key, x => x.Sum(w => (double)w.EffectiveAmount));
 
 		var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
 		var reversedTxIds = await GetReversedTransactionIdsAsync();
@@ -126,11 +130,13 @@ public partial class StudentFeeDetailsQueryService
 		{
 			var net = (double)c.Amount;
 			var paid = paidPerCharge.GetValueOrDefault(c.Id, 0d);
-			var pending = Math.Max(0d, net - paid);
+			var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0d);
+			var pending = Math.Max(0d, net - paid - waived);
 			return new FeeChargeDetailDto
 			{
 				ChargeId = c.Id, Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
 				Amount = net, PaidAmount = paid, PendingAmount = pending,
+				WaivedAmount = waived, CanWaive = pending > 0,
 				Status = pending <= 0d ? FeeCollectionStatus.Paid
 					: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 			};

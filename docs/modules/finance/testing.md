@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-09-21
+updated_on: 2026-09-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -31,7 +31,7 @@ git diff --check
 | Concessions | `ConcessionTypeLifecycle_Tests`, `ConcessionRequestCoreApi_Tests`, `ConcessionRequestValidationApi_Tests`, `ConcessionRequestWorkflowApi_Tests` |
 | Fee adjustments | `FeeAdjustmentApi_Tests` |
 | Fee collection | `FeeCollectionAppServiceV2_Tests`, `FeeCollectionV2Api_Tests`, `CollectFeeInputValidator_Tests` |
-| Fee Collection waivers | Cover per-rule/per-charge toggle capture, both source types, amount/reason validation, dedicated apply permission, student scope, live-balance recalculation, immediate application, idempotency, and non-cash ledger evidence; use the [target acceptance scenarios](./references/fee-collection-waiver-end-to-end.md#team-acceptance-scenarios) |
+| Fee Collection waivers | Cover absence of policy/charge waiver configuration, both source types, row-toggle visibility, reason-only input, server-derived full balance, dedicated apply permission, student scope, idempotency, and non-cash ledger evidence; use the [target acceptance scenarios](./references/fee-collection-waiver-end-to-end.md#acceptance-scenarios) |
 | Refunds and receipts | `FeeRefundApi_Tests`, `FeeReceiptApi_Tests`, receipt domain tests |
 | Accounts and reconciliation | `TransactionAppService_Tests`, `ReconciliationAppService_Tests`, `ReconciliationApi_Tests` |
 | Audit | `FinanceAuditTrailAppService_Tests` |

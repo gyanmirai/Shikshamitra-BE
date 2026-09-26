@@ -1,15 +1,23 @@
 using System;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common;
 using ShikshaMitra.Common.Responses;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
+using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Data;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Enrollments.Registrations;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.Charges;
 
@@ -40,7 +48,10 @@ public static class ChargeTestHelper
 	/// populated so the student satisfies the <c>ChargeManager</c> scope guard.
 	/// Returns the student ID and derived board ID.
 	/// </summary>
-	public static async Task<(Guid StudentId, Guid BoardId)> CreateStudentAsync(HttpClient client)
+	public static async Task<(Guid StudentId, Guid BoardId)> CreateStudentAsync(
+		HttpClient client,
+		ShikshaMitraApiTestFactory factory,
+		bool assignFeeStructure = true)
 	{
 		var dto = new CreateDirectRegistrationDto
 		{
@@ -69,7 +80,34 @@ public static class ChargeTestHelper
 		var details = result.Data
 			?? throw new InvalidOperationException("Null student details in response");
 
+		if (assignFeeStructure)
+		{
+			await AddFeeStructureAssignmentAsync(details.StudentId, factory);
+		}
+
 		return (details.StudentId, details.AcademicBoardId);
+	}
+
+	private static async Task AddFeeStructureAssignmentAsync(
+		Guid studentId,
+		ShikshaMitraApiTestFactory factory)
+	{
+		using var scope = factory.Services.CreateScope();
+		var provider = scope.ServiceProvider;
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (provider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+		using (var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+		{
+			var structures = await provider.GetRequiredService<IRepository<FeeStructure, Guid>>()
+				.GetListAsync(structure => structure.StandardId == DefaultStandardId);
+			var structure = structures.FirstOrDefault()
+				?? throw new InvalidOperationException("Charge API tests require a seeded fee structure for the default standard.");
+			await provider.GetRequiredService<IRepository<StudentFeeStructure, Guid>>().InsertAsync(
+				new StudentFeeStructure(
+					Guid.NewGuid(), tenantId, studentId, structure.Id, DefaultAcademicYearId),
+				autoSave: false);
+			await uow.CompleteAsync();
+		}
 	}
 
 	/// <summary>

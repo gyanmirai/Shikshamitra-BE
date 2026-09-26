@@ -19,4 +19,9 @@ public class GetStudentsByScopeRequest
 	public List<Guid> ClassIds { get; set; } = [];
 
 	public List<Guid>? DivisionIds { get; set; }
+
+	/// <summary>
+	/// Limits results to students with a fee-structure assignment for <see cref="AcademicYearId"/>.
+	/// </summary>
+	public bool OnlyWithFeeStructureAssignment { get; set; }
 }

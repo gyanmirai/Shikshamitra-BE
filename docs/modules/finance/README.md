@@ -3,7 +3,7 @@ module: finance
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-09-21
+updated_on: 2026-09-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -31,7 +31,7 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 | 10 | [Proration Policy end-to-end](./references/proration-policy-end-to-end.md) | Review the current gap and implement policy versioning, fee attachment, charge periods, demand calculation, downstream integrations, and rollout |
 | 11 | [Concession flow review](./references/concession-flow-end-to-end-review.md) | Review the current cross-stack verdict, defects, edge cases, test gaps, remediation priorities, and release gates |
 | 12 | [Charge management end to end](./references/charge-management-end-to-end.md) | Review the shipped charge, collection, receipt, source-integration flow, release gaps, target contract, and phased delivery gates |
-| 13 | [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) | Review the approved target for per-late-fee/per-charge eligibility and immediate amount-plus-reason application in Fee Collection |
+| 13 | [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) | Review the approved target for a reason-only full-balance waiver toggle on eligible late-fee and charge rows in Fee Collection |
 
 ## Source of truth
 

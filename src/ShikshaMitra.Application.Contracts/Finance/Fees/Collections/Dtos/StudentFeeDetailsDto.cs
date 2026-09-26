@@ -75,6 +75,8 @@ public class FeeChargeDetailDto
     public double Amount { get; set; }
     public double PaidAmount { get; set; }
     public double PendingAmount { get; set; }
+    public double WaivedAmount { get; set; }
+    public bool CanWaive { get; set; }
     public FeeCollectionStatus Status { get; set; }
 }
 

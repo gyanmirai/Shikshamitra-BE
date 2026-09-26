@@ -17,7 +17,11 @@ public class FeeCollectFormDto
     /// <summary>Month-wise breakdown of outstanding obligations, ordered chronologically.</summary>
     public List<FeeLedgerMonthDto> Ledger { get; set; } = [];
 
-    /// <summary>Approved charges that have not yet been fully paid.</summary>
+    /// <summary>
+    /// Collectible charges. Includes approved Charge Management charges and system-generated
+    /// late-fee charges. System-generated late-fee charges exist only in Fee Collection and
+    /// use their DueFee id as both ChargeId and SourceId.
+    /// </summary>
     public List<ChargeDetailDto> Charges { get; set; } = [];
 
     /// <summary>
@@ -110,10 +114,8 @@ public class FeeLedgerLineDto
 	public FeeCollectionStatus Status { get; set; }
 
 	/// <summary>
-	/// Computed via LateFeeCalculationService (Finance/Policies), net of any Applied
-	/// LateFeeWaiverApplication rows for this due line — this is what's actually collectible,
-	/// not the raw formula output. Zero when no Collection Policy resolves, the student is
-	/// exempt, or the line isn't yet overdue.
+	/// Legacy ledger field retained for contract compatibility. Late fees are now returned as
+	/// system-generated entries in <see cref="FeeCollectFormDto.Charges"/>, so this value is zero.
 	/// </summary>
 	public double LateFeeAmount { get; set; }
 
@@ -122,6 +124,9 @@ public class FeeLedgerLineDto
 
 	/// <summary>Sum of Applied waivers against this due line's late fee — shown so the cashier can see a waiver was already granted, not just a smaller number.</summary>
 	public double LateFeeWaivedAmount { get; set; }
+
+	/// <summary>Legacy ledger action flag. Waiver actions are exposed on the generated charge.</summary>
+	public bool CanWaive { get; set; }
 }
 
 /// <summary>Query parameters for the collect-form endpoint.</summary>

@@ -10,6 +10,7 @@ using ShikshaMitra.Common.Files;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using Volo.Abp;
 using Volo.Abp.Data;
@@ -23,6 +24,30 @@ namespace ShikshaMitra.Finance.Fees.Concessions;
 
 public partial class ConcessionRequestAppService
 {
+	private List<ConcessionDueFeeAllocation> BuildSubmittedApprovalAllocations(
+		ConcessionRequest request,
+		List<DueFee> dueFees,
+		IReadOnlyList<ConcessionFeeHeadMapping> liveMappings)
+	{
+		foreach (var requested in request.ConcessionFeeHeadMappings)
+		{
+			var live = liveMappings.FirstOrDefault(x => x.FeeHeadId == requested.FeeHeadId);
+			if (live is null || live.FeeHeadConcessionAmount < requested.FeeHeadConcessionAmount)
+				throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged)
+					.WithData("FeeHeadId", requested.FeeHeadId);
+		}
+		if (ConcessionRequestManager.ReadDueFeeEvidence(request).Count > 0)
+			return concessionRequestManager.BuildSubmittedDueFeeAllocations(request, dueFees);
+
+		var approvals = concessionRequestManager.BuildAutoApproveAllocations(request, dueFees);
+		if (approvals.Count != request.ConcessionFeeHeadMappings.Count ||
+			approvals.Sum(x => x.ApprovedConcessionAmount) != request.GetTotalRequestedConcession())
+			throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged);
+		return concessionRequestManager.BuildDueFeeAllocations(
+			CurrentTenant.Id, request.Id, approvals, dueFees,
+			request.ConcessionFeeHeadMappings.ToList(), liveMappings);
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Add)]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Submit)]
 	public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(
@@ -42,7 +67,8 @@ public partial class ConcessionRequestAppService
 			CurrentTenant.Id, academicYearId, input.StudentId,
 			input.ConcessionPolicyId, input.ConcessionPolicyVersionId, input.ConcessionTypeId,
 			input.Remarks, MapFeeHeadInputs(input.FeeHeadConcessions), input.StudentFeeStructureId,
-			input.SourceRequestId, currentUser.GetId(), input.IdempotencyKey, ComputeCommandHash(input));
+			input.SourceRequestId, currentUser.GetId(), input.IdempotencyKey, ComputeCommandHash(input),
+			dueFeeConcessions: MapDueFeeInputs(input.DueFeeConcessions));
 		var evaluation = await concessionRequestManager.EvaluateSubmittedAsync(request);
 		var currentFingerprint = ComputePreviewFingerprint(
 			request.ConcessionPolicyVersionId, evaluation.DueFees, evaluation.Mappings);
@@ -85,7 +111,8 @@ public partial class ConcessionRequestAppService
 			input.ConcessionPolicyId, input.ConcessionPolicyVersionId, input.ConcessionTypeId,
 			input.Remarks, MapFeeHeadInputs(input.FeeHeadConcessions), input.StudentFeeStructureId,
 			input.SourceRequestId, currentUser.GetId(), input.IdempotencyKey, ComputeCommandHash(input),
-			allowIncomplete: true, enforcePendingUniqueness: false);
+			allowIncomplete: true, enforcePendingUniqueness: false,
+			dueFeeConcessions: MapDueFeeInputs(input.DueFeeConcessions));
 		request.ReplaceDocuments(await ValidateAndBuildDocumentsAsync(request, input.Documents));
 		await concessionRequestRepository.UpdateAsync(request, autoSave: false);
 		await RecordCommandReceiptAsync("create_draft", input.IdempotencyKey, input, request.Id);
@@ -154,7 +181,8 @@ public partial class ConcessionRequestAppService
 			input.ConcessionPolicyVersionId,
 			input.ConcessionTypeId,
 			MapFeeHeadInputs(input.FeeHeadConcessions),
-			input.StudentFeeStructureId);
+			input.StudentFeeStructureId,
+			MapDueFeeInputs(input.DueFeeConcessions));
 		var feeHeadIds = preview.Mappings.Select(x => x.FeeHeadId).ToList();
 		var feeHeadNames = (await feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id)))
 			.ToDictionary(x => x.Id, x => x.Name);
@@ -219,7 +247,8 @@ public partial class ConcessionRequestAppService
 
 		await concessionRequestManager.ReplaceFeeHeadMappingsAsync(
 			request, input.ConcessionPolicyId, input.ConcessionPolicyVersionId,
-			MapFeeHeadInputs(input.FeeHeadConcessions), allowIncomplete: true);
+			MapFeeHeadInputs(input.FeeHeadConcessions), allowIncomplete: true,
+			dueFeeConcessions: MapDueFeeInputs(input.DueFeeConcessions));
 		request.UpdateRemarks(input.Remarks);
 		var updatedDocuments = await ValidateAndBuildDocumentsAsync(request, input.Documents);
 		var replacementDocuments = await PreserveHiddenDocumentsAsync(request, updatedDocuments);
@@ -391,6 +420,8 @@ public partial class ConcessionRequestAppService
 	public async Task<ConcessionApprovalPreviewDto> PreviewApprovalAsync(
 		Guid id, PreviewConcessionApprovalDto input)
 	{
+		if (input.FeeHeadApprovals is { Count: > 0 })
+			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
@@ -404,18 +435,7 @@ public partial class ConcessionRequestAppService
 		if (!string.Equals(input.PreviewFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
 			throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged);
 
-		var approvals = input.FeeHeadApprovals.Select(group => new FeeHeadApprovalInput(
-			group.FeeHeadId,
-			group.ApprovedConcessionAmount,
-			group.DueFeeAllocations.Select(line => new DueFeeAllocationInput(
-				line.DueFeeId, line.ConcessionAmount, line.ConcurrencyStamp)).ToList())).ToList();
-		var allocations = concessionRequestManager.BuildDueFeeAllocations(
-			CurrentTenant.Id,
-			request.Id,
-			approvals,
-			dueFees,
-			request.ConcessionFeeHeadMappings.ToList(),
-			evaluation.Mappings);
+		var allocations = BuildSubmittedApprovalAllocations(request, dueFees, evaluation.Mappings);
 		if (allocations.Count == 0 || allocations.Sum(x => x.ConcessionAmount) <= 0m)
 			throw new BusinessException(FinanceConcessionErrorCodes.ApprovalAllocationsRequired);
 
@@ -459,6 +479,8 @@ public partial class ConcessionRequestAppService
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve)]
 	public async Task<ConcessionApprovalResponseDto> ApproveAsync(Guid id, ApproveConcessionRequestDto input)
 	{
+		if (input.FeeHeadApprovals is { Count: > 0 })
+			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
 		using var uow = unitOfWorkManager.Begin(isTransactional: true);
 		var replayId = await FindCommandReplayAsync("approve", input.IdempotencyKey, input);
 		if (replayId.HasValue)
@@ -481,27 +503,10 @@ public partial class ConcessionRequestAppService
 
 		EnsureRequiredDocumentsPresent(request);
 
-		if (input.FeeHeadApprovals is null || input.FeeHeadApprovals.Count == 0)
-			throw new BusinessException(FinanceConcessionErrorCodes.ApprovalAllocationsRequired);
-		var approvals = input.FeeHeadApprovals.Select(a => new FeeHeadApprovalInput(
-			a.FeeHeadId, a.ApprovedConcessionAmount,
-			a.DueFeeAllocations.Select(d => new DueFeeAllocationInput(
-				d.DueFeeId, d.ConcessionAmount, d.ConcurrencyStamp)).ToList()
-		)).ToList();
-
-		var allocations = concessionRequestManager.BuildDueFeeAllocations(
-			CurrentTenant.Id,
-			request.Id,
-			approvals,
-			dueFees,
-			request.ConcessionFeeHeadMappings.ToList(),
-			evaluation.Mappings);
+		var allocations = BuildSubmittedApprovalAllocations(request, dueFees, evaluation.Mappings);
 		if (allocations.Count == 0 || allocations.Sum(x => x.ConcessionAmount) <= 0m)
 			throw new BusinessException(FinanceConcessionErrorCodes.ApprovalAllocationsRequired);
 		var approvedTotal = allocations.Sum(x => x.ConcessionAmount);
-		if (approvedTotal < request.GetTotalRequestedConcession() &&
-			(string.IsNullOrWhiteSpace(input.Message) || input.Message.Trim().Length < 10))
-			throw new BusinessException(FinanceConcessionErrorCodes.ApprovalReductionReasonRequired);
 
 		var approvedAt = Clock.Now;
 		request.Approve(currentUser.Id!.Value, input.Message, allocations, approvedAt);

@@ -47,7 +47,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 
 	private readonly IFeeCollectionAppService _feeCollections;
 	private readonly ICollectionPolicyAppService _collectionPolicies;
-	private readonly ILateFeeWaiverAppService _waivers;
+	private readonly IFeeWaiverAppService _waivers;
 	private readonly IRepository<AcademicYear, Guid> _academicYearRepo;
 	private readonly IRepository<EducationBoard, Guid> _boardRepo;
 	private readonly IRepository<EducationMedium, Guid> _mediumRepo;
@@ -67,7 +67,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 	{
 		_feeCollections = GetRequiredService<IFeeCollectionAppService>();
 		_collectionPolicies = GetRequiredService<ICollectionPolicyAppService>();
-		_waivers = GetRequiredService<ILateFeeWaiverAppService>();
+		_waivers = GetRequiredService<IFeeWaiverAppService>();
 		_academicYearRepo = GetRequiredService<IRepository<AcademicYear, Guid>>();
 		_boardRepo = GetRequiredService<IRepository<EducationBoard, Guid>>();
 		_mediumRepo = GetRequiredService<IRepository<EducationMedium, Guid>>();
@@ -307,18 +307,19 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		{
 			var (academicYearId, studentId, _, dueFeeId, _) = await SeedStudentWithOverdueDueFeeAsync(daysOverdue: 10, attachPolicy: true);
 
-			await _waivers.ApplyWaiverAsync(new ApplyLateFeeWaiverInput
+			await _waivers.ApplyAsync(new ApplyFeeWaiverInput
 			{
-				DueFeeId = dueFeeId,
-				RequestedAmount = 50,
+				SourceType = "LateFee",
+				SourceId = dueFeeId,
 				Reason = "Family financial hardship — documented.",
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
 			});
 
 			var form = await _feeCollections.GetCollectFormAsync(studentId, academicYearId);
 			var lateFeeCharge = form.Charges.Single(x => x.SourceType == "LateFee" && x.SourceId == dueFeeId);
 
-			lateFeeCharge.PendingAmount.ShouldBe(150); // 200 computed - 50 waived
-			lateFeeCharge.WaivedAmount.ShouldBe(50);
+			lateFeeCharge.PendingAmount.ShouldBe(0); // full remaining balance waived
+			lateFeeCharge.WaivedAmount.ShouldBe(200);
 		}
 	}
 
@@ -329,14 +330,15 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		{
 			var (_, _, _, dueFeeId, _) = await SeedStudentWithOverdueDueFeeAsync(daysOverdue: 10, attachPolicy: true);
 
-			var ex = await Should.ThrowAsync<BusinessException>(() => _waivers.ApplyWaiverAsync(new ApplyLateFeeWaiverInput
+			var ex = await Should.ThrowAsync<BusinessException>(() => _waivers.ApplyAsync(new ApplyFeeWaiverInput
 			{
-				DueFeeId = dueFeeId,
-				RequestedAmount = 20,
+				SourceType = "LateFee",
+				SourceId = dueFeeId,
 				Reason = "",
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
 			}));
 
-			ex.Code.ShouldBe(LateFeeWaiverErrorCodes.ReasonRequired);
+			ex.Code.ShouldBe(FeeWaiverErrorCodes.ReasonRequired);
 		}
 	}
 
@@ -347,15 +349,16 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		{
 			var (_, _, _, dueFeeId, _) = await SeedStudentWithOverdueDueFeeAsync(daysOverdue: 15, attachPolicy: true);
 
-			var result = await _waivers.ApplyWaiverAsync(new ApplyLateFeeWaiverInput
+			var result = await _waivers.ApplyAsync(new ApplyFeeWaiverInput
 			{
-				DueFeeId = dueFeeId,
-				RequestedAmount = 300,
+				SourceType = "LateFee",
+				SourceId = dueFeeId,
 				Reason = "Requesting full waiver.",
+				IdempotencyKey = Guid.NewGuid().ToString("N"),
 			});
 
-			result.EffectiveAmount.ShouldBe(300);
-			result.RequestedAmount.ShouldBe(300);
+			result.WaivedAmount.ShouldBe(300);
+			result.RemainingAmount.ShouldBe(0);
 		}
 	}
 

@@ -135,7 +135,7 @@ public partial class StudentFeeDetailsQueryService(
 					{
 						var lateFee = ComputeLateFeeForLine(
 							effectiveRules, d, today, waivedByDueFee, paidLateFeeByDueFee, activeWindow);
-						if (lateFee.Amount > 0)
+						if (lateFee.Amount + lateFee.PaidAmount + lateFee.WaivedAmount > 0)
 						{
 							var feeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty);
 							var installmentLabel = d.GetDisplayInstallmentLabel();
@@ -150,11 +150,11 @@ public partial class StudentFeeDetailsQueryService(
 								PaidAmount = lateFee.PaidAmount,
 								PendingAmount = lateFee.Amount,
 								WaivedAmount = lateFee.WaivedAmount,
-								CanWaive = true,
+								CanWaive = lateFee.Amount > 0,
 								Explanation = lateFee.Explanation,
-								Status = lateFee.PaidAmount > 0
-									? FeeCollectionStatus.Partial
-									: FeeCollectionStatus.Pending,
+								Status = lateFee.Amount <= 0
+									? FeeCollectionStatus.Paid
+									: (lateFee.PaidAmount > 0 ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 							});
 						}
 						return new FeeLedgerLineDto

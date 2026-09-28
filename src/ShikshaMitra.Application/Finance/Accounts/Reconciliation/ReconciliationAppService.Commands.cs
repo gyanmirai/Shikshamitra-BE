@@ -45,7 +45,8 @@ public partial class ReconciliationAppService
             ApprovedAt           = DateTime.UtcNow,
         });
 
-        return BuildActionResponse(finalReceipt, finalReceipt.ReceiptNumber, input.Remarks);
+        var verifiedProvisional = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
+        return BuildActionResponse(verifiedProvisional, finalReceipt.ReceiptNumber, input.Remarks);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Reconciliation.Add)]

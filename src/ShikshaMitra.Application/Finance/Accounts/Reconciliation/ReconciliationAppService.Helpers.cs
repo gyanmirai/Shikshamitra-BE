@@ -43,7 +43,7 @@ public partial class ReconciliationAppService
             Success = true,
             Data = new ReconciliationActionData
             {
-                ReceiptId          = receipt.LinkedFinalReceiptId ?? Guid.Empty,
+                ReceiptId          = receipt.Id,
                 VerificationStatus = receipt.VerificationStatus,
                 Status             = statusInt,
                 StatusLabel        = statusLabel,

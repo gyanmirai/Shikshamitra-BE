@@ -22,7 +22,7 @@ public class AdmissionInquiryRuntimeService(
 		var context = await policies.ResolveAsync(inquiry.AdmissionOfferingId);
 		if (context == null) return null;
 		return await management.InsertAsync(new AdmissionInquiryManagement(GuidGenerator.Create(), CurrentTenant.Id,
-			inquiry.Id, context.Definition.Id, context.SnapshotJson, inquiry.CreationTime == default ? Clock.Now : inquiry.CreationTime,
+			inquiry.Id, context.Definition?.Id, context.SnapshotJson, inquiry.CreationTime == default ? Clock.Now : inquiry.CreationTime,
 			context.Policy.FirstContactDueInHours, context.Policy.QualificationDueInDays), false);
 	}
 

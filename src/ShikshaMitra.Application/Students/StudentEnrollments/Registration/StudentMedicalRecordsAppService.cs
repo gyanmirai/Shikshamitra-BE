@@ -18,7 +18,8 @@ public class StudentMedicalRecordsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetMedicalRecordsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecords);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecords,
+            includeStudentRecords: true);
 
         var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -48,7 +49,8 @@ public class StudentMedicalRecordsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdateMedicalRecordsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecordsUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForMedicalRecordsUpdate,
+            forProfileWrite: true);
 
         var medicalRecord = await studentMedicalRecordRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -73,7 +75,8 @@ public class StudentMedicalRecordsAppService(
             input.CurrentMedications
         );
 
-        student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.MedicalRecords);
+        if (student.Status != StudentLifeCycleStatusEnum.Enrolled)
+            student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.MedicalRecords);
         student.AdditionalDetail?.UpdateDisabilityInfo(input.HaveDisability, input.DisabilityDetails);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();

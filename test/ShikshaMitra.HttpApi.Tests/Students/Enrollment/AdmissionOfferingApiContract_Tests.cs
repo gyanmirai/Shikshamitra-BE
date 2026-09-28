@@ -1,9 +1,11 @@
 using System.Linq;
 using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Shouldly;
 using Xunit;
+using OfferingPermissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings;
 
 namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 
@@ -34,6 +36,28 @@ public class AdmissionOfferingApiContract_Tests
 				parameter.Name == "concurrencyStamp" || parameter.ParameterType == typeof(UpdateAdmissionOfferingDto));
 			hasStamp.ShouldBeTrue($"{methodName} must carry optimistic concurrency data.");
 		}
+	}
+
+	[Fact]
+	public void Class_capacity_routes_preserve_view_and_configuration_permissions()
+	{
+		var controller = typeof(AdmissionClassCapacityController);
+		controller.GetCustomAttribute<RouteAttribute>()!.Template.ShouldBe(
+			"api/student/enrollment/admissions/offerings/{offeringId:guid}/class-capacity");
+		var get = controller.GetMethod(nameof(AdmissionClassCapacityController.Get))!;
+		get.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBeNull();
+		get.GetCustomAttributes<AuthorizeAttribute>().Select(attribute => attribute.Policy)
+			.ShouldContain(OfferingPermissions.View);
+		var rooms = controller.GetMethod(nameof(AdmissionClassCapacityController.GetRooms))!;
+		rooms.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("rooms");
+		rooms.GetCustomAttributes<AuthorizeAttribute>().Select(attribute => attribute.Policy)
+			.ShouldContain(OfferingPermissions.View);
+		var update = controller.GetMethod(nameof(AdmissionClassCapacityController.Update))!;
+		update.GetCustomAttribute<HttpPutAttribute>()!.Template.ShouldBeNull();
+		update.GetCustomAttributes<AuthorizeAttribute>().Select(attribute => attribute.Policy)
+			.ShouldContain(OfferingPermissions.Add);
+		update.GetParameters().ShouldContain(parameter =>
+			parameter.ParameterType == typeof(UpdateAdmissionClassRoomsDto));
 	}
 
 	private static string? PostTemplate(string methodName) =>

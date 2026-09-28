@@ -10,6 +10,30 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionDocumentPolicyAndEvidence_Tests
 {
+	[Fact]
+	public void Class_scope_uses_identity_and_fails_closed_when_class_is_unknown()
+	{
+		var classOne = Guid.NewGuid();
+		var classTen = Guid.NewGuid();
+		var requirement = Requirement() with { StandardIds = [classTen] };
+		var values = new Dictionary<string, string> { ["application.class"] = classTen.ToString() };
+		AdmissionDocumentRules.ConditionStatus(requirement, values, classOne).ShouldBe("notMatched");
+		AdmissionDocumentRules.ConditionStatus(requirement, values, classTen).ShouldBe("notConditional");
+		AdmissionDocumentRules.ConditionStatus(requirement, values).ShouldBe("undetermined");
+		AdmissionDocumentRules.ConditionStatus(Requirement(), values).ShouldBe("notConditional");
+		var conditional = requirement with { Requirement = "conditional", ConditionJson = "{\"operator\":\"Equals\",\"field\":\"application.transfer\",\"value\":\"yes\"}" };
+		AdmissionDocumentRules.ConditionStatus(conditional, values, classOne).ShouldBe("notMatched");
+		AdmissionDocumentRules.ConditionStatus(conditional, values, classTen).ShouldBe("undetermined");
+		values["application.transfer"] = "yes";
+		AdmissionDocumentRules.ConditionStatus(conditional, values, classTen).ShouldBe("matched");
+	}
+	[Fact]
+	public void Invalid_class_selections_cannot_publish()
+	{
+		var id = Guid.NewGuid();
+		foreach (var ids in new List<Guid>[] { [], [Guid.Empty], [id, id] })
+			Should.Throw<ArgumentException>(() => (Requirement() with { StandardIds = ids }).Validate());
+	}
 	[Theory]
 	[InlineData(null)]
 	[InlineData("{}")]

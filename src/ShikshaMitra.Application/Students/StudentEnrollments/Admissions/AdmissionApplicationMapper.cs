@@ -17,6 +17,7 @@ internal static class AdmissionApplicationMapper
 		ApplicantName = applicantName,
 		AdmissionCycleId = application.AdmissionCycleId,
 		AdmissionOfferingId = application.AdmissionOfferingId,
+		AssignedCounsellorId = application.AssignedCounsellorId,
 		OfferingCode = offeringCode,
 		CurrentStageName = currentStageName,
 		Status = application.Status,

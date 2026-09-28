@@ -83,7 +83,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				await _offeringRepository.UpdateAsync(stored, true);
 			});
 
-			var application = await _applicationAppService.StartAsync((await CreateApplicantAsync("Mira")).Id, offering.Id);
+			var application = await StartFixtureApplicationAsync((await CreateApplicantAsync("Mira")).Id, offering.Id);
 			var workflow = await _applicationAppService.GetWorkflowAsync(application.Id);
 			var stage = workflow.Stages.Single(item => item.StageType == AdmissionWorkflowStageType.Form);
 			stage.FormStageEnabled.ShouldBeTrue();

@@ -21,6 +21,7 @@ public class AdmissionOfferingReadService(
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
+	IRepository<AdmissionIntakeProfile, Guid> intakeProfileRepository,
 	IRepository<AdmissionApplication, Guid> applicationRepository,
 	IRepository<EducationBoard, Guid> boardRepository,
 	IRepository<EducationMedium, Guid> mediumRepository,
@@ -28,7 +29,8 @@ public class AdmissionOfferingReadService(
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IUserScopeAccessService scopeAccessService,
-	AdmissionEligibilityOfferingValidator eligibilityValidator)
+	AdmissionEligibilityOfferingValidator eligibilityValidator,
+	AdmissionClassCapacityAppService classCapacityService)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<PagedResultDto<AdmissionOfferingListDto>> GetListAsync(AdmissionOfferingListInput input)
@@ -54,7 +56,9 @@ public class AdmissionOfferingReadService(
 		}, id);
 		var rows = await AsyncExecuter.ToListAsync(read.Query);
 		var row = rows.SingleOrDefault() ?? throw new EntityNotFoundException(typeof(AdmissionOffering), id);
-		return MapDetail(row, read.Errors.GetValueOrDefault(row.Offering.Id));
+		var detail = MapDetail(row, read.Errors.GetValueOrDefault(row.Offering.Id));
+		detail.ClassCapacity = await classCapacityService.ReadForOfferingAsync(id);
+		return detail;
 	}
 
 	public async Task<AdmissionOfferingAvailabilityDto> GetAvailabilityAsync(Guid id)
@@ -62,9 +66,11 @@ public class AdmissionOfferingReadService(
 		var detail = await GetAsync(id);
 		return new AdmissionOfferingAvailabilityDto
 		{
+			ClassCapacity = detail.ClassCapacity,
 			IsAvailable = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
 			Status = detail.AvailabilityStatus,
-			CanCreateInquiry = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
+			CanCreateInquiry = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open &&
+				detail.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both,
 			CanStartApplication = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
 			ReasonCode = detail.Configuration.IsValid ? StatusReasonCode(detail.AvailabilityStatus) : AdmissionErrorCodes.OfferingConfigurationIncomplete,
 			ReasonMessage = detail.Configuration.IsValid ? StatusReasonMessage(detail.AvailabilityStatus) :
@@ -85,6 +91,7 @@ public class AdmissionOfferingReadService(
 		var standards = await standardRepository.GetQueryableAsync();
 		var workflows = await workflowRepository.GetQueryableAsync();
 		var forms = await formRepository.GetQueryableAsync();
+		var intakeProfiles = await intakeProfileRepository.GetQueryableAsync();
 		var applications = await applicationRepository.GetQueryableAsync();
 		var divisions = await divisionRepository.GetQueryableAsync();
 
@@ -103,8 +110,14 @@ public class AdmissionOfferingReadService(
 			from inquiryForm in inquiryFormGroup.DefaultIfEmpty()
 			join applicationFormValue in forms on offering.ApplicationFormDefinitionId equals applicationFormValue.Id into applicationFormGroup
 			from applicationForm in applicationFormGroup.DefaultIfEmpty()
+			join inquiryProfileValue in intakeProfiles on offering.InquiryIntakeProfileId equals inquiryProfileValue.Id into inquiryProfileGroup
+			from inquiryProfile in inquiryProfileGroup.DefaultIfEmpty()
+			join assignmentProfileValue in intakeProfiles on offering.CounsellorAssignmentProfileId equals assignmentProfileValue.Id into assignmentProfileGroup
+			from assignmentProfile in assignmentProfileGroup.DefaultIfEmpty()
 			where (!offeringId.HasValue || offering.Id == offeringId.Value) &&
 				(!input.AdmissionCycleId.HasValue || offering.AdmissionCycleId == input.AdmissionCycleId.Value) &&
+				(!input.Track.HasValue || offering.Track == input.Track.Value) &&
+				(!input.EntryMode.HasValue || offering.EntryMode == input.EntryMode.Value) &&
 				(!input.CampusId.HasValue || offering.CampusId == input.CampusId.Value) &&
 				(!input.BoardId.HasValue || offering.BoardId == input.BoardId.Value) &&
 				(!input.MediumId.HasValue || offering.MediumId == input.MediumId.Value) &&
@@ -126,6 +139,8 @@ public class AdmissionOfferingReadService(
 				Workflow = workflow,
 				InquiryForm = inquiryForm,
 				ApplicationForm = applicationForm,
+				InquiryProfile = inquiryProfile,
+				AssignmentProfile = assignmentProfile,
 				ApplicationCount = applications.Count(application => application.AdmissionOfferingId == offering.Id)
 			};
 
@@ -212,8 +227,18 @@ public class AdmissionOfferingReadService(
 			row.Workflow != null &&
 			(row.Workflow.Status == AdmissionWorkflowStatus.Published ||
 				row.Workflow.Status == AdmissionWorkflowStatus.Superseded) &&
-			row.InquiryForm != null && row.InquiryForm.Status == AdmissionFormStatus.Published &&
-			row.ApplicationForm != null && row.ApplicationForm.Status == AdmissionFormStatus.Published);
+			(row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration ||
+				row.InquiryForm != null && row.InquiryForm.Status == AdmissionFormStatus.Published &&
+				row.InquiryForm.Purpose == AdmissionFormPurpose.Inquiry) &&
+			(!row.Offering.InquiryFormDefinitionId.HasValue ||
+				row.InquiryForm != null && row.InquiryForm.Purpose == AdmissionFormPurpose.Inquiry) &&
+			(!row.Offering.InquiryIntakeProfileId.HasValue || row.InquiryProfile != null && row.InquiryProfile.Kind == AdmissionIntakeProfileKind.Inquiry) &&
+			(!row.Offering.CounsellorAssignmentProfileId.HasValue || row.AssignmentProfile != null && row.AssignmentProfile.Kind == AdmissionIntakeProfileKind.CounsellorAssignment) &&
+			(!row.Offering.IntakeConfigurationRequired ||
+				(row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration || row.InquiryProfile != null) &&
+				row.AssignmentProfile != null) &&
+			row.ApplicationForm != null && row.ApplicationForm.Status == AdmissionFormStatus.Published &&
+			row.ApplicationForm.Purpose == AdmissionFormPurpose.Registration);
 
 	private static IQueryable<AdmissionOfferingReadRow> ApplyConfigurationIncompleteFilter(
 		IQueryable<AdmissionOfferingReadRow> query, List<Guid> incompatibleOfferingIds) => query.Where(row =>
@@ -231,8 +256,18 @@ public class AdmissionOfferingReadService(
 			row.Workflow == null ||
 			(row.Workflow.Status != AdmissionWorkflowStatus.Published &&
 				row.Workflow.Status != AdmissionWorkflowStatus.Superseded) ||
-			row.InquiryForm == null || row.InquiryForm.Status != AdmissionFormStatus.Published ||
-			row.ApplicationForm == null || row.ApplicationForm.Status != AdmissionFormStatus.Published);
+			(row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration &&
+				(row.InquiryForm == null || row.InquiryForm.Status != AdmissionFormStatus.Published ||
+				row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)) ||
+			(row.Offering.InquiryFormDefinitionId.HasValue &&
+				(row.InquiryForm == null || row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)) ||
+			(row.Offering.InquiryIntakeProfileId.HasValue && (row.InquiryProfile == null || row.InquiryProfile.Kind != AdmissionIntakeProfileKind.Inquiry)) ||
+			(row.Offering.CounsellorAssignmentProfileId.HasValue && (row.AssignmentProfile == null || row.AssignmentProfile.Kind != AdmissionIntakeProfileKind.CounsellorAssignment)) ||
+			(row.Offering.IntakeConfigurationRequired &&
+				(row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryProfile == null ||
+				row.AssignmentProfile == null)) ||
+			row.ApplicationForm == null || row.ApplicationForm.Status != AdmissionFormStatus.Published ||
+			row.ApplicationForm.Purpose != AdmissionFormPurpose.Registration);
 
 	private AdmissionOfferingListDto MapList(AdmissionOfferingReadRow row, List<AdmissionOfferingValidationError>? eligibilityErrors)
 	{
@@ -255,6 +290,8 @@ public class AdmissionOfferingReadService(
 			StageName = row.Stage.Name,
 			StandardId = row.Standard.Id,
 			StandardName = row.Standard.Name,
+			Track = row.Offering.Track,
+			EntryMode = row.Offering.EntryMode,
 			Code = row.Offering.Code,
 			EffectiveOpenDate = row.Offering.GetEffectiveOpenDate(row.Cycle.StartDate),
 			EffectiveCloseDate = row.Offering.GetEffectiveCloseDate(row.Cycle.EndDate),
@@ -286,6 +323,8 @@ public class AdmissionOfferingReadService(
 			StageName = list.StageName,
 			StandardId = list.StandardId,
 			StandardName = list.StandardName,
+			Track = list.Track,
+			EntryMode = list.EntryMode,
 			Code = list.Code,
 			EffectiveOpenDate = list.EffectiveOpenDate,
 			EffectiveCloseDate = list.EffectiveCloseDate,
@@ -301,6 +340,8 @@ public class AdmissionOfferingReadService(
 			WorkflowDefinitionId = row.Offering.WorkflowDefinitionId,
 			InquiryFormDefinitionId = row.Offering.InquiryFormDefinitionId,
 			ApplicationFormDefinitionId = row.Offering.ApplicationFormDefinitionId,
+			InquiryIntakeProfileId = row.Offering.InquiryIntakeProfileId,
+			CounsellorAssignmentProfileId = row.Offering.CounsellorAssignmentProfileId,
 			InquiryFormName = row.InquiryForm?.Name,
 			InquiryFormVersion = row.InquiryForm?.Version,
 			ApplicationFormName = row.ApplicationForm?.Name,
@@ -334,14 +375,24 @@ public class AdmissionOfferingReadService(
 			errors.Add(new(AdmissionOfferingValidationCodes.WorkflowMissing, "Published Admission Workflow is required."));
 		else if (!row.Workflow.Status.CanConfigureOffering())
 			errors.Add(new(AdmissionOfferingValidationCodes.WorkflowNotPublished, "Admission Workflow is not published."));
-		if (row.InquiryForm == null)
+		if (row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryForm == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormMissing, "Published Inquiry Form is required."));
-		else if (row.InquiryForm.Status != AdmissionFormStatus.Published)
+		else if (row.InquiryForm != null && row.InquiryForm.Status != AdmissionFormStatus.Published)
 			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormNotPublished, "Inquiry Form is not published."));
+		else if (row.InquiryForm != null && row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)
+			errors.Add(new(AdmissionOfferingValidationCodes.InquiryFormPurposeMismatch, "The selected Inquiry Form must have the Inquiry purpose."));
 		if (row.ApplicationForm == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormMissing, "Published Application Form is required."));
 		else if (row.ApplicationForm.Status != AdmissionFormStatus.Published)
 			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormNotPublished, "Application Form is not published."));
+		else if (row.ApplicationForm.Purpose != AdmissionFormPurpose.Registration)
+			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormPurposeMismatch, "The selected Application Form must have the Registration purpose."));
+		if (row.Offering.InquiryIntakeProfileId.HasValue && row.InquiryProfile?.Kind != AdmissionIntakeProfileKind.Inquiry ||
+			row.Offering.IntakeConfigurationRequired && row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryProfile == null)
+			errors.Add(new(AdmissionOfferingValidationCodes.InquiryIntakeProfileInvalid, "Inquiry profile is unavailable."));
+		if (row.Offering.CounsellorAssignmentProfileId.HasValue && row.AssignmentProfile?.Kind != AdmissionIntakeProfileKind.CounsellorAssignment ||
+			row.Offering.IntakeConfigurationRequired && row.AssignmentProfile == null)
+			errors.Add(new(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid, "Counsellor assignment profile is unavailable."));
 		return new AdmissionOfferingValidationResult(errors);
 	}
 
@@ -411,6 +462,8 @@ public class AdmissionOfferingReadService(
 		public AdmissionWorkflowDefinition? Workflow { get; init; }
 		public AdmissionFormDefinition? InquiryForm { get; init; }
 		public AdmissionFormDefinition? ApplicationForm { get; init; }
+		public AdmissionIntakeProfile? InquiryProfile { get; init; }
+		public AdmissionIntakeProfile? AssignmentProfile { get; init; }
 		public int ApplicationCount { get; init; }
 	}
 }

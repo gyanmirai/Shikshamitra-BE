@@ -12,6 +12,10 @@ public interface IAdmissionApplicationAppService : IApplicationService
 	Task<AdmissionApplicationDto> GetAsync(Guid id);
 	Task<AdmissionApplicationDto?> FindAsync(Guid id);
 	Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId = null);
+	Task<AdmissionApplicationDto> StartDirectRegistrationAsync(StartAdmissionDirectRegistrationDto input);
+	Task<List<AdmissionDirectFamilyMatchDto>> FindDirectRegistrationFamiliesAsync(Guid offeringId, string guardianMobile);
+	Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(Guid? offeringId = null, string? filter = null);
+	Task<AdmissionApplicationDto> AssignCounsellorAsync(Guid id, AssignAdmissionApplicationCounsellorDto input);
 	Task<AdmissionApplicationWorkflowDto> GetWorkflowAsync(Guid id);
 	Task<AdmissionApplicationFormDto> GetFormAsync(Guid id);
 	Task<AdmissionApplicationFormDto> UpdateFormValuesAsync(Guid id, UpdateAdmissionApplicationFormValuesDto input);

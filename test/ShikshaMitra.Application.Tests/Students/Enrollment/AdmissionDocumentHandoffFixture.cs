@@ -44,7 +44,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var offering = await CreateAvailableOfferingAsync(published.Id);
 		Guid? studentId = existingStudent ? (await CreateExistingStudentAsync(offering, "Handoff", "Patel")).Id : null;
 		var applicant = await CreateCertificationApplicantAsync("Handoff", true, true, studentId);
-		var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id);
+		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
 		await _applicationAppService.SubmitAsync(application.Id);
 		var workflow = await _applicationAppService.GetWorkflowAsync(application.Id);
 		if (workflow.Stages.Single(item => item.Id == workflow.CurrentStageInstanceId).StageType != AdmissionWorkflowStageType.DocumentVerification)

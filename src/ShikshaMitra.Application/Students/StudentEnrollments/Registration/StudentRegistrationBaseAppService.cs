@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 
@@ -26,6 +28,21 @@ public abstract class StudentRegistrationBaseAppService(
 		StudentLifeCycleStatusEnum.Registration,
 		StudentLifeCycleStatusEnum.EntranceExam,
 		StudentLifeCycleStatusEnum.Admission
+	];
+
+	// These section DTOs also back Student Records. A completed student must
+	// remain readable there without reopening registration writes.
+	protected static readonly StudentLifeCycleStatusEnum[] ProfileReadStatuses =
+	[
+		..RegistrationStatuses,
+		StudentLifeCycleStatusEnum.Enrolled,
+		StudentLifeCycleStatusEnum.InActive,
+		StudentLifeCycleStatusEnum.Left
+	];
+	protected static readonly StudentLifeCycleStatusEnum[] ProfileWriteStatuses =
+	[
+		..RegistrationStatuses,
+		StudentLifeCycleStatusEnum.Enrolled
 	];
 
 	/// <summary>
@@ -56,7 +73,9 @@ public abstract class StudentRegistrationBaseAppService(
 	protected async Task<Student> GetScopedRegistrationStudentAsync(
 		Guid studentId,
 		string operation,
-		string invalidStatusErrorCode)
+		string invalidStatusErrorCode,
+		bool includeStudentRecords = false,
+		bool forProfileWrite = false)
 	{
 		var student = await studentRepository.GetRegistrationAggregateAsync(studentId)
 			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
@@ -64,8 +83,11 @@ public abstract class StudentRegistrationBaseAppService(
 
 		validationService.ValidateStudentStatus(
 			student,
-			RegistrationStatuses,
+			forProfileWrite ? ProfileWriteStatuses :
+				includeStudentRecords ? ProfileReadStatuses : RegistrationStatuses,
 			invalidStatusErrorCode);
+		if (forProfileWrite && student.Status == StudentLifeCycleStatusEnum.Enrolled)
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add);
 
 		return student;
 	}

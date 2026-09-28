@@ -27,13 +27,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			await SetReviewOfferingScopeAsync(reviewer, original);
 			var cycleId = await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId);
-			var input = EligibilityOfferingInput<CreateAdmissionOfferingDto>(original);
+			var input = await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(original);
 			var created = await service.CreateAsync(cycleId, input);
 			created.Configuration.IsValid.ShouldBeTrue();
 			input.StandardId = otherStandard;
 			(await Should.ThrowAsync<BusinessException>(() => service.CreateAsync(cycleId, input)))
 				.Code.ShouldBe(AdmissionReviewErrorCodes.ReviewerNotAllowed);
-			var update = EligibilityOfferingInput<UpdateAdmissionOfferingDto>(created);
+			var update = await EligibilityOfferingInputAsync<UpdateAdmissionOfferingDto>(created);
 			update.ConcurrencyStamp = created.ConcurrencyStamp; update.StandardId = otherStandard;
 			(await Should.ThrowAsync<BusinessException>(() => service.UpdateAsync(created.Id, update)))
 				.Code.ShouldBe(AdmissionReviewErrorCodes.ReviewerNotAllowed);
@@ -63,7 +63,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				if (change == "inactive") { user.SetIsActive(false); await users.UpdateAsync(user, autoSave: true); }
 				else (await GetRequiredService<IdentityUserManager>().RemoveFromRoleAsync(user, role)).Succeeded.ShouldBeTrue();
 			});
-			var input = EligibilityOfferingInput<CreateAdmissionOfferingDto>(original);
+			var input = await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(original);
 			var cycleId = await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId);
 			(await Should.ThrowAsync<BusinessException>(() => service.CreateAsync(cycleId, input)))
 				.Code.ShouldBe(AdmissionReviewErrorCodes.ReviewerNotAllowed);
@@ -83,7 +83,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var service = GetRequiredService<IAdmissionOfferingAppService>();
 			var original = await service.GetAsync(fixture.Offering.Id);
 			var created = await service.CreateAsync(await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId),
-				EligibilityOfferingInput<CreateAdmissionOfferingDto>(original));
+				await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(original));
 			created.Configuration.IsValid.ShouldBeTrue();
 		});
 

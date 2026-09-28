@@ -12,6 +12,7 @@ public sealed record AdmissionDocumentPolicy
 	public bool Enabled { get; init; }
 	public bool AllowWaivers { get; init; }
 	public bool RequireIndependentReview { get; init; }
+	public string? CollectionFormStageCode { get; init; }
 	public List<AdmissionDocumentRequirement> Requirements { get; init; } = [];
 	public static AdmissionDocumentPolicy? Read(string? json)
 	{
@@ -27,6 +28,8 @@ public sealed record AdmissionDocumentPolicy
 	public void Validate()
 	{
 		if (Version != 1) throw new ArgumentException("Document verification version must be 1.");
+		if (CollectionFormStageCode != null && !Regex.IsMatch(CollectionFormStageCode, "^[A-Z][A-Z0-9_]{0,63}$"))
+			throw new ArgumentException("Choose a valid Form stage for early document collection.");
 		if (Requirements == null || Requirements.Count is < 1 or > 30)
 			throw new ArgumentException("Configure between 1 and 30 document requirements.");
 		var codes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -50,6 +53,7 @@ public sealed record AdmissionDocumentRequirement
 	public List<string> AllowedExtensions { get; init; } = ["pdf", "jpg", "jpeg", "png"];
 	public int MaxFileSizeMb { get; init; } = 10;
 	public Guid? DocumentTypeId { get; init; }
+	public List<Guid>? StandardIds { get; init; }
 	public void Validate()
 	{
 		if (Code == null || !Regex.IsMatch(Code, "^[A-Z][A-Z0-9_]{0,63}$")) throw new ArgumentException("Use a unique uppercase document code beginning with a letter, up to 64 characters.");
@@ -60,6 +64,8 @@ public sealed record AdmissionDocumentRequirement
 		if (AllowedExtensions == null || AllowedExtensions.Count is < 1 or > 4 || AllowedExtensions.Any(value => value is not ("pdf" or "jpg" or "jpeg" or "png")) || AllowedExtensions.Distinct().Count() != AllowedExtensions.Count)
 			throw new ArgumentException("Choose unique supported document formats: pdf, jpg, jpeg, png.");
 		if (DocumentTypeId == Guid.Empty) throw new ArgumentException("Choose a valid document type.");
+		if (StandardIds != null && (StandardIds.Count is < 1 or > 100 || StandardIds.Contains(Guid.Empty) || StandardIds.Distinct().Count() != StandardIds.Count))
+			throw new ArgumentException("Select between 1 and 100 different classes, or choose all classes.");
 		if (Requirement == "conditional") AdmissionDocumentCondition.Validate(ConditionJson);
 		else if (!string.IsNullOrWhiteSpace(ConditionJson)) throw new ArgumentException("Conditions belong to conditional requirements only.");
 	}

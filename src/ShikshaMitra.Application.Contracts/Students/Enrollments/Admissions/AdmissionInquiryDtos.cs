@@ -24,6 +24,8 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 	public string PreferredLanguageCode { get; set; } = "en";
 	public AdmissionInquirySource Source { get; set; }
 	public string? SourceDetail { get; set; }
+	public Guid? FormResponseDefinitionId { get; set; }
+	public List<AdmissionInquiryFormAnswerDto> FormAnswers { get; set; } = [];
 	public AdmissionInquiryStatus Status { get; set; }
 	public Guid? DuplicateOfId { get; set; }
 	public DateTime? ContactedAt { get; set; }
@@ -118,6 +120,21 @@ public class UpdateAdmissionInquiryDto
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
+public class AdmissionInquiryFormAnswerDto
+{
+	public string FieldCode { get; set; } = string.Empty;
+	public string Label { get; set; } = string.Empty;
+	public string Value { get; set; } = string.Empty;
+}
+
+public class ConfirmAdmissionInquiryOfferingDto
+{
+	[Required]
+	public Guid OfferingId { get; set; }
+	[Required, StringLength(40)]
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+}
+
 public class AdmissionInquiryTimelineItemDto
 {
 	public Guid Id { get; set; }
@@ -142,7 +159,7 @@ public class BulkAdmissionInquiryResultDto
 }
 
 public class AdmissionInquiryDuplicateCheckInput { public Guid AdmissionCycleId { get; set; } public string GuardianPhone { get; set; } = string.Empty; public string? GuardianEmail { get; set; } public string ApplicantName { get; set; } = string.Empty; public DateTime? ApplicantDateOfBirth { get; set; } }
-public class AdmissionInquiryDuplicateMatchDto { public Guid ApplicantId { get; set; } public Guid FamilyId { get; set; } public Guid? ExistingInquiryId { get; set; } public string? ExistingInquiryNumber { get; set; } public string ApplicantName { get; set; } = string.Empty; public string? GuardianPhone { get; set; } public string? GuardianEmail { get; set; } public DateTime? DateOfBirth { get; set; } }
+public class AdmissionInquiryDuplicateMatchDto { public Guid ApplicantId { get; set; } public Guid FamilyId { get; set; } public Guid? ExistingInquiryId { get; set; } public string? ExistingInquiryNumber { get; set; } public string ApplicantName { get; set; } = string.Empty; public string? GuardianPhone { get; set; } public string? GuardianEmail { get; set; } public DateTime? DateOfBirth { get; set; } public bool CanLinkFamily { get; set; } }
 public class AssignAdmissionCounsellorDto { public AdmissionCounsellorAssignmentMode Mode { get; set; } public Guid? CounsellorId { get; set; } public List<Guid> CandidateCounsellorIds { get; set; } = []; }
 
 public class CreateAdmissionInquiryCommunicationDto

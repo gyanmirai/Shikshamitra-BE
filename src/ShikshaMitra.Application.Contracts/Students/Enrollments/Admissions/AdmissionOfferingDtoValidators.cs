@@ -10,6 +10,8 @@ public abstract class AdmissionOfferingWriteDtoValidator<T> : AbstractValidator<
 	protected AdmissionOfferingWriteDtoValidator()
 	{
 		RuleFor(x => x.Name).MaximumLength(AdmissionOfferingConsts.MaxNameLength);
+		RuleFor(x => x.Track).IsInEnum();
+		RuleFor(x => x.EntryMode).IsInEnum();
 		RuleFor(x => x.BoardId).NotEmpty();
 		RuleFor(x => x.MediumId).NotEmpty();
 		RuleFor(x => x.StageId).NotEmpty();
@@ -55,6 +57,8 @@ public sealed class CloneAdmissionOfferingDtoValidator : AbstractValidator<Clone
 	public CloneAdmissionOfferingDtoValidator()
 	{
 		RuleFor(x => x.Name).MaximumLength(AdmissionOfferingConsts.MaxNameLength);
+		RuleFor(x => x.Track).IsInEnum().When(x => x.Track.HasValue);
+		RuleFor(x => x.EntryMode).IsInEnum().When(x => x.EntryMode.HasValue);
 		RuleFor(x => x.AdmissionCycleId).NotEmpty();
 		RuleFor(x => x.BoardId).NotEmpty();
 		RuleFor(x => x.MediumId).NotEmpty();
@@ -68,10 +72,12 @@ public sealed class BulkCreateAdmissionOfferingsDtoValidator : AbstractValidator
 {
 	public BulkCreateAdmissionOfferingsDtoValidator()
 	{
+		RuleFor(x => x.Track).IsInEnum();
+		RuleFor(x => x.EntryMode).IsInEnum();
 		RuleFor(x => x.BoardId).NotEmpty();
 		RuleFor(x => x.MediumId).NotEmpty();
 		RuleFor(x => x.StageId).NotEmpty();
-		RuleFor(x => x.Items).NotEmpty().Must(items => items.Count <= 100)
+		RuleFor(x => x.Items).Cascade(CascadeMode.Stop).NotEmpty().Must(items => items.Count <= 100)
 			.WithMessage("Between 1 and 100 Admission Offerings can be created in one request.");
 		RuleForEach(x => x.Items).ChildRules(item =>
 		{
@@ -79,7 +85,8 @@ public sealed class BulkCreateAdmissionOfferingsDtoValidator : AbstractValidator
 			item.RuleFor(x => x.StandardId).NotEmpty();
 			item.RuleFor(x => x.Code).NotEmpty().MaximumLength(AdmissionOfferingConsts.MaxCodeLength);
 		});
-		RuleFor(x => x.Items).Must(items => items.ConvertAll(x => x.StandardId).Distinct().Count() == items.Count)
+		RuleFor(x => x.Items).Must(items => items == null ||
+			items.ConvertAll(x => x.StandardId).Distinct().Count() == items.Count)
 			.WithMessage("A Standard can appear only once in a bulk request.");
 		RuleFor(x => x.OpenDate).NotNull().When(x => !x.UseCycleDates);
 		RuleFor(x => x.CloseDate).NotNull().When(x => !x.UseCycleDates);

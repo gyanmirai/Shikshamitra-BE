@@ -18,6 +18,22 @@ public class AdmissionOffering_Tests
 		offering.Code.ShouldBe("GRADE-5");
 		offering.Name.ShouldBe("GRADE-5");
 		offering.IsActive.ShouldBeTrue();
+		offering.Track.ShouldBe(AdmissionTrack.General);
+		offering.EntryMode.ShouldBe(AdmissionEntryMode.Inquiry);
+	}
+
+	[Fact]
+	public void Direct_registration_track_is_independent_of_workflow_configuration()
+	{
+		var offering = CreateOffering(useCycleDates: true, null, null);
+
+		offering.UpdateRouting(AdmissionTrack.Rte, AdmissionEntryMode.DirectRegistration, identityLocked: false);
+
+		offering.Track.ShouldBe(AdmissionTrack.Rte);
+		offering.EntryMode.ShouldBe(AdmissionEntryMode.DirectRegistration);
+		Should.Throw<BusinessException>(() => offering.UpdateRouting(
+			AdmissionTrack.General, AdmissionEntryMode.Inquiry, identityLocked: true))
+			.Code.ShouldBe(AdmissionErrorCodes.OfferingIdentityLocked);
 	}
 
 	[Fact]
@@ -104,7 +120,7 @@ public class AdmissionOffering_Tests
 		var cycle = CreatePublishedCycle();
 
 		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(
-			offering, cycle, true, new DateTimeOffset(2026, 9, 30, 23, 59, 59, TimeSpan.Zero));
+			offering, cycle, true, new DateTimeOffset(2026, 9, 30, 23, 59, 59, TimeSpan.FromHours(5.5)));
 
 		availability.Status.ShouldBe(AdmissionOfferingAvailabilityStatus.NotOpenYet);
 		availability.CanCreateInquiry.ShouldBeFalse();
@@ -148,9 +164,9 @@ public class AdmissionOffering_Tests
 		var cycle = CreatePublishedCycle();
 
 		AdmissionOfferingAvailabilityEvaluator.Evaluate(offering, cycle, true,
-			new DateTimeOffset(2026, 10, 1, 23, 59, 59, TimeSpan.Zero)).IsAvailable.ShouldBeTrue();
+			new DateTimeOffset(2026, 10, 1, 23, 59, 59, TimeSpan.FromHours(5.5))).IsAvailable.ShouldBeTrue();
 		AdmissionOfferingAvailabilityEvaluator.Evaluate(offering, cycle, true,
-			new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.Zero)).IsAvailable.ShouldBeTrue();
+			new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.FromHours(5.5))).IsAvailable.ShouldBeTrue();
 	}
 
 	[Fact]

@@ -66,7 +66,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		draft = await _workflowAppService.UpdateAsync(draft.Id, input);
 		var graphValidation = await _workflowAppService.ValidateAsync(draft.Id);
 		graphValidation.IsValid.ShouldBeTrue(string.Join(" | ", graphValidation.Issues.Select(item => item.Message)));
-		var published = await _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
+		var refreshed = await _workflowAppService.GetAsync(draft.Id);
+		var published = await _workflowAppService.PublishAsync(draft.Id, refreshed.ConcurrencyStamp);
 		var offering = await CreateAvailableOfferingAsync(legacy.Id);
 		await WithUnitOfWorkAsync(async () =>
 		{
@@ -78,7 +79,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			validation.Errors.ShouldBeEmpty(string.Join(" | ", validation.Errors.Select(item => item.Message)));
 		});
 		var applicant = await CreateCertificationApplicantAsync("Review", true, true, null);
-		var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id);
+		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
 		(await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
 		var workflow = await _applicationAppService.GetWorkflowAsync(application.Id);
 		return new(applicant.Id, application.Id, workflow.Stages.Single(item => item.Code == "REVIEW").Id,

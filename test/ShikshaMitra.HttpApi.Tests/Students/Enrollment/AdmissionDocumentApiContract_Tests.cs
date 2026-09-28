@@ -21,6 +21,7 @@ public class AdmissionDocumentApiContract_Tests
 	[InlineData(nameof(AdmissionDocumentVerificationAppService.WaiveAsync), Permissions.Waive)]
 	[InlineData(nameof(AdmissionDocumentVerificationAppService.DownloadAsync), Permissions.Download)]
 	[InlineData(nameof(AdmissionDocumentVerificationAppService.GetDocumentTypesAsync), WorkflowPermissions.View)]
+	[InlineData(nameof(AdmissionDocumentVerificationAppService.GetClassesAsync), WorkflowPermissions.View)]
 	public void Document_actions_have_distinct_permissions_at_both_boundaries(string method, string permission)
 	{
 		typeof(AdmissionDocumentVerificationAppService).GetMethod(method)!.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(permission);

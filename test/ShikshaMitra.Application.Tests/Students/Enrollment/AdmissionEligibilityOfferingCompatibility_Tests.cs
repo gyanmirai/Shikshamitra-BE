@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Shouldly;
 using Volo.Abp;
@@ -22,8 +23,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			original.Configuration.IsValid.ShouldBeTrue();
 			(await service.GetAvailabilityAsync(original.Id)).IsAvailable.ShouldBeTrue();
 			var cycleId = await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId);
-			var unrelatedForm = await CreateEligibilityAnswerFormAsync(AdmissionFormFieldType.Number);
-			var create = EligibilityOfferingInput<CreateAdmissionOfferingDto>(original);
+			var unrelatedForm = await CreateEligibilityAnswerFormAsync(AdmissionFormFieldType.Number,
+				source == "inquiry" ? AdmissionFormPurpose.Inquiry : AdmissionFormPurpose.Registration);
+			var create = await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(original);
 			SelectEligibilityOfferingForm(create, source, unrelatedForm);
 			var createError = await Should.ThrowAsync<BusinessException>(() => service.CreateAsync(cycleId, create));
 			createError.Code.ShouldBe(AdmissionEligibilityErrorCodes.OfferingFormMismatch);
@@ -32,7 +34,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			SelectEligibilityOfferingForm(create, source, SelectedEligibilityOfferingForm(original, source));
 			var created = await service.CreateAsync(cycleId, create);
 			created.Configuration.IsValid.ShouldBeTrue();
-			var update = EligibilityOfferingInput<UpdateAdmissionOfferingDto>(created);
+			var update = await EligibilityOfferingInputAsync<UpdateAdmissionOfferingDto>(created);
 			update.ConcurrencyStamp = created.ConcurrencyStamp;
 			SelectEligibilityOfferingForm(update, source, unrelatedForm);
 			var updateError = await Should.ThrowAsync<BusinessException>(() => service.UpdateAsync(created.Id, update));
@@ -58,7 +60,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var service = GetRequiredService<IAdmissionOfferingAppService>();
 			var original = await service.GetAsync(fixture.Offering.Id);
 			var cycleId = await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId);
-			var create = EligibilityOfferingInput<CreateAdmissionOfferingDto>(original);
+			var create = await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(original);
 			SelectEligibilityOfferingForm(create, source, null);
 			var activeError = await Should.ThrowAsync<BusinessException>(() => service.CreateAsync(cycleId, create));
 			activeError.Code.ShouldBe(AdmissionErrorCodes.OfferingConfigurationIncomplete);
@@ -69,7 +71,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var activationError = await Should.ThrowAsync<BusinessException>(() => service.ActivateAsync(draft.Id, draft.ConcurrencyStamp));
 			activationError.Code.ShouldBe(AdmissionErrorCodes.OfferingConfigurationIncomplete);
 
-			var update = EligibilityOfferingInput<UpdateAdmissionOfferingDto>(await service.GetAsync(draft.Id));
+			var update = await EligibilityOfferingInputAsync<UpdateAdmissionOfferingDto>(await service.GetAsync(draft.Id));
 			update.ConcurrencyStamp = (await service.GetAsync(draft.Id)).ConcurrencyStamp;
 			SelectEligibilityOfferingForm(update, source, SelectedEligibilityOfferingForm(original, source));
 			draft = await service.UpdateAsync(draft.Id, update);
@@ -87,7 +89,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			var fixture = await CreateEligibilityOfferingFixtureAsync(source);
 			var service = GetRequiredService<IAdmissionOfferingAppService>();
-			var unrelatedForm = await CreateEligibilityAnswerFormAsync(AdmissionFormFieldType.Number);
+			var unrelatedForm = await CreateEligibilityAnswerFormAsync(AdmissionFormFieldType.Number,
+				source == "inquiry" ? AdmissionFormPurpose.Inquiry : AdmissionFormPurpose.Registration);
 			// Simulate a persisted selection made before the compatibility guard existed.
 			await SetStoredEligibilityOfferingFormAsync(fixture.Offering.Id, source, unrelatedForm);
 			var detail = await service.GetAsync(fixture.Offering.Id);
@@ -131,7 +134,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var original = await service.GetAsync(fixture.Offering.Id);
 			original.ApplicationFormDefinitionId.ShouldNotBe(referencedForm);
 			var cycleId = await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId);
-			var created = await service.CreateAsync(cycleId, EligibilityOfferingInput<CreateAdmissionOfferingDto>(original));
+			var created = await service.CreateAsync(cycleId, await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(original));
 			created.Configuration.IsValid.ShouldBeTrue();
 			(await service.GetAvailabilityAsync(created.Id)).IsAvailable.ShouldBeTrue();
 			var open = await service.GetListAsync(new() { AdmissionCycleId = cycleId,
@@ -141,7 +144,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 	private async Task<EligibilityFixture> CreateEligibilityOfferingFixtureAsync(string source)
 	{
-		var formId = await CreateEligibilityAnswerFormAsync(AdmissionFormFieldType.Number);
+		var formId = await CreateEligibilityAnswerFormAsync(AdmissionFormFieldType.Number,
+			source == "inquiry" ? AdmissionFormPurpose.Inquiry : AdmissionFormPurpose.Registration);
 		return await CreateEligibilityFixtureAsync(EligibilityPolicyJson([EligibilityOfferingCriterion(source, formId)]),
 			new DateTime(2021, 4, 1), applicationFormDefinitionId: source == "application" ? formId : null,
 			inquiryFormDefinitionId: source == "inquiry" ? formId : null);
@@ -172,14 +176,40 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await _offeringRepository.UpdateAsync(offering, autoSave: true);
 	});
 
-	private static T EligibilityOfferingInput<T>(AdmissionOfferingDto source) where T : AdmissionOfferingWriteDto, new() => new()
+	private async Task<T> EligibilityOfferingInputAsync<T>(AdmissionOfferingDto source) where T : AdmissionOfferingWriteDto, new()
 	{
+		var inquiryProfileId = source.InquiryIntakeProfileId;
+		var assignmentProfileId = source.CounsellorAssignmentProfileId;
+		if (!inquiryProfileId.HasValue || !assignmentProfileId.HasValue)
+		{
+			var ids = await WithUnitOfWorkAsync(async () =>
+			{
+				var repository = GetRequiredService<IRepository<AdmissionIntakeProfile, Guid>>();
+				var inquiry = new AdmissionIntakeProfile(Guid.NewGuid(), TestTenantId,
+					AdmissionIntakeProfileKind.Inquiry, $"TEST_INQUIRY_{Guid.NewGuid():N}"[..30],
+					"Inquiry compatibility", JsonSerializer.Serialize(new AdmissionInquiryIntakeRules()));
+				var assignment = new AdmissionIntakeProfile(Guid.NewGuid(), TestTenantId,
+					AdmissionIntakeProfileKind.CounsellorAssignment, $"TEST_ASSIGN_{Guid.NewGuid():N}"[..30],
+					"Assignment compatibility", JsonSerializer.Serialize(new AdmissionCounsellorAssignmentRules
+					{ CounsellorUserIds = [TestUserId] }));
+				await repository.InsertAsync(inquiry, autoSave: false);
+				await repository.InsertAsync(assignment, autoSave: true);
+				return (inquiry.Id, assignment.Id);
+			});
+			inquiryProfileId = ids.Item1;
+			assignmentProfileId = ids.Item2;
+		}
+		return new T
+		{
 		CampusId = source.CampusId, BoardId = source.BoardId, MediumId = source.MediumId,
 		StageId = source.StageId, StandardId = source.StandardId, Code = source.Code,
 		UseCycleDates = source.UseCycleDates, OpenDate = source.OpenDate, CloseDate = source.CloseDate,
 		WorkflowDefinitionId = source.WorkflowDefinitionId, InquiryFormDefinitionId = source.InquiryFormDefinitionId,
-		ApplicationFormDefinitionId = source.ApplicationFormDefinitionId, IsActive = source.IsActive
-	};
+		ApplicationFormDefinitionId = source.ApplicationFormDefinitionId, IsActive = source.IsActive,
+		InquiryIntakeProfileId = inquiryProfileId,
+		CounsellorAssignmentProfileId = assignmentProfileId
+		};
+	}
 
 	private static Guid? SelectedEligibilityOfferingForm(AdmissionOfferingDto offering, string source) =>
 		source == "application" ? offering.ApplicationFormDefinitionId : offering.InquiryFormDefinitionId;

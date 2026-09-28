@@ -181,6 +181,7 @@ public class AdmissionWorkflowGraphValidator : DomainService
 			validTransitions.Add(transition);
 		}
 
+		foreach (var issue in AdmissionWorkflowRouteDiagnostics.Validate(stages, validTransitions)) issues.Add(issue);
 		return validTransitions;
 	}
 

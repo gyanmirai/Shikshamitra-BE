@@ -19,6 +19,8 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 	public string StageName { get; set; } = string.Empty;
 	public Guid StandardId { get; set; }
 	public string StandardName { get; set; } = string.Empty;
+	public AdmissionTrack Track { get; set; } = AdmissionTrack.General;
+	public AdmissionEntryMode EntryMode { get; set; } = AdmissionEntryMode.Inquiry;
 	public string Code { get; set; } = string.Empty;
 	public DateTimeOffset EffectiveOpenDate { get; set; }
 	public DateTimeOffset EffectiveCloseDate { get; set; }
@@ -35,12 +37,15 @@ public class AdmissionOfferingListDto : EntityDto<Guid>
 
 public class AdmissionOfferingDto : AdmissionOfferingListDto
 {
+	public AdmissionClassCapacityDto? ClassCapacity { get; set; }
 	public bool UseCycleDates { get; set; }
 	public DateTimeOffset? OpenDate { get; set; }
 	public DateTimeOffset? CloseDate { get; set; }
 	public Guid? WorkflowDefinitionId { get; set; }
 	public Guid? InquiryFormDefinitionId { get; set; }
 	public Guid? ApplicationFormDefinitionId { get; set; }
+	public Guid? InquiryIntakeProfileId { get; set; }
+	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public string? InquiryFormName { get; set; }
 	public int? InquiryFormVersion { get; set; }
 	public string? ApplicationFormName { get; set; }
@@ -56,6 +61,8 @@ public class AdmissionOfferingDto : AdmissionOfferingListDto
 public abstract class AdmissionOfferingWriteDto
 {
 	public string? Name { get; set; }
+	public AdmissionTrack Track { get; set; } = AdmissionTrack.General;
+	public AdmissionEntryMode EntryMode { get; set; } = AdmissionEntryMode.Inquiry;
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid MediumId { get; set; }
@@ -68,6 +75,8 @@ public abstract class AdmissionOfferingWriteDto
 	public Guid? WorkflowDefinitionId { get; set; }
 	public Guid? InquiryFormDefinitionId { get; set; }
 	public Guid? ApplicationFormDefinitionId { get; set; }
+	public Guid? InquiryIntakeProfileId { get; set; }
+	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public bool IsActive { get; set; } = true;
 }
 
@@ -87,6 +96,8 @@ public class ValidateAdmissionOfferingDto : AdmissionOfferingWriteDto
 public class CloneAdmissionOfferingDto
 {
 	public string? Name { get; set; }
+	public AdmissionTrack? Track { get; set; }
+	public AdmissionEntryMode? EntryMode { get; set; }
 	public Guid AdmissionCycleId { get; set; }
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
@@ -112,6 +123,7 @@ public class AdmissionOfferingConfigurationValidationDto
 
 public class AdmissionOfferingAvailabilityDto
 {
+	public AdmissionClassCapacityDto? ClassCapacity { get; set; }
 	public bool IsAvailable { get; set; }
 	public AdmissionOfferingAvailabilityStatus Status { get; set; }
 	public bool CanCreateInquiry { get; set; }
@@ -123,6 +135,8 @@ public class AdmissionOfferingAvailabilityDto
 public class AdmissionOfferingListInput : PagedAndSortedResultRequestDto
 {
 	public Guid? AdmissionCycleId { get; set; }
+	public AdmissionTrack? Track { get; set; }
+	public AdmissionEntryMode? EntryMode { get; set; }
 	public Guid? CampusId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
@@ -143,6 +157,8 @@ public class BulkAdmissionOfferingItemDto
 
 public class BulkCreateAdmissionOfferingsDto
 {
+	public AdmissionTrack Track { get; set; } = AdmissionTrack.General;
+	public AdmissionEntryMode EntryMode { get; set; } = AdmissionEntryMode.Inquiry;
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid MediumId { get; set; }
@@ -153,6 +169,8 @@ public class BulkCreateAdmissionOfferingsDto
 	public Guid? WorkflowDefinitionId { get; set; }
 	public Guid? InquiryFormDefinitionId { get; set; }
 	public Guid? ApplicationFormDefinitionId { get; set; }
+	public Guid? InquiryIntakeProfileId { get; set; }
+	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public bool IsActive { get; set; } = true;
 	public bool PreviewOnly { get; set; } = true;
 	public List<BulkAdmissionOfferingItemDto> Items { get; set; } = [];

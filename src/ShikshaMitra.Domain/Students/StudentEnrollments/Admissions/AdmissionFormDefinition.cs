@@ -14,12 +14,13 @@ public class AdmissionFormDefinition : FullAuditedAggregateRoot<Guid>, IMultiTen
 	public int Version { get; private set; }
 	public AdmissionFormStatus Status { get; private set; }
 	public AdmissionFormLayoutType LayoutType { get; private set; }
+	public AdmissionFormPurpose Purpose { get; private set; }
 	public int FieldsPerRow { get; private set; }
 	public Guid? ParentVersionId { get; private set; }
 	public DateTime? PublishedAt { get; private set; }
 	public Guid? PublishedBy { get; private set; }
 	protected AdmissionFormDefinition() { }
-	public AdmissionFormDefinition(Guid id, Guid? tenantId, string name, string code, AdmissionFormLayoutType layoutType, int version = 1, Guid? parentVersionId = null, string? description = null, int fieldsPerRow = 1) : base(id)
+	public AdmissionFormDefinition(Guid id, Guid? tenantId, string name, string code, AdmissionFormLayoutType layoutType, int version = 1, Guid? parentVersionId = null, string? description = null, int fieldsPerRow = 1, AdmissionFormPurpose purpose = AdmissionFormPurpose.Registration) : base(id)
 	{
 		TenantId = tenantId;
 		IsDeleted = false;
@@ -27,15 +28,16 @@ public class AdmissionFormDefinition : FullAuditedAggregateRoot<Guid>, IMultiTen
 		Code = NormalizeCode(code);
 		Description = NormalizeDescription(description);
 		LayoutType = layoutType;
+		Purpose = purpose;
 		FieldsPerRow = NormalizeFieldsPerRow(fieldsPerRow);
 		Version = version;
 		ParentVersionId = parentVersionId;
 		Status = AdmissionFormStatus.Draft;
 	}
-	public void UpdateDetails(string name, string code, AdmissionFormLayoutType layoutType, string? description = null, int fieldsPerRow = 1)
+	public void UpdateDetails(string name, string code, AdmissionFormLayoutType layoutType, string? description = null, int fieldsPerRow = 1, AdmissionFormPurpose purpose = AdmissionFormPurpose.Registration)
 	{
 		if (Status != AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.PublishedImmutable);
-		Name = Check.NotNullOrWhiteSpace(name, nameof(name)).Trim(); Code = NormalizeCode(code); LayoutType = layoutType; Description = NormalizeDescription(description); FieldsPerRow = NormalizeFieldsPerRow(fieldsPerRow);
+		Name = Check.NotNullOrWhiteSpace(name, nameof(name)).Trim(); Code = NormalizeCode(code); LayoutType = layoutType; Purpose = purpose; Description = NormalizeDescription(description); FieldsPerRow = NormalizeFieldsPerRow(fieldsPerRow);
 	}
 	public void Publish(Guid? userId) { if (Status != AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.PublishedImmutable); Status = AdmissionFormStatus.Published; PublishedAt = DateTime.UtcNow; PublishedBy = userId; }
 	public void Archive() { if (Status == AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.PublishedImmutable); Status = AdmissionFormStatus.Archived; }

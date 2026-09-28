@@ -18,7 +18,8 @@ public class StudentBankDetailsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetBankDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForBankDetails);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForBankDetails,
+            includeStudentRecords: true);
 
         var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -43,7 +44,8 @@ public class StudentBankDetailsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdateBankDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForBankDetailsUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForBankDetailsUpdate,
+            forProfileWrite: true);
 
         var bankDetail = await studentBankDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -65,7 +67,8 @@ public class StudentBankDetailsAppService(
             input.SwiftCode
         );
 
-        student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.BankDetails);
+        if (student.Status != StudentLifeCycleStatusEnum.Enrolled)
+            student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.BankDetails);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();
 

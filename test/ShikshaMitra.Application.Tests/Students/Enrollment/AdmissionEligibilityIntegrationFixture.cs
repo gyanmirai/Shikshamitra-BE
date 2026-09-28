@@ -70,7 +70,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		Guid? studentId = existingStudent ? (await CreateExistingStudentAsync(offering, "Eligibility", "Patel")).Id : null;
 		var applicant = await CreateCertificationApplicantAsync("Eligibility", true, true, studentId);
 		if (applicantDateOfBirth.HasValue) await UpdateEligibilityApplicantBirthDateAsync(applicant.Id, applicantDateOfBirth);
-		var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id);
+		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
 		await _applicationAppService.SubmitAsync(application.Id);
 		// A profile correction can remove DOB after the required application form was submitted.
 		if (!applicantDateOfBirth.HasValue) await UpdateEligibilityApplicantBirthDateAsync(applicant.Id, null);
@@ -136,10 +136,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await AdvanceAssessmentAsync(fixture.ApplicationId, stageId);
 	}
 
-	private async Task<Guid> CreateEligibilityAnswerFormAsync(AdmissionFormFieldType answerType) => await WithUnitOfWorkAsync(async () =>
+	private async Task<Guid> CreateEligibilityAnswerFormAsync(AdmissionFormFieldType answerType,
+		AdmissionFormPurpose purpose = AdmissionFormPurpose.Registration) => await WithUnitOfWorkAsync(async () =>
 	{
 		var form = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Eligibility source form",
-			$"ELIG_{Guid.NewGuid():N}"[..24], AdmissionFormLayoutType.SinglePage);
+			$"ELIG_{Guid.NewGuid():N}"[..24], AdmissionFormLayoutType.SinglePage, purpose: purpose);
 		form.Publish(TestUserId);
 		await _formRepository.InsertAsync(form, autoSave: true);
 		var section = new AdmissionFormSectionDefinition(Guid.NewGuid(), form.Id, "ANSWERS", "Eligibility answers", 0, null);

@@ -14,6 +14,31 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public async Task Document_class_scope_uses_the_offering_and_not_an_applicant_answer()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var fixture = await CreateDocumentHandoffFixtureAsync(HandoffPolicy(new AdmissionDocumentRequirement { Code = "BIRTH", Name = "Birth certificate" }));
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var application = await _applicationRepository.GetAsync(fixture.Application.Id);
+			var form = await GetRequiredService<IRepository<AdmissionFormInstance, Guid>>().GetAsync(item => item.ApplicationId == application.Id);
+			var differentClass = Guid.NewGuid();
+			await GetRequiredService<IRepository<AdmissionFormFieldValue, Guid>>().InsertAsync(new(Guid.NewGuid(), TestTenantId, form.Id, "class", $"\"{differentClass}\""), true);
+			var policy = HandoffPolicy(
+				new() { Code = "COMMON", Name = "Common document" },
+				new() { Code = "OWN_CLASS", Name = "Selected class document", StandardIds = [fixture.Offering.StandardId] },
+				new() { Code = "OTHER_CLASS", Name = "Other class document", StandardIds = [differentClass] });
+			var result = await GetRequiredService<AdmissionDocumentEvaluationService>().EvaluateAsync(application, fixture.StageId, policy);
+			result.Requirements.Single(item => item.Requirement.Code == "COMMON").IsRequired.ShouldBeTrue();
+			result.Requirements.Single(item => item.Requirement.Code == "OWN_CLASS").IsRequired.ShouldBeTrue();
+			var other = result.Requirements.Single(item => item.Requirement.Code == "OTHER_CLASS");
+			other.IsRequired.ShouldBeFalse();
+			other.Status.ShouldBe("notRequired");
+			other.Blockers.ShouldBeEmpty();
+		});
+	}
+	[Fact]
 	public async Task Managed_documents_gate_skip_and_override_and_require_replacement_review()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);

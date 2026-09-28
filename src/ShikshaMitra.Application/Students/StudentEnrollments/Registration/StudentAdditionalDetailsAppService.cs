@@ -20,7 +20,8 @@ public class StudentAdditionalDetailsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetAdditionalDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetails);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetails,
+            includeStudentRecords: true);
 
         var additionalDetail = student.AdditionalDetail;
 
@@ -48,7 +49,8 @@ public class StudentAdditionalDetailsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdateAdditionalDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetailsUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForAdditionalDetailsUpdate,
+            forProfileWrite: true);
 
         validationService.ValidateAdditionalDetailExists(student);
 

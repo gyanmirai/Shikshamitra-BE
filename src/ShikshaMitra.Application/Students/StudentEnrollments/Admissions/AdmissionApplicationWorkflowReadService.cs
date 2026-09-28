@@ -24,9 +24,8 @@ public class AdmissionApplicationWorkflowReadService(
 		var stages = await stageRepository.GetListAsync(stage => stage.WorkflowInstanceId == workflow.Id);
 		var definitions = await stageDefinitionRepository.GetListAsync(stage => stage.WorkflowDefinitionId == workflow.WorkflowDefinitionId);
 		var current = stages.SingleOrDefault(stage => stage.Id == application.CurrentStageInstanceId);
-		var transitions = current == null ? [] : await transitionRepository.GetListAsync(transition =>
-			transition.WorkflowDefinitionId == workflow.WorkflowDefinitionId &&
-			transition.FromStageId == current.DefinitionStageId);
+		var allTransitions = await transitionRepository.GetListAsync(item => item.WorkflowDefinitionId == workflow.WorkflowDefinitionId);
+		var transitions = allTransitions.Where(transition => transition.FromStageId == current?.DefinitionStageId).ToList();
 		var history = await historyRepository.GetListAsync(item => item.WorkflowInstanceId == workflow.Id);
 		return new AdmissionApplicationWorkflowDto
 		{
@@ -59,6 +58,13 @@ public class AdmissionApplicationWorkflowReadService(
 					AdmissionAssessmentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
 				DocumentVerificationEnabled = stage.StageType == AdmissionWorkflowStageType.DocumentVerification &&
 					AdmissionDocumentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				DocumentCollectionAvailable = workflow.Status == AdmissionWorkflowInstanceStatus.Active &&
+					application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted &&
+					current?.StageType == AdmissionWorkflowStageType.Form && current.Status == AdmissionRuntimeStageStatus.Active &&
+					stage.StageType == AdmissionWorkflowStageType.DocumentVerification && stage.Status == AdmissionRuntimeStageStatus.Pending &&
+					AdmissionDocumentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) is { CollectionFormStageCode: not null } documentPolicy &&
+					AdmissionDocumentCollectionRules.IsLinkedForm(definitions.First(item => item.Id == current.DefinitionStageId),
+						definitions.First(item => item.Id == stage.DefinitionStageId), documentPolicy, allTransitions),
 				EligibilityEnabled = stage.StageType == AdmissionWorkflowStageType.Eligibility &&
 					AdmissionEligibilityAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
 				ReviewEnabled = stage.StageType == AdmissionWorkflowStageType.Review &&

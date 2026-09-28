@@ -19,7 +19,7 @@ public class AdmissionDocumentCommandService(IRepository<AdmissionDocumentEviden
 {
 	public async Task<AdmissionDocumentVerificationDto> UploadAsync(Guid applicationId, Guid stageId, string code, AdmissionDocumentUploadInput input)
 	{
-		var (context, item) = await PrepareAsync(applicationId, stageId, code, input);
+		var (context, item) = await PrepareAsync(applicationId, stageId, code, input, allowEarlyCollection: true);
 		if (item.Requirement.CollectionMode == "original") throw Invalid("This requirement records an original document check only.");
 		var id = GuidGenerator.Create();
 		var file = await files.SaveAsync(context, item.Requirement, id, input.File);
@@ -59,9 +59,11 @@ public class AdmissionDocumentCommandService(IRepository<AdmissionDocumentEviden
 	}
 
 	private async Task<(AdmissionDocumentContext Context, AdmissionDocumentRequirementEvaluation Item)> PrepareAsync(
-		Guid applicationId, Guid stageId, string code, AdmissionDocumentActionInput input)
+		Guid applicationId, Guid stageId, string code, AdmissionDocumentActionInput input, bool allowEarlyCollection = false)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId);
+		var context = await access.GetContextAsync(applicationId, stageId, !allowEarlyCollection);
+		if (context.Policy == null || !context.IsActive && !(allowEarlyCollection && context.CanCollectDuringForm))
+			throw Invalid("Upload documents during the configured Form stage or the active Document Verification stage.");
 		if (input.Notes?.Length > 1024) throw Invalid("Document notes allow 1024 characters.");
 		AdmissionDocumentAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		var requirement = AdmissionDocumentAccessService.GetRequirement(context, code);

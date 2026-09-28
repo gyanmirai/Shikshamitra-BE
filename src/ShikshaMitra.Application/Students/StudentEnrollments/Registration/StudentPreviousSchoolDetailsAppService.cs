@@ -18,7 +18,8 @@ public class StudentPreviousSchoolDetailsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetPreviousSchoolDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchool);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchool,
+            includeStudentRecords: true);
 
         var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -48,7 +49,8 @@ public class StudentPreviousSchoolDetailsAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdatePreviousSchoolDetailsAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchoolUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForPreviousSchoolUpdate,
+            forProfileWrite: true);
 
         var previousSchoolDetail = await studentPreviousSchoolDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -73,7 +75,8 @@ public class StudentPreviousSchoolDetailsAppService(
             input.Remarks
         );
 
-        student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.PrevSchoolDetails);
+        if (student.Status != StudentLifeCycleStatusEnum.Enrolled)
+            student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.PrevSchoolDetails);
         student.AdditionalDetail?.UpdatePreviousSchoolSummary(input.PreviousSchool, input.LastClassPassed);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();

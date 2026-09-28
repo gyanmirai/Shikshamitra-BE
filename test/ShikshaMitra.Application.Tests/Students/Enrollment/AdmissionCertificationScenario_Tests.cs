@@ -281,7 +281,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			existingStudentId = (await CreateExistingStudentAsync(offering, firstName, "Patel")).Id;
 		var applicant = await CreateCertificationApplicantAsync(
 			firstName, true, createGuardian, existingStudentId);
-		var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id);
+		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
 		var submitResult = await _applicationAppService.SubmitAsync(application.Id);
 		submitResult.ValidationErrors.ShouldBeEmpty();
 		if (!completeIdentity)

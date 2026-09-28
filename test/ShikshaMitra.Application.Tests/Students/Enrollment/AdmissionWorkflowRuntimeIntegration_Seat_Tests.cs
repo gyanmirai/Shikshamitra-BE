@@ -139,7 +139,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	private async Task<(AdmissionApplicationDto Application, AdmissionApplicationStageDto Stage)> EnterSeatAsync(
 		Guid offeringId, string name, string key)
 	{
-		var application = await _applicationAppService.StartAsync((await CreateApplicantAsync(name)).Id, offeringId);
+		var application = await StartFixtureApplicationAsync((await CreateApplicantAsync(name)).Id, offeringId);
 		var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
 		runtime = await _applicationAppService.AdvanceWorkflowAsync(application.Id, new()
 		{

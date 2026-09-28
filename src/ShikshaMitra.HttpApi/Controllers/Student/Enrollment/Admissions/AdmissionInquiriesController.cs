@@ -44,6 +44,12 @@ public class AdmissionInquiriesController(IAdmissionInquiryAppService service) :
 	public async Task<Result<AdmissionInquiryDto>> UpdateAsync(Guid id, UpdateAdmissionInquiryDto input) =>
 		Result.Success(await service.UpdateAsync(id, input));
 
+	[HttpPost("{id:guid}/confirm-offering")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<Result<AdmissionInquiryDto>> ConfirmOfferingAsync(Guid id,
+		[FromBody] ConfirmAdmissionInquiryOfferingDto input) =>
+		Result.Success(await service.ConfirmOfferingAsync(id, input));
+
 	[HttpPost("{id:guid}/status")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
 	public async Task<Result<AdmissionInquiryDto>> SetStatusAsync(Guid id, [FromQuery] AdmissionInquiryStatus status, [FromQuery] Guid? duplicateOfId = null) => Result.Success(await service.SetStatusAsync(id, status, duplicateOfId));

@@ -29,9 +29,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				return await _offeringRepository.InsertAsync(offering, autoSave: true);
 			});
 			var applicant = await CreateCertificationApplicantAsync("OutsideScope", true, true, null);
-			var denied = await _applicationAppService.StartAsync(applicant.Id, otherOffering.Id);
+			var denied = await StartFixtureApplicationAsync(applicant.Id, otherOffering.Id);
 			var year = (await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(allowed.Offering.AdmissionCycleId))).AcademicYearId;
 			var staffId = Guid.NewGuid();
+			await EnsureTestIdentityUserAsync(staffId, $"admission-staff-{staffId:N}");
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: staffId,
 				academicYearId: year, educationBoardId: allowed.Offering.BoardId, educationMediumId: allowed.Offering.MediumId,
 				educationMediumStageId: allowed.Offering.StageId, standardId: allowed.Offering.StandardId,

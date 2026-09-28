@@ -20,23 +20,33 @@ public class AdmissionWorkflowValidationService(
 {
 	public async Task<AdmissionWorkflowValidationResultDto> ValidateAsync(Guid workflowId)
 	{
-		await definitionStore.GetAsync(workflowId);
+		var workflow = await definitionStore.GetAsync(workflowId);
 		var stages = await definitionStore.GetStagesAsync(workflowId);
 		var transitions = await definitionStore.GetTransitionsAsync(workflowId);
 		var issues = graphValidator.Validate(stages, transitions)
 			.Select(AdmissionWorkflowMapper.ToDto)
 			.ToList();
+		if (workflow.DefaultInquiryFormDefinitionId.HasValue)
+		{
+			var inquiryForm = await formRepository.FindAsync(workflow.DefaultInquiryFormDefinitionId.Value);
+			if (inquiryForm == null || inquiryForm.Status != AdmissionFormStatus.Published ||
+				inquiryForm.Purpose != AdmissionFormPurpose.Inquiry)
+				issues.Add(new AdmissionWorkflowValidationIssueDto { Code = AdmissionWorkflowErrorCodes.InvalidInquiryForm,
+					Message = "Select a published Inquiry form for this workflow.",
+					Severity = AdmissionWorkflowValidationSeverity.Error });
+		}
 		foreach (var stage in stages.Where(stage => stage.StageType == AdmissionWorkflowStageType.Form))
 		{
 			if (issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)) continue;
 			if (!TryReadGuid(stage.ConfigurationJson, "formDefinitionId", out var formId)) continue;
 			var form = await formRepository.FindAsync(formId);
-			if (form == null || form.Status != AdmissionFormStatus.Published)
+			if (form == null || form.Status != AdmissionFormStatus.Published ||
+				form.Purpose != AdmissionFormPurpose.Registration)
 			{
 				issues.Add(new AdmissionWorkflowValidationIssueDto
 				{
 					Code = AdmissionWorkflowErrorCodes.InvalidTransition,
-					Message = $"Stage '{stage.Name}' must reference a published form in this tenant.",
+					Message = $"Stage '{stage.Name}' must reference a published student registration form in this tenant.",
 					Severity = AdmissionWorkflowValidationSeverity.Error,
 					StageId = stage.Id
 				});
@@ -66,9 +76,18 @@ public class AdmissionWorkflowValidationService(
 			if (issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)) continue;
 			var policy = AdmissionDocumentAccessService.ReadPolicy(stage);
 			if (policy == null) continue;
+			if (policy.CollectionFormStageCode != null && !AdmissionDocumentCollectionRules.IsLinkedForm(
+				stages.FirstOrDefault(item => item.Code == policy.CollectionFormStageCode), stage, policy, transitions))
+				issues.Add(new AdmissionWorkflowValidationIssueDto { Code = AdmissionDocumentErrorCodes.InvalidPolicy,
+					Message = $"Stage '{stage.Name}': choose a Form stage with a route to this document stage for early collection.",
+					Severity = AdmissionWorkflowValidationSeverity.Error, StageId = stage.Id });
 			foreach (var requirement in policy.Requirements)
 			{
-				try { await documentAccess.ValidateMappingAsync(requirement); }
+				try
+				{
+					await documentAccess.ValidateMappingAsync(requirement);
+					await documentAccess.ValidateClassesAsync(requirement);
+				}
 				catch (Volo.Abp.BusinessException exception)
 				{
 					issues.Add(new AdmissionWorkflowValidationIssueDto { Code = AdmissionDocumentErrorCodes.InvalidPolicy,

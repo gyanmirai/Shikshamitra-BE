@@ -10,14 +10,15 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public sealed record AdmissionInquiryPolicyContext(
-	AdmissionWorkflowStageDefinition Definition,
+	AdmissionWorkflowStageDefinition? Definition,
 	AdmissionInquiryPolicy Policy,
 	string SnapshotJson);
 
 [RemoteService(false)]
 public class AdmissionInquiryPolicyResolver(
 	IRepository<AdmissionOffering, Guid> offerings,
-	IRepository<AdmissionWorkflowStageDefinition, Guid> stages) : ApplicationService, ITransientDependency
+	IRepository<AdmissionWorkflowStageDefinition, Guid> stages,
+	IRepository<AdmissionIntakeProfile, Guid> profiles) : ApplicationService, ITransientDependency
 {
 	private static readonly JsonSerializerOptions SnapshotOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -25,6 +26,40 @@ public class AdmissionInquiryPolicyResolver(
 	{
 		if (!offeringId.HasValue) return null;
 		var offering = await offerings.GetAsync(offeringId.Value);
+		if (offering.InquiryIntakeProfileId.HasValue)
+		{
+			var profile = await profiles.GetAsync(offering.InquiryIntakeProfileId.Value);
+			if (profile.Kind != AdmissionIntakeProfileKind.Inquiry)
+				throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
+			try
+			{
+				var rules = JsonSerializer.Deserialize<AdmissionInquiryIntakeRules>(profile.ConfigurationJson,
+					new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ??
+					throw new ArgumentException("Inquiry settings are missing.");
+				rules.Validate();
+				var profilePolicy = new AdmissionInquiryPolicy
+				{
+					Version = 1, Enabled = true,
+					RequireLinkedInquiry = offering.EntryMode == AdmissionEntryMode.Inquiry,
+					ApplicationStartRequirement = rules.ApplicationStartRequirement,
+					DuplicateRule = rules.DuplicateRule,
+					FirstContactDueInHours = rules.FirstContactDueInHours,
+					QualificationDueInDays = rules.QualificationDueInDays,
+					FollowUpDueInDays = rules.FollowUpDueInDays,
+					MaxOpenFollowUps = rules.MaxOpenFollowUps,
+					RequireGuardianEmail = rules.RequireGuardianEmail,
+					RequireApplicantDateOfBirth = rules.RequireApplicantDateOfBirth,
+					AllowedSources = rules.AllowedSources,
+					RequireSourceDetailFor = rules.RequireSourceDetailFor
+				};
+				profilePolicy.Validate();
+				return new AdmissionInquiryPolicyContext(null, profilePolicy, JsonSerializer.Serialize(profilePolicy, SnapshotOptions));
+			}
+			catch (Exception error) when (error is ArgumentException or JsonException or InvalidOperationException)
+			{
+				throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration, error.Message);
+			}
+		}
 		if (!offering.WorkflowDefinitionId.HasValue) return null;
 		var definitions = await stages.GetListAsync(item =>
 			item.WorkflowDefinitionId == offering.WorkflowDefinitionId.Value &&

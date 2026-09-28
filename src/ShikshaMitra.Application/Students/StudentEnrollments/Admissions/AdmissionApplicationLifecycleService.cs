@@ -42,6 +42,12 @@ public class AdmissionApplicationLifecycleService(
 		var offering = (await offeringRuntimeService.GetAvailableAsync(offeringId)).Offering;
 		inquiryId = await ResolveInquiryAsync(applicantId, offeringId, inquiryId);
 		var inquiry = await EnsureInquiryMatchesAsync(inquiryId, applicantId, offering);
+		if (offering.EntryMode == AdmissionEntryMode.Inquiry && inquiry == null)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.LinkedInquiryRequired,
+				"Start with an inquiry for this Admission Offering.");
+		if (offering.EntryMode == AdmissionEntryMode.DirectRegistration && inquiry != null)
+			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable,
+				"This Admission Offering starts directly with Registration.");
 		await inquiryRuntime.EnsureCanStartApplicationAsync(offering.Id, inquiry);
 		var workflow = await workflowRepository.FindAsync(offering.WorkflowDefinitionId!.Value);
 		var form = await formRepository.FindAsync(offering.ApplicationFormDefinitionId!.Value);
@@ -56,6 +62,8 @@ public class AdmissionApplicationLifecycleService(
 		var application = new AdmissionApplication(
 			GuidGenerator.Create(), CurrentTenant.Id, applicationNumber, applicantId, inquiryId,
 			offering.AdmissionCycleId, offeringId, workflow.Id, form.Id);
+		if (inquiry?.AssignedCounsellorId is { } counsellorId)
+			application.AssignCounsellor(counsellorId);
 		var workflowInstance = new AdmissionApplicationWorkflowInstance(
 			GuidGenerator.Create(), CurrentTenant.Id, application.Id, workflow.Id);
 		var stageDefinitions = (await stageRepository.GetListAsync(stage => stage.WorkflowDefinitionId == workflow.Id))
@@ -117,9 +125,12 @@ public class AdmissionApplicationLifecycleService(
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
 		var fields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
 		var inquiryValues = ReadInquiryValues(inquiry?.FormResponseSnapshotJson);
+		var inquiryFields = inquiry?.FormResponseDefinitionId is Guid inquiryFormId
+			? await fieldRepository.GetListAsync(field => field.FormDefinitionId == inquiryFormId)
+			: [];
 		return fields.Select(field => new AdmissionFormFieldValue(
 				GuidGenerator.Create(), CurrentTenant.Id, instance.Id, field.Code,
-				ResolveInitialValue(field, applicant, guardian, inquiryValues)))
+				ResolveInitialValue(field, applicant, guardian, inquiryFields, inquiryValues)))
 			.Where(value => value.ValueJson != "null" && !string.IsNullOrWhiteSpace(value.ValueJson)).ToArray();
 	}
 
@@ -127,16 +138,13 @@ public class AdmissionApplicationLifecycleService(
 		AdmissionFormFieldDefinition field,
 		AdmissionApplicant applicant,
 		AdmissionGuardian? guardian,
+		IReadOnlyCollection<AdmissionFormFieldDefinition> inquiryFields,
 		IReadOnlyDictionary<string, string> inquiryValues)
 	{
-		var snapshotKey = string.IsNullOrWhiteSpace(field.BindingKey) ? field.Code : field.BindingKey;
-		if (field.BindingType != AdmissionFormBindingType.System &&
-			inquiryValues.TryGetValue(snapshotKey!, out var snapshotValue) &&
-			!string.IsNullOrWhiteSpace(snapshotValue) && snapshotValue != "null")
-			return snapshotValue;
 		if (field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey))
 			return JsonSerializer.Serialize(AdmissionApplicationMapper.GetBoundValue(field.BindingKey, applicant, guardian));
-		return field.DefaultValue;
+		return AdmissionInquiryFormPrefill.ResolveCustomValue(field, inquiryFields, inquiryValues)
+			?? field.DefaultValue;
 	}
 
 	private static IReadOnlyDictionary<string, string> ReadInquiryValues(string? snapshotJson)

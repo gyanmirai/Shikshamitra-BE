@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Mail;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using ShikshaMitra.Students.ValueObjects;
@@ -21,6 +22,7 @@ public class AdmissionApplicationDecisionService(
 	IRepository<AdmissionGuardian, Guid> guardianRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
+	IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
 	IRepository<AdmissionApplicationWorkflowInstance, Guid> workflowRepository,
 	IRepository<AdmissionApplicationDecisionHistory, Guid> historyRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository,
@@ -35,6 +37,7 @@ public class AdmissionApplicationDecisionService(
 	AdmissionReviewDecisionGuard reviewGuard,
 	AdmissionSeatRuntimeService seatRuntime,
 	AdmissionOfferCommandService offerCommands,
+	AdmissionInquiryPeopleService peopleService,
 	AdmissionApplicationScopeAccessService applicationScope)
 	: ApplicationService, ITransientDependency
 {
@@ -53,9 +56,21 @@ public class AdmissionApplicationDecisionService(
 	public async Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input)
 	{
 		if (await offerCommands.TryIssueLegacyAsync(id, input)) return await GetDecisionResultAsync(id);
-		return await ChangeAsync(id, input, application => application.IssueOffer(
-			input.OfferExpiresAt?.ToUniversalTime() ?? throw new BusinessException(AdmissionErrorCodes.ApplicationOfferExpiryInvalid),
-			CurrentUser.Id, input.Reason), "issueOffer");
+		var target = await GetApplicationAsync(id);
+		if (input.CounsellorId.HasValue && input.CounsellorId != target.AssignedCounsellorId)
+			throw new BusinessException(AdmissionOfferStageErrorCodes.InvalidState,
+				"Change the journey counsellor through the application assignment action before issuing an offer.");
+		var effectiveCounsellorId = input.CounsellorId ?? target.AssignedCounsellorId;
+		if (effectiveCounsellorId.HasValue)
+			await peopleService.EnsureCanAccessOfferingAsync(effectiveCounsellorId.Value, target.AdmissionOfferingId);
+		return await ChangeAsync(id, input, application =>
+		{
+			application.IssueOffer(
+				input.OfferExpiresAt.HasValue
+					? input.OfferExpiresAt.Value.UtcDateTime
+					: throw new BusinessException(AdmissionErrorCodes.ApplicationOfferExpiryInvalid),
+				CurrentUser.Id, input.Reason);
+		}, "issueOffer");
 	}
 
 	public async Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input)
@@ -128,7 +143,7 @@ public class AdmissionApplicationDecisionService(
 			await reviewGuard.EnsureApplicationCompleteAsync(context.Application);
 			await seatRuntime.EnsureApplicationCompleteAsync(context.Application);
 			context.Applicant.LinkStudent(existingCase.StudentId);
-			context.Application.FinalizeAdmission(existingCase.StudentId, existingCase.Id, existingCase.CreationTime);
+			FinalizeApplication(context, existingCase.StudentId, existingCase.Id, existingCase.CreationTime);
 			await documentHandoff.LinkAsync(context.Application, await studentRepository.GetAsync(existingCase.StudentId));
 			await applicantRepository.UpdateAsync(context.Applicant, false);
 			await applicationRepository.UpdateAsync(context.Application, false);
@@ -190,11 +205,13 @@ public class AdmissionApplicationDecisionService(
 			context.Offering.Id, context.Cycle.AcademicYearId, context.Offering.BoardId, context.Offering.MediumId,
 			context.Offering.StageId, context.Offering.StandardId, input.IdempotencyKey, now,
 			now.AddHours(policy?.SlaHours ?? 72));
+		if (context.Application.AssignedCounsellorId.HasValue)
+			onboardingCase.AssignOwner(context.Application.AssignedCounsellorId);
 		await onboardingRepository.InsertAsync(onboardingCase, false);
 		await CreateDefaultStepsAsync(onboardingCase, policy, now);
 
 		context.Applicant.LinkStudent(student.Id);
-		context.Application.FinalizeAdmission(student.Id, onboardingCase.Id, now);
+		FinalizeApplication(context, student.Id, onboardingCase.Id, now);
 		await documentHandoff.LinkAsync(context.Application, student);
 		await applicantRepository.UpdateAsync(context.Applicant, false);
 		await applicationRepository.UpdateAsync(context.Application, false);
@@ -318,9 +335,14 @@ public class AdmissionApplicationDecisionService(
 	{
 		var application = context.Application;
 		var applicant = context.Applicant;
-		var offerReady = application.Status == AdmissionApplicationStatus.OfferAccepted &&
-			application.OfferAcceptedAt.HasValue &&
-			(!application.OfferExpiresAt.HasValue || application.OfferExpiresAt.Value > DateTime.UtcNow);
+		var usesDirectApproval = context.AllowsApprovedDirectFinalization &&
+			application.Status is not (AdmissionApplicationStatus.Offered or
+				AdmissionApplicationStatus.OfferAccepted or AdmissionApplicationStatus.OfferDeclined);
+		var offerReady = usesDirectApproval
+			? application.Status == AdmissionApplicationStatus.Approved
+			: application.Status == AdmissionApplicationStatus.OfferAccepted &&
+				application.OfferAcceptedAt.HasValue &&
+				(!application.OfferExpiresAt.HasValue || application.OfferExpiresAt.Value > DateTime.UtcNow);
 		var identityReady = !string.IsNullOrWhiteSpace(applicant.FirstName) &&
 			!string.IsNullOrWhiteSpace(applicant.LastName) && applicant.DateOfBirth.HasValue &&
 			Enum.TryParse<GenderEnum>(applicant.Gender, true, out _);
@@ -331,7 +353,9 @@ public class AdmissionApplicationDecisionService(
 			!application.CurrentStageInstanceId.HasValue;
 		return
 		[
-			Item("offer", "Accepted, unexpired offer", offerReady, offerReady ? "Ready" : "Offer must be accepted and unexpired."),
+			Item("offer", usesDirectApproval ? "Direct admission approved" : "Accepted, unexpired offer",
+				offerReady, offerReady ? "Ready" : usesDirectApproval
+					? "Approve this direct admission before finalizing." : "Offer must be accepted and unexpired."),
 			Item("workflow", "Admission workflow completed", workflowReady, workflowReady ? "Ready" : "Complete the admission workflow first."),
 			Item("identity", "Core identity complete", identityReady, identityReady ? "Ready" : "Name, date of birth, and gender are required."),
 			Item("guardian", "Primary guardian contact valid", guardianReady, guardianReady ? "Verification confirmation is required when finalizing." : "Enter a valid 10-digit Indian mobile number or email for the primary guardian."),
@@ -342,6 +366,15 @@ public class AdmissionApplicationDecisionService(
 
 	private static AdmissionFinalizationReadinessItemDto Item(string key, string label, bool passed, string detail) =>
 		new() { Key = key, Label = label, Passed = passed, Detail = detail };
+
+	private static void FinalizeApplication(FinalizationContext context, Guid studentId, Guid caseId, DateTime finalizedAt)
+	{
+		if (context.AllowsApprovedDirectFinalization && context.Application.Status == AdmissionApplicationStatus.Approved)
+			context.Application.FinalizeApprovedDirectAdmission(studentId, caseId, finalizedAt);
+		else
+			context.Application.FinalizeAdmission(studentId, caseId, finalizedAt);
+	}
+
 
 	private Student CreateStudent(FinalizationContext context)
 	{
@@ -379,7 +412,13 @@ public class AdmissionApplicationDecisionService(
 		var offering = await offeringRepository.FindAsync(application.AdmissionOfferingId) ??
 			throw new EntityNotFoundException(typeof(AdmissionOffering), application.AdmissionOfferingId);
 		var workflow = await workflowRepository.FindAsync(item => item.ApplicationId == id);
-		return new FinalizationContext(application, applicant, guardian, cycle, offering, workflow);
+		var hasOfferStage = await workflowStageRepository.AnyAsync(stage =>
+			stage.WorkflowDefinitionId == application.WorkflowDefinitionId &&
+			stage.StageType == AdmissionWorkflowStageType.Offer);
+		var allowsApprovedDirectFinalization = offering.EntryMode == AdmissionEntryMode.DirectRegistration &&
+			offering.Track != AdmissionTrack.General && !hasOfferStage;
+		return new FinalizationContext(application, applicant, guardian, cycle, offering, workflow,
+			allowsApprovedDirectFinalization);
 	}
 
 	private async Task<AdmissionApplicationDto> ChangeAsync(Guid id, AdmissionApplicationDecisionDto input, Action<AdmissionApplication> change, string? decision = null)
@@ -440,5 +479,6 @@ public class AdmissionApplicationDecisionService(
 		AdmissionGuardian? Guardian,
 		AdmissionCycle Cycle,
 		AdmissionOffering Offering,
-		AdmissionApplicationWorkflowInstance? Workflow);
+		AdmissionApplicationWorkflowInstance? Workflow,
+		bool AllowsApprovedDirectFinalization);
 }

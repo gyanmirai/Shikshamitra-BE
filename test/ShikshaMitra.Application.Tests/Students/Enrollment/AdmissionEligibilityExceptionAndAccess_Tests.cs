@@ -35,6 +35,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await Should.ThrowAsync<BusinessException>(() => service.ReviewExceptionAsync(fixture.ApplicationId, fixture.StageId, request.Id,
 				new() { ConcurrencyStamp = state.ConcurrencyStamp, Decision = "approved", Reason = "The requester cannot approve their own exception." }));
 			var reviewerId = Guid.NewGuid();
+			await EnsureTestIdentityUserAsync(reviewerId, $"eligibility-reviewer-{reviewerId:N}");
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: reviewerId, description: "Eligibility reviewer scope"), autoSave: true);
 			using (_principalAccessor.Change(EligibilityPrincipal(reviewerId, "eligibility-reviewer")))
 			{
@@ -83,6 +84,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				new() { ConcurrencyStamp = state.ConcurrencyStamp, Reason = "Principal approval is required for this placement exception." });
 			var requestId = state.LatestEvaluation!.Exceptions.Single().Id;
 			var reviewerId = Guid.NewGuid();
+			await EnsureTestIdentityUserAsync(reviewerId, $"eligibility-reviewer-{reviewerId:N}");
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: reviewerId, description: "Scoped role reviewer"), autoSave: true);
 			using (_principalAccessor.Change(EligibilityPrincipal(reviewerId, "reviewer-with-wrong-role")))
 			{

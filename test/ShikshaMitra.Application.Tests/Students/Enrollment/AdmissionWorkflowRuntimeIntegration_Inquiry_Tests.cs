@@ -37,6 +37,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			state = await management.RecordContactAsync(inquiry.Id, new()
 			{
 				ConcurrencyStamp = state.ConcurrencyStamp,
+				Channel = "PHONE",
+				Direction = "OUTBOUND",
+				Outcome = "CONNECTED",
 				Note = "Guardian confirmed interest in a campus visit."
 			});
 			state.ContactCount.ShouldBe(1);

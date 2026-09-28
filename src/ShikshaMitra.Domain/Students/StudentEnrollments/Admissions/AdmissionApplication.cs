@@ -16,6 +16,7 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid AdmissionOfferingId { get; private set; }
 	public Guid WorkflowDefinitionId { get; private set; }
 	public Guid FormDefinitionId { get; private set; }
+	public Guid? AssignedCounsellorId { get; private set; }
 	public AdmissionApplicationStatus Status { get; private set; }
 	public string? DecisionReason { get; private set; }
 	public Guid? DecisionBy { get; private set; }
@@ -41,6 +42,8 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public void SetCurrentStage(Guid stageInstanceId) => CurrentStageInstanceId = stageInstanceId;
+	public void AssignCounsellor(Guid counsellorId) =>
+		AssignedCounsellorId = Check.NotDefaultOrNull<Guid>(counsellorId, nameof(counsellorId));
 	public void CompleteWorkflow() => CurrentStageInstanceId = null;
 	public void RecordWorkflowStarted(Guid workflowInstanceId, Guid entryStageInstanceId) =>
 		AddLocalEvent(new ApplicationWorkflowStartedEvent(Id, workflowInstanceId, WorkflowDefinitionId, entryStageInstanceId, TenantId));
@@ -154,6 +157,20 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		    StudentId == studentId && OnboardingCaseId == onboardingCaseId)
 			return;
 		EnsureStatus(AdmissionApplicationStatus.OfferAccepted);
+		CompleteFinalization(studentId, onboardingCaseId, finalizedAt);
+	}
+
+	public void FinalizeApprovedDirectAdmission(Guid studentId, Guid onboardingCaseId, DateTime finalizedAt)
+	{
+		if (Status == AdmissionApplicationStatus.AdmissionFinalized &&
+		    StudentId == studentId && OnboardingCaseId == onboardingCaseId)
+			return;
+		EnsureStatus(AdmissionApplicationStatus.Approved);
+		CompleteFinalization(studentId, onboardingCaseId, finalizedAt);
+	}
+
+	private void CompleteFinalization(Guid studentId, Guid onboardingCaseId, DateTime finalizedAt)
+	{
 		StudentId = Check.NotDefaultOrNull<Guid>(studentId, nameof(studentId));
 		OnboardingCaseId = Check.NotDefaultOrNull<Guid>(onboardingCaseId, nameof(onboardingCaseId));
 		FinalizedAt = finalizedAt.ToUniversalTime();

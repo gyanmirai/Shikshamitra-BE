@@ -12,6 +12,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [RemoteService(false)]
 public class AdmissionOfferReadService(
 	IRepository<AdmissionApplicationDecisionHistory, Guid> history,
+	AdmissionInquiryPeopleService peopleService,
 	AdmissionOfferAccessService access) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionOfferStageDto> GetAsync(Guid applicationId, Guid stageId)
@@ -25,13 +26,20 @@ public class AdmissionOfferReadService(
 		var extensionCount = events.Count(item => item.Action == "extend");
 		var reissueCount = events.Count(item => item.Action == "reissue");
 		var canComplete = policy?.AllowedCompletionOutcomes.Contains(status, StringComparer.Ordinal) == true;
+		Dictionary<Guid, string> counsellorNames = context.Application.AssignedCounsellorId.HasValue
+			? await peopleService.GetNamesAsync([context.Application.AssignedCounsellorId.Value])
+			: [];
 		return new AdmissionOfferStageDto
 		{
-			ApplicationId = applicationId, StageId = stageId, OfferStageEnabled = policy != null,
+			ApplicationId = applicationId, AdmissionOfferingId = context.Application.AdmissionOfferingId,
+			StageId = stageId, OfferStageEnabled = policy != null,
 			Policy = policy, IsActive = context.IsActive, Status = status, VersionNumber = issueEvents.Count,
 			ExtensionCount = extensionCount, ReissueCount = reissueCount,
 			IssuedAt = issueEvents.LastOrDefault()?.OccurredAt, ExpiresAt = context.Application.OfferExpiresAt,
 			RespondedAt = events.LastOrDefault(item => item.Action is "accept" or "decline")?.OccurredAt,
+			AssignedCounsellorId = context.Application.AssignedCounsellorId,
+			AssignedCounsellorName = context.Application.AssignedCounsellorId.HasValue
+				? counsellorNames.GetValueOrDefault(context.Application.AssignedCounsellorId.Value) : null,
 			ConcurrencyStamp = context.Application.ConcurrencyStamp,
 			Events = events.Select(Map).ToList(), Blockers = Blockers(policy, status),
 			CanIssue = context.IsActive && policy != null && status == "ready" && context.Application.Status == AdmissionApplicationStatus.Approved,

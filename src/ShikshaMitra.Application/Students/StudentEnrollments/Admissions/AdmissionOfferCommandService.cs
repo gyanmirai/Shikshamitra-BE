@@ -18,6 +18,7 @@ public class AdmissionOfferCommandService(
 	IRepository<AdmissionActivity, Guid> activities,
 	AdmissionOfferAccessService access,
 	AdmissionOfferReadService reader,
+	AdmissionInquiryPeopleService people,
 	AdmissionReviewDecisionGuard reviewGuard) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionOfferStageDto> IssueAsync(Guid applicationId, Guid stageId, IssueAdmissionOfferDto input)
@@ -25,15 +26,20 @@ public class AdmissionOfferCommandService(
 		var context = await ManagedAsync(applicationId, stageId);
 		var key = Key(input.IdempotencyKey);
 		var reason = Optional(input.Reason, 512, "Offer note cannot exceed 512 characters.");
-		var fingerprint = Fingerprint("issue", new { ExpiresAt = input.ExpiresAt?.ToUniversalTime(), Reason = reason });
+		var fingerprint = Fingerprint("issue", new { ExpiresAt = input.ExpiresAt.HasValue ? AdmissionOfferUtcTime.Normalize(input.ExpiresAt.Value) : (DateTime?)null, Reason = reason, input.CounsellorId });
 		if (await IsRetryAsync(context, key, "issue", fingerprint)) return await reader.GetAsync(applicationId, stageId);
 		AdmissionOfferAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		if (context.Application.Status != AdmissionApplicationStatus.Approved)
 			throw Invalid("Approve the application before issuing its offer.");
 		await reviewGuard.EnsureApplicationCompleteAsync(context.Application);
+		EnsureJourneyOwnerContinuity(context.Application, input.CounsellorId);
+		var effectiveCounsellorId = input.CounsellorId ?? context.Application.AssignedCounsellorId;
+		if (effectiveCounsellorId.HasValue)
+			await people.EnsureCanAccessOfferingAsync(effectiveCounsellorId.Value, context.Application.AdmissionOfferingId);
 		var expiresAt = Expiry(context.Policy!, input.ExpiresAt);
 		context.Application.IssueOffer(expiresAt, CurrentUser.Id, reason);
-		return await SaveAsync(context, "issue", key, fingerprint, reason, new { expiresAt, VersionNumber = 1 });
+		return await SaveAsync(context, "issue", key, fingerprint, reason,
+			new { expiresAt, VersionNumber = 1, context.Application.AssignedCounsellorId });
 	}
 
 	public async Task<AdmissionOfferStageDto> RespondAsync(Guid applicationId, Guid stageId, RespondAdmissionOfferDto input)
@@ -66,7 +72,7 @@ public class AdmissionOfferCommandService(
 		var context = await ManagedAsync(applicationId, stageId);
 		var key = Key(input.IdempotencyKey);
 		var reason = Optional(input.Reason, 512, "Extension note cannot exceed 512 characters.");
-		var fingerprint = Fingerprint("extend", new { ExpiresAt = input.ExpiresAt.ToUniversalTime(), Reason = reason });
+		var fingerprint = Fingerprint("extend", new { ExpiresAt = AdmissionOfferUtcTime.Normalize(input.ExpiresAt), Reason = reason });
 		if (await IsRetryAsync(context, key, "extend", fingerprint)) return await reader.GetAsync(applicationId, stageId);
 		AdmissionOfferAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		var state = await reader.GetAsync(applicationId, stageId);
@@ -94,16 +100,20 @@ public class AdmissionOfferCommandService(
 		var context = await ManagedAsync(applicationId, stageId);
 		var key = Key(input.IdempotencyKey);
 		var reason = Optional(input.Reason, 512, "Reissue note cannot exceed 512 characters.");
-		var fingerprint = Fingerprint("reissue", new { ExpiresAt = input.ExpiresAt?.ToUniversalTime(), Reason = reason });
+		var fingerprint = Fingerprint("reissue", new { ExpiresAt = input.ExpiresAt.HasValue ? AdmissionOfferUtcTime.Normalize(input.ExpiresAt.Value) : (DateTime?)null, Reason = reason, input.CounsellorId });
 		if (await IsRetryAsync(context, key, "reissue", fingerprint)) return await reader.GetAsync(applicationId, stageId);
 		AdmissionOfferAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		var state = await reader.GetAsync(applicationId, stageId);
 		if (context.Policy?.AllowReissue != true || !state.CanReissue)
 			throw new BusinessException(AdmissionOfferStageErrorCodes.ReissueNotAllowed, "This offer cannot be reissued again.");
+		EnsureJourneyOwnerContinuity(context.Application, input.CounsellorId);
+		var effectiveCounsellorId = input.CounsellorId ?? context.Application.AssignedCounsellorId;
+		if (effectiveCounsellorId.HasValue)
+			await people.EnsureCanAccessOfferingAsync(effectiveCounsellorId.Value, context.Application.AdmissionOfferingId);
 		var expiresAt = Expiry(context.Policy, input.ExpiresAt);
 		context.Application.ReissueOffer(expiresAt, CurrentUser.Id, reason);
 		return await SaveAsync(context, "reissue", key, fingerprint, reason,
-			new { expiresAt, VersionNumber = state.VersionNumber + 1 });
+			new { expiresAt, VersionNumber = state.VersionNumber + 1, context.Application.AssignedCounsellorId });
 	}
 
 	public async Task<bool> TryIssueLegacyAsync(Guid applicationId, AdmissionApplicationDecisionDto input)
@@ -112,7 +122,8 @@ public class AdmissionOfferCommandService(
 		if (context == null) return false;
 		await IssueAsync(applicationId, context.Stage.Id, new IssueAdmissionOfferDto
 		{
-			ExpiresAt = context.Policy!.AllowExpiryOverride ? input.OfferExpiresAt : null,
+			ExpiresAt = context.Policy!.AllowExpiryOverride ? input.OfferExpiresAt?.UtcDateTime : null,
+			CounsellorId = input.CounsellorId,
 			Reason = input.Reason, ConcurrencyStamp = input.ConcurrencyStamp,
 			IdempotencyKey = LegacyKey("issue", input)
 		});
@@ -171,7 +182,7 @@ public class AdmissionOfferCommandService(
 	private DateTime Expiry(AdmissionOfferStagePolicy policy, DateTime? requested)
 	{
 		var now = Clock.Now;
-		var expiresAt = requested?.ToUniversalTime() ?? now.AddDays(policy.ValidityDays);
+		var expiresAt = requested.HasValue ? AdmissionOfferUtcTime.Normalize(requested.Value) : now.AddDays(policy.ValidityDays);
 		var days = (expiresAt - now).TotalDays;
 		if (expiresAt <= now || days < policy.MinimumValidityDays - 0.01 || days > policy.MaximumValidityDays + 0.01)
 			throw new BusinessException(AdmissionOfferStageErrorCodes.ExpiryInvalid,
@@ -196,5 +207,11 @@ public class AdmissionOfferCommandService(
 	}
 	private static string Required(string? value, int max, string message) =>
 		string.IsNullOrWhiteSpace(value) || value.Trim().Length > max ? throw Invalid(message) : value.Trim();
+	private static void EnsureJourneyOwnerContinuity(AdmissionApplication application, Guid? requestedCounsellorId)
+	{
+		if (requestedCounsellorId.HasValue && requestedCounsellorId != application.AssignedCounsellorId)
+			throw Invalid("Change the journey counsellor through the application assignment action before issuing an offer.");
+	}
+
 	private static BusinessException Invalid(string message) => new(AdmissionOfferStageErrorCodes.InvalidState, message);
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -28,6 +29,30 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[HttpPost("start")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	public async Task<Result<AdmissionApplicationDto>> StartAsync([FromQuery] Guid applicantId, [FromQuery] Guid offeringId, [FromQuery] Guid? inquiryId = null) => Result.Success(await service.StartAsync(applicantId, offeringId, inquiryId));
+
+	[HttpPost("direct-registration")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
+	public async Task<Result<AdmissionApplicationDto>> StartDirectRegistrationAsync(
+		[FromBody] StartAdmissionDirectRegistrationDto input) =>
+		Result.Success(await service.StartDirectRegistrationAsync(input));
+
+	[HttpGet("direct-registration/family-matches")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
+	public async Task<Result<List<AdmissionDirectFamilyMatchDto>>> FindDirectRegistrationFamiliesAsync(
+		[FromQuery] Guid offeringId, [FromQuery] string guardianMobile) =>
+		Result.Success(await service.FindDirectRegistrationFamiliesAsync(offeringId, guardianMobile));
+
+	[HttpGet("counsellors")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<List<AdmissionInquiryCounsellorDto>>> GetAssignableCounsellorsAsync(
+		[FromQuery] Guid? offeringId = null, [FromQuery] string? filter = null) =>
+		Result.Success(await service.GetAssignableCounsellorsAsync(offeringId, filter));
+
+	[HttpPost("{id:guid}/assign-counsellor")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
+	public async Task<Result<AdmissionApplicationDto>> AssignCounsellorAsync(Guid id,
+		[FromBody] AssignAdmissionApplicationCounsellorDto input) =>
+		Result.Success(await service.AssignCounsellorAsync(id, input));
 
 	[HttpPost("/api/student/enrollment/admissions/applicants/{applicantId:guid}/applications/start")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]

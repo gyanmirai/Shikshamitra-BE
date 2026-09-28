@@ -13,6 +13,8 @@ public class AdmissionApprovalWorkflowStageHandler_Tests
 
 	[Theory]
 	[InlineData(AdmissionApplicationStatus.Approved)]
+	[InlineData(AdmissionApplicationStatus.Offered)]
+	[InlineData(AdmissionApplicationStatus.OfferAccepted)]
 	[InlineData(AdmissionApplicationStatus.Waitlisted)]
 	[InlineData(AdmissionApplicationStatus.Rejected)]
 	public async Task Admission_Decision_Stage_Should_Complete_After_A_Decision(
@@ -28,7 +30,6 @@ public class AdmissionApprovalWorkflowStageHandler_Tests
 	[InlineData(AdmissionApplicationStatus.Draft)]
 	[InlineData(AdmissionApplicationStatus.Submitted)]
 	[InlineData(AdmissionApplicationStatus.InReview)]
-	[InlineData(AdmissionApplicationStatus.OfferAccepted)]
 	public async Task Admission_Decision_Stage_Should_Wait_For_A_Decision(
 		AdmissionApplicationStatus status)
 	{

@@ -25,7 +25,8 @@ public class StudentGeneralInfoAppService(
 		var student = await GetScopedRegistrationStudentAsync(
 			studentId,
 			nameof(GetRegistrationGeneralDetailsByIdAsync),
-			StudentRegistrationErrorCodes.InvalidStatusForRegistrationView);
+			StudentRegistrationErrorCodes.InvalidStatusForRegistrationView,
+			includeStudentRecords: true);
 
 		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
 		await ApplyComplianceMaskAsync(studentId, result);
@@ -38,9 +39,18 @@ public class StudentGeneralInfoAppService(
 		var student = await GetScopedRegistrationStudentAsync(
 			studentId,
 			nameof(UpdateGeneralInfoAsync),
-			StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo);
+			StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo,
+			forProfileWrite: true);
 
-		await UpdateAcademicPlacementAsync(student, input);
+		if (student.Status == StudentLifeCycleStatusEnum.Enrolled)
+		{
+			if ((input.AcademicMediumId.HasValue && input.AcademicMediumId != student.AcademicMediumId) ||
+				(input.StandardId.HasValue && input.StandardId != student.StandardId) ||
+				(input.DivisionId.HasValue && input.DivisionId != student.DivisionId))
+				throw new BusinessException(StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo,
+					"Use Student Management to change an enrolled student's placement.");
+		}
+		else await UpdateAcademicPlacementAsync(student, input);
 
 		await studentScopeAccessService.EnsureCanUseInquiryPreferenceAsync(
 			input.InquiryPreferenceId,
@@ -88,7 +98,11 @@ public class StudentGeneralInfoAppService(
 		}
 
 		await studentRepository.UpdateAsync(student, autoSave: true);
-		var compliance = await UpsertComplianceAsync(student.Id, input);
+		// The profile form receives masked identity numbers. Keep the verified
+		// compliance record intact when an enrolled student's details are edited.
+		var compliance = student.Status == StudentLifeCycleStatusEnum.Enrolled
+			? await identityComplianceAppService.GetAsync(student.Id)
+			: await UpsertComplianceAsync(student.Id, input);
 
 		var result = ObjectMapper.Map<Student, StudentGeneralDetailsDto>(student);
 		ApplyComplianceMask(result, compliance);

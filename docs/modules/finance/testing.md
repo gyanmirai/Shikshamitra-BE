@@ -29,6 +29,7 @@ git diff --check
 |---|---|
 | Charges | `ChargeAppService_Tests`, `ChargeCoreApi_Tests`, `ChargeValidationApi_Tests`, `ChargeWorkflowApi_Tests`; add the missing isolation, mixed-batch, concurrency, idempotency, source-replay, receipt/account, and correction cases from [Charge management end to end](./references/charge-management-end-to-end.md) |
 | Concessions | `ConcessionTypeLifecycle_Tests`, `ConcessionRequestCoreApi_Tests`, `ConcessionRequestValidationApi_Tests`, `ConcessionRequestWorkflowApi_Tests` |
+| Paid-fee concessions | `ConcessionEligibility_Tests`, `DueFee_Mutations_Tests`; verify a fully paid installment remains Paid, approval creates the exact receipt-linked refund request, and only settlement decreases the paid cash balance |
 | Fee adjustments | `FeeAdjustmentApi_Tests` |
 | Fee collection | `FeeCollectionAppServiceV2_Tests`, `FeeCollectionV2Api_Tests`, `CollectFeeInputValidator_Tests` |
 | Fee Collection waivers | Cover absence of policy/charge waiver configuration, both source types, row-toggle visibility, reason-only input, server-derived full balance, dedicated apply permission, student scope, idempotency, and non-cash ledger evidence; use the [target acceptance scenarios](./references/fee-collection-waiver-end-to-end.md#acceptance-scenarios) |

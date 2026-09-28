@@ -34,6 +34,17 @@ public class ConcessionEligibility_Tests
 		Assert.Equal(secondInstallmentId, future[0].PaymentTermInstallmentId);
 	}
 
+	[Fact]
+	public void All_fees_includes_paid_installments_for_retroactive_concessions()
+	{
+		var paid = BuildDue(Guid.NewGuid(), Guid.NewGuid(), MonthEnum.January,
+			Guid.NewGuid(), Guid.NewGuid(), 1);
+		paid.ApplyPayment(100m);
+
+		Assert.Empty(ConcessionRequestManager.GetEligibleDueFees([paid], ConcessionApplyOn.CurrentInstallment));
+		Assert.Single(ConcessionRequestManager.GetEligibleDueFees([paid], ConcessionApplyOn.AllFees));
+	}
+
 	private static DueFee BuildDue(
 		Guid studentId,
 		Guid feeHeadId,

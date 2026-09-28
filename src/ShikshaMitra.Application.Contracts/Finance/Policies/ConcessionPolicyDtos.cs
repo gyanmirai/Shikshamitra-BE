@@ -78,7 +78,7 @@ public class CreateUpdateConcessionPolicyDtoValidator : AbstractValidator<Create
 			.WithMessage("Only an Active concession policy can be the default.");
 		RuleFor(x => x.ValueSource).Must(x => EnumValue(x, "PolicyFixed", "RequestEnteredWithinLimits"));
 		RuleFor(x => x.CalculationMethod).Must(x => EnumValue(x, "Percentage", "FixedAmount", "FullWaiver"));
-		RuleFor(x => x.ApplyOn).Must(x => EnumValue(x, "AllOutstanding", "CurrentInstallment", "FutureInstallments"));
+		RuleFor(x => x.ApplyOn).Must(x => EnumValue(x, "AllOutstanding", "CurrentInstallment", "FutureInstallments", "AllFees"));
 		RuleFor(x => x.RoundingMethod).Must(x => EnumValue(x, "None", "RoundUp", "RoundDown", "NearestRupee"));
 		RuleFor(x => x).Must(x => !string.Equals(x.ValueSource, "RequestEnteredWithinLimits", StringComparison.OrdinalIgnoreCase) ||
 			!string.Equals(x.CalculationMethod, "FullWaiver", StringComparison.OrdinalIgnoreCase))

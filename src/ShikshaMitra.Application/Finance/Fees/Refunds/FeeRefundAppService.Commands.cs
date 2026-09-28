@@ -36,6 +36,8 @@ public partial class FeeRefundAppService
     public async Task<FeeRefundRequestDto> UpdateAsync(Guid id, UpdateFeeRefundRequestDto input)
     {
         var request = await RequireAsync(id);
+        if (request.ConcessionRequestId.HasValue)
+            throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         var create = new CreateFeeRefundRequestDto
         {
@@ -241,6 +243,12 @@ public partial class FeeRefundAppService
 
     private static void EnsureSettlementMethodAllowed(FeeRefundRequest request, string method)
     {
+        if (request.ConcessionRequestId.HasValue)
+        {
+            if (!TryMapPayoutMethod(method, out _))
+                throw new BusinessException(FeeRefundErrorCodes.PayoutMethodNotAllowed);
+            return;
+        }
         if (request.PolicySnapshotJson == null) throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
         var policy = JsonSerializer.Deserialize<Domain.Finance.Policies.RefundPolicySnapshot>(request.PolicySnapshotJson)
             ?? throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);

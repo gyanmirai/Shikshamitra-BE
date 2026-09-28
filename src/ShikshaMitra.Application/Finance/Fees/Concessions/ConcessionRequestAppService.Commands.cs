@@ -27,6 +27,7 @@ public partial class ConcessionRequestAppService
 	private List<ConcessionDueFeeAllocation> BuildSubmittedApprovalAllocations(
 		ConcessionRequest request,
 		List<DueFee> dueFees,
+		ConcessionPolicySnapshot policy,
 		IReadOnlyList<ConcessionFeeHeadMapping> liveMappings)
 	{
 		foreach (var requested in request.ConcessionFeeHeadMappings)
@@ -37,14 +38,14 @@ public partial class ConcessionRequestAppService
 					.WithData("FeeHeadId", requested.FeeHeadId);
 		}
 		if (ConcessionRequestManager.ReadDueFeeEvidence(request).Count > 0)
-			return concessionRequestManager.BuildSubmittedDueFeeAllocations(request, dueFees);
+			return concessionRequestManager.BuildSubmittedDueFeeAllocations(request, dueFees, policy);
 
-		var approvals = concessionRequestManager.BuildAutoApproveAllocations(request, dueFees);
+		var approvals = concessionRequestManager.BuildAutoApproveAllocations(request, dueFees, policy);
 		if (approvals.Count != request.ConcessionFeeHeadMappings.Count ||
 			approvals.Sum(x => x.ApprovedConcessionAmount) != request.GetTotalRequestedConcession())
 			throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged);
 		return concessionRequestManager.BuildDueFeeAllocations(
-			CurrentTenant.Id, request.Id, approvals, dueFees,
+			CurrentTenant.Id, request.Id, policy, approvals, dueFees,
 			request.ConcessionFeeHeadMappings.ToList(), liveMappings);
 	}
 
@@ -214,7 +215,8 @@ public partial class ConcessionRequestAppService
 				DiscountAmount = x.FeeHeadConcessionAmount,
 				NetAmount = x.PostConcessionFeeHeadAmount,
 			}).ToList(),
-			EligibleDueFees = MapEligibleDueFees(preview.EligibleDueFees, feeHeadNames),
+			EligibleDueFees = MapEligibleDueFees(preview.EligibleDueFees, feeHeadNames,
+				preview.Policy.ApplyOn == ConcessionApplyOn.AllFees),
 			PreviewFingerprint = ComputePreviewFingerprint(
 				input.ConcessionPolicyVersionId, preview.EligibleDueFees, preview.Mappings),
 			GeneratedAt = Clock.Now,
@@ -435,7 +437,7 @@ public partial class ConcessionRequestAppService
 		if (!string.Equals(input.PreviewFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
 			throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged);
 
-		var allocations = BuildSubmittedApprovalAllocations(request, dueFees, evaluation.Mappings);
+		var allocations = BuildSubmittedApprovalAllocations(request, dueFees, evaluation.Policy, evaluation.Mappings);
 		if (allocations.Count == 0 || allocations.Sum(x => x.ConcessionAmount) <= 0m)
 			throw new BusinessException(FinanceConcessionErrorCodes.ApprovalAllocationsRequired);
 
@@ -445,6 +447,8 @@ public partial class ConcessionRequestAppService
 			RequestConcurrencyStamp = request.ConcurrencyStamp,
 			PreviewFingerprint = fingerprint,
 			TotalApprovedAmount = allocations.Sum(x => x.ConcessionAmount),
+			RefundRequestAmount = allocations.Sum(x =>
+				Math.Max(0m, x.ConcessionAmount - dueFees.First(d => d.Id == x.DueFeeId).OutstandingAmount)),
 			DueFeeAllocations = allocations.Select(allocation =>
 			{
 				var dueFee = dueFees.First(x => x.Id == allocation.DueFeeId);
@@ -503,7 +507,7 @@ public partial class ConcessionRequestAppService
 
 		EnsureRequiredDocumentsPresent(request);
 
-		var allocations = BuildSubmittedApprovalAllocations(request, dueFees, evaluation.Mappings);
+		var allocations = BuildSubmittedApprovalAllocations(request, dueFees, evaluation.Policy, evaluation.Mappings);
 		if (allocations.Count == 0 || allocations.Sum(x => x.ConcessionAmount) <= 0m)
 			throw new BusinessException(FinanceConcessionErrorCodes.ApprovalAllocationsRequired);
 		var approvedTotal = allocations.Sum(x => x.ConcessionAmount);
@@ -511,12 +515,18 @@ public partial class ConcessionRequestAppService
 		var approvedAt = Clock.Now;
 		request.Approve(currentUser.Id!.Value, input.Message, allocations, approvedAt);
 
-		var affectedDueFees = allocations.Select(a => dueFees.First(df => df.Id == a.DueFeeId)).ToList();
+		var affectedDueFees = allocations.Select(a => dueFees.First(df => df.Id == a.DueFeeId))
+			.DistinctBy(x => x.Id).ToList();
+		var previousOverpayment = affectedDueFees.ToDictionary(x => x.Id, x => x.OverpaymentAmount);
 		foreach (var allocation in allocations)
 		{
 			var dueFee = affectedDueFees.First(df => df.Id == allocation.DueFeeId);
 			dueFee.ApplyConcession(allocation.ConcessionAmount);
 		}
+		var newOverpayment = affectedDueFees.ToDictionary(x => x.Id,
+			x => Math.Max(0m, x.OverpaymentAmount - previousOverpayment[x.Id]));
+		var refundRequests = await CreateConcessionRefundRequestsAsync(request,
+			newOverpayment, affectedDueFees.ToDictionary(x => x.Id));
 
 		await dueFeeRepository.UpdateManyAsync(affectedDueFees, autoSave: false);
 		await concessionRequestRepository.UpdateAsync(request, autoSave: false);
@@ -526,7 +536,8 @@ public partial class ConcessionRequestAppService
 			"approve",
 			$"Concession request approved for {approvedTotal:0.00}.",
 			input.Message,
-			new { Requested = request.GetTotalRequestedConcession(), Approved = approvedTotal, Allocations = allocations.Count });
+			new { Requested = request.GetTotalRequestedConcession(), Approved = approvedTotal,
+				Allocations = allocations.Count, RefundRequestIds = refundRequests.Select(x => x.Id).ToList() });
 		try
 		{
 			await uow.CompleteAsync();
@@ -556,6 +567,12 @@ public partial class ConcessionRequestAppService
 			ApproverId                      = currentUser.Id!.Value,
 			ApproverMessage                 = input.Message,
 			TotalApprovedAmount             = approvedTotal,
+			RefundRequests = refundRequests.Select(x => new ConcessionRefundReferenceDto
+			{
+				RefundRequestId = x.Id, VoucherNumber = x.VoucherNumber,
+				OriginalReceiptId = x.OriginalReceiptId!.Value,
+				Amount = x.CalculatedAmount, Status = x.Status.ToString()
+			}).ToList(),
 			DueFeeAllocations = allocations.Select(a =>
 			{
 				var df = dueFees.First(x => x.Id == a.DueFeeId);
@@ -625,6 +642,7 @@ public partial class ConcessionRequestAppService
 	{
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+		await EnsureConcessionRefundReversalAllowedAsync(request, input.Lines.Sum(x => x.Amount));
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
 		if (request.Status is not (ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed))
 			throw new BusinessException(FinanceConcessionErrorCodes.InvalidReversal)
@@ -679,7 +697,8 @@ public partial class ConcessionRequestAppService
 					FeeHeadId = line.Allocation.FeeHeadId,
 					ReversalAmount = line.Input.Amount,
 					OutstandingBefore = dueFee.OutstandingAmount,
-					OutstandingAfter = dueFee.OutstandingAmount + line.Input.Amount,
+					OutstandingAfter = Math.Max(0m, dueFee.OriginalAmount - dueFee.NetAmount +
+						line.Input.Amount - dueFee.PaidAmount + dueFee.RefundedAmount),
 				};
 			}).ToList(),
 		};
@@ -706,6 +725,7 @@ public partial class ConcessionRequestAppService
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
+		await EnsureConcessionRefundReversalAllowedAsync(request, input.Lines.Sum(x => x.Amount));
 
 		if (request.Status is not (ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed)
 			|| input.Lines.Count == 0

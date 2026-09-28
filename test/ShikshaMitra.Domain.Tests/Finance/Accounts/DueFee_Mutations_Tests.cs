@@ -108,6 +108,33 @@ public class DueFee_Mutations_Tests
         Assert.Equal(0m, df.OutstandingAmount);
     }
 
+    [Fact]
+    public void ApplyConcession_After_Full_Payment_Creates_Refundable_Overpayment()
+    {
+        var df = Create(1000m);
+        df.ApplyPayment(1000m);
+        df.ApplyConcession(400m);
+
+        Assert.Equal(FeeStatus.Paid, df.Status);
+        Assert.Equal(0m, df.OutstandingAmount);
+        Assert.Equal(400m, df.OverpaymentAmount);
+        Assert.Equal(1000m, df.PaidAmount);
+
+        df.ApplyRefund(400m);
+        Assert.Equal(FeeStatus.Paid, df.Status);
+        Assert.Equal(0m, df.OutstandingAmount);
+        Assert.Equal(0m, df.OverpaymentAmount);
+        Assert.Equal(400m, df.RefundedAmount);
+    }
+
+    [Fact]
+    public void ApplyConcession_Cannot_Exceed_Original_Obligation()
+    {
+        var df = Create(1000m);
+        df.ApplyPayment(1000m);
+        Assert.Throws<BusinessException>(() => df.ApplyConcession(1000.01m));
+    }
+
     // ── ApplyAdjustmentCredit ─────────────────────────────────────────────────
 
     [Fact]

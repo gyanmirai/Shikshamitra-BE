@@ -169,7 +169,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                 AddRow("Academic Year", academicYear?.Name ?? "—",
                     "Receipt Type", isCharge ? "Charge Receipt" : (isFinal ? "Final Fee Receipt" : "Provisional Fee Receipt"));
                 AddRow("Amount Paid", $"\u20B9 {receipt.TotalPaidAmount:N2}",
-                    "Transaction ID", receipt.FeeCollectionTransactionId.ToString()[..8] + "...");
+                    "Payment reference", receipt.ReceiptNumber);
             });
 
             col.Item().PaddingTop(12).Background(Colors.Grey.Lighten3).Padding(8).Text(

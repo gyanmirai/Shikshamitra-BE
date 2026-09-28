@@ -12073,6 +12073,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("CalculationSnapshotJson")
                         .HasColumnType("jsonb");
 
+                    b.Property<Guid?>("ConcessionRequestId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -12215,6 +12218,11 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("OriginalReceiptId");
 
                     b.HasIndex("RefundPolicyVersionId");
+
+                    b.HasIndex("ConcessionRequestId", "OriginalReceiptId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_FeeRefundRequests_Concession_Receipt")
+                        .HasFilter("\"ConcessionRequestId\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "VoucherNumber")
                         .IsUnique()

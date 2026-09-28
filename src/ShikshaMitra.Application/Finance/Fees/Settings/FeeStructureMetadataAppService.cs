@@ -15,6 +15,7 @@ using Volo.Abp.Guids;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using ShikshaMitra.TenantSettings.Standards;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
 
@@ -58,10 +59,12 @@ public class FeeStructureMetadataAppService(
 			.Where(x => mediumIds.Contains(x.EducationMediumStage.EducationMediumId)).Select(standard => new
 			{
 				MediumId = standard.EducationMediumStage.EducationMediumId,
-				StageId = standard.EducationMediumStageId, StandardId = standard.Id, standard.Name
+				StageId = standard.EducationMediumStageId, StandardId = standard.Id, standard.Name, standard.AgeLowerLimit
 			}));
-		var accessible = all.ToDictionary(x => x.Id, x => classRows.Where(c => c.MediumId == x.MediumId &&
-			UserScopeQueryExtensions.HasAccessToEntity(new MetadataScope(x.AcademicYearId, x.BoardId, x.MediumId, c.StageId, c.StandardId), scope))
+		var accessible = all.ToDictionary(x => x.Id, x => StandardAcademicOrder.Sort(
+			classRows.Where(c => c.MediumId == x.MediumId &&
+				UserScopeQueryExtensions.HasAccessToEntity(new MetadataScope(x.AcademicYearId, x.BoardId, x.MediumId, c.StageId, c.StandardId), scope)),
+			c => c.Name, c => c.AgeLowerLimit, c => c.StandardId)
 			.Select(c => new FeeStructureClassOptionDto { Id = c.StandardId, Name = c.Name }).ToList());
 		var visible = all.Where(x => accessible[x.Id].Count > 0).ToList();
 		var totalCount = visible.Count;

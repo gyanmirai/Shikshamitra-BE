@@ -101,6 +101,10 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             .HasDatabaseName("IX_FeeRefundRequests_Student_Year_Status");
         builder.HasIndex(x => x.OriginalReceiptId);
         builder.HasIndex(x => x.RefundPolicyVersionId);
+        builder.HasIndex(x => new { x.ConcessionRequestId, x.OriginalReceiptId })
+            .IsUnique()
+            .HasFilter("\"ConcessionRequestId\" IS NOT NULL")
+            .HasDatabaseName("UX_FeeRefundRequests_Concession_Receipt");
 
         builder.ConfigureByConvention();
     }

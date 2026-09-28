@@ -107,6 +107,7 @@ public class ConcessionRequestDetailDto
 	public decimal TotalApprovedConcessionAmount { get; set; }
 	public decimal TotalReversedConcessionAmount { get; set; }
 	public decimal NetApprovedConcessionAmount { get; set; }
+	public List<ConcessionRefundReferenceDto> RefundRequests { get; set; } = [];
 	public string? Remarks { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid EducationMediumId { get; set; }
@@ -252,6 +253,7 @@ public class ConcessionApprovalPreviewDto
 	public string RequestConcurrencyStamp { get; set; } = string.Empty;
 	public string PreviewFingerprint { get; set; } = string.Empty;
 	public decimal TotalApprovedAmount { get; set; }
+	public decimal RefundRequestAmount { get; set; }
 	public List<ApprovedDueFeeAllocationDto> DueFeeAllocations { get; set; } = [];
 }
 
@@ -354,6 +356,7 @@ public class ConcessionEligibleDueFeeDto
 	public decimal ConcessionAmount { get; set; }
 	public decimal AdjustmentCreditAmount { get; set; }
 	public decimal OutstandingAmount { get; set; }
+	public decimal EligibleConcessionAmount { get; set; }
 	public string Status { get; set; } = string.Empty;
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
@@ -430,7 +433,17 @@ public class ConcessionApprovalResponseDto
 	public Guid ApproverId { get; set; }
 	public string? ApproverMessage { get; set; }
 	public decimal TotalApprovedAmount { get; set; }
+	public List<ConcessionRefundReferenceDto> RefundRequests { get; set; } = [];
 	public List<ApprovedDueFeeAllocationDto> DueFeeAllocations { get; set; } = [];
+}
+
+public class ConcessionRefundReferenceDto
+{
+	public Guid RefundRequestId { get; set; }
+	public string VoucherNumber { get; set; } = string.Empty;
+	public Guid OriginalReceiptId { get; set; }
+	public decimal Amount { get; set; }
+	public string Status { get; set; } = string.Empty;
 }
 
 public class ConcessionRejectionResponseDto
@@ -503,6 +516,7 @@ public class StudentConcessionRequestItemDto
 	public decimal TotalApprovedAmount { get; set; }
 	public decimal TotalReversedAmount { get; set; }
 	public decimal NetApprovedAmount { get; set; }
+	public List<ConcessionRefundReferenceDto> RefundRequests { get; set; } = [];
 	public List<FeeHeadConcessionDetailDto> FeeHeads { get; set; } = [];
 	public List<ConcessionSubmittedDocumentDto> SubmittedDocuments { get; set; } = [];
 	public List<ConcessionDocumentRequirementDto> RequiredDocuments { get; set; } = [];

@@ -321,7 +321,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 			lateFeeCharge.PendingAmount.ShouldBe(0); // full remaining balance waived
 			lateFeeCharge.WaivedAmount.ShouldBe(200);
 			lateFeeCharge.CanWaive.ShouldBeFalse();
-			lateFeeCharge.Status.ShouldBe(FeeCollectionStatus.Paid);
+			lateFeeCharge.Status.ShouldBe(FeeCollectionStatus.Waived);
 		}
 	}
 

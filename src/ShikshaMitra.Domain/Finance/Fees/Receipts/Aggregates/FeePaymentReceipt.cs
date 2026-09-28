@@ -54,7 +54,7 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public FeeReceiptScope ReceiptScope { get; set; }
 
-    /// <summary>Verification lifecycle, meaningful only for <see cref="FeeReceiptKind.ProvisionalFee"/>.</summary>
+    /// <summary>Verification lifecycle for provisional fee and charge receipts.</summary>
     public FeeReceiptVerificationStatus VerificationStatus { get; set; }
 
     // ── Amounts ───────────────────────────────────────────────────────────────
@@ -140,8 +140,8 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public void MarkVerified(Guid finalReceiptId, string? remarks = null)
     {
-        if (ReceiptKind != FeeReceiptKind.ProvisionalFee)
-            throw new AbpException("Only ProvisionalFee receipts can be marked verified.");
+        if (ReceiptKind is not (FeeReceiptKind.ProvisionalFee or FeeReceiptKind.ProvisionalCharge))
+            throw new AbpException("Only provisional receipts can be marked verified.");
 
         VerificationStatus = FeeReceiptVerificationStatus.Verified;
         LinkedFinalReceiptId = finalReceiptId;
@@ -154,8 +154,8 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// </summary>
     public void MarkRejected(string? remarks = null)
     {
-        if (ReceiptKind != FeeReceiptKind.ProvisionalFee)
-            throw new AbpException("Only ProvisionalFee receipts can be marked rejected.");
+        if (ReceiptKind is not (FeeReceiptKind.ProvisionalFee or FeeReceiptKind.ProvisionalCharge))
+            throw new AbpException("Only provisional receipts can be marked rejected.");
 
         VerificationStatus = FeeReceiptVerificationStatus.Rejected;
         if (!string.IsNullOrWhiteSpace(remarks))

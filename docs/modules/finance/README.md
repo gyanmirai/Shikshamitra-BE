@@ -32,6 +32,7 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 | 11 | [Concession flow review](./references/concession-flow-end-to-end-review.md) | Review the current cross-stack verdict, defects, edge cases, test gaps, remediation priorities, and release gates |
 | 12 | [Charge management end to end](./references/charge-management-end-to-end.md) | Review the shipped charge, collection, receipt, source-integration flow, release gaps, target contract, and phased delivery gates |
 | 13 | [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) | Review the approved target for a reason-only full-balance waiver toggle on eligible late-fee and charge rows in Fee Collection |
+| 14 | [Fee Collection to reconciliation](./references/fee-collection-reconciliation-flow.md) | Trace the current payment-verification path, release gaps, bank-match target, and edge-case acceptance gates |
 
 ## Source of truth
 

@@ -24,6 +24,7 @@ namespace ShikshaMitra.Finance.Accounts.Reconciliation;
 public class ReconciliationManager(
 	IFeePaymentReceiptRepository receiptRepository,
 	IRepository<FeeRecordMetadata, Guid> metadataRepository,
+	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
 	IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
 	IDueFeeRepository dueFeeRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
@@ -55,6 +56,7 @@ public class ReconciliationManager(
 
 		EnsureProvisional(provisional);
 		EnsureNotTerminal(provisional);
+		await EnsureUnambiguousCollectionAsync(provisional, cancellationToken);
 
 		var finalKind = provisional.ReceiptKind == FeeReceiptKind.ProvisionalFee
 			? FeeReceiptKind.FinalFee
@@ -111,6 +113,7 @@ public class ReconciliationManager(
 
 		EnsureProvisional(provisional);
 		EnsureNotTerminal(provisional);
+		await EnsureUnambiguousCollectionAsync(provisional, cancellationToken);
 
 		provisional.MarkRejected(remarks);
 
@@ -144,6 +147,26 @@ public class ReconciliationManager(
 	}
 
 	// ── Private helpers ───────────────────────────────────────────────────────
+
+	/// <summary>
+	/// The current model links allocations to a collection, not to an instrument or
+	/// receipt. A receipt-level decision is safe only for one instrument and one
+	/// original receipt. Otherwise rejection would reverse unrelated money.
+	/// </summary>
+	private async Task EnsureUnambiguousCollectionAsync(
+		FeePaymentReceipt provisional, CancellationToken cancellationToken)
+	{
+		var paymentCount = await paymentMethodRecordRepository.CountAsync(
+			p => p.FeeRecordMetadataId == provisional.FeeCollectionTransactionId,
+			cancellationToken);
+		var originalReceiptCount = await receiptRepository.CountAsync(
+			r => r.FeeCollectionTransactionId == provisional.FeeCollectionTransactionId
+				&& r.LinkedProvisionalReceiptId == null,
+			cancellationToken);
+		if (paymentCount != 1 || originalReceiptCount != 1)
+			throw new BusinessException(ReconciliationErrorCodes.InstrumentAttributionRequired)
+				.WithData("FeeCollectionTransactionId", provisional.FeeCollectionTransactionId);
+	}
 
 	private async Task<FeeCollectionStatus> DeterminePostApprovalStatusAsync(
 		Guid metadataId, CancellationToken cancellationToken)

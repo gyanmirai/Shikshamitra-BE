@@ -192,7 +192,10 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
         success.GetBoolean().ShouldBeTrue();
         if (json.TryGetProperty("data", out var data) && data.ValueKind != JsonValueKind.Null)
         {
-            data.TryGetProperty("verificationStatus", out _).ShouldBeTrue();
+            data.TryGetProperty("receiptId", out var returnedReceiptId).ShouldBeTrue();
+            returnedReceiptId.GetGuid().ShouldBe(receiptId);
+            data.TryGetProperty("verificationStatus", out var verificationStatus).ShouldBeTrue();
+            verificationStatus.GetInt32().ShouldBe(2, "approval must report the verified provisional receipt");
             data.TryGetProperty("finalReceiptNumber", out var finalReceipt);
             finalReceipt.ValueKind.ShouldNotBe(JsonValueKind.Undefined,
                 "Approve should return a final receipt number");

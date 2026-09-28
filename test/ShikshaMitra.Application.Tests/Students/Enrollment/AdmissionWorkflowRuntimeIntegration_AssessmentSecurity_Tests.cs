@@ -48,7 +48,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		currentSession.BookedCount.ShouldBe(1);
 		await Should.ThrowAsync<BusinessException>(() => service.CancelSessionAsync(session.Id, new() { ConcurrencyStamp = currentSession.ConcurrencyStamp }));
 		var other = await CreateApplicantAsync("Second assessment applicant");
-		var otherApplication = await _applicationAppService.StartAsync(other.Id, offering.Id);
+			var otherApplication = await StartFixtureApplicationAsync(other.Id, offering.Id);
 		var otherRuntime = await _applicationAppService.GetWorkflowAsync(otherApplication.Id);
 		otherRuntime = await AdvanceAssessmentAsync(otherApplication.Id, otherRuntime.CurrentStageInstanceId!.Value);
 		var otherSummary = await service.GetAsync(otherApplication.Id, otherRuntime.CurrentStageInstanceId!.Value);

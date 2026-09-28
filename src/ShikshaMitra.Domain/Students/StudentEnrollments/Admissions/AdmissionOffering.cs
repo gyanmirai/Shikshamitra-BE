@@ -14,6 +14,8 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid MediumId { get; private set; }
 	public Guid StageId { get; private set; }
 	public Guid StandardId { get; private set; }
+	public AdmissionTrack Track { get; private set; }
+	public AdmissionEntryMode EntryMode { get; private set; }
 	public string Name { get; private set; } = string.Empty;
 	public string Code { get; private set; } = string.Empty;
 	public DateTimeOffset? OpenDate { get; private set; }
@@ -22,6 +24,9 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? WorkflowDefinitionId { get; private set; }
 	public Guid? InquiryFormDefinitionId { get; private set; }
 	public Guid? ApplicationFormDefinitionId { get; private set; }
+	public Guid? InquiryIntakeProfileId { get; private set; }
+	public Guid? CounsellorAssignmentProfileId { get; private set; }
+	public bool IntakeConfigurationRequired { get; private set; }
 
 	private AdmissionOffering() { }
 
@@ -38,14 +43,27 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		bool useCycleDates,
 		DateTimeOffset? openDate,
 		DateTimeOffset? closeDate,
-		string? name = null)
+		string? name = null,
+		AdmissionTrack track = AdmissionTrack.General,
+		AdmissionEntryMode entryMode = AdmissionEntryMode.Inquiry)
 		: base(id)
 	{
 		TenantId = tenantId;
 		AdmissionCycleId = Check.NotDefaultOrNull<Guid>(admissionCycleId, nameof(admissionCycleId));
 		UpdateIdentity(campusId, boardId, mediumId, stageId, standardId, identityLocked: false);
+		UpdateRouting(track, entryMode, identityLocked: false);
 		UpdateOperationalDetails(code, useCycleDates, openDate, closeDate, name);
 		IsActive = true;
+	}
+
+	public void UpdateRouting(AdmissionTrack track, AdmissionEntryMode entryMode, bool identityLocked)
+	{
+		if (!Enum.IsDefined(track) || !Enum.IsDefined(entryMode))
+			throw new ArgumentOutOfRangeException(nameof(track), "Choose a supported admission track and entry mode.");
+		if (identityLocked && (Track != track || EntryMode != entryMode))
+			throw new BusinessException(AdmissionErrorCodes.OfferingIdentityLocked);
+		Track = track;
+		EntryMode = entryMode;
 	}
 
 	public void UpdateIdentity(
@@ -101,6 +119,16 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		InquiryFormDefinitionId = inquiryFormDefinitionId;
 		ApplicationFormDefinitionId = applicationFormDefinitionId;
 	}
+
+	public void ConfigureIntake(Guid? inquiryIntakeProfileId, Guid? counsellorAssignmentProfileId)
+	{
+		InquiryIntakeProfileId = inquiryIntakeProfileId;
+		CounsellorAssignmentProfileId = counsellorAssignmentProfileId;
+		if (inquiryIntakeProfileId.HasValue || counsellorAssignmentProfileId.HasValue)
+			IntakeConfigurationRequired = true;
+	}
+
+	public void RequireIntakeConfiguration() => IntakeConfigurationRequired = true;
 
 	public DateTimeOffset GetEffectiveOpenDate(DateTime cycleStartDate) =>
 		OpenDate ?? ToUtcDateOffset(cycleStartDate);

@@ -22,7 +22,8 @@ public class StudentCommunicationInfoAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetCommunicationInfoAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForCommunicationInfo);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForCommunicationInfo,
+            includeStudentRecords: true);
 
         var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -49,7 +50,8 @@ public class StudentCommunicationInfoAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdateCommunicationInfoAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForCommunicationUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForCommunicationUpdate,
+            forProfileWrite: true);
 
         var communicationDetail = await studentCommunicationDetailRepository.FirstOrDefaultAsync(x => x.Id == studentId);
 
@@ -74,7 +76,8 @@ public class StudentCommunicationInfoAppService(
             input.EmergencyContactRelation
         );
 
-        student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.Communication);
+        if (student.Status != StudentLifeCycleStatusEnum.Enrolled)
+            student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.Communication);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();
 

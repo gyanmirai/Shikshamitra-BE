@@ -14,6 +14,7 @@ public class AdmissionWorkflowDefinition : FullAuditedAggregateRoot<Guid>, IMult
 	public AdmissionWorkflowStatus Status { get; private set; }
 	public Guid? ParentVersionId { get; private set; }
 	public string? Description { get; private set; }
+	public Guid? DefaultInquiryFormDefinitionId { get; private set; }
 	public DateTime? PublishedAt { get; private set; }
 	public Guid? PublishedBy { get; private set; }
 	public Guid? OwnerUserId { get; private set; }
@@ -43,7 +44,8 @@ public class AdmissionWorkflowDefinition : FullAuditedAggregateRoot<Guid>, IMult
 		int version = 1,
 		Guid? parentVersionId = null,
 		string? description = null,
-		Guid? ownerUserId = null) : base(id)
+		Guid? ownerUserId = null,
+		Guid? defaultInquiryFormDefinitionId = null) : base(id)
 	{
 		TenantId = tenantId;
 		// FullAuditedAggregateRoot does not initialize the soft-delete flag in
@@ -54,6 +56,7 @@ public class AdmissionWorkflowDefinition : FullAuditedAggregateRoot<Guid>, IMult
 		Version = version;
 		ParentVersionId = parentVersionId;
 		OwnerUserId = ownerUserId;
+		DefaultInquiryFormDefinitionId = defaultInquiryFormDefinitionId;
 		Status = AdmissionWorkflowStatus.Draft;
 		AddLocalEvent(new AdmissionWorkflowCreatedEvent(Id, TenantId));
 	}
@@ -62,6 +65,12 @@ public class AdmissionWorkflowDefinition : FullAuditedAggregateRoot<Guid>, IMult
 	{
 		PrepareForEdit();
 		SetDetails(name, code, description);
+	}
+
+	public void SetDefaultInquiryForm(Guid? formDefinitionId)
+	{
+		PrepareForEdit();
+		DefaultInquiryFormDefinitionId = formDefinitionId;
 	}
 
 	public void RecordVersionCreated(Guid sourceWorkflowDefinitionId) =>

@@ -12,9 +12,43 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [Authorize]
-public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> applicantRepository, IRepository<AdmissionFamily, Guid> familyRepository, IRepository<AdmissionGuardian, Guid> guardianRepository, IRepository<AdmissionApplication, Guid> applicationRepository, IRepository<AdmissionApplicationWorkflowInstance, Guid> workflowInstanceRepository, IRepository<AdmissionApplicationStageInstance, Guid> stageInstanceRepository, IRepository<AdmissionActivity, Guid> activityRepository, IRepository<AdmissionNote, Guid> noteRepository) : ApplicationService, IAdmissionApplicantAppService
+public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> applicantRepository, IRepository<AdmissionFamily, Guid> familyRepository, IRepository<AdmissionGuardian, Guid> guardianRepository, IRepository<AdmissionApplication, Guid> applicationRepository, IRepository<AdmissionApplicationWorkflowInstance, Guid> workflowInstanceRepository, IRepository<AdmissionApplicationStageInstance, Guid> stageInstanceRepository, IRepository<AdmissionActivity, Guid> activityRepository, IRepository<AdmissionNote, Guid> noteRepository, AdmissionInquiryPeopleService peopleService) : ApplicationService, IAdmissionApplicantAppService
 {
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View)] public async Task<AdmissionApplicant360Dto> GetAsync(Guid id) { var applicant = await GetApplicantAsync(id); var family = await familyRepository.FindAsync(applicant.FamilyId); var guardian = family?.PrimaryGuardianId.HasValue == true ? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null; var applications = (await applicationRepository.GetListAsync(x => x.ApplicantId == id)).OrderByDescending(x => x.CreationTime).ToList(); var workflows = await workflowInstanceRepository.GetListAsync(x => applications.Select(a => a.Id).Contains(x.ApplicationId)); var stages = await stageInstanceRepository.GetListAsync(x => workflows.Select(w => w.Id).Contains(x.WorkflowInstanceId)); return new AdmissionApplicant360Dto { Applicant = Map(applicant), Family = family == null ? null : new AdmissionFamilyDto { Id = family.Id, FamilyNumber = family.FamilyNumber, PrimaryGuardianId = family.PrimaryGuardianId, Status = family.Status }, PrimaryGuardian = guardian == null ? null : Map(guardian), Applications = applications.Select(a => Map(a, stages.Where(s => workflows.FirstOrDefault(w => w.ApplicationId == a.Id)?.Id == s.WorkflowInstanceId))).ToList(), Activities = (await GetActivitiesAsync(id)), Notes = (await GetNotesAsync(id)) }; }
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View)]
+	public async Task<AdmissionApplicant360Dto> GetAsync(Guid id)
+	{
+		var applicant = await GetApplicantAsync(id);
+		var family = await familyRepository.FindAsync(applicant.FamilyId);
+		var guardian = family?.PrimaryGuardianId.HasValue == true
+			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
+		var applications = (await applicationRepository.GetListAsync(x => x.ApplicantId == id))
+			.OrderByDescending(x => x.CreationTime).ToList();
+		var workflows = await workflowInstanceRepository.GetListAsync(x => applications.Select(a => a.Id).Contains(x.ApplicationId));
+		var stages = await stageInstanceRepository.GetListAsync(x => workflows.Select(w => w.Id).Contains(x.WorkflowInstanceId));
+		var counsellorNames = await peopleService.GetNamesAsync(applications
+			.Where(application => application.AssignedCounsellorId.HasValue)
+			.Select(application => application.AssignedCounsellorId!.Value));
+		return new AdmissionApplicant360Dto
+		{
+			Applicant = Map(applicant),
+			Family = family == null ? null : new AdmissionFamilyDto
+			{
+				Id = family.Id, FamilyNumber = family.FamilyNumber,
+				PrimaryGuardianId = family.PrimaryGuardianId, Status = family.Status
+			},
+			PrimaryGuardian = guardian == null ? null : Map(guardian),
+			Applications = applications.Select(application =>
+			{
+				var result = Map(application, stages.Where(stage =>
+					workflows.FirstOrDefault(workflow => workflow.ApplicationId == application.Id)?.Id == stage.WorkflowInstanceId));
+				result.AssignedCounsellorName = application.AssignedCounsellorId.HasValue
+					? counsellorNames.GetValueOrDefault(application.AssignedCounsellorId.Value) : null;
+				return result;
+			}).ToList(),
+			Activities = await GetActivitiesAsync(id),
+			Notes = await GetNotesAsync(id)
+		};
+	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.Edit)]
 	public async Task<AdmissionApplicantDto> UpdateProfileAsync(Guid id, UpdateAdmissionApplicantProfileDto input)
 	{
@@ -64,6 +98,6 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 	private static AdmissionApplicantDto Map(AdmissionApplicant x) => new() { Id = x.Id, FamilyId = x.FamilyId, FirstName = x.FirstName, MiddleName = x.MiddleName, LastName = x.LastName, DateOfBirth = x.DateOfBirth, Gender = x.Gender, AddressLine1 = x.AddressLine1, AddressLine2 = x.AddressLine2, City = x.City, State = x.State, Country = x.Country, PostalCode = x.PostalCode, Status = x.Status, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId };
 	private static AdmissionGuardianDto Map(AdmissionGuardian x) => new() { Id = x.Id, FamilyId = x.FamilyId, FirstName = x.FirstName, LastName = x.LastName, Mobile = x.Mobile, Email = x.Email, Relationship = x.Relationship, IsPrimaryContact = x.IsPrimaryContact, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId };
 	private static AdmissionApplicationDto Map(AdmissionApplication x) => new() { Id = x.Id, ApplicationNumber = x.ApplicationNumber, ApplicantId = x.ApplicantId, AdmissionCycleId = x.AdmissionCycleId, AdmissionOfferingId = x.AdmissionOfferingId, Status = x.Status, CurrentStageInstanceId = x.CurrentStageInstanceId, LastSavedAt = x.LastSavedAt, SubmittedAt = x.SubmittedAt, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId };
-	private static AdmissionApplicantApplicationDto Map(AdmissionApplication x, IEnumerable<AdmissionApplicationStageInstance> stages) => new() { Id = x.Id, ApplicationNumber = x.ApplicationNumber, ApplicantId = x.ApplicantId, AdmissionCycleId = x.AdmissionCycleId, AdmissionOfferingId = x.AdmissionOfferingId, Status = x.Status, CurrentStageInstanceId = x.CurrentStageInstanceId, LastSavedAt = x.LastSavedAt, SubmittedAt = x.SubmittedAt, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId, Stages = stages.OrderBy(s => s.DisplayOrder).Select(s => new AdmissionApplicantStageProgressDto { Code = s.Code, Name = s.Name, StageType = s.StageType, Status = s.Status, DisplayOrder = s.DisplayOrder, EnteredAt = s.EnteredAt, CompletedAt = s.CompletedAt }).ToList() };
+	private static AdmissionApplicantApplicationDto Map(AdmissionApplication x, IEnumerable<AdmissionApplicationStageInstance> stages) => new() { Id = x.Id, ApplicationNumber = x.ApplicationNumber, ApplicantId = x.ApplicantId, AdmissionCycleId = x.AdmissionCycleId, AdmissionOfferingId = x.AdmissionOfferingId, AssignedCounsellorId = x.AssignedCounsellorId, Status = x.Status, CurrentStageInstanceId = x.CurrentStageInstanceId, LastSavedAt = x.LastSavedAt, SubmittedAt = x.SubmittedAt, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId, Stages = stages.OrderBy(s => s.DisplayOrder).Select(s => new AdmissionApplicantStageProgressDto { Code = s.Code, Name = s.Name, StageType = s.StageType, Status = s.Status, DisplayOrder = s.DisplayOrder, EnteredAt = s.EnteredAt, CompletedAt = s.CompletedAt }).ToList() };
 	private static AdmissionNoteDto Map(AdmissionNote x) => new() { Id = x.Id, ApplicantId = x.ApplicantId, Text = x.Text, CreationTime = x.CreationTime, LastEditedAt = x.LastEditedAt, CreatorId = x.CreatorId };
 }

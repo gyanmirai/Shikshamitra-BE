@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -13,8 +14,13 @@ public static class AdmissionDocumentRules
 		"both" => evidence.BlobName != null && evidence.OriginalSeen,
 		_ => false
 	};
-	public static string ConditionStatus(AdmissionDocumentRequirement requirement, IReadOnlyDictionary<string, string> values)
+	public static string ConditionStatus(AdmissionDocumentRequirement requirement, IReadOnlyDictionary<string, string> values, Guid? standardId = null)
 	{
+		if (requirement.StandardIds != null)
+		{
+			if (!standardId.HasValue || standardId == Guid.Empty) return "undetermined";
+			if (!requirement.StandardIds.Contains(standardId.Value)) return "notMatched";
+		}
 		if (requirement.Requirement != "conditional") return "notConditional";
 		if (AdmissionDocumentCondition.GetFields(requirement.ConditionJson).Any(field => !values.ContainsKey(field))) return "undetermined";
 		return new AdmissionWorkflowConditionEvaluator().Evaluate(requirement.ConditionJson, values) ? "matched" : "notMatched";

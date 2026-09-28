@@ -22,6 +22,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Payment collector"), true);
+			await EnsureTestIdentityUserAsync(verifierId, "payment-verifier");
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: verifierId, description: "Payment verifier"), true);
 			var basicWorkflow = await CreateAndPublishWorkflowAsync();
@@ -34,7 +35,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					stored.ApplicationFormDefinitionId);
 				await _offeringRepository.UpdateAsync(stored, true);
 			});
-			var application = await _applicationAppService.StartAsync(
+			var application = await StartFixtureApplicationAsync(
 				(await CreateApplicantAsync("Payment Applicant")).Id, offering.Id);
 			var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
 			runtime = await _applicationAppService.AdvanceWorkflowAsync(application.Id, new()
@@ -85,7 +86,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			runtime.Stages.Single(item => item.Code == "DONE").Status
 				.ShouldBe(AdmissionRuntimeStageStatus.Active);
 
-			var waivedApplication = await _applicationAppService.StartAsync(
+			var waivedApplication = await StartFixtureApplicationAsync(
 				(await CreateApplicantAsync("Waived Applicant")).Id, offering.Id);
 			var waivedRuntime = await _applicationAppService.GetWorkflowAsync(waivedApplication.Id);
 			waivedRuntime = await _applicationAppService.AdvanceWorkflowAsync(waivedApplication.Id, new()

@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-09-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -78,8 +78,14 @@ remain read-only.
 
 ## Offering identity
 
-The active identity is Admission Cycle, optional Campus, Board, Medium, Stage, and Standard.
+The active identity is Admission Cycle, optional Campus, Board, Medium, Stage, Standard, and
+admission Track (General, RTE, Management, or Staff). A class may therefore have one offering
+per track with a distinct process, while a second offering for the same track and identity is rejected.
 Division is not part of Admission Offering identity.
+RTE offerings must use direct Registration entry and a published workflow without Inquiry or
+Assessment stages. General, Management, and Staff tracks can independently choose inquiry or
+direct Registration entry according to their offering workflow. An inactive RTE draft may omit
+published references, but cannot save an incompatible entry mode or workflow.
 The database prevents duplicate non-deleted identities with separate filtered indexes for Campus and no-Campus records.
 The Offering code is a normalized operational label, not a second identity key. It may repeat for
 different Campus or academic-hierarchy combinations, and runtime APIs never resolve an Offering by
@@ -133,6 +139,8 @@ Managed Inquiry can require contact or qualification before application start, c
 First-contact and qualification deadlines are snapshotted when the inquiry is created.
 Follow-ups retain assignment, purpose, due time, completion or cancellation state, actor, and audit timestamps.
 Inquiry staff can create a linked family communication for WhatsApp, SMS, or Email. The CRM records the campaign handoff in admission activity while the shared Communication module owns approval, consent, providers, delivery attempts, retries, and usage; no duplicate Admissions messaging store is introduced.
+
+Application Experience creates Inquiry and Registration forms. Correction requests reopen the submitted Registration form, and consent questions may be included in that form. Offering activation accepts only a published Inquiry form in the inquiry slot and a published Registration form in the application slot. Admission lifecycle content is stored as `Admissions lifecycle` Communication templates for inquiry acknowledgement, application receipt, missing documents, exam schedule, hall ticket, result, offer, payment reminder, and finalization. Communication remains the delivery owner.
 Qualification uses a versioned checklist and records Qualified, Nurture, Not interested, Lost, or Duplicate with a reason where required.
 Application start rechecks the linked inquiry, offering, scope, contact, outcome, and policy requirement on the server.
 Existing inquiries and workflows remain compatible; management is created only for an enabled policy attached to the selected offering's published workflow.
@@ -162,7 +170,7 @@ Results and reviews do not advance the workflow automatically.
 Existing separately authorized workflow skip and override controls remain available with their existing audit and permission requirements.
 
 Assessment does not approve admission or create a Student.
-Admissions finalization still requires an accepted offer and completed admissions workflow, and creates or links the Student plus a Student Onboarding case.
+Admissions finalization requires a completed admissions workflow and normally an accepted, unexpired offer; it creates or links the Student plus a Student Onboarding case. Non-General direct-registration offerings without an Offer stage can also finalize from Approved. If staff issue an optional offer on that path, it must be accepted and unexpired before finalization; the accepted-offer path remains valid. Guardian confirmation, identity resolution, and evidence checks apply to both paths.
 Operational StudentEnrollment creation remains part of onboarding activation.
 Subject-level marks, public applicant self-booking, and external examination provider integrations are not included in this assessment policy version.
 
@@ -173,6 +181,8 @@ Document Verification opts into `ConfigurationJson.documentVerification` version
 Evidence is owned by the application and runtime stage. Every upload, replacement, original observation, and waiver adds an immutable revision. A replacement resets original observation and review; recording an original can retain the previous upload with its original uploader identity. Accept/reject reviews are immutable and apply only to the latest unreviewed revision. File validity alone never means acceptance. Independent review excludes the revision submitter, retained file uploader, and original observer. Waivers require policy support, a distinct permission, and a recorded reason.
 
 Conditional requirements use saved application answers, linked inquiry snapshot answers, and assessment facts. Missing referenced answers block completion; an explicitly saved blank answer supports `IsEmpty`. Application status and reserved inquiry/assessment/document facts come from server records. Required and matched conditional requirements block normal advance, skip, and administrator override until accepted collection evidence or an authorized waiver exists. Optional evidence does not block completion. Finalization rechecks visited managed document stages before creating a Student; successful finalized retries preserve their existing outcome.
+
+Canonical document selectors cover Admission type, Class, Category, RTE status, Transfer admission, Scholarship, and Assessment outcome. Application answers are normalized to these keys, and Class falls back to the offering Standard identifier.
 
 Accepted and historical admissions evidence remains canonical after finalization and is linked to the same Student without overwriting Student documents. Only latest accepted, mapped file evidence meeting its collection mode can satisfy a matching onboarding upload requirement. A waiver, original-only observation, or unmapped custom requirement remains visible but does not silently satisfy an independently mandatory onboarding upload.
 
@@ -231,11 +241,17 @@ Admission payment rows remain Finance-owned audited records while the Admissions
 
 Offer stages opt into `configurationJson.offer` version 1. Schools can configure unconditional or conditional content, terms, acceptance evidence, default and override validity, decline reasons, extension and reissue limits, completion outcomes, and automatic continuation after acceptance. Missing or disabled settings preserve the established admission decision and offer behavior.
 
+Application counsellor ownership is independent of a workflow stage. Inquiry-linked applications inherit their inquiry counsellor; Direct Registration can assign one immediately; offer issue or reissue may confirm or change it. Only active users with access to the application Offering are assignable. Authorized staff can reassign an open application later, and server-filtered application lists can track each counsellor's applicants. Counsellor selection is optional so schools without counsellor teams are not blocked.
+
 The existing Admission Application remains the single source for current offer status, issue and response timestamps, and expiry. Every managed issue, acceptance, decline, extension, withdrawal, and reissue appends immutable decision history with the stage, actor, version, reason, safe metadata, and idempotency key. Commands use optimistic concurrency, and a matching retry returns the existing result without creating a second event.
 
 Managed Offer cannot be skipped. It completes only with a policy-allowed accepted, declined, expired, or withdrawn outcome. Acceptance enforces configured terms and conditional evidence. Declined, expired, and withdrawn outcomes require an explicit matching `offer.status` route so they cannot follow the acceptance path accidentally. This staff runtime records the response; applicant portal delivery, email/SMS delivery, and automated reminders require a separate notification integration.
 
 ## Managed Seat stages
+
+Class-level admission capacity is a separate warning-only projection: for an academic year and Standard, sum the capacities of assigned Institute Setup rooms and subtract active enrollments plus accepted or finalized admissions not already enrolled. General, RTE, Management, and Staff offerings for the same class share this count. A full class warns staff at inquiry or registration but does not stop either action. No room assignment means capacity is unknown. This does not change the historical managed Seat-stage reservation and waitlist policy below.
+An Enrolled application does not hold a second seat after its active StudentEnrollment is deactivated;
+transfers and withdrawals free that class seat in the live projection.
 
 Seat stages opt into `configurationJson.seat` version 1. Schools set the offering capacity, choose manual reservation or reservation on stage entry, define hold duration and staff override limits, enable bounded renewals and FIFO waitlisting, control authorized capacity exceptions, require release reasons, and choose which outcomes may complete the stage. Missing or disabled settings preserve the basic workflow step.
 

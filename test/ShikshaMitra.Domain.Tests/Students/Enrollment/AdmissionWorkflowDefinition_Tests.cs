@@ -28,6 +28,20 @@ public class AdmissionWorkflowDefinition_Tests
 	}
 
 	[Fact]
+	public void Inquiry_form_default_can_change_in_draft_but_is_frozen_after_publication()
+	{
+		var inquiryFormId = Guid.NewGuid();
+		var workflow = new AdmissionWorkflowDefinition(Guid.NewGuid(), null, "Standard admission", "STANDARD_V1",
+			defaultInquiryFormDefinitionId: inquiryFormId);
+		workflow.DefaultInquiryFormDefinitionId.ShouldBe(inquiryFormId);
+
+		workflow.SetDefaultInquiryForm(null);
+		workflow.DefaultInquiryFormDefinitionId.ShouldBeNull();
+		workflow.Publish(null);
+		Should.Throw<BusinessException>(() => workflow.SetDefaultInquiryForm(inquiryFormId));
+	}
+
+	[Fact]
 	public void PublishedWorkflowCanBeArchivedButDraftCannot()
 	{
 		var workflow = new AdmissionWorkflowDefinition(Guid.NewGuid(), null, "Standard admission", "STANDARD_V1");

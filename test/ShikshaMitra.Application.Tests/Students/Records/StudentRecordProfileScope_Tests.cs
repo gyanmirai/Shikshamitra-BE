@@ -23,6 +23,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var other = await CreateExistingStudentAsync(offering, "Other", "Division");
 		var unplaced = await CreateExistingStudentAsync(offering, "Unplaced", "Student");
 		var staffId = Guid.NewGuid();
+		await EnsureTestIdentityUserAsync(staffId, $"profile-staff-{staffId:N}");
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var manager = GetRequiredService<DivisionManager>();

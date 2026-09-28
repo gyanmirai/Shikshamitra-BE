@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-09-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -62,8 +62,12 @@ description is optional and limited to 1000 characters.
 | POST | `/api/student/enrollment/admissions/offerings/validate` | `Students.Admissions.Offerings.Add` |
 | GET | `/api/student/enrollment/admissions/offerings/{id}/availability` | `Students.Admissions.Offerings.View` |
 | POST | `/api/student/enrollment/admissions/offerings/cycles/{admissionCycleId}/bulk` | `Students.Admissions.Offerings.Add` |
+| GET | `/api/student/enrollment/admissions/offerings/{offeringId}/class-capacity` | `Students.Admissions.Offerings.View` |
+| GET | `/api/student/enrollment/admissions/offerings/{offeringId}/class-capacity/rooms` | `Students.Admissions.Offerings.View` |
+| PUT | `/api/student/enrollment/admissions/offerings/{offeringId}/class-capacity` | `Students.Admissions.Offerings.Add` |
 
 The compatibility create route accepts `POST /api/student/enrollment/admissions/offerings?admissionCycleId=...`.
+Class capacity is shared by all tracks for the same academic year and Standard. PUT accepts distinct `roomIds`; it assigns existing positive-capacity rooms to that class, not a manually entered seat number. The GET summary returns `capacity`, `occupiedCount`, `remainingSeats`, `isFull`, `isOverCapacity`, and a non-blocking warning. With no assigned rooms, capacity is unknown rather than zero. The room-choice response flags rooms allocated to a different class.
 
 ## Workflow endpoints
 
@@ -117,6 +121,8 @@ The response returns current workflow status, stage timestamps, immutable transi
 Published form definitions are immutable versions. Existing applications retain their original `FormDefinitionId` and `FormVersion` when an offering is moved to a later version.
 
 Choice fields support either static option arrays or an approved source descriptor such as `{ "source": "EducationBoards" }` or `{ "source": "EducationMediums", "parentField": "BOARD_FIELD" }`. Approved source metadata is exposed by `GET /api/student/enrollment/admissions/forms/metadata/data-sources`; tenant-scoped options are read through `GET /api/student/enrollment/admissions/forms/metadata/options?sourceKey=...&parentId=...`. Arbitrary URLs and executable data sources are not accepted, and submission validates selected values against the authoritative source.
+
+Form list, detail, create, and update contracts expose `purpose`; new forms support `Inquiry` or `Registration`, and list requests may filter by purpose. The additive form-purpose migration may have classified earlier test definitions as `Correction` or `Consent`; those values are retained for reading existing records, but new drafts, clones, and versions cannot use them.
 
 ## Assessment endpoints
 
@@ -172,7 +178,7 @@ The inquiry collection route prefix is `/api/student/enrollment/admissions/inqui
 | `POST` | `{inquiryId}/assign` | `Students.Admissions.Inquiries.Assign` | Assign manually or through the configured candidate pool after rechecking active status and offering scope |
 | `POST` | `bulk/assign` | `Students.Admissions.Inquiries.Assign` | Atomically apply one validated assignment to up to 100 scoped inquiries |
 | `POST` | `{inquiryId}/communications` | `Students.Admissions.Inquiries.Manage` plus Communication permissions | Create a family-facing Communication campaign linked to the inquiry; `Communication.Campaigns.Add` is always required and `Communication.Campaigns.Send` is additionally required for immediate delivery |
-| `POST` | `duplicate-check` | `Students.Admissions.Inquiries.Manage` | Find applicant or family matches inside the requested admission cycle before creation |
+| `POST` | `duplicate-check` | `Students.Admissions.Inquiries.Manage` | Find current-cycle duplicate signals and same-mobile families visible in staff scope across admission cycles before creation |
 
 `isAssigned=false` is the authoritative Unassigned queue. Combining `isAssigned=true` with `assignedCounsellorId` produces a specific counsellor queue without loading and filtering all inquiries in the browser.
 
@@ -196,6 +202,12 @@ Workflow setup continues to use `GET /api/student/enrollment/admissions/inquiry-
 Every management command requires the current management concurrency stamp.
 Internal policy snapshot JSON and qualification-answer JSON are never returned directly.
 Create Inquiry accepts `duplicateOverrideReason`; enabled policies can block duplicates or require this reason when staff explicitly create a separate family.
+`existingFamilyId` is accepted only for an active, admission-scope-visible family whose primary guardian mobile
+matches the normalized mobile in the request. A duplicate-check result based only on name or email is not
+authorization to link that family. Duplicate-check marks each result with `canLinkFamily` for the supplied
+guardian mobile; Create Inquiry rechecks the rule rather than trusting that preview flag.
+Cross-cycle matches are limited to the supplied guardian mobile and an applicant visible through a
+scoped Inquiry or Application; name/email-only duplicate signals remain within the requested cycle.
 
 ## Applicant 360 APIs
 
@@ -261,8 +273,11 @@ Base: `/api/student/enrollment/admissions/document-verification`. Responses use 
 | POST `evidence/{evidenceId}/review` | `Students.Admissions.Documents.Add` | JSON `concurrencyStamp`, `decision: accepted/rejected`, optional `reason` (required for rejection) |
 | GET `evidence/{evidenceId}/download` | `Students.Admissions.Documents.View` | Scoped private attachment, no-store response, audit activity; storage keys never exposed |
 | GET `document-types` | `Students.Admissions.Workflows.View` | Tenant catalog mappings, allowed extensions and maximum file size |
+| GET `classes` | `Students.Admissions.Workflows.View` | Tenant class IDs, names, and academic-year/board/medium/stage context for requirement applicability |
 
 All mutations return refreshed stage state and serialize against the application stamp. History is read-only after leaving the stage. Server authorization validates tenant, offering UserScope, application-stage ownership, frozen workflow version, current stage, policy, and evidence revision. Error family `Admissions:Documents:*` provides localized invalid-policy/state/evidence/review, stale-stamp, and completion-gate messages.
+The stage summary adds `canCollectDuringForm`; workflow stage rows add `documentCollectionAvailable` for configured early uploads.
+An early upload uses the existing upload endpoint and permission, targeting the pending document stage; this does not authorize review, original verification, waiver, or stage completion.
 
 Linked Student evidence uses GET `/api/student/records/students/{studentId}/admission-evidence` with both `Students.Records.StudentList.View` and `Students.Admissions.Documents.View`. Its `/{evidenceId}/download` uses the same Admissions document `View` permission and verifies the finalized source application and Student link.
 
@@ -360,14 +375,16 @@ Base: `/api/student/enrollment/admissions/offers`. All routes use the standard `
 
 | Method and relative route | Permission | Behavior |
 |---|---|---|
-| GET `applications/{applicationId}/stages/{stageId}` | `Students.Admissions.Offers.View` | Return pinned content, status, expiry, counters, blockers, capabilities and safe history |
-| POST same stage route `/issue` | `Issue` | Issue the first version with configured or permitted expiry |
+| GET `applications/{applicationId}/stages/{stageId}` | `Students.Admissions.Offers.View` | Return pinned content, status, expiry, assigned counsellor, counters, blockers, capabilities and safe history |
+| POST same stage route `/issue` | `Issue` | Issue the first version with configured or permitted expiry and optionally assign an eligible counsellor |
 | POST same stage route `/respond` | `Respond` | Record acceptance confirmations or a reasoned decline |
 | POST same stage route `/extend` | `Extend` | Extend an active offer within policy limits |
 | POST same stage route `/withdraw` | `Withdraw` | Withdraw an active offer with a permanent reason |
-| POST same stage route `/reissue` | `Reissue` | Issue a new bounded version after decline, expiry, or withdrawal |
+| POST same stage route `/reissue` | `Reissue` | Issue a new bounded version after decline, expiry, or withdrawal; optionally change the counsellor |
 
 Every command body includes `concurrencyStamp` and `idempotencyKey`; route identifiers stay in the URL. Workflow facts are `offer.status`, `offer.versionNumber`, `offer.extensionCount`, and `offer.isExpired`. Non-acceptance outcomes can continue only through a transition whose evaluated condition explicitly matches `offer.status`.
+
+Application counsellor routes use `/api/student/enrollment/admissions/applications`: `GET /counsellors?offeringId=` requires Applications View and returns active tenant users who can access that Offering. Without `offeringId`, it returns counsellors already assigned to visible applications for tracking filters. `POST /{id}/assign-counsellor` requires Applications Edit, a current `concurrencyStamp`, and an active counsellor with access to the application's Offering; it records the change in Admission activity. Application list accepts `assignedCounsellorId` and returns assigned counsellor names. Direct registration accepts optional `counsellorId`; an inquiry-linked application initially inherits its inquiry counsellor. Both legacy and managed offer issuance accept optional `counsellorId` for existing clients, but it must match the application owner; offer issuance never assigns or changes that owner. Use the dedicated application assignment action first.
 
 ## Managed Seat stage APIs
 

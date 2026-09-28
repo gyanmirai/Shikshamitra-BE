@@ -14,7 +14,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Eligibility_inquiry_answers_require_persisted_source_provenance_and_use_binding_keys()
 		=> RunCertificationScenarioAsync(async () =>
 		{
-			var formId = await CreateEligibilityAnswerFormAsync(AdmissionFormFieldType.Number);
+			var formId = await CreateEligibilityAnswerFormAsync(AdmissionFormFieldType.Number,
+				AdmissionFormPurpose.Inquiry);
 			var criterion = new { code = "INQUIRY", name = "Original inquiry answers", kind = "inquiry", formDefinitionId = formId,
 				conditionJson = "{\"operator\":\"ALL\",\"conditions\":[{\"field\":\"inquiry.Applicant.FirstName\",\"operator\":\"Equals\",\"value\":\"Aanya\"},{\"field\":\"inquiry.ANSWER\",\"operator\":\"GreaterThanOrEqual\",\"value\":80}]}" };
 			var fixture = await CreateEligibilityFixtureAsync(EligibilityPolicyJson([criterion]), new DateTime(2021, 4, 1), inquiryFormDefinitionId: formId);

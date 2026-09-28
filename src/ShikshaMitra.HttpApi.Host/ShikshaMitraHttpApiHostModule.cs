@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -29,6 +30,7 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
+using System.Threading.RateLimiting;
 using Volo.Abp;
 using Volo.Abp.Account;
 using Volo.Abp.Account.Web;
@@ -107,6 +109,19 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		var hostingEnvironment = context.Services.GetHostingEnvironment();
 		var services = context.Services;
 		services.AddHttpClient();
+		services.AddRateLimiter(options =>
+		{
+			options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+			options.AddPolicy("public-admission-inquiry", context =>
+				RateLimitPartition.GetFixedWindowLimiter(
+					context.Request.RouteValues["token"]?.ToString() ?? "unknown",
+					_ => new FixedWindowRateLimiterOptions
+					{
+						PermitLimit = 120,
+						Window = TimeSpan.FromMinutes(1),
+						QueueLimit = 0
+					}));
+		});
 		services.AddHostedService<StagingDatabaseMigrationHostedService>();
 
 		if (hostingEnvironment.IsDevelopment() && configuration.GetValue<bool>("DevAutoAuth:Enabled"))
@@ -511,6 +526,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		app.UseCorrelationId();
 		app.UseStaticFiles();
 		app.UseRouting();
+		app.UseRateLimiter();
 		app.UseCors();
 
 		if (env.IsDevelopment() && configuration.GetValue<bool>("DevAutoAuth:Enabled"))

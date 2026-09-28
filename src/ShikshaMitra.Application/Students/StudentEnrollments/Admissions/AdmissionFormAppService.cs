@@ -21,6 +21,7 @@ public class AdmissionFormAppService(
 	IRepository<AdmissionFormFieldDefinition, Guid> fieldRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
 	IRepository<AdmissionApplication, Guid> applicationRepository,
+	IRepository<AdmissionPublicInquiryLink, Guid> publicInquiryLinkRepository,
 	AdmissionFormDataSourceRegistry dataSourceRegistry)
 	: ApplicationService, IAdmissionFormAppService
 {
@@ -45,12 +46,21 @@ public class AdmissionFormAppService(
 		"GreaterThan", "GreaterThanOrEqual", "LessThan", "LessThanOrEqual", "In", "NotIn"
 	];
 
+	private static void EnsureSupportedPurpose(AdmissionFormPurpose purpose)
+	{
+		if (purpose is not (AdmissionFormPurpose.Inquiry or AdmissionFormPurpose.Registration))
+			throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition,
+				"Only Inquiry and Registration forms are supported.");
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public async Task<PagedResultDto<AdmissionFormDto>> GetListAsync(AdmissionFormListInput input)
 	{
 		var query = await formRepository.GetQueryableAsync();
 		query = query.Where(form =>
+			(form.Purpose == AdmissionFormPurpose.Inquiry || form.Purpose == AdmissionFormPurpose.Registration) &&
 			(!input.Status.HasValue || form.Status == input.Status) &&
+			(!input.Purpose.HasValue || form.Purpose == input.Purpose) &&
 			(!input.Version.HasValue || form.Version == input.Version) &&
 			(string.IsNullOrWhiteSpace(input.Search) || form.Name.Contains(input.Search) || form.Code.Contains(input.Search)));
 		var count = await AsyncExecuter.CountAsync(query);
@@ -81,9 +91,10 @@ public class AdmissionFormAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
 	public async Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input)
 	{
+		EnsureSupportedPurpose(input.Purpose);
 		await EnsureCodeAvailableAsync(input.Code, null);
 		var form = new AdmissionFormDefinition(GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code,
-			input.LayoutType, description: input.Description, fieldsPerRow: input.FieldsPerRow);
+			input.LayoutType, description: input.Description, fieldsPerRow: input.FieldsPerRow, purpose: input.Purpose);
 		AdmissionFormMetadataStore.WriteExperience(form, input);
 		AdmissionFormMetadataStore.AddAudit(form, "Created", CurrentUser.Id);
 		await formRepository.InsertAsync(form, autoSave: false);
@@ -95,10 +106,11 @@ public class AdmissionFormAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
 	public async Task<AdmissionFormDto> UpdateAsync(Guid id, CreateUpdateAdmissionFormDto input)
 	{
+		EnsureSupportedPurpose(input.Purpose);
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, input.ConcurrencyStamp);
 		await EnsureCodeAvailableAsync(input.Code, id);
-		form.UpdateDetails(input.Name, input.Code, input.LayoutType, input.Description, input.FieldsPerRow);
+		form.UpdateDetails(input.Name, input.Code, input.LayoutType, input.Description, input.FieldsPerRow, input.Purpose);
 		AdmissionFormMetadataStore.WriteExperience(form, input);
 		AdmissionFormMetadataStore.WriteApproval(form, new AdmissionFormApprovalMetadata());
 		AdmissionFormMetadataStore.AddAudit(form, "Updated", CurrentUser.Id);
@@ -112,11 +124,12 @@ public class AdmissionFormAppService(
 	public async Task<AdmissionFormDto> CloneAsync(Guid id, CloneAdmissionFormDto input)
 	{
 		var source = await GetFormAsync(id);
+		EnsureSupportedPurpose(source.Purpose);
 		var code = string.IsNullOrWhiteSpace(input.Code) ? $"{source.Code}_COPY" : input.Code;
 		var name = string.IsNullOrWhiteSpace(input.Name) ? $"{source.Name} copy" : input.Name;
 		await EnsureCodeAvailableAsync(code, null);
 		var clone = new AdmissionFormDefinition(GuidGenerator.Create(), CurrentTenant.Id, name, code,
-			source.LayoutType, description: input.Description ?? source.Description, fieldsPerRow: source.FieldsPerRow);
+			source.LayoutType, description: input.Description ?? source.Description, fieldsPerRow: source.FieldsPerRow, purpose: source.Purpose);
 		AdmissionFormMetadataStore.CopyExperience(source, clone);
 		AdmissionFormMetadataStore.AddAudit(clone, "Cloned", CurrentUser.Id, $"Source form {source.Id}");
 		await formRepository.InsertAsync(clone, autoSave: false);
@@ -129,12 +142,13 @@ public class AdmissionFormAppService(
 	public async Task<AdmissionFormDto> CreateNewVersionAsync(Guid id)
 	{
 		var source = await GetFormAsync(id);
+		EnsureSupportedPurpose(source.Purpose);
 		if (source.Status == AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.DraftRequired);
 		var query = await formRepository.GetQueryableAsync();
 		var versions = await AsyncExecuter.ToListAsync(query.Where(form => form.Code == source.Code));
 		if (versions.Any(form => form.Status == AdmissionFormStatus.Draft)) throw new BusinessException(AdmissionFormErrorCodes.DraftRequired);
 		var version = new AdmissionFormDefinition(GuidGenerator.Create(), CurrentTenant.Id, source.Name, source.Code,
-			source.LayoutType, versions.Max(form => form.Version) + 1, source.Id, source.Description, source.FieldsPerRow);
+			source.LayoutType, versions.Max(form => form.Version) + 1, source.Id, source.Description, source.FieldsPerRow, source.Purpose);
 		AdmissionFormMetadataStore.CopyExperience(source, version);
 		AdmissionFormMetadataStore.AddAudit(version, "VersionCreated", CurrentUser.Id, $"Based on version {source.Version}");
 		await formRepository.InsertAsync(version, autoSave: false);
@@ -251,9 +265,11 @@ public class AdmissionFormAppService(
 		await GetFormAsync(id);
 		var offerings = await offeringRepository.GetQueryableAsync();
 		var applications = await applicationRepository.GetQueryableAsync();
+		var publicLinks = await publicInquiryLinkRepository.GetQueryableAsync();
 		var offeringCount = await AsyncExecuter.CountAsync(offerings.Where(offering => offering.InquiryFormDefinitionId == id || offering.ApplicationFormDefinitionId == id));
 		var applicationCount = await AsyncExecuter.CountAsync(applications.Where(application => application.FormDefinitionId == id));
-		return new AdmissionFormUsageDto { FormDefinitionId = id, OfferingCount = offeringCount, ApplicationCount = applicationCount, CanDelete = offeringCount == 0 && applicationCount == 0 };
+		var publicLinkCount = await AsyncExecuter.CountAsync(publicLinks.Where(link => link.InquiryFormDefinitionId == id));
+		return new AdmissionFormUsageDto { FormDefinitionId = id, OfferingCount = offeringCount, ApplicationCount = applicationCount, PublicLinkCount = publicLinkCount, CanDelete = offeringCount == 0 && applicationCount == 0 && publicLinkCount == 0 };
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
@@ -300,6 +316,7 @@ public class AdmissionFormAppService(
 		var changes = new List<string>();
 		if (!string.Equals(from.Name, to.Name, StringComparison.Ordinal)) changes.Add($"Form name: '{from.Name}' to '{to.Name}'");
 		if (!string.Equals(from.Description, to.Description, StringComparison.Ordinal)) changes.Add("Form description changed");
+		if (from.Purpose != to.Purpose) changes.Add($"Purpose changed from {from.Purpose} to {to.Purpose}");
 		if (from.LayoutType != to.LayoutType) changes.Add($"Layout changed from {from.LayoutType} to {to.LayoutType}");
 		if (from.FieldsPerRow != to.FieldsPerRow) changes.Add($"Desktop columns changed from {from.FieldsPerRow} to {to.FieldsPerRow}");
 		if (!from.SupportedLanguages.SequenceEqual(to.SupportedLanguages, StringComparer.OrdinalIgnoreCase)) changes.Add("Supported languages changed");
@@ -595,7 +612,7 @@ public class AdmissionFormAppService(
 		return new AdmissionFormDto
 		{
 			Id = form.Id, Name = form.Name, Code = form.Code, Description = form.Description,
-			Version = form.Version, Status = form.Status, LayoutType = form.LayoutType,
+			Version = form.Version, Status = form.Status, LayoutType = form.LayoutType, Purpose = form.Purpose,
 			FieldsPerRow = form.FieldsPerRow, DefaultLanguage = experience.DefaultLanguage,
 			SupportedLanguages = experience.SupportedLanguages, ApprovalStatus = approval.Status,
 			ApprovalRequestedBy = approval.RequestedBy, ApprovalRequestedAt = approval.RequestedAt,

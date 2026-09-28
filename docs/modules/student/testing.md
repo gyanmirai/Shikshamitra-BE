@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-09-15
+updated_on: 2026-09-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,41 @@ audience: humans-and-agents
 # Validate Student Enrollment Admissions changes
 
 TL;DR: run domain, application contract, EF mapping, and HTTP contract tests for Admission Offering changes, then validate module docs and migration safety.
+
+The room-derived class-capacity integration scenario allocates a persisted room, finalizes a direct RTE application, verifies the same occupied and remaining seats from a parallel General offering, and confirms that a full class still allows a new registration. Run `AdmissionWorkflowRuntimeIntegration_Tests` after changing routing or capacity; a calculator-only test does not cover the shared query. Applying the new migrations to a disposable PostgreSQL database and checking the live API remain release gates.
+
+`20260924090000_AddAdmissionFormPurpose` uses active Offering references to classify existing Inquiry and Registration Forms; a name-based guess is only a fallback for unreferenced forms. If the same form is referenced in both slots, migration stops with a clear error instead of silently invalidating an active Offering. Resolve that existing-data conflict before rollout, then rerun migration verification against a disposable copy. The EF mapping test checks operation order and generates PostgreSQL Up/Down commands for all three new migrations without connecting to a database; only a disposable PostgreSQL migration run can prove SQL execution.
+
+## Workflow route and document configuration checks
+
+```powershell
+dotnet test test/ShikshaMitra.Domain.Tests/ShikshaMitra.Domain.Tests.csproj --filter "FullyQualifiedName~AdmissionWorkflowRouteDiagnostics|FullyQualifiedName~AdmissionWorkflowGraphValidator|FullyQualifiedName~AdmissionDocumentCollectionRules|FullyQualifiedName~AdmissionDocumentPolicyAndEvidence"
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Managed_documents|FullyQualifiedName~Document_class_scope|FullyQualifiedName~Document_handoff|FullyQualifiedName~Document_finalization|FullyQualifiedName~Document_onboarding_replacement"
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter FullyQualifiedName~AdmissionDocumentApiContract
+```
+
+Route diagnostics reject identical simple conditions from one stage even when their priorities differ, unsupported managed Payment outcomes, and Offer/Seat outcomes excluded by the source policy. An Offer with Accepted disabled cannot use a default continuation; it needs a special outcome path. Complex preserved rules remain subject to the existing condition and graph validators.
+
+The document integration files are partial members of `AdmissionWorkflowRuntimeIntegration_Tests`; filter by the method names above, not by their filenames. Confirm that the test report contains executed tests: a zero-test run can still return exit code zero.
+
+On 25 September, this application filter executed and passed 24 tests with zero skips. Coverage includes early linked-Form collection and evidence reuse, class applicability, denied early review/unlinked upload, replacement review, private evidence scope, and finalization/handoff preservation and rollback. The Document HTTP contract suite passed nine tests. These are automated integration/contract results; live browser upload through finalization remains a separate acceptance check.
+
+The focused `FullyQualifiedName~Rte_direct_registration_starts_at_form` selection subsequently passed both theory cases with zero failures or skips.
+It verifies finalization from direct approval and from an accepted optional offer, and confirms an issued but unaccepted offer remains blocked.
+Both cases execute actual finalization and Student/Onboarding linkage assertions.
+The duplicate-offering fixture includes the required intake profiles so it continues to exercise duplicate rejection rather than failing earlier configuration validation.
+
+The isolated Host build succeeded with zero errors and existing compiler/analyzer warnings.
+Loading the current Host exposed missing intake-profile columns in the local PostgreSQL database.
+After confirming `postgres` at `::1:5432`, a readable full custom-format backup was saved under ignored `.artifacts/backups/before-intake-profile-20260925.dump`.
+The reviewed script applied only `20260925121515_AddAdmissionIntakeProfiles` from `20260925100000_AddAdmissionApplicationCounsellor`, in a transaction, with SHA256 `98DBADAE7B65C2771D7EAB6CBD7672EDE31B12F0201DCE43583D196CCA1D6FE0`.
+It added two nullable Offering references, the intake-profile table, indexes, and foreign keys; the new table remained empty and no seeder ran.
+The authenticated browser then finalized synthetic `APP-2026-000002` from its accepted optional offer and displayed the created Student identity and Continue onboarding link.
+A scoped read-only query confirmed one retained PNG evidence row at Version 1 with its accepted review linked to that Student, and exactly one Student Onboarding case.
+The browser opened that matching live case; the custom evidence had no document-category mapping, so this does not claim mapped onboarding-document completion or Student activation.
+Student documentation validation and diff hygiene passed; the all-module documentation run is blocked separately by a mojibake error in the Finance charge-management test plan.
+
+Document checks cover authoritative Offering class applicability, fail-closed missing class context, same-version forward Form collection links, shared evidence identity, and replacement invalidating prior review. Live API, permission-denial, finalization/handoff, and responsive browser acceptance remain separate release gates; domain-only success does not establish those outcomes.
 
 ## Admission Cycle validation
 
@@ -63,6 +98,9 @@ git diff --check
 | Bulk inactive/activation readiness and exact View/Add/Delete action aliases | `test/ShikshaMitra.Application.Tests/Students/Enrollment/AdmissionOfferingContract_Tests.cs` |
 | Defaults, nullability, indexes, restrictive FKs | `test/ShikshaMitra.EntityFrameworkCore.Tests/Students/Enrollment/AdmissionOfferingModelMapping_Tests.cs` |
 | Required HTTP routes and concurrency inputs | `test/ShikshaMitra.HttpApi.Tests/Students/Enrollment/AdmissionOfferingApiContract_Tests.cs` |
+| Track-aware same-class create/update rejection, shared room-derived capacity, non-blocking full-class warning, and inactive-enrollment seat release | `test/ShikshaMitra.Application.Tests/Students/Enrollment/AdmissionWorkflowRuntimeIntegration_Tests.cs` and `AdmissionClassCapacityIntegration_Tests.cs` |
+| Capacity read/configuration HTTP permissions and routes | `test/ShikshaMitra.HttpApi.Tests/Students/Enrollment/AdmissionOfferingApiContract_Tests.cs` |
+| Same-cycle duplicate signals, scoped prior-cycle family linking, name-only rejection, and inaccessible-cycle denial | `test/ShikshaMitra.Application.Tests/Students/Enrollment/AdmissionWorkflowRuntimeIntegration_Tests.cs` |
 | Workflow graph, controlled conditions, handlers, and runtime state | `test/ShikshaMitra.Domain.Tests/Students/Enrollment/AdmissionWorkflowGraphValidator_Tests.cs` and `test/ShikshaMitra.Domain.Tests/Students/StudentEnrollments/Admissions/AdmissionWorkflowConditionEvaluator_Tests.cs` |
 | Required-stage skip conflicts and runtime-unavailable publication blocks | `test/ShikshaMitra.Domain.Tests/Students/Enrollment/AdmissionWorkflowGraphValidator_Tests.cs` |
 | Frozen published version, complete version-history definitions, per-version runtime analytics, transition history, retry idempotency, and future-application version selection | `test/ShikshaMitra.Application.Tests/Students/Enrollment/AdmissionWorkflowRuntimeIntegration_Tests.cs` |
@@ -108,6 +146,8 @@ dotnet ef migrations has-pending-model-changes --project src/ShikshaMitra.Entity
 ```
 
 The inquiry runtime integration check covers unassigned and assigned queues, offering-scoped counsellor lookup, server-filtered first-contact and open-follow-up queues, list-row enrichment, editable preferred language, and a traceable one-recipient Communication draft. The HTTP contract check keeps edit, timeline, CSV export, bulk assignment, work-queue, row SLA/readiness, communication route, permission, request, and result fields public.
+
+Application Experience coverage additionally verifies persisted form purpose, purpose-preserving clones and versions, purpose-safe Offering configuration, the seven canonical document-condition facts, and the nine lifecycle templates remaining in the Communication contract.
 
 The 2026-09-11 focused verification passed 10 Domain policy/aggregate tests, two real Application lifecycle scenarios, one EF mapping test, and nine HTTP route, permission, and safe-contract checks.
 The Basic scenario proves existing application start behavior remains available without an enabled Inquiry policy.
@@ -250,3 +290,7 @@ The 2026-09-11 focused run passed 26 Domain tests, one real Application workflow
 Run the focused Seat policy, allocation and route tests; the database-backed managed workflow tests; the EF mapping test; and the HTTP contract tests. Coverage includes legacy opt-out, policy bounds, automatic reservation on entry, capacity protection, idempotent retry, confirmation gating, FIFO waitlisting, promotion after capacity growth, post-advance release, explicit negative routing, tenant uniqueness, permission separation, and safe DTOs.
 
 The 2026-09-11 focused run passed 16 Domain tests, two real Application workflow tests, one EF mapping test, and eight HTTP contract tests with zero failures or skips. The HTTP API build completed with zero errors. EF reports no pending model changes. Generated SQL from `20260911071841_AddManagedAdmissionOffers` to `20260911084131_AddManagedAdmissionSeats` creates only the two Seat tables, their foreign keys and indexes, and the migration-history row in a transaction. It has not been applied.
+
+## Class capacity and counsellor validation (2026-09-25)
+
+This review applied the current Admissions migrations to a newly created disposable localhost PostgreSQL database named `shikshamitra_admissions_disposable_20260925`; no live deployment or existing API restart was performed by this review. The disposable database's migration history contains 79 entries, ending at `20260925100000_AddAdmissionApplicationCounsellor`. Read-only checks confirmed the application counsellor column and that class-room allocation foreign keys reference `academic_Rooms`, `academic_Standards`, and `academic_Years`. The existing local `postgres` database was initially observed at 77 migrations and later at 80, including the two new Admissions migrations; the source of that concurrent change was not established, so do not assume it was unchanged. EF reported no pending model changes. The focused Application selection passed 25/25 tests, including RTE direct registration and managed-offer counsellor assignment; capacity boundary/integration selection passed 5/5; EF mapping/migration selection passed 6/6; and HTTP route/permission contracts passed 5/5. A later focused integration rerun also passed the explicit assertion that an RTE/Direct Registration offering cannot accept an Inquiry. Authenticated browser inspection reached the Applications list and direct-registration empty state, but no configured direct-registration offering was available for an end-to-end applicant journey.

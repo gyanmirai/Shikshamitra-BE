@@ -21,6 +21,7 @@ public class AdmissionWorkflowConfiguration : IEntityTypeConfiguration<Admission
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(AdmissionWorkflowConsts.MaxNameLength);
 		builder.Property(x => x.Code).IsRequired().HasMaxLength(AdmissionWorkflowConsts.MaxCodeLength);
 		builder.Property(x => x.Description).HasMaxLength(AdmissionWorkflowConsts.MaxDescriptionLength);
+		builder.Property(x => x.DefaultInquiryFormDefinitionId).HasColumnType("uuid");
 		builder.Property(x => x.ChangeReason).HasMaxLength(AdmissionWorkflowConsts.MaxReasonLength);
 		builder.HasIndex(x => new { x.TenantId, x.Code, x.Version })
 			.IsUnique()

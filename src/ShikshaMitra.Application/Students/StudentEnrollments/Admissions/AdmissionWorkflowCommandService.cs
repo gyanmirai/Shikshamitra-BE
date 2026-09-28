@@ -11,6 +11,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionWorkflowCommandService(
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
+	IRepository<AdmissionFormDefinition, Guid> formRepository,
 	AdmissionWorkflowDefinitionStore definitionStore,
 	AdmissionWorkflowReadService readService,
 	AdmissionWorkflowValidationService validationService,
@@ -20,9 +21,11 @@ public class AdmissionWorkflowCommandService(
 	public async Task<AdmissionWorkflowDto> CreateAsync(CreateUpdateAdmissionWorkflowDto input)
 	{
 		await EnsureCodeVersionAvailableAsync(input.Code, 1);
+		await EnsurePublishedInquiryFormAsync(input.DefaultInquiryFormDefinitionId);
 		var workflow = new AdmissionWorkflowDefinition(
 			GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code, description: input.Description,
-			ownerUserId: CurrentUser.Id);
+			ownerUserId: CurrentUser.Id,
+			defaultInquiryFormDefinitionId: input.DefaultInquiryFormDefinitionId);
 		// Keep the value explicit at the application boundary as a safeguard for
 		// databases where the repair migration has not been applied yet.
 		workflow.IsDeleted = false;
@@ -46,7 +49,9 @@ public class AdmissionWorkflowCommandService(
 				"Workflow code cannot change inside a version history.");
 		}
 		await EnsureCodeVersionAvailableAsync(input.Code, workflow.Version, workflow.Id);
+		await EnsurePublishedInquiryFormAsync(input.DefaultInquiryFormDefinitionId);
 		workflow.UpdateDetails(input.Name, input.Code, input.Description);
+		workflow.SetDefaultInquiryForm(input.DefaultInquiryFormDefinitionId);
 		await definitionStore.ReplaceChildrenAsync(id, input);
 		await workflowRepository.UpdateAsync(workflow, autoSave: true);
 		return await definitionStore.GetDtoAsync(workflow);
@@ -72,7 +77,8 @@ public class AdmissionWorkflowCommandService(
 		await EnsureCodeVersionAvailableAsync(input.Code, 1);
 		var clone = new AdmissionWorkflowDefinition(
 			GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code, description: input.Description,
-			ownerUserId: CurrentUser.Id);
+			ownerUserId: CurrentUser.Id,
+			defaultInquiryFormDefinitionId: source.DefaultInquiryFormDefinitionId);
 		clone.IsDeleted = false;
 		await workflowRepository.InsertAsync(clone, autoSave: true);
 		await definitionStore.CopyChildrenAsync(source.Id, clone.Id);
@@ -96,7 +102,7 @@ public class AdmissionWorkflowCommandService(
 		var version = new AdmissionWorkflowDefinition(
 			GuidGenerator.Create(), CurrentTenant.Id, source.Name, source.Code,
 			versions.Max(workflow => workflow.Version) + 1, source.Id, source.Description,
-			CurrentUser.Id);
+			CurrentUser.Id, source.DefaultInquiryFormDefinitionId);
 		version.IsDeleted = false;
 		version.RecordVersionCreated(source.Id);
 		await workflowRepository.InsertAsync(version, autoSave: true);
@@ -252,7 +258,8 @@ public class AdmissionWorkflowCommandService(
 			throw new BusinessException(AdmissionWorkflowErrorCodes.DraftRequired,
 				"Complete or remove the existing pending version before creating a rollback draft.");
 		var rollback = new AdmissionWorkflowDefinition(GuidGenerator.Create(), CurrentTenant.Id, source.Name, source.Code,
-			versions.Max(workflow => workflow.Version) + 1, source.Id, source.Description, CurrentUser.Id);
+			versions.Max(workflow => workflow.Version) + 1, source.Id, source.Description, CurrentUser.Id,
+			source.DefaultInquiryFormDefinitionId);
 		rollback.IsDeleted = false;
 		rollback.RecordVersionCreated(source.Id);
 		rollback.RecordRollbackSource(source.Id, reason);
@@ -322,6 +329,18 @@ public class AdmissionWorkflowCommandService(
 		if (!validation.IsValid)
 			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidTransition, "Workflow validation failed.")
 				.WithData("ValidationIssues", validation.Issues.Select(issue => issue.Code).ToArray());
+	}
+
+	private async Task EnsurePublishedInquiryFormAsync(Guid? formDefinitionId)
+	{
+		if (!formDefinitionId.HasValue) return;
+		var form = await formRepository.FindAsync(formDefinitionId.Value);
+		if (form is null || form.Status != AdmissionFormStatus.Published ||
+			form.Purpose != AdmissionFormPurpose.Inquiry)
+		{
+			throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidInquiryForm,
+				"Select a published Inquiry form for this workflow.");
+		}
 	}
 
 	private async Task EnsureCodeVersionAvailableAsync(string code, int version, Guid? excludingId = null)

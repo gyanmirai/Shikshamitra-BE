@@ -71,7 +71,16 @@ public class AdmissionInquiryPeopleService(
 		return rows.ToDictionary(user => user.Id, Display);
 	}
 
-	private async Task<bool> CanAccessOfferingAsync(Guid userId, Guid offeringId)
+	public async Task<bool> CanAccessCycleAsync(Guid userId, Guid cycleId)
+	{
+		if (!await IsActiveAsync(userId)) return false;
+		var query = AdmissionOfferingScopeQuery.Apply(await offerings.GetQueryableAsync(), await cycles.GetQueryableAsync(),
+			await divisions.GetQueryableAsync(), await scopes.GetUserScopeAsync(userId));
+		return await AsyncExecuter.AnyAsync(query.Where(item => item.AdmissionCycleId == cycleId && item.IsActive &&
+			item.EntryMode != AdmissionEntryMode.DirectRegistration));
+	}
+
+	public async Task<bool> CanAccessOfferingAsync(Guid userId, Guid offeringId)
 	{
 		if (!await IsActiveAsync(userId)) return false;
 		var query = AdmissionOfferingScopeQuery.Apply(await offerings.GetQueryableAsync(), await cycles.GetQueryableAsync(),

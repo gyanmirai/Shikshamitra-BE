@@ -34,22 +34,25 @@ public sealed record AdmissionDocumentEvaluation(List<AdmissionDocumentRequireme
 
 [RemoteService(false)]
 public class AdmissionDocumentEvaluationService(IRepository<AdmissionDocumentEvidence, Guid> evidence,
-	IRepository<AdmissionDocumentReview, Guid> reviews, AdmissionWorkflowRuntimeValueService runtimeValues) : ITransientDependency
+	IRepository<AdmissionDocumentReview, Guid> reviews, AdmissionWorkflowRuntimeValueService runtimeValues,
+	IRepository<AdmissionOffering, Guid> offerings) : ITransientDependency
 {
 	public async Task<AdmissionDocumentEvaluation> EvaluateAsync(AdmissionApplication application, Guid stageId, AdmissionDocumentPolicy policy)
 	{
 		var values = await runtimeValues.ReadAsync(application, protectManagedFacts: true);
+		var offering = policy.Requirements.Any(item => item.StandardIds != null)
+			? await offerings.FindAsync(application.AdmissionOfferingId) : null;
 		var rows = await evidence.GetListAsync(item => item.ApplicationId == application.Id && item.StageInstanceId == stageId);
 		var decisions = await reviews.GetListAsync(item => item.ApplicationId == application.Id && item.StageInstanceId == stageId);
-		return new(policy.Requirements.Select(requirement => Evaluate(requirement, policy, values, rows, decisions)).ToList(), values);
+		return new(policy.Requirements.Select(requirement => Evaluate(requirement, policy, values, rows, decisions, offering?.StandardId)).ToList(), values);
 	}
 
 	private static AdmissionDocumentRequirementEvaluation Evaluate(AdmissionDocumentRequirement requirement, AdmissionDocumentPolicy policy,
-		IReadOnlyDictionary<string, string> values, List<AdmissionDocumentEvidence> rows, List<AdmissionDocumentReview> decisions)
+		IReadOnlyDictionary<string, string> values, List<AdmissionDocumentEvidence> rows, List<AdmissionDocumentReview> decisions, Guid? standardId)
 	{
 		var versions = rows.Where(item => item.RequirementCode == requirement.Code).OrderBy(item => item.VersionNumber).ToList();
-		var condition = AdmissionDocumentRules.ConditionStatus(requirement, values);
-		var required = requirement.Requirement == "required" || requirement.Requirement == "conditional" && condition != "notMatched";
+		var condition = AdmissionDocumentRules.ConditionStatus(requirement, values, standardId);
+		var required = condition != "notMatched" && requirement.Requirement is "required" or "conditional";
 		var latest = versions.LastOrDefault();
 		var status = condition == "notMatched" ? "notRequired" : AdmissionDocumentRules.Status(latest, decisions);
 		var blockers = new List<string>();

@@ -16,6 +16,7 @@ public class AdmissionApplicationReadService(
 	IRepository<AdmissionOffering, Guid> offeringRepository,
 	IRepository<AdmissionApplicationStageInstance, Guid> stageRepository,
 	AdmissionApplicationScopeAccessService scopeAccess,
+	AdmissionInquiryPeopleService peopleService,
 	AdmissionReviewDecisionGuard reviewGuard)
 	: ApplicationService, ITransientDependency
 {
@@ -30,6 +31,7 @@ public class AdmissionApplicationReadService(
 			(!input.Status.HasValue || application.Status == input.Status) &&
 			(!input.AdmissionCycleId.HasValue || application.AdmissionCycleId == input.AdmissionCycleId) &&
 			(!input.AdmissionOfferingId.HasValue || application.AdmissionOfferingId == input.AdmissionOfferingId) &&
+			(!input.AssignedCounsellorId.HasValue || application.AssignedCounsellorId == input.AssignedCounsellorId) &&
 			(!input.CurrentStageInstanceId.HasValue || application.CurrentStageInstanceId == input.CurrentStageInstanceId) &&
 			(string.IsNullOrWhiteSpace(input.CurrentStageSearch) ||
 				(application.CurrentStageInstanceId.HasValue && stageIds!.Contains(application.CurrentStageInstanceId.Value))) &&
@@ -68,6 +70,11 @@ public class AdmissionApplicationReadService(
 	{
 		var applicant = await applicantRepository.FindAsync(application.ApplicantId);
 		var result = AdmissionApplicationMapper.ToDto(application, applicant == null ? string.Empty : GetName(applicant));
+		if (application.AssignedCounsellorId.HasValue)
+		{
+			var names = await peopleService.GetNamesAsync([application.AssignedCounsellorId.Value]);
+			result.AssignedCounsellorName = names.GetValueOrDefault(application.AssignedCounsellorId.Value);
+		}
 		result.ReviewDecision = await reviewGuard.GetCapabilitiesAsync(application);
 		return result;
 	}
@@ -102,13 +109,21 @@ public class AdmissionApplicationReadService(
 			.ToDictionary(item => item.Id);
 		var stages = (await stageRepository.GetListAsync(item => stageIds.Contains(item.Id)))
 			.ToDictionary(item => item.Id);
-		return rows.Select(row => AdmissionApplicationMapper.ToDto(
+		var counsellorNames = await peopleService.GetNamesAsync(rows.Where(row => row.AssignedCounsellorId.HasValue)
+			.Select(row => row.AssignedCounsellorId!.Value));
+		return rows.Select(row =>
+		{
+			var dto = AdmissionApplicationMapper.ToDto(
 			row,
 			applicants.TryGetValue(row.ApplicantId, out var applicant) ? GetName(applicant) : string.Empty,
 			offerings.GetValueOrDefault(row.AdmissionOfferingId)?.Code ?? string.Empty,
 			row.CurrentStageInstanceId.HasValue
 				? stages.GetValueOrDefault(row.CurrentStageInstanceId.Value)?.Name ?? string.Empty
-				: string.Empty)).ToList();
+				: string.Empty);
+			dto.AssignedCounsellorName = row.AssignedCounsellorId.HasValue
+				? counsellorNames.GetValueOrDefault(row.AssignedCounsellorId.Value) : null;
+			return dto;
+		}).ToList();
 	}
 
 	private static string GetName(AdmissionApplicant applicant) => string.Join(" ",

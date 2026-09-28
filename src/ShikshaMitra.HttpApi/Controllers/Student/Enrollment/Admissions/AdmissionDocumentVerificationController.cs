@@ -18,6 +18,8 @@ public class AdmissionDocumentVerificationController(IAdmissionDocumentVerificat
 {
 	[HttpGet("applications/{applicationId:guid}/stages/{stageInstanceId:guid}"), Authorize(Permissions.View)]
 	public async Task<Result<AdmissionDocumentVerificationDto>> GetAsync(Guid applicationId, Guid stageInstanceId) => Result.Success(await service.GetAsync(applicationId, stageInstanceId));
+	[HttpGet("classes"), Authorize(WorkflowPermissions.View)]
+	public async Task<Result<List<AdmissionDocumentClassDto>>> GetClassesAsync() => Result.Success(await service.GetClassesAsync());
 	[HttpGet("document-types"), Authorize(WorkflowPermissions.View)]
 	public async Task<Result<List<AdmissionDocumentTypeDto>>> GetDocumentTypesAsync() => Result.Success(await service.GetDocumentTypesAsync());
 	[HttpPost("applications/{applicationId:guid}/stages/{stageInstanceId:guid}/requirements/{code}/upload"), Authorize(Permissions.Upload)]

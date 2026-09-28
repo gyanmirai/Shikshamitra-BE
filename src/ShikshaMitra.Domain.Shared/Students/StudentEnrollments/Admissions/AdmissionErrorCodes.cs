@@ -25,6 +25,11 @@ public static class AdmissionErrorCodes
 	public const string InquiryCounsellorCandidatesRequired = "Admissions.InquiryCounsellorCandidatesRequired";
 	public const string InquiryCounsellorInvalid = "Admissions.InquiryCounsellorInvalid";
 	public const string InquiryOfferingRequired = "Admissions.InquiryOfferingRequired";
+	public const string InquiryEntryNotAllowed = "Admissions.InquiryEntryNotAllowed";
+	public const string InquiryFamilyMismatch = "Admissions.InquiryFamilyMismatch";
+	public const string DirectRegistrationEntryNotAllowed = "Admissions.DirectRegistration.EntryNotAllowed";
+	public const string DirectRegistrationIdempotencyConflict = "Admissions.DirectRegistration.IdempotencyConflict";
+	public const string DirectRegistrationFamilyMismatch = "Admissions.DirectRegistration.FamilyMismatch";
 	public const string OfferingWorkflowNotPublished = "Admissions.OfferingWorkflowNotPublished";
 	public const string OfferingFormNotPublished = "Admissions.OfferingFormNotPublished";
 	public const string OfferingConfigurationIncomplete = "Admissions.Offering.ConfigurationIncomplete";
@@ -38,6 +43,8 @@ public static class AdmissionErrorCodes
 	public const string OfferingCampusInvalid = "Admissions.Offering.CampusInvalid";
 	public const string OfferingBulkValidationFailed = "Admissions.Offering.BulkValidationFailed";
 	public const string OfferingStateCommandRequired = "Admissions.Offering.StateCommandRequired";
+	public const string ClassRoomAllocationInvalid = "Admissions.ClassRoomAllocation.Invalid";
+	public const string ClassRoomAlreadyAllocated = "Admissions.ClassRoomAllocation.RoomAlreadyAllocated";
 	public const string ApplicationDecisionInvalidState = "Admissions.Application.DecisionInvalidState";
 	public const string ApplicationDecisionReasonRequired = "Admissions.Application.DecisionReasonRequired";
 	public const string ApplicationOfferExpiryInvalid = "Admissions.Application.OfferExpiryInvalid";

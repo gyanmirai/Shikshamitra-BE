@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Students.StudentEnrollments;
@@ -10,6 +11,23 @@ namespace ShikshaMitra.EntityFrameworkCore.Tests.Students.Enrollment;
 
 public class AdmissionDecisionModelMapping_Tests : ShikshaMitraEntityFrameworkCoreTestBase
 {
+	[Fact]
+	public void Offer_expiry_maps_through_utc_offset_without_changing_the_instant()
+	{
+		var property = GetRequiredService<ShikshaMitraDbContext>().Model
+			.FindEntityType(typeof(AdmissionApplication))!
+			.FindProperty(nameof(AdmissionApplication.OfferExpiresAt))!;
+		var converter = property.GetValueConverter();
+
+		converter.ShouldNotBeNull();
+		converter.ProviderClrType.ShouldBe(typeof(DateTimeOffset));
+		var expiry = new DateTime(2026, 9, 30, 11, 30, 0, DateTimeKind.Utc);
+		var provider = (DateTimeOffset)converter.ConvertToProvider(expiry)!;
+		provider.Offset.ShouldBe(TimeSpan.Zero);
+		provider.UtcDateTime.ShouldBe(expiry);
+		((DateTime)converter.ConvertFromProvider(provider)!).ShouldBe(expiry);
+	}
+
 	[Fact]
 	public void Decision_and_enrollment_models_have_auditable_indexes_and_links()
 	{

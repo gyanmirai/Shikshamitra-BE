@@ -11,7 +11,7 @@ public class AdmissionInquiryManagement : FullAuditedAggregateRoot<Guid>, IMulti
 	private const string OutcomeReasonCodeProperty = "OutcomeReasonCode";
 	public Guid? TenantId { get; private set; }
 	public Guid InquiryId { get; private set; }
-	public Guid StageDefinitionId { get; private set; }
+	public Guid? StageDefinitionId { get; private set; }
 	public string PolicySnapshotJson { get; private set; } = string.Empty;
 	public DateTime? FirstContactDueAt { get; private set; }
 	public DateTime? QualificationDueAt { get; private set; }
@@ -27,12 +27,13 @@ public class AdmissionInquiryManagement : FullAuditedAggregateRoot<Guid>, IMulti
 
 	private AdmissionInquiryManagement() { }
 
-	public AdmissionInquiryManagement(Guid id, Guid? tenantId, Guid inquiryId, Guid stageDefinitionId,
+	public AdmissionInquiryManagement(Guid id, Guid? tenantId, Guid inquiryId, Guid? stageDefinitionId,
 		string policySnapshotJson, DateTime createdAt, int? firstContactDueInHours, int? qualificationDueInDays) : base(id)
 	{
 		TenantId = tenantId;
 		InquiryId = Check.NotDefaultOrNull<Guid>(inquiryId, nameof(inquiryId));
-		StageDefinitionId = Check.NotDefaultOrNull<Guid>(stageDefinitionId, nameof(stageDefinitionId));
+		if (stageDefinitionId == Guid.Empty) throw new ArgumentException("Choose a valid stage definition.", nameof(stageDefinitionId));
+		StageDefinitionId = stageDefinitionId;
 		PolicySnapshotJson = Check.NotNullOrWhiteSpace(policySnapshotJson, nameof(policySnapshotJson));
 		FirstContactDueAt = firstContactDueInHours.HasValue ? createdAt.ToUniversalTime().AddHours(firstContactDueInHours.Value) : null;
 		QualificationDueAt = qualificationDueInDays.HasValue ? createdAt.ToUniversalTime().AddDays(qualificationDueInDays.Value) : null;
@@ -115,6 +116,13 @@ public class AdmissionInquiryFollowUp : FullAuditedAggregateRoot<Guid>, IMultiTe
 		CompletedBy = actor;
 		CompletedAt = completedAt.ToUniversalTime();
 		CompletionNote = note.Trim();
+	}
+
+	public void Reassign(Guid counsellorId)
+	{
+		if (Status != AdmissionInquiryFollowUpStatus.Scheduled)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+		AssignedCounsellorId = Check.NotDefaultOrNull<Guid>(counsellorId, nameof(counsellorId));
 	}
 
 	public void Cancel(Guid actor, DateTime cancelledAt, string reason)

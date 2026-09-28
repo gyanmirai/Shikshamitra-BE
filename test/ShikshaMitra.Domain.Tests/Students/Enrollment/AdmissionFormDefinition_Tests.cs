@@ -51,6 +51,25 @@ public class AdmissionFormDefinition_Tests
     }
 
     [Fact]
+    public void FormPurposeIsStoredAndCanChangeOnlyWhileDraft()
+    {
+        var form = new AdmissionFormDefinition(
+            Guid.NewGuid(), null, "Family inquiry", "FAMILY_INQUIRY",
+            AdmissionFormLayoutType.SinglePage, purpose: AdmissionFormPurpose.Inquiry);
+
+        form.Purpose.ShouldBe(AdmissionFormPurpose.Inquiry);
+        form.UpdateDetails(
+            "Parent consent", "PARENT_CONSENT", AdmissionFormLayoutType.SinglePage,
+            purpose: AdmissionFormPurpose.Consent);
+        form.Purpose.ShouldBe(AdmissionFormPurpose.Consent);
+
+        form.Publish(null);
+        Should.Throw<BusinessException>(() => form.UpdateDetails(
+            "Correction", "CORRECTION", AdmissionFormLayoutType.SinglePage,
+            purpose: AdmissionFormPurpose.Correction));
+    }
+
+    [Fact]
     public void PublishedFormCannotBeEditedAndDraftCannotBeArchived()
     {
         var form = new AdmissionFormDefinition(

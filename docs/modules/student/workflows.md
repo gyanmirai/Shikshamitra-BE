@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-09-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -40,7 +40,7 @@ not inherit Offering/Application records, preventing accidental exposure of last
 
 1. The controller authorizes the granular operation.
 2. FluentValidation checks request shape and date presence.
-3. `AdmissionOfferingConfigurationValidator` checks cycle, hierarchy, UserScope, dates, published references, and full Offering-identity uniqueness. The operational code is not used as an identity key.
+3. `AdmissionOfferingConfigurationValidator` checks cycle, hierarchy, UserScope, dates, published references, and full Offering-identity uniqueness. The operational code is not used as an identity key. RTE offerings additionally require direct Registration entry and a workflow without Inquiry or Assessment stages; the other tracks retain configurable entry modes.
 4. Active offerings require complete readiness; inactive offerings may save missing runtime references for later completion.
 5. The command service persists through the aggregate and returns a scoped detail projection.
 6. Update compares the concurrency stamp and locks academic identity after an application exists.
@@ -59,14 +59,22 @@ Bulk preview validates each standard and returns structured row errors together 
 `CanSaveInactive` and `CanActivate` decisions. Bulk commit inserts every row in one unit of work only
 when every row is valid for the requested inactive or active state.
 
-## Run a managed Inquiry
+## Configure intake and assignment for new Offerings
 
-1. Enable the Inquiry policy in a draft workflow and choose the application-start requirement.
+1. Save reusable Inquiry and Counsellor Assignment profiles through the Admission Intake Profiles API. Inquiry settings control allowed sources, duplicates, deadlines, and the application-start requirement. Assignment settings specify an active, scoped staff pool, active-case capacity, and optional fallback manager.
+2. Select both profiles on a new Inquiry or Both-mode Offering; select the assignment profile on a new Direct Registration Offering. New active Offerings require these references. Historical Offerings retain the pinned Inquiry-stage policy until they opt in.
+3. At inquiry creation, the Offering supplies the policy and assignment pool. Assignment counts open inquiry, application, and onboarding cases, then chooses the least loaded counsellor below capacity. A database transaction lock serializes assignments for one profile. Direct Registration uses the same assignment when no owner is selected manually.
+4. A staff-captured inquiry with no known Offering is tied to a published cycle and remains unassigned for triage. Staff confirm an open Offering later; its policy and assignment then apply. Linked inquiry and application ownership is kept together when the application owner changes, and scheduled follow-ups move with it. Finalization seeds onboarding ownership from the application.
+5. An administrator may create a revocable public inquiry link for one published cycle and assignment profile, with a fixed source, optional campaign detail, and optional expiry. The raw link token is returned only on creation; only its SHA-256 hash is stored. The anonymous basic inquiry form records class interest in source detail and requires contact consent. Repeated phone submissions receive the same acknowledgement without creating another inquiry. Requests are limited per link in the HTTP host. The lead is assigned before the Offering is known, then staff confirm a suitable open Offering.
+
+## Historical managed Inquiry
+
+1. Existing published Inquiry-stage policies retain their application-start requirement.
 2. Configure allowed sources, required source detail, duplicate behavior, identity requirements, counsellor assignment, deadlines, follow-up defaults, and qualification checklist as needed.
 3. Validate and publish the workflow, then attach it to an offering whose forms and counsellor scope are compatible.
-4. Create an inquiry; the server validates the selected source and required source detail, stores the preferred language, checks duplicates inside the selected admission cycle, snapshots policy and deadlines, assigns a counsellor when configured, and records duplicate-override context in audit activity.
+4. Create an inquiry; the server validates the selected source and required source detail, stores the preferred language, checks current-cycle duplicates, suggests same-mobile families from other cycles only when their applicant is visible in staff admission scope, snapshots policy and deadlines, assigns a counsellor when configured, and records duplicate-override context in audit activity.
 5. Work from All, My inquiries, Unassigned, a specific counsellor, Overdue, Awaiting first contact, Awaiting qualification, or Open follow-ups. Operational queues are filtered before server paging, URL-backed clients can restore the same view, and each row carries its next-action and SLA summary.
-6. Assign one inquiry or atomically assign up to 100 inquiries. Manual assignment lists only active staff who can access the inquiry's offering and rechecks that scope on save; default and round-robin workflow policies remain the automatic assignment path.
+6. Assign one inquiry or atomically assign up to 100 inquiries. Manual assignment lists only active staff who can access the inquiry's offering and rechecks that scope on save; default and round-robin workflow policies remain available for historical Offerings.
 7. Edit identity, contact, source, source detail, or language before application start. The concurrency stamp rejects stale edits, and the activity timeline preserves the change.
 8. Compose a preferred-language family communication from the Inquiry list or Pipeline. Staff with Communication Add permission can create a draft; staff with Communication Send permission can request immediate delivery. Existing Communication approval, provider, consent, tracking, retry, and usage rules stay authoritative.
 9. Record structured contact channel, direction, and outcome; schedule, complete, or cancel follow-ups; then record the checklist-backed qualification outcome and standard closure reason where required.
@@ -75,21 +83,28 @@ when every row is valid for the requested inactive or active state.
 
 Basic workflows retain the existing inquiry commands and do not create managed records.
 
+When linking a sibling to an existing family, Inquiry and direct Registration both require an active family
+visible through the staff member's admission scope and a matching primary-guardian mobile number.
+An arbitrary family ID or a name/email-only duplicate suggestion does not authorize linking;
+staff must verify or update a changed guardian number through a separate family-maintenance flow.
+
 ## Inquiry and application runtime
 
-Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values. Duplicate precheck and create-time duplicate enforcement both use the selected admission cycle.
+Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values. Create-time duplicate enforcement stays in the selected admission cycle. The duplicate precheck additionally suggests scoped prior-cycle families with the same guardian mobile for sibling linking; a name/email-only signal does not cross cycles.
 Application start checks the same availability service, validates any linked inquiry, and freezes the offering's published workflow and application form references.
 Later changes to offering defaults affect only future runtime records.
 
 ## Configure and publish a workflow
 
-1. Create a draft identity.
-2. Add selectable stages from the server stage-type registry. Seat, Enrollment, and Custom remain registered for immutable historical workflows but are deprecated and not selectable for new stages. Appointment remains non-selectable until its runtime scheduling and completion flow is available. The Approval enum value is retained for compatibility and is presented to schools as **Admission decision**.
+1. Create a draft identity and, optionally, its stages and routes in the same request. A selected template's published Registration form is attached to its Form stage. The workflow may also store a published Inquiry form as a default for future Offerings; it does not replace the Offering's own Inquiry form reference. Clone, new-version, and rollback operations preserve this default.
+2. Add selectable stages from the server stage-type registry. Inquiry, Seat, Enrollment, and Custom remain registered for immutable historical workflows but are deprecated and not selectable for new stages. Appointment remains non-selectable until its runtime scheduling and completion flow is available. The Approval enum value is retained for compatibility and is presented to schools as **Admission decision**.
 3. Mark exactly one entry stage and at least one terminal stage.
 4. Add controlled conditional transitions and at most one default route per source stage. Each conditional route from a stage uses a unique non-negative priority; a route without a condition is always the single default route. Condition fields must use the server allowlist (`application`, `inquiry`, `assessment`, `documents`, `payment`, `eligibility`, `approval`, `offer`, `seat`, `enrollment`, or `appointment`).
    A required stage cannot enable ordinary manual skip. Stage types without a runtime-ready handler are publication errors, not advisory warnings.
 
 Admission forms use the same controlled rule foundation for section visibility, field visibility, and conditional requiredness. The form runtime also supports canonical Applicant, Guardian, and Address bindings; these values remain domain-owned and are written back through the binding registry.
+
+Every new form version carries an Inquiry or Registration purpose. Clone and new-version operations preserve it, and changing it is allowed only on a Draft. Earlier Correction and Consent values may remain on existing test records but cannot be used for new forms. Workflow publication requires a published Registration form on each Form stage and a published Inquiry form for any configured workflow default. Offering readiness rejects a purpose mismatch before activation.
 5. Validate reachability, dead ends, duplicate routes, cycles, terminal reachability, published form references, and every enabled managed-stage policy. Form, Review, Payment, Offer, and Seat policies are parsed with the same domain validators used by runtime, so malformed or out-of-range settings cannot pass publication validation.
 6. If school maker-checker governance is disabled, publish the validated version directly with a
    change reason. If it is enabled, submit it with a change reason and select a different active
@@ -106,7 +121,7 @@ Admission forms use the same controlled rule foundation for section visibility, 
 11. Archive a Published or Superseded version only when the usage rule permits it. Use governance
     history and notifications to audit actors, decisions, reasons, and effective times.
 
-Publication and Offering activation validate different scopes. Workflow publication owns graph, runtime-handler, managed-policy, and SLA/deadline-range validation. People assignments cannot be fully checked until the workflow is attached to an Offering with a concrete academic hierarchy. Activation therefore verifies that configured Inquiry counsellors are active and can access that hierarchy, and that a default Review assignee is active, has the configured role, and can access the same hierarchy. A reusable published workflow is not coupled to one campus, but an Offering with unusable staff assignments cannot become active.
+Publication and Offering activation validate different scopes. Workflow publication owns graph, runtime-handler, managed-policy, and SLA/deadline-range validation. People assignments cannot be fully checked until the workflow is attached to an Offering with a concrete academic hierarchy. Activation therefore verifies the new Offering's assignment profile has eligible active staff in that hierarchy, and that a default Review assignee is active, has the configured role, and can access the same hierarchy. Historical Offerings using pinned Inquiry-stage assignment rules retain their existing compatibility checks. A reusable published workflow is not coupled to one campus, but an Offering with unusable staff assignments cannot become active.
 
 Version-history reads include every version's complete stages and transitions plus Offering, distinct Campus, and Application usage counts. School-wide offerings with no Campus are reported as school-wide scope rather than being invented as a Campus. This lets authorized clients compare historical configuration and copy a selected immutable version into the next Draft without changing published versions or applications already pinned to them.
 
@@ -146,7 +161,7 @@ Changes after an assessment stage has completed are rejected; its attempts remai
 
 1. Configure a managed Document Verification stage in a new workflow version, including applicability, collection mode, formats, limits, catalog mapping, independent review, and optional waivers.
 2. Publish validated settings and use the new version for future applications. Existing applicants keep their pinned requirements.
-3. At the active document stage, collect uploads or record an original-document observation. Each action creates a new evidence revision with its collector identities.
+3. Collect uploads at the active document stage, or during its explicitly linked earlier Form stage. Original-document observations remain available only in the active document stage. Each action creates a new evidence revision with its collector identities.
 4. A permitted reviewer accepts complete evidence or requests replacement with a reason. Rejection is available before an original check; acceptance still requires every configured collection component.
 5. Replace rejected evidence, record a fresh original check when required, and review the new revision. Earlier revisions and decisions remain available as history.
 6. Resolve all mandatory and matched conditional requirements, or record a separately authorized policy-supported waiver with a reason. Missing condition inputs block continuation.
@@ -154,6 +169,13 @@ Changes after an assessment stage has completed are rejected; its attempts remai
 8. Finalize admission through the existing accepted-offer and completed-workflow process. Link canonical evidence to the Student in the finalization unit of work and continue operational onboarding.
 
 Mapped accepted uploads may satisfy corresponding onboarding document uploads. Where an admission waiver, physical-only check, or custom document leaves a mandatory onboarding upload outstanding, authorized staff use the scoped active-onboarding document upload flow. This preserves the separate onboarding readiness rule while providing a route to complete it.
+
+Class applicability uses the offering's authoritative `StandardId`, combined with any existing conditional rule.
+Missing class context fails closed; an applicant's typed class answer cannot change applicability.
+`standardIds: null` or omission means all classes; selected IDs must be nonempty, unique, and belong to the tenant at publication.
+Early collection requires a configured `collectionFormStageCode`, an active matching Form stage, a pending document stage, a Draft or Submitted application, and a forward route in the same frozen workflow.
+Only uploads are permitted early; original checks, review, waiver, and document-stage completion are rejected until that stage is active.
+Early and later uploads use the same application/stage/requirement evidence history, and replacement still requires fresh acceptance.
 
 ## Check eligibility
 
@@ -208,11 +230,11 @@ Transition rules may use only `payment.status`, `payment.settledAmount`, and `pa
 2. Choose unconditional or conditional content, terms and confirmations, validity and override limits, decline reasons, extension/reissue limits, allowed completion outcomes, and acceptance continuation.
 3. Add explicit `offer.status` transitions for every enabled declined, expired, or withdrawn outcome. Acceptance may use the normal default path.
 4. Validate and publish the workflow. Existing applications and basic Offer stages keep their pinned behavior.
-5. At the active stage, issue the offer. Staff may extend or withdraw it only when the server capability permits the action.
+5. At the active stage, issue the offer and optionally select an eligible Admission counsellor; an inquiry-linked application starts with its inquiry counsellor. Staff may extend or withdraw only when the server capability permits the action. Reissue may change the counsellor.
 6. Record acceptance with the required confirmations, or record a decline reason. Expired, declined, and withdrawn offers may be reissued within the configured limit.
 7. Continue only after the server reports an allowed completed outcome and safe route.
 
-The application card shows the current version, type, expiry, conditions, blockers, available actions, and permanent event history. This workflow records staff-mediated responses; communication delivery and applicant self-service are separate integrations.
+The application card shows the current version, type, expiry, conditions, assigned counsellor, blockers, available actions, and permanent event history. Direct Registration may select a counsellor at entry; authorized staff may later reassign an open application with an auditable note. The application queue supports a server-side assigned-counsellor filter. This workflow records staff-mediated responses; communication delivery and applicant self-service are separate integrations.
 
 ## Run a legacy managed Seat stage
 
@@ -220,4 +242,4 @@ Seat is not selectable in new workflow drafts. Published workflow versions and a
 
 For those historical journeys, capacity, expiry, and waitlist facts remain server-computed. Confirm, renew, release, promote, or adjust capacity only when the returned server capability permits it; every action records immutable history. Staff should refresh and retry after a concurrency conflict instead of overwriting a newer allocation decision.
 
-New offering-level capacity and waitlist configuration is a separate Admission Offering contract. Do not expose placeholder fields in Workflow Builder or claim the migration is complete until that persisted contract, validation, permissions, and finalization gate are implemented end to end.
+Room-derived class capacity is configured by assigning Institute Setup rooms to a class from Admission Offering details. Its shared remaining-seat count is a warning only and does not reserve seats or implement a waitlist. Any future offering-level reservation and waitlist contract remains separate from this class-capacity display and from the historical managed Seat stage.

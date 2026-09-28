@@ -48,9 +48,19 @@ public class AdmissionOfferingCommandService(
 		AdmissionOfferingConfigurationValidator.EnsureCanSave(validation, offering.IsActive);
 		var hasApplications = await applicationRepository.AnyAsync(application => application.AdmissionOfferingId == offering.Id);
 		offering.UpdateIdentity(input.CampusId, input.BoardId, input.MediumId, input.StageId, input.StandardId, hasApplications);
+		offering.UpdateRouting(input.Track, input.EntryMode, hasApplications);
 		offering.UpdateOperationalDetails(input.Code, input.UseCycleDates, input.OpenDate, input.CloseDate, input.Name);
 		offering.ConfigureReferences(input.WorkflowDefinitionId, input.InquiryFormDefinitionId, input.ApplicationFormDefinitionId);
-		await offeringRepository.UpdateAsync(offering, autoSave: true);
+		offering.ConfigureIntake(input.InquiryIntakeProfileId, input.CounsellorAssignmentProfileId);
+		try
+		{
+			await offeringRepository.UpdateAsync(offering, autoSave: true);
+		}
+		catch (Exception exception) when (IsUniqueConstraintViolation(exception))
+		{
+			throw new BusinessException(AdmissionErrorCodes.OfferingDuplicate,
+				"An Admission Offering already exists for the selected Cycle, class, and admission track.");
+		}
 		return await readService.GetAsync(offering.Id);
 	}
 
@@ -93,6 +103,8 @@ public class AdmissionOfferingCommandService(
 		var cloneInput = new CreateAdmissionOfferingDto
 		{
 			Name = input.Name ?? source.Name,
+			Track = input.Track ?? source.Track,
+			EntryMode = input.EntryMode ?? source.EntryMode,
 			CampusId = input.CampusId,
 			BoardId = input.BoardId,
 			MediumId = input.MediumId,
@@ -105,6 +117,8 @@ public class AdmissionOfferingCommandService(
 			WorkflowDefinitionId = source.WorkflowDefinitionId,
 			InquiryFormDefinitionId = source.InquiryFormDefinitionId,
 			ApplicationFormDefinitionId = source.ApplicationFormDefinitionId,
+			InquiryIntakeProfileId = source.InquiryIntakeProfileId,
+			CounsellorAssignmentProfileId = source.CounsellorAssignmentProfileId,
 			IsActive = input.IsActive ?? source.IsActive
 		};
 		return await CreateAsync(input.AdmissionCycleId, cloneInput);
@@ -171,9 +185,11 @@ public class AdmissionOfferingCommandService(
 		var offering = new AdmissionOffering(
 			GuidGenerator.Create(), CurrentTenant.Id, admissionCycleId, input.CampusId,
 			input.BoardId, input.MediumId, input.StageId, input.StandardId, input.Code,
-			input.UseCycleDates, input.OpenDate, input.CloseDate, input.Name);
+			input.UseCycleDates, input.OpenDate, input.CloseDate, input.Name, input.Track, input.EntryMode);
 		offering.ConfigureReferences(
 			input.WorkflowDefinitionId, input.InquiryFormDefinitionId, input.ApplicationFormDefinitionId);
+		offering.ConfigureIntake(input.InquiryIntakeProfileId, input.CounsellorAssignmentProfileId);
+		offering.RequireIntakeConfiguration();
 		if (input.IsActive)
 			offering.Activate();
 		else
@@ -197,6 +213,8 @@ public class AdmissionOfferingCommandService(
 	private static CreateAdmissionOfferingDto ToWriteDto(AdmissionOffering offering) => new()
 	{
 		Name = offering.Name,
+		Track = offering.Track,
+		EntryMode = offering.EntryMode,
 		CampusId = offering.CampusId,
 		BoardId = offering.BoardId,
 		MediumId = offering.MediumId,
@@ -209,6 +227,8 @@ public class AdmissionOfferingCommandService(
 		WorkflowDefinitionId = offering.WorkflowDefinitionId,
 		InquiryFormDefinitionId = offering.InquiryFormDefinitionId,
 		ApplicationFormDefinitionId = offering.ApplicationFormDefinitionId,
+		InquiryIntakeProfileId = offering.InquiryIntakeProfileId,
+		CounsellorAssignmentProfileId = offering.CounsellorAssignmentProfileId,
 		IsActive = offering.IsActive
 	};
 
@@ -229,6 +249,8 @@ public class AdmissionOfferingCommandService(
 		BulkAdmissionOfferingItemDto item) => new()
 	{
 		Name = item.Name,
+		Track = input.Track,
+		EntryMode = input.EntryMode,
 		CampusId = input.CampusId,
 		BoardId = input.BoardId,
 		MediumId = input.MediumId,
@@ -241,6 +263,8 @@ public class AdmissionOfferingCommandService(
 		WorkflowDefinitionId = input.WorkflowDefinitionId,
 		InquiryFormDefinitionId = input.InquiryFormDefinitionId,
 		ApplicationFormDefinitionId = input.ApplicationFormDefinitionId,
+		InquiryIntakeProfileId = input.InquiryIntakeProfileId,
+		CounsellorAssignmentProfileId = input.CounsellorAssignmentProfileId,
 		IsActive = input.IsActive
 	};
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
@@ -19,6 +20,7 @@ public class AdmissionOfferingConfigurationValidator(
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
+	IRepository<AdmissionIntakeProfile, Guid> intakeProfileRepository,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
 	IEducationBoardRepository boardRepository,
 	IEducationMediumRepository mediumRepository,
@@ -27,6 +29,7 @@ public class AdmissionOfferingConfigurationValidator(
 	AcademicOrganizationScopeAccessService scopeAccessService,
 	AdmissionEligibilityOfferingValidator eligibilityValidator,
 	AdmissionInquiryOfferingValidator inquiryValidator,
+	AdmissionInquiryPeopleService people,
 	AdmissionReviewOfferingValidator reviewValidator)
 	: ApplicationService, ITransientDependency
 {
@@ -36,6 +39,8 @@ public class AdmissionOfferingConfigurationValidator(
 		AdmissionOfferingValidationCodes.WorkflowMissing,
 		AdmissionOfferingValidationCodes.InquiryFormMissing,
 		AdmissionOfferingValidationCodes.ApplicationFormMissing
+		,AdmissionOfferingValidationCodes.InquiryIntakeProfileMissing
+		,AdmissionOfferingValidationCodes.CounsellorAssignmentProfileMissing
 	];
 
 	public async Task<AdmissionOfferingValidationResult> ValidateAsync(
@@ -59,7 +64,11 @@ public class AdmissionOfferingConfigurationValidator(
 
 		await ValidateHierarchyAsync(cycle, input, errors);
 		ValidateDates(cycle, input, errors);
+		if (input.Track == AdmissionTrack.Rte && input.EntryMode != AdmissionEntryMode.DirectRegistration)
+			errors.Add(Error(AdmissionOfferingValidationCodes.RteRequiresDirectRegistration,
+				"RTE offerings must start with Registration, without an Inquiry."));
 		await ValidatePublishedConfigurationAsync(input, errors);
+		await ValidateIntakeProfilesAsync(cycle, input, excludingOfferingId, errors);
 		errors.AddRange(await inquiryValidator.ValidateAsync(cycle, input));
 		errors.AddRange(await reviewValidator.ValidateAsync(cycle, input));
 		await ValidateUniquenessAsync(admissionCycleId, input, excludingOfferingId, errors);
@@ -70,6 +79,8 @@ public class AdmissionOfferingConfigurationValidator(
 		ValidateAsync(offering.AdmissionCycleId, new CreateAdmissionOfferingDto
 		{
 			Name = offering.Name,
+			Track = offering.Track,
+			EntryMode = offering.EntryMode,
 			CampusId = offering.CampusId,
 			BoardId = offering.BoardId,
 			MediumId = offering.MediumId,
@@ -82,6 +93,8 @@ public class AdmissionOfferingConfigurationValidator(
 			WorkflowDefinitionId = offering.WorkflowDefinitionId,
 			InquiryFormDefinitionId = offering.InquiryFormDefinitionId,
 			ApplicationFormDefinitionId = offering.ApplicationFormDefinitionId,
+			InquiryIntakeProfileId = offering.InquiryIntakeProfileId,
+			CounsellorAssignmentProfileId = offering.CounsellorAssignmentProfileId,
 			IsActive = offering.IsActive
 		}, offering.Id);
 
@@ -191,14 +204,104 @@ public class AdmissionOfferingConfigurationValidator(
 		await ValidateFormAsync(input.InquiryFormDefinitionId,
 			AdmissionOfferingValidationCodes.InquiryFormMissing,
 			AdmissionOfferingValidationCodes.InquiryFormNotPublished,
-			"Inquiry Form", errors);
+			AdmissionOfferingValidationCodes.InquiryFormPurposeMismatch,
+			AdmissionFormPurpose.Inquiry, "Inquiry Form", errors,
+			required: input.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both);
 		await ValidateFormAsync(input.ApplicationFormDefinitionId,
 			AdmissionOfferingValidationCodes.ApplicationFormMissing,
 			AdmissionOfferingValidationCodes.ApplicationFormNotPublished,
-			"Application Form", errors);
+			AdmissionOfferingValidationCodes.ApplicationFormPurposeMismatch,
+			AdmissionFormPurpose.Registration, "Application Form", errors);
 		await ValidateWorkflowFormCompatibilityAsync(input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, errors);
-		foreach (var error in await eligibilityValidator.ValidateAsync(input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, input.InquiryFormDefinitionId))
+		await ValidateEntryModeWorkflowCompatibilityAsync(input.WorkflowDefinitionId, input.Track, input.EntryMode, errors);
+		foreach (var error in await eligibilityValidator.ValidateAsync(
+			input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, input.InquiryFormDefinitionId, input.EntryMode))
 			errors.Add(error);
+	}
+
+	private async Task ValidateIntakeProfilesAsync(AdmissionCycle cycle, AdmissionOfferingWriteDto input,
+		Guid? existingOfferingId,
+		ICollection<AdmissionOfferingValidationError> errors)
+	{
+		// Existing offerings retain their published workflow behavior until an admin opts in.
+		var usingProfiles = input.InquiryIntakeProfileId.HasValue || input.CounsellorAssignmentProfileId.HasValue;
+		if (!usingProfiles && existingOfferingId.HasValue &&
+			(await offeringRepository.FindAsync(existingOfferingId.Value))?.IntakeConfigurationRequired != true) return;
+		if (input.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both)
+			await ValidateIntakeProfileAsync(input.InquiryIntakeProfileId, AdmissionIntakeProfileKind.Inquiry,
+				AdmissionOfferingValidationCodes.InquiryIntakeProfileMissing,
+				AdmissionOfferingValidationCodes.InquiryIntakeProfileInvalid, errors);
+		else if (input.InquiryIntakeProfileId.HasValue)
+			errors.Add(Error(AdmissionOfferingValidationCodes.InquiryIntakeProfileInvalid,
+				"A direct-only offering cannot use an Inquiry profile."));
+		await ValidateIntakeProfileAsync(input.CounsellorAssignmentProfileId, AdmissionIntakeProfileKind.CounsellorAssignment,
+			AdmissionOfferingValidationCodes.CounsellorAssignmentProfileMissing,
+			AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid, errors);
+		if (input.CounsellorAssignmentProfileId.HasValue)
+		{
+			var profile = await intakeProfileRepository.FindAsync(input.CounsellorAssignmentProfileId.Value);
+			if (profile?.Kind == AdmissionIntakeProfileKind.CounsellorAssignment)
+			{
+				try
+				{
+					var rules = JsonSerializer.Deserialize<AdmissionCounsellorAssignmentRules>(profile.ConfigurationJson,
+						new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ??
+						throw new ArgumentException("Assignment settings are missing.");
+					rules.Validate();
+					var eligible = false;
+					foreach (var userId in rules.CounsellorUserIds)
+						if (await people.CanAccessHierarchyAsync(userId, cycle, input)) { eligible = true; break; }
+					if (!eligible)
+						errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+							"Select an active counsellor who has access to this class in the assignment profile."));
+					if (rules.FallbackManagerUserId.HasValue &&
+						!await people.CanAccessHierarchyAsync(rules.FallbackManagerUserId.Value, cycle, input))
+						errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+							"The fallback manager in the assignment profile must be active and have access to this class."));
+				}
+				catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException)
+				{
+					errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+							"The assignment profile has invalid rules."));
+				}
+			}
+		}
+	}
+
+	private async Task ValidateIntakeProfileAsync(Guid? id, AdmissionIntakeProfileKind kind,
+		string missingCode, string invalidCode, ICollection<AdmissionOfferingValidationError> errors)
+	{
+		if (!id.HasValue)
+		{
+			errors.Add(Error(missingCode, $"Select a {kind} profile."));
+			return;
+		}
+		var profile = await intakeProfileRepository.FindAsync(id.Value);
+		if (profile == null || profile.Kind != kind)
+			errors.Add(Error(invalidCode, $"The selected {kind} profile is unavailable."));
+	}
+
+	private async Task ValidateEntryModeWorkflowCompatibilityAsync(
+		Guid? workflowId,
+		AdmissionTrack track,
+		AdmissionEntryMode entryMode,
+		ICollection<AdmissionOfferingValidationError> errors)
+	{
+		if (!workflowId.HasValue || (entryMode is not (AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both) && track != AdmissionTrack.Rte)) return;
+		var stages = await workflowStageRepository.GetListAsync(stage =>
+			stage.WorkflowDefinitionId == workflowId.Value);
+		if (entryMode is AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both)
+		{
+			if (stages.Any(stage => stage.StageType == AdmissionWorkflowStageType.Inquiry))
+				errors.Add(Error(AdmissionOfferingValidationCodes.DirectWorkflowContainsInquiry,
+					"A direct Registration Offering must use a Workflow without an Inquiry stage."));
+			if (stages.FirstOrDefault(stage => stage.IsEntryStage)?.StageType != AdmissionWorkflowStageType.Form)
+				errors.Add(Error(AdmissionOfferingValidationCodes.DirectWorkflowMustStartWithForm,
+					"A direct Registration Offering must start at the Registration Form stage."));
+		}
+		if (track == AdmissionTrack.Rte && stages.Any(stage => stage.StageType == AdmissionWorkflowStageType.Assessment))
+			errors.Add(Error(AdmissionOfferingValidationCodes.RteWorkflowContainsAssessment,
+				"RTE offerings cannot use a Workflow with an Entrance Assessment stage."));
 	}
 
 	private async Task ValidateWorkflowFormCompatibilityAsync(
@@ -219,12 +322,15 @@ public class AdmissionOfferingConfigurationValidator(
 		Guid? formId,
 		string missingCode,
 		string unpublishedCode,
+		string purposeMismatchCode,
+		AdmissionFormPurpose purpose,
 		string label,
-		ICollection<AdmissionOfferingValidationError> errors)
+		ICollection<AdmissionOfferingValidationError> errors,
+		bool required = true)
 	{
 		if (!formId.HasValue)
 		{
-			errors.Add(Error(missingCode, $"Published {label} is required."));
+			if (required) errors.Add(Error(missingCode, $"Published {label} is required."));
 			return;
 		}
 
@@ -232,6 +338,11 @@ public class AdmissionOfferingConfigurationValidator(
 		if (form == null || form.Status != AdmissionFormStatus.Published)
 		{
 			errors.Add(Error(unpublishedCode, $"The selected {label} must be a published version."));
+		}
+		else if (form.Purpose != purpose)
+		{
+			errors.Add(Error(purposeMismatchCode,
+				$"The selected {label} must have the {purpose} purpose."));
 		}
 	}
 
@@ -246,11 +357,12 @@ public class AdmissionOfferingConfigurationValidator(
 			offering.AdmissionCycleId == admissionCycleId && offering.CampusId == input.CampusId &&
 			offering.BoardId == input.BoardId && offering.MediumId == input.MediumId &&
 			offering.StageId == input.StageId && offering.StandardId == input.StandardId &&
+			offering.Track == input.Track &&
 			(!excludingOfferingId.HasValue || offering.Id != excludingOfferingId.Value)));
 		if (duplicate)
 		{
 			errors.Add(Error(AdmissionOfferingValidationCodes.Duplicate,
-				"An Admission Offering already exists for the selected Cycle and academic hierarchy."));
+				"An Admission Offering already exists for this Cycle, class, and admission track."));
 		}
 	}
 

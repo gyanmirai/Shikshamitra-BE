@@ -5,6 +5,7 @@ public static class AdmissionWorkflowErrorCodes
 	public const string PublishedImmutable = "Admissions.WorkflowPublishedImmutable";
 	public const string DraftRequired = "Admissions.WorkflowDraftRequired";
 	public const string CodeAlreadyExists = "Admissions.WorkflowCodeAlreadyExists";
+	public const string InvalidInquiryForm = "Admissions.WorkflowInvalidInquiryForm";
 	public const string NoStages = "Admissions.WorkflowNoStages";
 	public const string DuplicateStageCode = "Admissions.WorkflowDuplicateStageCode";
 	public const string InvalidInitialStage = "Admissions.WorkflowInvalidInitialStage";

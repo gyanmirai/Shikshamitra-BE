@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
@@ -12,6 +13,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionApplicationAppService(
 	AdmissionApplicationReadService readService,
 	AdmissionApplicationLifecycleService lifecycleService,
+	AdmissionDirectRegistrationService directRegistrationService,
+	AdmissionDirectFamilyMatchService directFamilyMatchService,
+	AdmissionApplicationCounsellorService counsellorService,
 	AdmissionApplicationWorkflowReadService workflowReadService,
 	AdmissionApplicationWorkflowService workflowService,
 	AdmissionApplicationFormService formService,
@@ -31,6 +35,27 @@ public class AdmissionApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	public Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId = null) =>
 		lifecycleService.StartAsync(applicantId, offeringId, inquiryId);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
+	public async Task<AdmissionApplicationDto> StartDirectRegistrationAsync(StartAdmissionDirectRegistrationDto input)
+	{
+		using var unitOfWork = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
+		var application = await directRegistrationService.StartAsync(input);
+		await unitOfWork.CompleteAsync();
+		return application;
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
+	public Task<List<AdmissionDirectFamilyMatchDto>> FindDirectRegistrationFamiliesAsync(
+		Guid offeringId, string guardianMobile) => directFamilyMatchService.FindAsync(offeringId, guardianMobile);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(Guid? offeringId = null, string? filter = null) =>
+		counsellorService.GetAssignableAsync(offeringId, filter);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit)]
+	public Task<AdmissionApplicationDto> AssignCounsellorAsync(Guid id, AssignAdmissionApplicationCounsellorDto input) =>
+		counsellorService.AssignAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<AdmissionApplicationWorkflowDto> GetWorkflowAsync(Guid id) =>

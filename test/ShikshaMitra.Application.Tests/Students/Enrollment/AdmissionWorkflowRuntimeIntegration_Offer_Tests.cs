@@ -35,10 +35,50 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var service = GetRequiredService<IAdmissionOfferAppService>();
 			var initial = await service.GetAsync(application.Id, stage.Id);
 			initial.Status.ShouldBe("ready");
+			var invalidCounsellor = await Should.ThrowAsync<BusinessException>(() => service.IssueAsync(
+				application.Id, stage.Id, new IssueAdmissionOfferDto
+				{
+					IdempotencyKey = "offer-invalid-counsellor", ConcurrencyStamp = initial.ConcurrencyStamp,
+					CounsellorId = Guid.NewGuid()
+				}));
+			invalidCounsellor.Code.ShouldBe(AdmissionOfferStageErrorCodes.InvalidState);
+			await _applicationAppService.AssignCounsellorAsync(application.Id,
+				new AssignAdmissionApplicationCounsellorDto
+				{
+					CounsellorId = TestUserId, ConcurrencyStamp = initial.ConcurrencyStamp
+				});
+			var applicant360 = await GetRequiredService<IAdmissionApplicantAppService>()
+				.GetAsync(application.ApplicantId);
+			applicant360.Applications.Single(item => item.Id == application.Id)
+				.AssignedCounsellorId.ShouldBe(TestUserId);
+			applicant360.Applications.Single(item => item.Id == application.Id)
+				.AssignedCounsellorName.ShouldNotBeNullOrWhiteSpace();
+			initial = await service.GetAsync(application.Id, stage.Id);
+			var implicitHandover = await Should.ThrowAsync<BusinessException>(() => service.IssueAsync(
+				application.Id, stage.Id, new IssueAdmissionOfferDto
+				{
+					IdempotencyKey = "offer-owner-change", ConcurrencyStamp = initial.ConcurrencyStamp,
+					CounsellorId = Guid.NewGuid()
+				}));
+			implicitHandover.Code.ShouldBe(AdmissionOfferStageErrorCodes.InvalidState);
 			var issue = new IssueAdmissionOfferDto { Reason = "Approved admission.", IdempotencyKey = "offer-issue-1",
-				ConcurrencyStamp = initial.ConcurrencyStamp };
+				ConcurrencyStamp = initial.ConcurrencyStamp, CounsellorId = TestUserId };
 			var issued = await service.IssueAsync(application.Id, stage.Id, issue);
 			issued.Status.ShouldBe("issued");
+			issued.AssignedCounsellorId.ShouldBe(TestUserId);
+			(await _applicationAppService.GetAsync(application.Id)).AssignedCounsellorId.ShouldBe(TestUserId);
+			var assignedApplications = await _applicationAppService.GetListAsync(new AdmissionApplicationListInput
+			{
+				AssignedCounsellorId = TestUserId
+			});
+			assignedApplications.Items.ShouldContain(item => item.Id == application.Id);
+			(await _applicationAppService.GetAssignableCounsellorsAsync())
+				.ShouldContain(item => item.Id == TestUserId);
+			(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.AssignCounsellorAsync(
+				application.Id, new AssignAdmissionApplicationCounsellorDto
+				{
+					CounsellorId = TestUserId, ConcurrencyStamp = initial.ConcurrencyStamp
+				}))).Code.ShouldBe(AdmissionOfferStageErrorCodes.ConcurrencyConflict);
 			issued.VersionNumber.ShouldBe(1);
 			(await service.IssueAsync(application.Id, stage.Id, issue)).Events.Count.ShouldBe(1);
 			var reusedKey = await Should.ThrowAsync<BusinessException>(() => service.IssueAsync(application.Id, stage.Id,
@@ -87,6 +127,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Accepted = false, Reason = "Family needs a corrected start date.", IdempotencyKey = "second-decline",
 				ConcurrencyStamp = secondIssued.ConcurrencyStamp
 			});
+			(await Should.ThrowAsync<BusinessException>(() => service.ReissueAsync(second.Id, secondStage.Id, new()
+			{
+				CounsellorId = TestUserId, IdempotencyKey = "second-owner-change",
+				ConcurrencyStamp = declined.ConcurrencyStamp
+			}))).Code.ShouldBe(AdmissionOfferStageErrorCodes.InvalidState);
 			var reissued = await service.ReissueAsync(second.Id, secondStage.Id, new()
 			{
 				Reason = "Corrected offer.", IdempotencyKey = "second-reissue", ConcurrencyStamp = declined.ConcurrencyStamp
@@ -98,13 +143,21 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 	private async Task<AdmissionApplicationDto> StartApprovedOfferApplicationAsync(Guid offeringId, string name)
 	{
-		var application = await _applicationAppService.StartAsync((await CreateApplicantAsync(name)).Id, offeringId);
+		var application = await StartFixtureApplicationAsync((await CreateApplicantAsync(name)).Id, offeringId);
 		var submitted = await _applicationAppService.SubmitAsync(application.Id);
 		submitted.ValidationErrors.ShouldBeEmpty();
-		return await _applicationAppService.ApproveAsync(application.Id, new AdmissionApplicationDecisionDto
+		var approved = await _applicationAppService.ApproveAsync(application.Id, new AdmissionApplicationDecisionDto
 		{
 			Reason = "Admission criteria satisfied.", ConcurrencyStamp = submitted.Application.ConcurrencyStamp
 		});
+		var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
+		await _applicationAppService.AdvanceWorkflowAsync(application.Id, new AdvanceAdmissionWorkflowDto
+		{
+			ExpectedCurrentStageInstanceId = runtime.CurrentStageInstanceId!.Value,
+			ConcurrencyStamp = approved.ConcurrencyStamp,
+			IdempotencyKey = $"enter-offer-{application.Id:N}"
+		});
+		return await _applicationAppService.GetAsync(application.Id);
 	}
 
 	private async Task<AdmissionWorkflowDto> CreateManagedOfferWorkflowAsync()

@@ -94,6 +94,14 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ApplicantId = Check.NotDefaultOrNull<Guid>(applicantId, nameof(applicantId));
 	}
 
+	public void ConfirmOffering(Guid offeringId)
+	{
+		if (Status is AdmissionInquiryStatus.ApplicationStarted or AdmissionInquiryStatus.Converted)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+		AdmissionOfferingId = Check.NotDefaultOrNull<Guid>(offeringId, nameof(offeringId));
+		LastActivityAt = DateTime.UtcNow;
+	}
+
 	public void AssignCounsellor(Guid counsellorId)
 	{
 		AssignedCounsellorId = Check.NotDefaultOrNull<Guid>(counsellorId, nameof(counsellorId));

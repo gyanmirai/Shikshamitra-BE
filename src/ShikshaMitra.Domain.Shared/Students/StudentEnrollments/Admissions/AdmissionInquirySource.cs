@@ -11,5 +11,8 @@ public enum AdmissionInquirySource
 	WhatsApp = 6,
 	ExistingParent = 7,
 	Manual = 8,
-	Other = 9
+	Other = 9,
+	QrCode = 10,
+	SchoolFair = 11,
+	SocialMedia = 12
 }

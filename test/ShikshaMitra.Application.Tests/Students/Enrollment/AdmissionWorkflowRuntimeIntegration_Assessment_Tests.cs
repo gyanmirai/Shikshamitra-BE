@@ -87,6 +87,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var reviewInput = new AdmissionAssessmentReviewInput { ConcurrencyStamp = state.Attempts.Single().ConcurrencyStamp, Approved = true };
 		await Should.ThrowAsync<BusinessException>(() => service.ReviewAsync(state.Attempts.Single().Id, reviewInput));
 		var reviewerId = Guid.NewGuid();
+		await EnsureTestIdentityUserAsync(reviewerId, $"assessment-reviewer-{reviewerId:N}");
 		await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId,
 			userId: reviewerId, description: "Assessment reviewer"), autoSave: true);
 		using var reviewer = _principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity(
@@ -108,7 +109,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
 		var (application, stageId, offering) = await CreateManagedAssessmentApplicationAsync();
 		var other = await CreateApplicantAsync("Other applicant");
-		var otherApplication = await _applicationAppService.StartAsync(other.Id, offering.Id);
+		var otherApplication = await StartFixtureApplicationAsync(other.Id, offering.Id);
 		var service = GetRequiredService<IAdmissionAssessmentAppService>();
 		await Should.ThrowAsync<EntityNotFoundException>(() => service.GetAsync(otherApplication.Id, stageId));
 		using var otherTenant = _currentTenant.Change(Guid.NewGuid());
@@ -191,7 +192,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var published = await _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
 		var offering = await CreateAvailableOfferingAsync(published.Id);
 		var applicant = await CreateApplicantAsync("Assessment applicant");
-		var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id);
+		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
 		var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
 		runtime = await AdvanceAssessmentAsync(application.Id, runtime.CurrentStageInstanceId!.Value);
 		return (await _applicationAppService.GetAsync(application.Id), runtime.CurrentStageInstanceId!.Value, offering);

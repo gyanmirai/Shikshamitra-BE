@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Records;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
@@ -15,6 +16,29 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public Task Enrolled_profile_reads_and_updates_details_without_changing_placement() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
+		var student = await CreateExistingStudentAsync(offering, "Profile", "Reader");
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var current = await _studentRepository.GetAsync(student.Id);
+			current.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
+			await _studentRepository.UpdateAsync(current, autoSave: true);
+		});
+		var general = GetRequiredService<IStudentGeneralInfoAppService>();
+		(await general.GetRegistrationGeneralDetailsByIdAsync(student.Id)).FirstName.ShouldBe("Profile");
+		var update = new UpdateGeneralInfoDto { FormNumber = "X", FirstName = "Changed", LastName = "Reader",
+			PrimaryContactNo = "9876543210", FamilyCast = "", City = "Surat",
+			State = new State("Gujarat", "GJ"), Country = new Country("India", "IN") };
+		(await general.UpdateGeneralInfoAsync(student.Id, update)).FirstName.ShouldBe("Changed");
+		(await general.GetRegistrationGeneralDetailsByIdAsync(student.Id)).FirstName.ShouldBe("Changed");
+		update.StandardId = Guid.NewGuid();
+		(await Should.ThrowAsync<BusinessException>(() => general.UpdateGeneralInfoAsync(student.Id, update)))
+			.Code.ShouldBe(StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo);
+	});
+
 	[Fact]
 	public Task Student_record_profile_reads_current_canonical_identity_and_placement_without_mutation() => RunCertificationScenarioAsync(async () =>
 	{
@@ -55,6 +79,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var allowed = await CreateExistingStudentAsync(offering, "Allowed", "Student");
 		var denied = await CreateExistingStudentAsync(offering, "Other", "Student");
 		var staffId = Guid.NewGuid();
+		await EnsureTestIdentityUserAsync(staffId, $"profile-staff-{staffId:N}");
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var other = await _standardManager.CreateAsync(offering.StageId, $"Profile {Guid.NewGuid():N}"[..24], 11, null);

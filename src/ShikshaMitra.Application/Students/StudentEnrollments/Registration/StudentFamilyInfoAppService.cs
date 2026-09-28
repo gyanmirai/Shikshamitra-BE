@@ -22,7 +22,8 @@ public class StudentFamilyInfoAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(GetFamilyInfoAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyInfo);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyInfo,
+            includeStudentRecords: true);
 
         var familyDetail = await familyDetailRepository.FindAsync(studentId);
 
@@ -69,7 +70,8 @@ public class StudentFamilyInfoAppService(
         var student = await GetScopedRegistrationStudentAsync(
             studentId,
             nameof(UpdateFamilyInfoAsync),
-            StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyUpdate);
+            StudentRegistrationErrorCodes.InvalidStudentStatusForFamilyUpdate,
+            forProfileWrite: true);
 
         await validationService.ValidateSiblingStudentsExistAsync(input.SiblingStudentIds);
         if (input.SiblingStudentIds != null)

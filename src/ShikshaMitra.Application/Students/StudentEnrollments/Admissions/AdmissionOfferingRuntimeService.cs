@@ -1,6 +1,6 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Students;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -11,20 +11,18 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public sealed record AdmissionOfferingRuntimeContext(AdmissionOffering Offering, AdmissionCycle Cycle);
 
 public class AdmissionOfferingRuntimeService(
-	IRepository<AdmissionOffering, Guid> offeringRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	AdmissionOfferingConfigurationValidator configurationValidator,
-	StudentScopeAccessService studentScopeAccessService)
+	AdmissionApplicationScopeAccessService applicationScope)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionOfferingRuntimeContext> GetAvailableAsync(Guid offeringId)
 	{
-		var offering = await offeringRepository.FindAsync(offeringId) ??
+		var offering = await AsyncExecuter.FirstOrDefaultAsync(
+			(await applicationScope.GetScopedOfferingsAsync()).Where(item => item.Id == offeringId)) ??
 			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable);
 		var cycle = await cycleRepository.FindAsync(offering.AdmissionCycleId) ??
 			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable);
-		await studentScopeAccessService.EnsureCanAccessStandardAsync(
-			offering.StandardId, nameof(GetAvailableAsync));
 		var validation = await configurationValidator.ValidateStoredAsync(offering);
 		var availability = AdmissionOfferingAvailabilityEvaluator.Evaluate(
 			offering, cycle, validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime()));

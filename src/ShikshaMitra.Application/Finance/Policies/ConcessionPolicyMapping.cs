@@ -35,6 +35,7 @@ internal static class ConcessionPolicyMapping
 		"currentinstallment" => ConcessionApplyOn.CurrentInstallment,
 		"futureinstallments" => ConcessionApplyOn.FutureInstallments,
 		"alloutstanding" => ConcessionApplyOn.AllOutstanding,
+		"allfees" => ConcessionApplyOn.AllFees,
 		_ => throw new BusinessException(ConcessionPolicyErrorCodes.InvalidCalculationRule)
 	};
 

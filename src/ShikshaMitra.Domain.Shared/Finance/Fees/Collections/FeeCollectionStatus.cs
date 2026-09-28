@@ -25,4 +25,7 @@ public enum FeeCollectionStatus
 
     /// <summary>The transaction needs bank/instrument clearance/verification.</summary>
     InReconciliation = 5,
+
+    /// <summary>A charge or late-fee balance was cleared by a non-cash waiver.</summary>
+    Waived = 6,
 }

@@ -2,6 +2,7 @@ using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
@@ -30,14 +31,19 @@ public class CreatePaymentTermInstallmentDto
 	public int Sequence { get; set; }
 	[Required, StringLength(100)]
 	public string Name { get; set; } = string.Empty;
+	[JsonConverter(typeof(PaymentTermCalendarDateJsonConverter))]
 	public DateTime CoverageStartDate { get; set; }
+	[JsonConverter(typeof(PaymentTermCalendarDateJsonConverter))]
 	public DateTime CoverageEndDate { get; set; }
+	[JsonConverter(typeof(PaymentTermNullableCalendarDateJsonConverter))]
 	public DateTime? DemandDate { get; set; }
+	[JsonConverter(typeof(PaymentTermCalendarDateJsonConverter))]
 	public DateTime DueDate { get; set; }
 	[Range(typeof(decimal), "0.01", "100")]
 	public decimal AllocationPercentage { get; set; }
 	public bool DemandEnabled { get; set; }
 	public bool ReminderEnabled { get; set; }
+	[JsonConverter(typeof(PaymentTermNullableCalendarDateJsonConverter))]
 	public DateTime? ReminderDate { get; set; }
 	public bool? AllowPartialOverride { get; set; }
 	public int? GracePeriodDaysOverride { get; set; }

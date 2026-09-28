@@ -18,6 +18,7 @@ public class FeeRefundRequestDto
 	public Guid? StudentFeeStructureId { get; set; }
 	public Guid? RefundPolicyId { get; set; }
 	public Guid? RefundPolicyVersionId { get; set; }
+	public Guid? ConcessionRequestId { get; set; }
 	public string? RefundPolicyName { get; set; }
 	public Guid? OriginalReceiptId { get; set; }
 	public string? OriginalReceiptNumber { get; set; }

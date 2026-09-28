@@ -21,7 +21,8 @@ public class AccountSettingVersionHistoryReader(
 		Guid? creatorId,
 		IReadOnlySet<string> visibleFields,
 		int skipCount,
-		int maxResultCount)
+		int maxResultCount,
+		int? currentVersion = null)
 	{
 		var changes = await auditLogRepository.GetEntityChangeListAsync(
 			sorting: "ChangeTime asc",
@@ -41,14 +42,14 @@ public class AccountSettingVersionHistoryReader(
 		var users = actorIds.Count == 0 ? [] : await userRepository.GetListAsync(x => actorIds.Contains(x.Id));
 		var actorNames = users.ToDictionary(x => x.Id, x => string.IsNullOrWhiteSpace(x.Name) ? x.UserName : x.Name);
 
-		var history = changes.Select((change, index) =>
+		var history = changes.Select(change =>
 		{
 			auditLogsById.TryGetValue(change.AuditLogId, out var auditLog);
 			var actorId = auditLog?.UserId;
 			return new AccountSettingVersionHistoryItemDto
 			{
 				Id = change.Id,
-				VersionNumber = index + 1,
+				VersionNumber = 0,
 				ChangeAction = change.ChangeType.ToString().ToLowerInvariant(),
 				ChangeTime = change.ChangeTime,
 				ActorId = actorId,
@@ -75,8 +76,18 @@ public class AccountSettingVersionHistoryReader(
 				ActorId = creatorId,
 				ActorName = creatorId.HasValue ? actorNames.GetValueOrDefault(creatorId.Value) : null
 			});
-			for (var index = 1; index < history.Count; index++) history[index].VersionNumber = index + 1;
 		}
+
+		// Older account heads can predate entity-history auditing. Preserve the known
+		// version sequence without inventing changes, timestamps, or actors.
+		var missing = Math.Max(0, (currentVersion ?? history.Count) - history.Count);
+		for (var index = 0; index < missing; index++)
+			history.Insert(1, new AccountSettingVersionHistoryItemDto
+			{
+				Id = Guid.NewGuid(),
+				ChangeAction = "unavailable"
+			});
+		for (var index = 0; index < history.Count; index++) history[index].VersionNumber = index + 1;
 
 		var ordered = history.OrderByDescending(x => x.VersionNumber).ToList();
 		return new PagedResultDto<AccountSettingVersionHistoryItemDto>(

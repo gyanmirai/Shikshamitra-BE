@@ -11,6 +11,7 @@ using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -268,6 +269,30 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         edit.FeeHeads[0].IsOneTime = false; edit.RefundPolicyId = null; edit.RefundPolicyVersionId = null; edit.ProrationPolicyId = null; edit.ProrationPolicyVersionId = null;
         var detached = await _feeStructures.UpdateAsync(saved.Id, edit);
         detached.RefundPolicyVersionId.ShouldBeNull(); detached.ProrationPolicyVersionId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Academic_Workspace_Projection_Returns_Classes_In_Academic_Order()
+    {
+        using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+        var (year, standardId, metadata, _) = await SeedStandardAsync();
+        var stageId = (await _standardRepo.GetAsync(standardId)).EducationMediumStageId;
+        var names = new[]
+        {
+            "LKG", "Class 12", "Class 1", "Class 10", "Class 6", "Class 9", "Class 7",
+            "Class 4", "UKG", "Class 11", "Nursery", "Class 2", "Class 5", "Class 3", "Class 8"
+        };
+        foreach (var name in names)
+            await _standardRepo.InsertAsync(new Standard(Guid.NewGuid(), TestTenantId, name, 6, stageId, null), autoSave: true);
+
+        var result = await GetRequiredService<IFeeStructureMetadataAppService>().GetListAsync(year);
+        result.Items.Single(item => item.Id == metadata).Classes.Select(item => item.Name)
+            .Where(names.Contains)
+            .ShouldBe(new[]
+            {
+                "Nursery", "LKG", "UKG", "Class 1", "Class 2", "Class 3", "Class 4", "Class 5",
+                "Class 6", "Class 7", "Class 8", "Class 9", "Class 10", "Class 11", "Class 12"
+            });
     }
 
     [Fact]

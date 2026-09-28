@@ -22,7 +22,7 @@ public partial class FeeRefundAppService
 	private static FeeRefundRequestDto MapToDto(FeeRefundRequest r, Dictionary<Guid, Student> studentMap)
 	{
 		studentMap.TryGetValue(r.StudentId, out var student);
-		var isLegacy = !r.RefundPolicyVersionId.HasValue;
+		var isLegacy = !r.RefundPolicyVersionId.HasValue && !r.ConcessionRequestId.HasValue;
 		var legacyFinancialAmount = isLegacy && r.Status == FeeRefundStatus.Approved ? r.TotalAmount : 0m;
 		var fullName = student is null ? string.Empty
 			: string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
@@ -35,6 +35,7 @@ public partial class FeeRefundAppService
 			CalculatedAmount = isLegacy ? r.TotalAmount : r.CalculatedAmount,
 			StudentFeeStructureId = r.StudentFeeStructureId, RefundPolicyId = r.RefundPolicyId,
 			RefundPolicyVersionId = r.RefundPolicyVersionId, RefundPolicyName = GetPolicyName(r.PolicySnapshotJson),
+			ConcessionRequestId = r.ConcessionRequestId,
 			OriginalReceiptId = r.OriginalReceiptId,
 			OriginalReceiptNumber = r.OriginalReceiptNumber, Currency = string.IsNullOrWhiteSpace(r.Currency) ? "INR" : r.Currency,
 			ApprovedAmount = isLegacy ? legacyFinancialAmount : r.ApprovedAmount,

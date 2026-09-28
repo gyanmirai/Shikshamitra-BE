@@ -98,7 +98,7 @@ public class AccountHeadAppService(
 		var entity = await accountHeadRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		return await historyReader.ReadAsync<AccountHead>(id, entity.CreationTime, entity.CreatorId,
-			HistoryFields, skipCount, maxResultCount);
+			HistoryFields, skipCount, maxResultCount, entity.Version);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Settings_AccountHead.Edit)]

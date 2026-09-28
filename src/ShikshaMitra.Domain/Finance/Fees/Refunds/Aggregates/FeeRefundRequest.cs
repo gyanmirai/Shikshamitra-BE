@@ -16,6 +16,7 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? StudentFeeStructureId { get; private set; }
     public Guid? RefundPolicyId { get; private set; }
     public Guid? RefundPolicyVersionId { get; private set; }
+    public Guid? ConcessionRequestId { get; private set; }
     public Guid? OriginalReceiptId { get; private set; }
     public string? OriginalReceiptNumber { get; private set; }
     public string Currency { get; private set; } = "INR";
@@ -95,6 +96,19 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         CalculationHash = Check.NotNullOrWhiteSpace(calculationHash, nameof(calculationHash), 64);
     }
 
+    internal void PinConcession(Guid assignmentId, Guid concessionRequestId, Guid receiptId,
+        string receiptNumber, string calculationSnapshotJson, string calculationHash)
+    {
+        if (StudentFeeStructureId.HasValue || ConcessionRequestId.HasValue)
+            throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
+        StudentFeeStructureId = assignmentId;
+        ConcessionRequestId = concessionRequestId;
+        OriginalReceiptId = receiptId;
+        OriginalReceiptNumber = Check.NotNullOrWhiteSpace(receiptNumber, nameof(receiptNumber), 100);
+        CalculationSnapshotJson = Check.NotNullOrWhiteSpace(calculationSnapshotJson, nameof(calculationSnapshotJson));
+        CalculationHash = Check.NotNullOrWhiteSpace(calculationHash, nameof(calculationHash), 64);
+    }
+
     internal void UpdateEvidence(string calculationSnapshotJson, string calculationHash)
     {
         EnsureDraft();
@@ -110,7 +124,8 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public FeeRefundRequest Submit(Guid userId)
     {
         EnsureTransition(FeeRefundStatus.Submitted, FeeRefundStatus.Draft);
-        if (_lines.Count == 0 || TotalAmount <= 0 || CalculatedAmount <= 0 || !RefundPolicyVersionId.HasValue || !OriginalReceiptId.HasValue)
+        if (_lines.Count == 0 || TotalAmount <= 0 || CalculatedAmount <= 0 ||
+            (!RefundPolicyVersionId.HasValue && !ConcessionRequestId.HasValue) || !OriginalReceiptId.HasValue)
             throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
         Status = FeeRefundStatus.Submitted;
         SubmittedByUserId = userId;

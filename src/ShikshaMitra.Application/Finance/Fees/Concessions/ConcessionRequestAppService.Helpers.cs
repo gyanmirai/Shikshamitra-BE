@@ -73,6 +73,9 @@ public partial class ConcessionRequestAppService
 				x.Id,
 				x.FeeHeadId,
 				x.OutstandingAmount,
+				x.PaidAmount,
+				x.RefundedAmount,
+				x.NetAmount,
 				x.ConcurrencyStamp
 			}),
 			Mappings = mappings.OrderBy(x => x.FeeHeadId).Select(x => new
@@ -210,7 +213,8 @@ public partial class ConcessionRequestAppService
 
 	private static List<ConcessionEligibleDueFeeDto> MapEligibleDueFees(
 		IEnumerable<DueFee> dueFees,
-		IReadOnlyDictionary<Guid, string> feeHeadNames) => dueFees
+		IReadOnlyDictionary<Guid, string> feeHeadNames,
+		bool includePaid = false) => dueFees
 		.OrderBy(x => x.InstallmentSequence.HasValue ? 0 : 1)
 		.ThenBy(x => x.InstallmentSequence ?? int.MaxValue)
 		.ThenBy(x => x.DemandDate ?? x.CoverageStartDate ?? x.ScheduleDueDate ?? x.DueDate)
@@ -232,6 +236,8 @@ public partial class ConcessionRequestAppService
 			ConcessionAmount = x.ConcessionAmount,
 			AdjustmentCreditAmount = x.AdjustmentCreditAmount,
 			OutstandingAmount = x.OutstandingAmount,
+			EligibleConcessionAmount = includePaid
+				? Math.Max(0m, x.OriginalAmount - x.NetAmount) : x.OutstandingAmount,
 			Status = x.Status.ToString(),
 			ConcurrencyStamp = x.ConcurrencyStamp
 		}).ToList();
@@ -260,6 +266,7 @@ public partial class ConcessionRequestAppService
 			? []
 			: await dueFeeRepository.GetListAsync(x => dueFeeIds.Contains(x.Id));
 		var dueFeeMap = dueFees.ToDictionary(x => x.Id);
+		var refunds = await feeRefundRepository.GetListAsync(x => x.ConcessionRequestId == request.Id);
 		return new ConcessionApprovalResponseDto
 		{
 			ConcessionRequestId = request.Id,
@@ -270,6 +277,12 @@ public partial class ConcessionRequestAppService
 			ApproverId = request.GetApprovedBy() ?? Guid.Empty,
 			ApproverMessage = request.ApproverMessage,
 			TotalApprovedAmount = request.GetTotalApprovedConcession(),
+			RefundRequests = refunds.Select(x => new ConcessionRefundReferenceDto
+			{
+				RefundRequestId = x.Id, VoucherNumber = x.VoucherNumber,
+				OriginalReceiptId = x.OriginalReceiptId!.Value,
+				Amount = x.CalculatedAmount, Status = x.Status.ToString()
+			}).ToList(),
 			DueFeeAllocations = request.ConcessionDueFeeAllocations.Select(x =>
 			{
 				dueFeeMap.TryGetValue(x.DueFeeId, out var dueFee);
@@ -336,6 +349,11 @@ public partial class ConcessionRequestAppService
     {
 		var canViewDocuments = await AuthorizationService.IsGrantedAsync(
 			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.ViewDocument);
+		var canViewRefunds = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
+		var linkedRefunds = canViewRefunds
+			? await feeRefundRepository.GetListAsync(x => x.ConcessionRequestId == request.Id)
+			: [];
         var student = await studentRepository.GetAsync(request.StudentId);
         var type = await concessionTypeRepository.GetAsync(request.ConcessionTypeId);
         var feeHeadIds = request.ConcessionFeeHeadMappings.Select(m => m.FeeHeadId).ToList();
@@ -404,6 +422,12 @@ public partial class ConcessionRequestAppService
 			TotalApprovedConcessionAmount = request.GetTotalApprovedConcession(),
 			TotalReversedConcessionAmount = request.GetTotalReversedConcession(),
 			NetApprovedConcessionAmount = request.GetNetApprovedConcession(),
+			RefundRequests = linkedRefunds.Select(x => new ConcessionRefundReferenceDto
+			{
+				RefundRequestId = x.Id, VoucherNumber = x.VoucherNumber,
+				OriginalReceiptId = x.OriginalReceiptId!.Value,
+				Amount = x.CalculatedAmount, Status = x.Status.ToString()
+			}).ToList(),
             Remarks = request.Remarks,
             BoardId = request.GetBoardId(), EducationMediumId = request.GetEducationMediumId(),
             StandardId = request.GetStandardId(), DivisionId = request.GetDivisionId(),
@@ -636,7 +660,7 @@ public partial class ConcessionRequestAppService
 
     private StudentConcessionRequestItemDto MapStudentItem(
         ConcessionRequest request, ConcessionType? type, Dictionary<Guid, string> feeHeadMap,
-		bool canViewDocuments)
+		bool canViewDocuments, IReadOnlyList<ConcessionRefundReferenceDto> refundRequests)
     {
 		List<ConcessionTypeRequirementSnapshot> requirements;
 		try
@@ -662,6 +686,7 @@ public partial class ConcessionRequestAppService
             TotalApprovedAmount = request.GetTotalApprovedConcession(),
             TotalReversedAmount = request.GetTotalReversedConcession(),
             NetApprovedAmount = request.GetNetApprovedConcession(),
+			RefundRequests = refundRequests.ToList(),
             FeeHeads = request.ConcessionFeeHeadMappings.Select(m => new FeeHeadConcessionDetailDto
             {
                 FeeHeadId = m.FeeHeadId, FeeHeadName = feeHeadMap.GetValueOrDefault(m.FeeHeadId, string.Empty),

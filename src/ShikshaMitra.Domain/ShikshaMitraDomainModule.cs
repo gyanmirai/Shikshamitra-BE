@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShikshaMitra.MultiTenancy;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using Volo.Abp;
 using Volo.Abp.AuditLogging;
 using Volo.Abp.Auditing;
@@ -63,6 +64,9 @@ public class ShikshaMitraDomainModule : AbpModule
 			options.EntityHistorySelectors.Add(new NamedTypeSelector(
 				"ConcessionType",
 				type => type == typeof(ConcessionType)));
+			options.EntityHistorySelectors.Add(new NamedTypeSelector(
+				"AccountHead",
+				type => type == typeof(AccountHead)));
 		});
 
 		Configure<AbpBlobStoringOptions>(options =>

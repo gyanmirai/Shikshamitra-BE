@@ -32,6 +32,23 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         return await repository.InsertAsync(request, autoSave: false);
     }
 
+    public async Task<FeeRefundRequest> CreateFromConcessionAsync(Guid studentId, Guid academicYearId,
+        Guid assignmentId, Guid concessionRequestId, Guid receiptId, string receiptNumber,
+        IReadOnlyCollection<RefundLineSpec> lines, string calculationSnapshot, string calculationHash,
+        Guid submittedBy)
+    {
+        await ValidateLinesAsync(studentId, assignmentId, lines, null);
+        var request = new FeeRefundRequest(GuidGenerator.Create(), currentTenant.Id, studentId,
+            academicYearId, GenerateVoucherNumber(), null, null,
+            $"Approved concession {concessionRequestId}");
+        request.PinConcession(assignmentId, concessionRequestId, receiptId, receiptNumber,
+            calculationSnapshot, calculationHash);
+        foreach (var line in lines)
+            request.AddLine(ToEntity(request.Id, line));
+        request.Submit(submittedBy);
+        return await repository.InsertAsync(request, autoSave: false);
+    }
+
     public async Task UpdateDraftAsync(FeeRefundRequest request, IReadOnlyCollection<RefundLineSpec> lines,
         string? method, RefundPaymentDetails? details, string? reason,
         string calculationSnapshot, string calculationHash)
@@ -56,11 +73,13 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
             .Select(x => x.SourceAllocationId!.Value).Distinct().ToList();
         var allocationCommitted = await repository.GetCommittedAllocationAmountsAsync(allocationIds, request.Id);
         var reservations = new List<FeeRefundReservation>();
+        var dueRemaining = dues.ToDictionary(x => x.Key,
+            x => x.Value.RefundableBalance - reserved.GetValueOrDefault(x.Key));
         foreach (var line in request.Lines)
         {
             if (!dues.TryGetValue(line.DueFeeId, out var due))
                 throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
-            var available = due.RefundableBalance - reserved.GetValueOrDefault(line.DueFeeId);
+            var available = dueRemaining[line.DueFeeId];
             if (line.CalculatedAmount > available)
                 throw new BusinessException(FeeRefundErrorCodes.ReservationConflict)
                     .WithData("DueFeeId", line.DueFeeId).WithData("Requested", line.CalculatedAmount).WithData("Available", available);
@@ -75,6 +94,7 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
             }
             reservations.Add(new FeeRefundReservation(GuidGenerator.Create(), request.Id, line.Id,
                 line.DueFeeId, line.SourceAllocationId, line.CalculatedAmount));
+            dueRemaining[line.DueFeeId] -= line.CalculatedAmount;
         }
         request.Approve(userId, reservations, notes);
     }
@@ -117,21 +137,25 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         IReadOnlyCollection<RefundLineSpec> lines, Guid? requestId)
     {
         if (lines.Count == 0 || lines.Any(x => x.Amount <= 0 || x.CalculatedAmount <= 0 || x.CalculatedAmount > x.Amount) ||
-            lines.GroupBy(x => x.DueFeeId).Any(g => g.Count() > 1))
+            lines.Any(x => !x.SourceAllocationId.HasValue) ||
+            lines.GroupBy(x => x.SourceAllocationId).Any(g => g.Count() > 1))
             throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
-        var ids = lines.Select(x => x.DueFeeId).ToList();
+        var ids = lines.Select(x => x.DueFeeId).Distinct().ToList();
         var dues = await dueFeeRepository.GetListAsync(x => ids.Contains(x.Id));
         if (dues.Count != ids.Count) throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
         var reserved = await repository.GetActiveReservedAmountsAsync(ids, requestId);
+        var dueRemaining = dues.ToDictionary(x => x.Id,
+            x => x.RefundableBalance - reserved.GetValueOrDefault(x.Id));
         foreach (var line in lines)
         {
             var due = dues.Single(x => x.Id == line.DueFeeId);
             if (due.StudentId != studentId || due.StudentFeeStructureId != assignmentId)
                 throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
-            var available = Math.Min(due.RefundableBalance - reserved.GetValueOrDefault(due.Id), line.SettledPaidAmount);
+            var available = Math.Min(dueRemaining[due.Id], line.SettledPaidAmount);
             if (line.Amount > available)
                 throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance)
                     .WithData("DueFeeId", due.Id).WithData("Requested", line.Amount).WithData("Available", available);
+            dueRemaining[due.Id] -= line.Amount;
         }
     }
 

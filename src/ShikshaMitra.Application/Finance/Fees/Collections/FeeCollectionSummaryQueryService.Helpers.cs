@@ -129,14 +129,30 @@ public partial class FeeCollectionSummaryQueryService
 			studentQ = studentQ.Where(s => s.StandardId == input.StandardId.Value);
 		if (input.DivisionId.HasValue)
 			studentQ = studentQ.Where(s => s.DivisionId == input.DivisionId.Value);
-		if (!string.IsNullOrWhiteSpace(input.Search) && input.Search.Length >= 2)
+		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
-			var term = input.Search.Trim().ToLower();
-			studentQ = studentQ.Where(s =>
-				(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
-				(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
-				(s.LastName   != null && s.LastName.ToLower().Contains(term))   ||
-				(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)));
+			var terms = input.Search.Split((char[]?)null,
+				StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+			if (terms.Length == 1 && terms[0].Length >= 2)
+			{
+				var term = terms[0].ToLower();
+				studentQ = studentQ.Where(s =>
+					(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
+					(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
+					(s.LastName   != null && s.LastName.ToLower().Contains(term))   ||
+					(s.RollNo     != null && s.RollNo.ToString()!.Contains(term)));
+			}
+			else if (terms.Length > 1)
+			{
+				foreach (var word in terms)
+				{
+					var term = word.ToLower();
+					studentQ = studentQ.Where(s =>
+						(s.FirstName  != null && s.FirstName.ToLower().Contains(term))  ||
+						(s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) ||
+						(s.LastName   != null && s.LastName.ToLower().Contains(term)));
+				}
+			}
 		}
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
 		return studentQ

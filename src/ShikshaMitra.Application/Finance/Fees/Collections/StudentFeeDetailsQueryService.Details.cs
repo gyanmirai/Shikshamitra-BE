@@ -137,7 +137,7 @@ public partial class StudentFeeDetailsQueryService
 				ChargeId = c.Id, Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
 				Amount = net, PaidAmount = paid, PendingAmount = pending,
 				WaivedAmount = waived, CanWaive = pending > 0,
-				Status = pending <= 0d ? FeeCollectionStatus.Paid
+				Status = pending <= 0d ? (waived > 0d ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
 					: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 			};
 		}).ToList();

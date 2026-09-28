@@ -103,9 +103,8 @@ public class StandardAppService(
 			}
 		}
 
-		standards = standards.OrderBy(x => x.CreationTime).ToList();
-
 		standards = await scopeAccessService.FilterStandardsAsync(standards);
+		standards = StandardAcademicOrder.Sort(standards, x => x.Name, x => x.AgeLowerLimit, x => x.Id);
 
 		var standardDtos = ObjectMapper.Map<List<Standard>, List<StandardDto>>(standards);
 		await EnrichDivisionOccupancyAsync(standardDtos.SelectMany(s => s.Divisions ?? []).ToList());

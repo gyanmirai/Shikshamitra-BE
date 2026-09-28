@@ -270,6 +270,9 @@ public DueFee(
 
 	public decimal RefundableBalance => Math.Max(0m, PaidAmount - RefundedAmount);
 
+	/// <summary>Paid money above the remaining obligation after approved concessions and adjustments.</summary>
+	public decimal OverpaymentAmount => Math.Max(0m, PaidAmount - RefundedAmount + NetAmount - OriginalAmount);
+
 	public decimal AdjustableBalance => Math.Max(0m, OutstandingAmount);
 
 	public void ReversePayment(decimal amount)
@@ -295,11 +298,12 @@ public DueFee(
 				.WithData("Amount", concessionAmount);
 		}
 
-		if (concessionAmount > OutstandingAmount)
+		var remainingConcessionCapacity = Math.Max(0m, OriginalAmount - NetAmount);
+		if (concessionAmount > remainingConcessionCapacity)
 		{
 			throw new BusinessException(FinanceConcessionErrorCodes.ConcessionExceedsDueOutstanding)
 				.WithData("DueFeeId", Id)
-				.WithData("Outstanding", OutstandingAmount)
+				.WithData("Available", remainingConcessionCapacity)
 				.WithData("Requested", concessionAmount);
 		}
 

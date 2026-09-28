@@ -10,10 +10,12 @@ using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -102,6 +104,49 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
         var response = await Client.GetAsync(url);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Should_Search_Each_Name_Word_In_Any_Order_Before_Pagination()
+    {
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+        var studentId = Guid.NewGuid();
+        using (var scope = Factory.Services.CreateScope())
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+        using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+        {
+            var student = new Student(studentId, tenantId, "Diya", "Hiren", "Akbari",
+                Factory.SeededAcademicYearId, Factory.SeededBoardId, Factory.SeededMediumId,
+                Factory.SeededMediumStageId, Factory.SeededStandardId, Factory.SeededDivisionId,
+                grNo: 10212, rollNo: 2, status: StudentLifeCycleStatusEnum.Enrolled);
+            await scope.ServiceProvider.GetRequiredService<IRepository<Student, Guid>>()
+                .InsertAsync(student, autoSave: true);
+            await uow.CompleteAsync();
+        }
+
+        var baseUrl = $"{BaseUrl}?academicYearId={Factory.SeededAcademicYearId}" +
+                      $"&boardId={Factory.SeededBoardId}" +
+                      $"&educationMediumId={Factory.SeededMediumId}" +
+                      $"&standardId={Factory.SeededStandardId}" +
+                      $"&divisionId={Factory.SeededDivisionId}" +
+                      "&maxResultCount=1";
+
+        foreach (var search in new[] { "Diya Akbari", "akbari diya", "Di Ak" })
+        {
+            var response = await Client.GetAsync($"{baseUrl}&search={Uri.EscapeDataString(search)}");
+            response.StatusCode.ShouldBe(HttpStatusCode.OK);
+            var body = await response.Content.ReadFromJsonAsync<PagedResultDto<FeeCollectionSummaryItemDto>>(JsonOptions);
+            body.ShouldNotBeNull();
+            body.Items.ShouldContain(item => item.StudentId == studentId);
+            body.TotalCount.ShouldBeGreaterThanOrEqualTo(1);
+        }
+
+        var noMatch = await Client.GetAsync($"{baseUrl}&search=Diya%20Unknown");
+        noMatch.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var emptyBody = await noMatch.Content.ReadFromJsonAsync<PagedResultDto<FeeCollectionSummaryItemDto>>(JsonOptions);
+        emptyBody.ShouldNotBeNull();
+        emptyBody.Items.ShouldNotContain(item => item.StudentId == studentId);
     }
 
     // ── POST /api/v2/fee-collections ─────────────────────────────────────────

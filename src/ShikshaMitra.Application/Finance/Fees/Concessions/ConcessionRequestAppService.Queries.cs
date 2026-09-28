@@ -124,6 +124,9 @@ public partial class ConcessionRequestAppService
 		if (context.Assignment.ConcessionFeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads)
 			concessionEnabledHeadIds.IntersectWith(context.Assignment.GetConcessionApplicableFeeHeadIds());
 		var eligibleDues = context.EligibleDueFees.Where(x => concessionEnabledHeadIds.Contains(x.FeeHeadId)).ToList();
+		var includePaid = context.Assignment.ConcessionPolicyId.HasValue &&
+			activePolicies.Any(x => x.Id == context.Assignment.ConcessionPolicyId.Value &&
+				x.ApplyOn == ConcessionApplyOn.AllFees);
 		var concessionTypes = await concessionTypeRepository.GetListAsync(x =>
 			x.AcademicYearId == academicYearId && x.IsActive);
 		if (concessionPolicyId.HasValue || concessionPolicyVersionId.HasValue)
@@ -138,7 +141,7 @@ public partial class ConcessionRequestAppService
 		if (eligibleDues.Count == 0)
 		{
 			if (context.EligibleDueFees.Count == 0)
-				blockers.Add("This fee assignment has no outstanding installment dues to discount.");
+				blockers.Add("This fee assignment has no eligible installment amount to discount.");
 			else if (!hasConcessionEnabledHeads)
 			{
 				var blockedHeadNames = feeHeads
@@ -150,7 +153,7 @@ public partial class ConcessionRequestAppService
 			else if (concessionEnabledHeadIds.Count == 0)
 				blockers.Add("This fee assignment excludes all concession-enabled fee heads. Review concession eligibility on its fee structure.");
 			else
-				blockers.Add("No outstanding installments match this policy's application rule.");
+				blockers.Add("No installments match this policy's application rule.");
 		}
 
 		return new ConcessionRequestContextDto
@@ -168,11 +171,12 @@ public partial class ConcessionRequestAppService
 				{
 					FeeHeadId = group.Key,
 					FeeHeadName = feeHeadNames.GetValueOrDefault(group.Key, string.Empty),
-					EligibleOutstanding = group.Sum(x => x.OutstandingAmount),
+					EligibleOutstanding = group.Sum(x => includePaid
+						? Math.Max(0m, x.OriginalAmount - x.NetAmount) : x.OutstandingAmount),
 				})
 				.OrderBy(x => x.FeeHeadName)
 				.ToList(),
-			EligibleDueFees = MapEligibleDueFees(eligibleDues, feeHeadNames),
+			EligibleDueFees = MapEligibleDueFees(eligibleDues, feeHeadNames, includePaid),
 			ConcessionPolicies = policyOptions,
 			ConcessionTypes = concessionTypes.OrderBy(x => x.Name).Select(type => new ConcessionTypeOptionDto
 			{
@@ -324,11 +328,26 @@ public partial class ConcessionRequestAppService
 		var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
 		var canViewDocuments = await AuthorizationService.IsGrantedAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.ViewDocument);
+		var canViewRefunds = await AuthorizationService.IsGrantedAsync(
+			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
+		var requestIds = page.Select(x => x.Id).ToList();
+		var refundMap = canViewRefunds
+			? (await feeRefundRepository.GetListAsync(x => requestIds.Contains(x.ConcessionRequestId ?? Guid.Empty)))
+				.GroupBy(x => x.ConcessionRequestId!.Value)
+				.ToDictionary(x => x.Key, x => (IReadOnlyList<ConcessionRefundReferenceDto>)x.Select(r =>
+					new ConcessionRefundReferenceDto
+					{
+						RefundRequestId = r.Id, VoucherNumber = r.VoucherNumber,
+						OriginalReceiptId = r.OriginalReceiptId!.Value,
+						Amount = r.CalculatedAmount, Status = r.Status.ToString()
+					}).ToList())
+			: new Dictionary<Guid, IReadOnlyList<ConcessionRefundReferenceDto>>();
 
 		var items = page.Select(r =>
 		{
 			typeMap.TryGetValue(r.ConcessionTypeId, out var type);
-			return MapStudentItem(r, type, feeHeadMap, canViewDocuments);
+			return MapStudentItem(r, type, feeHeadMap, canViewDocuments,
+				refundMap.GetValueOrDefault(r.Id, []));
 		}).ToList();
 
 		return new StudentConcessionRequestsDto
@@ -393,14 +412,15 @@ public partial class ConcessionRequestAppService
 			var liveMaximum = liveMapping?.FeeHeadConcessionAmount ?? m.FeeHeadConcessionAmount;
 			var suggestedTotal = isReversal ? 0m : Math.Min(m.FeeHeadConcessionAmount, liveMaximum);
 			var eligibleHeadDues = dueFees
-				.Where(df => df.FeeHeadId == m.FeeHeadId && df.OutstandingAmount > 0m)
+				.Where(df => df.FeeHeadId == m.FeeHeadId && ConcessionRequestManager.GetConcessionCapacity(df, policy) > 0m)
 				.ToList();
 			var suggestedByDue = !isReversal && requestedDueAmounts.Count > 0
 				? eligibleHeadDues.ToDictionary(x => x.Id, x => requestedDueAmounts.GetValueOrDefault(x.Id))
 				: isReversal || eligibleHeadDues.Count == 0
 				? new Dictionary<Guid, decimal>()
 				: ConcessionAmountAllocator.AllocateProportionally(
-					eligibleHeadDues.Select(x => new ConcessionAmountCapacity(x.Id, x.OutstandingAmount)).ToList(),
+					eligibleHeadDues.Select(x => new ConcessionAmountCapacity(x.Id,
+						ConcessionRequestManager.GetConcessionCapacity(x, policy))).ToList(),
 					suggestedTotal).ToDictionary(x => x.Key, x => x.Amount);
 			var lines = dueFees
 				.Where(df => df.FeeHeadId == m.FeeHeadId)
@@ -424,8 +444,8 @@ public partial class ConcessionRequestAppService
 						PaidAmount = df.PaidAmount,
 						OutstandingAmount = df.OutstandingAmount,
 						Status = df.Status.ToString(),
-						IsSelectable = isReversal ? reversible > 0m : df.OutstandingAmount > 0m,
-						MaxConcessionAmount = isReversal ? reversible : df.OutstandingAmount,
+						IsSelectable = isReversal ? reversible > 0m : ConcessionRequestManager.GetConcessionCapacity(df, policy) > 0m,
+						MaxConcessionAmount = isReversal ? reversible : ConcessionRequestManager.GetConcessionCapacity(df, policy),
 						SuggestedConcessionAmount = suggestedByDue.GetValueOrDefault(df.Id),
 						AppliedConcessionAmount = allocation?.ConcessionAmount ?? 0m,
 						ReversedConcessionAmount = reversed,
@@ -443,7 +463,8 @@ public partial class ConcessionRequestAppService
 				SuggestedConcessionAmount = suggestedTotal,
 				HasChangedSinceSubmission = liveMaximum < m.FeeHeadConcessionAmount ||
 					dueFees.Where(x => x.FeeHeadId == m.FeeHeadId)
-						.Any(x => requestedDueAmounts.GetValueOrDefault(x.Id) > x.OutstandingAmount),
+						.Any(x => requestedDueAmounts.GetValueOrDefault(x.Id) >
+							ConcessionRequestManager.GetConcessionCapacity(x, policy)),
 				DueFeeLines = lines,
 			};
 		}).ToList();

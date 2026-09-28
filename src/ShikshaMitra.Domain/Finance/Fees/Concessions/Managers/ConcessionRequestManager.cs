@@ -214,10 +214,17 @@ public class ConcessionRequestManager(
 		var student = await LoadStudentAsync(studentId);
 		var assignment = await ResolveAssignmentAsync(studentId, academicYearId, studentFeeStructureId);
 		var feeStructure = await feeStructureRepository.GetAsync(assignment.FeeStructureStandardId);
+		var includePaid = false;
+		if (assignment.ConcessionPolicyId.HasValue && assignment.ConcessionPolicyVersionId.HasValue)
+		{
+			var policy = await LoadPolicySnapshotAsync(
+				assignment, assignment.ConcessionPolicyId.Value, assignment.ConcessionPolicyVersionId.Value);
+			includePaid = policy.ApplyOn == ConcessionApplyOn.AllFees;
+		}
 		var dueFees = await dueFeeRepository.GetListAsync(df =>
 			df.StudentId == studentId &&
 			df.StudentFeeStructureId == assignment.Id &&
-			df.OutstandingAmount > 0m);
+			(includePaid ? df.OriginalAmount > df.NetAmount : df.OutstandingAmount > 0m));
 		return new ConcessionRequestContextResult(student, assignment, feeStructure, dueFees);
 	}
 
@@ -241,7 +248,7 @@ public class ConcessionRequestManager(
 		var dueEvidence = ReadDueFeeEvidence(request);
 		var inputs = request.ConcessionFeeHeadMappings
 			.Where(mapping => dueFees.Any(dueFee =>
-				dueFee.FeeHeadId == mapping.FeeHeadId && dueFee.OutstandingAmount > 0m))
+				dueFee.FeeHeadId == mapping.FeeHeadId && GetConcessionCapacity(dueFee, policy) > 0m))
 			.Select(x => new FeeHeadConcessionInput(
 				x.FeeHeadId,
 				x.UserSpecifiedConcessionAmountType,
@@ -279,6 +286,7 @@ public class ConcessionRequestManager(
 	public List<ConcessionDueFeeAllocation> BuildDueFeeAllocations(
 		Guid? tenantId,
 		Guid concessionRequestId,
+		ConcessionPolicySnapshot policy,
 		IReadOnlyList<FeeHeadApprovalInput> feeHeadApprovals,
 		List<DueFee> studentDueFees,
 		IReadOnlyList<ConcessionFeeHeadMapping>? requestedMappings = null,
@@ -328,7 +336,7 @@ public class ConcessionRequestManager(
 					throw new BusinessException(FinanceConcessionErrorCodes.DueFeeWrongFeeHead);
 				}
 
-				if (dueFee.OutstandingAmount <= 0)
+				if (GetConcessionCapacity(dueFee, policy) <= 0)
 				{
 					throw new BusinessException(FinanceConcessionErrorCodes.ConcessionOnFullyPaidDueFee)
 						.WithData("DueFeeId", line.DueFeeId);
@@ -337,12 +345,12 @@ public class ConcessionRequestManager(
 			}
 
 			if (selectedDues.Count == 0 ||
-				group.ApprovedConcessionAmount > selectedDues.Sum(x => x.OutstandingAmount))
+				group.ApprovedConcessionAmount > selectedDues.Sum(x => GetConcessionCapacity(x, policy)))
 				throw new BusinessException(FinanceConcessionErrorCodes.DiscountExceedsBase)
 					.WithData("FeeHeadId", group.FeeHeadId);
 
 			var shares = ConcessionAmountAllocator.AllocateProportionally(
-				selectedDues.Select(x => new ConcessionAmountCapacity(x.Id, x.OutstandingAmount)).ToList(),
+				selectedDues.Select(x => new ConcessionAmountCapacity(x.Id, GetConcessionCapacity(x, policy))).ToList(),
 				group.ApprovedConcessionAmount);
 			foreach (var share in shares.Where(x => x.Amount > 0m))
 			{
@@ -364,14 +372,15 @@ public class ConcessionRequestManager(
 
 	public List<FeeHeadApprovalInput> BuildAutoApproveAllocations(
 		ConcessionRequest request,
-		List<DueFee> studentDueFees)
+		List<DueFee> studentDueFees,
+		ConcessionPolicySnapshot policy)
 	{
 		var result = new List<FeeHeadApprovalInput>();
 
 		foreach (var mapping in request.ConcessionFeeHeadMappings)
 		{
 			var unpaid = studentDueFees
-				.Where(df => df.FeeHeadId == mapping.FeeHeadId && df.OutstandingAmount > 0)
+				.Where(df => df.FeeHeadId == mapping.FeeHeadId && GetConcessionCapacity(df, policy) > 0)
 				.OrderBy(df => df.Year)
 				.ThenBy(df => df.Month)
 				.ToList();
@@ -382,7 +391,7 @@ public class ConcessionRequestManager(
 			}
 
 			var total = Math.Min(mapping.FeeHeadConcessionAmount,
-				unpaid.Sum(x => (decimal)x.OutstandingAmount));
+				unpaid.Sum(x => GetConcessionCapacity(x, policy)));
 			var lines = unpaid.Select(dueFee => new DueFeeAllocationInput(
 				dueFee.Id, 0m, dueFee.ConcurrencyStamp)).ToList();
 
@@ -394,7 +403,8 @@ public class ConcessionRequestManager(
 
 	public List<ConcessionDueFeeAllocation> BuildSubmittedDueFeeAllocations(
 		ConcessionRequest request,
-		List<DueFee> liveDueFees)
+		List<DueFee> liveDueFees,
+		ConcessionPolicySnapshot policy)
 	{
 		var evidence = ReadDueFeeEvidence(request);
 		if (evidence.Count == 0 || evidence.Select(x => x.DueFeeId).Distinct().Count() != evidence.Count)
@@ -404,7 +414,7 @@ public class ConcessionRequestManager(
 		foreach (var line in evidence)
 		{
 			if (!dues.TryGetValue(line.DueFeeId, out var due) || due.FeeHeadId != line.FeeHeadId ||
-				line.RequestedAmount <= 0m || due.OutstandingAmount < line.RequestedAmount)
+				line.RequestedAmount <= 0m || GetConcessionCapacity(due, policy) < line.RequestedAmount)
 				throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged)
 					.WithData("DueFeeId", line.DueFeeId);
 			allocations.Add(new ConcessionDueFeeAllocation(guidGenerator.Create(), request.TenantId,
@@ -449,7 +459,7 @@ public class ConcessionRequestManager(
 			inputs.Select(x => x.DueFeeId).Distinct().Count() != inputs.Count)
 			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
 		var eligible = (enforceApplyOn ? GetEligibleDueFees(dueFees, policy.ApplyOn) : dueFees)
-			.Where(x => permittedFeeHeadIds.Contains(x.FeeHeadId) && x.OutstandingAmount > 0m)
+			.Where(x => permittedFeeHeadIds.Contains(x.FeeHeadId) && GetConcessionCapacity(x, policy) > 0m)
 			.ToDictionary(x => x.Id);
 		var basis = policy.CalculationMethod == ConcessionCalculationMethod.Percentage
 			? DiscountBasis.Percentage : DiscountBasis.FlatAmount;
@@ -463,11 +473,11 @@ public class ConcessionRequestManager(
 			if (!eligible.TryGetValue(input.DueFeeId, out var dueFee) || dueFee.FeeHeadId != input.FeeHeadId)
 				throw new BusinessException(FinanceConcessionErrorCodes.DueFeeNotFound)
 					.WithData("DueFeeId", input.DueFeeId);
-			if (basis == DiscountBasis.FlatAmount && input.Amount > dueFee.OutstandingAmount)
+			if (basis == DiscountBasis.FlatAmount && input.Amount > GetConcessionCapacity(dueFee, policy))
 				throw new BusinessException(FinanceConcessionErrorCodes.DiscountExceedsBase)
 					.WithData("DueFeeId", input.DueFeeId);
 			var discount = concessionPolicyCalculationService.Calculate(
-				policy, dueFee.OutstandingAmount, basis, input.Amount);
+				policy, GetConcessionCapacity(dueFee, policy), basis, input.Amount);
 			return (Input: input, DueFee: dueFee, Discount: discount);
 		}).ToList();
 		if (evaluated.Sum(x => x.Discount) <= 0m)
@@ -477,7 +487,7 @@ public class ConcessionRequestManager(
 			throw new BusinessException(ConcessionPolicyErrorCodes.LimitExceeded);
 		return evaluated.GroupBy(x => x.Input.FeeHeadId).Select(group =>
 		{
-			var baseAmount = group.Sum(x => x.DueFee.OutstandingAmount);
+			var baseAmount = group.Sum(x => GetConcessionCapacity(x.DueFee, policy));
 			var discount = group.Sum(x => x.Discount);
 			return new ConcessionFeeHeadMapping(
 				guidGenerator.Create(), tenantId, requestId, group.Key, baseAmount, discount,
@@ -541,7 +551,7 @@ public class ConcessionRequestManager(
 					.WithData("FeeHeadId", input.FeeHeadId);
 			}
 
-			var baseAmount = headDueFees.Sum(df => (decimal)df.OutstandingAmount);
+			var baseAmount = headDueFees.Sum(df => GetConcessionCapacity(df, policy));
 			var amount = policyFixedTotal || requestEnteredFixed
 				? 0m
 				: allowIncomplete &&
@@ -612,7 +622,7 @@ public class ConcessionRequestManager(
 	public static List<DueFee> GetEligibleDueFees(List<DueFee> dueFees, ConcessionApplyOn applyOn)
 	{
 		var outstanding = dueFees
-			.Where(x => x.OutstandingAmount > 0)
+			.Where(x => GetConcessionCapacity(x, applyOn) > 0m)
 			.OrderBy(x => x.InstallmentSequence.HasValue ? 0 : 1)
 			.ThenBy(x => x.InstallmentSequence ?? int.MaxValue)
 			.ThenBy(x => x.DemandDate ?? x.CoverageStartDate ?? x.ScheduleDueDate ?? x.DueDate)
@@ -620,12 +630,20 @@ public class ConcessionRequestManager(
 			.ThenBy(x => x.Month)
 			.ThenBy(x => x.Id)
 			.ToList();
-		if (outstanding.Count == 0 || applyOn == ConcessionApplyOn.AllOutstanding) return outstanding;
+		if (outstanding.Count == 0 || applyOn is ConcessionApplyOn.AllOutstanding or ConcessionApplyOn.AllFees) return outstanding;
 		var first = outstanding[0];
 		return applyOn == ConcessionApplyOn.CurrentInstallment
 			? outstanding.Where(x => IsSameInstallmentCohort(x, first)).ToList()
 			: outstanding.Where(x => !IsSameInstallmentCohort(x, first)).ToList();
 	}
+
+	public static decimal GetConcessionCapacity(DueFee dueFee, ConcessionPolicySnapshot policy) =>
+		GetConcessionCapacity(dueFee, policy.ApplyOn);
+
+	private static decimal GetConcessionCapacity(DueFee dueFee, ConcessionApplyOn applyOn) =>
+		applyOn == ConcessionApplyOn.AllFees
+			? Math.Max(0m, dueFee.OriginalAmount - dueFee.NetAmount)
+			: dueFee.OutstandingAmount;
 
 	private static bool IsSameInstallmentCohort(DueFee candidate, DueFee first)
 	{
@@ -738,7 +756,7 @@ public class ConcessionRequestManager(
 				var basis = policy.CalculationMethod == ConcessionCalculationMethod.Percentage
 					? DiscountBasis.Percentage : DiscountBasis.FlatAmount;
 				return new DueFeeConcessionEvidence(x.DueFeeId, x.FeeHeadId, x.Amount,
-					concessionPolicyCalculationService.Calculate(policy, due.OutstandingAmount, basis, x.Amount));
+					concessionPolicyCalculationService.Calculate(policy, GetConcessionCapacity(due, policy), basis, x.Amount));
 			}))
 			: JsonSerializer.Serialize(request.ConcessionFeeHeadMappings
 			.OrderBy(x => x.FeeHeadId)

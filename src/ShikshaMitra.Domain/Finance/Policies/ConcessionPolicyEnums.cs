@@ -24,5 +24,6 @@ public enum ConcessionApplyOn
 {
 	AllOutstanding = 0,
 	CurrentInstallment = 1,
-	FutureInstallments = 2
+	FutureInstallments = 2,
+	AllFees = 3
 }

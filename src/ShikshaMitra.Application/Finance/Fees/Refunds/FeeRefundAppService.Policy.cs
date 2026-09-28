@@ -71,6 +71,8 @@ public partial class FeeRefundAppService
         var allocationCommitted = await feeRefundRepository.GetCommittedAllocationAmountsAsync(allocationIds, excludingRequestId);
         var dueReserved = await feeRefundRepository.GetActiveReservedAmountsAsync(dueIds, excludingRequestId);
         var dueMap = dues.ToDictionary(x => x.Id);
+        var dueRemaining = dues.ToDictionary(x => x.Id,
+            x => Math.Max(0m, x.RefundableBalance - dueReserved.GetValueOrDefault(x.Id)));
         var specs = new List<RefundLineSpec>();
         foreach (var item in input.Lines)
         {
@@ -79,12 +81,12 @@ public partial class FeeRefundAppService
                 throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
             var due = dueMap[item.DueFeeId];
             var allocationAvailable = Math.Max(0m, Convert.ToDecimal(allocation.Amount) - allocationCommitted.GetValueOrDefault(allocation.Id));
-            var dueAvailable = Math.Max(0m, due.RefundableBalance - dueReserved.GetValueOrDefault(due.Id));
-            var available = Math.Min(allocationAvailable, dueAvailable);
+            var available = Math.Min(allocationAvailable, dueRemaining[due.Id]);
             if (item.Amount > available)
                 throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance)
                     .WithData("DueFeeId", due.Id).WithData("Requested", item.Amount).WithData("Available", available);
             var requestedAmount = policy.AmountMode == RefundAmountMode.ManualUpToEligible ? item.Amount : available;
+            dueRemaining[due.Id] -= requestedAmount;
             specs.Add(new RefundLineSpec(due.Id, allocation.Id, receipt.Id, due.FeeHeadId,
                 heads.GetValueOrDefault(due.FeeHeadId, allocation.FeeHeadName ?? "Fee head"),
                 due.GetDisplayInstallmentLabel(), available, requestedAmount, 0m));

@@ -160,7 +160,8 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 
 	public void RequireAttention(string reason)
 	{
-		EnsureEditable();
+		if (Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
+			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
 		LastError = Check.NotNullOrWhiteSpace(reason, nameof(reason), 2000).Trim();
 		Status = StudentOnboardingStatus.NeedsAttention;
 	}
@@ -176,6 +177,39 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		LastError = null;
 	}
 
+	public string GetAdmissionRoute() => ExtraProperties.TryGetValue("AdmissionRoute", out var route)
+		? route?.ToString() ?? "Fresh admission" : "Fresh admission";
+
+	public void SetAdmissionRoute(string route)
+	{
+		EnsureEditable();
+		if (route is not ("Fresh admission" or "Transfer student" or "Mid-year admission" or "Returning student"))
+			throw new BusinessException(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+		ExtraProperties["AdmissionRoute"] = route;
+		RecordProgress(DateTime.UtcNow);
+	}
+
+	public void BeginProvisioning(Guid studentEnrollmentId)
+	{
+		if (StudentEnrollmentId == studentEnrollmentId) return;
+		if (Status != StudentOnboardingStatus.ReadyForActivation)
+			throw new BusinessException(StudentOnboardingErrorCodes.RequiredStepsIncomplete);
+		StudentEnrollmentId = Check.NotDefaultOrNull<Guid>(studentEnrollmentId, nameof(studentEnrollmentId));
+		Status = StudentOnboardingStatus.Provisioning;
+		CompletedAt = null;
+		LastError = null;
+	}
+
+	public void CompleteProvisioning(DateTime at)
+	{
+		if (Status == StudentOnboardingStatus.Completed) return;
+		if (!StudentEnrollmentId.HasValue || Status == StudentOnboardingStatus.Cancelled)
+			throw new BusinessException(StudentOnboardingErrorCodes.RequiredStepsIncomplete);
+		Status = StudentOnboardingStatus.Completed;
+		CompletedAt = at.ToUniversalTime();
+		LastError = null;
+	}
+
 	public void Cancel(string reason, DateTime at)
 	{
 		EnsureEditable();
@@ -186,7 +220,7 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 
 	private void EnsureEditable()
 	{
-		if (Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
+		if (StudentEnrollmentId.HasValue || Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
 			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
 	}
 }

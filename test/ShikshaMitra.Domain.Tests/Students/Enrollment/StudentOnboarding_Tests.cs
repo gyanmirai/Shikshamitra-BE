@@ -10,6 +10,69 @@ namespace ShikshaMitra.Students;
 public class StudentOnboarding_Tests
 {
 	[Fact]
+	public void Settings_recognize_an_idempotent_configuration_retry()
+	{
+		const string configuration = "{\"readinessAccess\":{\"requireDocuments\":true}}";
+		var settings = new StudentOnboardingSettings(Guid.NewGuid(), Guid.NewGuid(), null,
+			StudentOnboardingSettingsConsts.CurrentSchemaVersion, configuration);
+
+		settings.MatchesConfiguration(StudentOnboardingSettingsConsts.CurrentSchemaVersion,
+			$"  {configuration}  ").ShouldBeTrue();
+		settings.MatchesConfiguration(StudentOnboardingSettingsConsts.CurrentSchemaVersion,
+			"{\"readinessAccess\":{\"requireDocuments\":false}}").ShouldBeFalse();
+		settings.MatchesConfiguration(StudentOnboardingSettingsConsts.CurrentSchemaVersion + 1,
+			configuration).ShouldBeFalse();
+	}
+
+	[Theory]
+	[InlineData("{SEQUENCE}{SEQUENCE}")]
+	[InlineData("{SCHOOL_CODE}{SEQUENCE}")]
+	[InlineData("GR-2026")]
+	public void Configuration_rejects_invalid_GR_formats_before_runtime(string pattern)
+	{
+		var json = System.Text.Json.JsonSerializer.Serialize(new
+		{
+			readinessAccess = new { }, onboardingProfiles = Array.Empty<object>(),
+			grNumber = new { configurations = new[] { new { formatPattern = pattern } } },
+			rollNumber = new { configurations = Array.Empty<object>() },
+			divisionChange = new { configurations = Array.Empty<object>() }
+		});
+		Should.Throw<BusinessException>(() => new OnboardingRuleConfiguration(json))
+			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+	}
+
+	[Fact]
+	public void Enrollment_does_not_complete_provisioning_and_cannot_be_cancelled_or_replaced()
+	{
+		var now = DateTime.UtcNow;
+		var item = CreateCase(now);
+		item.RecordPlacement(Guid.NewGuid(), Guid.NewGuid(), now);
+		item.RecordIdentifier(Guid.NewGuid(), 1, now);
+		item.MarkReady(now);
+		var enrollmentId = Guid.NewGuid();
+		item.BeginProvisioning(enrollmentId);
+		item.Status.ShouldBe(StudentOnboardingStatus.Provisioning);
+		item.CompletedAt.ShouldBeNull();
+		Should.Throw<BusinessException>(() => item.Cancel("Cannot undo an enrollment", now));
+		Should.Throw<BusinessException>(() => item.RecordIdentifier(Guid.NewGuid(), 2, now));
+		item.RequireAttention("First installment not settled");
+		item.StudentEnrollmentId.ShouldBe(enrollmentId);
+		item.CompleteProvisioning(now.AddMinutes(10));
+		item.Status.ShouldBe(StudentOnboardingStatus.Completed);
+		item.BeginProvisioning(enrollmentId);
+		item.Status.ShouldBe(StudentOnboardingStatus.Completed);
+	}
+
+	[Fact]
+	public void Editing_a_GR_rule_never_rewinds_its_counter()
+	{
+		var series = new StudentIdentifierSeries(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null,
+			StudentIdentifierType.GrNumber, "TEST", "Test", "GR-", "", 4, 10, null, DateTime.UnixEpoch, null);
+		series.Allocate(DateTime.UtcNow).Value.ShouldBe("GR-0010");
+		series.ApplyRule("Renamed", "GR-", "", 4, 1, null);
+		series.Allocate(DateTime.UtcNow).Value.ShouldBe("GR-0011");
+	}
+	[Fact]
 	public void Case_tracks_SLA_placement_identifiers_and_terminal_activation()
 	{
 		var now = DateTime.UtcNow;

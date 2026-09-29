@@ -21941,6 +21941,91 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Finance_StudentFeeRecords", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.Portal.StudentPortalAccountLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Relationship")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("VerifiedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TenantId", "StudentId", "AccountType")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.HasIndex("TenantId", "UserId", "AccountType");
+
+                    b.ToTable("AppStudentPortalAccountLinks", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.Records.Settings.HouseSettings", b =>
                 {
                     b.Property<Guid>("Id")
@@ -23274,7 +23359,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("OfferAcceptedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("OfferExpiresAt")
+                    b.Property<DateTimeOffset?>("OfferExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("OnboardingCaseId")
@@ -25882,13 +25967,13 @@ namespace ShikshaMitra.Migrations
                     b.Property<DateTime?>("ExpiresAtUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("InquiryFormDefinitionId")
-                        .HasColumnType("uuid");
-
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
+
+                    b.Property<Guid?>("InquiryFormDefinitionId")
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -25930,10 +26015,10 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("InquiryFormDefinitionId");
+
                     b.HasIndex("TokenHash")
                         .IsUnique();
-
-                    b.HasIndex("InquiryFormDefinitionId");
 
                     b.HasIndex("TenantId", "AdmissionCycleId", "IsActive");
 
@@ -25977,15 +26062,6 @@ namespace ShikshaMitra.Migrations
                         .HasDatabaseName("UX_AdmissionReferenceSequences_Tenant_Year_Kind");
 
                     b.ToTable("AppAdmissionReferenceSequences", (string)null);
-                });
-
-            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionPublicInquiryLink", b =>
-                {
-                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionFormDefinition", null)
-                        .WithMany()
-                        .HasForeignKey("InquiryFormDefinitionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("FK_PublicInquiryLinks_InquiryForm");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionReviewDecision", b =>
@@ -26494,12 +26570,12 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<Guid?>("DefaultInquiryFormDefinitionId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("DeleterId")
                         .HasColumnType("uuid")
                         .HasColumnName("DeleterId");
-
-                    b.Property<Guid?>("DefaultInquiryFormDefinitionId")
-                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("DeletionTime")
                         .HasColumnType("timestamp with time zone")
@@ -27368,11 +27444,11 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("TenantId", "StudentId", "AcademicYearId")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false AND \"Status\" IN (0, 1, 2, 3)");
+                        .HasFilter("\"IsDeleted\" = false AND \"Status\" IN (0, 1, 2, 3, 6)");
 
                     b.HasIndex("TenantId", "AcademicYearId", "DivisionId", "RollNumber")
                         .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false AND \"DivisionId\" IS NOT NULL AND \"RollNumber\" IS NOT NULL AND \"Status\" IN (0, 1, 2, 3)");
+                        .HasFilter("\"IsDeleted\" = false AND \"DivisionId\" IS NOT NULL AND \"RollNumber\" IS NOT NULL AND \"Status\" IN (0, 1, 2, 3, 6)");
 
                     b.ToTable("AppStudentOnboardingCases", (string)null);
                 });
@@ -35675,6 +35751,21 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.Portal.StudentPortalAccountLink", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.Student", null)
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Volo.Abp.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.Records.StudentCertificate", b =>
                 {
                     b.HasOne("ShikshaMitra.Students.Student", null)
@@ -36522,6 +36613,15 @@ namespace ShikshaMitra.Migrations
                         .WithMany()
                         .HasForeignKey("WorkflowDefinitionId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionPublicInquiryLink", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionFormDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("InquiryFormDefinitionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("FK_PublicInquiryLinks_InquiryForm");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionReviewDecision", b =>

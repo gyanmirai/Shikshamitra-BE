@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -155,6 +156,9 @@ public class ShikshaMitraApplicationTestModule : AbpModule
 
     public override void ConfigureServices(ServiceConfigurationContext context)
     {
+        // Use real protected reset/verification tokens for portal owner-setup tests.
+        new Microsoft.AspNetCore.Identity.IdentityBuilder(typeof(Volo.Abp.Identity.IdentityUser),
+            typeof(Volo.Abp.Identity.IdentityRole), context.Services).AddDefaultTokenProviders();
         Configure<FeatureManagementOptions>(options =>
         {
             options.SaveStaticFeaturesToDatabase = false;

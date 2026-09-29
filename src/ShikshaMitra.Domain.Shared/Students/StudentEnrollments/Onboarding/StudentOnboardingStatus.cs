@@ -7,7 +7,8 @@ public enum StudentOnboardingStatus
 	ReadyForActivation = 2,
 	NeedsAttention = 3,
 	Completed = 4,
-	Cancelled = 5
+	Cancelled = 5,
+	Provisioning = 6
 }
 
 public enum StudentOnboardingStepStatus

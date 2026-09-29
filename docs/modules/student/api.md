@@ -305,7 +305,13 @@ GET/POST `/api/student/onboarding/{caseId}/documents` requires `Students.Onboard
 
 ### Onboarding configuration
 
-GET `/api/student/onboarding/settings/configurations` requires `Students.Onboarding.View` and returns the school configuration plus the requested academic-year override. PUT on the same route requires `Students.Onboarding.Add` and creates or updates one schema-versioned JSON configuration per scope with a concurrency stamp. DELETE `/api/student/onboarding/settings/configurations/{id}` requires the same configuration permission and concurrency stamp and removes only that scoped override. These records persist Readiness, GR, Roll, and Division guidance; operational policy, capacity, identifier allocation, activation, and service-handoff endpoints remain authoritative for Student changes.
+GET `/api/student/onboarding/settings/configurations` requires `Students.Onboarding.View` and returns school configuration plus the requested academic-year override. PUT requires `Students.Onboarding.Add`, scope access and a concurrency stamp, and validates rule hierarchy, overlap, dates and numbering bounds. DELETE `/api/student/onboarding/settings/configurations/{id}` requires configuration permission, scope access and concurrency. Runtime resolves this configuration for readiness, account requirements and numbering; case commands enforce capacity, uniqueness and activation.
+
+GET `/api/student/onboarding/{id}/portal-accounts` reads scoped account requirements and links. POST requires onboarding management plus `AbpIdentity.Users.Create`, saved contact-email equality and explicit contact verification. Linking an existing guardian additionally requires `AbpIdentity.Users.Update` and an already linked, active, confirmed Parent-only identity. New identities are passwordless; staff cannot reuse privileged identities or supply a password. GET `/api/student/onboarding/portal/my-students` requires an active, confirmed identity and returns only that identity's tenant-local student links.
+
+The existing Account reset-password contract validates the protected owner token. First password setup confirms email only for a passwordless linked Student-only or Parent-only identity. Invalid/replayed tokens do not confirm email. No automatic message delivery is performed by onboarding.
+
+Case list/detail responses include configured `intendedBoardName` and `intendedMediumName`, plus independent `studentAccountRequired`, `guardianAccountRequired`, `studentAccountStatus` and `guardianAccountStatus`. Before enrollment, requirements resolve from effective saved settings; after enrollment, including completed cases, they come from persisted required handoffs. The optional pre-activation finance/accounts checklist item is not evidence that post-activation fee or portal provisioning is optional. Account handoff acknowledgement means linking is complete, not that the owner has verified email or set a password.
 
 ## Eligibility APIs
 

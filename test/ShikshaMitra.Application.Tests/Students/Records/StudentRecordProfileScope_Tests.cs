@@ -7,6 +7,7 @@ using ShikshaMitra.TenantSettings.Divisions;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -37,6 +38,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					offering.StageId, offering.StandardId, divisionId);
 				await _studentRepository.UpdateAsync(student, autoSave: true);
 			}
+			await GetRequiredService<IIdentityUserRepository>().InsertAsync(new IdentityUser(staffId,
+				$"profile-division-staff-{staffId:N}", $"profile-division-staff-{staffId:N}@example.test", TestTenantId),
+				autoSave: true);
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: staffId,
 				academicYearId: assigned.AcademicYearId, educationBoardId: offering.BoardId, educationMediumId: offering.MediumId,
 				educationMediumStageId: offering.StageId, standardId: offering.StandardId,

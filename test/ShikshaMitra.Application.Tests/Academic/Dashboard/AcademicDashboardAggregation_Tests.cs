@@ -45,7 +45,20 @@ public class AcademicDashboardAggregation_Tests : ShikshaMitraApplicationTestBas
 			{
 				var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
 				db.ChangeTracker.Clear();
-				var result = await GetRequiredService<IAcademicDashboardAppService>().GetPrincipalDashboardAsync();
+				var service = GetRequiredService<IAcademicDashboardAppService>();
+				var performance = await service.GetPrincipalPerformanceAsync();
+				var curriculum = await service.GetPrincipalCurriculumAsync();
+				var operations = await service.GetPrincipalOperationsAsync();
+				var overview = await service.GetPrincipalOverviewAsync();
+				var analytics = await service.GetPrincipalAnalyticsAsync();
+				var result = await service.GetPrincipalDashboardAsync();
+				overview.ActionCenterItems.Single(item => item.Id == "lesson-review").Count.ShouldBe(3);
+				performance.TotalStudents.ShouldBe(overview.TotalStudents);
+				performance.SchoolPerformanceIndex.ShouldBe(overview.SchoolPerformanceIndex);
+				curriculum.SyllabusProgress.ShouldBe(overview.SyllabusProgress);
+				operations.ActionCenterItems.Single(item => item.Id == "lesson-review").Count.ShouldBe(3);
+				overview.ChapterCompletionChart.StandardNames.ShouldBeEmpty();
+				analytics.ChapterCompletionChart.StandardNames.ShouldBe(result.ChapterCompletionChart.StandardNames);
 				result.ActionCenterItems.Single(item => item.Id == "lesson-review").Count.ShouldBe(3);
 				var diaryReadiness = result.ReadinessItems.Single(item => item.Key == "lesson-diary-readiness");
 				diaryReadiness.TotalCount.ShouldBe(3);

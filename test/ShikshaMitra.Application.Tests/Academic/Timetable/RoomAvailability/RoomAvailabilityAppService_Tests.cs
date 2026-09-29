@@ -449,6 +449,77 @@ public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<
     }
 
     [Fact]
+    public async Task Batched_Room_Periods_Should_Match_Individual_Checks()
+    {
+        var (room, _) = await SeedRoomAndReservationAsync(Guid.NewGuid());
+        var date = new DateTime(2030, 1, 7);
+        var maintenanceRepository = GetRequiredService<IRepository<RoomMaintenanceBlock, Guid>>();
+        await WithUnitOfWorkAsync(async () =>
+        {
+            await _reservationRepository.InsertAsync(new RoomReservation(Guid.NewGuid(), null,
+                room.Id, date, new TimeSpan(9, 0, 0), new TimeSpan(10, 0, 0),
+                "Reserved for class", RoomReservationType.Class));
+            await maintenanceRepository.InsertAsync(new RoomMaintenanceBlock(Guid.NewGuid(), null,
+                room.Id, "Repair", "Electrical repair", MaintenanceSeverity.High,
+                date.AddHours(12), date.AddHours(13)));
+        });
+
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var periods = new List<(TimeSpan Start, TimeSpan End)>
+            {
+                (new TimeSpan(8, 0, 0), new TimeSpan(9, 0, 0)),
+                (new TimeSpan(9, 0, 0), new TimeSpan(10, 0, 0)),
+                (new TimeSpan(12, 0, 0), new TimeSpan(13, 0, 0)),
+                (new TimeSpan(13, 0, 0), new TimeSpan(14, 0, 0))
+            };
+            var conflictService = GetRequiredService<RoomConflictService>();
+            var batch = await conflictService.CheckRoomPeriodsAsync(room, date, periods);
+
+            for (var index = 0; index < periods.Count; index++)
+            {
+                var period = periods[index];
+                var individual = await conflictService.CheckConflictsAsync(room.Id, date,
+                    period.Start, period.End);
+                System.Text.Json.JsonSerializer.Serialize(batch[index])
+                    .ShouldBe(System.Text.Json.JsonSerializer.Serialize(individual));
+            }
+
+            batch[0].CanSave.ShouldBeTrue();
+            batch[1].CanSave.ShouldBeFalse();
+            batch[2].CanSave.ShouldBeFalse();
+            batch[3].CanSave.ShouldBeTrue();
+        });
+    }
+
+    [Fact]
+    public async Task Room_Schedule_Should_Keep_Reservation_Maintenance_And_Free_Periods()
+    {
+        var (room, _) = await SeedRoomAndReservationAsync(Guid.NewGuid());
+        var date = new DateTime(2030, 1, 7);
+        var maintenanceRepository = GetRequiredService<IRepository<RoomMaintenanceBlock, Guid>>();
+        await WithUnitOfWorkAsync(async () =>
+        {
+            await _reservationRepository.InsertAsync(new RoomReservation(Guid.NewGuid(), null,
+                room.Id, date, new TimeSpan(9, 0, 0), new TimeSpan(10, 0, 0),
+                "Reserved for class", RoomReservationType.Class));
+            await maintenanceRepository.InsertAsync(new RoomMaintenanceBlock(Guid.NewGuid(), null,
+                room.Id, "Repair", "Electrical repair", MaintenanceSeverity.High,
+                date.AddHours(12), date.AddHours(13)));
+        });
+
+        await WithUnitOfWorkAsync(async () =>
+        {
+            var schedule = await _roomAvailabilityAppService.GetRoomScheduleAsync(room.Id, date);
+            schedule.Slots.Count.ShouldBe(18);
+            schedule.Slots.Single(slot => slot.Period == "P3").Status.ShouldBe("free");
+            schedule.Slots.Single(slot => slot.Period == "P4").Status.ShouldBe("class");
+            schedule.Slots.Single(slot => slot.Period == "P7").Status.ShouldBe("maintenance");
+            schedule.Slots.Single(slot => slot.Period == "P8").Status.ShouldBe("free");
+        });
+    }
+
+    [Fact]
     public async Task SuggestRooms_Should_Respect_Pagination_And_Limits()
     {
         // Arrange: Seed 10 rooms

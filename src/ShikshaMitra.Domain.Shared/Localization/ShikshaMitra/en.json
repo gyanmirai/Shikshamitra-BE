@@ -1,6 +1,7 @@
 {
   "Culture": "en",
   "Texts": {
+	"Admissions:ReservedStudentIdConflict": "The reserved Student ID is unavailable, or another request has already finalized this applicant. Refresh and review the linked Student before retrying. If the conflict persists, contact an administrator.",
 	"Finance:LateFeeWaiver:010006": "Enter a reason for rejecting the waiver request.",
 	"Finance:LateFeeWaiver:010007": "The user who submitted this waiver request cannot approve or reject it.",
 	"Admissions.FormMakerCheckerRequired": "A different authorized user must review this form. The user who requested approval cannot approve or reject the same form.",

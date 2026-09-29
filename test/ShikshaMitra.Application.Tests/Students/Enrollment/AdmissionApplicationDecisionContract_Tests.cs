@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Shouldly;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Students.Enrollment;
@@ -43,6 +44,31 @@ public class AdmissionApplicationDecisionContract_Tests
 		inputProperties.ShouldNotContain("RollNumber");
 		resultProperties.ShouldContain(nameof(AdmissionFinalizationResultDto.OnboardingCaseId));
 		resultProperties.ShouldNotContain("StudentEnrollmentId");
+	}
+
+	[Fact]
+	public void Finalization_requires_a_transactional_unit_of_work()
+	{
+		var method = typeof(AdmissionApplicationAppService).GetMethod(nameof(AdmissionApplicationAppService.FinalizeAsync))!;
+		method.GetCustomAttributes(typeof(UnitOfWorkAttribute), inherit: true)
+			.Cast<UnitOfWorkAttribute>()
+			.ShouldContain(attribute => attribute.IsTransactional == true);
+	}
+
+	[Fact]
+	public void Reserved_student_identity_is_internal_and_cannot_be_supplied_through_admission_contracts()
+	{
+		Type[] contracts =
+		[
+			typeof(CreateAdmissionInquiryDto),
+			typeof(UpdateAdmissionInquiryDto),
+			typeof(UpdateAdmissionApplicantProfileDto),
+			typeof(FinalizeAdmissionApplicationDto),
+			typeof(AdmissionApplicantDto)
+		];
+
+		foreach (var contract in contracts)
+			contract.GetProperty(nameof(AdmissionApplicant.ReservedStudentId)).ShouldBeNull();
 	}
 
 	[Fact]

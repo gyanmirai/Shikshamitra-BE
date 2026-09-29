@@ -92,6 +92,12 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		fullNameResult.Items.Select(x => x.Id).ShouldNotContain(outsider.Id);
 		middleNameResult.Items.Select(x => x.Id).ShouldContain(target.Id);
 		firstNameResult.Items.Select(x => x.Id).ShouldContain(target.Id);
+		var assignedShift = await _shiftRepository.GetAsync(targetInput.ShiftId!.Value);
+		var returnedShift = firstNameResult.Items.Single(x => x.Id == target.Id).Shift;
+		returnedShift.ShouldNotBeNull();
+		returnedShift.Name.ShouldBe(assignedShift.ShiftName);
+		returnedShift.StartTime.ShouldBe(assignedShift.StartTime.ToString("HH:mm:ss"));
+		returnedShift.EndTime.ShouldBe(assignedShift.EndTime.ToString("HH:mm:ss"));
 	}
 
 	[Fact]

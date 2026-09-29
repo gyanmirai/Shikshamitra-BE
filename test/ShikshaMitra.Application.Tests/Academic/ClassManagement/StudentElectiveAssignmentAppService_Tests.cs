@@ -1,11 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
@@ -23,6 +28,11 @@ public class StudentElectiveAssignmentAppService_Tests
 	private readonly IRepository<Subject, Guid> _subjectRepository;
 	private readonly IRepository<StudentElectiveSelection, Guid> _selectionRepository;
 	private readonly IRepository<EducationMediumStage, Guid> _stageRepository;
+	private readonly IRepository<EducationMedium, Guid> _mediumRepository;
+	private readonly IRepository<EducationBoard, Guid> _boardRepository;
+	private readonly IRepository<Standard, Guid> _standardRepository;
+	private readonly IRepository<Division, Guid> _divisionRepository;
+	private readonly IRepository<Student, Guid> _studentRepository;
 	private readonly ICurrentTenant _currentTenant;
 
 	public StudentElectiveAssignmentAppService_Tests()
@@ -32,7 +42,50 @@ public class StudentElectiveAssignmentAppService_Tests
 		_subjectRepository = GetRequiredService<IRepository<Subject, Guid>>();
 		_selectionRepository = GetRequiredService<IRepository<StudentElectiveSelection, Guid>>();
 		_stageRepository = GetRequiredService<IRepository<EducationMediumStage, Guid>>();
+		_mediumRepository = GetRequiredService<IRepository<EducationMedium, Guid>>();
+		_boardRepository = GetRequiredService<IRepository<EducationBoard, Guid>>();
+		_standardRepository = GetRequiredService<IRepository<Standard, Guid>>();
+		_divisionRepository = GetRequiredService<IRepository<Division, Guid>>();
+		_studentRepository = GetRequiredService<IRepository<Student, Guid>>();
 		_currentTenant = GetRequiredService<ICurrentTenant>();
+	}
+
+	[Fact]
+	public async Task Get_Assignments_Should_Return_Numeric_Roll_Order_With_Unassigned_Last()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (_currentTenant.Change(TestTenantId))
+			{
+				var stageId = await EmployeeOrganizationTestHelper.EnsureOrganizationExistsAsync(ServiceProvider);
+				var stage = await _stageRepository.GetAsync(stageId);
+				var medium = await _mediumRepository.GetAsync(stage.EducationMediumId);
+				var board = await _boardRepository.GetAsync(medium.EducationBoardId);
+				var standard = await _standardRepository.InsertAsync(
+					new Standard(Guid.NewGuid(), TestTenantId, "Class 8", 8, stageId, shiftId: null),
+					autoSave: true);
+				var division = await _divisionRepository.InsertAsync(
+					new Division(Guid.NewGuid(), TestTenantId, "A", standard.Id, 30, "8-A"),
+					autoSave: true);
+				var group = await _electiveGroupRepository.InsertAsync(new ElectiveGroup(
+					Guid.NewGuid(), TestTenantId, "Elven Grp One", "#7C3AED", medium.Id),
+					autoSave: true);
+
+				foreach (var rollNo in new int?[] { 2, null, 10, 1, 3 })
+				{
+					await _studentRepository.InsertAsync(new Student(
+						Guid.NewGuid(), TestTenantId, "Student", null, rollNo?.ToString() ?? "Unassigned",
+						board.AcademicYearId, board.Id, medium.Id, stageId, standard.Id, division.Id,
+						rollNo: rollNo), autoSave: true);
+				}
+
+				var response = await _appService.GetStudentElectiveAssignmentsAsync(
+					medium.Id, standard.Id, division.Id, group.Id);
+
+				response.TotalRecords.ShouldBe(5);
+				response.Records.Select(record => record.RollNo).ShouldBe(new[] { "1", "2", "3", "10", "N/A" });
+			}
+		});
 	}
 
 	[Fact]

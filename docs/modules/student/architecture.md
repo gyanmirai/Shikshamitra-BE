@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-09-11
+updated_on: 2026-09-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,22 @@ audience: humans-and-agents
 # Locate Student Enrollment Admissions code
 
 TL;DR: Admissions remains inside the Student modular-monolith boundary and separates aggregate invariants, authoritative validation, reads, commands, and runtime availability.
+
+## Reserved Student identity and rollout
+
+`AdmissionApplicant.ReservedStudentId` is supplied by `AdmissionInquiryAppService` using the server GUID generator.
+`AdmissionIdentityConfiguration` requires the GUID, prohibits ordinary EF changes after save, and adds `UX_AdmissionApplicants_ReservedStudentId` plus a nonempty check constraint.
+There is no Student foreign key and no database-generated default.
+`AdmissionApplicationDecisionService` uses this ID only on its new-Student branch; existing-Student selection and actual application links keep their current meanings.
+The Domain `IAdmissionFinalizationConflictClassifier` contract keeps provider-specific exception handling inside EF's `AdmissionFinalizationConflictClassifier`.
+Only Student-primary-key collisions, relevant onboarding unique constraints and optimistic concurrency errors are translated; tenant filters remain enabled and unrelated failures propagate.
+
+Migration `src/ShikshaMitra.EntityFrameworkCore/Migrations/20260924103013_AddAdmissionApplicantReservedStudentId.cs` adds the column nullable, backfills every applicant (including deleted and already-linked records), then enforces required/nonempty/global uniqueness.
+Existing Student IDs, actual applicant/application links and historical data are not rewritten; backfilled reservations on already-linked applicants remain unused.
+Review generated SQL and rehearse against an isolated PostgreSQL database before rollout.
+Deployment requires admission writes to stop while the migration and matching backend binaries are installed: older binaries cannot insert applicants into the new required column without a default.
+Do not roll back to old binaries while writes continue; use a coordinated recovery window or a separately designed expand/contract release if zero-downtime deployment is required.
+Do not drop or regenerate reservations once they are in use, and never delete Students as a rollback shortcut.
 
 ## Offering implementation map
 

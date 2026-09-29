@@ -416,7 +416,12 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
         return result;
     }
 
-    public async Task<PrincipalAcademicDashboardDto> GetPrincipalDashboardAsync()
+    public Task<PrincipalAcademicDashboardDto> GetPrincipalDashboardAsync() => BuildPrincipalDashboardAsync(includeAnalytics: true);
+
+    public Task<PrincipalAcademicDashboardDto> GetPrincipalOverviewAsync() => BuildPrincipalDashboardAsync(includeAnalytics: false);
+
+    private async Task<PrincipalAcademicDashboardDto> BuildPrincipalDashboardAsync(
+        bool includeAnalytics, bool includePerformance = true)
     {
         var studentsCount = (int)await _studentRepository.GetCountAsync();
         var totalStudents = studentsCount;
@@ -433,7 +438,7 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
 
         var exams = await _examRepository.GetListAsync();
 
-        var results = await GetDashboardResultDetailsAsync();
+        var results = includePerformance ? await GetDashboardResultDetailsAsync() : [];
         var schoolPerformanceIndex = results.Count > 0
             ? (int)Math.Round(results.Average(r => r.Percentage))
             : 0;
@@ -475,75 +480,8 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
                 ActionHref = "/academic/gradingAndFeedback"
             });
         }
-        var standards = await _standardRepository.GetListAsync();
         var divisions = await _divisionRepository.GetListAsync();
-        var chartStandards = new List<string>();
-        var chartPercentages = new List<int>();
-        if (standards.Count > 0)
-        {
-            foreach (var std in standards.OrderBy(s => s.Name).Take(6))
-            {
-                var stdDivIds = divisions.Where(d => d.StandardId == std.Id).Select(d => d.Id).ToList();
-                var stdProgress = progressList.Where(p => stdDivIds.Contains(p.DivisionId)).ToList();
-                var avgProgress = stdProgress.Count > 0 ? (int)Math.Round(stdProgress.Average(p => p.Progress)) : 0;
-                chartStandards.Add(std.Name);
-                chartPercentages.Add(avgProgress);
-            }
-        }
-        AcademicDashboardPassFailChartDto passFailChart;
-        if (exams.Count > 0)
-        {
-            var passCounts = new List<int>();
-            var failCounts = new List<int>();
-            var subjectNames = new List<string>();
-
-            var groupedResults = results.GroupBy(r => r.ExamId).ToDictionary(g => g.Key, g => g.ToList());
-            foreach (var exam in exams.Take(6))
-            {
-                subjectNames.Add(exam.ExamName);
-                if (groupedResults.TryGetValue(exam.Id, out var grp))
-                {
-                    passCounts.Add(grp.Count(r => r.ResultStatus == ExamStudentResultStatus.Pass));
-                    failCounts.Add(grp.Count(r => r.ResultStatus == ExamStudentResultStatus.Fail));
-                }
-                else
-                {
-                    passCounts.Add(0);
-                    failCounts.Add(0);
-                }
-            }
-            passFailChart = new AcademicDashboardPassFailChartDto
-            {
-                SubjectNames = subjectNames,
-                PassCounts = passCounts,
-                FailCounts = failCounts
-            };
-        }
-        else
-        {
-            passFailChart = new AcademicDashboardPassFailChartDto();
-        }
-
-        var teacherComparison = new List<AcademicDashboardTeacherPerformanceDto>();
-        var upcomingExamsList = new List<AcademicDashboardExamDto>();
         var students = await _studentRepository.GetListAsync();
-        var topPerformers = new List<AcademicDashboardPerformerDto>();
-        var bottomPerformers = new List<AcademicDashboardPerformerDto>();
-        if (results.Count > 0 && students.Count > 0)
-        {
-            var topRes = results.OrderByDescending(r => r.Percentage).Take(3).ToList();
-            foreach (var r in topRes)
-            {
-                var s = students.FirstOrDefault(st => st.Id == r.StudentId);
-                topPerformers.Add(new() { Id = r.Id.ToString(), Name = $"{s?.FirstName} {s?.LastName}".Trim(), AvatarUrl = string.Empty, TotalMarks = (int)r.Percentage });
-            }
-            var bottomRes = results.OrderBy(r => r.Percentage).Take(3).ToList();
-            foreach (var r in bottomRes)
-            {
-                var s = students.FirstOrDefault(st => st.Id == r.StudentId);
-                bottomPerformers.Add(new() { Id = r.Id.ToString(), Name = $"{s?.FirstName} {s?.LastName}".Trim(), AvatarUrl = string.Empty, TotalMarks = (int)r.Percentage });
-            }
-        }
         var principalAssignedSubjects = await _assignedSubjectRepository.GetListAsync();
         var principalDivisions = divisions;
         var principalTimetables = await _timetableRepository.GetListAsync();
@@ -562,6 +500,9 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
         var principalPendingTimetables = principalTimetables.Count(t => t.Status == TimetableStatus.Draft);
         var principalPendingGradeEntries = exams.Count(e => e.Status == ExamStatus.Published);
 
+        var resultReadyExamCount = includePerformance
+            ? results.Select(result => result.ExamId).Distinct().Count()
+            : (await GetDashboardResultCountsAsync()).Select(result => result.ExamId).Distinct().Count();
         var principalReadinessItems = BuildReadinessItems(
             students,
             employees.Where(e => e.EmployeeGroup == EmployeeGroupType.Teaching).ToList(),
@@ -580,7 +521,7 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
             principalQuestionPapers,
             principalSeatingPlans,
             principalSeatAllocationCount,
-            results.Select(result => result.ExamId).Distinct().Count(),
+            resultReadyExamCount,
             principalRoomCount);
         var principalReadinessRate = principalReadinessItems.Count > 0
             ? (int)Math.Round(principalReadinessItems.Average(i => i.TotalCount == 0 ? 0 : (double)i.CompletedCount / i.TotalCount * 100))
@@ -626,22 +567,28 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
                 principalQuestionPapers,
                 principalSeatingPlans,
                 principalCalendarImpacts),
-            ChapterCompletionChart = new AcademicDashboardChapterCompletionChartDto
-            {
-                StandardNames = chartStandards,
-                CompletionPercentages = chartPercentages
-            },
-            SubjectPassFailChart = passFailChart,
-            TeacherPerformanceComparison = teacherComparison,
-            UpcomingExamsList = upcomingExamsList,
-            TopPerformers = topPerformers,
-            BottomPerformers = bottomPerformers
         };
+
+        if (includeAnalytics)
+        {
+            var analytics = await GetPrincipalAnalyticsAsync();
+            result.ChapterCompletionChart = analytics.ChapterCompletionChart;
+            result.SubjectPassFailChart = analytics.SubjectPassFailChart;
+            result.TeacherPerformanceComparison = analytics.TeacherPerformanceComparison;
+            result.UpcomingExamsList = analytics.UpcomingExamsList;
+            result.TopPerformers = analytics.TopPerformers;
+            result.BottomPerformers = analytics.BottomPerformers;
+        }
 
         return result;
     }
 
-    public async Task<TeacherAcademicDashboardDto> GetTeacherDashboardAsync()
+    public Task<TeacherAcademicDashboardDto> GetTeacherDashboardAsync() => BuildTeacherDashboardAsync(includeAnalytics: true);
+
+    public Task<TeacherAcademicDashboardDto> GetTeacherOverviewAsync() => BuildTeacherDashboardAsync(includeAnalytics: false);
+
+    private async Task<TeacherAcademicDashboardDto> BuildTeacherDashboardAsync(
+        bool includeAnalytics, bool includeAttention = true)
     {
         var currentUserId = CurrentUser.Id;
         var employeesList = await _employeeRepository.GetListAsync(employee =>
@@ -683,7 +630,7 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
             ? divisions.Where(d => teacherStandardIds.Contains(d.StandardId)).ToList()
             : [];
         var teacherDivisionIds = teacherDivisions.Select(d => d.Id).Distinct().ToList();
-        var results = hasTeacherScope && teacherDivisionIds.Count > 0
+        var results = includeAttention && hasTeacherScope && teacherDivisionIds.Count > 0
             ? await GetDashboardResultDetailsAsync(divisionIds: teacherDivisionIds)
             : [];
 
@@ -748,58 +695,13 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
             Graded = completedHW
         };
 
-        var relevantResults = results;
-        if (hasTeacherScope && teacherDivisionIds.Count > 0)
-        {
-            relevantResults = results.Where(r => teacherDivisionIds.Contains(r.DivisionId)).ToList();
-        }
-
-        var excellent = 0;
-        var good = 0;
-        var average = 0;
-        var needsImprovement = 0;
-
-        if (relevantResults.Count > 0)
-        {
-            excellent = relevantResults.Count(r => r.Percentage >= 85);
-            good = relevantResults.Count(r => r.Percentage >= 70 && r.Percentage < 85);
-            average = relevantResults.Count(r => r.Percentage >= 50 && r.Percentage < 70);
-            needsImprovement = relevantResults.Count(r => r.Percentage < 50);
-        }
-
-        var performanceDistribution = new TeacherAcademicDashboardPerformanceDistributionDto
-        {
-            Excellent = excellent,
-            Good = good,
-            Average = average,
-            NeedsImprovement = needsImprovement
-        };
+        var resultReadyExamCount = includeAttention
+            ? results.Select(result => result.ExamId).Distinct().Count()
+            : teacherDivisionIds.Count == 0 ? 0
+                : (await GetDashboardResultCountsAsync(teacherDivisionIds))
+                    .Select(result => result.ExamId).Distinct().Count();
 
         var progressList = await GetDashboardChapterProgressAsync();
-        var chartChapters = new List<string>();
-        var chartPercentages = new List<int>();
-
-        if (teacherAssigned.Count > 0)
-        {
-            var teacherAssignmentIds = teacherAssigned.Select(ta => ta.Id).ToList();
-            var chList = await _chapterRepository.GetListAsync(c => teacherAssignmentIds.Contains(c.AssignedSubjectId));
-            if (chList.Count > 0)
-            {
-                var chIds = chList.Select(c => c.Id).ToList();
-                var progressMap = progressList.Where(p => chIds.Contains(p.ChapterId)).ToDictionary(p => p.ChapterId, p => p.Progress);
-                foreach (var ch in chList.OrderBy(c => c.ChapterNumber).Take(6))
-                {
-                    chartChapters.Add(ch.ChapterName);
-                    chartPercentages.Add(progressMap.TryGetValue(ch.Id, out var prog) ? prog : 0);
-                }
-            }
-        }
-
-        var chapterProgressChart = new AcademicDashboardChapterCompletionChartDto
-        {
-            StandardNames = chartChapters,
-            CompletionPercentages = chartPercentages
-        };
 
         var upcomingExamsList = new List<AcademicDashboardExamDto>();
         var teacherSubjects = hasTeacherScope
@@ -848,7 +750,7 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
             teacherQuestionPapers,
             teacherSeatingPlans,
             teacherSeatAllocationCount,
-            relevantResults.Select(result => result.ExamId).Distinct().Count(),
+            resultReadyExamCount,
             teacherRoomCount);
         var teacherActionCenterItems = BuildActionCenterItems(
             teacherPendingTimetables,
@@ -905,10 +807,15 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
             StudentsAttention = attentionStudents,
             RecentActivities = [],
             HomeworkStatus = homeworkStatus,
-            UpcomingExamsList = upcomingExamsList,
-            PerformanceDistribution = performanceDistribution,
-            ChapterProgressChart = chapterProgressChart
+            UpcomingExamsList = upcomingExamsList
         };
+
+        if (includeAnalytics)
+        {
+            var analytics = await GetTeacherAnalyticsAsync();
+            result.PerformanceDistribution = analytics.PerformanceDistribution;
+            result.ChapterProgressChart = analytics.ChapterProgressChart;
+        }
 
         return result;
     }
@@ -1427,9 +1334,14 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
             .Select(group => new DashboardSeatingCount(group.Key.Status, group.Key.IsLocked, group.Count())));
     }
 
-    private async Task<List<DashboardExamResultCount>> GetDashboardResultCountsAsync()
+    private async Task<List<DashboardExamResultCount>> GetDashboardResultCountsAsync(
+        IReadOnlyCollection<Guid>? divisionIds = null)
     {
         var query = await _examResultDetailRepository.GetQueryableAsync();
+        if (divisionIds is { Count: > 0 })
+        {
+            query = query.Where(result => divisionIds.Contains(result.DivisionId));
+        }
         return await AsyncExecuter.ToListAsync(query.GroupBy(result => new { result.ExamId, result.ResultStatus })
             .Select(group => new DashboardExamResultCount(group.Key.ExamId, group.Key.ResultStatus, group.Count())));
     }

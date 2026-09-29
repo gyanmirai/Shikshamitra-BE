@@ -20,6 +20,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var evidence = await AddHandoffEvidenceAsync(fixture, requirement);
 			var ready = await CompleteDocumentHandoffApplicationAsync(fixture);
 			var studentsBefore = await WithUnitOfWorkAsync(() => _studentRepository.CountAsync());
+			var applicantBefore = await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(ready.ApplicantId));
 			var evidenceRepository = GetRequiredService<IRepository<AdmissionDocumentEvidence, Guid>>();
 			await Should.ThrowAsync<InvalidOperationException>(() => WithUnitOfWorkAsync(async () =>
 			{
@@ -30,6 +31,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				try
 				{
 					var finalized = await FinalizeAsync(ready, true, "document-handoff-rollback");
+					finalized.StudentId.ShouldBe(applicantBefore.ReservedStudentId);
 					(await evidenceRepository.GetAsync(evidence.Id)).StudentId.ShouldBe(finalized.StudentId);
 					(await _onboardingCaseRepository.CountAsync(item => item.ApplicationId == ready.Id)).ShouldBe(1);
 					throw new InvalidOperationException("Simulated failure after finalization persistence.");
@@ -44,7 +46,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var storedApplication = await _applicationAppService.GetAsync(ready.Id);
 			storedApplication.Status.ShouldBe(AdmissionApplicationStatus.OfferAccepted);
 			storedApplication.StudentId.ShouldBeNull();
+			var applicantAfter = await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(ready.ApplicantId));
+			applicantAfter.ReservedStudentId.ShouldBe(applicantBefore.ReservedStudentId);
+			applicantAfter.ExistingStudentId.ShouldBeNull();
+			(await WithUnitOfWorkAsync(() => _studentRepository.FindAsync(applicantBefore.ReservedStudentId)))
+				.ShouldBeNull();
 			var retry = await FinalizeAsync(storedApplication, true, "document-handoff-rollback");
 			retry.Application.Status.ShouldBe(AdmissionApplicationStatus.AdmissionFinalized);
+			retry.StudentId.ShouldBe(applicantBefore.ReservedStudentId);
+			(await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(ready.ApplicantId)))
+				.ReservedStudentId.ShouldBe(applicantBefore.ReservedStudentId);
 		});
 }

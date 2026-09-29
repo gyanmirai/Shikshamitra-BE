@@ -48,6 +48,49 @@ public class AssignmentAlignment_Tests
 	}
 
 	[Fact]
+	public void AssignmentType_Allows_Marks_Evaluation_Without_Default_Marks_On_Create_And_Update()
+	{
+		var assignmentType = CreateAssignmentType(
+			"Project",
+			evaluationRequired: true,
+			evaluationMethod: EvaluationMethod.Marks);
+
+		Assert.Equal(EvaluationMethod.Marks, assignmentType.DefaultEvaluationMethod);
+		Assert.Null(assignmentType.DefaultMarks);
+
+		assignmentType.UpdateInfo(
+			"Project",
+			null,
+			null,
+			25,
+			null,
+			true,
+			EvaluationMethod.Marks,
+			TaskTypeStatus.Active);
+		Assert.Equal(25, assignmentType.DefaultMarks);
+
+		assignmentType.UpdateInfo(
+			"Project",
+			null,
+			null,
+			null,
+			null,
+			true,
+			EvaluationMethod.Marks,
+			TaskTypeStatus.Active);
+		Assert.Null(assignmentType.DefaultMarks);
+	}
+
+	[Fact]
+	public void AssignmentType_Rejects_Negative_Default_Marks_When_Supplied()
+	{
+		var exception = Assert.Throws<BusinessException>(() =>
+			CreateAssignmentType("Project", true, EvaluationMethod.Marks, marks: -1));
+
+		Assert.Equal(HomeworkAssignmentErrorCodes.InvalidDefaultMarks, exception.Code);
+	}
+
+	[Fact]
 	public void AssignmentType_Rejects_Zero_Due_Days()
 	{
 		var exception = Assert.Throws<BusinessException>(() =>

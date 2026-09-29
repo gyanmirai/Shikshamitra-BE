@@ -12,6 +12,14 @@ audience: humans-and-agents
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
 
+## Reserved Student identity contract
+
+The reserved GUID is backend-owned and is not accepted by inquiry, applicant-update, form or finalization inputs.
+Existing public DTO shapes are unchanged; `StudentId` continues to mean an actual Student, not a reservation.
+Finalization may return `Admissions:ReservedStudentIdConflict` if the reserved identity is occupied, including a concurrent finalization; refresh and review the actual linked Student before retrying, and escalate a persistent conflict.
+The error does not reveal other-tenant or deleted Student details.
+Existing finalization permissions, scope checks, idempotency and onboarding boundaries remain unchanged.
+
 ## Permission catalog
 
 Student submodules normally expose `View`, `Add`, and `Delete`. Workflow Builder additionally

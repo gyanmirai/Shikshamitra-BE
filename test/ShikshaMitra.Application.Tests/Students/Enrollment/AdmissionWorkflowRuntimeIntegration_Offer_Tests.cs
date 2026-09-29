@@ -30,6 +30,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			var application = await StartApprovedOfferApplicationAsync(offering.Id, "Offer Applicant");
 			var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
+			runtime = await _applicationAppService.AdvanceWorkflowAsync(application.Id, new AdvanceAdmissionWorkflowDto
+			{
+				ExpectedCurrentStageInstanceId = runtime.CurrentStageInstanceId.ShouldNotBeNull(),
+				ConcurrencyStamp = application.ConcurrencyStamp,
+				IdempotencyKey = "offer-prepare-first"
+			});
 			var stage = runtime.Stages.Single(item => item.StageType == AdmissionWorkflowStageType.Offer);
 			stage.OfferStageEnabled.ShouldBeTrue();
 			var service = GetRequiredService<IAdmissionOfferAppService>();
@@ -116,6 +122,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 			var second = await StartApprovedOfferApplicationAsync(offering.Id, "Reissue Applicant");
 			var secondRuntime = await _applicationAppService.GetWorkflowAsync(second.Id);
+			secondRuntime = await _applicationAppService.AdvanceWorkflowAsync(second.Id, new AdvanceAdmissionWorkflowDto
+			{
+				ExpectedCurrentStageInstanceId = secondRuntime.CurrentStageInstanceId.ShouldNotBeNull(),
+				ConcurrencyStamp = second.ConcurrencyStamp,
+				IdempotencyKey = "offer-prepare-second"
+			});
 			var secondStage = secondRuntime.Stages.Single(item => item.StageType == AdmissionWorkflowStageType.Offer);
 			var secondState = await service.GetAsync(second.Id, secondStage.Id);
 			var secondIssued = await service.IssueAsync(second.Id, secondStage.Id, new()

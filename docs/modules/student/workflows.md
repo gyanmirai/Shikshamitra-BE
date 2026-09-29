@@ -12,20 +12,19 @@ audience: humans-and-agents
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
 
-## Complete onboarding after admission
+## Reserve an identity and finalize admission
 
-Admission finalization links a Student and onboarding case, without operational enrollment.
-Saved year-specific onboarding configuration takes precedence over school configuration; the matching academic path and admission route select readiness and numbering rules.
-Staff refresh evidence, reserve placement and identifiers, and record any required approval.
-Activation creates one enrollment and enters Provisioning (6), rather than completing the case.
-Finance assignment uses that enrollment and remains the only writer of dues and receipts.
-Completion requires a canonical assignment, settlement of the earliest due-date installment group, and sufficient confirmed payment-allocation evidence for its paid amount.
-Later installments may remain unpaid; zero-payable or fully credited obligations do not require artificial payment.
-Required student/guardian identities are created passwordless and linked to the student by authorized staff.
-Their owners use the existing Account password-reset flow; successful first password setup using a valid protected token also verifies the email for linked portal-only identities.
-The self-service linked-student endpoint requires an active, email-confirmed identity and returns only that user's saved tenant-local links.
-Readiness refresh rechecks Finance and account links, completing the case only when all required handoffs are acknowledged.
-Completed historical cases are not reopened by this process.
+1. Create the inquiry/applicant and persist one backend-generated `ReservedStudentId`; do not create a Student yet.
+2. Complete the existing application, review and offer workflow without changing the reservation.
+3. After offer acceptance, run Finalize Admission with the current concurrency stamp, idempotency key, guardian confirmation and explicit duplicate resolution where required.
+4. Reuse a valid linked/selected Student, or create a new Student with the applicant's reserved ID and current validated profile/guardian information.
+5. Atomically link the applicant and application, hand off documents, create the onboarding case and record history.
+6. Continue operational onboarding; finalization does not create the enrollment or assign placement.
+
+A failed transaction leaves the reservation intact and no committed partial Student/onboarding handoff.
+Refresh after a concurrency conflict before retrying; a reservation conflict must be investigated if it persists.
+Later applications reuse an already linked Student and still obey existing same-year enrollment/onboarding restrictions.
+Separate applicant records do not automatically become the same person merely because names match; retain the existing staff duplicate-resolution process.
 
 ## Operate an Admission Cycle
 

@@ -20,6 +20,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		RunCertificationScenarioAsync(async () =>
 		{
 			var fixture = await CreateCertificationFixtureAsync("Aarav", realisticWorkflow: true);
+			fixture.Application.StudentId.ShouldBeNull();
+			(await WithUnitOfWorkAsync(() => _studentRepository.FindAsync(fixture.Applicant.ReservedStudentId)))
+				.ShouldBeNull();
 			var preview = await _applicationAppService.GetFinalizationPreviewAsync(fixture.Application.Id);
 			preview.IsReady.ShouldBeTrue();
 			preview.Items.ShouldAllBe(item => item.Passed);
@@ -31,6 +34,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			result.Application.EnrolledStudentId.ShouldBeNull();
 			result.Application.StudentEnrollmentId.ShouldBeNull();
 			result.ReusedExistingStudent.ShouldBeFalse();
+			result.StudentId.ShouldBe(fixture.Applicant.ReservedStudentId);
+			var finalizedApplicant = await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(fixture.Applicant.Id));
+			finalizedApplicant.ReservedStudentId.ShouldBe(fixture.Applicant.ReservedStudentId);
+			finalizedApplicant.ExistingStudentId.ShouldBe(result.StudentId);
 
 			var student = await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(result.StudentId));
 			student.Status.ShouldBe(StudentLifeCycleStatusEnum.Admission);
@@ -69,7 +76,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 			var reused = await FinalizeAsync(reusable.Application, false, "cert-returning-student");
 			reused.ReusedExistingStudent.ShouldBeTrue();
-			reused.StudentId.ShouldBe(reusable.ExistingStudentId.Value);
+			reused.StudentId.ShouldBe(original.Id);
+			(await WithUnitOfWorkAsync(() => _studentRepository.FindAsync(reusable.Applicant.ReservedStudentId)))
+				.ShouldBeNull();
+			(await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(reusable.Applicant.Id)))
+				.ReservedStudentId.ShouldBe(reusable.Applicant.ReservedStudentId);
 			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentCount);
 			var unchanged = await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(reused.StudentId));
 			unchanged.Status.ShouldBe(originalStatus);
@@ -110,6 +121,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 			var result = await FinalizeAsync(fixture.Application, true, "cert-duplicate-new");
 			result.StudentId.ShouldNotBe(existing.Id);
+			result.StudentId.ShouldBe(fixture.Applicant.ReservedStudentId);
 			result.ReusedExistingStudent.ShouldBeFalse();
 		});
 
@@ -190,6 +202,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var unacceptedError = await Should.ThrowAsync<BusinessException>(() =>
 				FinalizeAsync(unaccepted.Application, true, "cert-unaccepted-offer"));
 			unacceptedError.Code.ShouldBe(StudentOnboardingErrorCodes.FinalizationNotReady);
+			await AssertReservationUnusedAsync(unaccepted);
 
 			var expired = await CreateCertificationFixtureAsync("Arjun");
 			await WithUnitOfWorkAsync(async () =>
@@ -205,6 +218,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var expiredError = await Should.ThrowAsync<BusinessException>(() =>
 				FinalizeAsync(expired.Application, true, "cert-expired-offer"));
 			expiredError.Code.ShouldBe(StudentOnboardingErrorCodes.FinalizationNotReady);
+			await AssertReservationUnusedAsync(expired);
 		});
 
 	[Fact]
@@ -244,6 +258,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					ConfirmGuardianContactVerified = true
 				});
 			second.StudentId.ShouldBe(first.StudentId);
+			second.StudentId.ShouldBe(fixture.Applicant.ReservedStudentId);
+			(await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(fixture.Applicant.Id)))
+				.ReservedStudentId.ShouldBe(fixture.Applicant.ReservedStudentId);
 			second.OnboardingCaseId.ShouldBe(first.OnboardingCaseId);
 			(await WithUnitOfWorkAsync(() =>
 				_onboardingCaseRepository.CountAsync(row => row.ApplicationId == fixture.Application.Id))).ShouldBe(1);
@@ -271,7 +288,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		bool createGuardian = true,
 		bool linkExistingStudent = false,
 		bool acceptOffer = true,
-		Guid? existingStudentId = null)
+		Guid? existingStudentId = null,
+		AdmissionApplicant? existingApplicant = null)
 	{
 		var workflow = realisticWorkflow
 			? await CreateAndPublishRealisticWorkflowAsync()
@@ -279,7 +297,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var offering = await CreateAvailableOfferingAsync(workflow.Id);
 		if (linkExistingStudent)
 			existingStudentId = (await CreateExistingStudentAsync(offering, firstName, "Patel")).Id;
-		var applicant = await CreateCertificationApplicantAsync(
+		var applicant = existingApplicant ?? await CreateCertificationApplicantAsync(
 			firstName, true, createGuardian, existingStudentId);
 		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
 		var submitResult = await _applicationAppService.SubmitAsync(application.Id);
@@ -341,6 +359,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				completeIdentity ? CertificationBirthDate : null,
 				completeIdentity ? "Male" : null,
 				existingStudentId,
+				Guid.NewGuid(),
 				"14 School Road", null, "Ahmedabad", "Gujarat", "India", "380001");
 			await _applicantRepository.InsertAsync(applicant, autoSave: true);
 			return applicant;
@@ -372,13 +391,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	private async Task<Student> CreateExistingStudentAsync(
 		AdmissionOffering offering,
 		string firstName,
-		string lastName)
+		string lastName,
+		Guid? studentId = null)
 	{
 		return await WithUnitOfWorkAsync(async () =>
 		{
 			var cycle = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
 			var student = Student.CreateDirectRegistration(
-				Guid.NewGuid(), TestTenantId, firstName, null, lastName,
+				studentId ?? Guid.NewGuid(), TestTenantId, firstName, null, lastName,
 				cycle.AcademicYearId, offering.BoardId, offering.MediumId, offering.StageId,
 				offering.StandardId, null,
 				new DateTimeOffset(CertificationBirthDate, TimeSpan.Zero), GenderEnum.Male,

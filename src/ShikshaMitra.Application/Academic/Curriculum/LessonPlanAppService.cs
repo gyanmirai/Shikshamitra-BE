@@ -179,105 +179,145 @@ public class LessonPlanAppService(
 
         if (timetableDay != null)
         {
-            var timetableQuery = await timetableRepository.WithDetailsAsync();
-            var timetablesQuery = timetableQuery.Where(x => x.Status == TimetableStatus.Published);
+            // Project only this teacher's periods for the requested weekday. Starting
+            // at the timetable root preserves ABP's tenant filter for child slots.
+            var timetableQuery = await timetableRepository.GetQueryableAsync();
+            var teachingSlotsQuery =
+                from timetable in timetableQuery
+                where timetable.Status == TimetableStatus.Published
+                from slot in timetable.Slots
+                where slot.Day == timetableDay.Value
+                from slotSubject in slot.Subjects
+                where slotSubject.TeacherId == targetTeacherId
+                orderby timetable.Id, slot.Sequence, slot.Id, slotSubject.Id
+                select new
+                {
+                    timetable.StandardId,
+                    timetable.DivisionId,
+                    TimetableSlotId = slot.Id,
+                    slot.Sequence,
+                    slot.StartTime,
+                    slot.EndTime,
+                    slotSubject.SubjectId
+                };
             if (allowedStandardIds != null)
             {
-                timetablesQuery = timetablesQuery.Where(x => allowedStandardIds.Contains(x.StandardId));
+                teachingSlotsQuery = teachingSlotsQuery.Where(x => allowedStandardIds.Contains(x.StandardId));
             }
-            var timetables = await AsyncExecuter.ToListAsync(timetablesQuery);
-
-            var standards = await standardRepository.GetListAsync();
-            var divisions = await divisionRepository.GetListAsync();
-            var subjects = await subjectRepository.GetListAsync();
-
-            foreach (var timetable in timetables)
+            var teachingSlots = await AsyncExecuter.ToListAsync(teachingSlotsQuery);
+            if (teachingSlots.Count > 0)
             {
-                var daySlots = timetable.Slots.Where(s => s.Day == timetableDay.Value);
-                foreach (var slot in daySlots)
+                var standardIds = teachingSlots.Select(x => x.StandardId).Distinct().ToList();
+                var divisionIds = teachingSlots.Select(x => x.DivisionId).Distinct().ToList();
+                var subjectIds = teachingSlots.Select(x => x.SubjectId).Distinct().ToList();
+                var standards = await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+                    .Where(x => standardIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
+                var divisions = await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+                    .Where(x => divisionIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
+                var subjects = await AsyncExecuter.ToListAsync((await subjectRepository.GetQueryableAsync())
+                    .Where(x => subjectIds.Contains(x.Id)).Select(x => new { x.Id, x.Name }));
+
+                var selectedDateOnly = DateOnly.FromDateTime(selectedDate);
+                var approvedLeave = (await employeeLeaveRepository.GetListAsync(x =>
+                        x.EmployeeId == targetTeacherId &&
+                        x.Status == EmployeeLeaveStatusType.Approved &&
+                        x.StartDateOnly <= selectedDateOnly &&
+                        x.EndDateOnly >= selectedDateOnly))
+                    .OrderByDescending(x => x.HalfDay)
+                    .FirstOrDefault();
+                var calendarDays = approvedLeave == null
+                    ? await calendarDayRepository.GetListAsync(day =>
+                        day.Date >= selectedDate && day.Date < selectedDate.AddDays(1) &&
+                        day.Status == CalendarDayStatus.Active &&
+                        (day.AppliesToAll ||
+                         (day.StandardId.HasValue && standardIds.Contains(day.StandardId.Value)) ||
+                         (day.DivisionId.HasValue && divisionIds.Contains(day.DivisionId.Value))))
+                    : [];
+                var insightsByClass = new Dictionary<(Guid StandardId, Guid DivisionId), LessonPlanInsight>();
+
+                foreach (var slot in teachingSlots)
                 {
-                    var teacherSubjects = slot.Subjects.Where(s => s.TeacherId == targetTeacherId);
-                    foreach (var slotSubject in teacherSubjects)
+                    var standard = standards.FirstOrDefault(s => s.Id == slot.StandardId);
+                    var division = divisions.FirstOrDefault(d => d.Id == slot.DivisionId);
+                    var subject = subjects.FirstOrDefault(sub => sub.Id == slot.SubjectId);
+                    var slotStartTime = slot.StartTime.ToString("hh:mm tt");
+                    var slotEndTime = slot.EndTime.ToString("hh:mm tt");
+                    var plan = lessonPlans.FirstOrDefault(lp =>
+                        !matchedPlanIds.Contains(lp.Id) &&
+                        lp.TimetableSlotId == slot.TimetableSlotId &&
+                        MatchesTimelineContext(lp, targetTeacherId, slot.StandardId, slot.DivisionId, slot.SubjectId));
+
+                    // A saved timetable can replace slot IDs. Recover a plan only
+                    // when its date, teacher, class and subject match unambiguously.
+                    if (plan == null)
                     {
-                        var standard = standards.FirstOrDefault(s => s.Id == timetable.StandardId);
-                        var division = divisions.FirstOrDefault(d => d.Id == timetable.DivisionId);
-                        var subject = subjects.FirstOrDefault(sub => sub.Id == slotSubject.SubjectId);
-                        var slotStartTime = slot.StartTime.ToString("hh:mm tt");
-                        var slotEndTime = slot.EndTime.ToString("hh:mm tt");
-                        var plan = lessonPlans.FirstOrDefault(lp =>
-                            !matchedPlanIds.Contains(lp.Id) &&
-                            lp.TimetableSlotId == slot.Id &&
-                            MatchesTimelineContext(lp, targetTeacherId, timetable.StandardId, timetable.DivisionId, slotSubject.SubjectId));
+                        var contextualPlans = lessonPlans
+                            .Where(lp =>
+                                !matchedPlanIds.Contains(lp.Id) &&
+                                lp.StandardId == slot.StandardId &&
+                                lp.DivisionId == slot.DivisionId &&
+                                lp.SubjectId == slot.SubjectId &&
+                                lp.TimetableSlotId != slot.TimetableSlotId)
+                            .ToList();
+                        var timeMatchedPlans = contextualPlans
+                            .Where(lp =>
+                                mappedById.TryGetValue(lp.Id, out var dto) &&
+                                dto.StartTime == slotStartTime &&
+                                dto.EndTime == slotEndTime)
+                            .ToList();
 
-                        // Timetable slots used to be recreated when a timetable was saved. If a
-                        // lesson plan still points at the previous slot id, recover it only when
-                        // there is one unambiguous plan for this teacher/date/context.
-                        if (plan == null)
+                        if (timeMatchedPlans.Count == 1)
                         {
-                            var contextualPlans = lessonPlans
-                                .Where(lp =>
-                                    !matchedPlanIds.Contains(lp.Id) &&
-                                    lp.StandardId == timetable.StandardId &&
-                                    lp.DivisionId == timetable.DivisionId &&
-                                    lp.SubjectId == slotSubject.SubjectId &&
-                                    lp.TimetableSlotId != slot.Id)
-                                .ToList();
-
-                            // A recreated timetable can have more than one occurrence of the
-                            // same subject for a class/division. Match the old slot's time first
-                            // so each plan is attached to its original period rather than being
-                            // left unmapped or assigned to an arbitrary slot.
-                            var timeMatchedPlans = contextualPlans
-                                .Where(lp =>
-                                    mappedById.TryGetValue(lp.Id, out var dto) &&
-                                    dto.StartTime == slotStartTime &&
-                                    dto.EndTime == slotEndTime)
-                                .ToList();
-
-                            if (timeMatchedPlans.Count == 1)
-                            {
-                                plan = timeMatchedPlans[0];
-                            }
-                            else if (contextualPlans.Count == 1)
-                            {
-                                plan = contextualPlans[0];
-                            }
+                            plan = timeMatchedPlans[0];
                         }
-
-                        LessonPlanDto? mappedPlan = null;
-                        if (plan != null && mappedById.TryGetValue(plan.Id, out var dto))
+                        else if (contextualPlans.Count == 1)
                         {
-                            mappedPlan = dto;
-                            matchedPlanIds.Add(dto.Id);
+                            plan = contextualPlans[0];
                         }
-
-                        var insight = await ResolveLessonPlanInsightAsync(
-                            targetTeacherId,
-                            selectedDate,
-                            timetable.StandardId,
-                            timetable.DivisionId
-                        );
-
-                        slots.Add(new TimelineSlotDto
-                        {
-                            TimetableSlotId = slot.Id,
-                            PeriodName = $"Period {slot.Sequence}",
-                            StartTime = slotStartTime,
-                            EndTime = slotEndTime,
-                            StandardId = timetable.StandardId,
-                            StandardName = standard?.Name ?? "Class",
-                            DivisionId = timetable.DivisionId,
-                            DivisionName = division?.Name ?? "Division",
-                            SubjectId = slotSubject.SubjectId,
-                            SubjectName = subject?.Name ?? "Subject",
-                            IsTimetableSlotOnly = plan == null,
-                            LessonPlan = mappedPlan,
-                            InsightType = insight.Type,
-                            InsightSeverity = insight.Severity,
-                            InsightMessage = insight.Message,
-                            IsPlanCreationBlocked = insight.BlocksPlanCreation
-                        });
                     }
+
+                    LessonPlanDto? mappedPlan = null;
+                    if (plan != null && mappedById.TryGetValue(plan.Id, out var dto))
+                    {
+                        mappedPlan = dto;
+                        matchedPlanIds.Add(dto.Id);
+                    }
+
+                    var classKey = (slot.StandardId, slot.DivisionId);
+                    if (!insightsByClass.TryGetValue(classKey, out var insight))
+                    {
+                        var calendarDay = calendarDays
+                            .Where(day => day.AppliesToAll ||
+                                (day.StandardId == slot.StandardId &&
+                                 (!day.DivisionId.HasValue || day.DivisionId == slot.DivisionId)) ||
+                                (day.DivisionId == slot.DivisionId && !day.StandardId.HasValue))
+                            .OrderByDescending(day => day.DayType)
+                            .FirstOrDefault(day => day.DayType != DayType.WorkingDay);
+                        insight = approvedLeave != null
+                            ? CreateLeaveInsight(approvedLeave)
+                            : CreateCalendarInsight(calendarDay);
+                        insightsByClass[classKey] = insight;
+                    }
+
+                    slots.Add(new TimelineSlotDto
+                    {
+                        TimetableSlotId = slot.TimetableSlotId,
+                        PeriodName = $"Period {slot.Sequence}",
+                        StartTime = slotStartTime,
+                        EndTime = slotEndTime,
+                        StandardId = slot.StandardId,
+                        StandardName = standard?.Name ?? "Class",
+                        DivisionId = slot.DivisionId,
+                        DivisionName = division?.Name ?? "Division",
+                        SubjectId = slot.SubjectId,
+                        SubjectName = subject?.Name ?? "Subject",
+                        IsTimetableSlotOnly = plan == null,
+                        LessonPlan = mappedPlan,
+                        InsightType = insight.Type,
+                        InsightSeverity = insight.Severity,
+                        InsightMessage = insight.Message,
+                        IsPlanCreationBlocked = insight.BlocksPlanCreation
+                    });
                 }
             }
         }
@@ -792,6 +832,10 @@ public class LessonPlanAppService(
     {
         var list = lessonPlans.ToList();
         var items = ObjectMapper.Map<List<LessonPlan>, List<LessonPlanDto>>(list);
+        if (list.Count == 0)
+        {
+            return items;
+        }
 
         var teacherIds = list.Select(x => x.TeacherId).Distinct().ToList();
         var standardIds = list.Select(x => x.StandardId).Distinct().ToList();

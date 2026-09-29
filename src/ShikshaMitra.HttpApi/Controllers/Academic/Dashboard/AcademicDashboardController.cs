@@ -71,12 +71,74 @@ public class AcademicDashboardController(IAcademicDashboardAppService dashboardA
         return await dashboardAppService.GetPrincipalDashboardAsync();
     }
 
+    [HttpGet("principal/overview")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    [ProducesResponseType(typeof(PrincipalAcademicDashboardDto), StatusCodes.Status200OK)]
+    public virtual async Task<PrincipalAcademicDashboardDto> GetPrincipalOverviewAsync()
+    {
+        return await dashboardAppService.GetPrincipalOverviewAsync();
+    }
+
+    [HttpGet("principal/performance")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    public virtual Task<PrincipalAcademicDashboardPerformanceDto> GetPrincipalPerformanceAsync() =>
+        dashboardAppService.GetPrincipalPerformanceAsync();
+
+    [HttpGet("principal/curriculum")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    public virtual Task<PrincipalAcademicDashboardCurriculumDto> GetPrincipalCurriculumAsync() =>
+        dashboardAppService.GetPrincipalCurriculumAsync();
+
+    [HttpGet("principal/operations")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    public virtual Task<PrincipalAcademicDashboardOperationsDto> GetPrincipalOperationsAsync() =>
+        dashboardAppService.GetPrincipalOperationsAsync();
+
+    [HttpGet("principal/analytics")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    [ProducesResponseType(typeof(PrincipalAcademicDashboardAnalyticsDto), StatusCodes.Status200OK)]
+    public virtual async Task<PrincipalAcademicDashboardAnalyticsDto> GetPrincipalAnalyticsAsync()
+    {
+        return await dashboardAppService.GetPrincipalAnalyticsAsync();
+    }
+
     [HttpGet("teacher")]
     [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
     [ProducesResponseType(typeof(TeacherAcademicDashboardDto), StatusCodes.Status200OK)]
     public virtual async Task<TeacherAcademicDashboardDto> GetTeacherDashboardAsync()
     {
         return await dashboardAppService.GetTeacherDashboardAsync();
+    }
+
+    [HttpGet("teacher/overview")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    [ProducesResponseType(typeof(TeacherAcademicDashboardDto), StatusCodes.Status200OK)]
+    public virtual async Task<TeacherAcademicDashboardDto> GetTeacherOverviewAsync()
+    {
+        return await dashboardAppService.GetTeacherOverviewAsync();
+    }
+
+    [HttpGet("teacher/assignments")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    public virtual Task<TeacherAcademicDashboardAssignmentsDto> GetTeacherAssignmentsAsync() =>
+        dashboardAppService.GetTeacherAssignmentsAsync();
+
+    [HttpGet("teacher/assessment")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    public virtual Task<TeacherAcademicDashboardAssessmentDto> GetTeacherAssessmentAsync() =>
+        dashboardAppService.GetTeacherAssessmentAsync();
+
+    [HttpGet("teacher/attention")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    public virtual Task<TeacherAcademicDashboardAttentionDto> GetTeacherAttentionAsync() =>
+        dashboardAppService.GetTeacherAttentionAsync();
+
+    [HttpGet("teacher/analytics")]
+    [Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+    [ProducesResponseType(typeof(TeacherAcademicDashboardAnalyticsDto), StatusCodes.Status200OK)]
+    public virtual async Task<TeacherAcademicDashboardAnalyticsDto> GetTeacherAnalyticsAsync()
+    {
+        return await dashboardAppService.GetTeacherAnalyticsAsync();
     }
 
     [HttpPost("refresh")]

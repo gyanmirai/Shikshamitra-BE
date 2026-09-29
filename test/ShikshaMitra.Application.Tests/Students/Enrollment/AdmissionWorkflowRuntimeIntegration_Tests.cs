@@ -214,6 +214,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var workflow = await CreateAndPublishWorkflowAsync();
 			var offering = await CreateAvailableOfferingAsync(workflow.Id);
 			var inquiryService = GetRequiredService<IAdmissionInquiryAppService>();
+			var studentCountBeforeInquiry = await WithUnitOfWorkAsync(() => _studentRepository.CountAsync());
 			var inquiry = await inquiryService.CreateAsync(new CreateAdmissionInquiryDto
 			{
 				AdmissionCycleId = offering.AdmissionCycleId,
@@ -242,9 +243,20 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			applicant.FirstName.ShouldBe("Aanya");
 			applicant.DateOfBirth.ShouldBe(new DateTime(2016, 4, 12));
 			applicant.Gender.ShouldBe("Female");
+			applicant.ReservedStudentId.ShouldNotBe(Guid.Empty);
+			applicant.ReservedStudentId.ShouldNotBe(applicant.Id);
+			(await WithUnitOfWorkAsync(() => _studentRepository.FindAsync(applicant.ReservedStudentId)))
+				.ShouldBeNull();
+			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentCountBeforeInquiry);
 			guardian.Mobile.ShouldBe("9876543210");
 
 			var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id, inquiry.Id);
+			application.StudentId.ShouldBeNull();
+			(await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(applicant.Id)))
+				.ReservedStudentId.ShouldBe(applicant.ReservedStudentId);
+			(await WithUnitOfWorkAsync(() => _studentRepository.FindAsync(applicant.ReservedStudentId)))
+				.ShouldBeNull();
+			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentCountBeforeInquiry);
 			var form = await _applicationAppService.GetFormAsync(application.Id);
 			form.Values.Single(value => value.FieldCode == "LEARNING_NOTES").ValueJson
 				.ShouldBe("\"Benefits from visual learning prompts\"");
@@ -337,7 +349,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				var family = new AdmissionFamily(Guid.NewGuid(), TestTenantId, $"REPAIR-{Guid.NewGuid():N}"[..20]);
 				await _familyRepository.InsertAsync(family, autoSave: true);
 				var incomplete = new AdmissionApplicant(
-					Guid.NewGuid(), TestTenantId, family.Id, "Aanya", null, null, null, null, null);
+					Guid.NewGuid(), TestTenantId, family.Id, "Aanya", null, null, null, null, null, Guid.NewGuid());
 				await _applicantRepository.InsertAsync(incomplete, autoSave: true);
 				return incomplete;
 			});
@@ -355,6 +367,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			updated.LastName.ShouldBe("Shah");
 			updated.DateOfBirth.ShouldBe(new DateTime(2016, 4, 12));
 			updated.Gender.ShouldBe("Female");
+			(await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(applicant.Id)))
+				.ReservedStudentId.ShouldBe(applicant.ReservedStudentId);
+			(await WithUnitOfWorkAsync(() => _studentRepository.FindAsync(applicant.ReservedStudentId)))
+				.ShouldBeNull();
 		}
 	}
 
@@ -643,10 +659,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var first = await _applicationAppService.StartDirectRegistrationAsync(input);
 			first.AssignedCounsellorId.ShouldBe(TestUserId);
 			(await _applicationRepository.GetAsync(first.Id)).InquiryId.ShouldBeNull();
+			var reservedStudentId = (await _applicantRepository.GetAsync(first.ApplicantId)).ReservedStudentId;
+			reservedStudentId.ShouldNotBe(Guid.Empty);
 			var runtime = await _applicationAppService.GetWorkflowAsync(first.Id);
 			runtime.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.Form)
 				.Status.ShouldBe(AdmissionRuntimeStageStatus.Active);
 			(await _applicationAppService.StartDirectRegistrationAsync(input)).Id.ShouldBe(first.Id);
+			(await _applicantRepository.GetAsync(first.ApplicantId)).ReservedStudentId.ShouldBe(reservedStudentId);
 			(await Should.ThrowAsync<BusinessException>(() =>
 				_applicationAppService.StartDirectRegistrationAsync(new StartAdmissionDirectRegistrationDto
 				{
@@ -1176,7 +1195,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var family = new AdmissionFamily(Guid.NewGuid(), TestTenantId, $"FAM-{Guid.NewGuid():N}");
 		await _familyRepository.InsertAsync(family, autoSave: true);
 		var applicant = new AdmissionApplicant(
-			Guid.NewGuid(), TestTenantId, family.Id, firstName, null, "Patel", new DateTime(2016, 5, 14), "Male", null);
+			Guid.NewGuid(), TestTenantId, family.Id, firstName, null, "Patel", new DateTime(2016, 5, 14), "Male", null,
+			Guid.NewGuid());
 		await _applicantRepository.InsertAsync(applicant, autoSave: true);
 		return applicant;
 	}

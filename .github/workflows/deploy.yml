@@ -15,10 +15,8 @@ env:
 jobs:
     security:
         uses: ./.github/workflows/security-regression.yml
-        if: github.ref == 'refs/heads/main'
     build-and-deploy:
         needs: security
-        if: github.ref == 'refs/heads/main'
         runs-on: ubuntu-latest
 
         steps:

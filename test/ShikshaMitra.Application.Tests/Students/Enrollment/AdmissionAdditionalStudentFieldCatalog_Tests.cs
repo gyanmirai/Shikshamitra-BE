@@ -29,7 +29,7 @@ public class AdmissionAdditionalStudentFieldCatalog_Tests
 	public void Additional_values_prefill_registration_and_follow_applicant_into_student_record()
 	{
 		var applicant = new AdmissionApplicant(Guid.NewGuid(), null, Guid.NewGuid(), "Asha", null,
-			"Patel", null, null, null);
+			"Patel", null, null, null, Guid.NewGuid());
 		var student = new Student(Guid.NewGuid(), null, "Asha", null, "Patel", Guid.NewGuid(),
 			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
 

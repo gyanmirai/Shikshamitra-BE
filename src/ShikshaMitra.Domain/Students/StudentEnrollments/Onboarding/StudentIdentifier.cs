@@ -66,6 +66,18 @@ public class StudentIdentifierSeries : FullAuditedAggregateRoot<Guid>, IMultiTen
 
 	public void Deactivate() => IsActive = false;
 
+	public void ApplyRule(string name, string prefix, string suffix, int padding, long startingNumber, long? maximumNumber)
+	{
+		if (padding is < 1 or > 20 || startingNumber < 1) throw new ArgumentOutOfRangeException(nameof(padding));
+		Name = Check.NotNullOrWhiteSpace(name, nameof(name), 120).Trim();
+		Prefix = NormalizeAffix(prefix, nameof(prefix));
+		Suffix = NormalizeAffix(suffix, nameof(suffix));
+		Padding = padding;
+		// Editing a rule must never rewind a committed or reserved sequence.
+		NextSequence = Math.Max(NextSequence, startingNumber);
+		MaximumSequence = maximumNumber;
+	}
+
 	private static string NormalizeAffix(string? value, string parameterName)
 	{
 		var normalized = value?.Trim() ?? string.Empty;

@@ -74,8 +74,24 @@ public class StudentOnboardingServiceHandoffDto : EntityDto<Guid>
 	public string? LastError { get; set; }
 }
 
+public class CapturedStudentFieldDto
+{
+	public string Key { get; set; } = string.Empty;
+	public string Label { get; set; } = string.Empty;
+	public string Value { get; set; } = string.Empty;
+}
+
 public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 {
+	public IReadOnlyList<CapturedStudentFieldDto> CapturedStudentFields { get; set; } = [];
+	public string AdmissionRoute { get; set; } = "Fresh admission";
+	public bool? FeeAssignmentConfirmed { get; set; }
+	public bool? FirstPaymentConfirmed { get; set; }
+	public string? FinanceReadinessDetail { get; set; }
+	public bool StudentAccountRequired { get; set; }
+	public bool GuardianAccountRequired { get; set; }
+	public StudentOnboardingServiceHandoffStatus? StudentAccountStatus { get; set; }
+	public StudentOnboardingServiceHandoffStatus? GuardianAccountStatus { get; set; }
 	public bool DocumentUploadsEnabled { get; set; } = true;
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public Guid ApplicationId { get; set; }
@@ -88,7 +104,9 @@ public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 	public Guid AcademicYearId { get; set; }
 	public string AcademicYearName { get; set; } = string.Empty;
 	public Guid IntendedBoardId { get; set; }
+	public string IntendedBoardName { get; set; } = string.Empty;
 	public Guid IntendedMediumId { get; set; }
+	public string IntendedMediumName { get; set; } = string.Empty;
 	public Guid IntendedStageId { get; set; }
 	public Guid IntendedStandardId { get; set; }
 	public string IntendedStandardName { get; set; } = string.Empty;
@@ -114,6 +132,12 @@ public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 	public bool IsOverdue { get; set; }
 	public IReadOnlyList<StudentOnboardingStepDto> Steps { get; set; } = [];
 	public IReadOnlyList<StudentOnboardingEventDto> Events { get; set; } = [];
+}
+
+public class SetStudentOnboardingRouteDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public string AdmissionRoute { get; set; } = "Fresh admission";
 }
 
 public class StudentOnboardingPlacementOptionDto : EntityDto<Guid>
@@ -144,6 +168,7 @@ public class SetStudentOnboardingPlacementDto
 {
 	public string? ConcurrencyStamp { get; set; }
 	public Guid DivisionId { get; set; }
+	public string? Reason { get; set; }
 }
 
 public class AllocateStudentOnboardingIdentifierDto

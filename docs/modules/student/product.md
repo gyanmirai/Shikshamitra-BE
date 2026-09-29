@@ -172,6 +172,7 @@ Existing separately authorized workflow skip and override controls remain availa
 Assessment does not approve admission or create a Student.
 Admissions finalization requires a completed admissions workflow and normally an accepted, unexpired offer; it creates or links the Student plus a Student Onboarding case. Non-General direct-registration offerings without an Offer stage can also finalize from Approved. If staff issue an optional offer on that path, it must be accepted and unexpired before finalization; the accepted-offer path remains valid. Guardian confirmation, identity resolution, and evidence checks apply to both paths.
 Operational StudentEnrollment creation remains part of onboarding activation.
+Activation starts Provisioning rather than completing onboarding. Completion requires the academic fee assignment, confirmed settlement of its first scheduled installment group, and required student/guardian account links. Finance owns all money writes. New portal accounts are passwordless; owners use the protected Account password-reset flow to establish access. The case never treats an unconfirmed payment or a queued account request as completed evidence.
 Subject-level marks, public applicant self-booking, and external examination provider integrations are not included in this assessment policy version.
 
 ## Managed document verification

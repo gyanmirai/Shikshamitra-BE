@@ -15,6 +15,21 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 [Route("api/student/onboarding")]
 public class StudentOnboardingController(IStudentOnboardingAppService service) : AbpController
 {
+	[HttpGet("{id:guid}/portal-accounts")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task<Result<IReadOnlyList<StudentPortalAccountDto>>> GetPortalAccountsAsync(Guid id) =>
+		Result.Success(await service.GetPortalAccountsAsync(id));
+
+	[HttpPost("{id:guid}/portal-accounts")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	[Authorize(Volo.Abp.Identity.IdentityPermissions.Users.Create)]
+	public async Task<Result<StudentPortalAccountDto>> ProvisionPortalAccountAsync(Guid id, ProvisionStudentPortalAccountDto input) =>
+		Result.Success(await service.ProvisionPortalAccountAsync(id, input));
+
+	[HttpGet("portal/my-students")]
+	public async Task<Result<IReadOnlyList<StudentPortalAccountDto>>> GetMyPortalStudentsAsync() =>
+		Result.Success(await service.GetMyPortalStudentsAsync());
+
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<PagedResultDto<StudentOnboardingCaseDto>>> GetListAsync(
@@ -54,6 +69,11 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	public async Task<Result<StudentOnboardingCaseDto>> AssignOwnerAsync(
 		Guid id, AssignStudentOnboardingOwnerDto input) => Result.Success(await service.AssignOwnerAsync(id, input));
+
+	[HttpPut("{id:guid}/admission-route")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	public async Task<Result<StudentOnboardingCaseDto>> SetAdmissionRouteAsync(Guid id, SetStudentOnboardingRouteDto input) =>
+		Result.Success(await service.SetAdmissionRouteAsync(id, input));
 
 	[HttpPut("{id:guid}/steps/{stepKey}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]

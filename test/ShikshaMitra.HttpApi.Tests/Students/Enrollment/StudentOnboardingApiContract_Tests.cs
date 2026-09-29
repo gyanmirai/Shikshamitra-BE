@@ -12,6 +12,21 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 public class StudentOnboardingApiContract_Tests
 {
 	[Fact]
+	public void Portal_creation_requires_both_onboarding_and_identity_permissions_on_both_boundaries()
+	{
+		Get(nameof(StudentOnboardingController.GetPortalAccountsAsync)).ShouldBe("{id:guid}/portal-accounts");
+		Post(nameof(StudentOnboardingController.ProvisionPortalAccountAsync)).ShouldBe("{id:guid}/portal-accounts");
+		Get(nameof(StudentOnboardingController.GetMyPortalStudentsAsync)).ShouldBe("portal/my-students");
+		foreach (var type in new[] { typeof(StudentOnboardingController), typeof(StudentOnboardingAppService) })
+		{
+			var policies = type.GetMethod(nameof(StudentOnboardingAppService.ProvisionPortalAccountAsync))!
+				.GetCustomAttributes<AuthorizeAttribute>().Select(attribute => attribute.Policy).ToArray();
+			policies.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
+			policies.ShouldContain(Volo.Abp.Identity.IdentityPermissions.Users.Create);
+		}
+	}
+
+	[Fact]
 	public void Controller_exposes_queue_workspace_activation_and_settings_routes()
 	{
 		Route(typeof(StudentOnboardingController)).ShouldBe("api/student/onboarding");

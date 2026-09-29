@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-25
+updated_on: 2026-09-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,21 @@ audience: humans-and-agents
 # Trace Student Enrollment Admissions workflows
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
+
+## Complete onboarding after admission
+
+Admission finalization links a Student and onboarding case, without operational enrollment.
+Saved year-specific onboarding configuration takes precedence over school configuration; the matching academic path and admission route select readiness and numbering rules.
+Staff refresh evidence, reserve placement and identifiers, and record any required approval.
+Activation creates one enrollment and enters Provisioning (6), rather than completing the case.
+Finance assignment uses that enrollment and remains the only writer of dues and receipts.
+Completion requires a canonical assignment, settlement of the earliest due-date installment group, and sufficient confirmed payment-allocation evidence for its paid amount.
+Later installments may remain unpaid; zero-payable or fully credited obligations do not require artificial payment.
+Required student/guardian identities are created passwordless and linked to the student by authorized staff.
+Their owners use the existing Account password-reset flow; successful first password setup using a valid protected token also verifies the email for linked portal-only identities.
+The self-service linked-student endpoint requires an active, email-confirmed identity and returns only that user's saved tenant-local links.
+Readiness refresh rechecks Finance and account links, completing the case only when all required handoffs are acknowledged.
+Completed historical cases are not reopened by this process.
 
 ## Operate an Admission Cycle
 
@@ -102,7 +117,7 @@ Later changes to offering defaults affect only future runtime records.
 4. Add controlled conditional transitions and at most one default route per source stage. Each conditional route from a stage uses a unique non-negative priority; a route without a condition is always the single default route. Condition fields must use the server allowlist (`application`, `inquiry`, `assessment`, `documents`, `payment`, `eligibility`, `approval`, `offer`, `seat`, `enrollment`, or `appointment`).
    A required stage cannot enable ordinary manual skip. Stage types without a runtime-ready handler are publication errors, not advisory warnings.
 
-Admission forms use the same controlled rule foundation for section visibility, field visibility, and conditional requiredness. The form runtime also supports canonical Applicant, Guardian, and Address bindings; these values remain domain-owned and are written back through the binding registry.
+Admission forms use the same controlled rule foundation for section visibility, field visibility, and conditional requiredness. The form runtime supports 100 canonical Student field bindings: 15 original Applicant, Guardian, and Address bindings plus 85 additional profile, family, address, previous-school, health, eligibility, identity, and admission-preference bindings. Financial assistance fields are excluded from the expanded catalogue. The original bindings update admission identity and contact properties. Additional bindings persist on the applicant, prefill registration after inquiry, and are copied to the Student record's captured admission fields during finalization. Staff can review those captured values on the onboarding case detail; they are not automatically treated as verified SIS profile values. Clearing an additional answer removes its applicant value before finalization.
 
 Every new form version carries an Inquiry or Registration purpose. Clone and new-version operations preserve it, and changing it is allowed only on a Draft. Earlier Correction and Consent values may remain on existing test records but cannot be used for new forms. Workflow publication requires a published Registration form on each Form stage and a published Inquiry form for any configured workflow default. Offering readiness rejects a purpose mismatch before activation.
 5. Validate reachability, dead ends, duplicate routes, cycles, terminal reachability, published form references, and every enabled managed-stage policy. Form, Review, Payment, Offer, and Seat policies are parsed with the same domain validators used by runtime, so malformed or out-of-range settings cannot pass publication validation.

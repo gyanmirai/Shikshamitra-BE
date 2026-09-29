@@ -183,6 +183,8 @@ public class AdmissionApplicationDecisionService(
 		{
 			student = await studentRepository.FindAsync(selectedStudentId.Value) ??
 				throw new BusinessException(StudentOnboardingErrorCodes.ExistingStudentInvalid);
+			AdmissionAdditionalStudentFieldCatalog.CopyToStudent(context.Applicant, student);
+			await studentRepository.UpdateAsync(student, false);
 		}
 		else
 		{
@@ -394,6 +396,7 @@ public class AdmissionApplicationDecisionService(
 		student.UpdateFamilyInfo(null, null, new ParentGuardianDetails(
 			$"{guardian.FirstName} {guardian.LastName}".Trim(), null, null, guardian.Email, guardian.Mobile,
 			null, null, null, null, null, null, null, null), null);
+		AdmissionAdditionalStudentFieldCatalog.CopyToStudent(applicant, student);
 		student.MoveToAdmission();
 		return student;
 	}

@@ -8,7 +8,11 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 internal static class AdmissionFormBindingRegistry
 {
 	public static readonly IReadOnlyDictionary<string, AdmissionFormSystemFieldMetadataDto> Metadata =
-		new Dictionary<string, AdmissionFormSystemFieldMetadataDto>(StringComparer.OrdinalIgnoreCase)
+		BuildMetadata();
+
+	private static IReadOnlyDictionary<string, AdmissionFormSystemFieldMetadataDto> BuildMetadata()
+	{
+		var metadata = new Dictionary<string, AdmissionFormSystemFieldMetadataDto>(StringComparer.OrdinalIgnoreCase)
 		{
 			["Applicant.FirstName"] = new() { Key = "Applicant.FirstName", DisplayName = "Applicant first name", Description = "The applicant's first name.", FieldType = AdmissionFormFieldType.Text },
 			["Applicant.MiddleName"] = new() { Key = "Applicant.MiddleName", DisplayName = "Applicant middle name", Description = "The applicant's middle name.", FieldType = AdmissionFormFieldType.Text },
@@ -26,6 +30,10 @@ internal static class AdmissionFormBindingRegistry
 			["Address.Country"] = new() { Key = "Address.Country", DisplayName = "Country", Description = "The applicant's country.", FieldType = AdmissionFormFieldType.Text },
 			["Address.PostalCode"] = new() { Key = "Address.PostalCode", DisplayName = "Postal code", Description = "The applicant's postal or ZIP code.", FieldType = AdmissionFormFieldType.Text }
 		};
+		foreach (var field in AdmissionAdditionalStudentFieldCatalog.Metadata.Values)
+			metadata.Add(field.Key, field);
+		return metadata;
+	}
 
 	public static object? GetValue(string key, AdmissionApplicant applicant, AdmissionGuardian? guardian) => key switch
 	{
@@ -44,7 +52,7 @@ internal static class AdmissionFormBindingRegistry
 		"Address.State" => applicant.State,
 		"Address.Country" => applicant.Country,
 		"Address.PostalCode" => applicant.PostalCode,
-		_ => null
+		_ => AdmissionAdditionalStudentFieldCatalog.GetValue(key, applicant)
 	};
 
 	public static bool ApplyValue(string key, string value, AdmissionApplicant applicant, AdmissionGuardian? guardian)
@@ -68,7 +76,7 @@ internal static class AdmissionFormBindingRegistry
 			case "Address.State": UpdateApplicantAddress(applicant, applicant.AddressLine1, applicant.AddressLine2, applicant.City, ReadLocationName(value), applicant.Country, applicant.PostalCode); return true;
 			case "Address.Country": UpdateApplicantAddress(applicant, applicant.AddressLine1, applicant.AddressLine2, applicant.City, applicant.State, ReadLocationName(value), applicant.PostalCode); return true;
 			case "Address.PostalCode": UpdateApplicantAddress(applicant, applicant.AddressLine1, applicant.AddressLine2, applicant.City, applicant.State, applicant.Country, value); return true;
-			default: return false;
+			default: return AdmissionAdditionalStudentFieldCatalog.ApplyValue(key, value, applicant);
 		}
 	}
 

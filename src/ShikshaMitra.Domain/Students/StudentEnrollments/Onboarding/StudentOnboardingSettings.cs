@@ -30,4 +30,8 @@ public class StudentOnboardingSettings : FullAuditedAggregateRoot<Guid>, IMultiT
 		ConfigurationJson = Check.NotNullOrWhiteSpace(configurationJson,
 			nameof(configurationJson), StudentOnboardingSettingsConsts.MaxConfigurationLength).Trim();
 	}
+
+	public bool MatchesConfiguration(int schemaVersion, string configurationJson) =>
+		SchemaVersion == schemaVersion &&
+		string.Equals(ConfigurationJson, configurationJson.Trim(), StringComparison.Ordinal);
 }

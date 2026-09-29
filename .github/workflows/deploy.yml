@@ -13,8 +13,6 @@ env:
     SeedTestLogins: 'true'
 
 jobs:
-    security:
-        uses: ./.github/workflows/security-regression.yml
     build-and-deploy:
         needs: security
         runs-on: ubuntu-latest

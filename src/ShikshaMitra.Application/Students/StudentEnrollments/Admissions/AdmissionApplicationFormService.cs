@@ -102,8 +102,13 @@ public class AdmissionApplicationFormService(
 				existing.SetValue(item.Input.ValueJson);
 				await valueRepository.UpdateAsync(existing, false);
 			}
-			if (definition.BindingType == AdmissionFormBindingType.System && applicant is not null && !string.IsNullOrWhiteSpace(item.Input.ValueJson))
-				AdmissionFormBindingRegistry.ApplyValue(definition.BindingKey!, AdmissionApplicationValueConverter.Unwrap(item.Input.ValueJson), applicant, guardian);
+			if (definition.BindingType == AdmissionFormBindingType.System && applicant is not null)
+			{
+				var value = AdmissionApplicationValueConverter.Unwrap(item.Input.ValueJson);
+				if (!string.IsNullOrWhiteSpace(value) ||
+					AdmissionAdditionalStudentFieldCatalog.Metadata.ContainsKey(definition.BindingKey!))
+					AdmissionFormBindingRegistry.ApplyValue(definition.BindingKey!, value, applicant, guardian);
+			}
 		}
 		if (applicant is not null) await applicantRepository.UpdateAsync(applicant, false);
 		if (guardian is not null) await guardianRepository.UpdateAsync(guardian, false);

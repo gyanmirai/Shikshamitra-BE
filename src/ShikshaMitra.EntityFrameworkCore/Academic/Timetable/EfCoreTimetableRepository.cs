@@ -65,6 +65,37 @@ public class EfCoreTimetableRepository(
             .ToListAsync();
     }
 
+    public async Task<List<TimetableConflictCandidate>> GetRoomOccupationsAsync(
+        IReadOnlyCollection<Guid> roomIds,
+        TimetableDayOfWeek day,
+        TimeOnly startTime,
+        TimeOnly endTime)
+    {
+        if (roomIds.Count == 0) return [];
+
+        // Child slots have no TenantId; begin at the ABP-filtered timetable root.
+        var roomIdArray = roomIds.ToArray();
+        var dbSet = await GetDbSetAsync();
+        var query = from timetable in dbSet.AsNoTracking()
+                    where timetable.Status != TimetableStatus.NotCreated
+                    from slot in timetable.Slots
+                    where slot.Day == day && slot.StartTime < endTime && slot.EndTime > startTime
+                    from subject in slot.Subjects
+                    where subject.RoomId.HasValue && Enumerable.Contains(roomIdArray, subject.RoomId.Value)
+                    orderby timetable.Id, slot.Id, subject.Id
+                    select new TimetableConflictCandidate(
+                        timetable.StandardId,
+                        timetable.DivisionId,
+                        subject.SubjectId,
+                        slot.Day,
+                        slot.StartTime,
+                        slot.EndTime,
+                        subject.TeacherId,
+                        subject.RoomId);
+
+        return await query.ToListAsync();
+    }
+
     public async Task<List<TimetableConflictCandidate>> GetConflictCandidatesAsync(
         Guid standardId,
         Guid divisionId,

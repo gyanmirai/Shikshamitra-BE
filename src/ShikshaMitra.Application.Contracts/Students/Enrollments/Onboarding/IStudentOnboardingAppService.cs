@@ -16,6 +16,7 @@ public interface IStudentOnboardingAppService : IApplicationService
 	Task<IReadOnlyList<StudentIdentifierSeriesDto>> GetAvailableIdentifierSeriesAsync(Guid id);
 	Task<StudentOnboardingCaseDto> RefreshReadinessAsync(Guid id, string? concurrencyStamp);
 	Task<StudentOnboardingCaseDto> AssignOwnerAsync(Guid id, AssignStudentOnboardingOwnerDto input);
+	Task<StudentOnboardingCaseDto> SetAdmissionRouteAsync(Guid id, SetStudentOnboardingRouteDto input);
 	Task<StudentOnboardingCaseDto> UpdateStepAsync(Guid id, string stepKey, UpdateStudentOnboardingStepDto input);
 	Task<StudentOnboardingCaseDto> SetPlacementAsync(Guid id, SetStudentOnboardingPlacementDto input);
 	Task<StudentOnboardingCaseDto> AllocateIdentifierAsync(Guid id, AllocateStudentOnboardingIdentifierDto input);
@@ -24,6 +25,9 @@ public interface IStudentOnboardingAppService : IApplicationService
 	Task<StudentOnboardingCaseDto> CancelAsync(Guid id, CancelStudentOnboardingDto input);
 	Task<IReadOnlyList<StudentOnboardingServiceHandoffDto>> GetServiceHandoffsAsync(Guid id);
 	Task<StudentOnboardingServiceHandoffDto> RetryServiceHandoffAsync(Guid id, Guid handoffId);
+	Task<IReadOnlyList<StudentPortalAccountDto>> GetPortalAccountsAsync(Guid id);
+	Task<StudentPortalAccountDto> ProvisionPortalAccountAsync(Guid id, ProvisionStudentPortalAccountDto input);
+	Task<IReadOnlyList<StudentPortalAccountDto>> GetMyPortalStudentsAsync();
 	Task<IReadOnlyList<StudentOnboardingPolicyDto>> GetPoliciesAsync(Guid academicYearId);
 	Task<StudentOnboardingPolicyDto> CreatePolicyAsync(UpsertStudentOnboardingPolicyDto input);
 	Task<StudentOnboardingPolicyDto> UpdatePolicyAsync(Guid id, UpsertStudentOnboardingPolicyDto input);

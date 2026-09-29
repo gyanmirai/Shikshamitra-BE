@@ -66,6 +66,26 @@ public class AdmissionWorkflowGraphValidator_Tests
 	}
 
 	[Fact]
+	public void Any_stage_type_can_be_selected_as_the_single_entry()
+	{
+		AdmissionWorkflowStageTypeRegistry.All.ShouldAllBe(metadata => metadata.CanBeEntryStage);
+		var workflowId = Guid.NewGuid();
+		var assessment = Stage(workflowId, "ASSESSMENT", 0, isEntry: true,
+			type: AdmissionWorkflowStageType.Assessment);
+		var form = Stage(workflowId, "FORM", 1, type: AdmissionWorkflowStageType.Form,
+			configurationJson: """{"formDefinitionId":"00000000-0000-0000-0000-000000000001","form":{"enabled":true,"version":1}}""");
+		var decision = Stage(workflowId, "DECISION", 2, isTerminal: true,
+			type: AdmissionWorkflowStageType.Approval);
+
+		var issues = _validator.Validate([assessment, form, decision],
+			[Transition(workflowId, assessment.Id, form.Id, 0),
+			 Transition(workflowId, form.Id, decision.Id, 0)]);
+
+		issues.ShouldNotContain(issue => issue.Code == AdmissionWorkflowErrorCodes.InvalidInitialStage);
+		issues.ShouldNotContain(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+	}
+
+	[Fact]
 	public void DetectsOrphansDeadEndsAndUnreachableStages()
 	{
 		var workflowId = Guid.NewGuid();

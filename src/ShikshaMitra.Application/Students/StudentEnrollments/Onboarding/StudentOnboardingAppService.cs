@@ -21,12 +21,15 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 [Authorize]
-public class StudentOnboardingAppService(
+public partial class StudentOnboardingAppService(
 	IRepository<StudentOnboardingCase, Guid> caseRepository,
 	IRepository<StudentOnboardingStep, Guid> stepRepository,
 	IRepository<StudentOnboardingEvent, Guid> eventRepository,
 	IRepository<StudentOnboardingPolicy, Guid> policyRepository,
 	IRepository<StudentOnboardingSettings, Guid> settingsRepository,
+	OnboardingConfigurationManager configurationManager,
+	ShikshaMitra.Security.UserScope.IUserScopeService userScopeService,
+	OnboardingFeeReadinessReader feeReadinessReader,
 	IRepository<StudentSeatReservation, Guid> reservationRepository,
 	IRepository<StudentIdentifierSeries, Guid> seriesRepository,
 	IRepository<StudentIdentifierAllocation, Guid> allocationRepository,
@@ -35,6 +38,8 @@ public class StudentOnboardingAppService(
 	IRepository<AdmissionOffering, Guid> offeringRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
+	IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid> boardRepository,
+	IRepository<ShikshaMitra.TenantSettings.EducationMediums.EducationMedium, Guid> mediumRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<StudentEnrollment, Guid> enrollmentRepository,
@@ -42,6 +47,9 @@ public class StudentOnboardingAppService(
 	StudentDocumentManager studentDocumentManager,
 	AdmissionStudentEvidenceReader admissionEvidenceReader,
 	IIdentityUserRepository identityUserRepository,
+	IdentityUserManager portalUserManager,
+	IdentityRoleManager portalRoleManager,
+	IRepository<ShikshaMitra.Students.Portal.StudentPortalAccountLink, Guid> portalLinkRepository,
 	IDistributedEventBus distributedEventBus,
 	IUnitOfWorkManager unitOfWorkManager)
 	: ApplicationService, IStudentOnboardingAppService
@@ -49,7 +57,7 @@ public class StudentOnboardingAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<PagedResultDto<StudentOnboardingCaseDto>> GetListAsync(StudentOnboardingListInput input)
 	{
-		var query = await caseRepository.GetQueryableAsync();
+		var query = await GetScopedCasesAsync();
 		if (input.Status.HasValue) query = query.Where(item => item.Status == input.Status.Value);
 		if (input.AcademicYearId.HasValue) query = query.Where(item => item.AcademicYearId == input.AcademicYearId.Value);
 		if (input.StandardId.HasValue) query = query.Where(item => item.IntendedStandardId == input.StandardId.Value);
@@ -85,7 +93,7 @@ public class StudentOnboardingAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<StudentOnboardingFilterOptionsDto> GetFilterOptionsAsync()
 	{
-		var query = await caseRepository.GetQueryableAsync();
+		var query = await GetScopedCasesAsync();
 		var academicYearIds = await AsyncExecuter.ToListAsync(query
 			.Select(item => item.AcademicYearId).Distinct());
 		var standardIds = await AsyncExecuter.ToListAsync(query
@@ -108,7 +116,7 @@ public class StudentOnboardingAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<StudentOnboardingAnalyticsDto> GetAnalyticsAsync()
 	{
-		var query = await caseRepository.GetQueryableAsync();
+		var query = await GetScopedCasesAsync();
 		var now = DateTime.UtcNow;
 		return new StudentOnboardingAnalyticsDto
 		{
@@ -163,6 +171,12 @@ public class StudentOnboardingAppService(
 	{
 		var onboardingCase = await GetCaseAsync(id);
 		var now = DateTime.UtcNow;
+		var configuration = await configurationManager.GetAsync(onboardingCase.AcademicYearId);
+		if (configuration != null)
+		{
+			var configured = await GetConfiguredSeriesAsync(configuration, onboardingCase, false);
+			return configured == null ? [] : [MapSeries(configured)];
+		}
 		return (await seriesRepository.GetListAsync(item =>
 			item.AcademicYearId == onboardingCase.AcademicYearId &&
 			(item.IdentifierType == StudentIdentifierType.GrNumber ||
@@ -181,6 +195,11 @@ public class StudentOnboardingAppService(
 	{
 		var onboardingCase = await GetCaseAsync(id);
 		EnsureConcurrency(onboardingCase, concurrencyStamp);
+		if (onboardingCase.StudentEnrollmentId.HasValue)
+		{
+			await RefreshProvisioningAsync(onboardingCase);
+			return await MapCaseAsync(onboardingCase, true);
+		}
 		var steps = await stepRepository.GetListAsync(item => item.OnboardingCaseId == id);
 		var now = DateTime.UtcNow;
 		await RefreshProfileReadinessAsync(onboardingCase, steps, now);
@@ -206,6 +225,21 @@ public class StudentOnboardingAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	public async Task<StudentOnboardingCaseDto> SetAdmissionRouteAsync(Guid id, SetStudentOnboardingRouteDto input)
+	{
+		var item = await GetCaseAsync(id);
+		EnsureConcurrency(item, input.ConcurrencyStamp);
+		item.SetAdmissionRoute(input.AdmissionRoute);
+		var steps = await stepRepository.GetListAsync(s => s.OnboardingCaseId == id);
+		steps.SingleOrDefault(s => s.Key == StudentOnboardingStepKeys.ApprovalReview)?.Reset("Admission route changed; review the applicable requirements again.");
+		await RefreshProfileReadinessAsync(item, steps, DateTime.UtcNow);
+		await caseRepository.UpdateAsync(item, false);
+		await AddEventAsync(id, "AdmissionRouteChanged", $"Onboarding route changed to {item.GetAdmissionRoute()}.");
+		await CurrentUnitOfWork!.SaveChangesAsync();
+		return await MapCaseAsync(item, true, steps);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	public async Task<StudentOnboardingCaseDto> UpdateStepAsync(
 		Guid id, string stepKey, UpdateStudentOnboardingStepDto input)
 	{
@@ -224,8 +258,16 @@ public class StudentOnboardingAppService(
 				step.Begin(input.Detail);
 				break;
 			case StudentOnboardingStepStatus.Completed:
-				if (step.Key == StudentOnboardingStepKeys.FinalReadiness)
+				if (step.Key == StudentOnboardingStepKeys.FinalReadiness || IsProfileReadinessStep(step.Key) ||
+				    step.Key is StudentOnboardingStepKeys.PlacementAndSeat or StudentOnboardingStepKeys.IdentifiersAndRoll)
 					throw new BusinessException(StudentOnboardingErrorCodes.InvalidStep);
+				if (step.Key == StudentOnboardingStepKeys.ApprovalReview)
+				{
+					await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate);
+					if (string.IsNullOrWhiteSpace(input.Detail)) throw new BusinessException(StudentOnboardingErrorCodes.WaiverReasonRequired);
+					var approvedConfiguration = await configurationManager.GetAsync(onboardingCase.AcademicYearId);
+					onboardingCase.ExtraProperties["ApprovalConfigurationHash"] = approvedConfiguration == null ? "legacy" : ConfigurationHash(approvedConfiguration);
+				}
 				step.Complete(CurrentUser.Id, now, input.Detail);
 				break;
 			case StudentOnboardingStepStatus.Blocked:
@@ -260,6 +302,16 @@ public class StudentOnboardingAppService(
 
 		var now = DateTime.UtcNow;
 		var placementChanged = onboardingCase.DivisionId.HasValue && onboardingCase.DivisionId != division.Id;
+		var configuration = await configurationManager.GetAsync(onboardingCase.AcademicYearId);
+		var placementRule = configuration?.ResolveRule("divisionChange", onboardingCase, now, division.Id);
+		if (placementChanged && placementRule.HasValue &&
+		    OnboardingRuleConfiguration.Boolean(placementRule.Value, "requireReason") && string.IsNullOrWhiteSpace(input.Reason))
+			throw new BusinessException(StudentOnboardingErrorCodes.WaiverReasonRequired);
+		if (placementChanged)
+		{
+			onboardingCase.ExtraProperties["PlacementChanged"] = true;
+			onboardingCase.ExtraProperties["PlacementChangeReason"] = input.Reason?.Trim();
+		}
 		if (onboardingCase.SeatReservationId.HasValue)
 		{
 			var current = await reservationRepository.FindAsync(onboardingCase.SeatReservationId.Value);
@@ -294,6 +346,7 @@ public class StudentOnboardingAppService(
 			now.AddMinutes(policy?.SeatReservationMinutes ?? 1440));
 		await reservationRepository.InsertAsync(reservation, false);
 		onboardingCase.RecordPlacement(division.Id, reservation.Id, now);
+		await InvalidateApprovalAsync(id, "Placement changed; review onboarding again.");
 		if (placementChanged && onboardingCase.RollNumber.HasValue)
 		{
 			onboardingCase.ClearRollNumberForPlacementChange(now);
@@ -329,6 +382,21 @@ public class StudentOnboardingAppService(
 		var now = DateTime.UtcNow;
 		var student = await studentRepository.FindAsync(onboardingCase.StudentId) ??
 			throw new EntityNotFoundException(typeof(Student), onboardingCase.StudentId);
+		var configuration = await configurationManager.GetAsync(onboardingCase.AcademicYearId);
+		var grRule = configuration?.ResolveRule("grNumber", onboardingCase, now);
+		var rollRule = configuration?.ResolveRule("rollNumber", onboardingCase, now);
+		if (onboardingCase.RollNumber.HasValue && onboardingCase.RollNumber != input.RollNumber && rollRule.HasValue &&
+			OnboardingRuleConfiguration.Boolean(rollRule.Value, "requireChangeReason") && string.IsNullOrWhiteSpace(input.OverrideReason))
+			throw new BusinessException(StudentOnboardingErrorCodes.WaiverReasonRequired);
+		if (rollRule.HasValue && input.RollNumber < OnboardingRuleConfiguration.Number(rollRule.Value, "startingNumber", 1))
+			throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
+		if (rollRule.HasValue && OnboardingRuleConfiguration.Text(rollRule.Value, "numberingScope") == "class" &&
+		    (await enrollmentRepository.AnyAsync(item => item.AcademicYearId == onboardingCase.AcademicYearId &&
+			 item.StandardId == onboardingCase.IntendedStandardId && item.RollNumber == input.RollNumber && item.IsActive) ||
+		     await caseRepository.AnyAsync(item => item.Id != id && item.AcademicYearId == onboardingCase.AcademicYearId &&
+			 item.IntendedStandardId == onboardingCase.IntendedStandardId && item.RollNumber == input.RollNumber &&
+			 item.Status != StudentOnboardingStatus.Completed && item.Status != StudentOnboardingStatus.Cancelled)))
+			throw new BusinessException(StudentOnboardingErrorCodes.RollNumberDuplicate);
 		Guid? allocationId = onboardingCase.IdentifierAllocationId;
 		if (string.IsNullOrWhiteSpace(student.GrNumber) && !student.GrNo.HasValue)
 		{
@@ -340,9 +408,11 @@ public class StudentOnboardingAppService(
 			}
 			else
 			{
-				var series = await seriesRepository.FindAsync(input.NumberSeriesId) ??
+				var series = (configuration == null ? await seriesRepository.FindAsync(input.NumberSeriesId) :
+					await GetConfiguredSeriesAsync(configuration, onboardingCase, true)) ??
 					throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesUnavailable);
-				if (!series.IsActive || series.AcademicYearId != onboardingCase.AcademicYearId ||
+				if (series.Id != input.NumberSeriesId || !series.IsActive ||
+				    configuration == null && series.AcademicYearId != onboardingCase.AcademicYearId ||
 				    series.IdentifierType is not (StudentIdentifierType.GrNumber or StudentIdentifierType.AdmissionNumber) ||
 				    series.StandardId.HasValue && series.StandardId != onboardingCase.IntendedStandardId)
 					throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesUnavailable);
@@ -352,6 +422,9 @@ public class StudentOnboardingAppService(
 				var isManual = !string.IsNullOrWhiteSpace(input.ManualValue);
 				if (isManual)
 				{
+					if (configuration != null && (OnboardingRuleConfiguration.Text(configuration.Root.GetProperty("grNumber"), "assignmentMode") == "automatic" ||
+						!grRule.HasValue || !OnboardingRuleConfiguration.Boolean(grRule.Value, "manualEntryAllowed")))
+						throw OnboardingRuleConfiguration.Invalid("Manual GR entry is not allowed by the applicable numbering rule.");
 					if (string.IsNullOrWhiteSpace(input.OverrideReason))
 						throw new BusinessException(StudentOnboardingErrorCodes.WaiverReasonRequired);
 					sequence = input.ManualSequence ?? 0;
@@ -359,9 +432,14 @@ public class StudentOnboardingAppService(
 				}
 				else
 				{
+					if (configuration != null && OnboardingRuleConfiguration.Text(configuration.Root.GetProperty("grNumber"), "assignmentMode") == "manual")
+						throw OnboardingRuleConfiguration.Invalid("Enter a GR number and reason under the manual assignment rule.");
 					(sequence, value) = series.Allocate(now);
 					await seriesRepository.UpdateAsync(series, false);
 				}
+				if (await allocationRepository.AnyAsync(a => a.Value == value && a.Status != StudentIdentifierAllocationStatus.Released) ||
+					await studentRepository.AnyAsync(s => s.Id != student.Id && s.GrNumber == value))
+					throw new BusinessException(StudentOnboardingErrorCodes.IdentifierAlreadyAllocated);
 				var allocation = new StudentIdentifierAllocation(GuidGenerator.Create(), CurrentTenant.Id, id,
 					student.Id, series.Id, series.IdentifierType, sequence, value, now, isManual, input.OverrideReason);
 				await allocationRepository.InsertAsync(allocation, false);
@@ -370,6 +448,7 @@ public class StudentOnboardingAppService(
 		}
 
 		onboardingCase.RecordIdentifier(allocationId, input.RollNumber, now);
+		await InvalidateApprovalAsync(id, "Identifiers changed; review onboarding again.");
 		await CompleteSystemStepAsync(id, StudentOnboardingStepKeys.IdentifiersAndRoll,
 			$"Identifiers prepared; roll number {input.RollNumber} reserved for activation.", now);
 		await caseRepository.UpdateAsync(onboardingCase, false);
@@ -416,7 +495,7 @@ public class StudentOnboardingAppService(
 	private async Task<StudentOnboardingCaseDto> ActivateCoreAsync(Guid id, ActivateStudentOnboardingDto input)
 	{
 		var onboardingCase = await GetCaseAsync(id);
-		if (onboardingCase.Status == StudentOnboardingStatus.Completed)
+		if (onboardingCase.StudentEnrollmentId.HasValue)
 			return await MapCaseAsync(onboardingCase, true);
 		EnsureConcurrency(onboardingCase, input.ConcurrencyStamp);
 		onboardingCase.BeginActivation(input.IdempotencyKey);
@@ -471,14 +550,11 @@ public class StudentOnboardingAppService(
 		student.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
 		await studentRepository.UpdateAsync(student, false);
 		await reservationRepository.UpdateAsync(reservation, false);
-		onboardingCase.Complete(enrollment.Id, now);
+		onboardingCase.BeginProvisioning(enrollment.Id);
 		await caseRepository.UpdateAsync(onboardingCase, false);
 		await EnsureServiceHandoffsAsync(onboardingCase);
-		await AddEventAsync(id, "Activated", "Onboarding completed and the Student became operational.");
+		await AddEventAsync(id, "Activated", "Enrollment created. Complete the required Finance and access handoffs before onboarding is complete.");
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		await distributedEventBus.PublishAsync(new StudentOnboardingCompletedEto(onboardingCase.Id, student.Id,
-			enrollment.Id, onboardingCase.AcademicYearId, onboardingCase.IntendedStandardId,
-			onboardingCase.DivisionId!.Value, CurrentTenant.Id, now));
 		return await MapCaseAsync(onboardingCase, true);
 	}
 
@@ -558,13 +634,13 @@ public class StudentOnboardingAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair)]
 	public async Task<StudentOnboardingServiceHandoffDto> RetryServiceHandoffAsync(Guid id, Guid handoffId)
 	{
-		await GetCaseAsync(id);
+		var item = await GetCaseAsync(id);
 		var handoff = await handoffRepository.FindAsync(item => item.Id == handoffId && item.OnboardingCaseId == id) ??
 			throw new EntityNotFoundException(typeof(StudentOnboardingServiceHandoff), handoffId);
-		handoff.QueueRetry();
-		await handoffRepository.UpdateAsync(handoff, false);
-		await AddEventAsync(id, "HandoffRetryQueued", $"Retry queued for {handoff.ServiceKey}.");
-		await CurrentUnitOfWork!.SaveChangesAsync();
+		if (handoff.ServiceKey is not ("finance-first-payment" or "student-account" or "guardian-account") ||
+			!item.StudentEnrollmentId.HasValue || item.Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
+			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
+		await RefreshProvisioningAsync(item);
 		return MapHandoff(handoff);
 	}
 
@@ -620,6 +696,8 @@ public class StudentOnboardingAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	public async Task<StudentOnboardingSettingsDto> SaveSettingsAsync(SaveStudentOnboardingSettingsDto input)
 	{
+		await EnsureSettingsScopeAsync(input.AcademicYearId);
+		await configurationManager.ValidateAsync(input.ConfigurationJson, input.AcademicYearId);
 		if (input.AcademicYearId.HasValue &&
 		    !await academicYearRepository.AnyAsync(item => item.Id == input.AcademicYearId.Value))
 			throw new BusinessException(StudentOnboardingErrorCodes.PolicyScopeInvalid);
@@ -635,6 +713,12 @@ public class StudentOnboardingAppService(
 		}
 		else
 		{
+			// PUT is idempotent: a retried/duplicate request may carry the previous stamp after
+			// an identical request has already committed. Returning the current representation is
+			// safe, while a stale request that changes configuration must still be rejected below.
+			if (!string.Equals(input.ConcurrencyStamp, settings.ConcurrencyStamp, StringComparison.Ordinal) &&
+			    settings.MatchesConfiguration(input.SchemaVersion, input.ConfigurationJson))
+				return MapSettings(settings);
 			EnsureConcurrency(settings, input.ConcurrencyStamp);
 			settings.Update(input.SchemaVersion, input.ConfigurationJson);
 			await settingsRepository.UpdateAsync(settings, true);
@@ -648,6 +732,7 @@ public class StudentOnboardingAppService(
 	{
 		var settings = await settingsRepository.FindAsync(id) ??
 			throw new EntityNotFoundException(typeof(StudentOnboardingSettings), id);
+		await EnsureSettingsScopeAsync(settings.AcademicYearId);
 		EnsureConcurrency(settings, concurrencyStamp);
 		await settingsRepository.DeleteAsync(settings, true);
 	}
@@ -835,8 +920,57 @@ public class StudentOnboardingAppService(
 	}
 
 	private async Task RefreshProfileReadinessAsync(StudentOnboardingCase onboardingCase,
-		IReadOnlyCollection<StudentOnboardingStep> steps, DateTime at)
+		List<StudentOnboardingStep> steps, DateTime at)
 	{
+		var configuration = await configurationManager.GetAsync(onboardingCase.AcademicYearId);
+		if (configuration != null)
+		{
+			var rules = configuration.Readiness(onboardingCase);
+			var documentRule = (rules.TryGetProperty("checks", out var checks) && checks.ValueKind == System.Text.Json.JsonValueKind.Array
+				? checks.EnumerateArray().AsEnumerable() : [])
+				.FirstOrDefault(check => OnboardingRuleConfiguration.Text(check, "key") == "documents");
+			var requireDocuments = OnboardingRuleConfiguration.Boolean(rules, "requireDocuments", true) &&
+				(documentRule.ValueKind == System.Text.Json.JsonValueKind.Undefined || OnboardingRuleConfiguration.Boolean(documentRule, "required", true));
+			steps.Single(s => s.Key == StudentOnboardingStepKeys.Documents).SetRequired(requireDocuments);
+			var allocation = onboardingCase.IdentifierAllocationId.HasValue
+				? await allocationRepository.FindAsync(onboardingCase.IdentifierAllocationId.Value) : null;
+			var needsApproval = OnboardingRuleConfiguration.Text(rules, "approvalMode") == "always" ||
+				OnboardingRuleConfiguration.Text(rules, "approvalMode") == "conditional" && allocation?.IsManual == true &&
+				OnboardingRuleConfiguration.Strings(rules, "approvalTriggers").Contains("manual-identifier");
+			needsApproval |= OnboardingRuleConfiguration.Text(rules, "approvalMode") == "conditional" &&
+				onboardingCase.GetAdmissionRoute() == "Mid-year admission" &&
+				OnboardingRuleConfiguration.Strings(rules, "approvalTriggers").Contains("mid-year-admission");
+			var grRule = configuration.ResolveRule("grNumber", onboardingCase, at);
+			var rollRule = configuration.ResolveRule("rollNumber", onboardingCase, at);
+			var placementRule = configuration.ResolveRule("divisionChange", onboardingCase, at);
+			var placementChanged = onboardingCase.ExtraProperties.TryGetValue("PlacementChanged", out var changed) &&
+				string.Equals(changed?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+			needsApproval |= allocation?.IsManual == true && grRule.HasValue && OnboardingRuleConfiguration.Boolean(grRule.Value, "requireManualApproval");
+			needsApproval |= onboardingCase.RollNumber.HasValue && rollRule.HasValue && OnboardingRuleConfiguration.Boolean(rollRule.Value, "requireApproval");
+			needsApproval |= placementChanged && (placementRule.HasValue && OnboardingRuleConfiguration.Boolean(placementRule.Value, "requireApproval") ||
+				OnboardingRuleConfiguration.Text(rules, "approvalMode") == "conditional" && OnboardingRuleConfiguration.Strings(rules, "approvalTriggers").Contains("division-change"));
+			var approval = steps.SingleOrDefault(s => s.Key == StudentOnboardingStepKeys.ApprovalReview);
+			if (approval == null && needsApproval)
+			{
+				approval = new StudentOnboardingStep(GuidGenerator.Create(), CurrentTenant.Id, onboardingCase.Id,
+					StudentOnboardingStepKeys.ApprovalReview, "Onboarding approval", 85, true);
+				await stepRepository.InsertAsync(approval, false);
+				steps.Add(approval);
+			}
+			if (approval != null)
+			{
+				approval.SetRequired(needsApproval);
+				if (needsApproval && IsSatisfied(approval.Status) &&
+				    (!onboardingCase.ExtraProperties.TryGetValue("ApprovalConfigurationHash", out var hash) || hash?.ToString() != ConfigurationHash(configuration)))
+					approval.Reset("Settings changed since approval. Review the current requirements.");
+				await stepRepository.UpdateAsync(approval, false);
+			}
+		}
+		// Applies to legacy policies as well: these dependencies require an enrollment first.
+		var serviceStep = steps.Single(s => s.Key == StudentOnboardingStepKeys.FinanceAccountsServices);
+		serviceStep.SetRequired(false);
+		serviceStep.Reset("Fee assignment, first payment and requested access are verified after enrollment.");
+		await stepRepository.UpdateAsync(serviceStep, false);
 		var student = await studentRepository.GetWithDetailsAsync(onboardingCase.StudentId) ??
 			throw new EntityNotFoundException(typeof(Student), onboardingCase.StudentId);
 		SetComputedStep(steps, StudentOnboardingStepKeys.Identity,
@@ -890,12 +1024,15 @@ public class StudentOnboardingAppService(
 	private async Task EnsureServiceHandoffsAsync(StudentOnboardingCase onboardingCase)
 	{
 		var policy = await ResolvePolicyAsync(onboardingCase);
+		var configuration = await configurationManager.GetAsync(onboardingCase.AcademicYearId);
+		var rules = configuration?.Readiness(onboardingCase);
 		// Optional services need an explicit family/staff selection. Until that selection is stored,
 		// do not fabricate transport, hostel, meal, uniform, device, library, or health requests.
-		var definitions = new List<(string Key, bool Required)>();
-		if (policy?.RequireFeeClearance == true) definitions.Add(("finance", true));
-		if (policy?.RequireStudentAccount == true) definitions.Add(("student-account", true));
-		if (policy?.RequireGuardianAccount == true) definitions.Add(("guardian-account", true));
+		var definitions = new List<(string Key, bool Required)> { ("finance-first-payment", true) };
+		if (rules.HasValue ? OnboardingRuleConfiguration.Boolean(rules.Value, "studentAccount") : policy?.RequireStudentAccount == true)
+			definitions.Add(("student-account", true));
+		if (rules.HasValue ? OnboardingRuleConfiguration.Boolean(rules.Value, "guardianAccount") : policy?.RequireGuardianAccount == true)
+			definitions.Add(("guardian-account", true));
 		if (policy?.RequireServiceConsent == true) definitions.Add(("service-consent", true));
 		var existingKeys = (await handoffRepository.GetListAsync(item => item.OnboardingCaseId == onboardingCase.Id))
 			.Select(item => item.ServiceKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -928,6 +1065,8 @@ public class StudentOnboardingAppService(
 		var application = await applicationRepository.FindAsync(onboardingCase.ApplicationId);
 		var offering = await offeringRepository.FindAsync(onboardingCase.OfferingId);
 		var academicYear = await academicYearRepository.FindAsync(onboardingCase.AcademicYearId);
+		var board = await boardRepository.FindAsync(onboardingCase.IntendedBoardId);
+		var medium = await mediumRepository.FindAsync(onboardingCase.IntendedMediumId);
 		var standard = await standardRepository.FindAsync(onboardingCase.IntendedStandardId);
 		var division = onboardingCase.DivisionId.HasValue
 			? await divisionRepository.FindAsync(onboardingCase.DivisionId.Value)
@@ -940,16 +1079,59 @@ public class StudentOnboardingAppService(
 		var events = includeEvents
 			? await eventRepository.GetListAsync(item => item.OnboardingCaseId == onboardingCase.Id)
 			: [];
+		var finance = includeEvents ? await feeReadinessReader.GetAsync(onboardingCase.StudentId, onboardingCase.AcademicYearId) : null;
+		var reservedIdentifier = string.IsNullOrWhiteSpace(student?.GrNumber) && student?.GrNo == null
+			? await allocationRepository.FindAsync(a => a.OnboardingCaseId == onboardingCase.Id &&
+				a.Status == StudentIdentifierAllocationStatus.Reserved)
+			: null;
+		var handoffs = onboardingCase.StudentEnrollmentId.HasValue
+			? await handoffRepository.GetListAsync(h => h.OnboardingCaseId == onboardingCase.Id && h.Required)
+			: [];
+		var requiredHandoffs = onboardingCase.Status != StudentOnboardingStatus.Completed ? handoffs : [];
+		var studentAccount = handoffs.Find(h => h.ServiceKey == "student-account");
+		var guardianAccount = handoffs.Find(h => h.ServiceKey == "guardian-account");
+		var accountPolicy = !onboardingCase.StudentEnrollmentId.HasValue ? await ResolvePolicyAsync(onboardingCase) : null;
+		var accountConfiguration = !onboardingCase.StudentEnrollmentId.HasValue
+			? await configurationManager.GetAsync(onboardingCase.AcademicYearId) : null;
+		var accountRules = accountConfiguration?.Readiness(onboardingCase);
 		var satisfied = steps.Count(step => IsSatisfied(step.Status));
 		var primaryBlocker = steps.OrderBy(step => step.DisplayOrder)
 			.FirstOrDefault(step => step.Key != StudentOnboardingStepKeys.FinalReadiness &&
-				step.Status == StudentOnboardingStepStatus.Blocked)?.Label ??
+				step.Required && step.Status == StudentOnboardingStepStatus.Blocked)?.Label ??
 			steps.OrderBy(step => step.DisplayOrder)
 				.FirstOrDefault(step => step.Key != StudentOnboardingStepKeys.FinalReadiness &&
 					step.Required && !IsSatisfied(step.Status))?.Label;
+		var pendingHandoff = requiredHandoffs.FirstOrDefault(h => h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged);
+		primaryBlocker ??= pendingHandoff?.ServiceKey switch
+		{
+			"finance-first-payment" => "Fee assignment and first payment",
+			"student-account" => "Student portal account",
+			"guardian-account" => "Guardian portal account",
+			null => null,
+			_ => "Required service setup"
+		};
+		var progressTotal = steps.Count + requiredHandoffs.Count;
+		satisfied += requiredHandoffs.Count(h => h.Status == StudentOnboardingServiceHandoffStatus.Acknowledged);
 		return new StudentOnboardingCaseDto
 		{
+			CapturedStudentFields = includeEvents && student != null
+				? AdmissionAdditionalStudentFieldCatalog.ReadStudent(student)
+					.Select(field => new CapturedStudentFieldDto
+					{
+						Key = field.Key, Label = field.Label, Value = field.Value
+					}).ToList()
+				: [],
 			Id = onboardingCase.Id,
+			AdmissionRoute = onboardingCase.GetAdmissionRoute(),
+			FeeAssignmentConfirmed = finance?.Assigned,
+			FirstPaymentConfirmed = finance?.FirstInstallmentSettled,
+			FinanceReadinessDetail = finance?.Detail,
+			StudentAccountRequired = onboardingCase.StudentEnrollmentId.HasValue ? studentAccount != null
+				: accountRules.HasValue ? OnboardingRuleConfiguration.Boolean(accountRules.Value, "studentAccount") : accountPolicy?.RequireStudentAccount == true,
+			GuardianAccountRequired = onboardingCase.StudentEnrollmentId.HasValue ? guardianAccount != null
+				: accountRules.HasValue ? OnboardingRuleConfiguration.Boolean(accountRules.Value, "guardianAccount") : accountPolicy?.RequireGuardianAccount == true,
+			StudentAccountStatus = studentAccount?.Status,
+			GuardianAccountStatus = guardianAccount?.Status,
 			ConcurrencyStamp = onboardingCase.ConcurrencyStamp,
 			ApplicationId = onboardingCase.ApplicationId,
 			ApplicationNumber = application?.ApplicationNumber ?? string.Empty,
@@ -962,7 +1144,9 @@ public class StudentOnboardingAppService(
 			AcademicYearId = onboardingCase.AcademicYearId,
 			AcademicYearName = academicYear?.Name ?? string.Empty,
 			IntendedBoardId = onboardingCase.IntendedBoardId,
+			IntendedBoardName = board?.Type.ToString() ?? string.Empty,
 			IntendedMediumId = onboardingCase.IntendedMediumId,
+			IntendedMediumName = medium?.Name ?? string.Empty,
 			IntendedStageId = onboardingCase.IntendedStageId,
 			IntendedStandardId = onboardingCase.IntendedStandardId,
 			IntendedStandardName = standard?.Name ?? string.Empty,
@@ -977,7 +1161,7 @@ public class StudentOnboardingAppService(
 			DivisionId = onboardingCase.DivisionId,
 			DivisionName = division?.Name,
 			SeatReservationId = onboardingCase.SeatReservationId,
-			GrNumber = student?.GrNumber ?? student?.GrNo?.ToString(),
+			GrNumber = student?.GrNumber ?? student?.GrNo?.ToString() ?? reservedIdentifier?.Value,
 			RollNumber = onboardingCase.RollNumber,
 			StudentEnrollmentId = onboardingCase.StudentEnrollmentId,
 			StartedAt = onboardingCase.StartedAt,
@@ -987,7 +1171,7 @@ public class StudentOnboardingAppService(
 			CancellationReason = onboardingCase.CancellationReason,
 			LastError = onboardingCase.LastError,
 			PrimaryBlocker = primaryBlocker,
-			ProgressPercent = steps.Count == 0 ? 0 : (int)Math.Round(satisfied * 100d / steps.Count),
+			ProgressPercent = progressTotal == 0 ? 0 : (int)Math.Round(satisfied * 100d / progressTotal),
 			IsOverdue = onboardingCase.Status is not StudentOnboardingStatus.Completed and not StudentOnboardingStatus.Cancelled &&
 				DateTime.UtcNow > onboardingCase.DueAt,
 			CreationTime = onboardingCase.CreationTime,
@@ -1052,7 +1236,7 @@ public class StudentOnboardingAppService(
 		await eventRepository.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id,
 			caseId, eventType, description), false);
 
-	private async Task<StudentOnboardingCase> GetCaseAsync(Guid id) => await caseRepository.FindAsync(id) ??
+	private async Task<StudentOnboardingCase> GetCaseAsync(Guid id) => await AsyncExecuter.FirstOrDefaultAsync((await GetScopedCasesAsync()).Where(c => c.Id == id)) ??
 		throw new EntityNotFoundException(typeof(StudentOnboardingCase), id);
 
 	private static bool IsSatisfied(StudentOnboardingStepStatus status) =>

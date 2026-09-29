@@ -59,6 +59,49 @@ public class TimetableConflictQuery_Tests : ShikshaMitraEntityFrameworkCoreTestB
 		}
 	}
 
+	[Fact]
+	public async Task Room_Occupations_Should_Read_Only_Matching_Tenant_Room_Day_And_Time()
+	{
+		var repository = GetRequiredService<ITimetableRepository>();
+		var currentTenant = GetRequiredService<ICurrentTenant>();
+		var tenantId = Guid.NewGuid();
+		var otherTenantId = Guid.NewGuid();
+		var roomId = Guid.NewGuid();
+		var matching = CreateTimetable(tenantId, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), roomId);
+
+		using (currentTenant.Change(tenantId))
+		{
+			await WithUnitOfWorkAsync(async () =>
+			{
+				await repository.InsertAsync(matching);
+				await repository.InsertAsync(CreateTimetable(tenantId, Guid.NewGuid(), Guid.NewGuid(),
+					Guid.NewGuid(), Guid.NewGuid()));
+				await repository.InsertAsync(CreateTimetable(tenantId, Guid.NewGuid(), Guid.NewGuid(),
+					Guid.NewGuid(), roomId, TimetableDayOfWeek.Tuesday));
+				await repository.InsertAsync(CreateTimetable(tenantId, Guid.NewGuid(), Guid.NewGuid(),
+					Guid.NewGuid(), roomId, start: new TimeOnly(10, 0), end: new TimeOnly(11, 0)));
+			});
+		}
+
+		using (currentTenant.Change(otherTenantId))
+		{
+			await WithUnitOfWorkAsync(() => repository.InsertAsync(CreateTimetable(otherTenantId,
+				Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), roomId)));
+		}
+
+		using (currentTenant.Change(tenantId))
+		{
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var rows = await repository.GetRoomOccupationsAsync([roomId], TimetableDayOfWeek.Monday,
+					new TimeOnly(9, 0), new TimeOnly(10, 0));
+				rows.Count.ShouldBe(1);
+				rows[0].DivisionId.ShouldBe(matching.DivisionId);
+				rows[0].RoomId.ShouldBe(roomId);
+			});
+		}
+	}
+
 	private static ShikshaMitra.Academic.Timetable.Timetables.Timetable CreateTimetable(
 		Guid tenantId, Guid standardId, Guid divisionId, Guid teacherId, Guid roomId,
 		TimetableDayOfWeek day = TimetableDayOfWeek.Monday, TimeOnly? start = null, TimeOnly? end = null)

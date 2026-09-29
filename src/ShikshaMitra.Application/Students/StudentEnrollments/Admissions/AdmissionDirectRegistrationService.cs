@@ -94,7 +94,8 @@ public class AdmissionDirectRegistrationService(
 
 		var applicant = new AdmissionApplicant(input.RequestId, CurrentTenant.Id, family.Id,
 			input.ApplicantFirstName, input.ApplicantMiddleName, input.ApplicantLastName,
-			input.ApplicantDateOfBirth, input.ApplicantGender, existingStudentId: null);
+			input.ApplicantDateOfBirth, input.ApplicantGender, existingStudentId: null,
+			reservedStudentId: GuidGenerator.Create());
 		await applicantRepository.InsertAsync(applicant, autoSave: true);
 		var application = await lifecycleService.StartAsync(applicant.Id, offering.Id, inquiryId: null);
 		if (selectedCounsellorId.HasValue)

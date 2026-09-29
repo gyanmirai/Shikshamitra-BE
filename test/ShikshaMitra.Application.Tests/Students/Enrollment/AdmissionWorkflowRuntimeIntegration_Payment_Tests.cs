@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Identity;
 using Volo.Abp.Security.Claims;
 using Xunit;
 
@@ -20,6 +21,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildPaymentPrincipal(TestUserId)))
 		{
+			await WithUnitOfWorkAsync(() => GetRequiredService<IIdentityUserRepository>().InsertAsync(
+				new IdentityUser(verifierId, "payment-verifier", "payment-verifier@example.test", TestTenantId),
+				autoSave: true));
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Payment collector"), true);
 			await EnsureTestIdentityUserAsync(verifierId, "payment-verifier");

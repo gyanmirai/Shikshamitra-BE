@@ -57,6 +57,7 @@ public class SetStudentOnboardingPlacementDtoValidator : AbstractValidator<SetSt
 	{
 		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
 		RuleFor(x => x.DivisionId).NotEmpty();
+		RuleFor(x => x.Reason).MaximumLength(1000);
 	}
 }
 

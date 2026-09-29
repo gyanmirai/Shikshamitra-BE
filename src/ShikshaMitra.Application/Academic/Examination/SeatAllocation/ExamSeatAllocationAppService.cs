@@ -480,6 +480,14 @@ public class ExamSeatAllocationAppService(
         await ThrowIfExaminationSeatingPublishedAsync(examId);
         var plan = await ResolvePlanAsync(exam, input.SeatingPlanId);
 
+        if (!string.IsNullOrWhiteSpace(input.Version) &&
+            !string.Equals(plan.ConcurrencyStamp, input.Version, StringComparison.Ordinal))
+        {
+            throw new UserFriendlyException(
+                "This seating plan was modified by someone else since you last loaded it. Refresh to see the latest changes before saving.")
+            { Code = "SEATING_PLAN_CONCURRENCY_CONFLICT" };
+        }
+
         if (input.LastKnownModifiedTime.HasValue && plan.LastModificationTime.HasValue &&
             plan.LastModificationTime.Value != input.LastKnownModifiedTime.Value)
         {
@@ -507,6 +515,30 @@ public class ExamSeatAllocationAppService(
             SpecialRequirementStudentIds = input.SpecialRequirementStudentIds
         };
         await SaveSeatingPlanDraftAsync(examId, draftInput);
+
+        // Free the unique room/seat keys before applying replacements. Updating two occupied
+        // seats directly (including a swap) creates a cycle in EF's unique-index ordering.
+        var submittedRoomIds = input.Rooms.Select(room => room.RoomId).ToHashSet();
+        if (submittedRoomIds.Count > 0)
+        {
+            List<ExamSeatAllocation> existingInSubmittedRooms;
+            using (dataFilter.Disable<ISoftDelete>())
+            {
+                existingInSubmittedRooms = await seatAllocationRepository.GetListAsync(allocation =>
+                    allocation.ExamId == examId && allocation.SeatingPlanId == plan.Id &&
+                    Enumerable.Contains(submittedRoomIds, allocation.RoomId));
+
+                for (var index = 0; index < existingInSubmittedRooms.Count; index++)
+                {
+                    var allocation = existingInSubmittedRooms[index];
+                    allocation.Update(plan.Id, allocation.RoomId, int.MinValue + index,
+                        allocation.BenchId, allocation.IsRoomAssign);
+                }
+
+                if (existingInSubmittedRooms.Count > 0)
+                    await seatAllocationRepository.UpdateManyAsync(existingInSubmittedRooms, autoSave: true);
+            }
+        }
 
         foreach (var room in input.Rooms)
         {

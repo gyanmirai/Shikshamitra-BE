@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-25
+updated_on: 2026-09-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,20 @@ audience: humans-and-agents
 # Trace Student Enrollment Admissions workflows
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
+
+## Reserve an identity and finalize admission
+
+1. Create the inquiry/applicant and persist one backend-generated `ReservedStudentId`; do not create a Student yet.
+2. Complete the existing application, review and offer workflow without changing the reservation.
+3. After offer acceptance, run Finalize Admission with the current concurrency stamp, idempotency key, guardian confirmation and explicit duplicate resolution where required.
+4. Reuse a valid linked/selected Student, or create a new Student with the applicant's reserved ID and current validated profile/guardian information.
+5. Atomically link the applicant and application, hand off documents, create the onboarding case and record history.
+6. Continue operational onboarding; finalization does not create the enrollment or assign placement.
+
+A failed transaction leaves the reservation intact and no committed partial Student/onboarding handoff.
+Refresh after a concurrency conflict before retrying; a reservation conflict must be investigated if it persists.
+Later applications reuse an already linked Student and still obey existing same-year enrollment/onboarding restrictions.
+Separate applicant records do not automatically become the same person merely because names match; retain the existing staff duplicate-resolution process.
 
 ## Operate an Admission Cycle
 
@@ -102,7 +116,7 @@ Later changes to offering defaults affect only future runtime records.
 4. Add controlled conditional transitions and at most one default route per source stage. Each conditional route from a stage uses a unique non-negative priority; a route without a condition is always the single default route. Condition fields must use the server allowlist (`application`, `inquiry`, `assessment`, `documents`, `payment`, `eligibility`, `approval`, `offer`, `seat`, `enrollment`, or `appointment`).
    A required stage cannot enable ordinary manual skip. Stage types without a runtime-ready handler are publication errors, not advisory warnings.
 
-Admission forms use the same controlled rule foundation for section visibility, field visibility, and conditional requiredness. The form runtime also supports canonical Applicant, Guardian, and Address bindings; these values remain domain-owned and are written back through the binding registry.
+Admission forms use the same controlled rule foundation for section visibility, field visibility, and conditional requiredness. The form runtime supports 100 canonical Student field bindings: 15 original Applicant, Guardian, and Address bindings plus 85 additional profile, family, address, previous-school, health, eligibility, identity, and admission-preference bindings. Financial assistance fields are excluded from the expanded catalogue. The original bindings update admission identity and contact properties. Additional bindings persist on the applicant, prefill registration after inquiry, and are copied to the Student record's captured admission fields during finalization. Staff can review those captured values on the onboarding case detail; they are not automatically treated as verified SIS profile values. Clearing an additional answer removes its applicant value before finalization.
 
 Every new form version carries an Inquiry or Registration purpose. Clone and new-version operations preserve it, and changing it is allowed only on a Draft. Earlier Correction and Consent values may remain on existing test records but cannot be used for new forms. Workflow publication requires a published Registration form on each Form stage and a published Inquiry form for any configured workflow default. Offering readiness rejects a purpose mismatch before activation.
 5. Validate reachability, dead ends, duplicate routes, cycles, terminal reachability, published form references, and every enabled managed-stage policy. Form, Review, Payment, Offer, and Seat policies are parsed with the same domain validators used by runtime, so malformed or out-of-range settings cannot pass publication validation.

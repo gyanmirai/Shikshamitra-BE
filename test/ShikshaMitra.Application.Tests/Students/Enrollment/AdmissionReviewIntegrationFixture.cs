@@ -66,8 +66,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		draft = await _workflowAppService.UpdateAsync(draft.Id, input);
 		var graphValidation = await _workflowAppService.ValidateAsync(draft.Id);
 		graphValidation.IsValid.ShouldBeTrue(string.Join(" | ", graphValidation.Issues.Select(item => item.Message)));
-		var refreshed = await _workflowAppService.GetAsync(draft.Id);
-		var published = await _workflowAppService.PublishAsync(draft.Id, refreshed.ConcurrencyStamp);
+		draft = await _workflowAppService.GetAsync(draft.Id);
+		var published = await _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
 		var offering = await CreateAvailableOfferingAsync(legacy.Id);
 		await WithUnitOfWorkAsync(async () =>
 		{

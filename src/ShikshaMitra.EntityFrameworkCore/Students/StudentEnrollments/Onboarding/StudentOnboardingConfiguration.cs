@@ -41,10 +41,10 @@ public class StudentOnboardingConfiguration :
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.Status });
 		builder.HasIndex(x => new { x.TenantId, x.StudentId, x.AcademicYearId })
 			.IsUnique()
-			.HasFilter("\"IsDeleted\" = false AND \"Status\" IN (0, 1, 2, 3)");
+			.HasFilter("\"IsDeleted\" = false AND \"Status\" IN (0, 1, 2, 3, 6)");
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.DivisionId, x.RollNumber })
 			.IsUnique()
-			.HasFilter("\"IsDeleted\" = false AND \"DivisionId\" IS NOT NULL AND \"RollNumber\" IS NOT NULL AND \"Status\" IN (0, 1, 2, 3)");
+			.HasFilter("\"IsDeleted\" = false AND \"DivisionId\" IS NOT NULL AND \"RollNumber\" IS NOT NULL AND \"Status\" IN (0, 1, 2, 3, 6)");
 		builder.HasOne<AdmissionApplication>().WithMany().HasForeignKey(x => x.ApplicationId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<AdmissionApplicant>().WithMany().HasForeignKey(x => x.ApplicantId).OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<Student>().WithMany().HasForeignKey(x => x.StudentId).OnDelete(DeleteBehavior.Restrict);

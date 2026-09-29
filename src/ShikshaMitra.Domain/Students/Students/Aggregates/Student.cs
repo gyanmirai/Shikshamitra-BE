@@ -23,6 +23,7 @@ namespace ShikshaMitra.Students;
 public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScopedEntity
 {
 	public Guid? TenantId { get; private set; }
+	public Guid? UserId { get; private set; }
 	public string? FirstName { get; private set; }
 	public string? MiddleName { get; private set; }
 	public string? LastName { get; private set; }
@@ -594,6 +595,15 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 	public void AssignRollNo(int? rollNo)
 	{
 		RollNo = rollNo;
+	}
+
+	public void LinkUser(Guid userId)
+	{
+		if (userId == Guid.Empty)
+			throw new ArgumentException("A user ID is required.", nameof(userId));
+		if (UserId.HasValue && UserId.Value != userId)
+			throw new InvalidOperationException("The student is already linked to another user.");
+		UserId = userId;
 	}
 
 	public void AssignGrNo(int? grNo)

@@ -12,6 +12,20 @@ audience: humans-and-agents
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
 
+## Reserved Student identity
+
+Creating an applicant through Inquiry reserves a server-generated `ReservedStudentId` GUID without inserting an `AppStudents` row.
+The reservation belongs to the applicant, so all applications for that applicant share it.
+It is immutable, nonempty, globally unique across tenants and soft-deleted applicants, and is not a Student foreign key or an operational GR/roll number.
+Profile edits, offers, rejection, withdrawal, and failed finalization never replace or recycle it.
+
+Actual Student creation remains at Finalize Admission after the existing accepted/unexpired-offer, completed-workflow, identity, guardian, evidence, eligibility, review, seat, permission and scope checks.
+A new Student uses the reservation as `AppStudents.Id`; an explicitly resolved existing Student retains its real ID and leaves the reservation unused.
+`AdmissionApplication.StudentId` remains null until successful finalization and then identifies the actual Student, not necessarily the reservation.
+Applicant linking, Student creation, document handoff, onboarding case creation and audit writes participate in the same finalization unit of work.
+Repeated successful finalization returns the existing Student/case; collisions never silently link another Student or generate a replacement reservation.
+Operational enrollment and placement remain in Student Onboarding.
+
 ## Admission Cycle governance
 
 An Admission Cycle is the school-controlled season for accepting applications, for example
@@ -172,6 +186,7 @@ Existing separately authorized workflow skip and override controls remain availa
 Assessment does not approve admission or create a Student.
 Admissions finalization requires a completed admissions workflow and normally an accepted, unexpired offer; it creates or links the Student plus a Student Onboarding case. Non-General direct-registration offerings without an Offer stage can also finalize from Approved. If staff issue an optional offer on that path, it must be accepted and unexpired before finalization; the accepted-offer path remains valid. Guardian confirmation, identity resolution, and evidence checks apply to both paths.
 Operational StudentEnrollment creation remains part of onboarding activation.
+Activation starts Provisioning rather than completing onboarding. Completion requires the academic fee assignment, confirmed settlement of its first scheduled installment group, and required student/guardian account links. Finance owns all money writes. New portal accounts are passwordless; owners use the protected Account password-reset flow to establish access. The case never treats an unconfirmed payment or a queued account request as completed evidence.
 Subject-level marks, public applicant self-booking, and external examination provider integrations are not included in this assessment policy version.
 
 ## Managed document verification

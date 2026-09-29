@@ -28,6 +28,7 @@ public static class StudentOnboardingErrorCodes
 	public const string RollNumberDuplicate = "Students.Onboarding.RollNumberDuplicate";
 	public const string ConcurrencyConflict = "Students.Onboarding.ConcurrencyConflict";
 	public const string OwnerInvalid = "Students.Onboarding.OwnerInvalid";
+	public const string PortalAccountInvalid = "Students.Onboarding.PortalAccountInvalid";
 }
 
 public static class StudentOnboardingSettingsConsts
@@ -47,6 +48,7 @@ public static class StudentOnboardingStepKeys
 	public const string IdentifiersAndRoll = "identifiers_roll";
 	public const string FinanceAccountsServices = "finance_accounts_services";
 	public const string FinalReadiness = "final_readiness";
+	public const string ApprovalReview = "approval_review";
 
 	public static readonly (string Key, string Label)[] Defaults =
 	[

@@ -15,6 +15,12 @@ public interface ITimetableRepository : IRepository<Timetable, Guid>
 
     Task<List<Timetable>> GetAllWithSlotsAsync();
 
+    Task<List<TimetableConflictCandidate>> GetRoomOccupationsAsync(
+        IReadOnlyCollection<Guid> roomIds,
+        TimetableDayOfWeek day,
+        TimeOnly startTime,
+        TimeOnly endTime);
+
     Task<List<TimetableConflictCandidate>> GetConflictCandidatesAsync(
         Guid standardId,
         Guid divisionId,

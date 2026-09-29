@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -15,7 +16,7 @@ namespace ShikshaMitra.Security.Permissions;
 
 [Dependency(ReplaceServices = true)]
 [ExposeServices(typeof(IPermissionChecker))]
-public class ShikshaMitraPermissionChecker : PermissionChecker
+public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionChecker
 {
 	private static readonly string[] ClassTeacherOperationalPermissionPrefixes =
 	[
@@ -195,6 +196,84 @@ public class ShikshaMitraPermissionChecker : PermissionChecker
 			(await IsDerivedClassTeacherPermissionAsync(userId, name) ||
 			 await IsDerivedReportingManagerPermissionAsync(userId, name));
 	}
+
+	public Task<MultiplePermissionGrantResult> GetEffectiveGrantsAsync(string[] names) =>
+		IsGrantedInBatchAsync(names, permissionNames => base.IsGrantedAsync(permissionNames), _currentUser.Id);
+
+	Task<MultiplePermissionGrantResult> IPermissionChecker.IsGrantedAsync(string[] names) =>
+		GetEffectiveGrantsAsync(names);
+
+	Task<MultiplePermissionGrantResult> IPermissionChecker.IsGrantedAsync(ClaimsPrincipal? claimsPrincipal, string[] names) =>
+		IsGrantedInBatchAsync(names, permissionNames => base.IsGrantedAsync(claimsPrincipal, permissionNames),
+			TryGetUserId(claimsPrincipal, out var userId) ? userId : null);
+
+	private async Task<MultiplePermissionGrantResult> IsGrantedInBatchAsync(
+		string[] names,
+		Func<string[], Task<MultiplePermissionGrantResult>> checkBasePermissions,
+		Guid? userId)
+	{
+		var distinctNames = names.Distinct(StringComparer.Ordinal).ToArray();
+		var aliases = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+		var aliasNames = new HashSet<string>(StringComparer.Ordinal);
+		foreach (var name in distinctNames)
+		{
+			var candidates = new List<string>();
+			if (name.EndsWith(".Create", StringComparison.Ordinal)) candidates.Add(name[..^7] + ".Add");
+			if (name.EndsWith(".Add", StringComparison.Ordinal)) candidates.Add(name[..^4] + ".Create");
+			if (TryGetAcademicOperationAddPermission(name, out var academicAdd)) candidates.Add(academicAdd);
+			if (name.EndsWith(".View", StringComparison.Ordinal))
+			{
+				var parent = name[..^5];
+				if (IsViewAliasRoot(parent)) candidates.Add(parent);
+			}
+			if (IsViewAliasRoot(name))
+			{
+				candidates.Add(name + ".View");
+				candidates.Add(name + ".Add");
+				candidates.Add(name + ".Delete");
+			}
+			aliases[name] = candidates;
+			foreach (var candidate in candidates) aliasNames.Add(candidate);
+		}
+
+		var baseGrants = (await checkBasePermissions(
+			distinctNames.Concat(aliasNames).Distinct(StringComparer.Ordinal).ToArray())).Result;
+		var result = new MultiplePermissionGrantResult();
+		var needsClassTeacher = false;
+		var needsReportingManager = false;
+		foreach (var name in distinctNames)
+		{
+			var granted = baseGrants[name] == PermissionGrantResult.Granted ||
+				(_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name)) ||
+				aliases[name].Any(alias => baseGrants[alias] == PermissionGrantResult.Granted);
+			result.Result[name] = granted ? PermissionGrantResult.Granted : PermissionGrantResult.Prohibited;
+			if (!granted && userId.HasValue && IsClassTeacherOperationalAcademicPermission(name))
+			{
+				needsClassTeacher = true;
+				needsReportingManager |= name.EndsWith(".View", StringComparison.Ordinal);
+			}
+		}
+
+		if (!userId.HasValue || !needsClassTeacher) return result;
+		var hasAssignment = await _classTeacherAccessService.HasAssignmentAsync(userId.Value);
+		if (hasAssignment)
+		{
+			foreach (var name in distinctNames.Where(IsClassTeacherOperationalAcademicPermission))
+				result.Result[name] = PermissionGrantResult.Granted;
+			return result;
+		}
+		if (needsReportingManager && await _reportingManagerAccessService.HasReporteesAsync(userId.Value))
+		{
+			foreach (var name in distinctNames.Where(name =>
+				name.EndsWith(".View", StringComparison.Ordinal) && IsClassTeacherOperationalAcademicPermission(name)))
+				result.Result[name] = PermissionGrantResult.Granted;
+		}
+		return result;
+	}
+
+	private static bool IsViewAliasRoot(string name) =>
+		name is "AbpIdentity.Users" or "AbpIdentity.Roles" or
+			"HR.PerformanceManagement.ReviewEmployees" or "HR.PerformanceManagement.ManageCycles";
 
 	private async Task<bool> IsDerivedClassTeacherPermissionAsync(Guid userId, string permissionName)
 	{

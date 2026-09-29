@@ -54,7 +54,10 @@ public class StudentElectiveAssignmentAppService(
 			);
 		}
 
-		var students = await AsyncExecuter.ToListAsync(studentsQuery);
+		var students = await AsyncExecuter.ToListAsync(studentsQuery
+			.OrderBy(s => s.RollNo == null)
+			.ThenBy(s => s.RollNo)
+			.ThenBy(s => s.Id));
 
 		// Get the elective group with subjects
 		var electiveGroup = await electiveGroupRepository.GetAsync(

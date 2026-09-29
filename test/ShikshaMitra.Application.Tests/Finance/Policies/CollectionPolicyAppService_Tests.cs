@@ -94,7 +94,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		created.LateFeeType.ShouldBe("PerDay");
 		created.AmountPerDay.ShouldBe(20);
 		created.MaximumLateFeeAmount.ShouldBe(2000);
-		created.LateFeeApplyOnFeeHeads.Count.ShouldBe(1);
+		created.LateFeeApplyOnFeeHeads.Count.ShouldBe(2);
 		created.Version.ShouldBe(1); // ctor calls Update() once, same as AttendancePolicy's pattern
 		var stored = await _collectionPolicyRepository.GetAsync(created.Id);
 		stored.EffectiveFrom.ShouldBe(new DateTime(2025, 4, 1));
@@ -142,6 +142,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		var created = await _collectionPolicies.CreateAsync(await BuildInputAsync(academicYearId, "Grace Period Policy"));
 
 		var updateInput = await BuildInputAsync(academicYearId, "Grace Period Policy");
+		updateInput.IsDefault = true;
 		updateInput.GracePeriodDays = 14;
 		updateInput.ChangeReason = "Extended the grace period after fee committee review.";
 		var updated = await _collectionPolicies.UpdateAsync(created.Id, updateInput);
@@ -159,6 +160,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task Version_History_Should_Record_Archive_And_Unarchive_Actions()
 	{
 		var academicYearId = _guidGenerator.Create();
+		await _collectionPolicies.CreateAsync(await BuildInputAsync(academicYearId, "History Default Policy"));
 		var created = await _collectionPolicies.CreateAsync(
 			await BuildInputAsync(academicYearId, "Lifecycle History Policy"));
 
@@ -202,6 +204,24 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	}
 
 	[Fact]
+	public async Task First_Active_Policy_Is_Default_And_Cannot_Be_Archived_Until_Replaced()
+	{
+		var academicYearId = _guidGenerator.Create();
+		var first = await _collectionPolicies.CreateAsync(
+			await BuildInputAsync(academicYearId, "First Active Policy"));
+		first.IsDefault.ShouldBeTrue();
+		var archiveError = await Should.ThrowAsync<BusinessException>(
+			() => _collectionPolicies.ArchiveAsync(first.Id));
+		archiveError.Code.ShouldBe(CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
+
+		var second = await _collectionPolicies.CreateAsync(
+			await BuildInputAsync(academicYearId, "Replacement Policy", isDefault: true));
+		second.IsDefault.ShouldBeTrue();
+		(await _collectionPolicies.GetAsync(first.Id)).IsDefault.ShouldBeFalse();
+		await _collectionPolicies.ArchiveAsync(first.Id);
+	}
+
+	[Fact]
 	public async Task Slab_Overlap_Is_Rejected_Server_Side()
 	{
 		var academicYearId = _guidGenerator.Create();
@@ -238,6 +258,7 @@ public class CollectionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task Archive_Then_Unarchive_Round_Trips_Status()
 	{
 		var academicYearId = _guidGenerator.Create();
+		await _collectionPolicies.CreateAsync(await BuildInputAsync(academicYearId, "Archive Default Policy"));
 		var created = await _collectionPolicies.CreateAsync(await BuildInputAsync(academicYearId, "Archivable Policy"));
 
 		await _collectionPolicies.ArchiveAsync(created.Id);

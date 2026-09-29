@@ -106,7 +106,8 @@ public class EfCoreFeeRefundRepository(
             .SelectMany(r => r.Reservations)
             .Where(r => dueFeeIds.Contains(r.DueFeeId) && r.Status == FeeRefundReservationStatus.Active);
         return await query.GroupBy(r => r.DueFeeId)
-            .ToDictionaryAsync(g => g.Key, g => g.Sum(x => x.Amount), cancellationToken);
+            .Select(g => new { DueFeeId = g.Key, Amount = g.Sum(x => x.Amount) })
+            .ToDictionaryAsync(x => x.DueFeeId, x => x.Amount, cancellationToken);
     }
 
     public async Task<Dictionary<Guid, decimal>> GetCommittedAllocationAmountsAsync(

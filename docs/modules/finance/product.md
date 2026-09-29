@@ -3,7 +3,7 @@ module: finance
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-09-21
+updated_on: 2026-09-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -42,6 +42,7 @@ Treat incorrect Finance reports or due balances as production defects.
 | Charges are not Fee Structure demand | Use charges for exceptional obligations; connect them through collection, receipt, accounts, audit, and reports rather than duplicating recurring fees |
 | Concession type names are unique per tenant and academic year after normalization | Duplicate labels cannot create ambiguous request classifications |
 | Concession types are lifecycle-controlled master data | Active types cannot be deleted; inactive unused types may be deleted, while used types remain resolvable in requests, reports, and version history |
+| Every policy type has an active academic-year default | Where active policies exist, Concession, Collection, Refund, and Proration each have exactly one Default per tenant and academic year. The first Active policy becomes Default; selecting another replaces it. The current Default cannot be cleared, moved to Draft, or archived until another Active policy is designated. A filtered unique index prevents duplicate Active defaults. |
 | Concession evidence definitions are server-enforced | Each document declares mandatory/optional, maximum bytes, and accepted formats; only mandatory evidence blocks approval |
 
 ## Fee-head module field

@@ -83,6 +83,9 @@ public class FeeLedgerLineDto
 
     public Guid? ProrationPolicyId { get; set; }
     public Guid? ProrationPolicyVersionId { get; set; }
+    /// <summary>Name captured by the immutable policy version used for this obligation.</summary>
+    public string? ProrationPolicyName { get; set; }
+    public int? ProrationPolicyVersionNumber { get; set; }
     public decimal? ProrationFactor { get; set; }
     public string? ProrationRuleType { get; set; }
     public string? ProrationRoundingMode { get; set; }

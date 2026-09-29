@@ -48,7 +48,7 @@ public class CollectionPolicyConfiguration : IEntityTypeConfiguration<Collection
 
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsDefault })
 			.IsUnique()
-			.HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true")
+			.HasFilter("\"IsDeleted\" = false AND \"Status\" = 0 AND \"IsDefault\" = true")
 			.HasDatabaseName("IX_Finance_CollectionPolicies_Tenant_AcademicYear_Default");
 	}
 }

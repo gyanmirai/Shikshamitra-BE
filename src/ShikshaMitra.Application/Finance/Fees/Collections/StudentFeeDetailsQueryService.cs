@@ -40,6 +40,7 @@ public partial class StudentFeeDetailsQueryService(
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
 	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
+	IReadOnlyRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
@@ -93,6 +94,11 @@ public partial class StudentFeeDetailsQueryService(
 			var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
 			var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
 			var feeHeadNameMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
+			var prorationVersionIds = dueFees.Where(d => d.ProrationPolicyVersionId.HasValue)
+				.Select(d => d.ProrationPolicyVersionId!.Value).Distinct().ToList();
+			var prorationVersions = (await financePolicyVersionRepository.GetListAsync(v =>
+				prorationVersionIds.Contains(v.Id) && v.PolicyType == "proration"))
+				.ToDictionary(v => v.Id);
 			var reconByDueFee = await GetInReconciliationByDueFeeAsync(studentId);
 
 			var grouped = dueFees.GroupBy(d => (d.Year, d.Month))
@@ -173,6 +179,12 @@ public partial class StudentFeeDetailsQueryService(
 							Due = (double) d.OutstandingAmount,
 							ProrationPolicyId = d.ProrationPolicyId,
 							ProrationPolicyVersionId = d.ProrationPolicyVersionId,
+							ProrationPolicyName = d.ProrationPolicyVersionId is { } versionId
+								&& prorationVersions.TryGetValue(versionId, out var version)
+								&& version.PolicyId == d.ProrationPolicyId ? version.PolicyName : null,
+							ProrationPolicyVersionNumber = d.ProrationPolicyVersionId is { } policyVersionId
+								&& prorationVersions.TryGetValue(policyVersionId, out var policyVersion)
+								&& policyVersion.PolicyId == d.ProrationPolicyId ? policyVersion.VersionNumber : null,
 							ProrationFactor = d.ProrationFactor,
 							ProrationRuleType = d.ProrationRuleType?.ToString(),
 							ProrationRoundingMode = d.ProrationRoundingMode?.ToString(),

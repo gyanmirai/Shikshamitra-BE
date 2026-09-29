@@ -95,11 +95,15 @@ public class RefundPolicyAppService(
 			? $"REF-{GuidGenerator.Create():N}"[..16].ToUpperInvariant()
 			: input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, null);
-		if (input.IsDefault)
+		var model = RefundPolicyMapping.ToUpdateModel(input, code);
+		if (model.Status == RefundPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
+		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
 		var entity = new RefundPolicy(
 			GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId,
-			RefundPolicyMapping.ToUpdateModel(input, code));
+			model);
 		await repository.InsertAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "created");
 		return RefundPolicyMapping.ToDto(entity);
@@ -124,9 +128,15 @@ public class RefundPolicyAppService(
 		await EnsureReferencesAsync(input);
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode) ? entity.PolicyCode : input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, id);
-		if (input.IsDefault)
+		if (entity.IsDefault && (!input.IsDefault || targetStatus != RefundPolicyStatus.Active))
+			throw new BusinessException(RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
+		var model = RefundPolicyMapping.ToUpdateModel(input, code);
+		if (model.Status == RefundPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
+		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
-		entity.Update(RefundPolicyMapping.ToUpdateModel(input, code));
+		entity.Update(model);
 		await repository.UpdateAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "edited", input.ChangeReason);
 		return RefundPolicyMapping.ToDto(entity);
@@ -170,6 +180,8 @@ public class RefundPolicyAppService(
 	{
 		var entity = await GetRequiredAsync(id);
 		if (entity.Status == RefundPolicyStatus.Archived) return;
+		if (entity.IsDefault)
+			throw new BusinessException(RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if ((await GetUsedIdsAsync([id])).Contains(id))
 			throw new BusinessException(RefundPolicyErrorCodes.PolicyInUse);
 		entity.Archive();
@@ -293,6 +305,10 @@ public class RefundPolicyAppService(
 				reason ?? $"Default replaced by {replacementName}.");
 		}
 	}
+
+	private async Task<bool> HasActiveDefaultAsync(Guid academicYearId) =>
+		await repository.AnyAsync(x => x.AcademicYearId == academicYearId &&
+			x.Status == RefundPolicyStatus.Active && x.IsDefault);
 
 	private async Task WriteVersionAsync(RefundPolicy entity, string action, string? reason = null)
 	{

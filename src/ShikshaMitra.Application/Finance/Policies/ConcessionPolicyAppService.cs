@@ -98,10 +98,14 @@ public class ConcessionPolicyAppService(
 			? $"CON-{GuidGenerator.Create():N}"[..16].ToUpperInvariant()
 			: input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, null);
+		var model = ConcessionPolicyMapping.ToUpdateModel(input, code);
+		if (model.Status == ConcessionPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
 		var entity = new ConcessionPolicy(
 			GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId,
-			ConcessionPolicyMapping.ToUpdateModel(input, code));
-		if (input.IsDefault)
+			model);
+		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
 		await repository.InsertAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "created");
@@ -126,8 +130,14 @@ public class ConcessionPolicyAppService(
 
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode) ? entity.PolicyCode : input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, id);
-		entity.Update(ConcessionPolicyMapping.ToUpdateModel(input, code));
-		if (input.IsDefault)
+		if (entity.IsDefault && (!input.IsDefault || targetStatus != ConcessionPolicyStatus.Active))
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
+		var model = ConcessionPolicyMapping.ToUpdateModel(input, code);
+		if (model.Status == ConcessionPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
+		entity.Update(model);
+		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
 		await repository.UpdateAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "edited", input.ChangeReason);
@@ -166,6 +176,8 @@ public class ConcessionPolicyAppService(
 	{
 		var entity = await GetRequiredAsync(id);
 		if (entity.Status == ConcessionPolicyStatus.Archived) return;
+		if (entity.IsDefault)
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if ((await GetUsedIdsAsync([id])).Contains(id))
 			throw new BusinessException(ConcessionPolicyErrorCodes.PolicyInUse);
 		entity.Archive();
@@ -264,6 +276,10 @@ public class ConcessionPolicyAppService(
 				reason ?? $"Default replaced by {replacementName}.");
 		}
 	}
+
+	private async Task<bool> HasActiveDefaultAsync(Guid academicYearId) =>
+		await repository.AnyAsync(x => x.AcademicYearId == academicYearId &&
+			x.Status == ConcessionPolicyStatus.Active && x.IsDefault);
 
 	private async Task WriteVersionAsync(ConcessionPolicy entity, string action, string? reason = null)
 	{

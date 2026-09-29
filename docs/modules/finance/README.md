@@ -33,6 +33,7 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 | 12 | [Charge management end to end](./references/charge-management-end-to-end.md) | Review the shipped charge, collection, receipt, source-integration flow, release gaps, target contract, and phased delivery gates |
 | 13 | [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) | Review the approved target for a reason-only full-balance waiver toggle on eligible late-fee and charge rows in Fee Collection |
 | 14 | [Fee Collection to reconciliation](./references/fee-collection-reconciliation-flow.md) | Trace the current payment-verification path, release gaps, bank-match target, and edge-case acceptance gates |
+| 15 | [Simplified Accounts operating flow](./references/accounts-simplified-operating-flow.md) | Reorganize Fees and Accounts around officer workflows, add the missing submodules, automatic accounting, target APIs, and rollout gates |
 
 ## Source of truth
 
@@ -64,6 +65,7 @@ Use this table before searching code:
 | Is the current concession flow production-ready, and which scenarios must be covered? | [Concession flow review](./references/concession-flow-end-to-end-review.md) |
 | How does Charge Management connect to fee structures, policies, collections, receipts, accounts, and source modules? | [Charge management end to end](./references/charge-management-end-to-end.md) |
 | How should late-fee and charge waivers work in Fee Collection? | [Fee Collection waiver end to end](./references/fee-collection-waiver-end-to-end.md) |
+| How should Fees and Accounts be reorganized into a simpler finance-officer flow? | [Simplified Accounts operating flow](./references/accounts-simplified-operating-flow.md) |
 
 ## Validation
 

@@ -105,6 +105,9 @@ public class ProrationPolicyAppService(
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, null);
 		await ValidateReferencesAsync(input.AcademicYearId, input.FeeHeadRules.Select(x => x.FeeHeadId));
 		var model = ProrationPolicyMapping.ToUpdateModel(input, code, GuidGenerator.Create);
+		if (model.Status == ProrationPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
 		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, null, input.PolicyName, input.ChangeReason);
 		var entity = new ProrationPolicy(GuidGenerator.Create(), CurrentTenant.Id, input.AcademicYearId, model);
@@ -134,6 +137,11 @@ public class ProrationPolicyAppService(
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, id);
 		await ValidateReferencesAsync(input.AcademicYearId, input.FeeHeadRules.Select(x => x.FeeHeadId));
 		var model = ProrationPolicyMapping.ToUpdateModel(input, code, GuidGenerator.Create);
+		if (entity.IsDefault && (!model.IsDefault || model.Status != ProrationPolicyStatus.Active))
+			throw new BusinessException(ProrationPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
+		if (model.Status == ProrationPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
 		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
 		entity.Update(model);
@@ -148,9 +156,11 @@ public class ProrationPolicyAppService(
 		var entity = await GetRequiredAsync(id);
 		if (entity.Status == ProrationPolicyStatus.Active)
 			return await ToDtoAsync(entity);
+		entity.Activate();
+		if (!await HasActiveDefaultAsync(entity.AcademicYearId))
+			entity.SetDefault(true);
 		if (entity.IsDefault)
 			await ReplaceExistingDefaultAsync(entity.AcademicYearId, id, entity.PolicyName, changeReason);
-		entity.Activate();
 		await repository.UpdateAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "activated", changeReason);
 		return await ToDtoAsync(entity);
@@ -184,6 +194,8 @@ public class ProrationPolicyAppService(
 	{
 		var entity = await GetRequiredAsync(id);
 		if (entity.Status == ProrationPolicyStatus.Archived) return;
+		if (entity.IsDefault)
+			throw new BusinessException(ProrationPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if ((await GetUsedIdsAsync([id])).Contains(id))
 			throw new BusinessException(ProrationPolicyErrorCodes.PolicyInUse);
 		entity.Archive();
@@ -329,6 +341,10 @@ public class ProrationPolicyAppService(
 				reason ?? $"Default replaced by {replacementName}.");
 		}
 	}
+
+	private async Task<bool> HasActiveDefaultAsync(Guid academicYearId) =>
+		await repository.AnyAsync(x => x.AcademicYearId == academicYearId &&
+			x.Status == ProrationPolicyStatus.Active && x.IsDefault);
 
 	private async Task<HashSet<Guid>> GetUsedIdsAsync(List<Guid> ids)
 	{

@@ -58,6 +58,8 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 	private readonly IRepository<FeeStructureMetadata, Guid> _feeStructureMetadataRepo;
 	private readonly IRepository<FeeStructure, Guid> _feeStructureRepo;
 	private readonly IRepository<StudentFeeStructure, Guid> _studentFeeStructureRepo;
+	private readonly IRepository<ProrationPolicy, Guid> _prorationPolicyRepo;
+	private readonly IRepository<FinancePolicyVersion, Guid> _policyVersionRepo;
 	private readonly IDueFeeRepository _dueFeeRepo;
 	private readonly IRepository<IdentityUser, Guid> _identityUserRepo;
 	private readonly IRepository<IdentityRole, Guid> _identityRoleRepo;
@@ -78,6 +80,8 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		_feeStructureMetadataRepo = GetRequiredService<IRepository<FeeStructureMetadata, Guid>>();
 		_feeStructureRepo = GetRequiredService<IRepository<FeeStructure, Guid>>();
 		_studentFeeStructureRepo = GetRequiredService<IRepository<StudentFeeStructure, Guid>>();
+		_prorationPolicyRepo = GetRequiredService<IRepository<ProrationPolicy, Guid>>();
+		_policyVersionRepo = GetRequiredService<IRepository<FinancePolicyVersion, Guid>>();
 		_dueFeeRepo = GetRequiredService<IDueFeeRepository>();
 		_identityUserRepo = GetRequiredService<IRepository<IdentityUser, Guid>>();
 		_identityRoleRepo = GetRequiredService<IRepository<IdentityRole, Guid>>();
@@ -110,7 +114,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 
 	private async Task<(Guid AcademicYearId, Guid StudentId, Guid FeeHeadId, Guid DueFeeId, Guid FeeStructureId)>
 		SeedStudentWithOverdueDueFeeAsync(int daysOverdue, bool attachPolicy, double? maximumLateFeeAmount = null,
-			bool enableLateFee = true, bool futurePaymentTerm = false)
+			bool enableLateFee = true, bool futurePaymentTerm = false, bool attachProrationPolicy = false)
 	{
 		await EnsureAdminUserExistsAsync();
 
@@ -199,17 +203,50 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 
 		var demandDate = futurePaymentTerm ? DateTime.UtcNow.Date.AddMonths(1) : (DateTime?)null;
 		var dueDate = demandDate?.AddDays(10) ?? DateTime.UtcNow.Date.AddDays(-daysOverdue);
+		Guid? prorationPolicyId = null;
+		Guid? prorationVersionId = null;
+		if (attachProrationPolicy)
+		{
+			prorationPolicyId = Guid.NewGuid();
+			var policy = new ProrationPolicy(prorationPolicyId.Value, TestTenantId, yearId,
+				new ProrationPolicyUpdateModel("Current policy name", "PROR-TEST", null,
+					ProrationPolicyStatus.Active, false,
+					[new ProrationPolicyRuleModel(Guid.NewGuid(), feeHeadId,
+						ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null, null)]));
+			await _prorationPolicyRepo.InsertAsync(policy, autoSave: true);
+			prorationVersionId = Guid.NewGuid();
+			await _policyVersionRepo.InsertAsync(new FinancePolicyVersion(prorationVersionId.Value,
+				TestTenantId, "proration", prorationPolicyId.Value, yearId, 2,
+				"Original policy name", "Active", "{}", "changed"), autoSave: true);
+		}
 		var dueFee = new DueFee(
 			id: Guid.NewGuid(), tenantId: TestTenantId, studentId: studentId, feeHeadId: feeHeadId,
 			month: (MonthEnum)(dueDate.Month - 1), year: dueDate.Year, isOneTime: false, amount: 5000m, dueDate: dueDate,
 			installmentSequence: futurePaymentTerm ? 1 : null,
 			installmentName: futurePaymentTerm ? "Future installment" : null,
 			demandDate: demandDate, scheduleDueDate: futurePaymentTerm ? dueDate : null,
-			scheduleSource: futurePaymentTerm ? ScheduleSource.PaymentTerm : ScheduleSource.Legacy);
+			scheduleSource: futurePaymentTerm ? ScheduleSource.PaymentTerm : ScheduleSource.Legacy,
+			prorationPolicyId: prorationPolicyId, prorationPolicyVersionId: prorationVersionId,
+			prorationExplanation: attachProrationPolicy ? "Full scheduled charge applies." : null);
 		dueFee.BindAssignment(assignment.Id);
 		await _dueFeeRepo.InsertAsync(dueFee, autoSave: true);
 
 		return (yearId, studentId, feeHeadId, dueFee.Id, feeStructure.Id);
+	}
+
+	[Fact]
+	public async Task Collect_Form_Uses_The_Pinned_Proration_Version_Label()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (academicYearId, studentId, _, dueFeeId, _) = await SeedStudentWithOverdueDueFeeAsync(
+				daysOverdue: 0, attachPolicy: true, attachProrationPolicy: true);
+			var line = (await _feeCollections.GetCollectFormAsync(studentId, academicYearId))
+				.Ledger.Should_ContainLine(dueFeeId);
+
+			line.ProrationPolicyName.ShouldBe("Original policy name");
+			line.ProrationPolicyVersionNumber.ShouldBe(2);
+		}
 	}
 
 	[Fact]

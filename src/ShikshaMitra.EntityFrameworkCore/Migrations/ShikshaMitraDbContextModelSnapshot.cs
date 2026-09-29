@@ -9209,7 +9209,7 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "AcademicYearId", "IsDefault")
                         .IsUnique()
                         .HasDatabaseName("IX_Finance_CollectionPolicies_Tenant_AcademicYear_Default")
-                        .HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true");
+                        .HasFilter("\"IsDeleted\" = false AND \"Status\" = 0 AND \"IsDefault\" = true");
 
                     b.HasIndex("TenantId", "AcademicYearId", "PolicyName")
                         .IsUnique()

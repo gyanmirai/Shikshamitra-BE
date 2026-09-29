@@ -82,6 +82,43 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Preview_Partial_Cash_Refund_And_Create_Draft()
+    {
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 2200d);
+        var eligible = await FeeRefundTestHelper.GetEligibleLineAsync(Client, studentId, dueFeeId);
+        var input = new CreateFeeRefundRequestDto
+        {
+            StudentId = studentId,
+            AcademicYearId = FeeRefundTestHelper.DefaultAcademicYearId,
+            OriginalReceiptId = eligible.SourceReceiptId,
+            RefundMethod = "Cash",
+            PaymentDetails = new System.Collections.Generic.Dictionary<string, object?>
+            {
+                ["refundDate"] = DateTime.UtcNow.ToString("yyyy-MM-dd"),
+                ["receivedBy"] = "Test parent",
+            },
+            Reason = "Partial refund test",
+            Lines = new System.Collections.Generic.List<CreateFeeRefundLineDto>
+            {
+                new() { DueFeeId = dueFeeId, SourceAllocationId = eligible.SourceAllocationId, Amount = 200m },
+            },
+        };
+
+        var previewResponse = await Client.PostAsJsonAsync($"{BaseUrl}/preview", input, JsonOptions);
+        previewResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var preview = await previewResponse.Content.ReadFromJsonAsync<FeeRefundPreviewDto>(JsonOptions);
+        preview.ShouldNotBeNull();
+        preview.MaximumAllowedAmount.ShouldBe(200m);
+
+        var createResponse = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+        createResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var draft = await createResponse.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
+        draft.ShouldNotBeNull();
+        draft.TotalAmount.ShouldBe(200m);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Create_Refund_Returns_201_With_Draft_Status()
     {
         var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 1500d);

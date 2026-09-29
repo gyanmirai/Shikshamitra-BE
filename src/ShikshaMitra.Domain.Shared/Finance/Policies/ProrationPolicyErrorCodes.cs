@@ -2,6 +2,7 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 public static class ProrationPolicyErrorCodes
 {
+	public const string DefaultPolicyCannotBeRemoved = "Finance:ProrationPolicy:010026";
 	private const string Prefix = "Finance:ProrationPolicy:";
 
 	public const string PolicyNotFound = Prefix + "010001";

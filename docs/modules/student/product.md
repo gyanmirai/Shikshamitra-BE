@@ -12,6 +12,20 @@ audience: humans-and-agents
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
 
+## Reserved Student identity
+
+Creating an applicant through Inquiry reserves a server-generated `ReservedStudentId` GUID without inserting an `AppStudents` row.
+The reservation belongs to the applicant, so all applications for that applicant share it.
+It is immutable, nonempty, globally unique across tenants and soft-deleted applicants, and is not a Student foreign key or an operational GR/roll number.
+Profile edits, offers, rejection, withdrawal, and failed finalization never replace or recycle it.
+
+Actual Student creation remains at Finalize Admission after the existing accepted/unexpired-offer, completed-workflow, identity, guardian, evidence, eligibility, review, seat, permission and scope checks.
+A new Student uses the reservation as `AppStudents.Id`; an explicitly resolved existing Student retains its real ID and leaves the reservation unused.
+`AdmissionApplication.StudentId` remains null until successful finalization and then identifies the actual Student, not necessarily the reservation.
+Applicant linking, Student creation, document handoff, onboarding case creation and audit writes participate in the same finalization unit of work.
+Repeated successful finalization returns the existing Student/case; collisions never silently link another Student or generate a replacement reservation.
+Operational enrollment and placement remain in Student Onboarding.
+
 ## Admission Cycle governance
 
 An Admission Cycle is the school-controlled season for accepting applications, for example

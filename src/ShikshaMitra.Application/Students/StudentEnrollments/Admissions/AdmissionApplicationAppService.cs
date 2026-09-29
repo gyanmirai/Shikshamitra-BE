@@ -118,6 +118,7 @@ public class AdmissionApplicationAppService(
 		decisionService.GetFinalizationPreviewAsync(id);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
+	[UnitOfWork(true)]
 	public Task<AdmissionFinalizationResultDto> FinalizeAsync(Guid id, FinalizeAdmissionApplicationDto input) =>
 		decisionService.FinalizeAsync(id, input);
 

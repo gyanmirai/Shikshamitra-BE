@@ -184,11 +184,6 @@ public class AssignmentType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidDefaultMarks);
 		}
 
-		if (defaultEvaluationMethod == EvaluationMethod.Marks && !defaultMarks.HasValue)
-		{
-			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidDefaultMarks);
-		}
-
 		if (defaultEvaluationMethod != EvaluationMethod.Marks && defaultMarks.HasValue)
 		{
 			throw new BusinessException(HomeworkAssignmentErrorCodes.InvalidDefaultMarks);

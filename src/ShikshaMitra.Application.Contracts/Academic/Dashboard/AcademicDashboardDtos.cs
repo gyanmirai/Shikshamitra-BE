@@ -6,6 +6,7 @@ namespace ShikshaMitra.Academic.Dashboard;
 public class AcademicDashboardContextDto
 {
     public string DefaultMode { get; set; } = "common";
+    public bool SupportsSectionDashboard { get; set; } = true;
     public List<string> AvailableModes { get; set; } = [];
     public string DisplayName { get; set; } = string.Empty;
     public List<AcademicDashboardClassAssignmentDto> ClassAssignments { get; set; } = [];
@@ -119,6 +120,48 @@ public class PrincipalAcademicDashboardDto
     public List<AcademicDashboardPerformerDto> BottomPerformers { get; set; } = [];
 }
 
+public class PrincipalAcademicDashboardAnalyticsDto
+{
+    public AcademicDashboardChapterCompletionChartDto ChapterCompletionChart { get; set; } = new();
+    public AcademicDashboardPassFailChartDto SubjectPassFailChart { get; set; } = new();
+    public List<AcademicDashboardTeacherPerformanceDto> TeacherPerformanceComparison { get; set; } = [];
+    public List<AcademicDashboardExamDto> UpcomingExamsList { get; set; } = [];
+    public List<AcademicDashboardPerformerDto> TopPerformers { get; set; } = [];
+    public List<AcademicDashboardPerformerDto> BottomPerformers { get; set; } = [];
+}
+
+public class PrincipalAcademicDashboardPerformanceDto
+{
+    public int SchoolPerformanceIndex { get; set; }
+    public string SchoolAverageGrade { get; set; } = string.Empty;
+    public string AverageAttendance { get; set; } = string.Empty;
+    public int TotalTeachers { get; set; }
+    public int TotalStudents { get; set; }
+    public string PerformanceIndexHelper { get; set; } = string.Empty;
+}
+
+public class PrincipalAcademicDashboardCurriculumDto
+{
+    public int SyllabusProgress { get; set; }
+    public int MathProgress { get; set; }
+    public int MathTarget { get; set; }
+    public int ScienceProgress { get; set; }
+    public int ScienceTarget { get; set; }
+    public int EnglishProgress { get; set; }
+    public int EnglishTarget { get; set; }
+}
+
+public class PrincipalAcademicDashboardOperationsDto
+{
+    public int ReadinessRate { get; set; }
+    public string EvaluationLag { get; set; } = string.Empty;
+    public int UpcomingExams { get; set; }
+    public List<AcademicDashboardInsightDto> Insights { get; set; } = [];
+    public List<AcademicDashboardReadinessItemDto> ReadinessItems { get; set; } = [];
+    public List<AcademicDashboardActionCenterItemDto> ActionCenterItems { get; set; } = [];
+    public List<AcademicDashboardDataHealthItemDto> DataHealthItems { get; set; } = [];
+}
+
 public class TeacherAcademicDashboardDto
 {
     public int AttendanceRate { get; set; }
@@ -146,6 +189,47 @@ public class TeacherAcademicDashboardDto
     public List<AcademicDashboardExamDto> UpcomingExamsList { get; set; } = [];
     public TeacherAcademicDashboardPerformanceDistributionDto PerformanceDistribution { get; set; } = new();
     public AcademicDashboardChapterCompletionChartDto ChapterProgressChart { get; set; } = new();
+}
+
+public class TeacherAcademicDashboardAnalyticsDto
+{
+    public TeacherAcademicDashboardPerformanceDistributionDto PerformanceDistribution { get; set; } = new();
+    public AcademicDashboardChapterCompletionChartDto ChapterProgressChart { get; set; } = new();
+}
+
+public class TeacherAcademicDashboardAssignmentsDto
+{
+    public int AttendanceRate { get; set; }
+    public int TodaysLecturesCount { get; set; }
+    public int LecturesDone { get; set; }
+    public int LecturesOngoing { get; set; }
+    public int PendingAttendanceClasses { get; set; }
+    public int AssignedClassesCount { get; set; }
+    public int AssignedSubjectsCount { get; set; }
+    public int PendingHomework { get; set; }
+    public List<AcademicDashboardLectureDto> TodaySchedule { get; set; } = [];
+}
+
+public class TeacherAcademicDashboardAssessmentDto
+{
+    public int SystemAlertsCount { get; set; }
+    public int EvaluationsRate { get; set; }
+    public int PendingEvaluations { get; set; }
+    public int UpcomingExams { get; set; }
+    public List<AcademicDashboardReadinessItemDto> ReadinessItems { get; set; } = [];
+    public List<AcademicDashboardActionCenterItemDto> ActionCenterItems { get; set; } = [];
+    public List<AcademicDashboardDataHealthItemDto> DataHealthItems { get; set; } = [];
+    public List<AcademicDashboardPendingTaskDto> PendingTasks { get; set; } = [];
+    public List<AcademicDashboardActivityDto> RecentActivities { get; set; } = [];
+    public AcademicDashboardHomeworkStatusDto HomeworkStatus { get; set; } = new();
+    public List<AcademicDashboardExamDto> UpcomingExamsList { get; set; } = [];
+}
+
+public class TeacherAcademicDashboardAttentionDto
+{
+    public int StudentsAttentionCount { get; set; }
+    public List<AcademicDashboardAttentionStudentDto> StudentsAttention { get; set; } = [];
+    public List<AcademicDashboardInsightDto> Insights { get; set; } = [];
 }
 
 public class TeacherAcademicDashboardPerformanceDistributionDto

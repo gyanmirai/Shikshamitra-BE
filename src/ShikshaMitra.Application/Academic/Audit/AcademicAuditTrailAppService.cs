@@ -6,11 +6,15 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum.Settings;
+using ShikshaMitra.Academic.Examination.Exams;
 using ShikshaMitra.Academic.Examination.Results;
 using ShikshaMitra.Academic.Examination.SeatAllocation;
 using ShikshaMitra.Academic.Timetable.RoomAvailability;
 using ShikshaMitra.Academic.Timetable.Substitutions;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -25,11 +29,18 @@ namespace ShikshaMitra.Academic.Audit;
 public class AcademicAuditTrailAppService(
 	IRepository<AcademicCalendarAuditLog, Guid> calendarAuditRepository,
 	IRepository<AcademicCalendar, Guid> calendarRepository,
+	IRepository<EducationBoard, Guid> boardRepository,
+	IRepository<EducationMedium, Guid> mediumRepository,
+	IRepository<EducationMediumStage, Guid> stageRepository,
+	IRepository<Standard, Guid> standardRepository,
+	IRepository<Subject, Guid> subjectRepository,
 	IRepository<SubjectAuditLog, Guid> subjectAuditLogRepository,
 	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
 	IRepository<RoomAuditLog, Guid> roomAuditRepository,
+	IRepository<RoomReservation, Guid> roomReservationRepository,
 	IRepository<SubstitutionAuditLog, Guid> substitutionAuditRepository,
 	IRepository<SubstitutionRequest, Guid> substitutionRepository,
+	IRepository<Exam, Guid> examRepository,
 	IRepository<SeatingPlanAuditLog, Guid> seatingPlanAuditRepository,
 	IRepository<ExamResultAuditLog, Guid> examResultAuditRepository,
 	IRepository<IdentityUser, Guid> identityUserRepository,
@@ -41,15 +52,18 @@ public class AcademicAuditTrailAppService(
 	public async Task<PagedResultDto<AcademicAuditEventDto>> GetListAsync(AcademicAuditEventListRequestDto input)
 	{
 		await EnsureCanViewAcademicAuditAsync();
+		var scope = await BuildSourceScopeAsync(input);
+		if (scope is { MediumIds.Count: 0 })
+			return new PagedResultDto<AcademicAuditEventDto>(0, []);
 
 		var events = new List<AcademicAuditEventDto>();
-		events.AddRange(await GetCalendarEventsAsync(input));
-		events.AddRange(await GetSubjectEventsAsync(input));
-		events.AddRange(await GetElectiveGroupEventsAsync(input));
-		events.AddRange(await GetRoomEventsAsync(input));
-		events.AddRange(await GetSubstitutionEventsAsync(input));
-		events.AddRange(await GetSeatingPlanEventsAsync(input));
-		events.AddRange(await GetResultEventsAsync(input));
+		events.AddRange(await GetCalendarEventsAsync(input, scope));
+		events.AddRange(await GetSubjectEventsAsync(input, scope));
+		events.AddRange(await GetElectiveGroupEventsAsync(input, scope));
+		events.AddRange(await GetRoomEventsAsync(input, scope));
+		events.AddRange(await GetSubstitutionEventsAsync(input, scope));
+		events.AddRange(await GetSeatingPlanEventsAsync(input, scope));
+		events.AddRange(await GetResultEventsAsync(input, scope));
 		await EnrichUserReferencesAsync(events);
 		await EnrichCalendarRoomReferencesAsync(events);
 
@@ -61,6 +75,64 @@ public class AcademicAuditTrailAppService(
 			.ToList();
 
 		return new PagedResultDto<AcademicAuditEventDto>(total, sorted);
+	}
+
+	private sealed record AuditSourceScope(
+		List<Guid> MediumIds,
+		List<Guid> CalendarIds,
+		List<Guid> SubjectIds,
+		List<Guid> ReservationIds,
+		List<Guid> SubstitutionIds,
+		List<Guid> ExamIds);
+
+	private async Task<AuditSourceScope?> BuildSourceScopeAsync(AcademicAuditEventListRequestDto input)
+	{
+		if (!input.AcademicYearId.HasValue && !input.AcademicMediumId.HasValue)
+			return null;
+
+		var mediumQuery = await mediumRepository.GetQueryableAsync();
+		if (input.AcademicYearId.HasValue)
+		{
+			var boardQuery = await boardRepository.GetQueryableAsync();
+			var boardIds = await AsyncExecuter.ToListAsync(boardQuery
+				.Where(x => x.AcademicYearId == input.AcademicYearId.Value)
+				.Select(x => x.Id));
+			mediumQuery = mediumQuery.Where(x => boardIds.Contains(x.EducationBoardId));
+		}
+		if (input.AcademicMediumId.HasValue)
+			mediumQuery = mediumQuery.Where(x => x.Id == input.AcademicMediumId.Value);
+
+		var mediumIds = await AsyncExecuter.ToListAsync(mediumQuery.Select(x => x.Id));
+		if (mediumIds.Count == 0)
+			return new AuditSourceScope([], [], [], [], [], []);
+
+		var calendarQuery = await calendarRepository.GetQueryableAsync();
+		var calendarIds = await AsyncExecuter.ToListAsync(calendarQuery
+			.Where(x => x.AcademicMediumId.HasValue && mediumIds.Contains(x.AcademicMediumId.Value))
+			.Select(x => x.Id));
+		var subjectQuery = await subjectRepository.GetQueryableAsync();
+		var subjectIds = await AsyncExecuter.ToListAsync(subjectQuery
+			.Where(x => mediumIds.Contains(x.EducationMediumId)).Select(x => x.Id));
+		var stageQuery = await stageRepository.GetQueryableAsync();
+		var stageIds = await AsyncExecuter.ToListAsync(stageQuery
+			.Where(x => mediumIds.Contains(x.EducationMediumId)).Select(x => x.Id));
+		var standardQuery = await standardRepository.GetQueryableAsync();
+		var standardIds = await AsyncExecuter.ToListAsync(standardQuery
+			.Where(x => stageIds.Contains(x.EducationMediumStageId)).Select(x => x.Id));
+		var reservationQuery = await roomReservationRepository.GetQueryableAsync();
+		var reservationIds = await AsyncExecuter.ToListAsync(reservationQuery
+			.Where(x => x.StandardId.HasValue && standardIds.Contains(x.StandardId.Value))
+			.Select(x => x.Id));
+		var substitutionQuery = await substitutionRepository.GetQueryableAsync();
+		var substitutionIds = await AsyncExecuter.ToListAsync(substitutionQuery
+			.Where(x => x.StandardId.HasValue && standardIds.Contains(x.StandardId.Value))
+			.Select(x => x.Id));
+		var examQuery = await examRepository.GetQueryableAsync();
+		var examIds = await AsyncExecuter.ToListAsync(examQuery
+			.Where(x => standardIds.Contains(x.StandardId)).Select(x => x.Id));
+
+		return new AuditSourceScope(
+			mediumIds, calendarIds, subjectIds, reservationIds, substitutionIds, examIds);
 	}
 
 	private async Task EnrichUserReferencesAsync(List<AcademicAuditEventDto> events)
@@ -140,9 +212,11 @@ public class AcademicAuditTrailAppService(
 		return await GetListAsync(input);
 	}
 
-	private async Task<List<AcademicAuditEventDto>> GetCalendarEventsAsync(AcademicAuditEventListRequestDto input)
+	private async Task<List<AcademicAuditEventDto>> GetCalendarEventsAsync(AcademicAuditEventListRequestDto input, AuditSourceScope? scope)
 	{
 		var query = await calendarAuditRepository.GetQueryableAsync();
+		if (scope != null)
+			query = query.Where(x => scope.CalendarIds.Contains(x.AcademicCalendarId));
 		if (input.FromDate.HasValue)
 			query = query.Where(x => x.ChangedAt >= input.FromDate.Value);
 		if (input.ToDate.HasValue)
@@ -182,9 +256,11 @@ public class AcademicAuditTrailAppService(
 		}).ToList();
 	}
 
-	private async Task<List<AcademicAuditEventDto>> GetSubjectEventsAsync(AcademicAuditEventListRequestDto input)
+	private async Task<List<AcademicAuditEventDto>> GetSubjectEventsAsync(AcademicAuditEventListRequestDto input, AuditSourceScope? scope)
 	{
 		var query = await subjectAuditLogRepository.GetQueryableAsync();
+		if (scope != null)
+			query = query.Where(x => scope.SubjectIds.Contains(x.SubjectId));
 		if (input.FromDate.HasValue)
 			query = query.Where(x => x.ChangedAt >= input.FromDate.Value);
 		if (input.ToDate.HasValue)
@@ -209,10 +285,12 @@ public class AcademicAuditTrailAppService(
 			contextJson: BuildJson(new { x.OldValueJson, x.NewValueJson, Metadata = new { x.IpAddress, x.Device, x.Browser, x.OperatingSystem, x.RequestPath, x.HttpMethod } }))).ToList();
 	}
 
-	private async Task<List<AcademicAuditEventDto>> GetElectiveGroupEventsAsync(AcademicAuditEventListRequestDto input)
+	private async Task<List<AcademicAuditEventDto>> GetElectiveGroupEventsAsync(AcademicAuditEventListRequestDto input, AuditSourceScope? scope)
 	{
 		var query = await electiveGroupRepository.GetQueryableAsync();
 		query = query.Where(x => !x.IsDeleted);
+		if (scope != null)
+			query = query.Where(x => scope.MediumIds.Contains(x.AcademicMediumId));
 		if (input.FromDate.HasValue)
 			query = query.Where(x => x.CreationTime >= input.FromDate.Value || x.LastModificationTime >= input.FromDate.Value);
 		if (input.ToDate.HasValue)
@@ -235,9 +313,11 @@ public class AcademicAuditTrailAppService(
 			BuildJson(new { x.Name, x.GroupType, x.Description, x.Status, x.SortOrder, x.AcademicMediumId }))).ToList();
 	}
 
-	private async Task<List<AcademicAuditEventDto>> GetRoomEventsAsync(AcademicAuditEventListRequestDto input)
+	private async Task<List<AcademicAuditEventDto>> GetRoomEventsAsync(AcademicAuditEventListRequestDto input, AuditSourceScope? scope)
 	{
 		var query = await roomAuditRepository.GetQueryableAsync();
+		if (scope != null)
+			query = query.Where(x => x.ReservationId.HasValue && scope.ReservationIds.Contains(x.ReservationId.Value));
 		if (input.FromDate.HasValue)
 			query = query.Where(x => x.Timestamp >= input.FromDate.Value);
 		if (input.ToDate.HasValue)
@@ -260,9 +340,11 @@ public class AcademicAuditTrailAppService(
 			contextJson: BuildJson(new { x.RoomId, x.ReservationId, x.OldValue, x.NewValue, x.Remarks }))).ToList();
 	}
 
-	private async Task<List<AcademicAuditEventDto>> GetSubstitutionEventsAsync(AcademicAuditEventListRequestDto input)
+	private async Task<List<AcademicAuditEventDto>> GetSubstitutionEventsAsync(AcademicAuditEventListRequestDto input, AuditSourceScope? scope)
 	{
 		var query = await substitutionAuditRepository.GetQueryableAsync();
+		if (scope != null)
+			query = query.Where(x => scope.SubstitutionIds.Contains(x.SubstitutionRequestId));
 		if (input.FromDate.HasValue)
 			query = query.Where(x => x.Timestamp >= input.FromDate.Value);
 		if (input.ToDate.HasValue)
@@ -294,9 +376,11 @@ public class AcademicAuditTrailAppService(
 		}).ToList();
 	}
 
-	private async Task<List<AcademicAuditEventDto>> GetSeatingPlanEventsAsync(AcademicAuditEventListRequestDto input)
+	private async Task<List<AcademicAuditEventDto>> GetSeatingPlanEventsAsync(AcademicAuditEventListRequestDto input, AuditSourceScope? scope)
 	{
 		var query = await seatingPlanAuditRepository.GetQueryableAsync();
+		if (scope != null)
+			query = query.Where(x => scope.ExamIds.Contains(x.ExamId));
 		if (input.FromDate.HasValue)
 			query = query.Where(x => x.ChangedAt >= input.FromDate.Value);
 		if (input.ToDate.HasValue)
@@ -319,9 +403,11 @@ public class AcademicAuditTrailAppService(
 			contextJson: x.AssignmentsSnapshotJson)).ToList();
 	}
 
-	private async Task<List<AcademicAuditEventDto>> GetResultEventsAsync(AcademicAuditEventListRequestDto input)
+	private async Task<List<AcademicAuditEventDto>> GetResultEventsAsync(AcademicAuditEventListRequestDto input, AuditSourceScope? scope)
 	{
 		var query = await examResultAuditRepository.GetQueryableAsync();
+		if (scope != null)
+			query = query.Where(x => scope.ExamIds.Contains(x.ExamId));
 		if (input.FromDate.HasValue)
 			query = query.Where(x => x.CreationTime >= input.FromDate.Value);
 		if (input.ToDate.HasValue)
@@ -401,8 +487,6 @@ public class AcademicAuditTrailAppService(
 		IEnumerable<AcademicAuditEventDto> query,
 		AcademicAuditEventListRequestDto input)
 	{
-		if (input.AcademicYearId.HasValue)
-			query = query.Where(x => x.AcademicYearId == null || x.AcademicYearId == input.AcademicYearId.Value);
 		if (!string.IsNullOrWhiteSpace(input.SubModuleCode))
 			query = query.Where(x => x.SubModuleCode == Normalize(input.SubModuleCode));
 		if (!string.IsNullOrWhiteSpace(input.EntityType))

@@ -327,7 +327,7 @@ public class AdmissionInquiryAppService(
 		var guardian = family.PrimaryGuardianId.HasValue ? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
 		var newGuardian = guardian == null;
 		if (newGuardian) { guardian = new AdmissionGuardian(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.GuardianFirstName, input.GuardianLastName, input.GuardianPhone, input.GuardianEmail, AdmissionGuardianRelationship.Parent, true); family.SetPrimaryGuardian(guardian.Id); }
-		var applicant = new AdmissionApplicant(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.ApplicantFirstName, null, input.ApplicantLastName, input.ApplicantDateOfBirth, null, null);
+		var applicant = new AdmissionApplicant(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.ApplicantFirstName, null, input.ApplicantLastName, input.ApplicantDateOfBirth, null, null, GuidGenerator.Create());
 		foreach (var field in inquiryFields.Where(field =>
 			field.BindingType == AdmissionFormBindingType.System &&
 			!string.IsNullOrWhiteSpace(field.BindingKey) &&

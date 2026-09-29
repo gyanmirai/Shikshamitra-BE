@@ -7,6 +7,7 @@ namespace ShikshaMitra.Academic.Audit;
 public class AcademicAuditEventListRequestDto : PagedAndSortedResultRequestDto
 {
 	public Guid? AcademicYearId { get; set; }
+	public Guid? AcademicMediumId { get; set; }
 	public string? SubModuleCode { get; set; }
 	public string? EntityType { get; set; }
 	public Guid? EntityId { get; set; }

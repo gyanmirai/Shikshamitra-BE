@@ -12,6 +12,20 @@ audience: humans-and-agents
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
 
+## Reserve an identity and finalize admission
+
+1. Create the inquiry/applicant and persist one backend-generated `ReservedStudentId`; do not create a Student yet.
+2. Complete the existing application, review and offer workflow without changing the reservation.
+3. After offer acceptance, run Finalize Admission with the current concurrency stamp, idempotency key, guardian confirmation and explicit duplicate resolution where required.
+4. Reuse a valid linked/selected Student, or create a new Student with the applicant's reserved ID and current validated profile/guardian information.
+5. Atomically link the applicant and application, hand off documents, create the onboarding case and record history.
+6. Continue operational onboarding; finalization does not create the enrollment or assign placement.
+
+A failed transaction leaves the reservation intact and no committed partial Student/onboarding handoff.
+Refresh after a concurrency conflict before retrying; a reservation conflict must be investigated if it persists.
+Later applications reuse an already linked Student and still obey existing same-year enrollment/onboarding restrictions.
+Separate applicant records do not automatically become the same person merely because names match; retain the existing staff duplicate-resolution process.
+
 ## Operate an Admission Cycle
 
 1. Create a Draft with name, unique code, Academic Year, open/close dates, and optional description.

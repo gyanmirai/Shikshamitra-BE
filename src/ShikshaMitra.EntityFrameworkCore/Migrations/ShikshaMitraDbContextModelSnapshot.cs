@@ -22418,6 +22418,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
 
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AcademicBoardId");
@@ -22437,6 +22440,10 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("PreviousSchoolDetailId");
 
                     b.HasIndex("StandardId");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasFilter("\"UserId\" IS NOT NULL");
 
                     b.HasIndex("AcademicYearId", "Status");
 
@@ -23146,6 +23153,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<Guid>("ReservedStudentId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("State")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
@@ -23159,9 +23169,16 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ReservedStudentId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_AdmissionApplicants_ReservedStudentId");
+
                     b.HasIndex("TenantId", "FamilyId");
 
-                    b.ToTable("AppAdmissionApplicants", (string)null);
+                    b.ToTable("AppAdmissionApplicants", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AdmissionApplicants_ReservedStudentId", "\"ReservedStudentId\" <> '00000000-0000-0000-0000-000000000000'");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionApplication", b =>
@@ -35712,6 +35729,11 @@ namespace ShikshaMitra.Migrations
                     b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
                         .WithMany()
                         .HasForeignKey("StandardId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Volo.Abp.Identity.IdentityUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("AcademicBoard");

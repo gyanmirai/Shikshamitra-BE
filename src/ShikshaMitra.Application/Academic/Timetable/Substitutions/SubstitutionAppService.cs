@@ -38,6 +38,15 @@ public class SubstitutionAppService(
     IClassTeacherAccessService classTeacherAccessService
 ) : ApplicationService, ISubstitutionAppService
 {
+    private static readonly SubstitutionStatus[] ActiveAssignmentStatuses =
+    [
+        SubstitutionStatus.Pending,
+        SubstitutionStatus.Assigned,
+        SubstitutionStatus.WaitingAck,
+        SubstitutionStatus.Acknowledged,
+        SubstitutionStatus.Conflict
+    ];
+
     public async Task<PagedResultDto<SubstitutionDto>> GetListAsync(GetSubstitutionsInput input)
     {
         return await GetListAsync(input, null);
@@ -221,9 +230,7 @@ public class SubstitutionAppService(
                 x.TimetableSlotSubjectId == input.TimetableSlotSubjectId &&
                 x.OriginalTeacherId.HasValue &&
                 teacherReferenceIds.Contains(x.OriginalTeacherId.Value) &&
-                x.Status != SubstitutionStatus.Cancelled &&
-                x.Status != SubstitutionStatus.Rejected &&
-                x.Status != SubstitutionStatus.Expired &&
+                Enumerable.Contains(ActiveAssignmentStatuses, x.Status) &&
                 x.StartTime < end &&
                 x.EndTime > start);
             if (duplicate != null)
@@ -326,9 +333,7 @@ public class SubstitutionAppService(
             x.Date == date &&
             x.TimetableSlotSubjectId == input.TimetableSlotSubjectId &&
             x.OriginalTeacherId == input.OriginalTeacherId &&
-            x.Status != SubstitutionStatus.Cancelled &&
-            x.Status != SubstitutionStatus.Rejected &&
-            x.Status != SubstitutionStatus.Expired &&
+            Enumerable.Contains(ActiveAssignmentStatuses, x.Status) &&
             x.StartTime < end &&
             x.EndTime > start);
         if (duplicate != null)
@@ -818,19 +823,10 @@ public class SubstitutionAppService(
             return;
         }
 
-        var activeStatuses = new[]
-        {
-            SubstitutionStatus.Pending,
-            SubstitutionStatus.Assigned,
-            SubstitutionStatus.WaitingAck,
-            SubstitutionStatus.Acknowledged,
-            SubstitutionStatus.Conflict
-        };
-
         var duplicateSubstitution = await substitutionRepository.FirstOrDefaultAsync(x =>
             (!currentSubstitutionId.HasValue || x.Id != currentSubstitutionId.Value) &&
             x.Date == date &&
-            activeStatuses.Contains(x.Status) &&
+            Enumerable.Contains(ActiveAssignmentStatuses, x.Status) &&
             (x.AssignedRoomId == assignedRoomId.Value || x.OriginalRoomId == assignedRoomId.Value) &&
             x.StartTime < endTime &&
             x.EndTime > startTime);
@@ -891,8 +887,7 @@ public class SubstitutionAppService(
         var unavailable = await availabilityRepository.GetListAsync(x =>
             x.AvailabilityDate == date &&
             !x.IsCancelled &&
-            x.StartTime < endTime &&
-            x.EndTime > startTime);
+            (x.IsFullDay || (x.StartTime < endTime && x.EndTime > startTime)));
         var allocationTeacherUserIds = new HashSet<Guid>();
         if (subjectId.HasValue)
         {
@@ -911,25 +906,24 @@ public class SubstitutionAppService(
         return employees
             .Where(x =>
                 (!originalTeacherId.HasValue || x.Id != originalTeacherId.Value) &&
-                !string.Equals(x.EmployeeName, originalTeacherName, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(x.EmployeeName, originalTeacherName, StringComparison.OrdinalIgnoreCase) &&
+                !unavailable.Any(row =>
+                    row.TeacherId.HasValue
+                        ? row.TeacherId == x.Id || row.TeacherId == x.UserId
+                        : string.Equals(row.TeacherName, x.EmployeeName, StringComparison.OrdinalIgnoreCase)))
             .Select(employee =>
             {
                 var todayCount = sameDay.Count(x => x.SubstituteTeacherId == employee.Id);
                 var weekCount = sameDay.Count(x => x.SubstituteTeacherId == employee.Id);
-                var blockingIntervals = unavailable
+                var blockingIntervals = sameDay
                     .Where(x =>
-                        (x.TeacherId.HasValue && x.TeacherId == employee.Id) ||
-                        string.Equals(x.TeacherName, employee.EmployeeName, StringComparison.OrdinalIgnoreCase))
+                        (!currentSubstitutionId.HasValue || x.Id != currentSubstitutionId.Value) &&
+                        x.SubstituteTeacherId == employee.Id &&
+                        x.Status != SubstitutionStatus.Cancelled &&
+                        x.Status != SubstitutionStatus.Rejected &&
+                        x.Status != SubstitutionStatus.Expired &&
+                        HasOverlap(x.StartTime, x.EndTime, startTime, endTime))
                     .Select(x => (Start: x.StartTime, End: x.EndTime))
-                    .Concat(sameDay
-                        .Where(x =>
-                            (!currentSubstitutionId.HasValue || x.Id != currentSubstitutionId.Value) &&
-                            x.SubstituteTeacherId == employee.Id &&
-                            x.Status != SubstitutionStatus.Cancelled &&
-                            x.Status != SubstitutionStatus.Rejected &&
-                            x.Status != SubstitutionStatus.Expired &&
-                            HasOverlap(x.StartTime, x.EndTime, startTime, endTime))
-                        .Select(x => (Start: x.StartTime, End: x.EndTime)))
                     .Concat(timetables
                         .SelectMany(timetable => timetable.Slots)
                         .Where(slot =>

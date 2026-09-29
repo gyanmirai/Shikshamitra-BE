@@ -13,12 +13,15 @@ using ShikshaMitra.TenantSettings.Standards;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Identity;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 
@@ -43,6 +46,9 @@ public class StudentSeederContributor : BaseSeederContributor
 	private readonly IEducationMediumStageRepository _educationMediumStageRepository;
 	private readonly IStandardRepository _standardRepository;
 	private readonly IDivisionRepository _divisionRepository;
+	private readonly IdentityUserManager _userManager;
+	private readonly IIdentityRoleRepository _roleRepository;
+	private readonly ILookupNormalizer _lookupNormalizer;
 	private readonly IConfiguration _configuration;
 	private readonly ILogger<StudentSeederContributor> _logger;
 
@@ -93,6 +99,9 @@ public class StudentSeederContributor : BaseSeederContributor
 		IEducationMediumStageRepository educationMediumStageRepository,
 		IStandardRepository standardRepository,
 		IDivisionRepository divisionRepository,
+		IdentityUserManager userManager,
+		IIdentityRoleRepository roleRepository,
+		ILookupNormalizer lookupNormalizer,
 		IConfiguration configuration,
 		ILogger<StudentSeederContributor> logger)
 		: base(currentTenant, guidGenerator, unitOfWork)
@@ -104,6 +113,9 @@ public class StudentSeederContributor : BaseSeederContributor
 		_educationMediumStageRepository = educationMediumStageRepository;
 		_standardRepository = standardRepository;
 		_divisionRepository = divisionRepository;
+		_userManager = userManager;
+		_roleRepository = roleRepository;
+		_lookupNormalizer = lookupNormalizer;
 		_configuration = configuration;
 		_logger = logger;
 	}
@@ -186,6 +198,9 @@ public class StudentSeederContributor : BaseSeederContributor
 		var pendingStudents = new List<Student>(InsertBatchSize);
 		var studentsPerDivision = GetStudentsPerDivision();
 		var maxStudents = GetMaxStudents();
+		var studentRole = await _roleRepository.FindByNormalizedNameAsync(_lookupNormalizer.NormalizeName("Student"));
+		if (string.IsNullOrWhiteSpace(studentRole?.Name))
+			throw new InvalidOperationException("The Student role must exist before demo students are seeded.");
 
 		_logger.LogInformation(
 			"[StudentSeeder] Limits resolved: StudentsPerDivision={StudentsPerDivision}, MaxStudents={MaxStudents}",
@@ -243,6 +258,7 @@ public class StudentSeederContributor : BaseSeederContributor
 									totalStudentsCreated + 1,
 									i + 1 // Roll number within division
 								);
+								await CreateUserForStudentAsync(student, studentRole.Name, medium.Name, standard.Name);
 
 								pendingStudents.Add(student);
 								totalStudentsCreated++;
@@ -305,6 +321,42 @@ public class StudentSeederContributor : BaseSeederContributor
 		);
 
 		pendingStudents.Clear();
+	}
+
+	internal async Task CreateUserForStudentAsync(Student student, string roleName, string mediumName, string className)
+	{
+		var baseUsername = $"student-{UsernameSegment(mediumName)}-{UsernameSegment(className)}-{UsernameSegment(student.FirstName)}-{UsernameSegment(student.LastName)}";
+		var username = baseUsername;
+		var suffix = 2;
+		while (await _userManager.FindByNameAsync(username) != null)
+		{
+			username = $"{baseUsername}-{suffix++}";
+		}
+
+		var email = $"{username}@example.invalid";
+		var user = new IdentityUser(GuidGenerator.Create(), username, email, CurrentTenant.Id)
+		{
+			Name = student.FirstName,
+			Surname = student.LastName
+		};
+		user.SetEmailConfirmed(true);
+		user.SetShouldChangePasswordOnNextLogin(false);
+		var createResult = await _userManager.CreateAsync(user, UserSeederContributor.DefaultPassword);
+		if (!createResult.Succeeded)
+			throw new InvalidOperationException("Failed to create a demo student user: " +
+				string.Join(", ", createResult.Errors.Select(error => error.Description)));
+
+		var roleResult = await _userManager.AddToRoleAsync(user, roleName);
+		if (!roleResult.Succeeded)
+			throw new InvalidOperationException("Failed to assign the Student role to a demo student user: " +
+				string.Join(", ", roleResult.Errors.Select(error => error.Description)));
+		student.LinkUser(user.Id);
+	}
+
+	internal static string UsernameSegment(string value)
+	{
+		var normalized = Regex.Replace(value.Trim().ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
+		return string.IsNullOrEmpty(normalized) ? "unknown" : normalized;
 	}
 
 	private Student CreateStudent(

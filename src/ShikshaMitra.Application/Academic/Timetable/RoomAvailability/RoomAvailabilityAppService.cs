@@ -942,8 +942,12 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             new { Period = "P18", Time = "11:00 PM - 12:00 AM", Start = new TimeSpan(23,0,0), End = new TimeSpan(23,59,59) }
         };
 
-        foreach (var cfg in slotsConfig)
+        var conflictsByPeriod = await _conflictService.CheckRoomPeriodsAsync(room, date,
+            slotsConfig.Select(cfg => (cfg.Start, cfg.End)).ToList());
+
+        for (var index = 0; index < slotsConfig.Length; index++)
         {
+            var cfg = slotsConfig[index];
             var res = reservations.FirstOrDefault(r => r.StartTime < cfg.End && r.EndTime > cfg.Start);
             if (res != null)
             {
@@ -960,7 +964,7 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             }
             else
             {
-                var conflict = await _conflictService.CheckConflictsAsync(roomId, date, cfg.Start, cfg.End);
+                var conflict = conflictsByPeriod[index];
                 var block = conflict.Conflicts.FirstOrDefault(c => c.Severity == "critical");
 
                 schedule.Slots.Add(new ScheduleSlotDto

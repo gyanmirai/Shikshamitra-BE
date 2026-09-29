@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Identity;
 using Volo.Abp.Uow;
@@ -67,9 +69,11 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 
 	public virtual async Task<GetPermissionListResultDto> GetAsync(string providerName, string providerKey)
 	{
+		var timer = Stopwatch.StartNew();
 		var isCurrentUserRead = IsCurrentUserProvider(providerName, providerKey);
 
 		await CheckProviderPolicy(providerName, providerKey, allowCurrentUserRead: true);
+		var policyMs = timer.ElapsedMilliseconds;
 
 		var result = new GetPermissionListResultDto
 		{
@@ -78,10 +82,26 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		};
 
 		var multiTenancySide = CurrentTenant.GetMultiTenancySide();
-
-		foreach (var group in await PermissionDefinitionManager.GetGroupsAsync())
+		var enabledGroups = new List<(PermissionGroupDto Group, List<PermissionGrantInfoDto> Permissions)>();
+		long localizationTicks = 0;
+		var groups = await PermissionDefinitionManager.GetGroupsAsync();
+		var stateDefinitions = new HashSet<PermissionDefinition>();
+		foreach (var permission in groups.SelectMany(group => group.GetPermissionsWithChildren()))
 		{
+			if (!permission.MultiTenancySide.HasFlag(multiTenancySide)) continue;
+			for (var current = permission; current != null; current = current.Parent)
+			{
+				if (!current.IsEnabled) break;
+				stateDefinitions.Add(current);
+			}
+		}
+		var stateResults = await SimpleStateCheckerManager.IsEnabledAsync(stateDefinitions.ToArray());
+
+		foreach (var group in groups)
+		{
+			var localizationStarted = Stopwatch.GetTimestamp();
 			var groupDto = CreatePermissionGroupDto(group);
+			localizationTicks += Stopwatch.GetTimestamp() - localizationStarted;
 
 			var neededCheckPermissions = new List<PermissionDefinition>();
 
@@ -91,7 +111,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 			{
 				var enabled = permission.MultiTenancySide.HasFlag(multiTenancySide);
 				for (var current = permission; current != null && enabled; current = current.Parent)
-					enabled = current.IsEnabled && await SimpleStateCheckerManager.IsEnabledAsync(current);
+					enabled = current.IsEnabled && stateResults[current];
 				if (enabled)
 				{
 					neededCheckPermissions.Add(permission);
@@ -103,20 +123,35 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 				continue;
 			}
 
+			localizationStarted = Stopwatch.GetTimestamp();
 			var grantInfoDtos = neededCheckPermissions
 				.Select(CreatePermissionGrantInfoDto)
 				.ToList();
+			localizationTicks += Stopwatch.GetTimestamp() - localizationStarted;
 
-			var permissionNames = neededCheckPermissions.Select(x => x.Name).ToArray();
-			var effectiveGrantLookup = isCurrentUserRead
-				? await GetCurrentUserEffectivePermissionLookupAsync(permissionNames)
-				: null;
-			var multipleGrantInfo = await PermissionManager.GetAsync(permissionNames, providerName, providerKey);
+			enabledGroups.Add((groupDto, grantInfoDtos));
+		}
 
+		var permissionNames = enabledGroups.SelectMany(group => group.Permissions).Select(permission => permission.Name).ToArray();
+		if (permissionNames.Length == 0) return result;
+		var catalogueMs = timer.ElapsedMilliseconds - policyMs;
+
+		var effectiveGrantLookup = isCurrentUserRead
+			? (await PermissionChecker.IsGrantedAsync(permissionNames)).Result
+			: null;
+		var effectiveMs = timer.ElapsedMilliseconds - policyMs - catalogueMs;
+		var grantInfoLookup = (await PermissionManager.GetAsync(permissionNames, providerName, providerKey))
+			.Result.ToDictionary(grant => grant.Name, StringComparer.Ordinal);
+		var grantSourcesMs = timer.ElapsedMilliseconds - policyMs - catalogueMs - effectiveMs;
+
+		foreach (var (groupDto, grantInfoDtos) in enabledGroups)
+		{
 			foreach (var grantInfoDto in grantInfoDtos)
 			{
-				var grantInfo = multipleGrantInfo!.Result.First(x => x.Name == grantInfoDto.Name);
-				grantInfoDto.IsGranted = effectiveGrantLookup?.GetValueOrDefault(grantInfoDto.Name) ?? grantInfo.IsGranted;
+				var grantInfo = grantInfoLookup[grantInfoDto.Name];
+				grantInfoDto.IsGranted = effectiveGrantLookup != null
+					? effectiveGrantLookup[grantInfoDto.Name] == PermissionGrantResult.Granted
+					: grantInfo.IsGranted;
 
 				foreach (var provider in grantInfo.Providers)
 				{
@@ -130,11 +165,14 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 				groupDto.Permissions.Add(grantInfoDto);
 			}
 
-			if (groupDto.Permissions.Any())
-			{
-				result.Groups.Add(groupDto);
-			}
+			result.Groups.Add(groupDto);
 		}
+		if (timer.ElapsedMilliseconds >= 1000)
+			Logger.LogWarning(
+				"Permission catalogue read took {TotalMs} ms: policy={PolicyMs}, catalogue={CatalogueMs}, localization={LocalizationMs}, effective={EffectiveMs}, grantSources={GrantSourcesMs}, groups={GroupCount}, permissions={PermissionCount}, selfRead={SelfRead}",
+				timer.ElapsedMilliseconds, policyMs, catalogueMs,
+				TimeSpan.FromSeconds(localizationTicks / (double)Stopwatch.Frequency).TotalMilliseconds,
+				effectiveMs, grantSourcesMs, result.Groups.Count, permissionNames.Length, isCurrentUserRead);
 
 		return result;
 	}
@@ -258,18 +296,6 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 			throw new AbpAuthorizationException();
 		}
 		await ValidateProviderAsync(providerName, providerKey);
-	}
-
-	private async Task<Dictionary<string, bool>> GetCurrentUserEffectivePermissionLookupAsync(string[] permissionNames)
-	{
-		var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-
-		foreach (var permissionName in permissionNames)
-		{
-			result[permissionName] = await PermissionChecker.IsGrantedAsync(permissionName);
-		}
-
-		return result;
 	}
 
 	private bool IsCurrentUserProvider(string providerName, string providerKey)

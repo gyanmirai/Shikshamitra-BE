@@ -38,7 +38,8 @@ public class AdmissionApplicationDecisionService(
 	AdmissionSeatRuntimeService seatRuntime,
 	AdmissionOfferCommandService offerCommands,
 	AdmissionInquiryPeopleService peopleService,
-	AdmissionApplicationScopeAccessService applicationScope)
+	AdmissionApplicationScopeAccessService applicationScope,
+	IAdmissionFinalizationConflictClassifier finalizationConflicts)
 	: ApplicationService, ITransientDependency
 {
 	public Task<AdmissionApplicationDto> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) =>
@@ -118,6 +119,25 @@ public class AdmissionApplicationDecisionService(
 
 	public async Task<AdmissionFinalizationResultDto> FinalizeAsync(Guid id, FinalizeAdmissionApplicationDto input)
 	{
+		try
+		{
+			return await FinalizeCoreAsync(id, input);
+		}
+		catch (Exception exception) when (finalizationConflicts.IsStudentIdentityConflict(exception))
+		{
+			// Includes hidden/deleted Students and racing requests, without disabling tenant filters.
+			throw new BusinessException(AdmissionApplicantErrorCodes.ReservedStudentIdConflict,
+				innerException: exception);
+		}
+		catch (Exception exception) when (finalizationConflicts.IsConcurrentFinalization(exception))
+		{
+			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict,
+				innerException: exception);
+		}
+	}
+
+	private async Task<AdmissionFinalizationResultDto> FinalizeCoreAsync(Guid id, FinalizeAdmissionApplicationDto input)
+	{
 		var context = await LoadFinalizationContextAsync(id);
 
 		if (context.Application.Status == AdmissionApplicationStatus.AdmissionFinalized &&
@@ -186,6 +206,8 @@ public class AdmissionApplicationDecisionService(
 		}
 		else
 		{
+			if (await studentRepository.AnyAsync(item => item.Id == context.Applicant.ReservedStudentId))
+				throw new BusinessException(AdmissionApplicantErrorCodes.ReservedStudentIdConflict);
 			student = CreateStudent(context);
 			await studentRepository.InsertAsync(student, false);
 		}
@@ -383,7 +405,7 @@ public class AdmissionApplicationDecisionService(
 			throw new BusinessException(StudentOnboardingErrorCodes.CoreIdentityIncomplete);
 		var applicant = context.Applicant;
 		var guardian = context.Guardian;
-		var student = Student.CreateDirectRegistration(GuidGenerator.Create(), CurrentTenant.Id,
+		var student = Student.CreateDirectRegistration(applicant.ReservedStudentId, CurrentTenant.Id,
 			applicant.FirstName, applicant.MiddleName, applicant.LastName, context.Cycle.AcademicYearId,
 			context.Offering.BoardId, context.Offering.MediumId, context.Offering.StageId, null, null,
 			applicant.DateOfBirth.Value, gender, guardian.Mobile, email: guardian.Email,

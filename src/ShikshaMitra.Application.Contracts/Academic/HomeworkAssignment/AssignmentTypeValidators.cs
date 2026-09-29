@@ -52,10 +52,11 @@ internal class AssignmentTypeSettingsValidator<TDto> : AbstractValidator<TDto>
 			.WithMessage("An evaluation method other than NoEvaluation is required when evaluation is enabled.");
 
 		RuleFor(x => GetMarks(x))
-			.NotNull()
 			.GreaterThanOrEqualTo(0)
-			.When(x => GetEvaluationRequired(x) && GetEvaluationMethod(x) == EvaluationMethod.Marks)
-			.WithMessage("Default marks are required and cannot be negative when evaluation uses marks.");
+			.When(x => GetEvaluationRequired(x) &&
+				GetEvaluationMethod(x) == EvaluationMethod.Marks &&
+				GetMarks(x).HasValue)
+			.WithMessage("Default marks cannot be negative when supplied.");
 
 		RuleFor(x => GetMarks(x))
 			.Null()

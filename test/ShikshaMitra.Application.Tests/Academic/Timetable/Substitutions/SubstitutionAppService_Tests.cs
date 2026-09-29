@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -23,6 +24,7 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
     private readonly IRepository<Employee, Guid> _employeeRepository;
     private readonly IRepository<IdentityRole, Guid> _roleRepository;
     private readonly IRepository<IdentityUser, Guid> _identityUserRepository;
+    private readonly IRepository<UserScopeAssignment, Guid> _scopeRepository;
     private readonly ICurrentPrincipalAccessor _currentPrincipalAccessor;
 
     public SubstitutionAppService_Tests()
@@ -34,7 +36,53 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
         _employeeRepository = GetRequiredService<IRepository<Employee, Guid>>();
         _roleRepository = GetRequiredService<IRepository<IdentityRole, Guid>>();
         _identityUserRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
+        _scopeRepository = GetRequiredService<IRepository<UserScopeAssignment, Guid>>();
         _currentPrincipalAccessor = GetRequiredService<ICurrentPrincipalAccessor>();
+    }
+
+    [Theory]
+    [InlineData(true, "09:00", "14:15")]
+    [InlineData(false, "16:45", "17:00")]
+    public async Task GetSuggestedTeachersAsync_Should_Exclude_Teacher_With_Overlapping_Unavailability(
+        bool isFullDay, string unavailableStart, string unavailableEnd)
+    {
+        var teacher = await CreateEmployeeAsync(Guid.NewGuid(), "Unavailable", "Teacher");
+        var date = DateTime.UtcNow.Date.AddDays(7);
+        await _availabilityRepository.InsertAsync(new TeacherAvailability(
+            Guid.NewGuid(), null, teacher.EmployeeName, date,
+            TimeOnly.Parse(unavailableStart), TimeOnly.Parse(unavailableEnd),
+            TeacherAvailabilityStatus.Unavailable, TeacherAvailabilitySource.Manual,
+            "Teacher unavailable", isFullDay, true, teacherId: teacher.Id), autoSave: true);
+
+        var suggestions = await _substitutionAppService.GetSuggestedTeachersAsync(new SuggestedTeacherInput
+        {
+            Date = new DateTimeOffset(date),
+            StartTime = "16:30",
+            EndTime = "17:30"
+        });
+
+        suggestions.ShouldNotContain(x => x.TeacherId == teacher.Id);
+    }
+
+    [Fact]
+    public async Task GetSuggestedTeachersAsync_Should_Allow_Teacher_When_Partial_Unavailability_Does_Not_Overlap()
+    {
+        var teacher = await CreateEmployeeAsync(Guid.NewGuid(), "Available", "Teacher");
+        var date = new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
+        await _availabilityRepository.InsertAsync(new TeacherAvailability(
+            Guid.NewGuid(), null, teacher.EmployeeName, date,
+            new TimeOnly(15, 30), new TimeOnly(16, 30),
+            TeacherAvailabilityStatus.Unavailable, TeacherAvailabilitySource.Manual,
+            "Earlier absence", false, true, teacherId: teacher.Id), autoSave: true);
+
+        var suggestions = await _substitutionAppService.GetSuggestedTeachersAsync(new SuggestedTeacherInput
+        {
+            Date = new DateTimeOffset(date),
+            StartTime = "16:30",
+            EndTime = "17:30"
+        });
+
+        suggestions.ShouldContain(x => x.TeacherId == teacher.Id);
     }
 
     [Fact]
@@ -234,6 +282,79 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
     }
 
     [Theory]
+    [InlineData(SubstitutionStatus.Rejected, true)]
+    [InlineData(SubstitutionStatus.Cancelled, true)]
+    [InlineData(SubstitutionStatus.Completed, true)]
+    [InlineData(SubstitutionStatus.WaitingAck, false)]
+    public async Task CreateAsync_Should_Use_Previous_Status_For_Slot_Conflict(
+        SubstitutionStatus previousStatus, bool canReassign)
+    {
+        var previousTeacher = await CreateEmployeeAsync(Guid.NewGuid(), "Previous", "Substitute");
+        var replacementTeacher = await CreateEmployeeAsync(Guid.NewGuid(), "Replacement", "Substitute");
+        var actorId = Guid.NewGuid();
+        await CreateEmployeeAsync(actorId, "Administrative", "User");
+        await _scopeRepository.InsertAsync(
+            new UserScopeAssignment(Guid.NewGuid(), null, actorId), autoSave: true);
+        var originalTeacherId = Guid.NewGuid();
+        var slotSubjectId = Guid.NewGuid();
+        var date = DateTime.UtcNow.Date.AddDays(7);
+        var previous = new SubstitutionRequest(
+            Guid.NewGuid(), null, date, "Period 2", new TimeOnly(13, 0), new TimeOnly(13, 30),
+            "Class 10", "A", "Mathematics", "Original Teacher", "BI01",
+            "Original teacher unavailable.", SubstitutionPriority.Normal, SubstitutionSource.Manual,
+            true, timetableSlotSubjectId: slotSubjectId, originalTeacherId: originalTeacherId);
+        previous.Assign(previousTeacher.Id, previousTeacher.EmployeeName, null, null, null,
+            "Low", SubstitutionConflictStatus.Clear, null, true);
+        switch (previousStatus)
+        {
+            case SubstitutionStatus.Rejected:
+                previous.Reject("Cannot cover the period.");
+                break;
+            case SubstitutionStatus.Cancelled:
+                previous.Cancel("Assignment cancelled.");
+                break;
+            case SubstitutionStatus.Completed:
+                previous.Complete();
+                break;
+        }
+        await _substitutionRepository.InsertAsync(previous, autoSave: true);
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(actorId, "admin")))
+        {
+            var input = new CreateSubstitutionDto
+            {
+                Date = new DateTimeOffset(date),
+                Period = "Period 2",
+                StartTime = "13:00",
+                EndTime = "13:30",
+                ClassName = "Class 10",
+                DivisionName = "A",
+                TimetableSlotSubjectId = slotSubjectId,
+                SubjectName = "Mathematics",
+                OriginalTeacherId = originalTeacherId,
+                OriginalTeacherName = "Original Teacher",
+                RoomName = "BI01",
+                Reason = "Original teacher unavailable.",
+                SubstituteTeacherId = replacementTeacher.Id,
+                SubstituteTeacherName = replacementTeacher.EmployeeName
+            };
+
+            if (!canReassign)
+            {
+                var error = await Should.ThrowAsync<UserFriendlyException>(() =>
+                    _substitutionAppService.CreateAsync(input));
+                error.Message.ShouldBe("This slot time already has an active substitution assignment.");
+                return;
+            }
+
+            var created = await _substitutionAppService.CreateAsync(input);
+
+            created.Id.ShouldNotBe(previous.Id);
+            created.SubstituteTeacherId.ShouldBe(replacementTeacher.Id);
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task AcknowledgeAsync_Should_Reject_User_Who_Is_Not_The_Assigned_Substitute(bool alreadyAccepted)
@@ -353,13 +474,13 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
         return await _employeeRepository.InsertAsync(employee, autoSave: true);
     }
 
-    private static ClaimsPrincipal BuildPrincipal(Guid userId)
+    private static ClaimsPrincipal BuildPrincipal(Guid userId, string role = "teacher")
     {
         var claims = new List<Claim>
         {
             new(AbpClaimTypes.UserId, userId.ToString()),
             new(AbpClaimTypes.UserName, $"user-{userId:N}"),
-            new(AbpClaimTypes.Role, "teacher")
+            new(AbpClaimTypes.Role, role)
         };
 
         return new ClaimsPrincipal(new ClaimsIdentity(claims, "Test"));

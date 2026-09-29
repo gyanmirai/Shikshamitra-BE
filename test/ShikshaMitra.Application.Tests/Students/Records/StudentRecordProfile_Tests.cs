@@ -9,6 +9,7 @@ using ShikshaMitra.Students.Enrollments.Registrations;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
+using Volo.Abp.Identity;
 using Volo.Abp.Security.Claims;
 using Xunit;
 
@@ -87,6 +88,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var student = await _studentRepository.GetAsync(denied.Id);
 			student.UpdateAcademicPlacement(allowed.AcademicYearId!.Value, offering.BoardId, offering.MediumId, offering.StageId, other.Id, null);
 			await _studentRepository.UpdateAsync(student, autoSave: true);
+			await GetRequiredService<IIdentityUserRepository>().InsertAsync(new IdentityUser(staffId,
+				$"profile-staff-{staffId:N}", $"profile-staff-{staffId:N}@example.test", TestTenantId), autoSave: true);
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: staffId,
 				academicYearId: allowed.AcademicYearId, educationBoardId: offering.BoardId, educationMediumId: offering.MediumId,
 				educationMediumStageId: offering.StageId, standardId: offering.StandardId), autoSave: true);

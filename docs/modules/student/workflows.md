@@ -14,17 +14,21 @@ TL;DR: setup commands produce validated offering defaults, while inquiry and app
 
 ## Reserve an identity and finalize admission
 
-1. Create the inquiry/applicant and persist one backend-generated `ReservedStudentId`; do not create a Student yet.
-2. Complete the existing application, review and offer workflow without changing the reservation.
-3. After offer acceptance, run Finalize Admission with the current concurrency stamp, idempotency key, guardian confirmation and explicit duplicate resolution where required.
-4. Reuse a valid linked/selected Student, or create a new Student with the applicant's reserved ID and current validated profile/guardian information.
-5. Atomically link the applicant and application, hand off documents, create the onboarding case and record history.
-6. Continue operational onboarding; finalization does not create the enrollment or assign placement.
-
-A failed transaction leaves the reservation intact and no committed partial Student/onboarding handoff.
-Refresh after a concurrency conflict before retrying; a reservation conflict must be investigated if it persists.
-Later applications reuse an already linked Student and still obey existing same-year enrollment/onboarding restrictions.
-Separate applicant records do not automatically become the same person merely because names match; retain the existing staff duplicate-resolution process.
+Admission finalization links a Student and onboarding case, without operational enrollment.
+Saved year-specific onboarding configuration takes precedence over school configuration; the matching admission route, optional campus, and academic path select readiness and numbering rules. A campus-specific rule matches the campus captured from the finalized Admission Offering; a rule without campus targeting continues to cover all campuses. Older cases without a campus snapshot use their linked Offering when available, without writing a snapshot merely by reading the case; this preserves the returned concurrency stamp. A case with no campus cannot match a campus-specific rule.
+Schools may name additional onboarding routes in readiness rules. Authorized staff can switch an open case to a route saved in its effective academic-year configuration; the four built-in routes remain valid for existing cases. Changing a route resets approval review and refreshes readiness. A custom route must have a readiness rule matching the case's academic path, including campus when targeted; if that rule is removed later, readiness refresh and activation fail closed until staff restore coverage or choose another route.
+Staff refresh evidence, reserve placement and identifiers, and record any required approval.
+Activation creates one enrollment and enters Provisioning (6), rather than completing the case.
+Finance assignment uses that enrollment and remains the only writer of dues and receipts.
+Completion requires a canonical assignment, settlement of the earliest due-date installment group, and sufficient confirmed payment-allocation evidence for its paid amount.
+Later installments may remain unpaid; zero-payable or fully credited obligations do not require artificial payment.
+Required student/guardian identities are created passwordless and linked to the student by authorized staff.
+Their owners use the existing Account password-reset flow; successful first password setup using a valid protected token also verifies the email for linked portal-only identities.
+The self-service linked-student endpoint requires an active, email-confirmed identity and returns only that user's saved tenant-local links.
+If a saved onboarding policy requires service consent, authorized staff first store the family's signed consent in the school's records, then enter its reference in Student Setup after enrollment. The scoped confirmation is audited and acknowledges the consent handoff; it cannot substitute for the signed record, fee settlement, or required portal links.
+Readiness refresh rechecks Finance and account links, completing the case only when all required handoffs are acknowledged.
+In Student Setup, **Recheck payment and onboarding** runs that backend readiness refresh after Finance records the first installment; reloading the case alone does not complete provisioning.
+Completed historical cases are not reopened by this process.
 
 ## Operate an Admission Cycle
 

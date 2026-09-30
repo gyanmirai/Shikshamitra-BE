@@ -229,6 +229,7 @@ public class AdmissionApplicationDecisionService(
 			context.Offering.Id, context.Cycle.AcademicYearId, context.Offering.BoardId, context.Offering.MediumId,
 			context.Offering.StageId, context.Offering.StandardId, input.IdempotencyKey, now,
 			now.AddHours(policy?.SlaHours ?? 72));
+		onboardingCase.SetCampusId(context.Offering.CampusId);
 		if (context.Application.AssignedCounsellorId.HasValue)
 			onboardingCase.AssignOwner(context.Application.AssignedCounsellorId);
 		await onboardingRepository.InsertAsync(onboardingCase, false);

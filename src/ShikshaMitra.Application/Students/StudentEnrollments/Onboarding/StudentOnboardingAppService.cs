@@ -36,10 +36,12 @@ public partial class StudentOnboardingAppService(
 	IRepository<StudentOnboardingServiceHandoff, Guid> handoffRepository,
 	IRepository<AdmissionApplication, Guid> applicationRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
+	IRepository<AdmissionCampus, Guid> campusRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationBoard, Guid> boardRepository,
 	IRepository<ShikshaMitra.TenantSettings.EducationMediums.EducationMedium, Guid> mediumRepository,
+	IRepository<ShikshaMitra.TenantSettings.EducationBoards.EducationMediumStage, Guid> mediumStageRepository,
 	IRepository<Standard, Guid> standardRepository,
 	IRepository<Division, Guid> divisionRepository,
 	IRepository<StudentEnrollment, Guid> enrollmentRepository,
@@ -60,7 +62,10 @@ public partial class StudentOnboardingAppService(
 		var query = await GetScopedCasesAsync();
 		if (input.Status.HasValue) query = query.Where(item => item.Status == input.Status.Value);
 		if (input.AcademicYearId.HasValue) query = query.Where(item => item.AcademicYearId == input.AcademicYearId.Value);
+		if (input.BoardId.HasValue) query = query.Where(item => item.IntendedBoardId == input.BoardId.Value);
+		if (input.MediumId.HasValue) query = query.Where(item => item.IntendedMediumId == input.MediumId.Value);
 		if (input.StandardId.HasValue) query = query.Where(item => item.IntendedStandardId == input.StandardId.Value);
+		if (input.DivisionId.HasValue) query = query.Where(item => item.DivisionId == input.DivisionId.Value);
 		if (input.AssignedToUserId.HasValue) query = query.Where(item => item.AssignedToUserId == input.AssignedToUserId.Value);
 		if (input.UnassignedOnly == true) query = query.Where(item => !item.AssignedToUserId.HasValue);
 		if (input.OverdueOnly == true)
@@ -91,25 +96,45 @@ public partial class StudentOnboardingAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
-	public async Task<StudentOnboardingFilterOptionsDto> GetFilterOptionsAsync()
+	public async Task<StudentOnboardingFilterOptionsDto> GetFilterOptionsAsync(Guid? academicYearId = null)
 	{
 		var query = await GetScopedCasesAsync();
+		if (academicYearId.HasValue) query = query.Where(item => item.AcademicYearId == academicYearId.Value);
 		var academicYearIds = await AsyncExecuter.ToListAsync(query
 			.Select(item => item.AcademicYearId).Distinct());
 		var standardIds = await AsyncExecuter.ToListAsync(query
 			.Select(item => item.IntendedStandardId).Distinct());
-		var academicYears = academicYearIds.Count == 0
-			? []
-			: await academicYearRepository.GetListAsync(item => academicYearIds.Contains(item.Id));
+		var boardIds = await AsyncExecuter.ToListAsync(query.Select(item => item.IntendedBoardId).Distinct());
+		var mediumIds = await AsyncExecuter.ToListAsync(query.Select(item => item.IntendedMediumId).Distinct());
+		var divisionIds = await AsyncExecuter.ToListAsync(query.Where(item => item.DivisionId.HasValue)
+			.Select(item => item.DivisionId!.Value).Distinct());
+		var boards = await boardRepository.GetListAsync(item => boardIds.Contains(item.Id));
+		var mediums = await mediumRepository.GetListAsync(item => mediumIds.Contains(item.Id));
+		var divisions = await divisionRepository.GetListAsync(item => divisionIds.Contains(item.Id));
 		var standards = standardIds.Count == 0
 			? []
 			: await standardRepository.GetListAsync(item => standardIds.Contains(item.Id));
+		var stageIds = standards.Select(item => item.EducationMediumStageId).Distinct().ToList();
+		var mediumByStage = (await mediumStageRepository.GetListAsync(item => stageIds.Contains(item.Id)))
+			.ToDictionary(item => item.Id, item => item.EducationMediumId);
+		var academicYears = academicYearIds.Count == 0
+			? []
+			: await academicYearRepository.GetListAsync(item => academicYearIds.Contains(item.Id));
 		return new StudentOnboardingFilterOptionsDto
 		{
 			AcademicYears = academicYears.OrderByDescending(item => item.Name)
 				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name }).ToList(),
+			Boards = boards.OrderBy(item => item.Type)
+				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Type.ToString() }).ToList(),
+			Mediums = mediums.OrderBy(item => item.Name)
+				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name,
+					ParentId = item.EducationBoardId }).ToList(),
 			Standards = standards.OrderBy(item => item.Name)
-				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name }).ToList()
+				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name,
+					ParentId = mediumByStage.GetValueOrDefault(item.EducationMediumStageId) }).ToList(),
+			Divisions = divisions.OrderBy(item => item.Name)
+				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name,
+					ParentId = item.StandardId }).ToList()
 		};
 	}
 
@@ -229,7 +254,13 @@ public partial class StudentOnboardingAppService(
 	{
 		var item = await GetCaseAsync(id);
 		EnsureConcurrency(item, input.ConcurrencyStamp);
-		item.SetAdmissionRoute(input.AdmissionRoute);
+		var requestedRoute = input.AdmissionRoute?.Trim();
+		var configuration = await configurationManager.GetAsync(item.AcademicYearId);
+		var configuredRoute = configuration?.FindAdmissionRoute(requestedRoute);
+		var builtInRoute = OnboardingRuleConfiguration.FindBuiltInAdmissionRoute(requestedRoute);
+		if (configuredRoute == null && builtInRoute == null)
+			throw OnboardingRuleConfiguration.Invalid("Choose an admission route configured for this academic year.");
+		item.SetAdmissionRoute(configuredRoute ?? builtInRoute!);
 		var steps = await stepRepository.GetListAsync(s => s.OnboardingCaseId == id);
 		steps.SingleOrDefault(s => s.Key == StudentOnboardingStepKeys.ApprovalReview)?.Reset("Admission route changed; review the applicable requirements again.");
 		await RefreshProfileReadinessAsync(item, steps, DateTime.UtcNow);
@@ -833,6 +864,7 @@ public partial class StudentOnboardingAppService(
 				application.Id, application.ApplicantId, student.Id, offering.Id, cycle.AcademicYearId,
 				offering.BoardId, offering.MediumId, offering.StageId, offering.StandardId,
 				$"historical:{application.Id:N}", null, completedAt);
+			onboardingCase.SetCampusId(offering.CampusId);
 			onboardingCase.CompleteHistoricalImport(enrollment.Id, enrollment.DivisionId,
 				enrollment.RollNumber ?? student.RollNo, completedAt);
 			await caseRepository.InsertAsync(onboardingCase, false);
@@ -923,6 +955,14 @@ public partial class StudentOnboardingAppService(
 		List<StudentOnboardingStep> steps, DateTime at)
 	{
 		var configuration = await configurationManager.GetAsync(onboardingCase.AcademicYearId);
+		OnboardingRuleConfiguration.EnsureAdmissionRouteCovered(onboardingCase, configuration);
+		var student = await studentRepository.GetWithDetailsAsync(onboardingCase.StudentId) ??
+			throw new EntityNotFoundException(typeof(Student), onboardingCase.StudentId);
+		var documentStatus = await studentDocumentManager.GetRequiredDocumentsStatusAsync(student.Id);
+		var acceptedAdmissionDocumentTypes = await admissionEvidenceReader.GetAcceptedUploadDocumentTypeIdsAsync(student.Id);
+		var documentsReady = documentStatus.Where(item => item.documentType.IsRequired)
+			.All(item => item.uploadedDocument?.ValidatedAt.HasValue == true ||
+				acceptedAdmissionDocumentTypes.Contains(item.documentType.Id));
 		if (configuration != null)
 		{
 			var rules = configuration.Readiness(onboardingCase);
@@ -940,6 +980,9 @@ public partial class StudentOnboardingAppService(
 			needsApproval |= OnboardingRuleConfiguration.Text(rules, "approvalMode") == "conditional" &&
 				onboardingCase.GetAdmissionRoute() == "Mid-year admission" &&
 				OnboardingRuleConfiguration.Strings(rules, "approvalTriggers").Contains("mid-year-admission");
+			needsApproval |= OnboardingRuleConfiguration.Text(rules, "approvalMode") == "conditional" &&
+				OnboardingRuleConfiguration.Strings(rules, "approvalTriggers").Contains("incomplete-optional-check") &&
+				!requireDocuments && !documentsReady;
 			var grRule = configuration.ResolveRule("grNumber", onboardingCase, at);
 			var rollRule = configuration.ResolveRule("rollNumber", onboardingCase, at);
 			var placementRule = configuration.ResolveRule("divisionChange", onboardingCase, at);
@@ -971,8 +1014,6 @@ public partial class StudentOnboardingAppService(
 		serviceStep.SetRequired(false);
 		serviceStep.Reset("Fee assignment, first payment and requested access are verified after enrollment.");
 		await stepRepository.UpdateAsync(serviceStep, false);
-		var student = await studentRepository.GetWithDetailsAsync(onboardingCase.StudentId) ??
-			throw new EntityNotFoundException(typeof(Student), onboardingCase.StudentId);
 		SetComputedStep(steps, StudentOnboardingStepKeys.Identity,
 			!string.IsNullOrWhiteSpace(student.FirstName) && !string.IsNullOrWhiteSpace(student.LastName) &&
 			student.AdditionalDetail?.DateOfBirth.HasValue == true && student.AdditionalDetail.Gender.HasValue,
@@ -988,11 +1029,6 @@ public partial class StudentOnboardingAppService(
 			(!string.IsNullOrWhiteSpace(student.ContactDetail.Address1) || student.CommunicationDetail?.LocalAddress != null),
 			"Primary contact and address information are available.",
 			"Add a primary contact number and local address.", at);
-		var documentStatus = await studentDocumentManager.GetRequiredDocumentsStatusAsync(student.Id);
-		var acceptedAdmissionDocumentTypes = await admissionEvidenceReader.GetAcceptedUploadDocumentTypeIdsAsync(student.Id);
-		var documentsReady = documentStatus.Where(item => item.documentType.IsRequired)
-			.All(item => item.uploadedDocument?.ValidatedAt.HasValue == true ||
-				acceptedAdmissionDocumentTypes.Contains(item.documentType.Id));
 		SetComputedStep(steps, StudentOnboardingStepKeys.Documents, documentsReady,
 			"Required documents have validated Student uploads or accepted admission uploads.",
 			"Provide a validated Student upload or an accepted admission upload for every required document type.", at);
@@ -1064,6 +1100,7 @@ public partial class StudentOnboardingAppService(
 	{
 		var application = await applicationRepository.FindAsync(onboardingCase.ApplicationId);
 		var offering = await offeringRepository.FindAsync(onboardingCase.OfferingId);
+		if (!onboardingCase.HasCampusSnapshot) onboardingCase.UseLegacyCampusId(offering?.CampusId);
 		var academicYear = await academicYearRepository.FindAsync(onboardingCase.AcademicYearId);
 		var board = await boardRepository.FindAsync(onboardingCase.IntendedBoardId);
 		var medium = await mediumRepository.FindAsync(onboardingCase.IntendedMediumId);
@@ -1141,6 +1178,7 @@ public partial class StudentOnboardingAppService(
 				new[] { student.FirstName, student.MiddleName, student.LastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
 			OfferingId = onboardingCase.OfferingId,
 			OfferingCode = offering?.Code ?? string.Empty,
+			CampusId = onboardingCase.GetCampusId(),
 			AcademicYearId = onboardingCase.AcademicYearId,
 			AcademicYearName = academicYear?.Name ?? string.Empty,
 			IntendedBoardId = onboardingCase.IntendedBoardId,
@@ -1236,8 +1274,24 @@ public partial class StudentOnboardingAppService(
 		await eventRepository.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id,
 			caseId, eventType, description), false);
 
-	private async Task<StudentOnboardingCase> GetCaseAsync(Guid id) => await AsyncExecuter.FirstOrDefaultAsync((await GetScopedCasesAsync()).Where(c => c.Id == id)) ??
-		throw new EntityNotFoundException(typeof(StudentOnboardingCase), id);
+	private async Task<StudentOnboardingCase> GetCaseAsync(Guid id)
+	{
+		var item = await AsyncExecuter.FirstOrDefaultAsync((await GetScopedCasesAsync()).Where(c => c.Id == id)) ??
+			throw new EntityNotFoundException(typeof(StudentOnboardingCase), id);
+		if (!item.HasCampusSnapshot)
+		{
+			var offering = await offeringRepository.FindAsync(item.OfferingId);
+			item.UseLegacyCampusId(offering?.CampusId);
+		}
+		return item;
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	public async Task<IReadOnlyList<StudentOnboardingCampusDto>> GetAvailableCampusesAsync() =>
+		(await campusRepository.GetListAsync(c => c.IsActive))
+			.OrderBy(c => c.Name).ThenBy(c => c.Code)
+			.Select(c => new StudentOnboardingCampusDto { Id = c.Id, Code = c.Code, Name = c.Name })
+			.ToList();
 
 	private static bool IsSatisfied(StudentOnboardingStepStatus status) =>
 		status is StudentOnboardingStepStatus.Completed or StudentOnboardingStepStatus.Waived or StudentOnboardingStepStatus.NotRequired;

@@ -7,6 +7,7 @@ using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 
@@ -18,7 +19,8 @@ public class OnboardingConfigurationManager(
 	IRepository<EducationMedium, Guid> mediumsRepository,
 	IRepository<EducationMediumStage, Guid> stagesRepository,
 	IRepository<Standard, Guid> standardsRepository,
-	IRepository<Division, Guid> divisionsRepository) : DomainService
+	IRepository<Division, Guid> divisionsRepository,
+	IRepository<AdmissionCampus, Guid> campusesRepository) : DomainService
 {
 	public async Task<OnboardingRuleConfiguration?> GetAsync(Guid yearId)
 	{
@@ -35,6 +37,8 @@ public class OnboardingConfigurationManager(
 		var stages = await stagesRepository.GetListAsync();
 		var standards = await standardsRepository.GetListAsync();
 		var divisions = await divisionsRepository.GetListAsync();
+		var activeCampusIds = (await campusesRepository.GetListAsync(c => c.IsActive))
+			.Select(c => c.Id).ToHashSet();
 		var paths = new[]
 		{
 			boards.Where(b => !yearId.HasValue || b.AcademicYearId == yearId).ToDictionary(b => b.Id, _ => (Guid?)null),
@@ -43,8 +47,41 @@ public class OnboardingConfigurationManager(
 			standards.ToDictionary(s => s.Id, s => (Guid?)s.EducationMediumStageId),
 			divisions.ToDictionary(d => d.Id, d => (Guid?)d.StandardId)
 		};
+		var availableSchoolLevelNames = config.AvailableSchoolLevelNames;
+		if (availableSchoolLevelNames != null)
+		{
+			var mediumById = mediums.ToDictionary(m => m.Id);
+			var boardById = boards.ToDictionary(b => b.Id);
+			var levelById = stages.Where(stage => mediumById.ContainsKey(stage.EducationMediumId) &&
+				boardById.ContainsKey(mediumById[stage.EducationMediumId].EducationBoardId))
+				.Where(stage => !yearId.HasValue ||
+					boardById[mediumById[stage.EducationMediumId].EducationBoardId].AcademicYearId == yearId)
+				.ToDictionary(stage => stage.Id, stage =>
+				{
+					var medium = mediumById[stage.EducationMediumId];
+					var board = boardById[medium.EducationBoardId];
+					var prefix = $"{board.Type} - {medium.Name} - ";
+					return stage.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+						? stage.Name[prefix.Length..].Trim() : stage.Name.Trim();
+				});
+			var selectedNames = availableSchoolLevelNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+			if (selectedNames.Any(name => !levelById.Values.Contains(name, StringComparer.OrdinalIgnoreCase)))
+				throw OnboardingRuleConfiguration.Invalid("Selected onboarding school levels are not configured for this scope.");
+			foreach (var rule in config.Applicabilities.Where(rule =>
+				OnboardingRuleConfiguration.Text(rule, "stageMode") == "selected"))
+				if (OnboardingRuleConfiguration.Ids(rule, "academicMediumStageIds")
+					.Any(id => levelById.TryGetValue(id, out var name) && !selectedNames.Contains(name)))
+					throw OnboardingRuleConfiguration.Invalid("Existing rules target a hidden onboarding school level.");
+		}
 		foreach (var rule in config.Applicabilities)
 		{
+			var campusMode = OnboardingRuleConfiguration.Text(rule, "campusMode", "all");
+			var campusIds = OnboardingRuleConfiguration.Ids(rule, "campusIds");
+			if (campusMode is not ("all" or "selected") ||
+				campusMode == "selected" && campusIds.Length == 0 ||
+				campusIds.Distinct().Count() != campusIds.Length ||
+				campusIds.Any(id => !activeCampusIds.Contains(id)))
+				throw OnboardingRuleConfiguration.Invalid("Select valid active campus coverage.");
 			HashSet<Guid>? parents = null;
 			for (var i = 0; i < OnboardingRuleConfiguration.Levels.Length; i++)
 			{
@@ -92,10 +129,15 @@ public class OnboardingConfigurationManager(
 		for (var j = i + 1; j < rules.Count; j++)
 		{
 			if (profiles && !OnboardingRuleConfiguration.Strings(rules[i], "admissionRoutes")
-				.Intersect(OnboardingRuleConfiguration.Strings(rules[j], "admissionRoutes")).Any()) continue;
+				.Intersect(OnboardingRuleConfiguration.Strings(rules[j], "admissionRoutes"),
+					StringComparer.OrdinalIgnoreCase).Any()) continue;
 			var a = profiles ? rules[i].GetProperty("applicability") : rules[i];
 			var b = profiles ? rules[j].GetProperty("applicability") : rules[j];
 			if (OnboardingRuleConfiguration.Score(a) != OnboardingRuleConfiguration.Score(b)) continue;
+			if (OnboardingRuleConfiguration.Text(a, "campusMode", "all") == "selected" &&
+				OnboardingRuleConfiguration.Text(b, "campusMode", "all") == "selected" &&
+				!OnboardingRuleConfiguration.Ids(a, "campusIds").Intersect(OnboardingRuleConfiguration.Ids(b, "campusIds")).Any())
+				continue;
 			if (OnboardingRuleConfiguration.Levels.All(level =>
 				OnboardingRuleConfiguration.Text(a, level.Mode) == "all" || OnboardingRuleConfiguration.Text(b, level.Mode) == "all" ||
 				OnboardingRuleConfiguration.Ids(a, level.Ids).Intersect(OnboardingRuleConfiguration.Ids(b, level.Ids)).Any()))

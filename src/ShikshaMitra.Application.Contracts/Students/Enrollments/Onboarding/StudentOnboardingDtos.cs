@@ -9,6 +9,9 @@ public class StudentOnboardingListInput : PagedAndSortedResultRequestDto
 	public string? Search { get; set; }
 	public StudentOnboardingStatus? Status { get; set; }
 	public Guid? AcademicYearId { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? MediumId { get; set; }
+	public Guid? DivisionId { get; set; }
 	public Guid? StandardId { get; set; }
 	public Guid? AssignedToUserId { get; set; }
 	public bool? OverdueOnly { get; set; }
@@ -18,12 +21,22 @@ public class StudentOnboardingListInput : PagedAndSortedResultRequestDto
 public class StudentOnboardingFilterOptionDto : EntityDto<Guid>
 {
 	public string Name { get; set; } = string.Empty;
+	public Guid? ParentId { get; set; }
+}
+
+public class StudentOnboardingCampusDto : EntityDto<Guid>
+{
+	public string Code { get; set; } = string.Empty;
+	public string Name { get; set; } = string.Empty;
 }
 
 public class StudentOnboardingFilterOptionsDto
 {
 	public IReadOnlyList<StudentOnboardingFilterOptionDto> AcademicYears { get; set; } = [];
+	public IReadOnlyList<StudentOnboardingFilterOptionDto> Boards { get; set; } = [];
+	public IReadOnlyList<StudentOnboardingFilterOptionDto> Mediums { get; set; } = [];
 	public IReadOnlyList<StudentOnboardingFilterOptionDto> Standards { get; set; } = [];
+	public IReadOnlyList<StudentOnboardingFilterOptionDto> Divisions { get; set; } = [];
 }
 
 public class StudentOnboardingAnalyticsDto
@@ -101,6 +114,7 @@ public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 	public string StudentName { get; set; } = string.Empty;
 	public Guid OfferingId { get; set; }
 	public string OfferingCode { get; set; } = string.Empty;
+	public Guid? CampusId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string AcademicYearName { get; set; } = string.Empty;
 	public Guid IntendedBoardId { get; set; }
@@ -191,6 +205,12 @@ public class CancelStudentOnboardingDto
 {
 	public string? ConcurrencyStamp { get; set; }
 	public string Reason { get; set; } = string.Empty;
+}
+
+public class ConfirmStudentOnboardingServiceConsentDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public string EvidenceReference { get; set; } = string.Empty;
 }
 
 public class UpsertStudentOnboardingPolicyDto

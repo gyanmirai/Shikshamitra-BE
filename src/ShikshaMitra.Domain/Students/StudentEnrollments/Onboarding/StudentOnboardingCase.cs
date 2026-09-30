@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -7,6 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private Guid? _legacyCampusId;
 	public Guid? TenantId { get; private set; }
 	public Guid ApplicationId { get; private set; }
 	public Guid ApplicantId { get; private set; }
@@ -17,6 +19,21 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public Guid IntendedMediumId { get; private set; }
 	public Guid IntendedStageId { get; private set; }
 	public Guid IntendedStandardId { get; private set; }
+	public bool HasCampusSnapshot => ExtraProperties.ContainsKey("AdmissionCampusId");
+	public Guid? GetCampusId()
+	{
+		if (!ExtraProperties.TryGetValue("AdmissionCampusId", out var value)) return _legacyCampusId;
+		return Guid.TryParse(value?.ToString(), out var id) && id != Guid.Empty ? id : null;
+	}
+	public void UseLegacyCampusId(Guid? campusId)
+	{
+		if (!HasCampusSnapshot) _legacyCampusId = campusId;
+	}
+	public void SetCampusId(Guid? campusId)
+	{
+		ExtraProperties["AdmissionCampusId"] = campusId?.ToString("D") ?? string.Empty;
+		_legacyCampusId = null;
+	}
 	public StudentOnboardingStatus Status { get; private set; }
 	public string IdempotencyKey { get; private set; } = string.Empty;
 	public string? ActivationIdempotencyKey { get; private set; }
@@ -183,7 +200,8 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 	public void SetAdmissionRoute(string route)
 	{
 		EnsureEditable();
-		if (route is not ("Fresh admission" or "Transfer student" or "Mid-year admission" or "Returning student"))
+		if (string.IsNullOrWhiteSpace(route) || route.Length > 100 || route != route.Trim() ||
+			route.Any(char.IsControl))
 			throw new BusinessException(StudentOnboardingErrorCodes.PolicyScopeInvalid);
 		ExtraProperties["AdmissionRoute"] = route;
 		RecordProgress(DateTime.UtcNow);

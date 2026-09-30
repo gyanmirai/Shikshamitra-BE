@@ -35,12 +35,15 @@ public class OnboardingFeeReadinessReader(
 			lines.Count != expected.Count || lines.Any(line => !expected.Contains(line.Id)))
 			return new(true, false, "Fee obligations are incomplete. Ask Finance to reconcile the assignment.");
 		if (lines.Count == 0)
-			return new(true, snapshot.ProratedTotal == 0m, snapshot.ProratedTotal == 0m
-				? "The saved fee assignment has no payable obligation." : "Fee obligations are missing.");
+			return new(true, false, snapshot.ProratedTotal == 0m
+				? "The saved fee assignment has no payable obligation or first payment. Ask Finance to review the assignment."
+				: "Fee obligations are missing.");
 		var firstDate = lines.Min(l => l.DueDate.Date);
 		var firstInstallment = lines.Where(l => l.DueDate.Date == firstDate).ToList();
 		var settled = firstInstallment.All(l => l.OutstandingAmount == 0m);
-		if (settled && firstInstallment.Any(l => l.PaidAmount > 0))
+		if (settled && !firstInstallment.Any(l => l.PaidAmount > 0m))
+			return new(true, false, "The first installment has no payment. Ask Finance to review the fee schedule or collect the first payment.");
+		if (settled)
 		{
 			var dueIds = firstInstallment.Select(l => l.Id).ToArray();
 			var applied = await allocations.GetListAsync(a => Enumerable.Contains(dueIds, a.DueFeeId));

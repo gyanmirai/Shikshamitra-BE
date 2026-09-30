@@ -1,4 +1,5 @@
 using FluentValidation;
+using System.Linq;
 using System.Text.Json;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
@@ -88,6 +89,17 @@ public class CancelStudentOnboardingDtoValidator : AbstractValidator<CancelStude
 	{
 		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
 		RuleFor(x => x.Reason).NotEmpty().MaximumLength(1000);
+	}
+}
+
+public class ConfirmStudentOnboardingServiceConsentDtoValidator : AbstractValidator<ConfirmStudentOnboardingServiceConsentDto>
+{
+	public ConfirmStudentOnboardingServiceConsentDtoValidator()
+	{
+		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
+		RuleFor(x => x.EvidenceReference).NotEmpty().MinimumLength(3).MaximumLength(200)
+			.Must(value => !string.IsNullOrWhiteSpace(value) && value == value.Trim() && !value.Any(char.IsControl))
+			.WithMessage("Enter a valid reference to the saved consent record.");
 	}
 }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Nodes;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using Shouldly;
@@ -38,6 +39,267 @@ public class StudentOnboarding_Tests
 			divisionChange = new { configurations = Array.Empty<object>() }
 		});
 		Should.Throw<BusinessException>(() => new OnboardingRuleConfiguration(json))
+			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+	}
+
+	[Theory]
+	[InlineData("assignmentMode", "sometimes")]
+	[InlineData("sequenceScope", "board")]
+	[InlineData("resetPolicy", "monthly")]
+	[InlineData("numberingScope", "school")]
+	public void Configuration_rejects_unsupported_numbering_modes_before_runtime(string key, string value)
+	{
+		const string json = """
+			{"readinessAccess":{},"onboardingProfiles":[],
+			"grNumber":{"assignmentMode":"both","configurations":[{"id":"gr","formatPattern":"{SEQUENCE}",
+			"sequenceScope":"school","resetPolicy":"continuous"}]},
+			"rollNumber":{"configurations":[{"id":"roll","numberingScope":"class-division"}]},
+			"divisionChange":{"configurations":[]}}
+			""";
+		var root = JsonNode.Parse(json)!;
+		var target = key switch
+		{
+			"assignmentMode" => root["grNumber"]!,
+			"numberingScope" => root["rollNumber"]!["configurations"]![0]!,
+			_ => root["grNumber"]!["configurations"]![0]!
+		};
+		target[key] = value;
+		Should.Throw<BusinessException>(() => new OnboardingRuleConfiguration(root.ToJsonString()))
+			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+	}
+
+	[Fact]
+	public void Configuration_accepts_supported_numbering_modes()
+	{
+		const string json = """
+			{"readinessAccess":{},"onboardingProfiles":[],
+			"grNumber":{"assignmentMode":"manual","configurations":[{"id":"gr","formatPattern":"{SEQUENCE}",
+			"sequenceScope":"academic-year","resetPolicy":"academic-year"}]},
+			"rollNumber":{"configurations":[{"id":"roll","numberingScope":"class"}]},
+			"divisionChange":{"configurations":[]}}
+			""";
+		_ = new OnboardingRuleConfiguration(json);
+	}
+
+	[Theory]
+	[InlineData("readinessAccess", "studentAccount", "\"false\"")]
+	[InlineData("profileRules", "guardianAccount", "null")]
+	[InlineData("profileRules", "approvalMode", "\"sometimes\"")]
+	[InlineData("profileRules", "approvalTriggers", "\"manual-identifier\"")]
+	[InlineData("profileRules", "approvalTriggers", "[42]")]
+	[InlineData("profileRules", "checks", "{}")]
+	[InlineData("documentCheck", "required", "\"false\"")]
+	[InlineData("grNumber", "manualEntryAllowed", "\"true\"")]
+	[InlineData("grNumber", "maximumNumber", "\"100\"")]
+	[InlineData("rollNumber", "requireApproval", "\"true\"")]
+	[InlineData("divisionChange", "isActive", "\"false\"")]
+	public void Configuration_rejects_malformed_operational_rules_before_they_can_weaken_readiness(
+		string section, string key, string value)
+	{
+		const string json = """
+			{"readinessAccess":{},"onboardingProfiles":[{"id":"fresh","admissionRoutes":["Fresh admission"],
+			"applicability":{},"rules":{"checks":[{"key":"documents","required":true}]}}],
+			"grNumber":{"configurations":[{"id":"gr","formatPattern":"{SEQUENCE}"}]},
+			"rollNumber":{"configurations":[{"id":"roll"}]},
+			"divisionChange":{"configurations":[{"id":"division"}]}}
+			""";
+		var root = JsonNode.Parse(json)!;
+		var target = section switch
+		{
+			"profileRules" => root["onboardingProfiles"]![0]!["rules"]!,
+			"documentCheck" => root["onboardingProfiles"]![0]!["rules"]!["checks"]![0]!,
+			"readinessAccess" => root[section]!,
+			_ => root[section]!["configurations"]![0]!
+		};
+		target[key] = JsonNode.Parse(value);
+		Should.Throw<BusinessException>(() => new OnboardingRuleConfiguration(root.ToJsonString()))
+			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+	}
+
+	[Theory]
+	[InlineData("[]")]
+	[InlineData("[\"Secondary\",\"secondary\"]")]
+	[InlineData("[\" \" ]")]
+	public void Configuration_rejects_invalid_onboarding_school_levels(string names)
+	{
+		using var document = System.Text.Json.JsonDocument.Parse(names);
+		var json = System.Text.Json.JsonSerializer.Serialize(new
+		{
+			academicAvailability = new { schoolLevelNames = document.RootElement },
+			readinessAccess = new { }, onboardingProfiles = Array.Empty<object>(),
+			grNumber = new { configurations = Array.Empty<object>() },
+			rollNumber = new { configurations = Array.Empty<object>() },
+			divisionChange = new { configurations = Array.Empty<object>() }
+		});
+		Should.Throw<BusinessException>(() => new OnboardingRuleConfiguration(json)
+			.AvailableSchoolLevelNames).Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+	}
+
+	[Fact]
+	public void Configuration_accepts_school_level_names_without_changing_academic_setup()
+	{
+		const string json = """
+			{"academicAvailability":{"schoolLevelNames":["Secondary","Higher Secondary"]},
+			"readinessAccess":{},"onboardingProfiles":[],
+			"grNumber":{"configurations":[]},"rollNumber":{"configurations":[]},
+			"divisionChange":{"configurations":[]}}
+			""";
+		new OnboardingRuleConfiguration(json).AvailableSchoolLevelNames
+			.ShouldBe(new[] { "Secondary", "Higher Secondary" });
+	}
+
+	[Fact]
+	public void Campus_targeting_matches_only_the_admission_offering_campus_and_preserves_old_rules()
+	{
+		var item = CreateCase(DateTime.UtcNow);
+		var campusId = Guid.NewGuid();
+		item.SetCampusId(campusId);
+		using var selected = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(new
+		{
+			campusMode = "selected", campusIds = new[] { campusId.ToString() },
+			boardMode = "all", mediumMode = "all", stageMode = "all",
+			classMode = "all", divisionMode = "all"
+		}));
+		OnboardingRuleConfiguration.Matches(selected.RootElement, item).ShouldBeTrue();
+		OnboardingRuleConfiguration.Score(selected.RootElement).ShouldBe(32);
+		item.SetCampusId(Guid.NewGuid());
+		OnboardingRuleConfiguration.Matches(selected.RootElement, item).ShouldBeFalse();
+		item.SetCampusId(null);
+		OnboardingRuleConfiguration.Matches(selected.RootElement, item).ShouldBeFalse();
+		using var legacy = System.Text.Json.JsonDocument.Parse("""
+			{"boardMode":"all","mediumMode":"all","stageMode":"all","classMode":"all","divisionMode":"all"}
+			""");
+		OnboardingRuleConfiguration.Matches(legacy.RootElement, item).ShouldBeTrue();
+	}
+
+	[Fact]
+	public void Academic_path_matching_requires_the_selected_board_medium_level_and_standard()
+	{
+		var boardId = Guid.NewGuid();
+		var mediumId = Guid.NewGuid();
+		var levelId = Guid.NewGuid();
+		var standardId = Guid.NewGuid();
+		using var selected = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(new
+		{
+			boardMode = "selected", boardIds = new[] { boardId },
+			mediumMode = "selected", academicMediumIds = new[] { mediumId },
+			stageMode = "selected", academicMediumStageIds = new[] { levelId },
+			classMode = "selected", standardIds = new[] { standardId },
+			divisionMode = "all"
+		}));
+		StudentOnboardingCase Case(Guid board, Guid medium, Guid level, Guid standard) => new(
+			Guid.NewGuid(), null, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+			Guid.NewGuid(), board, medium, level, standard, $"path:{Guid.NewGuid():N}",
+			DateTime.UtcNow, DateTime.UtcNow.AddHours(48));
+
+		OnboardingRuleConfiguration.Matches(selected.RootElement,
+			Case(boardId, mediumId, levelId, standardId)).ShouldBeTrue();
+		OnboardingRuleConfiguration.Matches(selected.RootElement,
+			Case(Guid.NewGuid(), mediumId, levelId, standardId)).ShouldBeFalse();
+		OnboardingRuleConfiguration.Matches(selected.RootElement,
+			Case(boardId, Guid.NewGuid(), levelId, standardId)).ShouldBeFalse();
+		OnboardingRuleConfiguration.Matches(selected.RootElement,
+			Case(boardId, mediumId, Guid.NewGuid(), standardId)).ShouldBeFalse();
+		OnboardingRuleConfiguration.Matches(selected.RootElement,
+			Case(boardId, mediumId, levelId, Guid.NewGuid())).ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Legacy_campus_recovery_does_not_write_a_snapshot_during_a_read()
+	{
+		var item = CreateCase(DateTime.UtcNow);
+		var campusId = Guid.NewGuid();
+		item.HasCampusSnapshot.ShouldBeFalse();
+		item.UseLegacyCampusId(campusId);
+		item.GetCampusId().ShouldBe(campusId);
+		item.HasCampusSnapshot.ShouldBeFalse();
+		item.ExtraProperties.ContainsKey("AdmissionCampusId").ShouldBeFalse();
+		item.SetCampusId(null);
+		item.GetCampusId().ShouldBeNull();
+		item.HasCampusSnapshot.ShouldBeTrue();
+	}
+
+	[Fact]
+	public void Campus_specific_readiness_and_numbering_win_over_all_campus_fallbacks()
+	{
+		var campusId = Guid.NewGuid();
+		var applicability = new
+		{
+			boardMode = "all", mediumMode = "all", stageMode = "all",
+			classMode = "all", divisionMode = "all"
+		};
+		var json = System.Text.Json.JsonSerializer.Serialize(new
+		{
+			readinessAccess = new { requireDocuments = false },
+			onboardingProfiles = new object[]
+			{
+				new { id = "all-campus", admissionRoutes = new[] { "Fresh admission" },
+					applicability, rules = new { requireDocuments = false } },
+				new { id = "campus-only", admissionRoutes = new[] { "Fresh admission" },
+					applicability = new { campusMode = "selected", campusIds = new[] { campusId },
+						applicability.boardMode, applicability.mediumMode, applicability.stageMode,
+						applicability.classMode, applicability.divisionMode },
+					rules = new { requireDocuments = true } }
+			},
+			grNumber = new { configurations = new object[]
+			{
+				new { id = "all-campus-gr", isActive = true, applicability.boardMode,
+					applicability.mediumMode, applicability.stageMode, applicability.classMode,
+					applicability.divisionMode },
+				new { id = "campus-gr", isActive = true, campusMode = "selected",
+					campusIds = new[] { campusId }, applicability.boardMode,
+					applicability.mediumMode, applicability.stageMode, applicability.classMode,
+					applicability.divisionMode }
+			} },
+			rollNumber = new { configurations = Array.Empty<object>() },
+			divisionChange = new { configurations = Array.Empty<object>() }
+		});
+		var config = new OnboardingRuleConfiguration(json);
+		var item = CreateCase(DateTime.UtcNow);
+		item.SetCampusId(campusId);
+		config.ResolveProfile(item)!.Value.GetProperty("id").GetString().ShouldBe("campus-only");
+		config.ResolveRule("grNumber", item, DateTime.UtcNow)!.Value.GetProperty("id")
+			.GetString().ShouldBe("campus-gr");
+
+		item.SetCampusId(null);
+		config.ResolveProfile(item)!.Value.GetProperty("id").GetString().ShouldBe("all-campus");
+		config.ResolveRule("grNumber", item, DateTime.UtcNow)!.Value.GetProperty("id")
+			.GetString().ShouldBe("all-campus-gr");
+	}
+
+	[Fact]
+	public void School_defined_admission_route_is_valid_but_blank_or_untrimmed_routes_are_not()
+	{
+		const string json = """
+			{"readinessAccess":{},"onboardingProfiles":[{"id":"special","admissionRoutes":["Scholarship intake"],
+			"applicability":{"boardMode":"all","mediumMode":"all","stageMode":"all",
+			"classMode":"all","divisionMode":"all"},"rules":{}}],"grNumber":{"configurations":[]},
+			"rollNumber":{"configurations":[]},"divisionChange":{"configurations":[]}}
+			""";
+		var configuration = new OnboardingRuleConfiguration(json);
+		configuration.FindAdmissionRoute(" scholarship INTAKE ")
+			.ShouldBe("Scholarship intake");
+		var item = CreateCase(DateTime.UtcNow);
+		item.SetAdmissionRoute("Scholarship intake");
+		item.GetAdmissionRoute().ShouldBe("Scholarship intake");
+		configuration.ResolveProfile(item)!.Value.GetProperty("id").GetString().ShouldBe("special");
+		OnboardingRuleConfiguration.EnsureAdmissionRouteCovered(item, configuration);
+		Should.Throw<BusinessException>(() => OnboardingRuleConfiguration.EnsureAdmissionRouteCovered(item, null))
+			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+		var otherCampus = Guid.NewGuid();
+		var campusOnly = new OnboardingRuleConfiguration(json.Replace(
+			"\"boardMode\":\"all\"",
+			$"\"campusMode\":\"selected\",\"campusIds\":[\"{otherCampus}\"],\"boardMode\":\"all\""));
+		item.SetCampusId(Guid.NewGuid());
+		Should.Throw<BusinessException>(() => OnboardingRuleConfiguration.EnsureAdmissionRouteCovered(item, campusOnly))
+			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+		item.SetAdmissionRoute("Fresh admission");
+		OnboardingRuleConfiguration.EnsureAdmissionRouteCovered(item, null);
+		Should.Throw<BusinessException>(() => item.SetAdmissionRoute(" "))
+			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+		Should.Throw<BusinessException>(() => item.SetAdmissionRoute(" Scholarship intake "))
+			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+		Should.Throw<BusinessException>(() => item.SetAdmissionRoute("Scholarship\nintake"))
 			.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
 	}
 

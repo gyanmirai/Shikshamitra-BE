@@ -9,7 +9,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 public interface IStudentOnboardingAppService : IApplicationService
 {
 	Task<PagedResultDto<StudentOnboardingCaseDto>> GetListAsync(StudentOnboardingListInput input);
-	Task<StudentOnboardingFilterOptionsDto> GetFilterOptionsAsync();
+	Task<StudentOnboardingFilterOptionsDto> GetFilterOptionsAsync(Guid? academicYearId = null);
+	Task<IReadOnlyList<StudentOnboardingCampusDto>> GetAvailableCampusesAsync();
 	Task<StudentOnboardingAnalyticsDto> GetAnalyticsAsync();
 	Task<StudentOnboardingCaseDto> GetAsync(Guid id);
 	Task<IReadOnlyList<StudentOnboardingPlacementOptionDto>> GetPlacementOptionsAsync(Guid id);
@@ -25,6 +26,7 @@ public interface IStudentOnboardingAppService : IApplicationService
 	Task<StudentOnboardingCaseDto> CancelAsync(Guid id, CancelStudentOnboardingDto input);
 	Task<IReadOnlyList<StudentOnboardingServiceHandoffDto>> GetServiceHandoffsAsync(Guid id);
 	Task<StudentOnboardingServiceHandoffDto> RetryServiceHandoffAsync(Guid id, Guid handoffId);
+	Task<StudentOnboardingCaseDto> ConfirmServiceConsentAsync(Guid id, ConfirmStudentOnboardingServiceConsentDto input);
 	Task<IReadOnlyList<StudentPortalAccountDto>> GetPortalAccountsAsync(Guid id);
 	Task<StudentPortalAccountDto> ProvisionPortalAccountAsync(Guid id, ProvisionStudentPortalAccountDto input);
 	Task<IReadOnlyList<StudentPortalAccountDto>> GetMyPortalStudentsAsync();

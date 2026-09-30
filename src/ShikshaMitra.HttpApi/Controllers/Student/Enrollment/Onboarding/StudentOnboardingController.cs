@@ -37,8 +37,13 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 
 	[HttpGet("filter-options")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
-	public async Task<Result<StudentOnboardingFilterOptionsDto>> GetFilterOptionsAsync() =>
-		Result.Success(await service.GetFilterOptionsAsync());
+	public async Task<Result<StudentOnboardingFilterOptionsDto>> GetFilterOptionsAsync([FromQuery] Guid? academicYearId = null) =>
+		Result.Success(await service.GetFilterOptionsAsync(academicYearId));
+
+	[HttpGet("settings/campuses")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	public async Task<Result<IReadOnlyList<StudentOnboardingCampusDto>>> GetAvailableCampusesAsync() =>
+		Result.Success(await service.GetAvailableCampusesAsync());
 
 	[HttpGet("analytics")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
@@ -116,6 +121,12 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair)]
 	public async Task<Result<StudentOnboardingServiceHandoffDto>> RetryServiceHandoffAsync(Guid id, Guid handoffId) =>
 		Result.Success(await service.RetryServiceHandoffAsync(id, handoffId));
+
+	[HttpPost("{id:guid}/service-consent/confirm")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	public async Task<Result<StudentOnboardingCaseDto>> ConfirmServiceConsentAsync(
+		Guid id, ConfirmStudentOnboardingServiceConsentDto input) =>
+		Result.Success(await service.ConfirmServiceConsentAsync(id, input));
 
 	[HttpGet("settings/policies")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]

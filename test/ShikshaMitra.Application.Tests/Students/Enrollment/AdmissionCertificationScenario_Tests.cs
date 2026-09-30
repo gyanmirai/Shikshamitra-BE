@@ -464,7 +464,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		bool linkExistingStudent = false,
 		bool acceptOffer = true,
 		bool campusScoped = false,
-		Guid? existingStudentId = null)
+		Guid? existingStudentId = null,
+		AdmissionApplicant? existingApplicant = null)
 	{
 		var workflow = realisticWorkflow
 			? await CreateAndPublishRealisticWorkflowAsync()

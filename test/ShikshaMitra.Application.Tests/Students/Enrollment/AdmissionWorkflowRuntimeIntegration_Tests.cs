@@ -1064,7 +1064,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
 	}
 
-	private Task<AdmissionOffering> CreateAvailableOfferingAsync(Guid workflowId, bool assertValid = true) =>
+	private Task<AdmissionOffering> CreateAvailableOfferingAsync(
+		Guid workflowId, bool assertValid = true, bool campusScoped = false) =>
 		WithUnitOfWorkAsync(async () =>
 	{
 		var userRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
@@ -1149,12 +1150,20 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await _formFieldRepository.InsertAsync(new AdmissionFormFieldDefinition(
 			Guid.NewGuid(), form.Id, section.Id, "LEARNING_NOTES", "Learning notes", AdmissionFormFieldType.Textarea,
 			AdmissionFormBindingType.Custom, "LearningNotes", false, false, 5, null, null, null, null, null), autoSave: true);
+		Guid? campusId = null;
+		if (campusScoped)
+		{
+			var campus = new AdmissionCampus(
+				Guid.NewGuid(), TestTenantId, $"CERT_{Guid.NewGuid():N}"[..24], "Certification Campus");
+			await _campusRepository.InsertAsync(campus, autoSave: true);
+			campusId = campus.Id;
+		}
 
 		var offering = new AdmissionOffering(
 			Guid.NewGuid(),
 			TestTenantId,
 			cycle.Id,
-			null,
+			campusId,
 			board.Id,
 			medium.Id,
 			stage.Id,

@@ -108,13 +108,14 @@ public class AdmissionOfferingConfigurationValidator(
 
 		var first = blockingErrors[0];
 		throw new BusinessException(ToBusinessErrorCode(first.Code), first.Message)
-			.WithData("ValidationErrors", blockingErrors.Select(error => error.Code).ToArray());
+			.WithData("ValidationErrors", blockingErrors.Select(error => error.Code).Distinct().ToArray())
+			.WithData("ValidationMessages", blockingErrors.Select(error => error.Message).Distinct().ToArray());
 	}
 
 	public static IReadOnlyList<AdmissionOfferingValidationError> GetBlockingErrors(
 		AdmissionOfferingValidationResult validation,
 		bool isActive) => validation.Errors
-			.Where(error => isActive || !IncompleteConfigurationCodes.Contains(error.Code))
+			.Where(error => isActive || (!error.ActivationOnly && !IncompleteConfigurationCodes.Contains(error.Code)))
 			.ToList();
 
 	public static bool CanSave(AdmissionOfferingValidationResult validation, bool isActive) =>
@@ -253,11 +254,11 @@ public class AdmissionOfferingConfigurationValidator(
 						if (await people.CanAccessHierarchyAsync(userId, cycle, input)) { eligible = true; break; }
 					if (!eligible)
 						errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
-							"Select an active counsellor who has access to this class in the assignment profile."));
+							"Select an active counsellor who has access to this class in the assignment profile.", activationOnly: true));
 					if (rules.FallbackManagerUserId.HasValue &&
 						!await people.CanAccessHierarchyAsync(rules.FallbackManagerUserId.Value, cycle, input))
 						errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
-							"The fallback manager in the assignment profile must be active and have access to this class."));
+							"The fallback manager in the assignment profile must be active and have access to this class.", activationOnly: true));
 				}
 				catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException)
 				{
@@ -366,7 +367,8 @@ public class AdmissionOfferingConfigurationValidator(
 		}
 	}
 
-	private static AdmissionOfferingValidationError Error(string code, string message) => new(code, message);
+	private static AdmissionOfferingValidationError Error(string code, string message, bool activationOnly = false) =>
+		new(code, message, activationOnly);
 
 	private static string ToBusinessErrorCode(string validationCode) => validationCode switch
 	{

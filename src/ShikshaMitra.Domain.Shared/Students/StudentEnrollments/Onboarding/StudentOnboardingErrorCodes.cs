@@ -29,6 +29,7 @@ public static class StudentOnboardingErrorCodes
 	public const string ConcurrencyConflict = "Students.Onboarding.ConcurrencyConflict";
 	public const string OwnerInvalid = "Students.Onboarding.OwnerInvalid";
 	public const string PortalAccountInvalid = "Students.Onboarding.PortalAccountInvalid";
+	public const string ServiceConsentInvalid = "Students.Onboarding.ServiceConsentInvalid";
 }
 
 public static class StudentOnboardingSettingsConsts

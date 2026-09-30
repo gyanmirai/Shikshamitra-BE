@@ -1,12 +1,45 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using Volo.Abp;
 using Volo.Abp.Authorization;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 public partial class StudentOnboardingAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	[UnitOfWork(true)]
+	public async Task<StudentOnboardingCaseDto> ConfirmServiceConsentAsync(
+		Guid id, ConfirmStudentOnboardingServiceConsentDto input)
+	{
+		var validation = await new ConfirmStudentOnboardingServiceConsentDtoValidator().ValidateAsync(input);
+		if (!validation.IsValid)
+			throw new BusinessException(StudentOnboardingErrorCodes.ServiceConsentInvalid)
+				.WithData("Reason", validation.Errors[0].ErrorMessage);
+		if (!CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
+		var item = await GetCaseAsync(id);
+		var handoff = await handoffRepository.FindAsync(h => h.OnboardingCaseId == id &&
+			h.ServiceKey == "service-consent" && h.Required)
+			?? throw new BusinessException(StudentOnboardingErrorCodes.ServiceConsentInvalid)
+				.WithData("Reason", "Service consent is not required for this onboarding case.");
+		if (handoff.Status == StudentOnboardingServiceHandoffStatus.Acknowledged)
+			return await MapCaseAsync(item, true);
+		EnsureConcurrency(item, input.ConcurrencyStamp);
+		if (!item.StudentEnrollmentId.HasValue || item.Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
+			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
+		var now = DateTime.UtcNow;
+		handoff.Acknowledge(now);
+		await handoffRepository.UpdateAsync(handoff, false);
+		await AddEventAsync(id, "ServiceConsentConfirmed",
+			$"Staff confirmed the saved service-consent record: {input.EvidenceReference}.");
+		await RefreshProvisioningAsync(item);
+		return await MapCaseAsync(item, true);
+	}
+
 	private async Task EnsureSettingsScopeAsync(Guid? yearId)
 	{
 		if (!CurrentUser.Id.HasValue) throw new AbpAuthorizationException();

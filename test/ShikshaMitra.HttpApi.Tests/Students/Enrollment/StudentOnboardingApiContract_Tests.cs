@@ -32,6 +32,7 @@ public class StudentOnboardingApiContract_Tests
 		Route(typeof(StudentOnboardingController)).ShouldBe("api/student/onboarding");
 		Get(nameof(StudentOnboardingController.GetListAsync)).ShouldBeNull();
 		Get(nameof(StudentOnboardingController.GetFilterOptionsAsync)).ShouldBe("filter-options");
+		Get(nameof(StudentOnboardingController.GetAvailableCampusesAsync)).ShouldBe("settings/campuses");
 		Get(nameof(StudentOnboardingController.GetAnalyticsAsync)).ShouldBe("analytics");
 		Get(nameof(StudentOnboardingController.GetAsync)).ShouldBe("{id:guid}");
 		Get(nameof(StudentOnboardingController.GetPlacementOptionsAsync)).ShouldBe("{id:guid}/placement-options");
@@ -41,6 +42,8 @@ public class StudentOnboardingApiContract_Tests
 		Post(nameof(StudentOnboardingController.AllocateIdentifierAsync)).ShouldBe("{id:guid}/identifiers");
 		Post(nameof(StudentOnboardingController.ActivateAsync)).ShouldBe("{id:guid}/activate");
 		Post(nameof(StudentOnboardingController.CancelAsync)).ShouldBe("{id:guid}/cancel");
+		Post(nameof(StudentOnboardingController.ConfirmServiceConsentAsync))
+			.ShouldBe("{id:guid}/service-consent/confirm");
 		Post(nameof(StudentOnboardingController.CreatePolicyAsync)).ShouldBe("settings/policies");
 		Get(nameof(StudentOnboardingController.GetSettingsAsync)).ShouldBe("settings/configurations");
 		Put(nameof(StudentOnboardingController.SaveSettingsAsync)).ShouldBe("settings/configurations");
@@ -58,6 +61,7 @@ public class StudentOnboardingApiContract_Tests
 	[Theory]
 	[InlineData(nameof(StudentOnboardingAppService.GetAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.GetFilterOptionsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	[InlineData(nameof(StudentOnboardingAppService.GetAvailableCampusesAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	[InlineData(nameof(StudentOnboardingAppService.GetAnalyticsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.GetPlacementOptionsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat)]
 	[InlineData(nameof(StudentOnboardingAppService.GetAvailableIdentifierSeriesAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
@@ -67,6 +71,7 @@ public class StudentOnboardingApiContract_Tests
 	[InlineData(nameof(StudentOnboardingAppService.AllocateIdentifierAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
 	[InlineData(nameof(StudentOnboardingAppService.ActivateAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate)]
 	[InlineData(nameof(StudentOnboardingAppService.CancelAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Cancel)]
+	[InlineData(nameof(StudentOnboardingAppService.ConfirmServiceConsentAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	[InlineData(nameof(StudentOnboardingAppService.CreatePolicyAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	[InlineData(nameof(StudentOnboardingAppService.GetSettingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.SaveSettingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
@@ -77,6 +82,14 @@ public class StudentOnboardingApiContract_Tests
 	{
 		var method = typeof(StudentOnboardingAppService).GetMethods().Single(value => value.Name == methodName);
 		method.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(permission);
+	}
+
+	[Fact]
+	public void Service_consent_confirmation_requires_onboarding_edit_at_the_http_boundary()
+	{
+		typeof(StudentOnboardingController).GetMethod(nameof(StudentOnboardingController.ConfirmServiceConsentAsync))!
+			.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(
+				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
 	}
 
 	private static string? Route(System.Type controller) =>

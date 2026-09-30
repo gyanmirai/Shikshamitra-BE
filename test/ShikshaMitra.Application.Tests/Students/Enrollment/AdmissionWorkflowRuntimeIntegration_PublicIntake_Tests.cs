@@ -13,6 +13,61 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public Task Inactive_offering_can_save_an_unscoped_assignment_but_cannot_activate() =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var workflow = await CreateAndPublishWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var profileRepository = GetRequiredService<IRepository<AdmissionIntakeProfile, Guid>>();
+			var profile = new AdmissionIntakeProfile(Guid.NewGuid(), TestTenantId,
+				AdmissionIntakeProfileKind.CounsellorAssignment,
+				$"UNSCOPED_{Guid.NewGuid():N}"[..30], "Unscoped assignment",
+				JsonSerializer.Serialize(new AdmissionCounsellorAssignmentRules
+				{
+					CounsellorUserIds = [Guid.NewGuid()],
+					FallbackManagerUserId = Guid.NewGuid()
+				}));
+			await WithUnitOfWorkAsync(async () =>
+			{
+				await profileRepository.InsertAsync(profile, autoSave: true);
+				offering.Deactivate();
+				await _offeringRepository.UpdateAsync(offering, autoSave: true);
+			});
+			var service = GetRequiredService<IAdmissionOfferingAppService>();
+			var current = await service.GetAsync(offering.Id);
+			var updated = await service.UpdateAsync(offering.Id, new UpdateAdmissionOfferingDto
+			{
+				Name = current.Name,
+				Track = current.Track,
+				EntryMode = current.EntryMode,
+				CampusId = current.CampusId,
+				BoardId = current.BoardId,
+				MediumId = current.MediumId,
+				StageId = current.StageId,
+				StandardId = current.StandardId,
+				Code = current.Code,
+				UseCycleDates = current.UseCycleDates,
+				WorkflowDefinitionId = current.WorkflowDefinitionId,
+				InquiryFormDefinitionId = current.InquiryFormDefinitionId,
+				ApplicationFormDefinitionId = current.ApplicationFormDefinitionId,
+				CounsellorAssignmentProfileId = profile.Id,
+				IsActive = false,
+				ConcurrencyStamp = current.ConcurrencyStamp
+			});
+			updated.CounsellorAssignmentProfileId.ShouldBe(profile.Id);
+			updated.IsActive.ShouldBeFalse();
+			updated.Configuration.Errors.Count(error => error.Code ==
+				AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid).ShouldBe(2);
+			var validation = await WithUnitOfWorkAsync(async () =>
+				await _offeringValidator.ValidateStoredAsync(await _offeringRepository.GetAsync(offering.Id)));
+			validation.Errors.Count(error => error.Code ==
+				AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid).ShouldBe(2);
+			var activation = await Should.ThrowAsync<BusinessException>(() =>
+				service.ActivateAsync(offering.Id, updated.ConcurrencyStamp));
+			activation.Code.ShouldBe(AdmissionErrorCodes.OfferingConfigurationIncomplete);
+		});
+
+	[Fact]
 	public Task Public_link_uses_published_inquiry_form_and_persists_answers_without_an_offering() =>
 		RunCertificationScenarioAsync(async () =>
 		{

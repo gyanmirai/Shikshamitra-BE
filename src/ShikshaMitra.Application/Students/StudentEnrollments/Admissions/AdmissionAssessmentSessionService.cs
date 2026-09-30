@@ -16,11 +16,15 @@ public class AdmissionAssessmentSessionService(
 	IRepository<AdmissionApplication, Guid> applications,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflows,
+	IRepository<AdmissionCycle, Guid> cycles,
 	AdmissionAssessmentAccessService access) : ApplicationService, ITransientDependency
 {
 	public async Task<List<AdmissionAssessmentScopeDto>> GetScopesAsync()
 	{
 		var offerings = await AsyncExecuter.ToListAsync(await access.GetScopedOfferingsAsync());
+		var cycleIds = offerings.Select(item => item.AdmissionCycleId).Distinct().ToList();
+		var academicYears = (await cycles.GetListAsync(item => cycleIds.Contains(item.Id)))
+			.ToDictionary(item => item.Id, item => item.AcademicYearId);
 		var offeringIds = offerings.Select(item => item.Id).ToList();
 		var applicationQuery = await applications.GetQueryableAsync();
 		var pinned = await AsyncExecuter.ToListAsync(applicationQuery.Where(item => offeringIds.Contains(item.AdmissionOfferingId))
@@ -41,6 +45,8 @@ public class AdmissionAssessmentSessionService(
 			result.Add(new AdmissionAssessmentScopeDto
 			{
 				AdmissionOfferingId = offering.Id, OfferingName = offering.Name, WorkflowStageDefinitionId = stage.Id,
+				AcademicYearId = academicYears.GetValueOrDefault(offering.AdmissionCycleId),
+				BoardId = offering.BoardId, MediumId = offering.MediumId, StandardId = offering.StandardId,
 				StageName = stage.Name, WorkflowDefinitionId = workflow.Id, WorkflowVersion = workflow.Version,
 				SchedulingEnabled = policy.SchedulingEnabled
 			});

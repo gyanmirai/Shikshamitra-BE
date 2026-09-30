@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-public sealed record AdmissionOfferingValidationError(string Code, string Message);
+public sealed record AdmissionOfferingValidationError(string Code, string Message, bool ActivationOnly = false);
 
 public sealed class AdmissionOfferingValidationResult
 {

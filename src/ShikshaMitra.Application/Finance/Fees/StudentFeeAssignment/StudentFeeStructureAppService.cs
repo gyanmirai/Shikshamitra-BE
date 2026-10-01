@@ -98,10 +98,14 @@ public partial class StudentFeeStructureAppService(
 			throw new BusinessException(AssignmentErrorCodes.StalePreview);
 		var id = GuidGenerator.Create();
 		var structure = prepared.Structure;
+		var policies = prepared.Preview.Policies.ToDictionary(x => x.Family);
+		var concessionPolicy = policies.GetValueOrDefault("concession");
+		var concessionVersion = concessionPolicy == null ? null : await financePolicyVersionRepository.GetAsync(concessionPolicy.VersionId);
+		var concessionSnapshot = concessionVersion == null ? null : JsonSerializer.Deserialize<ConcessionPolicySnapshot>(concessionVersion.SnapshotJson);
 		var assignment = new StudentFeeStructure(id, CurrentTenant.Id, input.StudentId, structure.Id, input.AcademicYearId,
-			null, null, ConcessionFeeHeadScope.EntireFeeStructure, [],
-			structure.CollectionPolicyId, structure.CollectionPolicyVersionId, structure.RefundPolicyId, structure.RefundPolicyVersionId,
-			structure.ProrationPolicyId, structure.ProrationPolicyVersionId, prepared.Preview.ChargeStartDate, prepared.Preview.ChargeEndDate);
+			concessionPolicy?.PolicyId, concessionPolicy?.VersionId, concessionSnapshot?.FeeHeadScope ?? ConcessionFeeHeadScope.EntireFeeStructure, concessionSnapshot?.ApplicableFeeHeadIds ?? [],
+			policies["collection"].PolicyId, policies["collection"].VersionId, policies.GetValueOrDefault("refund")?.PolicyId, policies.GetValueOrDefault("refund")?.VersionId,
+			policies.GetValueOrDefault("proration")?.PolicyId, policies.GetValueOrDefault("proration")?.VersionId, prepared.Preview.ChargeStartDate, prepared.Preview.ChargeEndDate);
 		for (var i = 0; i < prepared.Dues.Count; i++)
 		{
 			prepared.Dues[i].BindAssignment(id);
@@ -145,6 +149,8 @@ public partial class StudentFeeStructureAppService(
 			input.ServicePeriods.Select(x => x.FeeHeadId).Distinct().Count() != input.ServicePeriods.Count ||
 			input.FeeHeadDetails.Any(x => x.Amount < 0 || decimal.Round(x.Amount, 2) != x.Amount) || input.OverrideReason?.Length > 500)
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+		ValidatePolicies(input.Policies);
+		if (input.PolicyOverrideReason?.Length > 500) throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 	}
 
 	private static string Hash(object value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
@@ -152,7 +158,8 @@ public partial class StudentFeeStructureAppService(
 		input.StudentId, input.AcademicYearId, input.StandardFeeStructureId,
 		Heads = input.SelectedOptionalFeeHeadIds.Order().ToArray(), Details = input.FeeHeadDetails.OrderBy(x => x.FeeHeadId).ToArray(),
 		Periods = input.ServicePeriods.OrderBy(x => x.FeeHeadId).ToArray(), input.ChargeStartDate, input.ChargeEndDate,
-		input.ChargePeriodSource, input.ChargePeriodSourceReferenceId, input.ChargePeriodOverrideReason, input.OverrideReason });
+		input.ChargePeriodSource, input.ChargePeriodSourceReferenceId, input.ChargePeriodOverrideReason, input.OverrideReason,
+		Policies = input.Policies.OrderBy(x => x.Family).ToArray(), input.PolicyOverrideReason });
 	private sealed record PreviewAssertion(Guid? TenantId, Guid? UserId, string Command, string Prepared, DateTime Expires);
 	private sealed record PreparedAssignment(FeeStructure Structure, StudentFeeAssignmentPreviewDto Preview, List<DueFee> Dues, string Fingerprint);
 }

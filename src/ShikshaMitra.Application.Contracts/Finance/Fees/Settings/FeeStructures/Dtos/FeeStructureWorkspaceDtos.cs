@@ -75,6 +75,7 @@ public class FeeStructurePolicyOptionDto
 	public string Name { get; set; } = string.Empty;
 	public int VersionNumber { get; set; }
 	public bool IsCurrent { get; set; }
+	public bool IsDefault { get; set; }
 }
 
 public class FeeStructureTermOptionDto

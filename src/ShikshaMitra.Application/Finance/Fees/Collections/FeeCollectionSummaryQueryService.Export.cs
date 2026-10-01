@@ -46,7 +46,7 @@ public partial class FeeCollectionSummaryQueryService
 			csv.WriteField(r.OverdueFees);
 			csv.WriteField(r.TotalCharges);
 			csv.WriteField(r.PendingCharges);
-			csv.WriteField(r.Status.ToString());
+			csv.WriteField(GetExportStatusLabel(r.Status));
 			csv.NextRecord();
 		}
 
@@ -88,7 +88,7 @@ public partial class FeeCollectionSummaryQueryService
 			sheet.Cell(row, 8).Value  = r.OverdueFees;
 			sheet.Cell(row, 9).Value  = r.TotalCharges;
 			sheet.Cell(row, 10).Value = r.PendingCharges;
-			sheet.Cell(row, 11).Value = r.Status.ToString();
+			sheet.Cell(row, 11).Value = GetExportStatusLabel(r.Status);
 
 			if (r.Status == FeeCollectionStatus.Overdue)
 				sheet.Row(row).Style.Fill.BackgroundColor = XLColor.LightSalmon;
@@ -100,4 +100,7 @@ public partial class FeeCollectionSummaryQueryService
 		workbook.SaveAs(ms);
 		return ms.ToArray();
 	}
+
+	private static string GetExportStatusLabel(FeeCollectionStatus status)
+		=> status == FeeCollectionStatus.NoFeeAssigned ? "No Fee Assigned" : status.ToString();
 }

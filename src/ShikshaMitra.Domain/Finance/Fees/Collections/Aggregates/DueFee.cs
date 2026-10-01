@@ -5,6 +5,7 @@ using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Domain.Finance.Policies;
 using System;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -49,6 +50,21 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public decimal NetAmount { get; private set; }
 	public decimal PaidAmount { get; private set; }
 	public decimal OutstandingAmount { get; private set; }
+
+	// Stored in the aggregate's existing JSON extension column; independent of principal.
+	public decimal GetAssessedLateFeeAmount() => this.GetProperty<decimal>("AssessedLateFeeAmount", 0m);
+	public string GetLateFeeAssessmentExplanation() => this.GetProperty<string>("LateFeeAssessmentExplanation", string.Empty);
+
+	public void PreserveLateFeeAssessment(decimal amount, DateTimeOffset assessedAt, Guid policyVersionId, string explanation)
+	{
+		if (amount < 0m) throw new ArgumentOutOfRangeException(nameof(amount));
+		if (policyVersionId == Guid.Empty) throw new ArgumentException("The collection policy version is required.", nameof(policyVersionId));
+		if (amount <= GetAssessedLateFeeAmount()) return;
+		this.SetProperty("AssessedLateFeeAmount", amount);
+		this.SetProperty("LateFeeAssessedAt", assessedAt);
+		this.SetProperty("LateFeeAssessmentPolicyVersionId", policyVersionId);
+		this.SetProperty("LateFeeAssessmentExplanation", explanation);
+	}
 
 	/// <summary>Total amount already refunded against this obligation line.</summary>
 	public decimal RefundedAmount { get; private set; }

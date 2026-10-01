@@ -50,5 +50,9 @@ public class CollectionPolicyConfiguration : IEntityTypeConfiguration<Collection
 			.IsUnique()
 			.HasFilter("\"IsDeleted\" = false AND \"Status\" = 0 AND \"IsDefault\" = true")
 			.HasDatabaseName("IX_Finance_CollectionPolicies_Tenant_AcademicYear_Default");
+		// PostgreSQL composite uniqueness treats null TenantId values as distinct.
+		builder.HasIndex(x => x.AcademicYearId).IsUnique()
+			.HasFilter("\"TenantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" = 0 AND \"IsDefault\" = true")
+			.HasDatabaseName("IX_Finance_CollectionPolicies_Host_ActiveDefault");
 	}
 }

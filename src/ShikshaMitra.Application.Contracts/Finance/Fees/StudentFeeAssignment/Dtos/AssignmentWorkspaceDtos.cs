@@ -37,6 +37,7 @@ public class AssignmentStudentDto
 
 public class AssignmentCandidateDto
 {
+	public List<AssignmentPolicyDto> Policies { get; set; } = [];
 	public Guid Id { get; set; }
 	public string Name { get; set; } = "";
 	public int RevisionNumber { get; set; }
@@ -79,6 +80,7 @@ public class AssignmentHeadDto
 
 public class AssignmentPolicyDto
 {
+	public string Source { get; set; } = "FeeStructure";
 	public string Family { get; set; } = "";
 	public Guid PolicyId { get; set; }
 	public Guid VersionId { get; set; }

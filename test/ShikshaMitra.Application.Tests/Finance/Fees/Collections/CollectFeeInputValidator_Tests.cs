@@ -115,6 +115,33 @@ public class CollectFeeInputValidator_Tests
     }
 
     [Fact]
+    public void Should_Reject_Mixed_Cash_And_Uncleared_Cheque()
+    {
+        var input = ValidInput();
+        input.Payments =
+        [
+            new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 400d },
+            new() { PaymentMethod = PaymentMethodEnum.Cheque, Amount = 600d,
+                Details = MinimalDetails(PaymentMethodEnum.Cheque) }
+        ];
+
+        var result = _validator.Validate(input);
+        result.Errors.ShouldContain(e => e.ErrorMessage.Contains("one payment method"));
+    }
+
+    [Fact]
+    public void Should_Reject_Provisional_Fee_And_Charge_In_One_Receipt_Decision()
+    {
+        var input = ValidInput();
+        input.ChargePayments = [new() { ChargeId = Guid.NewGuid(), Amount = 500d }];
+        input.Payments = [new() { PaymentMethod = PaymentMethodEnum.Cheque, Amount = 1500d,
+            Details = MinimalDetails(PaymentMethodEnum.Cheque) }];
+
+        var result = _validator.Validate(input);
+        result.Errors.ShouldContain(e => e.ErrorMessage.Contains("one fee or charge receipt"));
+    }
+
+    [Fact]
     public void Should_Pass_For_LateFee_Only_Payment()
     {
         var input = ValidInput();

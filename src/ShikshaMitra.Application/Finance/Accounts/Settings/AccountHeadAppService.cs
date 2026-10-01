@@ -22,6 +22,9 @@ public class AccountHeadAppService(
 	IRepository<AccountHead, Guid> accountHeadRepository,
 	IRepository<TransactionCategory, Guid> categoryRepository,
 	IRepository<BankAccount, Guid> bankAccountRepository,
+	IRepository<ShikshaMitra.Finance.Accounts.Posting.JournalLine, Guid> journalLineRepository,
+	IRepository<ShikshaMitra.Finance.Accounts.Posting.AccountsPostingConfiguration, Guid> postingConfigurationRepository,
+	IRepository<ShikshaMitra.Finance.Accounts.Posting.PaymentDestinationRule, Guid> destinationRuleRepository,
 	FinanceScopeAccessService financeScopeAccessService,
 	AccountSettingVersionHistoryReader historyReader) : ApplicationService, IAccountHeadAppService
 {
@@ -169,6 +172,9 @@ public class AccountHeadAppService(
 	private async Task<bool> IsUsedAsync(Guid id) =>
 		await categoryRepository.AnyAsync(x => x.DefaultAccountHeadId == id) ||
 		await bankAccountRepository.AnyAsync(x => x.AccountHeadId == id) ||
+		await journalLineRepository.AnyAsync(x => x.AccountHeadId == id) ||
+		await postingConfigurationRepository.AnyAsync(x => x.CashAccountHeadId == id) ||
+		await destinationRuleRepository.AnyAsync(x => x.AssetAccountHeadId == id) ||
 		await accountHeadRepository.AnyAsync(x => x.ParentAccountHeadId == id);
 
 	private async Task<AccountHeadResponse> MapAsync(AccountHead entity)

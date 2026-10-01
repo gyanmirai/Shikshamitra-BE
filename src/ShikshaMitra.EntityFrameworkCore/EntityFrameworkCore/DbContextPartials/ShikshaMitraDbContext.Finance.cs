@@ -67,6 +67,9 @@ public partial class ShikshaMitraDbContext
 	public DbSet<FinancialEvent> FinancialEvents { get; set; }
 	public DbSet<JournalEntry> JournalEntries { get; set; }
 	public DbSet<JournalLine> JournalLines { get; set; }
+	public DbSet<AccountingPeriod> AccountingPeriods { get; set; }
+	public DbSet<AccountsPostingConfiguration> AccountsPostingConfigurations { get; set; }
+	public DbSet<PaymentDestinationRule> PaymentDestinationRules { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Student Fee Assignment

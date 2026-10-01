@@ -114,7 +114,8 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 
 	private async Task<(Guid AcademicYearId, Guid StudentId, Guid FeeHeadId, Guid DueFeeId, Guid FeeStructureId)>
 		SeedStudentWithOverdueDueFeeAsync(int daysOverdue, bool attachPolicy, double? maximumLateFeeAmount = null,
-			bool enableLateFee = true, bool futurePaymentTerm = false, bool attachProrationPolicy = false)
+			bool enableLateFee = true, bool futurePaymentTerm = false, bool attachProrationPolicy = false,
+		bool percentageLateFee = false, decimal principalAmount = 5000m)
 	{
 		await EnsureAdminUserExistsAsync();
 
@@ -175,7 +176,8 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				EnableLateFee = enableLateFee,
 				GracePeriodDays = 0,
 				LateFeeApplyOnFeeHeads = new() { feeHeadId },
-				LateFeeType = "PerDay",
+				LateFeeType = percentageLateFee ? "Percentage" : "PerDay",
+				Percentage = percentageLateFee ? 10m : null,
 				AmountPerDay = 20,
 				PercentageBase = "OutstandingAmount",
 				CompoundFrequency = "Daily",
@@ -221,7 +223,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		}
 		var dueFee = new DueFee(
 			id: Guid.NewGuid(), tenantId: TestTenantId, studentId: studentId, feeHeadId: feeHeadId,
-			month: (MonthEnum)(dueDate.Month - 1), year: dueDate.Year, isOneTime: false, amount: 5000m, dueDate: dueDate,
+			month: (MonthEnum)(dueDate.Month - 1), year: dueDate.Year, isOneTime: false, amount: principalAmount, dueDate: dueDate,
 			installmentSequence: futurePaymentTerm ? 1 : null,
 			installmentName: futurePaymentTerm ? "Future installment" : null,
 			demandDate: demandDate, scheduleDueDate: futurePaymentTerm ? dueDate : null,
@@ -232,6 +234,288 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		await _dueFeeRepo.InsertAsync(dueFee, autoSave: true);
 
 		return (yearId, studentId, feeHeadId, dueFee.Id, feeStructure.Id);
+	}
+
+	private async Task<FeeCollectionSummaryItemDto> GetSummaryRowAsync(Guid yearId, Guid studentId)
+	{
+		var student = await _studentRepo.GetAsync(studentId);
+		return (await _feeCollections.GetSummaryAsync(new GetFeeCollectionSummaryInput
+		{
+			AcademicYearId = yearId, BoardId = student.AcademicBoardId!.Value,
+			EducationMediumId = student.AcademicMediumId, MaxResultCount = 100,
+		})).Items.Single(x => x.StudentId == studentId);
+	}
+
+	[Theory]
+	[InlineData(1, FeeCollectionStatus.Overdue, 5000d)]
+	[InlineData(0, FeeCollectionStatus.Pending, 0d)]
+	[InlineData(-1, FeeCollectionStatus.Pending, 0d)]
+	public async Task Grid_Details_And_Ledger_Use_The_Same_Actual_Due_Date(int daysOverdue, FeeCollectionStatus expected, double overdueAmount)
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (yearId, studentId, _, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(daysOverdue, true, enableLateFee: false);
+			var due = await _dueFeeRepo.GetAsync(dueId);
+			var form = await _feeCollections.GetCollectFormAsync(studentId, yearId);
+			var line = form.Ledger.SelectMany(x => x.Items).Single();
+			line.Status.ShouldBe(expected); line.DueDate.ShouldBe(due.DueDate);
+			(await GetSummaryRowAsync(yearId, studentId)).OverdueFees.ShouldBe(overdueAmount);
+			var details = await _feeCollections.GetStudentFeeDetailsAsync(studentId, yearId);
+			(details.FeeOverview.OverdueFee ?? 0d).ShouldBe(overdueAmount);
+		}
+	}
+
+	[Fact]
+	public async Task Partially_Paid_Overdue_Principal_Remains_Visible_As_Overdue()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (yearId, studentId, _, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(1, true, enableLateFee: false);
+			var due = await _dueFeeRepo.GetAsync(dueId); due.ApplyPayment(1000m);
+			await _dueFeeRepo.UpdateAsync(due, autoSave: true);
+			var form = await _feeCollections.GetCollectFormAsync(studentId, yearId);
+			form.Ledger.SelectMany(x => x.Items).Single().Status.ShouldBe(FeeCollectionStatus.Overdue);
+			(await GetSummaryRowAsync(yearId, studentId)).OverdueFees.ShouldBe(4000d);
+		}
+	}
+
+	[Fact]
+	public async Task Uncleared_Late_Fee_Allocation_Uses_Reconciliation_Status_Without_Changing_Pending_Principal()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (yearId, studentId, _, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(10, true);
+			var metadata = new FeeRecordMetadata(Guid.NewGuid(), TestTenantId, studentId, yearId,
+				200d, $"RECON-{Guid.NewGuid():N}", FeeCollectionStatus.InReconciliation);
+			await GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(metadata, autoSave: true);
+			await GetRequiredService<IRepository<LateFeeCollectionAllocation, Guid>>().InsertAsync(
+				new LateFeeCollectionAllocation(Guid.NewGuid(), TestTenantId, metadata.Id, dueId, 200d), autoSave: true);
+			var form = await _feeCollections.GetCollectFormAsync(studentId, yearId);
+			var charge = form.Charges.Single();
+			charge.Status.ShouldBe(FeeCollectionStatus.InReconciliation);
+			charge.ReconciliationAmount.ShouldBe(200m); charge.PendingAmount.ShouldBe(0d);
+			form.Ledger.SelectMany(x => x.Items).Single().Status.ShouldBe(FeeCollectionStatus.Overdue);
+		}
+	}
+
+	[Fact]
+	public async Task Six_Fee_Items_Of_12396_Leave_Four_Unselected_100_Rupee_Charges_Pending()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (yearId, studentId, headId, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(
+				10, true, maximumLateFeeAmount: 100, principalAmount: 1999.2m);
+			var first = await _dueFeeRepo.GetAsync(dueId);
+			var dues = new List<DueFee> { first };
+			foreach (var (offset, amount) in new[] { (-40, 1999.2m), (-70, 1999.2m), (-100, 2400m), (30, 1999.2m), (60, 1999.2m) })
+			{
+				var date = DateTime.UtcNow.Date.AddDays(offset);
+				var due = new DueFee(Guid.NewGuid(), TestTenantId, studentId, headId,
+					(MonthEnum)(date.Month - 1), date.Year, false, amount, date);
+				due.BindAssignment(first.StudentFeeStructureId!.Value);
+				await _dueFeeRepo.InsertAsync(due, autoSave: true); dues.Add(due);
+			}
+			var initial = await GetSummaryRowAsync(yearId, studentId);
+			initial.TotalCharges.ShouldBe(400d); initial.PendingCharges.ShouldBe(400d);
+			var fees = await _feeCollections.CollectFeeAsync(new CollectFeeInput
+			{
+				StudentId = studentId, AcademicYearId = yearId, IdempotencyKey = Guid.NewGuid().ToString("N"),
+				DueFeePayments = dues.Select(d => new DueFeePaymentDto
+				{ DueFeeId = d.Id, FeeHeadId = headId, Amount = (double)d.OutstandingAmount }).ToList(),
+				Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 12396d }],
+			});
+			fees.ReceivedAmount.ShouldBe(12396d, 0.000001d); fees.PaidDueFees.Count.ShouldBe(6); fees.PaidLateFees.ShouldBeEmpty();
+			var remaining = (await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges;
+			remaining.Count.ShouldBe(4); remaining.ShouldAllBe(c => c.PendingAmount == 100d && c.Status == FeeCollectionStatus.Pending);
+			(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(400d);
+		}
+	}
+
+	[Fact]
+	public async Task Grid_Includes_System_Charges_Before_Opening_The_Form_And_Exports_The_Same_Totals()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (yearId, studentId, _, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(10, true);
+			var row = await GetSummaryRowAsync(yearId, studentId);
+			row.TotalCharges.ShouldBe(200d); row.PendingCharges.ShouldBe(200d);
+			(await _dueFeeRepo.GetAsync(dueId)).GetAssessedLateFeeAmount().ShouldBe(0m); // read is side-effect free
+			var form = await _feeCollections.GetCollectFormAsync(studentId, yearId);
+			row.TotalCharges.ShouldBe(form.Charges.Sum(x => x.Amount));
+			row.PendingCharges.ShouldBe(form.Charges.Sum(x => x.PendingAmount));
+			var details = await _feeCollections.GetStudentFeeDetailsAsync(studentId, yearId);
+			details.Charges!.Sum(x => x.PendingAmount).ShouldBe(200d);
+			var student = await _studentRepo.GetAsync(studentId);
+			var csv = System.Text.Encoding.UTF8.GetString(await _feeCollections.ExportAsync(new FeeCollectionExportRequestDto
+			{
+				AcademicYearId = yearId, BoardId = student.AcademicBoardId!.Value, EducationMediumId = student.AcademicMediumId,
+				Format = FeeCollectionExportFormat.Csv,
+			}));
+			csv.ShouldContain(",200,200,");
+		}
+	}
+
+	[Fact]
+	public async Task Principal_Only_Payment_Preserves_Charges_For_Later_Collection_And_Reversal()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (yearId, studentId, headId, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(10, true);
+			var principal = await _feeCollections.CollectFeeAsync(new CollectFeeInput
+			{
+				IdempotencyKey = Guid.NewGuid().ToString("N"), StudentId = studentId, AcademicYearId = yearId,
+				DueFeePayments = [new() { DueFeeId = dueId, FeeHeadId = headId, Amount = 5000d }],
+				Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 5000d }],
+			});
+			principal.PaidLateFees.ShouldBeEmpty();
+			using (var reload = GetRequiredService<Volo.Abp.Uow.IUnitOfWorkManager>().Begin(new Volo.Abp.Uow.AbpUnitOfWorkOptions(), requiresNew: true))
+			{
+				var storedDue = await _dueFeeRepo.GetAsync(dueId);
+				storedDue.OutstandingAmount.ShouldBe(0m);
+				storedDue.GetAssessedLateFeeAmount().ShouldBe(200m);
+				storedDue.GetLateFeeAssessmentExplanation().ShouldNotBeNullOrWhiteSpace();
+				await reload.CompleteAsync();
+			}
+			var form = await _feeCollections.GetCollectFormAsync(studentId, yearId);
+			var charge = form.Charges.Single(x => x.SourceId == dueId);
+			charge.PendingAmount.ShouldBe(200d); charge.Status.ShouldBe(FeeCollectionStatus.Pending);
+			form.Summary.PendingFee.ShouldBe(0d);
+			(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(200d);
+			(await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges.Single().PendingAmount.ShouldBe(200d);
+			(await GetSummaryRowAsync(yearId, studentId)).TotalCharges.ShouldBe(200d);
+			var late = await _feeCollections.CollectFeeAsync(new CollectFeeInput
+			{
+				IdempotencyKey = Guid.NewGuid().ToString("N"), StudentId = studentId, AcademicYearId = yearId,
+				LateFeePayments = [new() { DueFeeId = dueId, Amount = 200d }],
+				Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 200d }],
+			});
+			late.PaidDueFees.ShouldBeEmpty(); late.PaidLateFees.Single().AmountPaid.ShouldBe(200d);
+			var settled = await GetSummaryRowAsync(yearId, studentId);
+			settled.TotalCharges.ShouldBe(200d); settled.PendingCharges.ShouldBe(0d);
+			var metadataRepo = GetRequiredService<IRepository<FeeRecordMetadata, Guid>>();
+			var tx = await metadataRepo.GetAsync(late.Id); tx.MarkReversed(); await metadataRepo.UpdateAsync(tx, autoSave: true);
+			(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(200d);
+		}
+	}
+
+	[Fact]
+	public async Task Partial_Principal_Payment_Cannot_Reduce_An_Accrued_Percentage_Charge_And_Waiver_Works_After_Settlement()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (yearId, studentId, headId, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(10, true, percentageLateFee: true);
+			foreach (var amount in new[] { 4000d, 1000d })
+			{
+				await _feeCollections.CollectFeeAsync(new CollectFeeInput
+				{
+					IdempotencyKey = Guid.NewGuid().ToString("N"), StudentId = studentId, AcademicYearId = yearId,
+					DueFeePayments = [new() { DueFeeId = dueId, FeeHeadId = headId, Amount = amount }],
+					Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = amount }],
+				});
+				(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(500d);
+			}
+			await _waivers.ApplyAsync(new ApplyFeeWaiverInput
+			{ SourceType = "LateFee", SourceId = dueId, Reason = "Approved hardship", IdempotencyKey = Guid.NewGuid().ToString("N") });
+			var row = await GetSummaryRowAsync(yearId, studentId);
+			row.TotalCharges.ShouldBe(500d); row.PendingCharges.ShouldBe(0d);
+			(await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges.Single().Status.ShouldBe(FeeCollectionStatus.Waived);
+		}
+	}
+
+	[Theory]
+	[InlineData(false, false, false)]
+	[InlineData(true, false, false)]
+	[InlineData(false, true, false)]
+	[InlineData(false, false, true)]
+	public async Task Pre_Fix_Principal_Payment_Recovers_Charges_From_Its_Original_Date_And_Pending_Before_Evidence(
+		bool policyChangedAfterPayment, bool overrideChangedAfterPayment, bool windowCreatedAfterPayment)
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (yearId, studentId, _, dueId, structureId) = await SeedStudentWithOverdueDueFeeAsync(30, true);
+			var due = await _dueFeeRepo.GetAsync(dueId);
+			var paidOn = due.DueDate.AddDays(10);
+			due.ApplyPayment(5000m); await _dueFeeRepo.UpdateAsync(due, autoSave: true);
+			var tx = new FeeRecordMetadata(Guid.NewGuid(), TestTenantId, studentId, yearId, 5000d, "LEGACY-REC", FeeCollectionStatus.Paid);
+			tx.SetCommandResult(System.Text.Json.JsonSerializer.Serialize(new
+			{ CollectedAt = paidOn, AuditSummary = new { AllocationLines = new[] { new { DueFeeId = dueId, PendingBefore = 5000m } } } }));
+			await GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(tx, autoSave: true);
+			await GetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>().InsertAsync(
+				new FeeCollectionDueFeeAllocation(Guid.NewGuid(), TestTenantId, tx.Id, dueId, 5000d), autoSave: true);
+			if (overrideChangedAfterPayment)
+			{
+				var overrideRepo = GetRequiredService<IRepository<StudentFeePolicyOverride, Guid>>();
+				var studentOverride = new StudentFeePolicyOverride(Guid.NewGuid(), TestTenantId, studentId, structureId)
+				{ CreationTime = paidOn.AddDays(-1) };
+				studentOverride.Update(true, null, false, null); // exemption at the historical payment
+				await overrideRepo.InsertAsync(studentOverride, autoSave: true);
+				studentOverride.Update(false, 0, false, null); // later removal must not create historical debt
+				await overrideRepo.UpdateAsync(studentOverride, autoSave: true);
+			}
+			if (windowCreatedAfterPayment)
+				await GetRequiredService<IRepository<CollectionPolicyExceptionWindow, Guid>>().InsertAsync(
+					new CollectionPolicyExceptionWindow(Guid.NewGuid(), TestTenantId, ExceptionWindowScope.AcademicYear,
+						yearId, due.DueDate, GetRequiredService<Volo.Abp.Timing.IClock>().Now.AddDays(1), ExceptionWindowEffect.ExtendGracePeriod, 1,
+						"BACKDATED", "Created after the historical payment", Guid.NewGuid()), autoSave: true);
+			if (policyChangedAfterPayment)
+			{
+				var assignment = (await _studentFeeStructureRepo.GetListAsync(x => x.StudentId == studentId)).Single();
+				assignment.ExtraProperties["AssignedPolicyHistory"] = System.Text.Json.JsonSerializer.Serialize(new[]
+				{
+					new { OccurredAt = paidOn.AddDays(1), Before = new { CollectionPolicyVersionId = Guid.NewGuid() },
+						After = new { assignment.CollectionPolicyVersionId } }
+				});
+				await _studentFeeStructureRepo.UpdateAsync(assignment, autoSave: true);
+				(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(0d);
+				(await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges.ShouldBeEmpty();
+			}
+			else if (overrideChangedAfterPayment || windowCreatedAfterPayment)
+			{
+				(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(0d);
+				(await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges.ShouldBeEmpty();
+			}
+			else
+			{
+				(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(200d); // 10 days, not today's 30 days
+				(await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges.Single().PendingAmount.ShouldBe(200d);
+			}
+		}
+	}
+
+	[Theory]
+	[InlineData("invalid-json", null)]
+	[InlineData("non-array-lines", null)]
+	[InlineData(null, "invalid-json")]
+	[InlineData(null, "{}")]
+	public async Task Malformed_Legacy_Recovery_Evidence_Does_Not_Invent_Charges_Or_Break_Collections(string? metadataShape, string? history)
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (yearId, studentId, _, dueId, _) = await SeedStudentWithOverdueDueFeeAsync(30, true);
+			var due = await _dueFeeRepo.GetAsync(dueId);
+			due.ApplyPayment(5000m); await _dueFeeRepo.UpdateAsync(due, autoSave: true);
+			var tx = new FeeRecordMetadata(Guid.NewGuid(), TestTenantId, studentId, yearId, 5000d, "LEGACY-REC", FeeCollectionStatus.Paid);
+			var json = metadataShape switch
+			{
+				"invalid-json" => "{broken",
+				"non-array-lines" => System.Text.Json.JsonSerializer.Serialize(new
+				{ CollectedAt = due.DueDate.AddDays(10), AuditSummary = new { AllocationLines = new { DueFeeId = dueId } } }),
+				_ => System.Text.Json.JsonSerializer.Serialize(new
+				{ CollectedAt = due.DueDate.AddDays(10), AuditSummary = new { AllocationLines = new[] { new { DueFeeId = dueId, PendingBefore = 5000m } } } }),
+			};
+			tx.SetCommandResult(json);
+			await GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(tx, autoSave: true);
+			await GetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>().InsertAsync(
+				new FeeCollectionDueFeeAllocation(Guid.NewGuid(), TestTenantId, tx.Id, dueId, 5000d), autoSave: true);
+			if (history is not null)
+			{
+				var assignment = (await _studentFeeStructureRepo.GetListAsync(x => x.StudentId == studentId)).Single();
+				assignment.ExtraProperties["AssignedPolicyHistory"] = history;
+				await _studentFeeStructureRepo.UpdateAsync(assignment, autoSave: true);
+			}
+			(await GetSummaryRowAsync(yearId, studentId)).PendingCharges.ShouldBe(0d);
+			(await _feeCollections.GetCollectFormAsync(studentId, yearId)).Charges.ShouldBeEmpty();
+		}
 	}
 
 	[Fact]

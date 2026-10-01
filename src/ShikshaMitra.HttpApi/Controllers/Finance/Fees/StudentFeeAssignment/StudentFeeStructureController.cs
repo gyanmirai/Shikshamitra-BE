@@ -15,6 +15,11 @@ public class StudentFeeStructureController(
 	IStudentFeeStructureAppService studentFeeStructureAppService
 ) : AbpController
 {
+	[HttpGet("policy-options")]
+	public Task<List<AssignmentPolicyDto>> GetPolicyOptionsAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetPolicyOptionsAsync(studentId, academicYearId);
+
+	[HttpPut("student/{studentId}/policies")]
+	public Task<StudentFeeStructureResponseDto> UpdatePoliciesAsync(Guid studentId, [FromBody] AssignmentPolicyUpdateDto input) => studentFeeStructureAppService.UpdatePoliciesAsync(studentId, input);
 	[HttpGet("transport-sources")]
 	public Task<List<AssignmentTransportSourceDto>> GetTransportSourcesAsync(Guid studentId, Guid academicYearId) => studentFeeStructureAppService.GetTransportSourcesAsync(studentId, academicYearId);
     [HttpGet("students")]

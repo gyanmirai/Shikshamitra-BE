@@ -8,6 +8,8 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public interface IStudentFeeStructureAppService : IApplicationService
 {
+	Task<List<AssignmentPolicyDto>> GetPolicyOptionsAsync(Guid studentId, Guid academicYearId);
+	Task<StudentFeeStructureResponseDto> UpdatePoliciesAsync(Guid studentId, AssignmentPolicyUpdateDto input);
 	Task<List<AssignmentTransportSourceDto>> GetTransportSourcesAsync(Guid studentId, Guid academicYearId);
 	Task<AssignmentCommitResultDto> AssignAsync(AssignStudentFeeStructureDto input);
     Task<List<AssignmentCandidateDto>> GetCandidatesAsync(Guid studentId, Guid academicYearId);

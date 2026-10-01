@@ -50,6 +50,8 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Update(RefundPolicyUpdateModel model)
 	{
+		if (IsDefault && (!model.IsDefault || model.Status != RefundPolicyStatus.Active))
+			throw new BusinessException(RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if (Status == RefundPolicyStatus.Archived && Version > 0)
 			throw new BusinessException(RefundPolicyErrorCodes.ArchivedPolicyNotEditable);
 		if (AcademicYearId == Guid.Empty)
@@ -97,6 +99,8 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Archive()
 	{
+		if (IsDefault)
+			throw new BusinessException(RefundPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		Status = RefundPolicyStatus.Archived;
 		IsDefault = false;
 		Version++;
@@ -104,6 +108,7 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Unarchive()
 	{
+		if (Status != RefundPolicyStatus.Archived) return;
 		Status = RefundPolicyStatus.Draft;
 		IsDefault = false;
 		Version++;

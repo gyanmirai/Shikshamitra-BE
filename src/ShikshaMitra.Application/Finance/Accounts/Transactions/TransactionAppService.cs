@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Incomes;
 using ShikshaMitra.Finance.Accounts.Settings;
@@ -22,6 +24,7 @@ public partial class TransactionAppService(
 {
 	public async Task<TransactionListResponse> GetListAsync(Guid academicYearId, GetTransactionsRequest input, TransactionType transactionType)
 	{
+		await CheckPermissionAsync(transactionType, "View");
 		if (input.Page < 1 || input.PageSize is < 1 or > 100)
 			throw new BusinessException(TransactionErrorCodes.InvalidPaging);
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
@@ -67,6 +70,7 @@ public partial class TransactionAppService(
 
 	public async Task<TransactionCreateUpdateResponse> CreateAsync(Guid academicYearId, TransactionCreateRequest input, TransactionType transactionType)
 	{
+		await CheckPermissionAsync(transactionType, "Add");
 		Transaction.EnsureValidMoneyAndMethod(input.Amount, input.PaymentMethod);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
 			academicYearId, null, null, null, null);
@@ -90,6 +94,7 @@ public partial class TransactionAppService(
 
 	public async Task<TransactionDetailsResponse> GetByIdAsync(Guid transactionId, TransactionType transactionType)
 	{
+		await CheckPermissionAsync(transactionType, "View");
 		var transaction = await transactionRepository.GetAsync(transactionId);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
 			transaction.AcademicYearId, null, null, null, null);
@@ -118,6 +123,7 @@ public partial class TransactionAppService(
 
 	public async Task<TransactionCreateUpdateResponse> UpdateAsync(Guid transactionId, TransactionUpdateRequest input, TransactionType transactionType)
 	{
+		await CheckPermissionAsync(transactionType, "Add");
 		Transaction.EnsureValidMoneyAndMethod(input.Amount, input.PaymentMethod);
 		var transaction = await transactionRepository.GetAsync(transactionId);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
@@ -140,6 +146,7 @@ public partial class TransactionAppService(
 
 	public async Task<TransactionDeleteResponse> DeleteAsync(Guid transactionId, TransactionType transactionType)
 	{
+		await CheckPermissionAsync(transactionType, "Delete");
 		var transaction = await transactionRepository.GetAsync(transactionId);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
 			transaction.AcademicYearId, null, null, null, null);
@@ -165,6 +172,27 @@ public partial class TransactionAppService(
 			throw new BusinessException("ShikshaMitra:TransactionCategoryNotAvailable")
 				.WithData("CategoryId", category.Id);
 		}
+	}
+
+	private Task CheckPermissionAsync(TransactionType type, string action)
+	{
+		var permission = type switch
+		{
+			TransactionType.Income => action switch
+			{
+				"View" => ShikshaMitraSubmodulePermissions.Finance.Accounts_IncomeTracking.View,
+				"Add" => ShikshaMitraSubmodulePermissions.Finance.Accounts_IncomeTracking.Add,
+				_ => ShikshaMitraSubmodulePermissions.Finance.Accounts_IncomeTracking.Delete
+			},
+			TransactionType.Expense => action switch
+			{
+				"View" => ShikshaMitraSubmodulePermissions.Finance.Accounts_ExpenseTracking.View,
+				"Add" => ShikshaMitraSubmodulePermissions.Finance.Accounts_ExpenseTracking.Add,
+				_ => ShikshaMitraSubmodulePermissions.Finance.Accounts_ExpenseTracking.Delete
+			},
+			_ => throw new ArgumentOutOfRangeException(nameof(type))
+		};
+		return AuthorizationService.CheckAsync(permission);
 	}
 
 }

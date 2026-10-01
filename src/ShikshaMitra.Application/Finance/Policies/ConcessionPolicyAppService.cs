@@ -136,9 +136,11 @@ public class ConcessionPolicyAppService(
 		if (model.Status == ConcessionPolicyStatus.Active &&
 			!await HasActiveDefaultAsync(input.AcademicYearId))
 			model = model with { IsDefault = true };
-		entity.Update(model);
 		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
+		// Save the demotion before modifying the tracked replacement: autoSave flushes
+		// all tracked changes, and the unique index must never see two active defaults.
+		entity.Update(model);
 		await repository.UpdateAsync(entity, autoSave: true);
 		await WriteVersionAsync(entity, "edited", input.ChangeReason);
 		return ConcessionPolicyMapping.ToDto(entity);

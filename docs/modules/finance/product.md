@@ -3,7 +3,7 @@ module: finance
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-09-29
+updated_on: 2026-10-01
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -36,7 +36,8 @@ Treat incorrect Finance reports or due balances as production defects.
 | Paid and pending due rows are different states | Adjustments must use paid source rows and pending target rows |
 | Concession approval allocates to `DueFee` rows | Approved concession amounts must reduce the correct outstanding lines |
 | Cash returned to parents uses refunds | Fee adjustments are not cash refunds |
-| Fee and charge status derives from the live balance | Fees show Pending, Partial Pending, or Paid. Charges show Pending, Partial Paid, Paid, or Waived. Concession amount and refund status are separate fields; a paid installment can still have a refund in progress. |
+| Fee and charge status derives from the live balance | Fee Ledger lines show Overdue for a generated bill with an unpaid remainder past its due date; otherwise an uncleared allocation shows In Reconciliation, a settled balance shows Paid, and an unsettled balance shows Partial Pending or Pending. Charges retain their independent Pending, Partial Paid, Paid, or Waived status. Concession amount and refund status are separate fields; a paid installment can still have a refund in progress. |
+| Empty Collections summaries are not payments | `FeeCollectionStatus.NoFeeAssigned` (`7`, summary only) applies when `IsFeeStructureAssigned` is false and total, paid, pending and overdue fees plus total and pending charges are all zero. Existing fee or charge amounts and assigned structures keep the existing balance-based status. Summary mapping, status filtering before pagination and CSV/Excel exports use the same classifier; exports display `No Fee Assigned`. This read-only rule uses the existing tenant, academic-year, academic-scope and Collections View authorization; it changes no dues, allocations, receipts, postings or history and requires no migration. |
 | Maker-checker rules protect approvals | Creators cannot approve or reject their own charge, concession, or adjustment where the domain enforces it |
 | Receipt numbers and payment records must remain auditable | Do not silently mutate payment history |
 | Charges are not Fee Structure demand | Use charges for exceptional obligations; connect them through collection, receipt, accounts, audit, and reports rather than duplicating recurring fees |
@@ -44,6 +45,22 @@ Treat incorrect Finance reports or due balances as production defects.
 | Concession types are lifecycle-controlled master data | Active types cannot be deleted; inactive unused types may be deleted, while used types remain resolvable in requests, reports, and version history |
 | Every policy type has an active academic-year default | Where active policies exist, Concession, Collection, Refund, and Proration each have exactly one Default per tenant and academic year. The first Active policy becomes Default; selecting another replaces it. The current Default cannot be cleared, moved to Draft, or archived until another Active policy is designated. A filtered unique index prevents duplicate Active defaults. |
 | Concession evidence definitions are server-enforced | Each document declares mandatory/optional, maximum bytes, and accepted formats; only mandatory evidence blocks approval |
+
+## Fee Ledger overdue classification
+
+Collections summaries, student overdue totals, and the collect-form installment status share
+`DueFeeCollectionStatusResolver`. Overdue requires a positive outstanding principal balance,
+a generated bill, and `ScheduleDueDate` (or legacy `DueDate`) strictly before the server's as-of
+date. A bill due today or an installment whose demand date has not arrived is not overdue.
+An overdue installment remains Overdue after partial payment; summary overdue amounts sum only
+its remaining principal. Reconciliation allocations already reduce outstanding principal, so
+an overdue remainder is still collectible and a fully provisionally settled line instead shows
+In Reconciliation. This is a read projection and does not change stored balances or payment history.
+
+System late-fee charges retain their independent balance status; they do not inherit Overdue from
+the principal installment. The Fee Structure settings policy options expose `IsDefault` only
+for a current active version. Explicit policy IDs and versions, saved optional-policy clears,
+and historical assignment snapshots remain authoritative.
 
 ## Fee-head module field
 
@@ -57,3 +74,11 @@ Account Heads now use name, type, optional parent, notes, and active status. The
 
 No generated Finance contract pack is canonical in this docs tree.
 Update [api.md](./api.md) from current source instead of adding raw exports.
+
+### Additional-charge balances in Fee Collection
+
+System late fees and approved manual charges contribute to Collections `TotalCharges` and `PendingCharges` before paging, sorting, status filtering, and export. The same `LateFeeBalanceService` supplies system-charge balances to the collection form, student fee details, collection validation, and waiver commands. `TotalCharges` retains assessed amounts after payment or waiver; `PendingCharges = max(0, assessed - non-reversed payments - applied waivers)`. Principal amounts remain separate and are not increased by these charges.
+
+Before a collection changes principal, it transactionally preserves the accrued late-fee assessment on the existing DueFee aggregate's `ExtraProperties` JSON column: decimal amount, assessment instant, pinned collection-policy version, and explanation. Assessments can increase through accrual but cannot decrease when principal is partially or fully paid, or when a later exception/exemption stops accrual. Paying fee items never allocates money to unselected charges. A remaining late fee is independently collectible or waivable after its principal is paid. Reads do not write assessments or generate receipts.
+
+For payments made before assessment preservation existed, the service recovers late fees from the immutable successful collection response's `CollectedAt` and `AuditSummary.AllocationLines.PendingBefore`, applying the assignment's pinned policy and the exception window covering that payment date. It never accrues a settled principal through today's date. Recovery is also skipped when assignment policy history shows a collection-policy version change after the payment, or when student override audit evidence shows an exemption/grace override created, modified, or deleted after that payment. Recovery is also skipped for a covering exception window created, modified, or deleted after payment; backdated windows cannot rewrite historical debt. Override and exception-window evidence are loaded in scoped batches, including soft-deleted rows while retaining tenant filtering. Applying newer rules would rewrite historical amounts. Records without trustworthy amount/date/version evidence cannot be safely reconstructed automatically; they require a reviewed correction rather than an invented balance. Assignments without a pinned collection-policy version cannot generate new policy-owned late fees (the collect form rejects the incomplete policy assignment); existing assessment/payment/waiver evidence remains included in summary balances. No schema migration is required.

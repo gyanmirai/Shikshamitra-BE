@@ -43,6 +43,43 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 {
 	private const string BaseUrl = "/api/student-fee-structure";
 
+	[Theory]
+	[InlineData("Finance.Fees.StructureAssign.View")]
+	[InlineData("Finance.Fees.StructureAssign.Add")]
+	public async Task Should_Deny_Policy_Edit_And_Options_Without_Override_Permission(string permission)
+	{
+		using var restricted = Factory.CreateClient();
+		restricted.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "accountant");
+		restricted.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, permission);
+		var options = await restricted.GetAsync($"{BaseUrl}/policy-options?studentId={Guid.NewGuid()}&academicYearId={Factory.SeededAcademicYearId}");
+		options.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		var edit = await restricted.PutAsJsonAsync($"{BaseUrl}/student/{Guid.NewGuid()}/policies", new AssignmentPolicyUpdateDto {
+			AcademicYearId = Factory.SeededAcademicYearId, Reason = "Synthetic policy edit", ConcurrencyStamp = "synthetic" });
+		edit.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	public async Task Should_Edit_Assigned_Policies_With_Concurrency_And_Preserve_Obligations()
+	{
+		var (input, _) = await CreateFixtureAsync();
+		var committed = await PreviewAndAssignAsync(input);
+		var read = await GetAndReadAsync<StudentFeeStructureResponseDto>($"{BaseUrl}/student/{input.StudentId}?academicYearId={input.AcademicYearId}");
+		var options = await GetAndReadAsync<System.Collections.Generic.List<AssignmentPolicyDto>>($"{BaseUrl}/policy-options?studentId={input.StudentId}&academicYearId={input.AcademicYearId}");
+		options.ShouldContain(p => p.Family == "collection");
+		var update = new AssignmentPolicyUpdateDto { AcademicYearId = input.AcademicYearId, ConcurrencyStamp = read.ConcurrencyStamp, Reason = "Synthetic unchanged selection",
+			Policies = new[] { "concession", "refund", "collection", "proration" }.Select(family => new AssignmentPolicySelectionDto {
+				Family = family, VersionId = read.Assignment!.Policies.FirstOrDefault(p => p.Family == family)?.VersionId }).ToList() };
+		var response = await Client.PutAsJsonAsync($"{BaseUrl}/student/{input.StudentId}/policies", update, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var saved = await response.Content.ReadFromJsonAsync<StudentFeeStructureResponseDto>(JsonOptions);
+		saved!.StudentFeeStructureId.ShouldBe(committed.AssignmentId);
+		saved.Assignment!.ProratedTotal.ShouldBe(committed.Assignment.ProratedTotal);
+		saved.Assignment.Lines.Select(l => l.DueFeeId).ShouldBe(read.Assignment!.Lines.Select(l => l.DueFeeId));
+		update.ConcurrencyStamp = "stale";
+		var conflict = await Client.PutAsJsonAsync($"{BaseUrl}/student/{input.StudentId}/policies", update, JsonOptions);
+		conflict.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
+
 	// Enrollment is a synthetic prerequisite, not a call to the removed registration API.
 	// Publication, preview, assignment and collection reads use real HTTP endpoints.
 	private async Task<(AssignStudentFeeStructureDto Input, Guid[] Heads)> CreateFixtureAsync(bool optionalHeads = false)

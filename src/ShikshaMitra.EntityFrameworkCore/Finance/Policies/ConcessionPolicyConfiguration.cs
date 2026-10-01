@@ -38,5 +38,9 @@ public class ConcessionPolicyConfiguration : IEntityTypeConfiguration<Concession
 		builder.HasIndex(x => new { x.TenantId, x.AcademicYearId, x.IsDefault })
 			.IsUnique().HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true")
 			.HasDatabaseName("IX_Finance_ConcessionPolicies_ActiveDefault");
+		// PostgreSQL composite uniqueness treats null TenantId values as distinct.
+		builder.HasIndex(x => x.AcademicYearId).IsUnique()
+			.HasFilter("\"TenantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true")
+			.HasDatabaseName("IX_Finance_ConcessionPolicies_Host_ActiveDefault");
 	}
 }

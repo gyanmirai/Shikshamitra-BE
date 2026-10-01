@@ -22,8 +22,7 @@ public partial class FeeCollectionSummaryQueryService
 		EnsureSummaryContextIsValid(input);
 
 		var now          = clock.Now;
-		var currentMonth = now.Month - 1;
-		var currentYear  = now.Year;
+
 
 		var studentQ = await BuildFilteredStudentQueryAsync(input, cancellationToken);
 		var students = await AsyncExecuter.ToListAsync(
@@ -46,10 +45,22 @@ public partial class FeeCollectionSummaryQueryService
 		dueFeeQ = dueFeeQ.Where(d => academicYearFeeHeadIds.Contains(d.FeeHeadId));
 
 		var (feeAggs, overdueAggs) = await GetStudentFeeAggregatesAsync(
-			dueFeeQ, studentIds, now.Date, currentYear, currentMonth, cancellationToken);
+			dueFeeQ, studentIds, now.Date, cancellationToken);
 
 		var chargeAggDict = await BuildChargeAggregatesByStudentAsync(
 			studentIds, input.AcademicYearId, cancellationToken);
+
+		// Include system late fees before paging, status filtering, sorting and export.
+		var chargeDues = await AsyncExecuter.ToListAsync(
+			dueFeeQ.Where(d => studentIds.Contains(d.StudentId)), cancellationToken);
+		var lateFeeBalances = await lateFeeBalanceService.GetBalancesAsync(chargeDues, input.AcademicYearId, now.Date);
+		foreach (var group in chargeDues.GroupBy(d => d.StudentId))
+		{
+			var manual = chargeAggDict[group.Key];
+			chargeAggDict[group.Key] = new StudentChargeAggregate(
+				manual.TotalCharges + (double)group.Sum(d => lateFeeBalances[d.Id].Total),
+				manual.PendingCharges + (double)group.Sum(d => lateFeeBalances[d.Id].PendingAmount));
+		}
 
 		var concessionRequestQ = await concessionRequestRepository.GetQueryableAsync();
 		var concessionAggs = await AsyncExecuter.ToListAsync(
@@ -111,8 +122,6 @@ public partial class FeeCollectionSummaryQueryService
 		IQueryable<DueFee> dueFeeQ,
 		ICollection<Guid> studentIds,
 		DateTime currentDate,
-		int currentYear,
-		int currentMonth,
 		CancellationToken cancellationToken)
 	{
 		var feeAggs = await AsyncExecuter.ToListAsync(
@@ -133,11 +142,8 @@ public partial class FeeCollectionSummaryQueryService
 
 		var overdueAggs = await AsyncExecuter.ToListAsync(
 			dueFeeQ
-				.Where(d => studentIds.Contains(d.StudentId)
-						 && d.OutstandingAmount > 0m
-						 && (d.ScheduleSource == ScheduleSource.Legacy || !d.DemandDate.HasValue || d.DemandDate.Value <= currentDate)
-						 && (d.Year < currentYear
-						 || (d.Year == currentYear && (int)d.Month < currentMonth)))
+				.Where(d => studentIds.Contains(d.StudentId))
+				.Where(DueFeeCollectionStatusResolver.OverdueOn(currentDate))
 				.GroupBy(d => d.StudentId)
 				.Select(g => new
 				{

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
@@ -26,16 +27,29 @@ public partial class FeeStructureAppService
 		var standard = await standardRepository.GetAsync(standardId);
 		var heads = await feeHeadRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.IsActive);
 		var versions = await ActivePolicyVersionsAsync(year.Id);
+		// Default selection belongs to the current master. Historical snapshots retain
+		// their original flags and must not become defaults after a replacement.
+		var policyMasters = new Dictionary<(string Family, Guid Id), (int Version, bool IsDefault)>();
+		foreach (var policy in await collectionPolicyRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.Status == CollectionPolicyStatus.Active))
+			policyMasters[("collection", policy.Id)] = (policy.Version, policy.IsDefault);
+		foreach (var policy in await concessionPolicyRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.Status == ConcessionPolicyStatus.Active))
+			policyMasters[("concession", policy.Id)] = (policy.Version, policy.IsDefault);
+		foreach (var policy in await refundPolicyRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.Status == RefundPolicyStatus.Active))
+			policyMasters[("refund", policy.Id)] = (policy.Version, policy.IsDefault);
+		foreach (var policy in await prorationPolicyRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.Status == ProrationPolicyStatus.Active))
+			policyMasters[("proration", policy.Id)] = (policy.Version, policy.IsDefault);
 		var terms = await paymentTermRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.BoardId == board.Id && x.Status == PaymentTermStatus.Active);
 		var result = new FeeStructureSettingsDto
 		{
 			AcademicYearId = year.Id, AcademicYearName = year.Name, BoardId = board.Id, ClassName = standard.Name,
 			StartDate = board.StartDate, EndDate = board.EndDate,
 			Heads = heads.OrderBy(x => x.Name).Select(x => new FeeStructureHeadOptionDto { Id = x.Id, Name = x.Name, CategoryName = x.FeeCategory?.Name ?? "", IsConcessionApplied = x.IsConcessionApplied }).ToList(),
-			Policies = versions.OrderBy(x => x.PolicyName).ThenByDescending(x => x.VersionNumber).Select(x => new FeeStructurePolicyOptionDto
+			Policies = versions.Where(x => policyMasters.ContainsKey((x.PolicyType, x.PolicyId)))
+				.OrderBy(x => x.PolicyName).ThenByDescending(x => x.VersionNumber).Select(x => new FeeStructurePolicyOptionDto
 			{
 				Id = x.PolicyId, VersionId = x.Id, Family = x.PolicyType, Name = x.PolicyName, VersionNumber = x.VersionNumber,
-				IsCurrent = x.VersionNumber == versions.Where(v => v.PolicyType == x.PolicyType && v.PolicyId == x.PolicyId).Max(v => v.VersionNumber)
+				IsCurrent = x.VersionNumber == policyMasters[(x.PolicyType, x.PolicyId)].Version,
+				IsDefault = x.VersionNumber == policyMasters[(x.PolicyType, x.PolicyId)].Version && policyMasters[(x.PolicyType, x.PolicyId)].IsDefault
 			}).ToList()
 		};
 		foreach (var term in terms.OrderBy(x => x.Name))

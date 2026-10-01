@@ -23,6 +23,8 @@ public class JournalEntryConfiguration : IEntityTypeConfiguration<JournalEntry>
 		builder.HasIndex(x => x.JournalNumber).IsUnique().HasFilter("\"TenantId\" IS NULL");
 		builder.HasOne<FinancialEvent>().WithMany().HasForeignKey(x => x.FinancialEventId)
 			.OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<AccountingPeriod>().WithMany().HasForeignKey(x => x.AccountingPeriodId)
+			.OnDelete(DeleteBehavior.Restrict);
 		builder.HasOne<JournalEntry>().WithMany().HasForeignKey(x => x.CorrectsJournalEntryId)
 			.OnDelete(DeleteBehavior.Restrict);
 	}

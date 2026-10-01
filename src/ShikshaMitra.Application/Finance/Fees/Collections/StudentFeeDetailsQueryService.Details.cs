@@ -30,6 +30,28 @@ public partial class StudentFeeDetailsQueryService
 		var overdueFee = CalculateOverdueFee(dueFees);
 		var feeHeads = await BuildFeeHeadSummariesAsync(studentId, feeStructureAssignment, dueFees);
 		var charges = await BuildChargeDetailsAsync(studentId, academicYearId);
+		var lateBalances = await lateFeeBalanceService.GetBalancesAsync(dueFees, academicYearId, clock.Now.Date);
+		var lateDues = dueFees.Where(d => lateBalances[d.Id].Total > 0m).ToList();
+		if (lateDues.Count > 0)
+		{
+			var headIds = lateDues.Select(d => d.FeeHeadId).Distinct().ToList();
+			var names = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id))).ToDictionary(x => x.Id, x => x.Name);
+			charges ??= [];
+			charges.InsertRange(0, lateDues.Select(d =>
+			{
+				var balance = lateBalances[d.Id];
+				return new FeeChargeDetailDto
+				{
+					ChargeId = d.Id, Name = $"Late Fee - {names.GetValueOrDefault(d.FeeHeadId, string.Empty)} ({d.GetDisplayInstallmentLabel()})",
+					Amount = (double)balance.Total, PaidAmount = (double)balance.PaidAmount,
+					PendingAmount = (double)balance.PendingAmount, WaivedAmount = (double)balance.WaivedAmount,
+					CanWaive = balance.PendingAmount > 0m,
+					Status = balance.PendingAmount <= 0m ? (balance.WaivedAmount > 0m ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
+						: (balance.PaidAmount > 0m ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending)
+				};
+			}));
+		}
+
 		var payments = await BuildPaymentHistoryAsync(studentId, academicYearId);
 		var concessions = await BuildConcessionDetailsAsync(studentId, academicYearId);
 		var feeOverview = BuildFeeOverview(feeHeads, concessions, overdueFee);
@@ -191,12 +213,7 @@ public partial class StudentFeeDetailsQueryService
 
 	private double CalculateOverdueFee(List<DueFee> dueFees)
 	{
-		var now = clock.Now;
-		var currentYear = now.Year;
-		var currentMonth = now.Month - 1;
-		return (double)dueFees.Where(d => d.OutstandingAmount > 0m
-			&& d.IsBillGeneratedOn(now.Date)
-			&& (d.Year < currentYear || (d.Year == currentYear && (int)d.Month < currentMonth)))
+		return (double)dueFees.Where(DueFeeCollectionStatusResolver.OverdueOn(clock.Now).Compile())
 			.Sum(d => d.OutstandingAmount);
 	}
 

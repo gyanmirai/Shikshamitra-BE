@@ -36,7 +36,6 @@ public partial class StudentFeeDetailsQueryService(
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	IRepository<FeeCollectionRecord, Guid> feeCollectionRecordRepository,
 	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
-	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
 	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
@@ -49,10 +48,8 @@ public partial class StudentFeeDetailsQueryService(
 	IConcessionRequestRepository concessionRequestRepository,
 	FinanceScopeAccessService financeScopeAccessService,
 	FinanceReferenceCacheService referenceCache,
-	LateFeeWaiverLookupService waiverLookupService,
+	LateFeeBalanceService lateFeeBalanceService,
 	CollectionPolicyResolver policyResolver,
-	LateFeeCalculationService lateFeeCalculationService,
-	ExceptionWindowResolver exceptionWindowResolver,
 	IClock clock
 ) : ApplicationService, ITransientDependency
 {
@@ -118,29 +115,15 @@ public partial class StudentFeeDetailsQueryService(
 				studentId, feeStructureAssignment.FeeStructureStandardId);
 			allowOnlineCollection = effectiveRules.Policy?.AllowOnlineCollection ?? true;
 
-			var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFees.Select(d => d.Id).ToList());
-			var dueFeeIds = dueFees.Select(d => d.Id).ToList();
-			var paidLateFeeAllocations = await lateFeeAllocationRepository.GetListAsync(x => dueFeeIds.Contains(x.DueFeeId));
-			var lateFeeTransactionIds = paidLateFeeAllocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
-			var reversedLateFeeTransactionIds = (await feeRecordMetadataRepository.GetListAsync(x =>
-				lateFeeTransactionIds.Contains(x.Id) && x.Status == FeeCollectionStatus.Reversed))
-				.Select(x => x.Id).ToHashSet();
-			var paidLateFeeByDueFee = paidLateFeeAllocations
-				.Where(x => !reversedLateFeeTransactionIds.Contains(x.FeeRecordMetadataId))
-				.GroupBy(x => x.DueFeeId)
-				.ToDictionary(x => x.Key, x => x.Sum(a => (decimal) a.Amount));
-
-			// Resolved once for the whole collect-form call, same rationale as the policy
-			// resolution above — an exception window doesn't vary by fee head/due line.
-			var activeWindow = await exceptionWindowResolver.ResolveActiveWindowAsync(
-				academicYearId, feeStructureAssignment.FeeStructureStandardId, today);
+			var lateFeeBalances = await lateFeeBalanceService.GetBalancesAsync(dueFees, academicYearId, today);
 
 			foreach (var group in grouped)
 			{
 				var lines = group.Select(d =>
 					{
-						var lateFee = ComputeLateFeeForLine(
-							effectiveRules, d, today, waivedByDueFee, paidLateFeeByDueFee, activeWindow);
+						var balance = lateFeeBalances[d.Id];
+						var lateFee = (Amount: (double)balance.PendingAmount, PaidAmount: (double)balance.PaidAmount,
+							WaivedAmount: (double)balance.WaivedAmount, balance.Explanation);
 						if (lateFee.Amount > 0 || lateFee.PaidAmount > 0 || lateFee.WaivedAmount > 0)
 						{
 							var feeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty);
@@ -157,8 +140,10 @@ public partial class StudentFeeDetailsQueryService(
 								PendingAmount = lateFee.Amount,
 								WaivedAmount = lateFee.WaivedAmount,
 								CanWaive = lateFee.Amount > 0,
+								ReconciliationAmount = balance.ReconciliationAmount,
 								Explanation = lateFee.Explanation,
-								Status = lateFee.Amount <= 0
+								Status = balance.ReconciliationAmount > 0m ? FeeCollectionStatus.InReconciliation
+									: lateFee.Amount <= 0
 									? (lateFee.WaivedAmount > 0 ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
 									: (lateFee.PaidAmount > 0 ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 							});
@@ -171,7 +156,7 @@ public partial class StudentFeeDetailsQueryService(
 							FeeHeadId = d.FeeHeadId,
 							FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
 							InstallmentLabel = d.GetDisplayInstallmentLabel(),
-							DueDate = d.ScheduleDueDate,
+							DueDate = d.ScheduleDueDate ?? d.DueDate,
 							CoverageStartDate = d.CoverageStartDate,
 							CoverageEndDate = d.CoverageEndDate,
 							ScheduleSource = d.ScheduleSource.ToString(),
@@ -202,9 +187,7 @@ public partial class StudentFeeDetailsQueryService(
 							ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
 							RefundAmount = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Amount,
 							RefundDescription = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Description,
-							Status = d.OutstandingAmount <= 0m ? FeeCollectionStatus.Paid
-							: (d.PaidAmount > 0m || d.ConcessionAmount > 0m || d.AdjustmentCreditAmount > 0m
-								? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
+							Status = DueFeeCollectionStatusResolver.Resolve(d, today, reconByDueFee.GetValueOrDefault(d.Id, 0d)),
 							LateFeeAmount = 0,
 							LateFeeExplanation = string.Empty,
 							LateFeeWaivedAmount = 0,
@@ -262,6 +245,11 @@ public partial class StudentFeeDetailsQueryService(
 			var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
 			var chargeMetaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 			var reversedTxIds = chargeMetaQ.Where(m => m.Status == FeeCollectionStatus.Reversed).Select(m => m.Id);
+			var reconTxIds = chargeMetaQ.Where(m => m.Status == FeeCollectionStatus.InReconciliation).Select(m => m.Id);
+			var reconPerCharge = chargeCollQ.Where(r => r.StudentId == studentId && reconTxIds.Contains(r.FeeRecordMetadataId))
+				.GroupBy(r => r.ChargeId)
+				.Select(g => new { ChargeId = g.Key, Amount = g.Sum(r => r.Amount) })
+				.ToDictionary(x => x.ChargeId, x => x.Amount);
 			var paidPerCharge = chargeCollQ
 				.Where(r => r.StudentId == studentId && !reversedTxIds.Contains(r.FeeRecordMetadataId))
 				.GroupBy(r => r.ChargeId)
@@ -286,7 +274,9 @@ public partial class StudentFeeDetailsQueryService(
 					PendingAmount = pending,
 					WaivedAmount = waived,
 					CanWaive = pending > 0,
-					Status = pending <= 0d ? (waived > 0d ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
+					ReconciliationAmount = Convert.ToDecimal(reconPerCharge.GetValueOrDefault(c.Id, 0d)),
+					Status = reconPerCharge.GetValueOrDefault(c.Id, 0d) > 0d ? FeeCollectionStatus.InReconciliation
+						: pending <= 0d ? (waived > 0d ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
 						: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 				};
 			}));
@@ -317,33 +307,4 @@ public partial class StudentFeeDetailsQueryService(
 			));
 	}
 
-	private (double Amount, string Explanation, double WaivedAmount, double PaidAmount) ComputeLateFeeForLine(
-		EffectiveCollectionRules effectiveRules, DueFee dueFee, DateTime today, Dictionary<Guid, decimal> waivedByDueFee,
-		Dictionary<Guid, decimal> paidByDueFee,
-		ActiveExceptionWindow? activeWindow)
-	{
-		if (effectiveRules.Policy is null || dueFee.OutstandingAmount <= 0)
-		{
-			return (0, string.Empty, 0, 0);
-		}
-
-		var daysLate = (today - dueFee.DueDate.Date).Days;
-		var result = lateFeeCalculationService.Calculate(effectiveRules.Policy, new LateFeeCalculationInput(
-			daysLate,
-			(decimal) dueFee.OutstandingAmount,
-			(decimal) dueFee.OriginalAmount,
-			(decimal) dueFee.OutstandingAmount,
-			dueFee.FeeHeadId,
-			effectiveRules.IsLateFeeExempt,
-			effectiveRules.CustomGracePeriodDays,
-			activeWindow?.Effect,
-			activeWindow?.ExtensionDays,
-			activeWindow?.Label));
-
-		var waived = waivedByDueFee.GetValueOrDefault(dueFee.Id, 0m);
-		var net = Math.Max(0, result.LateFee - waived - paidByDueFee.GetValueOrDefault(dueFee.Id, 0m));
-
-		return ((double) net, net > 0 ? result.Explanation : string.Empty, (double) waived,
-			(double) paidByDueFee.GetValueOrDefault(dueFee.Id, 0m));
-	}
 }

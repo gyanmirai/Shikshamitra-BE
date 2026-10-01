@@ -73,7 +73,7 @@ public class LateFeeCalculationService_Tests
 	[Fact]
 	public void Disabled_Late_Fee_Produces_Zero()
 	{
-		var policy = BuildPolicy(b => { b.EnableLateFee = false; b.LateFeeType = LateFeeCalculationType.Flat; b.FlatAmount = 500; });
+		var policy = BuildPolicy(b => { b.EnableLateFee = false; b.EnableWaiver = false; b.LateFeeType = LateFeeCalculationType.Flat; b.FlatAmount = 500; });
 		var result = _service.Calculate(policy, Input(daysLate: 30));
 		Assert.Equal(0, result.LateFee);
 	}

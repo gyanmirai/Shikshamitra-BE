@@ -3,7 +3,7 @@ module: finance
 domain: fee-collection-reconciliation
 content_type: Reference
 status: active
-updated_on: 2026-09-28
+updated_on: 2026-10-01
 owner: product-and-engineering
 audience: humans-and-agents
 ---
@@ -15,6 +15,13 @@ audience: humans-and-agents
 This is the implementation contract for money received through Fee Collection, from the collection command to bank evidence, receipt finalization, accounting, correction, and reports. The two distinct decisions are **payment verification** (is a provisional instrument genuinely settled?) and **bank reconciliation** (does a bank statement line match the booked settlement?). A cashier assertion is evidence to record, not a bank match. Cash is verified at the counter but still belongs in cash/deposit reconciliation. The workflow must keep fee, charge, late-fee, and payment-instrument amounts traceable without rewriting the original collection.
 
 **Current readiness: blocked for full bank reconciliation.** The implemented approve/reject API handles provisional receipt verification. There is no bank statement ingestion, statement-line match model, or operational account-posting chain in this path. Existing approval must not be represented to users as bank-reconciled.
+
+The collection validator now rejects a provisional payment mixed with another
+instrument or spanning both fee and charge receipts. It asks staff to record
+those payments separately until each instrument has its own allocation shares.
+The frontend no longer exposes the nonexistent `match`, `by-head`, or
+`post-statement` operations or the In-Transit placeholder. These safeguards do
+not add bank matching or journal posting.
 
 ## Source trace and observed behavior (28 September 2026)
 

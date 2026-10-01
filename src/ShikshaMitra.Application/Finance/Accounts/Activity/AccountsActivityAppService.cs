@@ -1,6 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Finance.Accounts.Incomes;
+using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Students;
@@ -19,12 +23,13 @@ namespace ShikshaMitra.Finance.Accounts.Activity;
 /// of a Fees action, not a General Accounts journal posting.
 /// </summary>
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Activity.View)]
 public class AccountsActivityAppService(
     IRepository<FeePaymentReceipt, Guid> receiptRepository,
     IRepository<FeeRecordMetadata, Guid> collectionRepository,
     IRepository<FeeRefundAccountingEntry, Guid> refundEntryRepository,
     IRepository<FeeRefundRequest, Guid> refundRepository,
+    IRepository<Transaction, Guid> transactionRepository,
+    IRepository<TransactionCategory, Guid> categoryRepository,
     IReadOnlyRepository<Student, Guid> studentRepository,
     FinanceScopeAccessService scopeAccessService) : ApplicationService, IAccountsActivityAppService
 {
@@ -33,8 +38,8 @@ public class AccountsActivityAppService(
         if (input.AcademicYearId == Guid.Empty)
             throw new UserFriendlyException("Select an academic year to view Accounts activity.");
         var source = input.Source?.Trim().ToLowerInvariant();
-        if (source is not (null or "collection" or "refund"))
-            throw new UserFriendlyException("Source must be collection or refund.");
+        if (source is not (null or "collection" or "refund" or "income" or "expense"))
+            throw new UserFriendlyException("Source must be collection, refund, income, or expense.");
         var search = input.Search?.Trim();
         if (search?.Length > 100)
             throw new UserFriendlyException("Search must be 100 characters or fewer.");
@@ -42,11 +47,33 @@ public class AccountsActivityAppService(
         var page = Math.Clamp(input.Page, 1, 1000);
         var pageSize = Math.Clamp(input.PageSize, 1, 100);
         var window = checked(page * pageSize);
+        var canViewFees = await AuthorizationService.IsGrantedAsync(
+            ShikshaMitraSubmodulePermissions.Finance.Accounts_Activity.View);
+        var canViewIncome = await AuthorizationService.IsGrantedAsync(
+            ShikshaMitraSubmodulePermissions.Finance.Accounts_IncomeTracking.View);
+        var canViewExpense = await AuthorizationService.IsGrantedAsync(
+            ShikshaMitraSubmodulePermissions.Finance.Accounts_ExpenseTracking.View);
+        if (!canViewFees && !canViewIncome && !canViewExpense)
+            await AuthorizationService.CheckAsync(
+                ShikshaMitraSubmodulePermissions.Finance.Accounts_Activity.View);
+        if ((source is "collection" or "refund") && !canViewFees)
+            await AuthorizationService.CheckAsync(
+                ShikshaMitraSubmodulePermissions.Finance.Accounts_Activity.View);
+        if (source == "income" && !canViewIncome)
+            await AuthorizationService.CheckAsync(
+                ShikshaMitraSubmodulePermissions.Finance.Accounts_IncomeTracking.View);
+        if (source == "expense" && !canViewExpense)
+            await AuthorizationService.CheckAsync(
+                ShikshaMitraSubmodulePermissions.Finance.Accounts_ExpenseTracking.View);
+        if (!await scopeAccessService.IsAcademicContextAccessibleAsync(
+                input.AcademicYearId, null, null, null, null))
+            return new AccountsActivityPageDto
+                { Page = page, PageSize = pageSize, TotalCount = 0, Items = [] };
         var scopedStudentIds = await scopeAccessService.GetScopedStudentIdsQueryAsync();
         var rows = new List<AccountsActivityRowDto>();
         var total = 0;
 
-        if (source is null or "collection")
+        if (canViewFees && (source is null or "collection"))
         {
             var receipts = await receiptRepository.GetQueryableAsync();
             var collections = await collectionRepository.GetQueryableAsync();
@@ -54,6 +81,8 @@ public class AccountsActivityAppService(
                         join collection in collections on receipt.FeeCollectionTransactionId equals collection.Id
                         where receipt.AcademicYearId == input.AcademicYearId
                             && scopedStudentIds.Contains(receipt.StudentId)
+                            && (collection.Status == FeeCollectionStatus.Paid ||
+                                collection.Status == FeeCollectionStatus.Partial)
                             && (receipt.ReceiptKind == FeeReceiptKind.FinalFee ||
                                 receipt.ReceiptKind == FeeReceiptKind.FinalCharge)
                         select new { receipt, collection };
@@ -70,7 +99,7 @@ public class AccountsActivityAppService(
                     x.receipt.FeeCollectionTransactionId, x.collection.Status
                 }));
             var canOpen = await AuthorizationService.IsGrantedAsync(
-                ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View);
+                ShikshaMitraSubmodulePermissions.Finance.Fees_InvoiceReceipt.View);
             rows.AddRange(selected.Select(x => new AccountsActivityRowDto
             {
                 Id = x.Id,
@@ -78,14 +107,14 @@ public class AccountsActivityAppService(
                 StudentId = x.StudentId,
                 Source = "Collection",
                 Reference = x.ReceiptNumber,
-                SourceStatus = x.Status == FeeCollectionStatus.Reversed ? "Reversed" : "Accepted",
+                SourceStatus = "Accepted",
                 Amount = Convert.ToDecimal(x.TotalPaidAmount),
                 OccurredAt = new DateTimeOffset(DateTime.SpecifyKind(x.CreationTime, DateTimeKind.Utc)),
                 CanOpenSource = canOpen
             }));
         }
 
-        if (source is null or "refund")
+        if (canViewFees && (source is null or "refund"))
         {
             var entries = await refundEntryRepository.GetQueryableAsync();
             var refunds = await refundRepository.GetQueryableAsync();
@@ -123,9 +152,49 @@ public class AccountsActivityAppService(
             }));
         }
 
+        if ((canViewIncome && (source is null or "income")) ||
+            (canViewExpense && (source is null or "expense")))
+        {
+            var transactions = await transactionRepository.GetQueryableAsync();
+            var categories = await categoryRepository.GetQueryableAsync();
+            var query = from transaction in transactions
+                        join category in categories on transaction.CategoryId equals category.Id
+                        where transaction.AcademicYearId == input.AcademicYearId
+                            && ((transaction.TransactionType == TransactionType.Income && canViewIncome &&
+                                    (source == null || source == "income")) ||
+                                (transaction.TransactionType == TransactionType.Expense && canViewExpense &&
+                                    (source == null || source == "expense")))
+                        select new { transaction, category };
+            if (!string.IsNullOrEmpty(search))
+                query = query.Where(x => x.transaction.Name.Contains(search) ||
+                    x.category.Name.Contains(search));
+            total += await AsyncExecuter.CountAsync(query);
+            var selected = await AsyncExecuter.ToListAsync(query
+                .OrderByDescending(x => x.transaction.PaymentDate)
+                .ThenByDescending(x => x.transaction.Id)
+                .Take(window).Select(x => new
+                {
+                    x.transaction.Id, x.transaction.Name, x.transaction.Amount,
+                    x.transaction.PaymentDate, x.transaction.TransactionType,
+                    CategoryName = x.category.Name
+                }));
+            rows.AddRange(selected.Select(x => new AccountsActivityRowDto
+            {
+                Id = x.Id, SourceId = x.Id, StudentId = null,
+                Source = x.TransactionType == TransactionType.Income ? "Income" : "Expense",
+                Reference = x.Name, CategoryName = x.CategoryName,
+                SourceStatus = "Recorded (legacy)",
+                AccountingStatus = "Not posted",
+                Amount = x.TransactionType == TransactionType.Income ? x.Amount : -x.Amount,
+                OccurredAt = new DateTimeOffset(DateTime.SpecifyKind(x.PaymentDate, DateTimeKind.Utc)),
+                CanOpenSource = true
+            }));
+        }
+
         var pageRows = rows.OrderByDescending(x => x.OccurredAt).ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize).Take(pageSize).ToList();
-        var studentIds = pageRows.Select(x => x.StudentId).Distinct().ToList();
+        var studentIds = pageRows.Where(x => x.StudentId.HasValue)
+            .Select(x => x.StudentId!.Value).Distinct().ToList();
         if (studentIds.Count > 0)
         {
             var students = await studentRepository.GetQueryableAsync();
@@ -135,7 +204,8 @@ public class AccountsActivityAppService(
                 new[] { x.FirstName, x.MiddleName, x.LastName }
                     .Where(value => !string.IsNullOrWhiteSpace(value))));
             foreach (var row in pageRows)
-                row.StudentName = byId.GetValueOrDefault(row.StudentId) ?? string.Empty;
+                if (row.StudentId.HasValue)
+                    row.StudentName = byId.GetValueOrDefault(row.StudentId.Value) ?? string.Empty;
         }
 
         return new AccountsActivityPageDto

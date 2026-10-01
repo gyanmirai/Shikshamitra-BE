@@ -1,20 +1,24 @@
 # Accounts source activity
 
-`GET /api/accounts/activity?academicYearId=...` is a read-only bridge from Fees to
-Accounts. It lists final fee/charge receipts and confirmed refund subledger
-entries (including compensating return entries) for students in the caller's
-scope. Search is by collection receipt, refund number, or original refund
-receipt. The list has server pagination and requires
-`Finance.Accounts.Activity.View`. Source navigation is allowed only with the
-corresponding Fees view permission.
+`GET /api/accounts/register?academicYearId=...` is the unified, read-only
+Income & Expenses source register. The older `/api/accounts/activity` remains
+available for historical clients. The new register lists accepted final
+fee/charge receipts, confirmed refund subledger entries (including compensating
+returns), and legacy manual income/expense transactions. Search and pagination
+are server-side. Fees rows require `Finance.Accounts.Activity.View`; manual
+income and expense rows require their respective exact Tracking View permission.
+Explicit source filters without the matching permission are denied. Student
+rows are restricted to the caller's student scope and source navigation requires
+the relevant Fees view permission.
 
 The activity amount is positive for a collection or returned payout and
 negative for a paid refund. Source status describes the Fees action.
 `AccountingStatus = Not posted` describes the current General Accounts state:
 the endpoint does not create journals or change balances. A final receipt
 represents an accepted payment; provisional cheque/DD receipts are omitted
-until verification creates a final receipt. A reversed collection remains
-visible with `SourceStatus = Reversed`.
+until verification creates a final receipt. Reversed and provisional
+collections are excluded from the accepted-income register. Legacy manual
+entries are labelled `Recorded (legacy)` and are not journals.
 
 This read model uses the canonical receipt and refund subledger rows, so
 historical completed actions are visible without backfilling a new event.

@@ -205,5 +205,20 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
+
+		public static class Accounts_Settings_PostingSetup
+		{
+			private const string SubmoduleName = $"{ModuleName}.Accounts.Settings.PostingSetup";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Accounts.Settings.PostingSetup";
+			public const string View = $"{SubmoduleName}.View";
+			public const string Edit = $"{SubmoduleName}.Edit";
+			public static readonly string[] All = { View, Edit };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" },
+				{ Edit, $"{SubmoduleDisplayName}.Edit" }
+			};
+		}
 	}
 }

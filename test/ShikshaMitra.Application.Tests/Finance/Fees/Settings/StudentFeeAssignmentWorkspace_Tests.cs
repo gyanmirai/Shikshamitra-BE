@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
@@ -9,6 +10,7 @@ using ShikshaMitra.Students.StudentEnrollments;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.Finance.Fees.Settings;
@@ -29,6 +31,80 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		await GetRequiredService<IRepository<Student, Guid>>().InsertAsync(student, autoSave: true);
 
 		return new() { StudentId = student.Id, AcademicYearId = metadata.AcademicYearId.Value, StandardFeeStructureId = structure.Id };
+	}
+
+	[Fact]
+	public async Task Assignment_Bulk_Commits_All_Six_Previews_For_The_Same_Structure_And_Retry_Is_Idempotent()
+	{
+		using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+		var first = await ReadyAssignmentAsync();
+		var students = GetRequiredService<IRepository<Student, Guid>>();
+		var original = await students.GetAsync(first.StudentId);
+		var items = new System.Collections.Generic.List<AssignStudentFeeStructureDto> { first };
+		for (var i = 1; i < 6; i++)
+		{
+			var student = new Student(Guid.NewGuid(), TestTenantId, $"Assignment {i}", null, "Student", first.AcademicYearId,
+				original.AcademicBoardId!.Value, original.AcademicMediumId, original.AcademicMediumStageId!.Value,
+				original.StandardId, status: StudentLifeCycleStatusEnum.Enrolled);
+			await students.InsertAsync(student, autoSave: true);
+			items.Add(new() { StudentId = student.Id, AcademicYearId = first.AcademicYearId, StandardFeeStructureId = first.StandardFeeStructureId });
+		}
+		var service = GetRequiredService<IStudentFeeStructureAppService>();
+		var preview = await service.PreviewBulkAsync(new() { Items = items });
+		preview.Results.Count.ShouldBe(6);
+		foreach (var item in items)
+			item.PreviewToken = preview.Results.Single(r => r.StudentId == item.StudentId).Preview.ShouldNotBeNull().PreviewToken;
+		var uowManager = GetRequiredService<IUnitOfWorkManager>();
+		var structures = GetRequiredService<IRepository<FeeStructure, Guid>>();
+		string structureRevision;
+		string yearRevision;
+		using (var verification = uowManager.Begin(requiresNew: true, isTransactional: false))
+		{
+			structureRevision = (await structures.GetAsync(first.StandardFeeStructureId)).ConcurrencyStamp;
+			yearRevision = (await _academicYearRepo.GetAsync(first.AcademicYearId)).ConcurrencyStamp;
+		}
+
+		var result = await service.BulkAssignAsync(new() { Items = items });
+		result.Results.ShouldAllBe(r => r.Outcome == "Assigned", string.Join("; ", result.Results.Select(r => $"{r.StudentId}: {r.ErrorMessage}")));
+		result.SuccessCount.ShouldBe(6);
+		result.FailedCount.ShouldBe(0);
+		using (var verification = uowManager.Begin(requiresNew: true, isTransactional: false))
+		{
+			(await structures.GetAsync(first.StandardFeeStructureId)).ConcurrencyStamp.ShouldBe(structureRevision);
+			(await _academicYearRepo.GetAsync(first.AcademicYearId)).ConcurrencyStamp.ShouldBe(yearRevision);
+		}
+		var dues = GetRequiredService<IRepository<DueFee, Guid>>();
+		foreach (var item in items)
+		{
+			var committed = await dues.GetListAsync(d => d.StudentId == item.StudentId);
+			committed.Count.ShouldBe(2);
+			committed.Sum(d => d.OriginalAmount).ShouldBe(1000.01m);
+			committed.ShouldAllBe(d => d.StudentFeeStructureId == result.Results.Single(r => r.StudentId == item.StudentId).Result!.AssignmentId);
+		}
+		var retry = await service.BulkAssignAsync(new() { Items = items });
+		retry.AlreadyAssignedCount.ShouldBe(6);
+		retry.FailedCount.ShouldBe(0);
+		foreach (var item in items)
+			(await dues.GetListAsync(d => d.StudentId == item.StudentId)).Count.ShouldBe(2);
+	}
+
+	[Fact]
+	public async Task Assignment_Changed_Academic_Year_Invalidates_Preview_Without_Writes()
+	{
+		using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
+		var input = await ReadyAssignmentAsync();
+		var service = GetRequiredService<IStudentFeeStructureAppService>();
+		input.PreviewToken = (await service.PreviewAsync(input)).PreviewToken;
+		using (var change = GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true))
+		{
+			var year = await _academicYearRepo.GetAsync(input.AcademicYearId);
+			year.SetDates(year.StartDate.AddDays(1), year.EndDate);
+			await _academicYearRepo.UpdateAsync(year);
+			await change.CompleteAsync();
+		}
+		(await Should.ThrowAsync<BusinessException>(() => service.AssignAsync(input))).Code.ShouldBe(AssignmentErrorCodes.StalePreview);
+		(await GetRequiredService<IRepository<StudentFeeStructure, Guid>>().GetListAsync(x => x.StudentId == input.StudentId)).ShouldBeEmpty();
+		(await GetRequiredService<IRepository<DueFee, Guid>>().GetListAsync(x => x.StudentId == input.StudentId)).ShouldBeEmpty();
 	}
 
 	[Fact]

@@ -81,6 +81,8 @@ public class FeeHeadDetailDto
 /// <summary>Breakdown of a single additional charge including payment status.</summary>
 public class ChargeDetailDto
 {
+    /// <summary>Included paid allocations awaiting instrument clearance; separate from pending balance.</summary>
+    public decimal ReconciliationAmount { get; set; }
     public Guid ChargeId { get; set; }
 	/// <summary><c>Charge</c> for a Charge Management charge; <c>LateFee</c> for a system-generated late-fee charge.</summary>
 	public string SourceType { get; set; } = "Charge";

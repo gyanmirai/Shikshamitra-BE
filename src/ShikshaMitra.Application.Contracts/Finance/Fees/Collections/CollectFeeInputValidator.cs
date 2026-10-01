@@ -95,6 +95,23 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
             .NotEmpty().WithMessage("At least one payment method is required.")
             .Must(p => p.Count <= 5).WithMessage("Maximum 5 payment methods allowed per transaction.");
 
+        // Reconciliation currently resolves a whole collection/receipt, not an individual
+        // instrument. Until instrument-to-allocation attribution exists, prevent a
+        // provisional instrument from trapping or reversing an unrelated payment.
+        RuleFor(x => x)
+            .Must(x =>
+            {
+                var needsVerification = x.Payments.Any(p => p.PaymentMethod is
+                    PaymentMethodEnum.Cheque or PaymentMethodEnum.DemandDraft)
+                    || (x.PaymentConfirmed == false && x.Payments.Any(p =>
+                        CashierDecidedMethods.Contains(p.PaymentMethod)));
+                if (!needsVerification) return true;
+                var receiptKinds = (x.DueFeePayments.Count > 0 || x.LateFeePayments.Count > 0 ? 1 : 0)
+                    + (x.ChargePayments.Count > 0 ? 1 : 0);
+                return x.Payments.Count == 1 && receiptKinds == 1;
+            })
+            .WithMessage("Payments awaiting verification must use one payment method and one fee or charge receipt. Record the other payment separately.");
+
         RuleForEach(x => x.Payments).ChildRules(payment =>
         {
             payment.RuleFor(x => x.Amount).GreaterThan(0);

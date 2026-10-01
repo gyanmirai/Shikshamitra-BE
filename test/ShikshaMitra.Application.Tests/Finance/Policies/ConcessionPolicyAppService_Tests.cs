@@ -5,6 +5,7 @@ using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 using Xunit;
+using Volo.Abp;
 
 namespace ShikshaMitra.Domain.Finance.Policies;
 
@@ -59,6 +60,31 @@ public class ConcessionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		currentPage.Items.ShouldNotContain(x => x.Id == archived.Id);
 		archivedPage.Items.ShouldContain(x => x.Id == archived.Id);
 		archivedPage.Items.ShouldNotContain(x => x.Id == current.Id);
+	}
+
+	[Fact]
+	public async Task First_Active_Default_Is_Protected_And_Update_Transfers_It_With_Version_History()
+	{
+		var year = _guidGenerator.Create();
+		var firstInput = BuildInput(year, "First active concession");
+		firstInput.Status = "Active";
+		var first = await _concessionPolicies.CreateAsync(firstInput);
+		first.IsDefault.ShouldBeTrue();
+		var rejected = await Should.ThrowAsync<BusinessException>(() => _concessionPolicies.ArchiveAsync(first.Id));
+		rejected.Code.ShouldBe(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
+
+		var secondInput = BuildInput(year, "Replacement concession");
+		secondInput.Status = "Active";
+		var second = await _concessionPolicies.CreateAsync(secondInput);
+		second.IsDefault.ShouldBeFalse();
+		secondInput.IsDefault = true;
+		secondInput.ConcurrencyStamp = second.ConcurrencyStamp;
+		secondInput.ChangeReason = "Finance committee selected a new default.";
+		(await _concessionPolicies.UpdateAsync(second.Id, secondInput)).IsDefault.ShouldBeTrue();
+		(await _concessionPolicies.GetAsync(first.Id)).IsDefault.ShouldBeFalse();
+		var history = await _concessionPolicies.GetVersionsAsync(first.Id, new FinancePolicyVersionListRequestDto());
+		history.Items.ShouldContain(x => x.ChangeAction == "default_replaced");
+		await _concessionPolicies.ArchiveAsync(first.Id);
 	}
 
 	[Fact]

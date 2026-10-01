@@ -68,6 +68,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Finance.Accounts.Settings.ExpenseCategory", new SubmoduleInfo(Accounts_Settings_ExpenseCategory.All, Accounts_Settings_ExpenseCategory.DisplayNames) },
 			{ "Finance.Accounts.Settings.BankAccount", new SubmoduleInfo(Accounts_Settings_BankAccount.All, Accounts_Settings_BankAccount.DisplayNames) },
 			{ "Finance.Accounts.Settings.AccountHead", new SubmoduleInfo(Accounts_Settings_AccountHead.All, Accounts_Settings_AccountHead.DisplayNames) },
+			{ "Finance.Accounts.Settings.PostingSetup", new SubmoduleInfo(Accounts_Settings_PostingSetup.All, Accounts_Settings_PostingSetup.DisplayNames) },
 
 			// Finance root-level submodules
 			{ "Finance.AuditTrail", new SubmoduleInfo(AuditTrail.All, AuditTrail.DisplayNames) },

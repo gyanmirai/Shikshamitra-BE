@@ -45,10 +45,12 @@ public class StudentSeederIdentity_Tests : ShikshaMitraEntityFrameworkCoreTestBa
 			});
 
 			student.UserId.ShouldNotBeNull();
+			student.UserId.ShouldBe(student.Id);
 			await WithUnitOfWorkAsync(async () =>
 			{
 				var user = await GetRequiredService<IIdentityUserRepository>().FindAsync(student.UserId!.Value);
 				user.ShouldNotBeNull();
+				user.Id.ShouldBe(student.Id);
 				user.TenantId.ShouldBe(tenantId);
 				user.IsActive.ShouldBeTrue();
 				user.ShouldChangePasswordOnNextLogin.ShouldBeFalse();

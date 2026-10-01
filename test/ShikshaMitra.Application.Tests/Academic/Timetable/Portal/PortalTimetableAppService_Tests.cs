@@ -38,7 +38,7 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
     private IDisposable SignIn(Guid userId) => GetRequiredService<ICurrentPrincipalAccessor>().Change(
         new ClaimsPrincipal(new ClaimsIdentity([new Claim(AbpClaimTypes.UserId, userId.ToString())], "test")));
 
-    private async Task<Fixture> Seed(Guid tenant, bool parent = false, bool publish = true, bool legacySelf = false)
+    private async Task<Fixture> Seed(Guid tenant, bool parent = false, bool publish = true, bool legacySelf = false, bool legacyPlacement = false)
     {
         var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata")).Date;
         var year = await Insert(await GetRequiredService<AcademicYearManager>().CreateAsync("Current", today.AddDays(-30), today.AddDays(300)));
@@ -47,8 +47,10 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         var stage = await Insert(await GetRequiredService<EducationMediumStageManager>().CreateAsync(medium.Id, "Primary"));
         var standard = await Insert(await GetRequiredService<StandardManager>().CreateAsync(stage.Id, "Class 8", 12, null));
         var division = await Insert(await GetRequiredService<DivisionManager>().CreateAsync(standard.Id, "A", 30));
-        var student = await Insert(new Student(Guid.NewGuid(), tenant, "Real", "", "Student", year.Id, board.Id, medium.Id, stage.Id, standard.Id, division.Id));
-        var enrollment = await Insert(StudentEnrollment.Create(Guid.NewGuid(), tenant, student.Id, year.Id, standard.Id, division.Id, 12));
+        var student = await Insert(new Student(Guid.NewGuid(), tenant, "Real", "", "Student", year.Id, board.Id, medium.Id, stage.Id, standard.Id, division.Id,
+            rollNo: 12, status: legacyPlacement ? StudentLifeCycleStatusEnum.Enrolled : StudentLifeCycleStatusEnum.New));
+        var enrollment = StudentEnrollment.Create(Guid.NewGuid(), tenant, student.Id, year.Id, standard.Id, division.Id, 12);
+        if (!legacyPlacement) await Insert(enrollment);
         var user = new IdentityUser(Guid.NewGuid(), "portal", "portal@example.test", tenant);
         user.SetEmailConfirmed(true);
         await Insert(user);
@@ -99,6 +101,39 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         day.Periods[0].StartDateTime.Hour.ShouldBe(8);
         day.Periods[1].PeriodType.ShouldBe("break");
         day.Periods[1].CanMessageTeacher.ShouldBeFalse();
+    });
+
+    [Fact]
+    public Task Legacy_current_student_placement_reads_existing_timetable_without_creating_enrollment() => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id, legacySelf: true, legacyPlacement: true); using var identity = SignIn(f.User.Id);
+        var context = await Service.GetContextAsync();
+        context.Availability.ShouldBe("available");
+        context.Student.StandardId.ShouldBe(f.Student.StandardId);
+        context.Student.DivisionId.ShouldBe(f.Student.DivisionId);
+        context.Student.RollNumber.ShouldBe(12);
+        context.CurrentAcademicYear!.Id.ShouldBe(f.Year.Id);
+        (await Service.GetScheduleAsync(f.Request)).Days.Single().Periods[0].Subject!.Name.ShouldBe("Mathematics");
+        (await GetRequiredService<IRepository<StudentEnrollment, Guid>>().CountAsync(x => x.StudentId == f.Student.Id)).ShouldBe(0);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Inactive_or_deleted_enrollment_blocks_legacy_placement_fallback(bool deleted) => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id, legacyPlacement: true); using var identity = SignIn(f.User.Id);
+        await Insert(f.Enrollment);
+        if (deleted) await GetRequiredService<IRepository<StudentEnrollment, Guid>>().DeleteAsync(f.Enrollment, true);
+        else
+        {
+            f.Enrollment.Deactivate();
+            await GetRequiredService<IRepository<StudentEnrollment, Guid>>().UpdateAsync(f.Enrollment, true);
+        }
+        (await Service.GetContextAsync()).Availability.ShouldBe("noEnrollment");
+        (await Service.GetScheduleAsync(f.Request)).Days.Single().Periods.ShouldBeEmpty();
     });
 
     [Fact]

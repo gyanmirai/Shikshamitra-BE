@@ -52,6 +52,7 @@ public partial class StudentOnboardingAppService(
 	IdentityUserManager portalUserManager,
 	IdentityRoleManager portalRoleManager,
 	IRepository<ShikshaMitra.Students.Portal.StudentPortalAccountLink, Guid> portalLinkRepository,
+	ShikshaMitra.Students.Portal.StudentPortalAccessService portalAccess,
 	IDistributedEventBus distributedEventBus,
 	IUnitOfWorkManager unitOfWorkManager)
 	: ApplicationService, IStudentOnboardingAppService

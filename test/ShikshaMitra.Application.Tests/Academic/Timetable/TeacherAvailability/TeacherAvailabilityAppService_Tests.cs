@@ -11,6 +11,8 @@ using ShikshaMitra.Academic.Timetable.Substitutions;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
+using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
+using ShikshaMitra.TenantSettings;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -546,6 +548,87 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
             result.TotalCount.ShouldBe(1);
             result.Items.ShouldHaveSingleItem().SourceType
                 .ShouldBe(TeacherAvailabilitySource.Attendance.ToString());
+        }
+    }
+
+    [Theory]
+    [InlineData(EmployeeAttendanceStatusType.FullDayLeave, "15:00", true)]
+    [InlineData(EmployeeAttendanceStatusType.HalfDayLeave, "11:30", false)]
+    public async Task AttendanceSync_Should_Use_Employee_Shift_And_Cancel_When_Present(
+        EmployeeAttendanceStatusType status, string expectedEnd, bool isFullDay)
+    {
+        var employee = await CreateEmployeeAsync(Guid.NewGuid(), "Shift", "Teacher");
+        var shift = await GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(
+            new ShiftManagement { ShiftName = "Teaching shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(15, 0) },
+            autoSave: true);
+        employee.ShiftId = shift.Id;
+        await _employeeRepository.UpdateAsync(employee, autoSave: true);
+        var attendance = await _employeeAttendanceRepository.InsertAsync(new EmployeeAttendance
+        {
+            EmployeeId = employee.Id,
+            AttendanceDate = new DateOnly(2026, 9, 30),
+            StatusType = status
+        }, autoSave: true);
+        var sync = GetRequiredService<TakeAttendanceTeacherAvailabilitySyncService>();
+
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            await sync.SyncAsync(new TakeAttendanceSavedEntry(employee, attendance));
+            await sync.SyncAsync(new TakeAttendanceSavedEntry(employee, attendance));
+            var row = (await _availabilityRepository.GetListAsync(x => !x.IsCancelled)).ShouldHaveSingleItem();
+            row.StartTime.ToString("HH:mm").ShouldBe("08:00");
+            row.EndTime.ToString("HH:mm").ShouldBe(expectedEnd);
+            row.IsFullDay.ShouldBe(isFullDay);
+            row.SourceEntityId.ShouldBe(attendance.Id);
+
+            attendance.StatusType = EmployeeAttendanceStatusType.Present;
+            await sync.SyncAsync(new TakeAttendanceSavedEntry(employee, attendance));
+            (await _availabilityRepository.GetListAsync(x => !x.IsCancelled)).ShouldBeEmpty();
+        }
+    }
+
+    [Fact]
+    public async Task GetListAsync_Should_Correct_Legacy_Attendance_Window_And_Recalculate_Early_Lectures()
+    {
+        var tenantId = Guid.NewGuid();
+        using (GetRequiredService<ICurrentTenant>().Change(tenantId))
+        using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
+        {
+            var employee = await CreateEmployeeAsync(Guid.NewGuid(), "LegacyShift", "Teacher", tenantId: tenantId);
+            var shift = await GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(
+                new ShiftManagement { ShiftName = "Teaching shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(15, 0) },
+                autoSave: true);
+            employee.ShiftId = shift.Id;
+            await _employeeRepository.UpdateAsync(employee, autoSave: true);
+            var context = await SeedTimetableContextAsync(
+                tenantId, employee.Id, "2026-2027", new DateTime(2026, 6, 1), new DateTime(2027, 5, 31),
+                "Early Class", new TimeOnly(8, 0), new TimeOnly(8, 45));
+            await SeedTimetableContextAsync(
+                tenantId, employee.Id, "2026-2027-late", new DateTime(2026, 6, 1), new DateTime(2027, 5, 31),
+                "Late Class", new TimeOnly(14, 30), new TimeOnly(15, 0), existingAcademicYearId: context.AcademicYearId);
+            var date = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc);
+            var legacy = await _availabilityRepository.InsertAsync(new TeacherAvailability(
+                Guid.NewGuid(), tenantId, employee.EmployeeName, date,
+                new TimeOnly(9, 0), new TimeOnly(14, 15), TeacherAvailabilityStatus.Unavailable,
+                TeacherAvailabilitySource.Attendance, "Marked absent in HR attendance.", true, true,
+                academicYearId: context.AcademicYearId, teacherId: employee.Id, affectedLectureCount: 0), autoSave: true);
+
+            var result = await _teacherAvailabilityAppService.GetListAsync(new GetTeacherAvailabilityInput
+            {
+                Date = date, AcademicYearId = context.AcademicYearId, MaxResultCount = 50
+            });
+            var row = result.Items.ShouldHaveSingleItem();
+            row.Id.ShouldBe(legacy.Id);
+            row.StartTime.ShouldBe("08:00");
+            row.EndTime.ShouldBe("15:00");
+            row.AffectedLectureCount.ShouldBe(2);
+            (await _availabilityRepository.GetCountAsync()).ShouldBe(1);
+            var fixturePath = Environment.GetEnvironmentVariable("SHIKSHAMITRA_AVAILABILITY_FIXTURE");
+            if (!string.IsNullOrWhiteSpace(fixturePath))
+            {
+                await System.IO.File.WriteAllTextAsync(fixturePath, System.Text.Json.JsonSerializer.Serialize(
+                    result, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+            }
         }
     }
 

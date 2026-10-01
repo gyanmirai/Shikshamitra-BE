@@ -100,11 +100,7 @@ public partial class StudentOnboardingAppService
 	[Authorize]
 	public async Task<IReadOnlyList<StudentPortalAccountDto>> GetMyPortalStudentsAsync()
 	{
-		if (!CurrentUser.Id.HasValue || !CurrentTenant.Id.HasValue) throw new AbpAuthorizationException();
-		var user = await identityUserRepository.FindAsync(CurrentUser.Id.Value);
-		if (user == null || !user.IsActive || !user.EmailConfirmed) throw new AbpAuthorizationException();
-		// No caller-supplied user/student IDs and no academic wildcard: only persisted links.
-		return await MapPortalLinksAsync(await portalLinkRepository.GetListAsync(x => x.UserId == user.Id));
+		return await portalAccess.GetMyStudentsAsync();
 	}
 
 	private async Task<IReadOnlyList<StudentPortalAccountDto>> MapPortalLinksAsync(IEnumerable<StudentPortalAccountLink> links)

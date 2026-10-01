@@ -19,19 +19,15 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
-using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
-using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Academic.Timetable.Portal;
 
-/// <summary>Owner/guardian reads are authorized by persisted links, never by staff wildcard scope.</summary>
+/// <summary>Owner/guardian reads use persisted student associations, never staff wildcard scope.</summary>
 [Authorize]
 [RemoteService(false)]
 public class PortalTimetableAppService(
-    IRepository<StudentPortalAccountLink, Guid> links,
-    IRepository<IdentityUser, Guid> users,
-    IRepository<Student, Guid> students,
+    StudentPortalAccessService portalAccess,
     IRepository<StudentEnrollment, Guid> enrollments,
     IRepository<AcademicYear, Guid> years,
     IRepository<Standard, Guid> standards,
@@ -217,16 +213,7 @@ public class PortalTimetableAppService(
 
     private async Task<Student> ResolveStudentAsync(Guid? studentId)
     {
-        if (!CurrentTenant.Id.HasValue || !CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
-        var user = await users.FindAsync(x => x.Id == CurrentUser.Id.Value && x.TenantId == CurrentTenant.Id);
-        if (user == null || !user.IsActive || !user.EmailConfirmed) throw new AbpAuthorizationException();
-        var owned = await links.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id &&
-            (x.AccountType == "guardian" || (x.AccountType == "student" && x.Relationship == "self")) &&
-            (!studentId.HasValue || x.StudentId == studentId.Value));
-        if (owned.Count == 0) throw new AbpAuthorizationException();
-        if (owned.Select(x => x.StudentId).Distinct().Count() != 1) throw Invalid("Select one linked student.");
-        return await students.FindAsync(x => x.Id == owned[0].StudentId && x.TenantId == CurrentTenant.Id)
-            ?? throw new AbpAuthorizationException();
+        return await portalAccess.ResolveStudentAsync(studentId);
     }
 
     private DateTimeOffset SchoolNow() => TimeZoneInfo.ConvertTime(new DateTimeOffset(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc)), SchoolZone);

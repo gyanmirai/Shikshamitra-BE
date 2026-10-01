@@ -10,6 +10,7 @@ using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.Students;
 using ShikshaMitra.Students.Portal;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -37,7 +38,7 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
     private IDisposable SignIn(Guid userId) => GetRequiredService<ICurrentPrincipalAccessor>().Change(
         new ClaimsPrincipal(new ClaimsIdentity([new Claim(AbpClaimTypes.UserId, userId.ToString())], "test")));
 
-    private async Task<Fixture> Seed(Guid tenant, bool parent = false, bool publish = true)
+    private async Task<Fixture> Seed(Guid tenant, bool parent = false, bool publish = true, bool legacySelf = false)
     {
         var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata")).Date;
         var year = await Insert(await GetRequiredService<AcademicYearManager>().CreateAsync("Current", today.AddDays(-30), today.AddDays(300)));
@@ -51,8 +52,14 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         var user = new IdentityUser(Guid.NewGuid(), "portal", "portal@example.test", tenant);
         user.SetEmailConfirmed(true);
         await Insert(user);
-        var link = await Insert(new StudentPortalAccountLink(Guid.NewGuid(), tenant, student.Id, user.Id,
-            parent ? "guardian" : "student", parent ? "mother" : "self", Guid.NewGuid()));
+        var link = new StudentPortalAccountLink(Guid.NewGuid(), tenant, student.Id, user.Id,
+            parent ? "guardian" : "student", parent ? "mother" : "self", Guid.NewGuid());
+        if (legacySelf)
+        {
+            student.LinkUser(user.Id);
+            await GetRequiredService<IRepository<Student, Guid>>().UpdateAsync(student, true);
+        }
+        else await Insert(link);
         var subject = await Insert(new Subject(Guid.NewGuid(), tenant, "Mathematics", "#008967", medium.Id));
         var timetable = new TimetableEntity(Guid.NewGuid(), tenant, standard.Id, division.Id);
         var monday = DateOnly.FromDateTime(today.AddDays(-(((int)today.DayOfWeek + 6) % 7)));
@@ -92,6 +99,50 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         day.Periods[0].StartDateTime.Hour.ShouldBe(8);
         day.Periods[1].PeriodType.ShouldBe("break");
         day.Periods[1].CanMessageTeacher.ShouldBeFalse();
+    });
+
+    [Fact]
+    public Task Legacy_persisted_self_association_reads_profile_and_schedule_with_all_access_checks() => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id, legacySelf: true); using var identity = SignIn(f.User.Id);
+        var profile = GetRequiredService<IStudentOnboardingAppService>();
+        var linked = (await profile.GetMyPortalStudentsAsync()).Single();
+        linked.StudentId.ShouldBe(f.Student.Id);
+        linked.UserId.ShouldBe(f.User.Id);
+        linked.AccountType.ShouldBe("student");
+        linked.Relationship.ShouldBe("self");
+        (await Service.GetContextAsync()).Student.Id.ShouldBe(f.Student.Id);
+        (await Service.GetScheduleAsync(f.Request)).Days.Single().Periods.Count.ShouldBe(2);
+        (await GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().CountAsync(x => x.UserId == f.User.Id)).ShouldBe(0);
+        await Should.ThrowAsync<AbpAuthorizationException>(() => Service.GetContextAsync(Guid.NewGuid()));
+        using (GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid()))
+        {
+            await Should.ThrowAsync<AbpAuthorizationException>(() => profile.GetMyPortalStudentsAsync());
+            await Should.ThrowAsync<AbpAuthorizationException>(() => Service.GetContextAsync(f.Student.Id));
+        }
+        f.User.SetEmailConfirmed(false); await GetRequiredService<IRepository<IdentityUser, Guid>>().UpdateAsync(f.User, true);
+        await Should.ThrowAsync<AbpAuthorizationException>(() => profile.GetMyPortalStudentsAsync());
+        await Should.ThrowAsync<AbpAuthorizationException>(() => Service.GetContextAsync(f.Student.Id));
+        f.User.SetEmailConfirmed(true); f.User.SetIsActive(false);
+        await GetRequiredService<IRepository<IdentityUser, Guid>>().UpdateAsync(f.User, true);
+        await Should.ThrowAsync<AbpAuthorizationException>(() => profile.GetMyPortalStudentsAsync());
+        await Should.ThrowAsync<AbpAuthorizationException>(() => Service.GetContextAsync(f.Student.Id));
+    });
+
+    [Fact]
+    public Task Explicit_self_link_deduplicates_legacy_association_and_revocation_prevents_fallback() => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id, legacySelf: true); using var identity = SignIn(f.User.Id);
+        await Insert(f.Link);
+        var profile = GetRequiredService<IStudentOnboardingAppService>();
+        (await profile.GetMyPortalStudentsAsync()).Count.ShouldBe(1);
+        (await Service.GetContextAsync()).Student.Id.ShouldBe(f.Student.Id);
+        await GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().DeleteAsync(f.Link, true);
+        (await profile.GetMyPortalStudentsAsync()).ShouldBeEmpty();
+        await Should.ThrowAsync<AbpAuthorizationException>(() => Service.GetContextAsync(f.Student.Id));
+        await Should.ThrowAsync<AbpAuthorizationException>(() => Service.GetScheduleAsync(f.Request));
     });
 
     [Fact]

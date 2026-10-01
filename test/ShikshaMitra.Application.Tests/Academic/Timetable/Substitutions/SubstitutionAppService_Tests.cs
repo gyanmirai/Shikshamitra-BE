@@ -6,6 +6,7 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -105,6 +106,43 @@ public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<Shik
             new DateTimeOffset(attendanceDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero));
 
         (await _availabilityRepository.GetCountAsync()).ShouldBe(0);
+    }
+
+    [Theory]
+    [InlineData(true, "08:00", "08:45", false)]
+    [InlineData(true, "14:30", "15:00", false)]
+    [InlineData(true, "15:00", "15:45", true)]
+    [InlineData(false, "08:00", "08:45", false)]
+    [InlineData(false, "11:30", "12:00", true)]
+    public async Task GetSuggestedTeachersAsync_Should_Match_Legacy_Attendance_Against_Configured_Shift(
+        bool isFullDay, string startTime, string endTime, bool shouldBeSuggested)
+    {
+        var employee = await CreateEmployeeAsync(Guid.NewGuid(), "Shift", "Teacher");
+        var shift = await GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(
+            new ShiftManagement { ShiftName = "Teaching shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(15, 0) },
+            autoSave: true);
+        employee.ShiftId = shift.Id;
+        await _employeeRepository.UpdateAsync(employee, autoSave: true);
+        var date = new DateTime(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
+        await _availabilityRepository.InsertAsync(new TeacherAvailability(
+            Guid.NewGuid(), null, employee.EmployeeName, date,
+            new TimeOnly(9, 0), isFullDay ? new TimeOnly(14, 15) : new TimeOnly(12, 0),
+            TeacherAvailabilityStatus.Unavailable, TeacherAvailabilitySource.Attendance,
+            "HR attendance", isFullDay, true, teacherId: employee.Id), autoSave: true);
+
+        var suggestions = await _substitutionAppService.GetSuggestedTeachersAsync(new SuggestedTeacherInput
+        {
+            Date = new DateTimeOffset(date), StartTime = startTime, EndTime = endTime
+        });
+
+        if (shouldBeSuggested)
+        {
+            suggestions.ShouldContain(x => x.TeacherId == employee.Id);
+        }
+        else
+        {
+            suggestions.ShouldNotContain(x => x.TeacherId == employee.Id);
+        }
     }
 
     [Fact]

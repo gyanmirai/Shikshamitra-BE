@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-09-29
+updated_on: 2026-10-01
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -311,7 +311,9 @@ GET `/api/student/onboarding/settings/campuses` requires onboarding configuratio
 
 PUT `/api/student/onboarding/{id}/admission-route` accepts the four built-in routes or a school-defined route present in the case's effective onboarding configuration. The server canonicalizes the saved route name, checks the case concurrency stamp, resets approval review, and recalculates readiness. Unconfigured route names are rejected.
 
-GET `/api/student/onboarding/{id}/portal-accounts` reads scoped account requirements and links. POST requires onboarding management plus `AbpIdentity.Users.Create`, saved contact-email equality and explicit contact verification. Linking an existing guardian additionally requires `AbpIdentity.Users.Update` and an already linked, active, confirmed Parent-only identity. New identities are passwordless; staff cannot reuse privileged identities or supply a password. GET `/api/student/onboarding/portal/my-students` requires an active, confirmed identity and returns only that identity's tenant-local student links.
+GET `/api/student/onboarding/{id}/portal-accounts` reads scoped account requirements and links. POST requires onboarding management plus `AbpIdentity.Users.Create`, saved contact-email equality and explicit contact verification. Linking an existing guardian additionally requires `AbpIdentity.Users.Update` and an already linked, active, confirmed Parent-only identity. New identities are passwordless; staff cannot reuse privileged identities or supply a password. GET `/api/student/onboarding/portal/my-students` requires an active, confirmed identity and returns only that identity's tenant-local student associations.
+
+`StudentPortalAccessService` supplies the same association policy to the mobile timetable context/schedule endpoints. It accepts active persisted portal links and the existing `Student.UserId` self association when that user/student pair has no explicit self-link history. A soft-deleted explicit self link suppresses the older association, so revocation cannot restore access through fallback. Names, email matches, client roles and staff wildcard scopes never establish a student association. Reads do not create links, reseed identities or change grants.
 
 POST `/api/student/onboarding/{id}/service-consent/confirm` requires `Students.Onboarding.Add` and scoped access to an enrolled, unfinished case with a required `service-consent` handoff. The body supplies the case `concurrencyStamp` and a 3-200 character saved-consent `evidenceReference`. The server audits the staff confirmation, acknowledges only that handoff, and rechecks the independent Finance and portal-account completion gates. Repeating an already acknowledged confirmation is idempotent; it does not collect consent or write money.
 

@@ -15,13 +15,10 @@ public class TakeAttendanceTeacherAvailabilitySyncService(
 	IRepository<TeacherAvailability, Guid> availabilityRepository,
 	IEmployeeAttendanceRepository attendanceRepository,
 	IRepository<Employee, Guid> employeeRepository,
+	AttendanceAvailabilityWindowResolver windowResolver,
 	ITeacherAvailabilityAppService teacherAvailabilityAppService)
 	: ApplicationService, ITransientDependency
 {
-	private const string FullDayStartTime = "09:00";
-	private const string FullDayEndTime = "14:15";
-	private const string HalfDayStartTime = "09:00";
-	private const string HalfDayEndTime = "12:00";
 
 	public async Task SyncDateRangeAsync(DateTime fromDate, DateTime toDate)
 	{
@@ -77,8 +74,13 @@ public class TakeAttendanceTeacherAvailabilitySyncService(
 		}
 
 		var isFullDay = attendance.StatusType == EmployeeAttendanceStatusType.FullDayLeave;
-		var startTime = isFullDay ? FullDayStartTime : HalfDayStartTime;
-		var endTime = isFullDay ? FullDayEndTime : HalfDayEndTime;
+		var window = await windowResolver.ResolveAsync(
+			employee,
+			isFullDay,
+			new TimeOnly(9, 0),
+			isFullDay ? new TimeOnly(14, 15) : new TimeOnly(12, 0));
+		var startTime = window.Start.ToString("HH:mm");
+		var endTime = window.End.ToString("HH:mm");
 		var reason = isFullDay
 			? "Marked absent in HR attendance."
 			: "Marked half-day unavailable in HR attendance.";

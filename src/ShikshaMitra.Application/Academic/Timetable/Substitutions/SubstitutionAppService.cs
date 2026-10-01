@@ -8,6 +8,7 @@ using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
@@ -33,6 +34,7 @@ public class SubstitutionAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Room, Guid> roomRepository,
     IRepository<Employee, Guid> employeeRepository,
+    AttendanceAvailabilityWindowResolver attendanceWindowResolver,
     IRepository<AcademicYear, Guid> academicYearRepository,
     IUserScopeAccessService userScopeAccessService,
     IClassTeacherAccessService classTeacherAccessService
@@ -884,10 +886,33 @@ public class SubstitutionAppService(
         }
 
         var sameDay = await substitutionRepository.GetListAsync(x => x.Date == date);
-        var unavailable = await availabilityRepository.GetListAsync(x =>
+        var availabilityRows = await availabilityRepository.GetListAsync(x =>
             x.AvailabilityDate == date &&
-            !x.IsCancelled &&
-            (x.IsFullDay || (x.StartTime < endTime && x.EndTime > startTime)));
+            !x.IsCancelled);
+        var unavailable = new List<TeacherAvailability>();
+        var attendanceShifts = await attendanceWindowResolver.LoadShiftsAsync(employees);
+        foreach (var row in availabilityRows)
+        {
+            var window = (Start: row.StartTime, End: row.EndTime);
+            var usesConfiguredShift = false;
+            if (row.SourceType == TeacherAvailabilitySource.Attendance)
+            {
+                var employee = ResolveEmployeeByTeacherReference(employees, row.TeacherId, row.TeacherName);
+                if (employee != null)
+                {
+                    var shift = employee.ShiftId is Guid shiftId ? attendanceShifts.GetValueOrDefault(shiftId) : null;
+                    usesConfiguredShift = shift != null && shift.EndTime > shift.StartTime;
+                    window = AttendanceAvailabilityWindowResolver.Resolve(
+                        shift, row.IsFullDay, row.StartTime, row.EndTime);
+                }
+            }
+
+            if ((row.IsFullDay && !usesConfiguredShift) ||
+                (window.Start < endTime && window.End > startTime))
+            {
+                unavailable.Add(row);
+            }
+        }
         var allocationTeacherUserIds = new HashSet<Guid>();
         if (subjectId.HasValue)
         {

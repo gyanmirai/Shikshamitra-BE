@@ -16,7 +16,7 @@ public class CreateUpdateRubricDto
 	public bool IsTemplate { get; set; }
 	public WorkType? AppliesToWorkType { get; set; }
 	public RubricScoringModel ScoringModel { get; set; }
-	public RubricVisibility Visibility { get; set; }
+	public RubricVisibility Visibility { get; set; } = RubricVisibility.Institution;
 	public string Title { get; set; } = string.Empty;
 	public string? Description { get; set; }
 	public string? EvaluationInstructions { get; set; }

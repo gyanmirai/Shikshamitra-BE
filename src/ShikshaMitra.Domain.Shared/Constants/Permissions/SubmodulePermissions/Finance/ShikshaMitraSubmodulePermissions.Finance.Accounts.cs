@@ -6,6 +6,19 @@ public static partial class ShikshaMitraSubmodulePermissions
 {
 	public static partial class Finance
 	{
+		public static class Accounts_Activity
+		{
+			private const string SubmoduleName = $"{ModuleName}.Accounts.Activity";
+			private const string SubmoduleDisplayName = $"{DisplayName}.Accounts.Activity";
+			public const string View = $"{SubmoduleName}.View";
+			public static readonly string[] All = { View };
+			public static readonly Dictionary<string, string> DisplayNames = new()
+			{
+				{ SubmoduleName, SubmoduleDisplayName },
+				{ View, $"{SubmoduleDisplayName}.View" }
+			};
+		}
+
 		public static class Accounts_Reconciliation
 		{
 			private const string SubmoduleName = $"{ModuleName}.Accounts.Reconciliation";

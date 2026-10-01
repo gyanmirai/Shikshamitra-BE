@@ -23,11 +23,29 @@ public partial class FeeRefundAppService
     {
         FinanceClassDivisionFilterValidator.Validate(input);
         var scoped = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-        var (items, count) = await feeRefundRepository.GetListWithDetailsAsync(input.StudentId,
-            input.AcademicMediumId, input.StandardId, input.DivisionId, input.Status, input.Search,
+        var (items, count) = await feeRefundRepository.GetListWithDetailsAsync(input.StudentId, input.AcademicYearId,
+            input.AcademicMediumId, input.StandardId, input.DivisionId, input.Status,
+            input.LegacyHistory, input.WorkflowVersion, input.Search,
             input.SkipCount, input.MaxResultCount, input.Sorting, scoped);
         var students = await BuildStudentMapAsync(items.Select(x => x.StudentId).Distinct());
-        return new PagedResultDto<FeeRefundRequestDto>(count, items.Select(x => MapToDto(x, students)).ToList());
+        var itemIds = items.Select(x => x.Id).ToList();
+        var replacements = itemIds.Count == 0 ? new Dictionary<Guid, Guid>() :
+            (await feeRefundRepository.GetListAsync(x =>
+                x.ReplacesRefundRequestId.HasValue && itemIds.Contains(x.ReplacesRefundRequestId.Value)))
+            .ToDictionary(x => x.ReplacesRefundRequestId!.Value, x => x.Id);
+        var dtos = new List<FeeRefundRequestDto>();
+        foreach (var item in items)
+        {
+            var dto = MapToDto(item, students);
+            await FilterAvailableActionsAsync(item, dto);
+            if (replacements.TryGetValue(item.Id, out var replacementId))
+            {
+                dto.ReplacedByRefundRequestId = replacementId;
+                dto.AvailableActions.Remove("createReplacement");
+            }
+            dtos.Add(dto);
+        }
+        return new PagedResultDto<FeeRefundRequestDto>(count, dtos);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
@@ -37,8 +55,41 @@ public partial class FeeRefundAppService
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         var dto = await MapAsync(request);
         if (await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.ViewSensitivePaymentDetails))
+        {
             dto.PaymentDetails = MapRefundPaymentDetailsToDict(request.RefundPaymentDetails);
+            foreach (var settlement in dto.Settlements)
+                settlement.ExternalReference = request.Settlements
+                    .First(x => x.Id == settlement.Id).ExternalReference;
+        }
         await PopulateRefundDetailsAsync(dto, request);
+        if (request.WorkflowVersion == 1)
+        {
+            var postings = await refundAccountingRepository.GetListAsync(x => x.RefundRequestId == id);
+            var net = postings.Sum(x => x.IsCorrection ? -x.Amount : x.Amount);
+            var lineNet = request.Lines.Sum(x => x.ProcessedAmount - x.ReversedAmount);
+            var dueIds = request.Lines.Select(x => x.DueFeeId).Distinct().ToList();
+            var dues = await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id));
+            var allocationIds = request.Lines.Where(x => x.SourceAllocationId.HasValue)
+                .Select(x => x.SourceAllocationId!.Value).Distinct().ToList();
+            var allocations = await allocationRepository.GetListAsync(x => allocationIds.Contains(x.Id));
+            dto.RefundSubledgerNetAmount = net;
+            dto.IsRefundSubledgerBalanced = net == request.ProcessedAmount - request.ReversedAmount &&
+                net == lineNet && postings.Count(x => !x.IsCorrection) <= 1 &&
+                postings.Count(x => x.IsCorrection) <= 1 &&
+                (request.Status != FeeRefundStatus.Processed || postings.Count(x => !x.IsCorrection) == 1) &&
+                dues.Count == dueIds.Count && allocations.Count == allocationIds.Count &&
+                request.Lines.All(line => line.SourceAllocationId.HasValue &&
+                    allocations.Any(allocation => allocation.Id == line.SourceAllocationId.Value &&
+                        allocation.DueFeeId == line.DueFeeId &&
+                        Convert.ToDecimal(allocation.Amount) >= line.ProcessedAmount - line.ReversedAmount) &&
+                    dues.Single(due => due.Id == line.DueFeeId).RefundedAmount >=
+                    line.ProcessedAmount - line.ReversedAmount);
+        }
+        dto.ReplacedByRefundRequestId = (await feeRefundRepository
+            .GetListAsync(x => x.ReplacesRefundRequestId == request.Id))
+            .Select(x => (Guid?)x.Id).FirstOrDefault();
+        if (dto.ReplacedByRefundRequestId.HasValue)
+            dto.AvailableActions.Remove("createReplacement");
         return dto;
     }
 

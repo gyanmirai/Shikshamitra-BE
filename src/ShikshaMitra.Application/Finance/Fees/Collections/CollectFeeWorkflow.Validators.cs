@@ -71,7 +71,8 @@ public partial class CollectFeeWorkflow
 			var df = dueFeeMap[dfp.DueFeeId];
 			if (df.StudentId != input.StudentId) throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
 			if (df.FeeHeadId != dfp.FeeHeadId) throw new BusinessException(FeeCollectionErrorCodes.InvalidFeeHead);
-			if ((decimal)dfp.Amount > df.OutstandingAmount)
+			var maxCollectible = Math.Ceiling(df.OutstandingAmount);
+			if ((decimal)dfp.Amount > maxCollectible)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
 					.WithData("DueFeeId", df.Id).WithData("Outstanding", df.OutstandingAmount).WithData("Amount", dfp.Amount);
 		}

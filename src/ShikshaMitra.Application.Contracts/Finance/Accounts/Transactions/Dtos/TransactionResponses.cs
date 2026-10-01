@@ -22,7 +22,7 @@ public class TransactionListItem
 	public string CategoryName { get; set; }
 	public List<string> CategoryTags { get; set; } = new();
 	public string Name { get; set; }
-	public double Amount { get; set; }
+	public decimal Amount { get; set; }
 	public int PaymentMethod { get; set; }
 	public DateTime PaymentDate { get; set; }
 	public string? Notes { get; set; }
@@ -45,7 +45,7 @@ public class TransactionResponseData
 	public string CategoryName { get; set; }
 	public List<string> CategoryTags { get; set; } = new();
 	public string Name { get; set; }
-	public double Amount { get; set; }
+	public decimal Amount { get; set; }
 	public int PaymentMethod { get; set; }
 	public DateTime PaymentDate { get; set; }
 	public string? Notes { get; set; }
@@ -66,7 +66,7 @@ public class TransactionInformation
 	public Guid TransactionCategoryId { get; set; }
 	public string TransactionCategoryName { get; set; }
 	public List<string> CategoryTags { get; set; } = new();
-	public double TotalAmountReceived { get; set; }
+	public decimal TotalAmountReceived { get; set; }
 }
 
 public class TransactionItem
@@ -75,7 +75,7 @@ public class TransactionItem
 	public string IncomeName { get; set; }
 	public DateTime ReceivedDate { get; set; }
 	public int PaymentMethod { get; set; }
-	public double Amount { get; set; }
+	public decimal Amount { get; set; }
 }
 
 // ────────────────────────────────────────────────────────────────

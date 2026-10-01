@@ -96,6 +96,7 @@ public partial class ShikshaMitraDbContext
 	// Finance — Fee Refunds
 	// ───────────────────────────────────────────────
 	public DbSet<FeeRefundRequest> FeeRefundRequests { get; set; }
+	public DbSet<FeeRefundAccountingEntry> FeeRefundAccountingEntries { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Fee Adjustments

@@ -14,15 +14,20 @@ using Xunit;
 
 namespace ShikshaMitra.Finance.FeeRefunds;
 
-[Collection(ApiTestCollection.Name)]
+[Collection(FeeRefundApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Finance)]
 public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 {
     private const string BaseUrl = "/api/fee-refunds";
 
-    public FeeRefundApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
+    public FeeRefundApi_Tests(FeeRefundApiTestFactory factory) : base(factory)
     {
         FeeRefundTestHelper.DefaultAcademicYearId      = factory.SeededAcademicYearId;
+        FeeRefundTestHelper.DefaultBoardId             = factory.SeededBoardId;
+        FeeRefundTestHelper.DefaultMediumId            = factory.SeededMediumId;
+        FeeRefundTestHelper.DefaultMediumStageId       = factory.SeededMediumStageId;
+        FeeRefundTestHelper.DefaultStandardId          = factory.SeededStandardId;
+        FeeRefundTestHelper.DefaultDivisionId          = factory.SeededDivisionId;
         FeeCollectionTestHelper.DefaultAcademicYearId  = factory.SeededAcademicYearId;
         FeeCollectionTestHelper.DefaultMediumId        = factory.SeededMediumId;
         FeeCollectionTestHelper.DefaultStandardId      = factory.SeededStandardId;
@@ -40,7 +45,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Get_Eligibility_Returns_Error_When_No_Refund_Policy_Is_Assigned()
     {
-        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var studentId = await FeeRefundTestHelper.SeedStudentOnlyAsync(Factory.Services);
 
         var response = await Client.GetAsync(
             $"{BaseUrl}/eligibility?studentId={studentId}&academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}");
@@ -82,12 +87,13 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Preview_Partial_Cash_Refund_And_Create_Draft()
+    public async Task Should_Preview_Partial_Cash_Refund_And_Create_Pending_Request()
     {
         var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 2200d);
         var eligible = await FeeRefundTestHelper.GetEligibleLineAsync(Client, studentId, dueFeeId);
         var input = new CreateFeeRefundRequestDto
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = studentId,
             AcademicYearId = FeeRefundTestHelper.DefaultAcademicYearId,
             OriginalReceiptId = eligible.SourceReceiptId,
@@ -115,11 +121,16 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         var draft = await createResponse.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
         draft.ShouldNotBeNull();
         draft.TotalAmount.ShouldBe(200m);
+        draft.Status.ShouldBe(FeeRefundStatus.Submitted);
+        var replayResponse = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+        replayResponse.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var replay = await replayResponse.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
+        replay!.Id.ShouldBe(draft.Id);
     }
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
-    public async Task Should_Create_Refund_Returns_201_With_Draft_Status()
+    public async Task Should_Create_Refund_Returns_201_With_Pending_Status()
     {
         var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services, 1500d);
         if (dueFeeId == Guid.Empty) return;
@@ -127,6 +138,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
         var input = new CreateFeeRefundRequestDto
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = studentId,
             AcademicYearId = FeeRefundTestHelper.DefaultAcademicYearId,
             OriginalReceiptId = eligible.SourceReceiptId,
@@ -148,7 +160,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         response.StatusCode.ShouldBe(HttpStatusCode.Created);
         var body = await response.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
         body.ShouldNotBeNull();
-        body.Status.ShouldBe(FeeRefundStatus.Draft);
+        body.Status.ShouldBe(FeeRefundStatus.Submitted);
         body.TotalAmount.ShouldBe(500m);
         body.VoucherNumber.ShouldNotBeNullOrWhiteSpace();
         body.Lines.Count.ShouldBe(1);
@@ -164,6 +176,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
         var input = new CreateFeeRefundRequestDto
         {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
             StudentId = studentId,
             AcademicYearId = FeeRefundTestHelper.DefaultAcademicYearId,
             OriginalReceiptId = eligible.SourceReceiptId,
@@ -201,7 +214,10 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
             Status = FeeRefundStatus.Approved,
             Notes = "Approved in test",
         };
-        var approveResp = await Client.PatchAsJsonAsync($"{BaseUrl}/{refundDto.Id}/status", approveInput, JsonOptions);
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var approveResp = await checker.PatchAsJsonAsync($"{BaseUrl}/{refundDto.Id}/status", approveInput, JsonOptions);
         approveResp.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var approved = await approveResp.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
@@ -227,12 +243,11 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
         var refundDto = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 300d);
 
-        var rejectInput = new UpdateFeeRefundStatusDto
-        {
-            Status = FeeRefundStatus.Rejected,
-            Notes = "Rejected in test",
-        };
-        var rejectResp = await Client.PatchAsJsonAsync($"{BaseUrl}/{refundDto.Id}/status", rejectInput, JsonOptions);
+        var rejectInput = new RejectFeeRefundDto { Notes = "Rejected in test" };
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var rejectResp = await checker.PostAsJsonAsync($"{BaseUrl}/{refundDto.Id}/reject", rejectInput, JsonOptions);
         rejectResp.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var rejected = await rejectResp.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
@@ -257,18 +272,17 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
         var refundDto = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 400d);
 
-        var approveInput = new UpdateFeeRefundStatusDto
-        {
-            Status = FeeRefundStatus.Approved,
-            Notes = "First approval",
-        };
+        var approveInput = new FeeRefundActionDto { Notes = "First approval" };
 
         // First approval should succeed
-        var firstResp = await Client.PatchAsJsonAsync($"{BaseUrl}/{refundDto.Id}/status", approveInput, JsonOptions);
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var firstResp = await checker.PostAsJsonAsync($"{BaseUrl}/{refundDto.Id}/approve", approveInput, JsonOptions);
         firstResp.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // Second approval attempt should fail
-        var secondResp = await Client.PatchAsJsonAsync($"{BaseUrl}/{refundDto.Id}/status", approveInput, JsonOptions);
+        var secondResp = await checker.PostAsJsonAsync($"{BaseUrl}/{refundDto.Id}/approve", approveInput, JsonOptions);
         secondResp.IsSuccessStatusCode.ShouldBeFalse();
     }
 
@@ -316,7 +330,218 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         installment.ShouldNotBeNull();
         installment.Paid.ShouldBe(2000d);
         installment.RefundAmount.ShouldBe(600d);
-        installment.Status.ShouldBe(1); // Paid status mapping
+        installment.Status.ShouldBe(2); // Paid status mapping
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Confirmed_Cash_Refund_Should_Post_One_Balanced_Subledger_Entry()
+    {
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(
+            Client, Factory.Services, 1000d);
+        var request = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 200d);
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var checkerView = await checker.GetAsync($"{BaseUrl}/{request.Id}");
+        checkerView.StatusCode.ShouldBe(HttpStatusCode.OK, await checkerView.Content.ReadAsStringAsync());
+        var approval = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve",
+            new FeeRefundActionDto { Notes = "Verified refund source" }, JsonOptions);
+        approval.StatusCode.ShouldBe(HttpStatusCode.OK, await approval.Content.ReadAsStringAsync());
+
+        var payoutInput = new RecordRefundPayoutDto
+        {
+            IdempotencyKey = Guid.NewGuid().ToString("N"), Method = "Cash", Amount = 200m,
+            PaymentDate = DateTimeOffset.UtcNow,
+            EvidenceReference = "Signed handover on file"
+        };
+        var record = await Client.PostAsJsonAsync($"{BaseUrl}/{request.Id}/payout",
+            payoutInput, JsonOptions);
+        record.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var awaiting = await record.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
+        awaiting!.Status.ShouldBe(FeeRefundStatus.Approved);
+        awaiting.Settlements.Count.ShouldBe(1);
+        var recordReplay = await Client.PostAsJsonAsync($"{BaseUrl}/{request.Id}/payout",
+            payoutInput, JsonOptions);
+        recordReplay.StatusCode.ShouldBe(HttpStatusCode.OK,
+            await recordReplay.Content.ReadAsStringAsync());
+        var replayedPayout = await recordReplay.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
+        replayedPayout!.Settlements.Single().Id.ShouldBe(awaiting.Settlements.Single().Id);
+
+        var verification = new ResolveRefundPayoutDto
+        {
+            IdempotencyKey = Guid.NewGuid().ToString("N"),
+            EvidenceReference = "Signed handover verified"
+        };
+        var confirmUrl = $"{BaseUrl}/{request.Id}/payout/{awaiting.Settlements[0].Id}/confirm";
+        var confirmed = await Client.PostAsJsonAsync(confirmUrl, verification, JsonOptions);
+        confirmed.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var replay = await Client.PostAsJsonAsync(confirmUrl, verification, JsonOptions);
+        replay.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var detail = await Client.GetFromJsonAsync<FeeRefundRequestDto>($"{BaseUrl}/{request.Id}", JsonOptions);
+        detail!.Status.ShouldBe(FeeRefundStatus.Processed);
+        detail.RefundSubledgerNetAmount.ShouldBe(200m);
+        detail.IsRefundSubledgerBalanced.ShouldBe(true);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Failed_Bank_Transfer_Should_Release_Reservation_And_Allow_Linked_Request()
+    {
+        const string method = "Bank Transfer (NEFT/RTGS/IMPS)";
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(
+            Client, Factory.Services, 1000d);
+        var bankId = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services);
+        var request = await FeeRefundTestHelper.CreateRefundRequestAsync(
+            Client, studentId, dueFeeId, 200d, method);
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var approved = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve",
+            new FeeRefundActionDto { Notes = "Approved bank refund" }, JsonOptions);
+        approved.StatusCode.ShouldBe(HttpStatusCode.OK, await approved.Content.ReadAsStringAsync());
+        var recorded = await Client.PostAsJsonAsync($"{BaseUrl}/{request.Id}/payout",
+            new RecordRefundPayoutDto
+            {
+                IdempotencyKey = Guid.NewGuid().ToString("N"), Method = method, Amount = 200m,
+                BankAccountId = bankId, PaymentDate = DateTimeOffset.UtcNow,
+                ExternalReference = Guid.NewGuid().ToString("N"),
+                EvidenceReference = "Bank submission receipt"
+            }, JsonOptions);
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        var awaiting = await recorded.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
+        awaiting!.Status.ShouldBe(FeeRefundStatus.Approved);
+        awaiting.RefundSubledgerNetAmount.ShouldBeNull();
+        var failed = await checker.PostAsJsonAsync(
+            $"{BaseUrl}/{request.Id}/payout/{awaiting.Settlements.Single().Id}/fail",
+            new ResolveRefundPayoutDto
+            {
+                IdempotencyKey = Guid.NewGuid().ToString("N"),
+                EvidenceReference = "Bank rejection advice", Reason = "Invalid beneficiary account"
+            }, JsonOptions);
+        failed.StatusCode.ShouldBe(HttpStatusCode.OK, await failed.Content.ReadAsStringAsync());
+        var failedDetail = await failed.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
+        failedDetail!.Status.ShouldBe(FeeRefundStatus.Failed);
+        failedDetail.RefundSubledgerNetAmount.ShouldBeNull();
+        var replacement = await FeeRefundTestHelper.CreateRefundRequestAsync(
+            Client, studentId, dueFeeId, 200d, method, request.Id);
+        replacement.Status.ShouldBe(FeeRefundStatus.Pending);
+        replacement.ReplacesRefundRequestId.ShouldBe(request.Id);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Returned_Bank_Transfer_Should_Compensate_Subledger_And_Restore_Due()
+    {
+        const string method = "Bank Transfer (NEFT/RTGS/IMPS)";
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(
+            Client, Factory.Services, 1000d);
+        var bankId = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services);
+        var request = await FeeRefundTestHelper.CreateRefundRequestAsync(
+            Client, studentId, dueFeeId, 200d, method);
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var approved = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve",
+            new FeeRefundActionDto { Notes = "Approved bank refund" }, JsonOptions);
+        approved.StatusCode.ShouldBe(HttpStatusCode.OK, await approved.Content.ReadAsStringAsync());
+        var recorded = await Client.PostAsJsonAsync($"{BaseUrl}/{request.Id}/payout",
+            new RecordRefundPayoutDto
+            {
+                IdempotencyKey = Guid.NewGuid().ToString("N"), Method = method, Amount = 200m,
+                BankAccountId = bankId, PaymentDate = DateTimeOffset.UtcNow,
+                ExternalReference = Guid.NewGuid().ToString("N"),
+                EvidenceReference = "Bank submission receipt"
+            }, JsonOptions);
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        var payout = (await recorded.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions))!
+            .Settlements.Single();
+        var confirmed = await checker.PostAsJsonAsync(
+            $"{BaseUrl}/{request.Id}/payout/{payout.Id}/confirm",
+            new ResolveRefundPayoutDto
+            {
+                IdempotencyKey = Guid.NewGuid().ToString("N"),
+                EvidenceReference = "Bank debit and beneficiary credit verified"
+            }, JsonOptions);
+        confirmed.StatusCode.ShouldBe(HttpStatusCode.OK, await confirmed.Content.ReadAsStringAsync());
+        var paid = await Client.GetFromJsonAsync<FeeRefundRequestDto>(
+            $"{BaseUrl}/{request.Id}", JsonOptions);
+        paid!.RefundSubledgerNetAmount.ShouldBe(200m);
+        paid.IsRefundSubledgerBalanced.ShouldBe(true);
+        var returned = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/payout/return",
+            new ReturnRefundPayoutDto
+            {
+                SettlementId = payout.Id, Reason = "Bank returned transfer after settlement",
+                EvidenceReference = "Bank return advice"
+            }, JsonOptions);
+        returned.StatusCode.ShouldBe(HttpStatusCode.OK, await returned.Content.ReadAsStringAsync());
+        var detail = await Client.GetFromJsonAsync<FeeRefundRequestDto>(
+            $"{BaseUrl}/{request.Id}", JsonOptions);
+        detail!.Status.ShouldBe(FeeRefundStatus.Failed);
+        detail.RefundSubledgerNetAmount.ShouldBe(0m);
+        detail.IsRefundSubledgerBalanced.ShouldBe(true);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Payout_Reference_Cannot_Be_Reused_On_Another_Request()
+    {
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(
+            Client, Factory.Services, 1000d);
+        var first = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 100d);
+        var second = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 100d);
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        foreach (var request in new[] { first, second })
+        {
+            var approval = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve",
+                new FeeRefundActionDto { Notes = "Source checked" }, JsonOptions);
+            approval.StatusCode.ShouldBe(HttpStatusCode.OK, await approval.Content.ReadAsStringAsync());
+        }
+
+        var reference = Guid.NewGuid().ToString("N");
+        RecordRefundPayoutDto Payout() => new()
+        {
+            IdempotencyKey = Guid.NewGuid().ToString("N"), Method = "Cash", Amount = 100m,
+            PaymentDate = DateTimeOffset.UtcNow, ExternalReference = reference,
+            EvidenceReference = "Signed handover"
+        };
+        var recorded = await Client.PostAsJsonAsync($"{BaseUrl}/{first.Id}/payout", Payout(), JsonOptions);
+        recorded.StatusCode.ShouldBe(HttpStatusCode.OK, await recorded.Content.ReadAsStringAsync());
+        var duplicate = await Client.PostAsJsonAsync($"{BaseUrl}/{second.Id}/payout", Payout(), JsonOptions);
+        duplicate.IsSuccessStatusCode.ShouldBeFalse();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Competing_Approvals_Cannot_Reserve_More_Than_Paid_Source()
+    {
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(
+            Client, Factory.Services, 1000d);
+        var first = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 700d);
+        var second = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 700d);
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var outcomes = await Task.WhenAll(
+            checker.PostAsJsonAsync($"{BaseUrl}/{first.Id}/approve",
+                new FeeRefundActionDto { Notes = "Source checked" }, JsonOptions),
+            checker.PostAsJsonAsync($"{BaseUrl}/{second.Id}/approve",
+                new FeeRefundActionDto { Notes = "Source checked" }, JsonOptions));
+        outcomes.Count(x => x.IsSuccessStatusCode).ShouldBe(1);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task User_Outside_Student_Scope_Cannot_Read_Refund()
+    {
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(
+            Client, Factory.Services, 1000d);
+        var request = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 100d);
+        using var unscoped = CreateClientAs(Guid.NewGuid());
+        var response = await unscoped.GetAsync($"{BaseUrl}/{request.Id}");
+        response.IsSuccessStatusCode.ShouldBeFalse();
     }
 
     // ── Helper types for test deserialization ────────────────────────────────

@@ -26,7 +26,7 @@ public partial class TransactionAppService
 			CategoryName = category.Name,
 			CategoryTags = ToTagValues(transaction.CategoryTags),
 			Name         = transaction.Name,
-			Amount       = (double)transaction.Amount,
+			Amount       = transaction.Amount,
 			PaymentMethod = transaction.PaymentMethod,
 			PaymentDate  = transaction.PaymentDate,
 			Notes        = transaction.Notes,
@@ -40,7 +40,7 @@ public partial class TransactionAppService
 			IncomeName    = transaction.Name,
 			ReceivedDate  = transaction.PaymentDate,
 			PaymentMethod = transaction.PaymentMethod,
-			Amount        = (double)transaction.Amount,
+			Amount        = transaction.Amount,
 		};
 
 	private static TransactionCreateUpdateResponse MapToCreateUpdateResponse(
@@ -55,7 +55,7 @@ public partial class TransactionAppService
 				CategoryName = category.Name,
 				CategoryTags = ToTagValues(transaction.CategoryTags),
 				Name         = transaction.Name,
-				Amount       = (double)transaction.Amount,
+				Amount       = transaction.Amount,
 				PaymentMethod = transaction.PaymentMethod,
 				PaymentDate  = transaction.PaymentDate,
 				Notes        = transaction.Notes,

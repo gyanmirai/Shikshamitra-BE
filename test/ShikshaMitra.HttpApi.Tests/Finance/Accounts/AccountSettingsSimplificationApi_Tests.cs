@@ -104,6 +104,34 @@ public class AccountSettingsSimplificationApi_Tests(ShikshaMitraApiTestFactory f
 	}
 
 	[Fact]
+	public async Task Bank_account_generates_code_and_preserves_it_when_editor_omits_code()
+	{
+		var head = await CreateHeadAsync("Asset");
+		var accountHeadId = head.GetProperty("id").GetGuid();
+		var accountNumber = Random.Shared.NextInt64(100000000000, 999999999999).ToString();
+		var bank = await PostAndReadAsync<JsonElement>($"/api/bank-accounts?academicYearId={Factory.SeededAcademicYearId}", new
+		{
+			accountHeadId, bankName = "Example School Bank", branchName = "Main Branch",
+			accountHolderName = "Example School", accountType = 0, accountNumber,
+			ifscCode = "SBIN0123456"
+		});
+		var code = bank.GetProperty("code").GetString();
+		code.ShouldNotBeNullOrWhiteSpace();
+		code!.Length.ShouldBeLessThanOrEqualTo(32);
+		bank.GetProperty("accountHeadId").GetGuid().ShouldBe(accountHeadId);
+
+		var update = await Client.PutAsJsonAsync($"/api/bank-accounts/{bank.GetProperty("id").GetGuid()}", new
+		{
+			accountHeadId, bankName = "Example School Bank Updated", branchName = "Main Branch",
+			accountHolderName = "Example School", accountType = 0, accountNumber,
+			ifscCode = "SBIN0123456", concurrencyStamp = bank.GetProperty("concurrencyStamp").GetString()
+		});
+		update.EnsureSuccessStatusCode();
+		var updated = await update.Content.ReadFromJsonAsync<JsonElement>();
+		updated.GetProperty("code").GetString().ShouldBe(code);
+	}
+
+	[Fact]
 	public void Migration_archives_legacy_values_before_dropping_only_the_removed_columns()
 	{
 		Migration migration = new SimplifyAccountHeads { ActiveProvider = "Npgsql.EntityFrameworkCore.PostgreSQL" };

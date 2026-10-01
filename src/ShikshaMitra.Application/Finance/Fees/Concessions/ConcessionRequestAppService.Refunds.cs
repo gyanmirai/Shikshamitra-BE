@@ -65,22 +65,9 @@ public partial class ConcessionRequestAppService
 				if (amount <= 0m) continue;
 				if (!linesByReceipt.TryGetValue(receipt.Id, out var group))
 					group = (receipt, []);
-				var existingIndex = group.Lines.FindIndex(x => x.DueFeeId == due.Id);
-				if (existingIndex >= 0)
-				{
-					var existing = group.Lines[existingIndex];
-					group.Lines[existingIndex] = existing with
-					{
-						SourceAllocationId = null,
-						SettledPaidAmount = existing.SettledPaidAmount + available,
-						Amount = existing.Amount + amount,
-						CalculatedAmount = existing.CalculatedAmount + amount
-					};
-				}
-				else
-					group.Lines.Add(new RefundLineSpec(due.Id, allocation.Id, receipt.Id,
-						due.FeeHeadId, allocation.FeeHeadName ?? "Fee head",
-						due.GetDisplayInstallmentLabel(), available, amount, amount));
+				group.Lines.Add(new RefundLineSpec(due.Id, allocation.Id, receipt.Id,
+					due.FeeHeadId, allocation.FeeHeadName ?? "Fee head",
+					due.GetDisplayInstallmentLabel(), available, amount, amount));
 				linesByReceipt[receipt.Id] = group;
 				remaining -= amount;
 				if (remaining == 0m) break;
@@ -118,7 +105,7 @@ public partial class ConcessionRequestAppService
 		var refunds = await feeRefundRepository.GetListAsync(x => x.ConcessionRequestId == request.Id);
 		if (refunds.Count == 0) return;
 		if (requestedReversal != request.GetNetApprovedConcession() ||
-			refunds.Any(x => x.Status is not (FeeRefundStatus.Cancelled or FeeRefundStatus.Rejected or FeeRefundStatus.Reversed)))
+			refunds.Any(x => x.Status is not (FeeRefundStatus.Cancelled or FeeRefundStatus.Rejected or FeeRefundStatus.Failed or FeeRefundStatus.Reversed)))
 			throw new BusinessException(FinanceConcessionErrorCodes.RefundRequestBlocksReversal)
 				.WithData("ConcessionRequestId", request.Id);
 	}

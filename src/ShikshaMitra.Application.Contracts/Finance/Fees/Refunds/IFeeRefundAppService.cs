@@ -50,5 +50,9 @@ public interface IFeeRefundAppService : IApplicationService
     Task<FeeRefundRequestDto> RejectAsync(Guid id, RejectFeeRefundDto input);
     Task<FeeRefundRequestDto> CancelAsync(Guid id, FeeRefundActionDto input);
     Task<FeeRefundRequestDto> ProcessAsync(Guid id, ProcessFeeRefundDto input);
+    Task<FeeRefundRequestDto> RecordPayoutAsync(Guid id, RecordRefundPayoutDto input);
+    Task<FeeRefundRequestDto> ConfirmPayoutAsync(Guid id, Guid payoutId, ResolveRefundPayoutDto input);
+    Task<FeeRefundRequestDto> FailPayoutAsync(Guid id, Guid payoutId, ResolveRefundPayoutDto input);
+    Task<FeeRefundRequestDto> ReturnPayoutAsync(Guid id, ReturnRefundPayoutDto input);
     Task<FeeRefundRequestDto> ReverseAsync(Guid id, ReverseFeeRefundDto input);
 }

@@ -9,6 +9,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Uow;
 using Volo.Abp.Users;
 
@@ -17,17 +18,73 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund;
 public partial class FeeRefundAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task<FeeRefundRequestDto> CreateAsync(CreateFeeRefundRequestDto input)
     {
+        if (string.IsNullOrWhiteSpace(input.IdempotencyKey))
+            throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
+        var replay = (await feeRefundRepository.GetListAsync(x => x.RequestIdempotencyKey == input.IdempotencyKey)).SingleOrDefault();
+        if (replay != null)
+        {
+            replay = await RequireAsync(replay.Id);
+            await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId);
+            if (replay.StudentId != input.StudentId || replay.OriginalReceiptId != input.OriginalReceiptId ||
+                replay.ReplacesRefundRequestId != input.ReplacesRefundRequestId ||
+                replay.RefundMethod != input.RefundMethod || replay.Reason != input.Reason ||
+                replay.Lines.Count != input.Lines.Count ||
+                input.Lines.Any(x => !replay.Lines.Any(y => y.DueFeeId == x.DueFeeId &&
+                    y.SourceAllocationId == x.SourceAllocationId && y.RequestedAmount == x.Amount)))
+                throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
+            return await MapAsync(replay);
+        }
+        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+        FeeRefundRequest? replaced = null;
+        if (input.ReplacesRefundRequestId.HasValue)
+        {
+            replaced = await RequireAsync(input.ReplacesRefundRequestId.Value);
+            await financeScopeAccessService.EnsureStudentAccessibleAsync(replaced.StudentId);
+            if (replaced.Status != FeeRefundStatus.Failed || replaced.StudentId != input.StudentId ||
+                replaced.AcademicYearId != input.AcademicYearId || replaced.OriginalReceiptId != input.OriginalReceiptId ||
+                (await feeRefundRepository.GetListAsync(x => x.ReplacesRefundRequestId == replaced.Id)).Count != 0)
+                throw new BusinessException(FeeRefundErrorCodes.DuplicateRefundRequest);
+        }
+        if (replaced?.ConcessionRequestId is Guid concessionId)
+        {
+            if (!replaced.StudentFeeStructureId.HasValue || !replaced.OriginalReceiptId.HasValue ||
+                input.Lines.Count != replaced.Lines.Count ||
+                input.Lines.Any(x => !replaced.Lines.Any(y => y.DueFeeId == x.DueFeeId &&
+                    y.SourceAllocationId == x.SourceAllocationId && y.ApprovedAmount == x.Amount)))
+                throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
+            var specs = replaced.Lines.Select(x => new RefundLineSpec(x.DueFeeId,
+                x.SourceAllocationId, x.SourceReceiptId, x.FeeHeadId, x.FeeHeadName,
+                x.InstallmentLabel, x.SettledPaidAmount, x.ApprovedAmount, x.ApprovedAmount)).ToList();
+            var concessionReplacement = await feeRefundManager.CreateFromConcessionAsync(
+                replaced.StudentId, replaced.AcademicYearId, replaced.StudentFeeStructureId.Value,
+                concessionId, replaced.OriginalReceiptId.Value, replaced.OriginalReceiptNumber ?? string.Empty,
+                specs, replaced.CalculationSnapshotJson ?? "{}", replaced.CalculationHash ?? string.Empty,
+                currentUser.GetId(), input.RefundMethod,
+                FeeRefundManager.MapRefundPaymentDetails(input.RefundMethod, input.PaymentDetails),
+                input.Reason, input.IdempotencyKey, replaced.Id);
+            await WriteAuditAsync(concessionReplacement, FinanceAuditActions.Create,
+                $"Linked refund replacement {concessionReplacement.VoucherNumber} submitted.", input.Reason);
+            await uow.CompleteAsync();
+            return await MapAsync(concessionReplacement);
+        }
         var prepared = await PrepareAsync(input);
-        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true });
-        var request = await feeRefundManager.CreateDraftAsync(input.StudentId, input.AcademicYearId,
+        if (replaced != null && (prepared.Lines.Sum(x => x.CalculatedAmount) != replaced.ApprovedAmount ||
+            prepared.Lines.Count != replaced.Lines.Count ||
+            prepared.Lines.Any(x => !replaced.Lines.Any(y => y.SourceAllocationId == x.SourceAllocationId &&
+                y.DueFeeId == x.DueFeeId && y.ApprovedAmount == x.CalculatedAmount))))
+            throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
+        var request = await feeRefundManager.CreatePendingAsync(input.StudentId, input.AcademicYearId,
             prepared.AssignmentId, prepared.PolicyId, prepared.PolicyVersionId, prepared.Receipt.Id,
             prepared.Receipt.ReceiptNumber, prepared.Lines, input.RefundMethod,
             FeeRefundManager.MapRefundPaymentDetails(input.RefundMethod, input.PaymentDetails), input.Reason,
-            prepared.PolicyJson, prepared.CalculationJson, prepared.Hash);
+            prepared.PolicyJson, prepared.CalculationJson, prepared.Hash,
+            currentUser.GetId(), input.IdempotencyKey, input.ReplacesRefundRequestId);
         await WriteAuditAsync(request, FinanceAuditActions.Create,
-            $"Refund request {request.VoucherNumber} created as a draft.", input.Reason);
+            $"Refund request {request.VoucherNumber} submitted for review.", input.Reason);
         await uow.CompleteAsync();
         return await MapAsync(request);
     }
@@ -88,6 +145,8 @@ public partial class FeeRefundAppService
     public async Task<FeeRefundRequestDto> StartReviewAsync(Guid id)
     {
         var request = await RequireAsync(id);
+        if (request.WorkflowVersion == 1)
+            throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         request.MarkUnderReview(currentUser.GetId());
         await feeRefundRepository.UpdateAsync(request, autoSave: true);
@@ -97,15 +156,18 @@ public partial class FeeRefundAppService
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task<FeeRefundRequestDto> ApproveAsync(Guid id, FeeRefundActionDto input)
     {
+        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         await EnsureMakerCheckerAsync(request);
-        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
-            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+        var existingReservationIds = request.Reservations.Select(x => x.Id).ToHashSet();
         await feeRefundManager.ApproveAsync(request, currentUser.GetId(), input.Notes);
-        await feeRefundRepository.UpdateAsync(request, autoSave: false);
+        await feeRefundRepository.StageNewReservationsAsync(
+            request.Reservations.Where(x => !existingReservationIds.Contains(x.Id)));
         await WriteAuditAsync(request, FinanceAuditActions.Approve,
             $"Refund request {request.VoucherNumber} approved and its payment allocations reserved.", input.Notes);
         await uow.CompleteAsync();
@@ -113,15 +175,18 @@ public partial class FeeRefundAppService
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Reject)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task<FeeRefundRequestDto> RejectAsync(Guid id, RejectFeeRefundDto input)
     {
+        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         await EnsureMakerCheckerAsync(request);
         request.Reject(currentUser.GetId(), input.Notes);
-        await feeRefundRepository.UpdateAsync(request, autoSave: true);
         await WriteAuditAsync(request, FinanceAuditActions.Reject,
             $"Refund request {request.VoucherNumber} rejected.", input.Notes);
+        await uow.CompleteAsync();
         return await MapAsync(request);
     }
 
@@ -129,6 +194,8 @@ public partial class FeeRefundAppService
     public async Task<FeeRefundRequestDto> CancelAsync(Guid id, FeeRefundActionDto input)
     {
         var request = await RequireAsync(id);
+        if (request.WorkflowVersion == 1)
+            throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         request.Cancel(currentUser.GetId(), input.Notes);
         await feeRefundRepository.UpdateAsync(request, autoSave: true);
@@ -141,6 +208,8 @@ public partial class FeeRefundAppService
     public async Task<FeeRefundRequestDto> ProcessAsync(Guid id, ProcessFeeRefundDto input)
     {
         var request = await RequireAsync(id);
+        if (request.WorkflowVersion == 1)
+            throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         await AuthorizationService.CheckAsync(request.Status == FeeRefundStatus.Failed
             ? ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.RetryProcessing
@@ -174,6 +243,8 @@ public partial class FeeRefundAppService
     public async Task<FeeRefundRequestDto> ReverseAsync(Guid id, ReverseFeeRefundDto input)
     {
         var request = await RequireAsync(id);
+        if (request.WorkflowVersion == 1)
+            throw new BusinessException(FeeRefundErrorCodes.IllegalStatusTransition);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
@@ -226,16 +297,21 @@ public partial class FeeRefundAppService
 
     private async Task<FeeRefundRequest> RequireAsync(Guid id) =>
         await feeRefundRepository.FindWithLinesAsync(id)
-        ?? throw new BusinessException(FeeRefundErrorCodes.RefundNotFound).WithData("Id", id);
+        ?? throw new EntityNotFoundException(typeof(FeeRefundRequest), id);
 
     private async Task<FeeRefundRequestDto> MapAsync(FeeRefundRequest request)
     {
         var map = await BuildStudentMapAsync([request.StudentId]);
-        return MapToDto(request, map);
+        var dto = MapToDto(request, map);
+        await FilterAvailableActionsAsync(request, dto);
+        return dto;
     }
 
     private async Task EnsureMakerCheckerAsync(FeeRefundRequest request)
     {
+        if (request.WorkflowVersion == 1 &&
+            (request.CreatorId == CurrentUser.Id || request.SubmittedByUserId == CurrentUser.Id))
+            throw new BusinessException(FeeRefundErrorCodes.MakerCheckerViolation);
         if (request.CreatorId != CurrentUser.Id) return;
         if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.OverrideMakerChecker))
             throw new BusinessException(FeeRefundErrorCodes.MakerCheckerViolation);
@@ -259,7 +335,9 @@ public partial class FeeRefundAppService
     private async Task WriteAuditAsync(FeeRefundRequest request, string action, string summary,
         string? reason = null, object? context = null)
     {
-        var student = await studentRepository.FindAsync(request.StudentId);
+        var student = await AsyncExecuter.FirstOrDefaultAsync((await studentRepository.GetQueryableAsync())
+            .Where(x => x.Id == request.StudentId)
+            .Select(x => new { x.FirstName, x.MiddleName, x.LastName, x.GrNo, x.RollNo }));
         var studentName = student == null ? null : string.Join(" ",
             new[] { student.FirstName, student.MiddleName, student.LastName }
                 .Where(x => !string.IsNullOrWhiteSpace(x)));

@@ -12048,6 +12048,30 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Finance_PaymentMethodRecords", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundAccountingEntry", b =>
+                {
+                    b.Property<Guid>("Id").HasColumnType("uuid");
+                    b.Property<decimal>("Amount").HasColumnType("numeric(18,2)");
+                    b.Property<Guid?>("BankAccountId").HasColumnType("uuid");
+                    b.Property<Guid?>("CorrectsEntryId").HasColumnType("uuid");
+                    b.Property<string>("EvidenceReference").IsRequired().HasMaxLength(500).HasColumnType("character varying(500)");
+                    b.Property<string>("ExternalReference").HasMaxLength(200).HasColumnType("character varying(200)");
+                    b.Property<string>("FeeHeadAmountsJson").IsRequired().HasColumnType("jsonb");
+                    b.Property<bool>("IsCorrection").HasColumnType("boolean");
+                    b.Property<string>("Method").IsRequired().HasMaxLength(100).HasColumnType("character varying(100)");
+                    b.Property<Guid?>("OriginalReceiptId").HasColumnType("uuid");
+                    b.Property<DateTimeOffset>("PostedAt").HasColumnType("timestamp with time zone");
+                    b.Property<Guid>("PostedByUserId").HasColumnType("uuid");
+                    b.Property<Guid>("RefundRequestId").HasColumnType("uuid");
+                    b.Property<Guid>("SettlementId").HasColumnType("uuid");
+                    b.Property<Guid?>("TenantId").HasColumnType("uuid");
+                    b.HasKey("Id");
+                    b.HasIndex("OriginalReceiptId").HasDatabaseName("IX_FeeRefundAccountingEntries_OriginalReceiptId");
+                    b.HasIndex("SettlementId").HasDatabaseName("IX_FeeRefundAccountingEntries_SettlementId");
+                    b.HasIndex("TenantId", "RefundRequestId", "IsCorrection").IsUnique().HasDatabaseName("IX_FeeRefundAccountingEntries_Tenant_Request_Correction");
+                    b.ToTable("Finance_FeeRefundAccountingEntries", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -12171,6 +12195,13 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
+                    b.Property<Guid?>("ReplacesRefundRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestIdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<decimal>("ReversedAmount")
                         .HasColumnType("numeric(18,2)");
 
@@ -12182,6 +12213,9 @@ namespace ShikshaMitra.Migrations
 
                     b.Property<DateTimeOffset?>("ReviewStartedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("WorkflowVersion")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("ReviewedByUserId")
                         .HasColumnType("uuid");
@@ -12217,16 +12251,24 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("OriginalReceiptId");
 
+                    b.HasIndex("ReplacesRefundRequestId")
+                        .IsUnique()
+                        .HasFilter("\"ReplacesRefundRequestId\" IS NOT NULL");
+
                     b.HasIndex("RefundPolicyVersionId");
 
                     b.HasIndex("ConcessionRequestId", "OriginalReceiptId")
                         .IsUnique()
                         .HasDatabaseName("UX_FeeRefundRequests_Concession_Receipt")
-                        .HasFilter("\"ConcessionRequestId\" IS NOT NULL");
+                        .HasFilter("\"ConcessionRequestId\" IS NOT NULL AND \"Status\" NOT IN (3, 8, 9)");
 
                     b.HasIndex("TenantId", "VoucherNumber")
                         .IsUnique()
                         .HasDatabaseName("UX_FeeRefundRequests_TenantId_VoucherNumber");
+
+                    b.HasIndex("TenantId", "RequestIdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"RequestIdempotencyKey\" IS NOT NULL");
 
                     b.HasIndex("StudentId", "AcademicYearId", "Status")
                         .HasDatabaseName("IX_FeeRefundRequests_Student_Year_Status");
@@ -34539,6 +34581,9 @@ namespace ShikshaMitra.Migrations
                             b1.Property<int>("AttemptNumber")
                                 .HasColumnType("integer");
 
+                            b1.Property<Guid?>("BankAccountId")
+                                .HasColumnType("uuid");
+
                             b1.Property<DateTimeOffset?>("CompletedAt")
                                 .HasColumnType("timestamp with time zone");
 
@@ -34548,6 +34593,10 @@ namespace ShikshaMitra.Migrations
                             b1.Property<string>("ExternalReference")
                                 .HasMaxLength(200)
                                 .HasColumnType("character varying(200)");
+
+                            b1.Property<string>("EvidenceReference")
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)");
 
                             b1.Property<string>("FailureReason")
                                 .HasMaxLength(1000)
@@ -34581,6 +34630,16 @@ namespace ShikshaMitra.Migrations
 
                             b1.Property<int>("Status")
                                 .HasColumnType("integer");
+
+                            b1.Property<DateTimeOffset?>("VerifiedAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<Guid?>("VerifiedByUserId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("VerificationKey")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
 
                             b1.HasKey("Id");
 

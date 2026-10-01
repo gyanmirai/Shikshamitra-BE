@@ -14,7 +14,10 @@ public class FeeRefundRequestDto
 	public Guid? StandardId { get; set; }
 	public Guid? DivisionId { get; set; }
 
-	public FeeRefundStatus Status { get; set; }
+    public FeeRefundStatus Status { get; set; }
+    public int WorkflowVersion { get; set; }
+    public Guid? ReplacesRefundRequestId { get; set; }
+    public Guid? ReplacedByRefundRequestId { get; set; }
 	public Guid? StudentFeeStructureId { get; set; }
 	public Guid? RefundPolicyId { get; set; }
 	public Guid? RefundPolicyVersionId { get; set; }
@@ -31,6 +34,10 @@ public class FeeRefundRequestDto
     public decimal ApprovedAmount { get; set; }
     public decimal ProcessedAmount { get; set; }
     public decimal ReversedAmount { get; set; }
+    /// <summary>Net amount posted to the refund subledger for this request.</summary>
+    public decimal? RefundSubledgerNetAmount { get; set; }
+    /// <summary>Reconciles the request, lines, due fees and immutable refund postings.</summary>
+    public bool? IsRefundSubledgerBalanced { get; set; }
 
     public string? RefundMethod { get; set; }
 
@@ -131,6 +138,10 @@ public class FeeRefundSettlementDto
     public DateTimeOffset SettlementDate { get; set; }
     public string? ExternalReference { get; set; }
     public string? FailureReason { get; set; }
+    public Guid? BankAccountId { get; set; }
+    public string? EvidenceReference { get; set; }
+    public Guid? VerifiedByUserId { get; set; }
+    public DateTimeOffset? VerifiedAt { get; set; }
 }
 
 public class RefundFeeHeadDto

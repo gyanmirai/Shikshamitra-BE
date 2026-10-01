@@ -24,9 +24,11 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund;
 [RemoteService(false)]
 public partial class FeeRefundAppService(
 	IFeeRefundRepository feeRefundRepository,
+	IRepository<FeeRefundAccountingEntry, Guid> refundAccountingRepository,
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<Student, Guid> studentRepository,
+	IRepository<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount, Guid> bankAccountRepository,
 	IRepository<FeePaymentReceipt, Guid> feePaymentReceiptRepository,
 	IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
 	IRepository<FeeRecordMetadata, Guid> collectionRepository,

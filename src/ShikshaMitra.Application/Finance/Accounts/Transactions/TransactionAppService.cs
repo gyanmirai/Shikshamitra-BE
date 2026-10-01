@@ -22,6 +22,8 @@ public partial class TransactionAppService(
 {
 	public async Task<TransactionListResponse> GetListAsync(Guid academicYearId, GetTransactionsRequest input, TransactionType transactionType)
 	{
+		if (input.Page < 1 || input.PageSize is < 1 or > 100)
+			throw new BusinessException(TransactionErrorCodes.InvalidPaging);
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
 				academicYearId, null, null, null, null))
 		{
@@ -65,6 +67,7 @@ public partial class TransactionAppService(
 
 	public async Task<TransactionCreateUpdateResponse> CreateAsync(Guid academicYearId, TransactionCreateRequest input, TransactionType transactionType)
 	{
+		Transaction.EnsureValidMoneyAndMethod(input.Amount, input.PaymentMethod);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
 			academicYearId, null, null, null, null);
 
@@ -78,7 +81,7 @@ public partial class TransactionAppService(
 
 		var transaction = new Transaction(
 			GuidGenerator.Create(), CurrentTenant.Id, academicYearId, input.CategoryId,
-			input.Name, input.CategoryTags, (decimal)input.Amount,
+			input.Name, input.CategoryTags, input.Amount,
 			input.PaymentMethod, input.PaymentDate, input.Notes, transactionType);
 
 		await transactionRepository.InsertAsync(transaction, autoSave: true);
@@ -107,7 +110,7 @@ public partial class TransactionAppService(
 				TransactionCategoryId   = category.Id,
 				TransactionCategoryName = category.Name,
 				CategoryTags            = ToTagValues(category.Tags),
-				TotalAmountReceived     = (double)relatedTransactions.Sum(x => x.Amount),
+				TotalAmountReceived     = relatedTransactions.Sum(x => x.Amount),
 			},
 			TransactionList = relatedTransactions.Select(MapToTransactionItem).ToList(),
 		};
@@ -115,6 +118,7 @@ public partial class TransactionAppService(
 
 	public async Task<TransactionCreateUpdateResponse> UpdateAsync(Guid transactionId, TransactionUpdateRequest input, TransactionType transactionType)
 	{
+		Transaction.EnsureValidMoneyAndMethod(input.Amount, input.PaymentMethod);
 		var transaction = await transactionRepository.GetAsync(transactionId);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
 			transaction.AcademicYearId, null, null, null, null);
@@ -129,7 +133,7 @@ public partial class TransactionAppService(
 		await EnsureCategoryAvailableAsync(category, transaction.AcademicYearId, input.PaymentDate, transactionType);
 
 		transaction.Update(input.CategoryId, input.Name, input.CategoryTags,
-			(decimal)input.Amount, input.PaymentMethod, input.PaymentDate, input.Notes);
+			input.Amount, input.PaymentMethod, input.PaymentDate, input.Notes);
 		await transactionRepository.UpdateAsync(transaction, autoSave: true);
 		return MapToCreateUpdateResponse(transaction, category);
 	}
@@ -162,4 +166,5 @@ public partial class TransactionAppService(
 				.WithData("CategoryId", category.Id);
 		}
 	}
+
 }

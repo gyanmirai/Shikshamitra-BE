@@ -163,6 +163,8 @@ public partial class StudentFeeDetailsQueryService(
 									: (lateFee.PaidAmount > 0 ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 							});
 						}
+						var collectionAmount = (double) Math.Ceiling(d.OutstandingAmount);
+						var roundingAmount = Math.Max(0d, collectionAmount - (double) d.OutstandingAmount);
 						return new FeeLedgerLineDto
 						{
 							DueFeeId = d.Id,
@@ -177,6 +179,8 @@ public partial class StudentFeeDetailsQueryService(
 							ScheduledTotal = (double) d.ScheduledAmount,
 							Paid = (double) d.PaidAmount,
 							Due = (double) d.OutstandingAmount,
+							CollectionAmount = collectionAmount,
+							RoundingAmount = roundingAmount,
 							ProrationPolicyId = d.ProrationPolicyId,
 							ProrationPolicyVersionId = d.ProrationPolicyVersionId,
 							ProrationPolicyName = d.ProrationPolicyVersionId is { } versionId
@@ -212,7 +216,7 @@ public partial class StudentFeeDetailsQueryService(
 				{
 					Month = group.Key.Month.ToString(),
 					Year = group.Key.Year,
-					TotalDue = lines.Sum(l => l.Due),
+					TotalDue = lines.Sum(l => l.CollectionAmount > 0 ? l.CollectionAmount : l.Due),
 					Items = lines,
 				});
 			}
@@ -239,6 +243,8 @@ public partial class StudentFeeDetailsQueryService(
 				PaidFee = (double) dueFees.Sum(d => d.PaidAmount),
 				PendingFee = (double) dueFees.Sum(d => d.OutstandingAmount),
 				ReconciliationAmount = reconByDueFee.Values.Sum(),
+				TotalCollectionAmount = (double) dueFees.Sum(d => Math.Ceiling(d.OutstandingAmount)),
+				TotalRoundingAdjustment = (double) dueFees.Sum(d => Math.Ceiling(d.OutstandingAmount) - d.OutstandingAmount),
 			};
 		}
 

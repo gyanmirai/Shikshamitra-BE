@@ -19,10 +19,13 @@ public class EfCoreFeeRefundRepository(
 {
     public async Task<(List<FeeRefundRequest> Items, int TotalCount)> GetListWithDetailsAsync(
         Guid? studentId = null,
+        Guid? academicYearId = null,
         Guid? academicMediumId = null,
         Guid? standardId = null,
         Guid? divisionId = null,
         FeeRefundStatus? status = null,
+        bool legacyHistory = false,
+        int? workflowVersion = null,
         string? search = null,
         int skipCount = 0,
         int maxResultCount = 20,
@@ -36,6 +39,8 @@ public class EfCoreFeeRefundRepository(
 
         if (studentId.HasValue)
             query = query.Where(r => r.StudentId == studentId.Value);
+        if (academicYearId.HasValue)
+            query = query.Where(r => r.AcademicYearId == academicYearId.Value);
 
         if (academicMediumId.HasValue || standardId.HasValue || divisionId.HasValue)
         {
@@ -66,11 +71,22 @@ public class EfCoreFeeRefundRepository(
 
         if (status.HasValue)
             query = query.Where(r => r.Status == status.Value);
+        if (legacyHistory)
+            query = query.Where(r => r.WorkflowVersion == 0);
+        else if (workflowVersion.HasValue)
+            query = query.Where(r => r.WorkflowVersion == workflowVersion.Value);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
-            query = query.Where(r => r.VoucherNumber.ToLower().Contains(term));
+            var matchingStudents = dbContext.Set<Student>()
+                .Where(s => s.FirstName.ToLower().Contains(term) ||
+                    s.LastName.ToLower().Contains(term) ||
+                    (s.GrNo != null && s.GrNo.ToString().Contains(term)))
+                .Select(s => s.Id);
+            query = query.Where(r => r.VoucherNumber.ToLower().Contains(term) ||
+                (r.OriginalReceiptNumber != null && r.OriginalReceiptNumber.ToLower().Contains(term)) ||
+                matchingStudents.Contains(r.StudentId));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -93,6 +109,35 @@ public class EfCoreFeeRefundRepository(
             .Include(r => r.Reservations)
             .Include(r => r.Settlements)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+    }
+
+    public async Task StageNewReservationsAsync(IEnumerable<FeeRefundReservation> reservations,
+        CancellationToken cancellationToken = default)
+    {
+        var dbContext = await GetDbContextAsync();
+        foreach (var reservation in reservations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            dbContext.Entry(reservation).State = EntityState.Added;
+        }
+    }
+
+    public async Task StageNewSettlementAsync(FeeRefundSettlement settlement,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var dbContext = await GetDbContextAsync();
+        dbContext.Entry(settlement).State = EntityState.Added;
+    }
+
+    public async Task<bool> IsPayoutReferenceUsedAsync(string method, string externalReference,
+        Guid? excludingRequestId = null, CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+        return await dbSet.Where(r => !excludingRequestId.HasValue || r.Id != excludingRequestId.Value)
+            .SelectMany(r => r.Settlements)
+            .AnyAsync(s => s.Method == method && s.ExternalReference == externalReference &&
+                s.Status != FeeRefundSettlementStatus.Failed, cancellationToken);
     }
 
     public async Task<Dictionary<Guid, decimal>> GetActiveReservedAmountsAsync(

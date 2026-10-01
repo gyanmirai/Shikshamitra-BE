@@ -12,12 +12,11 @@ public class TransactionCreateRequest
 	[Required]
 	public string Name { get; set; }
 
-	[Required]
-	public List<string> CategoryTags { get; set; }
+	public List<string> CategoryTags { get; set; } = [];
 
 	[Required]
-	[Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than 0")]
-	public double Amount { get; set; }
+	[Range(typeof(decimal), "0.01", "999999999999.99", ErrorMessage = "Amount must be between 0.01 and 999999999999.99")]
+	public decimal Amount { get; set; }
 
 	[Required]
 	[Range(0, 6, ErrorMessage = "PaymentMethod must be between 0 and 6")]
@@ -37,12 +36,11 @@ public class TransactionUpdateRequest
 	[Required]
 	public string Name { get; set; }
 
-	[Required]
-	public List<string> CategoryTags { get; set; }
+	public List<string> CategoryTags { get; set; } = [];
 
 	[Required]
-	[Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than 0")]
-	public double Amount { get; set; }
+	[Range(typeof(decimal), "0.01", "999999999999.99", ErrorMessage = "Amount must be between 0.01 and 999999999999.99")]
+	public decimal Amount { get; set; }
 
 	[Required]
 	[Range(0, 6, ErrorMessage = "PaymentMethod must be between 0 and 6")]

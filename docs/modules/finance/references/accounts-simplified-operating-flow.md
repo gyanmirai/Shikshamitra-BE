@@ -3,7 +3,7 @@ module: finance
 domain: accounts-simplified-operating-flow
 content_type: Conceptual
 status: active
-updated_on: 2026-09-29
+updated_on: 2026-09-30
 owner: product-and-engineering
 audience: humans-and-agents
 ---
@@ -13,6 +13,9 @@ audience: humans-and-agents
 TL;DR: organize Fees and Accounts around the finance officer's real work, keep setup forms short, add missing Student Accounts and Fee Demands workspaces, separate payment verification from bank reconciliation, and let the backend create journals automatically.
 This page is an active target design based on the reviewed implementation.
 Routes and APIs marked as target are not statements of shipped behavior.
+For the current frontend/backend implementation status, ownership, and acceptance gates, use [Accounts frontend/backend delivery](./accounts-frontend-backend-delivery.md).
+The [integrated end-to-end contract](./accounts-integrated-end-to-end-flow.md) refines this target with source-owned automatic journals, genuine credit reservation/consumption, per-instrument settlement, earned-versus-unearned fee treatment, and a balanced school walkthrough.
+Its officer-first tab approach does not require exposing every proposed workspace below as a separate staff menu item.
 
 Team walkthrough: [editable Excalidraw flow](./school-finance-management-flow.excalidraw) and [PNG preview](./school-finance-management-flow.png). The diagram combines the proposed Fees and Accounts journey with an INR-based school payment example.
 
@@ -37,6 +40,7 @@ Match the bank statement
 
 The finance officer should not need to construct debit and credit lines for routine work.
 The backend resolves policies, accounting mappings, periods, journals, and audit evidence.
+The journal examples below assume accrual accounting for fees; that basis and the historical cutover method still require product approval before production posting.
 **Accounts Settings and Accounts transactions have no policy-selection field.** Fee policies are configured once under Policies & Rules and resolved by the Fees backend where they apply. Accounts receives the resulting approved financial event and posts it; it never asks which Collection, Concession, Refund, or Proration Policy to use.
 
 ## Form-design rule: ask only what a person knows
@@ -64,7 +68,7 @@ Do not hide a real accounting decision merely to shorten a form. A refundable de
 | Fee Category with embedded Fee Heads | Category name and description; embedded heads repeat name, income category, module, concession, description | Category name; description optional; add heads by name with inherited defaults | Reuse the same Fee Head rules in both creation paths so one path does not force extra fields or bypass accounting validation. |
 | Income/Expense Category | Name, mandatory default account head, **mandatory tags**, optional description | Name and matching account head; description optional | Make tags optional and keep them outside the primary form unless a real reporting feature uses them. Preserve the account mapping because it controls posting. |
 | Bank Account | Manual **Code**, bank/branch/account details, IFSC, dates, purpose, UPI ID, asset account head | Bank name, account holder, account number, IFSC, branch if operationally needed; optional UPI ID; clear display name | Generate an internal bank code server-side if legacy/export logic needs it. Default/create the linked asset head safely or require accountant confirmation. Default effective-from to today; show end date only for planned retirement. Keep actual account number and IFSC. |
-| Payment Mode | Proposed shared configuration | Mode name and active status in ordinary setup; conditional reference/settlement settings for an administrator | Seed Cash, Bank Transfer, Cheque, UPI, Card and Gateway defaults. Do not ask an officer to configure clearing accounts on every transaction. |
+| Payment method | Already selected in Fee Collections from the seven-value shared enum | Reuse the existing choices and conditional payment details in Collections, Income, Expenses, Refunds, and verification; no Accounts Settings form | Consolidate display/config duplication around the existing Fee Collections contract. Add settlement/account mappings internally, not a new payment-mode master or Accounts menu item. |
 
 These are target changes, not claims that the current frontend or backend has already been modified.
 
@@ -106,7 +110,6 @@ Finance
 |     |- Income Categories
 |     |- Expense Categories
 |     |- Bank Accounts
-|     |- Payment Modes                         [new]
 |     |- Accounting Mappings                   [replace Posting Automation]
 |     `- Opening Balances                      [new, migration/admin only]
 |- Policies & Rules
@@ -160,12 +163,12 @@ The frontend route and client migration remains owned by the [Finance frontend d
 
 ```text
 Accounts setup (accountant):
-  Confirm seeded Account Heads -> Link Bank Accounts -> Confirm Payment Modes
+  Confirm seeded Account Heads -> Link Bank Accounts
   -> Map Income/Expense Categories -> Review automatic posting defaults
 
 Fees setup (fees administrator):
   Fee Categories/Heads -> Payment Terms -> Fee Structure
-  -> Publish -> Assign to students
+  -> Publish -> Assign to students -> Use existing Collection payment methods
 
 Policies & Rules setup (authorized finance administrator):
   Configure Collection/Concession/Refund/Proration rules once
@@ -219,21 +222,20 @@ The current Bank Account form requires a manual **Code** and **Effective From**;
 Add reconciliation enablement, pending dependency counts, and separately audited sensitive-detail access as system/administrative behavior, not routine form fields.
 Refund and expense payouts use `BankAccountId` instead of free-text bank information.
 
-### Payment Modes
+### Payment methods: reuse Fee Collections
 
-Use one canonical configuration across Collections, Income, Expenses, Refunds, and Reconciliation.
+Do **not** add Payment Modes to Accounts Settings, create a second payment-method master, or require an accountant to configure the same options again. Fee Collections already offers Cash, Cheque, Demand Draft, Bank Transfer, Credit Card, Debit Card, and UPI. The backend `PaymentMethodEnum` and frontend `PaymentMethodLabels` have the same seven numeric values; Income and Expenses already use those labels. Treat Fee Collections' instrument choices and validation as the starting contract, then extract shared frontend metadata and backend validation so the flows cannot drift. Existing refund-specific fields remain conditional on payout method. Gateway and Wallet are not currently in the shared enum and must not be shown as live choices until a separate supported-method change is approved.
 
 | Mode | Initial account | Initial state |
 |---|---|---|
 | Cash | Cash in hand | Settled |
 | Bank transfer | Selected bank | Settled or pending confirmation |
 | Cheque | Cheque clearing | Pending verification |
+| Demand Draft | Demand-draft clearing | Pending verification |
 | UPI | UPI clearing | Pending settlement |
-| Card | Card clearing | Pending settlement |
-| Gateway | Gateway clearing | Pending settlement |
-| Wallet | Wallet clearing | Pending settlement |
+| Credit/Debit Card | Card clearing | Pending settlement |
 
-The system seeds each mode's reference requirements and verification/settlement behavior. The routine user chooses only the payment mode, relevant bank, and a reference when that mode needs one. Effective dates and clearing-account settings belong in a restricted administrator view only if a real change is required.
+The table shows **target posting behavior**, not currently shipped journals or settlement. The routine user chooses an existing method, relevant school bank, and reference when required. Accounts maps that method to cash, bank, or clearing internally and exposes any unresolved mapping in setup readiness; there is no payment-method create/update/status API under Accounts.
 
 ### Accounting Mappings
 
@@ -374,8 +376,9 @@ Cr Student Fee Receivable    INR 10,000
 
 Accounts > Payment Verification works at Payment Instrument level.
 It supports Verify, Reject, Mark Failed, View Receipt, and View Evidence.
+Verification alone does **not** move UPI Clearing to School Bank. The instrument remains in clearing until actual settlement is evidenced and matched in Bank Reconciliation.
 
-UPI settlement example:
+UPI bank-settlement example, after statement confirmation:
 
 ```text
 Dr School Bank                INR 6,000
@@ -590,7 +593,7 @@ These are the fields the person actually enters. Summary cards show due, credit,
 | Assignment | Student/group and published structure | Start date or proration reason when joining mid-year | Eligibility, installment dates, amounts, resolved rule versions, preview fingerprint; no policy picker |
 | Fee Demand | Due installment(s) or scheduled generation batch | Reason for cancellation | Demand number, fee-head lines, status, journal, duplicate protection |
 | Collection | Student, received amount, payment mode(s), allocation confirmation | Reference for UPI/transfer/cheque; bank when needed; advance decision when overpaid | Available dues, default oldest-due allocation, receipt number, advance, payment status and journal |
-| Payment Verification | Select pending instrument and Verify/Reject/Failed | Failure reason and evidence if rejected/failed | Clearing release, affected receipt/dues, settlement journal |
+| Payment Verification | Select pending instrument and Verify/Reject/Failed | Failure reason and evidence if rejected/failed | Instrument acceptance or failure, affected receipt/dues, reversal if needed; no bank settlement without statement evidence |
 | Concession | Student, named concession, amount or percentage, reason | Evidence and fee-head selection if policy requires; approval comment | Eligible cap, unpaid/paid split, revised due or refund payable, journal |
 | Direct waiver | Eligible charge, reason | Approval/evidence when policy threshold requires | Full eligible waiver amount, remaining charge, journal |
 | Adjustment | Student, available credit source, target due, amount, reason | Approval if threshold requires | Credit availability and consumption, due after transfer, journal |
@@ -648,13 +651,12 @@ Use existing shared headers, tables, forms, dialogs, drawers, details, reports, 
 Preserve AccountHead, TransactionCategory, BankAccount, FeeHead, FeeStructure, PaymentTerm, StudentFeeStructure, DueFee, Fee Collection, Concession, Refund, and policy aggregates.
 Extend them through named transitions and immutable source links rather than duplicating existing facts.
 Keep `AccountHeadUpsertRequest` and Fee Head create/update contracts free of a Code field. Remove mandatory bank `Code` input from `CreateBankAccountRequest`/`UpdateBankAccountRequest` and its validator once the service can generate or retain an internal code without breaking existing records. Make Income/Expense Category tags optional in frontend validation; do not remove stored tags without checking reporting usage. Default Fee Head income category from a validated Fee Category setting, but require an explicit mapping when a treatment or category has no safe default. Never guess between income and liability for a deposit.
-Do not add `PolicyId` to Account Head, Bank Account, Income/Expense Category, Payment Mode, Accounting Mapping, Income, Expense, Journal, or Reconciliation create/update commands. Fee-policy resolution belongs to the Fees service; a journal stores the source-event link and may expose the rule/version as read-only provenance. Missing/ambiguous applicable rules are Fees validation errors, not Accounts setting errors.
+Do not add `PolicyId` to Account Head, Bank Account, Income/Expense Category, Accounting Mapping, Income, Expense, Journal, or Reconciliation create/update commands. Fee-policy resolution belongs to the Fees service; a journal stores the source-event link and may expose the rule/version as read-only provenance. Missing/ambiguous applicable rules are Fees validation errors, not Accounts setting errors.
 
 Add these focused concepts:
 
 ```text
 AccountingPeriod
-PaymentModeConfiguration
 AccountingMapping and AccountingMappingVersion
 FinancialEvent
 JournalEntry and JournalLine
@@ -699,10 +701,6 @@ GET   /api/v1/finance/account-heads/{id}/dependencies
 GET   /api/v1/finance/account-heads/{id}/ledger
 GET   /api/v1/finance/bank-accounts/{id}/dependencies
 POST  /api/v1/finance/bank-accounts/{id}/reveal-sensitive
-GET   /api/v1/finance/payment-modes
-POST  /api/v1/finance/payment-modes
-PUT   /api/v1/finance/payment-modes/{id}
-PATCH /api/v1/finance/payment-modes/{id}/status
 ```
 
 Existing Account Head, Income Category, Expense Category, and Bank Account CRUD endpoints remain the setup owners.
@@ -936,7 +934,7 @@ Approval and reconciliation actions must not reuse a generic Add permission.
 1. Add AccountingPeriod, AccountingMapping, FinancialEvent, JournalEntry, JournalLine, PaymentInstrument, and command receipts.
 2. Seed standard school control accounts and fixed posting templates.
 3. Add setup readiness and preview services.
-4. Add Journals and Ledger, Posting Exceptions, Payment Modes, and Period Close navigation.
+4. Add Journals and Ledger, Posting Exceptions, and Period Close navigation; reuse Fee Collections payment methods with no Accounts Settings payment-mode page.
 5. Simplify Bank Account setup: server-generated internal code, sensible effective-date default, safe asset-head linkage. Make category tags optional. Add the Fee Category default and treatment-aware Fee Head mapping before removing the current mandatory Income Category input.
 
 ### P2: complete the core Fees path

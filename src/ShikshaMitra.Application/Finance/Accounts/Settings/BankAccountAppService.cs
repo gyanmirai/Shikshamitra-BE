@@ -37,11 +37,13 @@ public class BankAccountAppService(
 	{
 		await EnsureScopeAsync(academicYearId);
 		await ValidateAccountHeadAsync(academicYearId, input.AccountHeadId);
-		await EnsureUniqueAsync(academicYearId, input.Code, input.AccountHeadId, input.AccountNumber);
-		var entity = new BankAccount(GuidGenerator.Create(), academicYearId, input.BankName,
+		var id = GuidGenerator.Create();
+		var code = string.IsNullOrWhiteSpace(input.Code) ? id.ToString("N") : input.Code.Trim();
+		await EnsureUniqueAsync(academicYearId, code, input.AccountHeadId, input.AccountNumber);
+		var entity = new BankAccount(id, academicYearId, input.BankName,
 			input.BranchName, input.BranchAddress, input.AccountHolderName, input.AccountType,
 			input.AccountNumber, input.Purpose, input.IfscCode, input.UpiId, true, CurrentTenant.Id,
-			input.Code, input.AccountHeadId, input.EffectiveFrom, input.EffectiveTo);
+			code, input.AccountHeadId, input.EffectiveFrom, input.EffectiveTo);
 		await bankAccountRepository.InsertAsync(entity, autoSave: true);
 		return await MapAsync(entity, includeSensitive: true);
 	}
@@ -100,8 +102,9 @@ public class BankAccountAppService(
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureConcurrency(entity, input.ConcurrencyStamp);
 		await ValidateAccountHeadAsync(entity.AcademicYearId, input.AccountHeadId);
-		await EnsureUniqueAsync(entity.AcademicYearId, input.Code, input.AccountHeadId, input.AccountNumber, id);
-		entity.Update(input.Code, input.AccountHeadId, input.BankName, input.BranchName,
+		var code = string.IsNullOrWhiteSpace(input.Code) ? entity.Code ?? entity.Id.ToString("N") : input.Code.Trim();
+		await EnsureUniqueAsync(entity.AcademicYearId, code, input.AccountHeadId, input.AccountNumber, id);
+		entity.Update(code, input.AccountHeadId, input.BankName, input.BranchName,
 			input.BranchAddress, input.AccountHolderName, input.AccountType, input.AccountNumber,
 			input.Purpose, input.IfscCode, input.UpiId, input.EffectiveFrom, input.EffectiveTo);
 		await bankAccountRepository.UpdateAsync(entity, autoSave: true);

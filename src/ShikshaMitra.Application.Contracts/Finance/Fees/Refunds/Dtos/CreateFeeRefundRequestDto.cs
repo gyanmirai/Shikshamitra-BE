@@ -8,6 +8,8 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 /// <summary>Input DTO for creating a new fee-refund request.</summary>
 public class CreateFeeRefundRequestDto
 {
+    [Required, MaxLength(100)] public string IdempotencyKey { get; set; } = string.Empty;
+    public Guid? ReplacesRefundRequestId { get; set; }
     [Required]
     public Guid StudentId { get; set; }
 
@@ -70,6 +72,7 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
 
     public CreateFeeRefundRequestDtoValidator()
     {
+        RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(100);
         RuleFor(x => x.StudentId).NotEmpty();
         RuleFor(x => x.AcademicYearId).NotEmpty();
         RuleFor(x => x.OriginalReceiptId).NotEmpty();
@@ -101,5 +104,21 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
             .NotNull()
             .WithMessage("PaymentDetails are required for the selected refund method.")
             .When(x => !string.IsNullOrWhiteSpace(x.RefundMethod));
+
+        RuleFor(x => x).Must(x =>
+        {
+            bool Has(string key) => x.PaymentDetails != null &&
+                x.PaymentDetails.TryGetValue(key, out var value) &&
+                !string.IsNullOrWhiteSpace(value?.ToString());
+            return x.RefundMethod switch
+            {
+                "Cash" => Has("receivedBy"),
+                "Cheque" or "Demand Draft (DD)" => Has("payeeName"),
+                "Bank Transfer (NEFT/RTGS/IMPS)" => Has("beneficiaryName") &&
+                    Has("beneficiaryBankName") && Has("beneficiaryAccountNumber") && Has("ifscCode"),
+                "UPI" => Has("beneficiaryName") && Has("upiId"),
+                _ => false,
+            };
+        }).WithMessage("Provide the beneficiary details required for the selected refund method.");
     }
 }

@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Transactions;
+using ShikshaMitra.Finance.Fees.Collections;
+using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.Accounts.Incomes;
 
 /// <summary>
-/// Represents an income transaction entry
+/// Represents a legacy Accounts income or expense transaction entry; this is not a posted journal.
 /// </summary>
 public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
@@ -28,7 +30,8 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public decimal Amount { get; private set; }
 
 	/// <summary>
-	/// Payment method (0=CHEQUE, 1=DEMAND_DRAFT, 2=BANK_TRANSFER, 3=CREDIT_CARD, 4=UPI, 5=ONLINE_PAYMENT_GATEWAY, 6=WALLET)
+	/// Uses the shared Fee Collections method values: 0=Cash, 1=Cheque, 2=DemandDraft,
+	/// 3=BankTransfer, 4=CreditCard, 5=DebitCard, 6=UPI.
 	/// </summary>
 	public int PaymentMethod { get; private set; }
 
@@ -55,6 +58,7 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		TransactionType transactionType = TransactionType.Income)
 		: base(id)
 	{
+		EnsureValidMoneyAndMethod(amount, paymentMethod);
 		TenantId = tenantId;
 		AcademicYearId = academicYearId;
 		CategoryId = categoryId;
@@ -101,6 +105,7 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTime paymentDate,
 		string? notes)
 	{
+		EnsureValidMoneyAndMethod(amount, paymentMethod);
 		CategoryId = categoryId;
 		Name = name;
 		Amount = amount;
@@ -110,5 +115,13 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		if (categoryTags != null)
 			SetCategoryTags(categoryTags);
+	}
+
+	public static void EnsureValidMoneyAndMethod(decimal amount, int paymentMethod)
+	{
+		if (amount is < 0.01m or > 999999999999.99m || decimal.Round(amount, 2) != amount)
+			throw new BusinessException(TransactionErrorCodes.InvalidAmount);
+		if (!Enum.IsDefined(typeof(PaymentMethodEnum), paymentMethod))
+			throw new BusinessException(TransactionErrorCodes.InvalidPaymentMethod);
 	}
 }

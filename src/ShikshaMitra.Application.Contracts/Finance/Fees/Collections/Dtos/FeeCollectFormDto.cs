@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -101,6 +101,12 @@ public class FeeLedgerLineDto
 
     /// <summary>Outstanding amount (Total − Paid, clamped to zero).</summary>
     public double Due { get; set; }
+
+    /// <summary>Whole rupee collection amount using the whole rupee round-up rule (Ceiling).</summary>
+    public double CollectionAmount { get; set; }
+
+    /// <summary>Identifiable Rounding Adjustment / Round Off difference (CollectionAmount - Due).</summary>
+    public double RoundingAmount { get; set; }
 
     /// <summary>
     /// Amount of <see cref="Paid"/> that is currently held in reconciliation

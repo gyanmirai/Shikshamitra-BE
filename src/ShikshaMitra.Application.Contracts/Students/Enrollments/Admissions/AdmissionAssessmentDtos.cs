@@ -6,6 +6,10 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionAssessmentScopeDto
 {
 	public Guid AdmissionOfferingId { get; set; }
+	public Guid BoardId { get; set; }
+	public Guid MediumId { get; set; }
+	public Guid StandardId { get; set; }
+	public Guid AcademicYearId { get; set; }
 	public string OfferingName { get; set; } = string.Empty;
 	public Guid WorkflowStageDefinitionId { get; set; }
 	public string StageName { get; set; } = string.Empty;

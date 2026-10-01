@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-09-25
+updated_on: 2026-09-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,8 @@ audience: humans-and-agents
 # Validate Student Enrollment Admissions changes
 
 TL;DR: run domain, application contract, EF mapping, and HTTP contract tests for Admission Offering changes, then validate module docs and migration safety.
+
+For onboarding service consent, run `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter FullyQualifiedName~Onboarding_service_consent_requires_an_audited_confirmation_without_bypassing_first_payment` and `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter FullyQualifiedName~StudentOnboardingApiContract_Tests`. The application scenario covers invalid and stale confirmation, an audited consent handoff, the still-required confirmed first payment, idempotent retry, and one enrollment; the HTTP contract checks route and permission. These do not replace live signed-record review or an authorized school-data walkthrough.
 
 The room-derived class-capacity integration scenario allocates a persisted room, finalizes a direct RTE application, verifies the same occupied and remaining seats from a parallel General offering, and confirms that a full class still allows a new registration. Run `AdmissionWorkflowRuntimeIntegration_Tests` after changing routing or capacity; a calculator-only test does not cover the shared query. Applying the new migrations to a disposable PostgreSQL database and checking the live API remain release gates.
 

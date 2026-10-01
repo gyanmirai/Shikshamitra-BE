@@ -30,6 +30,7 @@ public class AdmissionOfferingReadService(
 	IRepository<Division, Guid> divisionRepository,
 	IUserScopeAccessService scopeAccessService,
 	AdmissionEligibilityOfferingValidator eligibilityValidator,
+	AdmissionOfferingConfigurationValidator configurationValidator,
 	AdmissionClassCapacityAppService classCapacityService)
 	: ApplicationService, ITransientDependency
 {
@@ -57,6 +58,11 @@ public class AdmissionOfferingReadService(
 		var rows = await AsyncExecuter.ToListAsync(read.Query);
 		var row = rows.SingleOrDefault() ?? throw new EntityNotFoundException(typeof(AdmissionOffering), id);
 		var detail = MapDetail(row, read.Errors.GetValueOrDefault(row.Offering.Id));
+		var validation = await configurationValidator.ValidateStoredAsync(row.Offering);
+		detail.Configuration = MapValidation(validation);
+		detail.ConfigurationStatus = validation.Status;
+		detail.AvailabilityStatus = AdmissionOfferingAvailabilityEvaluator.Evaluate(
+			row.Offering, row.Cycle, validation.IsValid, new DateTimeOffset(Clock.Now.ToUniversalTime())).Status;
 		detail.ClassCapacity = await classCapacityService.ReadForOfferingAsync(id);
 		return detail;
 	}

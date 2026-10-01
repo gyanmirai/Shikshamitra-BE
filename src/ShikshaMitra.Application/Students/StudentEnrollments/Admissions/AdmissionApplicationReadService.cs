@@ -14,6 +14,7 @@ public class AdmissionApplicationReadService(
 	IRepository<AdmissionApplication, Guid> applicationRepository,
 	IRepository<AdmissionApplicant, Guid> applicantRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
+	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionApplicationStageInstance, Guid> stageRepository,
 	AdmissionApplicationScopeAccessService scopeAccess,
 	AdmissionInquiryPeopleService peopleService,
@@ -24,7 +25,14 @@ public class AdmissionApplicationReadService(
 	{
 		var query = await applicationRepository.GetQueryableAsync();
 		var visibleOfferings = await scopeAccess.GetScopedOfferingsAsync();
-		query = query.Where(application => visibleOfferings.Any(offering => offering.Id == application.AdmissionOfferingId));
+		var cycles = await cycleRepository.GetQueryableAsync();
+		query = query.Where(application => visibleOfferings.Any(offering =>
+			offering.Id == application.AdmissionOfferingId &&
+			(!input.BoardId.HasValue || offering.BoardId == input.BoardId.Value) &&
+			(!input.MediumId.HasValue || offering.MediumId == input.MediumId.Value) &&
+			(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value)) &&
+			(!input.AcademicYearId.HasValue || cycles.Any(cycle =>
+				cycle.Id == application.AdmissionCycleId && cycle.AcademicYearId == input.AcademicYearId.Value)));
 		var applicantIds = await GetMatchingApplicantIdsAsync(input.Search);
 		var stageIds = await GetMatchingStageIdsAsync(input.CurrentStageSearch);
 		query = query.Where(application =>

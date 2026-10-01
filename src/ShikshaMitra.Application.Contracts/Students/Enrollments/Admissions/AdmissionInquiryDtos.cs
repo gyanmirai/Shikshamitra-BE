@@ -74,6 +74,10 @@ public class CreateAdmissionInquiryDto
 
 public class AdmissionInquiryListInput : PagedAndSortedResultRequestDto
 {
+	public Guid? AcademicYearId { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? MediumId { get; set; }
+	public Guid? StandardId { get; set; }
 	public Guid? AdmissionCycleId { get; set; }
 	public Guid? AdmissionOfferingId { get; set; }
 	[StringLength(64)]

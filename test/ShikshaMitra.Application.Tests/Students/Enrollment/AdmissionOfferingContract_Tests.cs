@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Shouldly;
+using Volo.Abp;
 using Xunit;
 
 namespace ShikshaMitra.Students.Enrollment;
@@ -130,6 +131,32 @@ public class AdmissionOfferingContract_Tests
 
 		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: false).ShouldBeTrue();
 		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: true).ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Inactive_offering_can_save_an_out_of_scope_assignment_without_allowing_activation()
+	{
+		var validation = new AdmissionOfferingValidationResult(
+			[
+				new(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+					"No counsellor has access to this class.", ActivationOnly: true),
+				new(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+					"The fallback manager has no access to this class.", ActivationOnly: true)
+			]);
+
+		validation.Status.ShouldBe(AdmissionOfferingConfigurationStatus.Incomplete);
+		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: false).ShouldBeTrue();
+		AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: true).ShouldBeFalse();
+		var activationError = Should.Throw<BusinessException>(() =>
+			AdmissionOfferingConfigurationValidator.EnsureCanSave(validation, isActive: true));
+		((string[])activationError.Data["ValidationErrors"]!).ShouldBe(
+			[AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid]);
+		((string[])activationError.Data["ValidationMessages"]!).Length.ShouldBe(2);
+
+		var unavailableProfile = new AdmissionOfferingValidationResult(
+			[new AdmissionOfferingValidationError(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+				"The selected assignment profile is unavailable.")]);
+		AdmissionOfferingConfigurationValidator.CanSave(unavailableProfile, isActive: false).ShouldBeFalse();
 	}
 
 	[Theory]

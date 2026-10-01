@@ -4,6 +4,8 @@ using System.Reflection;
 using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
+using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
@@ -16,13 +18,149 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	private static readonly DateTime CertificationBirthDate = new(2016, 4, 12);
 
 	[Fact]
+	public Task Certification_onboarding_settings_accept_a_GSEB_school_level_and_reject_invalid_coverage() =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var fixture = await CreateCertificationFixtureAsync("GsebSettings");
+			var existingMedium = await WithUnitOfWorkAsync(() => _mediumRepository.GetAsync(fixture.Offering.MediumId));
+			var existingBoard = await WithUnitOfWorkAsync(() => _boardRepository.GetAsync(fixture.Offering.BoardId));
+			existingBoard.Type.ShouldBe(EducationBoardType.CBSE);
+			var path = await WithUnitOfWorkAsync(async () =>
+			{
+				var board = (await _boardRepository.GetListAsync(item =>
+					item.AcademicYearId == existingBoard.AcademicYearId && item.Type == EducationBoardType.GSEB))
+					.FirstOrDefault();
+				board ??= await _boardRepository.InsertAsync(
+					await GetRequiredService<EducationBoardManager>().CreateAsync(
+						existingBoard.AcademicYearId, EducationBoardType.GSEB), true);
+				var suffix = Guid.NewGuid().ToString("N")[..8];
+				var mediumName = $"Gujarati {suffix}";
+				var medium = await _mediumRepository.InsertAsync(
+					await GetRequiredService<EducationMediumManager>().CreateAsync(board.Id, mediumName), true);
+				var level = await _stageRepository.InsertAsync(
+					await GetRequiredService<EducationMediumStageManager>().CreateAsync(
+						medium.Id, $"GSEB - {mediumName} - Higher Secondary"), true);
+				await _stageRepository.InsertAsync(
+					await GetRequiredService<EducationMediumStageManager>().CreateAsync(
+						medium.Id, $"GSEB - {mediumName} - Primary"), true);
+				var standard = await _standardRepository.InsertAsync(
+					await _standardManager.CreateAsync(level.Id, $"Class 11 {suffix}", 11, null), true);
+				return (BoardId: board.Id, MediumId: medium.Id, LevelId: level.Id, StandardId: standard.Id);
+			});
+			var configurationJson = System.Text.Json.JsonSerializer.Serialize(new
+			{
+				academicAvailability = new { schoolLevelNames = new[] { "Higher Secondary" } },
+				readinessAccess = new { studentAccount = true, guardianAccount = true },
+				onboardingProfiles = new[]
+				{
+					new
+					{
+						id = "gseb-higher-secondary",
+						admissionRoutes = new[] { "Fresh admission" },
+						applicability = new
+						{
+							boardMode = "selected", boardIds = new[] { path.BoardId },
+							mediumMode = "selected", academicMediumIds = new[] { path.MediumId },
+							stageMode = "selected", academicMediumStageIds = new[] { path.LevelId },
+							classMode = "selected", standardIds = new[] { path.StandardId },
+							divisionMode = "all"
+						},
+						rules = new { studentAccount = true, guardianAccount = true }
+					}
+				},
+				grNumber = new { configurations = Array.Empty<object>() },
+				rollNumber = new { configurations = Array.Empty<object>() },
+				divisionChange = new { configurations = Array.Empty<object>() }
+			});
+			var onboarding = GetRequiredService<IStudentOnboardingAppService>();
+			var saved = await onboarding.SaveSettingsAsync(new()
+			{
+				AcademicYearId = existingBoard.AcademicYearId,
+				ConfigurationJson = configurationJson
+			});
+			(await onboarding.GetSettingsAsync(existingBoard.AcademicYearId))
+				.Single(item => item.AcademicYearId == existingBoard.AcademicYearId)
+				.ConfigurationJson.ShouldBe(configurationJson);
+
+			var invalidJson = configurationJson.Replace(path.MediumId.ToString(),
+				existingMedium.Id.ToString(), StringComparison.OrdinalIgnoreCase);
+			invalidJson.ShouldNotBe(configurationJson);
+			(await Should.ThrowAsync<BusinessException>(() => onboarding.SaveSettingsAsync(new()
+			{
+				AcademicYearId = existingBoard.AcademicYearId,
+				ConfigurationJson = invalidJson,
+				ConcurrencyStamp = saved.ConcurrencyStamp
+			}))).Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+			var hiddenLevelJson = configurationJson.Replace(
+				"\"schoolLevelNames\":[\"Higher Secondary\"]",
+				"\"schoolLevelNames\":[\"Primary\"]", StringComparison.Ordinal);
+			hiddenLevelJson.ShouldNotBe(configurationJson);
+			var hiddenLevelError = await Should.ThrowAsync<BusinessException>(() => onboarding.SaveSettingsAsync(new()
+			{
+				AcademicYearId = existingBoard.AcademicYearId,
+				ConfigurationJson = hiddenLevelJson,
+				ConcurrencyStamp = saved.ConcurrencyStamp
+			}));
+			hiddenLevelError.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+			hiddenLevelError.Data["Reason"].ShouldBe("Existing rules target a hidden onboarding school level.");
+			var malformedReadinessJson = configurationJson.Replace(
+				"\"studentAccount\":true", "\"studentAccount\":\"true\"", StringComparison.Ordinal);
+			malformedReadinessJson.ShouldNotBe(configurationJson);
+			(await Should.ThrowAsync<BusinessException>(() => onboarding.SaveSettingsAsync(new()
+			{
+				AcademicYearId = existingBoard.AcademicYearId,
+				ConfigurationJson = malformedReadinessJson,
+				ConcurrencyStamp = saved.ConcurrencyStamp
+			}))).Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+			(await onboarding.GetSettingsAsync(existingBoard.AcademicYearId))
+				.Single(item => item.AcademicYearId == existingBoard.AcademicYearId)
+				.ConfigurationJson.ShouldBe(configurationJson);
+		});
+
+	[Fact]
 	public Task Certification_01_new_student_completes_the_realistic_journey_and_stops_at_the_admissions_boundary() =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var fixture = await CreateCertificationFixtureAsync("Aarav", realisticWorkflow: true);
-			fixture.Application.StudentId.ShouldBeNull();
-			(await WithUnitOfWorkAsync(() => _studentRepository.FindAsync(fixture.Applicant.ReservedStudentId)))
-				.ShouldBeNull();
+			var fixture = await CreateCertificationFixtureAsync("Aarav", realisticWorkflow: true, campusScoped: true);
+			fixture.Offering.CampusId.ShouldNotBeNull();
+			var campusId = fixture.Offering.CampusId.Value;
+			var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
+			var onboarding = GetRequiredService<IStudentOnboardingAppService>();
+			var allPath = new
+			{
+				boardMode = "all",
+				mediumMode = "all",
+				stageMode = "all",
+				classMode = "all",
+				divisionMode = "all"
+			};
+			var settingsJson = System.Text.Json.JsonSerializer.Serialize(new
+			{
+				readinessAccess = new { studentAccount = false },
+				onboardingProfiles = new object[]
+				{
+					new { id = "all-campus", admissionRoutes = new[] { "Fresh admission" },
+						applicability = allPath, rules = new { studentAccount = false } },
+					new { id = "certification-campus", admissionRoutes = new[] { "Fresh admission" },
+						applicability = new { campusMode = "selected", campusIds = new[] { campusId },
+							allPath.boardMode, allPath.mediumMode, allPath.stageMode,
+							allPath.classMode, allPath.divisionMode },
+						rules = new { studentAccount = true } },
+					new { id = "scholarship-campus", admissionRoutes = new[] { "Scholarship intake" },
+						applicability = new { campusMode = "selected", campusIds = new[] { campusId },
+							allPath.boardMode, allPath.mediumMode, allPath.stageMode,
+							allPath.classMode, allPath.divisionMode },
+						rules = new { guardianAccount = true } }
+				},
+				grNumber = new { configurations = Array.Empty<object>() },
+				rollNumber = new { configurations = Array.Empty<object>() },
+				divisionChange = new { configurations = Array.Empty<object>() }
+			});
+			var savedSettings = await onboarding.SaveSettingsAsync(new()
+			{
+				AcademicYearId = cycle.AcademicYearId,
+				ConfigurationJson = settingsJson
+			});
 			var preview = await _applicationAppService.GetFinalizationPreviewAsync(fixture.Application.Id);
 			preview.IsReady.ShouldBeTrue();
 			preview.Items.ShouldAllBe(item => item.Passed);
@@ -51,15 +189,52 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var onboardingCase = await WithUnitOfWorkAsync(() =>
 				_onboardingCaseRepository.GetAsync(result.OnboardingCaseId));
 			onboardingCase.ApplicationId.ShouldBe(fixture.Application.Id);
+			onboardingCase.GetCampusId().ShouldBe(fixture.Offering.CampusId);
 			onboardingCase.IntendedStandardId.ShouldBe(fixture.Offering.StandardId);
+			var onboardingView = await onboarding.GetAsync(onboardingCase.Id);
+			onboardingView.CampusId.ShouldBe(campusId);
+			onboardingView.StudentAccountRequired.ShouldBeTrue();
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var legacyCase = await _onboardingCaseRepository.GetAsync(onboardingCase.Id);
+				legacyCase.ExtraProperties.Remove("AdmissionCampusId");
+				await _onboardingCaseRepository.UpdateAsync(legacyCase, autoSave: true);
+			});
+			var legacyView = await onboarding.GetAsync(onboardingCase.Id);
+			legacyView.CampusId.ShouldBe(campusId);
+			legacyView.StudentAccountRequired.ShouldBeTrue();
+			var scholarshipView = await onboarding.SetAdmissionRouteAsync(onboardingCase.Id, new()
+			{
+				AdmissionRoute = "SCHOLARSHIP INTAKE",
+				ConcurrencyStamp = legacyView.ConcurrencyStamp
+			});
+			scholarshipView.AdmissionRoute.ShouldBe("Scholarship intake");
+			scholarshipView.GuardianAccountRequired.ShouldBeTrue();
+			scholarshipView.StudentAccountRequired.ShouldBeFalse();
+			(await Should.ThrowAsync<BusinessException>(() => onboarding.SetAdmissionRouteAsync(onboardingCase.Id, new()
+			{
+				AdmissionRoute = "Unconfigured intake",
+				ConcurrencyStamp = scholarshipView.ConcurrencyStamp
+			}))).Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+			var withoutCustomRoute = System.Text.Json.Nodes.JsonNode.Parse(settingsJson)!;
+			withoutCustomRoute["onboardingProfiles"]!.AsArray().RemoveAt(2);
+			await onboarding.SaveSettingsAsync(new()
+			{
+				AcademicYearId = cycle.AcademicYearId,
+				ConfigurationJson = withoutCustomRoute.ToJsonString(),
+				ConcurrencyStamp = savedSettings.ConcurrencyStamp
+			});
+			(await Should.ThrowAsync<BusinessException>(() => onboarding.RefreshReadinessAsync(
+				onboardingCase.Id, scholarshipView.ConcurrencyStamp)))
+				.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
 			(await WithUnitOfWorkAsync(() =>
 				_onboardingStepRepository.CountAsync(step => step.OnboardingCaseId == onboardingCase.Id)))
 				.ShouldBe(StudentOnboardingStepKeys.Defaults.Length);
 
-			#pragma warning disable CS0618 // The compatibility endpoint is intentionally exercised here.
+#pragma warning disable CS0618 // The compatibility endpoint is intentionally exercised here.
 			var legacy = await Should.ThrowAsync<BusinessException>(() =>
 				_applicationAppService.EnrollAsync(fixture.Application.Id, new EnrollAdmissionApplicationDto()));
-			#pragma warning restore CS0618
+#pragma warning restore CS0618
 			legacy.Code.ShouldBe(StudentOnboardingErrorCodes.LegacyEnrollDisabled);
 		});
 
@@ -288,13 +463,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		bool createGuardian = true,
 		bool linkExistingStudent = false,
 		bool acceptOffer = true,
+		bool campusScoped = false,
 		Guid? existingStudentId = null,
 		AdmissionApplicant? existingApplicant = null)
 	{
 		var workflow = realisticWorkflow
 			? await CreateAndPublishRealisticWorkflowAsync()
 			: await CreateAndPublishWorkflowAsync();
-		var offering = await CreateAvailableOfferingAsync(workflow.Id);
+		var offering = await CreateAvailableOfferingAsync(workflow.Id, campusScoped: campusScoped);
 		if (linkExistingStudent)
 			existingStudentId = (await CreateExistingStudentAsync(offering, firstName, "Patel")).Id;
 		var applicant = existingApplicant ?? await CreateCertificationApplicantAsync(
@@ -427,11 +603,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		AdmissionApplicationDto application,
 		string reason,
 		DateTime? offerExpiresAt = null) => new()
-	{
-		ConcurrencyStamp = application.ConcurrencyStamp,
-		Reason = reason,
-		OfferExpiresAt = offerExpiresAt
-	};
+		{
+			ConcurrencyStamp = application.ConcurrencyStamp,
+			Reason = reason,
+			OfferExpiresAt = offerExpiresAt
+		};
 
 	private sealed record AdmissionCertificationFixture(
 		AdmissionApplicant Applicant,

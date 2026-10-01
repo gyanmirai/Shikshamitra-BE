@@ -776,6 +776,21 @@ public class AdmissionInquiryAppService(
 	private async Task<IQueryable<AdmissionInquiry>> BuildFilteredQueryAsync(AdmissionInquiryListInput input)
 	{
 		var query = await scopeAccess.GetScopedQueryAsync();
+		if (input.AcademicYearId.HasValue)
+		{
+			var cycles = await cycleRepository.GetQueryableAsync();
+			query = query.Where(inquiry => cycles.Any(cycle => cycle.Id == inquiry.AdmissionCycleId &&
+				cycle.AcademicYearId == input.AcademicYearId.Value));
+		}
+		if (input.BoardId.HasValue || input.MediumId.HasValue || input.StandardId.HasValue)
+		{
+			var offerings = await offeringRepository.GetQueryableAsync();
+			query = query.Where(inquiry => inquiry.AdmissionOfferingId.HasValue &&
+				offerings.Any(offering => offering.Id == inquiry.AdmissionOfferingId.Value &&
+					(!input.BoardId.HasValue || offering.BoardId == input.BoardId.Value) &&
+					(!input.MediumId.HasValue || offering.MediumId == input.MediumId.Value) &&
+					(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value)));
+		}
 		var managementQuery = await managementRepository.GetQueryableAsync();
 		var followUpQuery = await followUpRepository.GetQueryableAsync();
 		var now = Clock.Now.ToUniversalTime();

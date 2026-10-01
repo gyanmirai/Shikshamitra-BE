@@ -1,0 +1,584 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="7620" height="5400" viewBox="0 0 7620 5400" role="img" aria-label="Detailed school finance management flow">
+<defs><marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M 1 1 L 11 6 L 1 11" fill="none" stroke="#52677e" stroke-width="2"/></marker></defs>
+<rect width="7620" height="5400" fill="#fffaf5"/>
+<text x="78" y="91" fill="#183153" font-family="Arial, sans-serif" font-size="49" font-weight="700">
+<tspan x="78" dy="0">School Finance | detailed target workflow and form contracts</tspan>
+</text>
+<text x="80" y="132" fill="#52677e" font-family="Arial, sans-serif" font-size="22" font-weight="400">
+<tspan x="80" dy="0">Editable team map. Fields below are the recommended target contract: retain current working screens; add the missing fields and controls.</tspan>
+</text>
+<rect x="80" y="160" width="7460" height="64" rx="18" fill="#ffffff" stroke="#b9c6d3" stroke-width="2"/>
+<text x="105" y="201" fill="#183153" font-family="Arial, sans-serif" font-size="24" font-weight="400">
+<tspan x="105" dy="0">Setup  -&gt;  Assign structure  -&gt;  Generate demand  -&gt;  Student Account  -&gt;  Collect / reduce / adjust / refund  -&gt;  Auto-post  -&gt;  Reconcile  -&gt;  Close</tspan>
+</text>
+<rect x="80" y="245" width="1760" height="4420" rx="18" fill="#ffffff" stroke="#b9c6d3" stroke-width="2"/>
+<text x="106" y="299" fill="#7048c9" font-family="Arial, sans-serif" font-size="34" font-weight="700">
+<tspan x="106" dy="0">01  SETUP AND SETTINGS</tspan>
+</text>
+<text x="106" y="329" fill="#52677e" font-family="Arial, sans-serif" font-size="19" font-weight="400">
+<tspan x="106" dy="0">Administrator configures once; effective versions are pinned.</tspan>
+</text>
+<rect x="1880" y="245" width="1760" height="4420" rx="18" fill="#ffffff" stroke="#b9c6d3" stroke-width="2"/>
+<text x="1906" y="299" fill="#1971c2" font-family="Arial, sans-serif" font-size="34" font-weight="700">
+<tspan x="1906" dy="0">02  FEES AND STUDENT WORK</tspan>
+</text>
+<text x="1906" y="329" fill="#52677e" font-family="Arial, sans-serif" font-size="19" font-weight="400">
+<tspan x="1906" dy="0">Finance officer enters business facts; optional paths stay optional.</tspan>
+</text>
+<rect x="3680" y="245" width="1760" height="4420" rx="18" fill="#ffffff" stroke="#b9c6d3" stroke-width="2"/>
+<text x="3706" y="299" fill="#2f9e44" font-family="Arial, sans-serif" font-size="34" font-weight="700">
+<tspan x="3706" dy="0">03  ACCOUNTS AND CONTROL</tspan>
+</text>
+<text x="3706" y="329" fill="#52677e" font-family="Arial, sans-serif" font-size="19" font-weight="400">
+<tspan x="3706" dy="0">Accountant reviews postings, settlement, reports and close.</tspan>
+</text>
+<rect x="5480" y="245" width="2060" height="4420" rx="18" fill="#ffffff" stroke="#b9c6d3" stroke-width="2"/>
+<text x="5506" y="299" fill="#b7791f" font-family="Arial, sans-serif" font-size="34" font-weight="700">
+<tspan x="5506" dy="0">04  SCHOOL-DAY EXAMPLES</tspan>
+</text>
+<text x="5506" y="329" fill="#52677e" font-family="Arial, sans-serif" font-size="19" font-weight="400">
+<tspan x="5506" dy="0">Amounts are illustrative; journals are system-generated.</tspan>
+</text>
+<rect x="106" y="362" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="408" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Account Heads</tspan>
+</text>
+<text x="128" y="447" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">FIELDS  Code*, name*, type (asset/liability/income/expense)*, parent,</tspan>
+<tspan x="128" dy="26.25">group/posting, control-account flag, reconciliation flag, currency,</tspan>
+<tspan x="128" dy="26.25">effective from/to, active status.</tspan>
+<tspan x="128" dy="26.25">RULE  Unique code per school; used heads cannot be deleted/retyped.</tspan>
+<tspan x="128" dy="26.25">ACTION  Save draft, activate, retire, view dependencies and ledger.</tspan>
+<tspan x="128" dy="26.25">API  account-heads; dependencies; account ledger.</tspan>
+</text>
+<polyline points="960,726 960,741" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="750" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="796" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Bank Accounts</tspan>
+</text>
+<text x="128" y="835" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">FIELDS  Bank name*, account holder*, masked account number*, IFSC*,</tspan>
+<tspan x="128" dy="26.25">branch, linked asset head*, reconciliation enabled, active status.</tspan>
+<tspan x="128" dy="26.25">RULE  One asset mapping; mask details by permission; no deletion if used.</tspan>
+<tspan x="128" dy="26.25">ACTION  Create/edit, deactivate, view dependencies and bank book.</tspan>
+<tspan x="128" dy="26.25">API  bank-accounts; dependencies; sensitive-detail reveal.</tspan>
+</text>
+<polyline points="960,1114 960,1129" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="1138" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="1184" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Payment Modes</tspan>
+</text>
+<text x="128" y="1223" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">FIELDS  Mode*, initial account*, reference required?, verification?</tspan>
+<tspan x="128" dy="26.25">settlement required?, allowed for collection/income/payout?, dates, status.</tspan>
+<tspan x="128" dy="26.25">RULE  Cash -&gt; cash head; UPI/cheque/card -&gt; clearing until settled.</tspan>
+<tspan x="128" dy="26.25">ACTION  Activate/deactivate with effective version.</tspan>
+<tspan x="128" dy="26.25">API  payment-modes GET/POST/PATCH.</tspan>
+</text>
+<polyline points="960,1502 960,1517" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="1526" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="1572" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Income and Expense Categories</tspan>
+</text>
+<text x="128" y="1611" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">FIELDS  Code*, name*, kind (income/expense)*, default GL head*,</tspan>
+<tspan x="128" dy="26.25">description, approval threshold, effective dates, active status.</tspan>
+<tspan x="128" dy="26.25">RULE  Used category mapping is superseded, never changed historically.</tspan>
+<tspan x="128" dy="26.25">ACTION  Save, activate, retire; show downstream usage.</tspan>
+<tspan x="128" dy="26.25">API  income-categories; expense-categories.</tspan>
+</text>
+<polyline points="960,1890 960,1905" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="1914" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="1960" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Fee Categories and Fee Heads</tspan>
+</text>
+<text x="128" y="1999" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">FIELDS  Category/name/code*, head name/code*, revenue/deposit/advance/</tspan>
+<tspan x="128" dy="26.25">pass-through class*, linked GL head*, refundable?, tax treatment if used,</tspan>
+<tspan x="128" dy="26.25">academic-year scope, effective dates, active status.</tspan>
+<tspan x="128" dy="26.25">RULE  Refundable security deposit maps to liability, not fee income.</tspan>
+<tspan x="128" dy="26.25">ACTION  Save, preview accounting, activate/retire.</tspan>
+<tspan x="128" dy="26.25">API  fee-categories; fee-heads; accounting-preview.</tspan>
+</text>
+<polyline points="960,2278 960,2293" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="2302" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="2348" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Payment Terms and Installments</tspan>
+</text>
+<text x="128" y="2387" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">FIELDS  Term name*, schedule type*, installment number/date or offset*,</tspan>
+<tspan x="128" dy="26.25">percentage/fixed amount*, grace days, late-fee rule, rounding, status.</tspan>
+<tspan x="128" dy="26.25">RULE  Shares total 100% or exact amount; due dates ordered/non-overlap.</tspan>
+<tspan x="128" dy="26.25">ACTION  Preview schedule, publish version, retire.</tspan>
+<tspan x="128" dy="26.25">API  payment-terms; schedule preview.</tspan>
+</text>
+<polyline points="960,2666 960,2681" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="2690" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="2736" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Fee Structure</tspan>
+</text>
+<text x="128" y="2775" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">FIELDS  Name*, school/academic year*, class/grade*, fee-head rows*</tspan>
+<tspan x="128" dy="26.25">(amount, frequency, term), effective dates, policy versions.</tspan>
+<tspan x="128" dy="26.25">RULE  Published version immutable; no missing account mapping.</tspan>
+<tspan x="128" dy="26.25">ACTION  Preview amounts/installments, publish, supersede.</tspan>
+<tspan x="128" dy="26.25">API  fee-structures; schedule/readiness preview.</tspan>
+</text>
+<polyline points="960,3054 960,3069" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="3078" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="3124" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Collection and Concession Policies</tspan>
+</text>
+<text x="128" y="3163" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">COLLECTION  Grace/late fee, rounding, head scope, partial/split/advance</tspan>
+<tspan x="128" dy="26.25">rules, allocation priority, provisional instruments, reversal window.</tspan>
+<tspan x="128" dy="26.25">CONCESSION  Eligibility, head scope, percent/cap, evidence, threshold,</tspan>
+<tspan x="128" dy="26.25">effective date, before/after demand and after-payment behavior.</tspan>
+<tspan x="128" dy="26.25">RULE  Request pins policy version; approval threshold enforced.</tspan>
+<tspan x="128" dy="26.25">ACTION  Simulate, publish version, retire.</tspan>
+</text>
+<polyline points="960,3442 960,3457" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="3466" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="3512" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Refund and Proration Policies</tspan>
+</text>
+<text x="128" y="3551" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">REFUND  Eligible source/head, paid charge/late fee, partial cap,</tspan>
+<tspan x="128" dy="26.25">deductions, payout modes, approver, evidence and reversal window.</tspan>
+<tspan x="128" dy="26.25">PRORATION  Head, cutoff, minimum days, rounding, after-cutoff rule.</tspan>
+<tspan x="128" dy="26.25">RULE  After demand, create a traceable reduction/reversal; no overwrite.</tspan>
+<tspan x="128" dy="26.25">ACTION  Simulate, publish version, retire.</tspan>
+</text>
+<polyline points="960,3830 960,3845" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="3854" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="3900" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Accounting Mappings</tspan>
+</text>
+<text x="128" y="3939" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">FIELDS  Event type*, debit source*, credit source*, conditions,</tspan>
+<tspan x="128" dy="26.25">effective from/to*, version*, status Draft/Active/Retired.</tspan>
+<tspan x="128" dy="26.25">RULE  Fixed supported event templates; active used version immutable.</tspan>
+<tspan x="128" dy="26.25">ACTION  Simulate amount/account resolution and balancing; activate.</tspan>
+<tspan x="128" dy="26.25">API  accounting-mappings; simulate; activate; retire.</tspan>
+</text>
+<polyline points="960,4218 960,4233" fill="none" stroke="#7048c9" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="106" y="4242" width="1708" height="360" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="128" y="4288" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="128" dy="0">Periods, Opening Balances, Readiness</tspan>
+</text>
+<text x="128" y="4327" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="128" dy="0">PERIOD  Financial year, month start/end, Open/Closed, closed by/at,</tspan>
+<tspan x="128" dy="26.25">reopen reason and approval. Backdating allowed only into open period.</tspan>
+<tspan x="128" dy="26.25">OPENING  As-of date, account/debit/credit rows, source, balancing fund.</tspan>
+<tspan x="128" dy="26.25">READINESS  Missing mappings, inactive heads, invalid terms, closed</tspan>
+<tspan x="128" dy="26.25">period, incomplete bank/payment configuration.</tspan>
+<tspan x="128" dy="26.25">API  accounting-periods; opening-balances; setup/readiness.</tspan>
+</text>
+<rect x="1906" y="362" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="408" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Fee Structure Assignment</tspan>
+</text>
+<text x="1928" y="447" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FIELDS  Student or cohort*, academic year*, structure version*,</tspan>
+<tspan x="1928" dy="26.25">effective date*, pinned term and policy versions, exclusion reason.</tspan>
+<tspan x="1928" dy="26.25">RULE  Enrollment eligible; avoid overlapping active assignments.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Preview roster/amounts, confirm with token and fingerprint.</tspan>
+<tspan x="1928" dy="26.25">STATUS  Previewed -&gt; Assigned -&gt; Superseded/Cancelled.</tspan>
+<tspan x="1928" dy="26.25">API  assignment preview and commit.</tspan>
+</text>
+<polyline points="2760,726 2760,741" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="750" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="796" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Fee Demands and Installments</tspan>
+</text>
+<text x="1928" y="835" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FIELDS  Student/cohort*, installment/period*, due date*, fee-head lines,</tspan>
+<tspan x="1928" dy="26.25">amounts, demand number generated, notes and cancellation reason.</tspan>
+<tspan x="1928" dy="26.25">RULE  Idempotent by assignment/version/installment; no duplicate bill.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Preview, generate, cancel/reinstate with linked reversal.</tspan>
+<tspan x="1928" dy="26.25">STATUS  Scheduled -&gt; Generated -&gt; Partial -&gt; Paid; Cancelled/Reversed.</tspan>
+<tspan x="1928" dy="26.25">API  fee-demands preview/generate/detail/cancel.</tspan>
+</text>
+<polyline points="2760,1114 2760,1129" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="1138" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="1184" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Student Financial Account</tspan>
+</text>
+<text x="1928" y="1223" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FILTERS  Student*, year, date range, source type and status.</tspan>
+<tspan x="1928" dy="26.25">SHOW  Demand, charge, allocation, concession, waiver, adjustment,</tspan>
+<tspan x="1928" dy="26.25">advance, refund, reversal, running due/credit, receipt and journal.</tspan>
+<tspan x="1928" dy="26.25">RULE  Student subledger totals reconcile to GL control accounts.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Open source/receipt/audit; start valid operation.</tspan>
+<tspan x="1928" dy="26.25">API  students/{id}/financial-account and /credits.</tspan>
+</text>
+<polyline points="2760,1502 2760,1517" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="1526" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="1572" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Charges</tspan>
+</text>
+<text x="1928" y="1611" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FIELDS  Student*, charge category/head*, amount*, effective/due date,</tspan>
+<tspan x="1928" dy="26.25">reason*, evidence, approval if threshold crossed.</tspan>
+<tspan x="1928" dy="26.25">RULE  Cannot add duplicate source charge or negative charge.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Preview, assess, reverse with reason.</tspan>
+<tspan x="1928" dy="26.25">STATUS  Draft -&gt; Approved -&gt; Posted -&gt; Reversed.</tspan>
+<tspan x="1928" dy="26.25">POST  Dr Student Receivable / Cr Charge Income.</tspan>
+</text>
+<polyline points="2760,1890 2760,1905" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="1914" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="1960" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Concession Request</tspan>
+</text>
+<text x="1928" y="1999" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FIELDS  Student*, policy/type*, fee head/installment scope*, amount</tspan>
+<tspan x="1928" dy="26.25">or percent*, reason*, evidence, effective date, requested by.</tspan>
+<tspan x="1928" dy="26.25">RULE  Within cap; no duplicated benefit; paid demand creates credit/</tspan>
+<tspan x="1928" dy="26.25">refund payable rather than negative outstanding.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Preview, submit, approve/reject, apply, reverse.</tspan>
+<tspan x="1928" dy="26.25">API  concessions approval-preview/approve/reverse.</tspan>
+</text>
+<polyline points="2760,2278 2760,2293" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="2302" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="2348" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Collections and Receipts</tspan>
+</text>
+<text x="1928" y="2387" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FIELDS  Student*, open demand/head allocations*, payment date*,</tspan>
+<tspan x="1928" dy="26.25">instrument rows (mode, amount, bank, reference, evidence),</tspan>
+<tspan x="1928" dy="26.25">unallocated/advance choice, remarks and receipt book.</tspan>
+<tspan x="1928" dy="26.25">RULE  Sum instruments = received; allocations &lt;= eligible due; one</tspan>
+<tspan x="1928" dy="26.25">idempotency key; receipt number server-generated.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Preview -&gt; Confirm -&gt; Receipt; reverse by linked entry.</tspan>
+<tspan x="1928" dy="26.25">API  fee-collections preview/create/reverse.</tspan>
+</text>
+<polyline points="2760,2666 2760,2681" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="2690" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="2736" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Payment Verification</tspan>
+</text>
+<text x="1928" y="2775" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FIELDS  Instrument*, provider/cheque reference, amount, initiated</tspan>
+<tspan x="1928" dy="26.25">date, settlement evidence/date, verifier decision and reason.</tspan>
+<tspan x="1928" dy="26.25">RULE  Operates per instrument, not entire split receipt; cash skips.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Verify, reject, mark failed; preserve other instruments.</tspan>
+<tspan x="1928" dy="26.25">STATUS  Pending -&gt; Verified/Failed/Rejected -&gt; Reversed.</tspan>
+<tspan x="1928" dy="26.25">API  payment-verifications/{instrumentId}/approve|reject|mark-failed.</tspan>
+</text>
+<polyline points="2760,3054 2760,3069" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="3078" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="3124" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Waiver in Collections</tspan>
+</text>
+<text x="1928" y="3163" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FIELDS  Eligible charge/late-fee row*, mandatory reason*, evidence</tspan>
+<tspan x="1928" dy="26.25">and approval if above policy threshold. Amount is server-calculated.</tspan>
+<tspan x="1928" dy="26.25">RULE  Only current unpaid eligible balance; not a cash transaction.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Preview, waive, reverse with full audit.</tspan>
+<tspan x="1928" dy="26.25">POST  Dr Waiver / Cr Student Receivable.</tspan>
+<tspan x="1928" dy="26.25">API  waivers/preview; waivers/apply; waivers/{id}/reverse.</tspan>
+</text>
+<polyline points="2760,3442 2760,3457" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="3466" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="3512" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Adjustments</tspan>
+</text>
+<text x="1928" y="3551" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FIELDS  Student*, genuine credit source* (advance/approved credit),</tspan>
+<tspan x="1928" dy="26.25">target demand/head*, amount*, effective date, reason and evidence.</tspan>
+<tspan x="1928" dy="26.25">RULE  Unpaid due is not available credit; amount &lt;= source and target.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Preview, submit/approve, apply atomically, reverse.</tspan>
+<tspan x="1928" dy="26.25">STATUS  Draft -&gt; Approved -&gt; Applied -&gt; Reversed.</tspan>
+<tspan x="1928" dy="26.25">API  adjustment-credits/targets; adjustments/preview/apply.</tspan>
+</text>
+<polyline points="2760,3830 2760,3845" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="3854" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="3900" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Refunds</tspan>
+</text>
+<text x="1928" y="3939" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">FIELDS  Student*, original credit/payment source*, requested amount*,</tspan>
+<tspan x="1928" dy="26.25">reason*, evidence, policy/version, deductions, approver; payout bank*,</tspan>
+<tspan x="1928" dy="26.25">method*, date*, reference*, failure reason if needed.</tspan>
+<tspan x="1928" dy="26.25">RULE  Reserve refundable balance; partial permitted per policy;</tspan>
+<tspan x="1928" dy="26.25">fee refund/advance/deposit have different accounting.</tspan>
+<tspan x="1928" dy="26.25">ACTION  Request -&gt; Review -&gt; Approve -&gt; Process/Fail -&gt; Reverse.</tspan>
+<tspan x="1928" dy="26.25">API  refunds accounting-preview/process/mark-failed/reverse.</tspan>
+</text>
+<polyline points="2760,4218 2760,4233" fill="none" stroke="#1971c2" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="1906" y="4242" width="1708" height="360" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="1928" y="4288" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1928" dy="0">Receipts, Cancellation and Reversal</tspan>
+</text>
+<text x="1928" y="4327" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1928" dy="0">RECEIPT  Number, student, allocations, instruments, verification state,</tspan>
+<tspan x="1928" dy="26.25">issued/voided by, download and source links. No editable amount.</tspan>
+<tspan x="1928" dy="26.25">CANCEL  Paid demand cannot be silently removed; show impact preview.</tspan>
+<tspan x="1928" dy="26.25">REVERSE  Original source/journal remains; linked contra-entry records</tspan>
+<tspan x="1928" dy="26.25">reason, actor, time and reopened receivable/advance.</tspan>
+<tspan x="1928" dy="26.25">API  source-specific reverse-preview and reverse.</tspan>
+</text>
+<rect x="3706" y="362" width="1708" height="360" rx="18" fill="#e9f7ec" stroke="#2f9e44" stroke-width="2"/>
+<text x="3728" y="408" fill="#2f9e44" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="3728" dy="0">Other Income (not school fees)</tspan>
+</text>
+<text x="3728" y="447" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="3728" dy="0">FIELDS  Category*, payer/source*, amount*, transaction date*, mode*,</tspan>
+<tspan x="3728" dy="26.25">cash/bank/receivable destination*, reference, description, evidence.</tspan>
+<tspan x="3728" dy="26.25">RULE  Fee receipt cannot be entered again as Income; period open.</tspan>
+<tspan x="3728" dy="26.25">ACTION  Preview, save draft, submit, approve, post, reverse.</tspan>
+<tspan x="3728" dy="26.25">STATUS  Draft -&gt; Submitted -&gt; Approved -&gt; Posted -&gt; Reversed.</tspan>
+<tspan x="3728" dy="26.25">API  incomes/preview/create/submit/approve/post/reverse.</tspan>
+</text>
+<polyline points="4560,726 4560,741" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="3706" y="750" width="1708" height="360" rx="18" fill="#e9f7ec" stroke="#2f9e44" stroke-width="2"/>
+<text x="3728" y="796" fill="#2f9e44" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="3728" dy="0">Expenses and Vendor Payable</tspan>
+</text>
+<text x="3728" y="835" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="3728" dy="0">FIELDS  Category*, vendor*, invoice no/date*, amount*, tax if used,</tspan>
+<tspan x="3728" dy="26.25">description*, due date, evidence; Already paid? Yes/No.</tspan>
+<tspan x="3728" dy="26.25">IF YES  Mode*, cash/bank*, paid date*, reference* where required.</tspan>
+<tspan x="3728" dy="26.25">IF NO  Create vendor payable; later choose bank/mode/ref/date.</tspan>
+<tspan x="3728" dy="26.25">RULE  Duplicate vendor invoice blocked; refund is not an expense.</tspan>
+<tspan x="3728" dy="26.25">API  expenses/preview/create/submit/approve/pay/reverse.</tspan>
+</text>
+<polyline points="4560,1114 4560,1129" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="3706" y="1138" width="1708" height="360" rx="18" fill="#e9f7ec" stroke="#2f9e44" stroke-width="2"/>
+<text x="3728" y="1184" fill="#2f9e44" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="3728" dy="0">Bank Reconciliation</tspan>
+</text>
+<text x="3728" y="1223" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="3728" dy="0">FIELDS  Bank account*, statement period*, opening/closing balance,</tspan>
+<tspan x="3728" dy="26.25">import file*, statement line date/amount/reference/description.</tspan>
+<tspan x="3728" dy="26.25">RULE  Detect duplicate file/lines; match/partial-match to bank book;</tspan>
+<tspan x="3728" dy="26.25">unresolved lines stay visible; matching never edits original receipt.</tspan>
+<tspan x="3728" dy="26.25">ACTION  Import -&gt; Suggest -&gt; Confirm match -&gt; Review -&gt; Close.</tspan>
+<tspan x="3728" dy="26.25">API  bank-statements/imports; candidates; reconciliation-matches.</tspan>
+</text>
+<polyline points="4560,1502 4560,1517" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="3706" y="1526" width="1708" height="360" rx="18" fill="#e9f7ec" stroke="#2f9e44" stroke-width="2"/>
+<text x="3728" y="1572" fill="#2f9e44" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="3728" dy="0">Journals and General Ledger</tspan>
+</text>
+<text x="3728" y="1611" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="3728" dy="0">FILTERS  Period, account, source module/id, posting state, date range.</tspan>
+<tspan x="3728" dy="26.25">SHOW  Entry no/date, debit/credit lines, source, mapping version, actor,</tspan>
+<tspan x="3728" dy="26.25">reversal link, account running balance and drill-through evidence.</tspan>
+<tspan x="3728" dy="26.25">RULE  Routine fee/income/expense actions post automatically.</tspan>
+<tspan x="3728" dy="26.25">ACTION  View/export; exceptional manual journal restricted.</tspan>
+<tspan x="3728" dy="26.25">API  journals/list/detail/reverse; ledgers/accounts/{id}.</tspan>
+</text>
+<polyline points="4560,1890 4560,1905" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="3706" y="1914" width="1708" height="360" rx="18" fill="#e9f7ec" stroke="#2f9e44" stroke-width="2"/>
+<text x="3728" y="1960" fill="#2f9e44" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="3728" dy="0">Posting Exceptions</tspan>
+</text>
+<text x="3728" y="1999" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="3728" dy="0">FIELDS  Source event/id, school, amount, reason code, mapping/period,</tspan>
+<tspan x="3728" dy="26.25">retry count, owner, created/resolved at and resolution evidence.</tspan>
+<tspan x="3728" dy="26.25">RULE  No silent partial posting or duplicate journal on retry.</tspan>
+<tspan x="3728" dy="26.25">ACTION  Fix mapping/account/period, retry safely, escalate.</tspan>
+<tspan x="3728" dy="26.25">STATUS  Open -&gt; Retrying -&gt; Resolved/Escalated.</tspan>
+<tspan x="3728" dy="26.25">API  posting-exceptions/list/detail/retry.</tspan>
+</text>
+<polyline points="4560,2278 4560,2293" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="3706" y="2302" width="1708" height="360" rx="18" fill="#e9f7ec" stroke="#2f9e44" stroke-width="2"/>
+<text x="3728" y="2348" fill="#2f9e44" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="3728" dy="0">Accounting Period Close</tspan>
+</text>
+<text x="3728" y="2387" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="3728" dy="0">FIELDS  Financial year/month*, start/end, close date, checker, note;</tspan>
+<tspan x="3728" dy="26.25">reopen action needs reason*, approval and audit.</tspan>
+<tspan x="3728" dy="26.25">BLOCKERS  Unposted events, exceptions, pending verification,</tspan>
+<tspan x="3728" dy="26.25">unreconciled lines, draft journals and high-risk approvals.</tspan>
+<tspan x="3728" dy="26.25">ACTION  Close preview, close, audited reopen.</tspan>
+<tspan x="3728" dy="26.25">API  accounting-periods/generate/close-preview/close/reopen.</tspan>
+</text>
+<polyline points="4560,2666 4560,2681" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="3706" y="2690" width="1708" height="360" rx="18" fill="#e9f7ec" stroke="#2f9e44" stroke-width="2"/>
+<text x="3728" y="2736" fill="#2f9e44" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="3728" dy="0">Reports and Daily Control</tspan>
+</text>
+<text x="3728" y="2775" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="3728" dy="0">FILTERS  School, year/period, account/head, class, mode, bank, status.</tspan>
+<tspan x="3728" dy="26.25">REPORTS  Collection, outstanding/aging, refunds/concessions, bank</tspan>
+<tspan x="3728" dy="26.25">book, cash book, trial balance, income-expense, P&amp;L, balance sheet.</tspan>
+<tspan x="3728" dy="26.25">RULE  Student due = receivable control; debits = credits; clearing</tspan>
+<tspan x="3728" dy="26.25">and statement differences have named exceptions.</tspan>
+<tspan x="3728" dy="26.25">ACTION  Drill down, export with permissions.</tspan>
+</text>
+<polyline points="4560,3054 4560,3069" fill="none" stroke="#2f9e44" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="3706" y="3078" width="1708" height="360" rx="18" fill="#e9f7ec" stroke="#2f9e44" stroke-width="2"/>
+<text x="3728" y="3124" fill="#2f9e44" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="3728" dy="0">Permissions and Audit</tspan>
+</text>
+<text x="3728" y="3163" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="3728" dy="0">ROLES  Officer records; approver authorizes; accountant closes;</tspan>
+<tspan x="3728" dy="26.25">auditor reads; admin configures. Enforce tenant/year scope server-side.</tspan>
+<tspan x="3728" dy="26.25">AUDIT  Who/when/from-to/reason/evidence/policy/mapping version,</tspan>
+<tspan x="3728" dy="26.25">idempotency key, source document and journal/reversal links.</tspan>
+<tspan x="3728" dy="26.25">RULE  No self-approval above limit; sensitive bank details masked.</tspan>
+<tspan x="3728" dy="26.25">ACTION  Filter/export audit trail; no destructive posted edits.</tspan>
+</text>
+<rect x="5506" y="362" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="408" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">1  Aarav | Grade 8 fee demand</tspan>
+</text>
+<text x="5528" y="447" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">Fee Structure: tuition INR 12,000 + transport INR 3,000.</tspan>
+<tspan x="5528" dy="26.25">Assignment pins term/policy versions; demand total INR 15,000.</tspan>
+<tspan x="5528" dy="26.25">POST  Dr Student Receivable 15,000; Cr Tuition Income 12,000;</tspan>
+<tspan x="5528" dy="26.25">Cr Transport Income 3,000. Student due = INR 15,000.</tspan>
+</text>
+<polyline points="6510,726 6510,741" fill="none" stroke="#b7791f" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="5506" y="750" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="796" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">2  Merit concession before payment</tspan>
+</text>
+<text x="5528" y="835" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">Approved concession INR 1,000 against tuition.</tspan>
+<tspan x="5528" dy="26.25">POST  Dr Fee Concession 1,000; Cr Student Receivable 1,000.</tspan>
+<tspan x="5528" dy="26.25">Student due = INR 14,000. Original demand stays visible.</tspan>
+</text>
+<polyline points="6510,1114 6510,1129" fill="none" stroke="#b7791f" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="5506" y="1138" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="1184" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">3  Split receipt: cash plus UPI</tspan>
+</text>
+<text x="5528" y="1223" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">Aarav pays INR 4,000 cash + INR 6,000 UPI.</tspan>
+<tspan x="5528" dy="26.25">POST  Dr Cash 4,000; Dr UPI Clearing 6,000;</tspan>
+<tspan x="5528" dy="26.25">Cr Student Receivable 10,000. Student due = INR 4,000.</tspan>
+<tspan x="5528" dy="26.25">UPI instrument alone awaits verification/settlement.</tspan>
+</text>
+<polyline points="6510,1502 6510,1517" fill="none" stroke="#b7791f" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="5506" y="1526" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="1572" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">4  UPI reaches the school bank</tspan>
+</text>
+<text x="5528" y="1611" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">Provider settlement INR 6,000 matches the UPI instrument.</tspan>
+<tspan x="5528" dy="26.25">POST  Dr School Bank 6,000; Cr UPI Clearing 6,000.</tspan>
+<tspan x="5528" dy="26.25">Bank reconciliation matches statement line; clearing = zero.</tspan>
+</text>
+<polyline points="6510,1890 6510,1905" fill="none" stroke="#b7791f" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="5506" y="1914" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="1960" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">5  Final payment exceeds due</tspan>
+</text>
+<text x="5528" y="1999" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">Aarav pays INR 5,000 by bank; due was INR 4,000.</tspan>
+<tspan x="5528" dy="26.25">POST  Dr School Bank 5,000; Cr Receivable 4,000;</tspan>
+<tspan x="5528" dy="26.25">Cr Student Advance 1,000. Due = zero; advance = INR 1,000.</tspan>
+</text>
+<polyline points="6510,2278 6510,2293" fill="none" stroke="#b7791f" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="5506" y="2302" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="2348" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">6  Parent asks for advance refund</tspan>
+</text>
+<text x="5528" y="2387" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">Approved payout INR 1,000; advance is reserved before payment.</tspan>
+<tspan x="5528" dy="26.25">POST  Dr Student Advance 1,000; Cr School Bank 1,000.</tspan>
+<tspan x="5528" dy="26.25">This is a liability payout, NOT an ordinary school expense.</tspan>
+</text>
+<polyline points="6510,2666 6510,2681" fill="none" stroke="#b7791f" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="5506" y="2690" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="2736" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">7  Meera | credit adjustment + waiver</tspan>
+</text>
+<text x="5528" y="2775" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">Meera owes transport INR 3,000; prior approved advance INR 2,000.</tspan>
+<tspan x="5528" dy="26.25">ADJUST  Dr Student Advance 2,000; Cr Receivable 2,000.</tspan>
+<tspan x="5528" dy="26.25">Due = INR 1,000. Late charge 500 is then fully waived:</tspan>
+<tspan x="5528" dy="26.25">Dr Waiver 500; Cr Receivable 500. Charge/waiver stay auditable.</tspan>
+</text>
+<polyline points="6510,3054 6510,3069" fill="none" stroke="#b7791f" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="5506" y="3078" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="3124" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">8  Paid fee later refunded</tspan>
+</text>
+<text x="5528" y="3163" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">Approved return of recognized tuition INR 2,000.</tspan>
+<tspan x="5528" dy="26.25">APPROVE  Dr Fee Refund 2,000; Cr Refund Payable 2,000.</tspan>
+<tspan x="5528" dy="26.25">PAYOUT  Dr Refund Payable 2,000; Cr Bank 2,000.</tspan>
+<tspan x="5528" dy="26.25">Not an Expenses voucher; source and payout reconcile.</tspan>
+</text>
+<polyline points="6510,3442 6510,3457" fill="none" stroke="#b7791f" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="5506" y="3466" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="3512" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">9  Non-fee income and true expense</tspan>
+</text>
+<text x="5528" y="3551" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">School receives donation INR 10,000:</tspan>
+<tspan x="5528" dy="26.25">Dr Bank 10,000; Cr Donation Income 10,000.</tspan>
+<tspan x="5528" dy="26.25">School pays electricity bill INR 25,000:</tspan>
+<tspan x="5528" dy="26.25">Dr Electricity Expense 25,000; Cr Bank 25,000.</tspan>
+</text>
+<polyline points="6510,3830 6510,3845" fill="none" stroke="#b7791f" stroke-width="3" marker-end="url(#arrow)"/>
+<rect x="5506" y="3854" width="2008" height="360" rx="18" fill="#fff7d6" stroke="#b7791f" stroke-width="2"/>
+<text x="5528" y="3900" fill="#b7791f" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5528" dy="0">10  End-of-day and month-end checks</tspan>
+</text>
+<text x="5528" y="3939" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5528" dy="0">Aarav: due 0; advance 0; UPI clearing 0; net fee income 14,000.</tspan>
+<tspan x="5528" dy="26.25">Cash + bank receipts net of Aarav refund = INR 14,000.</tspan>
+<tspan x="5528" dy="26.25">Trial balance debits = credits; bank lines matched.</tspan>
+<tspan x="5528" dy="26.25">Unresolved exceptions block close; reopening requires reason.</tspan>
+</text>
+<rect x="80" y="4785" width="7460" height="540" rx="18" fill="#ffffff" stroke="#b9c6d3" stroke-width="2"/>
+<text x="108" y="4839" fill="#183153" font-family="Arial, sans-serif" font-size="34" font-weight="700">
+<tspan x="108" dy="0">05  BACKEND CONTRACT | every operation, without asking the finance officer to write journals</tspan>
+</text>
+<rect x="108" y="4875" width="1780" height="365" rx="18" fill="#fff0dc" stroke="#e67700" stroke-width="2"/>
+<text x="130" y="4921" fill="#e67700" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="130" dy="0">Command and validation</tspan>
+</text>
+<text x="130" y="4960" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="130" dy="0">Authenticate school/year and permission.</tspan>
+<tspan x="130" dy="26.25">Validate status transition, policy version,</tspan>
+<tspan x="130" dy="26.25">effective date, evidence, open period,</tspan>
+<tspan x="130" dy="26.25">amount and account readiness.</tspan>
+<tspan x="130" dy="26.25">Check idempotency key + row version +</tspan>
+<tspan x="130" dy="26.25">backend preview fingerprint.</tspan>
+</text>
+<rect x="1960" y="4875" width="1780" height="365" rx="18" fill="#e9f7ec" stroke="#2f9e44" stroke-width="2"/>
+<text x="1982" y="4921" fill="#2f9e44" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="1982" dy="0">Atomic automatic posting</tspan>
+</text>
+<text x="1982" y="4960" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="1982" dy="0">Save business transition and Financial Event.</tspan>
+<tspan x="1982" dy="26.25">Resolve active event-to-account mapping.</tspan>
+<tspan x="1982" dy="26.25">Create balanced Journal and lines.</tspan>
+<tspan x="1982" dy="26.25">Update rebuildable student/GL projections.</tspan>
+<tspan x="1982" dy="26.25">Commit in one database transaction.</tspan>
+<tspan x="1982" dy="26.25">Publish outbox work after commit.</tspan>
+</text>
+<rect x="3812" y="4875" width="1780" height="365" rx="18" fill="#eaf4ff" stroke="#1971c2" stroke-width="2"/>
+<text x="3834" y="4921" fill="#1971c2" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="3834" dy="0">Failure, reversal, concurrency</tspan>
+</text>
+<text x="3834" y="4960" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="3834" dy="0">Unique source-event and journal constraints.</tspan>
+<tspan x="3834" dy="26.25">Lock affected student credit/receivable rows.</tspan>
+<tspan x="3834" dy="26.25">Retry returns the same result, never reposts.</tspan>
+<tspan x="3834" dy="26.25">Failed posting -&gt; visible exception.</tspan>
+<tspan x="3834" dy="26.25">Posted source is never deleted or edited;</tspan>
+<tspan x="3834" dy="26.25">reverse with linked contra-entry.</tspan>
+</text>
+<rect x="5664" y="4875" width="1780" height="365" rx="18" fill="#f2edff" stroke="#7048c9" stroke-width="2"/>
+<text x="5686" y="4921" fill="#7048c9" font-family="Arial, sans-serif" font-size="29" font-weight="700">
+<tspan x="5686" dy="0">Control totals and close</tspan>
+</text>
+<text x="5686" y="4960" fill="#183153" font-family="Arial, sans-serif" font-size="21" font-weight="400">
+<tspan x="5686" dy="0">Student subledger = receivable/advance GL.</tspan>
+<tspan x="5686" dy="26.25">Debits = credits per journal and trial balance.</tspan>
+<tspan x="5686" dy="26.25">Bank book = matched statement + exceptions.</tspan>
+<tspan x="5686" dy="26.25">Clearing balances explain unsettled instruments.</tspan>
+<tspan x="5686" dy="26.25">Period close blocks unresolved high-risk work.</tspan>
+<tspan x="5686" dy="26.25">Audit stores actor, reason, source and version.</tspan>
+</text>
+<text x="108" y="5290" fill="#52677e" font-family="Arial, sans-serif" font-size="20" font-weight="400">
+<tspan x="108" dy="0">Important: the arrows between cards show reading order. Charges, concessions, waiver, adjustments and refunds are optional business paths, not mandatory steps.</tspan>
+</text>
+</svg>

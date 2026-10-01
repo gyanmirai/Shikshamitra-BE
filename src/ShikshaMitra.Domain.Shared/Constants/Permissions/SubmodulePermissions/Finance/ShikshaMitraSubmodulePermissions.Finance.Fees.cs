@@ -72,6 +72,8 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Approve = $"{SubmoduleName}.Approve";
 			public const string Reject = $"{SubmoduleName}.Reject";
 			public const string Process = $"{SubmoduleName}.Process";
+			public const string VerifyPayout = $"{SubmoduleName}.VerifyPayout";
+			public const string FailPayout = $"{SubmoduleName}.FailPayout";
 			public const string RetryProcessing = $"{SubmoduleName}.RetryProcessing";
 			public const string Reverse = $"{SubmoduleName}.Reverse";
 			public const string OverrideMakerChecker = $"{SubmoduleName}.OverrideMakerChecker";
@@ -80,7 +82,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public static readonly string[] All =
 			{
 				View, Add, Edit, Submit, StartReview, Delete, Cancel, Approve, Reject,
-				Process, RetryProcessing, Reverse, OverrideMakerChecker, ViewSensitivePaymentDetails
+				Process, VerifyPayout, FailPayout, RetryProcessing, Reverse, OverrideMakerChecker, ViewSensitivePaymentDetails
 			};
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
@@ -95,6 +97,8 @@ public static partial class ShikshaMitraSubmodulePermissions
 				{ Approve, $"{SubmoduleDisplayName}.Approve" },
 				{ Reject, $"{SubmoduleDisplayName}.Reject" },
 				{ Process, $"{SubmoduleDisplayName}.Process" },
+				{ VerifyPayout, $"{SubmoduleDisplayName}.VerifyPayout" },
+				{ FailPayout, $"{SubmoduleDisplayName}.FailPayout" },
 				{ RetryProcessing, $"{SubmoduleDisplayName}.RetryProcessing" },
 				{ Reverse, $"{SubmoduleDisplayName}.Reverse" },
 				{ OverrideMakerChecker, $"{SubmoduleDisplayName}.OverrideMakerChecker" },
@@ -187,15 +191,17 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string OverrideAmount = $"{SubmoduleName}.OverrideAmount";
+			public const string OverridePolicies = $"{SubmoduleName}.OverridePolicies";
 			public const string Delete = $"{SubmoduleName}.Delete";
 
-			public static readonly string[] All = { View, Add, Delete, OverrideAmount };
+			public static readonly string[] All = { View, Add, Delete, OverrideAmount, OverridePolicies };
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ SubmoduleName, SubmoduleDisplayName },
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
 				{ OverrideAmount, $"{SubmoduleDisplayName}.OverrideAmount" },
+				{ OverridePolicies, $"{SubmoduleDisplayName}.OverridePolicies" },
 				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}

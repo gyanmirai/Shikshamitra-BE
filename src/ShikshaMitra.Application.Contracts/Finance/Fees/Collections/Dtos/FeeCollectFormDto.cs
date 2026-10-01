@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -83,6 +83,9 @@ public class FeeLedgerLineDto
 
     public Guid? ProrationPolicyId { get; set; }
     public Guid? ProrationPolicyVersionId { get; set; }
+    /// <summary>Name captured by the immutable policy version used for this obligation.</summary>
+    public string? ProrationPolicyName { get; set; }
+    public int? ProrationPolicyVersionNumber { get; set; }
     public decimal? ProrationFactor { get; set; }
     public string? ProrationRuleType { get; set; }
     public string? ProrationRoundingMode { get; set; }
@@ -98,6 +101,12 @@ public class FeeLedgerLineDto
 
     /// <summary>Outstanding amount (Total − Paid, clamped to zero).</summary>
     public double Due { get; set; }
+
+    /// <summary>Whole rupee collection amount using the whole rupee round-up rule (Ceiling).</summary>
+    public double CollectionAmount { get; set; }
+
+    /// <summary>Identifiable Rounding Adjustment / Round Off difference (CollectionAmount - Due).</summary>
+    public double RoundingAmount { get; set; }
 
     /// <summary>
     /// Amount of <see cref="Paid"/> that is currently held in reconciliation

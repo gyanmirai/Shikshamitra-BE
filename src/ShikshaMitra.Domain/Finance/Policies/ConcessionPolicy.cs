@@ -48,6 +48,8 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Update(ConcessionPolicyUpdateModel model)
 	{
+		if (IsDefault && (!model.IsDefault || model.Status != ConcessionPolicyStatus.Active))
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if (Status == ConcessionPolicyStatus.Archived && Version > 0)
 			throw new BusinessException(ConcessionPolicyErrorCodes.ArchivedPolicyNotEditable);
 		if (AcademicYearId == Guid.Empty)
@@ -89,6 +91,8 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Archive()
 	{
+		if (IsDefault)
+			throw new BusinessException(ConcessionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		Status = ConcessionPolicyStatus.Archived;
 		IsDefault = false;
 		Version++;
@@ -96,6 +100,7 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Unarchive()
 	{
+		if (Status != ConcessionPolicyStatus.Archived) return;
 		Status = ConcessionPolicyStatus.Draft;
 		IsDefault = false;
 		Version++;

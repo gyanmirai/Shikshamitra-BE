@@ -41,11 +41,8 @@ public partial class CollectFeeWorkflow(
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
-	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
-	LateFeeWaiverLookupService waiverLookupService,
+	LateFeeBalanceService lateFeeBalanceService,
 	CollectionPolicyResolver policyResolver,
-	LateFeeCalculationService lateFeeCalculationService,
-	ExceptionWindowResolver exceptionWindowResolver,
 	FeeCollectionManager feeCollectionManager,
 	FinanceAuditWriter financeAuditWriter,
 	FinanceScopeAccessService financeScopeAccessService,
@@ -84,7 +81,10 @@ public partial class CollectFeeWorkflow(
 		await ValidatePaymentChannelPolicyAsync(input);
 		var dueFeeContext = await LoadAndValidateDueFeesContextAsync(input);
 		var chargeContext = await LoadAndValidateChargesContextAsync(input);
-		await ValidateLateFeePaymentsAsync(input);
+		var lateFeeMap = await ValidateLateFeePaymentsAsync(input);
+		// Snapshot all accrued charges before principal can change, even when charges are unselected.
+		await lateFeeBalanceService.GetBalancesAsync(dueFeeContext.DueFeeMap.Values.ToList(),
+			input.AcademicYearId, clock.Now, preserveAssessment: true);
 
 		var paymentMethods = input.Payments.Select(p => p.PaymentMethod).ToList();
 		var received = input.DueFeePayments.Sum(dfp => dfp.Amount) + input.ChargePayments.Sum(cp => cp.Amount)
@@ -145,7 +145,7 @@ public partial class CollectFeeWorkflow(
 			PaidLateFees = input.LateFeePayments.Select(lfp => new PaidDueFeeInfoDto
 			{
 				DueFeeId = lfp.DueFeeId,
-				FeeHeadId = dueFeeContext.DueFeeMap.GetValueOrDefault(lfp.DueFeeId)?.FeeHeadId ?? Guid.Empty,
+				FeeHeadId = lateFeeMap[lfp.DueFeeId].FeeHeadId,
 				AmountPaid = lfp.Amount,
 			}).ToList(),
 			PaidFeeHeads = transaction.FeeCollectionRecords.Select(r => new PaidFeeHeadInfoDto

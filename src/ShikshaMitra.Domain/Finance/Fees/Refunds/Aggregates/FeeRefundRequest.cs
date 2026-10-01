@@ -17,6 +17,9 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? RefundPolicyId { get; private set; }
     public Guid? RefundPolicyVersionId { get; private set; }
     public Guid? ConcessionRequestId { get; private set; }
+    public Guid? ReplacesRefundRequestId { get; private set; }
+    public string? RequestIdempotencyKey { get; private set; }
+    public int WorkflowVersion { get; private set; }
     public Guid? OriginalReceiptId { get; private set; }
     public string? OriginalReceiptNumber { get; private set; }
     public string Currency { get; private set; } = "INR";
@@ -109,6 +112,20 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         CalculationHash = Check.NotNullOrWhiteSpace(calculationHash, nameof(calculationHash), 64);
     }
 
+    internal void UseSimpleWorkflow(Guid submittedBy, string? idempotencyKey = null, Guid? replacesRequestId = null)
+    {
+        if (Status != FeeRefundStatus.Draft && Status != FeeRefundStatus.Submitted)
+            ThrowIllegalTransition(FeeRefundStatus.Submitted);
+        if (_lines.Count == 0 || CalculatedAmount <= 0 || !OriginalReceiptId.HasValue)
+            throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
+        WorkflowVersion = 1;
+        RequestIdempotencyKey = Normalize(idempotencyKey);
+        ReplacesRefundRequestId = replacesRequestId;
+        Status = FeeRefundStatus.Submitted;
+        SubmittedByUserId = submittedBy;
+        SubmittedAt = DateTimeOffset.UtcNow;
+    }
+
     internal void UpdateEvidence(string calculationSnapshotJson, string calculationHash)
     {
         EnsureDraft();
@@ -187,7 +204,11 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     public FeeRefundRequest Reject(Guid userId, string notes)
     {
-        EnsureTransitionAny(FeeRefundStatus.Rejected, FeeRefundStatus.Submitted, FeeRefundStatus.UnderReview);
+        if (WorkflowVersion == 1 && Status == FeeRefundStatus.Approved && _settlements.Count == 0)
+        {
+            // A checker may rescind an approval before any money is sent.
+        }
+        else EnsureTransitionAny(FeeRefundStatus.Rejected, FeeRefundStatus.Submitted, FeeRefundStatus.UnderReview);
         if (string.IsNullOrWhiteSpace(notes)) throw new ArgumentException("Rejection notes are required.", nameof(notes));
         ReleaseReservations(); Status = FeeRefundStatus.Rejected; ReviewedByUserId = userId; ProcessedAt = DateTimeOffset.UtcNow; ApproverNotes = notes.Trim(); return this;
     }
@@ -208,6 +229,61 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         if (amount != ApprovedAmount || amount <= 0) throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
         var attempt = new FeeRefundSettlement(settlementId, Id, _settlements.Count + 1, userId, idempotencyKey, method, amount, settlementDate, externalReference, paymentDetailsJson);
         _settlements.Add(attempt); Status = FeeRefundStatus.Processing; FailureReason = null; return attempt;
+    }
+
+    public FeeRefundSettlement RecordPayout(Guid settlementId, Guid userId, string idempotencyKey,
+        string method, decimal amount, DateTimeOffset date, string? reference, string? details,
+        Guid? bankAccountId, string evidenceReference)
+    {
+        if (WorkflowVersion != 1 || Status != FeeRefundStatus.Approved)
+            ThrowIllegalTransition(FeeRefundStatus.Approved);
+        var prior = _settlements.FirstOrDefault(x => x.IdempotencyKey == idempotencyKey);
+        if (prior != null) return prior;
+        if (_settlements.Count != 0 || amount != ApprovedAmount || amount <= 0 ||
+            (RefundMethod != null && !string.Equals(method, RefundMethod, StringComparison.OrdinalIgnoreCase)) ||
+            (RefundMethod == null && !ConcessionRequestId.HasValue))
+            throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
+        if (RefundMethod == null) RefundMethod = method;
+        var attempt = new FeeRefundSettlement(settlementId, Id, 1, userId, idempotencyKey,
+            method, amount, date, reference, details, bankAccountId, evidenceReference);
+        _settlements.Add(attempt);
+        return attempt;
+    }
+
+    public void ConfirmPayout(Guid settlementId, Guid userId, string key, string evidenceReference)
+    {
+        if (WorkflowVersion != 1 || Status != FeeRefundStatus.Approved)
+            ThrowIllegalTransition(FeeRefundStatus.Processed);
+        var settlement = _settlements.SingleOrDefault(x => x.Id == settlementId)
+            ?? throw new BusinessException(FeeRefundErrorCodes.SettlementNotFound);
+        settlement.Confirm(userId, key, evidenceReference);
+        foreach (var reservation in _reservations.Where(x => x.Status == FeeRefundReservationStatus.Active)) reservation.Consume();
+        foreach (var line in _lines) line.MarkProcessed(line.ApprovedAmount);
+        ProcessedAmount = settlement.Amount;
+        Status = FeeRefundStatus.Processed;
+        ProcessedByUserId = userId;
+        ProcessedAt = DateTimeOffset.UtcNow;
+    }
+
+    public void FailPayout(Guid settlementId, Guid userId, string key, string reason, string evidenceReference)
+    {
+        if (WorkflowVersion != 1 || Status != FeeRefundStatus.Approved)
+            ThrowIllegalTransition(FeeRefundStatus.Failed);
+        var settlement = _settlements.SingleOrDefault(x => x.Id == settlementId)
+            ?? throw new BusinessException(FeeRefundErrorCodes.SettlementNotFound);
+        settlement.Fail(userId, key, reason, evidenceReference);
+        ReleaseReservations();
+        Status = FeeRefundStatus.Failed;
+        FailureReason = reason.Trim();
+    }
+
+    public void RecordReturnedPayout(Guid settlementId, Guid userId, string reason)
+    {
+        if (WorkflowVersion != 1 || Status != FeeRefundStatus.Processed || RefundMethod == "Cash")
+            ThrowIllegalTransition(FeeRefundStatus.Failed);
+        Reverse(settlementId, userId, reason);
+        Status = FeeRefundStatus.Failed;
+        FailureReason = reason.Trim();
     }
 
     public void CompleteSettlement(Guid settlementId, Guid userId)

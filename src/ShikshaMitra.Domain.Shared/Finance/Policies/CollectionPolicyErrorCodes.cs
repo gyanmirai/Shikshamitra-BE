@@ -2,6 +2,7 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 public static class CollectionPolicyErrorCodes
 {
+	public const string DefaultPolicyCannotBeRemoved = "Finance:CollectionPolicy:010033";
 	private const string Prefix = "Finance:CollectionPolicy:";
 
 	public const string PolicyNotFound = Prefix + "010001";

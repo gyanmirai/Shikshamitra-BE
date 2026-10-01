@@ -5,6 +5,7 @@ using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Common;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Students;
 using System;
 using System.Collections.Generic;
@@ -21,7 +22,7 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
 /// <summary>
 /// Applies (or requests approval for) a waiver against a due line's computed late fee.
-/// Does not mutate DueFee — see LateFeeWaiverApplication's class doc for why.
+/// Preserves the accrued assessment on DueFee without changing its principal balance.
 /// </summary>
 [RemoteService(false)]
 [Authorize]
@@ -30,10 +31,8 @@ public class LateFeeWaiverAppService(
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<LateFeeWaiverApplication, Guid> waiverRepository,
 	CollectionPolicyResolver policyResolver,
-	LateFeeCalculationService lateFeeCalculationService,
-	ExceptionWindowResolver exceptionWindowResolver,
+	LateFeeBalanceService lateFeeBalanceService,
 	WaiverCalculationService waiverCalculationService,
-	LateFeeWaiverLookupService waiverLookupService,
 	FinanceAuditWriter financeAuditWriter,
 	IReadOnlyRepository<Student, Guid> studentRepository,
 	IReadOnlyRepository<FeeHead, Guid> feeHeadRepository,
@@ -110,23 +109,9 @@ public class LateFeeWaiverAppService(
 		}
 
 		var policy = effective.Policy;
-		var daysLate = (clock.Now.Date - dueFee.DueDate.Date).Days;
-		var activeWindow = await exceptionWindowResolver.ResolveActiveWindowAsync(
-			policy.AcademicYearId, feeStructureId, clock.Now.Date);
-		var lateFeeResult = lateFeeCalculationService.Calculate(policy, new LateFeeCalculationInput(
-			Math.Max(0, daysLate),
-			(decimal)dueFee.OutstandingAmount,
-			(decimal)dueFee.OriginalAmount,
-			(decimal)dueFee.OutstandingAmount,
-			dueFee.FeeHeadId,
-			effective.IsLateFeeExempt,
-			effective.CustomGracePeriodDays,
-			activeWindow?.Effect,
-			activeWindow?.ExtensionDays,
-			activeWindow?.Label));
-
-		var alreadyWaived = await waiverLookupService.GetAppliedWaivedAmountAsync(dueFee.Id);
-		var remainingLateFee = Math.Max(0, lateFeeResult.LateFee - alreadyWaived);
+		var balances = await lateFeeBalanceService.GetBalancesAsync([dueFee], policy.AcademicYearId,
+			clock.Now, preserveAssessment: true);
+		var remainingLateFee = balances[dueFee.Id].PendingAmount;
 
 		var requestedAmount = input.RequestedAmount
 			?? (input.RequestedPercentage is { } pct ? remainingLateFee * pct / 100m : remainingLateFee);

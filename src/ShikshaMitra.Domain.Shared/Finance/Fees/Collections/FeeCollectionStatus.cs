@@ -1,7 +1,7 @@
 ﻿namespace ShikshaMitra.Finance.Fees.Collections;
 
 /// <summary>
-/// Payment status for a fee collection transaction.
+/// Status for a fee collection transaction or student collection summary.
 /// </summary>
 public enum FeeCollectionStatus
 {
@@ -28,4 +28,7 @@ public enum FeeCollectionStatus
 
     /// <summary>A charge or late-fee balance was cleared by a non-cash waiver.</summary>
     Waived = 6,
+
+    /// <summary>Summary only: no fee structure assigned and no fee or charge amounts recorded.</summary>
+    NoFeeAssigned = 7,
 }

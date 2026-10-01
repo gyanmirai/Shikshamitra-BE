@@ -130,6 +130,35 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public IReadOnlyList<Guid> GetConcessionApplicableFeeHeadIds() =>
 		JsonSerializer.Deserialize<List<Guid>>(ConcessionApplicableFeeHeadIdsJson) ?? [];
 
+	public void ChangeAssignedPolicies(
+		Guid? concessionId, Guid? concessionVersion, ConcessionFeeHeadScope concessionScope, IReadOnlyCollection<Guid> concessionHeads,
+		Guid collectionId, Guid collectionVersion, Guid? refundId, Guid? refundVersion, Guid? prorationId, Guid? prorationVersion,
+		string reason, Guid actorId, DateTime occurredAt)
+	{
+		if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 500 || actorId == Guid.Empty ||
+			collectionId == Guid.Empty || collectionVersion == Guid.Empty ||
+			concessionId.HasValue != concessionVersion.HasValue || refundId.HasValue != refundVersion.HasValue || prorationId.HasValue != prorationVersion.HasValue)
+			throw new Volo.Abp.BusinessException(AssignmentErrorCodes.InvalidInput);
+		var before = new { ConcessionPolicyVersionId, CollectionPolicyVersionId, RefundPolicyVersionId, ProrationPolicyVersionId };
+		SetConcessionApplicability(concessionScope, concessionHeads);
+		ConcessionPolicyId = concessionId;
+		ConcessionPolicyVersionId = concessionVersion;
+		CollectionPolicyId = collectionId;
+		CollectionPolicyVersionId = collectionVersion;
+		RefundPolicyId = refundId;
+		RefundPolicyVersionId = refundVersion;
+		ProrationPolicyId = prorationId;
+		ProrationPolicyVersionId = prorationVersion;
+		// ABP persists ExtraProperties with the aggregate and its concurrency token.
+		var history = ExtraProperties.TryGetValue("AssignedPolicyHistory", out var saved)
+			? JsonSerializer.Deserialize<List<JsonElement>>(saved?.ToString() ?? "[]") ?? [] : [];
+		history.Add(JsonSerializer.SerializeToElement(new {
+			Before = before, After = new { ConcessionPolicyVersionId, CollectionPolicyVersionId, RefundPolicyVersionId, ProrationPolicyVersionId },
+			Reason = reason.Trim(), ActorId = actorId, OccurredAt = occurredAt }));
+		ExtraProperties["AssignedPolicyHistory"] = JsonSerializer.Serialize(history);
+		ExtraProperties["AssignedPolicyReason"] = reason.Trim();
+	}
+
 	private void SetConcessionApplicability(
 		ConcessionFeeHeadScope scope,
 		IReadOnlyCollection<Guid> applicableFeeHeadIds)

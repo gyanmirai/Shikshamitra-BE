@@ -9209,7 +9209,12 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "AcademicYearId", "IsDefault")
                         .IsUnique()
                         .HasDatabaseName("IX_Finance_CollectionPolicies_Tenant_AcademicYear_Default")
-                        .HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true");
+                        .HasFilter("\"IsDeleted\" = false AND \"Status\" = 0 AND \"IsDefault\" = true");
+
+                    b.HasIndex("AcademicYearId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Finance_CollectionPolicies_Host_ActiveDefault")
+                        .HasFilter("\"TenantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" = 0 AND \"IsDefault\" = true");
 
                     b.HasIndex("TenantId", "AcademicYearId", "PolicyName")
                         .IsUnique()
@@ -9436,6 +9441,11 @@ namespace ShikshaMitra.Migrations
                         .HasDatabaseName("IX_Finance_ConcessionPolicies_ActiveDefault")
                         .HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true");
 
+                    b.HasIndex("AcademicYearId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Finance_ConcessionPolicies_Host_ActiveDefault")
+                        .HasFilter("\"TenantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true");
+
                     b.HasIndex("TenantId", "AcademicYearId", "PolicyCode")
                         .IsUnique()
                         .HasDatabaseName("IX_Finance_ConcessionPolicies_Tenant_Year_Code");
@@ -9609,6 +9619,11 @@ namespace ShikshaMitra.Migrations
                         .IsUnique()
                         .HasDatabaseName("IX_Finance_ProrationPolicies_ActiveDefault")
                         .HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true");
+
+                    b.HasIndex("AcademicYearId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Finance_ProrationPolicies_Host_ActiveDefault")
+                        .HasFilter("\"TenantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true");
 
                     b.HasIndex("TenantId", "AcademicYearId", "PolicyCode")
                         .IsUnique()
@@ -9806,6 +9821,11 @@ namespace ShikshaMitra.Migrations
                         .HasDatabaseName("IX_Finance_RefundPolicies_ActiveDefault")
                         .HasFilter("\"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true");
 
+                    b.HasIndex("AcademicYearId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Finance_RefundPolicies_Host_ActiveDefault")
+                        .HasFilter("\"TenantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" = 1 AND \"IsDefault\" = true");
+
                     b.HasIndex("TenantId", "AcademicYearId", "PolicyCode")
                         .IsUnique()
                         .HasDatabaseName("IX_Finance_RefundPolicies_Tenant_Year_Code");
@@ -9977,6 +9997,316 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Finance_Transactions", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.AccountingPeriod", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateOnly>("EndsOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateOnly>("StartsOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "StartsOn", "EndsOn");
+
+                    b.ToTable("Finance_AccountingPeriods", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.AccountsPostingConfiguration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CashAccountHeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<DateOnly?>("FirstPostingDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashAccountHeadId");
+
+                    b.HasIndex("TenantId", "AcademicYearId")
+                        .IsUnique();
+
+                    b.ToTable("Finance_AccountsPostingConfigurations", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.FinancialEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateOnly>("BusinessDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SnapshotHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("Transition")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("TransitionVersion")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventKey")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "SourceType", "SourceId");
+
+                    b.ToTable("Finance_FinancialEvents", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.JournalEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountingPeriodId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<Guid?>("CorrectsJournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<Guid>("FinancialEventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("JournalNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("PostedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PostedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("PostingDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountingPeriodId");
+
+                    b.HasIndex("CorrectsJournalEntryId");
+
+                    b.HasIndex("FinancialEventId")
+                        .IsUnique();
+
+                    b.HasIndex("JournalNumber")
+                        .IsUnique()
+                        .HasFilter("\"TenantId\" IS NULL");
+
+                    b.HasIndex("TenantId", "JournalNumber")
+                        .IsUnique();
+
+                    b.ToTable("Finance_JournalEntries", (string)null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.JournalLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountHeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Credit")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("Debit")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SourceAllocationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountHeadId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.ToTable("Finance_JournalLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Finance_JournalLines_OneSide", "(\"Debit\" > 0 AND \"Credit\" = 0) OR (\"Credit\" > 0 AND \"Debit\" = 0)");
+                        });
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.PaymentDestinationRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AssetAccountHeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BankAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<int>("Direction")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Method")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssetAccountHeadId");
+
+                    b.HasIndex("BankAccountId");
+
+                    b.HasIndex("TenantId", "AcademicYearId", "Direction", "Method", "EffectiveFrom");
+
+                    b.ToTable("Finance_PaymentDestinationRules", (string)null);
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Admissions.AdmissionPaymentTransaction", b =>
@@ -12048,6 +12378,75 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("Finance_PaymentMethodRecords", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundAccountingEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("BankAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CorrectsEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EvidenceReference")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ExternalReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("FeeHeadAmountsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<bool>("IsCorrection")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("OriginalReceiptId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("PostedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PostedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RefundRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SettlementId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OriginalReceiptId")
+                        .HasDatabaseName("IX_FeeRefundAccountingEntries_OriginalReceiptId");
+
+                    b.HasIndex("SettlementId")
+                        .HasDatabaseName("IX_FeeRefundAccountingEntries_SettlementId");
+
+                    b.HasIndex("TenantId", "RefundRequestId", "IsCorrection")
+                        .IsUnique()
+                        .HasDatabaseName("IX_FeeRefundAccountingEntries_Tenant_Request_Correction");
+
+                    b.ToTable("Finance_FeeRefundAccountingEntries", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundRequest", b =>
                 {
                     b.Property<Guid>("Id")
@@ -12167,6 +12566,13 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("RefundPolicyVersionId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ReplacesRefundRequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestIdempotencyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("ReversalReason")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
@@ -12213,16 +12619,27 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<int>("WorkflowVersion")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("OriginalReceiptId");
 
                     b.HasIndex("RefundPolicyVersionId");
 
+                    b.HasIndex("ReplacesRefundRequestId")
+                        .IsUnique()
+                        .HasFilter("\"ReplacesRefundRequestId\" IS NOT NULL");
+
                     b.HasIndex("ConcessionRequestId", "OriginalReceiptId")
                         .IsUnique()
                         .HasDatabaseName("UX_FeeRefundRequests_Concession_Receipt")
-                        .HasFilter("\"ConcessionRequestId\" IS NOT NULL");
+                        .HasFilter("\"ConcessionRequestId\" IS NOT NULL AND \"Status\" NOT IN (3, 8, 9)");
+
+                    b.HasIndex("TenantId", "RequestIdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("\"RequestIdempotencyKey\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "VoucherNumber")
                         .IsUnique()
@@ -34305,6 +34722,63 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("CategoryTags");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.AccountsPostingConfiguration", b =>
+                {
+                    b.HasOne("ShikshaMitra.Domain.Finance.Accounts.Settings.AccountHead", null)
+                        .WithMany()
+                        .HasForeignKey("CashAccountHeadId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.JournalEntry", b =>
+                {
+                    b.HasOne("ShikshaMitra.Finance.Accounts.Posting.AccountingPeriod", null)
+                        .WithMany()
+                        .HasForeignKey("AccountingPeriodId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Finance.Accounts.Posting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("CorrectsJournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("ShikshaMitra.Finance.Accounts.Posting.FinancialEvent", null)
+                        .WithMany()
+                        .HasForeignKey("FinancialEventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.JournalLine", b =>
+                {
+                    b.HasOne("ShikshaMitra.Domain.Finance.Accounts.Settings.AccountHead", null)
+                        .WithMany()
+                        .HasForeignKey("AccountHeadId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Finance.Accounts.Posting.JournalEntry", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.PaymentDestinationRule", b =>
+                {
+                    b.HasOne("ShikshaMitra.Domain.Finance.Accounts.Settings.AccountHead", null)
+                        .WithMany()
+                        .HasForeignKey("AssetAccountHeadId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount", null)
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Finance.Admissions.AdmissionPaymentTransaction", b =>
                 {
                     b.HasOne("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionApplication", null)
@@ -34539,11 +35013,18 @@ namespace ShikshaMitra.Migrations
                             b1.Property<int>("AttemptNumber")
                                 .HasColumnType("integer");
 
+                            b1.Property<Guid?>("BankAccountId")
+                                .HasColumnType("uuid");
+
                             b1.Property<DateTimeOffset?>("CompletedAt")
                                 .HasColumnType("timestamp with time zone");
 
                             b1.Property<DateTimeOffset>("CreatedAt")
                                 .HasColumnType("timestamp with time zone");
+
+                            b1.Property<string>("EvidenceReference")
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)");
 
                             b1.Property<string>("ExternalReference")
                                 .HasMaxLength(200)
@@ -34581,6 +35062,16 @@ namespace ShikshaMitra.Migrations
 
                             b1.Property<int>("Status")
                                 .HasColumnType("integer");
+
+                            b1.Property<string>("VerificationKey")
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)");
+
+                            b1.Property<DateTimeOffset?>("VerifiedAt")
+                                .HasColumnType("timestamp with time zone");
+
+                            b1.Property<Guid?>("VerifiedByUserId")
+                                .HasColumnType("uuid");
 
                             b1.HasKey("Id");
 
@@ -38113,6 +38604,11 @@ namespace ShikshaMitra.Migrations
             modelBuilder.Entity("ShikshaMitra.Domain.Finance.Policies.ProrationPolicy", b =>
                 {
                     b.Navigation("Rules");
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Finance.Accounts.Posting.JournalEntry", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.ConcessionRequests.ConcessionRequest", b =>

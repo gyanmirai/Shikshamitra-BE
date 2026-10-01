@@ -58,7 +58,7 @@ public partial class StudentFeeStructureAppService
 		var details = await feeStructureDetailRepository.GetListAsync(x => ids.Contains(x.FeeStructureId));
 		var headIds = details.Select(x => x.FeeHeadId).Distinct().ToList();
 		var heads = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id))).ToDictionary(x => x.Id);
-		return structures.OrderBy(x => x.Name).ThenByDescending(x => x.RevisionNumber).Select(s => new AssignmentCandidateDto {
+		var candidates = structures.OrderBy(x => x.Name).ThenByDescending(x => x.RevisionNumber).Select(s => new AssignmentCandidateDto {
 			Id = s.Id, Name = s.Name, RevisionNumber = s.RevisionNumber, AcademicYearId = academicYearId, StandardId = s.StandardId,
 			Total = details.Where(d => d.FeeStructureId == s.Id).Sum(d => d.Amount),
 			Heads = details.Where(d => d.FeeStructureId == s.Id).Select(d => new AssignmentHeadDto {
@@ -66,6 +66,11 @@ public partial class StudentFeeStructureAppService
 				IsOneTime = d.IsOneTime, Included = !d.IsOptional, ConfiguredAmount = d.Amount, EffectiveAmount = d.Amount,
 				AmountBasis = d.IsOneTime ? "OneTime" : "AnnualTotal", PaymentTermId = d.PaymentTermId, PaymentTermVersionId = d.PaymentTermVersionId }).ToList()
 		}).ToList();
+		var versionIds = structures.SelectMany(s => StructurePolicyVersions(s).Values).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+		var versions = await financePolicyVersionRepository.GetListAsync(x => versionIds.Contains(x.Id));
+		foreach (var candidate in candidates)
+			candidate.Policies = versions.Where(v => StructurePolicyVersions(structures.Single(s => s.Id == candidate.Id)).Values.Contains(v.Id)).Select(ToAssignmentPolicy).ToList();
+		return candidates;
 	}
 
 	[Authorize(ViewPermission)]
@@ -74,7 +79,7 @@ public partial class StudentFeeStructureAppService
 		var enrollment = await RequireEnrollmentAsync(studentId, academicYearId, false);
 		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == studentId && x.AcademicYearId == academicYearId)
 			?? throw new BusinessException(AssignmentErrorCodes.NotAssigned);
-		var result = new StudentFeeStructureResponseDto { StudentFeeStructureId = assignment.Id, StandardFeeStructureId = assignment.FeeStructureStandardId,
+		var result = new StudentFeeStructureResponseDto { ConcurrencyStamp = assignment.ConcurrencyStamp, StudentFeeStructureId = assignment.Id, StandardFeeStructureId = assignment.FeeStructureStandardId,
 			StudentId = studentId, AcademicYearId = academicYearId, StandardId = enrollment.StandardId ?? Guid.Empty,
 			ConcessionPolicyId = assignment.ConcessionPolicyId, ConcessionPolicyVersionId = assignment.ConcessionPolicyVersionId,
 			RefundPolicyId = assignment.RefundPolicyId, RefundPolicyVersionId = assignment.RefundPolicyVersionId,
@@ -120,6 +125,20 @@ public partial class StudentFeeStructureAppService
 			line.PaidAmount = due.PaidAmount;
 			line.OutstandingAmount = due.OutstandingAmount;
 		}
+		snapshot.OriginalPolicies = snapshot.Policies.ToList();
+		var currentVersions = new[] { assignment.ConcessionPolicyVersionId, assignment.CollectionPolicyVersionId, assignment.RefundPolicyVersionId, assignment.ProrationPolicyVersionId }
+			.Where(x => x.HasValue).Select(x => x!.Value).ToList();
+		var currentPolicies = await financePolicyVersionRepository.GetListAsync(x => currentVersions.Contains(x.Id));
+		snapshot.Policies = currentPolicies.Select(version => {
+			var original = snapshot.OriginalPolicies.FirstOrDefault(p => p.VersionId == version.Id);
+			var policy = original ?? ToAssignmentPolicy(version);
+			if (original == null) {
+				policy.Source = "StudentOverride";
+				policy.Description = version.PolicyType == "proration" ? "Updated selection; existing obligations retain their original proration calculation." : "Applies to subsequent policy evaluations; existing financial history is preserved.";
+			}
+			return policy;
+		}).ToList();
+		if (assignment.ExtraProperties.TryGetValue("AssignedPolicyReason", out var reason)) snapshot.PolicyOverrideReason = reason?.ToString();
 		result.Assignment = snapshot;
 		result.StructureName = snapshot.StructureName;
 		result.ChargeStartDate = snapshot.ChargeStartDate;

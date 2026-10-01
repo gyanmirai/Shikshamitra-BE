@@ -71,7 +71,8 @@ public partial class CollectFeeWorkflow
 			var df = dueFeeMap[dfp.DueFeeId];
 			if (df.StudentId != input.StudentId) throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
 			if (df.FeeHeadId != dfp.FeeHeadId) throw new BusinessException(FeeCollectionErrorCodes.InvalidFeeHead);
-			if ((decimal)dfp.Amount > df.OutstandingAmount)
+			var maxCollectible = Math.Ceiling(df.OutstandingAmount);
+			if ((decimal)dfp.Amount > maxCollectible)
 				throw new BusinessException(FeeCollectionErrorCodes.AmountExceedsOutstanding)
 					.WithData("DueFeeId", df.Id).WithData("Outstanding", df.OutstandingAmount).WithData("Amount", dfp.Amount);
 		}
@@ -87,11 +88,11 @@ public partial class CollectFeeWorkflow
 	/// without it, a client could submit an arbitrary DueFeeId + amount as "late fee collected"
 	/// with no server-side check at all.
 	/// </summary>
-	private async Task ValidateLateFeePaymentsAsync(CollectFeeInput input)
+	private async Task<Dictionary<Guid, DueFee>> ValidateLateFeePaymentsAsync(CollectFeeInput input)
 	{
 		if (input.LateFeePayments is not { Count: > 0 })
 		{
-			return;
+			return [];
 		}
 
 		var dueFeeIds = input.LateFeePayments.Select(lfp => lfp.DueFeeId).Distinct().ToList();
@@ -107,56 +108,21 @@ public partial class CollectFeeWorkflow
 			throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
 		}
 
-		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == input.StudentId);
-		var effectiveRules = assignment is null
-			? new EffectiveCollectionRules(null, false, null, false)
-			: await policyResolver.ResolveEffectiveRulesForStudentAsync(input.StudentId, assignment.FeeStructureStandardId);
-
-		var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFeeIds);
-		var paidAllocations = await lateFeeAllocationRepository.GetListAsync(x => dueFeeIds.Contains(x.DueFeeId));
-		var paidTransactionIds = paidAllocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
-		var reversedTransactionIds = (await feeRecordMetadataRepository.GetListAsync(x =>
-			paidTransactionIds.Contains(x.Id) && x.Status == FeeCollectionStatus.Reversed))
-			.Select(x => x.Id).ToHashSet();
-		var paidByDueFee = paidAllocations
-			.Where(x => !reversedTransactionIds.Contains(x.FeeRecordMetadataId))
-			.GroupBy(x => x.DueFeeId)
-			.ToDictionary(x => x.Key, x => x.Sum(a => (decimal)a.Amount));
-
-		var today = clock.Now.Date;
-		var activeWindow = assignment is null
-			? null
-			: await exceptionWindowResolver.ResolveActiveWindowAsync(input.AcademicYearId, assignment.FeeStructureStandardId, today);
-
+		var feeHeadIds = dueFees.Select(d => d.FeeHeadId).Distinct().ToList();
+		var heads = await feeHeadRepository.GetListAsync(x => feeHeadIds.Contains(x.Id));
+		if (heads.Any(x => x.AcademicYearId != input.AcademicYearId))
+			throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
+		var balances = await lateFeeBalanceService.GetBalancesAsync(dueFees, input.AcademicYearId, clock.Now, preserveAssessment: true);
 		foreach (var lfp in input.LateFeePayments)
 		{
-			var dueFee = dueFeeMap[lfp.DueFeeId];
-			var ceiling = 0m;
-			if (effectiveRules.Policy is not null && !effectiveRules.IsLateFeeExempt)
-			{
-				var daysLate = (today - dueFee.DueDate.Date).Days;
-				var result = lateFeeCalculationService.Calculate(effectiveRules.Policy, new LateFeeCalculationInput(
-					daysLate,
-					(decimal)dueFee.OutstandingAmount,
-					(decimal)dueFee.OriginalAmount,
-					(decimal)dueFee.OutstandingAmount,
-					dueFee.FeeHeadId,
-					effectiveRules.IsLateFeeExempt,
-					effectiveRules.CustomGracePeriodDays,
-					activeWindow?.Effect,
-					activeWindow?.ExtensionDays,
-					activeWindow?.Label));
-				ceiling = Math.Max(0, result.LateFee
-					- waivedByDueFee.GetValueOrDefault(lfp.DueFeeId, 0m)
-					- paidByDueFee.GetValueOrDefault(lfp.DueFeeId, 0m));
-			}
-
+			var ceiling = balances[lfp.DueFeeId].PendingAmount;
 			if ((decimal)lfp.Amount > ceiling)
 			{
 				throw new BusinessException(FeeCollectionErrorCodes.LateFeeAmountExceedsComputed)
 					.WithData("DueFeeId", lfp.DueFeeId).WithData("Ceiling", ceiling).WithData("Amount", lfp.Amount);
 			}
 		}
+		return dueFeeMap;
 	}
 
 	private async Task<ChargeValidationContext> LoadAndValidateChargesContextAsync(CollectFeeInput input)

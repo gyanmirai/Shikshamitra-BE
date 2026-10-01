@@ -17,6 +17,7 @@ using ShikshaMitra.Finance.Fees.FeeAdjustment.Aggregates;
 using ShikshaMitra.Finance.Fees.FeeAdjustment.Entities;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Admissions;
+using ShikshaMitra.Finance.Accounts.Posting;
 
 namespace ShikshaMitra.EntityFrameworkCore;
 
@@ -63,6 +64,12 @@ public partial class ShikshaMitraDbContext
 	public DbSet<TransactionCategory> TransactionCategories { get; set; }
 	public DbSet<BankAccount> BankAccounts { get; set; }
 	public DbSet<AccountHead> AccountHeads { get; set; }
+	public DbSet<FinancialEvent> FinancialEvents { get; set; }
+	public DbSet<JournalEntry> JournalEntries { get; set; }
+	public DbSet<JournalLine> JournalLines { get; set; }
+	public DbSet<AccountingPeriod> AccountingPeriods { get; set; }
+	public DbSet<AccountsPostingConfiguration> AccountsPostingConfigurations { get; set; }
+	public DbSet<PaymentDestinationRule> PaymentDestinationRules { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Student Fee Assignment
@@ -96,6 +103,7 @@ public partial class ShikshaMitraDbContext
 	// Finance — Fee Refunds
 	// ───────────────────────────────────────────────
 	public DbSet<FeeRefundRequest> FeeRefundRequests { get; set; }
+	public DbSet<FeeRefundAccountingEntry> FeeRefundAccountingEntries { get; set; }
 
 	// ───────────────────────────────────────────────
 	// Finance — Fee Adjustments

@@ -31,12 +31,10 @@ public class FeeWaiverAppService(
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<LateFeeWaiverApplication, Guid> lateFeeWaiverRepository,
 	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
-	IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocationRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRepository,
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	CollectionPolicyResolver policyResolver,
-	LateFeeCalculationService lateFeeCalculationService,
-	ExceptionWindowResolver exceptionWindowResolver,
+	LateFeeBalanceService lateFeeBalanceService,
 	FinanceScopeAccessService financeScopeAccessService,
 	FinanceAuditWriter financeAuditWriter,
 	IUnitOfWorkManager unitOfWorkManager
@@ -86,34 +84,13 @@ public class FeeWaiverAppService(
 
 		var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(
 			dueFee.StudentId, assignment.FeeStructureStandardId);
-		if (effective.Policy is null || effective.IsLateFeeExempt)
+		if (effective.Policy is null)
 			throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible).WithData("reason", "No late fee applies.");
 
 		var policy = effective.Policy;
-		var today = Clock.Now.Date;
-		var activeWindow = await exceptionWindowResolver.ResolveActiveWindowAsync(
-			policy.AcademicYearId, assignment.FeeStructureStandardId, today);
-		var calculation = lateFeeCalculationService.Calculate(policy, new LateFeeCalculationInput(
-			(today - dueFee.DueDate.Date).Days,
-			(decimal)dueFee.OutstandingAmount,
-			(decimal)dueFee.OriginalAmount,
-			(decimal)dueFee.OutstandingAmount,
-			dueFee.FeeHeadId,
-			effective.IsLateFeeExempt,
-			effective.CustomGracePeriodDays,
-			activeWindow?.Effect,
-			activeWindow?.ExtensionDays,
-			activeWindow?.Label));
-
-		var appliedWaivers = await lateFeeWaiverRepository.GetListAsync(x =>
-			x.DueFeeId == dueFeeId && x.Status == LateFeeWaiverStatus.Applied);
-		var paidAllocations = await lateFeeAllocationRepository.GetListAsync(x => x.DueFeeId == dueFeeId);
-		var transactionIds = paidAllocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
-		var reversedIds = (await feeRecordMetadataRepository.GetListAsync(x =>
-			transactionIds.Contains(x.Id) && x.Status == FeeCollectionStatus.Reversed))
-			.Select(x => x.Id).ToHashSet();
-		var paid = paidAllocations.Where(x => !reversedIds.Contains(x.FeeRecordMetadataId)).Sum(x => (decimal)x.Amount);
-		var remaining = Math.Max(0m, calculation.LateFee - appliedWaivers.Sum(x => x.EffectiveAmount) - paid);
+		var balances = await lateFeeBalanceService.GetBalancesAsync([dueFee], feeHead.AcademicYearId,
+			Clock.Now, preserveAssessment: true);
+		var remaining = balances[dueFee.Id].PendingAmount;
 		if (remaining <= 0) throw new BusinessException(FeeWaiverErrorCodes.NoRemainingBalance);
 
 		var entity = new LateFeeWaiverApplication(

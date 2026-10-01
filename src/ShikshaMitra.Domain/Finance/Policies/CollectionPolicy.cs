@@ -92,6 +92,8 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Update(CollectionPolicyUpdateModel model)
 	{
+		if (IsDefault && (!model.IsDefault || model.Status != CollectionPolicyStatus.Active))
+			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if (Status == CollectionPolicyStatus.Archived && Version > 0)
 		{
 			throw new BusinessException(CollectionPolicyErrorCodes.ArchivedPolicyNotEditable);
@@ -184,6 +186,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Unarchive()
 	{
+		if (Status != CollectionPolicyStatus.Archived) return;
 		Status = CollectionPolicyStatus.Draft;
 		IsDefault = false;
 		Version++;

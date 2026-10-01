@@ -36,6 +36,8 @@ public class ProrationPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Update(ProrationPolicyUpdateModel model)
 	{
+		if (IsDefault && (!model.IsDefault || model.Status != ProrationPolicyStatus.Active))
+			throw new BusinessException(ProrationPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		if (Status == ProrationPolicyStatus.Archived && Version > 0)
 			throw new BusinessException(ProrationPolicyErrorCodes.ArchivedPolicyNotEditable);
 		if (AcademicYearId == Guid.Empty)
@@ -85,6 +87,8 @@ public class ProrationPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Archive()
 	{
+		if (IsDefault)
+			throw new BusinessException(ProrationPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 		Status = ProrationPolicyStatus.Archived;
 		IsDefault = false;
 		Version++;
@@ -92,6 +96,7 @@ public class ProrationPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Unarchive()
 	{
+		if (Status != ProrationPolicyStatus.Archived) return;
 		Status = ProrationPolicyStatus.Draft;
 		IsDefault = false;
 		Version++;

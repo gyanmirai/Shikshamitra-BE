@@ -19,10 +19,13 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
     /// </summary>
     Task<(List<FeeRefundRequest> Items, int TotalCount)> GetListWithDetailsAsync(
         Guid? studentId = null,
+        Guid? academicYearId = null,
         Guid? academicMediumId = null,
         Guid? standardId = null,
         Guid? divisionId = null,
         FeeRefundStatus? status = null,
+        bool legacyHistory = false,
+        int? workflowVersion = null,
         string? search = null,
         int skipCount = 0,
         int maxResultCount = 20,
@@ -32,6 +35,15 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
 
     /// <summary>Loads a single request with its <see cref="FeeRefundRequest.Lines"/> collection.</summary>
     Task<FeeRefundRequest?> FindWithLinesAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task StageNewReservationsAsync(IEnumerable<FeeRefundReservation> reservations,
+        CancellationToken cancellationToken = default);
+
+    Task StageNewSettlementAsync(FeeRefundSettlement settlement,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> IsPayoutReferenceUsedAsync(string method, string externalReference,
+        Guid? excludingRequestId = null, CancellationToken cancellationToken = default);
 
     Task<Dictionary<Guid, decimal>> GetActiveReservedAmountsAsync(
         IReadOnlyCollection<Guid> dueFeeIds,

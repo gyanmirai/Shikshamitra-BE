@@ -87,6 +87,9 @@ public class CollectionPolicyAppService(
 	public async Task<CollectionPolicyDto> CreateAsync(CreateUpdateCollectionPolicyDto input)
 	{
 		var model = await BuildValidatedModelAsync(input);
+		if (model.Status == CollectionPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
 		if (model.Status == CollectionPolicyStatus.Active)
 		{
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add);
@@ -128,6 +131,11 @@ public class CollectionPolicyAppService(
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add);
 		}
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, input.PolicyCode, id);
+		if (entity.IsDefault && (!model.IsDefault || model.Status != CollectionPolicyStatus.Active))
+			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
+		if (model.Status == CollectionPolicyStatus.Active &&
+			!await HasActiveDefaultAsync(input.AcademicYearId))
+			model = model with { IsDefault = true };
 		if (model.IsDefault)
 			await ReplaceExistingDefaultAsync(input.AcademicYearId, id, input.PolicyName, input.ChangeReason);
 
@@ -197,6 +205,8 @@ public class CollectionPolicyAppService(
 		{
 			return;
 		}
+		if (entity.IsDefault)
+			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 
 		if ((await GetUsageCountsAsync(new[] { id })).Contains(id))
 		{
@@ -368,6 +378,10 @@ public class CollectionPolicyAppService(
 				reason ?? $"Default replaced by {replacementName}.");
 		}
 	}
+
+	private async Task<bool> HasActiveDefaultAsync(Guid academicYearId) =>
+		await repository.AnyAsync(x => x.AcademicYearId == academicYearId &&
+			x.Status == CollectionPolicyStatus.Active && x.IsDefault);
 
 	private async Task EnsureUniqueAsync(Guid academicYearId, string name, string code, Guid? excludeId)
 	{

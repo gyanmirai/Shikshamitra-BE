@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-09-24
+updated_on: 2026-10-01
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -32,6 +32,8 @@ git diff --check
 | Paid-fee concessions | `ConcessionEligibility_Tests`, `DueFee_Mutations_Tests`; verify a fully paid installment remains Paid, approval creates the exact receipt-linked refund request, and only settlement decreases the paid cash balance |
 | Fee adjustments | `FeeAdjustmentApi_Tests` |
 | Fee collection | `FeeCollectionAppServiceV2_Tests`, `FeeCollectionV2Api_Tests`, `CollectFeeInputValidator_Tests` |
+| Ledger due-date classification | `DueFeeCollectionStatusResolver_Tests`, `LateFeeCollectionRuntime_Tests`; cover due today, within-month due dates, legacy due dates, ungenerated bills, partial settlement, reconciliation and grid/form overdue parity |
+| Finance policy defaults | `FinancePolicyDefaultLifecycle_Tests`, `FinancePolicyDefaultPersistence_Tests`, `ConcessionPolicyAppService_Tests`, `CollectionPolicyAppService_Tests`, `FeeStructureAppService_CollectionPolicy_Tests`; cover first activation, replacement, rejected default removal/archive, host and tenant uniqueness, immutable version pins and settings default projection |
 | Fee Collection waivers | Cover absence of policy/charge waiver configuration, both source types, row-toggle visibility, reason-only input, server-derived full balance, dedicated apply permission, student scope, idempotency, and non-cash ledger evidence; use the [target acceptance scenarios](./references/fee-collection-waiver-end-to-end.md#acceptance-scenarios) |
 | Refunds and receipts | `FeeRefundApi_Tests`, `FeeReceiptApi_Tests`, receipt domain tests |
 | Accounts and reconciliation | `TransactionAppService_Tests`, `ReconciliationAppService_Tests`, `ReconciliationApi_Tests` |

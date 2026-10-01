@@ -55,16 +55,30 @@ public partial class FeeCollectionSummaryQueryService
 				PendingCharges         = r.PendingCharges ?? 0d,
 				TotalConcessionAmount  = r.TotalConcessionAmount ?? 0d,
 				IsFeeStructureAssigned = r.IsFeeStructureAssigned,
-				Status = ((outstanding ?? 0d) <= 0d && r.PendingCharges <= 0d)
-					? FeeCollectionStatus.Paid
-					: (overdue ?? 0d) > 0d
-						? FeeCollectionStatus.Overdue
-						: FeeCollectionStatus.Pending,
+				Status = GetSummaryStatus(r),
 			};
 		});
 
 	private static string BuildFullName(string? first, string? middle, string? last)
 		=> string.Join(" ", new[] { first, middle, last }.Where(p => !string.IsNullOrWhiteSpace(p)));
+
+	private static FeeCollectionStatus GetSummaryStatus(FeeCollectionRawRow row)
+	{
+		if (!row.IsFeeStructureAssigned
+			&& (row.TotalFees ?? 0d) == 0d
+			&& (row.PaidFees ?? 0d) == 0d
+			&& (row.OutstandingFees ?? 0d) == 0d
+			&& (row.OverdueFees ?? 0d) == 0d
+			&& (row.TotalCharges ?? 0d) == 0d
+			&& (row.PendingCharges ?? 0d) == 0d)
+			return FeeCollectionStatus.NoFeeAssigned;
+
+		return (row.OutstandingFees ?? 0d) <= 0d && (row.PendingCharges ?? 0d) <= 0d
+			? FeeCollectionStatus.Paid
+			: (row.OverdueFees ?? 0d) > 0d
+				? FeeCollectionStatus.Overdue
+				: FeeCollectionStatus.Pending;
+	}
 
 	private static List<FeeCollectionRawRow> ApplyStatusFilter(
 		List<FeeCollectionRawRow> rows, FeeCollectionStatus? status)
@@ -72,9 +86,9 @@ public partial class FeeCollectionSummaryQueryService
 		if (!status.HasValue) return rows;
 		return status.Value switch
 		{
-			FeeCollectionStatus.Paid    => rows.Where(x => (x.OutstandingFees ?? 0d) <= 0d).ToList(),
-			FeeCollectionStatus.Overdue => rows.Where(x => (x.OutstandingFees ?? 0d) > 0d && (x.OverdueFees ?? 0d) > 0d).ToList(),
-			FeeCollectionStatus.Pending => rows.Where(x => (x.OutstandingFees ?? 0d) > 0d && (x.OverdueFees ?? 0d) <= 0d).ToList(),
+			FeeCollectionStatus.Paid or FeeCollectionStatus.Overdue
+				or FeeCollectionStatus.Pending or FeeCollectionStatus.NoFeeAssigned
+				=> rows.Where(x => GetSummaryStatus(x) == status.Value).ToList(),
 			_                           => rows,
 		};
 	}

@@ -5,6 +5,7 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
 public class StudentFeeStructureResponseDto
 {
+	public string ConcurrencyStamp { get; set; } = "";
     public StudentFeeAssignmentPreviewDto? Assignment { get; set; }
     public List<string> Warnings { get; set; } = [];
 

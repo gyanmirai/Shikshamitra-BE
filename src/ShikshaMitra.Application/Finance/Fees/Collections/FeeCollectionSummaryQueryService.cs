@@ -32,6 +32,7 @@ public partial class FeeCollectionSummaryQueryService(
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<ConcessionRequest, Guid> concessionRequestRepository,
 	FinanceScopeAccessService financeScopeAccessService,
+	LateFeeBalanceService lateFeeBalanceService,
 	IClock clock
 ) : ApplicationService, ITransientDependency
 {

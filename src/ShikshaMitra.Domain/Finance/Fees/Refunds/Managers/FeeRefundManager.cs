@@ -17,10 +17,11 @@ public sealed record RefundLineSpec(Guid DueFeeId, Guid? SourceAllocationId, Gui
 public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository dueFeeRepository,
     ICurrentTenant currentTenant) : DomainService
 {
-    public async Task<FeeRefundRequest> CreateDraftAsync(Guid studentId, Guid academicYearId,
+    public async Task<FeeRefundRequest> CreatePendingAsync(Guid studentId, Guid academicYearId,
         Guid assignmentId, Guid policyId, Guid policyVersionId, Guid receiptId, string receiptNumber,
         IReadOnlyCollection<RefundLineSpec> lines, string? method, RefundPaymentDetails? details,
-        string? reason, string policySnapshot, string calculationSnapshot, string calculationHash)
+        string? reason, string policySnapshot, string calculationSnapshot, string calculationHash,
+        Guid submittedBy, string idempotencyKey, Guid? replacesRequestId)
     {
         await ValidateLinesAsync(studentId, assignmentId, lines, null);
         var request = new FeeRefundRequest(GuidGenerator.Create(), currentTenant.Id, studentId,
@@ -29,23 +30,25 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
             policySnapshot, calculationSnapshot, calculationHash);
         foreach (var line in lines)
             request.AddLine(ToEntity(request.Id, line));
+        request.UseSimpleWorkflow(submittedBy, idempotencyKey, replacesRequestId);
         return await repository.InsertAsync(request, autoSave: false);
     }
 
     public async Task<FeeRefundRequest> CreateFromConcessionAsync(Guid studentId, Guid academicYearId,
         Guid assignmentId, Guid concessionRequestId, Guid receiptId, string receiptNumber,
         IReadOnlyCollection<RefundLineSpec> lines, string calculationSnapshot, string calculationHash,
-        Guid submittedBy)
+        Guid submittedBy, string? method = null, RefundPaymentDetails? details = null,
+        string? reason = null, string? idempotencyKey = null, Guid? replacesRequestId = null)
     {
         await ValidateLinesAsync(studentId, assignmentId, lines, null);
         var request = new FeeRefundRequest(GuidGenerator.Create(), currentTenant.Id, studentId,
-            academicYearId, GenerateVoucherNumber(), null, null,
-            $"Approved concession {concessionRequestId}");
+            academicYearId, GenerateVoucherNumber(), method, details,
+            reason ?? $"Approved concession {concessionRequestId}");
         request.PinConcession(assignmentId, concessionRequestId, receiptId, receiptNumber,
             calculationSnapshot, calculationHash);
         foreach (var line in lines)
             request.AddLine(ToEntity(request.Id, line));
-        request.Submit(submittedBy);
+        request.UseSimpleWorkflow(submittedBy, idempotencyKey, replacesRequestId);
         return await repository.InsertAsync(request, autoSave: false);
     }
 
@@ -120,6 +123,36 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         return settlement;
     }
 
+    public async Task ConfirmPayoutAsync(FeeRefundRequest request, Guid settlementId, Guid userId,
+        string key, string evidenceReference)
+    {
+        var dueIds = request.Lines.Select(x => x.DueFeeId).Distinct().ToList();
+        var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
+        foreach (var line in request.Lines)
+        {
+            if (!dues.TryGetValue(line.DueFeeId, out var due))
+                throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+            due.ApplyRefund(line.ApprovedAmount);
+        }
+        request.ConfirmPayout(settlementId, userId, key, evidenceReference);
+        await dueFeeRepository.UpdateManyAsync(dues.Values, autoSave: false);
+    }
+
+    public async Task ReturnPayoutAsync(FeeRefundRequest request, Guid settlementId, Guid userId,
+        string reason)
+    {
+        var dueIds = request.Lines.Select(x => x.DueFeeId).Distinct().ToList();
+        var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
+        foreach (var line in request.Lines)
+        {
+            if (!dues.TryGetValue(line.DueFeeId, out var due))
+                throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
+            due.ReverseRefund(line.ProcessedAmount);
+        }
+        request.RecordReturnedPayout(settlementId, userId, reason);
+        await dueFeeRepository.UpdateManyAsync(dues.Values, autoSave: false);
+    }
+
     public async Task ReverseAsync(FeeRefundRequest request, Guid settlementId, Guid userId, string reason)
     {
         var dueIds = request.Lines.Select(x => x.DueFeeId).Distinct().ToList();
@@ -171,7 +204,7 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         details ??= [];
         string Get(string key) => details.TryGetValue(key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
         string? GetOpt(string key) => details.TryGetValue(key, out var v) ? v?.ToString() : null;
-        DateOnly Date(string key) => DateOnly.TryParse(Get(key), out var d) ? d : DateOnly.FromDateTime(DateTime.UtcNow);
+        DateOnly Date(string key) => DateOnly.TryParse(Get(key), out var d) ? d : default;
         return method switch
         {
             "Cash" => new CashRefundDetails(Date("refundDate"), Get("receivedBy"), GetOpt("remarks")),

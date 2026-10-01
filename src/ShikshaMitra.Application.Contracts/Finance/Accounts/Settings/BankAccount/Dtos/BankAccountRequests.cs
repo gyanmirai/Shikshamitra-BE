@@ -5,8 +5,8 @@ namespace ShikshaMitra.Finance.Accounts.Settings.Dtos;
 
 public class CreateBankAccountRequest
 {
-	[Required]
-	public string Code { get; set; } = string.Empty;
+	// Optional for legacy clients. New bank accounts receive a server-generated internal code.
+	public string? Code { get; set; }
 	[Required]
 	public Guid? AccountHeadId { get; set; }
 	[Required]

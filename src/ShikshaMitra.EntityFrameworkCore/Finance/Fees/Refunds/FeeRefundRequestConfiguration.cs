@@ -20,6 +20,7 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
         builder.Property(x => x.OriginalReceiptNumber).HasMaxLength(100);
         builder.Property(x => x.Currency).HasMaxLength(3).IsRequired();
         builder.Property(x => x.RefundMethod).HasMaxLength(100);
+        builder.Property(x => x.RequestIdempotencyKey).HasMaxLength(100);
         builder.Property(x => x.Reason).HasMaxLength(1000);
         builder.Property(x => x.ApproverNotes).HasMaxLength(1000);
         builder.Property(x => x.FailureReason).HasMaxLength(1000);
@@ -89,6 +90,8 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             sb.Property(x => x.PaymentDetailsJson).HasColumnType("jsonb");
             sb.Property(x => x.FailureReason).HasMaxLength(1000);
             sb.Property(x => x.ReversalReason).HasMaxLength(1000);
+            sb.Property(x => x.EvidenceReference).HasMaxLength(500);
+            sb.Property(x => x.VerificationKey).HasMaxLength(100);
             sb.HasIndex(x => new { x.FeeRefundRequestId, x.IdempotencyKey }).IsUnique();
         });
 
@@ -100,10 +103,14 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
         builder.HasIndex(x => new { x.StudentId, x.AcademicYearId, x.Status })
             .HasDatabaseName("IX_FeeRefundRequests_Student_Year_Status");
         builder.HasIndex(x => x.OriginalReceiptId);
+        builder.HasIndex(x => new { x.TenantId, x.RequestIdempotencyKey }).IsUnique()
+            .HasFilter("\"RequestIdempotencyKey\" IS NOT NULL");
+        builder.HasIndex(x => x.ReplacesRefundRequestId).IsUnique()
+            .HasFilter("\"ReplacesRefundRequestId\" IS NOT NULL");
         builder.HasIndex(x => x.RefundPolicyVersionId);
         builder.HasIndex(x => new { x.ConcessionRequestId, x.OriginalReceiptId })
             .IsUnique()
-            .HasFilter("\"ConcessionRequestId\" IS NOT NULL")
+            .HasFilter("\"ConcessionRequestId\" IS NOT NULL AND \"Status\" NOT IN (3, 8, 9)")
             .HasDatabaseName("UX_FeeRefundRequests_Concession_Receipt");
 
         builder.ConfigureByConvention();

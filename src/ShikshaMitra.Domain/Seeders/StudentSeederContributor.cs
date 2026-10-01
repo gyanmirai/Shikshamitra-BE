@@ -334,7 +334,7 @@ public class StudentSeederContributor : BaseSeederContributor
 		}
 
 		var email = $"{username}@example.invalid";
-		var user = new IdentityUser(GuidGenerator.Create(), username, email, CurrentTenant.Id)
+		var user = new IdentityUser(student.Id, username, email, CurrentTenant.Id)
 		{
 			Name = student.FirstName,
 			Surname = student.LastName

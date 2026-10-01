@@ -28,7 +28,7 @@ public class TeacherAvailabilityAppService(
     IRepository<Subject, Guid> subjectRepository,
     IRepository<Room, Guid> roomRepository,
     IRepository<Employee, Guid> employeeRepository,
-    IEmployeeAttendanceRepository employeeAttendanceRepository,
+    AttendanceAvailabilityWindowResolver attendanceWindowResolver,
     IRepository<AcademicYear, Guid> academicYearRepository,
     IUserScopeAccessService userScopeAccessService,
     IReportingManagerAccessService reportingManagerAccessService
@@ -68,126 +68,32 @@ public class TeacherAvailabilityAppService(
         var max = input.MaxResultCount <= 0 ? 50 : input.MaxResultCount;
 
         var pageRows = list.Skip(input.SkipCount).Take(max).ToList();
+        var attendanceRows = pageRows.Where(x => x.SourceType == TeacherAvailabilitySource.Attendance).ToList();
+        var teacherIds = attendanceRows.Where(x => x.TeacherId.HasValue).Select(x => x.TeacherId!.Value).Distinct().ToArray();
+        var teacherNames = attendanceRows.Where(x => !x.TeacherId.HasValue).Select(x => x.TeacherName).Distinct().ToArray();
+        var employees = teacherIds.Length == 0 ? [] : await employeeRepository.GetListAsync(x =>
+            Enumerable.Contains(teacherIds, x.Id) ||
+            (x.UserId.HasValue && Enumerable.Contains(teacherIds, x.UserId.Value)));
+        if (teacherNames.Length > 0)
+        {
+            // EmployeeName is computed and cannot be used in an EF predicate.
+            employees.AddRange((await employeeRepository.GetListAsync()).Where(x =>
+                teacherNames.Contains(x.EmployeeName, StringComparer.OrdinalIgnoreCase) &&
+                employees.All(existing => existing.Id != x.Id)));
+        }
+        var shifts = await attendanceWindowResolver.LoadShiftsAsync(employees);
         var dtoRows = new List<TeacherAvailabilityDto>();
         foreach (var row in pageRows)
         {
-            dtoRows.Add(await MapAsync(row));
+            var employee = ResolveEmployeeByTeacherReference(employees, row.TeacherId, row.TeacherName);
+            var shift = employee?.ShiftId is Guid shiftId ? shifts.GetValueOrDefault(shiftId) : null;
+            var window = row.SourceType == TeacherAvailabilitySource.Attendance
+                ? AttendanceAvailabilityWindowResolver.Resolve(shift, row.IsFullDay, row.StartTime, row.EndTime)
+                : (row.StartTime, row.EndTime);
+            dtoRows.Add(await MapAsync(row, window));
         }
 
         return new PagedResultDto<TeacherAvailabilityDto>(total, dtoRows);
-    }
-
-    private async Task SyncAttendanceAvailabilityRowsAsync(
-        GetTeacherAvailabilityInput input,
-        IReadOnlySet<Guid>? visibleEmployeeIds)
-    {
-        var rangeStart = input.Date ?? input.FromDate;
-        var rangeEnd = input.Date ?? input.ToDate;
-        if (!rangeStart.HasValue || !rangeEnd.HasValue)
-        {
-            return;
-        }
-
-        var from = DateOnly.FromDateTime(rangeStart.Value.Date);
-        var to = DateOnly.FromDateTime(rangeEnd.Value.Date);
-        if (visibleEmployeeIds is { Count: 0 })
-        {
-            return;
-        }
-
-        var attendanceQuery = await employeeAttendanceRepository.GetQueryableAsync();
-        if (visibleEmployeeIds != null)
-        {
-            var visibleEmployeeIdArray = visibleEmployeeIds.ToArray();
-            attendanceQuery = attendanceQuery.Where(attendance =>
-                Enumerable.Contains(visibleEmployeeIdArray, attendance.EmployeeId));
-        }
-
-        var attendanceRows = await AsyncExecuter.ToListAsync(
-            attendanceQuery.Where(x =>
-                x.AttendanceDate >= from &&
-                x.AttendanceDate <= to &&
-                x.StatusType != EmployeeAttendanceStatusType.Present));
-
-        if (attendanceRows.Count == 0)
-        {
-            return;
-        }
-
-        var attendanceEmployeeIds = attendanceRows.Select(x => x.EmployeeId).Distinct().ToArray();
-        var employees = await employeeRepository.GetListAsync(employee =>
-            Enumerable.Contains(attendanceEmployeeIds, employee.Id));
-        var employeeById = employees.ToDictionary(x => x.Id);
-
-        var availabilityStart = NormalizeDate(rangeStart.Value);
-        var availabilityEnd = NormalizeDate(rangeEnd.Value);
-        var existingRows = await availabilityRepository.GetListAsync(x =>
-            !x.IsCancelled &&
-            x.AvailabilityDate >= availabilityStart &&
-            x.AvailabilityDate <= availabilityEnd);
-
-        foreach (var attendance in attendanceRows)
-        {
-            if (!employeeById.TryGetValue(attendance.EmployeeId, out var employee))
-            {
-                continue;
-            }
-
-            var availabilityDate = NormalizeDate(attendance.AttendanceDate.ToDateTime(TimeOnly.MinValue));
-            var existingRow = existingRows.FirstOrDefault(x =>
-                x.SourceType == TeacherAvailabilitySource.Attendance &&
-                (x.SourceEntityId == attendance.Id ||
-                 (x.TeacherId == attendance.EmployeeId && x.AvailabilityDate == availabilityDate)));
-
-            if (existingRow != null)
-            {
-                // Older attendance syncs could create rows without an academic year.
-                // Backfill the year so the current-year filter does not hide them.
-                if (!existingRow.AcademicYearId.HasValue && input.AcademicYearId.HasValue)
-                {
-                    existingRow.SetAcademicYear(input.AcademicYearId);
-                    await availabilityRepository.UpdateAsync(existingRow, autoSave: true);
-                }
-
-                continue;
-            }
-
-            var isFullDay = attendance.StatusType == EmployeeAttendanceStatusType.FullDayLeave;
-            var startTime = new TimeOnly(9, 0);
-            var endTime = isFullDay ? new TimeOnly(14, 15) : new TimeOnly(12, 0);
-            var teacherName = string.IsNullOrWhiteSpace(employee.EmployeeName)
-                ? employee.EmployeeCode
-                : employee.EmployeeName;
-            var hasOverlappingAvailability = existingRows.Any(existing =>
-                existing.AvailabilityDate == availabilityDate &&
-                IsSameTeacher(existing, employee.Id, teacherName) &&
-                existing.StartTime < endTime &&
-                startTime < existing.EndTime);
-
-            if (hasOverlappingAvailability)
-            {
-                continue;
-            }
-
-            await CreateAvailabilityAsync(new CreateTeacherAvailabilityDto
-            {
-                TeacherId = employee.Id,
-                TeacherName = teacherName,
-                DepartmentName = employee.Department ?? "Academic",
-                AvailabilityDate = availabilityDate,
-                StartTime = startTime.ToString("HH:mm"),
-                EndTime = endTime.ToString("HH:mm"),
-                AvailabilityStatus = TeacherAvailabilityStatus.Unavailable,
-                SourceType = TeacherAvailabilitySource.Attendance,
-                SourceEntityId = attendance.Id,
-                Reason = isFullDay
-                    ? "Marked absent in HR attendance."
-                    : "Marked half-day unavailable in HR attendance.",
-                IsFullDay = isFullDay,
-                NotifyLeadership = true,
-                Remarks = attendance.Remarks
-            }, skipIfOverlapping: true);
-        }
     }
 
     public async Task<TeacherAvailabilityDto> CreateAsync(CreateTeacherAvailabilityDto input)
@@ -393,7 +299,8 @@ public class TeacherAvailabilityAppService(
 
         return string.IsNullOrWhiteSpace(teacherName)
             ? null
-            : await employeeRepository.FirstOrDefaultAsync(x => x.EmployeeName == teacherName);
+            : (await employeeRepository.GetListAsync()).FirstOrDefault(x =>
+                string.Equals(x.EmployeeName, teacherName, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task CancelAsync(Guid id)
@@ -508,10 +415,13 @@ public class TeacherAvailabilityAppService(
         return ids.Distinct().ToList();
     }
 
-    private async Task<TeacherAvailabilityDto> MapAsync(TeacherAvailability row)
+    private async Task<TeacherAvailabilityDto> MapAsync(TeacherAvailability row, (TimeOnly Start, TimeOnly End) window)
     {
         var dto = Map(row);
-        if (row.AffectedLectureCount <= 0)
+        dto.StartTime = window.Start.ToString("HH:mm");
+        dto.EndTime = window.End.ToString("HH:mm");
+
+        if (row.AffectedLectureCount <= 0 && row.SourceType != TeacherAvailabilitySource.Attendance)
         {
             dto.CanCreateSubstitution = false;
             return dto;
@@ -524,8 +434,8 @@ public class TeacherAvailabilityAppService(
             TeacherName = row.TeacherName,
             DepartmentName = row.DepartmentName,
             AvailabilityDate = row.AvailabilityDate,
-            StartTime = row.StartTime.ToString("HH:mm"),
-            EndTime = row.EndTime.ToString("HH:mm"),
+            StartTime = dto.StartTime,
+            EndTime = dto.EndTime,
             AvailabilityStatus = row.AvailabilityStatus,
             SourceType = row.SourceType,
             SourceEntityId = row.SourceEntityId,

@@ -14,6 +14,7 @@ TL;DR: use this page as the entrypoint for Finance behavior, API families, archi
 Finance covers fees, collections, concessions, adjustments, refunds, receipts, accounts, audit, and reports.
 
 Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
+For current Fees-to-Accounts work, use the [integration-only posting foundation](./references/accounts-posting-foundation.md); older Accounts proposals in this directory include credit and collection-flow changes outside that scope.
 
 ## Read order
 
@@ -36,6 +37,7 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 | 15 | [Simplified Accounts operating flow](./references/accounts-simplified-operating-flow.md) | Reorganize Fees and Accounts around officer workflows, add the missing submodules, automatic accounting, target APIs, and rollout gates |
 | 16 | [Accounts frontend/backend delivery](./references/accounts-frontend-backend-delivery.md) | Track shipped versus target behavior, Fee Collections payment-method reuse, cross-stack work, examples, and acceptance gates |
 | 17 | [Integrated Accounts end-to-end flow](./references/accounts-integrated-end-to-end-flow.md) | Implement one source-to-journal chain for Fees, credit, refunds, other income/expense, settlement, and close with simple staff forms |
+| 18 | [Accounts posting foundation](./references/accounts-posting-foundation.md) | Inspect the partial event and journal schema, invariants, and live-posting gates |
 
 ## Source of truth
 

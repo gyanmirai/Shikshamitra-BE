@@ -74,7 +74,7 @@ public class GetChargesRequest
 
 	public string? Search { get; set; }
 
-	/// <summary>0 = Pending (has at least one pending line), 1 = Processed (all lines actioned).</summary>
+	/// <summary>Batch workflow: 0 = Pending, 1 = In Process, 2 = Completed, 3 = Rejected.</summary>
 	public int Status { get; set; } = 0;
 
 	public string? SortBy { get; set; }

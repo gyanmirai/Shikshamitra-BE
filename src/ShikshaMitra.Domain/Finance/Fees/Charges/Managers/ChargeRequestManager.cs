@@ -37,7 +37,7 @@ public class ChargeRequestManager(
 	{
 		var category = await GetActiveCategoryAsync(chargeCategoryId, academicYearId);
 		var studentIds = await audienceResolver.ResolveAsync(audience, academicYearId);
-		var initialStatus = category.IsApprovalRequired ? ChargeStatus.Pending : ChargeStatus.Approved;
+		var initialStatus = ChargeStatus.Pending;
 
 		var request = new ChargeRequest(
 			guidGenerator.Create(),
@@ -58,7 +58,7 @@ public class ChargeRequestManager(
 		await chargeRequestRepository.InsertAsync(request, autoSave: false);
 
 		var lines = await CreateLinesAsync(
-			request, studentIds, initialStatus, requestorId, category, autoApprove: !category.IsApprovalRequired);
+			request, studentIds, initialStatus, requestorId, category);
 
 		logger.LogInformation(
 			"Charge request created: RequestId={RequestId}, LineCount={LineCount}, Status={Status}",
@@ -117,14 +117,13 @@ public class ChargeRequestManager(
 		var existingStudentIds = existingLines.Select(l => l.StudentId).ToHashSet();
 		var newStudentIds = resolvedIds.Where(id => !existingStudentIds.Contains(id)).ToList();
 
-		var initialStatus = category.IsApprovalRequired ? ChargeStatus.Pending : ChargeStatus.Approved;
+		var initialStatus = ChargeStatus.Pending;
 		var newLines = await CreateLinesAsync(
 			request,
 			newStudentIds,
 			initialStatus,
 			request.RequestorId,
-			category,
-			autoApprove: !category.IsApprovalRequired);
+			category);
 
 		foreach (var line in existingLines.Where(l => l.Status == ChargeStatus.Pending))
 		{
@@ -137,14 +136,6 @@ public class ChargeRequestManager(
 				request.AdditionalNotes);
 			if (category.IncomeCategoryId.HasValue && category.IncomeAccountHeadId.HasValue)
 				line.SetAccountingSnapshot(category.IncomeCategoryId.Value, category.IncomeAccountHeadId.Value);
-		}
-
-		if (!category.IsApprovalRequired)
-		{
-			foreach (var line in existingLines.Where(l => l.Status == ChargeStatus.Pending))
-			{
-				line.AutoApprove();
-			}
 		}
 
 		return existingLines.Concat(newLines).ToList();
@@ -189,8 +180,7 @@ public class ChargeRequestManager(
 		IReadOnlyList<Guid> studentIds,
 		ChargeStatus initialStatus,
 		Guid requestorId,
-		ChargeCategory category,
-		bool autoApprove)
+		ChargeCategory category)
 	{
 		var lines = new List<Charge>();
 		var distinctStudentIds = studentIds.Distinct().ToList();
@@ -246,11 +236,6 @@ public class ChargeRequestManager(
 					.WithData("ChargeCategoryId", category.Id);
 			line.SetAccountingSnapshot(category.IncomeCategoryId.Value, category.IncomeAccountHeadId.Value);
 
-			if (autoApprove)
-			{
-				line.AutoApprove();
-			}
-
 			await chargeRepository.InsertAsync(line, autoSave: false);
 			lines.Add(line);
 		}
@@ -287,6 +272,9 @@ public class ChargeRequestManager(
 	{
 		var lines = await chargeRepository.GetListAsync(
 			c => c.ChargeRequestId == chargeRequestId && c.Status == requiredStatus);
+
+		if (lines.Count == 0)
+			throw new BusinessException(FinanceChargeErrorCodes.ChargeNotPending);
 
 		if (studentIds is { Count: > 0 })
 		{

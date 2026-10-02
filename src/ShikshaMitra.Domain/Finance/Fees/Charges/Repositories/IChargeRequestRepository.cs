@@ -22,7 +22,8 @@ public record ChargeRequestJoinResult(
 	AcademicYear AcademicYear,
 	int StudentCount,
 	int PendingCount,
-	int ProcessedCount);
+	int ProcessedCount,
+	ChargeWorkflowStatus WorkflowStatus = ChargeWorkflowStatus.Pending);
 
 public record ChargeRequestDetailResult(
 	ChargeRequest Request,
@@ -47,7 +48,7 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 	/// Returns a paged list of charge requests with per-request student counts,
 	/// along with the total filtered count. Handles ordering and pagination
 	/// inside the repository to avoid EF Core correlated-subquery translation errors.
-	/// status: 0 = Pending (any pending line), 1 = Processed (all lines actioned).
+	/// status: 0 = Pending, 1 = In Process, 2 = Completed, 3 = Rejected.
 	/// </summary>
 	Task<(List<ChargeRequestJoinResult> Items, int TotalCount)> GetChargeRequestsPagedAsync(
 		Guid academicYearId,
@@ -80,4 +81,4 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 		CancellationToken cancellationToken = default);
 }
 
-public record ChargeRequestStatusCounts(int Pending, int Processed);
+public record ChargeRequestStatusCounts(int Pending, int Processed, int Completed = 0, int Rejected = 0);

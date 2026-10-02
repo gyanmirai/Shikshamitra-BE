@@ -37,7 +37,6 @@ public partial class ChargeAppService
 			audience, snapshot, currentUser.Id!.Value, input.AdditionalNotes);
 
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		await PublishApprovedEventsAsync(request, lines.Where(l => l.Status == ChargeStatus.Approved));
 
 		await financeAuditWriter.WriteAsync(
 			academicYearId, FinanceAuditEntityTypes.FeeCharge, request.Id, request.ChargeName,
@@ -47,9 +46,7 @@ public partial class ChargeAppService
 		logger.LogInformation("Charge request created: {ChargeRequestId}, Lines={Count}", request.Id, lines.Count);
 
 		return await BuildChargeResponseAsync(request, lines.Count,
-			lines.All(l => l.Status == ChargeStatus.Pending)
-				? "Charge created successfully and pending approval"
-				: "Charge created and approved successfully");
+			"Charge created successfully and pending approval");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update)]
@@ -81,20 +78,14 @@ public partial class ChargeAppService
 				input.AdditionalNotes);
 
 			var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == chargeId && c.Status == ChargeStatus.Pending);
-			var category = await chargeCategoryRepository.FindAsync(request.ChargeCategoryId);
 			foreach (var line in lines)
 			{
 				line.Update(request.ChargeCategoryId, request.PurposeDescription, request.Amount,
 					request.DueDate, request.Priority, request.AdditionalNotes);
-				if (category is not null && !category.IsApprovalRequired)
-					line.AutoApprove();
 			}
 		}
 
 		await chargeRequestRepository.UpdateAsync(request, autoSave: true);
-		var autoApprovedLines = await chargeRepository.GetListAsync(
-			c => c.ChargeRequestId == request.Id && c.Status == ChargeStatus.Approved);
-		await PublishApprovedEventsAsync(request, autoApprovedLines);
 
 		await financeAuditWriter.WriteAsync(
 			request.AcademicYearId, FinanceAuditEntityTypes.FeeCharge, request.Id, request.ChargeName,
@@ -141,6 +132,7 @@ public partial class ChargeAppService
 			Data = new ApprovalData
 			{
 				ChargeId = request.Id, Status = (int)ChargeStatus.Approved,
+				WorkflowStatus = await GetWorkflowStatusAsync(await chargeRepository.GetListAsync(c => c.ChargeRequestId == request.Id)),
 				ProcessedCount = processed, RemainingPendingCount = remaining,
 				ApprovedBy = currentUser.Id!.Value,
 				ApprovedByName = approver?.Name ?? approver?.UserName ?? currentUser.UserName ?? string.Empty,
@@ -182,6 +174,7 @@ public partial class ChargeAppService
 			Data = new RejectionData
 			{
 				ChargeId = request.Id, Status = (int)ChargeStatus.Rejected,
+				WorkflowStatus = await GetWorkflowStatusAsync(await chargeRepository.GetListAsync(c => c.ChargeRequestId == request.Id)),
 				ProcessedCount = processed, RemainingPendingCount = remaining,
 				RejectedBy = currentUser.Id!.Value,
 				RejectedByName = rejector?.Name ?? rejector?.UserName ?? currentUser.UserName ?? string.Empty,
@@ -238,6 +231,7 @@ public partial class ChargeAppService
 			Data = new ApprovalData
 			{
 				ChargeId = request.Id, Status = (int)ChargeStatus.Voided,
+				WorkflowStatus = await GetWorkflowStatusAsync(await chargeRepository.GetListAsync(c => c.ChargeRequestId == request.Id)),
 				ProcessedCount = approvedLines.Count,
 				RemainingPendingCount = await chargeRepository.CountAsync(
 					c => c.ChargeRequestId == chargeId && c.Status == ChargeStatus.Pending),

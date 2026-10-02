@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Charges;
+using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -37,7 +39,7 @@ public class EfCoreChargeRequestRepository(
 			join requestor in db.Set<IdentityUser>().AsNoTracking() on request.RequestorId equals requestor.Id
 			where request.Id == chargeRequestId
 			select new { request, category, academicYear, requestor }
-		).FirstOrDefaultAsync(cancellationToken);
+		).IgnoreAutoIncludes().FirstOrDefaultAsync(cancellationToken);
 
 		if (header is null)
 		{
@@ -51,7 +53,7 @@ public class EfCoreChargeRequestRepository(
 			join division in db.Set<Division>().AsNoTracking() on charge.DivisionId equals division.Id
 			where charge.ChargeRequestId == chargeRequestId
 			select new ChargeLineJoinResult(charge, student, standard, division)
-		).ToListAsync(cancellationToken);
+		).IgnoreAutoIncludes().ToListAsync(cancellationToken);
 
 		return new ChargeRequestDetailResult(
 			header.request,
@@ -115,22 +117,11 @@ public class EfCoreChargeRequestRepository(
 			chargeQuery = chargeQuery.Where(r => requestIds.Contains(r.Id));
 		}
 
-		// Apply status filter.
-		if (status == 0)
-		{
-			// if status is 0, means get all charges whose at least one line is pending.
-			var pendingRequestIds = await chargeLineQuery.Where(c => c.Status == ChargeStatus.Pending)
-				.Select(c => c.ChargeRequestId)
-				.Distinct()
-				.ToListAsync(cancellationToken);
-			chargeQuery = chargeQuery.Where(r => pendingRequestIds.Contains(r.Id));
-		}
-		else
-		{
-			// if status is 1, means get all charges whose all lines are processed.
-			chargeQuery = chargeQuery.Where(r => chargeLineQuery.Any(c => c.ChargeRequestId == r.Id)
-				&& !chargeLineQuery.Any(c => c.ChargeRequestId == r.Id && c.Status == ChargeStatus.Pending));
-		}
+		// Class/division and user scope select requests, but their lifecycle uses the entire batch.
+		var candidateIds = await chargeQuery.Select(r => r.Id).ToListAsync(cancellationToken);
+		var workflows = await GetWorkflowsAsync(candidateIds, cancellationToken);
+		var matchingIds = workflows.Where(x => (int)x.Value == status).Select(x => x.Key).ToList();
+		chargeQuery = chargeQuery.Where(r => matchingIds.Contains(r.Id));
 
 		// get total count before applying pagination.
 		var totalCount = await chargeQuery.CountAsync(cancellationToken);
@@ -160,11 +151,11 @@ public class EfCoreChargeRequestRepository(
 		var academicYearIds = charges.Select(c => c.AcademicYearId).Distinct().ToList();
 
 		var db = await GetDbContextAsync();
-		var requestors = await db.Set<IdentityUser>().AsNoTracking()
+		var requestors = await db.Set<IdentityUser>().IgnoreAutoIncludes().AsNoTracking()
 			.Where(u => requestorIds.Contains(u.Id))
 			.ToDictionaryAsync(u => u.Id, cancellationToken);
 
-		var academicYears = await db.Set<AcademicYear>().AsNoTracking()
+		var academicYears = await db.Set<AcademicYear>().IgnoreAutoIncludes().AsNoTracking()
 			.Where(a => academicYearIds.Contains(a.Id))
 			.ToDictionaryAsync(a => a.Id, cancellationToken);
 
@@ -180,7 +171,8 @@ public class EfCoreChargeRequestRepository(
 						 academicYear!,
 						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id),
 						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id && cl.Status == ChargeStatus.Pending),
-						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id && cl.Status != ChargeStatus.Pending)
+						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id && cl.Status != ChargeStatus.Pending),
+						 workflows[charge.Id]
 					 );
 
 		return (result.ToList(), totalCount);
@@ -194,7 +186,7 @@ public class EfCoreChargeRequestRepository(
 	{
 		var db = await GetDbContextAsync();
 
-		return from charge in db.Set<Charge>().AsNoTracking()
+		return from charge in db.Set<Charge>().IgnoreAutoIncludes().AsNoTracking()
 			join student in db.Set<Student>().AsNoTracking() on charge.StudentId equals student.Id
 			join standard in db.Set<Standard>().AsNoTracking() on charge.StandardId equals standard.Id
 			join division in db.Set<Division>().AsNoTracking() on charge.DivisionId equals division.Id
@@ -251,19 +243,36 @@ public class EfCoreChargeRequestRepository(
 		if (requestIds.Count == 0)
 			return new ChargeRequestStatusCounts(0, 0);
 
-		// Aggregate per-request pending line counts.
-		var lineStats = await db.Set<Charge>().AsNoTracking()
-			.Where(c => requestIds.Contains(c.ChargeRequestId))
-			.GroupBy(c => c.ChargeRequestId)
-			.Select(g => new
-			{
-				HasPending = g.Any(x => x.Status == ChargeStatus.Pending),
-			})
-			.ToListAsync(cancellationToken);
+		var workflows = await GetWorkflowsAsync(requestIds, cancellationToken);
+		return new ChargeRequestStatusCounts(
+			workflows.Count(x => x.Value == ChargeWorkflowStatus.Pending),
+			workflows.Count(x => x.Value == ChargeWorkflowStatus.InProcess),
+			workflows.Count(x => x.Value == ChargeWorkflowStatus.Completed),
+			workflows.Count(x => x.Value == ChargeWorkflowStatus.Rejected));
+	}
 
-		var pending = lineStats.Count(s => s.HasPending);
-		var processed = lineStats.Count(s => !s.HasPending);
-
-		return new ChargeRequestStatusCounts(pending, processed);
+	private async Task<Dictionary<Guid, ChargeWorkflowStatus>> GetWorkflowsAsync(
+		List<Guid> requestIds, CancellationToken cancellationToken)
+	{
+		if (requestIds.Count == 0) return [];
+		var db = await GetDbContextAsync();
+		var lines = await db.Set<Charge>().AsNoTracking()
+			.Where(line => requestIds.Contains(line.ChargeRequestId)).ToListAsync(cancellationToken);
+		var chargeIds = lines.Select(line => line.Id).ToList();
+		var allocations = await (from allocation in db.Set<ChargeCollectionRecord>().AsNoTracking()
+			join transaction in db.Set<FeeRecordMetadata>().AsNoTracking()
+				on allocation.FeeRecordMetadataId equals transaction.Id
+			where chargeIds.Contains(allocation.ChargeId) && transaction.Status != FeeCollectionStatus.Reversed
+			select new { allocation.ChargeId, allocation.Amount }).ToListAsync(cancellationToken);
+		var collected = allocations.GroupBy(x => x.ChargeId)
+			.ToDictionary(g => g.Key, g => g.Sum(x => Convert.ToDecimal(x.Amount)));
+		var waivers = await db.Set<ChargeWaiverApplication>().AsNoTracking()
+			.Where(x => chargeIds.Contains(x.ChargeId)).ToListAsync(cancellationToken);
+		var waived = waivers.GroupBy(x => x.ChargeId)
+			.ToDictionary(g => g.Key, g => g.Sum(x => x.EffectiveAmount));
+		var linesByRequest = lines.ToLookup(line => line.ChargeRequestId);
+		return requestIds.ToDictionary(id => id, id => ChargeWorkflowStatusResolver.Resolve(
+			linesByRequest[id].Select(line => new ChargeWorkflowLine(line.Status,
+				Math.Max(0m, line.Amount - collected.GetValueOrDefault(line.Id) - waived.GetValueOrDefault(line.Id))))));
 	}
 }

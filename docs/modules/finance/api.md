@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-09-24
+updated_on: 2026-10-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,6 +19,10 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 
 Finance APIs require authenticated access and tenant context through the platform pipeline.
 Mutations must enforce backend permissions and audit important financial actions.
+
+## Charge workflow contract
+
+`GET api/charges` filters the batch lifecycle with `status=0` (Pending), `1` (In Process), `2` (Completed), or `3` (Rejected). Responses expose `workflowStatus` separately from the existing student approval `status`. New charges always await an independent checker; completion is derived from settlement evidence and reversals reopen outstanding batches. See [the charge lifecycle contract](./references/charge-management-end-to-end.md#four-state-batch-lifecycle) for totals, mixed decisions, waivers and compatibility.
 
 ## Fees API families
 

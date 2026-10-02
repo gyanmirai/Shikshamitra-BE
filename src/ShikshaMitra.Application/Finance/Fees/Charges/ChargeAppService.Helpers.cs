@@ -33,6 +33,7 @@ public partial class ChargeAppService
 		var academicYear = await academicYearRepository.GetAsync(request.AcademicYearId);
 		var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == request.Id);
 		var status = DeriveRequestStatus(lines.Select(l => l.Status).ToList());
+		var workflowStatus = await GetWorkflowStatusAsync(lines);
 
 		return new ChargeResponse
 		{
@@ -44,7 +45,7 @@ public partial class ChargeAppService
 				ChargeCategoryId = request.ChargeCategoryId, CategoryName = category.Name,
 				PurposeDescription = request.PurposeDescription, Amount = request.Amount,
 				DueDate = request.DueDate, AppliedOn = request.AppliedOn,
-				Priority = (int)request.Priority, Status = (int)status,
+				Priority = (int)request.Priority, Status = (int)status, WorkflowStatus = workflowStatus,
 				BoardId = request.BoardId, EducationMediumId = request.EducationMediumId,
 				AdditionalNotes = request.AdditionalNotes,
 				RequestorId = request.RequestorId,
@@ -56,7 +57,7 @@ public partial class ChargeAppService
 					request.RequestorId,
 					lines.Any(l => l.Status == ChargeStatus.Pending),
 					lines.Count == 0 || lines.All(l => l.Status == ChargeStatus.Pending),
-					lines.Any(l => l.Status == ChargeStatus.Approved))
+					workflowStatus == ChargeWorkflowStatus.InProcess)
 			},
 			Message = message
 		};
@@ -71,7 +72,7 @@ public partial class ChargeAppService
 			Amount = r.Request.Amount, PurposeDescription = r.Request.PurposeDescription,
 			DueDate = r.Request.DueDate, AppliedOn = r.Request.AppliedOn,
 			Priority = (int)r.Request.Priority,
-			DisplayStatus = r.PendingCount > 0 ? 0 : 1,
+			DisplayStatus = (int)r.WorkflowStatus, WorkflowStatus = r.WorkflowStatus,
 			StudentCount = r.StudentCount, ProcessedCount = r.ProcessedCount,
 			RequestorId = r.Requestor.Id,
 			RequestorName = r.Requestor.Name ?? r.Requestor.UserName ?? string.Empty,
@@ -203,17 +204,33 @@ public partial class ChargeAppService
 		return actions;
 	}
 
+	private async Task<ChargeWorkflowStatus> GetWorkflowStatusAsync(IReadOnlyList<Charge> lines)
+	{
+		var collected = await GetCollectedAmountsAsync(lines.Select(line => line.Id));
+		var waived = await GetWaivedAmountsAsync(lines.Select(line => line.Id));
+		return ChargeWorkflowStatusResolver.Resolve(lines.Select(line => new ChargeWorkflowLine(
+			line.Status, Math.Max(0m, line.Amount - collected.GetValueOrDefault(line.Id) - waived.GetValueOrDefault(line.Id)))));
+	}
+
+	private async Task<Dictionary<Guid, decimal>> GetWaivedAmountsAsync(IEnumerable<Guid> chargeLineIds)
+	{
+		var ids = chargeLineIds.Distinct().ToList();
+		if (ids.Count == 0) return [];
+		var waivers = await chargeWaiverRepository.GetListAsync(x => ids.Contains(x.ChargeId));
+		return waivers.GroupBy(x => x.ChargeId).ToDictionary(g => g.Key, g => g.Sum(x => x.EffectiveAmount));
+	}
+
 	private async Task<Dictionary<Guid, decimal>> GetCollectedAmountsAsync(IEnumerable<Guid> chargeLineIds)
 	{
 		var ids = chargeLineIds.Distinct().ToList();
 		if (ids.Count == 0) return [];
 		var allocations = await chargeCollectionRecordRepository.GetListAsync(x => ids.Contains(x.ChargeId));
 		var transactionIds = allocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
-		var reversedIds = (await feeRecordMetadataRepository.GetListAsync(x =>
-			transactionIds.Contains(x.Id) && x.Status == ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.Reversed))
+		var activeIds = (await feeRecordMetadataRepository.GetListAsync(x =>
+			transactionIds.Contains(x.Id) && x.Status != ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.Reversed))
 			.Select(x => x.Id).ToHashSet();
 		return allocations
-			.Where(x => !reversedIds.Contains(x.FeeRecordMetadataId))
+			.Where(x => activeIds.Contains(x.FeeRecordMetadataId))
 			.GroupBy(x => x.ChargeId)
 			.ToDictionary(x => x.Key, x => x.Sum(row => Convert.ToDecimal(row.Amount)));
 	}

@@ -28,6 +28,7 @@ public partial class ChargeAppService(
 	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
 	IRepository<Student, Guid> studentRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
+	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	FinanceScopeAccessService financeScopeAccessService,
 	ICurrentUser currentUser,

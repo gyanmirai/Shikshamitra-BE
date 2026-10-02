@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-01
+updated_on: 2026-10-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -27,6 +27,7 @@ git diff --check
 
 | Change area | First tests |
 |---|---|
+| Batch lifecycle | `ChargeWorkflowStatusResolver_Tests`, `ChargeBatchLifecycleApi_Tests`: mandatory approval for all categories, partial decisions/payments, all-student completion, rejection inbox, waiver settlement, payment reversal, status validation and detail/list/count parity |
 | Charges | `ChargeAppService_Tests`, `ChargeCoreApi_Tests`, `ChargeValidationApi_Tests`, `ChargeWorkflowApi_Tests`; add the missing isolation, mixed-batch, concurrency, idempotency, source-replay, receipt/account, and correction cases from [Charge management end to end](./references/charge-management-end-to-end.md) |
 | Concessions | `ConcessionTypeLifecycle_Tests`, `ConcessionRequestCoreApi_Tests`, `ConcessionRequestValidationApi_Tests`, `ConcessionRequestWorkflowApi_Tests` |
 | Paid-fee concessions | `ConcessionEligibility_Tests`, `DueFee_Mutations_Tests`; verify a fully paid installment remains Paid, approval creates the exact receipt-linked refund request, and only settlement decreases the paid cash balance |

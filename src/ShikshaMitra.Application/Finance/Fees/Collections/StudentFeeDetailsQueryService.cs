@@ -122,8 +122,8 @@ public partial class StudentFeeDetailsQueryService(
 				var lines = group.Select(d =>
 					{
 						var balance = lateFeeBalances[d.Id];
-						var lateFee = (Amount: (double)balance.PendingAmount, PaidAmount: (double)balance.PaidAmount,
-							WaivedAmount: (double)balance.WaivedAmount, balance.Explanation);
+						var lateFee = (Amount: (double) balance.PendingAmount, PaidAmount: (double) balance.PaidAmount,
+							WaivedAmount: (double) balance.WaivedAmount, balance.Explanation);
 						if (lateFee.Amount > 0 || lateFee.PaidAmount > 0 || lateFee.WaivedAmount > 0)
 						{
 							var feeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty);

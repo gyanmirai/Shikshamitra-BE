@@ -12,6 +12,9 @@ public partial class ChargeAppService
 {
 	public async Task<ChargeListResponse> GetAllAsync(GetChargesRequest input)
 	{
+		if (!Enum.IsDefined(typeof(ChargeWorkflowStatus), input.Status))
+			throw new Volo.Abp.Validation.AbpValidationException("Invalid charge workflow status.");
+
 		if (input.AcademicYearId == Guid.Empty)
 			throw new Volo.Abp.Validation.AbpValidationException("academicYearId is required.");
 
@@ -42,7 +45,7 @@ public partial class ChargeAppService
 			var dto = MapToListItem(item);
 			dto.AvailableActions = await GetAvailableActionsAsync(
 				item.Request.RequestorId, item.PendingCount > 0, item.PendingCount == item.StudentCount,
-				item.ProcessedCount > 0);
+				item.WorkflowStatus == ChargeWorkflowStatus.InProcess);
 			mappedItems.Add(dto);
 		}
 
@@ -52,6 +55,7 @@ public partial class ChargeAppService
 			TotalCount = totalCount, CurrentPage = page, PageSize = pageSize,
 			TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
 			PendingCount = statusCounts.Pending, ProcessedCount = statusCounts.Processed,
+			InProcessCount = statusCounts.Processed, CompletedCount = statusCounts.Completed, RejectedCount = statusCounts.Rejected,
 			Message = "Charges retrieved successfully"
 		};
 	}
@@ -76,6 +80,7 @@ public partial class ChargeAppService
 			? await chargeCategoryRepository.GetListAsync(c => categoryIds.Contains(c.Id)) : [];
 		var categoryMap = categories.ToDictionary(c => c.Id);
 		var collectedAmounts = await GetCollectedAmountsAsync(lines.Select(line => line.Charge.Id));
+		var waivedAmounts = await GetWaivedAmountsAsync(lines.Select(line => line.Charge.Id));
 
 		return new ChargeLineListResponse
 		{
@@ -85,8 +90,10 @@ public partial class ChargeAppService
 				categoryMap.TryGetValue(line.Charge.ChargeCategoryId, out var category);
 				var item = MapToLineListItem(line, category);
 				item.CollectedAmount = collectedAmounts.GetValueOrDefault(line.Charge.Id);
+				item.WaivedAmount = waivedAmounts.GetValueOrDefault(line.Charge.Id);
 				item.OutstandingAmount = line.Charge.Status == ChargeStatus.Approved
-					? Math.Max(0m, line.Charge.Amount - item.CollectedAmount) : 0m;
+					? Math.Max(0m, line.Charge.Amount - item.CollectedAmount - item.WaivedAmount) : 0m;
+				item.WorkflowStatus = ChargeWorkflowStatusResolver.Resolve([new ChargeWorkflowLine(line.Charge.Status, item.OutstandingAmount)]);
 				return item;
 			}).ToList(),
 			TotalCount = totalCount,
@@ -110,18 +117,22 @@ public partial class ChargeAppService
 
 		var allPending = detail.Lines.Count == 0 || detail.Lines.All(x => x.Charge.Status == ChargeStatus.Pending);
 		var hasPending = detail.Lines.Any(x => x.Charge.Status == ChargeStatus.Pending);
-		var hasApproved = detail.Lines.Any(x => x.Charge.Status == ChargeStatus.Approved);
-		var availableActions = await GetAvailableActionsAsync(
-			detail.Request.RequestorId, hasPending, allPending, hasApproved);
 		var collectedAmounts = await GetCollectedAmountsAsync(detail.Lines.Select(line => line.Charge.Id));
+		var waivedAmounts = await GetWaivedAmountsAsync(detail.Lines.Select(line => line.Charge.Id));
 		var studentLines = detail.Lines.Select(line =>
 		{
 			var item = MapToStudentLine(line);
 			item.CollectedAmount = collectedAmounts.GetValueOrDefault(line.Charge.Id);
+			item.WaivedAmount = waivedAmounts.GetValueOrDefault(line.Charge.Id);
 			item.OutstandingAmount = line.Charge.Status == ChargeStatus.Approved
-				? Math.Max(0m, line.Charge.Amount - item.CollectedAmount) : 0m;
+				? Math.Max(0m, line.Charge.Amount - item.CollectedAmount - item.WaivedAmount) : 0m;
+			item.WorkflowStatus = ChargeWorkflowStatusResolver.Resolve([new ChargeWorkflowLine(line.Charge.Status, item.OutstandingAmount)]);
 			return item;
 		}).ToList();
+		var workflowStatus = ChargeWorkflowStatusResolver.Resolve(studentLines.Select(line =>
+			new ChargeWorkflowLine((ChargeStatus)line.Status, line.OutstandingAmount)));
+		var availableActions = await GetAvailableActionsAsync(
+			detail.Request.RequestorId, hasPending, allPending, workflowStatus == ChargeWorkflowStatus.InProcess);
 
 		return new ChargeDetailResponse
 		{
@@ -136,7 +147,8 @@ public partial class ChargeAppService
 				Status = (int)DeriveRequestStatus(detail.Lines.Select(l => l.Charge.Status).ToList()),
 				AdditionalNotes = detail.Request.AdditionalNotes, Audience = audience,
 				AppliedCount = detail.Lines.Count(l => l.Charge.Status == ChargeStatus.Approved),
-				IsApprovalRequired = detail.Category.IsApprovalRequired,
+				IsApprovalRequired = true,
+				WorkflowStatus = workflowStatus,
 				Students = studentLines,
 				Requestor = new RequestorInfo
 				{

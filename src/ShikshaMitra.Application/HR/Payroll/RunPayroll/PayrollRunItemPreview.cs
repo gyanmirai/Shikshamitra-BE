@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.AttendanceAndLeaves;
@@ -58,6 +58,11 @@ internal sealed record PayrollRunItemPreview(
 		if (overtimeComponent != null)
 		{
 			allComponents.Add(overtimeComponent);
+			if (statutoryRules?.EmployeeStateInsurance is { } esi)
+				statutoryRules = statutoryRules with
+				{
+					EmployeeStateInsurance = esi with { SystemOvertimeComponentId = overtimeComponent.Id }
+				};
 		}
 
 		var computation = PayrollComputation.Calculate(
@@ -99,15 +104,15 @@ internal sealed record PayrollRunItemPreview(
 		AttendancePolicy? attendancePolicy)
 	{
 		if (shift == null ||
-		    attendancePolicy?.OvertimeEnabled != true ||
-		    attendancePolicy.OvertimeRate == AttendanceOvertimeRate.Flat ||
-		    !attendancePolicy.MinOvertimeMinutes.HasValue ||
-		    basis.BasisDays <= 0m)
+			attendancePolicy?.OvertimeEnabled != true ||
+			attendancePolicy.OvertimeRate == AttendanceOvertimeRate.Flat ||
+			!attendancePolicy.MinOvertimeMinutes.HasValue ||
+			basis.BasisDays <= 0m)
 		{
 			return null;
 		}
 
-		var shiftMinutes = (decimal)(shift.EndTime.ToTimeSpan() - shift.StartTime.ToTimeSpan()).TotalMinutes;
+		var shiftMinutes = (decimal) (shift.EndTime.ToTimeSpan() - shift.StartTime.ToTimeSpan()).TotalMinutes;
 		if (shiftMinutes <= 0m)
 		{
 			return null;
@@ -196,7 +201,7 @@ internal sealed record PayrollRunItemPreview(
 				var dayOffset = utcTimeOutDate.DayNumber - a.AttendanceDate.DayNumber;
 				var minutesAfterShiftEnd =
 					dayOffset * 24m * 60m +
-					(decimal)(utcTimeOut.TimeOfDay - shiftEndTime.ToTimeSpan()).TotalMinutes;
+					(decimal) (utcTimeOut.TimeOfDay - shiftEndTime.ToTimeSpan()).TotalMinutes;
 				return Math.Max(0m, minutesAfterShiftEnd);
 			});
 	}

@@ -17,6 +17,7 @@ public class StatutoryRuleVersion : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public decimal StandardWageCeiling { get; private set; }
 	public decimal DisabilityWageCeiling { get; private set; }
 	public decimal EmployeePercentage { get; private set; }
+	public decimal EmployeeShareDailyWageExemption { get; private set; } = 176m;
 	public decimal EmployerPercentage { get; private set; }
 	public decimal ExclusionCapPercentage { get; private set; }
 	public decimal InKindCapPercentage { get; private set; }

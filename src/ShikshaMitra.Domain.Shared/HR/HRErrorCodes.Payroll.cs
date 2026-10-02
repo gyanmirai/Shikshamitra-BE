@@ -2,6 +2,10 @@ namespace ShikshaMitra.HR;
 
 public static partial class HRErrorCodes
 {
+	public const string EsiConfigurationInvalidMonth = "HR:Payroll:EsiConfigurationInvalidMonth";
+	public const string EsiConfigurationLocked = "HR:Payroll:EsiConfigurationLocked";
+	public const string EsiConfigurationReasonRequired = "HR:Payroll:EsiConfigurationReasonRequired";
+	public const string EsiConfigurationCancellationInvalid = "HR:Payroll:EsiConfigurationCancellationInvalid";
 	public const string PayrollPreviewStale = "PAYROLL_PREVIEW_STALE";
 	public const string PayrollPreviewNotFound = "PAYROLL_PREVIEW_NOT_FOUND";
 	public const string PayrollPreviewNotReady = "PAYROLL_PREVIEW_NOT_READY";

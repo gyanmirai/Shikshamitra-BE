@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
@@ -15,6 +15,7 @@ using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.Timing;
 using Volo.Abp.Uow;
+using Volo.Abp.Linq;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -29,6 +30,7 @@ public class PayrollPreviewBackgroundJob(
 	IClock clock,
 	IBackgroundJobManager jobs,
 	IPayrollInputRevisionStore revisions,
+	IAsyncQueryableExecuter executor,
 	PayrollScopedEmployeeResolver scopeResolver,
 	PayrollIneligibleRowCleaner ineligibleRowCleaner,
 	PayrollSnapshotRefresher refresher,
@@ -67,32 +69,32 @@ public class PayrollPreviewBackgroundJob(
 			var (_, _, lockMonth) = PayrollRunRules.ParseMonth(run.Month);
 			await monthLocks.WithMonthLockAsync(lockMonth, async checkLease =>
 			{
-			using (var start = uows.Begin(requiresNew: true, isTransactional: true))
-			{
-				if (!await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View))
-					throw new BusinessException(HRErrorCodes.PayrollPreviewNotFound);
-				await revisions.LockAsync();
-				run = await runs.GetAsync(args.RunId);
-				if (run.IsTerminal) return true;
-				if (run.Attempts >= 3)
+				using (var start = uows.Begin(requiresNew: true, isTransactional: true))
 				{
-					run.Fail(HRErrorCodes.PayrollPreviewFailed, clock.Now);
+					if (!await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View))
+						throw new BusinessException(HRErrorCodes.PayrollPreviewNotFound);
+					await revisions.LockAsync();
+					run = await runs.GetAsync(args.RunId);
+					if (run.IsTerminal) return true;
+					if (run.Attempts >= 3)
+					{
+						run.Fail(HRErrorCodes.PayrollPreviewFailed, clock.Now);
+						await runs.UpdateAsync(run, autoSave: true);
+						await start.CompleteAsync();
+						return true;
+					}
+					var (cleanupYear, cleanupMonth, cleanupMonthKey) = PayrollRunRules.ParseMonth(run.Month);
+					var allScopedEmployees = await scopeResolver.GetScopedEmployeesAsync(false);
+					var eligibleEmployees = await scopeResolver.GetScopedPayrollEmployeesAsync(cleanupYear, cleanupMonth, false);
+					if (PayrollPreviewRunAppService.ScopeFingerprint(eligibleEmployees.Select(x => x.Id)) != run.ScopeFingerprint)
+						throw new BusinessException(HRErrorCodes.PayrollPreviewStale);
+					await ineligibleRowCleaner.CleanupAsync(cleanupMonthKey, allScopedEmployees, eligibleEmployees);
+					// Cleanup can remove obsolete input adjustments. Capture the revision after that work commits with this start.
+					run.Start(await revisions.ReadAsync(), clock.Now);
+					ownedAttempt = run.Attempts;
 					await runs.UpdateAsync(run, autoSave: true);
 					await start.CompleteAsync();
-					return true;
 				}
-				var (cleanupYear, cleanupMonth, cleanupMonthKey) = PayrollRunRules.ParseMonth(run.Month);
-				var allScopedEmployees = await scopeResolver.GetScopedEmployeesAsync(false);
-				var eligibleEmployees = await scopeResolver.GetScopedPayrollEmployeesAsync(cleanupYear, cleanupMonth, false);
-				if (PayrollPreviewRunAppService.ScopeFingerprint(eligibleEmployees.Select(x => x.Id)) != run.ScopeFingerprint)
-					throw new BusinessException(HRErrorCodes.PayrollPreviewStale);
-				await ineligibleRowCleaner.CleanupAsync(cleanupMonthKey, allScopedEmployees, eligibleEmployees);
-				// Cleanup can remove obsolete input adjustments. Capture the revision after that work commits with this start.
-				run.Start(await revisions.ReadAsync(), clock.Now);
-				ownedAttempt = run.Attempts;
-				await runs.UpdateAsync(run, autoSave: true);
-				await start.CompleteAsync();
-			}
 				using var calculation = uows.Begin(requiresNew: true, isTransactional: true);
 				var (year, month, internalMonth) = PayrollRunRules.ParseMonth(run.Month);
 				var scoped = await scopeResolver.GetScopedPayrollEmployeesAsync(year, month, false);
@@ -100,7 +102,17 @@ public class PayrollPreviewBackgroundJob(
 					throw new BusinessException(HRErrorCodes.PayrollPreviewStale);
 				if (await revisions.ReadAsync() != run.InputRevision) throw new BusinessException(HRErrorCodes.PayrollPreviewStale);
 				await refresher.RefreshAsync(internalMonth, year, month, run.AcademicYearId, scoped, false,
-					completed => ReportProgressAsync(run.Id, ownedAttempt.Value, completed));
+					completed => ReportProgressAsync(run.Id, ownedAttempt.Value, completed),
+					async () =>
+					{
+						if (await revisions.LockAsync() != run.InputRevision)
+							throw new BusinessException(HRErrorCodes.PayrollPreviewStale);
+						// Query scalar state to avoid a tracked entity hiding concurrent invalidation.
+						var state = await executor.FirstOrDefaultAsync((await runs.GetQueryableAsync())
+							.Where(x => x.Id == run.Id).Select(x => new { x.Status, x.Attempts }));
+						if (state?.Status != "RUNNING" || state.Attempts != run.Attempts)
+							throw new BusinessException(HRErrorCodes.PayrollPreviewStale);
+					});
 				var ids = scoped.Select(x => x.Id).ToHashSet();
 				var items = (await snapshots.GetByMonthAsync(internalMonth)).Where(x => ids.Contains(x.EmployeeId)).Select(PayrollRunProjection.ToItem).ToList();
 				if (items.Count != ids.Count) throw new BusinessException(HRErrorCodes.PayrollPreviewFailed);

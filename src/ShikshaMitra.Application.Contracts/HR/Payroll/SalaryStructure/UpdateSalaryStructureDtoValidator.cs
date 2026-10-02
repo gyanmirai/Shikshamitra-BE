@@ -9,15 +9,16 @@ public class UpdateSalaryStructureDtoValidator : AbstractValidator<UpdateSalaryS
 {
 	public UpdateSalaryStructureDtoValidator()
 	{
-		RuleFor(x => x.EarningComponents).NotEmpty();
+		// Recurring salary lives in compensation revisions; one-time additions may be empty.
+		RuleFor(x => x.EarningComponents).NotNull();
 		RuleFor(x => x.DeductionComponents).NotNull();
 
 		RuleForEach(x => x.EarningComponents).SetValidator(new SalaryComponentDtoValidator());
 		RuleForEach(x => x.DeductionComponents).SetValidator(new SalaryComponentDtoValidator());
 		RuleFor(x => x.QuotedSalaryBasis)
-			.Must(x => x is "GROSS" or "TAKE_HOME")
+			.Must(x => x is "GROSS" or "EMPLOYER_COST")
 			.When(x => !string.IsNullOrWhiteSpace(x.QuotedSalaryBasis))
-			.WithMessage("Quoted salary basis must be GROSS or TAKE_HOME.");
+			.WithMessage("Quoted salary basis must be GROSS or EMPLOYER_COST.");
 		RuleFor(x => x.QuotedMonthlyAmount)
 			.GreaterThan(0m)
 			.LessThanOrEqualTo(100_000_000m)
@@ -45,7 +46,7 @@ public class UpdateSalaryStructureDtoValidator : AbstractValidator<UpdateSalaryS
 			input.SourceSalaryTemplateVersion > 0 &&
 			input.SalaryGeneratedAt.HasValue &&
 			input.QuotedMonthlyAmount > 0m &&
-			input.QuotedSalaryBasis is "GROSS" or "TAKE_HOME";
+			input.QuotedSalaryBasis is "GROSS" or "EMPLOYER_COST";
 	}
 
 	private static void AddComponentFailures(

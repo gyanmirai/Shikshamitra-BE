@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -114,17 +114,15 @@ public static class EsiStatutoryCalculator
 				periodStart, periodEnd, issueCodes);
 		}
 
-		if (enrollment is null || enrollment.Status == EmployeeStatutoryEnrollmentStatus.PendingReview)
-		{
-			issueCodes.Add(EnrollmentReviewIssue);
-		}
-		if (enrollment is not { Status: EmployeeStatutoryEnrollmentStatus.RegistrationPending } &&
-			string.IsNullOrWhiteSpace(enrollment?.InsuranceNumber))
+		if (string.IsNullOrWhiteSpace(enrollment?.InsuranceNumber))
 		{
 			issueCodes.Add(InsuranceNumberIssue);
 		}
 
-		var employeeContribution = ApplyRounding(statutoryWages * rule.EmployeePercentage / 100m, rule.RoundingPolicy);
+		// Monthly-rated average daily wages use full contractual wages divided by 26,
+		// so unpaid days cannot create an employee-share exemption.
+		var employeeContribution = coverageWages / 26m <= rule.EmployeeShareDailyWageExemption
+			? 0m : ApplyRounding(statutoryWages * rule.EmployeePercentage / 100m, rule.RoundingPolicy);
 		var employerContribution = ApplyRounding(statutoryWages * rule.EmployerPercentage / 100m, rule.RoundingPolicy);
 		var employeeAmountOverride = activeOverrides.FirstOrDefault(x => x.OverrideType == StatutoryOverrideType.EmployeeAmount);
 		var employerAmountOverride = activeOverrides.FirstOrDefault(x => x.OverrideType == StatutoryOverrideType.EmployerAmount);
@@ -143,6 +141,7 @@ public static class EsiStatutoryCalculator
 			EmployerShareReliefEligible: true
 		} &&
 			enrollment.EmployerShareReliefFrom.HasValue &&
+			monthStart < enrollment.EmployerShareReliefFrom.Value.Date.AddYears(3) &&
 			enrollment.EmployerShareReliefFrom.Value.Date <= monthEnd &&
 			(!enrollment.EmployerShareReliefTo.HasValue || enrollment.EmployerShareReliefTo.Value.Date >= monthStart) &&
 			!string.IsNullOrWhiteSpace(enrollment.DisabilityEvidenceReference);
@@ -185,7 +184,7 @@ public static class EsiStatutoryCalculator
 		new(false, canCalculate, decision, 0m, 0m, 0m, 0m, 0m, 0m, wageCeiling, 0m, 0m, 0m,
 			periodStart, periodEnd, issueCodes);
 
-	private static (DateTime Start, DateTime End) GetContributionPeriod(DateTime date) =>
+	public static (DateTime Start, DateTime End) GetContributionPeriod(DateTime date) =>
 		date.Month is >= 4 and <= 9
 			? (new DateTime(date.Year, 4, 1), new DateTime(date.Year, 9, 30))
 			: date.Month is >= 10 and <= 12

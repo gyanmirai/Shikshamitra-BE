@@ -1,5 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
+using ShikshaMitra.HR.Payroll.Statutory;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
@@ -67,6 +68,20 @@ internal static class PayrollReadinessProjector
 		{
 			blockingIssues.Add(IssueCodes.CompensationRevisionRequired);
 			recommendedActions.Add("set-up-salary");
+		}
+
+		// Summary and locking must agree, including statutory and compensation blockers.
+		var remainingBlockers = items.Where(x => !x.IsLocked)
+			.SelectMany(x => x.IssueCodes)
+			.Where(PayrollLockPreconditionGuard.IsBlockingLockIssue)
+			.Except(blockingIssues).ToList();
+		if (items.Any(x => !x.IsLocked && EsiPayrollReadiness.MissingInsuranceNumber(
+			x.EmployeeStateInsuranceRuleId, x.EmployeeStateInsuranceCoverageDecision, x.EmployeeStateInsuranceNumber)))
+			remainingBlockers.Add(IssueCodes.EsiInsuranceNumberRequired);
+		if (remainingBlockers.Count > 0)
+		{
+			blockingIssues.AddRange(remainingBlockers);
+			recommendedActions.Add("review-payroll-rows");
 		}
 
 		return new RunPayrollReadinessSummary

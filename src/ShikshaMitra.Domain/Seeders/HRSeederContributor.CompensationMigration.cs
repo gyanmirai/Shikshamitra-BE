@@ -64,12 +64,12 @@ public partial class HRSeederContributor
 			var salaryBasis = ParseLegacyBasis(details?.QuotedSalaryBasis);
 			var protectionPolicy = salaryBasis switch
 			{
-				SalaryInputBasis.TakeHome => CompensationProtectionPolicy.ProtectTakeHome,
 				SalaryInputBasis.EmployerCost => CompensationProtectionPolicy.ProtectEmployerCost,
 				_ => CompensationProtectionPolicy.ProtectGross
 			};
-			var fallbackQuote = salaryBasis == SalaryInputBasis.TakeHome ? netSalary : grossSalary;
-			var quotedAmount = details?.QuotedMonthlyAmount is > 0m ? details.QuotedMonthlyAmount.Value : fallbackQuote;
+			var quotedAmount = details?.QuotedSalaryBasis is "GROSS" or "EMPLOYER_COST" && details.QuotedMonthlyAmount is > 0m
+				? details.QuotedMonthlyAmount.Value
+				: grossSalary;
 			var employerCost = salaryBasis == SalaryInputBasis.EmployerCost
 				? Math.Max(grossSalary, quotedAmount)
 				: grossSalary;
@@ -166,7 +166,6 @@ public partial class HRSeederContributor
 
 	private static SalaryInputBasis ParseLegacyBasis(string? value) => value?.Trim().ToUpperInvariant() switch
 	{
-		"TAKE_HOME" => SalaryInputBasis.TakeHome,
 		"EMPLOYER_COST" => SalaryInputBasis.EmployerCost,
 		_ => SalaryInputBasis.Gross
 	};

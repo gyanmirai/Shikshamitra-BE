@@ -18,8 +18,8 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 
 public sealed class EsiStatutoryPreviewReader(
 	IRepository<StatutoryRuleVersion, Guid> ruleRepository,
-	IRepository<StatutoryEstablishment, Guid> establishmentRepository,
-	IRepository<EmployeeStatutoryEnrollment, Guid> enrollmentRepository,
+	EsiPayrollConfigurationResolver configurationResolver,
+	EsiEnrollmentResolver enrollmentResolver,
 	IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
 	IRepository<StatutoryOverride, Guid> overrideRepository,
 	IEmployeePayrollComponentRepository payrollComponentRepository,
@@ -30,11 +30,17 @@ public sealed class EsiStatutoryPreviewReader(
 {
 	private const string JurisdictionCode = "IN-GJ";
 
-	public async Task<EsiStatutoryPreviewCalculation> CalculateAsync(string monthYear)
+	public async Task<EsiStatutoryPreviewCalculation> CalculateAsync(string monthYear, EsiConfigurationDraftDto? draft = null)
 	{
 		var payrollMonth = DateTime.ParseExact(monthYear, "MM-yyyy", CultureInfo.InvariantCulture);
-		var establishment = await establishmentRepository.FindAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance);
+		var savedConfiguration = await configurationResolver.ResolveAsync(payrollMonth);
+		var configuration = draft == null ? savedConfiguration
+			: new EsiPayrollConfiguration(Guid.Empty, null, payrollMonth, draft.Enabled, draft.RegistrationNumber,
+				draft.CoveredSince, "PREVIEW");
+		var establishment = configuration?.ToCalculationEstablishment();
+		if (establishment == null)
+			return new EsiStatutoryPreviewCalculation(monthYear, [], new StatutoryImpactSummaryDto { CanActivate = true },
+				clock.Now.ToUniversalTime(), "DISABLED");
 		var monthEnd = new DateTime(payrollMonth.Year, payrollMonth.Month, 1).AddMonths(1).AddDays(-1);
 		var rules = await ruleRepository.GetListAsync(x =>
 			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
@@ -59,9 +65,12 @@ public sealed class EsiStatutoryPreviewReader(
 			.OrderByDescending(x => x.EffectiveFrom)
 			.GroupBy(x => x.ComponentId)
 			.ToDictionary(x => x.Key, x => x.First().Treatment);
-		var enrollments = (await enrollmentRepository.GetListAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance && employeeIds.Contains(x.EmployeeId)))
-			.ToDictionary(x => x.EmployeeId);
+		foreach (var earning in await earningComponentRepository.GetListAsync(x => x.IsActive))
+			treatments.TryAdd(earning.Id, EsiWageDefaults.ByName.GetValueOrDefault(earning.Name, StatutoryWageTreatment.Unclassified));
+		foreach (var treatment in savedConfiguration?.GetTreatments() ?? []) treatments[treatment.Key] = treatment.Value;
+		foreach (var treatment in draft?.Treatments ?? [])
+			treatments[treatment.ComponentId] = Enum.Parse<StatutoryWageTreatment>(treatment.Treatment);
+		var enrollments = await enrollmentResolver.ResolveAsync(payrollMonth, employeeIds);
 		var overrides = (await overrideRepository.GetListAsync(x =>
 			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance && employeeIds.Contains(x.EmployeeId) &&
 			x.EffectiveFrom <= payrollMonth && x.EffectiveTo >= payrollMonth))
@@ -100,7 +109,7 @@ public sealed class EsiStatutoryPreviewReader(
 				.ToList();
 			var calculation = EsiStatutoryCalculator.Calculate(
 				payrollMonth, rule, establishment, enrollment, wageLines,
-				overrides[employee.Id].ToList(), assumeEstablishmentActive: true);
+				overrides[employee.Id].ToList());
 			items.Add(new EmployeeStatutoryImpactDto
 			{
 				EmployeeId = employee.Id,
@@ -118,7 +127,7 @@ public sealed class EsiStatutoryPreviewReader(
 				EnrollmentStatus = (enrollment?.Status ?? EmployeeStatutoryEnrollmentStatus.PendingReview).ToString(),
 				WageCeilingCategory = (enrollment?.WageCeilingCategory ?? StatutoryWageCeilingCategory.Standard).ToString(),
 				InsuranceNumber = enrollment?.InsuranceNumber,
-				ContributionPeriodEnd = enrollment?.ContributionPeriodEnd,
+				ContributionPeriodEnd = calculation.ContributionPeriodEnd,
 				Issues = calculation.IssueCodes.Select(EsiStatutoryPresentation.CreateIssue).ToList()
 			});
 		}
@@ -261,7 +270,7 @@ public sealed class EsiStatutoryPreviewReader(
 			{
 				rule.Id, rule.Version, rule.EffectiveFrom, rule.EffectiveTo, rule.JurisdictionCode,
 				rule.EstablishmentThreshold, rule.StandardWageCeiling, rule.DisabilityWageCeiling,
-				rule.EmployeePercentage, rule.EmployerPercentage, rule.ExclusionCapPercentage,
+				rule.EmployeePercentage, rule.EmployeeShareDailyWageExemption, rule.EmployerPercentage, rule.ExclusionCapPercentage,
 				rule.InKindCapPercentage, rule.RoundingPolicy, rule.SourceUrl, rule.SourceVerifiedOn
 			},
 			Establishment = establishment is null ? null : new

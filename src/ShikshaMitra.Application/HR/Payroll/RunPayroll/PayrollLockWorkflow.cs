@@ -1,8 +1,9 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Services;
+using ShikshaMitra.HR.Payroll.Statutory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +26,7 @@ public class PayrollLockWorkflow(
 	IUnitOfWorkManager uows,
 	PayrollSnapshotLockProvider snapshotLockProvider,
 	PayrollLockBatchProcessor batchProcessor,
+	EsiContinuityInvalidator continuityInvalidator,
 	PayrollAcademicYearScopeResolver academicYearScopeResolver,
 	IGuidGenerator guidGenerator,
 	ILogger<PayrollLockWorkflow> logger)
@@ -103,6 +105,7 @@ public class PayrollLockWorkflow(
 			employees.Count);
 
 		var result = await batchProcessor.ProcessAsync(employees, snapshotByEmployee, request.Month);
+		await continuityInvalidator.InvalidateAsync(internalMonthYear, targetEmployeeIds);
 
 		if (result.GeneratedCount == 0 && result.FailedCount == employees.Count)
 		{

@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
@@ -7,6 +7,7 @@ using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.TenantSettings;
 using System;
@@ -38,6 +39,7 @@ public class PayrollSnapshotRefresher(
 	PayrollProvidentFundComponentBuilder providentFundComponentBuilder,
 	PayrollCompensationRevisionResolver compensationRevisionResolver,
 	PayrollEsiContextResolver esiContextResolver,
+	EsiPayrollConfigurationResolver esiConfigurationResolver,
 	IProfessionalTaxRepository professionalTaxRepository,
 	ILogger<PayrollSnapshotRefresher> logger)
 	: ITransientDependency
@@ -84,9 +86,9 @@ public class PayrollSnapshotRefresher(
 			 employee.EmployeeStatusType == EmployeeStatusType.Active ||
 			 (employee.EmployeeStatusType != EmployeeStatusType.Active &&
 			  ((employee.StatusEffectiveDate.HasValue &&
-			    employee.StatusEffectiveDate.Value >= monthStart) ||
+				employee.StatusEffectiveDate.Value >= monthStart) ||
 			   (!employee.StatusEffectiveDate.HasValue &&
-			    employee.StatusLastChangedAt.HasValue)))));
+				employee.StatusLastChangedAt.HasValue)))));
 
 		return candidates
 			.Where(employee => EmployeeLifecycleEligibility.IsEligibleForPayrollMonth(employee, monthStart, monthEnd))
@@ -101,7 +103,8 @@ public class PayrollSnapshotRefresher(
 		Guid? academicYearId,
 		List<Employee> scopedEmployees,
 		bool preserveReviewedSnapshots,
-		Func<int, Task>? reportProgress = null)
+		Func<int, Task>? reportProgress = null,
+		Func<Task>? beforePersist = null)
 	{
 		if (scopedEmployees.Count == 0)
 		{
@@ -124,7 +127,7 @@ public class PayrollSnapshotRefresher(
 		var previousMonthNetPayByEmployee = (await salarySlipRepository.GetByMonthAsync(PayrollRunRules.GetPreviousMonth(internalMonthYear)))
 			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.GroupBy(x => x.EmployeeId)
-			.ToDictionary(g => g.Key, g => (decimal?)g.OrderByDescending(x => x.ProcessedDate).First().NetSalary);
+			.ToDictionary(g => g.Key, g => (decimal?) g.OrderByDescending(x => x.ProcessedDate).First().NetSalary);
 		var reviewByEmployee = await lookupReader.GetReviewsByEmployeeAsync(internalMonthYear);
 		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
@@ -150,6 +153,7 @@ public class PayrollSnapshotRefresher(
 			x.JurisdictionCode == "IN-GJ" &&
 			x.EffectiveFrom <= statutoryEffectiveDate &&
 			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= statutoryEffectiveDate));
+		var esiConfiguration = await esiConfigurationResolver.ResolveAsync(new DateTime(year, month, 1));
 		var esiContexts = await esiContextResolver.ResolveAsync(
 			year,
 			month,
@@ -236,7 +240,7 @@ public class PayrollSnapshotRefresher(
 						pfRule,
 						professionalTaxSlabs,
 						IsEmploymentCessationMonth(employee, year, month),
-						esiContexts.GetValueOrDefault(employee.Id)),
+						esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id),
 					revision));
 			}
 		}
@@ -248,7 +252,7 @@ public class PayrollSnapshotRefresher(
 			month,
 			payrollContextByEmployee.ToDictionary(
 				x => x.Key,
-				x => (IReadOnlyDictionary<DateOnly, decimal>)x.Value.WorkingUnitsByDate));
+				x => (IReadOnlyDictionary<DateOnly, decimal>) x.Value.WorkingUnitsByDate));
 		await lateArrivalDeductionAdjustmentService.SyncAsync(
 			internalMonthYear,
 			year,
@@ -303,13 +307,14 @@ public class PayrollSnapshotRefresher(
 					pfRule,
 					professionalTaxSlabs,
 					IsEmploymentCessationMonth(employee, year, month),
-					esiContexts.GetValueOrDefault(employee.Id)),
+					esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id),
 				revision
 			));
 			if (reportProgress != null && (computedItems.Count % 25 == 0 || computedItems.Count == scopedEmployees.Count))
 				await reportProgress(computedItems.Count + immutableCount);
 		}
 
+		if (beforePersist != null) await beforePersist();
 		await snapshotStore.UpsertAsync(internalMonthYear, computedItems, preserveReviewedSnapshots);
 	}
 

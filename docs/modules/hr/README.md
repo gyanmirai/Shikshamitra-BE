@@ -3,7 +3,7 @@ module: hr
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-08
+updated_on: 2026-09-30
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -67,6 +67,7 @@ Use this folder only after the six canonical files:
 | Folder | Purpose |
 |---|---|
 | [references](./references/) | Deep supporting notes that are still active |
+| [ESIC compensation design](./references/esic-compensation-design.md) | Agreed salary bases, compact ESIC configuration, documentation handoff, and acceptance criteria; pending behaviour is marked explicitly |
 
 ## Validation
 

@@ -98,8 +98,8 @@ public class SalaryStructureTemplateVersion : FullAuditedAggregateRoot<Guid>, IM
 		Guid templateId,
 		int versionNumber,
 		IReadOnlyList<SalaryTemplateRule> rules,
-		SalaryInputBasis defaultSalaryBasis = SalaryInputBasis.Gross,
-		CompensationProtectionPolicy defaultProtectionPolicy = CompensationProtectionPolicy.ProtectGross,
+		SalaryInputBasis defaultSalaryBasis = SalaryInputBasis.EmployerCost,
+		CompensationProtectionPolicy defaultProtectionPolicy = CompensationProtectionPolicy.ProtectEmployerCost,
 		bool defaultPfApplicable = false,
 		Guid? defaultPfRuleId = null,
 		string? saveOperationKey = null) : base(id)

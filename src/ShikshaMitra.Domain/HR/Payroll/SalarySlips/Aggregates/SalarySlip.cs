@@ -45,6 +45,7 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? ProfessionalTaxRuleId { get; private set; }
 	public int? ProfessionalTaxRuleVersion { get; private set; }
 	public Guid? EmployeeStateInsuranceRuleId { get; private set; }
+	public Guid? EsiConfigurationId { get; private set; }
 	public int? EmployeeStateInsuranceRuleVersion { get; private set; }
 	public decimal EmployeeStateInsuranceWages { get; private set; }
 	public decimal EmployeeStateInsuranceGovernmentContribution { get; private set; }
@@ -139,6 +140,8 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (IsImmutable())
 			throw new InvalidOperationException("Salary slip is already finalized");
+		ShikshaMitra.HR.Payroll.Statutory.EsiPayrollReadiness.EnsureInsuranceNumber(
+			EmployeeStateInsuranceRuleId, EmployeeStateInsuranceCoverageDecision, EmployeeStateInsuranceNumber);
 
 		Status = SalarySlipStatus.Finalized;
 	}
@@ -215,7 +218,8 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? employeeStateInsuranceCoverageDecision,
 		string? employeeStateInsuranceNumber,
 		DateTime? employeeStateInsuranceContributionPeriodStart,
-		DateTime? employeeStateInsuranceContributionPeriodEnd)
+		DateTime? employeeStateInsuranceContributionPeriodEnd,
+		Guid? esiConfigurationId = null)
 	{
 		if (IsImmutable())
 			throw new InvalidOperationException("Cannot update finalized or paid salary slip");
@@ -227,6 +231,7 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ProfessionalTaxRuleId = professionalTaxRuleId;
 		ProfessionalTaxRuleVersion = professionalTaxRuleVersion;
 		EmployeeStateInsuranceRuleId = employeeStateInsuranceRuleId;
+		EsiConfigurationId = esiConfigurationId;
 		EmployeeStateInsuranceRuleVersion = employeeStateInsuranceRuleVersion;
 		EmployeeStateInsuranceWages = employeeStateInsuranceWages;
 		EmployeeStateInsuranceGovernmentContribution = employeeStateInsuranceGovernmentContribution;

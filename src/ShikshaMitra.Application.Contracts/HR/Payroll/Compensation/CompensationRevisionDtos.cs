@@ -13,7 +13,8 @@ public class SaveEmployeeCompensationDto
 {
 	public Guid TemplateVersionId { get; set; }
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
-	public string ProtectionPolicy { get; set; } = "PROTECT_EMPLOYER_COST";
+	[System.Text.Json.Serialization.JsonIgnore]
+	public string ProtectionPolicy { get => SalaryBasis == "EMPLOYER_COST" ? "PROTECT_EMPLOYER_COST" : "PROTECT_GROSS"; set { } }
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; }
 	public bool PfApplicable { get; set; }
@@ -86,8 +87,7 @@ public class SaveEmployeeCompensationDtoValidator : AbstractValidator<SaveEmploy
 	public SaveEmployeeCompensationDtoValidator()
 	{
 		RuleFor(x => x.TemplateVersionId).NotEmpty();
-		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
-		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_GROSS" or "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
+		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Day == 1);
 		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);

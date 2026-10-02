@@ -16860,6 +16860,9 @@ namespace ShikshaMitra.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<Guid?>("EsiConfigurationId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -17208,6 +17211,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<string>("EmployerContributions")
                         .IsRequired()
                         .HasColumnType("jsonb");
+
+                    b.Property<Guid?>("EsiConfigurationId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
@@ -17988,6 +17994,101 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEmployeeStatutoryEnrollments", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Statutory.EsiPayrollConfiguration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ComponentTreatmentsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime?>("CoveredSince")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<DateTime>("EffectiveMonth")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsCancelled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("RegistrationNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("ReplacesId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "EffectiveMonth")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false AND \"IsCancelled\" = false");
+
+                    b.HasIndex("TenantId", "RequestFingerprint")
+                        .IsUnique();
+
+                    b.ToTable("AppEsiPayrollConfigurations", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Statutory.PayrollComponentStatutoryTreatment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -18250,6 +18351,12 @@ namespace ShikshaMitra.Migrations
                     b.Property<decimal>("EmployeePercentage")
                         .HasPrecision(7, 4)
                         .HasColumnType("numeric(7,4)");
+
+                    b.Property<decimal>("EmployeeShareDailyWageExemption")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasDefaultValue(176m);
 
                     b.Property<decimal>("EmployerPercentage")
                         .HasPrecision(7, 4)

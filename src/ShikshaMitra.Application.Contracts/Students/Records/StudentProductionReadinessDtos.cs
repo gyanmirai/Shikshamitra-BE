@@ -51,29 +51,41 @@ public class StudentBirthdayDto
 	public string? DateLabel { get; set; }
 }
 
-public class StudentAttendanceDashboardSummaryDto
+public class StudentAttendanceDashboardMetricsDto
 {
-	public decimal SchoolAttendancePercentage { get; set; }
+	public int ExpectedDays { get; set; }
+	public int RecordedDays { get; set; }
+	public int MissingDays { get; set; }
+	public double PresentCredit { get; set; }
+	public double DenominatorDays { get; set; }
+	public decimal? CompletionPercentage { get; set; }
+	public bool IsProvisional { get; set; }
+}
+
+public class StudentAttendanceDashboardSummaryDto : StudentAttendanceDashboardMetricsDto
+{
+	public decimal? SchoolAttendancePercentage { get; set; }
 	public List<StudentAttendanceClassSummaryDto> Classes { get; set; } = [];
 }
 
 public class GetStudentAttendanceDashboardSummaryInput
 {
+	public Guid? AcademicYearId { get; set; }
 	public DateTime? StartDate { get; set; }
 	public DateTime? EndDate { get; set; }
 }
 
-public class StudentAttendanceClassSummaryDto
+public class StudentAttendanceClassSummaryDto : StudentAttendanceDashboardMetricsDto
 {
 	public Guid? StandardId { get; set; }
 	public string Name { get; set; } = string.Empty;
-	public decimal Percentage { get; set; }
+	public decimal? Percentage { get; set; }
 	public List<StudentAttendanceDivisionSummaryDto> Divisions { get; set; } = [];
 }
 
-public class StudentAttendanceDivisionSummaryDto
+public class StudentAttendanceDivisionSummaryDto : StudentAttendanceDashboardMetricsDto
 {
 	public Guid? DivisionId { get; set; }
 	public string Name { get; set; } = string.Empty;
-	public decimal Percentage { get; set; }
+	public decimal? Percentage { get; set; }
 }

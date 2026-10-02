@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-09-29
+updated_on: 2026-10-01
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,54 @@ audience: humans-and-agents
 # Understand Student Enrollment Admissions behavior
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
+
+## Universal daily Student Attendance
+
+| Area | Implemented rule |
+|---|---|
+| Observation | One school-date record per enrollment; Present/Absent with policy-enabled Late/Half-day details. Pending means unmarked. Individual shortened schedules do not automatically produce Half-day. |
+| Membership | Formal enrollment and a school-confirmed AttendanceStartDate determine eligibility. Dated placement/activation/exit history prevents current class changes from rewriting the historical roster. Fee or portal provisioning does not independently block operational attendance. |
+| School days | Existing published Academic Calendar owns working days, holidays, vacations and emergency closures. Missing or ambiguous calendar setup fails closed and keeps affected unsnapshotted reports provisional; an explicit holiday is a confirmed exclusion. Individual recurring or temporary schedules narrow working-day eligibility. |
+| Configuration | Save draft, preview, publish an effective-dated immutable policy. Academic-year policy precedes school default; scoped exceptions resolve Board > Medium > Stage > Standard > Division. Equal-priority overlapping rules are rejected. |
+| Save and submit | Partial drafts are allowed. Submit checks all eligible students, including persisted draft rows, and pins policy/credits/membership/roll snapshots. No unmarked row may be submitted. |
+| Corrections | Same-day recorded corrections follow the school reason rule. Prior-day or locked corrections follow approval rules. Review cannot be performed by the requester; a locked-day correction also requires lock-management authority. |
+| Leave | Approval annotates the roster without fabricating an observation. Configured leave treatment changes denominator credit after explicit attendance marking. Leave approved after submission requires an audited correction under the school's review rule, even when Present/Absent stays unchanged; existing credits remain pinned until application. Conflicting Present observations require a reason; overlapping approved school-day leave is rejected. |
+| Reports | Register, profile, daily cumulative metrics and dashboards use the same calculation. Percentage uses recorded eligible credit; unknown days remain separate with completeness/provisional flags. No recorded denominator produces null, never an invented zero percent. Low-attendance comparison uses the effective school threshold. |
+| Cutoff | The configured local-school cutoff supplies a reminder for expected unsubmitted days; it does not silently lock attendance. |
+| Concurrency | Revision/roster checks and serializable commands reject stale writes. Matching actor/payload retries reuse durable operation results. Enrollment/date uniqueness prevents recording the same student in two divisions. |
+
+For 17 Present, one Absent and two unmarked expected days, the recorded percentage is 94.44%, completion is 18/20, and the result is provisional.
+Legacy migration retains original observations and ambiguous conflicts, bridges valid enrolled identities only when formal enrollment is absent, and leaves attendance-start dates unconfirmed.
+It never invents historical presence, activation dates, calendar definitions, policy snapshots or provisioning completion.
+Parent alerts, offline marking and biometric/RFID integrations are outside this rollout.
+Local tests and source availability do not certify deployment or authenticated browser verification.
+
+## Permanent Student Records behavior
+
+| Area | Backend rule |
+|---|---|
+| Entry | A completed onboarding case or explicitly approved historical override permits the permanent profile. Provisioning-only entry follows the school's OnboardingOnly/Summary/Full policy. Operational modules continue to use enrollment independently. |
+| Identity | The same Student ID and GR record remain across promotion, repetition, graduation, withdrawal, transfer, and return. Historical overrides are audited; duplicate review does not merge profiles. |
+| Changes | Action policy chooses audited direct execution or one to three ordered central-role approval stages. Optional conditions narrow approval. Pending requests pin the published policy and source evidence; self-approval is prohibited. |
+| Sensitive data | Current database roles govern field groups. Current and historical-year school policy both constrain history and export reads. Free-text reasons and event remarks are withheld when relevant groups are restricted. |
+| Guardian changes | Published school policy chooses SuspendUntilReview or KeepUntilReview for previous portal access. Resolution uses verified identity and preserves sibling relationships. |
+| Documents | IDs and certificates retain issued snapshots, numbering, issue history, reasoned reprint/void actions, and idempotency. Leaving certificates for withdrawal/transfer require the configured ApprovedExit or EffectiveExit point. Graduation requires an Applied case whose effective date has arrived, including when ApprovedExit is selected. |
+| Year-end | Promote, Repeat, Hold, Graduate, Withdraw, and Transfer use batch preview, owner checks, approval, and per-student atomic apply. ReadyOnly skips exception rows; HoldAll keeps the batch waiting when any submitted row cannot proceed. |
+| Annual renewal | DirectEnrollment creates a unique next-year enrollment after approval and placement checks. ShortChecklist opens year-specific short onboarding; the prior permanent profile stays visible. Finance and portal completion follow enrollment activation. |
+| Returns | Every route follows the frozen Records Status approval rule. ReuseProfile opens short renewal. FreshApplication follows the Offering's Inquiry or DirectRegistration entry; Both requires an explicit choice. ResumeStage resumes the eligible linked application's current stage. Fresh/Resume remain AwaitingAdmission until real Onboarding completion. |
+| Corrections | A correction retains the applied original and records its own school-governed request. Changed placement/status evidence, downstream attendance/documents, or new-year Finance assignment block reversal. Records never reverses money. |
+
+Settings are school defaults with optional academic-year overrides. Only published immutable versions affect runtime; saving a draft does not alter pending or future execution. Approver roles must exist in the current tenant's central Security catalogue. The safe starter requests approval for identity, guardian, placement, status, medical, bank, corrections, and historical overrides.
+
+Transition dates use the same institution calendar as Admissions (`Asia/Kolkata`). Exit roster removal follows Approval or EffectiveDate. Scheduled apply rechecks current permission, active identity, every recorded approval's database role, scope, placement snapshot, capacity, roll uniqueness, and owner checks. Failed apply becomes an explicit Exception requiring staff retry.
+
+Required academic evidence comes from a published/frozen source-class result; this is evidence availability, not an inferred promotion decision. Finance uses the canonical collection ledger and immutable assignment evidence. Library requires outstanding issues to be returned; Transport requires the current active route assignment to be closed. Required evidence is never accepted from a client-supplied pass flag. Unsupported required renewal check keys block configuration consumption instead of silently passing.
+
+The short renewal snapshots the existing target-year Onboarding readiness rules for Returning student, including inherited campus evidence. It does not manufacture an initial admission/onboarding case or bypass Finance's confirmed first installment. Missing owner evidence is reported as an actionable blocking issue.
+
+Admissions return integration is implemented in source and remains under verification. A fresh Inquiry is a real New inquiry and must complete the configured Admissions journey; it is never marked contacted or qualified by Records. Fresh DirectRegistration creates a new applicant journey linked to the permanent Student. Initial completed Onboarding history remains intact, while finalization creates a separately tagged return case. A reviewed same-year return reopens the original inactive enrollment and preserves its origin case and permanent GR; a reviewed historical profile without enrollment requires independent approved legacy authority before its first real enrollment. Governed profile and guardian changes remain separate from intake. Automated and live verification limits are recorded in [testing.md](testing.md).
+
+Wrong-class renewal fee correction is deferred by the user for this implementation. Immutable Finance assignments and fixed provisioning class remain guarded; same-class division/roll edits remain available. A future correction must obtain Finance-owned review and preserve financial history before renewal completion.
 
 ## Reserved Student identity
 
@@ -245,6 +293,18 @@ Committee voting, delegation, reminders and reopening historical Assessment or D
 Form stages opt into `configurationJson.form` version 1. Schools can choose applicant, guardian, staff, or shared responsibility; save and resume; an optional 1-365 day deadline; late-submission behavior; automatic advancement; 1-20 submission attempts; correction requests; and verification of selected published form sections. Missing or disabled settings retain the established Form stage.
 
 ## Managed Payment stages
+
+### Saved fee structure intent
+
+Admissions can save a published Finance structure revision and selected head references against each application.
+The first Offer or Payment stage actually entered owns selection; later stages display that same intent.
+An application without either stage retains the existing Student Onboarding fee workflow.
+Managed Payment policy version 1 adds `requiresFeeStructureSelection`, defaulting to false for historical compatibility.
+Enabling it in any pinned managed Payment definition makes saved fee intent required at the workflow's first entered Offer or Payment stage, including when Offer comes before Payment.
+When enabled, the required selection is validated before collecting payment, issuing an offer and completing the relevant stage.
+Payment evidence locks the saved choice; corrections and refunds remain Finance responsibilities.
+Onboarding staff explicitly confirm saved intent before provisioning completes, while Finance assignment and confirmed-payment readiness remain independent requirements.
+Selection never changes the configured admission amount or Finance pricing, allocation, settlement and automatic continuation behavior.
 
 Payment stages opt into `configurationJson.payment` version 1. Schools configure a named purpose, ISO currency, required amount, payer, staff collection methods, optional deadline, late-payment behavior, installments, independent verification, authorized full waivers, and continuation after settlement. Missing or disabled settings retain basic manual stage behavior.
 

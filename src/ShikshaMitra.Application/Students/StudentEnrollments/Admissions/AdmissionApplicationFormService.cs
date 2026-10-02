@@ -102,7 +102,8 @@ public class AdmissionApplicationFormService(
 				existing.SetValue(item.Input.ValueJson);
 				await valueRepository.UpdateAsync(existing, false);
 			}
-			if (definition.BindingType == AdmissionFormBindingType.System && applicant is not null)
+			if (definition.BindingType == AdmissionFormBindingType.System && applicant is not null &&
+				!(applicant.ExistingStudentId.HasValue && definition.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true))
 			{
 				var value = AdmissionApplicationValueConverter.Unwrap(item.Input.ValueJson);
 				if (!string.IsNullOrWhiteSpace(value) ||
@@ -111,7 +112,7 @@ public class AdmissionApplicationFormService(
 			}
 		}
 		if (applicant is not null) await applicantRepository.UpdateAsync(applicant, false);
-		if (guardian is not null) await guardianRepository.UpdateAsync(guardian, false);
+		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true) await guardianRepository.UpdateAsync(guardian, false);
 		instance.MarkSaved();
 		await instanceRepository.UpdateAsync(instance, false);
 		await historyRepository.InsertAsync(new AdmissionFormChangeHistory(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, application.Id,

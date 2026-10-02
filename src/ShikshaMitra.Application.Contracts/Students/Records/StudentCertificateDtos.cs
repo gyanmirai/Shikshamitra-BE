@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using ShikshaMitra.Students.StudentRecords;
 
 namespace ShikshaMitra.Students.Records;
@@ -10,10 +11,18 @@ public class StudentCertificatePreviewRequestDto
 	public StudentCertificateType CertificateType { get; set; }
 	public DateTimeOffset? IssueDate { get; set; }
 	public Dictionary<string, string?> CertificateFields { get; set; } = new();
+	public Guid? TransitionId { get; set; }
 }
 
 public class CreateStudentCertificateDto : StudentCertificatePreviewRequestDto
 {
+	[Required, StringLength(100)] public string IdempotencyKey { get; set; } = "";
+}
+
+public class StudentDocumentActionDto
+{
+	[Required, StringLength(2000, MinimumLength = 5)] public string Reason { get; set; } = "";
+	[StringLength(100)] public string? IdempotencyKey { get; set; }
 }
 
 public class StudentCertificateResponseDto
@@ -23,6 +32,7 @@ public class StudentCertificateResponseDto
 	public string CertificateType { get; set; } = string.Empty;
 	public DateTimeOffset IssueDate { get; set; }
 	public string Status { get; set; } = string.Empty;
+	public Guid? TransitionId { get; set; }
 	public StudentCertificateStudentDto Student { get; set; } = new();
 	public StudentCertificateOrganizationDto Organization { get; set; } = new();
 	public Dictionary<string, string?> CertificateData { get; set; } = new();
@@ -86,6 +96,8 @@ public class StudentCertificateHistoryDto
 	public Guid? GeneratedBy { get; set; }
 	public string Status { get; set; } = string.Empty;
 	public DateTime CreatedDate { get; set; }
+	public Guid? TransitionId { get; set; }
+	public Guid? SourceCertificateId { get; set; }
 	public List<string> SupportedActions { get; set; } = new() { "View", "Download", "Print", "Duplicate" };
 }
 

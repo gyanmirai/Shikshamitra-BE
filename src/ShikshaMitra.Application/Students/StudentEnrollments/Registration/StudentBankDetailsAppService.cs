@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
@@ -67,7 +67,7 @@ public class StudentBankDetailsAppService(
             input.SwiftCode
         );
 
-        if (student.Status != StudentLifeCycleStatusEnum.Enrolled)
+        if (Array.Exists(RegistrationStatuses, status => status == student.Status))
             student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.BankDetails);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();

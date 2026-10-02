@@ -11,6 +11,7 @@ using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Registration;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -26,6 +27,9 @@ public class StudentListAppService(
 	IStudentRepository studentRepository,
 	IRepository<AttendanceEntry, Guid> attendanceEntryRepository,
 	IAttendanceDayRepository attendanceDayRepository,
+	IRepository<StudentEnrollment, Guid> enrollmentRepository,
+	IRepository<AcademicYear, Guid> academicYearRepository,
+	AttendanceReportService attendanceReports,
 	IRepository<StudentDocument, Guid> studentDocumentRepository,
 	IRepository<DocumentTypeEntity, Guid> documentTypeRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
@@ -141,6 +145,8 @@ public class StudentListAppService(
 	public async Task<StudentPhotoUploadResultDto> UploadPhotoAsync(Guid studentId, UploadStudentPhotoDto input)
 	{
 		var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(UploadPhotoAsync));
+		if (student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
+			await LazyServiceProvider.LazyGetRequiredService<StudentRecordWriteGuard>().EnsureAsync(studentId, nameof(UploadPhotoAsync));
 
 		FileValidationService.ValidateProfilePictureUpload(input.FileName, input.Content);
 
@@ -165,6 +171,8 @@ public class StudentListAppService(
 	public async Task<StudentPhotoDownloadDto?> GetPhotoAsync(Guid studentId)
 	{
 		var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(GetPhotoAsync));
+		if (student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
+			await LazyServiceProvider.LazyGetRequiredService<StudentRecordReadGuard>().EnsureAsync(studentId, "photo");
 
 		if (string.IsNullOrWhiteSpace(student.PhotoBlobName))
 		{
@@ -250,117 +258,110 @@ public class StudentListAppService(
 
 	public async Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummaryAsync(GetStudentAttendanceDashboardSummaryInput input)
 	{
+		if (!CurrentTenant.Id.HasValue) return new();
 		var (startDate, endDate) = ResolveAttendanceDateRange(input.StartDate, input.EndDate);
-		var query = await GetScopedEnrolledStudentsQueryAsync();
-		var rows = await AsyncExecuter.ToListAsync(query.Select(s => new
+		if ((endDate - startDate).TotalDays > 1096) throw new BusinessException(AttendanceOperationErrorCodes.InvalidDateRange);
+		if (input.AcademicYearId.HasValue)
+			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(input.AcademicYearId.Value, "attendance dashboard");
+		var years = await AsyncExecuter.ToListAsync((await academicYearRepository.GetQueryableAsync()).Where(y =>
+			y.TenantId == CurrentTenant.Id && (!input.AcademicYearId.HasValue || y.Id == input.AcademicYearId) &&
+			y.StartDate <= endDate && y.EndDate >= startDate));
+		var slices = new List<AttendanceDashboardSlice>();
+		var partialEnrollments = new HashSet<Guid>();
+		var scopedDays = await studentScopeAccessService.ApplyCurrentUserAttendanceDayScopeAsync(await attendanceDayRepository.GetQueryableAsync());
+		foreach (var year in years)
 		{
-			s.StandardId,
-			Standard = s.Standard != null ? s.Standard.Name : "Unassigned",
-			s.DivisionId,
-			Division = s.Division != null ? s.Division.Name : "Unassigned"
-		}));
-		var attendanceRows = new List<StudentAttendanceSummaryRow>();
-		if (rows.Count > 0)
-		{
-			var scopedAttendanceDays = await studentScopeAccessService.ApplyCurrentUserAttendanceDayScopeAsync(
-				await attendanceDayRepository.GetQueryableAsync());
-			var attendanceEntries = await attendanceEntryRepository.GetQueryableAsync();
-			var projectedAttendanceRows = await AsyncExecuter.ToListAsync(
-				from entry in attendanceEntries
-				join day in scopedAttendanceDays on entry.AttendanceDayId equals day.Id
-				join student in query on entry.StudentId equals student.Id
-				where day.Date >= startDate
-				      && day.Date <= endDate
-				      && (entry.Status == AttendanceStatus.Present || entry.Status == AttendanceStatus.Absent)
-				select new
-				{
-					entry.Status,
-					StandardId = (Guid?)day.StandardId,
-					DivisionId = (Guid?)day.DivisionId
-				});
-			attendanceRows = projectedAttendanceRows
-				.Select(x => new StudentAttendanceSummaryRow(x.Status, x.StandardId, x.DivisionId))
-				.ToList();
-		}
-
-		var groupRows = rows
-			.Select(s => new StudentAttendanceGroupRow(s.StandardId, s.DivisionId))
-			.Concat(attendanceRows.Select(s => new StudentAttendanceGroupRow(s.StandardId, s.DivisionId)))
-			.Distinct()
-			.ToList();
-		var standardIds = groupRows
-			.Where(x => x.StandardId.HasValue)
-			.Select(x => x.StandardId!.Value)
-			.Distinct()
-			.ToList();
-		var divisionIds = groupRows
-			.Where(x => x.DivisionId.HasValue)
-			.Select(x => x.DivisionId!.Value)
-			.Distinct()
-			.ToList();
-		var standardNames = rows
-			.Where(x => x.StandardId.HasValue)
-			.GroupBy(x => x.StandardId!.Value)
-			.ToDictionary(x => x.Key, x => x.First().Standard);
-		var divisionNames = rows
-			.Where(x => x.DivisionId.HasValue)
-			.GroupBy(x => x.DivisionId!.Value)
-			.ToDictionary(x => x.Key, x => x.First().Division);
-
-		if (standardIds.Count > 0)
-		{
-			var standards = await AsyncExecuter.ToListAsync(
-				(await standardRepository.GetQueryableAsync())
-					.Where(x => standardIds.Contains(x.Id))
-					.Select(x => new { x.Id, x.Name }));
-			foreach (var standard in standards)
+			var start = startDate > year.StartDate.Date ? startDate : year.StartDate.Date;
+			var end = endDate < year.EndDate.Date ? endDate : year.EndDate.Date;
+			var members = await AsyncExecuter.ToListAsync((await enrollmentRepository.GetQueryableAsync()).Where(e =>
+				e.TenantId == CurrentTenant.Id && e.AcademicYearId == year.Id));
+			var paths = new Dictionary<(Guid Standard, Guid Division), HashSet<Guid>>();
+			void Add(Guid? standard, Guid? division, Guid enrollmentId)
 			{
-				standardNames[standard.Id] = standard.Name;
+				if (!standard.HasValue || !division.HasValue) return;
+				var path = (standard.Value, division.Value);
+				if (!paths.TryGetValue(path, out var cohort)) paths[path] = cohort = [];
+				cohort.Add(enrollmentId);
+			}
+			foreach (var member in members)
+			{
+				Add(member.StandardId, member.DivisionId, member.Id);
+				for (var date = start; date <= end; date = date.AddDays(1))
+				{
+					var placement = member.AttendancePlacementOn(date);
+					Add(placement?.StandardId, placement?.DivisionId, member.Id);
+				}
+			}
+			// Submitted day scopes retain the original class even after a later move or exit.
+			var historic = await AsyncExecuter.ToListAsync(from entry in await attendanceEntryRepository.GetQueryableAsync()
+				join day in scopedDays on entry.AttendanceDayId equals day.Id
+				where day.TenantId == CurrentTenant.Id && day.AcademicYearId == year.Id && day.Date >= start && day.Date <= end
+				select new { entry.EnrollmentId, entry.StudentId, day.StandardId, day.DivisionId });
+			foreach (var item in historic)
+			{
+				var member = members.SingleOrDefault(e => item.EnrollmentId.HasValue ? e.Id == item.EnrollmentId : e.StudentId == item.StudentId);
+				if (member != null) Add(item.StandardId, item.DivisionId, member.Id);
+			}
+			foreach (var path in paths)
+			{
+				try
+				{
+					var rows = await attendanceReports.BuildAsync(year.Id, path.Key.Standard, path.Key.Division, start, end,
+						members.Where(e => path.Value.Contains(e.Id)).ToList(), includeDaily: true);
+					slices.Add(new(path.Key.Standard, path.Key.Division, rows));
+				}
+				catch (BusinessException exception) when (exception.Code == UserScopeErrorCodes.AccessDenied)
+				{
+					// An enrollment's current path does not authorize its other historical paths.
+					partialEnrollments.UnionWith(path.Value);
+				}
 			}
 		}
-
-		if (divisionIds.Count > 0)
+		var standardIds = slices.Select(s => s.StandardId).Distinct().ToArray();
+		var divisionIds = slices.Select(s => s.DivisionId).Distinct().ToArray();
+		var standardNames = (await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+			.Where(s => s.TenantId == CurrentTenant.Id && Enumerable.Contains(standardIds, s.Id)).Select(s => new { s.Id, s.Name })))
+			.ToDictionary(s => s.Id, s => s.Name);
+		var divisionNames = (await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+			.Where(d => d.TenantId == CurrentTenant.Id && Enumerable.Contains(divisionIds, d.Id)).Select(d => new { d.Id, d.Name })))
+			.ToDictionary(d => d.Id, d => d.Name);
+		foreach (var row in slices.SelectMany(s => s.Rows)) row.IsProvisional |= partialEnrollments.Contains(row.EnrollmentId);
+		var result = new StudentAttendanceDashboardSummaryDto();
+		result.SchoolAttendancePercentage = ApplyDashboardMetrics(result, slices.SelectMany(s => s.Rows));
+		result.Classes = slices.GroupBy(s => s.StandardId).OrderBy(g => GetStandardName(g.Key, standardNames)).Select(group =>
 		{
-			var divisions = await AsyncExecuter.ToListAsync(
-				(await divisionRepository.GetQueryableAsync())
-					.Where(x => divisionIds.Contains(x.Id))
-					.Select(x => new { x.Id, x.Name }));
-			foreach (var division in divisions)
+			var item = new StudentAttendanceClassSummaryDto { StandardId = group.Key, Name = GetStandardName(group.Key, standardNames) };
+			item.Percentage = ApplyDashboardMetrics(item, group.SelectMany(s => s.Rows));
+			item.Divisions = group.GroupBy(s => s.DivisionId).OrderBy(g => GetDivisionName(g.Key, divisionNames)).Select(division =>
 			{
-				divisionNames[division.Id] = division.Name;
-			}
-		}
-
-		return new StudentAttendanceDashboardSummaryDto
-		{
-			SchoolAttendancePercentage = CalculateAttendancePercentage(attendanceRows.Select(x => x.Status)),
-			Classes = groupRows
-				.GroupBy(s => s.StandardId)
-				.OrderBy(g => GetStandardName(g.Key, standardNames))
-				.Select(g => new StudentAttendanceClassSummaryDto
-				{
-					StandardId = g.Key,
-					Name = GetStandardName(g.Key, standardNames),
-					Percentage = CalculateAttendancePercentage(attendanceRows
-						.Where(x => x.StandardId == g.Key)
-						.Select(x => x.Status)),
-					Divisions = g
-						.GroupBy(x => x.DivisionId)
-						.OrderBy(d => GetDivisionName(d.Key, divisionNames))
-						.Select(d => new StudentAttendanceDivisionSummaryDto
-						{
-							DivisionId = d.Key,
-							Name = GetDivisionName(d.Key, divisionNames),
-							Percentage = CalculateAttendancePercentage(attendanceRows
-								.Where(x => x.StandardId == g.Key && x.DivisionId == d.Key)
-								.Select(x => x.Status))
-						})
-						.ToList()
-				})
-				.ToList()
-		};
+				var row = new StudentAttendanceDivisionSummaryDto { DivisionId = division.Key, Name = GetDivisionName(division.Key, divisionNames) };
+				row.Percentage = ApplyDashboardMetrics(row, division.SelectMany(s => s.Rows));
+				return row;
+			}).ToList();
+			return item;
+		}).ToList();
+		return result;
 	}
 
+	private static decimal? ApplyDashboardMetrics(StudentAttendanceDashboardMetricsDto target, IEnumerable<AttendanceSummaryDto> rows)
+	{
+		// Different students on the same date are different student-days; merge moved paths within each enrollment.
+		foreach (var group in rows.GroupBy(r => r.EnrollmentId))
+		{
+			var result = AttendanceCalculation.Calculate(group.SelectMany(r => r.Daily).Select(d => new AttendanceCalculationDay(
+				d.Date, d.Expected, d.Recorded, d.PresentCredit, d.DenominatorCredit, d.IsProvisional, d.Status)));
+			target.ExpectedDays += result.ExpectedDays;
+			target.RecordedDays += result.RecordedDays;
+			target.MissingDays += result.MissingDays;
+			target.PresentCredit += result.PresentCredit;
+			target.DenominatorDays += result.DenominatorDays;
+			target.IsProvisional |= result.IsProvisional || group.Any(row => row.IsProvisional);
+		}
+		target.CompletionPercentage = target.ExpectedDays == 0 ? null : Math.Round(target.RecordedDays * 100m / target.ExpectedDays, 2);
+		return target.DenominatorDays == 0 ? null : (decimal)Math.Round(target.PresentCredit * 100 / target.DenominatorDays, 2);
+	}
+
+	private sealed record AttendanceDashboardSlice(Guid StandardId, Guid DivisionId, List<AttendanceSummaryDto> Rows);
 	public async Task ChangeStudentStatusAsync(Guid studentId, ChangeStudentStatusDto input)
 	{
 		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
@@ -371,6 +372,8 @@ public class StudentListAppService(
 		}
 
 		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, nameof(ChangeStudentStatusAsync));
+		await LazyServiceProvider.LazyGetRequiredService<StudentRecordWriteGuard>()
+			.EnsureAsync(studentId, nameof(ChangeStudentStatusAsync));
 
 		try
 		{
@@ -593,18 +596,6 @@ public class StudentListAppService(
 		return new DateTime(year, dateOfBirth.Month, day);
 	}
 
-	private static decimal CalculateAttendancePercentage(IEnumerable<AttendanceStatus> statuses)
-	{
-		var marked = statuses.Count(status => status is AttendanceStatus.Present or AttendanceStatus.Absent);
-		if (marked == 0)
-		{
-			return 0;
-		}
-
-		var present = statuses.Count(status => status == AttendanceStatus.Present);
-		return Math.Round(present * 100m / marked, 2);
-	}
-
 	private (DateTime StartDate, DateTime EndDate) ResolveAttendanceDateRange(DateTime? startDate, DateTime? endDate)
 	{
 		var now = Clock.Now.Date;
@@ -615,7 +606,7 @@ public class StudentListAppService(
 
 		if (start > end)
 		{
-			throw new BusinessException("StudentAttendance:InvalidDateRange")
+			throw new BusinessException(AttendanceOperationErrorCodes.InvalidDateRange)
 				.WithData("StartDate", start)
 				.WithData("EndDate", end);
 		}
@@ -652,12 +643,4 @@ public class StudentListAppService(
 		};
 	}
 
-	private sealed record StudentAttendanceSummaryRow(
-		AttendanceStatus Status,
-		Guid? StandardId,
-		Guid? DivisionId);
-
-	private sealed record StudentAttendanceGroupRow(
-		Guid? StandardId,
-		Guid? DivisionId);
 }

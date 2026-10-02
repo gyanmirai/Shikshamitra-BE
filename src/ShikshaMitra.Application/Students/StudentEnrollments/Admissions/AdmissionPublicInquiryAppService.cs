@@ -21,6 +21,7 @@ public class AdmissionPublicInquiryAppService(
 	IRepository<AdmissionPublicInquiryLink, Guid> links,
 	IRepository<AdmissionCycle, Guid> cycles,
 	IRepository<AdmissionIntakeProfile, Guid> profiles,
+	IRepository<AdmissionIntakeSetup, Guid> setups,
 	IRepository<AdmissionFormDefinition, Guid> forms,
 	IRepository<AdmissionFormSectionDefinition, Guid> formSections,
 	IRepository<AdmissionFormFieldDefinition, Guid> formFields,
@@ -48,6 +49,11 @@ public class AdmissionPublicInquiryAppService(
 		var profile = await profiles.FindAsync(input.CounsellorAssignmentProfileId);
 		if (profile?.Kind != AdmissionIntakeProfileKind.CounsellorAssignment)
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
+		var managedSetup = await setups.FirstOrDefaultAsync(setup =>
+			setup.CounsellorAssignmentProfileId == profile.Id);
+		if (managedSetup?.IsArchived == true)
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.SetupArchived,
+				"Archived intake setups cannot be used to create public inquiry links.");
 		if (input.InquiryFormDefinitionId.HasValue)
 			await EnsurePublishedInquiryFormAsync(input.InquiryFormDefinitionId.Value);
 		AdmissionCounsellorAssignmentRules rules;
@@ -67,6 +73,10 @@ public class AdmissionPublicInquiryAppService(
 		if (!hasEligibleOwner)
 			throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid,
 				"Choose a counsellor who can access an active Inquiry offering in this period.");
+		if (managedSetup != null && rules.FallbackManagerUserId.HasValue &&
+			!await people.CanAccessCycleAsync(rules.FallbackManagerUserId.Value, cycle.Id))
+			throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid,
+				"Choose a fallback manager who can access an active Inquiry offering in this period.");
 		var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 		var link = new AdmissionPublicInquiryLink(GuidGenerator.Create(), CurrentTenant.Id,
 			cycle.Id, profile.Id, input.Name, Hash(token), input.Source,

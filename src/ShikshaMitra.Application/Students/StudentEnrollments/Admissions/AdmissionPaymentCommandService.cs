@@ -17,7 +17,8 @@ public class AdmissionPaymentCommandService(
 	IRepository<AdmissionApplication, Guid> applications,
 	IRepository<AdmissionActivity, Guid> activities,
 	AdmissionPaymentAccessService access,
-	AdmissionPaymentReadService reader) : ApplicationService, ITransientDependency
+	AdmissionPaymentReadService reader,
+	AdmissionFeeSelectionAccessService feeSelection) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionPaymentStageDto> RecordAsync(Guid applicationId, Guid stageId, RecordAdmissionPaymentDto input)
 	{
@@ -33,6 +34,7 @@ public class AdmissionPaymentCommandService(
 		}
 		EnsureManagedActive(context);
 		AdmissionPaymentAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
+		await feeSelection.EnsureSelectionAsync(context.Application);
 		var state = await reader.GetAsync(applicationId, stageId);
 		var policy = context.Policy!;
 		var method = Required(input.Method, 32, "Choose a payment method.");

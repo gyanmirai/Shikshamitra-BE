@@ -411,6 +411,27 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	[Fact]
+	public async Task Inquiry_And_Registration_Drafts_Should_Publish_Without_Approval()
+	{
+		using (_currentTenant.Change(TestTenantId))
+		using (_principalAccessor.Change(BuildAdminPrincipal()))
+		{
+			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId,
+				userId: TestUserId, description: "Direct form publication integration test"), autoSave: true);
+			var workflow = await CreateAndPublishWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+
+			foreach (var formId in new[] { offering.InquiryFormDefinitionId, offering.ApplicationFormDefinitionId })
+			{
+				var draft = await _formAppService.CreateNewVersionAsync(formId!.Value);
+				draft.Status.ShouldBe(AdmissionFormStatus.Draft);
+				var published = await _formAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
+				published.Status.ShouldBe(AdmissionFormStatus.Published);
+			}
+		}
+	}
+
+	[Fact]
 	public async Task Published_Form_Version_Should_Remain_Frozen_For_Existing_Application()
 	{
 		using (_currentTenant.Change(TestTenantId))
@@ -425,17 +446,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			aaravForm.FormVersion.ShouldBe(1);
 
 			var formV2 = await _formAppService.CreateNewVersionAsync(aaravForm.FormDefinitionId);
-			formV2 = await _formAppService.RequestApprovalAsync(formV2.Id, new ReviewAdmissionFormDto
-			{
-				ConcurrencyStamp = formV2.ConcurrencyStamp,
-				Comment = "Validate the second published version."
-			});
-			formV2 = await _formAppService.ApproveAsync(formV2.Id, new ReviewAdmissionFormDto
-			{
-				ConcurrencyStamp = formV2.ConcurrencyStamp,
-				Comment = "Administrator approved this test version."
-			});
+			formV2.Status.ShouldBe(AdmissionFormStatus.Draft);
 			formV2 = await _formAppService.PublishAsync(formV2.Id, formV2.ConcurrencyStamp);
+			formV2.Status.ShouldBe(AdmissionFormStatus.Published);
 			await WithUnitOfWorkAsync(async () =>
 			{
 				var currentOffering = await _offeringRepository.GetAsync(offering.Id);

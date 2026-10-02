@@ -39,7 +39,8 @@ public class AdmissionApplicationDecisionService(
 	AdmissionOfferCommandService offerCommands,
 	AdmissionInquiryPeopleService peopleService,
 	AdmissionApplicationScopeAccessService applicationScope,
-	IAdmissionFinalizationConflictClassifier finalizationConflicts)
+	IAdmissionFinalizationConflictClassifier finalizationConflicts,
+	AdmissionFeeSelectionAccessService feeSelection)
 	: ApplicationService, ITransientDependency
 {
 	public Task<AdmissionApplicationDto> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) =>
@@ -58,6 +59,7 @@ public class AdmissionApplicationDecisionService(
 	{
 		if (await offerCommands.TryIssueLegacyAsync(id, input)) return await GetDecisionResultAsync(id);
 		var target = await GetApplicationAsync(id);
+		await feeSelection.EnsureSelectionAsync(target);
 		if (input.CounsellorId.HasValue && input.CounsellorId != target.AssignedCounsellorId)
 			throw new BusinessException(AdmissionOfferStageErrorCodes.InvalidState,
 				"Change the journey counsellor through the application assignment action before issuing an offer.");
@@ -139,6 +141,8 @@ public class AdmissionApplicationDecisionService(
 	private async Task<AdmissionFinalizationResultDto> FinalizeCoreAsync(Guid id, FinalizeAdmissionApplicationDto input)
 	{
 		var context = await LoadFinalizationContextAsync(id);
+		var returnService = LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>();
+		var reviewedReturn = context.Application.Status == AdmissionApplicationStatus.AdmissionFinalized ? null : await returnService.ValidateFinalizationAsync(context.Application, context.Applicant);
 
 		if (context.Application.Status == AdmissionApplicationStatus.AdmissionFinalized &&
 		    context.Application.StudentId.HasValue && context.Application.OnboardingCaseId.HasValue)
@@ -203,8 +207,13 @@ public class AdmissionApplicationDecisionService(
 		{
 			student = await studentRepository.FindAsync(selectedStudentId.Value) ??
 				throw new BusinessException(StudentOnboardingErrorCodes.ExistingStudentInvalid);
-			AdmissionAdditionalStudentFieldCatalog.CopyToStudent(context.Applicant, student);
-			await studentRepository.UpdateAsync(student, false);
+			if (student.Status == StudentLifeCycleStatusEnum.Left && reviewedReturn == null)
+				throw new BusinessException("Students:Records:InvalidReturnApplication");
+			if (reviewedReturn == null)
+			{
+				AdmissionAdditionalStudentFieldCatalog.CopyToStudent(context.Applicant, student);
+				await studentRepository.UpdateAsync(student, false);
+			}
 		}
 		else
 		{
@@ -219,7 +228,7 @@ public class AdmissionApplicationDecisionService(
 			throw new BusinessException(StudentOnboardingErrorCodes.EnrollmentAlreadyExists);
 		if (await onboardingRepository.AnyAsync(item =>
 			item.StudentId == student.Id && item.AcademicYearId == context.Cycle.AcademicYearId &&
-			item.Status != StudentOnboardingStatus.Cancelled))
+			item.Status != StudentOnboardingStatus.Cancelled && (reviewedReturn == null || item.Status != StudentOnboardingStatus.Completed)))
 			throw new BusinessException(StudentOnboardingErrorCodes.OnboardingAlreadyExists);
 
 		var now = DateTime.UtcNow;
@@ -230,6 +239,12 @@ public class AdmissionApplicationDecisionService(
 			context.Offering.StageId, context.Offering.StandardId, input.IdempotencyKey, now,
 			now.AddHours(policy?.SlaHours ?? 72));
 		onboardingCase.SetCampusId(context.Offering.CampusId);
+		if (reviewedReturn != null)
+		{
+			onboardingCase.SetAdmissionRoute("Returning student");
+			onboardingCase.ExtraProperties["RecordReturnTransitionId"] = reviewedReturn.TransitionId!.Value.ToString("D");
+			onboardingCase.ExtraProperties["RecordReturnHandoffId"] = reviewedReturn.Id.ToString("D");
+		}
 		if (context.Application.AssignedCounsellorId.HasValue)
 			onboardingCase.AssignOwner(context.Application.AssignedCounsellorId);
 		await onboardingRepository.InsertAsync(onboardingCase, false);

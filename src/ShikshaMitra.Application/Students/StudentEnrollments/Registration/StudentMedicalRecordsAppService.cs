@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using System;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
@@ -75,7 +75,7 @@ public class StudentMedicalRecordsAppService(
             input.CurrentMedications
         );
 
-        if (student.Status != StudentLifeCycleStatusEnum.Enrolled)
+        if (Array.Exists(RegistrationStatuses, status => status == student.Status))
             student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.MedicalRecords);
         student.AdditionalDetail?.UpdateDisabilityInfo(input.HaveDisability, input.DisabilityDetails);
 

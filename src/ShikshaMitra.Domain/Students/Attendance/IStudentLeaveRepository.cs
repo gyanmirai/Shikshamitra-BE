@@ -11,6 +11,9 @@ namespace ShikshaMitra.Students.Attendance;
 /// </summary>
 public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 {
+	Task<List<AttendanceApprovedLeave>> GetApprovedForAttendanceAsync(IReadOnlyCollection<Guid> studentIds,
+		DateTimeOffset start, DateTimeOffset endExclusive, Guid? tenantId, CancellationToken cancellationToken = default);
+
 	/// <summary>
 	/// Gets a filtered, sorted, and paginated list of student leaves
 	/// </summary>
@@ -75,3 +78,6 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 		Guid? tenantId = null,
 		CancellationToken cancellationToken = default);
 }
+
+public sealed record AttendanceApprovedLeave(Guid Id, Guid StudentId, bool IsHalfDay,
+	DateTimeOffset LeaveDate, DateTimeOffset? EndDate, string ConcurrencyStamp);

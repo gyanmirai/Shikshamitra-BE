@@ -982,6 +982,8 @@ public class StudentManagementAppService(
 			{
 				var student = await studentRepository.GetAsync(changeStudentDivision.StudentId, includeDetails: true);
 				await EnsureCanAccessStudentAsync(student, nameof(ChangeDivision));
+				await LazyServiceProvider.LazyGetRequiredService<StudentRecordWriteGuard>()
+					.EnsureAsync(student.Id, nameof(ChangeDivision));
 				await EnsureCanAccessDivisionAsync(changeStudentDivision.DivisionId, nameof(ChangeDivision));
 				student.AssignDivision(changeStudentDivision.DivisionId);
 				student.AssignRollNo(null);

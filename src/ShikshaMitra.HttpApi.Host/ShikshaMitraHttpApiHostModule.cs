@@ -593,6 +593,9 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionCycleScheduleWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionWorkflowScheduleWorker>();
+		await context.AddBackgroundWorkerAsync<StudentRecordScheduleWorker>();
+		await context.AddBackgroundWorkerAsync<StudentRecordReportWorker>();
+		await context.AddBackgroundWorkerAsync<StudentRecordTransitionWorker>();
 		await context.AddBackgroundWorkerAsync<ExamAutoCompleteWorker>();
 		await context.AddBackgroundWorkerAsync<HrDashboardPreviewRefreshWorker>();
 		await context.AddBackgroundWorkerAsync<StudentDashboardPreviewRefreshWorker>();

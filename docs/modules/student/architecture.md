@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-09-24
+updated_on: 2026-10-01
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,55 @@ audience: humans-and-agents
 # Locate Student Enrollment Admissions code
 
 TL;DR: Admissions remains inside the Student modular-monolith boundary and separates aggregate invariants, authoritative validation, reads, commands, and runtime availability.
+
+## Student Attendance ownership
+
+| Layer | Owner |
+|---|---|
+| Shared rules | `src/ShikshaMitra.Domain.Shared/Students/Attendance/`: typed policy, centralized operation errors and pure credit/completeness calculation. |
+| Domain | `src/ShikshaMitra.Domain/Students/Attendance/`: day/entry, published configuration, individual schedule, correction and durable operation journal. Applicability consumes existing Academic Calendar without creating competing holiday definitions. |
+| Enrollment | `src/ShikshaMitra.Domain/Students/StudentEnrollments/Aggregates/StudentEnrollment.Attendance.cs`: confirmed start and dated membership snapshots. Existing Records placement/transition/renewal commands supply their effective dates. |
+| Application | `src/ShikshaMitra.Application/Students/Attendance/`: focused roster/register/report reads, daily and correction commands, enrollment setup and policy/schedule services. Thin entry services retain action permissions and academic-scope checks. |
+| Persistence | `src/ShikshaMitra.EntityFrameworkCore/Students/Attendance/`: policy/version/schedule, correction and operation mappings plus enrollment/date uniqueness. Migration `20261001043143_AddUniversalStudentAttendance` preserves legacy identity and leaves unknown membership dates unknown. |
+| Integration | `StudentListAppService` and `DashboardStudentAttendanceSliceProvider` use canonical credit and provisional metrics. Student Leave approval remains explicit and never writes fabricated daily presence. |
+
+Daily/correction/leave-approval transactions use serializable units of work and map database concurrency conflicts to a reviewable business response.
+Daily entry persistence reads existing rows once per day and batches inserts/updates.
+Submitted snapshots pin historical policy and eligibility; mutable school configuration cannot silently recalculate finalized credit.
+Tenant filters remain enabled; historical paths are independently scoped rather than authorized through a student's current placement.
+
+## Student Records ownership
+
+| Layer | Source and responsibility |
+|---|---|
+| Shared policy | `Domain.Shared/Students/StudentRecords/StudentRecordsPolicy.cs`: typed action/stage/condition, provisioning, masks, guardian access, document, and transition choices. Central permission partials remain the only permission catalogue. |
+| Published configuration | `Domain/Students/StudentRecords/`: draft configuration, immutable policy versions, structural validator, and effective resolver. Year-published policy precedes school-published policy; otherwise runtime uses the documented starter. |
+| API contract | `Application.Contracts/Students/Records/`: requests, paged results, state/capability DTOs; settings contracts remain under `Students/StudentRecords/`. |
+| Access and governance | `Application/Students/Records/StudentRecordsActorService`, access service, enrollment scope, write guard, change application, and placement services preserve existing write APIs while governing enrolled/former records. Records checks the current tenant's active database identity even when a previously issued login remains valid; settings uses the same guard. |
+| Transitions | Focused Readiness, Options, Authority, Application, Correction, RenewalReadiness, RenewalCoordinator, ReturnCoordinator, AdmissionReturnService, and thin partial TransitionAppService separate source-owner evidence, authorization, lifecycle, and mapping. Internal coordinators disable remote exposure. |
+| History | Transition/batch/event/renewal/return-handoff entities retain policy and source snapshots. Target year/class/division projections are parsed once from immutable input for database scope filtering and paging. |
+| Owner boundary | Initial enrollment stays in Onboarding. Academic/Library/Transport source evidence is read only. `StudentTransitionFinanceClearanceReader` delegates to Finance's canonical collection ledger; renewal delegates to Onboarding's Finance readiness reader. `StudentRenewalPortalCoordinator` owns the account handoff for real annual renewals without fabricating an initial case. Returns call real Admissions commands. |
+| Persistence | `EntityFrameworkCore/Students/Records/` defines tenant-scoped unique request keys, policy version numbering, one active student/year renewal, correction uniqueness, indexes, restrictive relationships, and immutable snapshot payloads. Completed and cancelled renewal reviews remain separate history rows. |
+
+Transition application uses a serializable unit of work for each student and revalidates live approvals. The background scheduler invokes `StudentRecordTransitionApplication.ApplyAsRecordedActorAsync(id)` within the tenant; it processes Approved/Scheduled cases, while Exceptions require manual retry. A school may choose immediate roster removal on approved exits, even when the historical effective date is later.
+
+Scheduled change selection and change application share ABP `IClock`; the transition worker also uses that clock and the institution calendar. Workers poll every minute. Report generation checks the current Add permission, captured source authority and expiry again after workbook generation, before blob publication. Download requires current Reports.View and source View, so removing Add alone does not invalidate an already completed report.
+
+Both change and transition application classify raw or wrapped database SQLSTATE `40001` through the existing provider-neutral Onboarding conflict mapper. After rollback they persist `Students:Records:ConcurrencyConflict` in Change Conflict or Transition Exception. These states leave the automatic worker queue; transition recovery is an explicit staff retry, while a change uses a reviewed replacement request. Unrelated exceptions still propagate.
+
+Transition exception recording reloads the row after rollback and only marks Approved or Scheduled cases. If another worker has already committed Applied or AwaitingRenewal, the losing worker preserves that result and its history. Repeated automatic ticks select neither completed state.
+
+Renewal activation uses the same classifier after its serializable transaction is disposed. A concurrent activation conflict returns `Students:Records:ConcurrencyConflict` for an explicit refresh; it does not retry the command automatically or mark the winning renewal as failed. Unrelated failures retain their existing handling.
+
+`StudentRecordsEnrollmentScopeService.EnsureTargetPlacementAsync` validates the target tenant, academic year and complete class/division hierarchy using the existing precise division-scope query. Placement request/application and transition readiness share this check. Parent board/medium IDs populated from a narrow class assignment do not authorize sibling classes; explicit wildcard or exact division grants remain authoritative. The shared generic scope implementation is unchanged.
+
+Renewal activation creates an enrollment before Finance assignment, matching existing Onboarding ordering. Renewal then remains Provisioning until confirmed Finance/portal evidence exists. Governed permitted placement edits synchronize the active enrollment and renewal target. No records service creates arbitrary admission FKs or performs a fee reversal.
+
+`StudentOnboardingRollRuleReader` resolves the target academic path without fabricating an Admission or Onboarding case. A submitted annual transition freezes that owner rule in its extra properties. `StudentOnboardingRollNumberAllocator` serves both initial Onboarding and Records annual/return commands. Target roll validation observes school manual/automatic/both mode, starting number, class or division scope, and reason requirements, including outstanding onboarding/renewal/transition reservations. Both mode requires an explicit staff choice. Previewed automatic proposals are checked again during serializable submission; a changed proposal or competing serializable reservation requires a refreshed preview. Existing GR numbers stay permanent. Records promotion/return uses only the Records approval chain; initial Onboarding retains its own approval rules.
+
+Reviewed same-year ReuseProfile returns reactivate the existing inactive enrollment and preserve owner history. Cancelling an unactivated PendingChecklist renewal retains both case and transition audit. Provisioning permits school-authorized division/roll edits, but has no automated target-class recovery. Class changes with an immutable Finance assignment are blocked in ordinary Placement and same-year Return until a Finance-owned impact workflow exists; completion does not bypass this dependency. Migration `20261001021100_AddStudentRecordRenewalHistory` changes only the renewal index predicate and refuses a downgrade that cannot retain repeated reviews. Its target model derives from the previous generated Records migration and changes only this predicate, keeping separately developing Attendance models outside this migration.
+
+`StudentRecordAdmissionReturnService` orchestrates the frozen Records Status authorization through existing Admissions and Onboarding owners. Handoffs persist typed entry/application/inquiry/transition references, intake configuration/contact and source provenance; `ReturnHandoffId` remains in transition extra properties. Migration `20261001060643_AddStudentRecordAdmissionReturn` changes only the return-handoff table and transition source nullability. Its target model retains the preceding Attendance migration and changes only those two Records entities. Unique linked application/inquiry indexes apply only where TransitionId exists, preserving legacy duplicate handoffs. Legacy rows are not backfilled with invented approval authority. A used governed return or source-less historical return blocks downgrade; use a forward fix.
 
 ## Reserved Student identity and rollout
 

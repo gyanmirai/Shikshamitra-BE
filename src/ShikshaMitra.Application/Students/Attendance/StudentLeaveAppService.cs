@@ -1,10 +1,17 @@
-﻿using System;
+using System;
+using System.Data;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.Students.StudentEnrollments;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.Attendance;
 
@@ -16,14 +23,31 @@ public class StudentLeaveAppService(
 	IStudentLeaveRepository studentLeaveRepository,
 	StudentLeaveManager studentLeaveManager,
 	IStudentRepository studentRepository,
-	StudentScopeAccessService studentScopeAccessService
+	StudentScopeAccessService studentScopeAccessService,
+	IRepository<AcademicYear, Guid> years,
+	IRepository<StudentEnrollment, Guid> enrollments,
+	AttendancePolicyResolver attendancePolicies
 ) : ApplicationService, IStudentLeaveAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public async Task<PagedResultDto<StudentLeaveDto>> GetListAsync(GetStudentLeaveListInput input)
 	{
 		var scopedStudents = await studentScopeAccessService.ApplyCurrentUserScopeAsync(
 			await studentRepository.GetQueryableWithoutAutoIncludesAsync());
 		var scopedStudentIds = await AsyncExecuter.ToListAsync(scopedStudents.Select(s => s.Id));
+		if (input.AcademicYearId.HasValue)
+		{
+			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(input.AcademicYearId.Value, "read attendance leave requests");
+			var year = await years.GetAsync(y => y.Id == input.AcademicYearId.Value && y.TenantId == CurrentTenant.Id);
+			var membership = await enrollments.GetListAsync(e => e.TenantId == CurrentTenant.Id && e.AcademicYearId == year.Id);
+			scopedStudentIds = scopedStudentIds.Intersect(membership.Select(e => e.StudentId)).ToList();
+			var policy = await attendancePolicies.ResolveAsync(year.Id, Clock.Now.Date);
+			var zone = TimeZoneInfo.FindSystemTimeZoneById(policy.Options.SchoolTimeZone);
+			var yearStart = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(year.StartDate.Date, DateTimeKind.Unspecified), zone));
+			var yearEnd = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(year.EndDate.Date.AddDays(1), DateTimeKind.Unspecified), zone)).AddTicks(-1);
+			input.StartDate = input.StartDate.HasValue && input.StartDate > yearStart ? input.StartDate : yearStart;
+			input.EndDate = input.EndDate.HasValue && input.EndDate < yearEnd ? input.EndDate : yearEnd;
+		}
 
 		var totalCount = await studentLeaveRepository.GetCountAsync(
 			input.FilterText,
@@ -59,6 +83,7 @@ public class StudentLeaveAppService(
 		return new PagedResultDto<StudentLeaveDto>(totalCount, leaveDtos);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public async Task<StudentLeaveDto> GetAsync(Guid id)
 	{
 		var leave = await studentLeaveRepository.GetWithDetailsAsync(id);
@@ -73,6 +98,7 @@ public class StudentLeaveAppService(
 		return MapToDto(leave);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public async Task<StudentLeaveDto> CreateAsync(CreateStudentLeaveDto input)
 	{
 		var student = await studentScopeAccessService.GetStudentAsync(input.StudentId, nameof(CreateAsync));
@@ -95,6 +121,7 @@ public class StudentLeaveAppService(
 		return MapToDto(leaveWithDetails!);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public async Task<StudentLeaveDto> UpdateAsync(Guid id, UpdateStudentLeaveDto input)
 	{
 		var leave = await studentLeaveRepository.GetAsync(id);
@@ -125,6 +152,7 @@ public class StudentLeaveAppService(
 		return MapToDto(leaveWithDetails!);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Delete)]
 	public async Task DeleteAsync(Guid id)
 	{
 		var leave = await studentLeaveRepository.GetAsync(id);
@@ -146,8 +174,11 @@ public class StudentLeaveAppService(
 		await studentLeaveRepository.DeleteAsync(leave, autoSave: true);
 	}
 
-	public async Task<StudentLeaveDto> ApproveAsync(Guid id, ApproveRejectStudentLeaveDto input)
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
+	public Task<StudentLeaveDto> ApproveAsync(Guid id, ApproveRejectStudentLeaveDto input) => AttendanceCommandConflictMapper.ExecuteAsync(() => ApproveCoreAsync(id, input));
+	private async Task<StudentLeaveDto> ApproveCoreAsync(Guid id, ApproveRejectStudentLeaveDto input)
 	{
+		using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
 		if (input.Status != StudentLeaveStatusEnum.Approved)
 		{
 			throw new BusinessException("StudentLeave:InvalidApproveStatus")
@@ -163,6 +194,14 @@ public class StudentLeaveAppService(
 				.WithData("Id", id);
 		}
 		await studentScopeAccessService.EnsureCanAccessLeaveAsync(leave, nameof(ApproveAsync));
+		var student = await studentScopeAccessService.GetStudentAsync(leave.StudentId, nameof(ApproveAsync));
+		var policy = await attendancePolicies.ResolveAsync(student.AcademicYearId, leave.LeaveDate.UtcDateTime.Date);
+		var zone = TimeZoneInfo.FindSystemTimeZoneById(policy.Options.SchoolTimeZone);
+		var schoolStart = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(TimeZoneInfo.ConvertTime(leave.LeaveDate, zone).Date, zone));
+		var schoolEnd = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(TimeZoneInfo.ConvertTime(leave.EndDate ?? leave.LeaveDate, zone).Date.AddDays(1), zone));
+		var overlapping = await studentLeaveRepository.GetApprovedForAttendanceAsync([leave.StudentId], schoolStart, schoolEnd, CurrentTenant.Id);
+		if (overlapping.Any(l => l.Id != leave.Id))
+			throw new BusinessException(AttendanceOperationErrorCodes.OverlappingApprovedLeave);
 
 		await studentLeaveManager.ApproveAsync(leave, input.Remarks);
 
@@ -171,9 +210,10 @@ public class StudentLeaveAppService(
 		// Reload with details for complete DTO
 		var leaveWithDetails = await studentLeaveRepository.GetWithDetailsAsync(leave.Id);
 
-		return MapToDto(leaveWithDetails!);
+		var result = MapToDto(leaveWithDetails!); await work.CompleteAsync(); return result;
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add)]
 	public async Task<StudentLeaveDto> RejectAsync(Guid id, ApproveRejectStudentLeaveDto input)
 	{
 		if (input.Status != StudentLeaveStatusEnum.Rejected)
@@ -207,6 +247,7 @@ public class StudentLeaveAppService(
 		return MapToDto(leaveWithDetails!);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public async Task<StudentLeaveAttachmentDto> GetAttachmentAsync(Guid id)
 	{
 		var leave = await studentLeaveRepository.GetAsync(id);

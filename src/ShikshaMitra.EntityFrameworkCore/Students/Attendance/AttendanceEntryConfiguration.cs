@@ -17,6 +17,11 @@ public class AttendanceEntryConfiguration : IEntityTypeConfiguration<AttendanceE
 		// Properties
 		builder.Property(ae => ae.AttendanceDayId).IsRequired();
 		builder.Property(ae => ae.StudentId).IsRequired();
+		builder.Property(ae => ae.SchoolDate).HasColumnType("date");
+		builder.Property(ae => ae.DenominatorCredit).HasDefaultValue(1d);
+		builder.HasIndex(ae => new { ae.EnrollmentId, ae.SchoolDate }).IsUnique()
+			.HasFilter("\"EnrollmentId\" IS NOT NULL AND \"IsDeleted\" = false")
+			.HasDatabaseName("UX_AttendanceEntry_EnrollmentDate");
 		builder.Property(ae => ae.MarkedByUserId).IsRequired();
 
 		builder.Property(ae => ae.Status)
@@ -43,5 +48,7 @@ public class AttendanceEntryConfiguration : IEntityTypeConfiguration<AttendanceE
 			.WithMany()
 			.HasForeignKey(ae => ae.StudentId)
 			.OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<ShikshaMitra.Students.StudentEnrollments.StudentEnrollment>()
+			.WithMany().HasForeignKey(ae => ae.EnrollmentId).OnDelete(DeleteBehavior.Restrict);
 	}
 }

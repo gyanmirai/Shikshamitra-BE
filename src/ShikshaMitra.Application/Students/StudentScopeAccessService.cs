@@ -41,7 +41,7 @@ public class StudentScopeAccessService(
 		UserScopeContext scope)
 	{
 
-		if (scope.IsAdmin)
+		if (scope.HasTenantWideScope())
 		{
 			return query;
 		}
@@ -379,19 +379,15 @@ public class StudentScopeAccessService(
 
 	private async Task<AcademicOrganizationScopeRow> BuildDivisionScopeAsync(Guid divisionId)
 	{
-		var division = await divisionRepository.GetAsync(divisionId);
-		var standard = await standardRepository.GetAsync(division.StandardId);
-		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
-		var medium = await educationMediumRepository.GetAsync(stage.EducationMediumId);
-		var board = await educationBoardRepository.GetAsync(medium.EducationBoardId);
-
-		return new AcademicOrganizationScopeRow(
-			board.AcademicYearId,
-			board.Id,
-			medium.Id,
-			stage.Id,
-			standard.Id,
-			division.Id);
+		// Scope validation needs only hierarchy IDs; loading aggregate details expands the Academic Setup graph.
+		var query = from division in await divisionRepository.GetQueryableAsync()
+			join standard in await standardRepository.GetQueryableAsync() on division.StandardId equals standard.Id
+			join stage in await educationMediumStageRepository.GetQueryableAsync() on standard.EducationMediumStageId equals stage.Id
+			join medium in await educationMediumRepository.GetQueryableAsync() on stage.EducationMediumId equals medium.Id
+			join board in await educationBoardRepository.GetQueryableAsync() on medium.EducationBoardId equals board.Id
+			where division.Id == divisionId
+			select new AcademicOrganizationScopeRow(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, division.Id);
+		return await AsyncExecuter.SingleOrDefaultAsync(query) ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Division), divisionId);
 	}
 
 	private sealed record AcademicOrganizationScopeRow(

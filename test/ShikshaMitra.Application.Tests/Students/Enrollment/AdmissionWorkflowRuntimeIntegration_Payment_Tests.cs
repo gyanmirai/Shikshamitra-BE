@@ -113,7 +113,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 	}
 
-	private async Task<AdmissionWorkflowDto> CreateManagedPaymentWorkflowAsync()
+	private async Task<AdmissionWorkflowDto> CreateManagedPaymentWorkflowAsync(bool requiresFeeStructureSelection = false)
 	{
 		var startId = Guid.NewGuid();
 		var paymentId = Guid.NewGuid();
@@ -123,7 +123,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			Version = 1, Enabled = true, PurposeCode = "APPLICATION_FEE",
 			PurposeName = "Application fee", Currency = "INR", Amount = 500m,
 			CollectionMode = "staff", Payer = "either", AcceptedMethods = ["cash", "upi"],
-			AllowLatePayment = true, RequireIndependentVerification = true, AllowWaiver = true
+			AllowLatePayment = true, RequireIndependentVerification = true, AllowWaiver = true,
+			RequiresFeeStructureSelection = requiresFeeStructureSelection
 		};
 		var workflow = await _workflowAppService.CreateAsync(new()
 		{

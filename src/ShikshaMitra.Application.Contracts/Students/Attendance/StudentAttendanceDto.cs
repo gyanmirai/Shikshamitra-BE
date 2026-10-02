@@ -30,6 +30,15 @@ public class GetStudentsForAttendanceInput
 public class StudentAttendanceDto
 {
 	public Guid StudentId { get; set; }
+	public Guid? EnrollmentId { get; set; }
+	public bool IsExpected { get; set; } = true;
+	public bool RequiresCorrectionApproval { get; set; }
+	public bool NeedsCreditCorrection { get; set; }
+	public string? NotExpectedReason { get; set; }
+	public bool Late { get; set; }
+	public bool HalfDay { get; set; }
+	public Guid? ApprovedLeaveId { get; set; }
+	public string? ScheduleLabel { get; set; }
 	public int? GrNo { get; set; }
 	public int? RollNo { get; set; }
 	public string? FirstName { get; set; }
@@ -41,7 +50,11 @@ public class StudentAttendanceDto
 	public string? DivisionName { get; set; }
 	public AttendanceStatus Status { get; set; } = AttendanceStatus.Pending;
 	public int PresentDays { get; set; }
-	public double AttendancePercentage { get; set; }
+	public double? AttendancePercentage { get; set; }
+	public int ExpectedDays { get; set; }
+	public int RecordedDays { get; set; }
+	public int MissingDays { get; set; }
+	public bool IsProvisional { get; set; }
 	public string? Remarks { get; set; }
 }
 
@@ -53,6 +66,15 @@ public class StudentAttendanceListDto
 	public Guid? AttendanceDayId { get; set; }
 	public DateTime Date { get; set; }
 	public bool IsLocked { get; set; }
+	public bool IsSubmitted { get; set; }
+	public bool NeedsReview { get; set; }
+	public bool IsPastMarkingCutoff { get; set; }
+	public string Revision { get; set; } = "0";
+	public string RosterRevision { get; set; } = "";
+	public bool CanMark { get; set; }
+	public bool IsExpected { get; set; }
+	public string? NotExpectedReason { get; set; }
+	public AttendancePolicyOptions Policy { get; set; } = new();
 	public int TotalStudents { get; set; }
 	public int PresentCount { get; set; }
 	public int AbsentCount { get; set; }

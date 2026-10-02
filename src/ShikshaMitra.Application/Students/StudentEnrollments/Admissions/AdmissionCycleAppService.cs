@@ -56,9 +56,11 @@ public class AdmissionCycleAppService(
 	public async Task<AdmissionCycleDto> CreateAsync(CreateUpdateAdmissionCycleDto input)
 	{
 		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
-		await EnsureCodeIsUniqueAsync(input.Code);
+		var id = GuidGenerator.Create();
+		var code = AdmissionSettingsCode.ForCreate(input.Code, "CYCLE", id);
+		await EnsureCodeIsUniqueAsync(code);
 
-		var cycle = new AdmissionCycle(GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code,
+		var cycle = new AdmissionCycle(id, CurrentTenant.Id, input.Name, code,
 			input.AcademicYearId, input.StartDate, input.EndDate, input.Description);
 		await cycleRepository.InsertAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Created, null, cycle.Status,
@@ -73,8 +75,9 @@ public class AdmissionCycleAppService(
 		var cycle = await GetCycleAsync(id);
 		EnsureConcurrency(cycle, input.ConcurrencyStamp);
 		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
-		await EnsureCodeIsUniqueAsync(input.Code, id);
-		cycle.UpdateDetails(input.Name, input.Code, input.AcademicYearId, input.StartDate, input.EndDate,
+		var code = AdmissionSettingsCode.ForUpdate(input.Code, cycle.Code);
+		await EnsureCodeIsUniqueAsync(code, id);
+		cycle.UpdateDetails(input.Name, code, input.AcademicYearId, input.StartDate, input.EndDate,
 			input.Description);
 		await cycleRepository.UpdateAsync(cycle, autoSave: false);
 		await RecordHistoryAsync(cycle, AdmissionCycleHistoryAction.Updated, cycle.Status, cycle.Status,
@@ -193,8 +196,10 @@ public class AdmissionCycleAppService(
 	{
 		var source = await GetCycleAsync(input.SourceCycleId);
 		await EnsureAcademicYearExistsAsync(input.AcademicYearId);
-		await EnsureCodeIsUniqueAsync(input.Code);
-		var clone = new AdmissionCycle(GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code,
+		var cloneId = GuidGenerator.Create();
+		var code = AdmissionSettingsCode.ForCreate(input.Code, "CYCLE", cloneId);
+		await EnsureCodeIsUniqueAsync(code);
+		var clone = new AdmissionCycle(cloneId, CurrentTenant.Id, input.Name, code,
 			input.AcademicYearId, input.StartDate, input.EndDate, input.Description ?? source.Description);
 		await cycleRepository.InsertAsync(clone, autoSave: false);
 		await RecordHistoryAsync(clone, AdmissionCycleHistoryAction.Cloned, null, clone.Status,

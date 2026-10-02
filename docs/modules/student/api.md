@@ -12,6 +12,56 @@ audience: humans-and-agents
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
 
+## Student Attendance API families
+
+| API family | Contract and authority |
+|---|---|
+| Existing `/api/students/attendance` | GET `/students` and `/history` under Attendance_MarkAttendance.View; POST `/mark` under Add; POST `/lock` or `/unlock` under Delete. |
+| `/api/students/attendance/settings` | GET nullable academicYearId under Attendance_SettingLeaveType.View; PUT `/draft`, POST `/preview` and `/publish` under Attendance_SettingLeaveType.Add. Commands use concurrency stamps and publish dates. |
+| `/api/students/attendance/schedules` | GET enrollmentId under Attendance_MarkAttendance.View; POST create/edit and DELETE id with concurrencyStamp under Attendance_SettingLeaveType.Add, plus enrollment/hierarchy access checks. |
+| `/api/students/attendance/register` and `/summary` | Register GET uses Attendance_Reports.View; summary GET uses Attendance_MarkAttendance.View. Both require academicYearId and bounded dates. Register permits optional Standard/Division and server paging; summary identifies one student. DTOs return nullable percentage, expected/recorded/missing counts, provisional and school-target metadata. |
+| `/api/students/attendance/enrollments` | GET paged scoped membership under Attendance_SettingLeaveType.View; POST `/{enrollmentId}/start-date` under Attendance_SettingLeaveType.Add with date and revision. A confirmed start cannot silently be rewritten. |
+| `/api/students/attendance/corrections` | GET under Attendance_LeaveAndAbsent.View; POST request, `/{id}/approve` or `/reject` under Attendance_LeaveAndAbsent.Add. Locked review additionally checks Attendance_MarkAttendance.Delete. Commands require reasons and revisions and prohibit self-review. |
+
+Daily saves require current `revision` when a day exists and `rosterRevision` from the roster response.
+`submit=false` saves partial drafts; `submit=true` checks the entire eligible roster.
+`operationId` identifies an actor/payload-specific durable retry, and `correctionReason` supplies observation conflict or correction evidence.
+`isPastMarkingCutoff` informs the UI; `canMark` remains the server capability.
+`needsCreditCorrection` identifies a submitted row whose approved-leave link or credit now differs from its recorded snapshot. Ordinary saves cannot refresh that row, and Submit checks omitted rows too. A correction request may retain the same Present/Absent mark when this flag is true; it still requires a reason and follows the school's approval rules. Approval rejects stale recorded credits or changed request-time leave facts.
+Correction responses expose `isCreditCorrection` and nullable before/requested present and denominator credits, derived from saved request evidence and policy. The review preview stays pinned when source leave later changes; legacy evidence without recorded credits remains unknown.
+Business errors are centralized in `AttendanceOperationErrorCodes` and `AttendancePolicyErrorCodes`, with English attendance localization.
+Stale roster/revision, incomplete submission, invalid status/detail, conflicting leave, tenant/scope violations and duplicate retry payloads are rejected atomically.
+
+## Student Records API families
+
+Records preserve each controller's response contract: Directory/Profile, Settings, Transitions, Guardian Access and certificate/ID metadata use the shared `Result<T>` envelope. Changes, Duplicates, Reports and photo-upload metadata return their DTO or paged DTO directly. PDF, photo and Excel downloads return file responses. Permission names use the central `Students.Records.*` catalogue; Directory/Profile reads retain `Students.Records.StudentList.View` for compatibility.
+
+| API family | Commands and permissions |
+|---|---|
+| `/api/students/records/settings` | GET effective/draft context and `/roles` under Settings.View; PUT `/draft` and POST `/preview` under Settings.Add; POST `/publish` under Settings.Publish. Nullable `academicYearId` selects school defaults. |
+| `/api/students/records/transitions` | GET paged cases, `/{id}`, `/options`, `/renewals`, `/renewals/{id}` under Transitions.View. Options accept `academicYearId`, optional `studentId` and `admissionOfferingId`; expose permitted placement, return policy, active Offerings with EntryMode, and resumable real applications. Selected Inquiry-capable Offering metadata additionally requires Inquiries.Create and source scope. |
+| Transition requests | POST `/preview`, `/batches`, `/{id}/cancel`, `/{id}/correct`, `/returns`, `/returns/preview`, `/renewals/{id}/confirm` under Transitions.Create. POST `/{id}/approve` and `/reject` under Transitions.Approve. POST `/{id}/apply` and `/renewals/{id}/activate` under Transitions.Apply. |
+| Renewal portal handoff | GET `/renewals/{id}/portal-options` exposes required accounts, recorded email/guardian choices, existing links and `canProvision`. POST `/renewals/{id}/portal-accounts` uses the existing Onboarding account DTO; requires Transitions.Create, Onboarding.Edit and Identity.Users.Create, plus Identity.Users.Update for verified existing guardian linkage. |
+| Other Records surfaces | Directory, profile, changes, historical overrides, duplicate review, documents/IDs, guardian reviews, and reports use their source-owned controllers in `HttpApi/Controllers/Student/Records/`. Existing certificate/ID permission compatibility is preserved. |
+
+Batch requests contain one to 100 distinct students, source academic year, stable idempotency key, per-row outcome/reason/effective date, and preview student/enrollment concurrency stamps. Promote/Repeat/Return additionally require target year/class/division and roll number. Submission validates stamps and school batch behavior again. Reusing a key for a different request is rejected.
+
+Target-year options expose the Onboarding-owned `rollAssignmentMode` (`manual`, `automatic`, or `both`). A row sends `rollAssignmentMode` (`manual` or `automatic`); a school allowing both requires an explicit choice. Preview returns the selected mode, `proposedRollNumber`, and numbering scope. Automatic submission must send that accepted proposed number. A changed reservation raises `Students:Records:RollProposalChanged`; refresh preview without replacing the idempotency key after an unknown network outcome. Existing no-configuration manual clients remain compatible. Records freezes the accepted number and owner rule; later application validates that number rather than allocating another.
+
+`POST /returns/preview` accepts the return input and returns one transition preview row for `ReuseProfile`; Fresh/Resume use their real Admissions handoff. Reuse supports a reviewed return within the same academic year by reopening the existing inactive enrollment. Completed and cancelled renewal cases remain in history; only one active renewal can exist for a student and year. A requester may cancel AwaitingRenewal only while its linked case is PendingChecklist, before target enrollment or new-year Finance dependencies; Provisioning cancellation is blocked.
+
+Initial Onboarding exposes its school mode on the case DTO. `POST /api/student/onboarding/{id}/roll-preview` requires AllocateIdentifier and accepts `{rollNumber?,rollAssignmentMode?,reason?}`; it returns `{schoolAssignmentMode,rollAssignmentMode,proposedRollNumber,concurrencyStamp}`. The existing identifiers command retains GR inputs and positive `rollNumber`, adds optional `rollAssignmentMode`, and validates the accepted automatic proposal using the shared owner allocator.
+
+Decision and renewal commands require `concurrencyStamp`. Correction first supports `previewOnly`; submission uses a reason and idempotency key and returns the new `transitionId`. Case DTO capabilities are derived from state, actual actor/role, permissions, and correction impact; they do not replace server authorization.
+
+Fresh return accepts optional guardian-only `registration` when `freshApplicationRequiresRegistration` is true, optional numeric `entryPath` (Inquiry=0, DirectRegistration=1), and `inquiry` containing explicit source, sourceDetail, preferredLanguageCode and configured formValues. Both requires an explicit entryPath; mismatches are rejected. Applicant/guardian bound fields are read-only and server-filled; metadata identifies their field codes even when policy masks hide values. Fresh/Resume enforce the owning Admissions permissions and return a nullable transition/application/inquiry link with Submitted or AwaitingAdmission status. Links are exposed only with the corresponding Admissions View permission. Onboarding completion marks the return Applied; submission and Admission handoff do not activate the student.
+
+Renewal portal creation is available only after a real target-year enrollment reaches Provisioning. The source checks saved contact/guardian email, required account type, explicit verified relationship, current database actor roles/grants, tenant and academic scope, concurrency, and exclusive Student/Parent identity roles. A verified existing guardian requires explicit reuse confirmation; privileged identities are never transferred by email alone. New identities have no generated password and remain unconfirmed until the existing Account owner setup flow completes. Linking is the local handoff acknowledged by renewal, consistent with initial Onboarding.
+
+Common blocking errors use `Students:Records:*`: `ConfigurationChanged`, `ConcurrencyConflict`, `StaleSnapshot`, `BatchHeld`, `TargetEnrollmentExists`, `AuthorityChanged`, `RenewalChecklistRequired`, `RenewalProvisioningRequired`, `FinancialDependency`, and `DownstreamDependency`. Required result/Finance/Library/Transport evidence has distinct readiness codes. Refresh a stale preview or resolve the owning module issue before an explicit retry.
+
+`FinancialPlacementImpactRequired` blocks a same-year class change or same-year return into another class when Finance already has an assignment. Records does not provide a Finance impact confirmation/reassignment contract; a paid installment is not evidence that old-class fees apply to the proposed class. Same-class division/roll edits and returns remain independent of this class-impact blocker.
+
 ## Reserved Student identity contract
 
 The reserved GUID is backend-owned and is not accepted by inquiry, applicant-update, form or finalization inputs.
@@ -127,6 +177,8 @@ The response returns current workflow status, stage timestamps, immutable transi
 | `GET /api/student/enrollment/admissions/applications/{id}/form/history` | `Students.Admissions.Applications.View` | Returns form creation, draft-save, submission, and reopen history. |
 
 Published form definitions are immutable versions. Existing applications retain their original `FormDefinitionId` and `FormVersion` when an offering is moved to a later version.
+
+Inquiry and Registration form definitions publish directly from Draft after validation, with the existing form publish permission and concurrency checks. Form create/update do not create an approval state, and the form API no longer exposes submit-for-review, approve, reject, or admin-override review commands. Historical form approval metadata and audit entries remain readable in storage for compatibility but do not gate publication; workflow-builder governance and application decision approvals are separate and unchanged.
 
 Choice fields support either static option arrays or an approved source descriptor such as `{ "source": "EducationBoards" }` or `{ "source": "EducationMediums", "parentField": "BOARD_FIELD" }`. Approved source metadata is exposed by `GET /api/student/enrollment/admissions/forms/metadata/data-sources`; tenant-scoped options are read through `GET /api/student/enrollment/admissions/forms/metadata/options?sourceKey=...&parentId=...`. Arbitrary URLs and executable data sources are not accepted, and submission validates selected values against the authoritative source.
 
@@ -390,6 +442,23 @@ Base: `/api/student/enrollment/admissions/applications/{applicationId}/form-stag
 Commands carry the application `concurrencyStamp`; route identifiers are excluded from bodies. Managed submit also enforces the deadline and maximum attempts through the existing application-form endpoint. A managed stage may hold after submit for verification or explicit continuation. Missing or disabled `configurationJson.form` retains legacy Form behavior. Offering configuration rejects a Form-stage definition that differs from the Offering application form.
 
 ## Managed Payment stage APIs
+
+### Application fee selection
+
+Base: `/api/student/enrollment/admissions/fee-selections/applications/{applicationId}`.
+The service returns server-controlled ownership, requiredness, locking and confirmation capabilities alongside an optional saved Finance-reference snapshot.
+
+| Method and relative route | Contract |
+|---|---|
+| GET base | Read the application's saved selection and current capabilities |
+| GET `/candidates` | Read eligible published Finance structures for the Offering class and admission-cycle academic year |
+| PUT base | Save `structureId`, `optionalHeadIds` and application `concurrencyStamp`; mandatory heads are included by the server |
+| POST `/confirm-onboarding` | Explicitly confirm the saved choice with application `concurrencyStamp` |
+
+Reads accept the existing Applicant View, Application View or linked Onboarding View capability, with record scope enforced separately.
+Saving requires `Students.Admissions.Applications.Add`; confirmation requires the existing Student Onboarding edit capability.
+These endpoints preserve the standard `Result<T>` envelope.
+They do not create Finance assignments, dues, allocations or receipts.
 
 Payment routes use `/api/student/enrollment/admissions/payments`. Stage reads are `GET /applications/{applicationId}/stages/{stageId}`; staff collection posts to `/transactions`; verification posts to `/transactions/{transactionId}/review`; full waivers post to the stage `/waive` route; reversals post to `/transactions/{transactionId}/reverse`.
 

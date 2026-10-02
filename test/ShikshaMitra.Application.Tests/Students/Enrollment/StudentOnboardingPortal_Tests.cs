@@ -360,7 +360,6 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await service.ProvisionPortalAccountAsync(item.Id, new() { AccountType = "guardian", Relationship = "father",
 				Email = guardianEmail, RelationshipVerified = true, ConcurrencyStamp = item.ConcurrencyStamp });
 			item = await service.GetAsync(item.Id);
-			item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
 			item.Status.ShouldBe(StudentOnboardingStatus.Completed, item.LastError);
 			item.StudentAccountStatus.ShouldBe(StudentOnboardingServiceHandoffStatus.Acknowledged);
 			item.GuardianAccountStatus.ShouldBe(StudentOnboardingServiceHandoffStatus.Acknowledged);

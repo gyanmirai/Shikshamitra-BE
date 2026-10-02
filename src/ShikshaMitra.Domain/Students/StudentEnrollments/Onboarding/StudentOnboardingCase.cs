@@ -218,6 +218,17 @@ public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenan
 		LastError = null;
 	}
 
+	public void ChangeProvisioningPlacement(Guid boardId, Guid mediumId, Guid stageId, Guid standardId,
+		Guid divisionId, Guid reservationId, int rollNumber)
+	{
+		if (Status != StudentOnboardingStatus.Provisioning || !StudentEnrollmentId.HasValue)
+			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
+		if (rollNumber <= 0) throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
+		IntendedBoardId = boardId; IntendedMediumId = mediumId; IntendedStageId = stageId;
+		IntendedStandardId = standardId; DivisionId = divisionId; SeatReservationId = reservationId;
+		RollNumber = rollNumber;
+	}
+
 	public void CompleteProvisioning(DateTime at)
 	{
 		if (Status == StudentOnboardingStatus.Completed) return;

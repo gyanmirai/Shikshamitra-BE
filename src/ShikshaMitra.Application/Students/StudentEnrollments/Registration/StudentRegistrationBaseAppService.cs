@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Students.Records;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 
@@ -42,7 +43,9 @@ public abstract class StudentRegistrationBaseAppService(
 	protected static readonly StudentLifeCycleStatusEnum[] ProfileWriteStatuses =
 	[
 		..RegistrationStatuses,
-		StudentLifeCycleStatusEnum.Enrolled
+		StudentLifeCycleStatusEnum.Enrolled,
+		StudentLifeCycleStatusEnum.InActive,
+		StudentLifeCycleStatusEnum.Left
 	];
 
 	/// <summary>
@@ -86,8 +89,16 @@ public abstract class StudentRegistrationBaseAppService(
 			forProfileWrite ? ProfileWriteStatuses :
 				includeStudentRecords ? ProfileReadStatuses : RegistrationStatuses,
 			invalidStatusErrorCode);
-		if (forProfileWrite && student.Status == StudentLifeCycleStatusEnum.Enrolled)
-			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add);
+		if (!forProfileWrite && student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
+			await LazyServiceProvider.LazyGetRequiredService<StudentRecordReadGuard>()
+				.EnsureAsync(studentId, StudentRecordReadGuard.Section(operation));
+		if (forProfileWrite && student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
+		{
+			var recordsGuard = LazyServiceProvider.LazyGetRequiredService<StudentRecordWriteGuard>();
+			if (!recordsGuard.IsApplying(studentId, operation))
+				await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add);
+			await recordsGuard.EnsureAsync(studentId, operation);
+		}
 
 		return student;
 	}

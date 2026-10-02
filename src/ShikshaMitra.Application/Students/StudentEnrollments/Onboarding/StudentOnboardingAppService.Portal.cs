@@ -33,6 +33,8 @@ public partial class StudentOnboardingAppService
 		if (!CurrentTenant.Id.HasValue || !CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
 		var item = await GetCaseAsync(id);
 		var existingLink = await portalLinkRepository.FindAsync(x => x.StudentId == item.StudentId && x.AccountType == input.AccountType);
+		if (ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(item).HasValue)
+			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(item, false);
 		if (existingLink != null)
 		{
 			var linkedUser = await identityUserRepository.GetAsync(existingLink.UserId);
@@ -93,7 +95,15 @@ public partial class StudentOnboardingAppService
 		handoff.Acknowledge(DateTime.UtcNow);
 		await handoffRepository.UpdateAsync(handoff, false);
 		await AddEventAsync(id, "PortalAccountLinked", $"Staff verified and linked the {input.AccountType} account ({input.Relationship}). Owner email verification and password setup remain separate.");
+		// The identity manager writes through the same unit of work. Flush before the
+		// completion check so it can read the just-created active user and link; this
+		// remains transactional and is rolled back if a later operation fails.
 		await CurrentUnitOfWork!.SaveChangesAsync();
+		// A portal link is a local onboarding handoff. Re-evaluate immediately so a
+		// case completes as soon as its already-settled Finance handoff and required
+		// account handoffs are all acknowledged; Finance remains the source of truth
+		// for the first-payment decision inside RefreshProvisioningAsync.
+		await RefreshProvisioningAsync(item);
 		return (await MapPortalLinksAsync([link]))[0];
 	}
 

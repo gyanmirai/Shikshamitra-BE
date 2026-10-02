@@ -15,7 +15,7 @@ public class AdmissionIntakeProfileDto : EntityDto<Guid>
 public class SaveAdmissionIntakeProfileDto
 {
 	public AdmissionIntakeProfileKind Kind { get; set; }
-	public string Code { get; set; } = string.Empty;
+	public string? Code { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public string ConfigurationJson { get; set; } = "{}";
 	public string? ConcurrencyStamp { get; set; }

@@ -11,4 +11,5 @@ public interface IAdmissionIntakeProfileAppService : IApplicationService
 	Task<List<AdmissionInquiryCounsellorDto>> GetCounsellorsAsync(string? filter = null);
 	Task<AdmissionIntakeProfileDto> CreateAsync(SaveAdmissionIntakeProfileDto input);
 	Task<AdmissionIntakeProfileDto> UpdateAsync(Guid id, SaveAdmissionIntakeProfileDto input);
+	Task<AdmissionIntakeProfileDto> UpdateManagedAsync(Guid setupId, Guid id, SaveAdmissionIntakeProfileDto input);
 }

@@ -448,6 +448,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
 		{
+			await EnsureTestIdentityUserAsync(TestUserId, "records-certification-actor");
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId,
 				description: $"Admission certification {Guid.NewGuid():N}"), autoSave: true);

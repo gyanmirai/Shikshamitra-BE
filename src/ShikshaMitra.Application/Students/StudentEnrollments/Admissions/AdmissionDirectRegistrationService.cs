@@ -27,6 +27,12 @@ public class AdmissionDirectRegistrationService(
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionApplicationDto> StartAsync(StartAdmissionDirectRegistrationDto input)
+		=> await StartCoreAsync(input, null);
+
+	internal Task<AdmissionApplicationDto> StartForReturnAsync(StartAdmissionDirectRegistrationDto input, Student student)
+		=> StartCoreAsync(input, student);
+
+	private async Task<AdmissionApplicationDto> StartCoreAsync(StartAdmissionDirectRegistrationDto input, Student? returningStudent)
 	{
 		ArgumentNullException.ThrowIfNull(input);
 		if (input.RequestId == Guid.Empty || input.AdmissionOfferingId == Guid.Empty)
@@ -36,7 +42,11 @@ public class AdmissionDirectRegistrationService(
 		// The client keeps RequestId stable across retries. No second family/applicant is created.
 		var existingApplicant = await applicantRepository.FindAsync(input.RequestId);
 		if (existingApplicant != null)
+		{
+			if (returningStudent != null && existingApplicant.ExistingStudentId != returningStudent.Id)
+				throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict);
 			return await ResolveReplayAsync(existingApplicant, input);
+		}
 
 		var offering = (await offeringRuntime.GetAvailableAsync(input.AdmissionOfferingId)).Offering;
 		if (offering.EntryMode is not (AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both))
@@ -94,8 +104,8 @@ public class AdmissionDirectRegistrationService(
 
 		var applicant = new AdmissionApplicant(input.RequestId, CurrentTenant.Id, family.Id,
 			input.ApplicantFirstName, input.ApplicantMiddleName, input.ApplicantLastName,
-			input.ApplicantDateOfBirth, input.ApplicantGender, existingStudentId: null,
-			reservedStudentId: GuidGenerator.Create());
+			input.ApplicantDateOfBirth, input.ApplicantGender, existingStudentId: returningStudent?.Id,
+			reservedStudentId: returningStudent?.Id ?? GuidGenerator.Create());
 		await applicantRepository.InsertAsync(applicant, autoSave: true);
 		var application = await lifecycleService.StartAsync(applicant.Id, offering.Id, inquiryId: null);
 		if (selectedCounsellorId.HasValue)

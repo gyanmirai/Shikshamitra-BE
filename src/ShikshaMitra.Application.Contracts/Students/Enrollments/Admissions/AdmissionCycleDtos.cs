@@ -39,8 +39,8 @@ public class CreateUpdateAdmissionCycleDto
 	public string? ConcurrencyStamp { get; set; }
 	[Required, StringLength(AdmissionCycleConsts.MaxNameLength)]
 	public string Name { get; set; } = string.Empty;
-	[Required, StringLength(AdmissionCycleConsts.MaxCodeLength)]
-	public string Code { get; set; } = string.Empty;
+	[StringLength(AdmissionCycleConsts.MaxCodeLength)]
+	public string? Code { get; set; }
 	[StringLength(AdmissionCycleConsts.MaxDescriptionLength)]
 	public string? Description { get; set; }
 	public Guid AcademicYearId { get; set; }

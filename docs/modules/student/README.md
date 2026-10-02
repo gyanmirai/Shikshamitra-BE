@@ -3,14 +3,42 @@ module: student
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-08-14
+updated_on: 2026-10-01
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Understand the Student backend module
 
-TL;DR: use this page as the entrypoint for Student Enrollment Admissions behavior, APIs, architecture, runtime workflows, and validation.
+TL;DR: use this page for Admissions, Onboarding, Student Records, and daily Student Attendance behavior, APIs, ownership, and validation.
+
+## Student Attendance
+
+Attendance supports one daily Present/Absent observation, optional Late/Half-day details, dated school policy, individual schedules, leave reconciliation, audited corrections, and a common reporting calculation.
+Source implementation is available; the local verification gates in [testing.md](./testing.md) still govern release readiness.
+Use [frontend Student documentation](../../../../Shikshamitra-FE/docs/student/README.md) for the four visible Attendance tasks and screen/cache behavior.
+
+| Source | Location |
+|---|---|
+| Contracts and HTTP | `src/ShikshaMitra.Application.Contracts/Students/Attendance/`, `src/ShikshaMitra.HttpApi/Controllers/Student/Attendance/` |
+| Runtime reads and commands | `src/ShikshaMitra.Application/Students/Attendance/` |
+| Policy, schedules, calculation and journal | `src/ShikshaMitra.Domain.Shared/Students/Attendance/`, `src/ShikshaMitra.Domain/Students/Attendance/` |
+| Dated enrollment membership | `src/ShikshaMitra.Domain/Students/StudentEnrollments/Aggregates/StudentEnrollment.Attendance.cs` |
+| Persistence and migration | `src/ShikshaMitra.EntityFrameworkCore/Students/Attendance/`, `src/ShikshaMitra.EntityFrameworkCore/Migrations/20261001043143_AddUniversalStudentAttendance.cs` |
+
+## Student Records
+
+The Records implementation connects completed onboarding to a permanent profile, governed changes, documents and IDs, year-end transitions, reports, and published school policy. Initial enrollment activation remains owned by Onboarding. Use the six canonical pages below for backend behavior; frontend routes and presentation remain owned by [frontend Student documentation](../../../../Shikshamitra-FE/docs/student/README.md).
+
+| Source | Location |
+|---|---|
+| Runtime contracts and controllers | `Application.Contracts/Students/Records/`, `HttpApi/Controllers/Student/Records/` |
+| Governance, scope, transitions, renewal, documents, reports | `Application/Students/Records/` |
+| Published school policy | `Domain.Shared/Students/StudentRecords/StudentRecordsPolicy.cs`, `Domain/Students/StudentRecords/`, `Application/Students/StudentRecords/Settings/` |
+| Records persistence | `EntityFrameworkCore/Students/Records/` |
+| Focused scenarios | `test/ShikshaMitra.Application.Tests/Students/Records/`, Domain policy/transition tests |
+
+These source locations are under `src/` unless explicitly prefixed with `test/`. Source implementation and local tests do not establish that migrations, authenticated school walkthroughs, or deployment gates have passed.
 
 ## Read order
 

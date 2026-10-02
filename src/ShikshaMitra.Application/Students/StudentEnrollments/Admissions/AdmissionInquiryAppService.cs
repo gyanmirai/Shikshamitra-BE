@@ -157,13 +157,16 @@ public class AdmissionInquiryAppService(
 	public Task<AdmissionInquiryDto> CreateAsync(CreateAdmissionInquiryDto input) =>
 		CreateCoreAsync(input, isPublic: false, publicAssignmentProfileId: null);
 
+	internal Task<AdmissionInquiryDto> CreateForReturnAsync(CreateAdmissionInquiryDto input, Student student) =>
+		CreateCoreAsync(input, isPublic: false, publicAssignmentProfileId: null, returningStudent: student);
+
 	[AllowAnonymous, RemoteService(false)]
 	public Task<AdmissionInquiryDto> CreateFromPublicLinkAsync(CreateAdmissionInquiryDto input,
 		Guid assignmentProfileId, Guid? inquiryFormDefinitionId = null) =>
 		CreateCoreAsync(input, isPublic: true, assignmentProfileId, inquiryFormDefinitionId);
 
 	private async Task<AdmissionInquiryDto> CreateCoreAsync(CreateAdmissionInquiryDto input, bool isPublic,
-		Guid? publicAssignmentProfileId, Guid? publicFormDefinitionId = null)
+		Guid? publicAssignmentProfileId, Guid? publicFormDefinitionId = null, Student? returningStudent = null)
 	{
 		if (!Enum.IsDefined(input.Source))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
@@ -204,6 +207,7 @@ public class AdmissionInquiryAppService(
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Submit each inquiry field once.");
 		var values = input.FormValues.ToDictionary(x => x.FieldCode, x => UnwrapValue(x.ValueJson), StringComparer.OrdinalIgnoreCase);
+		var returningContact = returningStudent == null ? null : new { input.GuardianFirstName, input.GuardianLastName, input.GuardianPhone, input.GuardianEmail };
 		var inquiryFields = new List<AdmissionFormFieldDefinition>();
 		var managedPolicy = await policyResolver.ResolveAsync(offering?.Id);
 		var inquiryFormId = offering?.InquiryFormDefinitionId ?? publicFormDefinitionId;
@@ -254,6 +258,12 @@ public class AdmissionInquiryAppService(
 		input.GuardianEmail = AdmissionInquiryIdentityFieldResolver.Resolve(values, inquiryFields,
 			"Guardian.Email", input.GuardianEmail);
 		input.Email ??= input.GuardianEmail;
+		if (returningContact != null)
+		{
+			input.GuardianFirstName = returningContact.GuardianFirstName; input.GuardianLastName = returningContact.GuardianLastName;
+			input.GuardianPhone = returningContact.GuardianPhone; input.GuardianEmail = returningContact.GuardianEmail;
+			input.Email = returningContact.GuardianEmail;
+		}
 		if (string.IsNullOrWhiteSpace(input.ApplicantName))
 			input.ApplicantName = string.Join(" ", new[] { input.ApplicantFirstName, input.ApplicantLastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
 		if (string.IsNullOrWhiteSpace(input.ApplicantFirstName) && !string.IsNullOrWhiteSpace(input.ApplicantName))
@@ -327,13 +337,15 @@ public class AdmissionInquiryAppService(
 		var guardian = family.PrimaryGuardianId.HasValue ? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
 		var newGuardian = guardian == null;
 		if (newGuardian) { guardian = new AdmissionGuardian(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.GuardianFirstName, input.GuardianLastName, input.GuardianPhone, input.GuardianEmail, AdmissionGuardianRelationship.Parent, true); family.SetPrimaryGuardian(guardian.Id); }
-		var applicant = new AdmissionApplicant(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.ApplicantFirstName, null, input.ApplicantLastName, input.ApplicantDateOfBirth, null, null, GuidGenerator.Create());
+		var applicant = new AdmissionApplicant(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.ApplicantFirstName, returningStudent?.MiddleName, input.ApplicantLastName, input.ApplicantDateOfBirth, returningStudent?.AdditionalDetail?.Gender?.ToString(), returningStudent?.Id, returningStudent?.Id ?? GuidGenerator.Create());
 		foreach (var field in inquiryFields.Where(field =>
 			field.BindingType == AdmissionFormBindingType.System &&
 			!string.IsNullOrWhiteSpace(field.BindingKey) &&
 			values.TryGetValue(field.Code, out var value) &&
 			!string.IsNullOrWhiteSpace(value)))
 		{
+			// A return captures fresh answers without modifying shared family or permanent identity.
+			if (returningStudent != null && field.BindingKey!.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase)) continue;
 			AdmissionFormBindingRegistry.ApplyValue(field.BindingKey!, values[field.Code], applicant, guardian);
 		}
 		if (!input.ExistingFamilyId.HasValue) await familyRepository.InsertAsync(family, autoSave: false);

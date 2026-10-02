@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-29
+updated_on: 2026-10-01
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,59 @@ audience: humans-and-agents
 # Trace Student Enrollment Admissions workflows
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
+
+## Configure and operate daily attendance
+
+1. Use the existing academic hierarchy and published Academic Calendar; Attendance does not duplicate their definitions.
+2. Save/preview/publish school defaults or an academic-year policy with scoped exceptions and an effective date.
+3. Confirm formal enrollments' attendance-start dates and add individual recurring or temporary schedules when required.
+4. Read the dated roster and its capabilities/revisions; show expected, not scheduled, approved leave and unconfirmed membership distinctly.
+5. Mark Present/Absent, add optional details and save a partial draft if needed.
+6. Submit only after all expected observations are known; the server pins membership and policy-credit snapshots.
+7. Correct recorded observations with the configured reason/review flow; independent approval records immutable evidence and preserves day-lock state.
+8. Read register, profile and dashboard metrics from the common calculation, including missing observations, provisional state and effective school target.
+
+A working-day cutoff is a pending-completion reminder, not an automatic observation or lock.
+Approved leave remains visible for explicit teacher marking; school leave policy determines credited denominator treatment.
+Leave approved after submission does not change the stored percentage automatically. The teacher requests a leave correction, retaining Present/Absent if appropriate; the school rule determines audited direct application or independent approval. Until application, reports retain the submitted credits and the roster identifies the needed correction. Changed leave facts during review invalidate the request.
+Records placement and exit/return operations supply dated enrollment membership so a later class change does not alter earlier attendance.
+
+## Upgrade historical attendance
+
+Apply the Attendance migration after `20261001021100_AddStudentRecordRenewalHistory`.
+Unambiguous existing observations gain school-date/enrollment references; ambiguous same-date observations remain intact for review.
+Valid enrolled students missing formal enrollment receive a marked legacy bridge with no invented attendance-start date.
+Confirm membership before new daily marking.
+The down migration permits an untouched-feature rollback but rejects removal once policy, schedules, operations, submitted snapshots or confirmed membership have been used; use a forward fix in that case.
+
+## Operate a permanent student record
+
+1. Admissions finalizes the real Student and initial onboarding case; Onboarding activates the first enrollment and completes required provisioning.
+2. Directory opens the permanent profile. Eligible historical students need an explicitly approved override; duplicate flags keep separate identities pending review.
+3. A record change captures its source evidence and published school policy. Direct policy applies with audit; Approval policy advances one to three role stages without self-approval. Effective dates and current authority are checked again on apply.
+4. Approved guardian changes create the required access review and apply the school's captured SuspendUntilReview/KeepUntilReview choice. Guardian resolution verifies identity and the selected relationship.
+5. Documents/IDs issue immutable student/template snapshots. Reprints reuse the issued number; duplicates and void actions preserve their own history and reasons. Leaving issuance references the matching approved/effective exit.
+
+## Complete year-end and returns
+
+| Step | Behavior |
+|---|---|
+| Preview | Read the source enrollment, validate target hierarchy/roll/capacity, validate school date range, and obtain selected result/Finance/Library/Transport evidence from owners. Check batch target roll duplicates and aggregate seats. |
+| Submit | Pin policy, source placement/status, idempotency key, and ordered approval rule. ReadyOnly persists ready rows and recorded exceptions; HoldAll rejects a preview with unresolved rows. |
+| Approve/apply | Persist each approval before applying. Recheck all approving actors' active identities, grants and database roles, scope, source evidence and owner checks. HoldAll waits for the batch. Apply/schedule is atomic per student. |
+| Promote/repeat | DirectEnrollment creates the unique target-year enrollment and retires the previous active enrollment. ShortChecklist opens renewal first; old profile visibility remains intact. |
+| Short renewal | Confirm the staff-audited guardian/contact/service review, complete captured Onboarding checks, and activate the target enrollment. Finance assigns the target-year obligations; the real confirmed first installment and required verified portal links permit completion. Portal provisioning follows enrollment and uses the Onboarding-owned renewal account handoff with current central Identity grants. |
+| Exit | Graduate/Withdraw/Transfer retain distinct outcomes and reason/date history while projecting legacy Left and inactive enrollment at the configured roster timing. Hold records the decision without inventing next-year enrollment. |
+| Return | Frozen Records Status approval governs all routes. ReuseProfile opens short renewal. Fresh follows configured Inquiry/DirectRegistration, requiring an explicit choice for Both and configured Inquiry evidence. Resume validates the eligible linked application's current stage. Fresh/Resume wait in AwaitingAdmission; finalization creates a tagged return Onboarding case, and reviewed activation reuses the original same-year enrollment or creates a legitimate later-year row. All routes preserve permanent identity. |
+| Correct | Preview affected source/target evidence and downstream dependencies; submit a separate governed correction. Original remains Applied. Finance obligations, changed snapshots, dependent attendance or document issuance block reversal. |
+
+Annual and returning-student approvals use only the frozen Records Placement/Status rule. Onboarding continues to own target safety, numbering configuration, readiness, portal accounts and Finance handoffs; its initial admission approval chain remains unchanged.
+
+Numbering follows the target-year Onboarding school setting: manual, automatic, or explicit staff choice when both are permitted. Preview proposes automatic roll numbers in the configured incoming-cohort order, accounting for current enrollments and pending Onboarding, Records transitions and renewals. Submission checks the proposal again inside a serializable transaction and freezes the accepted number. It never renumbers the existing roster. Rules requiring roster recalculation, replacement of existing numbers, first-academic-day assignment or a separate manual-bulk numbering workflow block this command explicitly instead of pretending those workflows have run.
+
+The permanent profile stays visible during a pending renewal. Before activation, the requester may cancel a mistaken target with a reason if the case is PendingChecklist and has no new target enrollment or new-year Finance dependency. Cancellation preserves the old case and its linked transition; a replacement receives a new review case. Provisioning cannot be cancelled. School-permitted governed division/roll edits can synchronize the active renewal, but its target class is fixed: there is currently no automated wrong-class recovery while Provisioning. Transition correction becomes available only after Applied and still blocks financial/downstream dependencies; staff must not treat completion as a promise that financial obligations can be reversed. Repeated same-year withdrawals and returns retain every completed review, reopen the same enrollment row, and preserve historical GR, payments, attendance and document relationships.
+
+The schedulers poll every minute. Transition dates use the Admissions institution-date helper; change timestamps use the same application clock as their due selector. A case becomes eligible at its effective date/time and applies on a due worker tick. Failed transitions retain a code and become Exception; staff resolves the source issue and uses Apply to retry. Failed changes become Conflict and require a reviewed replacement request. Policy republishing affects new requests, while live authority and privacy rules are rechecked for existing requests and report download.
 
 ## Reserve an identity and finalize admission
 
@@ -79,11 +132,12 @@ when every row is valid for the requested inactive or active state.
 
 ## Configure intake and assignment for new Offerings
 
-1. Save reusable Inquiry and Counsellor Assignment profiles through the Admission Intake Profiles API. Inquiry settings control allowed sources, duplicates, deadlines, and the application-start requirement. Assignment settings specify an active, scoped staff pool, active-case capacity, and optional fallback manager.
-2. Select both profiles on a new Inquiry or Both-mode Offering; select the assignment profile on a new Direct Registration Offering. New active Offerings require these references. Historical Offerings retain the pinned Inquiry-stage policy until they opt in.
-3. At inquiry creation, the Offering supplies the policy and assignment pool. Assignment counts open inquiry, application, and onboarding cases, then chooses the least loaded counsellor below capacity. A database transaction lock serializes assignments for one profile. Direct Registration uses the same assignment when no owner is selected manually.
-4. A staff-captured inquiry with no known Offering is tied to a published cycle and remains unassigned for triage. Staff confirm an open Offering later; its policy and assignment then apply. Linked inquiry and application ownership is kept together when the application owner changes, and scheduled follow-ups move with it. Finalization seeds onboarding ownership from the application.
-5. An administrator may create a revocable public inquiry link for one published cycle and assignment profile, with a fixed source, optional campaign detail, and optional expiry. The raw link token is returned only on creation; only its SHA-256 hash is stored. The anonymous basic inquiry form records class interest in source detail and requires contact consent. Repeated phone submissions receive the same acknowledgement without creating another inquiry. Requests are limited per link in the HTTP host. The lead is assigned before the Offering is known, then staff confirm a suitable open Offering.
+1. An Admission Head or administrator creates one reusable Admission Intake Setup. The setup combines Inquiry handling rules with Counsellor routing rules; its fallback manager is required. Counsellors do not configure these rules and only work the inquiries assigned to them.
+2. Select the setup on a new Inquiry or Both-mode Offering. The system stores both underlying profile references. For Direct Registration, it stores only the setup's assignment-profile reference. New active Offerings require the applicable references. Historical Offerings keep their existing references until an administrator explicitly replaces them.
+3. At inquiry creation, the Offering supplies the policy and assignment pool. Assignment counts open inquiry, application, and onboarding cases, then chooses the least-loaded counsellor below capacity. A database transaction lock serializes assignments for one profile. Direct Registration uses the same assignment when no owner is selected manually; the mandatory fallback receives the case only when every configured counsellor is at capacity.
+4. A staff-captured inquiry with no known Offering is tied to a published cycle and remains unassigned for triage. Staff confirm an open Offering later; its current setup policy and assignment then apply. Linked inquiry and application ownership is kept together when the application owner changes, and scheduled follow-ups move with it. Finalization seeds onboarding ownership from the application.
+5. An administrator may create a revocable public inquiry link for one published cycle and Admission Intake Setup, with a fixed source, optional campaign detail, and optional expiry. The link initially uses the setup's assignment profile; the confirmed Offering supplies its Inquiry policy later. The raw link token is returned only on creation; only its SHA-256 hash is stored. The anonymous basic inquiry form records class interest in source detail and requires contact consent. Repeated phone submissions receive the same acknowledgement without creating another inquiry. Requests are limited per link in the HTTP host. The lead is assigned before the Offering is known, then staff confirm a suitable open Offering.
+6. Editing a setup changes the shared rules for future processing wherever it is selected. Archiving is allowed only when no active Offering or active unexpired public link still uses it. Existing cases keep their persisted snapshots and ownership history.
 
 ## Historical managed Inquiry
 

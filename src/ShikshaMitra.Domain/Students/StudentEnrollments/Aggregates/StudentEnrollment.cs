@@ -15,7 +15,7 @@ namespace ShikshaMitra.Students.StudentEnrollments;
 /// It tracks the active enrollment state for the academic period.
 /// </para>
 /// </summary>
-public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     /// <inheritdoc/>
     public Guid? TenantId { get; private set; }
@@ -75,12 +75,24 @@ public class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? onboardingCaseId = null) => new(id, tenantId, studentId, academicYearId, standardId, divisionId, rollNumber, onboardingCaseId);
 
     /// <summary>Marks this enrollment as inactive (e.g. student transferred out).</summary>
-    public void Deactivate() => IsActive = false;
+    public void Deactivate(DateTime? effectiveDate = null) { CaptureAttendancePlacement(effectiveDate); IsActive = false; RecordAttendancePlacement(effectiveDate); }
 
     /// <summary>Re-activates a previously deactivated enrollment.</summary>
-    public void Activate() => IsActive = true;
+    public void Activate(DateTime? effectiveDate = null) { CaptureAttendancePlacement(effectiveDate); IsActive = true; RecordAttendancePlacement(effectiveDate); }
 
-    public void AssignDivision(Guid? divisionId) => DivisionId = divisionId;
+    public void AssignDivision(Guid? divisionId) { CaptureAttendancePlacement(null); DivisionId = divisionId; RecordAttendancePlacement(null); }
+
+	public void ChangePlacement(Guid standardId, Guid divisionId, int? rollNumber, DateTime? effectiveDate = null)
+	{
+		if (rollNumber.HasValue && rollNumber <= 0) throw new ArgumentOutOfRangeException(nameof(rollNumber));
+		Check.NotDefaultOrNull<Guid>(standardId, nameof(standardId));
+		Check.NotDefaultOrNull<Guid>(divisionId, nameof(divisionId));
+		CaptureAttendancePlacement(effectiveDate);
+		StandardId = Check.NotDefaultOrNull<Guid>(standardId, nameof(standardId));
+		DivisionId = Check.NotDefaultOrNull<Guid>(divisionId, nameof(divisionId));
+		RollNumber = rollNumber;
+		RecordAttendancePlacement(effectiveDate);
+	}
 
 	public void LinkOnboardingCase(Guid onboardingCaseId)
 	{

@@ -42,7 +42,7 @@ public class StudentGeneralInfoAppService(
 			StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo,
 			forProfileWrite: true);
 
-		if (student.Status == StudentLifeCycleStatusEnum.Enrolled)
+		if (student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
 		{
 			if ((input.AcademicMediumId.HasValue && input.AcademicMediumId != student.AcademicMediumId) ||
 				(input.StandardId.HasValue && input.StandardId != student.StandardId) ||
@@ -100,7 +100,7 @@ public class StudentGeneralInfoAppService(
 		await studentRepository.UpdateAsync(student, autoSave: true);
 		// The profile form receives masked identity numbers. Keep the verified
 		// compliance record intact when an enrolled student's details are edited.
-		var compliance = student.Status == StudentLifeCycleStatusEnum.Enrolled
+		var compliance = student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left
 			? await identityComplianceAppService.GetAsync(student.Id)
 			: await UpsertComplianceAsync(student.Id, input);
 

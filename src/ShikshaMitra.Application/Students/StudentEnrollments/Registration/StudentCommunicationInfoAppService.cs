@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Students.Enrollments.Registrations;
+using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.Students.StudentEnrollments.Helpers;
 using System;
 using System.Collections.Generic;
@@ -76,7 +76,7 @@ public class StudentCommunicationInfoAppService(
             input.EmergencyContactRelation
         );
 
-        if (student.Status != StudentLifeCycleStatusEnum.Enrolled)
+        if (Array.Exists(RegistrationStatuses, status => status == student.Status))
             student.AdditionalDetail?.AdvanceRegistrationState(StudentRegistrationStateEnum.Communication);
 
         await UnitOfWorkManager.Current!.SaveChangesAsync();

@@ -37,4 +37,23 @@ public class AdmissionFormDefinitionValidation_Tests
 
 		result.Errors.ShouldContain("Admissions.FormInvalidValidationRule:CUSTOM_FIELD");
 	}
+
+	[Theory]
+	[InlineData("[{\"value\":\"OPTION_1\",\"label\":\"\"}]", true)]
+	[InlineData("[{\"value\":\"OPTION_1\",\"label\":\"Yes\"}]", false)]
+	[InlineData("[{\"value\":\"OPTION_1\"}]", false)]
+	[InlineData("[\"Yes\"]", false)]
+	public void Choice_options_require_a_name_when_a_label_is_provided(string optionsJson, bool invalid)
+	{
+		var field = new AdmissionFormFieldDefinition(
+			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "CUSTOM_RADIO", "Custom radio",
+			AdmissionFormFieldType.Radio, AdmissionFormBindingType.Custom, "CUSTOM_RADIO", false, false,
+			0, null, null, null, null, null, optionsJson);
+		var result = new AdmissionFormValidationResultDto();
+
+		AdmissionFormAppService.ValidateOptions(field, new HashSet<string>(StringComparer.OrdinalIgnoreCase), result);
+
+		if (invalid) result.Errors.ShouldContain("Admissions.FormInvalidOptions:CUSTOM_RADIO");
+		else result.Errors.ShouldBeEmpty();
+	}
 }

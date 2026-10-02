@@ -10,10 +10,11 @@ public class CreateUpdateAdmissionWorkflowDtoValidator : AbstractValidator<Creat
 			.NotEmpty()
 			.MaximumLength(AdmissionWorkflowConsts.MaxNameLength);
 		RuleFor(input => input.Code)
-			.NotEmpty()
-			.MaximumLength(AdmissionWorkflowConsts.MaxCodeLength)
+			.MaximumLength(AdmissionWorkflowConsts.MaxCodeLength);
+		RuleFor(input => input.Code)
 			.Matches("^[A-Za-z][A-Za-z0-9_-]*$")
-			.WithMessage("Workflow code must start with a letter and contain only letters, numbers, underscores, or hyphens.");
+			.WithMessage("Workflow code must start with a letter and contain only letters, numbers, underscores, or hyphens.")
+			.When(input => !string.IsNullOrWhiteSpace(input.Code));
 		RuleFor(input => input.Description)
 			.MaximumLength(AdmissionWorkflowConsts.MaxDescriptionLength);
 		RuleForEach(input => input.Stages)
@@ -68,9 +69,9 @@ public class CloneAdmissionWorkflowDtoValidator : AbstractValidator<CloneAdmissi
 			.NotEmpty()
 			.MaximumLength(AdmissionWorkflowConsts.MaxNameLength);
 		RuleFor(input => input.Code)
-			.NotEmpty()
-			.MaximumLength(AdmissionWorkflowConsts.MaxCodeLength)
-			.Matches("^[A-Za-z][A-Za-z0-9_]*$");
+			.MaximumLength(AdmissionWorkflowConsts.MaxCodeLength);
+		RuleFor(input => input.Code).Matches("^[A-Za-z][A-Za-z0-9_]*$")
+			.When(input => !string.IsNullOrWhiteSpace(input.Code));
 		RuleFor(input => input.Description)
 			.MaximumLength(AdmissionWorkflowConsts.MaxDescriptionLength);
 	}

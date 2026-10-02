@@ -20,6 +20,22 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 	{
 	}
 
+	public async Task<List<AttendanceApprovedLeave>> GetApprovedForAttendanceAsync(IReadOnlyCollection<Guid> studentIds,
+		DateTimeOffset start, DateTimeOffset endExclusive, Guid? tenantId, CancellationToken cancellationToken = default)
+	{
+		if (studentIds.Count == 0) return [];
+		var ids = studentIds.ToArray();
+		var query = (await GetQueryableAsync()).IgnoreAutoIncludes().Where(l => l.TenantId == tenantId &&
+			Enumerable.Contains(ids, l.StudentId) && l.Status == StudentLeaveStatusEnum.Approved);
+		var dbContext = await GetDbContextAsync();
+		var isSqlite = dbContext.Database.ProviderName?.Contains("Sqlite", StringComparison.OrdinalIgnoreCase) == true;
+		if (!isSqlite) query = query.Where(l => l.LeaveDate < endExclusive && (l.EndDate ?? l.LeaveDate) >= start);
+		// SQLite cannot compare DateTimeOffset. Read only approved cohort metadata, never attachments or student graphs.
+		var rows = await query.Select(l => new AttendanceApprovedLeave(l.Id, l.StudentId, l.IsHalfDay,
+			l.LeaveDate, l.EndDate, l.ConcurrencyStamp)).ToListAsync(GetCancellationToken(cancellationToken));
+		return isSqlite ? rows.Where(l => l.LeaveDate < endExclusive && (l.EndDate ?? l.LeaveDate) >= start).ToList() : rows;
+	}
+
 	public async Task<List<StudentLeave>> GetListAsync(
 		string? filterText = null,
 		Guid? studentId = null,
@@ -294,12 +310,12 @@ public class EfCoreStudentLeaveRepository : EfCoreRepository<ShikshaMitraDbConte
 		// Apply date range filter
 		if (startDate.HasValue)
 		{
-			query = query.Where(x => x.LeaveDate >= startDate.Value);
+			query = query.Where(x => (x.EndDate ?? x.LeaveDate) >= startDate.Value);
 		}
 
 		if (endDate.HasValue)
 		{
-			query = query.Where(x => x.EndDate == null || x.EndDate <= endDate.Value);
+			query = query.Where(x => x.LeaveDate <= endDate.Value);
 		}
 
 		return query;

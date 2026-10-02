@@ -85,6 +85,15 @@ public class AdmissionFormAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public async Task<AdmissionFormDto> GetAsync(Guid id) => await MapAsync(await GetFormAsync(id));
 
+	// Only scoped staff intake owners call this; unpublished management data remains protected.
+	internal async Task<AdmissionFormDto> GetPublishedIntakeAsync(Guid id)
+	{
+		var form = await GetFormAsync(id);
+		if (form.Status != AdmissionFormStatus.Published || form.Purpose != AdmissionFormPurpose.Inquiry)
+			throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
+		return await MapAsync(form);
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public Task<AdmissionFormDto> PreviewAsync(Guid id) => GetAsync(id);
 
@@ -92,8 +101,10 @@ public class AdmissionFormAppService(
 	public async Task<AdmissionFormDto> CreateAsync(CreateUpdateAdmissionFormDto input)
 	{
 		EnsureSupportedPurpose(input.Purpose);
-		await EnsureCodeAvailableAsync(input.Code, null);
-		var form = new AdmissionFormDefinition(GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code,
+		var id = GuidGenerator.Create();
+		var code = AdmissionSettingsCode.ForCreate(input.Code, "FORM", id);
+		await EnsureCodeAvailableAsync(code, null);
+		var form = new AdmissionFormDefinition(id, CurrentTenant.Id, input.Name, code,
 			input.LayoutType, description: input.Description, fieldsPerRow: input.FieldsPerRow, purpose: input.Purpose);
 		AdmissionFormMetadataStore.WriteExperience(form, input);
 		AdmissionFormMetadataStore.AddAudit(form, "Created", CurrentUser.Id);
@@ -109,10 +120,11 @@ public class AdmissionFormAppService(
 		EnsureSupportedPurpose(input.Purpose);
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, input.ConcurrencyStamp);
-		await EnsureCodeAvailableAsync(input.Code, id);
-		form.UpdateDetails(input.Name, input.Code, input.LayoutType, input.Description, input.FieldsPerRow, input.Purpose);
+		var code = AdmissionSettingsCode.ForUpdate(input.Code, form.Code);
+		if (!string.Equals(code, form.Code, StringComparison.Ordinal))
+			await EnsureCodeAvailableAsync(code, id);
+		form.UpdateDetails(input.Name, code, input.LayoutType, input.Description, input.FieldsPerRow, input.Purpose);
 		AdmissionFormMetadataStore.WriteExperience(form, input);
-		AdmissionFormMetadataStore.WriteApproval(form, new AdmissionFormApprovalMetadata());
 		AdmissionFormMetadataStore.AddAudit(form, "Updated", CurrentUser.Id);
 		await ReplaceChildrenAsync(id, input);
 		await formRepository.UpdateAsync(form, autoSave: false);
@@ -125,10 +137,11 @@ public class AdmissionFormAppService(
 	{
 		var source = await GetFormAsync(id);
 		EnsureSupportedPurpose(source.Purpose);
-		var code = string.IsNullOrWhiteSpace(input.Code) ? $"{source.Code}_COPY" : input.Code;
+		var cloneId = GuidGenerator.Create();
+		var code = AdmissionSettingsCode.ForCreate(input.Code, "FORM", cloneId);
 		var name = string.IsNullOrWhiteSpace(input.Name) ? $"{source.Name} copy" : input.Name;
 		await EnsureCodeAvailableAsync(code, null);
-		var clone = new AdmissionFormDefinition(GuidGenerator.Create(), CurrentTenant.Id, name, code,
+		var clone = new AdmissionFormDefinition(cloneId, CurrentTenant.Id, name, code,
 			source.LayoutType, description: input.Description ?? source.Description, fieldsPerRow: source.FieldsPerRow, purpose: source.Purpose);
 		AdmissionFormMetadataStore.CopyExperience(source, clone);
 		AdmissionFormMetadataStore.AddAudit(clone, "Cloned", CurrentUser.Id, $"Source form {source.Id}");
@@ -157,13 +170,18 @@ public class AdmissionFormAppService(
 		return await MapAsync(version);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Delete)]
 	public async Task DeleteAsync(Guid id, string? concurrencyStamp = null)
 	{
 		var form = await GetFormAsync(id);
 		EnsureConcurrency(form, concurrencyStamp);
 		if (form.Status != AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.DraftRequired);
-		if (!(await GetUsageAsync(id)).CanDelete) throw new BusinessException(AdmissionFormErrorCodes.FormInUse);
+		var usage = await GetUsageAsync(id);
+		if (!usage.CanDelete)
+			throw new BusinessException(AdmissionFormErrorCodes.FormInUse)
+				.WithData(nameof(usage.OfferingCount), usage.OfferingCount)
+				.WithData(nameof(usage.ApplicationCount), usage.ApplicationCount)
+				.WithData(nameof(usage.PublicLinkCount), usage.PublicLinkCount);
 		await formRepository.DeleteAsync(form, autoSave: true);
 	}
 
@@ -185,32 +203,6 @@ public class AdmissionFormAppService(
 		return await ValidateDefinitionAsync(id);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)]
-	public async Task<AdmissionFormDto> RequestApprovalAsync(Guid id, ReviewAdmissionFormDto input)
-	{
-		var form = await GetFormAsync(id);
-		EnsureConcurrency(form, input.ConcurrencyStamp);
-		if (form.Status != AdmissionFormStatus.Draft) throw new BusinessException(AdmissionFormErrorCodes.DraftRequired);
-		var validation = await ValidateDefinitionAsync(id);
-		if (!validation.IsValid) throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition).WithData("Errors", string.Join(";", validation.Errors));
-		AdmissionFormMetadataStore.WriteApproval(form, new AdmissionFormApprovalMetadata
-		{
-			Status = AdmissionFormApprovalStatus.Pending,
-			RequestedBy = CurrentUser.Id,
-			RequestedAt = DateTime.UtcNow,
-			Comment = string.IsNullOrWhiteSpace(input.Comment) ? null : input.Comment.Trim()
-		});
-		AdmissionFormMetadataStore.AddAudit(form, "ApprovalRequested", CurrentUser.Id, input.Comment);
-		await formRepository.UpdateAsync(form, autoSave: true);
-		return await MapAsync(form);
-	}
-
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Publish)]
-	public Task<AdmissionFormDto> ApproveAsync(Guid id, ReviewAdmissionFormDto input) => ReviewAsync(id, input, true);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Publish)]
-	public Task<AdmissionFormDto> RejectAsync(Guid id, ReviewAdmissionFormDto input) => ReviewAsync(id, input, false);
-
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Publish)]
 	public async Task<AdmissionFormDto> PublishAsync(Guid id, string? concurrencyStamp = null)
 	{
@@ -218,9 +210,6 @@ public class AdmissionFormAppService(
 		EnsureConcurrency(form, concurrencyStamp);
 		var validation = await ValidateDefinitionAsync(id);
 		if (!validation.IsValid) throw new BusinessException(AdmissionFormErrorCodes.InvalidDefinition).WithData("Errors", string.Join(";", validation.Errors));
-		var approval = AdmissionFormMetadataStore.ReadApproval(form);
-		if (approval.Status != AdmissionFormApprovalStatus.Approved)
-			throw new BusinessException("Admissions.FormApprovalRequired", "This form must be approved before publishing.");
 		form.Publish(CurrentUser.Id);
 		AdmissionFormMetadataStore.AddAudit(form, "Published", CurrentUser.Id);
 		await formRepository.UpdateAsync(form, autoSave: true);
@@ -283,33 +272,6 @@ public class AdmissionFormAppService(
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null) => dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId);
-
-	private async Task<AdmissionFormDto> ReviewAsync(Guid id, ReviewAdmissionFormDto input, bool approved)
-	{
-		var form = await GetFormAsync(id);
-		EnsureConcurrency(form, input.ConcurrencyStamp);
-		var approval = AdmissionFormMetadataStore.ReadApproval(form);
-		if (approval.Status != AdmissionFormApprovalStatus.Pending)
-			throw new BusinessException("Admissions.FormApprovalNotPending", "This form is not awaiting review.");
-		var isSelfReview = approval.RequestedBy.HasValue && approval.RequestedBy == CurrentUser.Id;
-		var isAdministratorOverride = isSelfReview &&
-			(CurrentUser.IsInRole("admin") || CurrentUser.IsInRole("super-admin"));
-		if (isSelfReview && !isAdministratorOverride)
-			throw new BusinessException(AdmissionFormErrorCodes.MakerCheckerRequired);
-		if (isAdministratorOverride && string.IsNullOrWhiteSpace(input.Comment))
-			throw new BusinessException(AdmissionFormErrorCodes.AdminOverrideReasonRequired);
-		approval.Status = approved ? AdmissionFormApprovalStatus.Approved : AdmissionFormApprovalStatus.Rejected;
-		approval.ReviewedBy = CurrentUser.Id;
-		approval.ReviewedAt = DateTime.UtcNow;
-		approval.Comment = string.IsNullOrWhiteSpace(input.Comment) ? null : input.Comment.Trim();
-		AdmissionFormMetadataStore.WriteApproval(form, approval);
-		var auditAction = isAdministratorOverride
-			? approved ? "AdminOverrideApproved" : "AdminOverrideRejected"
-			: approved ? "Approved" : "Rejected";
-		AdmissionFormMetadataStore.AddAudit(form, auditAction, CurrentUser.Id, input.Comment);
-		await formRepository.UpdateAsync(form, autoSave: true);
-		return await MapAsync(form);
-	}
 
 	private static List<string> Compare(AdmissionFormDto from, AdmissionFormDto to)
 	{
@@ -406,7 +368,7 @@ public class AdmissionFormAppService(
 		return result;
 	}
 
-	private static void ValidateOptions(AdmissionFormFieldDefinition field, HashSet<string> knownFields, AdmissionFormValidationResultDto result)
+	internal static void ValidateOptions(AdmissionFormFieldDefinition field, HashSet<string> knownFields, AdmissionFormValidationResultDto result)
 	{
 		if (string.IsNullOrWhiteSpace(field.OptionsJson)) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}"); return; }
 		try
@@ -433,6 +395,9 @@ public class AdmissionFormAppService(
 						? valueProperty.GetString()
 						: null;
 				if (string.IsNullOrWhiteSpace(value) || !values.Add(value)) result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}");
+				if (option.ValueKind == JsonValueKind.Object && option.TryGetProperty("label", out var labelProperty) &&
+					(labelProperty.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(labelProperty.GetString())))
+					result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}");
 			}
 		}
 		catch (JsonException) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidOptions}:{field.Code}"); }
@@ -608,15 +573,12 @@ public class AdmissionFormAppService(
 	private static AdmissionFormDto Map(AdmissionFormDefinition form, List<AdmissionFormSectionDefinition> sections, List<AdmissionFormFieldDefinition> fields)
 	{
 		var experience = AdmissionFormMetadataStore.ReadExperience(form);
-		var approval = AdmissionFormMetadataStore.ReadApproval(form);
 		return new AdmissionFormDto
 		{
 			Id = form.Id, Name = form.Name, Code = form.Code, Description = form.Description,
 			Version = form.Version, Status = form.Status, LayoutType = form.LayoutType, Purpose = form.Purpose,
 			FieldsPerRow = form.FieldsPerRow, DefaultLanguage = experience.DefaultLanguage,
-			SupportedLanguages = experience.SupportedLanguages, ApprovalStatus = approval.Status,
-			ApprovalRequestedBy = approval.RequestedBy, ApprovalRequestedAt = approval.RequestedAt,
-			ReviewedBy = approval.ReviewedBy, ReviewedAt = approval.ReviewedAt, ReviewComment = approval.Comment,
+			SupportedLanguages = experience.SupportedLanguages,
 			ParentVersionId = form.ParentVersionId, PublishedAt = form.PublishedAt, PublishedBy = form.PublishedBy,
 			ConcurrencyStamp = form.ConcurrencyStamp, CreationTime = form.CreationTime, CreatorId = form.CreatorId,
 			LastModificationTime = form.LastModificationTime, LastModifierId = form.LastModifierId,

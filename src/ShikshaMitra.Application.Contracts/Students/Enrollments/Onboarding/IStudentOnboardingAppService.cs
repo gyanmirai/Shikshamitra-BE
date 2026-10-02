@@ -21,6 +21,7 @@ public interface IStudentOnboardingAppService : IApplicationService
 	Task<StudentOnboardingCaseDto> UpdateStepAsync(Guid id, string stepKey, UpdateStudentOnboardingStepDto input);
 	Task<StudentOnboardingCaseDto> SetPlacementAsync(Guid id, SetStudentOnboardingPlacementDto input);
 	Task<StudentOnboardingCaseDto> AllocateIdentifierAsync(Guid id, AllocateStudentOnboardingIdentifierDto input);
+	Task<StudentOnboardingRollPreviewDto> PreviewRollAsync(Guid id, StudentOnboardingRollPreviewInput input);
 	Task<StudentOnboardingCaseDto> PreviewActivationAsync(Guid id);
 	Task<StudentOnboardingCaseDto> ActivateAsync(Guid id, ActivateStudentOnboardingDto input);
 	Task<StudentOnboardingCaseDto> CancelAsync(Guid id, CancelStudentOnboardingDto input);

@@ -5,20 +5,26 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using ShikshaMitra.Common.Responses;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Security.UserScope;
-using ShikshaMitra.Students.Enrollment;
+using ShikshaMitra.Academic.Calendar;
+using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -27,10 +33,9 @@ namespace ShikshaMitra.Students.Attendance;
 
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Students)]
-public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
+public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
 {
     private const string AttendanceBaseUrl = "/api/students/attendance";
-    private const string RegistrationBaseUrl = "/api/student/enrollment/registrations";
 
     public StudentAttendanceApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
@@ -40,22 +45,26 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
     {
         var context = await ResolveSeededDivisionContextAsync();
         var student = await CreateEnrolledStudentAsync(context, "AttendanceMark");
-        var attendanceDate = DateTime.Today;
+        var attendanceDate = context.ReferenceDate;
+        await EnsureWorkingDateAsync(context, attendanceDate);
 
         var beforeResponse = await Client.GetAsync(
-            $"{AttendanceBaseUrl}/students?academicYearId={Factory.SeededAcademicYearId}&standardId={context.StandardId}&divisionId={Factory.SeededDivisionId}&date={attendanceDate:yyyy-MM-dd}");
+            $"{AttendanceBaseUrl}/students?academicYearId={context.AcademicYearId}&standardId={context.StandardId}&divisionId={context.DivisionId}&date={attendanceDate:yyyy-MM-dd}");
 
-        beforeResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        beforeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await beforeResponse.Content.ReadAsStringAsync());
         var before = await beforeResponse.Content.ReadFromJsonAsync<StudentAttendanceListDto>(JsonOptions);
         before.ShouldNotBeNull();
         before.Students.ShouldContain(s => s.StudentId == student.StudentId);
 
         var markInput = new MarkAttendanceInput
         {
-            AcademicYearId = Factory.SeededAcademicYearId,
+            AcademicYearId = context.AcademicYearId,
             StandardId = context.StandardId,
-            DivisionId = Factory.SeededDivisionId,
+            DivisionId = context.DivisionId,
             Date = attendanceDate,
+            Revision = before.Revision,
+            RosterRevision = before.RosterRevision,
+            OperationId = Guid.NewGuid(),
             Entries =
             {
                 new AttendanceEntryDto
@@ -69,14 +78,14 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
 
         var markResponse = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/mark", markInput, JsonOptions);
 
-        markResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        markResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await markResponse.Content.ReadAsStringAsync());
         var markOutput = await markResponse.Content.ReadFromJsonAsync<MarkAttendanceOutput>(JsonOptions);
         markOutput.ShouldNotBeNull();
         markOutput.TotalMarked.ShouldBe(1);
         markOutput.PresentCount.ShouldBe(1);
 
         var afterResponse = await Client.GetAsync(
-            $"{AttendanceBaseUrl}/students?academicYearId={Factory.SeededAcademicYearId}&standardId={context.StandardId}&divisionId={Factory.SeededDivisionId}&date={attendanceDate:yyyy-MM-dd}");
+            $"{AttendanceBaseUrl}/students?academicYearId={context.AcademicYearId}&standardId={context.StandardId}&divisionId={context.DivisionId}&date={attendanceDate:yyyy-MM-dd}");
 
         afterResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
         var after = await afterResponse.Content.ReadFromJsonAsync<StudentAttendanceListDto>(JsonOptions);
@@ -91,24 +100,32 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
     public async Task Should_Return_Cumulative_Present_Days_And_Attendance_Percentage()
     {
         var context = await ResolveSeededDivisionContextAsync();
-        var student = await CreateEnrolledStudentAsync(context, "AttendanceCumulative");
-        var firstDate = DateTime.Today.AddDays(-8);
-        var secondDate = DateTime.Today.AddDays(-7);
-        var thirdDate = DateTime.Today.AddDays(-6);
+        var firstDate = context.ReferenceDate.AddDays(-8);
+        var secondDate = context.ReferenceDate.AddDays(-7);
+        var thirdDate = context.ReferenceDate.AddDays(-6);
+        var student = await CreateEnrolledStudentAsync(context, "AttendanceCumulative", attendanceStartDate: firstDate);
 
         await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Present, firstDate, "Cumulative present 1");
         await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Absent, secondDate, "Cumulative absent");
         await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Present, thirdDate, "Cumulative present 2");
+        await SubmitAllAsync(context, context.DivisionId, firstDate);
+        await SubmitAllAsync(context, context.DivisionId, secondDate);
+        await SubmitAllAsync(context, context.DivisionId, thirdDate);
 
         var response = await Client.GetAsync(
-            $"{AttendanceBaseUrl}/students?academicYearId={Factory.SeededAcademicYearId}&standardId={context.StandardId}&divisionId={Factory.SeededDivisionId}&date={DateTime.Today:yyyy-MM-dd}");
+            $"{AttendanceBaseUrl}/students?academicYearId={context.AcademicYearId}&standardId={context.StandardId}&divisionId={context.DivisionId}&date={thirdDate:yyyy-MM-dd}");
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         var body = await response.Content.ReadFromJsonAsync<StudentAttendanceListDto>(JsonOptions);
         body.ShouldNotBeNull();
         var attendanceStudent = body.Students.Single(s => s.StudentId == student.StudentId);
         attendanceStudent.PresentDays.ShouldBe(2);
-        attendanceStudent.AttendancePercentage.ShouldBe(66.67, 0.01);
+        attendanceStudent.AttendancePercentage.ShouldNotBeNull();
+        attendanceStudent.AttendancePercentage.Value.ShouldBe(66.67, 0.01);
+        attendanceStudent.ExpectedDays.ShouldBe(3);
+        attendanceStudent.RecordedDays.ShouldBe(3);
+        attendanceStudent.MissingDays.ShouldBe(0);
+        attendanceStudent.IsProvisional.ShouldBeFalse();
     }
 
     [Fact]
@@ -118,7 +135,7 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
         var context = await ResolveSeededDivisionContextAsync();
         var student = await CreateEnrolledStudentAsync(context, "AttendanceHistory");
         var otherStudent = await CreateEnrolledStudentAsync(context, "AttendanceHistoryOther");
-        var earlierDate = DateTime.Today.AddDays(-12);
+        var earlierDate = context.ReferenceDate.AddDays(-12);
         var laterDate = earlierDate.AddDays(2);
 
         await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Absent, earlierDate, "History earlier");
@@ -155,7 +172,7 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
         var context = await ResolveSeededDivisionContextAsync();
         var currentDivisionId = await CreateDivisionAsync(context.StandardId, "HistoryCurrent");
         var student = await CreateEnrolledStudentAsync(context, "AttendanceHistoryScope");
-        var attendanceDate = DateTime.Today.AddDays(-40);
+        var attendanceDate = context.ReferenceDate.AddDays(-40);
         await MarkAttendanceAsync(
             student.StudentId,
             AttendanceStatus.Present,
@@ -185,7 +202,7 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
         var context = await ResolveSeededDivisionContextAsync();
         var currentDivisionId = await CreateDivisionAsync(context.StandardId, "HistoryAllowed");
         var student = await CreateEnrolledStudentAsync(context, "AttendanceHistoryAllowed");
-        var attendanceDate = DateTime.Today.AddDays(-41);
+        var attendanceDate = context.ReferenceDate.AddDays(-41);
         await MarkAttendanceAsync(
             student.StudentId,
             AttendanceStatus.Absent,
@@ -194,7 +211,7 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
         await MoveStudentToDivisionAsync(student.StudentId, currentDivisionId);
 
         var originalDivisionUserId = Guid.NewGuid();
-        await SeedDivisionScopeAsync(originalDivisionUserId, Factory.SeededDivisionId);
+        await SeedDivisionScopeAsync(originalDivisionUserId, context.DivisionId);
         await SeedDivisionScopeAsync(originalDivisionUserId, currentDivisionId);
         using var originalDivisionClient = CreateClientAs(originalDivisionUserId);
 
@@ -216,14 +233,15 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
     {
         var context = await ResolveSeededDivisionContextAsync();
         var student = await CreateEnrolledStudentAsync(context, "AttendanceLockPermission");
-        var attendanceDate = DateTime.Today.AddDays(-2);
+        var attendanceDate = context.ReferenceDate.AddDays(-2);
         await MarkAttendanceAsync(student.StudentId, AttendanceStatus.Present, attendanceDate, "Lock auth");
+        await SubmitAllAsync(context, context.DivisionId, attendanceDate);
 
         var input = new LockAttendanceDayInput
         {
-            AcademicYearId = Factory.SeededAcademicYearId,
+            AcademicYearId = context.AcademicYearId,
             StandardId = context.StandardId,
-            DivisionId = Factory.SeededDivisionId,
+            DivisionId = context.DivisionId,
             Date = attendanceDate
         };
 
@@ -248,30 +266,34 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
             $"{AttendanceBaseUrl}/lock",
             input,
             JsonOptions);
-        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await deleteResponse.Content.ReadAsStringAsync());
     }
 
     private async Task<StudentGeneralDetailsDto> CreateEnrolledStudentAsync(
         SeededDivisionContext context,
         string suffix,
-        Guid? divisionId = null)
+        Guid? divisionId = null,
+        bool confirmStart = true,
+        DateTime? attendanceStartDate = null)
     {
-        var targetDivisionId = divisionId ?? Factory.SeededDivisionId;
-        var dto = StudentEnrollmentTestHelper.BuildDirectRegistrationDto(suffix);
-        dto.AcademicMediumId = context.AcademicMediumId;
-        dto.StandardId = context.StandardId;
-        dto.DivisionId = targetDivisionId;
-
-        var response = await Client.PostAsJsonAsync(
-            $"{RegistrationBaseUrl}/general-details", dto, JsonOptions);
-        response.EnsureSuccessStatusCode();
-
-        var result = await response.Content.ReadFromJsonAsync<Result<StudentGeneralDetailsDto>>(JsonOptions)
-                     ?? throw new InvalidOperationException("Failed to create direct registration");
-        var student = result.Data ?? throw new InvalidOperationException("Null direct registration data");
-
-        await MoveRegistrationToEnrolledAsync(student.StudentId, targetDivisionId);
-        return student;
+        var targetDivisionId = divisionId ?? context.DivisionId;
+        using var scope = Factory.Services.CreateScope();
+        var services = scope.ServiceProvider;
+        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+        using (services.GetRequiredService<ICurrentTenant>().Change(tenantId))
+        using (var uow = services.GetRequiredService<IUnitOfWorkManager>().Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+        {
+            var student = new Student(Guid.NewGuid(), tenantId, suffix, null, "Attendance fixture",
+                context.AcademicYearId, context.AcademicBoardId, context.AcademicMediumId, context.AcademicMediumStageId,
+                context.StandardId, targetDivisionId, status: StudentLifeCycleStatusEnum.Enrolled);
+            await services.GetRequiredService<IStudentRepository>().InsertAsync(student);
+            var enrollment = StudentEnrollment.Create(Guid.NewGuid(), tenantId, student.Id, context.AcademicYearId,
+                context.StandardId, targetDivisionId, student.RollNo);
+            if (confirmStart) enrollment.ConfirmAttendanceStart(attendanceStartDate ?? context.YearStartDate);
+            await services.GetRequiredService<IRepository<StudentEnrollment, Guid>>().InsertAsync(enrollment);
+            await uow.CompleteAsync();
+            return new StudentGeneralDetailsDto { StudentId = student.Id };
+        }
     }
 
     private async Task MarkAttendanceAsync(
@@ -282,15 +304,20 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
         Guid? divisionId = null)
     {
         var context = await ResolveSeededDivisionContextAsync();
-        var targetDivisionId = divisionId ?? Factory.SeededDivisionId;
+        var targetDivisionId = divisionId ?? context.DivisionId;
+        await EnsureWorkingDateAsync(context, date);
+        var roster = await ReadRosterAsync(context, targetDivisionId, date);
         var response = await Client.PostAsJsonAsync(
             $"{AttendanceBaseUrl}/mark",
             new MarkAttendanceInput
             {
-                AcademicYearId = Factory.SeededAcademicYearId,
+                AcademicYearId = context.AcademicYearId,
                 StandardId = context.StandardId,
                 DivisionId = targetDivisionId,
                 Date = date,
+                Revision = roster.Revision,
+                RosterRevision = roster.RosterRevision,
+                OperationId = Guid.NewGuid(),
                 Entries =
                 {
                     new AttendanceEntryDto
@@ -303,33 +330,12 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
             },
             JsonOptions);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
     }
 
-    private async Task MoveRegistrationToEnrolledAsync(Guid studentId, Guid? divisionId = null)
+    private async Task MoveStudentToDivisionAsync(Guid studentId, Guid divisionId, DateTime? effectiveDate = null)
     {
-        using var scope = Factory.Services.CreateScope();
-        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
-        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-        var studentRepository = scope.ServiceProvider.GetRequiredService<IStudentRepository>();
-        var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
-
-        using (currentTenant.Change(tenantId))
-        using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
-        {
-            var student = await studentRepository.GetInquiryForUpdateAsync(studentId)
-                          ?? throw new InvalidOperationException($"Student not found: {studentId}");
-            student.MoveToAdmission();
-            student.AssignDivision(divisionId ?? Factory.SeededDivisionId);
-            student.ApproveAdmission();
-
-            await studentRepository.UpdateAsync(student);
-            await uow.CompleteAsync();
-        }
-    }
-
-    private async Task MoveStudentToDivisionAsync(Guid studentId, Guid divisionId)
-    {
+        var context = await ResolveSeededDivisionContextAsync();
         using var scope = Factory.Services.CreateScope();
         var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
         var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
@@ -342,6 +348,10 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
             var student = await studentRepository.GetInquiryForUpdateAsync(studentId)
                           ?? throw new InvalidOperationException($"Student not found: {studentId}");
             student.AssignDivision(divisionId);
+            var enrollmentRepository = scope.ServiceProvider.GetRequiredService<IRepository<StudentEnrollment, Guid>>();
+            var enrollment = await enrollmentRepository.GetAsync(e => e.StudentId == studentId && e.AcademicYearId == context.AcademicYearId);
+            enrollment.ChangePlacement(enrollment.StandardId!.Value, divisionId, enrollment.RollNumber, effectiveDate ?? context.ReferenceDate);
+            await enrollmentRepository.UpdateAsync(enrollment);
 
             await studentRepository.UpdateAsync(student);
             await uow.CompleteAsync();
@@ -370,8 +380,9 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
         }
     }
 
-    private async Task SeedDivisionScopeAsync(Guid userId, Guid divisionId)
+    private async Task SeedDivisionScopeAsync(Guid userId, Guid divisionId, Guid? academicYearId = null)
     {
+        var context = await ResolveSeededDivisionContextAsync();
         using var scope = Factory.Services.CreateScope();
         var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
         var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
@@ -382,12 +393,19 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
         using (currentTenant.Change(tenantId))
         using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
         {
+            var identityRepository = scope.ServiceProvider.GetRequiredService<IRepository<IdentityUser, Guid>>();
+            if (!await identityRepository.AnyAsync(user => user.Id == userId))
+            {
+                var identity = new IdentityUser(userId, $"attendance-scope-{userId:N}", $"{userId:N}@example.test", tenantId);
+                identity.SetIsActive(true);
+                await identityRepository.InsertAsync(identity, autoSave: false);
+            }
             await scopeRepository.InsertAsync(
                 new UserScopeAssignment(
                     Guid.NewGuid(),
                     tenantId,
                     userId: userId,
-                    academicYearId: Factory.SeededAcademicYearId,
+                    academicYearId: academicYearId ?? context.AcademicYearId,
                     divisionId: divisionId,
                     description: "Student attendance scope regression test"),
                 autoSave: false);
@@ -397,29 +415,30 @@ public class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
         }
     }
 
-    private async Task<SeededDivisionContext> ResolveSeededDivisionContextAsync()
+    private async Task<SeededDivisionContext> ResolveSeededDivisionContextAsync(bool currentYear = false)
     {
         using var scope = Factory.Services.CreateScope();
         var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
         var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-        var divisionRepository = scope.ServiceProvider.GetRequiredService<IDivisionRepository>();
-        var standardRepository = scope.ServiceProvider.GetRequiredService<IStandardRepository>();
-        var mediumStageRepository = scope.ServiceProvider.GetRequiredService<IEducationMediumStageRepository>();
         var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
         using (currentTenant.Change(tenantId))
         using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
         {
-            var division = await divisionRepository.GetAsync(Factory.SeededDivisionId);
-            var standard = await standardRepository.GetAsync(division.StandardId);
-            var mediumStage = await mediumStageRepository.GetAsync(standard.EducationMediumStageId);
+            var today = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(5.5)).Date;
+            var academic = await AttendanceApiSeedContext.ReadAsync(scope.ServiceProvider, tenantId,
+                currentYear ? null : Factory.SeededDivisionId, today);
+            var referenceDate = DateTime.SpecifyKind(
+                today <= academic.YearEnd.Date ? today : academic.YearEnd.Date, DateTimeKind.Unspecified);
             await uow.CompleteAsync();
 
-            return new SeededDivisionContext(division.StandardId, mediumStage.EducationMediumId);
+            return new SeededDivisionContext(academic.StandardId, academic.MediumId, academic.StageId,
+                academic.BoardId, academic.YearId, academic.DivisionId, academic.YearStart.Date, referenceDate);
         }
     }
 
-    private sealed record SeededDivisionContext(Guid StandardId, Guid AcademicMediumId);
+    private sealed record SeededDivisionContext(Guid StandardId, Guid AcademicMediumId, Guid AcademicMediumStageId,
+        Guid AcademicBoardId, Guid AcademicYearId, Guid DivisionId, DateTime YearStartDate, DateTime ReferenceDate);
 
     private HttpClient CreatePermissionClient(params string[] permissions)
     {

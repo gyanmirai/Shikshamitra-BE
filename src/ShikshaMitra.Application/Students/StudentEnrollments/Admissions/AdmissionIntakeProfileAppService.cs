@@ -14,6 +14,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [Authorize]
 public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile, Guid> profiles,
+	IRepository<AdmissionIntakeSetup, Guid> setups,
 	IRepository<AdmissionOffering, Guid> offerings,
 	IRepository<AdmissionPublicInquiryLink, Guid> publicLinks,
 	AdmissionInquiryPeopleService people)
@@ -39,9 +40,12 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 	{
 		EnsureIdentity(input);
 		Validate(input.Kind, input.ConfigurationJson);
-		await EnsureUniqueAsync(input.Kind, input.Code, null);
-		var profile = new AdmissionIntakeProfile(GuidGenerator.Create(), CurrentTenant.Id,
-			input.Kind, input.Code, input.Name, input.ConfigurationJson);
+		var id = GuidGenerator.Create();
+		var code = AdmissionSettingsCode.ForCreate(input.Code,
+			input.Kind == AdmissionIntakeProfileKind.Inquiry ? "INQ" : "COUNSELLOR", id);
+		await EnsureUniqueAsync(input.Kind, code, null);
+		var profile = new AdmissionIntakeProfile(id, CurrentTenant.Id,
+			input.Kind, code, input.Name, input.ConfigurationJson);
 		try { await profiles.InsertAsync(profile, true); }
 		catch (Exception error) when (IsUniqueConstraintViolation(error))
 		{
@@ -53,6 +57,26 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	public async Task<AdmissionIntakeProfileDto> UpdateAsync(Guid id, SaveAdmissionIntakeProfileDto input)
 	{
+		if (await setups.AnyAsync(item => item.InquiryIntakeProfileId == id ||
+			item.CounsellorAssignmentProfileId == id))
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.SetupManagedProfile,
+				"This profile belongs to an intake setup and must be edited through that setup.");
+		return await UpdateCoreAsync(id, input);
+	}
+
+	[RemoteService(false)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	public async Task<AdmissionIntakeProfileDto> UpdateManagedAsync(Guid setupId, Guid id,
+		SaveAdmissionIntakeProfileDto input)
+	{
+		if (!await setups.AnyAsync(item => item.Id == setupId &&
+			(item.InquiryIntakeProfileId == id || item.CounsellorAssignmentProfileId == id)))
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.SetupManagedProfile);
+		return await UpdateCoreAsync(id, input);
+	}
+
+	private async Task<AdmissionIntakeProfileDto> UpdateCoreAsync(Guid id, SaveAdmissionIntakeProfileDto input)
+	{
 		EnsureIdentity(input);
 		var profile = await profiles.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionIntakeProfile), id);
 		if (profile.Kind != input.Kind)
@@ -62,8 +86,9 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.ConcurrencyConflict);
 		Validate(input.Kind, input.ConfigurationJson);
 		await EnsureActiveOfferingsCanUseAsync(id, input.Kind, input.ConfigurationJson);
-		await EnsureUniqueAsync(input.Kind, input.Code, id);
-		profile.Update(input.Code, input.Name, input.ConfigurationJson);
+		var code = AdmissionSettingsCode.ForUpdate(input.Code, profile.Code);
+		await EnsureUniqueAsync(input.Kind, code, id);
+		profile.Update(code, input.Name, input.ConfigurationJson);
 		try { await profiles.UpdateAsync(profile, true); }
 		catch (Exception error) when (IsUniqueConstraintViolation(error))
 		{
@@ -74,8 +99,8 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 
 	private static void EnsureIdentity(SaveAdmissionIntakeProfileDto input)
 	{
-		if (input == null || !Enum.IsDefined(input.Kind) || string.IsNullOrWhiteSpace(input.Code) ||
-			string.IsNullOrWhiteSpace(input.Name) || input.Code.Length > 64 || input.Name.Length > 128 ||
+		if (input == null || !Enum.IsDefined(input.Kind) ||
+			string.IsNullOrWhiteSpace(input.Name) || input.Code?.Length > 64 || input.Name.Length > 128 ||
 			string.IsNullOrWhiteSpace(input.ConfigurationJson) || input.ConfigurationJson.Length > 8192)
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
 	}
@@ -132,8 +157,10 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 				throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration,
 					$"This assignment would leave active offering {offering.Code} without a scoped counsellor or fallback manager.");
 		}
+		var now = Clock.Now.ToUniversalTime();
 		foreach (var link in await publicLinks.GetListAsync(item =>
-			item.CounsellorAssignmentProfileId == profileId && item.IsActive))
+			item.CounsellorAssignmentProfileId == profileId && item.IsActive &&
+			(!item.ExpiresAtUtc.HasValue || item.ExpiresAtUtc.Value > now)))
 		{
 			var eligible = false;
 			foreach (var userId in rules.CounsellorUserIds)

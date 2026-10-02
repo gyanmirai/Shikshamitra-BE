@@ -84,6 +84,7 @@ public class AdmissionApplicationLifecycleService(
 			GuidGenerator.Create(), CurrentTenant.Id, application.Id, form.Id, form.Version);
 		await PersistAsync(application, workflowInstance, stages, formInstance,
 			await CreateInitialValuesAsync(applicant, formInstance, inquiry), inquiryId, workflow, entryInstance);
+		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().GetForApplicationAsync(application);
 		return AdmissionApplicationMapper.ToDto(application);
 	}
 

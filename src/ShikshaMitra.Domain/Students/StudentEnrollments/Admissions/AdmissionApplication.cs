@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using System.Text.Json;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -8,6 +10,36 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const string FeeSelectionProperty = "AdmissionFeeSelection";
+	public AdmissionFeeSelectionSnapshot? GetFeeSelection() =>
+		this.GetProperty<string>(FeeSelectionProperty) is string json
+			? JsonSerializer.Deserialize<AdmissionFeeSelectionSnapshot>(json) : null;
+
+	public void SaveFeeSelection(AdmissionFeeSelectionSnapshot selection, bool hasPaymentEvidence)
+	{
+		if (hasPaymentEvidence) throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked,
+			"Payment evidence already exists. Ask Finance to review a correction or refund.");
+		if (Status is AdmissionApplicationStatus.Withdrawn or AdmissionApplicationStatus.Rejected or AdmissionApplicationStatus.OfferDeclined or
+			AdmissionApplicationStatus.AdmissionFinalized or AdmissionApplicationStatus.Enrolled)
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState);
+		if (selection.StructureId == Guid.Empty || selection.OwnerStageId == Guid.Empty || selection.SavedBy == Guid.Empty ||
+			selection.RevisionNumber < 1 || selection.Heads.Count == 0 ||
+			selection.Heads.Select(h => h.FeeHeadId).Distinct().Count() != selection.Heads.Count ||
+			selection.Heads.Any(h => h.FeeHeadId == Guid.Empty || h.ConfiguredAmount < 0 || decimal.Round(h.ConfiguredAmount, 2) != h.ConfiguredAmount))
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidSelection);
+		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection with { ConfirmedBy = null, OnboardingConfirmedAt = null }));
+	}
+
+	public void ConfirmOnboardingFeeSelection(Guid actorId, DateTimeOffset now)
+	{
+		var selection = GetFeeSelection() ?? throw new BusinessException(AdmissionFeeSelectionErrorCodes.Required);
+		if (!OnboardingCaseId.HasValue || !StudentId.HasValue || actorId == Guid.Empty)
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState);
+		if (selection.OnboardingConfirmedAt.HasValue) return;
+		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection with
+		{ ConfirmedBy = actorId, OnboardingConfirmedAt = now.ToUniversalTime() }));
+	}
+
 	public Guid? TenantId { get; private set; }
 	public string ApplicationNumber { get; private set; }
 	public Guid ApplicantId { get; private set; }

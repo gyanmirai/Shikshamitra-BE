@@ -67,10 +67,20 @@ public class StudentCertificateController(
 
 	[HttpPost("{certificateId}/duplicate")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Add)]
-	public async Task<Result<StudentCertificateResponseDto>> Duplicate(Guid certificateId)
+	public async Task<Result<StudentCertificateResponseDto>> Duplicate(Guid certificateId, [FromBody] StudentDocumentActionDto input)
 	{
-		return Result.Success(await certificateAppService.DuplicateAsync(certificateId));
+		return Result.Success(await certificateAppService.DuplicateAsync(certificateId, input));
 	}
+	[HttpPost("{certificateId:guid}/reprint")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Add)]
+	public async Task<IActionResult> Reprint(Guid certificateId, [FromBody] StudentDocumentActionDto input)
+	{
+		var pdf = await certificateAppService.ReprintAsync(certificateId, input);
+		return File(pdf.Content, pdf.ContentType, pdf.FileName);
+	}
+	[HttpPost("{certificateId:guid}/void")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Delete)]
+	public async Task<Result<StudentCertificateResponseDto>> Void(Guid certificateId, [FromBody] StudentDocumentActionDto input) => Result.Success(await certificateAppService.VoidAsync(certificateId, input));
 
 	[HttpGet("{certificateId}/pdf")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]

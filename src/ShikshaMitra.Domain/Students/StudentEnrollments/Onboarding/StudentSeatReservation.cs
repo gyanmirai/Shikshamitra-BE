@@ -60,4 +60,13 @@ public class StudentSeatReservation : FullAuditedAggregateRoot<Guid>, IMultiTena
 		if (Status == StudentSeatReservationStatus.Reserved && ExpiresAt <= at.ToUniversalTime())
 			Status = StudentSeatReservationStatus.Expired;
 	}
+
+	public void ReleaseCommittedForRecordChange(string reason, DateTime at)
+	{
+		if (Status != StudentSeatReservationStatus.Committed)
+			throw new BusinessException(StudentOnboardingErrorCodes.SeatReservationExpired);
+		Status = StudentSeatReservationStatus.Released;
+		ReleasedAt = at.ToUniversalTime();
+		ReleaseReason = Check.NotNullOrWhiteSpace(reason, nameof(reason), 500).Trim();
+	}
 }

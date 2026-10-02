@@ -14,6 +14,8 @@ public interface IStudentCertificateAppService
 	Task<StudentCertificateResponseDto> GenerateAsync(CreateStudentCertificateDto input);
 	Task<StudentCertificateResponseDto> GetAsync(Guid certificateId);
 	Task<List<StudentCertificateHistoryDto>> GetHistoryAsync(Guid studentId);
-	Task<StudentCertificateResponseDto> DuplicateAsync(Guid certificateId);
+	Task<StudentCertificateResponseDto> DuplicateAsync(Guid certificateId, StudentDocumentActionDto? input = null);
+	Task<StudentCertificatePdfDto> ReprintAsync(Guid certificateId, StudentDocumentActionDto input);
+	Task<StudentCertificateResponseDto> VoidAsync(Guid certificateId, StudentDocumentActionDto input);
 	Task<StudentCertificatePdfDto> GeneratePdfAsync(Guid certificateId);
 }

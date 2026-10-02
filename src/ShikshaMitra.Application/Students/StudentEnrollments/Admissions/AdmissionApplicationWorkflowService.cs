@@ -32,7 +32,8 @@ public class AdmissionApplicationWorkflowService(
 	AdmissionPaymentRuntimeService paymentRuntime,
 	AdmissionOfferRuntimeService offerRuntime,
 	AdmissionSeatRuntimeService seatRuntime,
-	AdmissionWorkflowRuntimeValueService runtimeValueService)
+	AdmissionWorkflowRuntimeValueService runtimeValueService,
+	AdmissionFeeSelectionAccessService feeSelection)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionApplicationWorkflowDto> AdvanceAsync(Guid id, AdvanceAdmissionWorkflowDto input)
@@ -94,6 +95,8 @@ public class AdmissionApplicationWorkflowService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.InvalidCurrentStage);
 		var definition = await stageDefinitionRepository.FindAsync(current.DefinitionStageId) ??
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), current.DefinitionStageId);
+		if (current.StageType is AdmissionWorkflowStageType.Offer or AdmissionWorkflowStageType.Payment)
+			await feeSelection.EnsureSelectionAsync(application);
 		if (input.SkipCurrentStage && definition.IsRequired && !input.AdminOverride)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed)
 				.WithData("Reason", "Required stages can only be bypassed through the emergency override.");

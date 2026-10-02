@@ -13,7 +13,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [RemoteService(false)]
 public class AdmissionPaymentReadService(
 	IRepository<AdmissionPaymentTransaction, Guid> payments,
-	AdmissionPaymentAccessService access) : ApplicationService, ITransientDependency
+	AdmissionPaymentAccessService access,
+	AdmissionFeeSelectionAccessService feeSelection) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionPaymentStageDto> GetAsync(Guid applicationId, Guid stageId)
 	{
@@ -31,6 +32,8 @@ public class AdmissionPaymentReadService(
 		var overdue = dueAt.HasValue && dueAt.Value < Clock.Now && !waived && outstanding > 0m;
 		var status = Status(rows, settled, required, waived, overdue);
 		var blockers = Blockers(policy, outstanding, pending, waived, overdue);
+		var feeSelectionMissing = (await feeSelection.GetContextAsync(context.Application)).IsRequired && context.Application.GetFeeSelection() == null;
+		if (feeSelectionMissing) blockers.Add("Save the required fee structure selection before recording payment or continuing.");
 		return new AdmissionPaymentStageDto
 		{
 			ApplicationId = applicationId, StageId = stageId, PaymentStageEnabled = policy != null,
@@ -40,7 +43,7 @@ public class AdmissionPaymentReadService(
 			ConcurrencyStamp = context.Application.ConcurrencyStamp,
 			Transactions = rows.Select(Map).ToList(), Blockers = blockers,
 			CanRecord = context.IsActive && policy != null && policy.CollectionMode is "staff" or "either" &&
-				(policy.AllowLatePayment || !overdue) && !waived && outstanding > pending,
+				(policy.AllowLatePayment || !overdue) && !waived && outstanding > pending && !feeSelectionMissing,
 			CanStartOnlinePayment = false,
 			CanVerify = context.IsActive && rows.Any(item => item.Status == AdmissionPaymentStatuses.PendingVerification),
 			CanWaive = context.IsActive && policy?.AllowWaiver == true && !waived &&

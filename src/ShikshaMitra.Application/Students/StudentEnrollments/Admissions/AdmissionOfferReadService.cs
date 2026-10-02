@@ -13,7 +13,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionOfferReadService(
 	IRepository<AdmissionApplicationDecisionHistory, Guid> history,
 	AdmissionInquiryPeopleService peopleService,
-	AdmissionOfferAccessService access) : ApplicationService, ITransientDependency
+	AdmissionOfferAccessService access,
+	AdmissionFeeSelectionAccessService feeSelection) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionOfferStageDto> GetAsync(Guid applicationId, Guid stageId)
 	{
@@ -26,6 +27,9 @@ public class AdmissionOfferReadService(
 		var extensionCount = events.Count(item => item.Action == "extend");
 		var reissueCount = events.Count(item => item.Action == "reissue");
 		var canComplete = policy?.AllowedCompletionOutcomes.Contains(status, StringComparer.Ordinal) == true;
+		var feeSelectionMissing = (await feeSelection.GetContextAsync(context.Application)).IsRequired && context.Application.GetFeeSelection() == null;
+		var blockers = Blockers(policy, status);
+		if (feeSelectionMissing) blockers.Add("Save the required fee structure selection before issuing the offer or continuing.");
 		Dictionary<Guid, string> counsellorNames = context.Application.AssignedCounsellorId.HasValue
 			? await peopleService.GetNamesAsync([context.Application.AssignedCounsellorId.Value])
 			: [];
@@ -41,14 +45,14 @@ public class AdmissionOfferReadService(
 			AssignedCounsellorName = context.Application.AssignedCounsellorId.HasValue
 				? counsellorNames.GetValueOrDefault(context.Application.AssignedCounsellorId.Value) : null,
 			ConcurrencyStamp = context.Application.ConcurrencyStamp,
-			Events = events.Select(Map).ToList(), Blockers = Blockers(policy, status),
-			CanIssue = context.IsActive && policy != null && status == "ready" && context.Application.Status == AdmissionApplicationStatus.Approved,
+			Events = events.Select(Map).ToList(), Blockers = blockers,
+			CanIssue = context.IsActive && policy != null && status == "ready" && context.Application.Status == AdmissionApplicationStatus.Approved && !feeSelectionMissing,
 			CanAccept = context.IsActive && policy != null && status == "issued",
 			CanDecline = context.IsActive && policy != null && status == "issued",
 			CanExtend = context.IsActive && policy?.AllowExtension == true && status == "issued" && extensionCount < policy.MaximumExtensions,
 			CanWithdraw = context.IsActive && policy != null && status == "issued",
 			CanReissue = context.IsActive && policy?.AllowReissue == true && status is "declined" or "expired" or "withdrawn" && reissueCount < policy.MaximumReissues,
-			CanComplete = canComplete
+			CanComplete = canComplete && !feeSelectionMissing
 		};
 	}
 

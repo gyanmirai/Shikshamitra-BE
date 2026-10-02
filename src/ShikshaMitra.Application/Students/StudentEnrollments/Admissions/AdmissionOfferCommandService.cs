@@ -19,7 +19,8 @@ public class AdmissionOfferCommandService(
 	AdmissionOfferAccessService access,
 	AdmissionOfferReadService reader,
 	AdmissionInquiryPeopleService people,
-	AdmissionReviewDecisionGuard reviewGuard) : ApplicationService, ITransientDependency
+	AdmissionReviewDecisionGuard reviewGuard,
+	AdmissionFeeSelectionAccessService feeSelection) : ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionOfferStageDto> IssueAsync(Guid applicationId, Guid stageId, IssueAdmissionOfferDto input)
 	{
@@ -29,6 +30,7 @@ public class AdmissionOfferCommandService(
 		var fingerprint = Fingerprint("issue", new { ExpiresAt = input.ExpiresAt.HasValue ? AdmissionOfferUtcTime.Normalize(input.ExpiresAt.Value) : (DateTime?)null, Reason = reason, input.CounsellorId });
 		if (await IsRetryAsync(context, key, "issue", fingerprint)) return await reader.GetAsync(applicationId, stageId);
 		AdmissionOfferAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
+		await feeSelection.EnsureSelectionAsync(context.Application);
 		if (context.Application.Status != AdmissionApplicationStatus.Approved)
 			throw Invalid("Approve the application before issuing its offer.");
 		await reviewGuard.EnsureApplicationCompleteAsync(context.Application);

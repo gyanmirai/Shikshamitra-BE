@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
+using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Standards;
@@ -30,6 +31,7 @@ public partial class StudentOnboardingAppService(
 	OnboardingConfigurationManager configurationManager,
 	ShikshaMitra.Security.UserScope.IUserScopeService userScopeService,
 	OnboardingFeeReadinessReader feeReadinessReader,
+	AdmissionFeeSelectionOnboardingReader admissionFeeSelectionReader,
 	IRepository<StudentSeatReservation, Guid> reservationRepository,
 	IRepository<StudentIdentifierSeries, Guid> seriesRepository,
 	IRepository<StudentIdentifierAllocation, Guid> allocationRepository,
@@ -397,10 +399,27 @@ public partial class StudentOnboardingAppService(
 	public async Task<StudentOnboardingCaseDto> AllocateIdentifierAsync(
 		Guid id, AllocateStudentOnboardingIdentifierDto input)
 	{
+		try { return await AllocateIdentifierCoreAsync(id, input); }
+		catch (Exception exception) when (StudentOnboardingRollConflictMapper.IsSerializationConflict(exception))
+		{
+			throw new BusinessException("Students:Records:RollProposalChanged");
+		}
+	}
+	private async Task<StudentOnboardingCaseDto> AllocateIdentifierCoreAsync(Guid id, AllocateStudentOnboardingIdentifierDto input)
+	{
+		using var rollWork = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);
 		var onboardingCase = await GetCaseAsync(id);
 		EnsureConcurrency(onboardingCase, input.ConcurrencyStamp);
 		if (!onboardingCase.DivisionId.HasValue)
 			throw new BusinessException(StudentOnboardingErrorCodes.PlacementInvalid);
+		var frozenRollRule = await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().CaptureForCaseAsync(onboardingCase);
+		var rollMode = StudentOnboardingRollNumberAllocator.ResolveMode(frozenRollRule, input.RollAssignmentMode);
+		if (rollMode == "automatic")
+		{
+			var proposal = await ProposeCaseRollAsync(onboardingCase, input.RollNumber, input.RollAssignmentMode, input.OverrideReason, frozenRollRule);
+			if (input.RollNumber != proposal.RollNumber) throw new BusinessException("Students:Records:RollProposalChanged").WithData("ProposedRollNumber", proposal.RollNumber);
+		}
+		else await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().ValidateAsync(onboardingCase.StudentId, onboardingCase.AcademicYearId, onboardingCase.IntendedStandardId, onboardingCase.DivisionId.Value, input.RollNumber, input.OverrideReason ?? "", frozenRollRule);
 		if (input.RollNumber <= 0) throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
 		if (await enrollmentRepository.AnyAsync(item => item.AcademicYearId == onboardingCase.AcademicYearId &&
 			item.DivisionId == onboardingCase.DivisionId && item.RollNumber == input.RollNumber && item.IsActive))
@@ -432,6 +451,8 @@ public partial class StudentOnboardingAppService(
 		Guid? allocationId = onboardingCase.IdentifierAllocationId;
 		if (string.IsNullOrWhiteSpace(student.GrNumber) && !student.GrNo.HasValue)
 		{
+			if (ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(onboardingCase).HasValue)
+				throw new BusinessException("Students:Records:RenewalChecklistRequired").WithData("Reason", "Verify the permanent GR number through Student Records before preparing a return.");
 			var existing = await allocationRepository.FindAsync(item => item.OnboardingCaseId == id &&
 				item.Status == StudentIdentifierAllocationStatus.Reserved);
 			if (existing != null)
@@ -486,7 +507,28 @@ public partial class StudentOnboardingAppService(
 		await caseRepository.UpdateAsync(onboardingCase, false);
 		await AddEventAsync(id, "IdentifiersPrepared", $"Identifier and roll number {input.RollNumber} prepared.");
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		return await MapCaseAsync(onboardingCase, true);
+		var result = await MapCaseAsync(onboardingCase, true); await rollWork.CompleteAsync(); return result;
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
+	public async Task<StudentOnboardingRollPreviewDto> PreviewRollAsync(Guid id, StudentOnboardingRollPreviewInput input)
+	{
+		var item = await GetCaseAsync(id);
+		if (!item.DivisionId.HasValue) throw new BusinessException(StudentOnboardingErrorCodes.PlacementInvalid);
+		var reader = LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>();
+		var rule = await reader.CaptureForCaseAsync(item);
+		var proposal = await ProposeCaseRollAsync(item, input.RollNumber, input.RollAssignmentMode, input.Reason, rule);
+		return new() { SchoolAssignmentMode = await reader.GetAssignmentModeAsync(item.AcademicYearId), RollAssignmentMode = proposal.AssignmentMode, ProposedRollNumber = proposal.RollNumber, ConcurrencyStamp = item.ConcurrencyStamp };
+	}
+	private async Task<StudentOnboardingRollProposal> ProposeCaseRollAsync(StudentOnboardingCase item, int? roll, string? mode, string? reason, string rule)
+	{
+		var selected = StudentOnboardingRollNumberAllocator.ResolveMode(rule, mode);
+		if (selected == "automatic" && item.RollNumber.HasValue)
+		{
+			await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().ValidateAsync(item.StudentId, item.AcademicYearId, item.IntendedStandardId, item.DivisionId!.Value, item.RollNumber, reason ?? "", rule);
+			return new(selected, item.RollNumber.Value);
+		}
+		return await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollNumberAllocator>().ProposeAsync(item.StudentId, item.AcademicYearId, item.IntendedStandardId, item.DivisionId!.Value, roll, mode, rule, reason ?? "");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
@@ -507,7 +549,8 @@ public partial class StudentOnboardingAppService(
 	{
 		try
 		{
-			return await ActivateCoreAsync(id, input);
+			using var activation = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);
+			var result = await ActivateCoreAsync(id, input); await activation.CompleteAsync(); return result;
 		}
 		catch (Exception exception)
 		{
@@ -529,6 +572,8 @@ public partial class StudentOnboardingAppService(
 		var onboardingCase = await GetCaseAsync(id);
 		if (onboardingCase.StudentEnrollmentId.HasValue)
 			return await MapCaseAsync(onboardingCase, true);
+		var reviewedReturn = ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(onboardingCase).HasValue;
+		if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(onboardingCase);
 		EnsureConcurrency(onboardingCase, input.ConcurrencyStamp);
 		onboardingCase.BeginActivation(input.IdempotencyKey);
 		var now = DateTime.UtcNow;
@@ -558,6 +603,8 @@ public partial class StudentOnboardingAppService(
 			throw new EntityNotFoundException(typeof(Student), onboardingCase.StudentId);
 		if (string.IsNullOrWhiteSpace(student.GrNumber) && !student.GrNo.HasValue && allocation == null)
 			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierAlreadyAllocated);
+		if (reviewedReturn && (allocation != null || string.IsNullOrWhiteSpace(student.GrNumber) && !student.GrNo.HasValue))
+			throw new BusinessException("Students:Records:RenewalChecklistRequired");
 		if (await enrollmentRepository.AnyAsync(item => item.StudentId == student.Id &&
 			item.AcademicYearId == onboardingCase.AcademicYearId && item.IsActive))
 			throw new BusinessException(StudentOnboardingErrorCodes.EnrollmentAlreadyExists);
@@ -565,11 +612,12 @@ public partial class StudentOnboardingAppService(
 			item.DivisionId == onboardingCase.DivisionId && item.RollNumber == onboardingCase.RollNumber && item.IsActive))
 			throw new BusinessException(StudentOnboardingErrorCodes.RollNumberDuplicate);
 
-		var enrollment = StudentEnrollment.Create(GuidGenerator.Create(), CurrentTenant.Id, student.Id,
-			onboardingCase.AcademicYearId, onboardingCase.IntendedStandardId, onboardingCase.DivisionId,
-			onboardingCase.RollNumber, onboardingCase.Id);
-		await enrollmentRepository.InsertAsync(enrollment, false);
-		if (allocation != null)
+		var enrollment = reviewedReturn
+			? await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ActivateEnrollmentAsync(onboardingCase)
+			: StudentEnrollment.Create(GuidGenerator.Create(), CurrentTenant.Id, student.Id, onboardingCase.AcademicYearId,
+				onboardingCase.IntendedStandardId, onboardingCase.DivisionId, onboardingCase.RollNumber, onboardingCase.Id);
+		if (!reviewedReturn) await enrollmentRepository.InsertAsync(enrollment, false);
+		if (allocation != null && !reviewedReturn)
 		{
 			var legacyGrNo = int.TryParse(allocation.Value, out var parsed) ? parsed : (int?)null;
 			student.AssignGrNumber(allocation.Value, legacyGrNo);
@@ -579,7 +627,8 @@ public partial class StudentOnboardingAppService(
 			onboardingCase.IntendedMediumId, onboardingCase.IntendedStageId, onboardingCase.IntendedStandardId,
 			onboardingCase.DivisionId);
 		student.AssignRollNo(onboardingCase.RollNumber);
-		student.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
+		if (reviewedReturn) student.ChangeOperationalStatus(StudentStatus.Active, "Reviewed Records return activated through Student Onboarding.");
+		else student.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
 		await studentRepository.UpdateAsync(student, false);
 		await reservationRepository.UpdateAsync(reservation, false);
 		onboardingCase.BeginProvisioning(enrollment.Id);
@@ -957,6 +1006,8 @@ public partial class StudentOnboardingAppService(
 	{
 		var configuration = await configurationManager.GetAsync(onboardingCase.AcademicYearId);
 		OnboardingRuleConfiguration.EnsureAdmissionRouteCovered(onboardingCase, configuration);
+		var reviewedReturn = ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(onboardingCase).HasValue;
+		if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(onboardingCase, !onboardingCase.StudentEnrollmentId.HasValue);
 		var student = await studentRepository.GetWithDetailsAsync(onboardingCase.StudentId) ??
 			throw new EntityNotFoundException(typeof(Student), onboardingCase.StudentId);
 		var documentStatus = await studentDocumentManager.GetRequiredDocumentsStatusAsync(student.Id);
@@ -994,6 +1045,7 @@ public partial class StudentOnboardingAppService(
 			needsApproval |= placementChanged && (placementRule.HasValue && OnboardingRuleConfiguration.Boolean(placementRule.Value, "requireApproval") ||
 				OnboardingRuleConfiguration.Text(rules, "approvalMode") == "conditional" && OnboardingRuleConfiguration.Strings(rules, "approvalTriggers").Contains("division-change"));
 			var approval = steps.SingleOrDefault(s => s.Key == StudentOnboardingStepKeys.ApprovalReview);
+			if (reviewedReturn) needsApproval = false;
 			if (approval == null && needsApproval)
 			{
 				approval = new StudentOnboardingStep(GuidGenerator.Create(), CurrentTenant.Id, onboardingCase.Id,
@@ -1011,6 +1063,10 @@ public partial class StudentOnboardingAppService(
 			}
 		}
 		// Applies to legacy policies as well: these dependencies require an enrollment first.
+		if (reviewedReturn && steps.SingleOrDefault(s => s.Key == StudentOnboardingStepKeys.ApprovalReview) is { } returnApproval)
+		{
+			returnApproval.SetRequired(false); await stepRepository.UpdateAsync(returnApproval, false);
+		}
 		var serviceStep = steps.Single(s => s.Key == StudentOnboardingStepKeys.FinanceAccountsServices);
 		serviceStep.SetRequired(false);
 		serviceStep.Reset("Fee assignment, first payment and requested access are verified after enrollment.");
@@ -1202,6 +1258,7 @@ public partial class StudentOnboardingAppService(
 			SeatReservationId = onboardingCase.SeatReservationId,
 			GrNumber = student?.GrNumber ?? student?.GrNo?.ToString() ?? reservedIdentifier?.Value,
 			RollNumber = onboardingCase.RollNumber,
+			RollAssignmentMode = await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().GetAssignmentModeAsync(onboardingCase.AcademicYearId),
 			StudentEnrollmentId = onboardingCase.StudentEnrollmentId,
 			StartedAt = onboardingCase.StartedAt,
 			ReadyAt = onboardingCase.ReadyAt,

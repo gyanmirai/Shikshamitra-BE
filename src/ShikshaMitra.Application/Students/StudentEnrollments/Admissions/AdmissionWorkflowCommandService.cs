@@ -20,10 +20,12 @@ public class AdmissionWorkflowCommandService(
 {
 	public async Task<AdmissionWorkflowDto> CreateAsync(CreateUpdateAdmissionWorkflowDto input)
 	{
-		await EnsureCodeVersionAvailableAsync(input.Code, 1);
+		var id = GuidGenerator.Create();
+		var code = AdmissionSettingsCode.ForCreate(input.Code, "WF", id);
+		await EnsureCodeVersionAvailableAsync(code, 1);
 		await EnsurePublishedInquiryFormAsync(input.DefaultInquiryFormDefinitionId);
 		var workflow = new AdmissionWorkflowDefinition(
-			GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code, description: input.Description,
+			id, CurrentTenant.Id, input.Name, code, description: input.Description,
 			ownerUserId: CurrentUser.Id,
 			defaultInquiryFormDefinitionId: input.DefaultInquiryFormDefinitionId);
 		// Keep the value explicit at the application boundary as a safeguard for
@@ -42,15 +44,16 @@ public class AdmissionWorkflowCommandService(
 		var workflow = await definitionStore.GetAsync(id);
 		workflow.PrepareForEdit();
 		EnsureConcurrency(workflow, input.ConcurrencyStamp);
+		var code = AdmissionSettingsCode.ForUpdate(input.Code, workflow.Code);
 		if (workflow.ParentVersionId.HasValue &&
-			!string.Equals(workflow.Code, NormalizeCode(input.Code), StringComparison.Ordinal))
+			!string.Equals(workflow.Code, code, StringComparison.Ordinal))
 		{
 			throw new BusinessException(AdmissionWorkflowErrorCodes.CodeAlreadyExists,
 				"Workflow code cannot change inside a version history.");
 		}
-		await EnsureCodeVersionAvailableAsync(input.Code, workflow.Version, workflow.Id);
+		await EnsureCodeVersionAvailableAsync(code, workflow.Version, workflow.Id);
 		await EnsurePublishedInquiryFormAsync(input.DefaultInquiryFormDefinitionId);
-		workflow.UpdateDetails(input.Name, input.Code, input.Description);
+		workflow.UpdateDetails(input.Name, code, input.Description);
 		workflow.SetDefaultInquiryForm(input.DefaultInquiryFormDefinitionId);
 		await definitionStore.ReplaceChildrenAsync(id, input);
 		await workflowRepository.UpdateAsync(workflow, autoSave: true);
@@ -74,9 +77,11 @@ public class AdmissionWorkflowCommandService(
 	public async Task<AdmissionWorkflowDto> CloneAsync(Guid id, CloneAdmissionWorkflowDto input)
 	{
 		var source = await definitionStore.GetAsync(id);
-		await EnsureCodeVersionAvailableAsync(input.Code, 1);
+		var cloneId = GuidGenerator.Create();
+		var code = AdmissionSettingsCode.ForCreate(input.Code, "WF", cloneId);
+		await EnsureCodeVersionAvailableAsync(code, 1);
 		var clone = new AdmissionWorkflowDefinition(
-			GuidGenerator.Create(), CurrentTenant.Id, input.Name, input.Code, description: input.Description,
+			cloneId, CurrentTenant.Id, input.Name, code, description: input.Description,
 			ownerUserId: CurrentUser.Id,
 			defaultInquiryFormDefinitionId: source.DefaultInquiryFormDefinitionId);
 		clone.IsDeleted = false;

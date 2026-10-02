@@ -17,6 +17,4 @@ public static class AdmissionFormErrorCodes
 	public const string FormInUse = "Admissions.FormInUse";
 	public const string DependencyCycle = "Admissions.FormDependencyCycle";
 	public const string InvalidValidationRule = "Admissions.FormInvalidValidationRule";
-	public const string MakerCheckerRequired = "Admissions.FormMakerCheckerRequired";
-	public const string AdminOverrideReasonRequired = "Admissions.FormAdminOverrideReasonRequired";
 }

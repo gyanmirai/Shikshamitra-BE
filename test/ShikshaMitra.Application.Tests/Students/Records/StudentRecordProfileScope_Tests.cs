@@ -23,6 +23,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var assigned = await CreateExistingStudentAsync(offering, "Assigned", "Student");
 		var other = await CreateExistingStudentAsync(offering, "Other", "Division");
 		var unplaced = await CreateExistingStudentAsync(offering, "Unplaced", "Student");
+		await GrantCompletedRecordAsync(assigned); await GrantCompletedRecordAsync(other); await GrantCompletedRecordAsync(unplaced);
 		var staffId = Guid.NewGuid();
 		await EnsureTestIdentityUserAsync(staffId, $"profile-staff-{staffId:N}");
 		await WithUnitOfWorkAsync(async () =>
@@ -38,9 +39,6 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					offering.StageId, offering.StandardId, divisionId);
 				await _studentRepository.UpdateAsync(student, autoSave: true);
 			}
-			await GetRequiredService<IIdentityUserRepository>().InsertAsync(new IdentityUser(staffId,
-				$"profile-division-staff-{staffId:N}", $"profile-division-staff-{staffId:N}@example.test", TestTenantId),
-				autoSave: true);
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: staffId,
 				academicYearId: assigned.AcademicYearId, educationBoardId: offering.BoardId, educationMediumId: offering.MediumId,
 				educationMediumStageId: offering.StageId, standardId: offering.StandardId,

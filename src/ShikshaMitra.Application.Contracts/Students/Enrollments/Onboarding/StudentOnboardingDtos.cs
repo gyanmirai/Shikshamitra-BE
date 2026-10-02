@@ -134,6 +134,7 @@ public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 	public Guid? SeatReservationId { get; set; }
 	public string? GrNumber { get; set; }
 	public int? RollNumber { get; set; }
+	public string RollAssignmentMode { get; set; } = "manual";
 	public Guid? StudentEnrollmentId { get; set; }
 	public DateTime? StartedAt { get; set; }
 	public DateTime? ReadyAt { get; set; }
@@ -190,9 +191,24 @@ public class AllocateStudentOnboardingIdentifierDto
 	public string? ConcurrencyStamp { get; set; }
 	public Guid NumberSeriesId { get; set; }
 	public int RollNumber { get; set; }
+	public string? RollAssignmentMode { get; set; }
 	public string? ManualValue { get; set; }
 	public long? ManualSequence { get; set; }
 	public string? OverrideReason { get; set; }
+}
+
+public class StudentOnboardingRollPreviewInput
+{
+	public int? RollNumber { get; set; }
+	public string? RollAssignmentMode { get; set; }
+	public string? Reason { get; set; }
+}
+public class StudentOnboardingRollPreviewDto
+{
+	public string SchoolAssignmentMode { get; set; } = "manual";
+	public string RollAssignmentMode { get; set; } = "manual";
+	public int ProposedRollNumber { get; set; }
+	public string ConcurrencyStamp { get; set; } = "";
 }
 
 public class ActivateStudentOnboardingDto

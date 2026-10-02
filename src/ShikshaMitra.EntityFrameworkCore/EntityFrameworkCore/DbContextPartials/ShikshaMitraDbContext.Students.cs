@@ -70,6 +70,7 @@ public partial class ShikshaMitraDbContext
 	public DbSet<AdmissionActivity> AdmissionActivities { get; set; }
 	public DbSet<AdmissionInquiryManagement> AdmissionInquiryManagement { get; set; }
 	public DbSet<AdmissionIntakeProfile> AdmissionIntakeProfiles { get; set; }
+	public DbSet<AdmissionIntakeSetup> AdmissionIntakeSetups { get; set; }
 	public DbSet<AdmissionPublicInquiryLink> AdmissionPublicInquiryLinks { get; set; }
 	public DbSet<AdmissionInquiryFollowUp> AdmissionInquiryFollowUps { get; set; }
 	public DbSet<AdmissionDocumentEvidence> AdmissionDocumentEvidence { get; set; }
@@ -105,6 +106,23 @@ public partial class ShikshaMitraDbContext
     public DbSet<StudentRollNumberAssignment> StudentRollNumberAssignments { get; set; }
     public DbSet<StudentCertificate> StudentCertificates { get; set; }
     public DbSet<StudentCertificateTemplate> StudentCertificateTemplates { get; set; }
+	public DbSet<StudentRecordChange> StudentRecordChanges { get; set; }
+	public DbSet<StudentRecordChangeDecision> StudentRecordChangeDecisions { get; set; }
+	public DbSet<StudentRecordDocumentEvent> StudentRecordDocumentEvents { get; set; }
+	public DbSet<StudentRecordPhotoDraft> StudentRecordPhotoDrafts { get; set; }
+	public DbSet<StudentRecordReportJob> StudentRecordReportJobs { get; set; }
+	public DbSet<StudentRecordDuplicateReview> StudentRecordDuplicateReviews { get; set; }
+	public DbSet<StudentRecordTransition> StudentRecordTransitions { get; set; }
+	public DbSet<StudentRecordTransitionBatch> StudentRecordTransitionBatches { get; set; }
+	public DbSet<StudentRecordTransitionEvent> StudentRecordTransitionEvents { get; set; }
+	public DbSet<StudentRecordRenewalCase> StudentRecordRenewalCases { get; set; }
+	public DbSet<StudentRecordReturnHandoff> StudentRecordReturnHandoffs { get; set; }
+	public DbSet<StudentGuardianAccessReview> StudentGuardianAccessReviews { get; set; }
+	public DbSet<StudentIdCard> StudentIdCards { get; set; }
+	public DbSet<StudentIdCardTemplate> StudentIdCardTemplates { get; set; }
+	public DbSet<StudentRecordLegacyOverride> StudentRecordLegacyOverrides { get; set; }
+	public DbSet<ShikshaMitra.Students.StudentRecords.StudentRecordsConfiguration> StudentRecordsConfigurations { get; set; }
+	public DbSet<ShikshaMitra.Students.StudentRecords.StudentRecordsPolicyVersion> StudentRecordsPolicyVersions { get; set; }
 
     // ───────────────────────────────────────────────
     // Students — Attendance

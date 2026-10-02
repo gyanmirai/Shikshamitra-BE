@@ -89,7 +89,7 @@ public class CreateUpdateAdmissionWorkflowTransitionDto
 public class CreateUpdateAdmissionWorkflowDto
 {
 	public string Name { get; set; } = string.Empty;
-	public string Code { get; set; } = string.Empty;
+	public string? Code { get; set; }
 	public string? Description { get; set; }
 	public Guid? DefaultInquiryFormDefinitionId { get; set; }
 	public string? ConcurrencyStamp { get; set; }
@@ -131,7 +131,7 @@ public class AdmissionWorkflowValidationIssueDto
 public class CloneAdmissionWorkflowDto
 {
 	public string Name { get; set; } = string.Empty;
-	public string Code { get; set; } = string.Empty;
+	public string? Code { get; set; }
 	public string? Description { get; set; }
 }
 

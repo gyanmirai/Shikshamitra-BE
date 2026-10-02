@@ -68,21 +68,26 @@ public partial class StudentOnboardingAppService
 	{
 		// Historical/completed records are immutable. A retry never enrolls the student twice.
 		if (item.Status == StudentOnboardingStatus.Completed) return;
+		var reviewedReturn = ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(item).HasValue;
+		if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(item, false);
 		var handoffs = await handoffRepository.GetListAsync(h => h.OnboardingCaseId == item.Id);
 		var finance = handoffs.SingleOrDefault(h => h.ServiceKey == "finance-first-payment");
 		if (finance == null)
 			throw OnboardingRuleConfiguration.Invalid("The required Finance handoff is missing. Reconcile this case before completion.");
 		var now = DateTime.UtcNow;
 		var readiness = await feeReadinessReader.GetAsync(item.StudentId, item.AcademicYearId);
-		if (readiness.Assigned && readiness.FirstInstallmentSettled) finance.Acknowledge(now);
-		else finance.Fail(readiness.Detail, now);
+		var application = await applicationRepository.GetAsync(item.ApplicationId);
+		var feeSelectionBlocker = await admissionFeeSelectionReader.GetBlockerAsync(application);
+		if (readiness.Assigned && readiness.FirstInstallmentSettled && feeSelectionBlocker == null) finance.Acknowledge(now);
+		else finance.Fail(feeSelectionBlocker ?? readiness.Detail, now);
 		await handoffRepository.UpdateAsync(finance, false);
 		foreach (var account in handoffs.Where(h => h.ServiceKey is "student-account" or "guardian-account"))
 		{
 			var type = account.ServiceKey.Replace("-account", "");
 			var link = await portalLinkRepository.FindAsync(x => x.StudentId == item.StudentId && x.AccountType == type);
 			var user = link == null ? null : await identityUserRepository.FindAsync(link.UserId);
-			if (user?.IsActive == true) account.Acknowledge(now);
+			var validReturnAccount = !reviewedReturn || await IsCurrentReturnPortalAsync(item.StudentId, type, link);
+			if (user?.IsActive == true && validReturnAccount) account.Acknowledge(now);
 			else account.Fail("Create and link the required portal account, or ask an identity administrator to review an inactive account.", now);
 			await handoffRepository.UpdateAsync(account, false);
 		}
@@ -95,11 +100,23 @@ public partial class StudentOnboardingAppService
 		else
 		{
 			item.CompleteProvisioning(now);
+			if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().CompleteAsync(item);
 			await AddEventAsync(item.Id, "Completed", "Onboarding completed after Finance confirmed the first installment and all required handoffs were acknowledged.");
 			await distributedEventBus.PublishAsync(new StudentOnboardingCompletedEto(item.Id, item.StudentId,
 				item.StudentEnrollmentId!.Value, item.AcademicYearId, item.IntendedStandardId, item.DivisionId!.Value, CurrentTenant.Id, now));
 		}
 		await caseRepository.UpdateAsync(item, false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
+	}
+	private async Task<bool> IsCurrentReturnPortalAsync(Guid studentId, string type, ShikshaMitra.Students.Portal.StudentPortalAccountLink? link)
+	{
+		if (link == null || link.VerifiedByUserId == Guid.Empty) return false;
+		var student = await studentRepository.GetWithDetailsAsync(studentId);
+		var user = await portalUserManager.FindByIdAsync(link.UserId.ToString());
+		if (student == null || user == null || user.TenantId != CurrentTenant.Id || !user.IsActive) return false;
+		var roles = await portalUserManager.GetRolesAsync(user);
+		var email = type == "student" && link.Relationship == "self" ? student.ContactDetail?.Email : link.Relationship switch
+		{ "father" => student.FamilyDetail?.FatherDetails?.Email, "mother" => student.FamilyDetail?.MotherDetails?.Email, "guardian" => student.FamilyDetail?.GuardianDetails?.Email, _ => null };
+		return roles.Count == 1 && roles[0] == (type == "student" ? "Student" : "Parent") && !string.IsNullOrWhiteSpace(email) && string.Equals(email.Trim(), user.Email, StringComparison.OrdinalIgnoreCase);
 	}
 }

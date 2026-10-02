@@ -16,9 +16,6 @@ public interface IAdmissionFormAppService : IApplicationService
 	Task DeleteAsync(Guid id, string? concurrencyStamp = null);
 	Task<AdmissionFormDto> ArchiveAsync(Guid id, string? concurrencyStamp = null);
 	Task<AdmissionFormValidationResultDto> ValidateAsync(Guid id);
-	Task<AdmissionFormDto> RequestApprovalAsync(Guid id, ReviewAdmissionFormDto input);
-	Task<AdmissionFormDto> ApproveAsync(Guid id, ReviewAdmissionFormDto input);
-	Task<AdmissionFormDto> RejectAsync(Guid id, ReviewAdmissionFormDto input);
 	Task<AdmissionFormDto> PublishAsync(Guid id, string? concurrencyStamp = null);
 	Task<IReadOnlyList<AdmissionFormAuditEntryDto>> GetAuditAsync(Guid id);
 	Task<IReadOnlyList<AdmissionFormVersionSummaryDto>> GetVersionsAsync(Guid id);

@@ -38,6 +38,7 @@ public sealed class OnboardingRuleConfiguration
 			if (Profiles.Select(p => Text(p, "id")).Distinct().Count() != Profiles.Count())
 				throw Invalid("Readiness rule IDs must be unique.");
 			ValidateChoice(Root.GetProperty("grNumber"), "assignmentMode", "both", "automatic", "manual");
+			ValidateChoice(Root.GetProperty("rollNumber"), "assignmentMode", "both", "automatic", "manual");
 			foreach (var section in new[] { "grNumber", "rollNumber", "divisionChange" })
 				foreach (var rule in Rules(section))
 				{
@@ -173,6 +174,20 @@ public sealed class OnboardingRuleConfiguration
 	public JsonElement? ResolveRule(string section, StudentOnboardingCase item, DateTime at, Guid? divisionId = null) =>
 		Resolve(Rules(section).Where(r => Boolean(r, "isActive", true) &&
 			(!DateTime.TryParse(Text(r, section == "divisionChange" ? "effectiveDate" : "effectiveFrom"), out var from) || from.Date <= at.Date)), item, false, divisionId);
+
+	/// <summary>Resolves the same owner rule for a real academic path without manufacturing an Admission case.</summary>
+	public JsonElement? ResolveRule(string section, Guid boardId, Guid mediumId, Guid stageId, Guid standardId,
+		Guid? divisionId, Guid? campusId, DateTime at)
+	{
+		Guid?[] path = [boardId, mediumId, stageId, standardId, divisionId];
+		var matches = Rules(section).Where(rule => Boolean(rule, "isActive", true) &&
+			(!DateTime.TryParse(Text(rule, section == "divisionChange" ? "effectiveDate" : "effectiveFrom"), out var from) || from.Date <= at.Date) &&
+			(Text(rule, "campusMode", "all") != "selected" || campusId.HasValue && Ids(rule, "campusIds").Contains(campusId.Value)) &&
+			Levels.Select((level, i) => Text(rule, level.Mode) == "all" || path[i].HasValue && Ids(rule, level.Ids).Contains(path[i]!.Value)).All(x => x))
+			.OrderByDescending(Score).ToList();
+		if (matches.Count > 1 && Score(matches[0]) == Score(matches[1])) throw Invalid("More than one rule has the same priority for this academic path. Narrow the rule coverage.");
+		return matches.Count == 0 ? null : matches[0];
+	}
 
 	private static JsonElement? Resolve(IEnumerable<JsonElement> rules, StudentOnboardingCase item,
 		bool profile, Guid? divisionId = null)

@@ -18,6 +18,7 @@ public class OnboardingFeeReadinessReader(
 	IRepository<FeeCollectionDueFeeAllocation, Guid> allocations,
 	IRepository<FeeRecordMetadata, Guid> collections) : ITransientDependency
 {
+	public Task<bool> HasAssignmentAsync(Guid studentId, Guid academicYearId) => assignments.AnyAsync(a => a.StudentId == studentId && a.AcademicYearId == academicYearId);
 	public async Task<OnboardingFeeReadiness> GetAsync(Guid studentId, Guid academicYearId)
 	{
 		var assignment = await assignments.FindAsync(a => a.StudentId == studentId && a.AcademicYearId == academicYearId);

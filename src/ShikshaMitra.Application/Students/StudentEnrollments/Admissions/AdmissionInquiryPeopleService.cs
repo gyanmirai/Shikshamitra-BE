@@ -71,6 +71,25 @@ public class AdmissionInquiryPeopleService(
 		return rows.ToDictionary(user => user.Id, Display);
 	}
 
+	public async Task EnsureSelectableAsync(IEnumerable<Guid> userIds)
+	{
+		var ids = userIds.Where(id => id != Guid.Empty).Distinct().ToArray();
+		if (ids.Length == 0)
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration,
+				"Choose at least one active counsellor and a fallback manager.");
+		var query = await users.GetQueryableAsync();
+		var activeIds = await AsyncExecuter.ToListAsync(query
+			.Where(user => Enumerable.Contains(ids, user.Id) && user.IsActive)
+			.Select(user => user.Id));
+		if (activeIds.Count != ids.Length)
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration,
+				"Every counsellor and fallback manager must be an active user.");
+		foreach (var id in ids)
+			if (!(await scopes.GetUserScopeAsync(id)).HasAnyAccess)
+				throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration,
+					"Every counsellor and fallback manager must have admission scope access.");
+	}
+
 	public async Task<bool> CanAccessCycleAsync(Guid userId, Guid cycleId)
 	{
 		if (!await IsActiveAsync(userId)) return false;

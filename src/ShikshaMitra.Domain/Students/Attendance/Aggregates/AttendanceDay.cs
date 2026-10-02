@@ -39,6 +39,25 @@ public class AttendanceDay : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUser
 	/// If true, no further edits are allowed to this day's attendance
 	/// </summary>
 	public bool IsLocked { get; private set; }
+	public bool IsSubmitted { get; private set; }
+	public int Revision { get; private set; }
+	public Guid? LastOperationId { get; private set; }
+	public string? LastOperationHash { get; private set; }
+	public string? PolicySnapshotJson { get; private set; }
+	public string? SubmittedRosterRevision { get; private set; }
+
+	public void SaveRevision(Guid operationId, string operationHash, bool submit, string rosterRevision, string policyJson)
+	{
+		Revision++;
+		LastOperationId = operationId == Guid.Empty ? null : operationId;
+		LastOperationHash = operationHash;
+		if (submit)
+		{
+			IsSubmitted = true;
+			SubmittedRosterRevision = rosterRevision;
+			PolicySnapshotJson ??= policyJson;
+		}
+	}
 
 	/// <summary>
 	/// User who created/saved this attendance day
@@ -87,6 +106,7 @@ public class AttendanceDay : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUser
 		}
 
 		IsLocked = true;
+		Revision++;
 	}
 
 	/// <summary>
@@ -95,6 +115,7 @@ public class AttendanceDay : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUser
 	public void Unlock()
 	{
 		IsLocked = false;
+		Revision++;
 	}
 
 	/// <summary>

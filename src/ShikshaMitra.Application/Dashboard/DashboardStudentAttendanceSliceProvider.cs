@@ -41,13 +41,14 @@ public class DashboardStudentAttendanceSliceProvider(
 					EndDate = DateTime.ParseExact(range.To!, "yyyy-MM-dd", CultureInfo.InvariantCulture)
 				});
 			var percentage = attendance.SchoolAttendancePercentage;
-			var status = percentage >= 90 ? "success" : percentage >= 75 ? "warning" : "error";
+			var status = !percentage.HasValue ? "info" : attendance.IsProvisional ? "warning" : percentage >= 90 ? "success" : percentage >= 75 ? "warning" : "error";
 			var classCount = attendance.Classes.Count;
 			var divisionCount = attendance.Classes.Sum(x => x.Divisions.Count);
 			var subtitle = classCount == 0
 				? "No scoped attendance summary found"
-				: $"{classCount} classes, {divisionCount} divisions in scope";
-			var value = $"{percentage:0.##}%";
+				: $"{attendance.RecordedDays}/{attendance.ExpectedDays} expected student-days marked; {classCount} classes, {divisionCount} divisions";
+			if (attendance.IsProvisional) subtitle += "; provisional";
+			var value = percentage.HasValue ? $"{percentage:0.##}%" : "—";
 
 			if (summary.DashboardTemplate == Leadership)
 			{

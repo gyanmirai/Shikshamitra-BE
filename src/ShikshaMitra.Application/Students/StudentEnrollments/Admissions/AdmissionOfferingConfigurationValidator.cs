@@ -21,6 +21,7 @@ public class AdmissionOfferingConfigurationValidator(
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
 	IRepository<AdmissionIntakeProfile, Guid> intakeProfileRepository,
+	IRepository<AdmissionIntakeSetup, Guid> intakeSetupRepository,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
 	IEducationBoardRepository boardRepository,
 	IEducationMediumRepository mediumRepository,
@@ -238,6 +239,15 @@ public class AdmissionOfferingConfigurationValidator(
 		await ValidateIntakeProfileAsync(input.CounsellorAssignmentProfileId, AdmissionIntakeProfileKind.CounsellorAssignment,
 			AdmissionOfferingValidationCodes.CounsellorAssignmentProfileMissing,
 			AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid, errors);
+		var profileIds = new[] { input.InquiryIntakeProfileId, input.CounsellorAssignmentProfileId }
+			.Where(id => id.HasValue).Select(id => id!.Value).ToArray();
+		if (profileIds.Length > 0 && await intakeSetupRepository.AnyAsync(setup => setup.IsArchived &&
+			(Enumerable.Contains(profileIds, setup.InquiryIntakeProfileId) ||
+			 Enumerable.Contains(profileIds, setup.CounsellorAssignmentProfileId))))
+		{
+			errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
+				"Archived intake setups cannot be used by an active Admission Offering.", activationOnly: true));
+		}
 		if (input.CounsellorAssignmentProfileId.HasValue)
 		{
 			var profile = await intakeProfileRepository.FindAsync(input.CounsellorAssignmentProfileId.Value);

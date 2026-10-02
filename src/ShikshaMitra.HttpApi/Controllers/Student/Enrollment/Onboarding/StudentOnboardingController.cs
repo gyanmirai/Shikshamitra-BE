@@ -97,6 +97,10 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 		Guid id, AllocateStudentOnboardingIdentifierDto input) =>
 		Result.Success(await service.AllocateIdentifierAsync(id, input));
 
+	[HttpPost("{id:guid}/roll-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
+	public async Task<Result<StudentOnboardingRollPreviewDto>> PreviewRollAsync(Guid id, StudentOnboardingRollPreviewInput input) => Result.Success(await service.PreviewRollAsync(id, input));
+
 	[HttpGet("{id:guid}/activation-preview")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<StudentOnboardingCaseDto>> PreviewActivationAsync(Guid id) =>

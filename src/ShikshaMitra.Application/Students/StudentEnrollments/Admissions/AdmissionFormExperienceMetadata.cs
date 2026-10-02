@@ -23,20 +23,9 @@ internal sealed class AdmissionFormSectionExperienceMetadata
 	public Dictionary<string, Dictionary<string, AdmissionFormTranslationDto>> Fields { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
-internal sealed class AdmissionFormApprovalMetadata
-{
-	public AdmissionFormApprovalStatus Status { get; set; }
-	public Guid? RequestedBy { get; set; }
-	public DateTime? RequestedAt { get; set; }
-	public Guid? ReviewedBy { get; set; }
-	public DateTime? ReviewedAt { get; set; }
-	public string? Comment { get; set; }
-}
-
 internal static class AdmissionFormMetadataStore
 {
 	private const string ExperienceKey = "AdmissionFormExperience";
-	private const string ApprovalKey = "AdmissionFormApproval";
 	private const string AuditKey = "AdmissionFormAudit";
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -92,12 +81,6 @@ internal static class AdmissionFormMetadataStore
 		var json = source.GetProperty<string>(ExperienceKey);
 		if (!string.IsNullOrWhiteSpace(json)) target.SetProperty(ExperienceKey, json);
 	}
-
-	public static AdmissionFormApprovalMetadata ReadApproval(AdmissionFormDefinition form) =>
-		Deserialize(form.GetProperty<string>(ApprovalKey), new AdmissionFormApprovalMetadata());
-
-	public static void WriteApproval(AdmissionFormDefinition form, AdmissionFormApprovalMetadata approval) =>
-		form.SetProperty(ApprovalKey, JsonSerializer.Serialize(approval, JsonOptions));
 
 	public static List<AdmissionFormAuditEntryDto> ReadAudit(AdmissionFormDefinition form) =>
 		Deserialize(form.GetProperty<string>(AuditKey), new List<AdmissionFormAuditEntryDto>());

@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-09-17
+updated_on: 2026-10-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -256,6 +256,44 @@ The worker captures and persists the owner's current scope before generating a l
 Previously completed legacy exports without a trusted snapshot may be opened only by a current tenant-wide HR user.
 PDF export uses a repeating table header, switches wide reports to landscape A3, limits output to 500 rows, displays a truncation notice, and records the number of rows actually written.
 PDF failures store a stable user-facing message while retaining technical exceptions in server logs.
+
+## Operational HR dashboard
+
+`GET /api/hr/dashboard/overview` requires `HR.Dashboard.View` and returns generation time, capabilities, section availability, staff summary, seven-day counts, authorized filter choices, attention items, and saved payroll cycle counts.
+`GET /api/hr/dashboard/staff` additionally requires `HR.AttendanceAndLeave.AttendanceTracking.View` and returns matching staff with bounded server pagination.
+Both reads enforce the current tenant and persisted UserScope before serialization.
+Attendance aggregates require `HR.AttendanceAndLeave.Dashboard.View`, employee counts and profile actions require `HR.Employee.EmployeeList.View`, leave counts require `HR.LeaveManagement.LeaveCenter.View` with the existing own/reporting hierarchy boundary, and payroll counts require `HR.PayrollManagement.Dashboard.View`.
+Mark attendance additionally requires its existing View and Add grants, and opening Run Payroll requires its View grant.
+
+Both endpoints accept ISO `date`, optional `isTeaching`, `educationMediumStageId`, `department`, and `shiftId`.
+Date defaults to today in IST and rejects future dates.
+Staff reads additionally accept name/code `search`, `status`, `sorting` of `name`, `name desc`, `status`, or `status desc`, nonnegative `skipCount`, and `maxResultCount` from 1 to 100.
+Name ordering uses employee ID as the final stable tie-breaker.
+Search and status selection narrow the table only, while summary counts cover the selected date and staff filters.
+`Review` filters secondary review flags without inventing another primary attendance status.
+
+| Primary status | Operational definition |
+|---|---|
+| Present | Recorded present, including a working exception on a non-working day |
+| Absent | Recorded full-day absence without covering approved full-day leave |
+| OnLeave | Approved full-day leave without contradictory present or half-day attendance |
+| HalfDay | Recorded half-day attendance, with approved half-day leave shown separately |
+| NotMarked | Required working attendance remains unrecorded or unresolved |
+| NotScheduled | Configured holiday or weekly off without a recorded working exception |
+| NeedsSetup | Missing or ambiguous calendar or policy prevents classification of an unrecorded day |
+
+Counts, staff rows, filters, and trends share one classification and eligible employee population.
+Approved full-day leave converts a recorded absence to OnLeave, while recorded presence or half-day attendance is preserved and flagged if it conflicts with full-day leave.
+Incomplete imported or integrated punches never establish absence, and unmarked attendance never becomes confirmed absence.
+Joining and effective employment-status dates constrain each daily population.
+Effective attendance assignment precedence, group membership, work-calendar holidays, and configured weekly offs determine scheduling through batch reads.
+Unavailable and failed sections use explicit states and nullable payloads rather than zero counts.
+The read model excludes leave reasons, salary, banking information, and documents.
+Reads do not create payroll previews or alter attendance, leave, or audit records.
+
+The combined `/api/hr/dashboard/summary` route is retired, and Main preview reads and refresh requests are rejected.
+Scheduled refreshes ignore existing Main snapshots and create only Attendance and Payroll previews.
+Existing snapshot history remains stored, and separate attendance and payroll preview workflows remain supported.
 
 ## Error and contract rules
 

@@ -3,7 +3,7 @@ module: hr
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-10-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,7 +19,7 @@ HR behavior is split by operational area:
 
 | Area | Status | Behavior owned by backend HR |
 |---|---|---|
-| Dashboard | Implemented | HR summary, attendance trend, payroll status, leaves, alerts, quick actions, birthdays, anniversaries, and recent activity |
+| Dashboard | Implemented | English daily staff visibility, attendance classifications, scoped staff filters, attention items, seven-day counts, and saved payroll cycle counts |
 | Employees | Implemented | Employee lifecycle, profile data, documents, I-card data, status transitions, payroll details, reporting manager, and academic scope |
 | Attendance | Implemented | Manual attendance, attendance tracking, grouped register, imports, automated runs, locks, and payroll tags |
 | Leave | Implemented | Paid and unpaid leave policies, leave requests, approvals, balances, leave center, and payroll impact |

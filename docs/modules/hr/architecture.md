@@ -33,7 +33,7 @@ HR source paths are organized by subsystem:
 
 | Subsystem | Main source area | Owns |
 |---|---|---|
-| Dashboard | `HR/Dashboard` | HR summary and dashboard projections |
+| Dashboard | `HR/Dashboard` | Operational overview and staff reader, shared daily classification, batch calendar resolution, and separate attendance/payroll previews |
 | Employees | `HR/Employees` | Employee aggregate, profile, documents, status, reporting, payroll details, and search |
 | Attendance and leaves | `HR/AttendanceAndLeaves` | Attendance facts, leave requests, leave policies, evaluation runs, and leave balances |
 | Payroll | `HR/Payroll` | Payroll settings, salary structures, payroll run, attendance imports, and salary slips |

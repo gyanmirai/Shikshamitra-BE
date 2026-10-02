@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-09-17
+updated_on: 2026-10-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -70,6 +70,10 @@ Salary-slip fixtures must create effective compensation revisions before calcula
 ESI regression tests must distinguish agreed monthly classified wages for coverage from attendance-adjusted wages for contributions, including above-ceiling employees with unpaid days and contribution-period continuation.
 
 ## Focused test map
+
+Operational dashboard tests cover daily classification, count reconciliation, stable pagination, exact section grants, restricted UserScope, revoked read access, tenant isolation, request validation, and retirement of the combined Main reads.
+Run `HRDashboardDailyStatusProjection_Tests` and `HRDashboardApi_Tests` for these contracts.
+Finish with local signed-in frontend checks against PostgreSQL after automated validation.
 
 Use this table to pick focused tests:
 

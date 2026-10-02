@@ -55,7 +55,7 @@ public class HRDashboardSecondaryReader(
 			LockedCount = rows.Count(x => x.IsLocked),
 			PendingCount = rows.Count(x => !x.IsLocked && x.ReviewStatus != "REVIEWED"),
 			LastUpdatedAt = rows.Count == 0 ? null :
-				new DateTimeOffset(DateTime.SpecifyKind(rows.Max(x => x.LastModificationTime ?? x.CreationTime), DateTimeKind.Utc))
+				new DateTimeOffset(rows.Max(x => x.LastModificationTime ?? x.CreationTime))
 		};
 	}
 }

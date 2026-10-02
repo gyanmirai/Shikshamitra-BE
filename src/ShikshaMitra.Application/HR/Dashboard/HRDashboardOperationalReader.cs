@@ -134,7 +134,7 @@ public class HRDashboardOperationalReader(
 	}
 
 	private Task<bool> IsGrantedAsync(string permission) => AuthorizationService.IsGrantedAsync(permission);
-	private DateTimeOffset UtcNow() => new(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc));
+	private static DateTimeOffset UtcNow() => DateTimeOffset.UtcNow;
 	private DateOnly ParseDate(string? input)
 	{
 		var today = DateOnly.FromDateTime(UtcNow().ToOffset(TimeSpan.FromHours(5.5)).DateTime);

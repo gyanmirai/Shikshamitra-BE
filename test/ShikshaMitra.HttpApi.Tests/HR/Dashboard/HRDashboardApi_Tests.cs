@@ -400,6 +400,25 @@ public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 		after.Summary.StaffCount.ShouldBe(before.Summary.StaffCount);
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Operational_Default_Date_And_Timestamps_Should_Use_Actual_UTC_And_IST()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var before = DateTimeOffset.UtcNow;
+		var overview = await Client.GetFromJsonAsync<HRDashboardOverviewDto>($"{BaseUrl}/overview", JsonOptions);
+		var staff = await Client.GetFromJsonAsync<HRDashboardStaffPageDto>($"{BaseUrl}/staff", JsonOptions);
+		var after = DateTimeOffset.UtcNow;
+		overview!.GeneratedAt.ShouldBeGreaterThanOrEqualTo(before);
+		overview.GeneratedAt.ShouldBeLessThanOrEqualTo(after);
+		staff!.GeneratedAt.ShouldBeGreaterThanOrEqualTo(before);
+		staff.GeneratedAt.ShouldBeLessThanOrEqualTo(after);
+		if (overview.Payroll?.LastUpdatedAt is { } savedPayrollTime)
+			savedPayrollTime.ShouldBeLessThanOrEqualTo(after);
+		overview.Date.ShouldBe(overview.GeneratedAt.ToOffset(TimeSpan.FromHours(5.5)).ToString("yyyy-MM-dd"));
+		staff.Date.ShouldBe(staff.GeneratedAt.ToOffset(TimeSpan.FromHours(5.5)).ToString("yyyy-MM-dd"));
+	}
+
 	[Theory]
 	[InlineData("maxResultCount=101")]
 	[InlineData("skipCount=-1")]

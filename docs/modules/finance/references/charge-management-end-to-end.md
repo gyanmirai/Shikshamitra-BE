@@ -3,7 +3,7 @@ module: finance
 domain: charge-management
 content_type: Reference
 status: active
-updated_on: 2026-09-24
+updated_on: 2026-10-02
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -37,15 +37,35 @@ Fee Structures and Charge Management meet at student eligibility and in the coll
 ```text
 Charge Category
     -> create ChargeRequest + resolved per-student Charge lines
-    -> Pending, or Approved when the category needs no approval
+    -> Pending for every category (approval is mandatory)
     -> approve/reject selected Pending lines
     -> approved line appears in Fee Collection
     -> collection validates outstanding amount and stores ChargeCollectionRecord
     -> separate charge receipt is issued
-    -> reconciliation reversal excludes the reversed allocation from paid totals
+    -> Completed when every approved line has zero outstanding balance
+    -> reconciliation reversal excludes reversed allocations and reopens In Process when necessary
 ```
 
 Transport billing already posts a run through `ChargeRequestManager` and stores Finance charge request/line IDs. Library maintains a separate charge model and is not automatically settled through Finance. Any source-module integration must use the target origin and idempotency contract below rather than relying on notes or duplicate charge creation.
+
+## Four-state batch lifecycle
+
+| Value | Workflow status | Server rule |
+|---|---|---|
+| 0 | Pending | No lines yet, or at least one student line awaits a decision |
+| 1 | In Process | All decisions are made and an approved line has outstanding money |
+| 2 | Completed | At least one approved line exists and all approved lines have zero outstanding money |
+| 3 | Rejected | All lines are rejected or voided; their original per-line decision remains visible |
+
+Every new batch and newly added audience line starts Pending, including categories whose legacy `isApprovalRequired` flag is false. Editing a pending batch never auto-approves it. The existing Approve and Reject permissions, scope checks, independent checker and concurrency stamp remain authoritative. Approve/reject with no remaining pending lines fails. Mixed partial decisions keep the batch Pending until every decision is made. Rejected/voided lines do not create collection requirements.
+
+`workflowStatus` is a read-only projection shared by create/update, decision responses, detail, student-line detail and inbox. `GET api/charges` accepts `status=0..3`; unknown values are rejected. `displayStatus` mirrors the batch workflow for compatibility. `status` on detail/commands/student lines continues to mean the original approval enum (Pending=0, Approved=1, Rejected=2, Voided=3); consumers must not use it as the batch lifecycle. Inbox totals are `pendingCount`, `inProcessCount`, `completedCount` and `rejectedCount`; `processedCount` remains a compatibility alias for `inProcessCount` at response level and means reviewed student lines at item level.
+
+Outstanding is calculated per approved line as `max(0, principal - non-reversed collection allocations - applied waiver amounts)`, using decimal totals. Waivers remain separate from collected cash in student detail. A partial payment cannot complete a batch while any approved student balance remains; a reversal reopens it through linked correction evidence. Existing collection semantics count accepted provisional allocations until reversal, so Completed describes obligation settlement, not bank reconciliation. Charge-refund reinstatement remains unsupported by the existing charge collection contract.
+
+The lifecycle always considers the entire charge batch even when class/division filters select matching requests. Counts, filtering and pagination are computed from the same server resolver before pagination; no client-computed completion or manual completion endpoint is introduced. The projection applies to existing history without a schema migration or rewriting approval/payment evidence. Source modules using `ChargeRequestManager`, including Transport, now create Pending obligations and require the normal checker flow.
+
+The affected chain is category/account snapshot -> student eligibility/audience -> pending obligation -> checker decision -> collection/waiver -> receipt/reversal evidence -> derived inbox. No monetary amount, payment policy, receipt format, account posting rule or permission definition changes. Writes retain their existing unit-of-work, audit and concurrency boundaries; a failed decision does not produce an approved event. Status is derived on reads so there is no stored completion flag that can become stale.
 
 ## Current HTTP and permission contract
 
@@ -137,17 +157,16 @@ Enforce a unique origin key per tenant, academic year, source module, and source
 ### State model
 
 ```text
-Draft (optional product choice)
-  -> PendingApproval
-      -> Approved -> PartiallyPaid -> Paid
-      -> Rejected
-  -> Cancelled
+Pending
+  -> In Process -> Completed
+  -> Rejected
 
-Approved and unpaid -> Voided with reason and checker
-PartiallyPaid/Paid  -> correction or refund transaction; never delete or rewrite history
+Completed -> In Process only through a linked payment reversal restoring outstanding money
+Student lines retain Pending/Approved/Rejected/Voided decision evidence
+Approved and unpaid -> Voided with reason and checker (existing correction flow)
 ```
 
-The current API begins at Pending or Approved. Introduce Draft/Submit only if the product needs resumable authoring. Whether Draft exists or not, line state remains authoritative and the server returns `availableActions`.
+The current API always begins at Pending. The legacy category approval flag no longer bypasses the checker. Introduce Draft/Submit only if the product needs resumable authoring. Whether Draft exists or not, line state remains authoritative and the server returns `availableActions`.
 
 ### Monetary invariants
 

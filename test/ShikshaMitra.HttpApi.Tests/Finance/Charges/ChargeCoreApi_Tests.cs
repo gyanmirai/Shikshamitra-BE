@@ -43,7 +43,7 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Create_Charge_With_No_Approval_Category_Returns_Approved_Status_Immediately()
+	public async Task Should_Create_Charge_With_No_Approval_Category_Still_Returns_Pending_Status()
 	{
 		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: false);
@@ -56,7 +56,7 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 		var body = await response.Content.ReadFromJsonAsync<ChargeResponse>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.Data.ShouldNotBeNull();
-		body.Data.Status.ShouldBe(1); // Approved
+		body.Data.Status.ShouldBe(0); // All categories require approval
 	}
 
 	[Fact]

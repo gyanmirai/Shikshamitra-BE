@@ -166,6 +166,7 @@ public class RunPayrollItem
 	public int? ProvidentFundRuleVersion { get; set; }
 	public Guid? ProfessionalTaxRuleId { get; set; }
 	public int? ProfessionalTaxRuleVersion { get; set; }
+	public Guid? EsiConfigurationId { get; set; }
 	public Guid? EmployeeStateInsuranceRuleId { get; set; }
 	public int? EmployeeStateInsuranceRuleVersion { get; set; }
 	public double EmployeeStateInsuranceWages { get; set; }

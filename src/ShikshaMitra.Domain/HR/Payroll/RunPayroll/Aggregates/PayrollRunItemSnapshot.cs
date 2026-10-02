@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -64,6 +64,7 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public int? ProvidentFundRuleVersion { get; set; }
 	public Guid? ProfessionalTaxRuleId { get; set; }
 	public int? ProfessionalTaxRuleVersion { get; set; }
+	public Guid? EsiConfigurationId { get; set; }
 	public Guid? EmployeeStateInsuranceRuleId { get; set; }
 	public int? EmployeeStateInsuranceRuleVersion { get; set; }
 	public decimal EmployeeStateInsuranceWages { get; set; }
@@ -110,6 +111,8 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 
 	public void MarkLocked()
 	{
+		ShikshaMitra.HR.Payroll.Statutory.EsiPayrollReadiness.EnsureInsuranceNumber(
+			EmployeeStateInsuranceRuleId, EmployeeStateInsuranceCoverageDecision, EmployeeStateInsuranceNumber);
 		IsLocked = true;
 		ReviewStatus = "LOCKED";
 	}

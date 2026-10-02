@@ -15,10 +15,11 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollEsiContextResolver(
 	IRepository<StatutoryRuleVersion, Guid> ruleRepository,
-	IRepository<StatutoryEstablishment, Guid> establishmentRepository,
-	IRepository<EmployeeStatutoryEnrollment, Guid> enrollmentRepository,
+	EsiPayrollConfigurationResolver configurationResolver,
+	EsiEnrollmentResolver enrollmentResolver,
 	IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
 	IRepository<StatutoryOverride, Guid> overrideRepository,
+	IEarningComponentRepository earningComponentRepository,
 	IDeductionComponentRepository deductionComponentRepository)
 	: ITransientDependency
 {
@@ -33,14 +34,8 @@ public class PayrollEsiContextResolver(
 	{
 		var payrollMonth = new DateTime(year, month, 1);
 		var monthEnd = payrollMonth.AddMonths(1).AddDays(-1);
-		var establishment = (await establishmentRepository.GetListAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
-			x.JurisdictionCode == JurisdictionCode &&
-			x.Status == StatutoryEstablishmentStatus.Active &&
-			x.BenefitsActiveFrom.HasValue &&
-			x.BenefitsActiveFrom.Value <= monthEnd))
-			.OrderByDescending(x => x.BenefitsActiveFrom)
-			.FirstOrDefault();
+		var configuration = await configurationResolver.ResolveAsync(payrollMonth);
+		var establishment = configuration?.ToCalculationEstablishment();
 		if (establishment is null)
 		{
 			return new Dictionary<Guid, PayrollEsiStatutoryContext>();
@@ -69,11 +64,10 @@ public class PayrollEsiContextResolver(
 				x => x.Key,
 				x => x.OrderByDescending(item => item.EffectiveFrom).First().Treatment);
 		var requestedEmployeeIds = employeeIds.Distinct().ToHashSet();
-		var enrollments = (await enrollmentRepository.GetListAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
-			requestedEmployeeIds.Contains(x.EmployeeId)))
-			.GroupBy(x => x.EmployeeId)
-			.ToDictionary(x => x.Key, x => x.OrderByDescending(item => item.CreationTime).First());
+		foreach (var earning in await earningComponentRepository.GetListAsync(x => x.IsActive))
+			treatments.TryAdd(earning.Id, EsiWageDefaults.ByName.GetValueOrDefault(earning.Name, StatutoryWageTreatment.Unclassified));
+		foreach (var treatment in configuration!.GetTreatments()) treatments[treatment.Key] = treatment.Value;
+		var enrollments = await enrollmentResolver.ResolveAsync(payrollMonth, requestedEmployeeIds);
 		var overrides = (await overrideRepository.GetListAsync(x =>
 			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
 			requestedEmployeeIds.Contains(x.EmployeeId) &&

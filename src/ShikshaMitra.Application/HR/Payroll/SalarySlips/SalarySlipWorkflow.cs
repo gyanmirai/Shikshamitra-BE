@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using System;
@@ -6,6 +6,9 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Uow;
+using ShikshaMitra.HR.Payroll.RunPayroll;
+using ShikshaMitra.HR.Payroll.Statutory;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
@@ -18,6 +21,9 @@ public class SalarySlipWorkflow(
 	SalarySlipSnapshotGenerationService snapshotGenerationService,
 	SalarySlipDtoMapper salarySlipDtoMapper,
 	SalarySlipAccessService accessService,
+	IPayrollInputRevisionStore revisions,
+	EsiContinuityInvalidator continuityInvalidator,
+	EsiEnrollmentResolver enrollmentResolver,
 	ILogger<SalarySlipAppService> logger)
 	: ApplicationService
 {
@@ -118,6 +124,7 @@ public class SalarySlipWorkflow(
 
 		var salarySlip = await salarySlipRepository.GetAsync(id);
 		await accessService.EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
+		salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip);
 		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 
 		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
@@ -134,6 +141,7 @@ public class SalarySlipWorkflow(
 
 		var salarySlip = await salarySlipRepository.GetAsync(id);
 		await accessService.EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
+		salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip);
 
 		salarySlip.UpdateRemarks(input.Remarks);
 
@@ -148,17 +156,25 @@ public class SalarySlipWorkflow(
 		return dto;
 	}
 
-	public async Task<SalarySlipDto> FinalizeAsync(Guid id)
+	[UnitOfWork(true)]
+	public virtual async Task<SalarySlipDto> FinalizeAsync(Guid id)
 	{
 		logger.LogInformation("FinalizeSalarySlip request - Id: {Id}", id);
+		await revisions.LockAsync();
 
 		var salarySlip = await salarySlipRepository.GetAsync(id);
 		await accessService.EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
 
 		salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip);
+		var enrollments = await enrollmentResolver.ResolveAsync(
+			new DateTime(salarySlip.Year, salarySlip.Month, 1), [salarySlip.EmployeeId]);
+		enrollments.TryGetValue(salarySlip.EmployeeId, out var enrollment);
+		EsiPayrollReadiness.EnsureInsuranceNumber(salarySlip.EmployeeStateInsuranceRuleId,
+			salarySlip.EmployeeStateInsuranceCoverageDecision, enrollment?.InsuranceNumber);
 		salarySlip.FinalizeSlip();
 
-		await salarySlipRepository.UpdateAsync(salarySlip);
+		await salarySlipRepository.UpdateAsync(salarySlip, autoSave: true);
+		await continuityInvalidator.InvalidateAsync(salarySlip.MonthYear, [salarySlip.EmployeeId]);
 
 		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);

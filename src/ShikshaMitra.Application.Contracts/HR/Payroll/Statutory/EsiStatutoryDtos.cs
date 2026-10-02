@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,6 +19,7 @@ public class StatutoryRuleVersionDto
 	public decimal StandardWageCeiling { get; set; }
 	public decimal DisabilityWageCeiling { get; set; }
 	public decimal EmployeePercentage { get; set; }
+	public decimal EmployeeShareDailyWageExemption { get; set; }
 	public decimal EmployerPercentage { get; set; }
 	public decimal ExclusionCapPercentage { get; set; }
 	public decimal InKindCapPercentage { get; set; }
@@ -215,15 +216,12 @@ public interface IEsiStatutoryAppService : IApplicationService
 {
 	Task<StatutoryRuleVersionDto> GetCurrentRuleAsync(DateTime? effectiveOn = null);
 	Task<StatutoryEstablishmentDto> GetEstablishmentAsync();
-	Task<StatutoryEstablishmentDto> ConfigureEstablishmentAsync(ConfigureStatutoryEstablishmentDto input);
 	Task<List<PayrollComponentStatutoryTreatmentDto>> GetComponentTreatmentsAsync(DateTime? effectiveOn = null);
-	Task<List<PayrollComponentStatutoryTreatmentDto>> UpdateComponentTreatmentsAsync(UpdatePayrollComponentStatutoryTreatmentsDto input);
 	Task<EmployeeStatutoryEnrollmentDto> GetEnrollmentAsync(Guid employeeId);
 	Task<EmployeeStatutoryEnrollmentDto> UpdateEnrollmentAsync(Guid employeeId, UpdateEmployeeStatutoryEnrollmentDto input);
 	Task<List<StatutoryOverrideDto>> GetOverridesAsync(Guid employeeId);
 	Task CreateOverrideAsync(Guid employeeId, CreateStatutoryOverrideDto input);
 	Task<StatutoryImpactPreviewDto> PreviewAsync(StatutoryImpactPreviewRequestDto input);
-	Task<StatutoryEstablishmentDto> ActivateAsync(ActivateStatutorySchemeDto input);
 }
 
 public class ConfigureStatutoryEstablishmentDtoValidator : AbstractValidator<ConfigureStatutoryEstablishmentDto>
@@ -283,6 +281,10 @@ public class CreateStatutoryOverrideDtoValidator : AbstractValidator<CreateStatu
 {
 	public CreateStatutoryOverrideDtoValidator()
 	{
+		RuleFor(x => x.EffectiveFrom).Must(value => value.Day == 1)
+			.WithMessage("Start month must begin on the first day of the month.");
+		RuleFor(x => x.EffectiveTo).Must(value => value.Day == DateTime.DaysInMonth(value.Year, value.Month))
+			.WithMessage("End month must end on the last day of the month.");
 		RuleFor(x => x.OverrideType).Must(value => Enum.TryParse<StatutoryOverrideType>(value, true, out _));
 		RuleFor(x => x.Reason).NotEmpty().MaximumLength(500);
 		RuleFor(x => x.EvidenceReference).MaximumLength(1000);

@@ -67,6 +67,7 @@ internal static class SalarySlipProjection
 			ProfessionalTaxRuleId = salarySlip.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = salarySlip.ProfessionalTaxRuleVersion,
 			EmployeeStateInsuranceRuleId = salarySlip.EmployeeStateInsuranceRuleId,
+			EsiConfigurationId = salarySlip.EsiConfigurationId,
 			EmployeeStateInsuranceRuleVersion = salarySlip.EmployeeStateInsuranceRuleVersion,
 			EmployeeStateInsuranceWages = salarySlip.EmployeeStateInsuranceWages,
 			EmployeeStateInsuranceGovernmentContribution = salarySlip.EmployeeStateInsuranceGovernmentContribution,

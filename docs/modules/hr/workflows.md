@@ -54,7 +54,7 @@ Payroll workflows depend on employee, attendance, leave, and policy data:
 |---|---|---|
 | Payroll setup | Create earning, deduction, provident fund, professional-tax, ESI establishment, salary-template, pay element, and payroll policy records | Tenant scope, effective dates, active status, statutory wage classification, same-tenant active dependency targets, acyclic earning dependencies, template gross reconciliation, and destructive-change impact |
 
-The salary builder resolves full-month Gross directly, solves the lowest Gross that reaches a Take-home quote, or solves the highest Gross that stays within an Employer Cost quote.
+The salary builder preserves full-month earnings for Monthly salary or solves earnings plus employer contributions within Monthly cost to school (CTC).
 The solver partitions professional-tax slabs and ESI coverage boundaries and evaluates the same statutory calculators used by payroll.
 It calculates Basic and other earnings, assigns the balancing earning, calculates employee deductions, and returns employer-funded contributions separately.
 Salary Template settings opens one table of Active, Needs setup, and Archived templates.
@@ -69,21 +69,25 @@ Saving another salary for the same month supersedes the older effective revision
 The revision records effective month, template, quote, permitted overrides, and statutory provenance.
 Employee activation is a separate action and uses the server activation-readiness check.
 The readiness check requires a valid effective revision covering the later of the joining month or current payroll month.
+For an ESIC-covered employee, activation also requires the employee insurance number, even when salary was saved with registration pending.
+HR can save registration details while the employee is inactive using the existing scoped enrollment endpoint.
+Readiness recalculates eligibility from saved earnings and applicable ESIC configuration, so off mode and employees outside coverage do not require a number.
 Later template or statutory changes do not silently change saved compensation.
 One-time earnings and deductions remain separate employee salary components and do not become revision lines.
-ESI activation follows establishment details, earning-component wage mapping, employee enrollment review, tenant-wide impact preview, and explicit approval.
-HR can complete establishment details, earning classifications, and employee review in any order before approval.
-The monthly impact preview loads as a paged employee projection, but readiness and contribution totals always use the complete scoped population.
-Activation must submit the fingerprint HR reviewed and recalculates all activation-relevant inputs in the same month before making changes.
-A changed rule, establishment, treatment, enrollment, override, compensation revision, or calculated contribution makes the reviewed fingerprint stale and requires a fresh review.
+ESIC uses the school-level default-on configuration without an activation journey.
+Save applies directly to current and future unlocked payroll with a concurrency stamp and idempotency key.
+School registration facts may be completed independently of salary calculation.
+The optional employee table projects the complete scoped population with server paging and attention filters.
 An active ESI scheme is evaluated for every payroll employee even when the selected salary template has no ESI row.
 ESI coverage above the entry ceiling continues only through the recorded contribution-period end or an audited override.
+Derive continuity from prior finalized or paid payslips in the same contribution period, including when their payroll snapshots remain unlocked.
+Use locked snapshot evidence only where that employee-month has no finalized or paid payslip; drafts do not establish continuity.
 PwD employer-share relief applies only to the PwD wage-ceiling category with a recorded start date and disability evidence.
 The employee contribution remains a deduction, while an eligible employer share is recorded as government funded and excluded from employer cost.
 Users with override approval permission can review immutable exception history and add a dated exception with a mandatory reason and optional evidence reference.
 | Compensation revision | Quote recurring salary, calculate, save directly, and resolve by effective month | Template version, effective statutory rules, controlled overrides, idempotency, concurrency, locked payroll, and immutable effective snapshots |
 | One-time components | Assign temporary earning or deduction lines to employees | Active components, amount ranges, applicable month, and reload consistency |
-| Payroll preview | Resolve the effective revision, append one-time lines, read attendance and leave facts, compute basis days, and calculate gross, deductions, net pay, and employer cost | Month format, effective compensation readiness, policy basis, proration, statutory provenance, warning-only protected-target drift, and cached preview freshness |
+| Payroll preview | Resolve the effective revision, append one-time lines, read attendance and leave facts, compute basis days, and calculate gross, deductions, net pay, and employer cost | Month format, effective compensation readiness, policy basis, proration, statutory provenance, blocking protected-target drift, and cached preview freshness |
 | Payroll review | Mark rows reviewed and add adjustments before lock | Permission checks, row state, audit, and adjustment totals |
 | Payroll lock | Finalize selected rows and create salary slip snapshots | Idempotency, already locked rows, snapshot basis, and error reporting |
 
@@ -143,3 +147,18 @@ Gross-based earning and deduction formulas run against this value and receive no
 One-time bonuses and incentives are additional earnings, excluded from this base and included in total earnings and net pay.
 Statutory calculators retain their existing wage treatment and effective rules.
 Payroll snapshots and payslip lines retain monthly amounts, formula types, formula values, and component dependencies.
+
+ESIC school settings use direct save with no month picker, preview confirmation, or activation journey.
+Changes apply to current/future unlocked payroll; prior and locked figures are preserved.
+New templates default to CTC, with Monthly salary as the alternative and authorized employee overrides.
+The chosen basis determines the compensation target; there is no independent protection selector.
+
+## ESIC continuity invalidation
+
+The payroll lock and payslip finalization workflows invoke EsiContinuityInvalidator within their evidence transaction.
+Only later months in the same contribution period are affected.
+The service removes affected unlocked snapshots and review markers and supersedes dependent preview runs.
+Immutable payslips protect their employee-month even when the snapshot remains unlocked.
+Payroll preview publication rechecks persisted run state under the tenant fence before writing snapshots.
+Regeneration is required before reviewing or locking superseded results.
+Registration pending permits salary preparation but never bypasses the insurance-number requirement for covered payroll finalization.

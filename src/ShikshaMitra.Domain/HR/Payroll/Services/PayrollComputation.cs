@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -128,12 +128,18 @@ public static class PayrollComputation
 					x.Source.ComponentId ?? x.Source.Id,
 					x.Source.Name,
 					x.Amount,
-					esiContext.ComponentTreatments.TryGetValue(x.Source.ComponentId ?? x.Source.Id, out var treatment)
+					x.Source.Id == esiContext.SystemOvertimeComponentId
+						? StatutoryWageTreatment.SpecifiedExclusion
+						: esiContext.ComponentTreatments.TryGetValue(x.Source.ComponentId ?? x.Source.Id, out var treatment)
 						? treatment
 						: StatutoryWageTreatment.Unclassified))
 				.ToList();
 			var monthlyWageLines = wageLines.Select((line, index) =>
-				line with { Amount = earnings[index].Source.Amount }).ToList();
+				line with
+				{
+					Amount = earnings[index].Source.Id == esiContext.SystemOvertimeComponentId
+					? 0m : earnings[index].Source.Amount
+				}).ToList();
 			var esiResult = EsiStatutoryCalculator.Calculate(
 				esiContext.PayrollMonth,
 				esiContext.Rule,
@@ -201,7 +207,10 @@ public static class PayrollComputation
 			esiInsuranceNumber,
 			esiContributionPeriodStart,
 			esiContributionPeriodEnd,
-			statutoryIssueCodes);
+			statutoryIssueCodes)
+		{
+			EsiConfigurationId = statutoryRules?.EsiConfigurationId ?? statutoryRules?.EmployeeStateInsurance?.Establishment.Id
+		};
 	}
 
 	public static SalarySlipLineItem ToSalarySlipLineItem(PayrollComputedLineItem item) =>

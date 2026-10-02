@@ -28,6 +28,7 @@ using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Seeders;
 using ShikshaMitra.TenantSettings;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
@@ -154,10 +155,16 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 				var medium = await (await mediumRepo.GetQueryableAsync()).AsNoTracking()
 					.FirstOrDefaultAsync(m => m.Id == SeededMediumId);
 				SeededBoardId = medium?.EducationBoardId ?? Guid.Empty;
+				// Resolve the year from the selected hierarchy, not an independently ordered row.
+				var boardRepo = services.GetRequiredService<IRepository<EducationBoard, Guid>>();
+				var board = await (await boardRepo.GetQueryableAsync()).AsNoTracking()
+					.FirstOrDefaultAsync(b => b.Id == SeededBoardId);
+				SeededAcademicYearId = board?.AcademicYearId ?? Guid.Empty;
 			}
 
 			var divisionRepo = services.GetRequiredService<IDivisionRepository>();
 			var firstDivision = await (await divisionRepo.GetQueryableAsync()).AsNoTracking()
+				.Where(d => d.StandardId == SeededStandardId)
 				.OrderBy(d => d.Id)
 				.FirstOrDefaultAsync();
 			SeededDivisionId = firstDivision?.Id ?? Guid.Empty;
@@ -230,14 +237,14 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		var queryable = await scopeRepository.GetQueryableAsync();
 
 		if (!queryable.Any(x =>
-			    x.UserId == testUserId &&
-			    x.AcademicYearId == null &&
-			    x.EducationBoardId == null &&
-			    x.EducationMediumId == null &&
-			    x.EducationMediumStageId == null &&
-			    x.StandardId == null &&
-			    x.DivisionId == null &&
-			    x.IsActive))
+				x.UserId == testUserId &&
+				x.AcademicYearId == null &&
+				x.EducationBoardId == null &&
+				x.EducationMediumId == null &&
+				x.EducationMediumStageId == null &&
+				x.StandardId == null &&
+				x.DivisionId == null &&
+				x.IsActive))
 		{
 			await scopeRepository.InsertAsync(
 				new UserScopeAssignment(

@@ -47,7 +47,7 @@ public class SalarySlipSnapshotWriter(ISalarySlipRepository salarySlipRepository
 				snapshot.EmployeeStateInsuranceWages, snapshot.EmployeeStateInsuranceGovernmentContribution,
 				snapshot.EmployeeStateInsuranceCoverageDecision,
 				snapshot.EmployeeStateInsuranceNumber, snapshot.EmployeeStateInsuranceContributionPeriodStart,
-				snapshot.EmployeeStateInsuranceContributionPeriodEnd);
+				snapshot.EmployeeStateInsuranceContributionPeriodEnd, snapshot.EsiConfigurationId);
 			salarySlip.SetCompensationSnapshot(
 				snapshot.CompensationRevisionId,
 				snapshot.CompensationRevisionNumber,
@@ -69,7 +69,7 @@ public class SalarySlipSnapshotWriter(ISalarySlipRepository salarySlipRepository
 			snapshot.EmployeeStateInsuranceWages, snapshot.EmployeeStateInsuranceGovernmentContribution,
 			snapshot.EmployeeStateInsuranceCoverageDecision,
 			snapshot.EmployeeStateInsuranceNumber, snapshot.EmployeeStateInsuranceContributionPeriodStart,
-			snapshot.EmployeeStateInsuranceContributionPeriodEnd);
+			snapshot.EmployeeStateInsuranceContributionPeriodEnd, snapshot.EsiConfigurationId);
 		existingSlip.SetCompensationSnapshot(
 			snapshot.CompensationRevisionId,
 			snapshot.CompensationRevisionNumber,

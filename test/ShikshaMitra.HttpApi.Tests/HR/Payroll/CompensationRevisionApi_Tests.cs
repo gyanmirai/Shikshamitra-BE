@@ -6,8 +6,11 @@ using System.Net.Http.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.Employees.Payroll;
 using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.SalaryStructure;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
@@ -97,6 +100,112 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 			.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 		(await deniedClient.GetAsync($"/api/payroll/employees/{employeeId}/compensation"))
 			.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Inactive_employee_can_register_but_pending_registration_cannot_bypass_activation()
+	{
+		await PayrollTestHelper.EnsureActiveEsiTestSetupAsync(Factory);
+		var employeeId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "EsiOnboarding");
+		var enrollmentUrl = $"/api/payroll/statutory-schemes/esi/employees/{employeeId}/enrollment";
+		var pending = await Client.PutAsJsonAsync(enrollmentUrl, new UpdateEmployeeStatutoryEnrollmentDto
+		{
+			Status = "RegistrationPending", WageCeilingCategory = "Standard"
+		}, JsonOptions);
+		pending.StatusCode.ShouldBe(HttpStatusCode.OK, await pending.Content.ReadAsStringAsync());
+		var request = Request(await GetDefaultTemplateAsync(Client), 10000m, Guid.NewGuid().ToString("N"));
+		request.PfApplicable = false;
+		request.PfRuleId = null;
+		var salary = await Client.PutAsJsonAsync($"/api/payroll/employees/{employeeId}/compensation", request, JsonOptions);
+		salary.StatusCode.ShouldBe(HttpStatusCode.OK, await salary.Content.ReadAsStringAsync());
+		var readinessUrl = $"/api/employees/{employeeId}/activation-readiness";
+		var readiness = (await Client.GetFromJsonAsync<EmployeeActivationReadinessDto>(readinessUrl, JsonOptions))!;
+		readiness.CanActivate.ShouldBeFalse();
+		readiness.BlockerCodes.ShouldContain(EsiStatutoryCalculator.InsuranceNumberIssue);
+		var activation = new { employeeStatusType = 0, remarks = "Onboarding complete" };
+		var denied = await Client.PutAsJsonAsync($"/api/employees/{employeeId}/status", activation, JsonOptions);
+		denied.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await denied.Content.ReadAsStringAsync());
+		(await denied.Content.ReadAsStringAsync()).ShouldContain(EsiStatutoryCalculator.InsuranceNumberIssue);
+
+		var registered = await Client.PutAsJsonAsync(enrollmentUrl, new UpdateEmployeeStatutoryEnrollmentDto
+		{
+			Status = "PendingReview", WageCeilingCategory = "Standard", InsuranceNumber = "1234567890"
+		}, JsonOptions);
+		registered.StatusCode.ShouldBe(HttpStatusCode.OK, await registered.Content.ReadAsStringAsync());
+		(await Client.GetFromJsonAsync<EmployeeActivationReadinessDto>(readinessUrl, JsonOptions))!.CanActivate.ShouldBeTrue();
+		var activated = await Client.PutAsJsonAsync($"/api/employees/{employeeId}/status", activation, JsonOptions);
+		activated.StatusCode.ShouldBe(HttpStatusCode.OK, await activated.Content.ReadAsStringAsync());
+	}
+
+	[Theory]
+	[InlineData("EMPLOYER_COST")]
+	[InlineData("GROSS")]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Bank_updates_should_round_trip_salary_basis_without_changing_compensation(string basis)
+	{
+		await PayrollTestHelper.EnsureActiveEsiTestSetupAsync(Factory);
+		var employeeId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "CompBankUpdate");
+		var request = Request(await GetDefaultTemplateAsync(Client), 50000m, Guid.NewGuid().ToString("N"));
+		request.SalaryBasis = basis;
+		var compensationUrl = $"/api/payroll/employees/{employeeId}/compensation";
+		var save = await Client.PutAsJsonAsync(compensationUrl, request, JsonOptions);
+		save.StatusCode.ShouldBe(HttpStatusCode.OK, await save.Content.ReadAsStringAsync());
+		var revision = (await save.Content.ReadFromJsonAsync<CompensationRevisionDto>(JsonOptions))!;
+		var payrollUrl = $"/api/employees/{employeeId}/payroll";
+		var payroll = new PayrollContract
+		{
+			BankDetails = new BankDetailsContract
+			{
+				BankName = "State Bank of India", BranchName = "Main Branch",
+				AccountHolderName = "CTC Test Employee", AccountNumber = "1234567890", IfscCode = "SBIN0001234"
+			},
+			SalaryDetails = new SalaryDetailsContract
+			{
+				QuotedSalaryBasis = basis, QuotedMonthlyAmount = revision.QuotedMonthlyAmount,
+				SourceSalaryTemplateId = revision.SourceSalaryTemplateId,
+				SourceSalaryTemplateVersionId = revision.SourceSalaryTemplateVersionId,
+				SourceSalaryTemplateVersion = revision.SourceSalaryTemplateVersion,
+				SalaryGeneratedAt = revision.SavedAt
+			}
+		};
+		var update = await Client.PutAsJsonAsync(payrollUrl, payroll, JsonOptions);
+		update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
+		var read = (await Client.GetFromJsonAsync<EmployeePayrollResponse>(payrollUrl, JsonOptions))!;
+		read.SalaryDetails.ShouldNotBeNull();
+		read.SalaryDetails.QuotedSalaryBasis.ShouldBe(basis);
+		read.SalaryDetails.SourceSalaryTemplateVersionId.ShouldBe(revision.SourceSalaryTemplateVersionId);
+		read.SalaryDetails.QuotedMonthlyAmount.ShouldBe(50000m);
+
+		payroll.BankDetails.AccountNumber = "9876543210";
+		payroll.SalaryDetails = read.SalaryDetails;
+		var second = await Client.PutAsJsonAsync(payrollUrl, payroll, JsonOptions);
+		second.StatusCode.ShouldBe(HttpStatusCode.OK, await second.Content.ReadAsStringAsync());
+		var reopened = (await Client.GetFromJsonAsync<EmployeePayrollResponse>(payrollUrl, JsonOptions))!;
+		reopened.BankDetails.ShouldNotBeNull();
+		reopened.SalaryDetails.ShouldNotBeNull();
+		reopened.BankDetails.AccountNumber.ShouldBe("9876543210");
+		reopened.SalaryDetails.QuotedSalaryBasis.ShouldBe(basis);
+		var structureUrl = $"/api/payroll/employees/{employeeId}/salary-structure";
+		var structureSave = await Client.PutAsJsonAsync(structureUrl, new UpdateSalaryStructureDto
+		{
+			QuotedSalaryBasis = basis, QuotedMonthlyAmount = revision.QuotedMonthlyAmount,
+			SourceSalaryTemplateId = revision.SourceSalaryTemplateId,
+			SourceSalaryTemplateVersionId = revision.SourceSalaryTemplateVersionId,
+			SourceSalaryTemplateVersion = revision.SourceSalaryTemplateVersion,
+			SalaryGeneratedAt = revision.SavedAt
+		}, JsonOptions);
+		structureSave.StatusCode.ShouldBe(HttpStatusCode.OK, await structureSave.Content.ReadAsStringAsync());
+		var structure = (await Client.GetFromJsonAsync<SalaryStructureResponseDto>(structureUrl, JsonOptions))!;
+		structure.QuotedSalaryBasis.ShouldBe(basis);
+		structure.SourceSalaryTemplateVersionId.ShouldBe(revision.SourceSalaryTemplateVersionId);
+		var history = (await Client.GetFromJsonAsync<CompensationRevisionListDto>(compensationUrl, JsonOptions))!;
+		var unchanged = history.Items.ShouldHaveSingleItem();
+		unchanged.Id.ShouldBe(revision.Id);
+		unchanged.GrossSalary.ShouldBe(revision.GrossSalary);
+		unchanged.NetSalary.ShouldBe(revision.NetSalary);
+		unchanged.EmployerCost.ShouldBe(revision.EmployerCost);
+		unchanged.Lines.Select(x => x.Amount).ShouldBe(revision.Lines.Select(x => x.Amount));
 	}
 
 	private async Task<SalaryTemplateDto> GetDefaultTemplateAsync(HttpClient client)

@@ -39,6 +39,7 @@ public class CompensationRevisionLineDto : EntityDto<Guid>
 
 public class CompensationRevisionDto : EntityDto<Guid>
 {
+	public int ProtectionCalculationVersion { get; set; }
 	public Guid EmployeeId { get; set; }
 	public int RevisionNumber { get; set; }
 	public DateTime EffectiveMonth { get; set; }
@@ -79,6 +80,8 @@ public interface ICompensationRevisionAppService : IApplicationService
 	Task<CompensationRevisionListDto> GetListAsync(Guid employeeId);
 	Task<CompensationRevisionDto?> GetEffectiveAsync(Guid employeeId, DateTime month);
 	Task<CompensationRevisionDto> SaveAsync(Guid employeeId, SaveEmployeeCompensationDto input);
+	Task<ProtectionMigrationPreviewDto> PreviewProtectionMigrationAsync(Guid employeeId, PreviewProtectionMigrationDto input);
+	Task<CompensationRevisionDto> ApplyProtectionMigrationAsync(Guid employeeId, ApplyProtectionMigrationDto input);
 }
 
 public class SaveEmployeeCompensationDtoValidator : AbstractValidator<SaveEmployeeCompensationDto>
@@ -87,7 +90,7 @@ public class SaveEmployeeCompensationDtoValidator : AbstractValidator<SaveEmploy
 	{
 		RuleFor(x => x.TemplateVersionId).NotEmpty();
 		RuleFor(x => x.SalaryBasis).Must(x => x is "GROSS" or "TAKE_HOME" or "EMPLOYER_COST");
-		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_GROSS" or "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
+		RuleFor(x => x.ProtectionPolicy).Must(x => x is "PROTECT_TAKE_HOME" or "PROTECT_EMPLOYER_COST");
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Day == 1);
 		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);

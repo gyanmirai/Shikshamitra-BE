@@ -36,7 +36,7 @@ namespace ShikshaMitra.HR.Payroll;
 
 [Trait("Database", "PostgreSQL")]
 [TestModule(TestTraits.Modules.HR)]
-public class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixture<PayrollWorkflowPostgresTestFactory>
+public partial class RunPayrollApi_Tests : ShikshaMitraApiTestBase, IClassFixture<PayrollWorkflowPostgresTestFactory>
 {
 	private const string BaseUrl = "/api/payroll/run";
 	private const string ReviewUrl = "/api/payroll/run/reviews";

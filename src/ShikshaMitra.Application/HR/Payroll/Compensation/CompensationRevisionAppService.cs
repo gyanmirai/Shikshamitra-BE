@@ -20,13 +20,15 @@ using Volo.Abp.Users;
 namespace ShikshaMitra.HR.Payroll.Compensation;
 
 [RemoteService(false)]
-public class CompensationRevisionAppService(
+public partial class CompensationRevisionAppService(
 	IRepository<EmployeeCompensationRevision, Guid> revisionRepository,
 	IRepository<EmployeeCompensationRevisionLine, Guid> lineRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollSnapshotRepository,
 	ISalaryTemplateAppService salaryTemplateAppService,
 	EmployeeActivationReadinessService activationReadinessService,
 	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator,
+	SalaryTemplatePreviewProofService previewProofService,
+	IPayrollInputRevisionStore payrollInputRevisions,
 	IAsyncQueryableExecuter asyncExecuter,
 	IClock clock) : ApplicationService, ICompensationRevisionAppService
 {
@@ -59,6 +61,7 @@ public class CompensationRevisionAppService(
 
 	public async Task<CompensationRevisionDto> SaveAsync(Guid employeeId, SaveEmployeeCompensationDto input)
 	{
+		await payrollInputRevisions.LockAsync();
 		var replay = await asyncExecuter.FirstOrDefaultAsync(
 			(await revisionRepository.GetQueryableAsync()).Where(x =>
 				x.EmployeeId == employeeId && x.IdempotencyKey == input.IdempotencyKey));
@@ -231,6 +234,7 @@ public class CompensationRevisionAppService(
 		var overrides = TryDeserializeOverrides(revision.OverridesJson);
 		return new CompensationRevisionDto
 		{
+			ProtectionCalculationVersion = calculation?.ProtectionCalculationVersion ?? 0,
 			Id = revision.Id,
 			EmployeeId = revision.EmployeeId,
 			RevisionNumber = revision.RevisionNumber,

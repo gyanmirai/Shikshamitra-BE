@@ -1,3 +1,4 @@
+using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.Settings;
@@ -57,6 +58,7 @@ public class SalarySlipSnapshotWriter(ISalarySlipRepository salarySlipRepository
 				snapshot.CompensationProtectedAmount,
 				snapshot.CompensationNormalizedProtectedAmount,
 				snapshot.CompensationTargetDifference);
+			SalaryProtectionSnapshot.Write(salarySlip, SalaryProtectionSnapshot.Read(snapshot));
 			await salarySlipRepository.InsertAsync(salarySlip, cancellationToken: cancellationToken);
 			return salarySlip;
 		}
@@ -79,6 +81,7 @@ public class SalarySlipSnapshotWriter(ISalarySlipRepository salarySlipRepository
 			snapshot.CompensationProtectedAmount,
 			snapshot.CompensationNormalizedProtectedAmount,
 			snapshot.CompensationTargetDifference);
+		SalaryProtectionSnapshot.Write(existingSlip, SalaryProtectionSnapshot.Read(snapshot));
 		await salarySlipRepository.UpdateAsync(existingSlip, cancellationToken: cancellationToken);
 		return existingSlip;
 	}

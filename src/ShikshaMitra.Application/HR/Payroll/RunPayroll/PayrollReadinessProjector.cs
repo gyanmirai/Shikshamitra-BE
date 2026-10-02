@@ -69,6 +69,12 @@ internal static class PayrollReadinessProjector
 			recommendedActions.Add("set-up-salary");
 		}
 
+		if (items.Any(x => x.IssueCodes.Contains(IssueCodes.CompensationTargetVariance)))
+		{
+			blockingIssues.Add(IssueCodes.CompensationTargetVariance);
+			recommendedActions.Add("review-protected-target");
+		}
+
 		return new RunPayrollReadinessSummary
 		{
 			NetPayTotal = items.Sum(x => x.NetPay),

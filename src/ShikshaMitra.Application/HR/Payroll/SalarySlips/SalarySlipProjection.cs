@@ -74,6 +74,7 @@ internal static class SalarySlipProjection
 			EmployeeStateInsuranceNumber = salarySlip.EmployeeStateInsuranceNumber,
 			EmployeeStateInsuranceContributionPeriodStart = salarySlip.EmployeeStateInsuranceContributionPeriodStart,
 			EmployeeStateInsuranceContributionPeriodEnd = salarySlip.EmployeeStateInsuranceContributionPeriodEnd,
+			SalaryProtection = ShikshaMitra.HR.Payroll.Services.SalaryProtectionSnapshot.Read(salarySlip),
 			CompensationRevisionId = salarySlip.CompensationRevisionId,
 			CompensationRevisionNumber = salarySlip.CompensationRevisionNumber,
 			CompensationSalaryBasis = salarySlip.CompensationSalaryBasis,

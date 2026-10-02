@@ -13,6 +13,30 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class EsiStatutoryCalculator_Tests
 {
+	[Theory]
+	[InlineData(CompensationProtectionPolicy.ProtectEmployerCost, 26)]
+	[InlineData(CompensationProtectionPolicy.ProtectEmployerCost, 13)]
+	[InlineData(CompensationProtectionPolicy.ProtectTakeHome, 26)]
+	[InlineData(CompensationProtectionPolicy.ProtectTakeHome, 13)]
+	public void Salary_protection_recalculates_rounded_ESI_for_the_actual_period(CompensationProtectionPolicy policy, int days)
+	{
+		var basic = BuildComponent(Guid.NewGuid(), Guid.NewGuid(), "Basic", 20000m, true, PayrollComponentSemanticType.Basic);
+		basic.Formula = new PayrollComponentFormula(SalaryTemplateFormulaType.PercentageOfGross, 100m);
+		var esi = BuildComponent(basic.EmployeeId, Guid.NewGuid(), "ESI", 0m, false, PayrollComponentSemanticType.EmployeeStateInsurance);
+		var rules = new PayrollStatutoryRuleSet(null, [], EmployeeStateInsurance: new PayrollEsiStatutoryContext(
+			new DateTime(2026, 8, 1), BuildRule(), BuildActiveEstablishment(),
+			BuildEnrollment(EmployeeStatutoryEnrollmentStatus.Covered, "ESI-1001"),
+			new Dictionary<Guid, StatutoryWageTreatment> { [basic.ComponentId!.Value] = StatutoryWageTreatment.Included }, [], esi));
+		var result = PayrollSalaryProtection.Calculate(days, 0, days, 26m, [basic], rules, policy, 20000m);
+		result.Protection!.Status.ShouldNotBe("BLOCKED");
+		Math.Abs(result.Protection.Difference).ShouldBeLessThanOrEqualTo(0.01m);
+		result.EmployeeStateInsurance!.IsCovered.ShouldBeTrue();
+		result.EmployerContributionTotal.ShouldBe(Math.Ceiling(result.GrossSalary * 0.0325m));
+		result.Deductions.Single().Amount.ShouldBe(Math.Ceiling(result.GrossSalary * 0.0075m));
+		PayrollComputation.ToSalarySlipLineItem(result.Earnings.Single()).FullMonthAmount
+			.ShouldBe(result.FullGrossSalary);
+	}
+
 	[Fact]
 	public void Monthly_classifications_not_gross_determine_coverage_when_pay_is_prorated()
 	{

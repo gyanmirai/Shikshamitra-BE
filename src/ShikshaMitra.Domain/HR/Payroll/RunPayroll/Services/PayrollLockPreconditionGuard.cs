@@ -76,6 +76,7 @@ public static class PayrollLockPreconditionGuard
 		       || issues.Contains(IssueCodes.EsiWageClassificationRequired)
 		       || issues.Contains(IssueCodes.EsiEnrollmentReviewRequired)
 		       || issues.Contains(IssueCodes.EsiInsuranceNumberRequired)
-		       || issues.Contains(IssueCodes.CompensationRevisionRequired);
+		       || issues.Contains(IssueCodes.CompensationRevisionRequired)
+		       || issues.Contains(IssueCodes.CompensationTargetVariance);
 	}
 }

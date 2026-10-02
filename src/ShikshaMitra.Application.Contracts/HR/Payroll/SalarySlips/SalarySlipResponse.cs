@@ -131,7 +131,8 @@ public class SalarySlipResponse
     public string? EmployeeStateInsuranceNumber { get; set; }
     public DateTime? EmployeeStateInsuranceContributionPeriodStart { get; set; }
     public DateTime? EmployeeStateInsuranceContributionPeriodEnd { get; set; }
-    public Guid? CompensationRevisionId { get; set; }
+    public ShikshaMitra.HR.Payroll.Templates.SalaryProtectionResult? SalaryProtection { get; set; }
+	public Guid? CompensationRevisionId { get; set; }
     public int? CompensationRevisionNumber { get; set; }
     public string? CompensationSalaryBasis { get; set; }
     public string? CompensationProtectionPolicy { get; set; }

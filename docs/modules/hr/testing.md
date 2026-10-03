@@ -258,7 +258,7 @@ The independent review inspected five synthetic PDF cases over seven rendered pa
 
 The design-time EF pending-model check passes and the writer applied the full migration chain to fresh PostgreSQL.
 The runtime model comparison fails: the unchanged runtime module enables Npgsql legacy timestamp behavior while the unchanged design-time factory disables it, yielding timestamp mapping differences across 1,254 existing columns.
-This remains a migration/runtime verification risk; do not suppress the assertion or generate an unrelated bulk timestamp migration.
+The focused runtime probe nevertheless applied all 106 real migrations successfully without changing timestamp settings. Model mismatch and migration execution are separate results; do not suppress the failed model assertion or generate an unrelated bulk timestamp migration.
 
 The authenticated browser journey completed a paid source correction through a later-month settlement and final target lock, retaining both canonical PDF hashes and the original source amounts.
 The broader period-boundary, mixed-employee, direct unproxied-service and production-host distribution matrices remain unverified.

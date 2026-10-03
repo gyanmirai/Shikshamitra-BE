@@ -40,6 +40,25 @@ public class PayslipBrowserFixtureFactAttribute : FactAttribute
 [Collection(ApiTestCollection.Name)]
 public class PayslipBrowserFixture_Tests
 {
+	[PayslipBrowserFixtureFact("verify-runtime-migration-guard")]
+	public async Task Runtime_timestamp_discrepancy_remains_after_applying_real_migrations()
+	{
+		using var factory = new PayslipWorkerAttachFactory();
+		using var scope = factory.Services.CreateScope();
+		using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+		var db = await scope.ServiceProvider.GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+		// This opt-in probe requires a NEW owned disposable database, never the populated browser database.
+		(await db.Database.GetAppliedMigrationsAsync()).ShouldBeEmpty();
+		var expectedMigrations = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+		expectedMigrations.ShouldNotBeEmpty();
+		db.Database.HasPendingModelChanges().ShouldBeTrue();
+		await db.Database.MigrateAsync();
+		(await db.Database.GetAppliedMigrationsAsync()).ShouldBe(expectedMigrations);
+		(await db.Database.GetPendingMigrationsAsync()).ShouldBeEmpty();
+		// Applying authoritative migrations does not resolve the unchanged runtime/design-time model mismatch.
+		db.Database.HasPendingModelChanges().ShouldBeTrue();
+	}
+
 	[PayslipBrowserFixtureFact("verify-settlement-result")]
 	public async Task Verify_authenticated_browser_settlement_evidence_and_migration_model()
 	{

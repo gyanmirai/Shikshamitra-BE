@@ -1,6 +1,14 @@
 {
   "Culture": "en",
   "Texts": {
+    "Finance:Routing:CategoryRequired": "Select the financial category before continuing.",
+    "Finance:Routing:InvalidCategory": "Select an active category of the correct type in this academic year.",
+    "Finance:Routing:BankRequired": "Select the school bank account before continuing.",
+    "Finance:Routing:InvalidBank": "Select an active school bank account in this academic year.",
+    "Finance:Routing:BankMismatch": "Use the school bank account saved at approval.",
+    "Finance:Routing:MappingLocked": "Financial routing cannot change after approval.",
+    "Finance:Routing:AllocationMismatch": "Category allocations and payment instruments must balance exactly.",
+    "Finance:AutomaticEntryImmutable": "Manage this automatic entry through its original collection or refund.",
 	"Permission:Students.Records.Changes": "Changes & Approvals",
 	"Permission:Students.Records.Changes.View": "View record requests",
 	"Permission:Students.Records.Changes.Create": "Request or directly apply allowed changes",

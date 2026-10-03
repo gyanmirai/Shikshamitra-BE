@@ -57,6 +57,8 @@ public class DueFeeManager(
 				continue;
 
 			var customDetail = optionalFeeHeadDetails?.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId);
+            if (detail.IsVariable && (customDetail == null || !detail.PaymentTermId.HasValue || !detail.PaymentTermVersionId.HasValue))
+                throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 			var detailChargeStart = (customDetail?.ChargeStartDate ?? assignmentChargeStart).Date;
 			var detailChargeEnd = (customDetail?.ChargeEndDate ?? assignmentChargeEnd).Date;
 			ValidateChargePeriod(detailChargeStart, detailChargeEnd, academicYear, detail.FeeHeadId);
@@ -92,7 +94,7 @@ public class DueFeeManager(
 				.WithData("FeeStructureDetailId", detail.Id)
 				.WithData("PaymentTermId", detail.PaymentTermId);
 
-		var annualAmount = customDetail?.Amount ?? detail.Amount;
+		var annualAmount = customDetail?.Amount ?? detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		var rows = new List<DueFee>();
         var weights = schedule.Installments.Select(x => x.AllocationPercentage).ToArray();
         var scheduled = AssignmentAmountCalculator.Allocate(annualAmount, weights);
@@ -150,7 +152,7 @@ public class DueFeeManager(
 		{
 			var month = customDetail?.PayableMonth ?? detail.PayableMonth ?? monthRange[0].Month;
 			var year = customDetail?.PayableYear ?? detail.PayableYear ?? monthRange[0].Year;
-			var amount = customDetail?.Amount ?? detail.Amount;
+			var amount = customDetail?.Amount ?? detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 			if (!monthRange.Any(m => m.Month == month && m.Year == year))
 				throw new BusinessException("Finance:OutofAcademicYearRange")
 					.WithData("Month", month.ToString()).WithData("Year", year);
@@ -176,7 +178,7 @@ public class DueFeeManager(
 			}).ToList();
 		}
 
-		var totalAmount = customDetail != null ? customDetail.Amount * selectedMonths.Count : detail.Amount;
+		var totalAmount = customDetail != null ? customDetail.Amount * selectedMonths.Count : detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		var baseAmount = customDetail != null
 			? customDetail.Amount
 			: Math.Round(totalAmount / selectedMonths.Count, 2, MidpointRounding.AwayFromZero);

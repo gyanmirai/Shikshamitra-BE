@@ -71,11 +71,14 @@ public class CollectionPolicyResolver(
 	/// returns. Override composition happens in exactly this one place — no other caller
 	/// should read StudentFeePolicyOverride directly.
 	/// </summary>
-	public async Task<EffectiveCollectionRules> ResolveEffectiveRulesForStudentAsync(Guid studentId, Guid feeStructureId)
+	public async Task<EffectiveCollectionRules> ResolveEffectiveRulesForStudentAsync(Guid studentId, Guid feeStructureId, Guid? assignmentId = null)
 	{
 		CollectionPolicy? policy = null;
 		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
-			x.StudentId == studentId && x.FeeStructureStandardId == feeStructureId);
+			x.StudentId == studentId && x.FeeStructureStandardId == feeStructureId &&
+            (!assignmentId.HasValue || x.Id == assignmentId.Value));
+        if (assignmentId.HasValue && assignment == null)
+            throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
 		if (assignment?.CollectionPolicyVersionId is { } versionId && versionId != Guid.Empty)
 		{
 			var version = await versionRepository.FindAsync(versionId);

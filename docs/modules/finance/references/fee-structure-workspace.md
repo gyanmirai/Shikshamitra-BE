@@ -31,7 +31,7 @@ flowchart LR
 |---|---|
 | Metadata | Academic year + board + medium parent workspace; exposes only accessible child classes |
 | Structure | Named class configuration and revision lineage; owns exact policy attachments |
-| Structure detail | Unique Fee Head, total service-coverage amount, one-time/optional flags, exact Payment Term version, schedule mode |
+| Structure detail | Unique Fee Head, fixed amount or variable pricing, independent one-time/optional flags, exact Payment Term version, schedule mode |
 | Schedule override | Structure-local dates and percentages referencing an installment in the pinned Payment Term version |
 | Policy attachment | One exact immutable version per family; monetary applicability is resolved per matching structure Fee Head |
 | Publication review | Saved coverage, exact configuration, policy labels and resolved schedule in aggregate `ExtraProperties.PublicationReview` |
@@ -210,3 +210,6 @@ The added cases cover exact current policy identity, stale new selection rejecti
 
 
 Configuration actions use the [three-permission contract](../api.md#fee-configuration-permissions). View reads/reviews, Add creates/edits/publishes/revises, and Delete removes unused drafts.
+
+
+Variable rows store no configured amount and retain Payment Terms; see [variable fee assignment](./variable-fee-assignment.md) for the active conditions and nullable preview contract.

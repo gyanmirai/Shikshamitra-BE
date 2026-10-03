@@ -16,7 +16,8 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     public Guid FeeStructureId { get; private set; }
     public Guid FeeHeadId { get; private set; }
 
-    public decimal Amount { get; private set; }
+    public decimal? Amount { get; private set; }
+    public bool IsVariable { get; private set; }
     public bool IsOneTime { get; private set; }
     public bool IsOptional { get; private set; }
 
@@ -46,16 +47,17 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
         Guid? tenantId,
         Guid feeStructureId,
         Guid feeHeadId,
-        decimal amount,
+        decimal? amount,
         bool isOneTime,
         bool isOptional,
 		MonthEnum? payableMonth,
-		int? payableYear) : base(id)
+		int? payableYear,
+        bool isVariable = false) : base(id)
     {
         TenantId = tenantId;
         FeeStructureId = feeStructureId;
         FeeHeadId = feeHeadId;
-        Amount = amount;
+        SetPricing(isVariable, amount);
         IsOneTime = isOneTime;
         IsOptional = isOptional;
 		PayableMonth = isOneTime ? payableMonth : null;
@@ -100,16 +102,19 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     }
 
     /// <summary>Updates the amount for this fee head.</summary>
-    public void UpdateAmount(decimal amount)
+    public void UpdateAmount(decimal amount) => SetPricing(IsVariable, amount);
+
+    public void SetPricing(bool isVariable, decimal? amount)
     {
-        if (amount < 0 || decimal.Round(amount, 2) != amount)
+        if (isVariable ? amount.HasValue : !amount.HasValue || amount < 0 || amount > 9999999999.99m || decimal.Round(amount.Value, 2) != amount)
             throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
+        IsVariable = isVariable;
         Amount = amount;
     }
 
-	public void UpdateConfiguration(decimal amount, bool isOneTime, bool isOptional, MonthEnum? month, int? year)
+	public void UpdateConfiguration(decimal? amount, bool isOneTime, bool isOptional, MonthEnum? month, int? year, bool isVariable = false)
 	{
-		UpdateAmount(amount);
+		SetPricing(isVariable, amount);
 		IsOneTime = isOneTime;
 		IsOptional = isOptional;
 		PayableMonth = isOneTime ? month : null;

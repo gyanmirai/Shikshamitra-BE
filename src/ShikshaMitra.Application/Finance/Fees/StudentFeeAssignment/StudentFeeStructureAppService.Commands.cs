@@ -67,6 +67,7 @@ public partial class StudentFeeStructureAppService
 	}
 
 	private static string AssignmentErrorMessage(string? code) => code switch {
+		AssignmentErrorCodes.VariableAmountRequired => "Enter an amount for every included variable fee head before previewing.",
 		AssignmentErrorCodes.AlreadyAssigned => "A different fee assignment already exists for this year. View its details before making a correction.",
 		AssignmentErrorCodes.StalePreview => "The preview expired or its inputs changed. Preview this student again.",
 		AssignmentErrorCodes.EnrollmentRequired => "No unambiguous accessible enrollment exists for this student and year.",

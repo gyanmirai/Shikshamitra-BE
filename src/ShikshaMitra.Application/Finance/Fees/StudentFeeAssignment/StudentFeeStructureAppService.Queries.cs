@@ -60,11 +60,11 @@ public partial class StudentFeeStructureAppService
 		var heads = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id))).ToDictionary(x => x.Id);
 		var candidates = structures.OrderBy(x => x.Name).ThenByDescending(x => x.RevisionNumber).Select(s => new AssignmentCandidateDto {
 			Id = s.Id, Name = s.Name, RevisionNumber = s.RevisionNumber, AcademicYearId = academicYearId, StandardId = s.StandardId,
-			Total = details.Where(d => d.FeeStructureId == s.Id).Sum(d => d.Amount),
+			Total = details.Where(d => d.FeeStructureId == s.Id).Sum(d => d.Amount ?? 0m),
 			Heads = details.Where(d => d.FeeStructureId == s.Id).Select(d => new AssignmentHeadDto {
-				FeeHeadId = d.FeeHeadId, FeeHeadName = heads.GetValueOrDefault(d.FeeHeadId)?.Name ?? "Fee head", SupportsTransportSource = heads.GetValueOrDefault(d.FeeHeadId)?.Module == ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport, IsOptional = d.IsOptional,
-				IsOneTime = d.IsOneTime, Included = !d.IsOptional, ConfiguredAmount = d.Amount, EffectiveAmount = d.Amount,
-				AmountBasis = d.IsOneTime ? "OneTime" : "AnnualTotal", PaymentTermId = d.PaymentTermId, PaymentTermVersionId = d.PaymentTermVersionId }).ToList()
+				FeeHeadId = d.FeeHeadId, FeeHeadName = heads.GetValueOrDefault(d.FeeHeadId)?.Name ?? "Fee head", SupportsTransportSource = !d.IsVariable && heads.GetValueOrDefault(d.FeeHeadId)?.Module == ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport, IsOptional = d.IsOptional,
+				IsVariable = d.IsVariable, IsOneTime = d.IsOneTime, Included = !d.IsOptional, ConfiguredAmount = d.Amount, EffectiveAmount = d.Amount,
+				AmountBasis = d.IsVariable ? "CoverageTotal" : d.IsOneTime ? "OneTime" : "AnnualTotal", PaymentTermId = d.PaymentTermId, PaymentTermVersionId = d.PaymentTermVersionId }).ToList()
 		}).ToList();
 		var versionIds = structures.SelectMany(s => StructurePolicyVersions(s).Values).Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
 		var versions = await financePolicyVersionRepository.GetListAsync(x => versionIds.Contains(x.Id));
@@ -145,7 +145,7 @@ public partial class StudentFeeStructureAppService
 		result.ChargeEndDate = snapshot.ChargeEndDate;
 		result.FeeHeads = snapshot.Heads.Where(h => h.Included).Select(h => new StudentFeeHeadDto {
 			FeeHeadId = h.FeeHeadId, FeeHeadName = h.FeeHeadName, Amount = h.Obligation,
-			IsSelected = true, IsOptional = h.IsOptional, IsOneTime = h.IsOneTime, SelectedAmount = h.EffectiveAmount }).ToList();
+			IsSelected = true, IsOptional = h.IsOptional, IsOneTime = h.IsOneTime, SelectedAmount = h.EffectiveAmount ?? h.Obligation }).ToList();
 		return result;
 	}
 }

@@ -10,7 +10,8 @@ public class AdmissionFeeSelectionHeadDto
 {
 	public Guid FeeHeadId { get; set; }
 	public string FeeHeadName { get; set; } = string.Empty;
-	public decimal ConfiguredAmount { get; set; }
+	public decimal? ConfiguredAmount { get; set; }
+	public bool IsVariable { get; set; }
 	public bool IsOptional { get; set; }
 	public bool IsOneTime { get; set; }
 	public Guid? PaymentTermId { get; set; }

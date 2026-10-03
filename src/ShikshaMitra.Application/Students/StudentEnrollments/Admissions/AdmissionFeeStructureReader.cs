@@ -43,7 +43,7 @@ public class AdmissionFeeStructureReader(
 			AcademicYearId = cycle.AcademicYearId, StandardId = s.StandardId,
 			Heads = lines.Where(d => d.FeeStructureId == s.Id).OrderBy(d => names.GetValueOrDefault(d.FeeHeadId)).Select(d =>
 				new AdmissionFeeSelectionHeadDto { FeeHeadId = d.FeeHeadId, FeeHeadName = names.GetValueOrDefault(d.FeeHeadId, "Fee head"),
-					ConfiguredAmount = d.Amount, IsOptional = d.IsOptional, IsOneTime = d.IsOneTime,
+					ConfiguredAmount = d.Amount, IsVariable = d.IsVariable, IsOptional = d.IsOptional, IsOneTime = d.IsOneTime,
 					PaymentTermId = d.PaymentTermId, PaymentTermVersionId = d.PaymentTermVersionId }).ToList()
 		}).Where(s => s.Heads.Count > 0).ToList();
 	}
@@ -62,7 +62,7 @@ public class AdmissionFeeStructureReader(
 			structure.AcademicYearId, structure.StandardId, ownerStageId, currency,
 			structure.Heads.Where(h => !h.IsOptional || input.OptionalHeadIds.Contains(h.FeeHeadId))
 				.Select(h => new AdmissionFeeSelectionHead(h.FeeHeadId, h.FeeHeadName, h.ConfiguredAmount,
-					h.IsOptional, h.IsOneTime, h.PaymentTermId, h.PaymentTermVersionId)).ToList(), actorId,
+					h.IsOptional, h.IsOneTime, h.PaymentTermId, h.PaymentTermVersionId, h.IsVariable)).ToList(), actorId,
 			new DateTimeOffset(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc)));
 	}
 }

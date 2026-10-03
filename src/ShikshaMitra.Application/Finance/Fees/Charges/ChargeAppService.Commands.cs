@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance.Accounts.Transactions;
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
@@ -34,7 +35,7 @@ public partial class ChargeAppService
 			CurrentTenant.Id, academicYearId,
 			input.ChargeName, input.ChargeCategoryId, input.PurposeDescription,
 			input.Amount, input.DueDate, (ChargePriority)input.Priority,
-			audience, snapshot, currentUser.Id!.Value, input.AdditionalNotes);
+			audience, snapshot, currentUser.Id!.Value, input.AdditionalNotes, input.IncomeCategoryId, input.ReceivingBankAccountId);
 
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
@@ -56,6 +57,9 @@ public partial class ChargeAppService
 		await EnsureRequestAccessibleAsync(chargeId);
 		EnsureConcurrencyStamp(request, input.ConcurrencyStamp);
 		await EnsureAllLinesPendingOrThrowAsync(chargeId, forDelete: false);
+		var income = await routingManager.RequireCategoryAsync(request.AcademicYearId, input.IncomeCategoryId ?? request.IncomeCategoryId, TransactionType.Income);
+		var bank = await routingManager.RequireBankAsync(request.AcademicYearId, input.ReceivingBankAccountId ?? request.ReceivingBankAccountId);
+		request.SetFinancialRouting(income.Id, income.Name, bank.Id, ChargeRequestManager.BankLabel(bank));
 
 		if (input.Audience is not null)
 		{
@@ -80,6 +84,7 @@ public partial class ChargeAppService
 			var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == chargeId && c.Status == ChargeStatus.Pending);
 			foreach (var line in lines)
 			{
+				line.SetFinancialRouting(income.Id, income.Name, bank.Id, ChargeRequestManager.BankLabel(bank));
 				line.Update(request.ChargeCategoryId, request.PurposeDescription, request.Amount,
 					request.DueDate, request.Priority, request.AdditionalNotes);
 			}

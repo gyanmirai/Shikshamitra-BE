@@ -1,3 +1,6 @@
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions;
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +28,8 @@ public class RefundPolicyAppService(
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<IdentityUser, Guid> userRepository,
+	FinanceRoutingManager routingManager,
+	FinanceScopeAccessService scopeAccess,
 	RefundPolicyCalculationService calculationService)
 	: ApplicationService, IRefundPolicyAppService
 {
@@ -171,7 +176,9 @@ public class RefundPolicyAppService(
 			MaximumDeduction = source.MaximumDeduction,
 			DeductionExplanation = source.DeductionExplanation,
 			AllowedPayoutMethods = source.GetAllowedPayoutMethods().Select(x => x.ToString()).ToList(),
-			ProcessingTargetDays = source.ProcessingTargetDays
+			ExpenseCategoryId = sameYear ? source.ExpenseCategoryId : null,
+            DefaultPayingBankAccountId = sameYear ? source.DefaultPayingBankAccountId : null,
+            ProcessingTargetDays = source.ProcessingTargetDays
 		});
 	}
 
@@ -248,6 +255,12 @@ public class RefundPolicyAppService(
 
 	private async Task EnsureReferencesAsync(CreateUpdateRefundPolicyDto input)
 	{
+		await scopeAccess.EnsureAcademicContextAccessibleAsync(input.AcademicYearId, null, null, null, null);
+		var active = input.Status == "Active";
+		if (active || input.ExpenseCategoryId.HasValue)
+			await routingManager.RequireCategoryAsync(input.AcademicYearId, input.ExpenseCategoryId, TransactionType.Expense);
+		if (input.DefaultPayingBankAccountId.HasValue || (active && input.AllowedPayoutMethods.Any(x => x != "Cash")))
+			await routingManager.RequireBankAsync(input.AcademicYearId, input.DefaultPayingBankAccountId);
 		if (await academicYearRepository.FindAsync(input.AcademicYearId) == null)
 			throw new BusinessException(RefundPolicyErrorCodes.AcademicYearRequired);
 		if (!string.Equals(input.FeeHeadScope, RefundFeeHeadScope.SelectedFeeHeads.ToString(), StringComparison.OrdinalIgnoreCase))

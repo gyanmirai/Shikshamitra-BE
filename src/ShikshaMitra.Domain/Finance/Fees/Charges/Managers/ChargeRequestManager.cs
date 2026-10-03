@@ -1,3 +1,5 @@
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions;
 ﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Students;
 using System;
@@ -17,6 +19,7 @@ public class ChargeRequestManager(
 	IRepository<Charge, Guid> chargeRepository,
 	IStudentRepository studentRepository,
 	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
+	FinanceRoutingManager routingManager,
 	ChargeAudienceResolver audienceResolver,
 	IGuidGenerator guidGenerator,
 	ILogger<ChargeRequestManager> logger) : DomainService
@@ -33,7 +36,9 @@ public class ChargeRequestManager(
 		ChargeAudience audience,
 		string audienceSnapshot,
 		Guid requestorId,
-		string? additionalNotes = null)
+		string? additionalNotes = null,
+		Guid? incomeCategoryId = null,
+		Guid? receivingBankAccountId = null)
 	{
 		var category = await GetActiveCategoryAsync(chargeCategoryId, academicYearId);
 		var studentIds = await audienceResolver.ResolveAsync(audience, academicYearId);
@@ -55,6 +60,9 @@ public class ChargeRequestManager(
 			audienceSnapshot,
 			additionalNotes);
 
+		var income = await routingManager.RequireCategoryAsync(academicYearId, incomeCategoryId, TransactionType.Income);
+		var bank = await routingManager.RequireBankAsync(academicYearId, receivingBankAccountId);
+		request.SetFinancialRouting(income.Id, income.Name, bank.Id, BankLabel(bank));
 		await chargeRequestRepository.InsertAsync(request, autoSave: false);
 
 		var lines = await CreateLinesAsync(
@@ -134,8 +142,7 @@ public class ChargeRequestManager(
 				request.DueDate,
 				request.Priority,
 				request.AdditionalNotes);
-			if (category.IncomeCategoryId.HasValue && category.IncomeAccountHeadId.HasValue)
-				line.SetAccountingSnapshot(category.IncomeCategoryId.Value, category.IncomeAccountHeadId.Value);
+			line.SetFinancialRouting(request.IncomeCategoryId!.Value, request.IncomeCategoryName!, request.ReceivingBankAccountId!.Value, request.ReceivingBankLabel!);
 		}
 
 		return existingLines.Concat(newLines).ToList();
@@ -147,6 +154,8 @@ public class ChargeRequestManager(
 		Guid approverId,
 		string? approvalNotes)
 	{
+		await routingManager.RequireCategoryAsync(request.AcademicYearId, request.IncomeCategoryId, TransactionType.Income);
+		await routingManager.RequireBankAsync(request.AcademicYearId, request.ReceivingBankAccountId);
 		var lines = await GetActionableLinesAsync(request.Id, studentIds, ChargeStatus.Pending);
 
 		foreach (var line in lines)
@@ -231,10 +240,7 @@ public class ChargeRequestManager(
 				initialStatus,
 				requestorId,
 				request.AdditionalNotes);
-			if (!category.IncomeCategoryId.HasValue || !category.IncomeAccountHeadId.HasValue)
-				throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryAccountingNotConfigured)
-					.WithData("ChargeCategoryId", category.Id);
-			line.SetAccountingSnapshot(category.IncomeCategoryId.Value, category.IncomeAccountHeadId.Value);
+			line.SetFinancialRouting(request.IncomeCategoryId!.Value, request.IncomeCategoryName!, request.ReceivingBankAccountId!.Value, request.ReceivingBankLabel!);
 
 			await chargeRepository.InsertAsync(line, autoSave: false);
 			lines.Add(line);
@@ -242,6 +248,8 @@ public class ChargeRequestManager(
 
 		return lines;
 	}
+
+	public static string BankLabel(BankAccount bank) => $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}";
 
 	private async Task<ChargeCategory> GetActiveCategoryAsync(Guid chargeCategoryId, Guid academicYearId)
 	{

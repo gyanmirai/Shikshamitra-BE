@@ -1,3 +1,6 @@
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions;
+using ShikshaMitra.Finance;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
@@ -28,6 +31,8 @@ public class CollectionPolicyAppService(
 	IAcademicYearRepository academicYearRepository,
 	LateFeeCalculationService lateFeeCalculationService,
 	ExceptionWindowResolver exceptionWindowResolver,
+	FinanceRoutingManager routingManager,
+	FinanceScopeAccessService scopeAccess,
 	IClock clock)
 	: ApplicationService, ICollectionPolicyAppService
 {
@@ -181,7 +186,8 @@ public class CollectionPolicyAppService(
 			FeeHeadOverrides = sameAcademicYear ? sourceDto.FeeHeadOverrides : new List<CollectionPolicyFeeHeadOverrideDto>(),
 			RoundingMethod = sourceDto.RoundingMethod,
 			ConsiderAsIncome = sourceDto.ConsiderAsIncome,
-			LateFeeIncomeHeadId = sourceDto.LateFeeIncomeHeadId,
+			LateFeeIncomeHeadId = null,
+			LateFeeIncomeCategoryId = sameAcademicYear ? sourceDto.LateFeeIncomeCategoryId : null,
 			MaximumLateFeeAmount = sourceDto.MaximumLateFeeAmount,
 			MaximumChargingDays = sourceDto.MaximumChargingDays,
 			AllowOnlineCollection = sourceDto.AllowOnlineCollection
@@ -397,6 +403,9 @@ public class CollectionPolicyAppService(
 
 	private async Task<CollectionPolicyUpdateModel> BuildValidatedModelAsync(CreateUpdateCollectionPolicyDto input)
 	{
+		await scopeAccess.EnsureAcademicContextAccessibleAsync(input.AcademicYearId, null, null, null, null);
+		if (input.LateFeeIncomeCategoryId.HasValue || (input.EnableLateFee && input.Status == "Active"))
+			await routingManager.RequireCategoryAsync(input.AcademicYearId, input.LateFeeIncomeCategoryId, TransactionType.Income);
 		var year = await academicYearRepository.FindAsync(input.AcademicYearId)
 			?? throw new BusinessException(CollectionPolicyErrorCodes.AcademicYearRequired);
 		var model = CollectionPolicyMapping.ToUpdateModel(input, year.StartDate.Date, year.EndDate.Date);

@@ -45,6 +45,8 @@ public partial class FeeRefundAppService
             string.IsNullOrWhiteSpace(reference) ||
             (input.Method != "Cash" && !input.BankAccountId.HasValue))
             throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
+        if (request.ExpenseCategoryId.HasValue && request.PayingBankAccountId != input.BankAccountId)
+            throw new BusinessException("Finance:Routing:BankMismatch");
         if (input.BankAccountId.HasValue)
         {
             var bank = await bankAccountRepository.FindAsync(input.BankAccountId.Value);
@@ -98,6 +100,12 @@ public partial class FeeRefundAppService
             request.OriginalReceiptId, payout.BankAccountId, payout.Method,
             payout.ExternalReference, amount, false, null, FeeHeadBreakdown(request),
             input.EvidenceReference, currentUser.GetId()), autoSave: false);
+        if (request.ExpenseCategoryId is { } categoryId)
+            await automaticTransactions.RecordAsync(request.AcademicYearId, categoryId,
+                request.ExpenseCategoryName!, payout.BankAccountId, request.PayingBankLabel,
+                request.VoucherNumber, amount, PayoutMethodValue(payout.Method),
+                ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense,
+                $"refund:{payout.Id:N}", request.Id, request.StudentId, paymentDate: payout.SettlementDate.UtcDateTime);
         await WriteAuditAsync(request, FinanceAuditActions.Refund,
             $"Refund {request.VoucherNumber} confirmed paid.", context: new { PayoutId = payoutId });
         await uow.CompleteAsync();
@@ -162,6 +170,7 @@ public partial class FeeRefundAppService
             original.OriginalReceiptId, original.BankAccountId, original.Method,
             original.ExternalReference, original.Amount, true, original.Id,
             original.FeeHeadAmountsJson, input.EvidenceReference, currentUser.GetId()), autoSave: false);
+        await automaticTransactions.ReverseAsync(request.Id);
         await WriteAuditAsync(request, FinanceAuditActions.Reverse,
             $"Refund payout returned for {request.VoucherNumber}.", input.Reason,
             new { input.SettlementId, input.EvidenceReference });
@@ -169,6 +178,9 @@ public partial class FeeRefundAppService
         return await MapAsync(request);
     }
 
+    private static int PayoutMethodValue(string method) => method switch
+    { "Cash" => 0, "Cheque" => 1, "DemandDraft" or "Demand Draft (DD)" => 2, "BankTransfer" or "Bank Transfer (NEFT/RTGS/IMPS)" => 3, "Upi" or "UPI" => 6,
+      _ => throw new BusinessException(FeeRefundErrorCodes.PayoutMethodNotAllowed) };
     private static string FeeHeadBreakdown(FeeRefundRequest request) => JsonSerializer.Serialize(
         request.Lines.Select(x => new
         {

@@ -42,6 +42,7 @@ public sealed class CollectionPolicySnapshot
 	public RoundingMethodType RoundingMethod { get; set; }
 	public bool ConsiderAsIncome { get; set; }
 	public Guid? LateFeeIncomeHeadId { get; set; }
+	public Guid? LateFeeIncomeCategoryId { get; set; }
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 	public bool EnableWaiver { get; set; }
@@ -62,5 +63,5 @@ public sealed class CollectionPolicySnapshot
 		FlatAmount, Percentage, PercentageBase, AmountPerDay, AmountPerWeek, AmountPerMonth,
 		CompoundFrequency, EscalationRules, FeeHeadOverrides, RoundingMethod, ConsiderAsIncome,
 		LateFeeIncomeHeadId, MaximumLateFeeAmount, MaximumChargingDays, EnableWaiver,
-		EnableChargeWaiver, RequiresApproval, ApprovalRoleIds, AllowOnlineCollection);
+		EnableChargeWaiver, RequiresApproval, ApprovalRoleIds, AllowOnlineCollection, LateFeeIncomeCategoryId);
 }

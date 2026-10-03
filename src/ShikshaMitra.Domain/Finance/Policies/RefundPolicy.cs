@@ -35,6 +35,8 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string AllowedPayoutMethodsJson { get; protected set; } = "[]";
 	public int? ProcessingTargetDays { get; protected set; }
 	public int Version { get; protected set; }
+	public Guid? ExpenseCategoryId { get; private set; }
+	public Guid? DefaultPayingBankAccountId { get; private set; }
 
 	protected RefundPolicy()
 	{
@@ -94,6 +96,8 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			: model.DeductionExplanation?.Trim() ?? string.Empty;
 		AllowedPayoutMethodsJson = JsonSerializer.Serialize(model.AllowedPayoutMethods.Distinct().Order().ToList());
 		ProcessingTargetDays = model.ProcessingTargetDays;
+		ExpenseCategoryId = model.ExpenseCategoryId;
+		DefaultPayingBankAccountId = model.DefaultPayingBankAccountId;
 		Version++;
 	}
 
@@ -153,7 +157,7 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DeductionExplanation,
 		GetAllowedPayoutMethods(),
 		ProcessingTargetDays,
-		Version);
+		Version, ExpenseCategoryId, DefaultPayingBankAccountId);
 
 	private static void ValidateRules(RefundPolicyUpdateModel model)
 	{
@@ -208,7 +212,9 @@ public sealed record RefundPolicyUpdateModel(
 	decimal? MaximumDeduction,
 	string? DeductionExplanation,
 	IReadOnlyCollection<RefundPayoutMethod> AllowedPayoutMethods,
-	int? ProcessingTargetDays);
+	int? ProcessingTargetDays,
+	Guid? ExpenseCategoryId = null,
+	Guid? DefaultPayingBankAccountId = null);
 
 public sealed record RefundPolicySnapshot(
 	Guid PolicyId,
@@ -234,4 +240,6 @@ public sealed record RefundPolicySnapshot(
 	string DeductionExplanation,
 	IReadOnlyList<RefundPayoutMethod> AllowedPayoutMethods,
 	int? ProcessingTargetDays,
-	int Version);
+	int Version,
+	Guid? ExpenseCategoryId = null,
+	Guid? DefaultPayingBankAccountId = null);

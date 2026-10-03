@@ -23,7 +23,13 @@ public class BankAccountAppService(
 	IRepository<ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundRequest, Guid> refundRequestRepository,
 	IRepository<ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundAccountingEntry, Guid> refundAccountingRepository,
 	IRepository<ShikshaMitra.Finance.Accounts.Posting.PaymentDestinationRule, Guid> destinationRuleRepository,
-	FinanceScopeAccessService financeScopeAccessService,
+	IRepository<ShikshaMitra.Finance.Fees.Charges.ChargeRequest, Guid> chargeRequests,
+ ChargeRoutingUsageManager chargeRoutingUsage,
+ IRepository<ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion, Guid> policyVersions,
+ IRepository<ShikshaMitra.Domain.Finance.Policies.RefundPolicy, Guid> refundPolicies,
+ IRepository<ShikshaMitra.Finance.Fees.FeeCollection.PaymentMethodRecord, Guid> payments,
+ IRepository<ShikshaMitra.Finance.Accounts.Incomes.Transaction, Guid> transactions,
+ FinanceScopeAccessService financeScopeAccessService,
 	AccountSettingVersionHistoryReader historyReader) : ApplicationService, IBankAccountAppService
 {
 	private static readonly IReadOnlySet<string> HistoryFields = new HashSet<string>
@@ -39,14 +45,13 @@ public class BankAccountAppService(
 	public async Task<BankAccountResponse> CreateAsync(Guid academicYearId, CreateBankAccountRequest input)
 	{
 		await EnsureScopeAsync(academicYearId);
-		await ValidateAccountHeadAsync(academicYearId, input.AccountHeadId);
 		var id = GuidGenerator.Create();
 		var code = string.IsNullOrWhiteSpace(input.Code) ? id.ToString("N") : input.Code.Trim();
-		await EnsureUniqueAsync(academicYearId, code, input.AccountHeadId, input.AccountNumber);
+		await EnsureUniqueAsync(academicYearId, code, null, input.AccountNumber);
 		var entity = new BankAccount(id, academicYearId, input.BankName,
 			input.BranchName, input.BranchAddress, input.AccountHolderName, input.AccountType,
 			input.AccountNumber, input.Purpose, input.IfscCode, input.UpiId, true, CurrentTenant.Id,
-			code, input.AccountHeadId, input.EffectiveFrom, input.EffectiveTo);
+			code, null, input.EffectiveFrom, input.EffectiveTo);
 		await bankAccountRepository.InsertAsync(entity, autoSave: true);
 		return await MapAsync(entity, includeSensitive: true);
 	}
@@ -104,14 +109,14 @@ public class BankAccountAppService(
 		var entity = await bankAccountRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureConcurrency(entity, input.ConcurrencyStamp);
-		await ValidateAccountHeadAsync(entity.AcademicYearId, input.AccountHeadId);
 		if (await IsUsedAsync(id) &&
-			(entity.AccountHeadId != input.AccountHeadId ||
-			 !string.Equals(entity.AccountNumber, input.AccountNumber, StringComparison.Ordinal)))
+			(!string.Equals(entity.AccountNumber, input.AccountNumber, StringComparison.Ordinal) ||
+             !string.Equals(entity.IfscCode, input.IfscCode, StringComparison.OrdinalIgnoreCase) ||
+             !string.Equals(entity.UpiId, input.UpiId, StringComparison.Ordinal)))
 			throw new BusinessException(AccountSettingErrorCodes.BankAccountInUse);
 		var code = string.IsNullOrWhiteSpace(input.Code) ? entity.Code ?? entity.Id.ToString("N") : input.Code.Trim();
-		await EnsureUniqueAsync(entity.AcademicYearId, code, input.AccountHeadId, input.AccountNumber, id);
-		entity.Update(code, input.AccountHeadId, input.BankName, input.BranchName,
+		await EnsureUniqueAsync(entity.AcademicYearId, code, entity.AccountHeadId, input.AccountNumber, id);
+		entity.Update(code, entity.AccountHeadId, input.BankName, input.BranchName,
 			input.BranchAddress, input.AccountHolderName, input.AccountType, input.AccountNumber,
 			input.Purpose, input.IfscCode, input.UpiId, input.EffectiveFrom, input.EffectiveTo);
 		await bankAccountRepository.UpdateAsync(entity, autoSave: true);
@@ -124,8 +129,7 @@ public class BankAccountAppService(
 		var entity = await bankAccountRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureConcurrency(entity, input.ConcurrencyStamp);
-		if (!input.IsActive && await destinationRuleRepository.AnyAsync(x =>
-			x.BankAccountId == id && x.IsActive))
+		if (!input.IsActive && await IsConfiguredForFuturePaymentsAsync(id))
 			throw new BusinessException(AccountSettingErrorCodes.BankAccountInUse);
 		if (input.IsActive) entity.Activate(); else entity.Deactivate(input.DeactivationReason ?? string.Empty);
 		await bankAccountRepository.UpdateAsync(entity, autoSave: true);
@@ -146,20 +150,23 @@ public class BankAccountAppService(
 	private Task EnsureScopeAsync(Guid academicYearId) =>
 		financeScopeAccessService.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
 
+ private async Task<bool> IsConfiguredForFuturePaymentsAsync(Guid id)
+ {
+   if (await destinationRuleRepository.AnyAsync(x=>x.BankAccountId == id && x.IsActive) ||
+       await refundPolicies.AnyAsync(x=>x.DefaultPayingBankAccountId == id && x.Status == ShikshaMitra.Domain.Finance.Policies.RefundPolicyStatus.Active) ||
+       await refundRequestRepository.AnyAsync(x=>x.PayingBankAccountId == id && x.Status == ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundStatus.Approved && !x.Settlements.Any())) return true;
+   return await chargeRoutingUsage.HasOpenChargesAsync(bankId: id);
+ }
 	private async Task<bool> IsUsedAsync(Guid id) =>
 		await refundRequestRepository.AnyAsync(x => x.Settlements.Any(s => s.BankAccountId == id)) ||
 		await refundAccountingRepository.AnyAsync(x => x.BankAccountId == id) ||
-		await destinationRuleRepository.AnyAsync(x => x.BankAccountId == id);
-
-	private async Task ValidateAccountHeadAsync(Guid academicYearId, Guid? accountHeadId)
-	{
-		if (!accountHeadId.HasValue)
-			throw new BusinessException(AccountSettingErrorCodes.InvalidAccountHeadType);
-		var head = await accountHeadRepository.FindAsync(accountHeadId.Value);
-		if (head is null || head.AcademicYearId != academicYearId || head.HeadType != AccountHeadType.Asset)
-			throw new BusinessException(AccountSettingErrorCodes.InvalidAccountHeadType).WithData("Expected", AccountHeadType.Asset);
-		if (!head.IsActive) throw new BusinessException(AccountSettingErrorCodes.AccountHeadMustBeActive);
-	}
+		await destinationRuleRepository.AnyAsync(x => x.BankAccountId == id) ||
+        await chargeRequests.AnyAsync(x => x.ReceivingBankAccountId == id) ||
+        await refundPolicies.AnyAsync(x => x.DefaultPayingBankAccountId == id) ||
+        await refundRequestRepository.AnyAsync(x => x.PayingBankAccountId == id) ||
+        await payments.AnyAsync(x => x.BankAccountId == id) ||
+        await transactions.AnyAsync(x => x.BankAccountId == id) ||
+        await policyVersions.AnyAsync(x=>x.SnapshotJson.Contains(id.ToString()));
 
 	private async Task EnsureUniqueAsync(Guid academicYearId, string code, Guid? accountHeadId,
 		string accountNumber, Guid? excludingId = null)

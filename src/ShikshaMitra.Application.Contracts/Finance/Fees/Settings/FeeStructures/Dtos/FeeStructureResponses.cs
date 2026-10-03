@@ -77,7 +77,8 @@ public class FeeHeadAssignmentResponse
     public Guid FeeHeadId { get; set; }
     public string FeeHeadName { get; set; }
     public string CategoryName { get; set; }
-    public decimal Amount { get; set; }
+    public decimal? Amount { get; set; }
+    public bool IsVariable { get; set; }
     public bool IsOneTime { get; set; }
     public bool IsOptional { get; set; }
 	public MonthEnum? PayableMonth { get; set; }

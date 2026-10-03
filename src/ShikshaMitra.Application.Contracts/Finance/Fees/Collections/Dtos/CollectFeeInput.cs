@@ -146,6 +146,7 @@ public class ChargePaymentDto
 /// <summary>A single payment instrument used in this transaction.</summary>
 public class FeePaymentDto
 {
+    public Guid? BankAccountId { get; set; }
     [Required]
     public PaymentMethodEnum PaymentMethod { get; set; }
 

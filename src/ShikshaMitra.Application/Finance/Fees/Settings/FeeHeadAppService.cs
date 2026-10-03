@@ -39,7 +39,7 @@ public class FeeHeadAppService(
             academicYearId,
             input.FeeCategoryId,
             input.Name.Trim(),
-            input.Module,
+            null, // Module selection is retired for new fee heads.
             input.IsConcessionApplied,
             input.Description,
             input.IncomeCategoryId
@@ -112,23 +112,18 @@ public class FeeHeadAppService(
 		var feeHeadQuery = await feeHeadRepository.GetQueryableAsync();
 		var categoryQuery = await feeCategoryRepository.GetQueryableAsync();
 		var incomeCategoryQuery = await incomeCategoryRepository.GetQueryableAsync();
-		var accountHeadQuery = await accountHeadRepository.GetQueryableAsync();
 
 		return await AsyncExecuter.ToListAsync(
 			from feeHead in feeHeadQuery
 			join category in categoryQuery on feeHead.FeeCategoryId equals category.Id
 			join incomeCategory in incomeCategoryQuery on feeHead.IncomeCategoryId equals incomeCategory.Id
-			join accountHead in accountHeadQuery on incomeCategory.DefaultAccountHeadId equals (Guid?)accountHead.Id
 			where feeHead.AcademicYearId == academicYearId &&
 				feeHead.IsActive &&
 				category.AcademicYearId == academicYearId &&
 				category.IsActive &&
 				incomeCategory.AcademicYearId == academicYearId &&
 				incomeCategory.CategoryType == TransactionType.Income &&
-				incomeCategory.IsActive &&
-				accountHead.AcademicYearId == academicYearId &&
-				accountHead.HeadType == AccountHeadType.Income &&
-				accountHead.IsActive
+				incomeCategory.IsActive
 			orderby category.Name, feeHead.Name
 			select new ActiveFeeHeadLookupDto
 			{
@@ -138,8 +133,6 @@ public class FeeHeadAppService(
 				FeeCategoryName = category.Name,
 				IncomeCategoryId = incomeCategory.Id,
 				IncomeCategoryName = incomeCategory.Name,
-				IncomeAccountHeadId = accountHead.Id,
-				IncomeAccountHeadName = accountHead.Name,
 				Name = feeHead.Name,
 				Module = feeHead.Module,
 				IsConcessionApplied = feeHead.IsConcessionApplied
@@ -165,7 +158,7 @@ public class FeeHeadAppService(
 			throw new BusinessException(FinanceFeeHeadErrorCodes.IncomeCategoryChangeBlocked);
 		}
 
-		feeHead.Update(input.FeeCategoryId, input.Name.Trim(), input.Module, input.IsConcessionApplied,
+		feeHead.Update(input.FeeCategoryId, input.Name.Trim(), feeHead.Module, input.IsConcessionApplied,
 			input.Description, input.IncomeCategoryId);
 
 		await feeHeadRepository.UpdateAsync(feeHead);

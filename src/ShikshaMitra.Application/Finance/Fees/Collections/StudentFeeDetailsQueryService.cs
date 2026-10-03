@@ -265,6 +265,8 @@ public partial class StudentFeeDetailsQueryService(
 				return new ChargeDetailDto
 				{
 					ChargeId = c.Id,
+                    IncomeCategoryId = c.IncomeCategoryId, ReceivingBankAccountId = c.ReceivingBankAccountId,
+                    IncomeCategoryName = c.IncomeCategoryName, ReceivingBankLabel = c.ReceivingBankLabel,
 					SourceId = c.Id,
 					SourceType = "Charge",
 					IsSystemGenerated = false,

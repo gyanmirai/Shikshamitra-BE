@@ -193,7 +193,7 @@ internal static class CollectionPolicyMapping
 			false,
 			false,
 			Array.Empty<Guid>(),
-			input.AllowOnlineCollection);
+			input.AllowOnlineCollection, input.LateFeeIncomeCategoryId);
 
 	public static CollectionPolicyDto ToDto(CollectionPolicy entity) => new()
 	{
@@ -221,6 +221,7 @@ internal static class CollectionPolicyMapping
 		RoundingMethod = MapRoundingMethod(entity.RoundingMethod),
 		ConsiderAsIncome = entity.ConsiderAsIncome,
 		LateFeeIncomeHeadId = entity.LateFeeIncomeHeadId,
+		LateFeeIncomeCategoryId = entity.LateFeeIncomeCategoryId,
 		MaximumLateFeeAmount = entity.MaximumLateFeeAmount,
 		MaximumChargingDays = entity.MaximumChargingDays,
 		AllowOnlineCollection = entity.AllowOnlineCollection,

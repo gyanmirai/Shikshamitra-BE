@@ -13,6 +13,7 @@ public class SalarySlipPdfWorkflow(
 	IEmployeeRepository employeeRepository,
 	SalarySlipDtoMapper salarySlipDtoMapper,
 	PayslipPdfService payslipPdfService,
+	PayslipIssuanceService issuance,
 	SalarySlipAccessService accessService,
 	SalarySlipSnapshotGenerationService snapshotGenerationService)
 	: ApplicationService
@@ -65,9 +66,11 @@ public class SalarySlipPdfWorkflow(
 
 	private async Task<byte[]> GenerateAsync(SalarySlip salarySlip, bool isPreview)
 	{
+		if (!isPreview)
+			return (await issuance.GetCurrentAsync(salarySlip.Id)).Pdf;
 		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
-		var pdfModel = SalarySlipProjection.ToPdfModel(dto, CurrentTenant.Name ?? "ShikshaMitra", isPreview);
+		var pdfModel = SalarySlipProjection.ToPdfModel(dto, CurrentTenant.Name ?? employee.EmployeeName, isPreview);
 
 		return payslipPdfService.Generate(pdfModel);
 	}

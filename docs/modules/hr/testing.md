@@ -234,3 +234,33 @@ Gross-based component fixtures must leave their component dependency ID empty.
 Do not weaken the validator to accept contradictory gross and component-based dependencies.
 Run the complete application and domain HR.Payroll filters in addition to the focused PostgreSQL workflows.
 Report repository-wide failures separately from these payroll results.
+
+### Payslip completion verification
+
+Use the [acceptance specification](references/payslip-design.md) and report executed checks separately from outstanding acceptance.
+On 2026-10-03 the independent review passed the API/test-project build, 105 domain payroll tests, 315 application payroll tests, 13 permission tests, 20 correction/delivery/PDF/mapping tests, 16 paid-settlement and rollback tests, one worker-process interruption test and one settlement-versus-lock race.
+These are separate focused runs, not a claim that every repository test passed.
+
+| Suite | Disposable connection variable | Evidence covered |
+| --- | --- | --- |
+| PayslipDocumentApi_Tests and PayslipDeliveryLifecycleApi_Tests | PAYROLL_REGISTRATION_TEST_POSTGRES | Frozen facts, exact PDFs, payment/replacement retry, permissions/scope/tenant isolation, rollback, capture email, competing workers, ambiguous send outcome |
+| PayslipCorrectionApi_Tests | PAYROLL_CORRECTION_TEST_POSTGRES | Required reasons, attendance validation, review/reissue/cancel, payment races, unchanged originals, actual added-document persistence failure and retry |
+| PayslipSettlementApi_Tests | PAYROLL_SETTLEMENT_TEST_POSTGRES | Signed differences, follow-up arrears, zero change, idempotency, stale/locked targets, grants/scope/tenant checks and target regeneration/review/lock |
+| PayslipSettlementLockRace_Tests | PAYROLL_SETTLEMENT_LOCK_TEST_POSTGRES | Exactly one competing settlement or lock, one target document and immutable paid-source hash |
+| PayslipWorkerProcess_Tests | PAYROLL_PROCESS_TEST_POSTGRES | Kill and restart a separate worker process; stale PROCESSING becomes UNCERTAIN without automatic resend; explicit retry attaches exact bytes |
+
+Use a fresh owned loopback payroll_tests_* database for each PostgreSQL factory; never reset a populated database to make a test pass.
+Set PAYSLIP_WORKER_DOTNET to the selected .NET 9 executable for child-process checks.
+The worker test proves process recovery, not the complete production-host poller lifecycle.
+PayslipPdfLayout_Tests and SalarySlipResponseMapping_Tests cover frozen byte arrays, draft/ESIC-off/zero-share presentation, Indian date boundaries, partial attendance, long tables and exclusion of employer/internal fields.
+Set PAYSLIP_VERIFY_ARTIFACTS to an ignored folder; inspect all PDF pages, including continuation pages.
+The independent review inspected five synthetic PDF cases over seven rendered pages without clipping.
+
+The design-time EF pending-model check passes and the writer applied the full migration chain to fresh PostgreSQL.
+The runtime model comparison fails: the unchanged runtime module enables Npgsql legacy timestamp behavior while the unchanged design-time factory disables it, yielding timestamp mapping differences across 1,254 existing columns.
+This remains a migration/runtime verification risk; do not suppress the assertion or generate an unrelated bulk timestamp migration.
+
+The authenticated browser journey completed a paid source correction through a later-month settlement and final target lock, retaining both canonical PDF hashes and the original source amounts.
+The broader period-boundary, mixed-employee, direct unproxied-service and production-host distribution matrices remain unverified.
+Current Gujarat wage-slip form and signature applicability are not certified; school jurisdiction/status must be established before a compliance claim.
+Store synthetic browser credentials only in ignored artifacts, never in logs or commits.

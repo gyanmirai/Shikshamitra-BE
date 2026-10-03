@@ -26,6 +26,7 @@ public class PayrollLockWorkflow(
 	IUnitOfWorkManager uows,
 	PayrollSnapshotLockProvider snapshotLockProvider,
 	PayrollLockBatchProcessor batchProcessor,
+	PayslipIssuanceService issuance,
 	EsiContinuityInvalidator continuityInvalidator,
 	PayrollAcademicYearScopeResolver academicYearScopeResolver,
 	IGuidGenerator guidGenerator,
@@ -104,6 +105,7 @@ public class PayrollLockWorkflow(
 			"Generating salary slips from reviewed payroll snapshots for {ProcessCount} employees",
 			employees.Count);
 
+		await issuance.EnsureSchoolConfiguredAsync();
 		var result = await batchProcessor.ProcessAsync(employees, snapshotByEmployee, request.Month);
 		await continuityInvalidator.InvalidateAsync(internalMonthYear, targetEmployeeIds);
 

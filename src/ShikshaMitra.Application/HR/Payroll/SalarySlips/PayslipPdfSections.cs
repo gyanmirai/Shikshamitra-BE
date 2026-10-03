@@ -1,7 +1,7 @@
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
-using System.Globalization;
+using System.Linq;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
@@ -38,9 +38,9 @@ internal static class PayslipPdfSections
 						.Text(NormalizeStatus(model.DocumentLabel)).FontSize(8).Bold().FontColor(Ink);
 					right.Item().PaddingTop(6).Text(model.PayPeriodDisplay).FontSize(14).Bold().FontColor(Ink);
 					right.Item().PaddingTop(3).Text($"Generated On: {model.GeneratedAt:dd MMM yyyy}").FontSize(8).FontColor(Muted);
-					right.Item().Text($"Slip No: {model.SlipNumber}").FontSize(8).FontColor(Muted);
 				});
 			});
+			column.Item().PaddingTop(5).AlignRight().Text($"Slip No: {model.SlipNumber}").FontSize(8).FontColor(Muted);
 
 			column.Item().PaddingTop(10).AlignCenter().Text("Salary Slip").FontSize(16).Bold().FontColor(Ink);
 			column.Item().PaddingTop(8).LineHorizontal(2).LineColor(Ink);
@@ -74,7 +74,8 @@ internal static class PayslipPdfSections
 				("Account", model.MaskedAccountNumber),
 				("IFSC", model.IfscCode),
 				("UAN", model.UanNumber),
-				("EPF No.", model.EpfNumber)
+				("EPF No.", model.EpfNumber),
+				("ESIC insurance number", model.InsuranceNumber)
 			}));
 		});
 	}
@@ -95,45 +96,15 @@ internal static class PayslipPdfSections
 	{
 		container.Border(1).BorderColor(Border).Padding(10).Column(column =>
 		{
-			column.Item().Text("Pay Basis").Bold().FontColor(Ink);
-			column.Item().PaddingTop(4).Text($"Full-month gross: {(model.FullGrossSalary.HasValue ? FormatCurrency(model.FullGrossSalary.Value) : "-")} | Gross Salary: {FormatCurrency(model.GrossSalary)} | Additional earnings: {FormatCurrency(model.AdditionalEarnings)}").FontSize(8);
-			column.Item().PaddingTop(2).Text("Attendance and proration values").FontSize(8).FontColor(Muted);
-			column.Item().PaddingTop(7).Row(row =>
-			{
-				var lopDays = model.LopDays.GetValueOrDefault();
-				row.RelativeItem().Element(c => ComposePayBasisMetric(c, "Payable Days", FormatDays(model.PayableDays), "Payout days"));
-				row.ConstantItem(6);
-				row.RelativeItem().Element(c => ComposePayBasisMetric(c, "Payroll Basis Days", FormatDays(model.PayrollBasisDays), "Monthly basis"));
-				row.ConstantItem(6);
-				row.RelativeItem().Element(c => ComposePayBasisMetric(
-					c,
-					"LOP / Absent Days",
-					FormatDays(model.LopDays),
-					lopDays > 0 ? "Salary impact" : "No LOP"));
-				row.ConstantItem(6);
-				row.RelativeItem().Element(c => ComposePayBasisMetric(
-					c,
-					"Proration Factor",
-					model.ProrationFactor.HasValue ? model.ProrationFactor.Value.ToString("0.####", CultureInfo.InvariantCulture) : "-",
-					"Applied factor"));
-			});
-
-			column.Item().PaddingTop(6).Row(row =>
-			{
-				row.RelativeItem().Element(c => ComposeCompactMetric(c, "Present Days", FormatDays(model.PresentDays)));
-				row.ConstantItem(6);
-				row.RelativeItem().Element(c => ComposeCompactMetric(c, "Half Days", FormatDays(model.HalfWorkingDays)));
-				row.ConstantItem(6);
-				row.RelativeItem().Element(c => ComposeCompactMetric(c, "Day Calculation", model.DayCalculationMode));
-				row.ConstantItem(6);
-				row.RelativeItem().Element(c => ComposeCompactMetric(c, "Pay Period", model.PayPeriodDisplay));
-			});
+			column.Item().Text("Earnings and attendance").Bold().FontColor(Ink);
+			if (model.FullGrossSalary.HasValue)
+				column.Item().PaddingTop(4).Text($"Full-month earnings: {FormatCurrency(model.FullGrossSalary.Value)}").FontSize(8);
+			column.Item().PaddingTop(4).Text($"Payable days: {FormatDays(model.PayableDays)}  |  Payroll days: {FormatDays(model.PayrollBasisDays)}  |  Unpaid days: {FormatDays(model.LopDays)}").FontSize(8);
 		});
 	}
-
 	public static void ComposeSalaryTables(IContainer container, PayslipPdfModel model)
 	{
-		var shouldStackTables = model.Earnings.Count > SideBySideLineLimit ||
+		var shouldStackTables = model.Earnings.Any(x => x.FullMonthAmount.HasValue) || model.Earnings.Count > SideBySideLineLimit ||
 		                        model.Deductions.Count > SideBySideLineLimit;
 
 		if (shouldStackTables)
@@ -186,8 +157,16 @@ internal static class PayslipPdfSections
 			{
 				column.Item().PaddingTop(6).AlignCenter().Text("This is a preview payslip and is not an official salary slip.").FontSize(8).Bold().FontColor(Ink);
 			}
-			column.Item().PaddingTop(6).AlignCenter().Text("This is a computer-generated payslip and does not require a signature.").FontSize(8).FontColor(Muted);
+			if (!model.IsPreview)
+				column.Item().PaddingTop(6).Text("Employer / pay-in-charge signature: ____________________").FontSize(8).FontColor(Ink);
 			column.Item().AlignCenter().Text("Confidential payroll document. Contact HR/payroll for any discrepancy.").FontSize(8).FontColor(Muted);
+			column.Item().AlignRight().Text(text =>
+			{
+				text.DefaultTextStyle(x => x.FontSize(7).FontColor(Muted));
+				text.CurrentPageNumber();
+				text.Span(" / ");
+				text.TotalPages();
+			});
 		});
 	}
 

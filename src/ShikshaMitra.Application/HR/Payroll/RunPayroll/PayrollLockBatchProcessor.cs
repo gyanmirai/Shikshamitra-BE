@@ -16,6 +16,7 @@ public class PayrollLockBatchProcessor(
 	ISalarySlipRepository salarySlipRepository,
 	IRepository<PayrollRunItemSnapshot, Guid> payrollRunItemSnapshotRepository,
 	SalarySlipManager salarySlipManager,
+	PayslipIssuanceService issuance,
 	IUnitOfWorkManager unitOfWorkManager,
 	ILogger<PayrollLockBatchProcessor> logger)
 	: ITransientDependency
@@ -61,6 +62,7 @@ public class PayrollLockBatchProcessor(
 		PayrollRunItemSnapshot snapshot,
 		PayrollLockBatchResult result)
 	{
+		var persistenceStarted = false;
 		try
 		{
 			logger.LogDebug(
@@ -73,6 +75,7 @@ public class PayrollLockBatchProcessor(
 			PayrollSnapshotTotalGuard.EnsureMatchesLineItems(snapshot, earningLineItems, deductionLineItems);
 			var dayCalculationMode = PayrollRunRules.ParseDayCalculationMode(snapshot.DayCalculationMode);
 
+			persistenceStarted = true;
 			var salarySlip = await salarySlipManager.GenerateOrGetSalarySlipFromSnapshotAsync(
 				snapshot,
 				earningLineItems,
@@ -91,6 +94,7 @@ public class PayrollLockBatchProcessor(
 				return;
 			}
 
+			await issuance.IssueAsync(salarySlip, fromPayrollLock: true);
 			salarySlip.FinalizeSlip();
 			await salarySlipRepository.UpdateAsync(salarySlip, autoSave: false);
 			result.RecordGenerated();
@@ -99,6 +103,9 @@ public class PayrollLockBatchProcessor(
 		}
 		catch (BusinessException bex)
 		{
+			// A caught exception must never commit a partially created document, slip or delivery intent.
+			// Known pre-write validation failures can still be reported per employee.
+			if (persistenceStarted) throw;
 			logger.LogWarning(bex,
 				"Business rule violation generating salary slip for employee {EmployeeCode} ({EmployeeName}): {ErrorCode}",
 				employee.EmployeeCode, employee.EmployeeName, bex.Code);
@@ -107,6 +114,7 @@ public class PayrollLockBatchProcessor(
 		}
 		catch (Exception ex)
 		{
+			if (persistenceStarted) throw;
 			logger.LogError(ex,
 				"Unexpected error generating salary slip for employee {EmployeeCode} ({EmployeeName})",
 				employee.EmployeeCode, employee.EmployeeName);

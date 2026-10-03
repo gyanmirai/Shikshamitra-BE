@@ -1,6 +1,12 @@
 {
   "Culture": "en",
   "Texts": {
+	"HR:Payroll:030044": "The issued payslip document is invalid. Contact payroll support.",
+	"HR:Payroll:030045": "No issued document is available. Complete payslip issuance before downloading.",
+	"HR:Payroll:030046": "Configure the school name and address in Payslip settings before finalizing payroll.",
+	"HR:Payroll:030047": "The payslip or settings changed. Refresh the current version and review your action.",
+	"HR:Payroll:030048": "Complete or cancel the pending payroll correction before recording payment or replacing document details.",
+	"HR:Payroll:030049": "{reason}",
 	"Permission:Students.Records.Changes": "Changes & Approvals",
 	"Permission:Students.Records.Changes.View": "View record requests",
 	"Permission:Students.Records.Changes.Create": "Request or directly apply allowed changes",

@@ -30,7 +30,7 @@ Follow this order when you need to change or review HR:
 
 Backend HR docs own canonical product behavior, API contracts, permissions, errors, domain rules, and data integrity notes.
 Frontend HR docs own routes, screens, React state, RTK Query clients, and browser workflow coverage.
-Start frontend work at [HR frontend docs](../../../../Shikshamitra-FE/docs/hr/README.md).
+Start frontend work at [HR frontend docs](https://github.com/gyanmirai/Shikshamitra-FE/blob/main/docs/hr/README.md).
 
 ## Source of truth
 
@@ -44,7 +44,7 @@ Use source code when a document and implementation disagree:
 | Backend persistence | `src/ShikshaMitra.EntityFrameworkCore/HR/**` |
 | Backend permissions | `src/ShikshaMitra.Domain.Shared/Constants/Permissions/SubmodulePermissions/HR/**` |
 | Backend API tests | `test/ShikshaMitra.HttpApi.Tests/HR/**` |
-| Frontend integration docs | [HR frontend docs](../../../../Shikshamitra-FE/docs/hr/README.md) |
+| Frontend integration docs | [HR frontend docs](https://github.com/gyanmirai/Shikshamitra-FE/blob/main/docs/hr/README.md) |
 
 ## For agents
 
@@ -68,6 +68,7 @@ Use this folder only after the six canonical files:
 |---|---|
 | [references](./references/) | Deep supporting notes that are still active |
 | [ESIC compensation design](./references/esic-compensation-design.md) | Agreed salary bases, compact ESIC configuration, documentation handoff, and acceptance criteria; pending behaviour is marked explicitly |
+| [Payslip design](./references/payslip-design.md) | Active requirements and implementation acceptance for immutable payslips, corrections and employee email distribution |
 
 ## Validation
 

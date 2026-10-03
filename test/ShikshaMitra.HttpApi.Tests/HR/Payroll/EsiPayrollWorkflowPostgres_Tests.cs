@@ -64,6 +64,7 @@ public class EsiPayrollWorkflowPostgres_Tests
 			await SeedAttendanceAsync(employee.Id, September);
 			var august = await CalculateAsync(August);
 			(await EmployeeAsync(august.Id, employee.Id)).EmployeeStateInsuranceCoverageDecision.ShouldBe("WITHIN_WAGE_CEILING");
+			await ReviewAsync(august.Id, employee.Id, August);
 			await WithSalarySlipAsync(employee.Id, finalize: false);
 			return employee.Id;
 		}

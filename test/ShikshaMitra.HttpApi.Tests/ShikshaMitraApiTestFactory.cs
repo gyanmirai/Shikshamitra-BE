@@ -68,9 +68,11 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 	public Guid SeededMediumId { get; private set; }
 	public Guid SeededStandardId { get; private set; }
 	public Guid SeededDivisionId { get; private set; }
+	protected virtual bool InitializeTestData => true;
 	protected override IHost CreateHost(IHostBuilder builder)
 	{
 		var host = base.CreateHost(builder);
+		if (!InitializeTestData) return host;
 
 		Task.Run(async () =>
 		{
@@ -111,6 +113,13 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			await EnsureTestAuthUserExistsAsync(services, tenantId, lookupNormalizer);
 			await EnsureTestAuthEmployeeExistsAsync(services);
 			await EnsureTestAuthUserHasTenantWideScopeAsync(services, tenantId);
+			var payslipSettings = services.GetRequiredService<IRepository<ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings, Guid>>();
+			if (await payslipSettings.FindAsync(tenantId) == null)
+			{
+				var school = new ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings(tenantId);
+				school.Configure("Synthetic Payroll Test School", "Synthetic Test Road, Ahmedabad, Gujarat", false, Guid.NewGuid());
+				await payslipSettings.InsertAsync(school);
+			}
 
 			var shiftRepo = services.GetRequiredService<IRepository<ShiftManagement, Guid>>();
 			var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()

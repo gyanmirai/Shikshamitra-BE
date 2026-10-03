@@ -103,7 +103,9 @@ internal static class SalarySlipProjection
 			Status: statusLabel,
 			IsPreview: isPreview,
 			DocumentLabel: isPreview ? $"Preview - {statusLabel}" : statusLabel,
-			GeneratedAt: dto.ProcessedDate,
+			GeneratedAt: TimeZoneInfo.ConvertTimeFromUtc(dto.ProcessedDate.Kind == DateTimeKind.Local
+				? dto.ProcessedDate.ToUniversalTime() : DateTime.SpecifyKind(dto.ProcessedDate, DateTimeKind.Utc),
+				TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata")),
 			PayrollBasisDays: dto.PayrollBasisDays,
 			PayableDays: dto.PayableDays,
 			PresentDays: dto.PresentDays,
@@ -116,8 +118,9 @@ internal static class SalarySlipProjection
 			IfscCode: dto.IfscCode,
 			UanNumber: dto.UanNumber,
 			EpfNumber: dto.EpfNumber,
-			Earnings: dto.Earnings.Select(x => new PayslipPdfLineItem(x.Name, x.Amount)).ToList(),
-			Deductions: dto.Deductions.Select(x => new PayslipPdfLineItem(x.Name, x.Amount)).ToList(),
+			Earnings: dto.Earnings.Select(x => new PayslipPdfLineItem(x.Name, x.Amount, x.FullMonthAmount)).ToList(),
+			Deductions: dto.Deductions.Select(x => new PayslipPdfLineItem(
+				x.Name == "Employee State Insurance (ESI) - Auto" ? "Employee ESI" : x.Name, x.Amount)).ToList(),
 			TotalEarnings: dto.TotalEarning,
 			TotalDeductions: dto.TotalDeduction,
 			NetPay: dto.NetSalary,
@@ -126,7 +129,8 @@ internal static class SalarySlipProjection
 		{
 			FullGrossSalary = dto.FullGrossSalary,
 			GrossSalary = dto.GrossSalary,
-			AdditionalEarnings = dto.AdditionalEarnings
+			AdditionalEarnings = dto.AdditionalEarnings,
+			InsuranceNumber = dto.EmployeeStateInsuranceRuleId.HasValue ? dto.EmployeeStateInsuranceNumber : null
 		};
 	}
 
@@ -135,6 +139,7 @@ internal static class SalarySlipProjection
 		return new SalarySlipLineItemDto
 		{
 			Name = lineItem.Name,
+			FullMonthAmount = lineItem.FullMonthAmount,
 			Amount = lineItem.Amount,
 			Description = lineItem.Description,
 			IsFixed = lineItem.IsFixed,

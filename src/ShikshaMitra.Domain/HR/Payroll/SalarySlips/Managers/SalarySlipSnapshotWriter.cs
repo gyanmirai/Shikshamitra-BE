@@ -11,6 +11,18 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 public class SalarySlipSnapshotWriter(ISalarySlipRepository salarySlipRepository) : DomainService
 {
+	public async Task<SalarySlip> ApplyUnpaidCorrectionAsync(SalarySlip source, PayrollRunItemSnapshot snapshot,
+		List<SalarySlipLineItem> earnings, List<SalarySlipLineItem> deductions,
+		List<SalarySlipLineItem> employerContributions, DayCalculationType dayMode)
+	{
+		if (source.EmployeeId != snapshot.EmployeeId || source.MonthYear != snapshot.MonthYear || source.TenantId != snapshot.TenantId)
+			throw new BusinessException(HRErrorCodes.PayslipConflict);
+		source.BeginUnpaidCorrection();
+		var corrected = await GenerateOrGetSalarySlipFromSnapshotAsync(snapshot, earnings, deductions, employerContributions, dayMode);
+		corrected.FinalizeSlip();
+		return corrected;
+	}
+
 	public async Task<SalarySlip> GenerateOrGetSalarySlipFromSnapshotAsync(
 		PayrollRunItemSnapshot snapshot,
 		List<SalarySlipLineItem> earningLineItems,

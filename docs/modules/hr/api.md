@@ -303,3 +303,48 @@ New salary templates default to EMPLOYER_COST.
 New setup contracts derive protection from the salary basis and do not accept an independent protection choice.
 Salary previews include the applicable ESIC configuration ID, including when calculation is off.
 Employee-facing payslips omit employer contributions; school cost reports and stored audit evidence retain them.
+
+## Payslip documents and distribution
+
+All endpoints below require authentication, the exact payslip action permission and employee scope where relevant.
+School settings writes additionally require HR-wide school scope.
+There is no public document URL or arbitrary email-recipient override.
+
+| Endpoint | Permission | Contract |
+| --- | --- | --- |
+| GET /api/payroll/payslip-documents?employeeId=&monthYear= | GenerateSalarySlip.View | Revision metadata, current marker, checksum, replacement reason/relation, recorded employee email and separate payment state. |
+| GET /api/payroll/payslip-documents/{id}/pdf | GenerateSalarySlip.View | Exact immutable PDF bytes for the requested revision, including a replaced revision. |
+| POST /api/payroll/payslip-documents/payment | GenerateSalarySlip.Add | DocumentId, IdempotencyKey, PaidAt and Reference; current finalized revision only. |
+| POST /api/payroll/payslip-documents/replace-facts | GenerateSalarySlip.Add | DocumentId, IdempotencyKey and Reason; preserves payroll amounts and returns replacement metadata. |
+| GET /api/payroll/payslip-deliveries?salarySlipId= | GenerateSalarySlip.View | Delivery history across all issued revisions, with recipient, actor, times, status and safe error category. |
+| POST /api/payroll/payslip-deliveries | GenerateSalarySlip.Add | DocumentId and IdempotencyKey; queues the current official document for its employee. |
+| GET /api/payroll/payslip-settings | GenerateSalarySlip.View | SchoolName, SchoolAddress, AutomaticEmail, ConcurrencyStamp and last IdempotencyKey. |
+| PUT /api/payroll/payslip-settings | GenerateSalarySlip.Add | Same settings fields; optimistic concurrency and idempotent retries under the payroll fence. |
+
+These short permission suffixes refer to the existing HR payroll payslip permission catalogue, not new grants.
+A retried Send request returns the same attempt; deliberate resend uses a new key.
+Delivery statuses are QUEUED, PROCESSING, PROVIDER_ACCEPTED, FAILED, UNCERTAIN and SUPERSEDED.
+UNCERTAIN requires checking receipt before deliberate resend because SMTP cannot guarantee exactly-once delivery.
+Reasoned monetary corrections use the following typed endpoints.
+Every operation also checks employee scope and tenant ownership.
+
+| Endpoint | Permissions | Contract |
+| --- | --- | --- |
+| GET /api/payroll/payslip-corrections?documentId= | GenerateSalarySlip.View and RunPayroll.View | Correction history with source, reason, status, attendance, original totals, candidate and concurrency stamp. |
+| POST /api/payroll/payslip-corrections | Read permissions, GenerateSalarySlip.Add and RunPayroll.Adjustments | DocumentId, IdempotencyKey and Reason; one active correction per salary slip. |
+| POST /api/payroll/payslip-corrections/{id}/calculate | Same edit permissions | ConcurrencyStamp and source-month Attendance; calculates without changing issued payroll. |
+| POST /api/payroll/payslip-corrections/{id}/review | Edit permissions and RunPayroll.Add | ConcurrencyStamp; revalidates current inputs, statutory evidence and blocking issues. |
+| POST /api/payroll/payslip-corrections/{id}/cancel | Edit permissions | ConcurrencyStamp; retains the cancelled evidence and supports repeated cancellation. |
+| POST /api/payroll/payslip-corrections/{id}/apply | Edit permissions and RunPayroll.Lock | ConcurrencyStamp; rechecks the calculation, replaces unpaid payroll and issues the next revision atomically. |
+| POST /api/payroll/payslip-corrections/{id}/settle | Edit permissions and RunPayroll.Lock | ConcurrencyStamp, TargetMonth (yyyy-MM) and PreviewRunId; commits a reviewed paid-source difference to a calculated later unlocked payroll and invalidates that target for regeneration. |
+
+Correction attendance uses ISO calendar dates, statuses Present (0), HalfDayLeave (1) and FullDayLeave (2), and optional offset-aware TimeIn/TimeOut.
+Duplicate dates, dates outside the source month and undefined statuses are rejected.
+Apply accepts unpaid finalized payroll only.
+Settle accepts paid source payroll only and retains its issued artifact and monetary snapshot.
+The target preview must be successful, current, contain the employee and belong to the selected later month.
+The employee must still belong to that payroll, and the target employee-month must not be locked, finalized or paid.
+The target must be recalculated and reviewed before locking after settlement.
+Repeated settlement of the same correction in the same month returns its existing outcome; retargeting an applied correction is rejected.
+Signed component differences retain source document, correction and source-period evidence in the calculated target components.
+Payment and document-detail replacement return HR:Payroll:030048 while a correction is pending.

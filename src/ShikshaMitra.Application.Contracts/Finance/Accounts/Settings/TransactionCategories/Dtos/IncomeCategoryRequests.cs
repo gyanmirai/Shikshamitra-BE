@@ -10,7 +10,7 @@ public class CreateTransactionCategoryRequest
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
 	public List<string> Tags { get; set; } = [];
-	[Required]
+	[System.Text.Json.Serialization.JsonIgnore]
 	public Guid? DefaultAccountHeadId { get; set; }
 	public string? ConcurrencyStamp { get; set; }
 }

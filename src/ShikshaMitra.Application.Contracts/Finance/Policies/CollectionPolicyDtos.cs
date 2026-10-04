@@ -70,6 +70,7 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string RoundingMethod { get; set; } = "None";
 	public bool ConsiderAsIncome { get; set; }
 	public Guid? LateFeeIncomeHeadId { get; set; }
+	public Guid? LateFeeIncomeCategoryId { get; set; }
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 
@@ -110,6 +111,7 @@ public class CreateUpdateCollectionPolicyDto
 	public string RoundingMethod { get; set; } = "None";
 	public bool ConsiderAsIncome { get; set; }
 	public Guid? LateFeeIncomeHeadId { get; set; }
+	public Guid? LateFeeIncomeCategoryId { get; set; }
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 

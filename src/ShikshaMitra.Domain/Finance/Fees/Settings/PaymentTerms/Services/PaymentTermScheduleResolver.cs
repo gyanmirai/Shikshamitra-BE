@@ -45,7 +45,7 @@ public class PaymentTermScheduleResolver(
 				.WithData("Status", version.Status.ToString());
 		}
 
-		var annualAmount = (decimal)detail.Amount;
+		var annualAmount = detail.Amount;
 		var installments = new List<ResolvedInstallment>();
 		var allocated = 0m;
 		var masterInstallments = version.Installments.OrderBy(i => i.Sequence).ToList();
@@ -87,16 +87,20 @@ public class PaymentTermScheduleResolver(
 					null);
 			}
 
-			decimal calculatedAmount;
-			if (index == masterInstallments.Count - 1)
+			decimal? calculatedAmount;
+			if (!annualAmount.HasValue)
+            {
+                calculatedAmount = null;
+            }
+            else if (index == masterInstallments.Count - 1)
 			{
 				// Absorb rounding residual on the last installment.
-				calculatedAmount = Math.Round(annualAmount - allocated, 2);
+				calculatedAmount = Math.Round(annualAmount.Value - allocated, 2);
 			}
 			else
 			{
-				calculatedAmount = Math.Round(annualAmount * allocationPercentage / 100m, 2);
-				allocated += calculatedAmount;
+				calculatedAmount = Math.Round(annualAmount.Value * allocationPercentage / 100m, 2);
+				allocated += calculatedAmount.Value;
 			}
 
 			installments.Add(new ResolvedInstallment(
@@ -144,7 +148,7 @@ public sealed class ResolvedFeeHeadSchedule
 	public Guid FeeStructureDetailId { get; }
 	public Guid FeeHeadId { get; }
 	public string? FeeHeadName { get; }
-	public decimal AnnualAmount { get; }
+	public decimal? AnnualAmount { get; }
 	public Guid? PaymentTermId { get; }
 	public string? PaymentTermName { get; }
 	public Guid? PaymentTermVersionId { get; }
@@ -157,7 +161,7 @@ public sealed class ResolvedFeeHeadSchedule
 		Guid feeStructureDetailId,
 		Guid feeHeadId,
 		string? feeHeadName,
-		decimal annualAmount,
+		decimal? annualAmount,
 		Guid? paymentTermId,
 		string? paymentTermName,
 		Guid? paymentTermVersionId,
@@ -183,7 +187,7 @@ public sealed class ResolvedFeeHeadSchedule
 		detail.Id,
 		detail.FeeHeadId,
 		detail.FeeHead?.Name,
-		(decimal)detail.Amount,
+		detail.Amount,
 		null,
 		null,
 		null,
@@ -203,7 +207,7 @@ public sealed class ResolvedInstallment
 	public DateTime DemandDate { get; }
 	public DateTime DueDate { get; }
 	public decimal AllocationPercentage { get; }
-	public decimal CalculatedAmount { get; }
+	public decimal? CalculatedAmount { get; }
 	public bool? AllowPartialOverride { get; }
 	public int? GracePeriodDaysOverride { get; }
 
@@ -216,7 +220,7 @@ public sealed class ResolvedInstallment
 		DateTime demandDate,
 		DateTime dueDate,
 		decimal allocationPercentage,
-		decimal calculatedAmount,
+		decimal? calculatedAmount,
 		bool? allowPartialOverride,
 		int? gracePeriodDaysOverride)
 	{

@@ -26,7 +26,13 @@ public class TransactionCategoryAppService(
 	IRepository<AccountHead, Guid> accountHeadRepository,
 	IRepository<Transaction, Guid> transactionRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
-	FinanceScopeAccessService financeScopeAccessService,
+	IRepository<ShikshaMitra.Finance.Fees.Charges.ChargeRequest, Guid> chargeRequests,
+ ChargeRoutingUsageManager chargeRoutingUsage,
+ IRepository<ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion, Guid> policyVersions,
+ IRepository<ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundRequest, Guid> refunds,
+ IRepository<ShikshaMitra.Domain.Finance.Policies.CollectionPolicy, Guid> collectionPolicies,
+ IRepository<ShikshaMitra.Domain.Finance.Policies.RefundPolicy, Guid> refundPolicies,
+ FinanceScopeAccessService financeScopeAccessService,
 	AccountSettingVersionHistoryReader historyReader) : ApplicationService, ITransactionCategoryAppService
 {
 	private static readonly IReadOnlySet<string> HistoryFields = new HashSet<string>
@@ -47,12 +53,7 @@ public class TransactionCategoryAppService(
 			: ShikshaMitraSubmodulePermissions.Finance.Accounts_Settings_ExpenseCategory.Edit;
 		if (!await AuthorizationService.IsGrantedAsync(add)) await AuthorizationService.CheckAsync(edit);
 		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null)) return [];
-		var headType = categoryType == TransactionType.Income ? AccountHeadType.Income : AccountHeadType.Expense;
-		var query = await accountHeadRepository.GetQueryableAsync();
-		return await AsyncExecuter.ToListAsync(query
-			.Where(x => x.AcademicYearId == academicYearId && x.IsActive && x.HeadType == headType)
-			.OrderBy(x => x.Name)
-			.Select(x => new AccountHeadOptionDto { Id = x.Id, Name = x.Name, HeadType = x.HeadType }));
+		return [];
 	}
 
 	public async Task<TransactionCategoryResponse> CreateAsync(Guid academicYearId,
@@ -63,9 +64,8 @@ public class TransactionCategoryAppService(
 		var id = GuidGenerator.Create();
 		var code = id.ToString("N").ToUpperInvariant();
 		await EnsureUniqueAsync(academicYearId, categoryType, code, input.Name);
-		await ValidateAccountHeadAsync(academicYearId, categoryType, input.DefaultAccountHeadId);
 		var entity = new TransactionCategory(id, CurrentTenant.Id, academicYearId,
-			categoryType, input.Name, input.Description, input.Tags, true, code, input.DefaultAccountHeadId);
+			categoryType, input.Name, input.Description, input.Tags, true, code);
 		await categoryRepository.InsertAsync(entity, autoSave: true);
 		return await MapAsync(entity);
 	}
@@ -128,11 +128,7 @@ public class TransactionCategoryAppService(
 		EnsureCategoryType(entity, categoryType);
 		EnsureConcurrency(entity, input.ConcurrencyStamp);
 		await EnsureUniqueAsync(entity.AcademicYearId, categoryType, entity.Code ?? id.ToString("N").ToUpperInvariant(), input.Name, id);
-		await ValidateAccountHeadAsync(entity.AcademicYearId, categoryType, input.DefaultAccountHeadId);
-		if (await IsUsedAsync(id) && entity.DefaultAccountHeadId != input.DefaultAccountHeadId)
-			throw new BusinessException(AccountSettingErrorCodes.CategoryInUse)
-				.WithData("Reason", "The default account cannot change after transactions exist.");
-		entity.Update(entity.Code ?? id.ToString("N").ToUpperInvariant(), input.Name, input.Description, input.DefaultAccountHeadId,
+		entity.Update(entity.Code ?? id.ToString("N").ToUpperInvariant(), input.Name, input.Description, entity.DefaultAccountHeadId,
 			entity.EffectiveFrom, entity.EffectiveTo, input.Tags);
 		await categoryRepository.UpdateAsync(entity, autoSave: true);
 		return await MapAsync(entity);
@@ -146,9 +142,9 @@ public class TransactionCategoryAppService(
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureCategoryType(entity, categoryType);
 		EnsureConcurrency(entity, input.ConcurrencyStamp);
-		if (!input.IsActive && await IsMappedByActiveFeeHeadAsync(id))
+		if (!input.IsActive && await IsConfiguredForFuturePaymentsAsync(id))
 			throw new BusinessException(AccountSettingErrorCodes.CategoryInUse)
-				.WithData("Reason", "Deactivate or remap the active Fee Heads using this Income Category first.");
+				.WithData("Reason", "Remap active Fee Heads, policies, and open charges before deactivating this category.");
 		if (input.IsActive) entity.Activate(); else entity.Deactivate(input.DeactivationReason ?? string.Empty);
 		await categoryRepository.UpdateAsync(entity, autoSave: true);
 		return await MapAsync(entity);
@@ -169,17 +165,6 @@ public class TransactionCategoryAppService(
 	private Task EnsureScopeAsync(Guid academicYearId) =>
 		financeScopeAccessService.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
 
-	private async Task ValidateAccountHeadAsync(Guid academicYearId, TransactionType categoryType, Guid? accountHeadId)
-	{
-		if (!accountHeadId.HasValue)
-			throw new BusinessException(AccountSettingErrorCodes.InvalidAccountHeadType);
-		var head = await accountHeadRepository.FindAsync(accountHeadId.Value);
-		var expected = categoryType == TransactionType.Income ? AccountHeadType.Income : AccountHeadType.Expense;
-		if (head is null || head.AcademicYearId != academicYearId || head.HeadType != expected)
-			throw new BusinessException(AccountSettingErrorCodes.InvalidAccountHeadType).WithData("Expected", expected);
-		if (!head.IsActive) throw new BusinessException(AccountSettingErrorCodes.AccountHeadMustBeActive);
-	}
-
 	private async Task EnsureUniqueAsync(Guid academicYearId, TransactionType type, string code,
 		string name, Guid? excludingId = null)
 	{
@@ -196,10 +181,20 @@ public class TransactionCategoryAppService(
 
 	private async Task<bool> IsUsedAsync(Guid id) =>
 		await transactionRepository.AnyAsync(x => x.CategoryId == id) ||
-		await feeHeadRepository.AnyAsync(x => x.IncomeCategoryId == id);
+		await feeHeadRepository.AnyAsync(x => x.IncomeCategoryId == id) ||
+        await chargeRequests.AnyAsync(x => x.IncomeCategoryId == id) ||
+        await refunds.AnyAsync(x => x.ExpenseCategoryId == id) ||
+        await collectionPolicies.AnyAsync(x => x.LateFeeIncomeCategoryId == id) ||
+        await refundPolicies.AnyAsync(x => x.ExpenseCategoryId == id) ||
+        await policyVersions.AnyAsync(x=>x.SnapshotJson.Contains(id.ToString()));
 
-	private Task<bool> IsMappedByActiveFeeHeadAsync(Guid id) =>
-		feeHeadRepository.AnyAsync(x => x.IncomeCategoryId == id && x.IsActive);
+ private async Task<bool> IsConfiguredForFuturePaymentsAsync(Guid id)
+ {
+   if (await feeHeadRepository.AnyAsync(x=>x.IncomeCategoryId == id && x.IsActive) ||
+       await collectionPolicies.AnyAsync(x=>x.LateFeeIncomeCategoryId == id && x.Status == ShikshaMitra.Domain.Finance.Policies.CollectionPolicyStatus.Active) ||
+       await refundPolicies.AnyAsync(x=>x.ExpenseCategoryId == id && x.Status == ShikshaMitra.Domain.Finance.Policies.RefundPolicyStatus.Active)) return true;
+   return await chargeRoutingUsage.HasOpenChargesAsync(categoryId: id);
+ }
 
 	private async Task<TransactionCategoryResponse> MapAsync(TransactionCategory entity)
 	{

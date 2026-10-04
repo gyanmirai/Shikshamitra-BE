@@ -33,10 +33,13 @@ public partial class StudentFeeStructureAppService
 		var details = (await feeStructureDetailRepository.GetListAsync(x => x.FeeStructureId == structure.Id)).OrderBy(x => x.Id).ToList();
 		if (details.Count == 0 || details.Select(x => x.FeeHeadId).Distinct().Count() != details.Count ||
 			input.SelectedOptionalFeeHeadIds.Any(id => !details.Any(d => d.FeeHeadId == id && d.IsOptional)) ||
-			input.FeeHeadDetails.Any(x => !details.Any(d => d.FeeHeadId == x.FeeHeadId && (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))) ||
+			input.FeeHeadDetails.Any(x => !details.Any(d => d.FeeHeadId == x.FeeHeadId && !d.IsVariable && (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))) ||
 			input.ServicePeriods.Any(x => !details.Any(d => d.FeeHeadId == x.FeeHeadId && (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))))
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
-		foreach (var detail in details.Where(d => structure.FeeStructureDetails.All(x => x.Id != d.Id))) structure.AddDetail(detail);
+		if (input.VariableFeeHeads.Any(x => !details.Any(d => d.FeeHeadId == x.FeeHeadId && d.IsVariable &&
+                (!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId)))))
+            throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+        foreach (var detail in details.Where(d => structure.FeeStructureDetails.All(x => x.Id != d.Id))) structure.AddDetail(detail);
 		var selectedPolicies = await ResolveAssignedPoliciesAsync(structure, year.Id, input.Policies, input.PolicyOverrideReason);
 		var collection = selectedPolicies["collection"];
 		var proration = selectedPolicies["proration"];
@@ -74,8 +77,8 @@ public partial class StudentFeeStructureAppService
 		{
 			var included = !detail.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(detail.FeeHeadId);
 			var head = new AssignmentHeadDto { FeeHeadId = detail.FeeHeadId, FeeHeadName = names.GetValueOrDefault(detail.FeeHeadId, "Fee head"),
-				IsOptional = detail.IsOptional, IsOneTime = detail.IsOneTime, Included = included, ConfiguredAmount = detail.Amount,
-				EffectiveAmount = detail.Amount, AmountBasis = detail.IsOneTime ? "OneTime" : "AnnualTotal",
+				IsOptional = detail.IsOptional, IsVariable = detail.IsVariable, IsOneTime = detail.IsOneTime, Included = included, ConfiguredAmount = detail.Amount,
+				EffectiveAmount = included ? detail.Amount : null, AmountBasis = detail.IsVariable ? "CoverageTotal" : detail.IsOneTime ? "OneTime" : "AnnualTotal",
 				PaymentTermId = detail.PaymentTermId, PaymentTermVersionId = detail.PaymentTermVersionId };
 			preview.Heads.Add(head);
 			if (!included) continue;
@@ -88,7 +91,15 @@ public partial class StudentFeeStructureAppService
 				throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
 			head.PaymentTermName = term.Name;
 			head.PaymentTermVersionNumber = termVersion.VersionNumber;
-			var amountInput = input.FeeHeadDetails.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId);
+			if (detail.IsVariable)
+            {
+                var variable = input.VariableFeeHeads.SingleOrDefault(x => x.FeeHeadId == detail.FeeHeadId);
+                if (variable?.Amount == null)
+                    throw new BusinessException(AssignmentErrorCodes.VariableAmountRequired).WithData("FeeHeadId", detail.FeeHeadId);
+                head.EffectiveAmount = variable.Amount;
+                head.ZeroAmountReason = variable.ZeroAmountReason?.Trim();
+            }
+            var amountInput = input.FeeHeadDetails.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId);
 			if (amountInput != null)
 			{
 				if (amountInput.PayableMonth.HasValue || amountInput.StartPayableMonth.HasValue || amountInput.EndPayableMonth.HasValue ||
@@ -104,13 +115,13 @@ public partial class StudentFeeStructureAppService
 			var requested = input.ServicePeriods.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
 				?? new AssignmentServicePeriodDto { FeeHeadId = detail.FeeHeadId, Source = input.ChargePeriodSource,
 					StartDate = input.ChargeStartDate, EndDate = input.ChargeEndDate, SourceReferenceId = input.ChargePeriodSourceReferenceId, Reason = input.ChargePeriodOverrideReason };
-			if (requested.Source == "TransportService" && headRecords[detail.FeeHeadId].Module != ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport)
+			if (requested.Source == "TransportService" && (detail.IsVariable || headRecords[detail.FeeHeadId].Module != ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport))
 				throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 			var fact = await ResolveServiceAsync(input.StudentId, requested, year);
 			head.ServicePeriod = fact.Period;
-			head.Verification = fact.Verification;
+			head.Verification = detail.IsVariable ? "Student amount entered during assignment; " + fact.Verification : fact.Verification;
 			head.SourceRevision = fact.Revision;
-			optionalDetails.Add(new CustomOptionalFeeHeadDetail { FeeHeadId = detail.FeeHeadId, Amount = head.EffectiveAmount,
+			optionalDetails.Add(new CustomOptionalFeeHeadDetail { FeeHeadId = detail.FeeHeadId, Amount = head.EffectiveAmount ?? throw new BusinessException(AssignmentErrorCodes.VariableAmountRequired),
 				ChargeStartDate = fact.Period.StartDate, ChargeEndDate = fact.Period.EndDate });
 		}
 		var dues = (await dueFeeManager.GenerateForStudentAsync(input.StudentId, structure, year,

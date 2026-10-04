@@ -58,7 +58,7 @@ public class FeeCategoryAppService(
 				academicYearId,
 				feeCategory.Id,
 				normalizedName,
-				headInput.Module,
+				null, // Retired for newly created fee heads.
 				headInput.IsConcessionApplied,
 				headInput.Description,
 				headInput.IncomeCategoryId
@@ -178,7 +178,7 @@ public class FeeCategoryAppService(
 				await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(
 					feeCategory.AcademicYearId, id, normalizedName, existingHead.Id);
 
-				existingHead.Update(id, normalizedName, headInput.Module, headInput.IsConcessionApplied,
+				existingHead.Update(id, normalizedName, existingHead.Module, headInput.IsConcessionApplied,
 					headInput.Description, headInput.IncomeCategoryId);
 				await feeHeadRepository.UpdateAsync(existingHead);
 				resultHeads.Add(existingHead);
@@ -193,7 +193,7 @@ public class FeeCategoryAppService(
 					feeCategory.AcademicYearId,
 					id,
 					normalizedName,
-					headInput.Module,
+					null, // Retired for newly created fee heads.
 					headInput.IsConcessionApplied,
 					headInput.Description,
 					headInput.IncomeCategoryId

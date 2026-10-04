@@ -1,3 +1,5 @@
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Transactions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
@@ -32,6 +34,7 @@ public partial class ChargeAppService(
 	IRepository<FeeRecordMetadata, Guid> feeRecordMetadataRepository,
 	FinanceScopeAccessService financeScopeAccessService,
 	ICurrentUser currentUser,
+	FinanceRoutingManager routingManager,
 	ChargeRequestManager chargeRequestManager,
 	ChargeAudienceResolver chargeAudienceResolver,
 	FinanceAuditWriter financeAuditWriter,

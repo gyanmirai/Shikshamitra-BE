@@ -7,7 +7,7 @@ public class CreateBankAccountRequest
 {
 	// Optional for legacy clients. New bank accounts receive a server-generated internal code.
 	public string? Code { get; set; }
-	[Required]
+	[System.Text.Json.Serialization.JsonIgnore]
 	public Guid? AccountHeadId { get; set; }
 	[Required]
 	public string BankName { get; set; } = string.Empty;

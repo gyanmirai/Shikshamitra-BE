@@ -183,13 +183,13 @@ public partial class FeeStructureAppService
 
 				detail = new FeeStructureDetail(GuidGenerator.Create(), CurrentTenant.Id, entity.Id, line.FeeHeadId,
 
-					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear);
+					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
 
 				entity.AddDetail(detail);
 
 			}
 
-			else detail.UpdateConfiguration(line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear);
+			else detail.UpdateConfiguration(line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
 
 			AttachSchedule(detail, line);
 
@@ -261,7 +261,7 @@ public partial class FeeStructureAppService
 
 		{
 
-			Id = x.Id, FeeHeadId = x.FeeHeadId, Amount = x.Amount, IsOneTime = x.IsOneTime, IsOptional = x.IsOptional,
+			Id = x.Id, FeeHeadId = x.FeeHeadId, Amount = x.Amount, IsVariable = x.IsVariable, IsOneTime = x.IsOneTime, IsOptional = x.IsOptional,
 
 			PayableMonth = x.PayableMonth ?? 0, PayableYear = x.PayableYear ?? 0, PaymentTermId = x.PaymentTermId,
 
@@ -337,7 +337,7 @@ public partial class FeeStructureAppService
 
 				Id = line.Id, FeeHeadId = line.FeeHeadId, FeeHeadName = frozen?.Coverage.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.Name ?? head?.Name ?? "Unavailable fee head", CategoryName = head?.FeeCategory?.Name ?? "",
 
-				Amount = line.Amount, IsOneTime = line.IsOneTime, IsOptional = line.IsOptional, PayableMonth = line.PayableMonth, PayableYear = line.PayableYear,
+				Amount = line.Amount, IsVariable = line.IsVariable, IsOneTime = line.IsOneTime, IsOptional = line.IsOptional, PayableMonth = line.PayableMonth, PayableYear = line.PayableYear,
 
 				PaymentTermId = line.PaymentTermId, PaymentTermVersionId = line.PaymentTermVersionId, PaymentTermName = frozen?.Schedules.SingleOrDefault(x => x.FeeHeadId == line.FeeHeadId)?.PaymentTermName ?? term?.Name,
 

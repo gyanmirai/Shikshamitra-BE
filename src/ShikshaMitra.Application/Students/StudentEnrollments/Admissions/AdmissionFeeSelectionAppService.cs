@@ -102,7 +102,7 @@ public class AdmissionFeeSelectionAppService(
 				AcademicYearId = snapshot.AcademicYearId, StandardId = snapshot.StandardId, Currency = snapshot.Currency,
 				SavedAt = snapshot.SavedAt, SavedBy = snapshot.SavedBy, OnboardingConfirmedAt = snapshot.OnboardingConfirmedAt,
 				Heads = snapshot.Heads.Select(h => new AdmissionFeeSelectionHeadDto { FeeHeadId = h.FeeHeadId,
-					FeeHeadName = h.FeeHeadName, ConfiguredAmount = h.ConfiguredAmount, IsOptional = h.IsOptional,
+					FeeHeadName = h.FeeHeadName, ConfiguredAmount = h.ConfiguredAmount, IsVariable = h.IsVariable, IsOptional = h.IsOptional,
 					IsOneTime = h.IsOneTime, PaymentTermId = h.PaymentTermId, PaymentTermVersionId = h.PaymentTermVersionId }).ToList()
 			}
 		};

@@ -62,3 +62,12 @@ dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~Finance"
 ## Student fee assignment
 
 The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.
+
+## Category and bank routing
+
+See [Income and expense routing](./references/income-expense-routing.md) for the current category selection, school bank, recognition, historical compatibility, and validation contracts.
+
+
+## Variable fee assignment checks
+
+See [variable fee assignment](./references/variable-fee-assignment.md) for focused suites and the current workflow acceptance checks.

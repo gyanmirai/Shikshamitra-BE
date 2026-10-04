@@ -164,12 +164,26 @@ public partial class FeeRefundAppService
         var request = await RequireAsync(id);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
         await EnsureMakerCheckerAsync(request);
+        var policy = string.IsNullOrWhiteSpace(request.PolicySnapshotJson) ? null : JsonSerializer.Deserialize<ShikshaMitra.Domain.Finance.Policies.RefundPolicySnapshot>(request.PolicySnapshotJson);
+        var category = await routingManager.RequireCategoryAsync(request.AcademicYearId,
+            input.ExpenseCategoryId ?? policy?.ExpenseCategoryId, ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense);
+        var method = input.Method ?? request.RefundMethod ?? "Cash";
+        EnsureSettlementMethodAllowed(request, method);
+        var bankId = method == "Cash" ? input.BankAccountId : input.BankAccountId ?? policy?.DefaultPayingBankAccountId;
+        var bank = bankId.HasValue || method != "Cash" ? await routingManager.RequireBankAsync(request.AcademicYearId, bankId) : null;
+        if (((policy?.ExpenseCategoryId.HasValue == true && policy.ExpenseCategoryId != category.Id) ||
+             (policy?.DefaultPayingBankAccountId.HasValue == true && method != "Cash" && policy.DefaultPayingBankAccountId != bank?.Id)) &&
+            string.IsNullOrWhiteSpace(input.Notes))
+            throw new UserFriendlyException("Add a reason when changing the refund policy's category or paying bank.");
+        request.SetApprovalRouting(category.Id, category.Name, bank?.Id,
+            bank == null ? null : $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}", method);
         var existingReservationIds = request.Reservations.Select(x => x.Id).ToHashSet();
         await feeRefundManager.ApproveAsync(request, currentUser.GetId(), input.Notes);
         await feeRefundRepository.StageNewReservationsAsync(
             request.Reservations.Where(x => !existingReservationIds.Contains(x.Id)));
         await WriteAuditAsync(request, FinanceAuditActions.Approve,
-            $"Refund request {request.VoucherNumber} approved and its payment allocations reserved.", input.Notes);
+            $"Refund request {request.VoucherNumber} approved and its payment allocations reserved.", input.Notes,
+            new { request.ExpenseCategoryId, request.PayingBankAccountId, request.RefundMethod });
         await uow.CompleteAsync();
         return await MapAsync(request);
     }

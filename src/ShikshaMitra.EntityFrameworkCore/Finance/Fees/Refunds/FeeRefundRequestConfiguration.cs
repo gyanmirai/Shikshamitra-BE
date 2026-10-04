@@ -15,6 +15,10 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
     public void Configure(EntityTypeBuilder<FeeRefundRequest> builder)
     {
         builder.ToTable("Finance_FeeRefundRequests", ShikshaMitraConsts.DbSchema);
+        builder.Property(x=>x.ExpenseCategoryName).HasMaxLength(500);
+        builder.Property(x=>x.PayingBankLabel).HasMaxLength(500);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory>().WithMany().HasForeignKey(x=>x.ExpenseCategoryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.PayingBankAccountId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.VoucherNumber).HasMaxLength(50).IsRequired();
         builder.Property(x => x.OriginalReceiptNumber).HasMaxLength(100);

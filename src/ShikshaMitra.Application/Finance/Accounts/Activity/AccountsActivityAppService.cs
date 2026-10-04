@@ -70,6 +70,7 @@ public class AccountsActivityAppService(
             return new AccountsActivityPageDto
                 { Page = page, PageSize = pageSize, TotalCount = 0, Items = [] };
         var scopedStudentIds = await scopeAccessService.GetScopedStudentIdsQueryAsync();
+        var automaticEntries = (await transactionRepository.GetQueryableAsync()).Where(x=>x.SourceKey != null);
         var rows = new List<AccountsActivityRowDto>();
         var total = 0;
 
@@ -79,7 +80,7 @@ public class AccountsActivityAppService(
             var collections = await collectionRepository.GetQueryableAsync();
             var query = from receipt in receipts
                         join collection in collections on receipt.FeeCollectionTransactionId equals collection.Id
-                        where receipt.AcademicYearId == input.AcademicYearId
+                        where !automaticEntries.Any(x=>x.SourceId == collection.Id) && receipt.AcademicYearId == input.AcademicYearId
                             && scopedStudentIds.Contains(receipt.StudentId)
                             && (collection.Status == FeeCollectionStatus.Paid ||
                                 collection.Status == FeeCollectionStatus.Partial)
@@ -120,7 +121,7 @@ public class AccountsActivityAppService(
             var refunds = await refundRepository.GetQueryableAsync();
             var query = from entry in entries
                         join refund in refunds on entry.RefundRequestId equals refund.Id
-                        where refund.AcademicYearId == input.AcademicYearId
+                        where !automaticEntries.Any(x=>x.SourceId == refund.Id) && refund.AcademicYearId == input.AcademicYearId
                             && scopedStudentIds.Contains(refund.StudentId)
                         select new { entry, refund };
             if (!string.IsNullOrEmpty(search))
@@ -152,42 +153,51 @@ public class AccountsActivityAppService(
             }));
         }
 
-        if ((canViewIncome && (source is null or "income")) ||
+        if (canViewFees || (canViewIncome && (source is null or "income")) ||
             (canViewExpense && (source is null or "expense")))
         {
             var transactions = await transactionRepository.GetQueryableAsync();
             var categories = await categoryRepository.GetQueryableAsync();
             var query = from transaction in transactions
                         join category in categories on transaction.CategoryId equals category.Id
-                        where transaction.AcademicYearId == input.AcademicYearId
-                            && ((transaction.TransactionType == TransactionType.Income && canViewIncome &&
+                        where transaction.AcademicYearId == input.AcademicYearId && transaction.IsConfirmed
+                            && (transaction.StudentId == null || scopedStudentIds.Contains(transaction.StudentId.Value))
+                            && (((transaction.TransactionType == TransactionType.Income && canViewIncome &&
                                     (source == null || source == "income")) ||
                                 (transaction.TransactionType == TransactionType.Expense && canViewExpense &&
-                                    (source == null || source == "expense")))
+                                    (source == null || source == "expense"))) ||
+                                (canViewFees && transaction.SourceKey != null &&
+                                 ((transaction.SourceKey.StartsWith("collection:") && (source == null || source == "collection")) ||
+                                  (transaction.SourceKey.StartsWith("refund:") && (source == null || source == "refund")))))
                         select new { transaction, category };
             if (!string.IsNullOrEmpty(search))
                 query = query.Where(x => x.transaction.Name.Contains(search) ||
                     x.category.Name.Contains(search));
             total += await AsyncExecuter.CountAsync(query);
+            var awaitCanOpenCollection = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_InvoiceReceipt.View);
+            var awaitCanOpenRefund = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
             var selected = await AsyncExecuter.ToListAsync(query
                 .OrderByDescending(x => x.transaction.PaymentDate)
                 .ThenByDescending(x => x.transaction.Id)
                 .Take(window).Select(x => new
                 {
                     x.transaction.Id, x.transaction.Name, x.transaction.Amount,
-                    x.transaction.PaymentDate, x.transaction.TransactionType,
+                    x.transaction.PaymentDate, x.transaction.TransactionType, x.transaction.SourceKey, x.transaction.SourceId, x.transaction.StudentId,
+                    x.transaction.BankAccountId, x.transaction.BankLabelSnapshot, x.transaction.CategoryNameSnapshot,
                     CategoryName = x.category.Name
                 }));
             rows.AddRange(selected.Select(x => new AccountsActivityRowDto
             {
-                Id = x.Id, SourceId = x.Id, StudentId = null,
-                Source = x.TransactionType == TransactionType.Income ? "Income" : "Expense",
-                Reference = x.Name, CategoryName = x.CategoryName,
-                SourceStatus = "Recorded (legacy)",
+                Id = x.Id, SourceId = x.SourceId ?? x.Id, StudentId = x.StudentId,
+                BankAccountId = x.BankAccountId, BankLabel = x.BankLabelSnapshot ?? "",
+                Source = x.SourceKey == null ? (x.TransactionType == TransactionType.Income ? "Income" : "Expense") : (x.TransactionType == TransactionType.Income ? "Collection" : "Refund"),
+                Reference = x.Name, CategoryName = x.CategoryNameSnapshot ?? x.CategoryName,
+                SourceStatus = x.SourceKey == null ? "Recorded (legacy)" : x.Amount < 0 ? "Returned" : "Confirmed",
                 AccountingStatus = "Not posted",
                 Amount = x.TransactionType == TransactionType.Income ? x.Amount : -x.Amount,
                 OccurredAt = new DateTimeOffset(DateTime.SpecifyKind(x.PaymentDate, DateTimeKind.Utc)),
-                CanOpenSource = true
+                CanOpenSource = x.SourceKey == null || (x.TransactionType == TransactionType.Income
+                    ? awaitCanOpenCollection : awaitCanOpenRefund)
             }));
         }
 

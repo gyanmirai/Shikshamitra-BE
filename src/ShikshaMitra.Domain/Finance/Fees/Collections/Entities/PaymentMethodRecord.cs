@@ -15,6 +15,9 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
 	public Guid StudentId { get; private set; }
+ public Guid? BankAccountId { get; private set; }
+ public string? BankLabelSnapshot { get; private set; }
+ public void SetReceivingBank(Guid? id, string? label) { BankAccountId = id; BankLabelSnapshot = label; }
 	public PaymentMethodEnum PaymentMethod { get; private set; }
 
 	/// <summary>Decimal is required for monetary values to avoid floating-point rounding errors.</summary>

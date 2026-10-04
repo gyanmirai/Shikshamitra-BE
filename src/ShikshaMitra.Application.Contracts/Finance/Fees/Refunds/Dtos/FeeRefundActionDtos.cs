@@ -7,6 +7,9 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 
 public class FeeRefundActionDto
 {
+    public Guid? ExpenseCategoryId { get; set; }
+    public Guid? BankAccountId { get; set; }
+    public string? Method { get; set; }
     [MaxLength(1000)] public string? Notes { get; set; }
 }
 

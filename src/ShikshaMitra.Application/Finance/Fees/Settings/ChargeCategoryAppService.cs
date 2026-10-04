@@ -45,7 +45,7 @@ public class ChargeCategoryAppService(
             input.IsApprovalRequired,
             input.Description
         );
-		chargeCategory.SetAccountingMapping(incomeCategory.Id, accountHead.Id);
+		chargeCategory.SetAccountingMapping(incomeCategory.Id, accountHead?.Id);
 
         await chargeCategoryRepository.InsertAsync(chargeCategory);
 
@@ -122,7 +122,7 @@ public class ChargeCategoryAppService(
             chargeCategory.IsApprovalRequired = input.IsApprovalRequired.Value;
         }
         chargeCategory.Description = input.Description;
-		chargeCategory.SetAccountingMapping(incomeCategory.Id, accountHead.Id);
+		chargeCategory.SetAccountingMapping(incomeCategory.Id, accountHead?.Id);
 
 		// validate for duplicate name within the same academic year
 		var existingCategory = await chargeCategoryRepository.AnyAsync(x => x.AcademicYearId == chargeCategory.AcademicYearId && x.Name == input.Name && x.Id != id);
@@ -165,19 +165,14 @@ public class ChargeCategoryAppService(
 		await chargeCategoryRepository.DeleteAsync(id);
     }
 
-	private async Task<(TransactionCategory Category, AccountHead AccountHead)> ValidateAccountingMappingAsync(
+	private async Task<(TransactionCategory Category, AccountHead? AccountHead)> ValidateAccountingMappingAsync(
 		Guid academicYearId, Guid incomeCategoryId)
 	{
 		var category = await transactionCategoryRepository.FindAsync(incomeCategoryId);
 		if (category is null || category.AcademicYearId != academicYearId ||
-			category.CategoryType != TransactionType.Income || !category.IsActive ||
-			!category.DefaultAccountHeadId.HasValue)
+			category.CategoryType != TransactionType.Income || !category.IsActive)
 			throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryAccountingInvalid);
-		var account = await accountHeadRepository.FindAsync(category.DefaultAccountHeadId.Value);
-		if (account is null || account.AcademicYearId != academicYearId ||
-			account.HeadType != AccountHeadType.Income || !account.IsActive)
-			throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryAccountingInvalid);
-		return (category, account);
+		return (category, null);
 	}
 
 	private async Task<ChargeCategoryResponse> ToResponseAsync(ChargeCategory category)

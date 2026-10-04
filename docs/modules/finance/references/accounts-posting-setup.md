@@ -1,3 +1,13 @@
+---
+module: finance
+domain: accounts
+content_type: Reference
+status: active
+updated_on: 2026-10-02
+owner: backend-team
+audience: humans-and-agents
+---
+
 # Accounts posting setup
 
 `GET /api/accounts/readiness?academicYearId=...` is an alias for the setup read endpoint.

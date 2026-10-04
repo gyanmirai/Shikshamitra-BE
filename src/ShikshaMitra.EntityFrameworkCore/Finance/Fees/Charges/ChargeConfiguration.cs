@@ -9,6 +9,9 @@ public class ChargeConfiguration : IEntityTypeConfiguration<Charge>
 	public void Configure(EntityTypeBuilder<Charge> builder)
 	{
 		builder.ToTable("Finance_Charges", ShikshaMitraConsts.DbSchema);
+        builder.Property(x=>x.IncomeCategoryName).HasMaxLength(500);
+        builder.Property(x=>x.ReceivingBankLabel).HasMaxLength(500);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.ReceivingBankAccountId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
 
 		// Configure properties

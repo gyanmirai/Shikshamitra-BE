@@ -98,6 +98,11 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 			FeeHeadModule.Finance, true, null, incomeCategoryId);
 		await _feeHeadRepo.InsertAsync(feeHead, autoSave: true);
 
+        // Finance policy scope is resolved through students; seed a non-enrolled context
+        // before creating policies so these fixtures exercise the real scope guard.
+        await GetRequiredService<IRepository<ShikshaMitra.Students.Student, Guid>>().InsertAsync(
+            new ShikshaMitra.Students.Student(Guid.NewGuid(), TestTenantId, "Scope", null, "Context", yearId,
+                boardId, mediumId, stageId, standard.Id, status: ShikshaMitra.Students.StudentLifeCycleStatusEnum.Inquiry), autoSave: true);
 		return (yearId, standard.Id, metadata.Id, feeHead.Id);
 	}
 
@@ -110,6 +115,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 			PolicyCode = $"CP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
 			Status = "Active",
 			EnableLateFee = true,
+            LateFeeIncomeCategoryId = (await _feeHeadRepo.GetAsync(feeHeadId)).IncomeCategoryId,
 			GracePeriodDays = 7,
 			LateFeeApplyOnFeeHeads = new() { feeHeadId },
 			LateFeeType = "PerDay",

@@ -39,6 +39,12 @@ public class FeeRefundRequestDto
     /// <summary>Reconciles the request, lines, due fees and immutable refund postings.</summary>
     public bool? IsRefundSubledgerBalanced { get; set; }
 
+    public Guid? ExpenseCategoryId { get; set; }
+    public Guid? PayingBankAccountId { get; set; }
+    public Guid? DefaultExpenseCategoryId { get; set; }
+    public Guid? DefaultPayingBankAccountId { get; set; }
+    public string? ExpenseCategoryName { get; set; }
+    public string? PayingBankLabel { get; set; }
     public string? RefundMethod { get; set; }
 
     /// <summary>

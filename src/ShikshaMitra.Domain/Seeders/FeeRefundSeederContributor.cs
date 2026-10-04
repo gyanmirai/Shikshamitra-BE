@@ -238,17 +238,10 @@ public class FeeRefundSeederContributor : BaseSeederContributor
         if (existing is not null) return existing;
 
         var categoryId = GuidGenerator.Create();
-        var accountHeadId = GuidGenerator.Create();
-        await _accountHeadRepository.InsertAsync(new AccountHead(
-            accountHeadId, CurrentTenant.Id, academicYearId, categoryName,
-            AccountHeadType.Income, null,
-            "Auto-created revenue account for seeded fee refund data."),
-            autoSave: false);
-
         return await _incomeCategoryRepository.InsertAsync(new TransactionCategory(
             categoryId, CurrentTenant.Id, academicYearId, TransactionType.Income, categoryName,
             "Auto-created income category for seeded fee refund data.", [], true,
-            AccountSettingSeedCode.FromId(categoryId), accountHeadId, DateTimeOffset.UtcNow, null), autoSave: false);
+            AccountSettingSeedCode.FromId(categoryId), null, DateTimeOffset.UtcNow, null), autoSave: false);
     }
 
     // ─── DueFee rows ─────────────────────────────────────────────────────────

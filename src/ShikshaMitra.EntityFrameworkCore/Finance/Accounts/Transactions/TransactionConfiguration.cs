@@ -11,9 +11,17 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
 	public void Configure(EntityTypeBuilder<Transaction> builder)
 	{
 		builder.ToTable("Finance_Transactions", ShikshaMitraConsts.DbSchema);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
 
-		builder.Property(x => x.Name).IsRequired().HasMaxLength(500);
+		builder.Ignore(x => x.IsAutomatic);
+        builder.HasIndex(x=>x.SourceId);
+  builder.Property(x => x.SourceKey).HasMaxLength(200);
+  builder.Property(x => x.CategoryNameSnapshot).HasMaxLength(500);
+  builder.Property(x => x.BankLabelSnapshot).HasMaxLength(500);
+  builder.Property(x => x.IsConfirmed).HasDefaultValue(true);
+  builder.HasIndex(x => x.SourceKey).IsUnique().HasFilter("\"SourceKey\" IS NOT NULL");
+  builder.Property(x => x.Name).IsRequired().HasMaxLength(500);
 		builder.Property(x => x.Notes).HasMaxLength(2000);
 		builder.Property(x => x.Amount).HasColumnType("numeric(18,4)");
 

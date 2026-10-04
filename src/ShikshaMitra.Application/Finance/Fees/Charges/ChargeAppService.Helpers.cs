@@ -42,7 +42,9 @@ public partial class ChargeAppService
 			{
 				ChargeId = request.Id, ChargeName = request.ChargeName,
 				ResolvedStudentCount = studentCount,
-				ChargeCategoryId = request.ChargeCategoryId, CategoryName = category.Name,
+				IncomeCategoryId = request.IncomeCategoryId, IncomeCategoryName = request.IncomeCategoryName,
+			ReceivingBankAccountId = request.ReceivingBankAccountId, ReceivingBankLabel = request.ReceivingBankLabel,
+			ChargeCategoryId = request.ChargeCategoryId, CategoryName = category.Name,
 				PurposeDescription = request.PurposeDescription, Amount = request.Amount,
 				DueDate = request.DueDate, AppliedOn = request.AppliedOn,
 				Priority = (int)request.Priority, Status = (int)status, WorkflowStatus = workflowStatus,
@@ -68,6 +70,8 @@ public partial class ChargeAppService
 		{
 			ChargeId = r.Request.Id, ChargeName = r.Request.ChargeName,
 			BoardId = r.Request.BoardId, EducationMediumId = r.Request.EducationMediumId,
+			IncomeCategoryId = r.Request.IncomeCategoryId, IncomeCategoryName = r.Request.IncomeCategoryName,
+			ReceivingBankAccountId = r.Request.ReceivingBankAccountId, ReceivingBankLabel = r.Request.ReceivingBankLabel,
 			ChargeCategoryId = r.Category.Id, CategoryName = r.Category.Name,
 			Amount = r.Request.Amount, PurposeDescription = r.Request.PurposeDescription,
 			DueDate = r.Request.DueDate, AppliedOn = r.Request.AppliedOn,
@@ -91,6 +95,8 @@ public partial class ChargeAppService
 			GrNumber = student.GrNo?.ToString() ?? string.Empty,
 			RollNumber = student.RollNo?.ToString() ?? string.Empty,
 			StandardName = line.Standard.Name, DivisionName = line.Division.Name,
+			IncomeCategoryId = line.Charge.IncomeCategoryId, IncomeCategoryName = line.Charge.IncomeCategoryName,
+			ReceivingBankAccountId = line.Charge.ReceivingBankAccountId, ReceivingBankLabel = line.Charge.ReceivingBankLabel,
 			ChargeCategoryId = line.Charge.ChargeCategoryId, CategoryName = category?.Name ?? string.Empty,
 			Amount = line.Charge.Amount, PurposeDescription = line.Charge.PurposeDescription,
 			DueDate = line.Charge.DueDate, Status = (int)line.Charge.Status,

@@ -11,6 +11,7 @@ public class CollectionPolicyConfiguration : IEntityTypeConfiguration<Collection
 	public void Configure(EntityTypeBuilder<CollectionPolicy> builder)
 	{
 		builder.ToTable("Finance_CollectionPolicies", ShikshaMitraConsts.DbSchema);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory>().WithMany().HasForeignKey(x=>x.LateFeeIncomeCategoryId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.AcademicYearId).IsRequired();

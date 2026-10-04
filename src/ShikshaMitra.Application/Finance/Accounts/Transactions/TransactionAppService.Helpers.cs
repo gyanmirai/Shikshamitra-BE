@@ -21,9 +21,11 @@ public partial class TransactionAppService
 	private static TransactionListItem MapToListItem(Transaction transaction, TransactionCategory category) =>
 		new()
 		{
-			Id           = transaction.Id,
+			IsAutomatic = transaction.IsAutomatic, SourceId = transaction.SourceId,
+            BankAccountId = transaction.BankAccountId, BankLabel = transaction.BankLabelSnapshot,
+            Id           = transaction.Id,
 			CategoryId   = transaction.CategoryId,
-			CategoryName = category.Name,
+			CategoryName = transaction.CategoryNameSnapshot ?? category.Name,
 			CategoryTags = ToTagValues(transaction.CategoryTags),
 			Name         = transaction.Name,
 			Amount       = transaction.Amount,
@@ -52,7 +54,7 @@ public partial class TransactionAppService
 			{
 				Id           = transaction.Id,
 				CategoryId   = transaction.CategoryId,
-				CategoryName = category.Name,
+				CategoryName = transaction.CategoryNameSnapshot ?? category.Name,
 				CategoryTags = ToTagValues(transaction.CategoryTags),
 				Name         = transaction.Name,
 				Amount       = transaction.Amount,

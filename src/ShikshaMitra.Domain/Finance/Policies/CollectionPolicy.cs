@@ -47,6 +47,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public RoundingMethodType RoundingMethod { get; protected set; }
 	public bool ConsiderAsIncome { get; protected set; }
 	public Guid? LateFeeIncomeHeadId { get; protected set; }
+	public Guid? LateFeeIncomeCategoryId { get; private set; }
 	/// <summary>Absolute ceiling on computed late fee, regardless of formula — closes the "runaway compounding" gap.</summary>
 	public decimal? MaximumLateFeeAmount { get; protected set; }
 	/// <summary>Stop accruing additional late fee once daysLate exceeds this many days — independent of the amount cap above.</summary>
@@ -151,6 +152,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RoundingMethod = model.RoundingMethod;
 		ConsiderAsIncome = model.ConsiderAsIncome;
 		LateFeeIncomeHeadId = model.LateFeeIncomeHeadId;
+		LateFeeIncomeCategoryId = model.LateFeeIncomeCategoryId;
 		MaximumLateFeeAmount = model.MaximumLateFeeAmount;
 		MaximumChargingDays = model.MaximumChargingDays;
 
@@ -289,6 +291,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RoundingMethod = RoundingMethod,
 		ConsiderAsIncome = ConsiderAsIncome,
 		LateFeeIncomeHeadId = LateFeeIncomeHeadId,
+		LateFeeIncomeCategoryId = LateFeeIncomeCategoryId,
 		MaximumLateFeeAmount = MaximumLateFeeAmount,
 		MaximumChargingDays = MaximumChargingDays,
 		EnableWaiver = EnableWaiver,
@@ -356,11 +359,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(model.EscalationRules);
 			}
 
-			if (model.ConsiderAsIncome && requireComplete && model.LateFeeIncomeHeadId is null)
-			{
-				throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule)
-					.WithData("field", "lateFeeIncomeHeadId");
-			}
+
 		}
 
 		if (model.EnableWaiver && requireComplete)
@@ -445,4 +444,5 @@ public sealed record CollectionPolicyUpdateModel(
 	bool EnableChargeWaiver,
 	bool RequiresApproval,
 	IReadOnlyList<Guid> ApprovalRoleIds,
-	bool AllowOnlineCollection);
+	bool AllowOnlineCollection,
+	Guid? LateFeeIncomeCategoryId = null);

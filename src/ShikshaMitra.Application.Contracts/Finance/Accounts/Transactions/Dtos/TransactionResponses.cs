@@ -17,6 +17,10 @@ public class TransactionListResponse
 
 public class TransactionListItem
 {
+    public bool IsAutomatic { get; set; }
+    public Guid? SourceId { get; set; }
+    public Guid? BankAccountId { get; set; }
+    public string? BankLabel { get; set; }
 	public Guid Id { get; set; }
 	public Guid CategoryId { get; set; }
 	public string CategoryName { get; set; }

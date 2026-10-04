@@ -18,6 +18,8 @@ public class PaymentMethodRecordConfiguration : IEntityTypeConfiguration<Payment
     public void Configure(EntityTypeBuilder<PaymentMethodRecord> builder)
     {
         builder.ToTable("Finance_PaymentMethodRecords", ShikshaMitraConsts.DbSchema);
+        builder.Property(x=>x.BankLabelSnapshot).HasMaxLength(500);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
         builder.ConfigureByConvention();
 
         builder.Property(x => x.Amount)

@@ -81,7 +81,8 @@ public class FeeHeadAssignmentRequest
 	public Guid? Id { get; set; }
 	[Required]
 	public Guid FeeHeadId { get; set; }
-	public decimal Amount { get; set; }
+	public decimal? Amount { get; set; }
+    public bool IsVariable { get; set; }
 	public bool IsOneTime { get; set; }
 	public bool IsOptional { get; set; }
 	public MonthEnum PayableMonth { get; set; }

@@ -64,8 +64,10 @@ public class AssignmentHeadDto
 	public bool IsOptional { get; set; }
 	public bool IsOneTime { get; set; }
 	public bool Included { get; set; }
-	public decimal ConfiguredAmount { get; set; }
-	public decimal EffectiveAmount { get; set; }
+	public decimal? ConfiguredAmount { get; set; }
+	public decimal? EffectiveAmount { get; set; }
+    public bool IsVariable { get; set; }
+    public string? ZeroAmountReason { get; set; }
 	public string AmountBasis { get; set; } = "AnnualTotal";
 	public string? PaymentTermName { get; set; }
 	public int? PaymentTermVersionNumber { get; set; }

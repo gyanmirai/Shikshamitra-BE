@@ -41,6 +41,9 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? VoidedBy => this.GetProperty<Guid?>(VoidedByProperty);
 	public DateTimeOffset? VoidedOn => this.GetProperty<DateTimeOffset?>(VoidedOnProperty);
 	public string? VoidReason => this.GetProperty<string>(VoidReasonProperty);
+	public Guid? ReceivingBankAccountId { get; private set; }
+	public string? IncomeCategoryName { get; private set; }
+	public string? ReceivingBankLabel { get; private set; }
 	public Guid? IncomeCategoryId => this.GetProperty<Guid?>(IncomeCategoryIdProperty);
 	public Guid? IncomeAccountHeadId => this.GetProperty<Guid?>(IncomeAccountHeadIdProperty);
 
@@ -218,7 +221,17 @@ public class Charge : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		this.SetProperty(VoidReasonProperty, normalizedReason);
 	}
 
-	public void SetAccountingSnapshot(Guid incomeCategoryId, Guid incomeAccountHeadId)
+	public void SetFinancialRouting(Guid categoryId, string categoryName, Guid bankId, string bankLabel)
+	{
+		if (Status != ChargeStatus.Pending || categoryId == Guid.Empty || bankId == Guid.Empty)
+            throw new BusinessException("Finance:Routing:MappingLocked");
+        SetAccountingSnapshot(categoryId);
+		IncomeCategoryName = categoryName;
+		ReceivingBankAccountId = bankId;
+		ReceivingBankLabel = bankLabel;
+	}
+
+	public void SetAccountingSnapshot(Guid incomeCategoryId, Guid? incomeAccountHeadId = null)
 	{
 		this.SetProperty(IncomeCategoryIdProperty, incomeCategoryId);
 		this.SetProperty(IncomeAccountHeadIdProperty, incomeAccountHeadId);

@@ -226,7 +226,8 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 			[new System.Security.Claims.Claim(Volo.Abp.Security.Claims.AbpClaimTypes.UserId, limitedId.ToString())], "Test")));
 		var service = GetRequiredService<IStudentFeeStructureAppService>();
 		var list = await service.GetStudentsAsync(new() { AcademicYearId = input.AcademicYearId, MaxResultCount = 10 });
-		list.Items.Select(x => x.StudentId).ShouldBe(new[] { input.StudentId });
+		list.Items.ShouldAllBe(x => x.StandardId == original.StandardId);
+        list.Items.Where(x => x.IsActive).Select(x => x.StudentId).ShouldBe(new[] { input.StudentId });
 		(await Should.ThrowAsync<BusinessException>(() => service.GetCandidatesAsync(sibling.Id, input.AcademicYearId))).Code.ShouldBe(AssignmentErrorCodes.EnrollmentRequired);
 		using var otherTenant = _currentTenant.Change(Guid.NewGuid());
 		(await Should.ThrowAsync<BusinessException>(() => service.GetCandidatesAsync(input.StudentId, input.AcademicYearId))).Code.ShouldBe(AssignmentErrorCodes.EnrollmentRequired);

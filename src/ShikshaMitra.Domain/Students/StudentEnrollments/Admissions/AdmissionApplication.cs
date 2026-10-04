@@ -25,7 +25,7 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (selection.StructureId == Guid.Empty || selection.OwnerStageId == Guid.Empty || selection.SavedBy == Guid.Empty ||
 			selection.RevisionNumber < 1 || selection.Heads.Count == 0 ||
 			selection.Heads.Select(h => h.FeeHeadId).Distinct().Count() != selection.Heads.Count ||
-			selection.Heads.Any(h => h.FeeHeadId == Guid.Empty || h.ConfiguredAmount < 0 || decimal.Round(h.ConfiguredAmount, 2) != h.ConfiguredAmount))
+			selection.Heads.Any(h => h.FeeHeadId == Guid.Empty || (h.IsVariable ? h.ConfiguredAmount.HasValue : !h.ConfiguredAmount.HasValue || h.ConfiguredAmount < 0 || decimal.Round(h.ConfiguredAmount.Value, 2) != h.ConfiguredAmount)))
 			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidSelection);
 		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection with { ConfirmedBy = null, OnboardingConfirmedAt = null }));
 	}

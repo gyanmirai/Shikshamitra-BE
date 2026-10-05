@@ -102,6 +102,40 @@ public class RubricTemplateAssignment_Tests : ShikshaMitraApplicationTestBase<Sh
 		});
 	}
 
+	[Fact]
+	public async Task Performance_Template_Should_Create_Update_And_Read_Without_Criterion_Maximum()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			using (currentTenant.Change(TestTenantId))
+			{
+				var input = new CreateUpdateRubricDto
+				{
+					IsTemplate = true, AppliesToWorkType = WorkType.Both,
+					Title = "Shared performance rubric", ScoringModel = RubricScoringModel.PerformanceLevels,
+					PerformanceLevels = [new() { Level = 1, Label = "Good", Score = 2 }, new() { Level = 2, Label = "Excellent", Score = 4 }],
+					Criteria = [new() { Title = "Accuracy", IsRequired = true }, new() { Title = "Presentation", IsRequired = false }]
+				};
+				var created = await rubricService.CreateAsync(input);
+				created.TotalMarks.ShouldBe(8);
+				created.Criteria.ShouldAllBe(c => c.Points == null && c.Weight == null);
+				var json = System.Text.Json.JsonSerializer.Serialize(created);
+				json.ShouldNotContain("MaxMarks");
+				input.PerformanceLevels[1].Score = 5;
+				var updated = await rubricService.UpdateAsync(created.Id, input);
+				updated.TotalMarks.ShouldBe(10);
+				var read = await rubricService.GetAsync(created.Id);
+				read.TotalMarks.ShouldBe(10);
+				read.Criteria.Count.ShouldBe(2);
+				read.Criteria.Count(c => c.IsRequired).ShouldBe(1);
+				var listed = await rubricService.GetListAsync(new() { IsTemplate = true });
+				listed.Single(r => r.Id == created.Id).TotalMarks.ShouldBe(10);
+				await rubricService.PublishAsync(created.Id);
+				(await rubricService.GetAsync(created.Id)).Status.ShouldBe(RubricStatus.Published);
+			}
+		});
+	}
+
 	private async Task<AssessmentRubric> InsertTemplateAsync(string title, Guid mediumId)
 	{
 		var rubric = new AssessmentRubric(

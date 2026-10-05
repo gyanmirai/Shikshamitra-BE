@@ -3345,7 +3345,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
-                    b.Property<decimal>("MaxMarks")
+                    b.Property<decimal?>("Points")
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)");
 
@@ -3368,6 +3368,10 @@ namespace ShikshaMitra.Migrations
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<decimal?>("Weight")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)");
 
                     b.HasKey("Id");
 

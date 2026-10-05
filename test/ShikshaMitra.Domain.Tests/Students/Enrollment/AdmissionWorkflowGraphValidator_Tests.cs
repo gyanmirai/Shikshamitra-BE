@@ -103,6 +103,42 @@ public class AdmissionWorkflowGraphValidator_Tests
 	}
 
 	[Fact]
+	public void All_stage_types_allow_user_selected_endings()
+	{
+		AdmissionWorkflowStageTypeRegistry.All.ShouldAllBe(metadata => metadata.CanBeTerminalStage);
+	}
+
+	[Theory]
+	[InlineData(AdmissionWorkflowStageType.Form)]
+	[InlineData(AdmissionWorkflowStageType.Assessment)]
+	[InlineData(AdmissionWorkflowStageType.Payment)]
+	[InlineData(AdmissionWorkflowStageType.DocumentVerification)]
+	public void Assessment_can_lead_directly_to_any_user_selected_ending(AdmissionWorkflowStageType terminalType)
+	{
+		var workflowId = Guid.NewGuid();
+		var entry = Stage(workflowId, "ENTRANCE_EXAM", 0, isEntry: true,
+			type: AdmissionWorkflowStageType.Assessment);
+		var terminal = Stage(workflowId, "REGISTRATION", 1, isTerminal: true, type: terminalType,
+			configurationJson: terminalType == AdmissionWorkflowStageType.Form
+				? """{"formDefinitionId":"00000000-0000-0000-0000-000000000001","form":{"enabled":true,"version":1}}""" : null);
+
+		var issues = _validator.Validate([entry, terminal], [Transition(workflowId, entry.Id, terminal.Id, 0)]);
+
+		issues.ShouldNotContain(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+	}
+
+	[Fact]
+	public void Single_form_can_be_both_entry_and_ending()
+	{
+		var form = Stage(Guid.NewGuid(), "REGISTRATION", 0, isEntry: true, isTerminal: true,
+			type: AdmissionWorkflowStageType.Form,
+			configurationJson: """{"formDefinitionId":"00000000-0000-0000-0000-000000000001","form":{"enabled":true,"version":1}}""");
+
+		_validator.Validate([form], []).ShouldNotContain(issue =>
+			issue.Severity == AdmissionWorkflowValidationSeverity.Error);
+	}
+
+	[Fact]
 	public void DetectsCycles()
 	{
 		var workflowId = Guid.NewGuid();

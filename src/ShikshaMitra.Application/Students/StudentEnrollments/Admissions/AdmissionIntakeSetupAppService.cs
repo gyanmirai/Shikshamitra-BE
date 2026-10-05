@@ -210,7 +210,7 @@ public class AdmissionIntakeSetupAppService(
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.ConcurrencyConflict);
 	}
 
-	private static AdmissionInquiryIntakeRules ToRules(AdmissionInquiryIntakeRulesDto input) => new()
+	private static AdmissionInquiryIntakeRules ToRules(AdmissionInquiryIntakeRulesDto input) => new AdmissionInquiryIntakeRules
 	{
 		DuplicateRule = input.DuplicateRule,
 		ApplicationStartRequirement = input.ApplicationStartRequirement,
@@ -222,7 +222,7 @@ public class AdmissionIntakeSetupAppService(
 		RequireApplicantDateOfBirth = input.RequireApplicantDateOfBirth,
 		AllowedSources = input.AllowedSources,
 		RequireSourceDetailFor = input.RequireSourceDetailFor
-	};
+	}.WithStandardBehavior();
 
 	private static AdmissionCounsellorAssignmentRules ToRules(AdmissionCounsellorAssignmentRulesDto input) => new()
 	{
@@ -249,6 +249,7 @@ public class AdmissionIntakeSetupAppService(
 				throw new InvalidOperationException("Inquiry rules are missing.");
 			assignmentRules = JsonSerializer.Deserialize<AdmissionCounsellorAssignmentRules>(assignment.ConfigurationJson, JsonOptions) ??
 				throw new InvalidOperationException("Counsellor assignment rules are missing.");
+			inquiryRules = inquiryRules.WithStandardBehavior();
 			inquiryRules.Validate();
 			assignmentRules.Validate();
 			if (!assignmentRules.FallbackManagerUserId.HasValue)

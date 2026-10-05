@@ -12,7 +12,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
-	public async Task Managed_inquiry_should_require_qualification_before_starting_application()
+	public async Task Legacy_inquiry_policy_should_allow_application_start_without_contact_or_qualification()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -28,11 +28,16 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var state = await management.GetAsync(inquiry.Id);
 			state.Managed.ShouldBeTrue();
 			state.ContactCount.ShouldBe(0);
-			state.CanStartApplication.ShouldBeFalse();
-			state.Blockers.ShouldContain(item => item.Contains("qualified", StringComparison.OrdinalIgnoreCase));
-			var blocked = await Should.ThrowAsync<BusinessException>(() =>
-				_applicationAppService.StartAsync(inquiry.ApplicantId!.Value, offering.Id, inquiry.Id));
-			blocked.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.ContactRequired);
+			state.CanStartApplication.ShouldBeTrue();
+			state.Blockers.ShouldBeEmpty();
+			state.Policy.ApplicationStartRequirement.ShouldBe(AdmissionInquiryApplicationStartRequirement.Captured);
+			var immediate = await inquiries.CreateAsync(ManagedInquiryInput(offering));
+			var immediateApplication = await _applicationAppService.StartAsync(immediate.ApplicantId!.Value, offering.Id, immediate.Id);
+			(await _applicationRepository.GetAsync(immediateApplication.Id)).InquiryId.ShouldBe(immediate.Id);
+			var immediateState = await management.GetAsync(immediate.Id);
+			immediateState.ContactCount.ShouldBe(0);
+			immediateState.Outcome.ShouldBeNull();
+			immediateState.IsLocked.ShouldBeTrue();
 
 			state = await management.RecordContactAsync(inquiry.Id, new()
 			{
@@ -76,6 +81,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var inquiry = await inquiries.CreateAsync(input);
 			(await GetRequiredService<IAdmissionInquiryManagementAppService>().GetAsync(inquiry.Id)).Managed.ShouldBeFalse();
 			input.CreateSeparateFamily = true;
+			var reasonRequired = await Should.ThrowAsync<BusinessException>(() => inquiries.CreateAsync(input));
+			reasonRequired.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.DuplicateReasonRequired);
+			input.DuplicateOverrideReason = "Verified separate family sharing the mobile number.";
 			var separate = await inquiries.CreateAsync(input);
 			separate.Id.ShouldNotBe(inquiry.Id);
 			var application = await _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, offering.Id, inquiry.Id);

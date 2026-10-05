@@ -65,8 +65,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 	}
 
-	[Fact]
-	public async Task Managed_Form_Should_Hold_The_Workflow_For_Verification_And_Audit_Corrections()
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Managed_Form_Should_Hold_The_Workflow_For_Verification_And_Audit_Corrections(bool endsAtForm)
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -75,7 +77,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Managed Form integration test"), true);
 			var basicWorkflow = await CreateAndPublishWorkflowAsync();
 			var offering = await CreateAvailableOfferingAsync(basicWorkflow.Id);
-			var managedWorkflow = await CreateManagedFormWorkflowAsync(offering.ApplicationFormDefinitionId!.Value);
+			var managedWorkflow = await CreateManagedFormWorkflowAsync(offering.ApplicationFormDefinitionId!.Value, endsAtForm);
 			await WithUnitOfWorkAsync(async () =>
 			{
 				var stored = await _offeringRepository.GetAsync(offering.Id);
@@ -126,7 +128,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					IdempotencyKey = "managed-form-complete",
 					ConcurrencyStamp = ready.ConcurrencyStamp
 				});
-			workflow.Stages.Single(item => item.Code == "DONE").Status.ShouldBe(AdmissionRuntimeStageStatus.Active);
+			if (endsAtForm)
+			{
+				workflow.Status.ShouldBe(AdmissionWorkflowInstanceStatus.Completed);
+				workflow.CompletedAt.ShouldNotBeNull();
+				workflow.Stages.Single().Status.ShouldBe(AdmissionRuntimeStageStatus.Completed);
+				workflow.NextRequiredAction.ShouldBeNull();
+			}
+			else
+			{
+				workflow.Stages.Single(item => item.Code == "DONE").Status.ShouldBe(AdmissionRuntimeStageStatus.Active);
+			}
 			var history = await _applicationAppService.GetFormHistoryAsync(application.Id);
 			history.ShouldContain(item => item.ChangeType == "CorrectionRequested");
 			history.Count(item => item.ChangeType == "SectionVerification").ShouldBe(2);
@@ -164,7 +176,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		return workflowId;
 	}
 
-	private async Task<AdmissionWorkflowDto> CreateManagedFormWorkflowAsync(Guid formId)
+	private async Task<AdmissionWorkflowDto> CreateManagedFormWorkflowAsync(Guid formId, bool endsAtForm = false)
 	{
 		var formStageId = Guid.NewGuid();
 		var doneStageId = Guid.NewGuid();
@@ -181,7 +193,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			RequireSectionVerification = true,
 			VerificationSectionCodes = ["STUDENT"]
 		};
-		var workflow = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto
+		var input = new CreateUpdateAdmissionWorkflowDto
 		{
 			Name = "Managed application form",
 			Code = $"FORM_{Guid.NewGuid():N}"[..24],
@@ -208,7 +220,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					FromStageId = formStageId, ToStageId = doneStageId, Priority = 1, IsDefault = true
 				}
 			]
-		});
+		};
+		if (endsAtForm)
+		{
+			input.Stages.RemoveAt(1);
+			input.Stages[0].IsTerminalStage = true;
+			input.Transitions.Clear();
+		}
+		var workflow = await _workflowAppService.CreateAsync(input);
 		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
 	}
 }

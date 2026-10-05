@@ -24,6 +24,10 @@ public static class AdmissionErrorCodes
 	public const string InquiryCounsellorRequired = "Admissions.InquiryCounsellorRequired";
 	public const string InquiryCounsellorCandidatesRequired = "Admissions.InquiryCounsellorCandidatesRequired";
 	public const string InquiryCounsellorInvalid = "Admissions.InquiryCounsellorInvalid";
+	public const string PublicInquiryOfferingRequired = "Admissions.PublicInquiry.OfferingRequired";
+	public const string PublicInquiryCounsellorUnavailable = "Admissions.PublicInquiry.CounsellorUnavailable";
+	public const string PublicInquiryFallbackUnavailable = "Admissions.PublicInquiry.FallbackUnavailable";
+	public const string PublicInquiryExpiryInvalid = "Admissions.PublicInquiry.ExpiryInvalid";
 	public const string InquiryOfferingRequired = "Admissions.InquiryOfferingRequired";
 	public const string InquiryEntryNotAllowed = "Admissions.InquiryEntryNotAllowed";
 	public const string InquiryFamilyMismatch = "Admissions.InquiryFamilyMismatch";

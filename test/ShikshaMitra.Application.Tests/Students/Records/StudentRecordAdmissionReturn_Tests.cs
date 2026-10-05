@@ -254,6 +254,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var activation = new ActivateStudentOnboardingDto { IdempotencyKey = "reviewed-return-activate", ConcurrencyStamp = item.ConcurrencyStamp };
 		item = await onboarding.ActivateAsync(item.Id, activation); item.Status.ShouldBe(StudentOnboardingStatus.Provisioning);
 		item = await onboarding.ActivateAsync(item.Id, activation); item.StudentEnrollmentId.ShouldBe(original.Enrollment.Id);
+		(await Should.ThrowAsync<BusinessException>(() => onboarding.CancelAsync(item.Id,
+			new() { ConcurrencyStamp = item.ConcurrencyStamp, Reason = "Cancellation after activation must be rejected" }))).Code.ShouldBe(StudentOnboardingErrorCodes.CaseNotEditable);
+		(await fixture.Service.GetAsync(returned.TransitionId!.Value)).Status.ShouldBe("AwaitingAdmission");
 		var finance = await SeedRecordRenewalFinanceAsync(fixture.Student.Id, fixture.Student.AcademicYearId.Value);
 		await CollectRecordRenewalCashAsync(fixture.Student.Id, fixture.Student.AcademicYearId.Value, finance.FeeHeadId, finance.DueId, 6000);
 		item = await onboarding.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp); item.Status.ShouldBe(StudentOnboardingStatus.Completed, item.LastError);

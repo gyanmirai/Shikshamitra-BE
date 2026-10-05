@@ -62,7 +62,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var workflow = await CreateAndPublishWorkflowAsync();
 			var offering = await CreateAvailableOfferingAsync(workflow.Id);
 			var applicant = await CreateCertificationApplicantAsync("ReservedRejected", true, true, null);
-			var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id);
+			var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
 			await AssertReservationUnusedAsync(new(applicant, offering, application, null));
 			var submitted = await _applicationAppService.SubmitAsync(application.Id);
 			submitted.ValidationErrors.ShouldBeEmpty();

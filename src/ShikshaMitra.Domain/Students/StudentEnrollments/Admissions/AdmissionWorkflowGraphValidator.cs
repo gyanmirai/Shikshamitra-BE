@@ -101,11 +101,6 @@ public class AdmissionWorkflowGraphValidator : DomainService
 				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidInitialStage, $"{metadata.DisplayName} cannot be used as an entry stage.", stage.Id));
 			}
 
-			if (stage.IsTerminalStage && !metadata.CanBeTerminalStage)
-			{
-				issues.Add(Error(AdmissionWorkflowErrorCodes.InvalidFinalStage, $"{metadata.DisplayName} cannot be used as a terminal stage.", stage.Id));
-			}
-
 			if (!metadata.IsRuntimeReady)
 			{
 				issues.Add(Error(

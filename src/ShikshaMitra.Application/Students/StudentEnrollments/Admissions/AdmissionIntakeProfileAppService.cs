@@ -39,6 +39,7 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 	public async Task<AdmissionIntakeProfileDto> CreateAsync(SaveAdmissionIntakeProfileDto input)
 	{
 		EnsureIdentity(input);
+		input.ConfigurationJson = NormalizeInquiryConfiguration(input.Kind, input.ConfigurationJson);
 		Validate(input.Kind, input.ConfigurationJson);
 		var id = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code,
@@ -84,6 +85,7 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 				"The profile type cannot be changed.");
 		if (string.IsNullOrWhiteSpace(input.ConcurrencyStamp) || profile.ConcurrencyStamp != input.ConcurrencyStamp)
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.ConcurrencyConflict);
+		input.ConfigurationJson = NormalizeInquiryConfiguration(input.Kind, input.ConfigurationJson);
 		Validate(input.Kind, input.ConfigurationJson);
 		await EnsureActiveOfferingsCanUseAsync(id, input.Kind, input.ConfigurationJson);
 		var code = AdmissionSettingsCode.ForUpdate(input.Code, profile.Code);
@@ -141,6 +143,24 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 		}
 	}
 
+	private static string NormalizeInquiryConfiguration(AdmissionIntakeProfileKind kind, string json)
+	{
+		if (kind != AdmissionIntakeProfileKind.Inquiry) return json;
+		try
+		{
+			var rules = JsonSerializer.Deserialize<AdmissionInquiryIntakeRules>(json,
+				new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ??
+				throw new ArgumentException("Inquiry settings are required.");
+			rules = rules.WithStandardBehavior();
+			rules.Validate();
+			return JsonSerializer.Serialize(rules, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+		}
+		catch (Exception error) when (error is ArgumentException or JsonException or InvalidOperationException)
+		{
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration, error.Message);
+		}
+	}
+
 	private async Task EnsureActiveOfferingsCanUseAsync(Guid profileId, AdmissionIntakeProfileKind kind, string json)
 	{
 		if (kind != AdmissionIntakeProfileKind.CounsellorAssignment) return;
@@ -178,7 +198,7 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 		Kind = profile.Kind,
 		Code = profile.Code,
 		Name = profile.Name,
-		ConfigurationJson = profile.ConfigurationJson,
+		ConfigurationJson = NormalizeInquiryConfiguration(profile.Kind, profile.ConfigurationJson),
 		ConcurrencyStamp = profile.ConcurrencyStamp
 	};
 }

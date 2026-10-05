@@ -36,6 +36,7 @@ public class AdmissionInquiryPolicyResolver(
 				var rules = JsonSerializer.Deserialize<AdmissionInquiryIntakeRules>(profile.ConfigurationJson,
 					new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ??
 					throw new ArgumentException("Inquiry settings are missing.");
+				rules = rules.WithStandardBehavior();
 				rules.Validate();
 				var profilePolicy = new AdmissionInquiryPolicy
 				{
@@ -91,6 +92,7 @@ public class AdmissionInquiryPolicyResolver(
 			var policy = JsonSerializer.Deserialize<AdmissionInquiryPolicy>(snapshotJson,
 				new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ??
 				throw new ArgumentException("Inquiry policy snapshot is missing.");
+			policy = policy.WithStandardBehavior();
 			policy.Validate();
 			return policy;
 		}

@@ -26,7 +26,7 @@ namespace ShikshaMitra.HR.Dashboard;
 
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.HR)]
-public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
+public partial class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string BaseUrl = "/api/hr/dashboard";
 
@@ -228,9 +228,9 @@ public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 		result.Summary.ShouldBeNull();
 		result.Payroll.ShouldBeNull();
 		result.Trend.ShouldBeNull();
-		result.PendingLeaveRequests.ShouldBeNull();
-		result.Filters.Departments.ShouldBeEmpty();
-		result.Attention.ShouldBeEmpty();
+		result.Leave.ShouldBeNull();
+		result.Onboarding.ShouldBeNull();
+		result.Appraisal.ShouldBeNull();
 		(await client.GetAsync($"{BaseUrl}/staff?date=2026-05-23")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
@@ -250,7 +250,7 @@ public class HRDashboardApi_Tests : ShikshaMitraApiTestBase
 		result.Summary.ShouldNotBeNull();
 		result.Capabilities.CanViewStaff.ShouldBeFalse();
 		result.Payroll.ShouldBeNull();
-		result.PendingLeaveRequests.ShouldBeNull();
+		result.Leave.ShouldBeNull();
 	}
 
 	[Fact]

@@ -165,6 +165,20 @@ public class ProfessionalManagementApi_Tests : ShikshaMitraApiTestBase
 		       ?? throw new InvalidOperationException("Failed to deserialize created performance template.");
 	}
 
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task View_Permission_Without_Employee_Scope_Should_Not_Expose_Reviews_Or_Evidence()
+	{
+		var (assignmentId, _) = await SeedReviewEvidenceAsync();
+		using var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "custom-review-reader");
+		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "HR.PerformanceManagement.View");
+
+		(await client.GetAsync($"{BaseUrl}/reviews")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		(await client.GetAsync($"{BaseUrl}/reviews/{assignmentId}/evidence")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+	}
+
 	private async Task<PerformanceTemplateDto> PublishTemplateAsync(Guid id)
 	{
 		var response = await Client.PostAsync($"{BaseUrl}/templates/{id}/publish", null);

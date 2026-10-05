@@ -16,6 +16,8 @@ public class ProfessionalManagementReviewReader(
 	IRepository<PerformanceFeedback, Guid> feedbackRepository,
 	IRepository<PerformanceAuditEvent, Guid> auditRepository,
 	ProfessionalManagementReviewLookupReader lookupReader,
+	ProfessionalManagementReadScopeService readScope,
+	ProfessionalManagementAuthorizationService authorization,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -25,7 +27,7 @@ public class ProfessionalManagementReviewReader(
 		ProfessionalReviewStatus? status,
 		string? search)
 	{
-		var query = await assignmentRepository.GetQueryableAsync();
+		var query = await readScope.ApplyAsync(await assignmentRepository.GetQueryableAsync());
 		query = query
 			.WhereIf(cycleId.HasValue, x => x.CycleId == cycleId)
 			.WhereIf(employeeId.HasValue, x => x.EmployeeId == employeeId)
@@ -41,6 +43,8 @@ public class ProfessionalManagementReviewReader(
 				employees.GetValueOrDefault(x.EmployeeId),
 				templates.GetValueOrDefault(x.TemplateId)))
 			.ToList();
+		if (!await authorization.CanViewConfidentialOutcomeAsync())
+			foreach (var item in items) ClearConfidentialOutcome(item);
 
 		if (!string.IsNullOrWhiteSpace(search))
 		{
@@ -57,6 +61,7 @@ public class ProfessionalManagementReviewReader(
 	public async Task<ProfessionalReviewDto> GetReviewAsync(Guid id)
 	{
 		var assignment = await assignmentRepository.GetAsync(id);
+		await readScope.EnsureEmployeeAsync(assignment.EmployeeId);
 		var cycle = await cycleRepository.GetAsync(assignment.CycleId);
 		var employees = await lookupReader.GetEmployeesByIdsAsync([assignment.EmployeeId]);
 		var templates = await lookupReader.GetTemplatesByIdsAsync([assignment.TemplateId]);
@@ -65,8 +70,16 @@ public class ProfessionalManagementReviewReader(
 		var dto = ProfessionalManagementProjection.ToReviewDto(assignment, cycle, employee, template);
 		dto.Template = template == null ? null : await MapTemplateAsync(template);
 		dto.Stages = await lookupReader.MapStagesAsync(id);
-		dto.Outcome = await lookupReader.MapOutcomeForReviewAsync(id);
+		if (await authorization.CanViewConfidentialOutcomeAsync()) dto.Outcome = await lookupReader.MapOutcomeForReviewAsync(id);
+		else ClearConfidentialOutcome(dto);
 		return dto;
+	}
+
+	private static void ClearConfidentialOutcome(ProfessionalReviewDto review)
+	{
+		review.FinalScore = null;
+		review.FinalRating = null;
+		review.Outcome = null;
 	}
 
 	public async Task<ProfessionalReviewListResponse> GetEmployeeReviewHistoryAsync(Guid employeeId)
@@ -117,7 +130,7 @@ public class ProfessionalManagementReviewReader(
 
 	public async Task<List<PerformanceAuditEventDto>> GetAuditTrailAsync(Guid? reviewId)
 	{
-		var query = await auditRepository.GetQueryableAsync();
+		var query = await readScope.ApplyAuditAsync(await auditRepository.GetQueryableAsync(), await assignmentRepository.GetQueryableAsync());
 		var rows = await asyncExecuter.ToListAsync(query
 			.WhereIf(reviewId.HasValue, x => x.ReviewAssignmentId == reviewId)
 			.OrderByDescending(x => x.CreationTime)

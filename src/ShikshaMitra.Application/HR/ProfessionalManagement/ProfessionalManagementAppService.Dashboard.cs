@@ -39,7 +39,7 @@ public partial class ProfessionalManagementAppService
 		await EnsureAuditAccessAsync();
 		if (reviewId.HasValue)
 		{
-			await _authorization.EnsureReviewExistsAsync(reviewId.Value);
+			await _authorization.EnsureCanViewReviewAsync(reviewId.Value);
 		}
 
 		return await _reviewReader.GetAuditTrailAsync(reviewId);

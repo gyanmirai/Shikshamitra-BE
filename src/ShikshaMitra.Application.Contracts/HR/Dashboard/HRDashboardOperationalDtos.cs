@@ -49,11 +49,16 @@ public class HRDashboardCapabilitiesDto
 	public bool CanViewLeave { get; set; }
 	public bool CanViewPayroll { get; set; }
 	public bool CanOpenPayroll { get; set; }
+	public bool CanViewOnboarding { get; set; }
+	public bool CanOpenOnboarding { get; set; }
+	public bool CanViewAppraisals { get; set; }
+	public bool CanAddEmployees { get; set; }
 }
 
 public class HRDashboardOverviewDto
 {
 	public string Date { get; set; } = "";
+	public string AsOfDate { get; set; } = "";
 	public DateTimeOffset GeneratedAt { get; set; }
 	public string ScopeLabel { get; set; } = "";
 	public HRDashboardCapabilitiesDto Capabilities { get; set; } = new();
@@ -61,14 +66,22 @@ public class HRDashboardOverviewDto
 	public HRDashboardSectionState WorkforceState { get; set; } = HRDashboardSectionState.Forbidden;
 	public HRDashboardSectionState LeaveState { get; set; } = HRDashboardSectionState.Forbidden;
 	public HRDashboardSectionState PayrollState { get; set; } = HRDashboardSectionState.Forbidden;
-	public int? StaffCount { get; set; }
+	public HRDashboardSectionState OnboardingState { get; set; } = HRDashboardSectionState.Forbidden;
+	public HRDashboardSectionState AppraisalState { get; set; } = HRDashboardSectionState.Forbidden;
+	public string? OnboardingUnavailableReason { get; set; }
+	public HRDashboardOperationalWorkforceDto? Workforce { get; set; }
+	public HRDashboardOperationalLeaveDto? Leave { get; set; }
+	public HRDashboardOnboardingDto? Onboarding { get; set; }
+	public HRDashboardAppraisalDto? Appraisal { get; set; }
 	public HRDashboardDailyCountsDto? Summary { get; set; }
 	public List<HRDashboardDailyCountsDto>? Trend { get; set; }
-	public HRDashboardFilterOptionsDto Filters { get; set; } = new();
-	public List<HRDashboardAttentionDto> Attention { get; set; } = [];
-	public int? PendingLeaveRequests { get; set; }
 	public HRDashboardPayrollCycleDto? Payroll { get; set; }
 }
+
+public sealed record HRDashboardOperationalWorkforceDto(int ActiveStaff, int Teaching, int NonTeaching, int JoinedThisMonth);
+public sealed record HRDashboardOperationalLeaveDto(int PendingRequests);
+public sealed record HRDashboardOnboardingDto(int ReadyCount, int InProgressCount);
+public sealed record HRDashboardAppraisalDto(int PendingCount, int OverdueCount, DateOnly? NextDeadline);
 
 public class HRDashboardDailyCountsDto
 {

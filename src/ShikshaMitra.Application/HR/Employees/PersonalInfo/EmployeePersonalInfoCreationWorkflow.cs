@@ -50,7 +50,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 		if (unitOfWorkManager.Current is null)
 		{
 			throw new InvalidOperationException(
-				"Atomic employee creation requires an active unit of work.");
+				"Atomic staff creation requires an active unit of work.");
 		}
 
 		return await CreateAsync(
@@ -146,14 +146,14 @@ public class EmployeePersonalInfoCreationWorkflow(
 			{
 				logger.LogWarning(
 					ex,
-					"Employee code collision detected for {Email}. Retrying create flow (attempt {Attempt}/{MaxAttempts}).",
+					"Staff code collision detected for {Email}. Retrying create flow (attempt {Attempt}/{MaxAttempts}).",
 					input.Email,
 					attempt + 1,
 					MaxEmployeeCodeInsertAttempts);
 			}
 		}
 
-		throw new InvalidOperationException("Employee creation retry loop exited unexpectedly.");
+		throw new InvalidOperationException("Staff creation retry loop exited unexpectedly.");
 	}
 
 	private async Task<Employee> CreateAndInsertEmployeeAsync(

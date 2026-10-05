@@ -25,7 +25,7 @@ public class PolicyAssignmentPreviewRequestDtoValidator :
 			.WithMessage("Preview date is required.");
 		RuleFor(x => x)
 			.Must(x => x.EmployeeId.HasValue || x.GroupId.HasValue)
-			.WithMessage("Employee or group is required for policy assignment preview.");
+			.WithMessage("Staff or group is required for policy assignment preview.");
 	}
 }
 

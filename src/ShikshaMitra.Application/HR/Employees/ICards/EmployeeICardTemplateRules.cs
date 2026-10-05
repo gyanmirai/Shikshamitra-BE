@@ -108,7 +108,7 @@ internal static class EmployeeICardTemplateRules
 
 	public static void ValidateAssetBlobName(string blobName, Guid? tenantId)
 	{
-		var expectedPrefix = $"employee-icards/assets/{tenantId ?? Guid.Empty}/";
+		var expectedPrefix = $"staff-icards/assets/{tenantId ?? Guid.Empty}/";
 		var extension = Path.GetExtension(blobName);
 		if (string.IsNullOrWhiteSpace(blobName) ||
 			!blobName.StartsWith(expectedPrefix, StringComparison.Ordinal) ||

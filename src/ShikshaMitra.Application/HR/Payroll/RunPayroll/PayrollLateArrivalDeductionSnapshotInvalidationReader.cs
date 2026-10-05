@@ -139,7 +139,7 @@ public class PayrollLateArrivalDeductionSnapshotInvalidationReader(
 		}
 
 		logger.LogDebug(
-			"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale after late deduction setup state changed.",
+			"Payroll snapshot for staff {EmployeeId} in {MonthYear} is stale after late deduction setup state changed.",
 			snapshot.EmployeeId,
 			snapshot.MonthYear);
 		return true;
@@ -160,7 +160,7 @@ public class PayrollLateArrivalDeductionSnapshotInvalidationReader(
 			}
 
 			logger.LogDebug(
-				"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale because late deduction is no longer expected.",
+				"Payroll snapshot for staff {EmployeeId} in {MonthYear} is stale because late deduction is no longer expected.",
 				snapshot.EmployeeId,
 				snapshot.MonthYear);
 			return true;
@@ -183,7 +183,7 @@ public class PayrollLateArrivalDeductionSnapshotInvalidationReader(
 		}
 
 		logger.LogDebug(
-			"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale after late deduction amount changed or was missing.",
+			"Payroll snapshot for staff {EmployeeId} in {MonthYear} is stale after late deduction amount changed or was missing.",
 			snapshot.EmployeeId,
 			snapshot.MonthYear);
 		return true;

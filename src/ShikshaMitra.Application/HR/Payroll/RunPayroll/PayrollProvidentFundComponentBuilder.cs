@@ -83,7 +83,7 @@ public class PayrollProvidentFundComponentBuilder(
 			employeeId,
 			$"Provident Fund - {rule.Name}",
 			componentId: null,
-			description: $"{rule.EmployeePercentage:0.##}% employee PF contribution",
+			description: $"{rule.EmployeePercentage:0.##}% staff PF contribution",
 			amount,
 			isFixed: true,
 			isTemp: false,
@@ -135,7 +135,7 @@ public class PayrollProvidentFundComponentBuilder(
 		    rule.EffectiveTo.HasValue && rule.EffectiveTo.Value < effectiveDate)
 		{
 			logger.LogWarning(
-				"Employee {EmployeeId} PF rule {PfRuleId} is unavailable or not effective for {EffectiveDate:yyyy-MM-dd}.",
+				"Staff {EmployeeId} PF rule {PfRuleId} is unavailable or not effective for {EffectiveDate:yyyy-MM-dd}.",
 				employeeId,
 				pfRuleId,
 				effectiveDate);

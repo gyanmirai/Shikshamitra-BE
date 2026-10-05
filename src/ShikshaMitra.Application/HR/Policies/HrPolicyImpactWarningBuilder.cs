@@ -68,7 +68,7 @@ internal static class HrPolicyImpactWarningBuilder
 			{
 				Severity = "info",
 				Code = HRErrorCodes.AffectedEmployees,
-				Message = $"{preview.AffectedEmployeeCount} employees may be affected."
+				Message = $"{preview.AffectedEmployeeCount} staff may be affected."
 			});
 		}
 	}
@@ -94,7 +94,7 @@ internal static class HrPolicyImpactWarningBuilder
 		{
 			Severity = "warning",
 			Code = HRErrorCodes.DefaultPolicyWillBeReplaced,
-			Message = $"Saving this policy as the default will replace the current default \"{existingDefaultName}\". Review affected employees before confirming."
+			Message = $"Saving this policy as the default will replace the current default \"{existingDefaultName}\". Review affected staff before confirming."
 		});
 	}
 
@@ -153,14 +153,14 @@ internal static class HrPolicyImpactWarningBuilder
 				: "No policy risks detected for this action.";
 
 		preview.ResolutionSummary = preview.AffectedEmployeeCount > 0
-			? $"{preview.AffectedEmployeeCount} employee(s) and {preview.AffectedAssignmentCount} assignment(s) may be affected by this {preview.PolicyType.Replace("_", " ")} {preview.Action}."
-			: $"No employees are currently affected by this {preview.PolicyType.Replace("_", " ")} {preview.Action}.";
+			? $"{preview.AffectedEmployeeCount} staff members and {preview.AffectedAssignmentCount} assignment(s) may be affected by this {preview.PolicyType.Replace("_", " ")} {preview.Action}."
+			: $"No staff are currently affected by this {preview.PolicyType.Replace("_", " ")} {preview.Action}.";
 
 		preview.RecommendedAction = preview.BlockingWarnings.Count > 0
 			? "Resolve the blocking warnings, then run impact preview again."
 			: preview.RequiresConfirmation || preview.Warnings.Count > 0
 				? preview.RequiresConfirmation
-					? "Review the policy notices and affected employees before confirming."
+					? "Review the policy notices and affected staff before confirming."
 					: "This action can be saved after reviewing the informational notices."
 				: "This action can be saved after normal review.";
 	}

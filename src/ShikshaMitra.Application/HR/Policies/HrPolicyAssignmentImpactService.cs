@@ -94,7 +94,7 @@ public class HrPolicyAssignmentImpactService(
 			{
 				Severity = "warning",
 				Code = HRErrorCodes.HrPolicyNoAffectedEmployees,
-				Message = "No active employees currently match this assignment target."
+				Message = "No active staff currently match this assignment target."
 			});
 		}
 		else
@@ -103,7 +103,7 @@ public class HrPolicyAssignmentImpactService(
 			{
 				Severity = "info",
 				Code = HRErrorCodes.AffectedEmployees,
-				Message = $"{preview.AffectedEmployeeCount} employees may be affected."
+				Message = $"{preview.AffectedEmployeeCount} staff may be affected."
 			});
 		}
 

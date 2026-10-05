@@ -74,7 +74,7 @@ public class UpdateEmployeePersonalInfoDtoValidator : AbstractValidator<UpdateEm
 			.Must(x => !x.DateOfJoining.HasValue ||
 			           !x.DateOfBirth.HasValue ||
 			           CalculateAge(x.DateOfBirth.Value, x.DateOfJoining.Value) >= 18)
-			.WithMessage("Employee must be at least 18 years old at the time of joining.");
+			.WithMessage("Staff must be at least 18 years old at the time of joining.");
 
 		RuleFor(x => x.DateOfJoining)
 			.Must((dto, dateOfJoining) =>

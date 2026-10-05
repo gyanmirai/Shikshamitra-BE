@@ -31,7 +31,7 @@ internal static class AttendanceImportPreviewMapper
 		{
 			foreach (var row in group)
 			{
-				row.Errors.Add("Duplicate Employee Code + Attendance Date found in the file.");
+				row.Errors.Add("Duplicate Staff Code + Attendance Date found in the file.");
 			}
 		}
 	}

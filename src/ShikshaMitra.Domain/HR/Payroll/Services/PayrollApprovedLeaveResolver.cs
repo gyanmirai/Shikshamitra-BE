@@ -90,12 +90,12 @@ public class PayrollApprovedLeaveResolver : DomainService
 	{
 		if (!workingUnitsByEmployee.TryGetValue(employeeId, out var workingUnitsByDate))
 		{
-			throw new InvalidOperationException($"Working units are required for employee {employeeId}.");
+			throw new InvalidOperationException($"Working units are required for staff {employeeId}.");
 		}
 
 		if (!workingUnitsByDate.TryGetValue(date, out var workingUnit))
 		{
-			throw new InvalidOperationException($"Working unit for employee {employeeId} on {date:yyyy-MM-dd} is required.");
+			throw new InvalidOperationException($"Working unit for staff {employeeId} on {date:yyyy-MM-dd} is required.");
 		}
 
 		return Math.Clamp(workingUnit, 0m, 1m);

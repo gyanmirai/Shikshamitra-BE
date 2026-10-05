@@ -19,9 +19,9 @@ internal static class HRDashboardInsightProjection
 			{
 				Severity = "critical",
 				Title = "Inactive reporting managers",
-				Summary = $"{inactiveReportingManagerIssue.ActiveDirectReportCount} active employee(s) report to {inactiveReportingManagerIssue.ManagerCount} inactive manager(s).",
+				Summary = $"{inactiveReportingManagerIssue.ActiveDirectReportCount} active staff members report to {inactiveReportingManagerIssue.ManagerCount} inactive manager(s).",
 				Source = "employee.reporting-manager",
-				ActionLabel = "Review employees",
+				ActionLabel = "Review staff",
 				ActionHref = "/hr/employee?reportingManagerStatus=nonActive"
 			});
 		}

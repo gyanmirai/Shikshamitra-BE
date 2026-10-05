@@ -124,7 +124,7 @@ public class EmployeeUserRoleManager(
 		{
 			throw new BusinessException(
 				HRErrorCodes.EmployeeRoleNotAllowed,
-				"Only roles with the Employee audience can be assigned to employees.")
+				"Only roles with the Staff audience can be assigned to staff.")
 				.WithData("roleId", role.Id)
 				.WithData("roleAudience", audience ?? EmployeeRoleAudience.ForRoleName(roleName));
 		}
@@ -134,7 +134,7 @@ public class EmployeeUserRoleManager(
 		{
 			throw new BusinessException(
 				HRErrorCodes.EmployeeRoleAssignmentNotAllowed,
-				"The selected role is not explicitly approved for employee onboarding.")
+				"The selected role is not explicitly approved for staff onboarding.")
 				.WithData("roleId", role.Id)
 				.WithData("roleName", roleName);
 		}
@@ -153,7 +153,7 @@ public class EmployeeUserRoleManager(
 		var roleName = GetRoleName(role).Trim();
 		throw new BusinessException(
 			HRErrorCodes.EmployeeRoleGroupNotAllowed,
-			"The selected role is not available for the selected employee group.")
+			"The selected role is not available for the selected staff group.")
 			.WithData("roleId", role.Id)
 			.WithData("roleName", roleName)
 			.WithData("employeeGroup", employeeGroup)

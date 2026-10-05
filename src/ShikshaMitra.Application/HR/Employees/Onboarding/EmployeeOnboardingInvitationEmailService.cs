@@ -38,7 +38,7 @@ public class EmployeeOnboardingInvitationEmailService(
 		{
 			await emailSender.SendAsync(
 				application.Email,
-				"Complete your ShikshaMitra employee onboarding",
+				"Complete your ShikshaMitra staff onboarding",
 				BuildEmailBody(application, invitationUrl),
 				isBodyHtml: true);
 
@@ -48,7 +48,7 @@ public class EmployeeOnboardingInvitationEmailService(
 		{
 			logger.LogWarning(
 				ex,
-				"Failed to send employee onboarding invitation email for application {ApplicationId} to {Email}.",
+				"Failed to send staff onboarding invitation email for application {ApplicationId} to {Email}.",
 				application.Id,
 				application.Email);
 
@@ -82,7 +82,7 @@ public class EmployeeOnboardingInvitationEmailService(
 
 		return $@"
 <p>Dear {encodedName},</p>
-<p>You have been invited to complete your employee onboarding for <strong>{encodedPosition}</strong> in <strong>{encodedDepartment}</strong>.</p>
+<p>You have been invited to complete your staff onboarding for <strong>{encodedPosition}</strong> in <strong>{encodedDepartment}</strong>.</p>
 <p>Please complete your application before <strong>{encodedExpiry}</strong>.</p>
 <p><a href=""{encodedUrl}"">Open employee onboarding application</a></p>
 <p>If the button does not open, copy and paste this link into your browser:</p>

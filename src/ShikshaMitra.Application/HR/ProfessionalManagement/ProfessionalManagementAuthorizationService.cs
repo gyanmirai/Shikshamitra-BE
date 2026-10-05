@@ -97,7 +97,7 @@ public class ProfessionalManagementAuthorizationService(
 			}
 
 			return await GetCurrentEmployeeIdAsync()
-			       ?? throw new AbpAuthorizationException("Access denied: Observer employee could not be resolved.");
+			       ?? throw new AbpAuthorizationException("Access denied: Observer staff could not be resolved.");
 		}
 
 		await EnsureGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PerformanceManagement.ClassroomObservation);

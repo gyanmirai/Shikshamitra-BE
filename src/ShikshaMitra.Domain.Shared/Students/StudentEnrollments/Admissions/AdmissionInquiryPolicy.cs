@@ -48,7 +48,7 @@ public sealed record AdmissionInquiryPolicy
 	public int Version { get; init; }
 	public bool Enabled { get; init; }
 	public bool RequireLinkedInquiry { get; init; } = true;
-	public AdmissionInquiryApplicationStartRequirement ApplicationStartRequirement { get; init; } = AdmissionInquiryApplicationStartRequirement.Qualified;
+	public AdmissionInquiryApplicationStartRequirement ApplicationStartRequirement { get; init; } = AdmissionInquiryApplicationStartRequirement.Captured;
 	public AdmissionInquiryDuplicateRule DuplicateRule { get; init; } = AdmissionInquiryDuplicateRule.RequireReason;
 	public AdmissionCounsellorAssignmentMode AssignmentMode { get; init; } = AdmissionCounsellorAssignmentMode.Manual;
 	public Guid? DefaultCounsellorId { get; init; }
@@ -64,6 +64,16 @@ public sealed record AdmissionInquiryPolicy
 	public List<AdmissionInquirySource> RequireSourceDetailFor { get; init; } = [];
 	public List<AdmissionInquiryQualificationCriterion> QualificationChecklist { get; init; } = [];
 
+	// Legacy keys remain readable; intake behavior is now the same for every school.
+	public AdmissionInquiryPolicy WithStandardBehavior() => this with
+	{
+		DuplicateRule = AdmissionInquiryDuplicateRule.RequireReason,
+		ApplicationStartRequirement = AdmissionInquiryApplicationStartRequirement.Captured,
+		RequireGuardianEmail = false,
+		RequireApplicantDateOfBirth = false,
+		RequireSourceDetailFor = []
+	};
+
 	public static AdmissionInquiryPolicy? Read(string? json)
 	{
 		if (string.IsNullOrWhiteSpace(json)) return null;
@@ -72,6 +82,7 @@ public sealed record AdmissionInquiryPolicy
 		var policy = value.Deserialize<AdmissionInquiryPolicy>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
 			?? throw new ArgumentException("Inquiry settings are required.");
 		if (!policy.Enabled) return null;
+		policy = policy.WithStandardBehavior();
 		policy.Validate();
 		return policy;
 	}

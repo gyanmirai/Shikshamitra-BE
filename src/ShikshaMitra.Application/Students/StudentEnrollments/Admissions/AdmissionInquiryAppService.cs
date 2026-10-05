@@ -171,9 +171,6 @@ public class AdmissionInquiryAppService(
 		if (!Enum.IsDefined(input.Source))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose a valid inquiry source.");
-		if ((input.Source is AdmissionInquirySource.QrCode or AdmissionInquirySource.SchoolFair) &&
-			string.IsNullOrWhiteSpace(input.SourceDetail))
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceDetailRequired);
 		AdmissionOffering? offering = null;
 		AdmissionCycle cycle;
 		if (input.AdmissionOfferingId.HasValue)
@@ -285,12 +282,6 @@ public class AdmissionInquiryAppService(
 			var policy = managedPolicy.Policy;
 			if (policy.AllowedSources.Count > 0 && !policy.AllowedSources.Contains(input.Source))
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceNotAllowed);
-			if (policy.RequireSourceDetailFor.Contains(input.Source) && string.IsNullOrWhiteSpace(input.SourceDetail))
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceDetailRequired);
-			if (policy.RequireGuardianEmail && string.IsNullOrWhiteSpace(input.GuardianEmail))
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Guardian email is required by the Inquiry policy.");
-			if (policy.RequireApplicantDateOfBirth && !input.ApplicantDateOfBirth.HasValue)
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Applicant date of birth is required by the Inquiry policy.");
 		}
 		var phone = guardianPhone;
 		var query = await inquiryRepository.GetQueryableAsync();
@@ -299,10 +290,7 @@ public class AdmissionInquiryAppService(
 		if (duplicateExists)
 		{
 			if (!input.CreateSeparateFamily) throw new BusinessException(AdmissionErrorCodes.InquiryDuplicate);
-			if (managedPolicy?.Policy.DuplicateRule == AdmissionInquiryDuplicateRule.Block)
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.DuplicateBlocked);
-			if ((managedPolicy?.Policy.DuplicateRule == AdmissionInquiryDuplicateRule.RequireReason || offering == null) &&
-				string.IsNullOrWhiteSpace(input.DuplicateOverrideReason))
+			if (string.IsNullOrWhiteSpace(input.DuplicateOverrideReason))
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.DuplicateReasonRequired);
 		}
 		AdmissionFamily? existingFamily = null;
@@ -337,7 +325,7 @@ public class AdmissionInquiryAppService(
 		var guardian = family.PrimaryGuardianId.HasValue ? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
 		var newGuardian = guardian == null;
 		if (newGuardian) { guardian = new AdmissionGuardian(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.GuardianFirstName, input.GuardianLastName, input.GuardianPhone, input.GuardianEmail, AdmissionGuardianRelationship.Parent, true); family.SetPrimaryGuardian(guardian.Id); }
-		var applicant = new AdmissionApplicant(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.ApplicantFirstName, returningStudent?.MiddleName, input.ApplicantLastName, input.ApplicantDateOfBirth, returningStudent?.AdditionalDetail?.Gender?.ToString(), returningStudent?.Id, returningStudent?.Id ?? GuidGenerator.Create());
+		var applicant = new AdmissionApplicant(GuidGenerator.Create(), CurrentTenant.Id, family.Id, input.ApplicantFirstName, returningStudent?.MiddleName, input.ApplicantLastName, input.ApplicantDateOfBirth, returningStudent?.AdditionalDetail?.Gender?.ToString(), returningStudent?.Id, GuidGenerator.Create());
 		foreach (var field in inquiryFields.Where(field =>
 			field.BindingType == AdmissionFormBindingType.System &&
 			!string.IsNullOrWhiteSpace(field.BindingKey) &&
@@ -407,23 +395,6 @@ public class AdmissionInquiryAppService(
 			var policy = policyContext.Policy;
 			if (policy.AllowedSources.Count > 0 && !policy.AllowedSources.Contains(inquiry.Source))
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceNotAllowed);
-			if (policy.RequireSourceDetailFor.Contains(inquiry.Source) &&
-				string.IsNullOrWhiteSpace(inquiry.SourceDetail))
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceDetailRequired);
-			var family = inquiry.FamilyId.HasValue ? await familyRepository.FindAsync(inquiry.FamilyId.Value) : null;
-			var guardian = family?.PrimaryGuardianId is Guid guardianId
-				? await guardianRepository.FindAsync(guardianId) : null;
-			var applicant = inquiry.ApplicantId.HasValue ? await applicantRepository.FindAsync(inquiry.ApplicantId.Value) : null;
-			if (policy.RequireGuardianEmail && string.IsNullOrWhiteSpace(guardian?.Email))
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
-					"Guardian email is required by this Inquiry profile.");
-			if (policy.RequireApplicantDateOfBirth && applicant?.DateOfBirth == null)
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
-					"Applicant date of birth is required by this Inquiry profile.");
-			if (policy.DuplicateRule == AdmissionInquiryDuplicateRule.Block &&
-				await inquiryRepository.AnyAsync(item => item.Id != inquiry.Id &&
-					item.AdmissionCycleId == inquiry.AdmissionCycleId && item.NormalizedPhone == inquiry.NormalizedPhone))
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.DuplicateBlocked);
 		}
 		var previousCounsellorId = inquiry.AssignedCounsellorId;
 		inquiry.ConfirmOffering(offering.Id);

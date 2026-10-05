@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-01
+updated_on: 2026-10-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -60,6 +60,10 @@ Renewal activation creates an enrollment before Finance assignment, matching exi
 Reviewed same-year ReuseProfile returns reactivate the existing inactive enrollment and preserve owner history. Cancelling an unactivated PendingChecklist renewal retains both case and transition audit. Provisioning permits school-authorized division/roll edits, but has no automated target-class recovery. Class changes with an immutable Finance assignment are blocked in ordinary Placement and same-year Return until a Finance-owned impact workflow exists; completion does not bypass this dependency. Migration `20261001021100_AddStudentRecordRenewalHistory` changes only the renewal index predicate and refuses a downgrade that cannot retain repeated reviews. Its target model derives from the previous generated Records migration and changes only this predicate, keeping separately developing Attendance models outside this migration.
 
 `StudentRecordAdmissionReturnService` orchestrates the frozen Records Status authorization through existing Admissions and Onboarding owners. Handoffs persist typed entry/application/inquiry/transition references, intake configuration/contact and source provenance; `ReturnHandoffId` remains in transition extra properties. Migration `20261001060643_AddStudentRecordAdmissionReturn` changes only the return-handoff table and transition source nullability. Its target model retains the preceding Attendance migration and changes only those two Records entities. Unique linked application/inquiry indexes apply only where TransitionId exists, preserving legacy duplicate handoffs. Legacy rows are not backfilled with invented approval authority. A used governed return or source-less historical return blocks downgrade; use a forward fix.
+
+`StudentRecordAdmissionReturnClosureService` is an internal, non-remote coordinator called by the existing Admissions Decide and Onboarding Cancel owners. It joins their unit of work, validates tenant and exact handoff/transition/case identity, rejects activation, and appends one closure event. Replays cannot append duplicate closure events. Fresh Inquiry and DirectRegistration applicants reserve a unique unused future Student ID per journey; `ExistingStudentId` remains the permanent profile link, including after repeated rejected/cancelled returns. No new schema is required for closure.
+
+Onboarding activation maps optimistic database concurrency and wrapped SQLSTATE `40001` to its existing `Students.Onboarding.ConcurrencyConflict` response after disposing the serializable transaction. These conflicts bypass activation failure-state repair, preserving the committed competing activation/cancellation. Unrelated activation failures retain the existing repair flow. Cancellation remains in its owner transaction, including linked Records closure; an optimistic conflict rolls the entire command back.
 
 ## Reserved Student identity and rollout
 

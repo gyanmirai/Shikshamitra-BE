@@ -140,11 +140,45 @@ public sealed partial class StudentRecordsApplicationPostgres_Tests
 					retry.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await retry.Content.ReadAsStringAsync());
 					(await retry.Content.ReadAsStringAsync()).ShouldContain("Students:Records:InvalidChangeState");
 					(await ReadAdmissionReturnSourceRowsAsync(studentId)).ShouldBe(saved);
+					await AssertAdmissionReturnRejectionRetryAsync(accepted, winningIndex == 0 ? request : otherRequest, saved, studentId);
 				}
 				output.WriteLine($"{mode}: natural PostgreSQL 40001 on distinct connections; one return/handoff/applicant/owner journey, preserved source business columns, expected ABP relationship revisions, and unchanged full rows on replay.");
 			}
 			finally { foreach (var response in responses) response.Dispose(); }
 		}
+	}
+
+	private async Task AssertAdmissionReturnRejectionRetryAsync(StudentRecordReturnDto accepted, StudentRecordReturnInput requests,
+		(string Student, string Enrollment, string Detail) saved, Guid studentId)
+	{
+		var owner = $"/api/student/enrollment/admissions/applications/{accepted.AdmissionApplicationId!.Value}";
+		var submitted = await PostResultAsync<AdmissionApplicationSubmitResultDto>(Client, owner + "/submit", new { });
+		submitted.ValidationErrors.ShouldBeEmpty();
+		var rejected = await PostResultAsync<AdmissionApplicationDto>(Client, owner + "/decision/reject",
+			new AdmissionApplicationDecisionDto { ConcurrencyStamp = submitted.Application.ConcurrencyStamp, Reason = "Provider return rejected before onboarding" });
+		rejected.Status.ShouldBe(AdmissionApplicationStatus.Rejected);
+		var closed = await PostResultAsync<StudentRecordReturnDto>(Client, Transitions + "/returns", requests);
+		closed.Status.ShouldBe("Cancelled"); closed.TransitionId.ShouldBe(accepted.TransitionId);
+		var after = await ReadAdmissionReturnSourceRowsAsync(studentId);
+		after.Enrollment.ShouldBe(saved.Enrollment); after.Detail.ShouldBe(saved.Detail);
+		var beforeStudent = JsonNode.Parse(saved.Student)!.AsObject(); var afterStudent = JsonNode.Parse(after.Student)!.AsObject();
+		foreach (var column in new[] { "ConcurrencyStamp", "LastModificationTime" }) { beforeStudent.Remove(column); afterStudent.Remove(column); }
+		JsonNode.DeepEquals(beforeStudent, afterStudent).ShouldBeTrue("Rejection closure must preserve all permanent profile business columns.");
+		requests.IdempotencyKey += "-reviewed-again";
+		var fresh = await PostResultAsync<StudentRecordReturnDto>(Client, Transitions + "/returns", requests);
+		fresh.Status.ShouldBe("AwaitingAdmission"); fresh.TransitionId.ShouldNotBe(accepted.TransitionId);
+		fresh.AdmissionApplicationId.ShouldNotBe(accepted.AdmissionApplicationId);
+		await InTenantAsync(async services =>
+		{
+			var applicants = await services.GetRequiredService<IRepository<AdmissionApplicant, Guid>>().GetListAsync(x => x.ExistingStudentId == studentId);
+			applicants.Count.ShouldBe(2); applicants.Select(x => x.ReservedStudentId).Distinct().Count().ShouldBe(2);
+			applicants.ShouldAllBe(x => x.ReservedStudentId != studentId);
+			(await services.GetRequiredService<IRepository<StudentRecordTransitionEvent, Guid>>().CountAsync(x => x.TransitionId == accepted.TransitionId && x.Action == "AdmissionRejected")).ShouldBe(1);
+			(await services.GetRequiredService<IRepository<StudentRecordTransition, Guid>>().GetAsync(accepted.TransitionId!.Value)).Status.ShouldBe("Cancelled");
+			(await services.GetRequiredService<IRepository<StudentEnrollment, Guid>>().CountAsync(x => x.StudentId == studentId)).ShouldBe(1);
+			return true;
+		});
+		output.WriteLine("Direct return: rejection closed atomically; old-key replay remained Cancelled; a new reviewed request created a distinct owner journey and reserved identity while preserving profile and enrollment history.");
 	}
 
 	private static void AssertAdmissionReturnSourcePreserved(string before, string after)

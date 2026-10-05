@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-01
+updated_on: 2026-10-03
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -46,6 +46,7 @@ Local tests and source availability do not certify deployment or authenticated b
 | Year-end | Promote, Repeat, Hold, Graduate, Withdraw, and Transfer use batch preview, owner checks, approval, and per-student atomic apply. ReadyOnly skips exception rows; HoldAll keeps the batch waiting when any submitted row cannot proceed. |
 | Annual renewal | DirectEnrollment creates a unique next-year enrollment after approval and placement checks. ShortChecklist opens year-specific short onboarding; the prior permanent profile stays visible. Finance and portal completion follow enrollment activation. |
 | Returns | Every route follows the frozen Records Status approval rule. ReuseProfile opens short renewal. FreshApplication follows the Offering's Inquiry or DirectRegistration entry; Both requires an explicit choice. ResumeStage resumes the eligible linked application's current stage. Fresh/Resume remain AwaitingAdmission until real Onboarding completion. |
+| Return closure | Terminal Admission rejection or preactivation Onboarding cancellation automatically changes its linked AwaitingAdmission return to Cancelled in the owner's transaction. Student identity, the inactive enrollment, original completed onboarding, intake journey and return history remain. A new reviewed request uses a new idempotency key; replay of the old key returns the closed request. Activated returns cannot be cancelled this way. |
 | Corrections | A correction retains the applied original and records its own school-governed request. Changed placement/status evidence, downstream attendance/documents, or new-year Finance assignment block reversal. Records never reverses money. |
 
 Settings are school defaults with optional academic-year overrides. Only published immutable versions affect runtime; saving a draft does not alter pending or future execution. Approver roles must exist in the current tenant's central Security catalogue. The safe starter requests approval for identity, guardian, placement, status, medical, bank, corrections, and historical overrides.
@@ -197,14 +198,17 @@ Soft deletion preserves historical references and uniqueness semantics.
 
 Inquiry stages can opt into version 1 of the `inquiry` policy inside `ConfigurationJson`.
 Missing configuration or `enabled: false` preserves the existing Basic inquiry and application-start behavior.
-Managed Inquiry can require contact or qualification before application start, constrain source capture, require guardian email or applicant date of birth, configure duplicate handling, and assign offering-scoped active counsellors manually or round robin.
+Managed Inquiry constrains allowed sources and assigns offering-scoped active counsellors manually or round robin.
+All intake profiles, workflow policies, and persisted snapshot reads use standard behavior: contact and qualification do not gate application start, source detail is optional for every source, and policy-level guardian email and applicant date-of-birth requirements are disabled.
+Stored historical JSON and entered data are preserved; published form requirements remain authoritative.
+Automatic duplicate detection remains enabled; a separate family on an actual current-cycle duplicate requires a reason, while an eligible sibling can link to its existing family.
 First-contact and qualification deadlines are snapshotted when the inquiry is created.
 Follow-ups retain assignment, purpose, due time, completion or cancellation state, actor, and audit timestamps.
 Inquiry staff can create a linked family communication for WhatsApp, SMS, or Email. The CRM records the campaign handoff in admission activity while the shared Communication module owns approval, consent, providers, delivery attempts, retries, and usage; no duplicate Admissions messaging store is introduced.
 
 Application Experience creates Inquiry and Registration forms. Correction requests reopen the submitted Registration form, and consent questions may be included in that form. Offering activation accepts only a published Inquiry form in the inquiry slot and a published Registration form in the application slot. Admission lifecycle content is stored as `Admissions lifecycle` Communication templates for inquiry acknowledgement, application receipt, missing documents, exam schedule, hall ticket, result, offer, payment reminder, and finalization. Communication remains the delivery owner.
 Qualification uses a versioned checklist and records Qualified, Nurture, Not interested, Lost, or Duplicate with a reason where required.
-Application start rechecks the linked inquiry, offering, scope, contact, outcome, and policy requirement on the server.
+Application start rechecks the linked inquiry, offering, and scope on the server.
 Existing inquiries and workflows remain compatible; management is created only for an enabled policy attached to the selected offering's published workflow.
 
 ## Managed assessment stages

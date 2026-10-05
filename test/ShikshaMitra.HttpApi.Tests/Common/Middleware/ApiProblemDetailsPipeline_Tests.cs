@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -13,6 +14,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.HR;
 using ShikshaMitra.Localization;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Shouldly;
 using Volo.Abp;
 using Xunit;
@@ -22,6 +24,44 @@ namespace ShikshaMitra.Common.Tests.Middleware;
 public class ApiProblemDetailsPipeline_Tests
 {
 	private const string GenericInternalDetail = "An internal error occurred during your request!";
+
+	[Theory]
+	[InlineData(AdmissionErrorCodes.PublicInquiryOfferingRequired, "activate an offering")]
+	[InlineData(AdmissionErrorCodes.PublicInquiryCounsellorUnavailable, "counsellor pool")]
+	[InlineData(AdmissionErrorCodes.PublicInquiryFallbackUnavailable, "fallback manager")]
+	[InlineData(AdmissionErrorCodes.PublicInquiryExpiryInvalid, "Choose a future link expiry")]
+	public async Task Public_inquiry_rejection_should_include_localized_reason_and_next_action(string code, string nextAction)
+	{
+		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
+		var resourceName = assembly.GetManifestResourceNames()
+			.Single(name => name.EndsWith("Localization.ShikshaMitra.en.json"));
+		using var resource = assembly.GetManifestResourceStream(resourceName)!;
+		using var messages = await JsonDocument.ParseAsync(resource);
+		var template = messages.RootElement.GetProperty("Texts").GetProperty(code).GetString()!;
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = template });
+		var filter = new ApiProblemDetailsResultFilter(resolver);
+		var httpContext = new DefaultHttpContext();
+		httpContext.Request.Path = "/api/student/enrollment/admissions/public-inquiry-links";
+		var source = new ProblemDetails { Status = 400, Detail = "One or more business rules were violated." };
+		source.Extensions["errorCode"] = code;
+		source.Extensions["data"] = new Dictionary<string, object?>
+		{
+			["PeriodName"] = "RTE", ["SetupName"] = "General Admission"
+		};
+		var context = new ResultExecutingContext(
+			new ActionContext(httpContext, new RouteData(), new ActionDescriptor()),
+			new List<IFilterMetadata>(), new ObjectResult(source) { StatusCode = 400 }, new object());
+		await filter.OnResultExecutionAsync(context, () => Task.FromResult(new ResultExecutedContext(
+			context, new List<IFilterMetadata>(), context.Result, new object())));
+		var output = ((ObjectResult)context.Result).Value.ShouldBeOfType<ProblemDetails>();
+		output.Status.ShouldBe(400);
+		output.Extensions["errorCode"].ShouldBe(code);
+		if (code != AdmissionErrorCodes.PublicInquiryExpiryInvalid)
+			output.Detail.ShouldContain("RTE");
+		output.Detail.ShouldContain(nextAction);
+		output.Detail.ShouldNotContain("{PeriodName}");
+		output.Detail.ShouldNotContain("{SetupName}");
+	}
 
 	[Fact]
 	public async Task Middleware_Should_Resolve_Localized_Detail_From_ErrorCode_When_Detail_Is_Generic()

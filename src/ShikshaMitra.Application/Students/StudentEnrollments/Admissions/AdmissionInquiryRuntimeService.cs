@@ -37,7 +37,8 @@ public class AdmissionInquiryRuntimeService(
 					"Complete the managed inquiry before starting this application.");
 			return;
 		}
-		await EnsureReadinessAsync(inquiry, await EnsureManagementAsync(inquiry), context.Policy);
+		if (await EnsureManagementAsync(inquiry) == null)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
 	}
 
 	public async Task<AdmissionInquiryManagement?> EnsureStageCompleteAsync(AdmissionApplication application,
@@ -55,7 +56,7 @@ public class AdmissionInquiryRuntimeService(
 			inquiry.AdmissionOfferingId != application.AdmissionOfferingId)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.LinkedInquiryRequired);
 		var state = await EnsureManagementAsync(inquiry);
-		await EnsureReadinessAsync(inquiry, state, policy);
+		if (state == null) throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
 		return state;
 	}
 
@@ -78,30 +79,4 @@ public class AdmissionInquiryRuntimeService(
 		(!state.LastContactAt.HasValue && state.FirstContactDueAt < now) ||
 		(!state.Outcome.HasValue && state.QualificationDueAt < now);
 
-	public static List<string> GetReadinessBlockers(AdmissionInquiry inquiry, AdmissionInquiryManagement state,
-		AdmissionInquiryPolicy policy)
-	{
-		var blockers = new List<string>();
-		if (policy.ApplicationStartRequirement >= AdmissionInquiryApplicationStartRequirement.Contacted &&
-			!inquiry.ContactedAt.HasValue && state.ContactCount == 0)
-			blockers.Add("Record the first contact.");
-		if (policy.ApplicationStartRequirement == AdmissionInquiryApplicationStartRequirement.Qualified &&
-			state.Outcome != AdmissionInquiryQualificationOutcome.Qualified)
-			blockers.Add("Record a qualified outcome.");
-		return blockers;
-	}
-
-	private static Task EnsureReadinessAsync(AdmissionInquiry inquiry, AdmissionInquiryManagement? state,
-		AdmissionInquiryPolicy policy)
-	{
-		if (state == null) throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
-		var blockers = GetReadinessBlockers(inquiry, state, policy);
-		if (blockers.Contains("Record the first contact."))
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.ContactRequired,
-				"Record the first contact before starting or completing the application Inquiry stage.");
-		if (blockers.Count > 0)
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.QualificationRequired,
-				"Qualify the inquiry before starting or completing the application Inquiry stage.");
-		return Task.CompletedTask;
-	}
 }

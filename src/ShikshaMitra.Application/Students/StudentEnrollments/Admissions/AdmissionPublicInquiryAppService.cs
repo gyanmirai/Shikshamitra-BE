@@ -20,6 +20,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionPublicInquiryAppService(
 	IRepository<AdmissionPublicInquiryLink, Guid> links,
 	IRepository<AdmissionCycle, Guid> cycles,
+	IRepository<AdmissionOffering, Guid> offerings,
 	IRepository<AdmissionIntakeProfile, Guid> profiles,
 	IRepository<AdmissionIntakeSetup, Guid> setups,
 	IRepository<AdmissionFormDefinition, Guid> forms,
@@ -40,9 +41,10 @@ public class AdmissionPublicInquiryAppService(
 	public async Task<AdmissionPublicInquiryLinkCreatedDto> CreateLinkAsync(CreateAdmissionPublicInquiryLinkDto input)
 	{
 		if (input.AdmissionCycleId == Guid.Empty || input.CounsellorAssignmentProfileId == Guid.Empty ||
-			string.IsNullOrWhiteSpace(input.Name) || !Enum.IsDefined(input.Source) ||
-			input.ExpiresAtUtc.HasValue && input.ExpiresAtUtc.Value.ToUniversalTime() <= Clock.Now.ToUniversalTime())
+			string.IsNullOrWhiteSpace(input.Name) || !Enum.IsDefined(input.Source))
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
+		if (input.ExpiresAtUtc.HasValue && input.ExpiresAtUtc.Value.ToUniversalTime() <= Clock.Now.ToUniversalTime())
+			throw new BusinessException(AdmissionErrorCodes.PublicInquiryExpiryInvalid);
 		var cycle = await cycles.FindAsync(input.AdmissionCycleId);
 		if (cycle?.Status != AdmissionCycleStatus.Published)
 			throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound);
@@ -67,16 +69,20 @@ public class AdmissionPublicInquiryAppService(
 		{
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
 		}
+		if (!await offerings.AnyAsync(offering => offering.AdmissionCycleId == cycle.Id &&
+			offering.IsActive && offering.EntryMode != AdmissionEntryMode.DirectRegistration))
+			throw new BusinessException(AdmissionErrorCodes.PublicInquiryOfferingRequired)
+				.WithData("PeriodName", cycle.Name);
 		var hasEligibleOwner = false;
 		foreach (var userId in rules.CounsellorUserIds)
 			if (await people.CanAccessCycleAsync(userId, cycle.Id)) { hasEligibleOwner = true; break; }
 		if (!hasEligibleOwner)
-			throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid,
-				"Choose a counsellor who can access an active Inquiry offering in this period.");
+			throw new BusinessException(AdmissionErrorCodes.PublicInquiryCounsellorUnavailable)
+				.WithData("SetupName", profile.Name).WithData("PeriodName", cycle.Name);
 		if (managedSetup != null && rules.FallbackManagerUserId.HasValue &&
 			!await people.CanAccessCycleAsync(rules.FallbackManagerUserId.Value, cycle.Id))
-			throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid,
-				"Choose a fallback manager who can access an active Inquiry offering in this period.");
+			throw new BusinessException(AdmissionErrorCodes.PublicInquiryFallbackUnavailable)
+				.WithData("SetupName", profile.Name).WithData("PeriodName", cycle.Name);
 		var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 		var link = new AdmissionPublicInquiryLink(GuidGenerator.Create(), CurrentTenant.Id,
 			cycle.Id, profile.Id, input.Name, Hash(token), input.Source,

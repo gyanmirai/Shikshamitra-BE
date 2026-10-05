@@ -55,7 +55,7 @@ public partial class FeeStructureAppService
 				var map = await accountingManager.GetValidMappingAsync(year.Id, head.IncomeCategoryId);
 				coverage.Accounting = "Ready";
 			}
-			catch (BusinessException) { coverage.Accounting = "Mapping needs attention"; if (publishing) result.Errors.Add($"{head.Name}: configure an active Income Category and Income Account Head."); }
+			catch (BusinessException) { coverage.Accounting = "Mapping needs attention"; if (publishing) result.Errors.Add($"{head.Name}: configure an active Income Category."); }
 			if (!line.PaymentTermId.HasValue)
 			{
 				if (line.PaymentTermVersionId.HasValue || line.InstallmentOverrides.Count > 0 || line.ScheduleMode != ScheduleMode.Inherited)
@@ -85,7 +85,7 @@ public partial class FeeStructureAppService
 						throw new BusinessException(FeeStructureErrorCodes.VersionMismatch);
 				}
 				var detail = new FeeStructureDetail(GuidGenerator.Create(), CurrentTenant.Id, current?.Id ?? Guid.NewGuid(), line.FeeHeadId,
-					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear);
+					line.Amount, line.IsOneTime, line.IsOptional, line.PayableMonth, line.PayableYear, line.IsVariable);
 				AttachSchedule(detail, line);
 				var resolved = await scheduleResolver.ResolveAsync(detail);
 				var installments = resolved.Installments.Select(x => new CreatePaymentTermInstallmentDto

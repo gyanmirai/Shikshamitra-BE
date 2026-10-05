@@ -141,12 +141,16 @@ public partial class StudentFeeStructureAppService(
 	private static void ValidateInput(AssignStudentFeeStructureDto input)
 	{
 		if (input.StudentId == Guid.Empty || input.AcademicYearId == Guid.Empty || input.StandardFeeStructureId == Guid.Empty ||
-			input.SelectedOptionalFeeHeadIds == null || input.FeeHeadDetails == null || input.ServicePeriods == null ||
-			input.FeeHeadDetails.Any(x => x == null) || input.ServicePeriods.Any(x => x == null) ||
-			input.SelectedOptionalFeeHeadIds.Count > 200 || input.FeeHeadDetails.Count > 200 || input.ServicePeriods.Count > 200 ||
+			input.SelectedOptionalFeeHeadIds == null || input.FeeHeadDetails == null || input.ServicePeriods == null || input.VariableFeeHeads == null ||
+			input.FeeHeadDetails.Any(x => x == null) || input.ServicePeriods.Any(x => x == null) || input.VariableFeeHeads.Any(x => x == null) ||
+			input.VariableFeeHeads.Count > 200 || input.SelectedOptionalFeeHeadIds.Count > 200 || input.FeeHeadDetails.Count > 200 || input.ServicePeriods.Count > 200 ||
 			input.SelectedOptionalFeeHeadIds.Distinct().Count() != input.SelectedOptionalFeeHeadIds.Count ||
 			input.FeeHeadDetails.Select(x => x.FeeHeadId).Distinct().Count() != input.FeeHeadDetails.Count ||
 			input.ServicePeriods.Select(x => x.FeeHeadId).Distinct().Count() != input.ServicePeriods.Count ||
+            input.VariableFeeHeads.Select(x => x.FeeHeadId).Distinct().Count() != input.VariableFeeHeads.Count ||
+            input.VariableFeeHeads.Any(x => x.FeeHeadId == Guid.Empty || !x.Amount.HasValue || x.Amount < 0 || x.Amount > 9999999999.99m ||
+                decimal.Round(x.Amount.Value, 2) != x.Amount || x.ZeroAmountReason?.Length > 500 ||
+                (x.Amount == 0 && string.IsNullOrWhiteSpace(x.ZeroAmountReason))) ||
 			input.FeeHeadDetails.Any(x => x.Amount < 0 || decimal.Round(x.Amount, 2) != x.Amount) || input.OverrideReason?.Length > 500)
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 		ValidatePolicies(input.Policies);
@@ -154,7 +158,9 @@ public partial class StudentFeeStructureAppService(
 	}
 
 	private static string Hash(object value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
-	private static string CommandFingerprint(AssignStudentFeeStructureDto input) => Hash(new {
+	private static string CommandFingerprint(AssignStudentFeeStructureDto input) => input.VariableFeeHeads.Count == 0 ? LegacyCommandFingerprint(input) :
+        Hash(new { Legacy = LegacyCommandFingerprint(input), VariableHeads = input.VariableFeeHeads.OrderBy(x => x.FeeHeadId).ToArray() });
+    private static string LegacyCommandFingerprint(AssignStudentFeeStructureDto input) => Hash(new {
 		input.StudentId, input.AcademicYearId, input.StandardFeeStructureId,
 		Heads = input.SelectedOptionalFeeHeadIds.Order().ToArray(), Details = input.FeeHeadDetails.OrderBy(x => x.FeeHeadId).ToArray(),
 		Periods = input.ServicePeriods.OrderBy(x => x.FeeHeadId).ToArray(), input.ChargeStartDate, input.ChargeEndDate,

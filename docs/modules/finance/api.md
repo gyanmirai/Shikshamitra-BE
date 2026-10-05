@@ -37,7 +37,7 @@ Mutations must enforce backend permissions and audit important financial actions
 | Student fee assignment | `Controllers/Finance/Fees/StudentFeeAssignment/StudentFeeStructureController.cs` | Student fee structure routes |
 | Fee settings | `Controllers/Finance/Fees/Settings/**` | Fee category, fee head, fee structure, receipt book, concession type, and charge category routes |
 
-Fee-category and fee-head create/update contracts accept `module` as an optional numeric `FeeHeadModule` enum value. Send `null` or omit the property when no module applies. The fee-head module lookup returns numeric `value` fields with user-facing `displayName` labels. Every standalone or nested Fee Head request must also send `incomeCategoryId`. Responses return the Income Category plus its resolved default Income Account Head ID and name. The backend accepts only active Income Categories from the Fee Head's academic year whose default account is an active Income head.
+Fee-category and fee-head create/update contracts accept `module` as an optional numeric `FeeHeadModule` enum value. Send `null` or omit the property when no module applies. The fee-head module lookup returns numeric `value` fields with user-facing `displayName` labels. Every standalone or nested Fee Head request must also send `incomeCategoryId`. Responses return the Income Category. Historical Income Account Head fields are compatibility evidence. The backend accepts active, effective Income Categories from the Fee Head's academic year without requiring an Account Head.
 
 Charge endpoints and exact permissions are documented in [Charge management end to end](./references/charge-management-end-to-end.md). The current base route is `api/charges`, with Add, View, Update, Approve, Reject, and Delete action permissions. The reference also records current contract defects: academic-year filtering is not consistently applied, row-level caller scope is incomplete, and the API has no charge-specific correction/refund or command concurrency contract. Do not treat those gaps as supported behavior.
 
@@ -90,17 +90,13 @@ Fee Collection instead exposes a toggle on each eligible late-fee and approved c
 Use backend constants as the security source of truth.
 Known Finance families include `Finance.Fees.Charges.*`, `Finance.Fees.Concession.*`, `Finance.Fees.Adjustment.*`, and related Fees, Accounts, Reports, and Audit permissions.
 
-Accounts settings use `Finance.Accounts.Settings.{AccountHead|IncomeCategory|ExpenseCategory|BankAccount}.{View|Add|Edit|ChangeStatus|Delete}`.
+Accounts settings use `Finance.Accounts.Settings.{IncomeCategory|ExpenseCategory|BankAccount}.{View|Add|Edit|ChangeStatus|Delete}`.
 Each action is independent; module visibility and Add do not authorize Edit or ChangeStatus.
-`GET /api/account-heads/options` requires `Finance.Accounts.Settings.AccountHead.View`. Category form lookups use `GET /api/{income|expense}-categories/account-head-options?academicYearId=...`, authorized by the corresponding category `Add` OR `Edit` action. They return only active, same-year heads of the matching type (`id`, `name`, `headType`, `displayName`). Category View alone, another category's grants, and module grants do not authorize these lookups or the Account Head master.
+Authenticated requests to `/api/account-heads`, including former options and CRUD routes, return HTTP 410. Category head lookups return empty options for authorized category editors. Income and Expense Category requests accept name, description, optional tags, and concurrency stamps; they do not require or accept a new Account Head mapping. Internal codes are generated on create and existing historical metadata is preserved.
 
-Account Head create/update contracts accept `headName`, `headType`, optional `parentAccountHeadId`, `notes`, and the update `concurrencyStamp`. Code, currency, posting/control flags, and effective dates are removed from requests, responses, the domain, and EF mapping. Active status determines availability; tenant/year/type, name uniqueness, parent-cycle, dependency, and concurrency checks remain enforced.
+Bank Accounts require school bank details, year/scope, uniqueness, and concurrency checks. They no longer require an Asset Account Head. Refer to [Income, expense, and bank routing](./references/income-expense-routing.md) for the required charge, policy, collection, and refund fields and the workflow-owned options endpoint.
 
-Income and Expense Category create/update requests accept `name`, `description`, `tags`, `defaultAccountHeadId`, and the update `concurrencyStamp`. They no longer accept code or effective dates. Creation generates a unique internal code from the complete category ID and has no date window; editing preserves existing code and date metadata. Existing legacy category date windows still govern transactions. Default-head changes remain rejected once a category is referenced by transactions or Fee Heads.
-
-Category `tags` are optional; an empty list is valid, while `defaultAccountHeadId` remains required. Bank Account create/update requests no longer require `code`: create generates a unique internal code from the new bank ID when omitted, and update retains the existing code when omitted. Older clients may still provide a valid code. Bank details, asset Account Head, year/scope, uniqueness, and concurrency checks remain required. Accounts Settings requests do not accept a fee-policy selection.
-
-Accounts Settings has no Payment Modes CRUD. Fee Collections owns the current seven-value `PaymentMethodEnum`; Income/Expense request fields still use numeric method values in the existing CRUD API. Income/Expense amounts use decimal JSON numbers, must be positive whole paise (at most two decimal places), and are returned without a `double` conversion. Category tags are optional entry metadata. Existing rows may still contain four-decimal amounts and need an audited cleanup before database precision is narrowed. The current `/api/v1/finance/reconciliations` route is receipt verification, not bank-statement matching. Journal, period, bank-statement import, and accounting-mapping routes in [Accounts frontend/backend delivery](./references/accounts-frontend-backend-delivery.md) are target work, not shipped endpoints.
+The previous simplification migration remains historical rollout evidence:
 
 Deploy FE and BE together after applying `20260909183000_SimplifyAccountHeads`. The migration archives the seven removed Account Head columns in `ExtraProperties.LegacyAccountHeadSettings20260909`, then drops those columns and the code index; it preserves IDs, name uniqueness, category/bank links, and transaction records. Rollback restores archived values; heads created after migration receive ID-based codes, INR, posting enabled, and an unrestricted start date. Old control/non-posting/date restrictions no longer determine head eligibility. This is the requested simplification of master configuration; it does not alter transaction currency or monetary calculations. Run on a backed-up database during release coordination, with the old host stopped before schema changes.
 
@@ -141,3 +137,7 @@ Deployment: rebuild/restart the API so its permission definitions and permission
 ## Student fee assignment
 
 The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.
+
+## Category and bank routing
+
+See [Income and expense routing](./references/income-expense-routing.md) for the current category selection, school bank, recognition, historical compatibility, and validation contracts.

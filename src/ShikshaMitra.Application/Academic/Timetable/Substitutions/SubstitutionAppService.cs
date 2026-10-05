@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Common;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
@@ -191,9 +193,9 @@ public class SubstitutionAppService(
         return await MapAsync(entity, await GetAuditLogsAsync(id));
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.Add)]
     public async Task<SubstitutionDto> CreateAsync(CreateSubstitutionDto input)
     {
-        await EnsureAdminAsync("create substitutions");
         var date = NormalizeDate(input.Date);
         var start = ParseTime(input.StartTime, "startTime");
         var end = ParseTime(input.EndTime, "endTime");
@@ -926,11 +928,13 @@ public class SubstitutionAppService(
                 .ToHashSet();
         }
         var timetableDay = ToTimetableDay(date.DayOfWeek);
-        var timetables = timetableDay.HasValue ? await timetableRepository.GetListAsync() : [];
+        var timetables = timetableDay.HasValue
+            ? await timetableRepository.GetListAsync(x => x.Status == TimetableStatus.Published)
+            : [];
 
         return employees
             .Where(x =>
-                (!originalTeacherId.HasValue || x.Id != originalTeacherId.Value) &&
+                (!originalTeacherId.HasValue || (x.Id != originalTeacherId.Value && x.UserId != originalTeacherId.Value)) &&
                 !string.Equals(x.EmployeeName, originalTeacherName, StringComparison.OrdinalIgnoreCase) &&
                 !unavailable.Any(row =>
                     row.TeacherId.HasValue
@@ -956,7 +960,8 @@ public class SubstitutionAppService(
                             slot.Day == timetableDay.Value &&
                             slot.SlotType == SlotType.Period &&
                             HasOverlap(slot.StartTime, slot.EndTime, startTime, endTime) &&
-                            slot.Subjects.Any(subject => subject.TeacherId == employee.Id))
+                            slot.Subjects.Any(subject => subject.TeacherId == employee.Id ||
+                                (employee.UserId.HasValue && subject.TeacherId == employee.UserId.Value)))
                         .Select(slot => (Start: slot.StartTime, End: slot.EndTime)))
                     .ToList();
                 var freeSegments = GetFreeSegments(startTime, endTime, blockingIntervals);

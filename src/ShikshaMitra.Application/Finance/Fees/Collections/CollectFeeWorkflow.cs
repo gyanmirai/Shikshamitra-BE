@@ -41,7 +41,9 @@ public partial class CollectFeeWorkflow(
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
-	LateFeeBalanceService lateFeeBalanceService,
+	ShikshaMitra.Domain.Finance.Accounts.Settings.FinanceRoutingManager routingManager,
+ ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions,
+ LateFeeBalanceService lateFeeBalanceService,
 	CollectionPolicyResolver policyResolver,
 	FeeCollectionManager feeCollectionManager,
 	FinanceAuditWriter financeAuditWriter,
@@ -94,7 +96,8 @@ public partial class CollectFeeWorkflow(
 			input.ChargePayments, chargeContext.PendingChargeMap,
 			paymentMethods, input.PaymentConfirmed ?? true);
 
-		var dueFeeBeforeSnapshots = BuildDueFeeBeforeSnapshots(input.DueFeePayments, dueFeeContext.DueFeeMap);
+		var routing = await PrepareIncomeRoutingAsync(input, dueFeeContext, chargeContext, lateFeeMap);
+        var dueFeeBeforeSnapshots = BuildDueFeeBeforeSnapshots(input.DueFeePayments, dueFeeContext.DueFeeMap);
 
 		var feeHeadGroups = input.DueFeePayments
 			.GroupBy(dfp => dfp.FeeHeadId)
@@ -115,7 +118,8 @@ public partial class CollectFeeWorkflow(
 				LateFeeAllocations: input.LateFeePayments.Select(lfp => (lfp.DueFeeId, lfp.Amount)).ToList(),
 				IdempotencyKey: idempotencyKey, CommandFingerprint: commandFingerprint));
 
-		// Flush the unique retry key before creating external blob side effects. A racing
+		await SaveIncomeRoutingAsync(input, transaction, routing, status != FeeCollectionStatus.InReconciliation);
+        // Flush the unique retry key before creating external blob side effects. A racing
 		// duplicate fails here and the unit of work rolls back all collection mutations.
 		await CurrentUnitOfWork!.SaveChangesAsync();
 

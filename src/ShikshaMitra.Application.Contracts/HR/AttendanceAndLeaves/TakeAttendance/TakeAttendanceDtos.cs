@@ -50,6 +50,7 @@ public class TakeAttendanceSummaryDto
 public class TakeAttendanceEmployeeRowDto
 {
 	public Guid EmployeeId { get; set; }
+	public bool IsTeaching { get; set; }
 	public string FullName { get; set; } = string.Empty;
 	public string EmployeeCode { get; set; } = string.Empty;
 	public string? Department { get; set; }

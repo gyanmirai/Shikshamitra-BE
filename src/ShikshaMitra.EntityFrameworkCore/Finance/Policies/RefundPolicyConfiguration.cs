@@ -10,6 +10,8 @@ public class RefundPolicyConfiguration : IEntityTypeConfiguration<RefundPolicy>
 	public void Configure(EntityTypeBuilder<RefundPolicy> builder)
 	{
 		builder.ToTable("Finance_RefundPolicies", ShikshaMitraConsts.DbSchema);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory>().WithMany().HasForeignKey(x=>x.ExpenseCategoryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.DefaultPayingBankAccountId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
 		builder.Property(x => x.AcademicYearId).IsRequired();
 		builder.Property(x => x.PolicyName).IsRequired().HasMaxLength(128);

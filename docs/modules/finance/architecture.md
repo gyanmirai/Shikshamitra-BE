@@ -49,3 +49,7 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 | Derive student scope server-side | Caller-supplied scope can leak or corrupt Finance data |
 | Preserve maker-checker restrictions | Finance approvals must be traceable and separated from creation |
 | Update report docs with calculation changes | Report accuracy is a production requirement |
+
+## Category and bank routing
+
+See [Income and expense routing](./references/income-expense-routing.md) for the current category selection, school bank, recognition, historical compatibility, and validation contracts.

@@ -2,6 +2,7 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public static class AssignmentErrorCodes
 {
+	public const string VariableAmountRequired = "Finance:Assignment:VariableAmountRequired";
 	public const string InvalidInput = "Finance:Assignment:InvalidInput";
 	public const string EnrollmentRequired = "Finance:Assignment:EnrollmentRequired";
 	public const string InactiveEnrollment = "Finance:Assignment:InactiveEnrollment";

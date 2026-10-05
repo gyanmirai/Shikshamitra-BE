@@ -83,3 +83,13 @@ During authoring, staff may request a non-persisting installment-template previe
 ## Student fee assignment
 
 The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.
+
+## Category and bank routing
+
+See [Income and expense routing](./references/income-expense-routing.md) for the current category selection, school bank, recognition, historical compatibility, and validation contracts.
+
+
+## Variable fee structure assignment
+
+See [variable fee assignment](./references/variable-fee-assignment.md) for the active fixed/variable and required/optional conditions.
+Included variable heads require a student amount before preview and commit; skipped optional heads create no dues.

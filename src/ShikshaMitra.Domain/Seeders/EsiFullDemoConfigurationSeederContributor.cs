@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Payroll.Compensation;
@@ -20,13 +20,14 @@ namespace ShikshaMitra.Seeders;
 public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContributor
 {
 	internal const string StepName = "EsiFullDemoConfigurationSeeder";
-	internal const string StepVersion = "EsiFullDemoConfigurationSeeder:v1";
+	internal const string StepVersion = "EsiFullDemoConfigurationSeeder:v3";
 	internal const int StepOrder = 163;
 
 	private readonly IEmployeeRepository _employeeRepository;
 	private readonly IRepository<EarningComponent, Guid> _earningComponentRepository;
 	private readonly IRepository<StatutoryRuleVersion, Guid> _ruleRepository;
 	private readonly IRepository<StatutoryEstablishment, Guid> _establishmentRepository;
+	private readonly IRepository<EsiPayrollConfiguration, Guid> _configurationRepository;
 	private readonly IRepository<PayrollComponentStatutoryTreatment, Guid> _treatmentRepository;
 	private readonly IRepository<EmployeeStatutoryEnrollment, Guid> _enrollmentRepository;
 	private readonly IRepository<EmployeeCompensationRevision, Guid> _revisionRepository;
@@ -44,6 +45,7 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 		IRepository<EarningComponent, Guid> earningComponentRepository,
 		IRepository<StatutoryRuleVersion, Guid> ruleRepository,
 		IRepository<StatutoryEstablishment, Guid> establishmentRepository,
+		IRepository<EsiPayrollConfiguration, Guid> configurationRepository,
 		IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
 		IRepository<EmployeeStatutoryEnrollment, Guid> enrollmentRepository,
 		IRepository<EmployeeCompensationRevision, Guid> revisionRepository,
@@ -58,6 +60,7 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 		_earningComponentRepository = earningComponentRepository;
 		_ruleRepository = ruleRepository;
 		_establishmentRepository = establishmentRepository;
+		_configurationRepository = configurationRepository;
 		_treatmentRepository = treatmentRepository;
 		_enrollmentRepository = enrollmentRepository;
 		_revisionRepository = revisionRepository;
@@ -132,6 +135,7 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 		employees = await GetSeededEmployeesAsync();
 		var establishment = existingEstablishment ?? await CreateEstablishmentAsync(employees);
 		await EnsureEmployeeEnrollmentsAsync(employees, rule, establishment, treatmentMap, effectiveOn);
+		await EnsurePayrollConfigurationsAsync(establishment, treatmentMap, effectiveOn);
 		await CurrentUnitOfWork.SaveChangesAsync();
 
 		_logger.LogInformation(
@@ -164,6 +168,30 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 				component.VisibleInPayslip,
 				component.DisplayOrder);
 			await _earningComponentRepository.UpdateAsync(component, autoSave: false);
+		}
+	}
+
+	private async Task EnsurePayrollConfigurationsAsync(StatutoryEstablishment establishment,
+		IReadOnlyDictionary<Guid, StatutoryWageTreatment> treatments, DateTime effectiveOn)
+	{
+		// FullDemo only. Preserve every user-created configuration and all enrollment facts.
+		var existing = await _configurationRepository.GetListAsync();
+		if (existing.Any(x => x.RequestFingerprint != EsiPayrollConfigurationResolver.BaselineKey &&
+			!x.RequestFingerprint.StartsWith("FULLDEMO-ESIC-", StringComparison.Ordinal))) return;
+		if (existing.Any(x => x.RequestFingerprint == "FULLDEMO-ESIC-V3-CURRENT")) return;
+		foreach (var obsolete in existing.Where(x => x.RequestFingerprint.StartsWith("FULLDEMO-ESIC-V2-", StringComparison.Ordinal)
+			&& !x.IsCancelled))
+		{
+			obsolete.Cancel("Development fixture replaced by direct current-month configuration.");
+			await _configurationRepository.UpdateAsync(obsolete, autoSave: true);
+		}
+		var month = new DateTime(effectiveOn.Year, effectiveOn.Month, 1);
+		foreach (var (offset, enabled, key) in new[] { (-1, false, "PREVIOUS"), (0, true, "CURRENT") })
+		{
+			await _configurationRepository.InsertAsync(new EsiPayrollConfiguration(
+				GuidGenerator.Create(), CurrentTenant.Id, month.AddMonths(offset), enabled,
+				establishment.RegistrationNumber, establishment.CoveredSince,
+				$"FULLDEMO-ESIC-V3-{key}", treatments: treatments));
 		}
 	}
 
@@ -364,7 +392,9 @@ public sealed class EsiFullDemoConfigurationSeederContributor : BaseSeederContri
 					enrollment,
 					BuildWageLines(employee, linesByRevision[revision.Id], treatmentMap),
 					assumeEstablishmentActive: true);
-				if (validation.IssueCodes.Count > 0)
+				// The pending-registration scenario intentionally demonstrates a payroll blocker.
+				if (validation.IssueCodes.Any(code => code != EsiStatutoryCalculator.InsuranceNumberIssue ||
+					scenario.Status != EmployeeStatutoryEnrollmentStatus.RegistrationPending))
 				{
 					throw new InvalidOperationException(
 						$"FullDemo ESI enrollment for '{employee.Email ?? employee.EmployeeCode}' is not preview-ready: {string.Join(", ", validation.IssueCodes)}.");

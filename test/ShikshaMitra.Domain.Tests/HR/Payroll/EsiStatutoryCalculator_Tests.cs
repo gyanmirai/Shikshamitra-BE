@@ -13,6 +13,60 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class EsiStatutoryCalculator_Tests
 {
+	[Theory]
+	[InlineData(20000, 5000, 20000, 150, 650, "WITHIN_WAGE_CEILING")]
+	[InlineData(20000, 24000, 22000, 165, 715, "WITHIN_WAGE_CEILING")]
+	[InlineData(30000, 5000, 30000, 0, 0, "ABOVE_WAGE_CEILING")]
+	public void Generated_overtime_is_classified_but_not_regular_monthly_coverage(
+		decimal salary, decimal overtimeAmount, decimal wages, decimal employeeShare, decimal employerShare, string coverage)
+	{
+		var id = Guid.NewGuid();
+		var basic = BuildComponent(id, Guid.NewGuid(), "Basic Salary", salary, true, PayrollComponentSemanticType.Basic);
+		var overtime = new EmployeePayrollComponent(Guid.NewGuid(), id, "Overtime Pay", null, null,
+			overtimeAmount, true, true, new DateTime(2026, 8, 1), SalaryComponentType.Fixed, SalaryComponentDependency.None, true);
+		var deduction = BuildComponent(id, Guid.NewGuid(), "System ESI", 0m, false, PayrollComponentSemanticType.EmployeeStateInsurance);
+		var context = new PayrollEsiStatutoryContext(new(2026, 8, 1), BuildRule(), BuildActiveEstablishment(),
+			BuildEnrollment(EmployeeStatutoryEnrollmentStatus.PendingReview, "1234567890"),
+			new Dictionary<Guid, StatutoryWageTreatment> { [basic.ComponentId!.Value] = StatutoryWageTreatment.Included },
+			[], deduction) { SystemOvertimeComponentId = overtime.Id };
+		var result = PayrollComputation.Calculate(26, 0, 26m, 26m, [basic, overtime],
+			new(null, [], EmployeeStateInsurance: context));
+		result.EmployeeStateInsuranceCoverageDecision.ShouldBe(coverage);
+		result.EmployeeStateInsuranceWages.ShouldBe(wages);
+		result.Deductions.Sum(x => x.Amount).ShouldBe(employeeShare);
+		result.EmployerContributionTotal.ShouldBe(employerShare);
+		result.NetPay.ShouldBe(salary + overtimeAmount - employeeShare);
+		result.StatutoryIssueCodes.ShouldBeEmpty();
+
+		// A user-created row with the same display name must still be classified.
+		var custom = PayrollComputation.Calculate(26, 0, 26m, 26m, [basic, overtime],
+			new(null, [], EmployeeStateInsurance: context with { SystemOvertimeComponentId = null }));
+		custom.StatutoryIssueCodes.ShouldContain(EsiStatutoryCalculator.WageClassificationIssue);
+	}
+
+	[Theory]
+	[InlineData(4576, 0, 149)]
+	[InlineData(4576.01, 35, 149)]
+	[InlineData(4577, 35, 149)]
+	public void Employee_daily_wage_exemption_preserves_employer_share(decimal wages, decimal employee, decimal employer)
+	{
+		var result = EsiStatutoryCalculator.Calculate(new(2026, 8, 1), BuildRule(), BuildActiveEstablishment(),
+			BuildEnrollment(EmployeeStatutoryEnrollmentStatus.RegistrationPending),
+			[new(Guid.NewGuid(), "Basic", wages, StatutoryWageTreatment.Included)]);
+		result.EmployeeContribution.ShouldBe(employee);
+		result.EmployerContribution.ShouldBe(employer);
+	}
+	[Theory]
+	[InlineData(2026, 3, 2025, 10, 2026, 3)]
+	[InlineData(2026, 4, 2026, 4, 2026, 9)]
+	[InlineData(2026, 9, 2026, 4, 2026, 9)]
+	[InlineData(2026, 10, 2026, 10, 2027, 3)]
+	public void Contribution_period_boundaries(int year, int month, int startYear, int startMonth, int endYear, int endMonth)
+	{
+		var (start, end) = EsiStatutoryCalculator.GetContributionPeriod(new(year, month, 1));
+		start.ShouldBe(new DateTime(startYear, startMonth, 1));
+		end.ShouldBe(new DateTime(endYear, endMonth, DateTime.DaysInMonth(endYear, endMonth)));
+	}
 	[Fact]
 	public void Monthly_classifications_not_gross_determine_coverage_when_pay_is_prorated()
 	{
@@ -366,6 +420,24 @@ public class EsiStatutoryCalculator_Tests
 		result.NetPay.ShouldBe(9_466m);
 		result.EmployeeStateInsuranceWages.ShouldBe(9_538m);
 		result.EmployeeStateInsuranceCoverageDecision.ShouldBe("WITHIN_WAGE_CEILING");
+	}
+
+	[Fact]
+	public void Off_omits_existing_esi_component_and_all_statutory_presentation_fields()
+	{
+		var employeeId = Guid.NewGuid();
+		var configurationId = Guid.NewGuid();
+		var basic = BuildComponent(employeeId, Guid.NewGuid(), "Basic", 10_000m, true, PayrollComponentSemanticType.Basic);
+		var esi = BuildComponent(employeeId, Guid.NewGuid(), "ESI", 100m, false, PayrollComponentSemanticType.EmployeeStateInsurance);
+		var result = PayrollComputation.Calculate(30, 0, 30m, 30m, [basic, esi],
+			new PayrollStatutoryRuleSet(null, [], EsiConfigurationId: configurationId));
+		result.Deductions.ShouldBeEmpty();
+		result.EmployerContributions.ShouldBeEmpty();
+		result.EmployeeStateInsuranceRuleId.ShouldBeNull();
+		result.EmployeeStateInsuranceNumber.ShouldBeNull();
+		result.EmployeeStateInsuranceWages.ShouldBe(0);
+		result.NetPay.ShouldBe(10_000m);
+		result.EsiConfigurationId.ShouldBe(configurationId);
 	}
 
 	[Fact]

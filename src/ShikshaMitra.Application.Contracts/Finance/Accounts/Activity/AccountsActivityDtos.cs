@@ -19,6 +19,8 @@ public sealed class AccountsActivityRowDto
     public Guid? StudentId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public string CategoryName { get; set; } = string.Empty;
+    public Guid? BankAccountId { get; set; }
+    public string BankLabel { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public string Reference { get; set; } = string.Empty;
     public string SourceStatus { get; set; } = string.Empty;

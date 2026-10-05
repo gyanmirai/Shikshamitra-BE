@@ -16,6 +16,10 @@ Finance covers fees, collections, concessions, adjustments, refunds, receipts, a
 Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
 For current Fees-to-Accounts work, use the [integration-only posting foundation](./references/accounts-posting-foundation.md); older Accounts proposals in this directory include credit and collection-flow changes outside that scope.
 
+Category-based income, refund expenses, and school bank selections: [Income and expense routing](./references/income-expense-routing.md).
+
+Variable structure pricing and manual student entry: [variable fee assignment](./references/variable-fee-assignment.md).
+
 ## Read order
 
 | Step | File | Use it to |

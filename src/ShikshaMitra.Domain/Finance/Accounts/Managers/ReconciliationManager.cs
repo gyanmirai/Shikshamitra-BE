@@ -35,6 +35,7 @@ public class ReconciliationManager(
 	FeeCollectionManager feeCollectionManager,
 	IFeeReceiptPdfGenerator pdfGenerator,
 	FeeReceiptBlobManager blobManager,
+	ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions,
 	IClock clock,
 	ICurrentTenant currentTenant
 ) : DomainService
@@ -93,6 +94,7 @@ public class ReconciliationManager(
 			await metadataRepository.UpdateAsync(metadata, autoSave: false);
 		}
 
+		await automaticTransactions.ConfirmAsync(provisional.FeeCollectionTransactionId);
 		return finalReceipt;
 	}
 
@@ -142,6 +144,7 @@ public class ReconciliationManager(
 			?? throw new BusinessException(ReconciliationErrorCodes.ReceiptNotFound)
 				.WithData("FeeCollectionTransactionId", provisional.FeeCollectionTransactionId);
 
+		await automaticTransactions.ReverseAsync(metadata.Id);
 		metadata.MarkReversed(remarks);
 		return provisional;
 	}

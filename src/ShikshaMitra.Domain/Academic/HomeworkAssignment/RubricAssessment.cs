@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -202,7 +203,11 @@ public class AssessmentRubric : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 
 		Criteria = criteria.ToList();
-		TotalMarks = Criteria.Sum(c => c.MaxMarks);
+		TotalMarks = Criteria.Sum(GetCriterionMaximum);
+		if (ScoringModel == RubricScoringModel.WeightedPercentage && TotalMarks != 100m)
+		{
+			throw new BusinessException("AssessmentRubric:WeightMustEqual100", "Criterion weights must total exactly 100%.");
+		}
 		if (TotalMarks <= 0)
 		{
 			throw new BusinessException("AssessmentRubric:CriteriaTotalRequired");
@@ -212,6 +217,23 @@ public class AssessmentRubric : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void SetCriteriaForRead(IEnumerable<AssessmentRubricCriterion> criteria)
 	{
 		Criteria = criteria.ToList();
+		TotalMarks = Criteria.Sum(GetCriterionMaximum);
+	}
+
+	/// <summary>Resolves the scoring limit from shared levels, points or weight.</summary>
+	public decimal GetCriterionMaximum(AssessmentRubricCriterion criterion)
+	{
+		if (ScoringModel == RubricScoringModel.PerformanceLevels)
+		{
+			using var levels = JsonDocument.Parse(PerformanceLevelsJson ?? "[]");
+			return levels.RootElement.EnumerateArray()
+				.Select(level => (level.TryGetProperty("Score", out var score) ? score : level.GetProperty("score")).GetDecimal())
+				.DefaultIfEmpty(0).Max();
+		}
+
+		return ScoringModel == RubricScoringModel.WeightedPercentage
+			? criterion.Weight ?? 0
+			: criterion.Points ?? (ScoringModel == RubricScoringModel.Checklist ? 1 : 0);
 	}
 
 	public void Publish()
@@ -253,7 +275,8 @@ public class AssessmentRubricCriterion : FullAuditedEntity<Guid>, IMultiTenant
 	public string? StudentDescription { get; private set; }
 	public string? TeacherGuidance { get; private set; }
 	public bool IsRequired { get; private set; }
-	public decimal MaxMarks { get; private set; }
+	public decimal? Points { get; private set; }
+	public decimal? Weight { get; private set; }
 	public int DisplayOrder { get; private set; }
 
 	private AssessmentRubricCriterion() { }
@@ -267,8 +290,9 @@ public class AssessmentRubricCriterion : FullAuditedEntity<Guid>, IMultiTenant
 		string? studentDescription,
 		string? teacherGuidance,
 		bool isRequired,
-		decimal maxMarks,
-		int displayOrder)
+		decimal? points,
+		int displayOrder,
+		decimal? weight = null)
 		: base(id)
 	{
 		TenantId = tenantId;
@@ -278,9 +302,10 @@ public class AssessmentRubricCriterion : FullAuditedEntity<Guid>, IMultiTenant
 		StudentDescription = string.IsNullOrWhiteSpace(studentDescription) ? null : studentDescription.Trim();
 		TeacherGuidance = string.IsNullOrWhiteSpace(teacherGuidance) ? null : teacherGuidance.Trim();
 		IsRequired = isRequired;
-		MaxMarks = maxMarks;
+		Points = points;
+		Weight = weight;
 		DisplayOrder = displayOrder;
-		if (MaxMarks <= 0) throw new BusinessException("AssessmentRubric:CriterionMarksRequired");
+		if (Points is <= 0 || Weight is <= 0) throw new BusinessException("AssessmentRubric:CriterionMarksRequired");
 	}
 }
 
@@ -372,7 +397,8 @@ public class RubricCriterionScore : FullAuditedEntity<Guid>, IMultiTenant
 		TenantId = tenantId;
 		EvaluationId = evaluationId;
 		CriterionId = criterionId;
-		Marks = marks;
+		if (marks < 0) throw new BusinessException("AssessmentRubric:NegativeScoreNotAllowed");
+		Marks = Math.Round(marks, 2, MidpointRounding.AwayFromZero);
 		Comments = string.IsNullOrWhiteSpace(comments) ? null : comments.Trim();
 		if (Marks < 0) throw new BusinessException("AssessmentRubric:NegativeScoreNotAllowed");
 	}

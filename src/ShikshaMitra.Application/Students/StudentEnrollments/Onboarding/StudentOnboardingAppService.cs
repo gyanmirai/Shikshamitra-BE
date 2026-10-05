@@ -552,6 +552,12 @@ public partial class StudentOnboardingAppService(
 			using var activation = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);
 			var result = await ActivateCoreAsync(id, input); await activation.CompleteAsync(); return result;
 		}
+		catch (Exception exception) when (exception is Volo.Abp.Data.AbpDbConcurrencyException ||
+			StudentOnboardingRollConflictMapper.IsSerializationConflict(exception))
+		{
+			// A competing command owns the committed state; do not mark its case as failed.
+			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
+		}
 		catch (Exception exception)
 		{
 			try
@@ -698,6 +704,8 @@ public partial class StudentOnboardingAppService(
 			}
 		}
 		onboardingCase.Cancel(input.Reason, now);
+		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnClosureService>()
+			.CloseCancelledOnboardingAsync(onboardingCase);
 		await caseRepository.UpdateAsync(onboardingCase, false);
 		await AddEventAsync(id, "Cancelled", $"Onboarding cancelled: {input.Reason.Trim()}");
 		await CurrentUnitOfWork!.SaveChangesAsync();

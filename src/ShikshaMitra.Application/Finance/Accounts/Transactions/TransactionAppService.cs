@@ -37,13 +37,14 @@ public partial class TransactionAppService(
 			};
 		}
 
-		var transactionQuery = await transactionRepository.GetQueryableAsync();
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+        var transactionQuery = await transactionRepository.GetQueryableAsync();
 		var categoryQuery    = await transactionCategoryRepository.GetQueryableAsync();
 
 		var joinedQuery =
 			from t in transactionQuery
 			join c in categoryQuery on t.CategoryId equals c.Id
-			where t.AcademicYearId == academicYearId && t.TransactionType == transactionType
+			where t.AcademicYearId == academicYearId && t.TransactionType == transactionType && t.IsConfirmed && (t.StudentId == null || scopedStudentIds.Contains(t.StudentId.Value))
 			select new { Transaction = t, Category = c };
 
 		if (!input.Search.IsNullOrWhiteSpace())
@@ -96,15 +97,17 @@ public partial class TransactionAppService(
 	{
 		await CheckPermissionAsync(transactionType, "View");
 		var transaction = await transactionRepository.GetAsync(transactionId);
+        if (transaction.StudentId is { } studentId) await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
 			transaction.AcademicYearId, null, null, null, null);
 		EnsureTransactionType(transaction, transactionType);
 
 		var category = await transactionCategoryRepository.GetAsync(transaction.CategoryId);
-		var transactionQuery  = await transactionRepository.GetQueryableAsync();
+		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+        var transactionQuery  = await transactionRepository.GetQueryableAsync();
 		var relatedTransactions = await AsyncExecuter.ToListAsync(
 			transactionQuery.Where(x =>
-				x.CategoryId == transaction.CategoryId &&
+				x.IsConfirmed && (x.StudentId == null || scopedStudentIds.Contains(x.StudentId.Value)) && x.CategoryId == transaction.CategoryId &&
 				x.AcademicYearId == transaction.AcademicYearId &&
 				x.TransactionType == transactionType));
 
@@ -126,6 +129,7 @@ public partial class TransactionAppService(
 		await CheckPermissionAsync(transactionType, "Add");
 		Transaction.EnsureValidMoneyAndMethod(input.Amount, input.PaymentMethod);
 		var transaction = await transactionRepository.GetAsync(transactionId);
+        if (transaction.StudentId is { } studentId) await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
 			transaction.AcademicYearId, null, null, null, null);
 		EnsureTransactionType(transaction, transactionType);
@@ -148,10 +152,12 @@ public partial class TransactionAppService(
 	{
 		await CheckPermissionAsync(transactionType, "Delete");
 		var transaction = await transactionRepository.GetAsync(transactionId);
+        if (transaction.StudentId is { } studentId) await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
 			transaction.AcademicYearId, null, null, null, null);
 		EnsureTransactionType(transaction, transactionType);
-		await transactionRepository.DeleteAsync(transaction, autoSave: true);
+		if (transaction.IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");
+        await transactionRepository.DeleteAsync(transaction, autoSave: true);
 		return new TransactionDeleteResponse { Success = true, Message = "Transaction deleted successfully" };
 	}
 
@@ -159,15 +165,9 @@ public partial class TransactionAppService(
 		DateTime paymentDate, TransactionType transactionType)
 	{
 		var postingTime = new DateTimeOffset(DateTime.SpecifyKind(paymentDate, DateTimeKind.Utc));
-		var expectedHeadType = transactionType == TransactionType.Income ? AccountHeadType.Income : AccountHeadType.Expense;
-		var head = category.DefaultAccountHeadId.HasValue
-			? await accountHeadRepository.FindAsync(category.DefaultAccountHeadId.Value)
-			: null;
 		if (!category.IsActive || category.AcademicYearId != academicYearId ||
 			(category.EffectiveFrom.HasValue && postingTime < category.EffectiveFrom.Value) ||
-			(category.EffectiveTo.HasValue && postingTime > category.EffectiveTo.Value) ||
-			head is null || !head.IsActive || head.AcademicYearId != academicYearId ||
-			head.HeadType != expectedHeadType)
+			(category.EffectiveTo.HasValue && postingTime > category.EffectiveTo.Value))
 		{
 			throw new BusinessException("ShikshaMitra:TransactionCategoryNotAvailable")
 				.WithData("CategoryId", category.Id);

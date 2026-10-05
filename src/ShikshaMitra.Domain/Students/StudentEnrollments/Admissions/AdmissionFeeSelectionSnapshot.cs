@@ -10,5 +10,5 @@ public sealed record AdmissionFeeSelectionSnapshot(
 	Guid SavedBy, DateTimeOffset SavedAt, Guid? ConfirmedBy = null, DateTimeOffset? OnboardingConfirmedAt = null);
 
 public sealed record AdmissionFeeSelectionHead(
-	Guid FeeHeadId, string FeeHeadName, decimal ConfiguredAmount, bool IsOptional, bool IsOneTime,
-	Guid? PaymentTermId, Guid? PaymentTermVersionId);
+	Guid FeeHeadId, string FeeHeadName, decimal? ConfiguredAmount, bool IsOptional, bool IsOneTime,
+	Guid? PaymentTermId, Guid? PaymentTermVersionId, bool IsVariable = false);

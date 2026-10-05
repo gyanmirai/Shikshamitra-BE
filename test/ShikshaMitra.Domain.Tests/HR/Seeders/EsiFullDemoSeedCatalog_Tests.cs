@@ -16,7 +16,7 @@ public class EsiFullDemoSeedCatalog_Tests
 	public void FullDemo_step_should_be_versioned_and_run_only_after_salary_templates()
 	{
 		EsiFullDemoConfigurationSeederContributor.StepName.ShouldBe("EsiFullDemoConfigurationSeeder");
-		EsiFullDemoConfigurationSeederContributor.StepVersion.ShouldBe("EsiFullDemoConfigurationSeeder:v1");
+		EsiFullDemoConfigurationSeederContributor.StepVersion.ShouldBe("EsiFullDemoConfigurationSeeder:v3");
 		EsiFullDemoConfigurationSeederContributor.StepOrder.ShouldBe(163);
 		EsiFullDemoConfigurationSeederContributor.StepOrder
 			.ShouldBeGreaterThan(SalaryTemplateBackfillSeederContributor.StepOrder);

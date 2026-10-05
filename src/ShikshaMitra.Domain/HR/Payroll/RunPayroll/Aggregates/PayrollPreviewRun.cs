@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.MultiTenancy;
@@ -62,5 +62,12 @@ public class PayrollPreviewRun : AggregateRoot<Guid>, IMultiTenant
 		if (IsTerminal) return;
 		Status = code == HRErrorCodes.PayrollPreviewStale ? "SUPERSEDED" : "FAILED";
 		ErrorCode = code; CompletedAtUtc = now;
+	}
+	public void Supersede(DateTime now)
+	{
+		if (Status is "FAILED" or "SUPERSEDED") return;
+		Status = "SUPERSEDED";
+		ErrorCode = HRErrorCodes.PayrollPreviewStale;
+		CompletedAtUtc = now;
 	}
 }

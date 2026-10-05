@@ -23,6 +23,9 @@ public class AssignStudentFeeStructureDto
 
 	public List<StudentFeeHeadDetailDto> FeeHeadDetails { get; set; } = new();
 
+    /// <summary>Initial student amounts for included variable heads; independent from fixed overrides.</summary>
+    public List<VariableFeeHeadAmountDto> VariableFeeHeads { get; set; } = [];
+
 	public DateTime? ChargeStartDate { get; set; }
 	public DateTime? ChargeEndDate { get; set; }
 	public string ChargePeriodSource { get; set; } = "AcademicYear";
@@ -30,3 +33,10 @@ public class AssignStudentFeeStructureDto
 	public string? ChargePeriodOverrideReason { get; set; }
 }
 
+
+public class VariableFeeHeadAmountDto
+{
+    public Guid FeeHeadId { get; set; }
+    public decimal? Amount { get; set; }
+    public string? ZeroAmountReason { get; set; }
+}

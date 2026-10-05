@@ -69,6 +69,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<SalaryStructureTemplateVersion> SalaryStructureTemplateVersions { get; set; }
     public DbSet<StatutoryRuleVersion> StatutoryRuleVersions { get; set; }
     public DbSet<StatutoryEstablishment> StatutoryEstablishments { get; set; }
+    public DbSet<EsiPayrollConfiguration> EsiPayrollConfigurations { get; set; }
     public DbSet<EmployeeStatutoryEnrollment> EmployeeStatutoryEnrollments { get; set; }
     public DbSet<PayrollComponentStatutoryTreatment> PayrollComponentStatutoryTreatments { get; set; }
     public DbSet<StatutoryOverride> StatutoryOverrides { get; set; }

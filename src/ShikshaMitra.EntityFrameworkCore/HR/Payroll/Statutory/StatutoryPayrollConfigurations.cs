@@ -8,6 +8,7 @@ public class StatutoryRuleVersionConfiguration : IEntityTypeConfiguration<Statut
 {
 	public void Configure(EntityTypeBuilder<StatutoryRuleVersion> builder)
 	{
+		builder.Property(x => x.EmployeeShareDailyWageExemption).HasPrecision(18, 2).HasDefaultValue(176m);
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "StatutoryRuleVersions", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
 		builder.Property(x => x.SchemeCode).IsRequired().HasMaxLength(20);

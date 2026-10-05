@@ -151,14 +151,14 @@ Underlying earnings must allocate gross before rounding; `HR:Payroll:SalaryTempl
 Salary generation and payroll share `GrossEarningAllocation`, evaluating earning dependencies at decimal precision and distributing fractional paise by largest remainder, with ties ordered by ordinary earnings before Basic and then component ID.
 Fixed monthly inputs are normalized to two decimals, attendance is applied once, and deductions use finalized earnings.
 Basic at 100 percent with PF does not require Special Allowance, and ESI remains system-managed.
-Active versions are immutable and carry a default quote basis, protection policy, PF applicability, and PF rule.
-The calculate endpoint accepts Gross, Take-home, or Employer Cost, an effective month, a protection policy, and optional employee context.
+Active versions are immutable and carry a default salary basis, derived protection target, PF applicability, and PF rule.
+The calculate endpoint accepts Monthly salary (GROSS) or Monthly cost to school (EMPLOYER_COST), an effective month, and optional employee context.
 It returns earnings, employee deductions, employer contributions, ESI coverage and contribution details, statutory references, target variance, warnings, and a formula trace.
 `GET /api/payroll/salary-templates/active` exposes only valid active templates to Compensation Manage users.
 The settings list returns Active, Needs setup, and Archived templates to Salary Template View users.
 `GET /api/payroll/salary-templates/component-catalog` returns active tenant earning and deduction components to Salary Template View users.
 `POST /api/payroll/salary-templates` creates a complete active template, and `PUT /api/payroll/salary-templates/{id}` atomically creates the next active immutable version.
-`POST /api/payroll/salary-templates/preview` accepts current rules, salary basis, protection policy, monthly amount, effective month, PF selection, and optional template/version/concurrency context under Salary Templates View permission.
+`POST /api/payroll/salary-templates/preview` accepts current rules, salary basis, monthly amount, effective month, PF selection, and optional template/version/concurrency context under Salary Templates View permission.
 It is employee-independent and does not persist templates, versions, employee structures, or payroll records.
 It returns `isSample`, `calculation`, `previewToken`, and `expiresAt`.
 Each create/update carries `previewToken`, `sampleMonthlyAmount`, `sampleEffectiveMonth`, an idempotency key, expected active version, and concurrency stamp.
@@ -169,12 +169,25 @@ Name and description changes do not invalidate the calculation proof.
 A successful sample establishes validity only for its amount and effective month; employee salary generation still validates actual compensation and eligibility.
 The first valid template becomes the tenant default, and archiving the default requires a replacement.
 Payroll preview recalculates employee PF from prorated eligible wages and Gujarat professional tax from actual monthly gross.
-Payroll preview evaluates ESI independently from salary templates after the tenant activates its establishment profile.
+Salary previews and payroll resolve the same effective-dated ESIC configuration for the selected month.
+GET /api/payroll/statutory-schemes/esi/configuration returns the persisted default-on/current configuration, audit history, server current month, and school-wide scope.
+Unknown school registration facts remain empty and do not block salary calculations.
+PUT /api/payroll/statutory-schemes/esi/configuration saves enabled status, registration facts, and earning-treatment changes with a concurrency stamp and idempotency key.
+Saving requires both Edit and Activate permissions plus HR-wide scope.
+There are no draft-preview, schedule, or cancellation commands in this configuration flow.
+The server applies changes from the current Asia/Kolkata payroll month.
+Save shares the payroll input-revision transaction fence with payroll locking.
+Identical retries are idempotent; stale edits and changed retry payloads are rejected.
+Current/future unlocked snapshots and reviews are invalidated; earlier, locked, and finalized snapshots retain their configuration and figures.
+Off mode omits ESI deductions and employer contributions while retaining employee enrollment facts.
 ESI uses effective-dated component wage classifications, the employee coverage record, the standard or disability ceiling, contribution-period continuation, and audited overrides.
 The wage-mapping catalog includes active master earnings and employee-specific earnings applicable to the selected month so a custom salary line cannot become an unresolvable payroll blocker.
 `GET` and `POST /api/payroll/statutory-schemes/esi/employees/{employeeId}/overrides` expose immutable exception history and add permission-controlled exceptions.
+ESIC exceptions require EffectiveFrom on the first day and EffectiveTo on the last day of their selected months, inclusive.
+Partial-month and reversed ranges fail validation.
 When exceptions overlap, the newest applicable coverage or amount exception is authoritative.
-Unclassified wages, pending enrollment review, and missing required insurance numbers block payroll lock.
+Unclassified wages and missing required insurance numbers block payroll lock.
+HR supplies registration facts and supported exceptions; eligibility and contribution-period continuation are derived automatically.
 Locked salary slips retain the ESI rule version, statutory wages, coverage decision, insurance number, contribution period, employee deduction, and employer contribution.
 PwD employer-share relief requires the PwD wage-ceiling category, an effective start date, and a disability evidence reference.
 Valid relief moves the employer ESI share to the government contribution ledger and does not reduce the employee deduction.
@@ -182,7 +195,11 @@ Invalid PwD relief data is rejected before enrollment is saved.
 Recurring employee compensation is exposed as effective-dated immutable Effective and Superseded revisions.
 `PUT /api/payroll/employees/{employeeId}/compensation` validates and recalculates the complete salary before saving it directly as an effective revision.
 Saving again for the same effective month supersedes the prior effective revision, while future-effective revisions remain scheduled until their month.
-The save contract includes template-version provenance, quote basis, protection policy, PF selection, permitted overrides, customization reason, idempotency key, and expected month revision.
+The save contract includes template-version provenance, a salary basis of GROSS or EMPLOYER_COST, PF selection, permitted overrides, customization reason, idempotency key, and expected month revision.
+Employee payroll and salary-structure update contracts also accept only `GROSS` and `EMPLOYER_COST` when a quote basis is supplied.
+`TAKE_HOME` is rejected by contract and domain validation.
+Template provenance remains all-or-nothing, and bank or one-time-component updates do not alter saved compensation revisions.
+The salary-structure component lists may be empty because recurring earnings belong to the effective compensation revision.
 Basic, DA, and ordinary rows may be customized with a reason.
 Balancing, PF, professional-tax, and ESI rows cannot be overridden.
 Employee enrollment and override endpoints enforce the employee scope in addition to the route permission.
@@ -192,12 +209,16 @@ Its summary and `canActivate` always cover the complete scoped employee populati
 Preview issues contain a stable code plus server-authored severity, title, message, resolution target, and affected employee count where applicable.
 Coverage decisions contain both the stable decision code and a server-authored display label.
 Preview responses include `generatedAtUtc` and a deterministic SHA-256 `previewFingerprint` over activation-relevant rule, establishment, classification, employee, enrollment, override, and calculated result inputs.
-`POST /api/payroll/statutory-schemes/esi/activate` requires the reviewed `monthYear` and `previewFingerprint`, recalculates the complete preview, and returns HTTP 409 with `ESI_PREVIEW_STALE` when the result is stale.
-Stale activation does not activate the establishment or create the canonical deduction binding.
+`PUT /api/payroll/statutory-schemes/esi/configuration` saves directly with a concurrency stamp and idempotency key; it does not require a client impact-preview fingerprint.
+The former establishment activation and standalone classification mutation routes have been removed.
 Compensation audit identities, timestamps, legacy workflow details, and calculation snapshots require `HR.PayrollManagement.CompensationRevisions.ViewAudit`.
 Payroll resolves the latest effective revision for the month and keeps one-time salary components separate.
 Locked payroll at or after the effective month prevents compensation revision changes.
-Payroll records quote provenance and warns when the normalized protected amount differs from the saved target without changing salary or blocking lock.
+Payroll records quote provenance and blocks locking when the normalized protected amount differs from the saved target.
+Resolution requires an explicit compensation change; ESIC configuration never silently reduces established wages.
+This follows the wage-protection principle in [Social Security Code section 124](https://labour.gov.in/sites/default/files/ss_code_as_passed_by_lok_sabha.pdf).
+The calculation retains the Gujarat profile, employee and employer rates of 0.75% and 3.25%, and upward rupee rounding under [Central Rules 2026 rule 19](https://www.labour.gov.in/static/uploads/2026/05/49aa9b62c2125499c37399b90e969d67.pdf).
+Monthly-rated average daily wages use contractual monthly statutory wages divided by 26; the employee share is exempt up to Rs 176 per day, while the employer share remains payable, as described in the [ESIC official report](https://www.esic.gov.in/attachments/publicationfile/b830b6c5a968aae81fdbc3a09e9063fb.pdf).
 The selected effective professional-tax slab also controls whether tax is deducted in an employee's employment cessation month.
 Employer PF is stored separately and never reduces employee net pay.
 Percentage-based earning components with a custom-component base may reference only an active earning component in the current tenant and may not create a self-reference or dependency cycle.
@@ -315,3 +336,8 @@ Salary-template calculation lines include `formulaValue` and `basisComponentId`,
 Run payroll returns regular `fullGrossSalary` and attendance-adjusted `grossSalary`, plus `additionalEarnings` and `totalEarnings`.
 Payslips return `fullGrossSalary`, `grossSalary`, `additionalEarnings`, and the existing `totalEarning`, deduction, and net totals.
 Gross is a summary and is never added again to its earning breakdown.
+
+New salary templates default to EMPLOYER_COST.
+New setup contracts derive protection from the salary basis and do not accept an independent protection choice.
+Salary previews include the applicable ESIC configuration ID, including when calculation is off.
+Employee-facing payslips omit employer contributions; school cost reports and stored audit evidence retain them.

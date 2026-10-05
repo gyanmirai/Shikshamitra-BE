@@ -1,3 +1,13 @@
+---
+module: finance
+domain: accounts
+content_type: Reference
+status: active
+updated_on: 2026-10-02
+owner: backend-team
+audience: humans-and-agents
+---
+
 # Fee refund payout workflow
 
 New fee refund requests use workflow version 1. The stored enum values remain unchanged: Submitted (0) is shown as **Pending**, Approved (2), Processed (7), Rejected (3), and Failed (8). Historical Draft, UnderReview, Processing, Cancelled, and Reversed records keep their original meanings.

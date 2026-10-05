@@ -30,7 +30,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
 
-public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private const string AvailabilityOverlapMessage =
         "Teacher is already marked unavailable for the selected date and time. Please choose a different time slot.";
@@ -138,6 +138,7 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
         using (currentTenant.Change(tenantId))
         using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
         {
+            await GrantCurrentActorScopeAsync(tenantId);
             var teacher = await CreateEmployeeAsync(
                 Guid.NewGuid(),
                 "Academic",
@@ -192,6 +193,7 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
         using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
         {
             var teacher = await CreateEmployeeAsync(Guid.NewGuid(), "Medium", "Teacher", tenantId: tenantId);
+            await GrantCurrentActorScopeAsync(tenantId);
             var selected = await SeedTimetableContextAsync(
                 tenantId, teacher.Id, "2026-2027", new DateTime(2026, 6, 1),
                 new DateTime(2027, 5, 31), "Selected Class", new TimeOnly(8, 0), new TimeOnly(8, 45));
@@ -513,7 +515,7 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
     }
 
     [Fact]
-    public async Task GetListAsync_Should_Not_Fail_When_Attendance_Sync_Encounters_A_Late_Overlap()
+    public async Task SyncDateRangeAsync_Should_Deduplicate_Legacy_Attendance_Before_Listing_Availability()
     {
         var teacher = await CreateEmployeeAsync(
             Guid.NewGuid(),
@@ -538,6 +540,11 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
 
         using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
         {
+            using var unitOfWork = GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var sync = GetRequiredService<TakeAttendanceTeacherAvailabilitySyncService>();
+            await sync.SyncDateRangeAsync(availabilityDate, availabilityDate);
+            await sync.SyncDateRangeAsync(availabilityDate, availabilityDate);
+
             var result = await _teacherAvailabilityAppService.GetListAsync(
                 new GetTeacherAvailabilityInput
                 {
@@ -548,6 +555,9 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
             result.TotalCount.ShouldBe(1);
             result.Items.ShouldHaveSingleItem().SourceType
                 .ShouldBe(TeacherAvailabilitySource.Attendance.ToString());
+            (await _availabilityRepository.GetListAsync(x => !x.IsCancelled && x.TeacherId == teacher.Id))
+                .ShouldHaveSingleItem();
+            await unitOfWork.CompleteAsync();
         }
     }
 
@@ -595,6 +605,7 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
         using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
         {
             var employee = await CreateEmployeeAsync(Guid.NewGuid(), "LegacyShift", "Teacher", tenantId: tenantId);
+            await GrantCurrentActorScopeAsync(tenantId);
             var shift = await GetRequiredService<IRepository<ShiftManagement, Guid>>().InsertAsync(
                 new ShiftManagement { ShiftName = "Teaching shift", StartTime = new TimeOnly(8, 0), EndTime = new TimeOnly(15, 0) },
                 autoSave: true);

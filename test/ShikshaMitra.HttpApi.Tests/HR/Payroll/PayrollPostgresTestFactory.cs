@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
@@ -49,6 +49,20 @@ public sealed class PayrollWorkflowPostgresTestFactory : PayrollPostgresTestFact
 	protected override string ConnectionVariable => "PAYROLL_WORKFLOW_TEST_POSTGRES";
 }
 
+public sealed class PayrollRegistrationPostgresTestFactory : PayrollPostgresTestFactory
+{
+	protected override string ConnectionVariable => "PAYROLL_REGISTRATION_TEST_POSTGRES";
+}
+
+public sealed class PayrollRegistrationPostgresFactAttribute : FactAttribute
+{
+	public PayrollRegistrationPostgresFactAttribute()
+	{
+		if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("PAYROLL_REGISTRATION_TEST_POSTGRES")))
+			Skip = "Set PAYROLL_REGISTRATION_TEST_POSTGRES to a separate empty, disposable loopback payroll_tests_* database.";
+	}
+}
+
 public sealed class PayrollWorkflowPostgresFactAttribute : FactAttribute
 {
 	public PayrollWorkflowPostgresFactAttribute()
@@ -61,13 +75,31 @@ public sealed class PayrollWorkflowPostgresFactAttribute : FactAttribute
 public sealed class PayrollCalculationBarrier : DbCommandInterceptor
 {
 	private int _armed;
+	private string _commandFragment = "AppEmployeeAttendances";
 	private int _failLeaseRead;
 	public void FailNextLeaseRead() => Interlocked.Exchange(ref _failLeaseRead, 1);
 	private TaskCompletionSource _reached = NewSignal();
 	private TaskCompletionSource _release = NewSignal();
-	public Task Reached => _reached.Task;
-	public void Arm()
+	private TaskCompletionSource _observed = NewSignal();
+	private string? _observedFragment;
+	private int _observationsRemaining;
+	public Task Observed => _observed.Task;
+	public void Observe(string commandFragment, int count = 1)
 	{
+		_observed = NewSignal();
+		_observedFragment = commandFragment;
+		Interlocked.Exchange(ref _observationsRemaining, count);
+	}
+	private void ObserveCommand(DbCommand command)
+	{
+		if (_observedFragment != null && command.CommandText.Contains(_observedFragment, StringComparison.Ordinal) &&
+			Interlocked.Decrement(ref _observationsRemaining) == 0)
+			_observed.TrySetResult();
+	}
+	public Task Reached => _reached.Task;
+	public void Arm(string commandFragment = "AppEmployeeAttendances")
+	{
+		_commandFragment = commandFragment;
 		_reached = NewSignal();
 		_release = NewSignal();
 		Interlocked.Exchange(ref _armed, 1);
@@ -79,15 +111,24 @@ public sealed class PayrollCalculationBarrier : DbCommandInterceptor
 		DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
 		CancellationToken cancellationToken = default)
 	{
+		ObserveCommand(command);
 		if (command.CommandText.Contains("HR_PayrollMonthLocks", StringComparison.Ordinal) &&
 			Interlocked.CompareExchange(ref _failLeaseRead, 0, 1) == 1)
 			throw new NpgsqlException("Synthetic database connection failure");
-		if (command.CommandText.Contains("AppEmployeeAttendances", StringComparison.Ordinal) &&
+		if (command.CommandText.Contains(_commandFragment, StringComparison.Ordinal) &&
 			Interlocked.CompareExchange(ref _armed, 0, 1) == 1)
 		{
 			_reached.TrySetResult();
 			await _release.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
 		}
 		return result;
+	}
+
+	public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+		DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+		CancellationToken cancellationToken = default)
+	{
+		ObserveCommand(command);
+		return ValueTask.FromResult(result);
 	}
 }

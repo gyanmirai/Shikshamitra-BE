@@ -30,6 +30,16 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public decimal ApprovedAmount { get; private set; }
     public decimal ProcessedAmount { get; private set; }
     public decimal ReversedAmount { get; private set; }
+    public Guid? ExpenseCategoryId { get; private set; }
+    public Guid? PayingBankAccountId { get; private set; }
+    public string? ExpenseCategoryName { get; private set; }
+    public string? PayingBankLabel { get; private set; }
+    public void SetApprovalRouting(Guid categoryId, string name, Guid? bankId, string? bankLabel, string method)
+    {
+        EnsureTransitionAny(FeeRefundStatus.Approved, FeeRefundStatus.Submitted, FeeRefundStatus.UnderReview);
+        ExpenseCategoryId = categoryId; ExpenseCategoryName = name;
+        PayingBankAccountId = bankId; PayingBankLabel = bankLabel; RefundMethod = method;
+    }
     public string? RefundMethod { get; private set; }
     public RefundPaymentDetails? RefundPaymentDetails { get; private set; }
     public string? Reason { get; private set; }

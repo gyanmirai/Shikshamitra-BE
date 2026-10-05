@@ -82,15 +82,16 @@ public sealed class StudentRecordsInsertBarrier : DbCommandInterceptor
 	private int _armed;
 	private int _arrived;
 	private string _writeSql = "INSERT INTO \"AppStudentRecordTransitions\"";
-	private IsolationLevel _isolation = IsolationLevel.Serializable;
+	private IsolationLevel? _isolation = IsolationLevel.Serializable;
 	private TaskCompletionSource _reached = Signal();
 	private TaskCompletionSource _release = Signal();
 	public ConcurrentDictionary<int, byte> Connections { get; } = new();
+	public ConcurrentDictionary<int, IsolationLevel> ConnectionIsolations { get; } = new();
 	public ConcurrentDictionary<string, byte> ProviderFailures { get; } = new();
 	public Task Reached => _reached.Task;
-	public void Arm(string writeSql = "INSERT INTO \"AppStudentRecordTransitions\"", IsolationLevel isolation = IsolationLevel.Serializable)
+	public void Arm(string writeSql = "INSERT INTO \"AppStudentRecordTransitions\"", IsolationLevel? isolation = IsolationLevel.Serializable)
 	{
-		_writeSql = writeSql; _isolation = isolation; _arrived = 0; Connections.Clear(); ProviderFailures.Clear();
+		_writeSql = writeSql; _isolation = isolation; _arrived = 0; Connections.Clear(); ConnectionIsolations.Clear(); ProviderFailures.Clear();
 		_reached = Signal(); _release = Signal(); Interlocked.Exchange(ref _armed, 1);
 	}
 	public void Release() { Interlocked.Exchange(ref _armed, 0); _release.TrySetResult(); }
@@ -100,8 +101,10 @@ public sealed class StudentRecordsInsertBarrier : DbCommandInterceptor
 	{
 		if (Volatile.Read(ref _armed) == 1 && command.CommandText.Contains(_writeSql, StringComparison.Ordinal))
 		{
-			if (command.Transaction?.IsolationLevel != _isolation) throw new InvalidOperationException("Records concurrency writes must use the application's expected transaction isolation.");
+			if (command.Transaction == null || _isolation.HasValue && command.Transaction.IsolationLevel != _isolation)
+				throw new InvalidOperationException("Records concurrency writes must use the application's expected transaction isolation.");
 			Connections.TryAdd(((NpgsqlConnection)command.Connection!).ProcessID, 0);
+			ConnectionIsolations.TryAdd(((NpgsqlConnection)command.Connection!).ProcessID, command.Transaction.IsolationLevel);
 			if (Interlocked.Increment(ref _arrived) == 2) _reached.TrySetResult();
 			await _release.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
 		}

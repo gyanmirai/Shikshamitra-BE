@@ -13,8 +13,8 @@ audience: humans-and-agents
 TL;DR: run the smallest command that proves the changed HR behavior, then run docs validation before handoff.
 Use broader API tests when a change touches contracts, permissions, payroll, attendance, leave, or policy resolution.
 
-Salary-template coverage must include complete active creation, Needs setup recovery, arbitrary active tenant components, exactly one Basic, zero or one balancing earning, exact rounded gross reconciliation, dependency cycles, cross-tenant component rejection, permission boundaries, concurrency conflicts, idempotent retries, PF defaults, percentage validation, largest fractional remainder allocation and existing statutory rounding, PF ceilings, Gujarat professional-tax boundaries, and Gross, Take-home, and Employer Cost solving across discontinuities.
-Compensation coverage must prove direct effective saves, effective-month resolution, immutable history, same-month supersession, scheduled future revisions, idempotent retries, controlled overrides, activation readiness, locked-payroll protection, separate one-time lines, and warning-only protected-target drift.
+Salary-template coverage must include complete active creation, Needs setup recovery, arbitrary active tenant components, exactly one Basic, zero or one balancing earning, exact rounded gross reconciliation, dependency cycles, cross-tenant component rejection, permission boundaries, concurrency conflicts, idempotent retries, PF defaults, percentage validation, largest fractional remainder allocation and existing statutory rounding, PF ceilings, Gujarat professional-tax boundaries, and Monthly salary and Monthly cost to school (CTC) solving across discontinuities.
+Compensation coverage must prove direct effective saves, effective-month resolution, immutable history, same-month supersession, scheduled future revisions, idempotent retries, controlled overrides, activation readiness, locked-payroll protection, separate one-time lines, and blocking protected-target drift.
 Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, ESI uses effective coverage and wages, eligible PwD relief is government funded, employer contributions remain outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
 
 ## Required docs checks
@@ -68,6 +68,9 @@ An Application Control assembly-load failure may appear as no matching tests wit
 
 Salary-slip fixtures must create effective compensation revisions before calculating permanent earnings.
 ESI regression tests must distinguish agreed monthly classified wages for coverage from attendance-adjusted wages for contributions, including above-ceiling employees with unpaid days and contribution-period continuation.
+`EsiContributionContinuity_Tests` covers finalized and paid evidence with missing or unlocked snapshots, draft exclusion, contribution-period boundaries, conflicting snapshots, and tenant/employee isolation.
+`EsiContributionContinuityApi_Tests` verifies above-ceiling salary calculation continues both contribution shares after finalized or paid payroll and stops at the next contribution period without changing historical evidence.
+`EsiContributionContinuityPostgres_Tests` runs both API scenarios on PostgreSQL when `PAYROLL_TEST_POSTGRES` points to an empty, disposable loopback `payroll_tests_*` database.
 
 ## Focused test map
 
@@ -150,6 +153,17 @@ Check these gaps before claiming full coverage:
 
 ## Built-in Gross Salary regression checks
 
+The 2026-10-01 employee salary-basis regression verified `EMPLOYER_COST` and `GROSS` through compensation save, employee payroll update, bank-detail readback, and salary-structure update.
+The API tests assert that those updates preserve compensation revision IDs, earnings, net salary, and employer cost.
+Contract and domain tests reject `TAKE_HOME`, unknown bases, and incomplete template provenance.
+Empty one-time additions remain valid without removing recurring compensation.
+Validation passed: 49 focused API/security tests, 45 application calculation/contract tests, 24 attendance/proration tests, and the seed-backfill integration test.
+
+For ESIC onboarding, run `CompensationRevisionApi_Tests`, `EmployeeStatusApi_Tests`, and `EsiStatutoryApi_Tests` against the disposable PostgreSQL test database.
+Verify inactive enrollment updates, registration-pending activation rejection, and successful activation after supplying the insurance number and effective compensation.
+On 2026-10-01, these focused API suites passed all 26 tests and `PermissionConsistencyApi_Tests` passed all 13 security checks.
+The new missing-number activation test reproduced the failure before the guard was added.
+
 Run `BuiltInGrossSalary_Tests`, `SalaryTemplateCalculator_Tests`, and `GrossSalaryComponentApi_Tests`.
 Run `GrossEarningAllocation_Tests`, `SalaryTemplatePreviewProof_Tests`, `SalaryTemplateComposerAppService_Tests`, and `SalaryTemplateApi_Tests` for raw allocation, odd-paisa ties, fixed/mixed rules, read-only previews, proof expiry/binding, concurrency, and idempotent retries.
 Build HTTP API tests with `dotnet test test/ShikshaMitra.HttpApi.Tests --artifacts-path .artifacts/payroll-api-tests --filter FullyQualifiedName~SalaryTemplateApi` while the local API server is running to avoid locked host DLLs.
@@ -176,3 +190,51 @@ Use an authorized staging administrator to list affected development templates, 
 Replace invalid disposable fixtures through the same preview/save contract and explicitly select a replacement before archiving a default template.
 Only recreate employee test structures intentionally included in that staging fixture; existing employee revisions and payroll snapshots remain unchanged.
 Record template/version IDs and confirm sample, employee structure, payroll preview, and payslip totals after the data update.
+
+ESIC coverage includes default-on idempotent initialization, null school registration facts, direct saves, stale concurrency, retry keys, current/future invalidation, and preservation of earlier/locked employee snapshots.
+Verify both INR 10,000 examples from the ESIC design reference and exact employer/employee reconciliation.
+Exercise save/lock concurrency on PostgreSQL, plus tenant isolation and permission enforcement.
+
+## ESIC correctness regressions
+
+EsiCorrectness_Tests covers scoped continuity invalidation, repeated calls, preserved immutable months, pending registration and complete-month exceptions.
+EsiContinuityInvalidationPostgres_Tests exercises authenticated preview endpoints, transaction rollback and invalidation of a worker paused during calculation.
+Run that PostgreSQL test with PAYROLL_TEST_POSTGRES pointing to a fresh empty loopback payroll_tests_* database.
+Never reuse a populated database for the test factory.
+Drawer dismissal, month-input serialization and salary loading are verified in the frontend owning suites.
+
+`SalarySlipAppService_Tests` creates approved compensation through template preview/save and compensation save before activating employees.
+Its scoped identities must exist in the identity store, and academic fixture IDs must describe one valid hierarchy.
+Overtime remains additional earnings rather than regular gross.
+
+`EsiPayrollWorkflowApi_Tests` exercises pending registration, compensation, activation, review and payroll locking for `GROSS` and `EMPLOYER_COST`.
+It also covers employees activated while ESIC was off, with employer-cost changes resolved explicitly through compensation.
+Set `PAYROLL_REGISTRATION_TEST_POSTGRES` to a fresh empty loopback `payroll_tests_*` database.
+The transaction fence requires PostgreSQL for this complete worker-to-lock journey.
+
+`EsiPayrollWorkflowPostgres_Tests` runs actual earlier-month finalization, later-month preview calculation and payroll locking concurrently in both fence orderings.
+Its August and September fixture explicitly enables ESIC in both months rather than inheriting the demo's disabled September scenario.
+Set `PAYROLL_WORKFLOW_TEST_POSTGRES` to a separate fresh empty loopback `payroll_tests_*` database.
+Finalization winning must supersede the running preview and reject the old lock; locking winning must preserve its immutable employee snapshot.
+Run both workflow suites with `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~EsiPayrollWorkflow` after setting their separate database variables.
+
+### Final calculation audit matrix
+
+| Scenario | Permanent regression coverage |
+| --- | --- |
+| Monthly salary and CTC, including the INR 10,000 examples | SalaryTemplateCalculator_Tests |
+| Twelve CTC budgets, with and without PF, crossed with zero, one, half-month and full attendance | SalaryTemplateCalculator_Tests.Ctc_boundaries_reconcile_with_payroll_and_never_exceed_monthly_budget |
+| Full-month quote reconciles with actual payroll; school cost never exceeds the monthly budget | SalaryTemplateCalculator_Tests |
+| Standard/disability ceilings, employee-share exemption including one paisa above the boundary, exclusion add-back and rounding | EsiStatutoryCalculator_Tests |
+| Generated overtime with ESIC on/off, above-ceiling employees and exclusion add-back | SalarySlipAppService_Tests and EsiStatutoryCalculator_Tests |
+| Custom earning names cannot impersonate generated overtime | EsiStatutoryCalculator_Tests |
+| Manual earning adjustments can be classified; other tenants, months and deductions stay outside the catalog | EsiPayrollWorkflowApi_Tests |
+| Readiness summaries report the same blockers as locking, including missing-number coverage with zero contributions | PayrollReadinessProjector_Tests and EsiPayrollWorkflowApi_Tests |
+| Whole-month exceptions, leap years, invalid ranges and continuity period boundaries | EsiCorrectness_Tests and EsiStatutoryCalculator_Tests |
+| Current/future recalculation, retries, stale edits and immutable earlier/locked payroll | EsiConfigurationResolution_Tests and EsiConfigurationPostgres_Tests |
+| Earlier finalization, later calculation and locking overlap in both transaction orderings | EsiPayrollWorkflowPostgres_Tests |
+
+Gross-based component fixtures must leave their component dependency ID empty.
+Do not weaken the validator to accept contradictory gross and component-based dependencies.
+Run the complete application and domain HR.Payroll filters in addition to the focused PostgreSQL workflows.
+Report repository-wide failures separately from these payroll results.

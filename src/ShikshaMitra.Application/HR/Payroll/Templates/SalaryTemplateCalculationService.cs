@@ -99,9 +99,10 @@ public class SalaryTemplateCalculationService(
 			},
 			EmployeeStateInsurance = new SalaryTemplateEsiPreviewDto
 			{
+				ConfigurationId = esiResolution.ConfigurationId,
 				IsConfigured = esiResolution.Context != null,
 				IsCovered = esiResult?.IsCovered ?? false,
-				CanCalculate = esiResult?.CanCalculate ?? false,
+				CanCalculate = esiResult?.CanCalculate ?? esiResolution.Warnings.Count == 0,
 				RegistrationPending = esiResolution.RegistrationPending,
 				CoverageDecision = esiResult?.CoverageDecision,
 				StatutoryWages = esiResult?.StatutoryWages ?? 0m,
@@ -151,7 +152,11 @@ public class SalaryTemplateCalculationService(
 		}
 	}
 
-	private static SalaryInputBasis ParseSalaryBasis(string value) => ParseEnum<SalaryInputBasis>(value, nameof(value));
+	private static SalaryInputBasis ParseSalaryBasis(string value) => value switch {
+		"GROSS" => SalaryInputBasis.Gross,
+		"EMPLOYER_COST" => SalaryInputBasis.EmployerCost,
+		_ => throw new BusinessException("HR:Payroll:SalaryTemplateRuleInvalidEnum").WithData("field", "salaryBasis")
+	};
 	private static CompensationProtectionPolicy ParseProtectionPolicy(string value) => ParseEnum<CompensationProtectionPolicy>(value, nameof(value));
 	private static string NormalizeEnum(string? value) => value?.Replace("_", string.Empty).Replace("-", string.Empty) ?? string.Empty;
 

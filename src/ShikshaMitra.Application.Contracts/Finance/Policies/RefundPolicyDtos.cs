@@ -35,6 +35,8 @@ public class RefundPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string DeductionExplanation { get; set; } = string.Empty;
 	public List<string> AllowedPayoutMethods { get; set; } = [];
 	public int? ProcessingTargetDays { get; set; }
+	public Guid? ExpenseCategoryId { get; set; }
+	public Guid? DefaultPayingBankAccountId { get; set; }
 	public int Version { get; set; }
 	public bool IsUsedInDownstream { get; set; }
 	public DateTime CreationTime { get; set; }
@@ -70,6 +72,8 @@ public class CreateUpdateRefundPolicyDto
 	public List<string> AllowedPayoutMethods { get; set; } =
 		["Cash", "Cheque", "DemandDraft", "BankTransfer", "Upi"];
 	public int? ProcessingTargetDays { get; set; }
+	public Guid? ExpenseCategoryId { get; set; }
+	public Guid? DefaultPayingBankAccountId { get; set; }
 	public string? ChangeReason { get; set; }
 	public string? ConcurrencyStamp { get; set; }
 }

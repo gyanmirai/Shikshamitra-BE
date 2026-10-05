@@ -17,6 +17,8 @@ using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Onboarding;
+using ShikshaMitra.HR.Payroll.RunPayroll;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
@@ -78,6 +80,20 @@ internal sealed class FakeEmployeeLeaveRepository(
 
         return await base.InsertAsync(entity, autoSave, cancellationToken);
     }
+}
+
+// This harness disables every UOW transaction. PostgreSQL API tests cover the real lock fence.
+internal sealed class NonTransactionalPayrollInputRevisionStore(
+    IDbContextProvider<ShikshaMitraDbContext> provider, ICurrentTenant tenant) : IPayrollInputRevisionStore
+{
+    public async Task<Guid> ReadAsync()
+    {
+        var db = await provider.GetDbContextAsync();
+        var tenantId = tenant.Id ?? Guid.Empty;
+        return await db.Set<PayrollInputRevision>().AsNoTracking().Where(x => x.Id == tenantId)
+            .Select(x => x.Revision).FirstOrDefaultAsync();
+    }
+    public Task<Guid> LockAsync() => ReadAsync();
 }
 
 public sealed record SentEmployeeOnboardingInvitation(Guid ApplicationId, string? Email, string PublicPath);
@@ -184,6 +200,7 @@ public class ShikshaMitraApplicationTestModule : AbpModule
         // so that application tests using SQLite don't fail on PostgreSQL-only SQL syntax.
         context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
         context.Services.AddTransient<IEmployeeLeaveRepository, FakeEmployeeLeaveRepository>();
+        context.Services.AddTransient<IPayrollInputRevisionStore, NonTransactionalPayrollInputRevisionStore>();
         context.Services.AddSingleton<FakeEmployeeEmailService>();
         context.Services.Replace(ServiceDescriptor.Singleton<IEmployeeEmailService>(sp =>
             sp.GetRequiredService<FakeEmployeeEmailService>()));

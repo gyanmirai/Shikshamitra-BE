@@ -57,6 +57,7 @@ internal static class PayrollRunProjection
 		snapshot.ProvidentFundRuleVersion != item.ProvidentFundRuleVersion ||
 		snapshot.ProfessionalTaxRuleId != item.ProfessionalTaxRuleId ||
 		snapshot.ProfessionalTaxRuleVersion != item.ProfessionalTaxRuleVersion ||
+		snapshot.EsiConfigurationId != item.EsiConfigurationId ||
 		snapshot.EmployeeStateInsuranceRuleId != item.EmployeeStateInsuranceRuleId ||
 		snapshot.EmployeeStateInsuranceRuleVersion != item.EmployeeStateInsuranceRuleVersion ||
 		snapshot.EmployeeStateInsuranceWages != (decimal)item.EmployeeStateInsuranceWages ||
@@ -130,6 +131,7 @@ internal static class PayrollRunProjection
 		snapshot.ProvidentFundRuleVersion = item.ProvidentFundRuleVersion;
 		snapshot.ProfessionalTaxRuleId = item.ProfessionalTaxRuleId;
 		snapshot.ProfessionalTaxRuleVersion = item.ProfessionalTaxRuleVersion;
+		snapshot.EsiConfigurationId = item.EsiConfigurationId;
 		snapshot.EmployeeStateInsuranceRuleId = item.EmployeeStateInsuranceRuleId;
 		snapshot.EmployeeStateInsuranceRuleVersion = item.EmployeeStateInsuranceRuleVersion;
 		snapshot.EmployeeStateInsuranceWages = (decimal)item.EmployeeStateInsuranceWages;
@@ -200,6 +202,7 @@ internal static class PayrollRunProjection
 			ProvidentFundRuleVersion = row.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = row.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = row.ProfessionalTaxRuleVersion,
+			EsiConfigurationId = row.EsiConfigurationId,
 			EmployeeStateInsuranceRuleId = row.EmployeeStateInsuranceRuleId,
 			EmployeeStateInsuranceRuleVersion = row.EmployeeStateInsuranceRuleVersion,
 			EmployeeStateInsuranceWages = (double)row.EmployeeStateInsuranceWages,

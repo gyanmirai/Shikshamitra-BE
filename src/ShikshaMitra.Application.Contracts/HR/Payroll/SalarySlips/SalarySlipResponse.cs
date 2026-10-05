@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -123,7 +123,8 @@ public class SalarySlipResponse
     public string? EpfNumber { get; set; }
 
     // Values captured when payroll was finalized, not current enrollment or compensation.
-    public Guid? EmployeeStateInsuranceRuleId { get; set; }
+    public Guid? EsiConfigurationId { get; set; }
+	public Guid? EmployeeStateInsuranceRuleId { get; set; }
     public int? EmployeeStateInsuranceRuleVersion { get; set; }
     public decimal EmployeeStateInsuranceWages { get; set; }
     public decimal EmployeeStateInsuranceGovernmentContribution { get; set; }

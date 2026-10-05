@@ -470,6 +470,9 @@ public class AdmissionApplicationDecisionService(
 		if (decision is "issueOffer" or "acceptOffer") await reviewGuard.EnsureApplicationCompleteAsync(application);
 		var reaffirm = review != null && decision == "approve" && application.Status is AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted;
 		if (!reaffirm) change(application);
+		if (decision == "reject")
+			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnClosureService>()
+				.CloseRejectedApplicationAsync(application, input.Reason ?? string.Empty);
 		if (review != null) await reviewGuard.RecordDecisionAsync(review, decision!, input.Reason);
 		await applicationRepository.UpdateAsync(application, false);
 		await historyRepository.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(), CurrentTenant.Id,

@@ -18,6 +18,15 @@ public sealed record AdmissionInquiryIntakeRules
 	public List<AdmissionInquirySource> AllowedSources { get; init; } = [];
 	public List<AdmissionInquirySource> RequireSourceDetailFor { get; init; } = [];
 
+	public AdmissionInquiryIntakeRules WithStandardBehavior() => this with
+	{
+		DuplicateRule = AdmissionInquiryDuplicateRule.RequireReason,
+		ApplicationStartRequirement = AdmissionInquiryApplicationStartRequirement.Captured,
+		RequireGuardianEmail = false,
+		RequireApplicantDateOfBirth = false,
+		RequireSourceDetailFor = []
+	};
+
 	public void Validate()
 	{
 		if (Version != 1 || !Enum.IsDefined(DuplicateRule) || !Enum.IsDefined(ApplicationStartRequirement))

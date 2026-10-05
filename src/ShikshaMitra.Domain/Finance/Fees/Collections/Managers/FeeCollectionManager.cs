@@ -63,7 +63,7 @@ public class FeeCollectionManager(
 		List<FeePaymentReceipt> Receipts,
 		double FeeLinesTotal,
 		double ChargeLinesTotal,
-		double LateFeeLinesTotal = 0);
+		double LateFeeLinesTotal = 0, List<PaymentMethodRecord>? PaymentRecords = null);
 
 	public async Task<CollectFeeTransactionResult> ExecuteCollectionTransactionAsync(CollectFeeTransactionCommand command)
 	{
@@ -186,7 +186,7 @@ public class FeeCollectionManager(
 			receipts,
 			feeLinesTotal,
 			chargeLinesTotal,
-			lateFeeLinesTotal);
+			lateFeeLinesTotal, paymentRecords);
 	}
 
 	/// <summary>

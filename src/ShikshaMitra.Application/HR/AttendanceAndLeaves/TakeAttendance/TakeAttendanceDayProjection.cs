@@ -5,6 +5,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves.TakeAttendance;
 using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.Common;
 using ShikshaMitra.TenantSettings;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -37,6 +38,7 @@ internal static class TakeAttendanceDayProjection
 			items.Add(new TakeAttendanceEmployeeRowDto
 			{
 				EmployeeId = employee.Id,
+				IsTeaching = employee.EmployeeGroup == EmployeeGroupType.Teaching,
 				FullName = FormatName(employee.FirstName, employee.MiddleName, employee.LastName),
 				EmployeeCode = employee.EmployeeCode ?? string.Empty,
 				Department = employee.Department,

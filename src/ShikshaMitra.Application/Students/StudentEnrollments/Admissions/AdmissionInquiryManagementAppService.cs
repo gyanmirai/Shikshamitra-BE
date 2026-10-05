@@ -204,7 +204,6 @@ public class AdmissionInquiryManagementAppService(
 	{
 		if (state == null) return new AdmissionInquiryManagementDto { InquiryId = inquiry.Id };
 		var policy = AdmissionInquiryPolicyResolver.ReadSnapshot(state.PolicySnapshotJson);
-		var blockers = AdmissionInquiryRuntimeService.GetReadinessBlockers(inquiry, state, policy);
 		var isLocked = inquiry.Status is AdmissionInquiryStatus.ApplicationStarted or AdmissionInquiryStatus.Converted;
 		return new AdmissionInquiryManagementDto
 		{
@@ -215,8 +214,8 @@ public class AdmissionInquiryManagementAppService(
 			OutcomeReasonCode = state.OutcomeReasonCode,
 			OutcomeAt = state.OutcomeAt, OutcomeBy = state.OutcomeBy,
 			IsOverdue = AdmissionInquiryRuntimeService.IsOverdue(state, Clock.Now), IsLocked = isLocked,
-			CanStartApplication = !isLocked && blockers.Count == 0,
-			Blockers = blockers, QualificationAnswers = ReadAnswers(state.QualificationAnswersJson),
+			CanStartApplication = !isLocked,
+			Blockers = [], QualificationAnswers = ReadAnswers(state.QualificationAnswersJson),
 			FollowUps = (await followUps.GetListAsync(item => item.InquiryId == inquiry.Id)).OrderBy(item => item.ScheduledAt).Select(Map).ToList()
 		};
 	}

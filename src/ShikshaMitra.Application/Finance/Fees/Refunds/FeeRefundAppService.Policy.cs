@@ -198,9 +198,9 @@ public partial class FeeRefundAppService
         {
             "Cash" => RefundPayoutMethod.Cash,
             "Cheque" => RefundPayoutMethod.Cheque,
-            "Demand Draft (DD)" => RefundPayoutMethod.DemandDraft,
-            "Bank Transfer (NEFT/RTGS/IMPS)" => RefundPayoutMethod.BankTransfer,
-            "UPI" => RefundPayoutMethod.Upi,
+            "DemandDraft" or "Demand Draft (DD)" => RefundPayoutMethod.DemandDraft,
+            "BankTransfer" or "Bank Transfer (NEFT/RTGS/IMPS)" => RefundPayoutMethod.BankTransfer,
+            "Upi" or "UPI" => RefundPayoutMethod.Upi,
             _ => (RefundPayoutMethod)(-1)
         };
         return (int)method >= 0;

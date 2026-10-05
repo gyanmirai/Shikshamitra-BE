@@ -149,65 +149,30 @@ public class PermissionConsistencyApi_Tests(ShikshaMitraApiTestFactory factory) 
             app.LazyServiceProvider = services.GetRequiredService<IAbpLazyServiceProvider>();
             await Should.ThrowAsync<AbpAuthorizationException>(() => app.GetCurrentRuleAsync());
             await Should.ThrowAsync<AbpAuthorizationException>(() => app.GetEstablishmentAsync());
-            await Should.ThrowAsync<AbpAuthorizationException>(() => app.ConfigureEstablishmentAsync(new()));
             await Should.ThrowAsync<AbpAuthorizationException>(() => app.GetComponentTreatmentsAsync());
-            await Should.ThrowAsync<AbpAuthorizationException>(() => app.UpdateComponentTreatmentsAsync(new()));
             await Should.ThrowAsync<AbpAuthorizationException>(() => app.GetEnrollmentAsync(Guid.NewGuid()));
             await Should.ThrowAsync<AbpAuthorizationException>(() => app.UpdateEnrollmentAsync(Guid.NewGuid(), new()));
             await Should.ThrowAsync<AbpAuthorizationException>(() => app.GetOverridesAsync(Guid.NewGuid()));
             await Should.ThrowAsync<AbpAuthorizationException>(() => app.CreateOverrideAsync(Guid.NewGuid(), new()));
             await Should.ThrowAsync<AbpAuthorizationException>(() => app.PreviewAsync(new()));
-            await Should.ThrowAsync<AbpAuthorizationException>(() => app.ActivateAsync(new()));
+            var configuration = ActivatorUtilities.CreateInstance<EsiConfigurationAppService>(services);
+            configuration.LazyServiceProvider = services.GetRequiredService<IAbpLazyServiceProvider>();
+            await Should.ThrowAsync<AbpAuthorizationException>(() => configuration.GetAsync());
+            await Should.ThrowAsync<AbpAuthorizationException>(() => configuration.SaveAsync(new()));
         }
         finally { context.HttpContext = oldContext; }
     }
 
-    [Fact]
-    public async Task Esi_classification_edit_does_not_require_the_separate_view_action()
+    [Theory]
+    [InlineData("HR.PayrollManagement.Settings.StatutorySchemes.Edit")]
+    [InlineData("HR.PayrollManagement.Settings.StatutorySchemes.Activate")]
+    public async Task Esi_configuration_requires_both_mutation_permissions(string permission)
     {
-        const string url = "/api/payroll/statutory-schemes/esi/component-treatments";
-        var treatments = await Client.GetFromJsonAsync<PayrollComponentStatutoryTreatmentDto[]>(
-            url + "?effectiveOn=2026-08-01", JsonOptions);
-        treatments.ShouldNotBeNull();
-        treatments.ShouldNotBeEmpty();
-        var treatment = treatments.First();
-        using var editor = Factory.CreateClient();
-        editor.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
-            ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.Edit);
-        using var response = await editor.PutAsJsonAsync(url, new UpdatePayrollComponentStatutoryTreatmentsDto
-        {
-            Items = [new PayrollComponentStatutoryTreatmentDto
-            {
-                ComponentId = treatment.ComponentId,
-                Treatment = treatment.Treatment,
-                EffectiveFrom = treatment.EffectiveFrom,
-                EffectiveTo = treatment.EffectiveTo
-            }]
-        });
-        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-        var saved = await response.Content.ReadFromJsonAsync<PayrollComponentStatutoryTreatmentDto[]>(JsonOptions);
-        saved.ShouldNotBeNull();
-        saved.Single(x => x.ComponentId == treatment.ComponentId).Treatment.ShouldBe(treatment.Treatment);
-        (await editor.GetAsync(url)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        using var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, permission);
+        (await client.PutAsJsonAsync("/api/payroll/statutory-schemes/esi/configuration", new SaveEsiConfigurationDto
+        { ConcurrencyStamp = "stamp", IdempotencyKey = Guid.NewGuid() })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
-
-    [Fact]
-    public async Task Esi_activation_only_grant_reaches_freshness_check_without_granting_view_or_edit()
-    {
-        const string baseUrl = "/api/payroll/statutory-schemes/esi";
-        using var activator = Factory.CreateClient();
-        activator.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, Activate);
-        using var response = await activator.PostAsJsonAsync(baseUrl + "/activate", new ActivateStatutorySchemeDto
-        {
-            MonthYear = "08-2026", PreviewFingerprint = new string('0', 64)
-        });
-        response.StatusCode.ShouldBe(HttpStatusCode.Conflict, await response.Content.ReadAsStringAsync());
-        (await response.Content.ReadAsStringAsync()).ShouldContain("ESI_PREVIEW_STALE");
-        (await activator.GetAsync(baseUrl + "/establishment")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await activator.PutAsJsonAsync(baseUrl + "/establishment", new ConfigureStatutoryEstablishmentDto()))
-            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-    }
-
     [Fact]
     public async Task Esi_employee_action_grants_cannot_bypass_scope_or_cross_tenant_boundaries()
     {

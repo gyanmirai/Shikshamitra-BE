@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -181,6 +183,7 @@ public class TeacherAvailabilityAppService(
         return academicYear?.Id;
     }
 
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
     public async Task<AffectedLectureResultDto> GetAffectedLecturesAsync(CreateTeacherAvailabilityDto input)
     {
         var teacherId = input.TeacherId;
@@ -219,6 +222,9 @@ public class TeacherAvailabilityAppService(
             .GroupBy(x => x.Id)
             .Select(x => x.First())
             .ToList();
+
+        var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+        timetables = timetables.FilterByUserScope(scope).ToList();
 
         if (input.AcademicMediumId.HasValue)
         {

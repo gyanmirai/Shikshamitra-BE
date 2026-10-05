@@ -18,6 +18,27 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public Guid CategoryId { get; private set; }
+ public string? SourceKey { get; private set; }
+ public Guid? SourceId { get; private set; }
+ public Guid? StudentId { get; private set; }
+ public Guid? BankAccountId { get; private set; }
+ public string? CategoryNameSnapshot { get; private set; }
+ public string? BankLabelSnapshot { get; private set; }
+ public bool IsConfirmed { get; private set; } = true;
+ public bool IsAutomatic => SourceKey != null;
+ public void Confirm() => IsConfirmed = true;
+ public static Transaction Automatic(Guid id, Guid? tenantId, Guid yearId, Guid categoryId,
+   string categoryName, Guid? bankId, string? bankLabel, string name, decimal amount,
+   int method, DateTime at, TransactionType type, string key, Guid sourceId, Guid studentId,
+   bool confirmed = true, bool correction = false)
+ {
+   var entry = new Transaction(id, tenantId, yearId, categoryId, name, null, amount, method, at, null, type);
+   entry.SourceKey = Check.NotNullOrWhiteSpace(key, nameof(key));
+   entry.SourceId = sourceId; entry.StudentId = studentId; entry.BankAccountId = bankId;
+   entry.CategoryNameSnapshot = categoryName; entry.BankLabelSnapshot = bankLabel;
+   entry.IsConfirmed = confirmed; if (correction) entry.Amount = -amount;
+   return entry;
+ }
 	public string Name { get; private set; }
 
 	private List<Tag> _categoryTags = new List<Tag>();
@@ -105,6 +126,7 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		DateTime paymentDate,
 		string? notes)
 	{
+		if (IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");
 		EnsureValidMoneyAndMethod(amount, paymentMethod);
 		CategoryId = categoryId;
 		Name = name;

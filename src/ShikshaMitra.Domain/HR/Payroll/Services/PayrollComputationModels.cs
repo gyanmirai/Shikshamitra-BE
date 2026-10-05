@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -21,7 +21,8 @@ public sealed record PayrollStatutoryRuleSet(
 	ProvidentFund? ProvidentFund,
 	IReadOnlyList<ProfessionalTax> ProfessionalTaxSlabs,
 	bool IsEmploymentCessationMonth = false,
-	PayrollEsiStatutoryContext? EmployeeStateInsurance = null);
+	PayrollEsiStatutoryContext? EmployeeStateInsurance = null,
+	Guid? EsiConfigurationId = null);
 
 public sealed record PayrollEsiStatutoryContext(
 	DateTime PayrollMonth,
@@ -30,7 +31,11 @@ public sealed record PayrollEsiStatutoryContext(
 	EmployeeStatutoryEnrollment? Enrollment,
 	IReadOnlyDictionary<Guid, StatutoryWageTreatment> ComponentTreatments,
 	IReadOnlyList<StatutoryOverride> Overrides,
-	EmployeePayrollComponent DeductionSource);
+	EmployeePayrollComponent DeductionSource)
+{
+	// Set only by the attendance calculator for this calculation's generated overtime row.
+	public Guid? SystemOvertimeComponentId { get; init; }
+}
 
 public sealed record PayrollComputationResult(
 	int PresentDays,
@@ -61,6 +66,7 @@ public sealed record PayrollComputationResult(
 	List<string> StatutoryIssueCodes)
 {
 	public decimal TotalEarnings => NetPay + TotalDeduction;
+	public Guid? EsiConfigurationId { get; init; }
 	public decimal AdditionalEarnings => TotalEarnings - GrossSalary;
 }
 

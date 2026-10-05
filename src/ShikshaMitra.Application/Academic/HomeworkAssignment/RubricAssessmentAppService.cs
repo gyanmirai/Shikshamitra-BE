@@ -29,7 +29,7 @@ public class RubricAssessmentAppService(
 	public async Task<AssessmentRubricDto> CreateAsync(CreateUpdateRubricDto input)
 	{
 		await EnsureTaskLinkIsValidAsync(input);
-		EnsureCriteriaAreValid(input.Criteria);
+		EnsureCriteriaAreValid(input);
 
 		var rubric = new AssessmentRubric(
 			GuidGenerator.Create(),
@@ -53,7 +53,7 @@ public class RubricAssessmentAppService(
 			SerializeList(input.Tags),
 			SerializeList(input.PerformanceLevels));
 
-		rubric.ReplaceCriteria(BuildCriteria(rubric.Id, input.Criteria));
+		rubric.ReplaceCriteria(BuildCriteria(rubric.Id, input.Criteria, input.ScoringModel));
 		await rubricRepository.InsertAsync(rubric, autoSave: true);
 		return MapRubric(rubric);
 	}
@@ -96,7 +96,7 @@ public class RubricAssessmentAppService(
 	public async Task<AssessmentRubricDto> UpdateAsync(Guid id, CreateUpdateRubricDto input)
 	{
 		await EnsureTaskLinkIsValidAsync(input);
-		EnsureCriteriaAreValid(input.Criteria);
+		EnsureCriteriaAreValid(input);
 
 		var rubric = await rubricRepository.GetAsync(id);
 		rubric.UpdateDetails(
@@ -125,7 +125,7 @@ public class RubricAssessmentAppService(
 			await criterionRepository.DeleteAsync(criterion, autoSave: false);
 		}
 
-		rubric.ReplaceCriteria(BuildCriteria(rubric.Id, input.Criteria));
+		rubric.ReplaceCriteria(BuildCriteria(rubric.Id, input.Criteria, input.ScoringModel));
 		await rubricRepository.UpdateAsync(rubric, autoSave: true);
 		return MapRubric(rubric);
 	}
@@ -204,7 +204,8 @@ public class RubricAssessmentAppService(
 					StudentDescription = c.StudentDescription,
 					TeacherGuidance = c.TeacherGuidance,
 					IsRequired = c.IsRequired,
-					MaxMarks = c.MaxMarks,
+					Points = c.Points,
+					Weight = c.Weight,
 					DisplayOrder = c.DisplayOrder
 				})
 				.ToList()
@@ -233,7 +234,7 @@ public class RubricAssessmentAppService(
 			SerializeList(cloneInput.Tags),
 			SerializeList(cloneInput.PerformanceLevels));
 
-		rubric.ReplaceCriteria(BuildCriteria(rubric.Id, cloneInput.Criteria));
+		rubric.ReplaceCriteria(BuildCriteria(rubric.Id, cloneInput.Criteria, cloneInput.ScoringModel));
 		rubric.Publish();
 		await rubricRepository.InsertAsync(rubric, autoSave: true);
 		foreach (var obsoleteRubric in currentTaskRubrics)
@@ -371,6 +372,7 @@ public class RubricAssessmentAppService(
 		await EnsureCurrentUserCanAccessEvaluationAsync(evaluation, nameof(ApproveEvaluationAsync));
 		await LoadScoresAsync([evaluation]);
 		var rubric = await rubricRepository.GetAsync(evaluation.RubricId);
+		await LoadCriteriaAsync([rubric]);
 		var submission = await submissionRepository.GetAsync(evaluation.StudentSubmissionId);
 
 		evaluation.Approve();
@@ -426,16 +428,33 @@ public class RubricAssessmentAppService(
 		}
 	}
 
-	private static void EnsureCriteriaAreValid(IReadOnlyCollection<RubricCriterionInputDto> criteria)
+	private static void EnsureCriteriaAreValid(CreateUpdateRubricDto input)
 	{
+		var criteria = input.Criteria;
+		if (input.ScoringModel == RubricScoringModel.PerformanceLevels)
+		{
+			EnsurePerformanceLevelsAreValid(input.PerformanceLevels);
+		}
 		if (criteria.Count == 0)
 		{
 			throw new BusinessException("AssessmentRubric:CriteriaRequired");
 		}
 
-		if (criteria.Any(c => string.IsNullOrWhiteSpace(c.Title) || c.MaxMarks <= 0))
+		if (criteria.Any(c => string.IsNullOrWhiteSpace(c.Title) ||
+			(input.ScoringModel == RubricScoringModel.WeightedPercentage ? c.Weight is null or <= 0 or > 100 :
+			 input.ScoringModel != RubricScoringModel.PerformanceLevels && c.Points is null or <= 0 or > 1000)))
 		{
 			throw new BusinessException("AssessmentRubric:InvalidCriteria");
+		}
+		if (criteria.Any(c =>
+			(c.Points.HasValue && c.Points.Value != Math.Round(c.Points.Value, 2, MidpointRounding.AwayFromZero)) ||
+			(c.Weight.HasValue && c.Weight.Value != Math.Round(c.Weight.Value, 2, MidpointRounding.AwayFromZero))))
+		{
+			throw new BusinessException("AssessmentRubric:InvalidCriteria", "Use no more than two decimal places for points and weights.");
+		}
+		if (input.ScoringModel == RubricScoringModel.Checklist && input.PerformanceLevels.Count == 0 && criteria.Any(c => c.Points != 1m))
+		{
+			throw new BusinessException("AssessmentRubric:InvalidChecklistItem", "Each checklist item must have a maximum of 1.");
 		}
 	}
 
@@ -459,7 +478,7 @@ public class RubricAssessmentAppService(
 			throw new BusinessException("AssessmentRubric:PerformanceLevelsRequired");
 		}
 
-		if (levels.Any(level => string.IsNullOrWhiteSpace(level.Label) || level.Score < 0))
+		if (levels.Any(level => string.IsNullOrWhiteSpace(level.Label) || level.Score < 0 || level.Score > 1000) || levels.Max(level => level.Score) <= 0)
 		{
 			throw new BusinessException("AssessmentRubric:InvalidPerformanceLevel");
 		}
@@ -487,6 +506,7 @@ public class RubricAssessmentAppService(
 			throw new BusinessException("AssessmentRubric:DuplicateCriterionScore");
 		}
 
+		var levels = DeserializeList<RubricPerformanceLevelDto>(rubric.PerformanceLevelsJson);
 		foreach (var score in scores)
 		{
 			if (!criteria.TryGetValue(score.CriterionId, out var criterion))
@@ -494,9 +514,19 @@ public class RubricAssessmentAppService(
 				throw new BusinessException("AssessmentRubric:InvalidCriterion");
 			}
 
-			if (score.Marks < 0 || score.Marks > criterion.MaxMarks)
+			if (score.Marks < 0 || score.Marks > rubric.GetCriterionMaximum(criterion))
 			{
 				throw new BusinessException("AssessmentRubric:ScoreOutOfRange");
+			}
+			if (levels.Count > 0 && !levels.Any(level => level.Score == score.Marks))
+			{
+				throw new BusinessException("AssessmentRubric:InvalidPerformanceLevel", "Choose a configured performance level.");
+			}
+			if (rubric.ScoringModel == RubricScoringModel.Checklist &&
+				levels.Count == 0 &&
+				score.Marks is not (0m or 1m))
+			{
+				throw new BusinessException("AssessmentRubric:InvalidChecklistScore", "Choose Met or Not met for each checklist item.");
 			}
 		}
 	}
@@ -572,7 +602,7 @@ public class RubricAssessmentAppService(
 		}
 	}
 
-	private List<AssessmentRubricCriterion> BuildCriteria(Guid rubricId, IEnumerable<RubricCriterionInputDto> criteria)
+	private List<AssessmentRubricCriterion> BuildCriteria(Guid rubricId, IEnumerable<RubricCriterionInputDto> criteria, RubricScoringModel model)
 	{
 		return criteria
 			.OrderBy(c => c.DisplayOrder)
@@ -585,8 +615,9 @@ public class RubricAssessmentAppService(
 				c.StudentDescription,
 				c.TeacherGuidance,
 				c.IsRequired,
-				c.MaxMarks,
-				c.DisplayOrder > 0 ? c.DisplayOrder : index + 1))
+				model is RubricScoringModel.PerformanceLevels or RubricScoringModel.WeightedPercentage ? null : c.Points,
+				c.DisplayOrder > 0 ? c.DisplayOrder : index + 1,
+				model == RubricScoringModel.WeightedPercentage ? c.Weight : null))
 			.ToList();
 	}
 
@@ -663,7 +694,8 @@ public class RubricAssessmentAppService(
 					StudentDescription = c.StudentDescription,
 					TeacherGuidance = c.TeacherGuidance,
 					IsRequired = c.IsRequired,
-					MaxMarks = c.MaxMarks,
+					Points = c.Points,
+					Weight = c.Weight,
 					DisplayOrder = c.DisplayOrder
 				})
 				.ToList()

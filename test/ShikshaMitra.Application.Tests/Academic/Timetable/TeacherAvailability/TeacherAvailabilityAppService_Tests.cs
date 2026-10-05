@@ -513,7 +513,7 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
     }
 
     [Fact]
-    public async Task GetListAsync_Should_Not_Fail_When_Attendance_Sync_Encounters_A_Late_Overlap()
+    public async Task SyncDateRangeAsync_Should_Deduplicate_Legacy_Attendance_Before_Listing_Availability()
     {
         var teacher = await CreateEmployeeAsync(
             Guid.NewGuid(),
@@ -538,6 +538,11 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
 
         using (_currentPrincipalAccessor.Change(BuildPrincipal(Guid.NewGuid(), "admin")))
         {
+            using var unitOfWork = GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var sync = GetRequiredService<TakeAttendanceTeacherAvailabilitySyncService>();
+            await sync.SyncDateRangeAsync(availabilityDate, availabilityDate);
+            await sync.SyncDateRangeAsync(availabilityDate, availabilityDate);
+
             var result = await _teacherAvailabilityAppService.GetListAsync(
                 new GetTeacherAvailabilityInput
                 {
@@ -548,6 +553,9 @@ public class TeacherAvailabilityAppService_Tests : ShikshaMitraApplicationTestBa
             result.TotalCount.ShouldBe(1);
             result.Items.ShouldHaveSingleItem().SourceType
                 .ShouldBe(TeacherAvailabilitySource.Attendance.ToString());
+            (await _availabilityRepository.GetListAsync(x => !x.IsCancelled && x.TeacherId == teacher.Id))
+                .ShouldHaveSingleItem();
+            await unitOfWork.CompleteAsync();
         }
     }
 

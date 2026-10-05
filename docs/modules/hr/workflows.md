@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-17
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -34,6 +34,9 @@ Attendance workflows create payroll-relevant facts:
 | Attendance tracking | Query date-wise or employee-wise attendance and grouped register rows | Pagination, date range, scope filtering, and adjustment behavior |
 | Attendance import | Preview file, classify rows, confirm rows, and create batch audit records | Header parsing, employee matching, single payroll month, warnings, and batch status |
 | Automated attendance run | Read automated run rows, update row state, and lock or unlock batch | Device-run audit, row replacement, batch lock, and payroll log mirror |
+
+Manual attendance saves synchronize attendance-owned teacher unavailability inside the authorized, employee-scoped save workflow. The synchronization service uses a unit of work and preserves overlapping records from other sources. An authorized HR operator does not need the administrator role to persist this derived fact. Present cancels only attendance-owned unavailability; it does not cancel substitution duties.
+The HR quick-substitution workflow uses the existing Academic APIs: affected periods require Timetable Management View and are filtered by UserScope; creation requires Timetable Management Add at the application-service boundary and validates the target scope and current substitute/room conflicts. Attendance permission alone does not grant assignment authority. Teacher conflicts recognize both employee IDs and linked user IDs in published timetable slots.
 
 ## Leave workflows
 

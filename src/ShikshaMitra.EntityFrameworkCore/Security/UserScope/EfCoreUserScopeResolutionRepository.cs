@@ -30,6 +30,27 @@ public sealed class EfCoreUserScopeResolutionRepository(
                       select role.Name).Distinct().ToListAsync(cancellationToken);
     }
 
+    public async Task<Dictionary<Guid, List<string>>> GetRoleNamesByUserIdsAsync(
+        IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken = default)
+    {
+        if (userIds.Count == 0) return [];
+        var ids = userIds.Distinct().ToArray();
+        var db = await contexts.GetDbContextAsync();
+        var users = db.Set<IdentityUser>().IgnoreAutoIncludes().AsNoTracking()
+            .Where(user => user.TenantId == tenant.Id && Enumerable.Contains(ids, user.Id));
+        var existingIds = await users.Select(user => user.Id).ToListAsync(cancellationToken);
+        var memberships = await (from user in users
+                                 from membership in user.Roles
+                                 join role in db.Set<IdentityRole>() on membership.RoleId equals role.Id
+                                 where role.TenantId == tenant.Id
+                                 select new { UserId = user.Id, RoleName = role.Name })
+            .ToListAsync(cancellationToken);
+        var roles = existingIds.ToDictionary(id => id, _ => new List<string>());
+        foreach (var membership in memberships)
+            roles[membership.UserId].Add(membership.RoleName);
+        return roles;
+    }
+
     public async Task<List<ScopeReportingEmployee>> GetReportingHierarchyAsync(CancellationToken cancellationToken = default)
     {
         var db = await contexts.GetDbContextAsync();

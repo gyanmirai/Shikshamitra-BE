@@ -48,7 +48,7 @@ public class PayrollSnapshotAttendanceInvalidationReader(
 			    (JsonSerializer.Deserialize<List<string>>(snapshot.IssueCodesJson) ?? new List<string>()).Contains(IssueCodes.NoAttendance))
 			{
 				logger.LogDebug(
-					"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale because attendance now exists.",
+					"Payroll snapshot for staff {EmployeeId} in {MonthYear} is stale because attendance now exists.",
 					employeeId,
 					monthYear);
 				return true;
@@ -62,7 +62,7 @@ public class PayrollSnapshotAttendanceInvalidationReader(
 			    attendance.ChangedAt > (snapshot.LastModificationTime ?? snapshot.CreationTime))
 			{
 				logger.LogDebug(
-					"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale after attendance change.",
+					"Payroll snapshot for staff {EmployeeId} in {MonthYear} is stale after attendance change.",
 					attendance.EmployeeId,
 					monthYear);
 				return true;

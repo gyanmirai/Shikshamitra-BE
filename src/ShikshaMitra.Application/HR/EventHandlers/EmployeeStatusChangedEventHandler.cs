@@ -16,7 +16,7 @@ public class EmployeeStatusChangedEventHandler(
 	public Task HandleEventAsync(EmployeeStatusChangedEto eventData)
 	{
 		logger.LogInformation(
-			"Employee status changed: EmployeeId={EmployeeId}, {Previous} -> {Current}, ChangeReason={ChangeReason}",
+			"Staff status changed: EmployeeId={EmployeeId}, {Previous} -> {Current}, ChangeReason={ChangeReason}",
 			eventData.EmployeeId, eventData.PreviousStatus, eventData.CurrentStatus, eventData.ChangeReason);
 
 		return Task.CompletedTask;

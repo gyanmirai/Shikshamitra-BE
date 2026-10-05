@@ -9,8 +9,8 @@ internal static class AttendanceImportPreviewRowValidator
 	{
 		ValidateMaxLength(row.Action, AttendanceImportPreviewMapper.RowActionMaxLength, "Action", row.Errors);
 		ValidateMaxLength(row.AttendanceDate, AttendanceImportPreviewMapper.RowAttendanceDateMaxLength, "Attendance Date", row.Errors);
-		ValidateMaxLength(row.EmployeeCode, AttendanceImportPreviewMapper.RowEmployeeCodeMaxLength, "Employee Code", row.Errors);
-		ValidateMaxLength(row.EmployeeName, AttendanceImportPreviewMapper.RowEmployeeNameMaxLength, "Employee Name", row.Errors);
+		ValidateMaxLength(row.EmployeeCode, AttendanceImportPreviewMapper.RowEmployeeCodeMaxLength, "Staff Code", row.Errors);
+		ValidateMaxLength(row.EmployeeName, AttendanceImportPreviewMapper.RowEmployeeNameMaxLength, "Staff Name", row.Errors);
 		ValidateMaxLength(row.ContactNo, AttendanceImportPreviewMapper.RowContactNoMaxLength, "Contact No", row.Errors);
 		ValidateMaxLength(row.TimeIn, AttendanceImportPreviewMapper.RowTimeMaxLength, "Time In", row.Errors);
 		ValidateMaxLength(row.TimeOut, AttendanceImportPreviewMapper.RowTimeMaxLength, "Time Out", row.Errors);

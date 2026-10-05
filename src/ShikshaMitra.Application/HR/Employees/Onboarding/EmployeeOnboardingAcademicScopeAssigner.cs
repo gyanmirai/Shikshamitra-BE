@@ -18,7 +18,7 @@ public class EmployeeOnboardingAcademicScopeAssigner(
 	IUnitOfWorkManager unitOfWorkManager,
 	IPermissionChecker permissionChecker) : ITransientDependency
 {
-	private const string AssignmentDescription = "Employee onboarding academic permission";
+	private const string AssignmentDescription = "Staff onboarding academic permission";
 
 	public async Task AssignAsync(
 		Guid userId,
@@ -89,5 +89,5 @@ public class EmployeeOnboardingAcademicScopeAssigner(
 
 	private Task SaveChangesAsync() =>
 		unitOfWorkManager.Current?.SaveChangesAsync() ??
-		throw new InvalidOperationException("Employee onboarding scope assignment requires an active unit of work.");
+		throw new InvalidOperationException("Staff onboarding scope assignment requires an active unit of work.");
 }

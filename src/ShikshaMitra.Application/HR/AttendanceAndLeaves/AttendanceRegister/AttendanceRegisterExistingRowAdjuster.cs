@@ -35,7 +35,7 @@ public class AttendanceRegisterExistingRowAdjuster(
 	{
 		if (!await hrScopeAccessService.CanAccessEmployeeStageAsync(scope, row.EducationMediumStageId))
 		{
-			results.Add(ToSkipped(row, "Employee is outside your organization scope."));
+			results.Add(ToSkipped(row, "Staff is outside your organization scope."));
 			return;
 		}
 

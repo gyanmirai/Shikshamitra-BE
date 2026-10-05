@@ -20,7 +20,7 @@ public class EmployeeICardAssetService(
 		EmployeeICardTemplateRules.ValidateAsset(fileName, contentType, content);
 
 		var sanitizedFileName = Path.GetFileName(fileName);
-		var blobName = $"employee-icards/assets/{CurrentTenant.Id ?? Guid.Empty}/{guidGenerator.Create()}_{sanitizedFileName}";
+		var blobName = $"staff-icards/assets/{CurrentTenant.Id ?? Guid.Empty}/{guidGenerator.Create()}_{sanitizedFileName}";
 		await blobContainer.SaveAsync(blobName, content, overrideExisting: true);
 
 		return new EmployeeICardAssetUploadResult

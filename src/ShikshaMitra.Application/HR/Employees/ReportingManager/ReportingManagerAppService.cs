@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -75,7 +75,7 @@ public class ReportingManagerAppService(
 	public async Task<EmployeesByManagerResponseDto> GetMyEmployeesByManagerAsync()
 	{
 		var actorEmployee = await ResolveCurrentEmployeeAsync()
-			?? throw new AbpAuthorizationException("Access denied: Employee profile not found.");
+			?? throw new AbpAuthorizationException("Access denied: Staff profile not found.");
 
 		return await GetEmployeesByManagerAsync(actorEmployee.Id);
 	}

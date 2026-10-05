@@ -122,7 +122,7 @@ internal static class HrPolicyAssignmentProjection
 
 		var target = matched.TargetDisplayName ?? matched.TargetKey ?? matched.TargetType;
 		var precedence = string.Equals(matched.TargetType, "employee", StringComparison.OrdinalIgnoreCase)
-			? "Employee-specific assignments take precedence over group assignments."
+			? "Staff-specific assignments take precedence over group assignments."
 			: "This group assignment was selected by priority and effective date.";
 		return $"{target} matched on {dto.Date:dd MMM yyyy}. {precedence}";
 	}

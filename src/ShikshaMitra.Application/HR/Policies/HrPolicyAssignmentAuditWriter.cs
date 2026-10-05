@@ -37,7 +37,7 @@ public class HrPolicyAssignmentAuditWriter(HrAuditWriter auditWriter) : ITransie
 			entity.Id,
 			BuildAssignmentAuditName(entity),
 			"assigned",
-			$"Upserted direct employee policy override for {employeeName}.",
+			$"Upserted direct staff policy override for {employeeName}.",
 			entity.AssignmentReason,
 			HrAuditWriter.Diff(before, dto, "lastModificationTime", "lastModifierId"),
 			BuildAssignmentAuditContext(entity));

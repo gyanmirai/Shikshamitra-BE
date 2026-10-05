@@ -44,7 +44,7 @@ public class AttendanceRegisterMissingRowCreator(
 			    employee.StatusLastChangedAt,
 			    attendanceDate))
 		{
-			results.Add(ToSkipped(employeeId, attendanceDate, "Employee is not active on this date."));
+			results.Add(ToSkipped(employeeId, attendanceDate, "Staff is not active on this date."));
 			return;
 		}
 
@@ -54,7 +54,7 @@ public class AttendanceRegisterMissingRowCreator(
 
 		if (!await hrScopeAccessService.CanAccessEmployeeStageAsync(scope, resolvedStageId))
 		{
-			results.Add(ToSkipped(employeeId, attendanceDate, "Employee is outside your organization scope."));
+			results.Add(ToSkipped(employeeId, attendanceDate, "Staff is outside your organization scope."));
 			return;
 		}
 

@@ -30,7 +30,7 @@ internal static class PayrollLateArrivalDeductionDiagnostics
 
 		if (shift == null)
 		{
-			return "Late arrival salary deduction is enabled, but the employee has no shift assigned.";
+			return "Late arrival salary deduction is enabled, but the staff has no shift assigned.";
 		}
 
 		var monthAttendance = attendanceRecords

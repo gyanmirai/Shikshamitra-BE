@@ -29,7 +29,7 @@ public class AttendanceImportPreviewRowEnricher(
 		{
 			if (!employeesByCode.TryGetValue(row.EmployeeCode.ToUpperInvariant(), out var employee))
 			{
-				row.Errors.Add("Employee Code was not found.");
+				row.Errors.Add("Staff Code was not found.");
 				continue;
 			}
 
@@ -39,7 +39,7 @@ public class AttendanceImportPreviewRowEnricher(
 				    employee.StatusEffectiveDate,
 				    row.AttendanceDateValue.Value))
 			{
-				row.Errors.Add("Employee is not active on the attendance date.");
+				row.Errors.Add("Staff is not active on the attendance date.");
 				continue;
 			}
 
@@ -85,7 +85,7 @@ public class AttendanceImportPreviewRowEnricher(
 		var normalizedStored = AttendanceImportPreviewMapper.NormalizeComparableValue(employee.EmployeeNameWithFather);
 		if (!string.Equals(normalizedIncoming, normalizedStored, StringComparison.OrdinalIgnoreCase))
 		{
-			row.Warnings.Add("Employee Name does not match the current employee record.");
+			row.Warnings.Add("Staff Name does not match the current staff record.");
 		}
 	}
 

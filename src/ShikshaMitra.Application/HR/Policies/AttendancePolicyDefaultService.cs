@@ -51,7 +51,8 @@ public class AttendancePolicyDefaultService(
 
 		if (!hasOtherActiveDefault)
 		{
-			throw new BusinessException(HRErrorCodes.DefaultAttendancePolicyRequired);
+			throw new BusinessException(HRErrorCodes.DefaultAttendancePolicyRequired)
+				.WithData("reason", "sole-default");
 		}
 	}
 }

@@ -104,7 +104,7 @@ public class PayrollEsiContextResolver(
 			employeeId,
 			component?.Name ?? CanonicalEsiComponentName,
 			component?.Id,
-			component?.Description ?? "System-calculated employee ESI contribution",
+			component?.Description ?? "System-calculated staff ESI contribution",
 			0m,
 			isFixed: true,
 			isTemp: false,

@@ -15,12 +15,12 @@ namespace ShikshaMitra.HR.AttendanceAndLeaves;
 internal static class AttendanceImportFileParser
 {
 	public const string AttendanceDateHeader = "Attendance Date";
-	public const string EmployeeCodeHeader = "Employee Code";
+	public const string EmployeeCodeHeader = "Staff Code";
 	public const string TimeInHeader = "Time In";
 	public const string TimeOutHeader = "Time Out";
 	public const string StatusHeader = "Status";
 	public const string RemarksHeader = "Remarks";
-	public const string EmployeeNameHeader = "Employee Name";
+	public const string EmployeeNameHeader = "Staff Name";
 	public const string ContactNoHeader = "Contact No";
 
 	private const long MaxFileSizeBytes = 5 * 1024 * 1024;
@@ -112,7 +112,8 @@ internal static class AttendanceImportFileParser
 		var config = new CsvConfiguration(CultureInfo.InvariantCulture)
 		{
 			IgnoreBlankLines = false,
-			TrimOptions = TrimOptions.Trim
+			TrimOptions = TrimOptions.Trim,
+			PrepareHeaderForMatch = args => AttendanceImportHeaderMap.NormalizeHeader(args.Header)
 		};
 
 		using var csv = new CsvReader(reader, config);

@@ -10,7 +10,7 @@ public class EmployeeICardPdfRequestValidator : AbstractValidator<EmployeeICardP
 	{
 		RuleFor(x => x.EmployeeIds)
 			.NotEmpty()
-			.WithMessage("At least one employee is required.");
+			.WithMessage("At least one staff is required.");
 
 		RuleFor(x => x.EmployeeIds)
 			.Must(x => x.All(id => id != Guid.Empty))

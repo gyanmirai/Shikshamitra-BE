@@ -37,7 +37,7 @@ public class EmployeePersonalInfoPostCommitEffects(
 
 		var fullName = $"{input.FirstName} {input.LastName}".Trim();
 		logger.LogInformation(
-			"Employee created: EmployeeId={EmployeeId}, Code={EmployeeCode}, Email={Email}",
+			"Staff created: EmployeeId={EmployeeId}, Code={EmployeeCode}, Email={Email}",
 			employee.Id,
 			employee.EmployeeCode,
 			input.Email);
@@ -67,7 +67,7 @@ public class EmployeePersonalInfoPostCommitEffects(
 	{
 		var currentUnitOfWork = unitOfWorkManager.Current ??
 			throw new InvalidOperationException(
-				"Deferred employee creation effects require an active unit of work.");
+				"Deferred staff creation effects require an active unit of work.");
 		var employeeId = employee.Id;
 		var employeeCode = employee.EmployeeCode;
 		var employeeEmail = input.Email;
@@ -96,13 +96,13 @@ public class EmployeePersonalInfoPostCommitEffects(
 				{
 					logger.LogError(
 						exception,
-						"Employee {EmployeeId} was finalized, but its profile picture could not be persisted.",
+						"Staff {EmployeeId} was finalized, but its profile picture could not be persisted.",
 						employeeId);
 				}
 			}
 
 			logger.LogInformation(
-				"Employee created: EmployeeId={EmployeeId}, Code={EmployeeCode}, Email={Email}",
+				"Staff created: EmployeeId={EmployeeId}, Code={EmployeeCode}, Email={Email}",
 				employeeId,
 				employeeCode,
 				employeeEmail);
@@ -123,7 +123,7 @@ public class EmployeePersonalInfoPostCommitEffects(
 			{
 				logger.LogError(
 					exception,
-					"Employee {EmployeeId} was finalized, but its creation event could not be published.",
+					"Staff {EmployeeId} was finalized, but its creation event could not be published.",
 					employeeId);
 			}
 

@@ -8,10 +8,10 @@ internal static class HrReportSourceDefinitions
 	{
 		return
 		[
-			Source(HrReportDataSources.Employee, "Employee", "Employee Reports", "Employee profile, contact, status, department, and reporting-manager data.",
+			Source(HrReportDataSources.Employee, "Staff", "Staff Reports", "Staff profile, contact, status, department, and reporting-manager data.",
 				[
-					Field("employeeCode", "Employee Code", groupable: true),
-					Field("employeeName", "Employee Name"),
+					Field("employeeCode", "Staff Code", groupable: true),
+					Field("employeeName", "Staff Name"),
 					Field("department", "Department", groupable: true),
 					Field("designation", "Designation", groupable: true),
 					Field("status", "Status", groupable: true),
@@ -26,8 +26,8 @@ internal static class HrReportSourceDefinitions
 			Source(HrReportDataSources.Payroll, "Payroll", "Payroll Reports", "Salary register, payslip, allowance, deduction, reconciliation, and settlement rows.",
 				[
 					Field("month", "Month", groupable: true),
-					Field("employeeCode", "Employee Code", groupable: true),
-					Field("employeeName", "Employee Name"),
+					Field("employeeCode", "Staff Code", groupable: true),
+					Field("employeeName", "Staff Name"),
 					Field("department", "Department", groupable: true),
 					Field("designation", "Designation", groupable: true),
 					Field("basicSalary", "Basic Salary", "number", summarizable: true),
@@ -40,11 +40,11 @@ internal static class HrReportSourceDefinitions
 				],
 				["month", "employeeCode", "employeeName", "department", "grossSalary", "totalDeduction", "netPay", "reviewStatus"],
 				["employeeCode"]),
-			Source(HrReportDataSources.Attendance, "Attendance", "Attendance Reports", "Daily attendance register and employee-wise status data.",
+			Source(HrReportDataSources.Attendance, "Attendance", "Attendance Reports", "Daily attendance register and staff-wise status data.",
 				[
 					Field("attendanceDate", "Date", "date", groupable: true),
-					Field("employeeCode", "Employee Code", groupable: true),
-					Field("employeeName", "Employee Name"),
+					Field("employeeCode", "Staff Code", groupable: true),
+					Field("employeeName", "Staff Name"),
 					Field("department", "Department", groupable: true),
 					Field("status", "Status", groupable: true),
 					Field("timeIn", "Time In", "date"),
@@ -57,8 +57,8 @@ internal static class HrReportSourceDefinitions
 			Source(HrReportDataSources.Leave, "Leave", "Leave Reports", "Leave requests, approvals, balances, and leave usage exports.",
 				[
 					Field("requestNo", "Request #", "number"),
-					Field("employeeCode", "Employee Code", groupable: true),
-					Field("employeeName", "Employee Name"),
+					Field("employeeCode", "Staff Code", groupable: true),
+					Field("employeeName", "Staff Name"),
 					Field("leaveType", "Leave Type", groupable: true),
 					Field("startDate", "Start Date", "date"),
 					Field("endDate", "End Date", "date"),
@@ -85,8 +85,8 @@ internal static class HrReportSourceDefinitions
 			Source(HrReportDataSources.Performance, "Performance", "Performance Reports", "Review cycles, assignments, scores, outcomes, and calibration views.",
 				[
 					Field("cycle", "Cycle", groupable: true),
-					Field("employeeCode", "Employee Code", groupable: true),
-					Field("employeeName", "Employee Name"),
+					Field("employeeCode", "Staff Code", groupable: true),
+					Field("employeeName", "Staff Name"),
 					Field("department", "Department", groupable: true),
 					Field("status", "Status", groupable: true),
 					Field("finalScore", "Final Score", "number", summarizable: true),

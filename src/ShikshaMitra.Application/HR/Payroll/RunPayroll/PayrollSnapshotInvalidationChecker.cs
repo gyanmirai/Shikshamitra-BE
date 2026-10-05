@@ -92,7 +92,7 @@ public class PayrollSnapshotInvalidationChecker(
 			{
 				logger.LogWarning(
 					ex,
-					"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale because policy setup cannot be resolved. ErrorCode={ErrorCode}",
+					"Payroll snapshot for staff {EmployeeId} in {MonthYear} is stale because policy setup cannot be resolved. ErrorCode={ErrorCode}",
 					snapshot.EmployeeId,
 					snapshot.MonthYear,
 					ex.Code);
@@ -103,7 +103,7 @@ public class PayrollSnapshotInvalidationChecker(
 			if (SnapshotPolicyMetadataChanged(snapshot, resolvedPolicies))
 			{
 				logger.LogDebug(
-					"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale after policy assignment change.",
+					"Payroll snapshot for staff {EmployeeId} in {MonthYear} is stale after policy assignment change.",
 					snapshot.EmployeeId,
 					snapshot.MonthYear);
 				return true;
@@ -112,7 +112,7 @@ public class PayrollSnapshotInvalidationChecker(
 			if (await SnapshotHasInvalidPayrollBasisAsync(snapshot, resolvedPolicies, year, month))
 			{
 				logger.LogDebug(
-					"Payroll snapshot for employee {EmployeeId} in {MonthYear} is stale because basis/payable metadata is invalid.",
+					"Payroll snapshot for staff {EmployeeId} in {MonthYear} is stale because basis/payable metadata is invalid.",
 					snapshot.EmployeeId,
 					snapshot.MonthYear);
 				return true;

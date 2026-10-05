@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Common;
+using ShikshaMitra.Common;
 using ShikshaMitra.Common.Excel;
 using ShikshaMitra.Common.Excel.Elements;
 using ShikshaMitra.HR.AttendanceAndLeaves.LeaveManagementInfo;
@@ -23,7 +23,7 @@ public class HRExcelService(IExcelService excelService) : ITransientDependency
 					[
 						new ExcelCell { Value = "Request #" },
 						new ExcelCell { Value = "Name" },
-						new ExcelCell { Value = "Employee code" },
+						new ExcelCell { Value = "Staff code" },
 						new ExcelCell { Value = "Paid type" },
 						new ExcelCell { Value = "Start date" },
 						new ExcelCell { Value = "End date" },

@@ -113,7 +113,7 @@ public class ProfessionalManagementCycleWorkflow(
 			await cycleRepository.UpdateAsync(cycle, autoSave: true);
 		}
 
-		await AuditAsync(null, "CycleAssigned", $"Assigned {createdCount} employees to {cycle.Name}");
+		await AuditAsync(null, "CycleAssigned", $"Assigned {createdCount} staff to {cycle.Name}");
 		return ProfessionalManagementProjection.ToCycleDto(cycle, await assignmentWorkflow.GetAssignmentsForCycleAsync(id));
 	}
 

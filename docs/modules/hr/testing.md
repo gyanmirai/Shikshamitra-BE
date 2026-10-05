@@ -8,6 +8,20 @@ owner: backend-team
 audience: humans-and-agents
 ---
 
+## Staff terminology and attendance header regression coverage
+
+Run `AttendanceImportHeaderAliases_Tests` and `HrStaffOutputLabels_Tests` in the Application test project.
+All 18 tests passed on 2026-10-05.
+They cover generated Staff headers, template round trips, existing Employee headers, mixed aliases across fields, casing and spacing, duplicate aliases in CSV and XLSX, and report display labels with unchanged field identifiers.
+No payroll calculation, stored report definition, permission key, or database identifier is renamed.
+
+The focused policy and security Domain run passed all 53 tests.
+The HTTP API `PermissionConsistencyApi` run passed all 13 tests.
+The broader Application run covering attendance imports, policy services, reports, I-card templates, and permission reads passed 165 tests and failed 42.
+A clean checkout of `main` at `0e05f0cb` reproduced the same 42 failing test cases, with no feature-only failures.
+Do not treat that baseline comparison as full payroll workflow acceptance.
+Final authenticated browser acceptance must use a running backend with valid local database configuration.
+
 # Validate HR backend changes
 
 TL;DR: run the smallest command that proves the changed HR behavior, then run docs validation before handoff.

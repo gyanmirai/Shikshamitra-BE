@@ -24,8 +24,8 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 		RuleFor(x => x.DateOfJoining).NotEmpty().WithMessage("Date of joining is required.");
 		RuleFor(x => x.RoleId).NotEmpty().WithMessage("Role is required.");
 		RuleFor(x => x.EmployeeGroup)
-			.NotNull().WithMessage("Employee group is required.")
-			.IsInEnum().WithMessage("Employee group is invalid.");
+			.NotNull().WithMessage("Staff group is required.")
+			.IsInEnum().WithMessage("Staff group is invalid.");
 		RuleFor(x => x.MiddleName).MaximumLength(256);
 		RuleFor(x => x.ShortName).MaximumLength(128);
 		RuleFor(x => x.CastType)
@@ -73,7 +73,7 @@ public class CreateEmployeePersonalInfoDtoValidator : AbstractValidator<CreateEm
 
 		RuleFor(x => x)
 			.Must(x => !x.DateOfBirth.HasValue || CalculateAge(x.DateOfBirth.Value, x.DateOfJoining) >= 18)
-			.WithMessage("Employee must be at least 18 years old at the time of joining.");
+			.WithMessage("Staff must be at least 18 years old at the time of joining.");
 
 		RuleFor(x => x.DateOfJoining)
 			.Must((dto, dateOfJoining) => !dto.DateOfBirth.HasValue || dateOfJoining >= dto.DateOfBirth.Value)

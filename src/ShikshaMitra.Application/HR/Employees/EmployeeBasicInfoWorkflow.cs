@@ -24,7 +24,7 @@ public class EmployeeBasicInfoWorkflow(
 	public async Task<EmployeeDto> CreateAsync(CreateEmployeeBasicInfoDto input)
 	{
 		logger.LogInformation(
-			"Starting employee creation process for: {Email}, Name: {FirstName} {LastName}, Role: {RoleId}",
+			"Starting staff creation process for: {Email}, Name: {FirstName} {LastName}, Role: {RoleId}",
 			input.Email,
 			input.FirstName,
 			input.LastName,
@@ -43,7 +43,7 @@ public class EmployeeBasicInfoWorkflow(
 		{
 			var identity = await identityCreationWorkflow.CreateAsync(input);
 			logger.LogInformation(
-				"Creating employee record: UserId={UserId}, RoleId={RoleId}, Department={Department}, Designation={Designation}",
+				"Creating staff record: UserId={UserId}, RoleId={RoleId}, Department={Department}, Designation={Designation}",
 				identity.UserId,
 				input.RoleId,
 				input.Department,
@@ -87,7 +87,7 @@ public class EmployeeBasicInfoWorkflow(
 			employee = await employeeRepository.InsertAsync(employee);
 
 			logger.LogInformation(
-				"Employee record created successfully: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, UserId={UserId}",
+				"Staff record created successfully: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, UserId={UserId}",
 				employee.Id,
 				employee.EmployeeCode,
 				identity.UserId);
@@ -95,7 +95,7 @@ public class EmployeeBasicInfoWorkflow(
 			await uow.CompleteAsync();
 
 			logger.LogInformation(
-				"Transaction completed successfully for employee creation: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, Email={Email}",
+				"Transaction completed successfully for staff creation: EmployeeId={EmployeeId}, EmployeeCode={EmployeeCode}, Email={Email}",
 				employee.Id,
 				employee.EmployeeCode,
 				input.Email);
@@ -110,7 +110,7 @@ public class EmployeeBasicInfoWorkflow(
 		{
 			logger.LogWarning(
 				ex,
-				"Employee creation validation failed for email: {Email}. Message: {Message}",
+				"Staff creation validation failed for email: {Email}. Message: {Message}",
 				input.Email,
 				ex.Message);
 			throw;
@@ -119,7 +119,7 @@ public class EmployeeBasicInfoWorkflow(
 		{
 			logger.LogError(
 				ex,
-				"Unexpected error during employee creation for email: {Email}, Name: {FirstName} {LastName}",
+				"Unexpected error during staff creation for email: {Email}, Name: {FirstName} {LastName}",
 				input.Email,
 				input.FirstName,
 				input.LastName);

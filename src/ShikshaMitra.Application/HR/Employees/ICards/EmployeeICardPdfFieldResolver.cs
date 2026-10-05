@@ -14,7 +14,7 @@ internal static class EmployeeICardPdfFieldResolver
 		string? fallback)
 	{
 		var address = string.Join(", ", new[] { employee.Address1, employee.Address2, employee.Address3 }.Where(x => !string.IsNullOrWhiteSpace(x)));
-		var employeeName = string.IsNullOrWhiteSpace(employee.EmployeeName) ? employee.ShortName ?? "Employee" : employee.EmployeeName;
+		var employeeName = string.IsNullOrWhiteSpace(employee.EmployeeName) ? employee.ShortName ?? "Staff" : employee.EmployeeName;
 		return fieldKey?.ToLowerInvariant() switch
 		{
 			"name" => employeeName,

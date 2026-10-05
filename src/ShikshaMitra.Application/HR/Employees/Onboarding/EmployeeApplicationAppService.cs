@@ -46,7 +46,7 @@ public class EmployeeApplicationAppService(
 {
 	private const int TokenExpiryDays = 30;
 	private const int MaxApplicationNumberInsertAttempts = 5;
-	private const string DefaultPolicyAssignmentReason = "Employee onboarding default policy assignment";
+	private const string DefaultPolicyAssignmentReason = "Staff onboarding default policy assignment";
 	private const string DefaultPolicyConfirmationTokenMarker = "__employee_onboarding_default_policy_assignment__";
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.View)]
@@ -135,14 +135,14 @@ public class EmployeeApplicationAppService(
 			{
 				Logger.LogWarning(
 					ex,
-					"Employee application number collision detected. Retrying invitation creation (attempt {Attempt}/{MaxAttempts}).",
+					"Staff application number collision detected. Retrying invitation creation (attempt {Attempt}/{MaxAttempts}).",
 					attempt + 1,
 					MaxApplicationNumberInsertAttempts);
 			}
 		}
 
 		throw new InvalidOperationException(
-			"Employee application invitation retry loop exited unexpectedly.");
+			"Staff application invitation retry loop exited unexpectedly.");
 	}
 
 	private async Task EnsureInviteEmailAvailableAsync(string email)
@@ -153,7 +153,7 @@ public class EmployeeApplicationAppService(
 		{
 			throw new BusinessException(
 					HRErrorCodes.EmployeeApplicationEmailAlreadyInUse,
-					"An employee or open onboarding application already uses this email.")
+					"A staff member or open onboarding application already uses this email.")
 				.WithData("field", nameof(CreateEmployeeApplicationInviteDto.Email));
 		}
 
@@ -172,7 +172,7 @@ public class EmployeeApplicationAppService(
 		{
 			throw new BusinessException(
 					HRErrorCodes.EmployeeApplicationEmailAlreadyInUse,
-					"An employee or open onboarding application already uses this email.")
+					"A staff member or open onboarding application already uses this email.")
 				.WithData("field", nameof(CreateEmployeeApplicationInviteDto.Email));
 		}
 	}
@@ -238,7 +238,7 @@ public class EmployeeApplicationAppService(
 			    input.AcademicScopes is not { Count: > 0 })
 			{
 				throw new AbpValidationException(
-					"Teaching employee academic permission validation failed.");
+					"Teaching staff academic permission validation failed.");
 			}
 
 			await academicScopeAssigner.ValidateAsync(
@@ -259,7 +259,7 @@ public class EmployeeApplicationAppService(
 			    input.AcademicScopes is not { Count: > 0 })
 			{
 				throw new AbpValidationException(
-					"Teaching employee academic permission validation failed.");
+					"Teaching staff academic permission validation failed.");
 			}
 
 			await academicScopeAssigner.AssignAsync(
@@ -425,7 +425,7 @@ public class EmployeeApplicationAppService(
 			PublicEmployeeApplicationSubmitValidation.GetInstitutionDate(now));
 		if (validationResults.Count > 0)
 		{
-			throw new AbpValidationException("Employee application validation failed.", validationResults.ToList());
+			throw new AbpValidationException("Staff application validation failed.", validationResults.ToList());
 		}
 	}
 
@@ -626,7 +626,7 @@ public class EmployeeApplicationAppService(
 			EmployeeApplicationUploadKind.Resume);
 		FileValidationService.ValidateDocumentUpload(fileName, file.Content, file.Size);
 
-		var blobName = $"employee-applications/{applicationId}/resume/{GuidGenerator.Create():N}_{fileName}";
+		var blobName = $"staff-applications/{applicationId}/resume/{GuidGenerator.Create():N}_{fileName}";
 		await blobContainer.SaveAsync(blobName, file.Content, overrideExisting: true);
 		return new EmployeeApplicationUploadMetadata
 		{
@@ -652,7 +652,7 @@ public class EmployeeApplicationAppService(
 			EmployeeApplicationUploadKind.Photo);
 		FileValidationService.ValidateProfilePictureUpload(fileName, file.Content);
 
-		var blobName = $"employee-applications/{applicationId}/photo/{GuidGenerator.Create():N}_{fileName}";
+		var blobName = $"staff-applications/{applicationId}/photo/{GuidGenerator.Create():N}_{fileName}";
 		await blobContainer.SaveAsync(blobName, file.Content, overrideExisting: true);
 		return new EmployeeApplicationUploadMetadata
 		{
@@ -867,7 +867,7 @@ public class EmployeeApplicationAppService(
 		{
 			Logger.LogWarning(
 				ex,
-				"Employee application {ApplicationId} has an encrypted invite token that could not be decrypted.",
+				"Staff application {ApplicationId} has an encrypted invite token that could not be decrypted.",
 				application.Id);
 			return null;
 		}

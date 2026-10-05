@@ -27,7 +27,7 @@ public class EmployeeIdentityCreationWorkflow(
 		if (existingUserByEmail != null)
 		{
 			logger.LogWarning(
-				"Employee creation failed: Email '{Email}' is already in use by user {UserId}",
+				"Staff creation failed: Email '{Email}' is already in use by user {UserId}",
 				input.Email,
 				existingUserByEmail.Id);
 			throw new BusinessException(HRErrorCodes.EmployeeEmailAlreadyExists)
@@ -36,7 +36,7 @@ public class EmployeeIdentityCreationWorkflow(
 
 		var username = input.Email!;
 		logger.LogInformation(
-			"Using email as username '{Username}' for employee identity account",
+			"Using email as username '{Username}' for staff identity account",
 			username);
 
 		var password = BuildInitialPassword(username, input.MobileNo!);

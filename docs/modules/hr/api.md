@@ -358,3 +358,15 @@ New salary templates default to EMPLOYER_COST.
 New setup contracts derive protection from the salary basis and do not accept an independent protection choice.
 Salary previews include the applicable ESIC configuration ID, including when calculation is off.
 Employee-facing payslips omit employer contributions; school cost reports and stored audit evidence retain them.
+
+## Staff presentation and attendance file headers
+
+HR output headings, export labels, generated attendance templates, onboarding email copy, and permission display labels use Staff terminology.
+Existing user data, stored documents, historical audit records, official statutory scheme names, routes, permission keys, enums, database names, and API property keys remain unchanged.
+New attendance templates use Staff Code and Staff Name.
+CSV and XLSX imports accept either Staff Code or Employee Code and either Staff Name or Employee Name, case-insensitively with the existing whitespace normalization.
+Different fields may use mixed aliases.
+Both aliases for one field, or repeated copies of one field, are rejected with `HR:Leave:020217`.
+Normalization retains the internal `EmployeeCode` and `EmployeeName` row fields and the existing attendance calculations.
+A sole-default attendance archive or clear-default rejection includes `reason: sole-default` in business-error data, allowing concise UI guidance without reinterpreting every use of `DefaultAttendancePolicyRequired`.
+Removal of the frontend policy lookup page does not remove authenticated effective-policy APIs, impact previews, permissions, grants, or payroll safeguards.

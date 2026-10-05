@@ -49,7 +49,7 @@ public class EmployeeAuthorizationService(
 
 		if (!canReadEmployeeList && !isOwnData)
 		{
-			throw new AbpAuthorizationException("Access denied: Insufficient permissions to access employee data.");
+			throw new AbpAuthorizationException("Access denied: Insufficient permissions to access staff data.");
 		}
 
 		if (!isOwnData)
@@ -65,7 +65,7 @@ public class EmployeeAuthorizationService(
 
 		if (!await CanModifyEmployeeListAsync())
 		{
-			throw new AbpAuthorizationException("Access denied: Employee edit permission is required to modify employee data.");
+			throw new AbpAuthorizationException("Access denied: Staff edit permission is required to modify staff data.");
 		}
 
 		await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeModifyAccessAsync));
@@ -130,14 +130,14 @@ public class EmployeeAuthorizationService(
 		if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
 		{
 			hrScopeAccessService.LogDeniedAccess(scope, operation, "Employee", employeeId);
-			throw new AbpAuthorizationException("Access denied: Employee is outside your organization scope.");
+			throw new AbpAuthorizationException("Access denied: Staff is outside your organization scope.");
 		}
 
 		var stageLookup = await employeeScopeQueryService.BuildEmployeeStageLookupAsync([employeeId]);
 		if (!stageLookup.TryGetValue(employeeId, out var stageIds) || stageIds.Count == 0)
 		{
 			hrScopeAccessService.LogDeniedAccess(scope, operation, "Employee", employeeId);
-			throw new AbpAuthorizationException("Access denied: Employee is outside your organization scope.");
+			throw new AbpAuthorizationException("Access denied: Staff is outside your organization scope.");
 		}
 
 		var accessibleIds = await hrScopeAccessService.FilterEmployeeIdsByStagesAsync(
@@ -149,7 +149,7 @@ public class EmployeeAuthorizationService(
 		if (accessibleIds.Count == 0)
 		{
 			hrScopeAccessService.LogDeniedAccess(scope, operation, "Employee", employeeId);
-			throw new AbpAuthorizationException("Access denied: Employee is outside your organization scope.");
+			throw new AbpAuthorizationException("Access denied: Staff is outside your organization scope.");
 		}
 	}
 }

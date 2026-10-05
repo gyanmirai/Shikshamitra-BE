@@ -32,7 +32,7 @@ public class AttendanceImportConfirmResponseDto
 
 public class AttendanceImportTemplateDto
 {
-	public string FileName { get; set; } = "employee-attendance-import-template.xlsx";
+	public string FileName { get; set; } = "staff-attendance-import-template.xlsx";
 	public string ContentType { get; set; } = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 	public byte[] Content { get; set; } = [];
 }

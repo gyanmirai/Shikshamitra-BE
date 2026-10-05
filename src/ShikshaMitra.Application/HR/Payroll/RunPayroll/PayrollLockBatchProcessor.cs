@@ -29,7 +29,7 @@ public class PayrollLockBatchProcessor(
 		string month)
 	{
 		logger.LogInformation(
-			"Generating salary slips from reviewed payroll snapshots for {ProcessCount} employees",
+			"Generating salary slips from reviewed payroll snapshots for {ProcessCount} staff",
 			employees.Count);
 
 		var result = new PayrollLockBatchResult();
@@ -42,7 +42,7 @@ public class PayrollLockBatchProcessor(
 			var totalBatches = (int)Math.Ceiling((double)employees.Count / batchSize);
 
 			logger.LogInformation(
-				"Processing batch {BatchNum}/{TotalBatches} with {Count} employees",
+				"Processing batch {BatchNum}/{TotalBatches} with {Count} staff",
 				batchNum, totalBatches, batch.Count);
 
 			foreach (var employee in batch)
@@ -64,7 +64,7 @@ public class PayrollLockBatchProcessor(
 		try
 		{
 			logger.LogDebug(
-				"Processing employee {EmployeeCode} ({EmployeeName})",
+				"Processing staff {EmployeeCode} ({EmployeeName})",
 				employee.EmployeeCode, employee.EmployeeName);
 
 			var earningLineItems = PayrollSnapshotComponentParser.BuildSalarySlipLineItems(snapshot.EarningComponentsJson);
@@ -83,7 +83,7 @@ public class PayrollLockBatchProcessor(
 			if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			{
 				logger.LogDebug(
-					"Salary slip for employee {EmployeeCode} is already immutable, skipping",
+					"Salary slip for staff {EmployeeCode} is already immutable, skipping",
 					employee.EmployeeCode);
 				result.RecordSkipped();
 				snapshot.MarkLocked();
@@ -100,7 +100,7 @@ public class PayrollLockBatchProcessor(
 		catch (BusinessException bex)
 		{
 			logger.LogWarning(bex,
-				"Business rule violation generating salary slip for employee {EmployeeCode} ({EmployeeName}): {ErrorCode}",
+				"Business rule violation generating salary slip for staff {EmployeeCode} ({EmployeeName}): {ErrorCode}",
 				employee.EmployeeCode, employee.EmployeeName, bex.Code);
 
 			result.RecordFailure(employee.EmployeeCode, employee.EmployeeName, bex.Message ?? bex.Code ?? "Unknown error");
@@ -108,7 +108,7 @@ public class PayrollLockBatchProcessor(
 		catch (Exception ex)
 		{
 			logger.LogError(ex,
-				"Unexpected error generating salary slip for employee {EmployeeCode} ({EmployeeName})",
+				"Unexpected error generating salary slip for staff {EmployeeCode} ({EmployeeName})",
 				employee.EmployeeCode, employee.EmployeeName);
 
 			result.RecordFailure(employee.EmployeeCode, employee.EmployeeName, ex.Message);

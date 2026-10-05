@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.Payroll.SalarySlips;
@@ -101,7 +101,7 @@ public class PayrollLockWorkflow(
 		PayrollLockPreconditionGuard.EnsureNoBlockingSetupIssues(targetEmployeeIds, snapshotByEmployee, request.Month);
 
 		logger.LogInformation(
-			"Generating salary slips from reviewed payroll snapshots for {ProcessCount} employees",
+			"Generating salary slips from reviewed payroll snapshots for {ProcessCount} staff",
 			employees.Count);
 
 		var result = await batchProcessor.ProcessAsync(employees, snapshotByEmployee, request.Month);
@@ -110,7 +110,7 @@ public class PayrollLockWorkflow(
 		if (result.GeneratedCount == 0 && result.FailedCount == employees.Count)
 		{
 			logger.LogError(
-				"Payroll generation failed for all {Count} employees in {Month}",
+				"Payroll generation failed for all {Count} staff in {Month}",
 				employees.Count, request.Month);
 			result.ThrowIfCompleteFailure(employees.Count, request.Month);
 		}

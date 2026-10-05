@@ -25,7 +25,7 @@ public class EmployeePersonalInfoPolicyOverrideWriter(
 			LeavePolicyId = input.LeavePolicyId,
 			EffectiveFrom = input.EffectiveFrom,
 			EffectiveTo = input.EffectiveTo,
-			AssignmentReason = input.AssignmentReason ?? "Employee creation override",
+			AssignmentReason = input.AssignmentReason ?? "Staff creation override",
 			ConfirmationToken = input.ConfirmationToken
 		};
 

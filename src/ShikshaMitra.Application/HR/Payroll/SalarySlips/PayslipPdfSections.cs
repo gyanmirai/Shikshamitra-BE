@@ -57,10 +57,10 @@ internal static class PayslipPdfSections
 	{
 		container.Row(row =>
 		{
-			row.RelativeItem().Element(c => ComposeKeyValueBlock(c, "Employee Details", new[]
+			row.RelativeItem().Element(c => ComposeKeyValueBlock(c, "Staff Details", new[]
 			{
 				("Name", model.EmployeeName),
-				("Employee Code", model.EmployeeCode),
+				("Staff Code", model.EmployeeCode),
 				("Department", model.Department),
 				("Designation", model.Designation),
 				("Joining Date", model.DateOfJoining)

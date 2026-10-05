@@ -403,7 +403,7 @@ internal static class SalaryTemplateCalculator
 						LineSource = "SYSTEM_STATUTORY",
 						Persistable = false
 					});
-					trace.Add($"Employee PF = {eligibleWage:0.00} x {pfRule.EmployeePercentage:0.####}% = {amount:0.00}");
+					trace.Add($"Staff PF = {eligibleWage:0.00} x {pfRule.EmployeePercentage:0.####}% = {amount:0.00}");
 					break;
 				case SalaryTemplateFormulaType.ProfessionalTax:
 					amount = forcedProfessionalTax ?? ResolveProfessionalTax(gross, professionalTaxSlabs);
@@ -468,7 +468,7 @@ internal static class SalaryTemplateCalculator
 					LineSource = "SYSTEM_STATUTORY",
 					Persistable = false
 				});
-				trace.Add($"Employee ESI = {esiResult.EmployeeContribution:0.00}; employer ESI = {esiResult.EmployerContribution:0.00}");
+				trace.Add($"Staff ESI = {esiResult.EmployeeContribution:0.00}; employer ESI = {esiResult.EmployerContribution:0.00}");
 			}
 		}
 

@@ -50,7 +50,7 @@ public class EmployeeProfilePictureWorkflow(
 			|| ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase))
 		{
 			logger.LogWarning(
-				"Profile picture blob not found for employee {EmployeeId}. BlobName: {BlobName}. Exception: {ExceptionType}",
+				"Profile picture blob not found for staff {EmployeeId}. BlobName: {BlobName}. Exception: {ExceptionType}",
 				employeeId,
 				employee.ProfilePictureBlobName,
 				ex.GetType().Name);
@@ -61,7 +61,7 @@ public class EmployeeProfilePictureWorkflow(
 	private void LogMissingProfilePicture(Guid employeeId, string blobName)
 	{
 		logger.LogWarning(
-			"Profile picture blob not found for employee {EmployeeId}. BlobName: {BlobName}",
+			"Profile picture blob not found for staff {EmployeeId}. BlobName: {BlobName}",
 			employeeId,
 			blobName);
 	}

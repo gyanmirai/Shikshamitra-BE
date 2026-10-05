@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
@@ -207,7 +207,7 @@ public class PayrollSnapshotRefresher(
 			{
 				logger.LogWarning(
 					ex,
-					"Payroll preview setup issue for employee {EmployeeId} in {Month}. ErrorCode={ErrorCode}",
+					"Payroll preview setup issue for staff {EmployeeId} in {Month}. ErrorCode={ErrorCode}",
 					employee.Id,
 					internalMonthYear,
 					ex.Code);

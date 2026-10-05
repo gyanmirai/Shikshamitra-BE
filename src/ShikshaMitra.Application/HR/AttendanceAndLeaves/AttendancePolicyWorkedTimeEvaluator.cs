@@ -82,20 +82,20 @@ public class AttendancePolicyWorkedTimeEvaluator(
 		{
 			throw new BusinessException(
 				HRErrorCodes.AttendancePolicyEvaluationShiftRequired,
-				"Employee shift is required to evaluate worked-time attendance policy.");
+				"Staff shift is required to evaluate worked-time attendance policy.");
 		}
 
 		var shift = await shiftRepository.FindAsync(employee.ShiftId.Value, cancellationToken: cancellationToken)
 			?? throw new BusinessException(
 				HRErrorCodes.AttendancePolicyEvaluationShiftRequired,
-				"Employee shift was not found for worked-time attendance policy evaluation.");
+				"Staff shift was not found for worked-time attendance policy evaluation.");
 
 		var shiftMinutes = (shift.EndTime.ToTimeSpan() - shift.StartTime.ToTimeSpan()).TotalMinutes;
 		if (shiftMinutes <= 0)
 		{
 			throw new BusinessException(
 				HRErrorCodes.AttendancePolicyEvaluationInvalidShift,
-				"Employee shift start and end time must define a positive duration.");
+				"Staff shift start and end time must define a positive duration.");
 		}
 
 		if (policy.AbsentThresholdPercentage > policy.HalfDayThresholdPercentage ||

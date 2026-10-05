@@ -278,6 +278,61 @@ Previously completed legacy exports without a trusted snapshot may be opened onl
 PDF export uses a repeating table header, switches wide reports to landscape A3, limits output to 500 rows, displays a truncation notice, and records the number of rows actually written.
 PDF failures store a stable user-facing message while retaining technical exceptions in server logs.
 
+## Operational HR dashboard
+
+`GET /api/hr/dashboard/overview` requires `HR.Dashboard.View` and returns generation time, current IST `asOfDate`, capabilities, explicit section states, typed workforce, leave, onboarding and appraisal summaries, seven-day attendance counts, and saved payroll progress.
+`GET /api/hr/dashboard/staff` additionally requires `HR.AttendanceAndLeave.AttendanceTracking.View` and returns matching staff with bounded server pagination.
+Both reads enforce the current tenant and persisted UserScope before serialization.
+Attendance aggregates require `HR.AttendanceAndLeave.Dashboard.View`, employee counts and profile actions require `HR.Employee.EmployeeList.View`, leave counts require `HR.LeaveManagement.LeaveCenter.View` with the existing own/reporting hierarchy boundary, and payroll counts require `HR.PayrollManagement.Dashboard.View`.
+Mark attendance additionally requires its existing View and Add grants, and opening Run Payroll requires its View grant.
+
+Overview accepts ISO `date` for attendance only.
+Staff reads additionally accept optional `isTeaching`, `educationMediumStageId`, `department`, and `shiftId`.
+Date defaults to today in IST and rejects future dates.
+Staff reads additionally accept name/code `search`, `status`, `sorting` of `name`, `name desc`, `status`, or `status desc`, nonnegative `skipCount`, and `maxResultCount` from 1 to 100.
+Name ordering uses employee ID as the final stable tie-breaker.
+Staff search and status selection narrow only the separate staff response.
+Overview attendance covers the whole authorized daily population without staff filters.
+`Review` filters secondary review flags without inventing another primary attendance status.
+
+Workforce counts eligible current staff with teaching/non-teaching totals and joins from the current IST month.
+Leave counts current pending requests using the existing approval hierarchy inside employee scope.
+Onboarding requires `HR.Employee.EmployeeOnboarding.View` and HR-wide scope because pending applications have no reliable school/stage ownership.
+Restricted users receive Unavailable, a safe explanation, and `canOpenOnboarding=false` rather than an unscoped count or shortcut.
+Onboarding counts ReadyForOnboarding separately from Applied, Screening, Interviewing, and Offered applications; invitations and completed/rejected applications are excluded.
+Appraisals require `HR.PerformanceManagement.View` or its existing `HR.ProfessionalManagement.View` alias.
+The count includes distinct unfinished assignments within employee scope in Published, InProgress, or Calibration cycles.
+An assignment is overdue once if any unfinished stage deadline has passed, and the next deadline is the earliest remaining deadline on or after the current IST date.
+Payroll uses saved snapshots for the current IST month, regardless of the attendance date.
+Each module failure produces a Failed state with a null payload without blocking independent sections.
+Review lists, cycle review lists, details, employee history, evidence, observations, feedback, audit drill-down and review PDF reads enforce canonical employee UserScope.
+Missing scope is denied, and an out-of-scope assignment cannot be opened by supplying its identifier.
+Scoped audit reads include only authorized review events, while HR-wide audit access retains tenant-wide events.
+Final scores, ratings, and outcomes require the existing confidential-outcome grant or its legacy alias in both list and detail responses.
+
+| Primary status | Operational definition |
+|---|---|
+| Present | Recorded present, including a working exception on a non-working day |
+| Absent | Recorded full-day absence without covering approved full-day leave |
+| OnLeave | Approved full-day leave without contradictory present or half-day attendance |
+| HalfDay | Recorded half-day attendance, with approved half-day leave shown separately |
+| NotMarked | Required working attendance remains unrecorded or unresolved |
+| NotScheduled | Configured holiday or weekly off without a recorded working exception |
+| NeedsSetup | Missing or ambiguous calendar or policy prevents classification of an unrecorded day |
+
+Counts, staff rows, filters, and trends share one classification and eligible employee population.
+Approved full-day leave converts a recorded absence to OnLeave, while recorded presence or half-day attendance is preserved and flagged if it conflicts with full-day leave.
+Incomplete imported or integrated punches never establish absence, and unmarked attendance never becomes confirmed absence.
+Joining and effective employment-status dates constrain each daily population.
+Effective attendance assignment precedence, group membership, work-calendar holidays, and configured weekly offs determine scheduling through batch reads.
+Unavailable and failed sections use explicit states and nullable payloads rather than zero counts.
+The read model excludes leave reasons, salary, banking information, and documents.
+Reads do not create payroll previews or alter attendance, leave, or audit records.
+
+The combined `/api/hr/dashboard/summary` route is retired, and Main preview reads and refresh requests are rejected.
+Scheduled refreshes ignore existing Main snapshots and create only Attendance and Payroll previews.
+Existing snapshot history remains stored, and separate attendance and payroll preview workflows remain supported.
+
 ## Error and contract rules
 
 Use business exceptions with stable HR error codes for domain failures.

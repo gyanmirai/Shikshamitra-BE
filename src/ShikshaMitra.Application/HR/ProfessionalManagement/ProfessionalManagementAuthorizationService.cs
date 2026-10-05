@@ -16,7 +16,8 @@ public class ProfessionalManagementAuthorizationService(
 	IPermissionChecker permissionChecker,
 	IRepository<PerformanceReviewAssignment, Guid> assignmentRepository,
 	IRepository<PerformanceEvidence, Guid> evidenceRepository,
-	IEmployeeRepository employeeRepository)
+	IEmployeeRepository employeeRepository,
+	ProfessionalManagementReadScopeService readScope)
 	: ApplicationService, ITransientDependency
 {
 	private const string AccessDenied = "Access denied: This professional review is outside your assigned review scope.";
@@ -31,7 +32,8 @@ public class ProfessionalManagementAuthorizationService(
 	public async Task EnsureCanViewReviewAsync(Guid reviewAssignmentId)
 	{
 		await EnsureViewAsync();
-		await EnsureReviewExistsAsync(reviewAssignmentId);
+		var assignment = await assignmentRepository.GetAsync(reviewAssignmentId);
+		await readScope.EnsureEmployeeAsync(assignment.EmployeeId);
 	}
 
 	public async Task EnsureReviewExistsAsync(Guid reviewAssignmentId)
@@ -42,8 +44,13 @@ public class ProfessionalManagementAuthorizationService(
 	public async Task EnsureCanViewEmployeeHistoryAsync(Guid employeeId)
 	{
 		await EnsureViewAsync();
+		await readScope.EnsureEmployeeAsync(employeeId);
 		await employeeRepository.GetAsync(employeeId);
 	}
+
+	public async Task<bool> CanViewConfidentialOutcomeAsync() =>
+		await IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.PerformanceManagement.ViewConfidentialOutcome) ||
+		await IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.ProfessionalManagement.View);
 
 	public async Task EnsureCanSelfReviewAsync(Guid reviewAssignmentId)
 	{

@@ -3,7 +3,7 @@ module: hr
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-07-26
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -33,13 +33,13 @@ HR source paths are organized by subsystem:
 
 | Subsystem | Main source area | Owns |
 |---|---|---|
-| Dashboard | `HR/Dashboard` | HR summary and dashboard projections |
+| Dashboard | `HR/Dashboard` | Scoped operational module reader, separate staff reader, shared daily classification, batch calendar resolution, and separate attendance/payroll previews |
 | Employees | `HR/Employees` | Employee aggregate, profile, documents, status, reporting, payroll details, and search |
 | Attendance and leaves | `HR/AttendanceAndLeaves` | Attendance facts, leave requests, leave policies, evaluation runs, and leave balances |
 | Payroll | `HR/Payroll` | Payroll settings, salary structures, payroll run, attendance imports, and salary slips |
 | Calendar | `HR/Calendar` | HR events, holidays, event types, holiday types, and calendar views |
 | Policies | `HR/Policies` | Work calendar, attendance policy, payroll policy, assignments, impact, versions, and audit |
-| Professional management | `HR/ProfessionalManagement` | Performance templates, cycles, reviews, outcomes, reports, and audit |
+| Professional management | `HR/ProfessionalManagement` | Performance templates, cycles, reviews, outcomes, reports, and audit; review reads enforce canonical employee UserScope before hydration |
 | Reports | `HR/Reports` | Report catalog, options, preview, export, and history |
 
 ## Implementation rules

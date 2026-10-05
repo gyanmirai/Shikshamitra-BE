@@ -12,6 +12,8 @@ public static class HrUserScopeAccess
 	public static bool HasHrWideAccess(UserScopeContext scope) =>
 		scope.HasTenantWideScope();
 
+	public static bool CanReadAllLeaveRequests(UserScopeContext scope) => scope.IsAdmin;
+
 	public static bool HasAnyConcreteHrStageAccess(UserScopeContext scope) =>
 		HasHrWideAccess(scope) ||
 		scope.MediumStageIds.Count > 0 ||

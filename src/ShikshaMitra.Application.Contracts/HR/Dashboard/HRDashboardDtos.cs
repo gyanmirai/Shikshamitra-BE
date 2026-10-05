@@ -7,7 +7,8 @@ namespace ShikshaMitra.HR.Dashboard;
 
 public interface IHRDashboardAppService : IApplicationService
 {
-	Task<HRDashboardSummaryDto> GetSummaryAsync(HRDashboardSummaryRequestDto input);
+	Task<HRDashboardOverviewDto> GetOverviewAsync(HRDashboardOverviewInput input);
+	Task<HRDashboardStaffPageDto> GetStaffAsync(HRDashboardStaffInput input);
 	Task<HRDashboardPreviewDto> GetPreviewAsync(string dashboardKey);
 	Task<HRDashboardPreviewDto> RefreshPreviewAsync(string dashboardKey);
 }

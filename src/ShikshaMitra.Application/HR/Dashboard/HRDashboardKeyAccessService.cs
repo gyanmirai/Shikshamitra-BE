@@ -20,13 +20,13 @@ public class HRDashboardKeyAccessService(IAuthorizationService authorizationServ
 
 	private static string NormalizeDashboardKey(string dashboardKey)
 	{
-		var normalized = HrDashboardKeys.All.FirstOrDefault(key =>
+		var normalized = HrDashboardKeys.All.Where(key => key != HrDashboardKeys.Main).FirstOrDefault(key =>
 			string.Equals(key, dashboardKey, StringComparison.OrdinalIgnoreCase));
 		if (normalized == null)
 		{
 			throw new AbpValidationException(
 				"Dashboard key is invalid.",
-				[new ValidationResult("Dashboard key must be Main, Attendance, or Payroll.", ["dashboardKey"])]);
+				[new ValidationResult("Dashboard key must be Attendance or Payroll. Main now uses overview and staff reads.", ["dashboardKey"])]);
 		}
 
 		return normalized;

@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-09-17
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -87,6 +87,12 @@ ESI regression tests must distinguish agreed monthly classified wages for covera
 `EsiContributionContinuityPostgres_Tests` runs both API scenarios on PostgreSQL when `PAYROLL_TEST_POSTGRES` points to an empty, disposable loopback `payroll_tests_*` database.
 
 ## Focused test map
+
+Operational dashboard tests cover daily classification, count reconciliation, stable pagination, exact section grants, restricted UserScope, revoked read access, tenant isolation, request validation, and retirement of the combined Main reads.
+Run `HRDashboardDailyStatusProjection_Tests`, `HRDashboardApi_Tests`, and `ProfessionalManagementApi_Tests` for these contracts.
+Module API fixtures cover 120 onboarding applications and 120 appraisal assignments, current module dates independent of historical attendance, distinct overdue counts, restricted onboarding, and scoped review drill-down.
+View permission without employee scope must fail through HTTP before any review or evidence is serialized.
+Finish with local signed-in frontend checks against PostgreSQL after automated validation.
 
 Use this table to pick focused tests:
 

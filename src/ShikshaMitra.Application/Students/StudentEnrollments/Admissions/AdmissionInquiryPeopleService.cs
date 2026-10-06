@@ -51,9 +51,10 @@ public class AdmissionInquiryPeopleService(
 		{
 			var rows = await AsyncExecuter.ToListAsync(query.OrderBy(user => user.UserName)
 				.Skip(offset).Take(batchSize));
+			var resolvedScopes = await scopes.GetUserScopesAsync(rows.Select(user => user.Id).ToArray());
 			foreach (var user in rows)
 			{
-				if ((await scopes.GetUserScopeAsync(user.Id)).HasAnyAccess &&
+				if (resolvedScopes[user.Id].HasAnyAccess &&
 					(!admissionOfferingId.HasValue || await CanAccessOfferingAsync(user.Id, admissionOfferingId.Value)))
 					result.Add(new() { Id = user.Id, UserName = user.UserName, Name = Display(user) });
 				if (result.Count == 50) break;

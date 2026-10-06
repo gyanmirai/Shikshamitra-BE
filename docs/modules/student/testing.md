@@ -383,7 +383,7 @@ That rejection remains historical evidence; a manual restart is no longer a pend
 
 | Check | Observed result |
 |---|---|
-| Running host | PID 30256, parent 21436, started 07:38 IST; serves port 44332 from `src/ShikshaMitra.HttpApi.Host/bin/Debug/net9.0/ShikshaMitra.HttpApi.Host.dll` |
+| Running host | PID 30256, parent 21436, started 07:38 IST; serves port 44332 from the Debug/net9.0 output of `src/ShikshaMitra.HttpApi.Host/ShikshaMitra.HttpApi.Host.csproj` |
 | Compiled implementation | Six running-output DLL/PDB identities match; all 57 checked Eligibility, Document, workflow/finalization and Offering source checksums match the current workspace |
 | Public API metadata | Student Swagger returns HTTP 200 with normal TLS verification; includes six canonical Eligibility routes, seven Document Verification routes, current action flags, Student admission evidence and onboarding document routes |
 | Database | The host has an established connection to `::1:5432`; a fresh read-only metadata query confirms local `postgres`, history 52, both migrations present, Eligibility latest, two Eligibility tables, ten indexes and six foreign keys |
@@ -489,3 +489,27 @@ The existing Inquiry workflow test also verifies optional contact/qualification 
 The local Host build succeeded and its refreshed process served a successful authenticated intake setup create/reopen flow; see [frontend browser checks](../../../../Shikshamitra-FE/docs/student/testing.md).
 Student documentation validation passed; the all-module gate stops on existing Finance reference frontmatter/mojibake issues.
 This change introduces no schema migration and was not deployed to production.
+
+## Counsellor lookup scale regression
+
+The intake counsellor lookup resolves each candidate page in a batch rather than resolving scope separately for every user.
+Eligibility still requires an active current-tenant identity and effective scope from current role membership, direct assignments, or reporting inheritance.
+
+```powershell
+dotnet test test/ShikshaMitra.Domain.Tests/ShikshaMitra.Domain.Tests.csproj --filter FullyQualifiedName~UserScopeResolution_Tests
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Counsellor_lookup_should_scan_many_active_users|FullyQualifiedName~Setup_writes_should_ignore_retired_requirements"
+```
+
+The Domain fixture contains 120 candidates and verifies fixed batch reads, administrator/direct/role/reporting access, denied access, request-local reuse, revocation on the next request, and failure without cached authority.
+The database-backed Application fixture contains 120 active identities with one eligible identity in the second candidate page.
+It must return that identity while excluding the unscoped identities.
+
+Before release, use a disposable local tenant with representative identity, scope-assignment and reporting-hierarchy counts.
+Run the authenticated `GET /api/student/enrollment/admissions/intake-profiles/counsellors` once cold, once for warm-up, then 20 times for timing samples.
+Record fixture counts, cold latency, query counts, p95 and every response status; an HTTP failure or request approaching the gateway timeout blocks release.
+Repeat with sparse scope assignments so the lookup scans several candidate pages, and with simultaneous callers.
+The existing 50-result limit remains part of this endpoint and must not be mistaken for a load failure.
+
+After deploying the backend build to staging, verify the same endpoint with the QA account and representative tenant data.
+Require a successful response before declaring QA unblocked, then follow the [frontend browser checks](../../../../Shikshamitra-FE/docs/student/testing.md) for visible options, selection, setup save and reload.
+Local synthetic tests alone do not certify staging or production performance.

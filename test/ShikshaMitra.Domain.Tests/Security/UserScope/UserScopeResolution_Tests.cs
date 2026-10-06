@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -88,6 +89,79 @@ public class UserScopeResolution_Tests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Should.ThrowAsync<OperationCanceledException>(() => _service.GetUserScopeAsync(_user, cancellation.Token));
+    }
+
+    [Fact]
+    public async Task Batch_resolution_preserves_admin_direct_role_and_reporting_access_with_constant_reads()
+    {
+        var candidates = Enumerable.Range(0, 120).Select(_ => Guid.NewGuid()).ToArray();
+        var admin = candidates[0];
+        var direct = candidates[1];
+        var roleUser = candidates[2];
+        var manager = candidates[3];
+        var reportee = Guid.NewGuid();
+        var managerEmployee = Guid.NewGuid();
+        var bridgeEmployee = Guid.NewGuid();
+        var reporteeEmployee = Guid.NewGuid();
+        _repository.GetReportingHierarchyAsync(Arg.Any<CancellationToken>()).Returns([
+            new(managerEmployee, manager, null),
+            new(bridgeEmployee, null, managerEmployee),
+            new(reporteeEmployee, reportee, bridgeEmployee)
+        ]);
+        _repository.GetRoleNamesByUserIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var ids = call.ArgAt<IReadOnlyCollection<Guid>>(0);
+                return ids.ToDictionary(id => id, id =>
+                    id == admin ? new List<string> { "admin" } :
+                    id == roleUser ? new List<string> { "Counsellor" } : new List<string>());
+            });
+        _repository.GetAssignmentsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<UserScopeAssignment> {
+                new(Guid.NewGuid(), _tenantId, userId: direct),
+                new(Guid.NewGuid(), _tenantId, roleName: "Counsellor"),
+                new(Guid.NewGuid(), _tenantId, userId: reportee)
+            });
+
+        var scopes = await _service.GetUserScopesAsync(candidates);
+
+        scopes.Count.ShouldBe(120);
+        scopes[admin].IsAdmin.ShouldBeTrue();
+        scopes[direct].HasAnyAccess.ShouldBeTrue();
+        scopes[roleUser].HasAnyAccess.ShouldBeTrue();
+        scopes[manager].HasAnyAccess.ShouldBeTrue();
+        scopes[candidates[4]].HasAnyAccess.ShouldBeFalse();
+        await _repository.Received(1).GetReportingHierarchyAsync(Arg.Any<CancellationToken>());
+        await _repository.Received(1).GetRoleNamesByUserIdsAsync(
+            Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
+        await _repository.Received(1).GetAssignmentsAsync(
+            Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
+        await _repository.DidNotReceive().GetRoleNamesAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+
+        // The same request reuses authority, but the next request sees a revocation.
+        (await _service.GetUserScopeAsync(direct)).HasAnyAccess.ShouldBeTrue();
+        _repository.GetAssignmentsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new List<UserScopeAssignment>());
+        NewRequest();
+        _repository.GetRoleNamesAsync(direct, Arg.Any<CancellationToken>()).Returns(new List<string>());
+        (await _service.GetUserScopeAsync(direct)).HasAnyAccess.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Batch_resolution_fails_closed_for_missing_identity_and_does_not_cache_errors()
+    {
+        _repository.GetRoleNamesByUserIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, List<string>>());
+        (await _service.GetUserScopesAsync([_user]))[_user].HasAnyAccess.ShouldBeFalse();
+
+        NewRequest();
+        _repository.GetRoleNamesByUserIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<Dictionary<Guid, List<string>>>(new InvalidOperationException("Synthetic DB failure")));
+        await Should.ThrowAsync<InvalidOperationException>(() => _service.GetUserScopesAsync([_user]));
+
+        _repository.GetRoleNamesByUserIdsAsync(Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, List<string>> { [_user] = [] });
+        (await _service.GetUserScopesAsync([_user]))[_user].HasAnyAccess.ShouldBeTrue();
     }
 
     [Fact]

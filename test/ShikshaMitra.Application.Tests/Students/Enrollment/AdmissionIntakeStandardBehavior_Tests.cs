@@ -3,14 +3,41 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Shouldly;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	[Fact]
+	public async Task Counsellor_lookup_should_scan_many_active_users_and_return_only_scoped_people()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var scopedId = Guid.NewGuid();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var users = GetRequiredService<IRepository<IdentityUser, Guid>>();
+			for (var index = 0; index < 120; index++)
+			{
+				var id = index == 110 ? scopedId : Guid.NewGuid();
+				await users.InsertAsync(new IdentityUser(id,
+					$"test-counsellor-{index:000}-{id:N}", $"{id:N}@example.test", TestTenantId));
+			}
+			await GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(
+				new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: scopedId));
+		});
+
+		var choices = await GetRequiredService<IAdmissionIntakeProfileAppService>()
+			.GetCounsellorsAsync("test-counsellor-");
+		choices.Count.ShouldBe(1);
+		choices.Single().Id.ShouldBe(scopedId);
+	}
+
 	[Fact]
 	public async Task Retired_intake_requirements_should_not_block_capture_confirmation_or_existing_inquiry_start()
 	{

@@ -51,7 +51,7 @@ public partial class FeeReceiptAppService(
             AcademicYearId        = input.AcademicYearId,
             BoardId               = input.BoardId,
             EducationMediumId     = input.EducationMediumId,
-            Month                 = input.Month+1,
+            Month                 = input.Month,
             ReceiptKind           = input.ReceiptKind,
             Search                = input.Search,
             StandardId            = input.StandardId,

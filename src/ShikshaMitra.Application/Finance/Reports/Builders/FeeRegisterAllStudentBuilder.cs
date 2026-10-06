@@ -154,7 +154,7 @@ public class FeeRegisterAllStudentBuilder(
             {
                 if (feeHeadData.TryGetValue(feeHead.Id, out var amount))
                 {
-                    row[$"FH_{feeHead.Id}"] = amount.ToString("N2");
+                    row[$"FH_{feeHead.Id}"] = Math.Ceiling(amount).ToString("N0");
                     rowTotal += amount;
                 }
                 else
@@ -163,7 +163,7 @@ public class FeeRegisterAllStudentBuilder(
                 }
             }
 
-            row["Total"] = rowTotal.ToString("N2");
+            row["Total"] = Math.Ceiling(rowTotal).ToString("N0");
             rows.Add(row);
         }
 
@@ -172,7 +172,7 @@ public class FeeRegisterAllStudentBuilder(
         payload.PageSize = request.PageSize;
 
         var sortedRows = rows.OrderBy(r => r["Class"]).ThenBy(r => r["Division"]).ThenBy(r => r["StudentName"]).ToList();
-        
+
         payload.Rows = exportAllRows
             ? sortedRows
             : sortedRows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();

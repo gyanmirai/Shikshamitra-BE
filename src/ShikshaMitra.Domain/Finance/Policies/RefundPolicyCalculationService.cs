@@ -42,7 +42,7 @@ public class RefundPolicyCalculationService : DomainService
 			: decimal.MaxValue;
 		var hardCeiling = Math.Min(remainingEligible, Math.Min(requestCap, studentYearCap));
 		var capped = Math.Min(afterDeduction, hardCeiling);
-		var finalRefund = Math.Min(ApplyRounding(capped, policy.RoundingMethod), hardCeiling);
+		var finalRefund = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUpWithin(capped, hardCeiling);
 
 		return new RefundPolicyCalculationResult(
 			input.SettledPaidAmount,
@@ -55,13 +55,8 @@ public class RefundPolicyCalculationService : DomainService
 			finalRefund);
 	}
 
-	private static decimal ApplyRounding(decimal value, RoundingMethodType method) => method switch
-	{
-		RoundingMethodType.RoundUp => Math.Ceiling(value),
-		RoundingMethodType.RoundDown => Math.Floor(value),
-		RoundingMethodType.NearestRupee => Math.Round(value, 0, MidpointRounding.AwayFromZero),
-		_ => Math.Round(value, 2, MidpointRounding.AwayFromZero)
-	};
+	private static decimal ApplyRounding(decimal value, RoundingMethodType method) =>
+		ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(value);
 }
 
 public sealed record RefundPolicyCalculationInput(

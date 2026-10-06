@@ -29,7 +29,8 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 			var refunds = GetRequiredService<IRefundPolicyAppService>();
 			var refund = await refunds.CreateAsync(new CreateUpdateRefundPolicyDto
 			{
-				AcademicYearId = year, PolicyName = "Refund default", Status = "Active"
+				AcademicYearId = year, PolicyName = "Refund default", Status = "Active",
+				ExpenseCategoryId = await CreateRefundExpenseCategoryAsync(year), AllowedPayoutMethods = ["Cash"]
 			});
 			refund.IsDefault.ShouldBeTrue();
 			(await Should.ThrowAsync<BusinessException>(() => refunds.ArchiveAsync(refund.Id)))
@@ -47,10 +48,11 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 				.Code.ShouldBe(ProrationPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
 
 			var settings = await _feeStructures.GetSettingsAsync(metadata, standard);
+			settings.Policies.ShouldNotContain(x => x.Family == "proration");
 			foreach (var (family, id) in new[]
 			{
 				("collection", replacement.Id), ("concession", concession),
-				("refund", refund.Id), ("proration", proration.Id)
+				("refund", refund.Id)
 			})
 			{
 				var defaults = settings.Policies.Where(x => x.Family == family && x.IsDefault).ToList();

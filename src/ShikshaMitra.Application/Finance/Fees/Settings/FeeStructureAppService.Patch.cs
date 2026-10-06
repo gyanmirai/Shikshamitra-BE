@@ -80,7 +80,7 @@ public partial class FeeStructureAppService
 		if (patch.TryGetPropertyValue("policies", out var policyNode))
 		{
 			var policies = policyNode?.AsObject() ?? throw InvalidPatch("Policies must be an object.");
-			Allowed(policies, "collection", "concession", "proration", "refund");
+			Allowed(policies, "collection", "concession", "refund");
 			foreach (var (family, value) in policies)
 			{
 				var selection = value?.AsObject();

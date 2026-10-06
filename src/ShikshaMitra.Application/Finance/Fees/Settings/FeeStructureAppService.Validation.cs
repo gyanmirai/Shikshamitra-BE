@@ -130,7 +130,6 @@ public partial class FeeStructureAppService
 				{
 					"collection" => (await collectionPolicyRepository.GetAsync(id.Value)).Version,
 					"concession" => (await concessionPolicyRepository.GetAsync(id.Value)).Version,
-					"proration" => (await prorationPolicyRepository.GetAsync(id.Value)).Version,
 					"refund" => (await refundPolicyRepository.GetAsync(id.Value)).Version,
 					_ => 0
 				};
@@ -144,23 +143,19 @@ public partial class FeeStructureAppService
 		// Legacy attachments remain validated; concession setup is no longer required for publication.
 		var concession = await Resolve("concession", candidate.ConcessionPolicyId, candidate.ConcessionPolicyVersionId, current?.ConcessionPolicyId, current?.ConcessionPolicyVersionId, false);
 		var refund = await Resolve("refund", candidate.RefundPolicyId, candidate.RefundPolicyVersionId, current?.RefundPolicyId, current?.RefundPolicyVersionId, false);
-		var proration = await Resolve("proration", candidate.ProrationPolicyId, candidate.ProrationPolicyVersionId, current?.ProrationPolicyId, current?.ProrationPolicyVersionId, false);
 		candidate.CollectionPolicyVersionId = collection?.Id;
 		candidate.ConcessionPolicyVersionId = concession?.Id;
 		candidate.RefundPolicyVersionId = refund?.Id;
-		candidate.ProrationPolicyVersionId = proration?.Id;
-		foreach (var version in new[] { collection, concession, refund, proration }.Where(x => x != null))
+		foreach (var version in new[] { collection, concession, refund }.Where(x => x != null))
 			result.PolicyLabels[version!.PolicyType] = $"{version.PolicyName} · v{version.VersionNumber}";
 		try
 		{
 			var cp = collection == null ? null : CollectionPolicySnapshot.Deserialize(collection.SnapshotJson);
 			var cn = concession == null ? null : JsonSerializer.Deserialize<ConcessionPolicySnapshot>(concession.SnapshotJson, SnapshotOptions);
 			var rp = refund == null ? null : JsonSerializer.Deserialize<RefundPolicySnapshot>(refund.SnapshotJson, SnapshotOptions);
-			var pp = proration == null ? null : JsonSerializer.Deserialize<ProrationPolicySnapshot>(proration.SnapshotJson, SnapshotOptions);
 			if (collection != null && (cp == null || string.IsNullOrWhiteSpace(cp.PolicyCode) || cp.LateFeeApplyOnFeeHeads == null) ||
 				concession != null && (cn == null || cn.PolicyId != concession.PolicyId || cn.AcademicYearId != year.Id) ||
-				refund != null && (rp == null || rp.PolicyId != refund.PolicyId || rp.AcademicYearId != year.Id || rp.ApplicableFeeHeadIds == null) ||
-				proration != null && (pp == null || pp.PolicyId != proration.PolicyId || pp.AcademicYearId != year.Id || pp.Rules == null || pp.Rules.Select(x => x.FeeHeadId).Distinct().Count() != pp.Rules.Count))
+				refund != null && (rp == null || rp.PolicyId != refund.PolicyId || rp.AcademicYearId != year.Id || rp.ApplicableFeeHeadIds == null))
 				throw new JsonException("Invalid policy snapshot identity or rules.");
 			var eligible = heads.Where(x => x.IsConcessionApplied).Select(x => x.Id).ToHashSet();
 			if (cn != null && candidate.ConcessionFeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads &&
@@ -181,18 +176,12 @@ public partial class FeeStructureAppService
 				row.Collection = cp is { EnableLateFee: true } && cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId) ? "Late fee applies" : "No late fee";
 				row.Concession = cn != null && candidate.ConcessionApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Eligible on approval" : "Not eligible";
 				row.Refund = rp == null ? "No refund policy attached" : rp.FeeHeadScope != RefundFeeHeadScope.SelectedFeeHeads || rp.ApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Policy eligible" : "Excluded";
-				var rule = pp?.Rules.SingleOrDefault(x => x.FeeHeadId == row.FeeHeadId);
-				row.Proration = rule?.RuleType.ToString() ?? "Full charge";
-				if (rule != null && rule.RuleType != ProrationRuleType.FullCharge && candidate.FeeHeads.Any(x => x.FeeHeadId == row.FeeHeadId && x.IsOneTime))
-					result.Errors.Add($"{row.Name}: a one-time fee cannot use a recurring proration rule.");
 			}
 			var unused = (cp?.LateFeeApplyOnFeeHeads ?? [])
-				.Concat(rp?.ApplicableFeeHeadIds ?? []).Concat(pp?.Rules.Select(x => x.FeeHeadId) ?? []).Distinct().Except(ids).Count();
+				.Concat(rp?.ApplicableFeeHeadIds ?? []).Distinct().Except(ids).Count();
 			if (unused > 0) result.Warnings.Add($"{unused} policy Fee Head(s) are absent from this structure and will not create charges.");
 			if (cp is { EnableLateFee: true } && !cp.LateFeeApplyOnFeeHeads.Any(ids.Contains))
 				result.Warnings.Add("No late-fee heads overlap. No late fee applies; Collection Policy channel controls remain attached.");
-			if (pp == null || ids.Any(x => pp.Rules.All(r => r.FeeHeadId != x)))
-				result.Warnings.Add("Heads without a proration rule use full charge. Review this treatment before publishing.");
 		}
 		catch (JsonException) { result.Errors.Add("A policy snapshot cannot be read. Repair the policy version before publishing."); }
 		return result;
@@ -203,10 +192,9 @@ public partial class FeeStructureAppService
 		var collection = (await collectionPolicyRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == CollectionPolicyStatus.Active)).Select(x => x.Id).ToList();
 		var concession = (await concessionPolicyRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == ConcessionPolicyStatus.Active)).Select(x => x.Id).ToList();
 		var refund = (await refundPolicyRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == RefundPolicyStatus.Active)).Select(x => x.Id).ToList();
-		var proration = (await prorationPolicyRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == ProrationPolicyStatus.Active)).Select(x => x.Id).ToList();
 		return await financePolicyVersionRepository.GetListAsync(x => x.AcademicYearId == yearId && x.Status == "Active" &&
 			(x.PolicyType == "collection" && collection.Contains(x.PolicyId) || x.PolicyType == "concession" && concession.Contains(x.PolicyId) ||
-			 x.PolicyType == "refund" && refund.Contains(x.PolicyId) || x.PolicyType == "proration" && proration.Contains(x.PolicyId)));
+			 x.PolicyType == "refund" && refund.Contains(x.PolicyId)));
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add)]

@@ -14,7 +14,8 @@ public static class AssignmentAmountCalculator
 		if (total < 0 || decimal.Round(total, 2) != total || percentages.Count == 0 ||
 			percentages.Any(x => x < 0 || x > 100) || percentages.Sum() != 100m)
 			throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
-		var amounts = percentages.Select(p => decimal.Round(total * p / 100m, 2, MidpointRounding.AwayFromZero)).ToArray();
+		total = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(total);
+		var amounts = ShikshaMitra.Finance.WholeRupeeAmounts.Allocate(total, percentages);
 		amounts[^1] = total - amounts.Take(amounts.Length - 1).Sum();
 		// Tiny totals can make the final residual negative. Remove excess minor units
 		// in stable reverse sequence, never generate a negative obligation.
@@ -31,7 +32,8 @@ public static class AssignmentAmountCalculator
 		ProrationPolicyCalculationService calculator, ProrationPolicyRuleSnapshot rule,
 		decimal amount, DateTime coverageStart, DateTime coverageEnd, DateTime start, DateTime end)
 	{
-		if (rule.RuleType != ProrationRuleType.MonthlyCutoff)
+		if (rule.RuleType != ProrationRuleType.MonthlyCutoff || rule.EarlyWithdrawalRuleType.HasValue ||
+			!rule.ApplyOnAdmission || !rule.ApplyOnEarlyWithdrawal)
 			return calculator.Calculate(rule, amount, coverageStart, coverageEnd, start, end);
 		var periods = new List<(DateTime Start, DateTime End)>();
 		for (var month = new DateTime(coverageStart.Year, coverageStart.Month, 1); month <= coverageEnd; month = month.AddMonths(1))
@@ -53,15 +55,9 @@ public static class AssignmentAmountCalculator
 		}
 		var result = calculator.Calculate(rule with { RuleType = ProrationRuleType.Daily, MinimumChargeDays = 0 },
 			amount, coverageStart, coverageEnd, start, end);
-		var rounded = rule.RoundingMode switch
-		{
-			ProrationRoundingMode.NearestRupee => decimal.Round(raw, 0, MidpointRounding.AwayFromZero),
-			ProrationRoundingMode.RoundUpRupee => decimal.Ceiling(raw),
-			ProrationRoundingMode.RoundDownRupee => decimal.Floor(raw),
-			_ => decimal.Round(raw, 2, MidpointRounding.AwayFromZero)
-		};
-		return result with { ProratedAmount = Math.Min(amount, rounded), RawAmount = raw,
-			Factor = amount == 0 ? 0 : raw / amount, RuleType = rule.RuleType, RoundingMode = rule.RoundingMode,
+		var rounded = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(raw);
+		return result with { ProratedAmount = rounded, RawAmount = raw,
+			Factor = amount == 0 ? 0 : raw / amount, RuleType = rule.RuleType, RoundingMode = ProrationRoundingMode.RoundUpRupee,
 			Explanation = $"Monthly cutoff evaluated across {periods.Count} service months; resulting head charge allocated using the payment term percentages." };
 	}
 }

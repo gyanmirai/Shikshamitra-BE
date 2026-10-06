@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-02
+updated_on: 2026-10-06
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -36,6 +36,12 @@ Mutations must enforce backend permissions and audit important financial actions
 | Fee refunds | `Controllers/Finance/Fees/Refunds/FeeRefundController.cs` | Fee refund routes |
 | Student fee assignment | `Controllers/Finance/Fees/StudentFeeAssignment/StudentFeeStructureController.cs` | Student fee structure routes |
 | Fee settings | `Controllers/Finance/Fees/Settings/**` | Fee category, fee head, fee structure, receipt book, concession type, and charge category routes |
+
+`GET api/v1/fee-receipts` requires `academicYearId`, `boardId`, and
+`educationMediumId`. Its optional `month` is a calendar month from 1 (January)
+through 12 (December), applied directly to `ReceiptDate.Month`. Omit `month` to
+list every month in the selected academic year. The list retains tenant and user
+scope filtering, optional class/division and receipt-kind filters, and server pagination.
 
 Fee-category and fee-head create/update contracts accept `module` as an optional numeric `FeeHeadModule` enum value. Send `null` or omit the property when no module applies. The fee-head module lookup returns numeric `value` fields with user-facing `displayName` labels. Every standalone or nested Fee Head request must also send `incomeCategoryId`. Responses return the Income Category. Historical Income Account Head fields are compatibility evidence. The backend accepts active, effective Income Categories from the Fee Head's academic year without requiring an Account Head.
 
@@ -119,6 +125,12 @@ Do not restore generated exports under `docs/`.
 
 ## Fee configuration permissions
 
+Refund and Proration list endpoints (`GET /api/finance/refund-policies` and `GET /api/finance/proration-policies`) exclude Archived policies when `status` is omitted, matching Concession.
+An explicit `status=Archived` selects only archived policies; Draft and Active select their respective current states.
+Academic-year and search filters apply before counting and pagination, so archive badges and list totals reflect the same scoped records.
+Existing archive and unarchive endpoints retain lifecycle guards and version history; unarchive restores Draft.
+Application regression coverage: `RefundProrationPolicyArchiveFiltering_Tests.cs` under `test/ShikshaMitra.Application.Tests/Finance/Policies`.
+
 Fee Structure and each of the four policy configuration families expose exactly three actions: `View`, `Add`, and `Delete`.
 
 | Action | Fee Structure | Collection, Concession, Refund and Proration policies |
@@ -127,7 +139,7 @@ Fee Structure and each of the four policy configuration families expose exactly 
 | Add | Create, edit/PATCH, publish and create revision | Create, edit, activate, clone, restore and manage attachments |
 | Delete | Delete an unused draft | Archive/delete where the existing endpoint supports it |
 
-Canonical roots are `Finance.Settings.FeeStructure` and `Finance.Policies.{CollectionPolicy,ConcessionPolicy,RefundPolicy,ProrationPolicy}`. Menu/module visibility grants do not authorize these API actions. Structure attachment changes require both structure Add and the changed policy family's Add. Context capability flags named `edit` and `publish` both derive from structure Add.
+Canonical roots are `Finance.Settings.FeeStructure` and `Finance.Policies.{CollectionPolicy,ConcessionPolicy,RefundPolicy,ProrationPolicy}`. Menu/module visibility grants do not authorize these API actions. Structure attachment changes require both structure Add and the supported changed policy family's Add. Proration is not a supported structure attachment; its attachment-impact endpoint is retired. Context capability flags named `edit` and `publish` both derive from structure Add.
 
 Student overrides, exception windows, and charge-period overrides retain their existing permission keys and grants.
 The target retires waiver approval and threshold permissions, replacing them with one dedicated Fee Collection apply-waiver permission; configuration Add does not grant authority to reduce receivables.

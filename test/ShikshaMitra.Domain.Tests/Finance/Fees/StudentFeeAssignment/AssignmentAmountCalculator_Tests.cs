@@ -22,7 +22,8 @@ public class AssignmentAmountCalculator_Tests
 	{
 		var amounts = AssignmentAmountCalculator.Allocate(.02m, [25m, 25m, 25m, 25m]);
 		Assert.All(amounts, x => Assert.True(x >= 0));
-		Assert.Equal(.02m, amounts.Sum());
+		Assert.Equal(1m, amounts.Sum());
+		Assert.Equal(new[] { 0m, 0m, 0m, 1m }, amounts);
 	}
 
 	[Fact]
@@ -37,7 +38,7 @@ public class AssignmentAmountCalculator_Tests
 	{
 		var rule = new ProrationPolicyRuleSnapshot(Guid.NewGuid(), ProrationRuleType.Daily, ProrationRoundingMode.Currency, 0, null, null);
 		var result = AssignmentAmountCalculator.Calculate(new(), rule, 12000m, new(2026, 4, 1), new(2027, 3, 31), new(2026, 10, 1), new(2027, 3, 31));
-		Assert.Equal(5983.56m, result.ProratedAmount);
+		Assert.Equal(5984m, result.ProratedAmount);
 		Assert.Equal(result.ProratedAmount, AssignmentAmountCalculator.Allocate(result.ProratedAmount, [100m]).Sum());
 		Assert.Equal(result.ProratedAmount, AssignmentAmountCalculator.Allocate(result.ProratedAmount, [25m, 25m, 25m, 25m]).Sum());
 	}

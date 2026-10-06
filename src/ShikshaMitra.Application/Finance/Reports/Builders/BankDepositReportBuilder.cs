@@ -106,7 +106,7 @@ public class BankDepositReportBuilder(
             if (paymentsByTx.TryGetValue(receipt.FeeCollectionTransactionId, out var txPayments))
             {
                 var mainPayment = txPayments.FirstOrDefault(p => p.PaymentMethod != PaymentMethodEnum.Cash) ?? txPayments.FirstOrDefault();
-                
+
                 if (mainPayment != null)
                 {
                     if (mainPayment.PaymentMethod == PaymentMethodEnum.Cash)
@@ -155,7 +155,7 @@ public class BankDepositReportBuilder(
                 { "Class", stdName },
                 { "ChequeRefNo", chequeRefNo },
                 { "Account", account },
-                { "Amount", receipt.TotalPaidAmount.ToString("N2") }
+                { "Amount", Math.Ceiling(receipt.TotalPaidAmount).ToString("N0") }
             });
 
             srNo++;

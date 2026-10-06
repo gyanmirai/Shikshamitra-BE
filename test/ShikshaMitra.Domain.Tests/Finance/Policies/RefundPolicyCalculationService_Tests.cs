@@ -63,7 +63,7 @@ public class RefundPolicyCalculationService_Tests
 			new RefundPolicyCalculationInput(100m, 99.60m, 0m, 0m, null));
 
 		Assert.Equal(0.40m, result.RemainingEligible);
-		Assert.Equal(0.40m, result.FinalRefund);
+		Assert.Equal(0m, result.FinalRefund);
 	}
 
 	[Fact]

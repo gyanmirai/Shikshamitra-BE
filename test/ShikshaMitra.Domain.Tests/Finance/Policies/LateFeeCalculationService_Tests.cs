@@ -228,8 +228,8 @@ public class LateFeeCalculationService_Tests
 
 	[Theory]
 	[InlineData(RoundingMethodType.RoundUp, 34)]
-	[InlineData(RoundingMethodType.RoundDown, 33)]
-	[InlineData(RoundingMethodType.NearestRupee, 33)]
+	[InlineData(RoundingMethodType.RoundDown, 34)]
+	[InlineData(RoundingMethodType.NearestRupee, 34)]
 	public void Rounding_Method_Is_Applied_To_The_Final_Amount(RoundingMethodType method, decimal expected)
 	{
 		var result = CalculateWithRoundingFixture(method);
@@ -237,14 +237,12 @@ public class LateFeeCalculationService_Tests
 	}
 
 	[Fact]
-	public void No_Rounding_Method_Leaves_A_Fractional_Amount_Unrounded()
+	public void Legacy_rounding_options_use_the_system_whole_rupee_rule()
 	{
-		// Deliberately not comparing against a literal like 33.333... — chained decimal
-		// division doesn't reproduce identical trailing digits to arbitrary precision, and
-		// that's not what this test is checking. The point is "None" doesn't round at all.
+
 		var result = CalculateWithRoundingFixture(RoundingMethodType.None);
-		Assert.NotEqual(Math.Floor(result.LateFee), result.LateFee);
-		Assert.True(result.LateFee > 33.33m && result.LateFee < 33.34m);
+		Assert.Equal(34m, result.LateFee);
+		Assert.Equal("RoundUp", result.RoundingApplied);
 	}
 
 	private LateFeeCalculationResult CalculateWithRoundingFixture(RoundingMethodType method)

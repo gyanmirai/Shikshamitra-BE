@@ -3,7 +3,7 @@ module: finance
 domain: fee-structure
 content_type: Reference
 status: canonical
-updated_on: 2026-09-10
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,7 +19,7 @@ flowchart LR
     M[Academic board and medium workspace] --> C[Authorized class]
     C --> D[Draft Fee Structure]
     H[Active Fee Heads and accounting mappings] --> D
-    P[Four policy masters and immutable versions] --> D
+    P[Collection and Refund immutable versions] --> D
     T[Published Payment Term versions] --> L[Per-head schedules and local overrides]
     L --> D
     D --> V[Authoritative readiness review]
@@ -38,9 +38,13 @@ flowchart LR
 
 Drafts may be incomplete. New/changed attachments must be valid: wrong-year, inactive, foreign-version, duplicate-head, corrupt-snapshot, and invalid-custom-schedule errors block relationship changes. Name/amount-only PATCH operations validate the command and monetary shape without revalidating unrelated master settings; full preview/publication always revalidates everything. `SaveAsDraft=false` requests complete validation on a save; publication remains a separate explicit action.
 
-Publication requires at least one active Fee Head, an active valid accounting mapping for every head, a Collection policy, and a published/superseded version of an active Payment Term for every head. Refund and Proration are optional. A structure without Proration uses full-charge coverage labels; no Refund attachment means no refund policy has been configured by this workspace.
+Publication requires at least one active Fee Head, an active valid accounting mapping for every head, a Collection policy, and a published/superseded version of an active Payment Term for every head. Refund is optional. Proration is removed from request/response contracts, settings catalogs, context capabilities, attachment validation, coverage and publication warnings; no Refund attachment means no refund policy has been configured by this workspace.
 
 Concession Policy setup has been removed from the Fee Structure UI. New structures can be published and assigned without an attachment; no default concession is selected and no discount is granted. Existing attachment/version/scope fields remain for compatibility and historical request processing; supplied legacy attachments still receive their existing validation. The request flow has not moved to request-level policy selection: a new assignment without a snapshot cannot create a concession request, and its legacy concession-context read returns `PolicyNotAttached`. Existing snapshots are preserved. No database migration or historical rewrite is required.
+
+Proration attachment PATCH fields are rejected as unsupported. Older create/update payload fields are ignored and never persisted. New drafts and revisions cannot attach proration, and new student assignments do not inherit old structure pins. Existing nullable structure columns, publication JSON, assignment snapshots and DueFee calculations are retained as historical evidence; no destructive migration is required. Reads project retired proration labels/fields/warnings out of publication responses without rewriting the stored snapshot. The separate Proration Policy lifecycle and simulation remain available; its structure attachment-impact endpoint is retired.
+
+Regression coverage lives in `FeeStructureProrationRemoval_Tests.cs`, the malformed PATCH cases, the supported policy-default tests and `StudentFeeAssignmentPolicies_Tests.cs`. These check unsupported inputs, publication without proration, historical evidence projection, no template inheritance, independent simulation and preservation of assigned policy pins.
 
 ## Policy and Fee Head mismatch rules
 
@@ -55,8 +59,6 @@ Policies attach to the **Fee Structure**; the policy's head rules apply to the *
 | Concession scope is selected heads | Every selected ID must be present in the structure and concession-enabled; empty selection is invalid |
 | No concession-enabled heads at publication | Allowed when no legacy concession policy is attached; an existing attachment still requires compatible coverage |
 | Refund selected-head policy has no intersection | Warn in an incomplete draft; block publication until matching heads are added or the attachment is changed/cleared |
-| Proration policy does not mention a structure head | Full charge; warn in review |
-| One-time structure head has a recurring Proration rule | Reject the conflicting configuration |
 | Extra policy heads are added later to a draft | Recompute coverage on preview, save and publication |
 | A selected concession head is removed | Selected scope becomes invalid; require explicit correction |
 | Master or snapshot is unavailable/inactive/wrong-year | Reject new or changed draft use; published review remains readable |
@@ -119,7 +121,7 @@ Academic workspace, scope and calendar lookups project only the required fields.
 | `DELETE /api/fee-structures/{id}` | `.Delete` | Unused draft only |
 | `PATCH /api/fee-structures/{id}/lock` | `.Add` | Retired compatibility route: rejects with instructions to review and use stamped publication |
 
-Permission prefix in abbreviated rows is `Finance.Settings.FeeStructure`. Changed attachments additionally require `Finance.Policies.{CollectionPolicy|ConcessionPolicy|ProrationPolicy|RefundPolicy}.Add`; changing selected concession coverage is an attachment change. Existing unchanged attachments do not require every policy-management permission merely to edit a fee amount.
+Permission prefix in abbreviated rows is `Finance.Settings.FeeStructure`. Changed attachments additionally require `Finance.Policies.{CollectionPolicy|ConcessionPolicy|RefundPolicy}.Add`; changing selected concession coverage is an attachment change. Existing unchanged attachments do not require every policy-management permission merely to edit a fee amount.
 
 The `Finance:FeeStructure:*` error family includes InvalidConfiguration, ScopeMismatch, VersionMismatch, ConcurrencyConflict, DuplicateName and RevisionRequiresPublication. Validation failures include human-readable `error.data.Errors`; clients should retain unsaved input and display this list. Database uniqueness/concurrency failures must not be interpreted as a successful save; refresh the canonical resource before retrying.
 

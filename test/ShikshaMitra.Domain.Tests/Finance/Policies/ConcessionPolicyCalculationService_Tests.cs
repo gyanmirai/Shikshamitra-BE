@@ -120,7 +120,7 @@ public class ConcessionPolicyCalculationService_Tests
 			percentageValue: 100m,
 			roundingMethod: RoundingMethodType.RoundUp);
 
-		Assert.Equal(10.20m, _service.Calculate(policy, 10.20m));
+		Assert.Equal(10m, _service.Calculate(policy, 10.20m));
 	}
 
 	[Fact]

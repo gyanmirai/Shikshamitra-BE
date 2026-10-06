@@ -62,7 +62,9 @@ public class ProrationPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			Rules.Add(new ProrationPolicyRule(
 				rule.Id, TenantId, Id, rule.FeeHeadId, rule.RuleType,
-				rule.RoundingMode, rule.MinimumChargeDays, rule.CutoffDay, rule.AfterCutoffAction));
+				rule.RoundingMode, rule.MinimumChargeDays, rule.CutoffDay, rule.AfterCutoffAction,
+				rule.ApplyOnAdmission, rule.ApplyOnEarlyWithdrawal, rule.EarlyWithdrawalRuleType,
+				rule.EarlyWithdrawalMinimumChargeDays, rule.EarlyWithdrawalCutoffDay, rule.EarlyWithdrawalBeforeCutoffAction));
 		}
 		Version++;
 	}
@@ -114,9 +116,18 @@ public class ProrationPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(ProrationPolicyErrorCodes.InvalidRule);
 		foreach (var rule in rules)
 		{
-			if (rule.RuleType == ProrationRuleType.Daily && rule.MinimumChargeDays is < 0 or > 366)
+			if (!Enum.IsDefined(rule.RuleType) || !Enum.IsDefined(rule.RoundingMode) ||
+				(rule.EarlyWithdrawalRuleType.HasValue && !Enum.IsDefined(rule.EarlyWithdrawalRuleType.Value)))
 				throw new BusinessException(ProrationPolicyErrorCodes.InvalidRule);
-			if (rule.RuleType == ProrationRuleType.MonthlyCutoff && rule.CutoffDay is null or < 1 or > 31)
+			if (rule.ApplyOnAdmission && rule.RuleType == ProrationRuleType.Daily && rule.MinimumChargeDays is < 0 or > 366)
+				throw new BusinessException(ProrationPolicyErrorCodes.InvalidRule);
+			if (rule.ApplyOnAdmission && rule.RuleType == ProrationRuleType.MonthlyCutoff &&
+				(rule.CutoffDay is null or < 1 or > 31 || !rule.AfterCutoffAction.HasValue || !Enum.IsDefined(rule.AfterCutoffAction.Value)))
+				throw new BusinessException(ProrationPolicyErrorCodes.InvalidRule);
+			if (rule.ApplyOnEarlyWithdrawal && rule.EarlyWithdrawalRuleType == ProrationRuleType.Daily && rule.EarlyWithdrawalMinimumChargeDays is < 0 or > 366)
+				throw new BusinessException(ProrationPolicyErrorCodes.InvalidRule);
+			if (rule.ApplyOnEarlyWithdrawal && rule.EarlyWithdrawalRuleType == ProrationRuleType.MonthlyCutoff &&
+				(rule.EarlyWithdrawalCutoffDay is null or < 1 or > 31 || !rule.EarlyWithdrawalBeforeCutoffAction.HasValue || !Enum.IsDefined(rule.EarlyWithdrawalBeforeCutoffAction.Value)))
 				throw new BusinessException(ProrationPolicyErrorCodes.InvalidRule);
 		}
 	}
@@ -133,6 +144,13 @@ public class ProrationPolicyRule : Entity<Guid>, IMultiTenant
 	public int? CutoffDay { get; protected set; }
 	public ProrationAfterCutoffAction? AfterCutoffAction { get; protected set; }
 
+	public bool ApplyOnAdmission { get; protected set; } = true;
+	public bool ApplyOnEarlyWithdrawal { get; protected set; } = true;
+	public ProrationRuleType? EarlyWithdrawalRuleType { get; protected set; }
+	public int? EarlyWithdrawalMinimumChargeDays { get; protected set; }
+	public int? EarlyWithdrawalCutoffDay { get; protected set; }
+	public ProrationAfterCutoffAction? EarlyWithdrawalBeforeCutoffAction { get; protected set; }
+
 	protected ProrationPolicyRule() { }
 
 	public ProrationPolicyRule(
@@ -144,13 +162,22 @@ public class ProrationPolicyRule : Entity<Guid>, IMultiTenant
 		ProrationRoundingMode roundingMode,
 		int? minimumChargeDays,
 		int? cutoffDay,
-		ProrationAfterCutoffAction? afterCutoffAction) : base(id)
+		ProrationAfterCutoffAction? afterCutoffAction,
+		bool applyOnAdmission = true, bool applyOnEarlyWithdrawal = true,
+		ProrationRuleType? earlyWithdrawalRuleType = null, int? earlyWithdrawalMinimumChargeDays = null,
+		int? earlyWithdrawalCutoffDay = null, ProrationAfterCutoffAction? earlyWithdrawalBeforeCutoffAction = null) : base(id)
 	{
 		TenantId = tenantId;
 		ProrationPolicyId = prorationPolicyId;
 		FeeHeadId = feeHeadId;
+		ApplyOnAdmission = applyOnAdmission;
+		ApplyOnEarlyWithdrawal = applyOnEarlyWithdrawal;
+		EarlyWithdrawalRuleType = earlyWithdrawalRuleType;
+		EarlyWithdrawalMinimumChargeDays = earlyWithdrawalRuleType == ProrationRuleType.Daily ? earlyWithdrawalMinimumChargeDays ?? 0 : null;
+		EarlyWithdrawalCutoffDay = earlyWithdrawalRuleType == ProrationRuleType.MonthlyCutoff ? earlyWithdrawalCutoffDay : null;
+		EarlyWithdrawalBeforeCutoffAction = earlyWithdrawalRuleType == ProrationRuleType.MonthlyCutoff ? earlyWithdrawalBeforeCutoffAction : null;
 		RuleType = ruleType;
-		RoundingMode = roundingMode;
+		RoundingMode = ProrationRoundingMode.RoundUpRupee;
 		MinimumChargeDays = ruleType == ProrationRuleType.Daily ? minimumChargeDays ?? 0 : null;
 		CutoffDay = ruleType == ProrationRuleType.MonthlyCutoff ? cutoffDay : null;
 		AfterCutoffAction = ruleType == ProrationRuleType.MonthlyCutoff
@@ -159,10 +186,14 @@ public class ProrationPolicyRule : Entity<Guid>, IMultiTenant
 	}
 
 	public ProrationPolicyRuleModel ToModel() => new(
-		Id, FeeHeadId, RuleType, RoundingMode, MinimumChargeDays, CutoffDay, AfterCutoffAction);
+		Id, FeeHeadId, RuleType, RoundingMode, MinimumChargeDays, CutoffDay, AfterCutoffAction,
+		ApplyOnAdmission, ApplyOnEarlyWithdrawal, EarlyWithdrawalRuleType,
+		EarlyWithdrawalMinimumChargeDays, EarlyWithdrawalCutoffDay, EarlyWithdrawalBeforeCutoffAction);
 
 	public ProrationPolicyRuleSnapshot ToSnapshot() => new(
-		FeeHeadId, RuleType, RoundingMode, MinimumChargeDays, CutoffDay, AfterCutoffAction);
+		FeeHeadId, RuleType, RoundingMode, MinimumChargeDays, CutoffDay, AfterCutoffAction,
+		ApplyOnAdmission, ApplyOnEarlyWithdrawal, EarlyWithdrawalRuleType,
+		EarlyWithdrawalMinimumChargeDays, EarlyWithdrawalCutoffDay, EarlyWithdrawalBeforeCutoffAction);
 }
 
 public sealed record ProrationPolicyUpdateModel(
@@ -180,7 +211,13 @@ public sealed record ProrationPolicyRuleModel(
 	ProrationRoundingMode RoundingMode,
 	int? MinimumChargeDays,
 	int? CutoffDay,
-	ProrationAfterCutoffAction? AfterCutoffAction);
+	ProrationAfterCutoffAction? AfterCutoffAction,
+	bool ApplyOnAdmission = true,
+	bool ApplyOnEarlyWithdrawal = true,
+	ProrationRuleType? EarlyWithdrawalRuleType = null,
+	int? EarlyWithdrawalMinimumChargeDays = null,
+	int? EarlyWithdrawalCutoffDay = null,
+	ProrationAfterCutoffAction? EarlyWithdrawalBeforeCutoffAction = null);
 
 public sealed record ProrationPolicySnapshot(
 	Guid PolicyId,
@@ -198,4 +235,10 @@ public sealed record ProrationPolicyRuleSnapshot(
 	ProrationRoundingMode RoundingMode,
 	int? MinimumChargeDays,
 	int? CutoffDay,
-	ProrationAfterCutoffAction? AfterCutoffAction);
+	ProrationAfterCutoffAction? AfterCutoffAction,
+	bool ApplyOnAdmission = true,
+	bool ApplyOnEarlyWithdrawal = true,
+	ProrationRuleType? EarlyWithdrawalRuleType = null,
+	int? EarlyWithdrawalMinimumChargeDays = null,
+	int? EarlyWithdrawalCutoffDay = null,
+	ProrationAfterCutoffAction? EarlyWithdrawalBeforeCutoffAction = null);

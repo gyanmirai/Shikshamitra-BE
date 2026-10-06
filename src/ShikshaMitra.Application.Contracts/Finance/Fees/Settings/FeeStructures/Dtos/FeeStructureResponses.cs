@@ -63,8 +63,6 @@ public class StandardFeeStructureResponseItem : EntityDto<Guid>
 	public Guid? ConcessionPolicyVersionId { get; set; }
 	public Guid? RefundPolicyId { get; set; }
 	public Guid? RefundPolicyVersionId { get; set; }
-	public Guid? ProrationPolicyId { get; set; }
-	public Guid? ProrationPolicyVersionId { get; set; }
 	[JsonConverter(typeof(JsonStringEnumConverter))]
 	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; set; }
 	public List<Guid> ConcessionApplicableFeeHeadIds { get; set; } = [];

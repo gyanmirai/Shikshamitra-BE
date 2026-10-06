@@ -130,21 +130,24 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
         fromThisTxn.ShouldContain(r => r.ReceiptKind == FeeReceiptKind.ProvisionalCharge);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(1)]
+    [InlineData(6)]
+    [InlineData(10)]
+    [InlineData(12)]
     [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Filter_By_Month_Returning_Only_Receipts_In_That_Month()
+    public async Task Should_Filter_By_Month_Returning_Only_Receipts_In_That_Month(int month)
     {
         var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
-        await FeeReceiptTestHelper.SeedReceiptAsync(Factory.Services, studentId);
-
-        var currentMonth = DateTime.UtcNow.Month;
-        var nextMonth    = currentMonth == 12 ? 1 : currentMonth + 1;
+        var receipt = await FeeReceiptTestHelper.SeedReceiptAsync(
+            Factory.Services, studentId, receiptDate: new DateOnly(2026, month, 5));
+        var nextMonth = month == 12 ? 1 : month + 1;
 
         var urlCurrentMonth = $"{BaseUrl}?academicYearId={FeeReceiptTestHelper.DefaultAcademicYearId}" +
                               $"&boardId={boardId}&educationMediumId={FeeReceiptTestHelper.DefaultMediumId}" +
-                              $"&month={currentMonth}";
+                              $"&month={month}";
 
         var urlNextMonth = $"{BaseUrl}?academicYearId={FeeReceiptTestHelper.DefaultAcademicYearId}" +
                            $"&boardId={boardId}&educationMediumId={FeeReceiptTestHelper.DefaultMediumId}" +
@@ -153,7 +156,9 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
         var bodyCurrentMonth = await GetAndReadAsync<PagedResultDto<FeeReceiptListItemDto>>(urlCurrentMonth);
         var bodyNextMonth    = await GetAndReadAsync<PagedResultDto<FeeReceiptListItemDto>>(urlNextMonth);
 
-        bodyCurrentMonth.TotalCount.ShouldBeGreaterThanOrEqualTo(1);
+        bodyCurrentMonth.Items.ShouldContain(r => r.Id == receipt.Id);
+        bodyCurrentMonth.Items.ShouldAllBe(r => r.ReceiptDate.Month == month);
+        bodyNextMonth.Items.ShouldNotContain(r => r.Id == receipt.Id);
         bodyNextMonth.Items.ShouldAllBe(r => r.ReceiptDate.Month == nextMonth);
     }
 

@@ -28,7 +28,7 @@ public class RefundPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public decimal? FixedAmount { get; set; }
 	public decimal? MaximumPerRequest { get; set; }
 	public decimal? MaximumPerStudentYear { get; set; }
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public string DeductionType { get; set; } = "None";
 	public decimal? DeductionValue { get; set; }
 	public decimal? MaximumDeduction { get; set; }
@@ -64,7 +64,7 @@ public class CreateUpdateRefundPolicyDto
 	public decimal? FixedAmount { get; set; }
 	public decimal? MaximumPerRequest { get; set; }
 	public decimal? MaximumPerStudentYear { get; set; }
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public string DeductionType { get; set; } = "None";
 	public decimal? DeductionValue { get; set; }
 	public decimal? MaximumDeduction { get; set; }

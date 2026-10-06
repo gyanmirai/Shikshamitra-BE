@@ -243,32 +243,40 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
     }
 
     [Fact]
-    public async Task Four_Policies_RoundTrip_With_Head_Coverage_And_OneTime_Proration_Conflict()
+    public async Task Refund_RoundTrip_And_Publish_Ignore_Independent_Proration_Rules()
     {
         using var reviewer = Reviewer(); using var tenant = _currentTenant.Change(TestTenantId);
         var (metadata, standard, candidate) = await ReadyCandidateAsync();
         var year = (await _metadataRepo.GetAsync(metadata)).AcademicYearId!.Value;
+        candidate.FeeHeads.Single().Amount = 1000m;
         var head = candidate.FeeHeads.Single().FeeHeadId;
         var refund = await GetRequiredService<IRefundPolicyAppService>().CreateAsync(new CreateUpdateRefundPolicyDto
         {
-            AcademicYearId = year, PolicyName = "Refund rules", Status = "Active", FeeHeadScope = "SelectedFeeHeads", ApplicableFeeHeadIds = [head]
+            AcademicYearId = year, PolicyName = "Refund rules", Status = "Active", FeeHeadScope = "SelectedFeeHeads", ApplicableFeeHeadIds = [head],
+            ExpenseCategoryId = await CreateRefundExpenseCategoryAsync(year), AllowedPayoutMethods = ["Cash"]
         });
         var proration = await GetRequiredService<IProrationPolicyAppService>().CreateAsync(new CreateUpdateProrationPolicyDto
         {
             AcademicYearId = year, PolicyName = "Daily proration", Status = "Active", FeeHeadRules = [new ProrationPolicyRuleDto { FeeHeadId = head, RuleType = "Daily" }]
         });
-        candidate.RefundPolicyId = refund.Id; candidate.ProrationPolicyId = proration.Id;
+        candidate.RefundPolicyId = refund.Id;
         var saved = await _feeStructures.CreateAsync(metadata, new() { StandardId = standard, StandardFeeStructures = candidate });
-        saved.RefundPolicyVersionId.ShouldNotBeNull(); saved.ProrationPolicyVersionId.ShouldNotBeNull();
+        saved.RefundPolicyVersionId.ShouldNotBeNull();
+        (await _feeStructures.GetSettingsAsync(metadata, standard)).Policies.ShouldNotContain(x => x.Family == "proration");
         var review = await _feeStructures.PreviewAsync(new() { FeeStructureMetadataId = metadata, StandardId = standard, StructureId = saved.Id, StandardFeeStructures = AsRequest(saved) });
         review.Errors.ShouldBeEmpty();
-        review.Coverage.Single().Proration.ShouldBe("Daily");
+        review.PolicyLabels.ShouldNotContainKey("proration");
+        review.Warnings.ShouldNotContain(x => x.Contains("proration", StringComparison.OrdinalIgnoreCase));
         review.Coverage.Single().Refund.ShouldBe("Policy eligible");
         var edit = AsRequest(saved); edit.FeeHeads[0].IsOneTime = true;
-        await Should.ThrowAsync<BusinessException>(() => _feeStructures.UpdateAsync(saved.Id, edit));
-        edit.FeeHeads[0].IsOneTime = false; edit.RefundPolicyId = null; edit.RefundPolicyVersionId = null; edit.ProrationPolicyId = null; edit.ProrationPolicyVersionId = null;
+        var oneTime = await _feeStructures.UpdateAsync(saved.Id, edit);
+        var published = await _feeStructures.PublishAsync(oneTime.Id, new() { ConcurrencyStamp = oneTime.ConcurrencyStamp });
+        published.PublicationReview!.IsReady.ShouldBeTrue();
+        saved = await _feeStructures.CreateRevisionAsync(published.Id, new() { ConcurrencyStamp = published.ConcurrencyStamp });
+        edit = AsRequest(saved);
+        edit.FeeHeads[0].IsOneTime = false; edit.RefundPolicyId = null; edit.RefundPolicyVersionId = null;
         var detached = await _feeStructures.UpdateAsync(saved.Id, edit);
-        detached.RefundPolicyVersionId.ShouldBeNull(); detached.ProrationPolicyVersionId.ShouldBeNull();
+        detached.RefundPolicyVersionId.ShouldBeNull();
     }
 
     [Fact]

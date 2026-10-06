@@ -75,13 +75,13 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		PercentageValue = model.CalculationMethod == ConcessionCalculationMethod.Percentage
 			? model.PercentageValue : null;
 		FixedAmount = model.CalculationMethod == ConcessionCalculationMethod.FixedAmount
-			? model.FixedAmount : null;
+			? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.FixedAmount) : null;
 		MaximumPercentage = model.ValueSource == ConcessionValueSource.RequestEnteredWithinLimits &&
 			model.CalculationMethod == ConcessionCalculationMethod.Percentage ? model.MaximumPercentage : null;
 		MaximumFixedAmount = model.ValueSource == ConcessionValueSource.RequestEnteredWithinLimits &&
-			model.CalculationMethod == ConcessionCalculationMethod.FixedAmount ? model.MaximumFixedAmount : null;
+			model.CalculationMethod == ConcessionCalculationMethod.FixedAmount ? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.MaximumFixedAmount) : null;
 		ApplyOn = model.ApplyOn;
-		RoundingMethod = model.RoundingMethod;
+		RoundingMethod = RoundingMethodType.RoundUp;
 		ApplicableConcessionTypeIdsJson = JsonSerializer.Serialize(NormalizeIds(model.ApplicableConcessionTypeIds));
 		FeeHeadScope = model.FeeHeadScope;
 		ApplicableFeeHeadIdsJson = JsonSerializer.Serialize(model.FeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads

@@ -40,7 +40,6 @@ public partial class FeeStructureAppService(
 	IRepository<ConcessionPolicy, Guid> concessionPolicyRepository,
 	IRepository<RefundPolicy, Guid> refundPolicyRepository,
 	IRepository<CollectionPolicy, Guid> collectionPolicyRepository,
-	IRepository<ProrationPolicy, Guid> prorationPolicyRepository,
 	IRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
 	IRepository<EducationMediumStage, Guid> stageRepository,
 	IRepository<EducationMedium, Guid> mediumRepository,

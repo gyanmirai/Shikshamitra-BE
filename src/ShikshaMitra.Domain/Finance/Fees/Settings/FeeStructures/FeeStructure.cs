@@ -39,6 +39,8 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? ConcessionPolicyVersionId { get; private set; }
 	public Guid? RefundPolicyId { get; private set; }
 	public Guid? RefundPolicyVersionId { get; private set; }
+	// Retired attachment storage: retained only for historical evidence and policy usage counts.
+	// New structures and revisions cannot attach or inherit proration.
 	public Guid? ProrationPolicyId { get; private set; }
 	public Guid? ProrationPolicyVersionId { get; private set; }
 	public ConcessionFeeHeadScope ConcessionFeeHeadScope { get; private set; } = ConcessionFeeHeadScope.EntireFeeStructure;
@@ -148,16 +150,6 @@ public class FeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 				.WithData("field", "RefundPolicyVersionId");
 		RefundPolicyId = refundPolicyId;
 		RefundPolicyVersionId = refundPolicyVersionId;
-	}
-
-	public void AttachProrationPolicy(Guid? prorationPolicyId, Guid? prorationPolicyVersionId)
-	{
-		EnsureNotLocked();
-		if (prorationPolicyId.HasValue != prorationPolicyVersionId.HasValue)
-			throw new BusinessException(ProrationPolicyErrorCodes.PolicyVersionNotFound)
-				.WithData("field", "ProrationPolicyVersionId");
-		ProrationPolicyId = prorationPolicyId;
-		ProrationPolicyVersionId = prorationPolicyVersionId;
 	}
 
 	public void AddDetail(FeeStructureDetail detail)

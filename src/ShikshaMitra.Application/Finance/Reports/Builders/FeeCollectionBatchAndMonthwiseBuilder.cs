@@ -24,8 +24,8 @@ public class FeeCollectionBatchAndMonthwiseBuilder(
     public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
         var academicYearIds = request.Filters.AcademicYearIds ?? new List<Guid>();
-        var targetMonths = request.Filters.Months != null && request.Filters.Months.Any() 
-            ? request.Filters.Months 
+        var targetMonths = request.Filters.Months != null && request.Filters.Months.Any()
+            ? request.Filters.Months
             : Enumerable.Range(1, 12).ToList();
 
         var targetAcademicYears = await asyncExecuter.ToListAsync(
@@ -47,10 +47,10 @@ public class FeeCollectionBatchAndMonthwiseBuilder(
 
         var metadataQuery = (await feeRecordRepository.GetQueryableAsync())
             .Where(m => targetYearIds.Contains(m.AcademicYearId));
-            
+
         var metadataList = await asyncExecuter.ToListAsync(metadataQuery);
         var metadataMap = metadataList.ToDictionary(m => m.Id, m => m.AcademicYearId);
-        
+
         var metadataIds = metadataMap.Keys.ToList();
 
         var paymentsQuery = (await paymentMethodRepository.GetQueryableAsync())
@@ -101,9 +101,9 @@ public class FeeCollectionBatchAndMonthwiseBuilder(
             {
                 if (yearData.TryGetValue(year.Id, out var amounts))
                 {
-                    row[$"Cash_{year.Id}"] = amounts.Cash.ToString("N2");
-                    row[$"Gateway_{year.Id}"] = amounts.Gateway.ToString("N2");
-                    row[$"Total_{year.Id}"] = amounts.Total.ToString("N2");
+                    row[$"Cash_{year.Id}"] = Math.Ceiling(amounts.Cash).ToString("N0");
+                    row[$"Gateway_{year.Id}"] = Math.Ceiling(amounts.Gateway).ToString("N0");
+                    row[$"Total_{year.Id}"] = Math.Ceiling(amounts.Total).ToString("N0");
                 }
                 else
                 {
@@ -120,7 +120,7 @@ public class FeeCollectionBatchAndMonthwiseBuilder(
         payload.PageSize = request.PageSize;
 
         var sortedRows = rows.OrderBy(r => int.Parse(r["MonthIndex"]!)).ToList();
-        
+
         payload.Rows = exportAllRows
             ? sortedRows
             : sortedRows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();

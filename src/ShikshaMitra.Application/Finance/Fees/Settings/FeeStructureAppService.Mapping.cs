@@ -142,9 +142,6 @@ public partial class FeeStructureAppService
 
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add);
 
-		if (input.ProrationPolicyId != old?.ProrationPolicyId || input.ProrationPolicyVersionId != old?.ProrationPolicyVersionId)
-
-			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add);
 
 	}
 
@@ -165,7 +162,6 @@ public partial class FeeStructureAppService
 
 		entity.AttachRefundPolicy(input.RefundPolicyId, input.RefundPolicyVersionId);
 
-		entity.AttachProrationPolicy(input.ProrationPolicyId, input.ProrationPolicyVersionId);
 
 		foreach (var deleted in entity.FeeStructureDetails.Where(x => input.FeeHeads.All(y => y.FeeHeadId != x.FeeHeadId)).ToList())
 
@@ -253,7 +249,6 @@ public partial class FeeStructureAppService
 
 		RefundPolicyId = entity.RefundPolicyId, RefundPolicyVersionId = entity.RefundPolicyVersionId,
 
-		ProrationPolicyId = entity.ProrationPolicyId, ProrationPolicyVersionId = entity.ProrationPolicyVersionId,
 
 		ConcessionFeeHeadScope = entity.ConcessionFeeHeadScope, ConcessionApplicableFeeHeadIds = entity.GetConcessionApplicableFeeHeadIds().ToList(),
 
@@ -283,6 +278,13 @@ public partial class FeeStructureAppService
 
 		var frozen = string.IsNullOrEmpty(snapshotJson) ? null : JsonSerializer.Deserialize<FeeStructurePreviewDto>(snapshotJson);
 
+		// Project retired setup fields out of the response without rewriting stored publication evidence.
+		if (frozen != null)
+		{
+			var hadProration = frozen.PolicyLabels.Remove("proration");
+			frozen.Warnings.RemoveAll(x => x.Contains("proration", StringComparison.OrdinalIgnoreCase) ||
+				(hadProration && x.Contains("policy Fee Head(s) are absent", StringComparison.Ordinal)));
+		}
 		var result = new FeeStructureCreateResponse
 
 		{
@@ -301,13 +303,12 @@ public partial class FeeStructureAppService
 
 			RefundPolicyId = entity.RefundPolicyId, RefundPolicyVersionId = entity.RefundPolicyVersionId,
 
-			ProrationPolicyId = entity.ProrationPolicyId, ProrationPolicyVersionId = entity.ProrationPolicyVersionId,
 
 			ConcessionFeeHeadScope = entity.ConcessionFeeHeadScope, ConcessionApplicableFeeHeadIds = entity.GetConcessionApplicableFeeHeadIds().ToList(), FeeHeads = []
 
 		};
 
-		var policyIds = new[] { entity.CollectionPolicyVersionId, entity.ConcessionPolicyVersionId, entity.ProrationPolicyVersionId, entity.RefundPolicyVersionId }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
+		var policyIds = new[] { entity.CollectionPolicyVersionId, entity.ConcessionPolicyVersionId, entity.RefundPolicyVersionId }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
 
 		result.PolicyLabels = frozen?.PolicyLabels ?? (await financePolicyVersionRepository.GetListAsync(x => policyIds.Contains(x.Id)))
 

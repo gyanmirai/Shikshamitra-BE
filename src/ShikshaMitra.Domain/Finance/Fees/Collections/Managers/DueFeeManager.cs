@@ -100,7 +100,7 @@ public class DueFeeManager(
         var scheduled = AssignmentAmountCalculator.Allocate(annualAmount, weights);
         var rule = prorationPolicy?.Rules.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
             ?? new ProrationPolicyRuleSnapshot(detail.FeeHeadId, ProrationRuleType.FullCharge, ProrationRoundingMode.Currency, null, null, null);
-        if (detail.IsOneTime) rule = rule with { RuleType = ProrationRuleType.FullCharge };
+        if (detail.IsOneTime) rule = rule with { RuleType = ProrationRuleType.FullCharge, ApplyOnAdmission = false, ApplyOnEarlyWithdrawal = false, EarlyWithdrawalRuleType = ProrationRuleType.FullCharge };
         var calculation = AssignmentAmountCalculator.Calculate(prorationCalculator, rule, annualAmount,
             academicYear.StartDate.Date, academicYear.EndDate.Date, chargeStartDate, chargeEndDate);
         var obligations = AssignmentAmountCalculator.Allocate(calculation.ProratedAmount, weights);
@@ -181,7 +181,9 @@ public class DueFeeManager(
 		var totalAmount = customDetail != null ? customDetail.Amount * selectedMonths.Count : detail.Amount ?? throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
 		var baseAmount = customDetail != null
 			? customDetail.Amount
-			: Math.Round(totalAmount / selectedMonths.Count, 2, MidpointRounding.AwayFromZero);
+			: decimal.Floor(ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(totalAmount) / selectedMonths.Count);
+		totalAmount = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(totalAmount);
+		baseAmount = decimal.Floor(baseAmount);
 		var allocated = 0m;
 		for (var i = 0; i < selectedMonths.Count; i++)
 		{
@@ -245,7 +247,7 @@ public class DueFeeManager(
 				detail.FeeHeadId, ProrationRuleType.FullCharge,
 				ProrationRoundingMode.Currency, null, null, null);
 		if (detail.IsOneTime)
-			rule = rule with { RuleType = ProrationRuleType.FullCharge };
+			rule = rule with { RuleType = ProrationRuleType.FullCharge, ApplyOnAdmission = false, ApplyOnEarlyWithdrawal = false, EarlyWithdrawalRuleType = ProrationRuleType.FullCharge };
 		return prorationCalculator.Calculate(rule, scheduledAmount, coverageStart, coverageEnd, chargeStart, chargeEnd);
 	}
 

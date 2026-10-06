@@ -146,7 +146,9 @@ public partial class FeeRefundAppService
     private static List<RefundLineSpec> AllocateCalculatedAmounts(
         IReadOnlyCollection<RefundLineSpec> source, decimal finalAmount)
     {
-        const decimal factor = 100m;
+        // Preserve source precision for historic fractional receipt allocations.
+        // New whole-rupee sources allocate whole rupees, with no lost remainder.
+        var factor = source.Any(x => x.Amount != decimal.Truncate(x.Amount)) ? 100m : 1m;
         var targetUnits = decimal.ToInt64(decimal.Round(finalAmount * factor, 0, MidpointRounding.AwayFromZero));
         var totalWeight = source.Sum(x => x.Amount);
         if (targetUnits <= 0 || totalWeight <= 0)

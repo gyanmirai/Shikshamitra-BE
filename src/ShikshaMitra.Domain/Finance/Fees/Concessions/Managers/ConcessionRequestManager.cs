@@ -438,7 +438,7 @@ public class ConcessionRequestManager(
 				throw new BusinessException(FinanceConcessionErrorCodes.PercentageOver100);
 			}
 
-			return Math.Round(baseAmount * value / 100m, 2, MidpointRounding.AwayFromZero);
+			return ShikshaMitra.Finance.WholeRupeeAmounts.RoundUpWithin(baseAmount * value / 100m, baseAmount);
 		}
 
 		return value;

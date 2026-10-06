@@ -18,11 +18,12 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 public partial class StudentFeeStructureAppService
 {
 	private const string PolicyPermission = ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.OverridePolicies;
+	private static readonly string[] SelectablePolicyFamilies = ["concession", "refund", "collection"];
 	private static readonly string[] PolicyFamilies = ["concession", "refund", "collection", "proration"];
 
 	private static void ValidatePolicies(List<AssignmentPolicySelectionDto> selections)
 	{
-		if (selections == null || selections.Count > 4 || selections.Any(x => x == null || !PolicyFamilies.Contains(x.Family) || x.VersionId == Guid.Empty) ||
+		if (selections == null || selections.Count > 3 || selections.Any(x => x == null || !SelectablePolicyFamilies.Contains(x.Family) || x.VersionId == Guid.Empty) ||
 			selections.Select(x => x.Family).Distinct().Count() != selections.Count)
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 	}
@@ -33,7 +34,7 @@ public partial class StudentFeeStructureAppService
 		await AuthorizationService.CheckAsync(PolicyPermission);
 		await RequireEnrollmentAsync(studentId, academicYearId, false);
 		var versions = await financePolicyVersionRepository.GetListAsync(x => x.AcademicYearId == academicYearId);
-		return versions.Where(x => PolicyFamilies.Contains(x.PolicyType)).GroupBy(x => new { x.PolicyType, x.PolicyId })
+		return versions.Where(x => SelectablePolicyFamilies.Contains(x.PolicyType)).GroupBy(x => new { x.PolicyType, x.PolicyId })
 			.Select(g => g.OrderByDescending(x => x.VersionNumber).ThenByDescending(x => x.CreationTime).First())
 			.Where(x => x.Status.Equals("Active", StringComparison.OrdinalIgnoreCase) && IsEffectiveVersion(x))
 			.OrderBy(x => x.PolicyName).Select(ToAssignmentPolicy).ToList();
@@ -56,9 +57,10 @@ public partial class StudentFeeStructureAppService
 	private static AssignmentPolicyDto ToAssignmentPolicy(FinancePolicyVersion version) => new() {
 		Family = version.PolicyType, PolicyId = version.PolicyId, VersionId = version.Id, Version = version.VersionNumber, Name = version.PolicyName };
 
+	// Proration is evaluated through independent events; templates never supply it to new assignments.
 	private static Dictionary<string, Guid?> StructurePolicyVersions(FeeStructure structure) => new() {
 		["concession"] = structure.ConcessionPolicyVersionId, ["collection"] = structure.CollectionPolicyVersionId,
-		["refund"] = structure.RefundPolicyVersionId, ["proration"] = structure.ProrationPolicyVersionId };
+		["refund"] = structure.RefundPolicyVersionId, ["proration"] = null };
 
 	private async Task<Dictionary<string, FinancePolicyVersion?>> ResolveAssignedPoliciesAsync(
 		FeeStructure structure, Guid year, List<AssignmentPolicySelectionDto> selections, string? reason)
@@ -66,7 +68,7 @@ public partial class StudentFeeStructureAppService
 		ValidatePolicies(selections);
 		var defaults = StructurePolicyVersions(structure);
 		var defaultIds = new Dictionary<string, Guid?> { ["concession"] = structure.ConcessionPolicyId, ["collection"] = structure.CollectionPolicyId,
-			["refund"] = structure.RefundPolicyId, ["proration"] = structure.ProrationPolicyId };
+			["refund"] = structure.RefundPolicyId, ["proration"] = null };
 		var changes = selections.Where(x => x.VersionId != defaults[x.Family] || (!x.VersionId.HasValue && defaultIds[x.Family].HasValue)).ToList();
 		if (changes.Count > 0)
 		{
@@ -104,7 +106,7 @@ public partial class StudentFeeStructureAppService
 	{
 		await AuthorizationService.CheckAsync(ViewPermission);
 		ValidatePolicies(input.Policies);
-		if (input.Policies.Count != 4 || string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Trim().Length > 500)
+		if (input.Policies.Count != 3 || string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Trim().Length > 500)
 			throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
 		await RequireEnrollmentAsync(studentId, input.AcademicYearId, false);
@@ -130,7 +132,7 @@ public partial class StudentFeeStructureAppService
 			assignment.ChangeAssignedPolicies(policies["concession"]?.PolicyId, policies["concession"]?.Id,
 				concession?.FeeHeadScope ?? ConcessionFeeHeadScope.EntireFeeStructure, concession?.ApplicableFeeHeadIds ?? [],
 				policies["collection"]!.PolicyId, policies["collection"]!.Id, policies["refund"]?.PolicyId, policies["refund"]?.Id,
-				policies["proration"]?.PolicyId, policies["proration"]?.Id, input.Reason, CurrentUser.Id!.Value, Clock.Now);
+				assignment.ProrationPolicyId, assignment.ProrationPolicyVersionId, input.Reason, CurrentUser.Id!.Value, Clock.Now);
 			await studentFeeStructureRepository.UpdateAsync(assignment, autoSave: true);
 		}
 		await uow.CompleteAsync();

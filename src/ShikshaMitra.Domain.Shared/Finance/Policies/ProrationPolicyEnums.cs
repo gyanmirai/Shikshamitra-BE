@@ -11,7 +11,8 @@ public enum ProrationRuleType
 {
 	FullCharge = 0,
 	Daily = 1,
-	MonthlyCutoff = 2
+	MonthlyCutoff = 2,
+	FullMonthCharge = 3
 }
 
 public enum ProrationRoundingMode

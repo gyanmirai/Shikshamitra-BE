@@ -60,7 +60,6 @@ public interface IProrationPolicyAppService : IApplicationService
 	Task<ProrationPolicyDto> UnarchiveAsync(Guid id);
 	Task<PagedResultDto<FinancePolicyVersionDto>> GetVersionsAsync(Guid id, FinancePolicyVersionListRequestDto input);
 	Task<ProrationCalculationResultDto> SimulateAsync(Guid id, ProrationPolicySimulateRequestDto input);
-	Task<ProrationPolicyAttachmentImpactDto> GetAttachmentImpactAsync(Guid id, ProrationPolicyAttachmentImpactRequestDto input);
 }
 
 public interface IStudentFeePolicyOverrideAppService : IApplicationService

@@ -113,11 +113,11 @@ public class FeeListChequeClearDateWiseBuilder(
             {
                 // Find the non-cash payment method
                 var mainPayment = txPayments.FirstOrDefault(p => p.PaymentMethod != PaymentMethodEnum.Cash) ?? txPayments.FirstOrDefault();
-                
+
                 if (mainPayment != null)
                 {
                     payType = mainPayment.PaymentMethod.ToString();
-                    
+
                     if (mainPayment.PaymentDetails is ChequeDetails cheque)
                     {
                         chequeRefNo = cheque.ChequeNumber;
@@ -154,7 +154,7 @@ public class FeeListChequeClearDateWiseBuilder(
                 { "PayType", payType },
                 { "ChequeRefNo", chequeRefNo },
                 { "BankName", bankName },
-                { "Amount", receipt.TotalPaidAmount.ToString("N2") }
+                { "Amount", Math.Ceiling(receipt.TotalPaidAmount).ToString("N0") }
             });
         }
 

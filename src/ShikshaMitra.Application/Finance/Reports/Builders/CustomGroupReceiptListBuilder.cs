@@ -107,11 +107,11 @@ public class CustomGroupReceiptListBuilder(
             if (paymentsByTx.TryGetValue(receipt.FeeCollectionTransactionId, out var txPayments))
             {
                 var mainPayment = txPayments.FirstOrDefault(p => p.PaymentMethod != PaymentMethodEnum.Cash) ?? txPayments.FirstOrDefault();
-                
+
                 if (mainPayment != null)
                 {
                     payType = mainPayment.PaymentMethod.ToString();
-                    
+
                     if (mainPayment.PaymentMethod != PaymentMethodEnum.Cash)
                     {
                         if (mainPayment.PaymentDetails is ChequeDetails cheque)
@@ -151,7 +151,7 @@ public class CustomGroupReceiptListBuilder(
                 { "PayType", payType },
                 { "ChequeRefNo", chequeRefNo },
                 { "BankName", bankName },
-                { "Amount", receipt.TotalPaidAmount.ToString("N2") }
+                { "Amount", Math.Ceiling(receipt.TotalPaidAmount).ToString("N0") }
             });
         }
 

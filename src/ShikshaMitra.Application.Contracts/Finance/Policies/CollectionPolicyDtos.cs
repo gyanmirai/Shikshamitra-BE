@@ -26,7 +26,7 @@ public class LateFeeRuleOverrideDto
 	public decimal? AmountPerMonth { get; set; }
 	public string CompoundFrequency { get; set; } = "Daily";
 	public List<CollectionPolicyEscalationRuleDto> EscalationRules { get; set; } = new();
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public decimal? MaximumLateFeeAmount { get; set; }
 	public int? MaximumChargingDays { get; set; }
 }
@@ -67,7 +67,7 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string CompoundFrequency { get; set; } = "Daily";
 	public List<CollectionPolicyEscalationRuleDto> EscalationRules { get; set; } = new();
 	public List<CollectionPolicyFeeHeadOverrideDto> FeeHeadOverrides { get; set; } = new();
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public bool ConsiderAsIncome { get; set; }
 	public Guid? LateFeeIncomeHeadId { get; set; }
 	public Guid? LateFeeIncomeCategoryId { get; set; }
@@ -108,7 +108,7 @@ public class CreateUpdateCollectionPolicyDto
 	public string CompoundFrequency { get; set; } = "Daily";
 	public List<CollectionPolicyEscalationRuleDto> EscalationRules { get; set; } = new();
 	public List<CollectionPolicyFeeHeadOverrideDto> FeeHeadOverrides { get; set; } = new();
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public bool ConsiderAsIncome { get; set; }
 	public Guid? LateFeeIncomeHeadId { get; set; }
 	public Guid? LateFeeIncomeCategoryId { get; set; }

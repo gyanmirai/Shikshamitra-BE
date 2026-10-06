@@ -159,7 +159,6 @@ public partial class StudentFeeStructureAppService
 		preview.ScheduledTotal = preview.Lines.Sum(x => x.ScheduledAmount);
 		preview.ProratedTotal = preview.Lines.Sum(x => x.ProratedAmount);
 		preview.ReductionTotal = preview.ScheduledTotal - preview.ProratedTotal;
-		if (proration == null) preview.Warnings.Add("No proration policy attached. Included heads use their full configured service charge.");
 		if (preview.Lines.Any(x => x.DueDate.Date < Clock.Now.Date)) preview.Warnings.Add("Some configured due dates are in the past. Assignment preserves those dates; it does not assess a late fee.");
 		var fingerprint = Hash(new { Preview = preview, structure.ConcurrencyStamp, Enrollment = enrollment.ConcurrencyStamp,
 			Snapshots = new[] { collection?.SnapshotJson, proration?.SnapshotJson, refund?.SnapshotJson, concession?.SnapshotJson } });

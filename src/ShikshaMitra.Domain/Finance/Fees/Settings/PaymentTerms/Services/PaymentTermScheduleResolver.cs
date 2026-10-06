@@ -45,7 +45,7 @@ public class PaymentTermScheduleResolver(
 				.WithData("Status", version.Status.ToString());
 		}
 
-		var annualAmount = detail.Amount;
+		var annualAmount = detail.Amount.HasValue ? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(detail.Amount.Value) : (decimal?)null;
 		var installments = new List<ResolvedInstallment>();
 		var allocated = 0m;
 		var masterInstallments = version.Installments.OrderBy(i => i.Sequence).ToList();
@@ -95,11 +95,11 @@ public class PaymentTermScheduleResolver(
             else if (index == masterInstallments.Count - 1)
 			{
 				// Absorb rounding residual on the last installment.
-				calculatedAmount = Math.Round(annualAmount.Value - allocated, 2);
+				calculatedAmount = annualAmount.Value - allocated;
 			}
 			else
 			{
-				calculatedAmount = Math.Round(annualAmount.Value * allocationPercentage / 100m, 2);
+				calculatedAmount = decimal.Floor(annualAmount.Value * allocationPercentage / 100m);
 				allocated += calculatedAmount.Value;
 			}
 

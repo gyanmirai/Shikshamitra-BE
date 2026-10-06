@@ -41,10 +41,6 @@ public class StandardFeeStructureRequest
 	public Guid? RefundPolicyId { get; set; }
 	/// <summary>Exact version assertion; the server validates ownership and availability.</summary>
 	public Guid? RefundPolicyVersionId { get; set; }
-	/// <summary>Optional Active Proration Policy. The server retains the selected immutable version.</summary>
-	public Guid? ProrationPolicyId { get; set; }
-	/// <summary>Exact version assertion; the server validates ownership and availability.</summary>
-	public Guid? ProrationPolicyVersionId { get; set; }
 }
 
 public class CollectionPolicyAttachmentImpactRequest

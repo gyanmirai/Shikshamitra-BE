@@ -1,4 +1,4 @@
-using ShikshaMitra.Domain.Finance.Fees.Settings;
+﻿using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Charges;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -112,7 +112,7 @@ public partial class StudentFeeDetailsQueryService
 		var reconByFeeHead = await GetInReconciliationByFeeHeadAsync(studentId);
 
 		return feeHeadDefs.Select(def =>
-		{
+	    {
 			var paid = paidPerHead.GetValueOrDefault(def.FeeHeadId, 0d);
 			var netAmount = (double)def.NetAmount;
 			var pending = Math.Max(0d, netAmount - paid);

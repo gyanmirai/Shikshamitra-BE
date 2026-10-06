@@ -3,7 +3,7 @@ module: finance
 domain: student-fee-assignment
 content_type: Reference
 status: canonical
-updated_on: 2026-10-01
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -33,7 +33,7 @@ All routes below are under `/api/student-fee-structure`; the client base URL alr
 | POST `assign-bulk` | `.Add` | Independent committed, already assigned, skipped or failed outcomes and counts |
 | GET `student/{studentId}?academicYearId=<year>` | `.View` | Saved evidence plus current canonical due balances; no repair or regeneration |
 | GET `policy-options?studentId=<student>&academicYearId=<year>` | `.View` + `.OverridePolicies` | Latest active, effective versions for each policy in the accessible student's academic year |
-| PUT `student/{studentId}/policies` | `.View` + `.OverridePolicies` | Concurrency-protected update of all four policy selections; no obligation regeneration |
+| PUT `student/{studentId}/policies` | `.View` + `.OverridePolicies` | Concurrency-protected update of concession, refund and collection selections; historical assignment proration stays pinned; no obligation regeneration |
 
 The abbreviated permission suffixes refer to `Finance.Fees.StructureAssign`. Amount overrides additionally require `.OverrideAmount`. Manual dates require the existing `Finance.Policies.ProrationPolicy.OverrideChargePeriod` permission. Neither operation checks concession permissions.
 
@@ -43,11 +43,11 @@ The abbreviated permission suffixes refer to `Finance.Fees.StructureAssign`. Amo
 |---|---|
 | Outcome/owner | Finance assignment owns the student's pinned Concession, Refund, Collection and Proration selections; fee structure and policy definitions are unchanged |
 | Actor/scope | Assignment `.Add` creates; `.View` reads; dedicated `.OverridePolicies` authorizes exceptions and later edits. Existing tenant/year/student/class UserScope checks apply |
-| Default/precedence | Omitted family inherits the exact structure version; explicit student version overrides it; null explicitly clears an optional family. Collection cannot be cleared. No academic-year default is substituted |
-| Fields | `policies: [{ family, versionId }]` (unique, at most four supported families); `policyOverrideReason` (1-500 characters when changed). Edit accepts all four, `academicYearId`, nonempty `concurrencyStamp`, and `reason` |
+| Default/precedence | Omitted family inherits the exact structure version; explicit student version overrides concession, refund or collection; null explicitly clears an optional family. Collection cannot be cleared. New assignments do not inherit Proration Policy from Fee Structure. Historical assignment pins cannot be overridden. No academic-year default is substituted |
+| Fields | `policies: [{ family, versionId }]` (unique, at most three selectable families: concession, refund, collection); `policyOverrideReason` (1-500 characters when changed). Edit requires those three families, `academicYearId`, nonempty `concurrencyStamp`, and `reason`. A proration selection is rejected |
 | Preconditions | Current active/effective same-year version for newly selected policies; already-pinned historical versions may remain unchanged. Family/year mismatches, empty identifiers and unavailable versions fail closed |
 | State/correction | Assignment remains assigned; later changes supersede its current selections and append before/after version IDs, actor, timestamp and reason to persisted aggregate ExtraProperties |
-| Monetary equation | Policy selection alone applies no concession, penalty or refund. Initial Proration uses selected rules in canonical due generation; later edits leave original, paid and outstanding amounts unchanged |
+| Monetary equation | Policy selection alone applies no concession, penalty or refund. New assignments use the full configured service charge without a template proration policy; later edits leave original, paid and outstanding amounts unchanged |
 | Side effects/history | No due, receipt, posting or payment mutation. `AssignmentSnapshotJson` remains immutable; read responses show original policies separately from current selections. Collection and refund evaluate assignment's current pinned versions on subsequent operations; existing transaction evidence stays pinned |
 | Failure/retry | Initial policy selections and reason are covered by command fingerprint and protected preview. Edit validates every selection before mutation, uses a transactional unit of work and checks the supplied aggregate concurrency stamp; identical selections are a no-op |
 | Evidence | `StudentFeeAssignmentPolicies_Tests`, assignment HTTP tests, frontend workflow and permission-group tests cover defaults, reasons, token invalidation, policy persistence, denied grants, stale edit and obligation preservation |
@@ -89,10 +89,10 @@ The protected token expires after 20 minutes and binds tenant, user, command, ex
 
 - The existing recurring structure amount is an **annual service total**; a one-time amount is charged once. Payment frequency never changes this amount basis.
 - A head's service obligation is calculated first, then allocated using the exact published term percentages and dates, including structure-local schedule overrides. Every included head requires a published term version.
-- Daily proration uses the academic-year service denominator. Monthly cutoff divides the annual total into the year's service months and applies the configured joining cutoff, independently of billing frequency. Eligible withdrawal month remains a full month; no new withdrawal-specific policy is inferred.
+- Daily proration uses the academic-year service denominator. Monthly cutoff divides the annual total into service months independently of billing frequency. New policy versions configure admission and early withdrawal independently; legacy snapshots retain their existing withdrawal-month behavior. See [the event calculation contract](./proration-policy-end-to-end.md#independent-admission-and-early-withdrawal-contract).
 - Currency rounding is deterministic. The final installment absorbs the residual; very small totals redistribute excess rounding in reverse installment order to prevent negative dues. Installments always sum to the head total.
 - One-time heads and heads with no matching proration rule receive full charge. The review says so explicitly.
-- Collection, Proration, Refund and optional Concession use the resolved exact immutable policy versions. Missing inherited versions fail closed. Authorized student selections override structure attachments without substituting current defaults.
+- Collection, Refund and optional Concession use the resolved exact immutable policy versions. Missing inherited versions fail closed. Authorized student selections override concession, refund or collection attachments without substituting current defaults; new assignments do not inherit proration, even when legacy structure storage contains a pin.
 - Snapshot evidence contains structure revision/name, all head selections, original/effective amounts, term name/version, policy versions/treatment, service periods, calculation version, schedule and due IDs. Current paid/outstanding amounts are read from `DueFee` on retrieval.
 
 ## Transactions, retries and integrity

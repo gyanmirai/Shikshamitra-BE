@@ -102,7 +102,7 @@ public class ClasswiseFeeSetupBuilder(
                 {
                     // Find detail
                     var detail = feeHeadData.Details.FirstOrDefault(d => d.FeeStructureId == structure.Id);
-                    row[$"STD_{std.Id}"] = detail == null ? "-" : detail.IsVariable ? "Entered at assignment" : detail.Amount?.ToString("N2");
+                    row[$"STD_{std.Id}"] = detail == null ? "-" : detail.IsVariable ? "Entered at assignment" : detail.Amount?.ToString("N0");
                 }
                 else
                 {

@@ -42,6 +42,10 @@ public class RefundPolicyAppService(
 			var status = ParseListStatus(input.Status);
 			query = query.Where(x => x.Status == status);
 		}
+		else
+		{
+			query = query.Where(x => x.Status != RefundPolicyStatus.Archived);
+		}
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
 			var search = input.Search.Trim().ToLower();

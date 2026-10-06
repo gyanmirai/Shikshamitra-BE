@@ -25,7 +25,7 @@ public class ConcessionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public decimal? MaximumPercentage { get; set; }
 	public decimal? MaximumFixedAmount { get; set; }
 	public string ApplyOn { get; set; } = "AllOutstanding";
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public int Version { get; set; }
 	public List<Guid> ApplicableConcessionTypeIds { get; set; } = [];
 	public string FeeHeadScope { get; set; } = "EntireFeeStructure";
@@ -53,7 +53,7 @@ public class CreateUpdateConcessionPolicyDto
 	public decimal? MaximumPercentage { get; set; }
 	public decimal? MaximumFixedAmount { get; set; }
 	public string ApplyOn { get; set; } = "AllOutstanding";
-	public string RoundingMethod { get; set; } = "None";
+	public string RoundingMethod { get; set; } = "RoundUp";
 	public List<Guid> ApplicableConcessionTypeIds { get; set; } = [];
 	public string FeeHeadScope { get; set; } = "EntireFeeStructure";
 	public List<Guid> ApplicableFeeHeadIds { get; set; } = [];

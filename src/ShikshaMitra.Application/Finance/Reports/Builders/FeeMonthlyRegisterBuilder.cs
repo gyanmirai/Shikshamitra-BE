@@ -71,7 +71,7 @@ public class FeeMonthlyRegisterBuilder(
 
         // 4. Group data by StudentId -> Month -> Amount
         var groupedData = new Dictionary<Guid, Dictionary<int, double>>();
-        
+
         foreach (var receipt in receipts)
         {
             var studentId = receipt.StudentId;
@@ -126,7 +126,7 @@ public class FeeMonthlyRegisterBuilder(
             {
                 if (monthData.TryGetValue(month, out var amount))
                 {
-                    row[$"M_{month}"] = amount.ToString("N2");
+                    row[$"M_{month}"] = Math.Ceiling(amount).ToString("N0");
                     rowTotal += amount;
                 }
                 else
@@ -135,7 +135,7 @@ public class FeeMonthlyRegisterBuilder(
                 }
             }
 
-            row["Total"] = rowTotal.ToString("N2");
+            row["Total"] = Math.Ceiling(rowTotal).ToString("N0");
             rows.Add(row);
         }
 

@@ -3,7 +3,7 @@ module: finance
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-01
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -86,3 +86,11 @@ For payments made before assessment preservation existed, the service recovers l
 ## Category and bank routing
 
 See [Income and expense routing](./references/income-expense-routing.md) for the current category selection, school bank, recognition, historical compatibility, and validation contracts.
+
+## Whole-rupee monetary rules
+
+Money remains decimal-typed for storage and ledger compatibility. New fee-structure pricing and fixed monetary policy settings round upward to whole rupees. Collection, concession, refund and proration calculations use the centralized `WholeRupeeAmounts` rule; rounding is a system rule, rather than a selectable policy setting. Legacy request rounding fields remain accepted for API compatibility; new versions always record RoundUp (RoundUpRupee for proration).
+
+Installments floor each percentage share of the rounded total and put the exact remainder into the final installment in schedule order. For example, Rs. 1,000 at 33.33%, 33.33%, 33.34% produces Rs. 333, Rs. 333, Rs. 334. The annual total, generated dues and preview totals reconcile exactly.
+
+Refunds, concessions and late fees never exceed eligible balances or hard caps: if a legacy cap is fractional, the largest permitted whole rupee is used. Exact full waivers and previously approved fractional concession allocations retain historical minor units so existing balances can be extinguished without rewriting posted evidence. Existing receipts, paid balances, reversals and journal history are not backfilled. Percentages, dates, service-day factors and statutory calculation precision retain their own units.

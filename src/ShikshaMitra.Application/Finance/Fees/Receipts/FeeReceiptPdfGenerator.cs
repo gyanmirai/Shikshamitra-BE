@@ -168,12 +168,12 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                     "GR Number", student?.GrNo?.ToString() ?? "—");
                 AddRow("Academic Year", academicYear?.Name ?? "—",
                     "Receipt Type", isCharge ? "Charge Receipt" : (isFinal ? "Final Fee Receipt" : "Provisional Fee Receipt"));
-                AddRow("Amount Paid", $"\u20B9 {receipt.TotalPaidAmount:N2}",
+                AddRow("Amount Paid", $"\u20B9 {Math.Ceiling(receipt.TotalPaidAmount):N0}",
                     "Payment reference", receipt.ReceiptNumber);
             });
 
             col.Item().PaddingTop(12).Background(Colors.Grey.Lighten3).Padding(8).Text(
-                $"Total Amount: \u20B9 {receipt.TotalPaidAmount:N2}")
+                $"Total Amount: \u20B9 {Math.Ceiling(receipt.TotalPaidAmount):N0}")
                 .FontSize(13).Bold();
 
             if (!isFinal && !isCharge)

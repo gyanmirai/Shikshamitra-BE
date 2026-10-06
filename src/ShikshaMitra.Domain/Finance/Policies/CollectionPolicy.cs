@@ -140,20 +140,20 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		GracePeriodType = model.GracePeriodType;
 		LateFeeApplyOnFeeHeadsJson = SerializeGuids(model.LateFeeApplyOnFeeHeads);
 		LateFeeType = model.LateFeeType;
-		FlatAmount = model.FlatAmount;
+		FlatAmount = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.FlatAmount);
 		Percentage = model.Percentage;
 		PercentageBase = model.PercentageBase;
-		AmountPerDay = model.AmountPerDay;
-		AmountPerWeek = model.AmountPerWeek;
-		AmountPerMonth = model.AmountPerMonth;
+		AmountPerDay = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.AmountPerDay);
+		AmountPerWeek = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.AmountPerWeek);
+		AmountPerMonth = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.AmountPerMonth);
 		CompoundFrequency = model.CompoundFrequency;
 		EscalationRulesJson = SerializeEscalationRules(model.EscalationRules);
 		FeeHeadOverridesJson = SerializeFeeHeadOverrides(model.FeeHeadOverrides);
-		RoundingMethod = model.RoundingMethod;
+		RoundingMethod = RoundingMethodType.RoundUp;
 		ConsiderAsIncome = model.ConsiderAsIncome;
 		LateFeeIncomeHeadId = model.LateFeeIncomeHeadId;
 		LateFeeIncomeCategoryId = model.LateFeeIncomeCategoryId;
-		MaximumLateFeeAmount = model.MaximumLateFeeAmount;
+		MaximumLateFeeAmount = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.MaximumLateFeeAmount);
 		MaximumChargingDays = model.MaximumChargingDays;
 
 		EnableWaiver = model.EnableWaiver;

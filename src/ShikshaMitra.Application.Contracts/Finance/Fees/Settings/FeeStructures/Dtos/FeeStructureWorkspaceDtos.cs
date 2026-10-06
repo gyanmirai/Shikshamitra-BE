@@ -35,7 +35,6 @@ public class FeeStructureCoverageDto
 	public string Name { get; set; } = string.Empty;
 	public string Collection { get; set; } = "No late fee";
 	public string Concession { get; set; } = "Not eligible";
-	public string Proration { get; set; } = "Full charge";
 	public string Refund { get; set; } = "No refund policy attached";
 	public string Accounting { get; set; } = string.Empty;
 }

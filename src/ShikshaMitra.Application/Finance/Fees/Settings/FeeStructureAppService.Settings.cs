@@ -36,8 +36,6 @@ public partial class FeeStructureAppService
 			policyMasters[("concession", policy.Id)] = (policy.Version, policy.IsDefault);
 		foreach (var policy in await refundPolicyRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.Status == RefundPolicyStatus.Active))
 			policyMasters[("refund", policy.Id)] = (policy.Version, policy.IsDefault);
-		foreach (var policy in await prorationPolicyRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.Status == ProrationPolicyStatus.Active))
-			policyMasters[("proration", policy.Id)] = (policy.Version, policy.IsDefault);
 		var terms = await paymentTermRepository.GetListAsync(x => x.AcademicYearId == year.Id && x.BoardId == board.Id && x.Status == PaymentTermStatus.Active);
 		var result = new FeeStructureSettingsDto
 		{
@@ -72,7 +70,6 @@ public partial class FeeStructureAppService
 			["publish"] = ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add,
 			["collection"] = ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add,
 			["concession"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ConcessionPolicy.Add,
-			["proration"] = ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.Add,
 			["refund"] = ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add
 		};
 		foreach (var permission in permissions) result.Permissions[permission.Key] = await AuthorizationService.IsGrantedAsync(permission.Value);

@@ -31,7 +31,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 /// existed on the domain aggregate (Phase 1) but no AppService/controller ever called it, so
 /// FeePoliciesTab.tsx's "Collection Policy" dropdown had nothing real to save to.
 /// </summary>
-public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitraApplicationTestBase<FeeStructurePolicyTestModule>
 {
 	private static readonly Guid TestUserId = Guid.Parse("66666666-6666-6666-6666-666666666666");
 	private static readonly Guid TestTenantId = Guid.Parse("55555555-5555-5555-5555-555555555555");
@@ -92,7 +92,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 		var incomeCategoryId = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
 			GetRequiredService<IRepository<AccountHead, Guid>>(),
 			GetRequiredService<IRepository<TransactionCategory, Guid>>(),
-			yearId, TestTenantId, "Structure Tuition");
+			yearId, TestTenantId, "Structure Tuition", new DateTimeOffset(GetRequiredService<Volo.Abp.Timing.IClock>().Now));
 		var feeHead = new FeeHead(
 			Guid.NewGuid(), TestTenantId, yearId, category.Id, "Tuition Fee",
 			FeeHeadModule.Finance, true, null, incomeCategoryId);
@@ -265,7 +265,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 			var incomeCategoryId = await FeeHeadAccountingTestData.CreateIncomeCategoryAsync(
 				GetRequiredService<IRepository<AccountHead, Guid>>(),
 				GetRequiredService<IRepository<TransactionCategory, Guid>>(),
-				academicYearId, TestTenantId, "Policy Only");
+				academicYearId, TestTenantId, "Policy Only", new DateTimeOffset(GetRequiredService<Volo.Abp.Timing.IClock>().Now));
 			var policyOnlyFeeHead = new FeeHead(
 				Guid.NewGuid(), TestTenantId, academicYearId, policyCategory.Id, "Policy-only Fee",
 				FeeHeadModule.Finance, true, null, incomeCategoryId);

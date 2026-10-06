@@ -9653,7 +9653,27 @@ namespace ShikshaMitra.Migrations
                     b.Property<int?>("AfterCutoffAction")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("ApplyOnAdmission")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ApplyOnEarlyWithdrawal")
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<int?>("CutoffDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EarlyWithdrawalBeforeCutoffAction")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EarlyWithdrawalCutoffDay")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EarlyWithdrawalMinimumChargeDays")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EarlyWithdrawalRuleType")
                         .HasColumnType("integer");
 
                     b.Property<Guid>("FeeHeadId")

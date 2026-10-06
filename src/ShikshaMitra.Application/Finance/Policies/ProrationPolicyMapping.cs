@@ -17,7 +17,8 @@ internal static class ProrationPolicyMapping
 
 	public static ProrationRuleType ParseRuleType(string? value) => Normalize(value) switch
 	{
-		"fullcharge" or "fullmonthcharge" or "noproration" => ProrationRuleType.FullCharge,
+		"fullcharge" or "noproration" => ProrationRuleType.FullCharge,
+		"fullmonthcharge" => ProrationRuleType.FullMonthCharge,
 		"daily" or "dailyproration" => ProrationRuleType.Daily,
 		"monthlycutoff" or "monthlyproration" => ProrationRuleType.MonthlyCutoff,
 		_ => throw new BusinessException(ProrationPolicyErrorCodes.InvalidRule)
@@ -58,7 +59,11 @@ internal static class ProrationPolicyMapping
 			var type = ParseRuleType(x.RuleType);
 			return new ProrationPolicyRuleModel(
 				newId(), x.FeeHeadId, type, ParseRounding(x.RoundingMode),
-				x.MinimumChargeDays, x.CutoffDay, ParseAfterCutoff(x.AfterCutoffAction, type));
+				x.MinimumChargeDays, x.CutoffDay, x.ApplyOnAdmission ? ParseAfterCutoff(x.AfterCutoffAction, type) : null,
+				x.ApplyOnAdmission, x.ApplyOnEarlyWithdrawal,
+				x.EarlyWithdrawalRuleType == null ? null : ParseRuleType(x.EarlyWithdrawalRuleType),
+				x.EarlyWithdrawalMinimumChargeDays, x.EarlyWithdrawalCutoffDay,
+				x.ApplyOnEarlyWithdrawal && x.EarlyWithdrawalRuleType != null ? ParseAfterCutoff(x.EarlyWithdrawalBeforeCutoffAction, ParseRuleType(x.EarlyWithdrawalRuleType)) : null);
 		}).ToList());
 
 	public static ProrationPolicyDto ToDto(
@@ -81,7 +86,13 @@ internal static class ProrationPolicyMapping
 			RoundingMode = x.RoundingMode.ToString(),
 			MinimumChargeDays = x.MinimumChargeDays,
 			CutoffDay = x.CutoffDay,
-			AfterCutoffAction = x.AfterCutoffAction?.ToString()
+			AfterCutoffAction = x.AfterCutoffAction?.ToString(),
+			ApplyOnAdmission = x.ApplyOnAdmission,
+			ApplyOnEarlyWithdrawal = x.ApplyOnEarlyWithdrawal,
+			EarlyWithdrawalRuleType = x.EarlyWithdrawalRuleType?.ToString(),
+			EarlyWithdrawalMinimumChargeDays = x.EarlyWithdrawalMinimumChargeDays,
+			EarlyWithdrawalCutoffDay = x.EarlyWithdrawalCutoffDay,
+			EarlyWithdrawalBeforeCutoffAction = x.EarlyWithdrawalBeforeCutoffAction?.ToString()
 		}).ToList(),
 		CreationTime = entity.CreationTime,
 		CreatorId = entity.CreatorId,

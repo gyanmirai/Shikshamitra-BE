@@ -22,7 +22,6 @@ public class ProrationPolicyAppService(
 	IRepository<ProrationPolicy, Guid> repository,
 	IRepository<FinancePolicyVersion, Guid> versionRepository,
 	IRepository<FeeStructure, Guid> feeStructureRepository,
-	IRepository<FeeStructureMetadata, Guid> feeStructureMetadataRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,
@@ -39,6 +38,10 @@ public class ProrationPolicyAppService(
 		{
 			var status = ParseListStatus(input.Status);
 			query = query.Where(x => x.Status == status);
+		}
+		else
+		{
+			query = query.Where(x => x.Status != ProrationPolicyStatus.Archived);
 		}
 		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
@@ -184,7 +187,13 @@ public class ProrationPolicyAppService(
 				RoundingMode = x.RoundingMode.ToString(),
 				MinimumChargeDays = x.MinimumChargeDays,
 				CutoffDay = x.CutoffDay,
-				AfterCutoffAction = x.AfterCutoffAction?.ToString()
+				AfterCutoffAction = x.AfterCutoffAction?.ToString(),
+				ApplyOnAdmission = x.ApplyOnAdmission,
+				ApplyOnEarlyWithdrawal = x.ApplyOnEarlyWithdrawal,
+				EarlyWithdrawalRuleType = x.EarlyWithdrawalRuleType?.ToString(),
+				EarlyWithdrawalMinimumChargeDays = x.EarlyWithdrawalMinimumChargeDays,
+				EarlyWithdrawalCutoffDay = x.EarlyWithdrawalCutoffDay,
+				EarlyWithdrawalBeforeCutoffAction = x.EarlyWithdrawalBeforeCutoffAction?.ToString()
 			}).ToList()
 		});
 	}
@@ -246,37 +255,6 @@ public class ProrationPolicyAppService(
 		var result = calculationService.Calculate(rule, input.ScheduledAmount, input.CoverageStartDate,
 			input.CoverageEndDate, input.ChargeStartDate, input.ChargeEndDate);
 		return ToCalculationDto(entity, input.FeeHeadId, result);
-	}
-
-	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_ProrationPolicy.View)]
-	public async Task<ProrationPolicyAttachmentImpactDto> GetAttachmentImpactAsync(
-		Guid id, ProrationPolicyAttachmentImpactRequestDto input)
-	{
-		var entity = await GetRequiredAsync(id);
-		if (entity.Status != ProrationPolicyStatus.Active)
-			throw new BusinessException(ProrationPolicyErrorCodes.PolicyNotActive);
-		var structure = await feeStructureRepository.GetAsync(input.FeeStructureId);
-		var metadata = await feeStructureMetadataRepository.GetAsync(structure.FeeStructureMetadataId);
-		if (metadata.AcademicYearId != entity.AcademicYearId)
-			throw new BusinessException(ProrationPolicyErrorCodes.AcademicYearMismatch);
-		var ruleIds = entity.Rules.Select(x => x.FeeHeadId).ToHashSet();
-		var structureIds = structure.FeeStructureDetails.Select(x => x.FeeHeadId).ToHashSet();
-		var oneTime = structure.FeeStructureDetails.Where(x => x.IsOneTime).Select(x => x.FeeHeadId).Distinct().Order().ToList();
-		var prorated = structure.FeeStructureDetails.Where(x => !x.IsOneTime && ruleIds.Contains(x.FeeHeadId) &&
-			entity.Rules.Any(r => r.FeeHeadId == x.FeeHeadId && r.RuleType != ProrationRuleType.FullCharge))
-			.Select(x => x.FeeHeadId).Distinct().Order().ToList();
-		var full = structureIds.Except(prorated).Order().ToList();
-		var impact = new ProrationPolicyAttachmentImpactDto
-		{
-			PolicyId = id, PolicyVersion = entity.Version, IsAttachable = true,
-			ProratedFeeHeadIds = prorated, FullChargeFeeHeadIds = full, OneTimeFeeHeadIds = oneTime,
-			PolicyFeeHeadsNotInStructure = ruleIds.Except(structureIds).Order().ToList()
-		};
-		if (impact.PolicyFeeHeadsNotInStructure.Count > 0)
-			impact.Warnings.Add("Some policy Fee Heads are not present in this Fee Structure and will be ignored.");
-		if (oneTime.Any(ruleIds.Contains))
-			impact.Warnings.Add("One-time Fee Structure details always remain full charge.");
-		return impact;
 	}
 
 	private async Task<ProrationPolicy> GetRequiredAsync(Guid id)

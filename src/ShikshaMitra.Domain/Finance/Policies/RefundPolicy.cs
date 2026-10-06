@@ -84,10 +84,10 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		AllowPartialRefund = model.AllowPartialRefund;
 		AmountMode = model.AmountMode;
 		PercentageValue = model.AmountMode == RefundAmountMode.Percentage ? model.PercentageValue : null;
-		FixedAmount = model.AmountMode == RefundAmountMode.FixedAmount ? model.FixedAmount : null;
-		MaximumPerRequest = model.MaximumPerRequest;
-		MaximumPerStudentYear = model.MaximumPerStudentYear;
-		RoundingMethod = model.RoundingMethod;
+		FixedAmount = model.AmountMode == RefundAmountMode.FixedAmount ? ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.FixedAmount) : null;
+		MaximumPerRequest = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.MaximumPerRequest);
+		MaximumPerStudentYear = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.MaximumPerStudentYear);
+		RoundingMethod = RoundingMethodType.RoundUp;
 		DeductionType = model.DeductionType;
 		DeductionValue = model.DeductionType == RefundDeductionType.None ? null : model.DeductionValue;
 		MaximumDeduction = model.DeductionType == RefundDeductionType.None ? null : model.MaximumDeduction;

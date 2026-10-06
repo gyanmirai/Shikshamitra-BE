@@ -109,7 +109,7 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
         if (isVariable ? amount.HasValue : !amount.HasValue || amount < 0 || amount > 9999999999.99m || decimal.Round(amount.Value, 2) != amount)
             throw new BusinessException(FeeStructureErrorCodes.InvalidConfiguration);
         IsVariable = isVariable;
-        Amount = amount;
+        Amount = WholeRupeeAmounts.RoundUp(amount);
     }
 
 	public void UpdateConfiguration(decimal? amount, bool isOneTime, bool isOptional, MonthEnum? month, int? year, bool isVariable = false)

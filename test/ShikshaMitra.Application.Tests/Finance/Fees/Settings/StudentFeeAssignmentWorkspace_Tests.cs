@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
@@ -17,12 +18,38 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 public partial class FeeStructureAppService_CollectionPolicy_Tests
 {
-	private async Task<AssignStudentFeeStructureDto> ReadyAssignmentAsync()
+	private async Task<AssignStudentFeeStructureDto> ReadyAssignmentAsync(bool withProration = false, decimal? amount = null)
 	{
 		var (metadataId, standardId, candidate) = await ReadyCandidateAsync();
+		if (amount.HasValue) candidate.FeeHeads.Single().Amount = amount.Value;
 		candidate.ConcessionPolicyId = null;
 		candidate.ConcessionPolicyVersionId = null;
+		Guid? legacyPolicyId = null, legacyVersionId = null;
+		if (withProration)
+		{
+			var year = (await _metadataRepo.GetAsync(metadataId)).AcademicYearId!.Value;
+			var policy = await GetRequiredService<IProrationPolicyAppService>().CreateAsync(new CreateUpdateProrationPolicyDto {
+				AcademicYearId = year, PolicyName = "Admission and withdrawal", Status = "Active",
+				FeeHeadRules = [new() { FeeHeadId = candidate.FeeHeads.Single().FeeHeadId, RuleType = "Daily", ApplyOnAdmission = false,
+					ApplyOnEarlyWithdrawal = true, EarlyWithdrawalRuleType = "MonthlyCutoff", EarlyWithdrawalCutoffDay = 15,
+					EarlyWithdrawalBeforeCutoffAction = "HalfCharge" }] });
+			legacyPolicyId = policy.Id;
+			legacyVersionId = (await GetRequiredService<IProrationPolicyAppService>()
+				.GetVersionsAsync(policy.Id, new())).Items.Single().Id;
+		}
 		var draft = await _feeStructures.CreateAsync(metadataId, new() { StandardId = standardId, StandardFeeStructures = candidate });
+		if (withProration)
+		{
+			// Hydrate pre-removal storage; production no longer has an attachment transition.
+			using var hydration = GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true);
+			var repository = GetRequiredService<IRepository<FeeStructure, Guid>>();
+			var legacy = await repository.GetAsync(draft.Id);
+			typeof(FeeStructure).GetProperty(nameof(FeeStructure.ProrationPolicyId))!.SetValue(legacy, legacyPolicyId);
+			typeof(FeeStructure).GetProperty(nameof(FeeStructure.ProrationPolicyVersionId))!.SetValue(legacy, legacyVersionId);
+			await repository.UpdateAsync(legacy, autoSave: true);
+			draft.ConcurrencyStamp = legacy.ConcurrencyStamp;
+			await hydration.CompleteAsync();
+		}
 		var structure = await _feeStructures.PublishAsync(draft.Id, new() { ConcurrencyStamp = draft.ConcurrencyStamp });
 		var metadata = await _metadataRepo.GetAsync(metadataId);
 		var standard = await _standardRepo.GetAsync(standardId);

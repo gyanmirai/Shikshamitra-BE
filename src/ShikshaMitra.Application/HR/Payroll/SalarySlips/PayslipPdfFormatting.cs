@@ -21,7 +21,7 @@ internal static class PayslipPdfFormatting
 		container.Background(HeaderBackground).BorderTop(1).BorderColor(Border).PaddingVertical(6).PaddingHorizontal(6);
 
 	public static string FormatCurrency(decimal amount) =>
-		$"Rs. {amount.ToString("N2", IndianCulture)}";
+		$"Rs. {decimal.Ceiling(amount).ToString("N0", IndianCulture)}";
 
 	public static string FormatDays(decimal? days) =>
 		days.HasValue ? days.Value.ToString("0.##", CultureInfo.InvariantCulture) : "-";

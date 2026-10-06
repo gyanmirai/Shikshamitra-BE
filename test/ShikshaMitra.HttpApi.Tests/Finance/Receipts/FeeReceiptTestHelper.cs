@@ -32,7 +32,8 @@ public static class FeeReceiptTestHelper
         FeeReceiptKind kind = FeeReceiptKind.FinalFee,
         FeeReceiptScope scope = FeeReceiptScope.Fee,
         double amount = 1000d,
-        Guid? feeCollectionTransactionId = null)
+        Guid? feeCollectionTransactionId = null,
+        DateOnly? receiptDate = null)
     {
         using var scope2 = services.CreateScope();
         var uowManager = scope2.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
@@ -67,7 +68,7 @@ public static class FeeReceiptTestHelper
             VerificationStatus         = verificationStatus,
             TotalPaidAmount            = amount,
             ReceiptNumber              = receiptNumber,
-            ReceiptDate                = DateOnly.FromDateTime(DateTime.UtcNow),
+            ReceiptDate                = receiptDate ?? DateOnly.FromDateTime(DateTime.UtcNow),
         };
 
         await receiptRepo.InsertAsync(receipt, autoSave: true);

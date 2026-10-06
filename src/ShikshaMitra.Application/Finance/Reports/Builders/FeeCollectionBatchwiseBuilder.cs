@@ -43,7 +43,7 @@ public class FeeCollectionBatchwiseBuilder(
         }
 
         var targetYearIds = targetAcademicYears.Select(x => x.Id).ToList();
-        
+
         var receiptBooks = await asyncExecuter.ToListAsync(await receiptBookRepository.GetQueryableAsync());
         var rbMap = receiptBooks.ToDictionary(r => r.Id, r => r.Name);
 
@@ -78,7 +78,7 @@ public class FeeCollectionBatchwiseBuilder(
             foreach (var receipt in txReceiptsList)
             {
                 if (receipt.ReceiptBookId == null) continue;
-                
+
                 var rbId = receipt.ReceiptBookId.Value;
                 var acYearId = receipt.AcademicYearId;
 
@@ -113,9 +113,9 @@ public class FeeCollectionBatchwiseBuilder(
             {
                 if (yearData.TryGetValue(year.Id, out var amounts))
                 {
-                    row[$"Cash_{year.Id}"] = amounts.Cash.ToString("N2");
-                    row[$"Gateway_{year.Id}"] = amounts.Gateway.ToString("N2");
-                    row[$"Total_{year.Id}"] = amounts.Total.ToString("N2");
+                    row[$"Cash_{year.Id}"] = Math.Ceiling(amounts.Cash).ToString("N0");
+                    row[$"Gateway_{year.Id}"] = Math.Ceiling(amounts.Gateway).ToString("N0");
+                    row[$"Total_{year.Id}"] = Math.Ceiling(amounts.Total).ToString("N0");
                 }
                 else
                 {

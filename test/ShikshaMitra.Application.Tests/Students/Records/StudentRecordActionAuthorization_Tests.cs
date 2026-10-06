@@ -15,6 +15,24 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 /// <summary>Unproxied direct calls must enforce each action before touching repositories.</summary>
 public class StudentRecordActionAuthorization_Tests
 {
+	[Theory]
+	[InlineData("Students.Records.Changes.View")]
+	[InlineData("Students.Records.Changes.Create")]
+	public async Task Admission_profile_review_requires_exact_records_permissions_before_repository_access(string permission)
+	{
+		var service = new StudentRecordChangeAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!)
+			{ LazyServiceProvider = Denying(permission) };
+		(await Should.ThrowAsync<AbpAuthorizationException>(() => service.CreateAdmissionReviewAsync(new()))).Data["PolicyName"].ShouldBe(permission);
+	}
+
+	[Fact]
+	public async Task Admission_photo_review_requires_records_create_permission_before_upload()
+	{
+		const string permission = "Students.Records.Changes.Create";
+		var service = new StudentRecordPhotoAppService(null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(permission) };
+		(await Should.ThrowAsync<AbpAuthorizationException>(() => service.UploadForAdmissionReviewAsync(Guid.NewGuid(), new() { FileName = "photo.png", ContentType = "image/png", Content = [] }))).Data["PolicyName"].ShouldBe(permission);
+	}
+
 	private static AbpLazyServiceProvider Denying(string deniedPermission)
 	{
 		var authorization = Substitute.For<IAbpAuthorizationService>();

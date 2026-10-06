@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-03
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,19 @@ audience: humans-and-agents
 # Locate Student Enrollment Admissions code
 
 TL;DR: Admissions remains inside the Student modular-monolith boundary and separates aggregate invariants, authoritative validation, reads, commands, and runtime availability.
+
+## Onboarding email and access ownership
+
+| Concern | Source |
+|---|---|
+| Persisted policy and document overrides | `Domain/Students/StudentEnrollments/Onboarding/OnboardingRuleConfiguration.cs`, `StudentOnboardingCase.Documents.cs`; audited existing case extra properties store exact override evidence. |
+| Readiness and automatic orchestration | `Application/Students/StudentEnrollments/Onboarding/StudentOnboardingCredentialEligibilityResolver.cs`, `StudentOnboardingAppService.CredentialEmails.cs`; uses current Enrollment, Student, Admissions document evidence and existing completion truth. |
+| Durable email | `Domain/Students/Portal/Entities/StudentCredentialEmailRequest.cs`, `Application/Students/StudentEnrollments/Onboarding/StudentCredentialEmailAppService.cs` and `StudentCredentialEmailDispatcher.cs`; durable preparation commits before SMTP, frozen link/mailbox and optimistic claim prevent duplicate intent. |
+| Persistence/worker | `EntityFrameworkCore/Students/Portal/StudentCredentialEmailRequestConfiguration.cs`, `HttpApi.Host/BackgroundWorkers/StudentCredentialEmailWorker.cs`; worker changes to each intent's tenant and delegates checks. |
+| Lifecycle and login | `Application/Students/Portal/StudentPortalLifecycleService.cs`, `StudentPortalLoginService.cs`, `StudentPortalAccessService.cs`, `HttpApi.Host/Controllers/StudentPortalTokenController.cs`; Records terminal application and correction own link revocation/restoration. |
+
+The source paths above use the corresponding backend layer's source folder.
+HR employee email and the queue-only generic communications gateway are unchanged.
 
 ## Student Attendance ownership
 

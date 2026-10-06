@@ -12,6 +12,9 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.BlobStoring;
+using ShikshaMitra.Students.Compliance;
+using ShikshaMitra.Constants.Permissions;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
@@ -109,13 +112,26 @@ public class AdmissionApplicationDecisionService(
 		try { await seatRuntime.EnsureApplicationCompleteAsync(context.Application); }
 		catch (BusinessException exception) when (exception.Code is AdmissionSeatStageErrorCodes.CompletionRequired or AdmissionSeatStageErrorCodes.InvalidPolicy)
 		{ items.Add(Item("admission_seat", "Admission seat confirmed", false, exception.Message)); }
+		var permissions = LazyServiceProvider.LazyGetRequiredService<Volo.Abp.Authorization.Permissions.IPermissionChecker>();
+		var canRequestReview = await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.View) &&
+			await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create);
 		return new AdmissionFinalizationPreviewDto
 		{
 			ApplicationId = id,
 			LinkedStudentId = context.Applicant.ExistingStudentId,
 			IsReady = items.All(item => item.Passed),
 			Items = items,
-			PossibleMatches = matches.Select(ToMatchDto).ToList()
+			CapturedStudentFields = AdmissionAdditionalStudentFieldCatalog.Metadata.Values.Select(field => new AdmissionCapturedStudentFieldDto
+			{
+				Key = field.Key, Label = field.DisplayName,
+				Value = field.Key == "Applicant.ProfilePhoto" && AdmissionStudentProfileMapping.Read(context.Applicant, field.Key) != null
+					? "Photo uploaded" : AdmissionStudentProfileMapping.Read(context.Applicant, field.Key) ?? string.Empty
+			}).Where(field => !string.IsNullOrWhiteSpace(field.Value)).ToList(),
+			CanApplyProfileFieldsDirectly = context.Applicant.ExistingStudentId.HasValue && matches.Any(student =>
+				student.Id == context.Applicant.ExistingStudentId && CanApplyDirectly(student)),
+			CanReviewProfileFields = canRequestReview || matches.Any(student => student.Id == context.Applicant.ExistingStudentId && CanApplyDirectly(student)),
+			ProfileReviewDescription = "New students receive supported profile details. Existing pending students require confirmation. Active or former students use Student Records change requests; Aadhaar, APAAR, PEN and UDISE require separate Identity Compliance review.",
+			PossibleMatches = matches.Select(student => ToMatchDto(student, canRequestReview)).ToList()
 		};
 	}
 
@@ -207,12 +223,24 @@ public class AdmissionApplicationDecisionService(
 		{
 			student = await studentRepository.FindAsync(selectedStudentId.Value) ??
 				throw new BusinessException(StudentOnboardingErrorCodes.ExistingStudentInvalid);
+			await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>().EnsureCanAccessStudentAsync(student, nameof(FinalizeAsync));
 			if (student.Status == StudentLifeCycleStatusEnum.Left && reviewedReturn == null)
 				throw new BusinessException("Students:Records:InvalidReturnApplication");
 			if (reviewedReturn == null)
 			{
 				AdmissionAdditionalStudentFieldCatalog.CopyToStudent(context.Applicant, student);
 				await studentRepository.UpdateAsync(student, false);
+			}
+			if (input.ApplyStudentProfileFields)
+			{
+				await ValidateCapturedSiblingsAsync(context.Applicant, student);
+				if (CanApplyDirectly(student))
+				{
+					student = await studentRepository.GetWithDetailsAsync(student.Id) ?? student;
+					await ApplyNewProfileAsync(context.Applicant, student);
+					await studentRepository.UpdateAsync(student, false);
+				}
+				else await LazyServiceProvider.LazyGetRequiredService<AdmissionStudentProfileReviewService>().SubmitAsync(context.Application, context.Applicant, student);
 			}
 		}
 		else
@@ -221,6 +249,7 @@ public class AdmissionApplicationDecisionService(
 				throw new BusinessException(AdmissionApplicantErrorCodes.ReservedStudentIdConflict);
 			student = CreateStudent(context);
 			await studentRepository.InsertAsync(student, false);
+			await ApplyNewProfileAsync(context.Applicant, student);
 		}
 
 		if (await enrollmentRepository.AnyAsync(item =>
@@ -336,12 +365,14 @@ public class AdmissionApplicationDecisionService(
 		if (applicant.ExistingStudentId.HasValue)
 		{
 			var linked = await studentRepository.FindAsync(applicant.ExistingStudentId.Value);
+			if (linked != null) await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>().EnsureCanAccessStudentAsync(linked, nameof(FindPossibleMatchesAsync));
 			return linked == null ? [] : [linked];
 		}
 
 		var normalizedFirstName = applicant.FirstName.Trim().ToLower();
 		var normalizedLastName = applicant.LastName?.Trim().ToLower();
-		var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var query = await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>()
+			.ApplyCurrentUserScopeAsync(await studentRepository.GetQueryableWithoutAutoIncludesAsync());
 		var candidates = await AsyncExecuter.ToListAsync(query.Where(student =>
 			student.FirstName != null && student.FirstName.ToLower() == normalizedFirstName &&
 			(normalizedLastName == null || student.LastName != null && student.LastName.ToLower() == normalizedLastName)));
@@ -359,8 +390,10 @@ public class AdmissionApplicationDecisionService(
 		return detailed.Take(10).ToList();
 	}
 
-	private static AdmissionStudentMatchDto ToMatchDto(Student student) => new()
+	private static AdmissionStudentMatchDto ToMatchDto(Student student, bool canRequestReview) => new()
 	{
+		CanApplyProfileFieldsDirectly = CanApplyDirectly(student),
+		CanReviewProfileFields = CanApplyDirectly(student) || canRequestReview,
 		StudentId = student.Id,
 		StudentName = string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
 			.Where(value => !string.IsNullOrWhiteSpace(value))),
@@ -369,6 +402,32 @@ public class AdmissionApplicationDecisionService(
 		GrNumber = student.GrNumber ?? student.GrNo?.ToString(),
 		AcademicYearId = student.AcademicYearId
 	};
+
+	private static bool CanApplyDirectly(Student student) => student.Status is StudentLifeCycleStatusEnum.Admission or StudentLifeCycleStatusEnum.Registration;
+	private async Task ApplyNewProfileAsync(AdmissionApplicant applicant, Student student)
+	{
+		await ValidateCapturedSiblingsAsync(applicant, student);
+		AdmissionStudentProfileMapping.Apply(applicant, student);
+		await LazyServiceProvider.LazyGetRequiredService<StudentIdentityComplianceAppService>().CaptureAdmissionIdentityAsync(student,
+			AdmissionStudentProfileMapping.Read(applicant, "Identity.AadhaarNumber"), AdmissionStudentProfileMapping.Read(applicant, "Identity.ApaarId"),
+			AdmissionStudentProfileMapping.Read(applicant, "Identity.PenNumber"), AdmissionStudentProfileMapping.Read(applicant, "Identity.UdiseStudentCode"),
+			AdmissionStudentProfileMapping.Read(applicant, "Identity.DocumentName"));
+		var photo = AdmissionStudentProfileMapping.Read(applicant, "Applicant.ProfilePhoto");
+		if (string.IsNullOrWhiteSpace(photo)) return;
+		var decoded = AdmissionStudentPhoto.Decode(photo);
+		var blobName = $"students/{CurrentTenant.Id}/{student.Id}/photo{decoded.Extension}";
+		await LazyServiceProvider.LazyGetRequiredService<IBlobContainer>().SaveAsync(blobName, decoded.Content, overrideExisting: true);
+		student.SetPhotoBlobName(blobName);
+	}
+
+	private async Task ValidateCapturedSiblingsAsync(AdmissionApplicant applicant, Student student)
+	{
+		var value = AdmissionStudentProfileMapping.Read(applicant, "Family.SiblingStudentIds");
+		if (string.IsNullOrWhiteSpace(value)) return;
+		var siblings = AdmissionStudentProfileMapping.ReadSiblings(value) ?? [];
+		if (siblings.Contains(student.Id) || !await LazyServiceProvider.LazyGetRequiredService<AdmissionFormDataSourceRegistry>().AreSiblingIdsAllowedAsync(siblings))
+			throw new BusinessException("Admissions:InvalidSiblingSelection");
+	}
 
 	private static List<AdmissionFinalizationReadinessItemDto> BuildReadinessItems(
 		FinalizationContext context, IReadOnlyCollection<Student> matches)

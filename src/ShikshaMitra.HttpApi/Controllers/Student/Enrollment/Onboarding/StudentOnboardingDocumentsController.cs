@@ -26,4 +26,8 @@ public class StudentOnboardingDocumentsController(IStudentOnboardingDocumentAppS
 		return Result.Success(await service.UploadAsync(caseId,
 			new() { DocumentTypeId = documentTypeId, ConcurrencyStamp = concurrencyStamp, File = content }));
 	}
+
+	[HttpPost("override"), Authorize(Permissions.Edit), Authorize(Permissions.Waive)]
+	public async Task<Result<StudentOnboardingDocumentsDto>> OverrideAsync(Guid caseId, StudentOnboardingDocumentOverrideInput input) =>
+		Result.Success(await service.OverrideAsync(caseId, input));
 }

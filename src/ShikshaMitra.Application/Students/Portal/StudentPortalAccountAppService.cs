@@ -33,7 +33,7 @@ public class StudentPortalAccountAppService(
 	{
 		var user = await UserManager.FindByIdAsync(input.UserId.ToString());
 		var firstPortalSetup = CurrentTenant.Id.HasValue && user != null && user.TenantId == CurrentTenant.Id &&
-			user.IsActive && !user.EmailConfirmed && string.IsNullOrEmpty(user.PasswordHash) &&
+			user.IsActive && (string.IsNullOrEmpty(user.PasswordHash) || user.ShouldChangePasswordOnNextLogin) &&
 			await links.AnyAsync(link => link.UserId == user.Id);
 
 		// ABP validates the protected, expiring reset token and password policy first.
@@ -43,6 +43,7 @@ public class StudentPortalAccountAppService(
 		var roles = await UserManager.GetRolesAsync(user!);
 		if (roles.Count != 1 || roles[0] is not ("Student" or "Parent")) return;
 		user!.SetEmailConfirmed(true);
+		user.SetShouldChangePasswordOnNextLogin(false);
 		var result = await UserManager.UpdateAsync(user);
 		if (!result.Succeeded)
 			throw new BusinessException(StudentOnboardingErrorCodes.PortalAccountInvalid)

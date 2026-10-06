@@ -701,11 +701,13 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 		bool permanentSameAsLocal,
 		string? emergencyContactName,
 		string? emergencyContactPhone,
-		string? emergencyContactRelation)
+		string? emergencyContactRelation,
+		AddressDetails? emergencyAddress = null,
+		bool emergencySameAsLocal = true)
 	{
 		CommunicationDetail ??= new StudentCommunicationDetail(Id, TenantId);
-		CommunicationDetail.UpdateCommunicationInformation(localAddress, permanentAddress, null,
-			permanentSameAsLocal, true, emergencyContactName, emergencyContactPhone, emergencyContactRelation);
+		CommunicationDetail.UpdateCommunicationInformation(localAddress, permanentAddress, emergencyAddress,
+			permanentSameAsLocal, emergencySameAsLocal, emergencyContactName, emergencyContactPhone, emergencyContactRelation);
 	}
 
 	public void ApplyVerifiedRegistrationMedical(

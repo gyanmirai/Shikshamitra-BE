@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-01
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,31 @@ audience: humans-and-agents
 # Find Student Enrollment Admissions APIs
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
+
+## Admission student field contracts
+
+| Contract | Behavior |
+|---|---|
+| Form system-field metadata | `validationJson` describes shared field formats. `destination` distinguishes `studentProfile` from `capturedAdmissionDetails`. The predefined catalogue has 107 fields. |
+| Form `metadata/options`, source `StudentSiblings` | Existing AdmissionForms.View authority and current tenant/staff scope. Optional `searchTerm` (at most 100 characters), `skipCount`, `maxResultCount` (default 20, maximum 21) supply a bounded option list. Repeated `selectedIds` GUID parameters hydrate up to 20 selected identities within scope; other data-source behavior remains unchanged. |
+| Finalization preview and possible Student matches | `canApplyProfileFieldsDirectly` identifies pending Admission/Registration profiles. `canReviewProfileFields` accounts for Records View/Create authority. `capturedStudentFields` contains `{key,label,value}` rows with a safe photo summary; `profileReviewDescription` explains the handoff and separate Compliance review. |
+| Finalization input | `applyStudentProfileFields` defaults to false for existing profiles. New profiles receive supported answers automatically. Protected existing profiles use the Records review service and its current section guards. |
+
+Student captured summaries exclude Aadhaar, APAAR, PEN, UDISE, PAN and raw photo payloads. Their existing canonical storage and read permissions remain authoritative. The original admission evidence stays on the applicant.
+
+## Onboarding credential delivery
+
+| Endpoint | Authority and contract |
+|---|---|
+| GET `/api/student/onboarding/{caseId}/credential-emails` | Onboarding.View and current academic scope; returns student/guardian rows including NotRequested/Blocked, mailbox, enabled flag and server canSend. No password/token fields. |
+| POST same route | Onboarding.Edit and current scope; `{accountType, concurrencyStamp?}` uses the onboarding case stamp and current mandatory readiness. Returns durable status; already-pending requests are idempotent. |
+| POST `/api/student/onboarding/{caseId}/documents/override` | Onboarding.Edit plus Onboarding.Waive and finalized-application scope; `{documentTypeIds, overrideAll, reason, concurrencyStamp}`. Requires note/current case stamp; only current required types; returns refreshed documents with canOverride, isValidated, isOverridden and overrideReason. |
+
+Email status DTO includes id, accountType, email, status, message, sentAt, attemptCount, emailEnabled and canSend.
+Manual resends/retries require the current saved readiness and sender permission, with a two-minute cooldown.
+Automatic dispatch preserves the initial account creation grants; exact sender grants and academic scope are checked again before transport.
+Email/mobile/username login aliases apply to exclusive Student/Parent identities with email and eligible child access.
+An ambiguous mobile match fails closed; the owner verifies the mailbox and changes an initial password through the existing Account setup route.
 
 ## Student Attendance API families
 

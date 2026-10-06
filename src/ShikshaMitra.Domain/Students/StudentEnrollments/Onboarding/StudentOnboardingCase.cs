@@ -6,7 +6,7 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
-public class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	private Guid? _legacyCampusId;
 	public Guid? TenantId { get; private set; }

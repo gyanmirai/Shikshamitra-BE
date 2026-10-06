@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
+using Volo.Abp.Data;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
@@ -57,6 +58,7 @@ internal static class AdmissionFormBindingRegistry
 
 	public static bool ApplyValue(string key, string value, AdmissionApplicant applicant, AdmissionGuardian? guardian)
 	{
+		if (key is "Address.State" or "Address.Country") applicant.SetProperty("AdmissionLocation." + key, value);
 		switch (key)
 		{
 			case "Applicant.FirstName": UpdateApplicant(applicant, value, applicant.MiddleName, applicant.LastName, applicant.DateOfBirth, applicant.Gender); return true;

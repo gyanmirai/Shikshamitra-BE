@@ -3,12 +3,29 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-03
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Predefined admission fields and profile handoff
+
+Run `AdmissionAdditionalStudentFieldCatalog_Tests`, `AdmissionStudentProfileMapping_Tests` and the focused cases in `AdmissionStudentFieldHandoff_Tests`. They cover metadata destinations, protected identifier storage, photo validation/save/reload, scoped sibling paging/hydration, absent-value preservation, pending-profile opt-in, Records review idempotency and masked-section rollback. Records action authorization tests verify the internal review helpers retain View/Create permissions.
+
+Rollback cases must use the existing copied SQLite database and normal UOW manager harness; the common application fixture disables transactions. Frontend authenticated acceptance remains a separate gate for the shared photo/identity/location controls, form save/reload and finalization review copy.
+
+## Credential email and access verification
+
+| Gate | Required evidence |
+|---|---|
+| Domain | `StudentCredentialReadiness_Tests`, `StudentCredentialEmailRequest_Tests`: legacy disabled defaults, invalid policy, exact noted overrides, claims, cooldown and secret cleanup. |
+| Application | `StudentCredentialEligibility_Tests`, `StudentCredentialEmailDispatcher_Tests`, existing Onboarding portal and Records transitions: actual enrollment/document/timing gates, retry hash preservation, sibling handling, recipient/link/actor revocation and exit access. |
+| HTTP | Portal token regression covers wrong initial password, protected password change, mailbox confirmation, aliases and exit/refresh denial. Existing Onboarding/Records contract tests remain required. |
+| Browser and email | [Frontend checks](../../../../Shikshamitra-FE/docs/student/testing.md) own saved settings/reload, status and document dialogs. Controlled emails must go only to the user-approved test recipients; transport acceptance is distinct from inbox confirmation. |
+
+Focused local compile/test results and remaining acceptance limits must be reported separately from deployment readiness.
 
 ## Student Attendance verification
 

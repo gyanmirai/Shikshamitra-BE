@@ -145,6 +145,18 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 	private static IEnumerable<string> ValidateValue(AdmissionFormFieldDefinition field, string value)
 	{
 		var errors = new List<string>();
+		if (field.BindingType == AdmissionFormBindingType.System)
+		{
+			if (field.BindingKey == "Identity.AadhaarNumber" && !Regex.IsMatch(value, @"^[2-9][0-9]{11}$"))
+				errors.Add($"{field.Code} must contain a valid 12-digit Aadhaar number.");
+			if (field.BindingKey == "Identity.PanNumber" && !Regex.IsMatch(value, @"^[A-Z]{5}[0-9]{4}[A-Z]$"))
+				errors.Add($"{field.Code} must contain a valid PAN number.");
+			if (field.BindingKey == "Applicant.ProfilePhoto")
+			{
+				try { AdmissionStudentPhoto.Decode(value); }
+				catch (Volo.Abp.BusinessException) { errors.Add($"{field.Code} must be a JPEG or PNG photo up to 2 MB."); }
+			}
+		}
 		if (field.FieldType == AdmissionFormFieldType.Number && !decimal.TryParse(value, out _))
 			errors.Add($"{field.Code} must be a number.");
 		if (field.FieldType == AdmissionFormFieldType.Date && !DateTimeOffset.TryParse(value, out _))
@@ -226,8 +238,14 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 				return;
 			}
 			var options = ReadOptions(field);
+			var dynamicOptions = false;
+			if (!string.IsNullOrWhiteSpace(field.OptionsJson))
+			{
+				using var source = JsonDocument.Parse(field.OptionsJson);
+				dynamicOptions = source.RootElement.ValueKind == JsonValueKind.Object && source.RootElement.TryGetProperty("source", out _);
+			}
 			foreach (var item in document.RootElement.EnumerateArray())
-				if (item.ValueKind != JsonValueKind.String || !options.Contains(item.GetString() ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+				if (item.ValueKind != JsonValueKind.String || (!dynamicOptions && !options.Contains(item.GetString() ?? string.Empty, StringComparer.OrdinalIgnoreCase)))
 					errors.Add($"{field.Code} contains an invalid option.");
 		}
 		catch (JsonException) { errors.Add($"{field.Code} must contain multiple options."); }

@@ -13,6 +13,9 @@ using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using ShikshaMitra.Students.Portal;
+using Volo.Abp.Data;
+using Volo.Abp.Domain.Entities;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -51,6 +54,68 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.GetAsync(x => x.StudentId == fixture.Student.Id))).IsActive.ShouldBeFalse();
 		(await GetRequiredService<IStudentRecordProfileAppService>().GetAsync(fixture.Student.Id)).RecordsAccess.ShouldBe("Full");
 		using (_currentTenant.Change(Guid.NewGuid())) await Should.ThrowAsync<Exception>(() => fixture.Service.GetAsync(item.Id));
+	});
+	[Theory][InlineData("Withdraw")][InlineData("Transfer")][InlineData("Graduate")]
+	public Task Record_transition_exit_revokes_only_departing_child_and_preserves_parent_sibling(string outcome) => RunCertificationScenarioAsync(async () =>
+	{
+		var policy = StudentRecordsPolicy.Starter(); policy.Changes["Status"].Mode = "Direct";
+		var fixture = await TransitionFixtureAsync(policy); fixture.Input.Items[0].Outcome = outcome;
+		var parentId = Guid.NewGuid(); var selfId = Guid.NewGuid(); var siblingId = Guid.NewGuid();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var users = GetRequiredService<IdentityUserManager>();
+			var parent = new IdentityUser(parentId, "exit-parent", "exit-parent@example.test", TestTenantId); parent.SetEmailConfirmed(true);
+			(await users.CreateAsync(parent)).Succeeded.ShouldBeTrue();
+			var self = new IdentityUser(selfId, "exit-self", "exit-self@example.test", TestTenantId); self.SetEmailConfirmed(true);
+			(await users.CreateAsync(self)).Succeeded.ShouldBeTrue();
+			var source = await _studentRepository.GetAsync(fixture.Student.Id); source.LinkUser(selfId); await _studentRepository.UpdateAsync(source, true);
+			var sibling = new Student(siblingId, TestTenantId, "Remaining", "", "Sibling", source.AcademicYearId!.Value,
+				source.AcademicBoardId!.Value, source.AcademicMediumId, source.AcademicMediumStageId!.Value, source.StandardId, source.DivisionId,
+				status: StudentLifeCycleStatusEnum.Enrolled);
+			await _studentRepository.InsertAsync(sibling, true);
+			var links = GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>();
+			var departingLinkId = Guid.NewGuid(); var siblingLinkId = Guid.NewGuid();
+			await links.InsertAsync(new(departingLinkId, TestTenantId, source.Id, parentId, "guardian", "father", TestUserId), true);
+			await links.InsertAsync(new(siblingLinkId, TestTenantId, siblingId, parentId, "guardian", "father", TestUserId), true);
+			var emails = GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>();
+			foreach (var state in new[] { "Pending", "Processing", "Failed" })
+			{
+				var request = new StudentCredentialEmailRequest(Guid.NewGuid(), TestTenantId, Guid.NewGuid(), source.Id,
+					departingLinkId, parentId, "guardian", parent.Email!, TestUserId, DateTime.UtcNow);
+				request.SetInitialPassword("synthetic-encrypted-retry-secret");
+				if (state == "Processing") request.Claim(DateTime.UtcNow.AddSeconds(1));
+				if (state == "Failed") request.Failed(DateTime.UtcNow);
+				await emails.InsertAsync(request, true);
+			}
+			await emails.InsertAsync(new(Guid.NewGuid(), TestTenantId, Guid.NewGuid(), siblingId, siblingLinkId,
+				parentId, "guardian", parent.Email!, TestUserId, DateTime.UtcNow), true);
+		});
+		// Refresh the preview after the legacy identity association changed its source stamp.
+		var preview = (await fixture.Service.PreviewAsync(fixture.Input)).Items.Single();
+		fixture.Input.Items[0].StudentConcurrencyStamp = preview.StudentConcurrencyStamp;
+		fixture.Input.Items[0].EnrollmentConcurrencyStamp = preview.EnrollmentConcurrencyStamp;
+		var item = (await fixture.Service.SubmitBatchAsync(fixture.Input)).Items.Single(); item.Status.ShouldBe("Applied");
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var links = GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>();
+			(await links.CountAsync(x => x.StudentId == fixture.Student.Id)).ShouldBe(0);
+			(await links.CountAsync(x => x.StudentId == siblingId && x.UserId == parentId)).ShouldBe(1);
+			var emails = GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>();
+			var cancelled = await emails.GetListAsync(x => x.StudentId == fixture.Student.Id);
+			cancelled.Count.ShouldBe(3);
+			cancelled.ShouldAllBe(x => x.Status == "Cancelled" && x.EncryptedInitialPassword == null && x.ClaimedAt == null);
+			(await emails.GetAsync(x => x.StudentId == siblingId)).Status.ShouldBe("Pending");
+			using (GetRequiredService<IDataFilter>().Disable<ISoftDelete>())
+			{
+				var history = await links.GetListAsync(x => x.StudentId == fixture.Student.Id);
+				history.Count.ShouldBe(2); history.ShouldAllBe(x => x.IsDeleted);
+			}
+			(await GetRequiredService<IdentityUserManager>().GetByIdAsync(parentId)).IsActive.ShouldBeTrue();
+		});
+		using (_principalAccessor.Change(EligibilityPrincipal(parentId, "exit-parent@example.test", "Parent")))
+			(await WithUnitOfWorkAsync(() => GetRequiredService<StudentPortalAccessService>().GetMyStudentsAsync())).Single().StudentId.ShouldBe(siblingId);
+		using (_principalAccessor.Change(EligibilityPrincipal(selfId, "exit-self@example.test", "Student")))
+			(await WithUnitOfWorkAsync(() => GetRequiredService<StudentPortalAccessService>().GetMyStudentsAsync())).ShouldBeEmpty();
 	});
 	[Fact] public Task Record_transition_stale_preview_and_unavailable_finance_are_blocked() => RunCertificationScenarioAsync(async () =>
 	{
@@ -111,6 +176,32 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await fixture.Service.GetAsync(correction.TransitionId!.Value)).Status.ShouldBe("Applied");
 		(await fixture.Service.GetAsync(item.Id)).Status.ShouldBe("Applied");
 		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(fixture.Student.Id))).Status.ShouldBe(StudentLifeCycleStatusEnum.Enrolled);
+	});
+	[Fact]
+	public Task Record_exit_correction_restores_exact_verified_portal_link() => RunCertificationScenarioAsync(async () =>
+	{
+		var policy = StudentRecordsPolicy.Starter(); policy.Changes["Status"].Mode = "Direct"; policy.Changes["Correction"].Mode = "Direct";
+		var fixture = await TransitionFixtureAsync(policy); var ownerId = Guid.NewGuid(); var linkId = Guid.NewGuid();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var users = GetRequiredService<IdentityUserManager>(); var roles = GetRequiredService<IdentityRoleManager>();
+			if (!await roles.RoleExistsAsync("Student")) (await roles.CreateAsync(new IdentityRole(Guid.NewGuid(), "Student", TestTenantId))).Succeeded.ShouldBeTrue();
+			var user = new IdentityUser(ownerId, "corrected-exit", "corrected-exit@example.test", TestTenantId); user.SetEmailConfirmed(true);
+			(await users.CreateAsync(user)).Succeeded.ShouldBeTrue(); (await users.AddToRoleAsync(user, "Student")).Succeeded.ShouldBeTrue();
+			var contactRepo = GetRequiredService<IRepository<StudentContactDetail, Guid>>();
+			var contact = await contactRepo.FindAsync(fixture.Student.Id);
+			if (contact == null) await contactRepo.InsertAsync(new(fixture.Student.Id, TestTenantId, "9988776600", email: user.Email), true);
+			else { contact.UpdateContactInfo("9988776600", null, user.Email, null, null, null, null, null, null, null); await contactRepo.UpdateAsync(contact, true); }
+			await GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().InsertAsync(new(linkId, TestTenantId, fixture.Student.Id, ownerId, "student", "self", TestUserId), true);
+		});
+		var item = (await fixture.Service.SubmitBatchAsync(fixture.Input)).Items.Single(); item.Status.ShouldBe("Applied");
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().CountAsync(x => x.StudentId == fixture.Student.Id))).ShouldBe(0);
+		var correction = await fixture.Service.CorrectAsync(item.Id, new() { ConcurrencyStamp = item.ConcurrencyStamp, IdempotencyKey = "correct-portal-exit", Reason = "Exit entered for wrong date", PreviewOnly = false });
+		(await fixture.Service.GetAsync(correction.TransitionId!.Value)).Status.ShouldBe("Applied");
+		var restored = await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().GetAsync(linkId));
+		restored.UserId.ShouldBe(ownerId); restored.IsDeleted.ShouldBeFalse();
+		using (_principalAccessor.Change(EligibilityPrincipal(ownerId, "corrected-exit@example.test", "Student")))
+			(await WithUnitOfWorkAsync(() => GetRequiredService<StudentPortalAccessService>().GetMyStudentsAsync())).Single().StudentId.ShouldBe(fixture.Student.Id);
 	});
 	private async Task<(Guid Year, Guid Standard, Guid Division)> NextRecordYearAsync(Guid sourceYearId)
 	{

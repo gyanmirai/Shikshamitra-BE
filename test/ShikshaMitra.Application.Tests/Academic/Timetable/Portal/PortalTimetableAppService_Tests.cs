@@ -11,6 +11,7 @@ using ShikshaMitra.Students;
 using ShikshaMitra.Students.Portal;
 using ShikshaMitra.Students.StudentEnrollments;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
+using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicYears;
@@ -294,4 +295,51 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         await Should.ThrowAsync<BusinessException>(() => Service.GetScheduleAsync(request));
         await Should.ThrowAsync<BusinessException>(() => Service.GetContextAsync(f.Student.Id, Guid.NewGuid()));
     });
+
+	[Theory]
+	[InlineData(false, false)]
+	[InlineData(true, false)]
+	[InlineData(false, true)]
+	public Task Left_student_is_denied_on_existing_session_and_legacy_fallback(bool parent, bool legacySelf) => WithUnitOfWorkAsync(async () =>
+	{
+		var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+		var f = await Seed(id, parent: parent, legacySelf: legacySelf, legacyPlacement: true);
+		using var identity = SignIn(f.User.Id);
+		(await Service.GetContextAsync(f.Student.Id)).Student.Id.ShouldBe(f.Student.Id);
+		f.Student.ChangeOperationalStatus(StudentStatus.Left, "School exit");
+		await GetRequiredService<IRepository<Student, Guid>>().UpdateAsync(f.Student, true);
+		(await GetRequiredService<StudentPortalAccessService>().GetMyStudentsAsync()).ShouldBeEmpty();
+		await Should.ThrowAsync<AbpAuthorizationException>(() => Service.GetContextAsync(f.Student.Id));
+		(await GetRequiredService<StudentPortalLoginService>().CanAccessAsync(f.User)).ShouldBeFalse();
+	});
+
+	[Fact]
+	public Task Pending_temporary_password_blocks_existing_portal_session() => WithUnitOfWorkAsync(async () =>
+	{
+		var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+		var f = await Seed(id); using var identity = SignIn(f.User.Id);
+		f.User.SetShouldChangePasswordOnNextLogin(true);
+		await GetRequiredService<IRepository<IdentityUser, Guid>>().UpdateAsync(f.User, true);
+		await Should.ThrowAsync<AbpAuthorizationException>(() => Service.GetContextAsync(f.Student.Id));
+	});
+
+	[Fact]
+	public Task Parent_mobile_alias_is_unique_email_backed_and_tenant_bound() => WithUnitOfWorkAsync(async () =>
+	{
+		var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+		var f = await Seed(id, parent: true);
+		var roles = GetRequiredService<IdentityRoleManager>();
+		(await roles.CreateAsync(new IdentityRole(Guid.NewGuid(), "Parent", id))).Succeeded.ShouldBeTrue();
+		var manager = GetRequiredService<IdentityUserManager>();
+		(await manager.AddToRoleAsync(f.User, "Parent")).Succeeded.ShouldBeTrue();
+		f.User.SetPhoneNumber("9988776655", false);
+		await GetRequiredService<IRepository<IdentityUser, Guid>>().UpdateAsync(f.User, true);
+		var login = GetRequiredService<StudentPortalLoginService>();
+		(await login.FindMobileUsernameAsync("9988776655")).ShouldBe(f.User.UserName);
+		using (GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid()))
+			(await login.FindMobileUsernameAsync("9988776655")).ShouldBeNull();
+		var other = new IdentityUser(Guid.NewGuid(), "other", "other@example.test", id);
+		other.SetPhoneNumber("9988776655", false); await Insert(other);
+		(await login.FindMobileUsernameAsync("9988776655")).ShouldBeNull();
+	});
 }

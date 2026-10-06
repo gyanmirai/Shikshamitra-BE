@@ -28,11 +28,11 @@ public class StudentPortalAccessService(
 	{
 		if (!CurrentTenant.Id.HasValue || !CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
 		var user = await users.FindAsync(x => x.Id == CurrentUser.Id.Value && x.TenantId == CurrentTenant.Id);
-		if (user == null || !user.IsActive || !user.EmailConfirmed) throw new AbpAuthorizationException();
+		if (user == null || !user.IsActive || !user.EmailConfirmed || string.IsNullOrWhiteSpace(user.Email) || user.ShouldChangePasswordOnNextLogin) throw new AbpAuthorizationException();
 
 		var activeLinks = await links.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id &&
 			(x.AccountType == "guardian" || (x.AccountType == "student" && x.Relationship == "self")));
-		var selfStudents = await students.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id);
+		var selfStudents = await students.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id && x.Status != StudentLifeCycleStatusEnum.Left);
 		List<StudentPortalAccountLink> selfLinkHistory;
 		// A soft-deleted explicit self link must not regain access through Student.UserId.
 		// Tenant filtering remains enabled while inspecting revocations.
@@ -42,7 +42,7 @@ public class StudentPortalAccessService(
 
 		var linkedIds = activeLinks.Select(x => x.StudentId).Distinct().ToArray();
 		var linkedStudents = linkedIds.Length == 0 ? [] :
-			await students.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(linkedIds, x.Id));
+			await students.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(linkedIds, x.Id) && x.Status != StudentLifeCycleStatusEnum.Left);
 		var result = new List<StudentPortalAccountDto>();
 		foreach (var link in activeLinks)
 		{

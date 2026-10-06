@@ -72,6 +72,7 @@ public class StudentRecordTransitionCorrectionService(IRepository<StudentRecordT
 		student.AssignRollNo(before.RollNumber);
 		student.ChangeOperationalStatus(before.StudentStatus == StudentLifeCycleStatusEnum.Left ? StudentStatus.Left : before.StudentStatus == StudentLifeCycleStatusEnum.InActive ? StudentStatus.Inactive : StudentStatus.Active, correction.Reason);
 		await students.UpdateAsync(student);
+		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Portal.StudentPortalLifecycleService>().RestoreCorrectionAsync(original, student);
 		correction.Apply(source.Id, StudentRecordTransitionReadinessService.Capture(student, source), Clock.Now);
 	}
 	private async Task<bool> HasActiveDocumentDependencyAsync(StudentRecordTransition original) =>

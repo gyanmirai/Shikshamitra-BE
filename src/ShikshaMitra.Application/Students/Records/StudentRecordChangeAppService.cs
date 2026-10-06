@@ -62,10 +62,22 @@ public partial class StudentRecordChangeAppService(
 		return new() { Section = section, Snapshot = StudentRecordPayloadService.Hash(json), Data = JsonSerializer.Deserialize<JsonElement>(json) };
 	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create)]
-	public async Task<StudentRecordChangeDto> CreateAsync(CreateStudentRecordChangeDto input)
+	public Task<StudentRecordChangeDto> CreateAsync(CreateStudentRecordChangeDto input) => CreateCoreAsync(input, false);
+
+	/// <summary>Uses the same review validation and policy while joining admission finalization.
+	/// Approved requests are picked up by the existing Records scheduling worker after commit.</summary>
+	internal async Task<StudentRecordChangeDto> CreateAdmissionReviewAsync(CreateStudentRecordChangeDto input)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.View);
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create);
+		if (CurrentUnitOfWork == null) throw new BusinessException("Students:Records:TransactionRequired");
+		return await CreateCoreAsync(input, true);
+	}
+
+	private async Task<StudentRecordChangeDto> CreateCoreAsync(CreateStudentRecordChangeDto input, bool joinAdmissionWork)
 	{
 		Guid id;
-		using (var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true))
+		using (var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: !joinAdmissionWork))
 		{
 			var allowed = await access.EnsureWritableAsync(input.StudentId, input.Section == "placement");
 			await EnsureVisibleAsync(allowed.Policy, input.Section);
@@ -116,7 +128,8 @@ public partial class StudentRecordChangeAppService(
 			await work.CompleteAsync();
 			}
 		}
-		await application.ApplyScheduledAsync(id);
+		if (joinAdmissionWork) await CurrentUnitOfWork!.SaveChangesAsync();
+		else await application.ApplyScheduledAsync(id);
 		return await GetAsync(id);
 	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Approve)]

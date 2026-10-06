@@ -333,7 +333,14 @@ public class AdmissionInquiryAppService(
 			!string.IsNullOrWhiteSpace(value)))
 		{
 			// A return captures fresh answers without modifying shared family or permanent identity.
-			if (returningStudent != null && field.BindingKey!.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase)) continue;
+			if (returningStudent != null && field.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email") continue;
+			if (field.BindingKey == "Family.SiblingStudentIds")
+			{
+				var siblingIds = AdmissionStudentProfileMapping.ReadSiblings(values[field.Code]) ?? [];
+				if (siblingIds.Contains(returningStudent?.Id ?? applicant.ReservedStudentId))
+					throw new BusinessException("Admissions:InvalidSiblingSelection");
+				await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>().EnsureCanAccessStudentsAsync(siblingIds, nameof(CreateAsync));
+			}
 			AdmissionFormBindingRegistry.ApplyValue(field.BindingKey!, values[field.Code], applicant, guardian);
 		}
 		if (!input.ExistingFamilyId.HasValue) await familyRepository.InsertAsync(family, autoSave: false);

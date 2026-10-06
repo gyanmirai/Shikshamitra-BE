@@ -20,7 +20,12 @@ public class StudentRecordPhotoAppService(IRepository<StudentRecordPhotoDraft, G
 	IRepository<StudentRecordChange, Guid> changes) : ApplicationService, IStudentRecordPhotoAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create)]
-	public async Task<StudentRecordPhotoDraftDto> UploadAsync(Guid studentId, UploadStudentPhotoDto input)
+	public Task<StudentRecordPhotoDraftDto> UploadAsync(Guid studentId, UploadStudentPhotoDto input) => UploadCoreAsync(studentId, input, false);
+
+	internal Task<StudentRecordPhotoDraftDto> UploadForAdmissionReviewAsync(Guid studentId, UploadStudentPhotoDto input) =>
+		UploadCoreAsync(studentId, input, true);
+
+	private async Task<StudentRecordPhotoDraftDto> UploadCoreAsync(Guid studentId, UploadStudentPhotoDto input, bool joinAdmissionWork)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create);
 		await access.EnsureWritableAsync(studentId);
@@ -42,7 +47,7 @@ public class StudentRecordPhotoAppService(IRepository<StudentRecordPhotoDraft, G
 		await blobs.SaveAsync(blob, input.Content, overrideExisting: false);
 		try
 		{
-			using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true);
+			using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: !joinAdmissionWork);
 			await drafts.InsertAsync(new(id, CurrentTenant.Id, studentId, CurrentUser.GetId(), blob, contentType,
 				Path.GetFileName(input.FileName), new DateTimeOffset(Clock.Now.ToUniversalTime()).AddDays(30)), autoSave: true);
 			await work.CompleteAsync();

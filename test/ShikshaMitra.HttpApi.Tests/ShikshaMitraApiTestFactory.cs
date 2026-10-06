@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using OpenIddict.Server.AspNetCore;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Common;
@@ -371,7 +372,9 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 
 			foreach (var scheme in options.SchemeMap.Values)
 			{
-				if (scheme.Name != TestAuthHandler.SchemeName)
+				// Keep token request parsing/sign-in native so security regressions can
+				// exercise /connect/token. Normal API auth still defaults to TestAuth.
+				if (scheme.Name != TestAuthHandler.SchemeName && scheme.Name != OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)
 				{
 					scheme.HandlerType = typeof(TestAuthHandler);
 				}

@@ -10,10 +10,12 @@ namespace ShikshaMitra.Students.Enrollment;
 public class AdmissionAdditionalStudentFieldCatalog_Tests
 {
 	[Fact]
-	public void Catalogue_contains_one_hundred_unique_student_fields_without_financial_assistance()
+	public void Catalogue_contains_predefined_profile_fields_without_financial_assistance()
 	{
-		AdmissionFormBindingRegistry.Metadata.Count.ShouldBe(100);
-		AdmissionAdditionalStudentFieldCatalog.Metadata.Count.ShouldBe(85);
+		AdmissionFormBindingRegistry.Metadata.Count.ShouldBe(107);
+		AdmissionAdditionalStudentFieldCatalog.Metadata.Count.ShouldBe(92);
+		AdmissionFormBindingRegistry.Metadata["Applicant.ProfilePhoto"].Destination.ShouldBe("studentProfile");
+		AdmissionFormBindingRegistry.Metadata["Preference.Class"].Destination.ShouldBe("capturedAdmissionDetails");
 		AdmissionFormBindingRegistry.Metadata.Keys.ShouldAllBe(key =>
 			!key.StartsWith("FinancialAssistance.", StringComparison.OrdinalIgnoreCase));
 		foreach (var field in AdmissionFormBindingRegistry.Metadata.Values.Where(field =>
@@ -22,6 +24,29 @@ public class AdmissionAdditionalStudentFieldCatalog_Tests
 			field.OptionsJson.ShouldNotBeNullOrWhiteSpace();
 			using var options = JsonDocument.Parse(field.OptionsJson);
 			options.RootElement.GetArrayLength().ShouldBeGreaterThan(0);
+		}
+	}
+
+	[Fact]
+	public void Protected_identifiers_and_photo_are_not_duplicated_in_student_capture_or_legacy_summaries()
+	{
+		var applicant = new AdmissionApplicant(Guid.NewGuid(), null, Guid.NewGuid(), "Asha", null,
+			"Patel", null, null, null, Guid.NewGuid());
+		var student = new Student(Guid.NewGuid(), null, "Asha", null, "Patel", Guid.NewGuid(),
+			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+		var keys = new[] { "Identity.AadhaarNumber", "Identity.PanNumber", "Identity.ApaarId",
+			"Identity.PenNumber", "Identity.UdiseStudentCode", "Applicant.ProfilePhoto" };
+		foreach (var key in keys)
+		{
+			applicant.ExtraProperties["AdmissionStudentField." + key] = "captured evidence";
+			student.ExtraProperties["AdmissionStudentField." + key] = "legacy raw copy";
+		}
+		AdmissionAdditionalStudentFieldCatalog.ReadStudent(student).ShouldBeEmpty();
+		AdmissionAdditionalStudentFieldCatalog.CopyToStudent(applicant, student);
+		foreach (var key in keys)
+		{
+			student.ExtraProperties.ContainsKey("AdmissionStudentField." + key).ShouldBeFalse();
+			applicant.ExtraProperties.ContainsKey("AdmissionStudentField." + key).ShouldBeTrue();
 		}
 	}
 
@@ -45,7 +70,7 @@ public class AdmissionAdditionalStudentFieldCatalog_Tests
 
 		AdmissionAdditionalStudentFieldCatalog.CopyToStudent(applicant, student);
 		student.ExtraProperties["AdmissionStudentField.Medical.BloodGroup"].ShouldBe("O+");
-		student.ExtraProperties["AdmissionStudentField.Identity.PenNumber"].ShouldBe("PEN-123");
+		student.ExtraProperties.ContainsKey("AdmissionStudentField.Identity.PenNumber").ShouldBeFalse();
 		student.ExtraProperties.ContainsKey("AdmissionStudentField.Unknown.Field").ShouldBeFalse();
 
 		AdmissionFormBindingRegistry.ApplyValue("Identity.PenNumber", "", applicant, null).ShouldBeTrue();

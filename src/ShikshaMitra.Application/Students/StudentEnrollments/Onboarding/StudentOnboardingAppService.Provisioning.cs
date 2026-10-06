@@ -107,6 +107,7 @@ public partial class StudentOnboardingAppService
 		}
 		await caseRepository.UpdateAsync(item, false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
+		await QueueAutomaticCredentialEmailsAsync(item);
 	}
 	private async Task<bool> IsCurrentReturnPortalAsync(Guid studentId, string type, ShikshaMitra.Students.Portal.StudentPortalAccountLink? link)
 	{

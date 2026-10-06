@@ -93,6 +93,14 @@ public class AdmissionApplicationFormService(
 		{
 			var definition = item.Definition!;
 			var code = item.Input.FieldCode.ToUpperInvariant();
+			if (definition.BindingType == AdmissionFormBindingType.System && definition.BindingKey == "Family.SiblingStudentIds")
+			{
+				var siblings = AdmissionStudentProfileMapping.ReadSiblings(AdmissionApplicationValueConverter.Unwrap(item.Input.ValueJson)) ?? [];
+				if (siblings.Contains(applicant?.ExistingStudentId ?? applicant?.ReservedStudentId ?? Guid.Empty))
+					throw new BusinessException(AdmissionApplicationErrorCodes.UnknownFormField).WithData("FieldCode", code);
+				if (!await dataSourceRegistry.AreSiblingIdsAllowedAsync(siblings))
+					throw new BusinessException("Admissions:InvalidSiblingSelection");
+			}
 			var existing = existingValues.FirstOrDefault(value => value.FieldCode == code);
 			if (existing == null)
 				await valueRepository.InsertAsync(new AdmissionFormFieldValue(
@@ -103,7 +111,7 @@ public class AdmissionApplicationFormService(
 				await valueRepository.UpdateAsync(existing, false);
 			}
 			if (definition.BindingType == AdmissionFormBindingType.System && applicant is not null &&
-				!(applicant.ExistingStudentId.HasValue && definition.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true))
+				!(applicant.ExistingStudentId.HasValue && definition.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email"))
 			{
 				var value = AdmissionApplicationValueConverter.Unwrap(item.Input.ValueJson);
 				if (!string.IsNullOrWhiteSpace(value) ||
@@ -228,6 +236,19 @@ public class AdmissionApplicationFormService(
 		foreach (var field in fields.Where(field => visibleFieldCodes.Contains(field.Code) && field.FieldType is (AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio)))
 		{
 			if (string.IsNullOrWhiteSpace(field.OptionsJson) || !TryReadSource(field.OptionsJson, out var sourceKey, out var parentField)) continue;
+			if (sourceKey == "StudentSiblings")
+			{
+				var allowed = false;
+				try { allowed = await dataSourceRegistry.AreSiblingIdsAllowedAsync(AdmissionStudentProfileMapping.ReadSiblings(values.GetValueOrDefault(field.Code)) ?? []); }
+				catch (BusinessException) { }
+				if (!allowed)
+				{
+					var message = $"{field.Code} contains an invalid sibling selection.";
+					validation.Errors.Add(message);
+					validation.FieldErrors.TryAdd(field.Code, message);
+				}
+				continue;
+			}
 			var parentId = parentField != null && Guid.TryParse(values.GetValueOrDefault(parentField), out var parsedParentId) ? parsedParentId : (Guid?)null;
 			var allowedValues = (await dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId)).Select(option => option.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
 			var section = sections.First(item => item.Id == field.SectionId);

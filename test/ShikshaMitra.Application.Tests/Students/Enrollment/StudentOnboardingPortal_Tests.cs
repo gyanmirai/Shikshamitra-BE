@@ -458,18 +458,27 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				await Should.ThrowAsync<EntityNotFoundException>(() => service.GetPortalAccountsAsync(item.Id));
 			}
 			// Exercise the existing owner password-setup service, not a staff email-confirmation bypass.
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var pending = await users.GetByIdAsync(user.Id);
+				(await users.AddPasswordAsync(pending, "Initial-Portal-Test-29!")).Succeeded.ShouldBeTrue();
+				pending.SetShouldChangePasswordOnNextLogin(true);
+				(await users.UpdateAsync(pending)).Succeeded.ShouldBeTrue();
+			});
 			var accountService = GetRequiredService<IAccountAppService>();
 			await Should.ThrowAsync<Exception>(() => accountService.ResetPasswordAsync(new ResetPasswordDto
 			{
 				UserId = user.Id, ResetToken = "invalid-owner-token", Password = "Portal-Test-Only-29!"
 			}));
 			(await WithUnitOfWorkAsync(() => users.GetByIdAsync(user.Id))).EmailConfirmed.ShouldBeFalse();
+			(await WithUnitOfWorkAsync(() => users.GetByIdAsync(user.Id))).ShouldChangePasswordOnNextLogin.ShouldBeTrue();
 			var resetToken = await WithUnitOfWorkAsync(async () => await users.GeneratePasswordResetTokenAsync(await users.GetByIdAsync(user.Id)));
 			await accountService.ResetPasswordAsync(new ResetPasswordDto
 			{
 				UserId = user.Id, ResetToken = resetToken, Password = "Portal-Test-Only-29!"
 			});
 			(await WithUnitOfWorkAsync(() => users.GetByIdAsync(user.Id))).EmailConfirmed.ShouldBeTrue();
+			(await WithUnitOfWorkAsync(() => users.GetByIdAsync(user.Id))).ShouldChangePasswordOnNextLogin.ShouldBeFalse();
 			await Should.ThrowAsync<Exception>(() => accountService.ResetPasswordAsync(new ResetPasswordDto
 			{
 				UserId = user.Id, ResetToken = resetToken, Password = "Portal-Test-Replay-29!"

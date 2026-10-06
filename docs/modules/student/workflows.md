@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-03
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,27 @@ audience: humans-and-agents
 # Trace Student Enrollment Admissions workflows
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
+
+## Carry admission answers into student profiles
+
+1. Choose predefined fields from the admission catalogue. Photo, student Aadhaar, optional PAN, single-child/single-parent conditions, sibling students and permanent country use stable bindings; school-specific answers remain captured admission details.
+2. Save and reload answers on the applicant. Photo accepts a JPEG/PNG data URI up to 2 MiB with file-signature validation. Sibling choices search the current staff scope; saved GUIDs are validated against the full scoped query and cannot include the resolved Student itself.
+3. Finalization creates a new Student and maps supported family, health, previous-school, contact and identification details while preserving unsupplied values. Aadhaar uses encrypted Identity Compliance storage; the Student photo uses the existing blob store. Raw identifiers and image payloads are not duplicated into Student captured-detail extras.
+4. For an existing Admission/Registration Student, staff explicitly confirms applying the previewed answers. Without confirmation, canonical profile details remain unchanged.
+5. For an Enrolled/Inactive/Left Student, confirmation submits section change requests through Student Records permissions, masks, snapshots and school approval policy. Requests join the finalization transaction; direct-policy changes apply through the Records worker after commit. Aadhaar, APAAR, PEN and UDISE require a separate Identity Compliance review.
+
+The applicant retains original captured evidence. Finalization retries preserve the existing Student, onboarding case and review requests. Admissions finalization does not activate enrollment; Onboarding retains that responsibility.
+
+## Deliver student and parent credentials
+
+1. Configure the applicable readiness rule's account/email flags, sending mode, timing and one guardian relationship.
+2. Finalize Admissions and complete placement, identifiers and required document evidence; authorized staff may record document-specific overrides with a note.
+3. Activate enrollment; automatic mode prepares eligible identities using current identity grants, while manual mode retains explicit staff verification/linking.
+4. Activation timing may queue immediately; completion timing waits for existing Finance and required handoffs, without waiting for email delivery to complete onboarding.
+5. Queue a durable request; after commit the worker rechecks actor scope, exact grants, active enrollment, mailbox and documents before preparing/sending credentials.
+6. The owner uses the secure setup link to confirm email and choose their password. An existing verified Parent links another child without password changes.
+7. Failed/interrupted delivery remains visible for controlled retry; Sent records sender acceptance. Repeated access emails do not reveal an existing password.
+8. Records terminal application unlinks the child immediately; eligible siblings remain available to the Parent. A reviewed correction checks exact recorded links before restoration.
 
 ## Configure and operate daily attendance
 

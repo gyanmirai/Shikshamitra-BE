@@ -24,5 +24,6 @@ public interface IAdmissionFormAppService : IApplicationService
 	Task<IReadOnlyList<AdmissionFormFieldMetadataDto>> GetFieldTypesAsync();
 	Task<IReadOnlyList<AdmissionFormSystemFieldMetadataDto>> GetSystemFieldsAsync();
 	Task<IReadOnlyList<AdmissionFormDataSourceMetadataDto>> GetDataSourcesAsync();
-	Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null);
+	Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null,
+		string? searchTerm = null, int skipCount = 0, int maxResultCount = 20, List<Guid>? selectedIds = null);
 }

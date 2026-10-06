@@ -34,7 +34,7 @@ public class AdmissionFormAppService(
 		new() { FieldType = AdmissionFormFieldType.Phone, DisplayName = "Phone", Description = "Phone number.", SupportsBinding = true },
 		new() { FieldType = AdmissionFormFieldType.Date, DisplayName = "Date", Description = "Calendar date.", SupportsBinding = true },
 		new() { FieldType = AdmissionFormFieldType.Select, DisplayName = "Select", Description = "One option from a list.", SupportsOptions = true, SupportsBinding = true },
-		new() { FieldType = AdmissionFormFieldType.MultiSelect, DisplayName = "Multi-select", Description = "Multiple options from a list.", SupportsOptions = true },
+		new() { FieldType = AdmissionFormFieldType.MultiSelect, DisplayName = "Multi-select", Description = "Multiple options from a list.", SupportsOptions = true, SupportsBinding = true },
 		new() { FieldType = AdmissionFormFieldType.Radio, DisplayName = "Radio", Description = "One option shown as radio buttons.", SupportsOptions = true },
 		new() { FieldType = AdmissionFormFieldType.Checkbox, DisplayName = "Checkbox", Description = "Boolean choice.", SupportsBinding = true },
 		new() { FieldType = AdmissionFormFieldType.File, DisplayName = "File", Description = "File placeholder for the upload integration.", SupportsBinding = false, IsRuntimeReady = false },
@@ -271,7 +271,9 @@ public class AdmissionFormAppService(
 	public Task<IReadOnlyList<AdmissionFormDataSourceMetadataDto>> GetDataSourcesAsync() => Task.FromResult(AdmissionFormDataSourceRegistry.Metadata);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
-	public Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null) => dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId);
+	public Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null,
+		string? searchTerm = null, int skipCount = 0, int maxResultCount = 20, List<Guid>? selectedIds = null) =>
+		dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId, searchTerm, skipCount, maxResultCount, selectedIds);
 
 	private static List<string> Compare(AdmissionFormDto from, AdmissionFormDto to)
 	{
@@ -463,7 +465,7 @@ public class AdmissionFormAppService(
 		if (!root.TryGetProperty("format", out var formatProperty)) return;
 		if (formatProperty.ValueKind != JsonValueKind.String) { result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}"); return; }
 		var format = formatProperty.GetString();
-		if (!new[] { "email", "phone", "aadhaar", "pan", "pincode", "country", "state", "city" }.Contains(format, StringComparer.OrdinalIgnoreCase))
+		if (!new[] { "email", "phone", "aadhaar", "pan", "pincode", "country", "state", "city", "photo" }.Contains(format, StringComparer.OrdinalIgnoreCase))
 		{
 			result.Errors.Add($"{AdmissionFormErrorCodes.InvalidValidationRule}:{code}");
 			return;

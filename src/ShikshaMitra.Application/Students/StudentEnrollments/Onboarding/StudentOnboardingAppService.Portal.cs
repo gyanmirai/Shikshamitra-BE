@@ -41,6 +41,7 @@ public partial class StudentOnboardingAppService
 			if (!linkedUser.IsActive || !string.Equals(linkedUser.Email, input.Email.Trim(), StringComparison.OrdinalIgnoreCase) ||
 				existingLink.Relationship != input.Relationship)
 				throw PortalInvalid("The existing account link differs or is inactive. Use the identity administrator's reviewed repair workflow.");
+			await QueueAutomaticCredentialEmailsAsync(item);
 			return (await MapPortalLinksAsync([existingLink]))[0];
 		}
 		EnsureConcurrency(item, input.ConcurrencyStamp);
@@ -70,9 +71,9 @@ public partial class StudentOnboardingAppService
 			// Existing staff identities and unverified email matches are never silently repurposed.
 			await AuthorizationService.CheckAsync(IdentityPermissions.Users.Update);
 			var roles = await portalUserManager.GetRolesAsync(user);
-			if (!input.LinkExistingGuardian || input.AccountType != "guardian" || !user.IsActive || !user.EmailConfirmed ||
+			if (!input.LinkExistingGuardian || input.AccountType != "guardian" || !user.IsActive ||
 				roles.Count != 1 || !roles.Contains("Parent") ||
-				!await portalLinkRepository.AnyAsync(x => x.UserId == user.Id && x.AccountType == "guardian"))
+				!await LazyServiceProvider.LazyGetRequiredService<StudentPortalSiblingIdentityService>().HasVerifiedGuardianIdentityAsync(user))
 				throw PortalInvalid("An identity already uses this email. Only an explicitly confirmed, verified existing guardian portal account may be linked for a sibling.");
 		}
 		else
@@ -82,12 +83,18 @@ public partial class StudentOnboardingAppService
 				Name = input.AccountType == "student" ? student.FirstName : guardian?.FullName,
 				Surname = input.AccountType == "student" ? student.LastName : null
 			};
-			// No password is generated, returned, logged, or sent. The owner uses the normal
-			// verified email/password-setup flow. Never mark an unverified mailbox confirmed.
+			// Credential delivery later prepares a random initial password transactionally.
+			// A manual account without email delivery retains the owner password-setup flow.
 			var created = await portalUserManager.CreateAsync(user);
 			if (!created.Succeeded) throw PortalInvalid("Account creation was rejected by the identity policy. Review the email and username with your identity administrator.");
 			var assigned = await portalUserManager.AddToRoleAsync(user, role);
 			if (!assigned.Succeeded) throw PortalInvalid("The configured portal role could not be assigned.");
+			var mobile = input.AccountType == "student" ? student.ContactDetail?.PrimaryContactNo : guardian?.ContactNo;
+			if (!string.IsNullOrWhiteSpace(mobile))
+			{
+				var phone = await portalUserManager.SetPhoneNumberAsync(user, mobile.Trim());
+				if (!phone.Succeeded) throw PortalInvalid("The saved account-owner mobile could not be assigned.");
+			}
 		}
 		var link = new StudentPortalAccountLink(GuidGenerator.Create(), CurrentTenant.Id.Value, student.Id,
 			user.Id, input.AccountType, input.Relationship, CurrentUser.Id.Value);

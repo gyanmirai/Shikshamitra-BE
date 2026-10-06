@@ -165,6 +165,10 @@ public partial class StudentOnboardingAppService(
 	public async Task<StudentOnboardingCaseDto> GetAsync(Guid id) =>
 		await MapCaseAsync(await GetCaseAsync(id), includeEvents: true);
 
+	[RemoteService(false)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task EnsureCaseAccessAsync(Guid id) => await GetCaseAsync(id);
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat)]
 	public async Task<IReadOnlyList<StudentOnboardingPlacementOptionDto>> GetPlacementOptionsAsync(Guid id)
 	{
@@ -225,6 +229,7 @@ public partial class StudentOnboardingAppService(
 		EnsureConcurrency(onboardingCase, concurrencyStamp);
 		if (onboardingCase.StudentEnrollmentId.HasValue)
 		{
+			await PrepareAutomaticPortalAccountsAsync(onboardingCase);
 			await RefreshProvisioningAsync(onboardingCase);
 			return await MapCaseAsync(onboardingCase, true);
 		}
@@ -642,6 +647,8 @@ public partial class StudentOnboardingAppService(
 		await EnsureServiceHandoffsAsync(onboardingCase);
 		await AddEventAsync(id, "Activated", "Enrollment created. Complete the required Finance and access handoffs before onboarding is complete.");
 		await CurrentUnitOfWork!.SaveChangesAsync();
+		await PrepareAutomaticPortalAccountsAsync(onboardingCase);
+		await QueueAutomaticCredentialEmailsAsync(onboardingCase);
 		return await MapCaseAsync(onboardingCase, true);
 	}
 
@@ -1022,7 +1029,8 @@ public partial class StudentOnboardingAppService(
 		var acceptedAdmissionDocumentTypes = await admissionEvidenceReader.GetAcceptedUploadDocumentTypeIdsAsync(student.Id);
 		var documentsReady = documentStatus.Where(item => item.documentType.IsRequired)
 			.All(item => item.uploadedDocument?.ValidatedAt.HasValue == true ||
-				acceptedAdmissionDocumentTypes.Contains(item.documentType.Id));
+				acceptedAdmissionDocumentTypes.Contains(item.documentType.Id) ||
+				onboardingCase.GetDocumentOverrides().Any(value => value.DocumentTypeId == item.documentType.Id));
 		if (configuration != null)
 		{
 			var rules = configuration.Readiness(onboardingCase);

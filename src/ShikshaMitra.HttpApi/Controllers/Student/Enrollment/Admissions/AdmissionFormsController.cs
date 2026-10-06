@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,7 +20,11 @@ public class AdmissionFormsController(IAdmissionFormAppService service) : AbpCon
 	[HttpGet("metadata/field-types"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<IReadOnlyList<AdmissionFormFieldMetadataDto>>> GetFieldTypesAsync() => Result.Success(await service.GetFieldTypesAsync());
 	[HttpGet("metadata/system-fields"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<IReadOnlyList<AdmissionFormSystemFieldMetadataDto>>> GetSystemFieldsAsync() => Result.Success(await service.GetSystemFieldsAsync());
 	[HttpGet("metadata/data-sources"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<IReadOnlyList<AdmissionFormDataSourceMetadataDto>>> GetDataSourcesAsync() => Result.Success(await service.GetDataSourcesAsync());
-	[HttpGet("metadata/options"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<IReadOnlyList<AdmissionFormOptionDto>>> GetOptionsAsync([FromQuery] string sourceKey, [FromQuery] Guid? parentId = null, [FromQuery] Guid? academicYearId = null) => Result.Success(await service.GetOptionsAsync(sourceKey, parentId, academicYearId));
+	[HttpGet("metadata/options"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
+	public async Task<Result<IReadOnlyList<AdmissionFormOptionDto>>> GetOptionsAsync([FromQuery] string sourceKey,
+		[FromQuery] Guid? parentId = null, [FromQuery] Guid? academicYearId = null, [FromQuery] string? searchTerm = null,
+		[FromQuery] int skipCount = 0, [FromQuery] int maxResultCount = 20, [FromQuery] List<Guid>? selectedIds = null) =>
+		Result.Success(await service.GetOptionsAsync(sourceKey, parentId, academicYearId, searchTerm, skipCount, maxResultCount, selectedIds));
 	[HttpPost, Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)] public async Task<Result<AdmissionFormDto>> CreateAsync(CreateUpdateAdmissionFormDto input) => Result.Success(await service.CreateAsync(input));
 	[HttpPut("{id:guid}"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)] public async Task<Result<AdmissionFormDto>> UpdateAsync(Guid id, CreateUpdateAdmissionFormDto input) => Result.Success(await service.UpdateAsync(id, input));
 	[HttpPost("{id:guid}/clone"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.Manage)] public async Task<Result<AdmissionFormDto>> CloneAsync(Guid id, CloneAdmissionFormDto input) => Result.Success(await service.CloneAsync(id, input));

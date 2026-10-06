@@ -16,6 +16,12 @@ internal static class AdmissionAdditionalStudentFieldCatalog
 	private static readonly IReadOnlyList<AdmissionFormSystemFieldMetadataDto> Fields =
 	[
 		// Student profile
+		Field("Applicant.ProfilePhoto", "Student profile photo"),
+		Field("Identity.AadhaarNumber", "Student Aadhaar number"),
+		Field("Identity.PanNumber", "Student PAN number"),
+		Field("Family.IsSingleParentChild", "Single-parent child", AdmissionFormFieldType.Checkbox),
+		Field("Family.IsSingleChild", "Single child", AdmissionFormFieldType.Checkbox),
+		Field("Family.SiblingStudentIds", "Sibling students", AdmissionFormFieldType.MultiSelect, "{\"source\":\"StudentSiblings\"}"),
 		Field("Applicant.PlaceOfBirth", "Place of birth"),
 		Field("Applicant.Nationality", "Nationality"),
 		Field("Applicant.MotherTongue", "Mother tongue"),
@@ -84,6 +90,7 @@ internal static class AdmissionAdditionalStudentFieldCatalog
 		Field("PermanentAddress.Line2", "Permanent address line 2"),
 		Field("PermanentAddress.City", "Permanent address city"),
 		Field("PermanentAddress.State", "Permanent address state"),
+		Field("PermanentAddress.Country", "Permanent address country"),
 		Field("PermanentAddress.PostalCode", "Permanent address postal code"),
 		Field("PermanentAddress.SameAsCurrent", "Permanent address same as current", AdmissionFormFieldType.Checkbox),
 		Field("Emergency.Relationship", "Emergency contact relationship"),
@@ -136,6 +143,8 @@ internal static class AdmissionAdditionalStudentFieldCatalog
 	public static bool ApplyValue(string key, string value, AdmissionApplicant applicant)
 	{
 		if (!Metadata.TryGetValue(key, out var field)) return false;
+		if (!string.IsNullOrWhiteSpace(value) && field.Key == "Applicant.ProfilePhoto") AdmissionStudentPhoto.Decode(value);
+		if (!string.IsNullOrWhiteSpace(value) && field.Key == "Family.SiblingStudentIds") AdmissionStudentProfileMapping.ReadSiblings(value);
 		if (string.IsNullOrWhiteSpace(value)) applicant.ExtraProperties.Remove(PropertyPrefix + field.Key);
 		else applicant.SetProperty(PropertyPrefix + field.Key, value.Trim());
 		return true;
@@ -145,6 +154,11 @@ internal static class AdmissionAdditionalStudentFieldCatalog
 	{
 		foreach (var key in Metadata.Keys)
 		{
+			if (HasCanonicalProtectedStorage(key))
+			{
+				student.ExtraProperties.Remove(PropertyPrefix + key);
+				continue;
+			}
 			if (applicant.ExtraProperties.TryGetValue(PropertyPrefix + key, out var value) && value is not null)
 				student.SetProperty(PropertyPrefix + key, value.ToString());
 		}
@@ -152,14 +166,19 @@ internal static class AdmissionAdditionalStudentFieldCatalog
 
 	public static IReadOnlyList<(string Key, string Label, string Value)> ReadStudent(Student student) =>
 		Metadata.Values
+			.Where(field => !HasCanonicalProtectedStorage(field.Key))
 			.Select(field => (
 				field.Key,
 				field.DisplayName,
 				Value: student.ExtraProperties.TryGetValue(PropertyPrefix + field.Key, out var raw)
-					? raw?.ToString() : null))
+					? field.Key == "Applicant.ProfilePhoto" ? "Photo uploaded" : raw?.ToString() : null))
 			.Where(field => !string.IsNullOrWhiteSpace(field.Value))
 			.Select(field => (field.Key, field.DisplayName, field.Value!))
 			.ToList();
+
+	private static bool HasCanonicalProtectedStorage(string key) => key is
+		"Applicant.ProfilePhoto" or "Identity.AadhaarNumber" or "Identity.PanNumber" or
+		"Identity.ApaarId" or "Identity.PenNumber" or "Identity.UdiseStudentCode";
 
 	private static IReadOnlyDictionary<string, AdmissionFormSystemFieldMetadataDto> BuildMetadata()
 	{
@@ -175,6 +194,14 @@ internal static class AdmissionAdditionalStudentFieldCatalog
 		DisplayName = displayName,
 		Description = "Saved with the applicant and carried into the Student record at admission finalization.",
 		FieldType = fieldType,
-		OptionsJson = optionsJson
+		OptionsJson = optionsJson,
+		ValidationJson = key switch
+		{
+			"Identity.AadhaarNumber" => "{\"format\":\"aadhaar\",\"regex\":\"^[2-9][0-9]{11}$\"}",
+			"Identity.PanNumber" => "{\"format\":\"pan\",\"regex\":\"^[A-Z]{5}[0-9]{4}[A-Z]$\"}",
+			"Applicant.ProfilePhoto" => "{\"format\":\"photo\"}",
+			_ => null
+		},
+		Destination = AdmissionStudentProfileMapping.IsStructured(key) ? "studentProfile" : "capturedAdmissionDetails"
 	};
 }

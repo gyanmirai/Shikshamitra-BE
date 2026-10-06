@@ -13,6 +13,7 @@ public interface IStudentOnboardingAppService : IApplicationService
 	Task<IReadOnlyList<StudentOnboardingCampusDto>> GetAvailableCampusesAsync();
 	Task<StudentOnboardingAnalyticsDto> GetAnalyticsAsync();
 	Task<StudentOnboardingCaseDto> GetAsync(Guid id);
+	Task EnsureCaseAccessAsync(Guid id);
 	Task<IReadOnlyList<StudentOnboardingPlacementOptionDto>> GetPlacementOptionsAsync(Guid id);
 	Task<IReadOnlyList<StudentIdentifierSeriesDto>> GetAvailableIdentifierSeriesAsync(Guid id);
 	Task<StudentOnboardingCaseDto> RefreshReadinessAsync(Guid id, string? concurrencyStamp);

@@ -98,6 +98,7 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 			var removalDate = policy.Transitions.RosterRemovalTiming == "Approval"
 				? AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now) : item.EffectiveDate;
 			source.Enrollment.Deactivate(removalDate); source.Student.ChangeOperationalStatus(StudentStatus.Left, item.Reason);
+			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Portal.StudentPortalLifecycleService>().RevokeAsync(item, source.Student);
 			await enrollments.UpdateAsync(source.Enrollment); await students.UpdateAsync(source.Student);
 		}
 		item.Apply(null, StudentRecordTransitionReadinessService.Capture(source.Student, source.Enrollment), Clock.Now);

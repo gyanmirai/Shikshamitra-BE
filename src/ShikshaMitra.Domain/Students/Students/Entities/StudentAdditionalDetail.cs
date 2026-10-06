@@ -205,6 +205,27 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 		DisabilityDetails = haveDisability ? disabilityDetails : null;
 	}
 
+	public void ApplyAdmissionIdentityAndFamilyConditions(string? panNumber, bool? isSingleChild,
+		bool? isSingleParentChild, bool? isBplStudent, string? bplCardNumber)
+	{
+		PanNo = panNumber ?? PanNo;
+		IsSingleChild = isSingleChild ?? IsSingleChild;
+		IsSingleParentChild = isSingleParentChild ?? IsSingleParentChild;
+		IsBPLStudent = isBplStudent ?? IsBPLStudent;
+		BPLCardNo = bplCardNumber ?? BPLCardNo;
+	}
+
+	public void ApplyAdmissionSupportDetails(string? secondLanguage, bool? haveDisability, string? disabilityDetails,
+		string? emergencyContactName, string? emergencyRelation, string? emergencyContactNo)
+	{
+		SecondLanguage = secondLanguage ?? SecondLanguage;
+		HaveDisability = haveDisability ?? HaveDisability;
+		DisabilityDetails = HaveDisability == false ? null : disabilityDetails ?? DisabilityDetails;
+		EmergencyRelationName = emergencyContactName ?? EmergencyRelationName;
+		EmergencyRelationType = emergencyRelation ?? EmergencyRelationType;
+		EmergencyContactNo = emergencyContactNo ?? EmergencyContactNo;
+	}
+
 	public void UpdatePreviousSchoolSummary(string? previousSchool, string? lastClassPassed)
 	{
 		PreviousSchool = previousSchool;

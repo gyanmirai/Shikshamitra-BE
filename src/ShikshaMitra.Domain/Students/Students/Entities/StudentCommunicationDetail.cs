@@ -1,5 +1,6 @@
 ﻿using System;
 using ShikshaMitra.Students.ValueObjects;
+using ShikshaMitra.Common;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -79,18 +80,24 @@ public class StudentCommunicationDetail : FullAuditedEntity<Guid>, IMultiTenant
 		string? emergencyContactPhone,
 		string? emergencyContactRelation)
 	{
-		LocalAddress = localAddress;
+		LocalAddress = CopyAddress(localAddress);
 
 		// If permanent address is same as local, copy local address
-		PermanentAddress = isPermanentSameAsLocal ? localAddress : permanentAddress;
+		PermanentAddress = CopyAddress(isPermanentSameAsLocal ? localAddress : permanentAddress);
 		IsPermanentSameAsLocal = isPermanentSameAsLocal;
 
 		// If emergency address is same as local, copy local address
-		EmergencyAddress = isEmergencySameAsLocal ? localAddress : emergencyAddress;
+		EmergencyAddress = CopyAddress(isEmergencySameAsLocal ? localAddress : emergencyAddress);
 		IsEmergencySameAsLocal = isEmergencySameAsLocal;
 
 		EmergencyContactName = emergencyContactName;
 		EmergencyContactPhone = emergencyContactPhone;
 		EmergencyContactRelation = emergencyContactRelation;
 	}
+
+	// EF maps each address and its nested location as a separate owned entity.
+	private static AddressDetails? CopyAddress(AddressDetails? address) => address == null ? null : new(
+		address.Address1, address.Address2, address.Address3, address.City,
+		address.State == null ? null : new State(address.State.Name, address.State.IsoCode),
+		address.Country == null ? null : new Country(address.Country.Name, address.Country.IsoCode), address.Pincode);
 }

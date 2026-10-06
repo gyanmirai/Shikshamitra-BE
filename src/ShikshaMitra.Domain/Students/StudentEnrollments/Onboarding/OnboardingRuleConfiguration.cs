@@ -79,8 +79,14 @@ public sealed class OnboardingRuleConfiguration
 
 	private static void ValidateReadinessRules(JsonElement rules)
 	{
-		foreach (var key in new[] { "requireDocuments", "studentAccount", "guardianAccount" })
+		foreach (var key in new[] { "requireDocuments", "studentAccount", "guardianAccount", "sendStudentCredentialEmail", "sendGuardianCredentialEmail" })
 			ValidateBoolean(rules, key);
+		ValidateChoice(rules, "credentialSendingTime", "activation", "completion");
+		ValidateChoice(rules, "credentialProvisioningMode", "manual", "automatic");
+		ValidateChoice(rules, "guardianAccountRelationship", "father", "mother", "guardian");
+		if (Boolean(rules, "sendStudentCredentialEmail") && !Boolean(rules, "studentAccount") ||
+			Boolean(rules, "sendGuardianCredentialEmail") && !Boolean(rules, "guardianAccount"))
+			throw Invalid("Enable the corresponding portal account before enabling its credential email.");
 		ValidateChoice(rules, "approvalMode", "none", "always", "conditional");
 		if (rules.TryGetProperty("approvalTriggers", out var triggers))
 		{

@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-03
+updated_on: 2026-10-05
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,18 @@ audience: humans-and-agents
 # Understand Student Enrollment Admissions behavior
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
+
+## Onboarding credential emails and portal access
+
+| Rule | Behavior |
+|---|---|
+| Configuration | Applicable school/year readiness rules own separate student and guardian email flags, both off for legacy settings; manual/automatic mode; activation/full-completion timing; and the selected father/mother/guardian for automatic provisioning. Email requires its corresponding account handoff. |
+| Mandatory readiness | Both timings require an active committed enrollment, GR number, roll number, division and every current required document validated, accepted from Admissions or explicitly overridden. Optional document-step policy and a generic step waiver do not bypass the email gate. Completion timing also waits for the existing Finance and required handoff completion. |
+| Document override | Authorized Onboarding.Waive staff may override specific or all current required document types, with a mandatory note and audited staff/time. No second approver is required. Newly required document types remain unsatisfied. |
+| Account ownership | Email is mandatory. Student gets its own identity; a single selected Parent identity can link multiple children. Existing verified Parent linkage preserves its password. Staff/privileged identities and unverified email collisions require identity review. Automatic provisioning respects current identity grants and verified guardian contact. |
+| Delivery | A durable tenant-owned request tracks Pending/Sent/Failed/Cancelled; dispatch rechecks current actor grants/scope, owner mailbox, links, settings and readiness. A new passwordless account receives a random initial password and owner setup link; temporary secrets are encrypted until transport acceptance or cancellation. Staff responses never return secrets. Existing identities keep their password; repeats use owner recovery. |
+| Exit | Applied Withdraw/Transfer/Graduate transitions set Left and revoke only that child's portal links. Current portal reads and token renewal deny departed children; shared Parent identities retain access to other children. Reviewed corrections restore only recorded links that still match the owner profile and exclusive role. |
+| Verification boundary | Sent means the configured email sender accepted delivery. Inbox arrival and the separately maintained mobile-app UI require their own acceptance checks. |
 
 ## Universal daily Student Attendance
 

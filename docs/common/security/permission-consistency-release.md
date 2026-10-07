@@ -22,6 +22,7 @@ After migration, the API is deployed and its startup endpoint is checked; a star
 
 The accompanying regression fixture corrections preserve current business rules: active late-fee policy fixtures supply their existing income category, Finance deletion protection checks the exact PostgreSQL 17/18 error code, and the FullDemo ESI integration expects the insurance-number readiness issue only for its known pending-registration counselor.
 Other demo employees remain issue-free, preview calculation assertions remain in place, and no production seeder, enrollment, grant, or monetary behavior is changed by these test corrections.
+The assignment policy-edit HTTP fixture selects an existing hierarchy in the current effective academic year for that case, submits the three supported policy families, and explicitly verifies that a three-item request containing unsupported proration is rejected without changing the existing obligation and concurrency checks.
 
 The September fresh-database procedure below is historical and requires separate operator approval.
 Routine deployments no longer seed an empty database: any approved fresh installation requires an explicit, separately reviewed seeding operation before its demo-specific verification steps apply.

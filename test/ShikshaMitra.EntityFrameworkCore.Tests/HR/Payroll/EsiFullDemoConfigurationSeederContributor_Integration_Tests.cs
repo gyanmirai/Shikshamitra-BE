@@ -186,7 +186,7 @@ public class EsiFullDemoConfigurationSeederContributor_Integration_Tests
 			revisions.Count.ShouldBe(activeEmployeeIds.Count);
 			revisions.ShouldAllBe(x => x.Status == CompensationRevisionStatus.Approved);
 
-			await AssertPreviewReadyAsync(establishment, treatments, enrollments, revisions);
+			await AssertPreviewReadyAsync(establishment, treatments, enrollments, revisions, employees.CounselorId);
 		});
 	}
 
@@ -365,7 +365,8 @@ public class EsiFullDemoConfigurationSeederContributor_Integration_Tests
 		StatutoryEstablishment establishment,
 		IReadOnlyCollection<PayrollComponentStatutoryTreatment> treatments,
 		IReadOnlyCollection<EmployeeStatutoryEnrollment> enrollments,
-		IReadOnlyCollection<EmployeeCompensationRevision> revisions)
+		IReadOnlyCollection<EmployeeCompensationRevision> revisions,
+		Guid expectedPendingEmployeeId)
 	{
 		var rule = (await _ruleRepository.GetListAsync()).ShouldHaveSingleItem();
 		var revisionIds = revisions.Select(x => x.Id).ToHashSet();
@@ -390,7 +391,17 @@ public class EsiFullDemoConfigurationSeederContributor_Integration_Tests
 				enrollment,
 				wageLines,
 				assumeEstablishmentActive: true);
-			result.IssueCodes.ShouldBeEmpty();
+			if (revision.EmployeeId == expectedPendingEmployeeId)
+			{
+				// This exact demo employee is intentionally awaiting registration; readiness must report it.
+				enrollment.Status.ShouldBe(EmployeeStatutoryEnrollmentStatus.RegistrationPending);
+				enrollment.InsuranceNumber.ShouldBeNull();
+				result.IssueCodes.ShouldBe(new[] { EsiStatutoryCalculator.InsuranceNumberIssue });
+			}
+			else
+			{
+				result.IssueCodes.ShouldBeEmpty();
+			}
 			result.CanCalculate.ShouldBeTrue();
 		}
 	}

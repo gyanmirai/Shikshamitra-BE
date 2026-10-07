@@ -1,5 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.AspNetCore.Identity;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.MultiTenancy;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
@@ -44,6 +46,7 @@ public class ShikshaMitraDomainModule : AbpModule
 {
 	public override void ConfigureServices(ServiceConfigurationContext context)
 	{
+		context.Services.AddTransient<IUserValidator<IdentityUser>, EmployeeAccountEmailUserValidator>();
 		Configure<AbpLocalizationOptions>(options =>
 		{
 			options.Languages.Add(new LanguageInfo("en", "en", "English"));

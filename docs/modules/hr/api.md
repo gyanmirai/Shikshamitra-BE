@@ -36,6 +36,7 @@ Employee APIs manage staff identity, profile data, documents, status, reporting,
 | Employee list and profile | `/api/employees`, `/api/employees/{id}` | `HR.Employee.EmployeeList.*` |
 | Employee profile dashboard | `/api/employees/{id}/dashboard` | Own employee or `HR.Employee.EmployeeList.View` with HR user-scope enforcement |
 | Personal info | `/api/employees/{id}/personal-info` | `HR.Employee.EmployeeList.*` |
+| Controlled account email | GET/PUT `/api/employees/{id}/account-email` | `HR.Employee.EmployeeList.Edit` AND `AbpIdentity.Users.Update`, employee scope |
 | Family info | `/api/employees/{id}/family` | `HR.Employee.EmployeeList.*` |
 | Additional info | `/api/employees/{id}/additional-info` | `HR.Employee.EmployeeList.*` |
 | Work experience | `/api/employees/{id}/work-experience` | `HR.Employee.EmployeeList.*` |
@@ -48,6 +49,16 @@ Employee APIs manage staff identity, profile data, documents, status, reporting,
 | Public employee application | `/api/public/employee-applications/{token}`, `/api/public/employee-applications/{token}/submit` | Anonymous token |
 
 Employee create and update flows must protect email, mobile, date of birth, date of joining, role, and academic scope consistency.
+Generic personal-information updates still reject email changes with HR:Employee:010034.
+The controlled account-email GET returns userId, employeeEmail, accountEmail, userName and a concurrencyToken covering both records.
+PUT requires email, a 5-512 character reason, confirmEmployeeVerified=true, that concurrencyToken and a non-empty idempotencyKey.
+It validates the unique same-tenant employee-account link and rejects duplicate employee or Identity addresses and duplicate email-based usernames.
+An email-based username follows the new email; a distinct username remains unchanged.
+Identity validation, security-stamp rotation, persisted OAuth credential revocation, employee persistence and the HR audit event share one transaction and the delivery fence.
+Request replay acknowledges its original write without restoring an old address after a later change.
+HR:Employee:010039 means a stale edit or mismatched request replay; 010040 means an invalid account link; 010041 means the address or sign-in name is in use; 010042 means Identity rejected the change.
+Current host validation and self-contained bearer-token expiry remain unchanged.
+No new database table or schema migration is required.
 Identity role DTOs expose `roleAudience` with `Employee`, `Student`, or `Parent`, `employeeGroupAudience` with `Teaching`, `NonTeaching`, or `Both`, and the Boolean `employeeOnboardingAssignable` approval marker.
 New or changed employee role assignments return `HR:Employee:010035` unless the role has the Employee audience, `HR:Employee:010036` unless it supports the selected employee group, and `HR:Employee:010038` unless it is explicitly approved for onboarding.
 Admin and Super Admin roles remain unassignable to employees even if stale metadata marks them as approved.
@@ -370,3 +381,59 @@ Both aliases for one field, or repeated copies of one field, are rejected with `
 Normalization retains the internal `EmployeeCode` and `EmployeeName` row fields and the existing attendance calculations.
 A sole-default attendance archive or clear-default rejection includes `reason: sole-default` in business-error data, allowing concise UI guidance without reinterpreting every use of `DefaultAttendancePolicyRequired`.
 Removal of the frontend policy lookup page does not remove authenticated effective-policy APIs, impact previews, permissions, grants, or payroll safeguards.
+
+## Payslip documents and distribution
+
+All endpoints below require authentication, the exact payslip action permission and employee scope where relevant.
+School settings writes additionally require HR-wide school scope.
+There is no public document URL or arbitrary email-recipient override.
+
+| Endpoint | Permission | Contract |
+| --- | --- | --- |
+| GET /api/payroll/payslip-documents?employeeId=&monthYear= | GenerateSalarySlip.View | Revision metadata, current marker, checksum, replacement reason/relation, recorded employee email and separate payment state. |
+| GET /api/payroll/payslip-documents/{id}/pdf | GenerateSalarySlip.View | Exact immutable PDF bytes for the requested revision, including a replaced revision. |
+| POST /api/payroll/payslip-documents/payment | GenerateSalarySlip.Add | DocumentId, IdempotencyKey, PaidAt and Reference; current finalized revision only. |
+| POST /api/payroll/payslip-documents/replace-facts | GenerateSalarySlip.Add | DocumentId, IdempotencyKey and Reason; preserves payroll amounts and returns replacement metadata. |
+| GET /api/payroll/payslip-deliveries?salarySlipId= | GenerateSalarySlip.View | Delivery history across all issued revisions, with recipient, actor, times, status and safe error category. |
+| POST /api/payroll/payslip-deliveries | GenerateSalarySlip.Add | DocumentId and IdempotencyKey; queues the current official document for its employee. |
+| GET /api/payroll/payslip-settings | GenerateSalarySlip.View | SchoolName, SchoolAddress, AutomaticEmail, ConcurrencyStamp and last IdempotencyKey. |
+| PUT /api/payroll/payslip-settings | GenerateSalarySlip.Add | Same settings fields; optimistic concurrency and idempotent retries under the payroll fence. |
+
+These short permission suffixes refer to the existing HR payroll payslip permission catalogue, not new grants.
+Background delivery from payroll locking rechecks the recorded RunPayroll.Lock action, so an approver does not need RunPayroll.Add to distribute an already reviewed payroll.
+Manual Send/Resend and direct payslip issuance retain GenerateSalarySlip.Add; delivery still revalidates the actor, tenant, employee scope, current revision and recipient.
+A retried Send request returns the same attempt; deliberate resend uses a new key.
+Send and history responses include the persisted IdempotencyKey for request correlation.
+The key does not grant access; existing action, tenant, employee-scope and current-document checks remain authoritative.
+Delivery statuses are QUEUED, PROCESSING, PROVIDER_ACCEPTED, FAILED, UNCERTAIN and SUPERSEDED.
+Delivery responses include RequestedByDisplayName resolved from the requesting account within the current school tenant, with full name preferred over username.
+RequestedBy remains the persisted audit identifier; the display name is current account metadata, not a frozen historical name.
+Missing, deleted or foreign-tenant accounts yield a null display name; the client cannot supply or override it, and history resolution batches the required identities after the existing permission and employee-scope checks.
+UNCERTAIN requires checking receipt before deliberate resend because SMTP cannot guarantee exactly-once delivery.
+Reasoned monetary corrections use the following typed endpoints.
+Every operation also checks employee scope and tenant ownership.
+
+| Endpoint | Permissions | Contract |
+| --- | --- | --- |
+| GET /api/payroll/payslip-corrections?documentId= | GenerateSalarySlip.View and RunPayroll.View | Correction history with source, reason, status, attendance, original totals, candidate and concurrency stamp. |
+| POST /api/payroll/payslip-corrections | Read permissions, GenerateSalarySlip.Add and RunPayroll.Adjustments | DocumentId, IdempotencyKey and Reason; one active correction per salary slip. |
+| POST /api/payroll/payslip-corrections/{id}/calculate | Same edit permissions | ConcurrencyStamp and source-month Attendance; calculates without changing issued payroll. |
+| POST /api/payroll/payslip-corrections/{id}/review | Edit permissions and RunPayroll.Add | ConcurrencyStamp; revalidates current inputs, statutory evidence and blocking issues. |
+| POST /api/payroll/payslip-corrections/{id}/cancel | Edit permissions | ConcurrencyStamp; retains the cancelled evidence and supports repeated cancellation. |
+| POST /api/payroll/payslip-corrections/{id}/apply | Edit permissions and RunPayroll.Lock | ConcurrencyStamp; rechecks the calculation, replaces unpaid payroll and issues the next revision atomically. |
+| POST /api/payroll/payslip-corrections/{id}/settle | Edit permissions and RunPayroll.Lock | ConcurrencyStamp, TargetMonth (yyyy-MM) and PreviewRunId; commits a reviewed paid-source difference to a calculated later unlocked payroll and invalidates that target for regeneration. |
+
+Correction attendance uses ISO calendar dates, statuses Present (0), HalfDayLeave (1) and FullDayLeave (2), and optional offset-aware TimeIn/TimeOut.
+Duplicate dates, dates outside the source month and undefined statuses are rejected.
+Supplied punches use attendance's offset-zero clock contract and must fall on the attendance date when read as UTC.
+TimeOut must be after TimeIn when both are supplied, except the supported FullDayLeave midnight pair.
+Status-only records and individual missing punches remain supported; invalid supplied timestamps return HR:Attendance:020313 with the attendanceDate and field.
+Calculation, review, reissue and paid settlement share this invariant through the correction calculation pipeline.
+Apply accepts unpaid finalized payroll only.
+Settle accepts paid source payroll only and retains its issued artifact and monetary snapshot.
+The target preview must be successful, current, contain the employee and belong to the selected later month.
+The employee must still belong to that payroll, and the target employee-month must not be locked, finalized or paid.
+The target must be recalculated and reviewed before locking after settlement.
+Repeated settlement of the same correction in the same month returns its existing outcome; retargeting an applied correction is rejected.
+Signed component differences retain source document, correction and source-period evidence in the calculated target components.
+Payment and document-detail replacement return HR:Payroll:030048 while a correction is pending.

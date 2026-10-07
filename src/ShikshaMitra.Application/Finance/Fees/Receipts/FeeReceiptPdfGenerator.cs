@@ -7,6 +7,7 @@ using QuestPDF.Infrastructure;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using ShikshaMitra.Common.PDF;
 using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.Application.Finance.Fees.Receipts;
@@ -24,6 +25,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
         CancellationToken cancellationToken = default)
     {
         QuestPDF.Settings.License = LicenseType.Community;
+        PortablePdfFonts.EnsureRegistered();
 
         var bytes = receipt.ReceiptKind switch
         {
@@ -50,7 +52,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                 page.Size(PageSizes.A5.Landscape());
                 page.Margin(20, Unit.Point);
                 page.PageColor(Colors.White);
-                page.DefaultTextStyle(t => t.FontSize(10));
+                page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
 
                 page.Header().Element(c => BuildHeader(c, "PAYMENT RECEIPT", receipt, Colors.Green.Medium));
                 page.Content().Element(c => BuildContent(c, receipt, student, academicYear, isFinal: true));
@@ -73,7 +75,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                 page.Size(PageSizes.A5.Landscape());
                 page.Margin(20, Unit.Point);
                 page.PageColor(Colors.White);
-                page.DefaultTextStyle(t => t.FontSize(10));
+                page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
 
                 page.Header().Element(c => BuildHeader(c, "PROVISIONAL RECEIPT (KACHI)", receipt, Colors.Orange.Medium));
                 page.Content().Column(col =>
@@ -103,7 +105,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                 page.Size(PageSizes.A5.Landscape());
                 page.Margin(20, Unit.Point);
                 page.PageColor(Colors.White);
-                page.DefaultTextStyle(t => t.FontSize(10));
+                page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
 
                 page.Header().Element(c => BuildHeader(c, "CHARGE RECEIPT (KACHI)", receipt, Colors.Blue.Medium));
                 page.Content().Element(c => BuildContent(c, receipt, student, academicYear, isFinal: false, isCharge: true));

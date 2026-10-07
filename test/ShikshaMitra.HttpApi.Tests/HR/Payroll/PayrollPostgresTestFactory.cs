@@ -78,6 +78,15 @@ public sealed class PayrollCalculationBarrier : DbCommandInterceptor
 	private string _commandFragment = "AppEmployeeAttendances";
 	private int _failLeaseRead;
 	public void FailNextLeaseRead() => Interlocked.Exchange(ref _failLeaseRead, 1);
+	private string? _failureFragment;
+	public void FailNextCommand(string commandFragment) => Interlocked.Exchange(ref _failureFragment, commandFragment);
+	private void ThrowInjectedFailure(DbCommand command)
+	{
+		var fragment = _failureFragment;
+		if (fragment != null && command.CommandText.Contains(fragment, StringComparison.Ordinal) &&
+			Interlocked.CompareExchange(ref _failureFragment, null, fragment) == fragment)
+			throw new NpgsqlException("Synthetic payroll transaction failure");
+	}
 	private TaskCompletionSource _reached = NewSignal();
 	private TaskCompletionSource _release = NewSignal();
 	private TaskCompletionSource _observed = NewSignal();
@@ -112,6 +121,7 @@ public sealed class PayrollCalculationBarrier : DbCommandInterceptor
 		CancellationToken cancellationToken = default)
 	{
 		ObserveCommand(command);
+		ThrowInjectedFailure(command);
 		if (command.CommandText.Contains("HR_PayrollMonthLocks", StringComparison.Ordinal) &&
 			Interlocked.CompareExchange(ref _failLeaseRead, 0, 1) == 1)
 			throw new NpgsqlException("Synthetic database connection failure");
@@ -129,6 +139,7 @@ public sealed class PayrollCalculationBarrier : DbCommandInterceptor
 		CancellationToken cancellationToken = default)
 	{
 		ObserveCommand(command);
+		ThrowInjectedFailure(command);
 		return ValueTask.FromResult(result);
 	}
 }

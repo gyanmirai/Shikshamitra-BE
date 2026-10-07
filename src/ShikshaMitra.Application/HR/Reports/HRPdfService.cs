@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.Common.PDF;
 using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.Reports;
@@ -39,7 +40,7 @@ public class HRPdfService : ITransientDependency
 				page.Size(pageSize);
 				page.Margin(columnCount > 12 ? 12 : 20);
 				page.PageColor(Colors.White);
-				page.DefaultTextStyle(style => style.FontSize(fontSize).FontColor(Colors.Grey.Darken4));
+				page.DefaultTextStyle(style => style.FontSize(fontSize).FontColor(Colors.Grey.Darken4).WithPortableFonts());
 				page.Header().PaddingBottom(8).Column(column =>
 				{
 					column.Item()

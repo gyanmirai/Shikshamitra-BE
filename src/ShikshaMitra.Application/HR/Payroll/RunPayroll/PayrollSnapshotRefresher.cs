@@ -41,6 +41,7 @@ public class PayrollSnapshotRefresher(
 	PayrollEsiContextResolver esiContextResolver,
 	EsiPayrollConfigurationResolver esiConfigurationResolver,
 	IProfessionalTaxRepository professionalTaxRepository,
+	IRepository<PayslipCorrection, Guid> payslipCorrections,
 	ILogger<PayrollSnapshotRefresher> logger)
 	: ITransientDependency
 {
@@ -106,9 +107,39 @@ public class PayrollSnapshotRefresher(
 		Func<int, Task>? reportProgress = null,
 		Func<Task>? beforePersist = null)
 	{
+		await ComputeAsync(internalMonthYear, year, month, academicYearId, scopedEmployees,
+			preserveReviewedSnapshots, reportProgress, beforePersist);
+	}
+
+	/// <summary>Reuses payroll computation without modifying the issued snapshot or system adjustments.</summary>
+	internal async Task<RunPayrollItem> CalculateCorrectionAsync(Guid employeeId, string monthYear,
+		Guid? academicYearId, IReadOnlyCollection<EmployeeAttendance> attendance)
+	{
+		var (year, month, internalMonth) = PayrollRunRules.ParseMonth(monthYear);
+		if (employeeId == Guid.Empty || attendance == null ||
+			attendance.Any(x => x == null || x.EmployeeId != employeeId ||
+				x.AttendanceDate.Year != year || x.AttendanceDate.Month != month || !Enum.IsDefined(x.StatusType)) ||
+			attendance.Select(x => x.AttendanceDate).Distinct().Count() != attendance.Count)
+			throw new BusinessException(HRErrorCodes.PayslipConflict);
+		var scoped = await scopedEmployeeResolver.ResolveScopedEmployeesByIdsAsync(year, month, [employeeId], false);
+		if (scoped.Count != 1) throw new BusinessException(HRErrorCodes.PayrollPreviewNotFound);
+		if (attendance.Any(x => x.TenantId != scoped[0].TenantId)) throw new BusinessException(HRErrorCodes.PayslipConflict);
+		foreach (var day in attendance) PayslipCorrectionAttendanceRules.EnsureValidPunches(day);
+		var items = await ComputeAsync(internalMonth, year, month, academicYearId, scoped, false,
+			correctionEmployeeId: employeeId, correctionAttendance: attendance);
+		var result = items.Single();
+		result.PayrollAttendanceSource = "payslip_correction";
+		return result;
+	}
+
+	private async Task<List<RunPayrollItem>> ComputeAsync(
+		string internalMonthYear, int year, int month, Guid? academicYearId, List<Employee> scopedEmployees,
+		bool preserveReviewedSnapshots, Func<int, Task>? reportProgress = null, Func<Task>? beforePersist = null,
+		Guid? correctionEmployeeId = null, IReadOnlyCollection<EmployeeAttendance>? correctionAttendance = null)
+	{
 		if (scopedEmployees.Count == 0)
 		{
-			return;
+			return [];
 		}
 
 		var existingSlips = await salarySlipRepository.GetByMonthAsync(internalMonthYear);
@@ -119,9 +150,10 @@ public class PayrollSnapshotRefresher(
 		var lockedIds = (await snapshotStore.GetByMonthAsync(internalMonthYear)).Where(x => x.IsLocked)
 			.Select(x => x.EmployeeId).ToHashSet();
 		var originalCount = scopedEmployees.Count;
-		scopedEmployees = scopedEmployees.Where(x => !finalizedEmployeeIds.Contains(x.Id) && !lockedIds.Contains(x.Id)).ToList();
+		scopedEmployees = scopedEmployees.Where(x => x.Id == correctionEmployeeId ||
+			(!finalizedEmployeeIds.Contains(x.Id) && !lockedIds.Contains(x.Id))).ToList();
 		var immutableCount = originalCount - scopedEmployees.Count;
-		if (scopedEmployees.Count == 0) return;
+		if (scopedEmployees.Count == 0) return [];
 		var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId);
 		var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
 		var previousMonthNetPayByEmployee = (await salarySlipRepository.GetByMonthAsync(PayrollRunRules.GetPreviousMonth(internalMonthYear)))
@@ -132,6 +164,16 @@ public class PayrollSnapshotRefresher(
 		var startDate = DateOnly.FromDateTime(new DateTime(year, month, 1));
 		var endDate = DateOnly.FromDateTime(new DateTime(year, month, DateTime.DaysInMonth(year, month)));
 		var attendanceByEmployee = await lookupReader.GetAttendanceRecordsAsync(employeeIds, startDate, endDate);
+		if (correctionEmployeeId.HasValue)
+			attendanceByEmployee[correctionEmployeeId.Value] = correctionAttendance!.ToList();
+		// A retroactive exit can leave recorded attendance after employment eligibility ends.
+		// Filter calculation inputs while retaining source records and immutable issued payroll.
+		foreach (var employee in scopedEmployees)
+		{
+			if (attendanceByEmployee.TryGetValue(employee.Id, out var attendance))
+				attendance.RemoveAll(day => !EmployeeLifecycleEligibility.IsAttendanceEligibleOnDate(
+					employee.EmployeeStatusType, employee.StatusEffectiveDate, employee.StatusLastChangedAt, day.AttendanceDate));
+		}
 		var payrollDetailsByEmployee = await payrollDetailsRepository.GetByEmployeeIdsAsync(employeeIds);
 		var componentsByEmployee = await payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
 		var shiftsById = await GetShiftsByIdAsync(scopedEmployees);
@@ -228,8 +270,8 @@ public class PayrollSnapshotRefresher(
 					adjustmentsByEmployee.GetValueOrDefault(employee.Id) ?? new List<PayrollAdjustment>(),
 					year,
 					month,
-					finalizedEmployeeIds.Contains(employee.Id),
-					reviewByEmployee.GetValueOrDefault(employee.Id),
+					!correctionEmployeeId.HasValue && finalizedEmployeeIds.Contains(employee.Id),
+					correctionEmployeeId.HasValue ? null : reviewByEmployee.GetValueOrDefault(employee.Id),
 					previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
 					leaveUnitsByDate: null,
 					revision == null
@@ -253,7 +295,16 @@ public class PayrollSnapshotRefresher(
 			payrollContextByEmployee.ToDictionary(
 				x => x.Key,
 				x => (IReadOnlyDictionary<DateOnly, decimal>) x.Value.WorkingUnitsByDate));
-		await lateArrivalDeductionAdjustmentService.SyncAsync(
+		foreach (var employee in scopedEmployees)
+		{
+			if (leaveUnitsByEmployee.TryGetValue(employee.Id, out var leaveUnits))
+				leaveUnitsByEmployee[employee.Id] = leaveUnits.Where(day => EmployeeLifecycleEligibility.IsAttendanceEligibleOnDate(
+					employee.EmployeeStatusType, employee.StatusEffectiveDate, employee.StatusLastChangedAt, day.Key))
+					.ToDictionary(day => day.Key, day => day.Value);
+		}
+		if (!correctionEmployeeId.HasValue)
+		{
+			await lateArrivalDeductionAdjustmentService.SyncAsync(
 			internalMonthYear,
 			year,
 			month,
@@ -261,7 +312,26 @@ public class PayrollSnapshotRefresher(
 			attendanceByEmployee,
 			shiftsById,
 			payrollContextByEmployee.ToDictionary(x => x.Key, x => x.Value.ResolvedPolicies));
-		adjustmentsByEmployee = await adjustmentReader.GetByEmployeeAsync(internalMonthYear, employeeIds);
+			adjustmentsByEmployee = await adjustmentReader.GetByEmployeeAsync(internalMonthYear, employeeIds);
+		}
+		else
+		{
+			// Recalculate this derived adjustment in memory. A correction draft must not write attendance penalties.
+			var employee = scopedEmployees.Single();
+			var adjustments = adjustmentsByEmployee.GetValueOrDefault(employee.Id)?.ToList() ?? [];
+			var previous = adjustments.FirstOrDefault(x => x.SourceType == PayrollAdjustmentSourceTypes.LateArrivalSalaryDeduction);
+			adjustments.RemoveAll(x => x.SourceType == PayrollAdjustmentSourceTypes.LateArrivalSalaryDeduction);
+			if (payrollContextByEmployee.TryGetValue(employee.Id, out var context))
+			{
+				var desired = PayrollLateArrivalDeductionCalculator.Calculate(internalMonthYear, year, month, employee,
+					attendanceByEmployee[employee.Id], ResolveShift(employee, shiftsById), context.ResolvedPolicies.AttendancePolicy);
+				if (desired != null) adjustments.Add(new PayrollAdjustment(previous?.Id ?? desired.SourceId, employee.TenantId,
+					internalMonthYear, employee.Id, PayrollLateArrivalDeductionCalculator.AdjustmentName, desired.Amount, false,
+					PayrollLateArrivalDeductionCalculator.AdjustmentReason, desired.Description,
+					PayrollAdjustmentSourceTypes.LateArrivalSalaryDeduction, desired.SourceId, true));
+			}
+			adjustmentsByEmployee[employee.Id] = adjustments;
+		}
 
 		foreach (var employee in scopedEmployees)
 		{
@@ -297,8 +367,8 @@ public class PayrollSnapshotRefresher(
 				leaveUnitsByEmployee.GetValueOrDefault(employee.Id),
 				payrollContext.ResolvedPolicies,
 				payrollContext.HolidayImpactJson,
-				finalizedEmployeeIds.Contains(employee.Id),
-				reviewByEmployee.GetValueOrDefault(employee.Id),
+				!correctionEmployeeId.HasValue && finalizedEmployeeIds.Contains(employee.Id),
+				correctionEmployeeId.HasValue ? null : reviewByEmployee.GetValueOrDefault(employee.Id),
 				previousMonthNetPayByEmployee.GetValueOrDefault(employee.Id),
 				itemIssueCodes,
 				PayrollRunRules.GetEffectiveEmploymentStartDate(employee),
@@ -314,8 +384,16 @@ public class PayrollSnapshotRefresher(
 				await reportProgress(computedItems.Count + immutableCount);
 		}
 
+		var settlementEmployees = computedItems.Select(x => x.EmployeeId).ToList();
+		var settlements = await payslipCorrections.GetListAsync(x => x.Status == "APPLIED" &&
+			x.SettlementMonth == internalMonthYear && settlementEmployees.Contains(x.EmployeeId));
+		foreach (var item in computedItems)
+			foreach (var settlement in settlements.Where(x => x.EmployeeId == item.EmployeeId).OrderBy(x => x.CompletedAt).ThenBy(x => x.Id))
+				PayslipSettlementProjection.Apply(item, settlement);
 		if (beforePersist != null) await beforePersist();
-		await snapshotStore.UpsertAsync(internalMonthYear, computedItems, preserveReviewedSnapshots);
+		if (!correctionEmployeeId.HasValue)
+			await snapshotStore.UpsertAsync(internalMonthYear, computedItems, preserveReviewedSnapshots);
+		return computedItems;
 	}
 
 	private static bool IsEmploymentCessationMonth(Employee employee, int year, int month)

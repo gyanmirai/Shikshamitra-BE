@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp.DependencyInjection;
@@ -12,7 +13,7 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 
 public class EsiEnrollmentResolver(IRepository<EmployeeStatutoryEnrollment, Guid> enrollments,
 	IRepository<PayrollRunItemSnapshot, Guid> snapshots,
-	IRepository<SalarySlip, Guid> slips) : ITransientDependency
+	IRepository<SalarySlip, Guid> slips, IRepository<PayslipCorrection, Guid> corrections) : ITransientDependency
 {
 	public async Task<Dictionary<Guid, EmployeeStatutoryEnrollment>> ResolveAsync(DateTime month, IReadOnlyCollection<Guid> employeeIds)
 	{
@@ -27,18 +28,27 @@ public class EsiEnrollmentResolver(IRepository<EmployeeStatutoryEnrollment, Guid
 			Enumerable.Contains(months, x.MonthYear) &&
 			(x.Status == SalarySlipStatus.Finalized || x.Status == SalarySlipStatus.Paid));
 		var finalizedMonths = finalized.Select(x => (x.EmployeeId, x.MonthYear)).ToHashSet();
+		var settled = (await corrections.GetListAsync(x => ids.Contains(x.EmployeeId) && months.Contains(x.SourceMonth) &&
+			x.Status == "APPLIED" && x.SettlementMonth != null)).GroupBy(x => (x.EmployeeId, x.SourceMonth))
+			.Select(x => x.OrderByDescending(y => y.CompletedAt).ThenByDescending(y => y.Id).First()).ToList();
+		var settledMonths = settled.Select(x => (x.EmployeeId, x.SourceMonth)).ToHashSet();
 		var locked = await snapshots.GetListAsync(x => ids.Contains(x.EmployeeId) && x.IsLocked &&
 			months.Contains(x.MonthYear) && x.EmployeeStateInsuranceRuleId != null &&
 			(x.EmployeeStateInsuranceCoverageDecision == "WITHIN_WAGE_CEILING" ||
 			 x.EmployeeStateInsuranceCoverageDecision == "CONTRIBUTION_PERIOD_CONTINUATION" ||
 			 x.EmployeeStateInsuranceCoverageDecision == "FORCE_COVERED_OVERRIDE"));
 		// An immutable payslip owns that employee-month's evidence, even if its snapshot differs.
-		var history = finalized.Where(x => x.EmployeeStateInsuranceRuleId != null &&
+		var history = finalized.Where(x => !settledMonths.Contains((x.EmployeeId, x.MonthYear)) && x.EmployeeStateInsuranceRuleId != null &&
 				x.EmployeeStateInsuranceCoverageDecision is "WITHIN_WAGE_CEILING" or
 					"CONTRIBUTION_PERIOD_CONTINUATION" or "FORCE_COVERED_OVERRIDE")
 			.Select(x => new { x.EmployeeId, x.TenantId, x.MonthYear, x.EmployeeStateInsuranceNumber, x.ConcurrencyStamp })
 			.Concat(locked.Where(x => !finalizedMonths.Contains((x.EmployeeId, x.MonthYear)))
 				.Select(x => new { x.EmployeeId, x.TenantId, x.MonthYear, x.EmployeeStateInsuranceNumber, x.ConcurrencyStamp }))
+			.Concat(settled.Select(x => new { Correction = x, Candidate = JsonSerializer.Deserialize<RunPayrollItem>(x.CandidateJson!)! })
+				.Where(x => x.Candidate.EmployeeStateInsuranceRuleId != null && x.Candidate.EmployeeStateInsuranceCoverageDecision is
+					"WITHIN_WAGE_CEILING" or "CONTRIBUTION_PERIOD_CONTINUATION" or "FORCE_COVERED_OVERRIDE")
+				.Select(x => new { x.Correction.EmployeeId, x.Correction.TenantId, MonthYear = x.Correction.SourceMonth,
+					x.Candidate.EmployeeStateInsuranceNumber, x.Correction.ConcurrencyStamp }))
 			.ToLookup(x => x.EmployeeId);
 		foreach (var employeeId in ids)
 		{

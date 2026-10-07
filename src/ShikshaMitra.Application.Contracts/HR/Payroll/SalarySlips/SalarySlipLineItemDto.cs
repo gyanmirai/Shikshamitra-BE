@@ -5,6 +5,7 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 /// </summary>
 public class SalarySlipLineItemDto
 {
+	public decimal? FullMonthAmount { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public decimal Amount { get; set; }
 	public string? Description { get; set; }

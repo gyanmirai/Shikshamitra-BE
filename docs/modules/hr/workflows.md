@@ -56,6 +56,12 @@ Payroll workflows depend on employee, attendance, leave, and policy data:
 | Workflow | Main steps | Validation focus |
 |---|---|---|
 | Payroll setup | Create earning, deduction, provident fund, professional-tax, ESI establishment, salary-template, pay element, and payroll policy records | Tenant scope, effective dates, active status, statutory wage classification, same-tenant active dependency targets, acyclic earning dependencies, template gross reconciliation, and destructive-change impact |
+| Compensation revision | Quote recurring salary, calculate, save directly, and resolve by effective month | Template version, effective statutory rules, controlled overrides, idempotency, concurrency, locked payroll, and immutable effective snapshots |
+| One-time components | Assign temporary earning or deduction lines to employees | Active components, amount ranges, applicable month, and reload consistency |
+| Payroll preview | Resolve the effective revision, append one-time lines, read attendance and leave facts, compute basis days, and calculate gross, deductions, net pay, and employer cost | Month format, effective compensation readiness, policy basis, proration, statutory provenance, blocking protected-target drift, and cached preview freshness |
+| Payroll review | Mark rows reviewed and add adjustments before lock | Permission checks, row state, audit, and adjustment totals |
+| Payroll lock | Finalize selected rows and create salary slip snapshots | Idempotency, already locked rows, snapshot basis, and error reporting |
+| Salary slip | Read slip data or PDF for employee and month | Locked snapshot existence, totals, policy basis, and PDF access |
 
 The salary builder preserves full-month earnings for Monthly salary or solves earnings plus employer contributions within Monthly cost to school (CTC).
 The solver partitions professional-tax slabs and ESI coverage boundaries and evaluates the same statutory calculators used by payroll.
@@ -88,14 +94,12 @@ Use locked snapshot evidence only where that employee-month has no finalized or 
 PwD employer-share relief applies only to the PwD wage-ceiling category with a recorded start date and disability evidence.
 The employee contribution remains a deduction, while an eligible employer share is recorded as government funded and excluded from employer cost.
 Users with override approval permission can review immutable exception history and add a dated exception with a mandatory reason and optional evidence reference.
-| Compensation revision | Quote recurring salary, calculate, save directly, and resolve by effective month | Template version, effective statutory rules, controlled overrides, idempotency, concurrency, locked payroll, and immutable effective snapshots |
-| One-time components | Assign temporary earning or deduction lines to employees | Active components, amount ranges, applicable month, and reload consistency |
-| Payroll preview | Resolve the effective revision, append one-time lines, read attendance and leave facts, compute basis days, and calculate gross, deductions, net pay, and employer cost | Month format, effective compensation readiness, policy basis, proration, statutory provenance, blocking protected-target drift, and cached preview freshness |
-| Payroll review | Mark rows reviewed and add adjustments before lock | Permission checks, row state, audit, and adjustment totals |
-| Payroll lock | Finalize selected rows and create salary slip snapshots | Idempotency, already locked rows, snapshot basis, and error reporting |
 
 Finalized and Paid salary slips are both immutable payroll facts and both block attendance, policy, component, preview-refresh, and month-lock changes that would invalidate their snapshots.
-| Salary slip | Read slip data or PDF for employee and month | Locked snapshot existence, totals, policy basis, and PDF access |
+An exiting employee remains eligible for the final employment month and is excluded from following months.
+Payroll and correction preparation filter attendance and approved leave using the existing inclusive employment lifecycle boundary.
+This prevents retained post-exit punches, overtime and paid leave from increasing earned pay after a retroactive exit.
+Source attendance and leave records remain intact, and locked or issued payroll stays immutable.
 
 ## Policy workflows
 
@@ -165,3 +169,74 @@ Immutable payslips protect their employee-month even when the snapshot remains u
 Payroll preview publication rechecks persisted run state under the tenant fence before writing snapshots.
 Regeneration is required before reviewing or locking superseded results.
 Registration pending permits salary preparation but never bypasses the insurance-number requirement for covered payroll finalization.
+
+## Issued payslip documents and delivery
+
+The [payslip acceptance specification](references/payslip-design.md) owns the completion requirements and remaining work.
+Payroll locking and direct finalization persist frozen document facts, PDF bytes and a SHA-256 checksum in the same transaction as finalization.
+Configured school name and address are required for draft PDFs and official issuance.
+Draft PDFs use the saved school facts rather than the tenant display name or employee name.
+Missing school facts block document rendering with the existing actionable error while payroll preparation remains available.
+Direct finalization repeats current-preview, review, setup and insurance checks under the tenant payroll fence.
+After persistence starts, an issuance exception aborts the lock transaction instead of committing a partial slip or delivery intent.
+Issued downloads read stored bytes; changes to employee, bank, school or renderer facts cannot silently alter them.
+The preview endpoint also returns those stored bytes once a revision is issued.
+Payslip request diagnostics retain employee/period/status/timing fields without earnings, deduction or net-pay totals.
+The document labels the recorded payroll-basis-minus-payable aggregate as Non-payable days because it includes employment-boundary days as well as unpaid attendance.
+This label applies to newly issued documents without rewriting earlier stored PDFs or changing their payroll facts.
+Payment status, date/reference and actor are recorded separately and never regenerate the issued artifact.
+Payment timestamps use PostgreSQL microsecond precision so identical retries remain idempotent after a reload.
+Reasoned document-detail replacement retains monetary/attendance/statutory evidence and creates another immutable revision.
+Older revisions remain readable, but manual sending and mutating actions target only the current revision.
+
+School automatic email is off by default and applies to subsequent successful issuance events.
+Issuance stores a delivery intent and background job within its transaction.
+The worker revalidates actor permission, employee scope, tenant, current revision and recipient before attaching the exact stored PDF.
+Automatic delivery from payroll locking records and rechecks RunPayroll.Lock, independently of the RunPayroll.Add permission used to calculate and review payroll.
+Direct payslip issuance and manual Send/Resend retain GenerateSalarySlip.Add as their delivery action.
+Concurrent workers serialize under the tenant fence.
+Provider acceptance is recorded separately from inbox delivery.
+Processing attempts receive a delayed recovery job; an ambiguous crash or SMTP failure becomes UNCERTAIN without an automatic resend.
+Delivery failure does not roll back finalized payroll.
+Only successfully issued employees in a partially successful lock receive automatic delivery intents.
+Changing automatic email does not cancel previously committed intents; subsequent issuance uses the saved setting.
+The user approved Identity-managed account email changes on 2026-10-06.
+HR uses the dedicated employee account-email operation, requiring both EmployeeList.Edit and AbpIdentity.Users.Update, a reason, explicit address verification and a current concurrency token.
+The transaction serializes with recipient selection and delivery, changes the employee and linked Identity email together, records the old/new values and revokes persisted credentials.
+If the username matched the old email, the new email becomes the sign-in name; a distinct existing username is retained.
+An acknowledged request can be retried without undoing subsequent changes, and a changed payload or stale account token is rejected.
+The generic personal-info immutability check remains in force, and generic Identity/profile email edits cannot disconnect a linked employee's address.
+Audit or Identity failure rolls back the account, employee, security stamp and credential revocation; mutable credential caches are evicted immediately and after commit.
+Recipient repair leaves finalized payroll and issued PDF bytes unchanged.
+The employee write participates in the existing conservative payroll input-revision tracking, so unlocked previews and reviews may require ordinary recalculation before locking.
+Retrying a previously failed delivery requires an explicit new delivery attempt after correction, while replaying its old key returns the original failure without sending.
+The account workflow sends no address-verification message and does not relax the host's existing bearer-token validation policy.
+
+Unpaid monetary correction starts a reasoned draft with recorded attendance and an immutable copy of the source calculation evidence.
+Draft calculation reuses PayrollSnapshotRefresher without overwriting the issued snapshot or derived system adjustments.
+HR can correct clock-in and clock-out alongside attendance status to recalculate overtime and lateness through the same payroll services.
+The correction calculation rejects supplied punches from another attendance date and reversed or equal time ranges, while preserving status-only records, missing punches and the explicit absent-day midnight pair.
+The existing same-day attendance clock contract applies; multi-day and overnight punches are not inferred or silently normalized.
+Review and reissue recalculate under the tenant transaction fence and reject changed statutory or ordinary input evidence.
+Reissue applies the existing component, total and missing-insurance guards, replaces unpaid payroll and stores the next PDF revision atomically.
+The original PDF and correction evidence remain readable.
+Subsequent corrections start from the latest applied correction attendance, including after a non-monetary document replacement, so recalculation cannot silently restore older raw attendance.
+The resulting payroll evidence identifies its attendance source as payslip_correction.
+Cancellation retains the draft and allows payment to proceed; repeated cancellation returns the same cancelled record.
+Pending corrections block payment and non-monetary replacement with an actionable error.
+Corrected ESIC evidence invalidates later unlocked contribution-period calculations, including when coverage is removed from the source.
+Executed correction continuity, fault-injection and authenticated browser cases are recorded separately in the specification ledger and implementation handoff.
+On 2026-10-07 the user deferred DOC-15 current Gujarat legal-format verification for both private unaided and government-aided schools and asked engineering to proceed with the existing document.
+This deferral does not change statutory calculations, signature fields, immutable issued records or authorization guards, and does not establish legal certification.
+Paid corrections retain the paid original and stage signed source-component differences in a selected later unlocked payroll.
+Settlement validates source review freshness, target membership, current preview evidence, reconciliation and recovery constraints under the tenant fence.
+It supersedes target previews and removes the affected employee's snapshot and reviews, requiring ordinary recalculation, review and locking.
+The ordinary payroll calculation applies each committed correction once after attendance and statutory calculation, so source-period differences are neither prorated nor assessed as new target-period ESIC wages.
+Subsequent corrections start from the previous applied correction's logical source evidence and attendance without changing the paid snapshot.
+Corrected source coverage is used when resolving contribution-period continuity.
+Employee contribution increases require corresponding positive source-period earnings; employer contribution differences never become employee deductions.
+Recovery validates the aggregate deduction limit against supported statutory wage classifications and rejects unknown custom earning classifications.
+The current recovery classifier supports canonical Basic, DA, retaining, special and medical allowance names, with HRA and transport exclusions and the statutory inclusion floor.
+Unknown custom recovery classifications return an actionable error rather than an invented statutory treatment.
+Executed statutory, security and concurrency cases do not establish browser or jurisdiction-specific legal acceptance.
+The document-detail replacement operation is not a monetary correction mechanism.

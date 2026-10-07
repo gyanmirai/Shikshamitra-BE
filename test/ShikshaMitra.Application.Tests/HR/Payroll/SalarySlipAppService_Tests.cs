@@ -69,6 +69,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 
 	public SalarySlipAppService_Tests()
 	{
+		QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 		_salarySlipAppService = GetRequiredService<ISalarySlipAppService>();
 		_runPayrollAppService = GetRequiredService<IRunPayrollAppService>();
 		_employeePersonalInfo = GetRequiredService<IEmployeePersonalInfoAppService>();
@@ -362,6 +363,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	[Fact]
 	public async Task GetSalarySlipAsync_Should_Return_Finalized_Current_Slip_Without_Regenerating_From_Snapshot()
 	{
+		using var schoolTenant = _currentTenant.Change(Guid.NewGuid(), "Synthetic Payslip School");
+		await ConfigurePayslipSchoolAsync();
 		var monthYear = CurrentPayrollMonth();
 		var context = await CreatePayrollPolicyContextAsync(PayrollYear(monthYear));
 		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear));
@@ -376,6 +379,7 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			EmployeeId = employee.Id,
 			MonthYear = monthYear
 		});
+		await ReviewForFinalizationAsync(employee.Id, monthYear, context.AcademicYearId);
 		var finalized = await _salarySlipAppService.FinalizeAsync(draft.Id);
 		finalized.Status.ShouldBe(SalarySlipStatus.Finalized);
 
@@ -537,6 +541,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	[Fact]
 	public async Task FinalizeAsync_Should_Reconcile_Draft_With_Authoritative_Snapshot()
 	{
+		using var schoolTenant = _currentTenant.Change(Guid.NewGuid(), "Synthetic Payslip School");
+		await ConfigurePayslipSchoolAsync();
 		var monthYear = CurrentPayrollMonth();
 		var context = await CreatePayrollPolicyContextAsync(PayrollYear(monthYear));
 		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear));
@@ -557,12 +563,14 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		var refreshedPreview = await _runPayrollAppService.GetPreviewAsync(new GetRunPayrollInput
 		{
 			Month = monthYear,
+			AcademicYearId = context.AcademicYearId,
 			Page = 0,
 			PageSize = 50,
 			ForceRefresh = true
 		});
 		var payrollRow = refreshedPreview.Items.Single(x => x.EmployeeId == employee.Id);
 
+		await ReviewForFinalizationAsync(employee.Id, monthYear, context.AcademicYearId);
 		var finalized = await _salarySlipAppService.FinalizeAsync(draft.Id);
 
 		finalized.Status.ShouldBe(SalarySlipStatus.Finalized);
@@ -575,6 +583,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	[Fact]
 	public async Task Paid_Salary_Slip_Should_Not_Be_Finalized_Or_Deleted()
 	{
+		using var schoolTenant = _currentTenant.Change(Guid.NewGuid(), "Synthetic Payslip School");
+		await ConfigurePayslipSchoolAsync();
 		var monthYear = CurrentPayrollMonth();
 		var context = await CreatePayrollPolicyContextAsync(PayrollYear(monthYear));
 		var employee = await CreateEmployeeAsync(FirstDayOfMonth(monthYear));
@@ -589,14 +599,16 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			EmployeeId = employee.Id,
 			MonthYear = monthYear
 		});
+		await ReviewForFinalizationAsync(employee.Id, monthYear, context.AcademicYearId);
+		await _salarySlipAppService.FinalizeAsync(draft.Id);
 		var salarySlip = await _salarySlipRepository.GetAsync(draft.Id);
-		typeof(SalarySlip)
-			.GetProperty(nameof(SalarySlip.Status), BindingFlags.Instance | BindingFlags.Public)!
-			.SetValue(salarySlip, SalarySlipStatus.Paid);
+		salarySlip.RecordPayment(DateTimeOffset.UtcNow.AddMinutes(-1), "Synthetic payment",
+			Guid.Parse("2e701e62-0953-4dd3-910b-dc6cc93ccb0d"), Guid.NewGuid());
 		await _salarySlipRepository.UpdateAsync(salarySlip, autoSave: true);
 
-		await Should.ThrowAsync<InvalidOperationException>(() =>
+		var finalizeException = await Should.ThrowAsync<BusinessException>(() =>
 			_salarySlipAppService.FinalizeAsync(draft.Id));
+		finalizeException.Code.ShouldBe(HRErrorCodes.SalarySlipAlreadyFinalized);
 		var deleteException = await Should.ThrowAsync<BusinessException>(() =>
 			_salarySlipAppService.DeleteAsync(draft.Id));
 
@@ -1063,6 +1075,37 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		});
 
 		return preview.Items.Single(x => x.EmployeeId == employeeId);
+	}
+
+	private async Task ConfigurePayslipSchoolAsync()
+	{
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var school = new PayslipSettings(_currentTenant.Id!.Value);
+			school.Configure("Synthetic Payslip School", "Synthetic address, Ahmedabad, Gujarat", false, Guid.NewGuid());
+			await GetRequiredService<IRepository<PayslipSettings, Guid>>().InsertAsync(school, autoSave: true);
+			// These finalization fixtures exercise non-statutory payroll; ESIC scenarios have their own coverage.
+			await GetRequiredService<IRepository<EsiPayrollConfiguration, Guid>>().InsertAsync(
+				new EsiPayrollConfiguration(Guid.NewGuid(), _currentTenant.Id, new DateTime(2000, 1, 1), false,
+					null, null, "Synthetic non-ESIC payslip fixture"), autoSave: true);
+		});
+	}
+
+	private async Task ReviewForFinalizationAsync(Guid employeeId, string monthYear, Guid academicYearId)
+	{
+		var previews = GetRequiredService<IPayrollPreviewRunAppService>();
+		var run = await previews.StartAsync(new StartPayrollPreviewRequest { Month = monthYear, AcademicYearId = academicYearId, Refresh = true });
+		await GetRequiredService<PayrollPreviewBackgroundJob>().ExecuteAsync(
+			new PayrollPreviewJobArgs { TenantId = _currentTenant.Id, RunId = run.Id });
+		var completed = await previews.GetAsync(run.Id);
+		completed.Status.ShouldBe("SUCCEEDED", completed.ErrorCode);
+		completed.IsCurrent.ShouldBeTrue();
+		var snapshot = await GetPayrollSnapshotAsync(employeeId, monthYear);
+		PayrollLockPreconditionGuard.HasBlockingLockIssue(snapshot.IssueCodesJson).ShouldBeFalse(snapshot.IssueCodesJson);
+		var review = await _runPayrollAppService.MarkReviewedAsync(new PayrollRunReviewRequest {
+			PreviewRunId = run.Id, Month = monthYear, AcademicYearId = run.AcademicYearId, EmployeeIds = [employeeId] });
+		review.EmployeesProcessed.ShouldBe(1);
+		review.EmployeesFailed.ShouldBe(0);
 	}
 
 	private async Task<EarningComponentDto> CreateEarningComponentAsync(string name, decimal amount) =>

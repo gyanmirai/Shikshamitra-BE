@@ -8,7 +8,6 @@ internal static class IndianCurrencyWords
 {
 	public static string Format(decimal amount)
 	{
-		amount = decimal.Ceiling(amount);
 		var rupees = (long) Math.Floor(Math.Abs(amount));
 		var paise = (int) Math.Round((Math.Abs(amount) - rupees) * 100, MidpointRounding.AwayFromZero);
 		if (paise == 100)

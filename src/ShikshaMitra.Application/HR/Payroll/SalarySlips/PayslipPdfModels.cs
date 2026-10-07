@@ -40,6 +40,7 @@ public sealed record PayslipPdfModel(
 	public decimal? FullGrossSalary { get; init; }
 	public decimal GrossSalary { get; init; }
 	public decimal AdditionalEarnings { get; init; }
+	public string? InsuranceNumber { get; init; }
 }
 
-public sealed record PayslipPdfLineItem(string Name, decimal Amount);
+public sealed record PayslipPdfLineItem(string Name, decimal Amount, decimal? FullMonthAmount = null);

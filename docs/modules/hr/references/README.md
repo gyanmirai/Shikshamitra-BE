@@ -21,3 +21,4 @@ Reference docs are active, but they are not the first-read path.
 | [policy-architecture.md](./policy-architecture.md) | Work calendar, attendance policy, payroll policy, and assignment resolution |
 | [attendance-integration-db-contract.md](./attendance-integration-db-contract.md) | Direct database contract for attendance import integrations |
 | [esic-compensation-design.md](./esic-compensation-design.md) | Agreed ESIC and salary-basis design, documentation plan, and acceptance criteria |
+| [payslip-design.md](./payslip-design.md) | Payslip requirements, corrections, HR distribution, email delivery and implementation acceptance |

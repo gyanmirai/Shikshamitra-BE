@@ -1,5 +1,6 @@
 ﻿using ShikshaMitra.Common.PDF.Elements;
 using System;
+using ShikshaMitra.Common.PDF;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -72,10 +73,10 @@ internal static class QuestExtensions
 		page.PageColor(specs.BackgroundColor);
 		page.DefaultTextStyle(x =>
 		{
-			x = x.FontSize(specs.DefaultFontSize);
+			x = x.FontSize(specs.DefaultFontSize).WithPortableFonts();
 			if (!string.IsNullOrWhiteSpace(specs.FontFamily))
 			{
-				x = x.FontFamily(specs.FontFamily);
+				x = x.FontFamily(specs.FontFamily, PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily);
 			}
 
 			return x;
@@ -213,8 +214,8 @@ internal static class QuestExtensions
 		{
 			(not null, not null) => container.Container().Height(imageElement.Height.Value)
 				.Width(imageElement.Width.Value).Image(imageElement.Image ??
-				                                       throw new InvalidOperationException(
-					                                       "Image bytes are not loaded")),
+													   throw new InvalidOperationException(
+														   "Image bytes are not loaded")),
 			(not null, null) => container.Container().Width(imageElement.Width.Value).Image(imageElement.Image ??
 				throw new InvalidOperationException("Image bytes are not loaded")),
 			(null, not null) => container.Container().Height(imageElement.Height.Value)

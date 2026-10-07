@@ -2,6 +2,12 @@ namespace ShikshaMitra.HR;
 
 public static partial class HRErrorCodes
 {
+	public const string PayslipDocumentInvalid = "HR:Payroll:030044";
+	public const string PayslipDocumentRequired = "HR:Payroll:030045";
+	public const string PayslipSchoolDetailsRequired = "HR:Payroll:030046";
+	public const string PayslipConflict = "HR:Payroll:030047";
+	public const string PayslipCorrectionPending = "HR:Payroll:030048";
+	public const string PayslipSettlementInvalid = "HR:Payroll:030049";
 	public const string EsiConfigurationInvalidMonth = "HR:Payroll:EsiConfigurationInvalidMonth";
 	public const string EsiConfigurationLocked = "HR:Payroll:EsiConfigurationLocked";
 	public const string EsiConfigurationReasonRequired = "HR:Payroll:EsiConfigurationReasonRequired";

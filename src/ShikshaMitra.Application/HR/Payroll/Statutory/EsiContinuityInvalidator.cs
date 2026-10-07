@@ -21,7 +21,8 @@ public class EsiContinuityInvalidator(
 	IRepository<PayrollPreviewEmployee, Guid> results,
 	IClock clock) : ITransientDependency
 {
-	public async Task InvalidateAsync(string sourceMonth, IReadOnlyCollection<Guid> employeeIds)
+	public async Task InvalidateAsync(string sourceMonth, IReadOnlyCollection<Guid> employeeIds,
+		IReadOnlyCollection<Guid>? previousEvidenceEmployeeIds = null)
 	{
 		if (employeeIds.Count == 0) return;
 		await revisions.LockAsync();
@@ -37,7 +38,8 @@ public class EsiContinuityInvalidator(
 			(x.Status == SalarySlipStatus.Finalized || x.Status == SalarySlipStatus.Paid));
 		var sourceSnapshots = await snapshots.GetListAsync(x => x.MonthYear == sourceMonth &&
 			Enumerable.Contains(ids, x.EmployeeId) && x.IsLocked);
-		ids = ids.Where(id => sourceSlips.Any(x => x.EmployeeId == id && x.EmployeeStateInsuranceRuleId.HasValue) ||
+		ids = ids.Where(id => previousEvidenceEmployeeIds?.Contains(id) == true ||
+			sourceSlips.Any(x => x.EmployeeId == id && x.EmployeeStateInsuranceRuleId.HasValue) ||
 			sourceSnapshots.Any(x => x.EmployeeId == id && x.EmployeeStateInsuranceRuleId.HasValue)).ToList();
 		if (ids.Count == 0) return;
 

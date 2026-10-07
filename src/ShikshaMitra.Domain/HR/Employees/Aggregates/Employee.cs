@@ -3,6 +3,7 @@ using ShikshaMitra.TenantSettings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Mail;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.Identity;
@@ -158,6 +159,13 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	internal void AddDocument(EmployeeDocument document) => Documents.Add(document);
 	internal void UpdateProfilePicture(string? profilePictureBlobName) => ProfilePictureBlobName = profilePictureBlobName;
 	internal void UpdateUserId(Guid id) => UserId = id;
+	public void ChangeAccountEmail(string email)
+	{
+		if (string.IsNullOrWhiteSpace(email) || email.Length > 256 ||
+			!MailAddress.TryCreate(email, out var address) || address.Address != email || email.Contains('\r') || email.Contains('\n'))
+			throw new BusinessException(HRErrorCodes.EmployeeAccountEmailRejected).WithData("field", "Email");
+		Email = email;
+	}
 	public void AssignReportingManager(Guid reportingManagerId) => ReportingManagerId = reportingManagerId;
 	public void RemoveReportingManager() => ReportingManagerId = null;
 

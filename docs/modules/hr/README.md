@@ -68,6 +68,7 @@ Use this folder only after the six canonical files:
 |---|---|
 | [references](./references/) | Deep supporting notes that are still active |
 | [ESIC compensation design](./references/esic-compensation-design.md) | Agreed salary bases, compact ESIC configuration, documentation handoff, and acceptance criteria; pending behaviour is marked explicitly |
+| [Payslip design](./references/payslip-design.md) | Active requirements and implementation acceptance for immutable payslips, corrections and employee email distribution |
 
 ## Validation
 

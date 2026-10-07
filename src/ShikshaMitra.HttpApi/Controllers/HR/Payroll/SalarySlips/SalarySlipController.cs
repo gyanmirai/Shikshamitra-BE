@@ -100,6 +100,8 @@ public class SalarySlipController : AbpControllerBase
 	{
 		return new SalarySlipResponse
 		{
+			DocumentId = dto.DocumentId,
+			DocumentRevision = dto.DocumentRevision,
 			EmployeeId = dto.EmployeeId,
 			EmployeeName = dto.EmployeeName,
 			EmployeeCode = dto.EmployeeCode,
@@ -132,19 +134,10 @@ public class SalarySlipController : AbpControllerBase
 			EmployeeStateInsuranceRuleId = dto.EmployeeStateInsuranceRuleId,
 			EmployeeStateInsuranceRuleVersion = dto.EmployeeStateInsuranceRuleVersion,
 			EmployeeStateInsuranceWages = dto.EmployeeStateInsuranceWages,
-			EmployeeStateInsuranceGovernmentContribution = dto.EmployeeStateInsuranceGovernmentContribution,
 			EmployeeStateInsuranceCoverageDecision = dto.EmployeeStateInsuranceCoverageDecision,
 			EmployeeStateInsuranceNumber = dto.EmployeeStateInsuranceNumber,
 			EmployeeStateInsuranceContributionPeriodStart = dto.EmployeeStateInsuranceContributionPeriodStart,
 			EmployeeStateInsuranceContributionPeriodEnd = dto.EmployeeStateInsuranceContributionPeriodEnd,
-			CompensationRevisionId = dto.CompensationRevisionId,
-			CompensationRevisionNumber = dto.CompensationRevisionNumber,
-			CompensationSalaryBasis = dto.CompensationSalaryBasis,
-			CompensationProtectionPolicy = dto.CompensationProtectionPolicy,
-			CompensationQuotedAmount = dto.CompensationQuotedAmount,
-			CompensationProtectedAmount = dto.CompensationProtectedAmount,
-			CompensationNormalizedProtectedAmount = dto.CompensationNormalizedProtectedAmount,
-			CompensationTargetDifference = dto.CompensationTargetDifference,
 			Remarks = dto.Remarks,
 			Earnings = dto.Earnings.Select(e => new SalaryComponent
 			{

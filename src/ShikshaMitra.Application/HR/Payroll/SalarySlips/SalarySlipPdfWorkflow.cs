@@ -1,4 +1,4 @@
-using ShikshaMitra.HR;
+﻿using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using System;
 using System.Threading.Tasks;
@@ -13,6 +13,7 @@ public class SalarySlipPdfWorkflow(
 	IEmployeeRepository employeeRepository,
 	SalarySlipDtoMapper salarySlipDtoMapper,
 	PayslipPdfService payslipPdfService,
+	PayslipIssuanceService issuance,
 	SalarySlipAccessService accessService,
 	SalarySlipSnapshotGenerationService snapshotGenerationService)
 	: ApplicationService
@@ -65,9 +66,14 @@ public class SalarySlipPdfWorkflow(
 
 	private async Task<byte[]> GenerateAsync(SalarySlip salarySlip, bool isPreview)
 	{
+		if (!isPreview)
+			return (await issuance.GetCurrentAsync(salarySlip.Id)).Pdf;
 		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
-		var pdfModel = SalarySlipProjection.ToPdfModel(dto, CurrentTenant.Name ?? "ShikshaMitra", isPreview);
+		var school = await issuance.EnsureSchoolConfiguredAsync();
+		var pdfModel = SalarySlipProjection.ToPdfModel(dto, school.SchoolName, isPreview)
+			with
+		{ InstituteAddress = school.SchoolAddress };
 
 		return payslipPdfService.Generate(pdfModel);
 	}

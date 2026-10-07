@@ -27,7 +27,7 @@
     <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="CsvHelper" Version="33.0.1" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
-    <PackageReference Include="QuestPDF" Version="2024.10.4" />
+    <PackageReference Include="QuestPDF" Version="2026.9.1" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="Volo.Abp.Account.Application" Version="9.0.0" />
     <PackageReference Include="Volo.Abp.Identity.Application" Version="9.0.0" />
@@ -58,6 +58,11 @@
     <Folder Include="HR\Payroll\ImportAttendances\" />
     <Folder Include="HR\Payroll\PayrollStructures\" />
     <Folder Include="Library\Setting\GeneralSetting\LoanPolicies\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Common\PDF\Fonts\NotoSansGujarati.ttf" LogicalName="ShikshaMitra.Pdf.Fonts.NotoSansGujarati.ttf" />
+    <Content Include="Common\PDF\Fonts\OFL-NotoSansGujarati.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

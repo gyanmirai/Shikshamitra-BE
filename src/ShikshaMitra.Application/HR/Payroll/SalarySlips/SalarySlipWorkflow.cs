@@ -24,6 +24,8 @@ public class SalarySlipWorkflow(
 	IPayrollInputRevisionStore revisions,
 	EsiContinuityInvalidator continuityInvalidator,
 	EsiEnrollmentResolver enrollmentResolver,
+	PayslipIssuanceService issuance,
+	PayslipFinalizationGuard finalizationGuard,
 	ILogger<SalarySlipAppService> logger)
 	: ApplicationService
 {
@@ -65,10 +67,8 @@ public class SalarySlipWorkflow(
 
 			stopwatch.Stop();
 			logger.LogInformation("Salary slip processed successfully - EmployeeId: {EmployeeId}, " +
-				"MonthYear: {MonthYear}, Status: {Status}, TotalEarning: {TotalEarning}, " +
-				"TotalDeduction: {TotalDeduction}, NetSalary: {NetSalary}, Duration: {Duration}ms",
-				employeeId, monthYear, salarySlip.Status, salarySlip.TotalEarning,
-				salarySlip.TotalDeduction, salarySlip.NetSalary, stopwatch.ElapsedMilliseconds);
+				"MonthYear: {MonthYear}, Status: {Status}, Duration: {Duration}ms",
+				employeeId, monthYear, salarySlip.Status, stopwatch.ElapsedMilliseconds);
 
 			return dto;
 		}
@@ -165,12 +165,17 @@ public class SalarySlipWorkflow(
 		var salarySlip = await salarySlipRepository.GetAsync(id);
 		await accessService.EnsureEmployeeScopeAllowedAsync(salarySlip.EmployeeId);
 
+		if (salarySlip.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
+			throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
+
 		salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip);
 		var enrollments = await enrollmentResolver.ResolveAsync(
 			new DateTime(salarySlip.Year, salarySlip.Month, 1), [salarySlip.EmployeeId]);
 		enrollments.TryGetValue(salarySlip.EmployeeId, out var enrollment);
 		EsiPayrollReadiness.EnsureInsuranceNumber(salarySlip.EmployeeStateInsuranceRuleId,
 			salarySlip.EmployeeStateInsuranceCoverageDecision, enrollment?.InsuranceNumber);
+		await finalizationGuard.EnsureReviewedAsync(salarySlip);
+		await issuance.IssueAsync(salarySlip);
 		salarySlip.FinalizeSlip();
 
 		await salarySlipRepository.UpdateAsync(salarySlip, autoSave: true);

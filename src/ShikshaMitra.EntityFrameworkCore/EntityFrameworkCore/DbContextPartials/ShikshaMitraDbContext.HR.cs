@@ -59,6 +59,10 @@ public partial class ShikshaMitraDbContext
     public DbSet<DeductionComponent> DeductionComponents { get; set; }
     public DbSet<PayrollComponentVersion> PayrollComponentVersions { get; set; }
     public DbSet<SalarySlip> SalarySlips { get; set; }
+    public DbSet<PayslipDocument> PayslipDocuments { get; set; }
+    public DbSet<PayslipSettings> PayslipSettings { get; set; }
+    public DbSet<PayslipDelivery> PayslipDeliveries { get; set; }
+    public DbSet<PayslipCorrection> PayslipCorrections { get; set; }
     public DbSet<AttendanceImportBatch> AttendanceImportBatches { get; set; }
     public DbSet<AttendanceImportRow> AttendanceImportRows { get; set; }
     public DbSet<PayrollRunReview> PayrollRunReviews { get; set; }

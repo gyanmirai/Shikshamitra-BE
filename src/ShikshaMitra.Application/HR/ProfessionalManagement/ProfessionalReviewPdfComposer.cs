@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.Common.PDF;
 
 namespace ShikshaMitra.HR.ProfessionalManagement;
 
@@ -27,7 +28,7 @@ internal static class ProfessionalReviewPdfComposer
 			{
 				page.Size(PageSizes.A4);
 				page.Margin(28);
-				page.DefaultTextStyle(style => style.FontSize(9).FontColor(Colors.Grey.Darken4));
+				page.DefaultTextStyle(style => style.FontSize(9).FontColor(Colors.Grey.Darken4).WithPortableFonts());
 				page.Header().Column(column =>
 				{
 					column.Item().Text("Performance Management Appraisal").FontSize(18).Bold().FontColor("#0F172A");

@@ -1,6 +1,7 @@
-using QuestPDF.Fluent;
+﻿using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.Common.PDF;
 using System;
 using System.IO;
 using System.Net;
@@ -28,7 +29,7 @@ public class AcademicDynamicReportPdfService : ITransientDependency
 			{
 				page.Size(PageSizes.A4.Landscape());
 				page.Margin(20);
-				page.DefaultTextStyle(style => style.FontSize(8).FontColor(Colors.Grey.Darken4));
+				page.DefaultTextStyle(style => style.FontSize(8).FontColor(Colors.Grey.Darken4).WithPortableFonts());
 				page.Header().Element(container => ComposeHeader(container, plan, report));
 				page.Content().PaddingTop(10).Element(container => ComposeContent(container, report));
 				page.Footer().Element(ComposeFooter);

@@ -40,6 +40,10 @@ public static partial class HRErrorCodes
 	public const string EmployeeRoleGroupNotAllowed = "HR:Employee:010036";
 	public const string EmployeeGroupRequired = "HR:Employee:010037";
 	public const string EmployeeRoleAssignmentNotAllowed = "HR:Employee:010038";
+	public const string EmployeeAccountEmailConflict = "HR:Employee:010039";
+	public const string EmployeeAccountLinkInvalid = "HR:Employee:010040";
+	public const string EmployeeAccountEmailInUse = "HR:Employee:010041";
+	public const string EmployeeAccountEmailRejected = "HR:Employee:010042";
 	public const string ReportingManagerMustBeActive = "ShikshaMitra:ReportingManagerMustBeActive";
 	public const string EmployeeDocumentNotFound = "HR:Employee:010101";
 	public const string EmployeeDocumentConfigurationNotFound = "HR:Employee:010102";

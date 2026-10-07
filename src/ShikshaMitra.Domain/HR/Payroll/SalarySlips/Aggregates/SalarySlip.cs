@@ -32,6 +32,10 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public SalarySlipStatus Status { get; private set; }
 
 	public DateTime ProcessedDate { get; private set; }
+	public DateTimeOffset? PaidAt { get; private set; }
+	public string? PaymentReference { get; private set; }
+	public Guid? PaymentRecordedBy { get; private set; }
+	public Guid? PaymentRequestId { get; private set; }
 
 	public string? Remarks { get; private set; }
 
@@ -152,6 +156,31 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new InvalidOperationException("Cannot update finalized or paid salary slip");
 
 		Remarks = remarks;
+	}
+
+	internal void BeginUnpaidCorrection()
+	{
+		if (Status != SalarySlipStatus.Finalized)
+			throw new Volo.Abp.BusinessException(HRErrorCodes.PayslipConflict);
+		Status = SalarySlipStatus.Draft;
+	}
+
+	public void RecordPayment(DateTimeOffset paidAt, string reference, Guid actor, Guid requestId)
+	{
+		if (string.IsNullOrWhiteSpace(reference)) throw new Volo.Abp.BusinessException(HRErrorCodes.PayslipConflict);
+		// PostgreSQL stores microseconds; normalize before both persisting and comparing a retry.
+		var utc = paidAt.ToUniversalTime();
+		paidAt = new DateTimeOffset(utc.Ticks - utc.Ticks % 10, TimeSpan.Zero);
+		if (Status == SalarySlipStatus.Paid && PaymentRequestId == requestId && PaidAt == paidAt && PaymentReference == reference.Trim())
+			return;
+		if (Status != SalarySlipStatus.Finalized || string.IsNullOrWhiteSpace(reference) || reference.Trim().Length > 200 ||
+			actor == Guid.Empty || requestId == Guid.Empty)
+			throw new Volo.Abp.BusinessException(HRErrorCodes.PayslipConflict);
+		PaidAt = paidAt.ToUniversalTime();
+		PaymentReference = reference.Trim();
+		PaymentRecordedBy = actor;
+		PaymentRequestId = requestId;
+		Status = SalarySlipStatus.Paid;
 	}
 
 	internal void UpdateLineItems(

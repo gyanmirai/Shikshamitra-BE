@@ -30,6 +30,9 @@ public class AdmissionInquiryManagementDto
 	public bool IsOverdue { get; set; }
 	public bool IsLocked { get; set; }
 	public bool CanStartApplication { get; set; }
+	public bool CanReassign { get; set; }
+	public string? QualificationEmailStatus { get; set; }
+	public string? QualificationEmailMessage { get; set; }
 	public List<string> Blockers { get; set; } = [];
 	public List<AdmissionInquiryQualificationAnswerDto> QualificationAnswers { get; set; } = [];
 	public List<AdmissionInquiryFollowUpDto> FollowUps { get; set; } = [];

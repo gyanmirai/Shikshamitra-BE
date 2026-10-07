@@ -4,6 +4,12 @@ using System.Collections.Generic;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
+public class AdmissionPublicInquiryLinkOptionDto
+{
+	public Guid CounsellorAssignmentProfileId { get; set; }
+	public Guid InquiryFormDefinitionId { get; set; }
+}
+
 public class CreateAdmissionPublicInquiryLinkDto
 {
 	[Required]
@@ -51,6 +57,30 @@ public class PublicAdmissionInquiryContextDto
 	public string AdmissionCycleName { get; set; } = string.Empty;
 	public AdmissionInquirySource Source { get; set; }
 	public PublicAdmissionInquiryFormDto? Form { get; set; }
+	public List<PublicAdmissionInquiryOfferingDto> Offerings { get; set; } = [];
+	public List<PublicAdmissionInquiryAcademicOptionDto> AcademicOptions { get; set; } = [];
+}
+
+public class PublicAdmissionInquiryAcademicOptionDto
+{
+	public Guid BoardId { get; set; }
+	public string BoardName { get; set; } = string.Empty;
+	public Guid MediumId { get; set; }
+	public string MediumName { get; set; } = string.Empty;
+	public Guid StandardId { get; set; }
+	public string StandardName { get; set; } = string.Empty;
+}
+
+public class PublicAdmissionInquiryOfferingDto : PublicAdmissionInquiryAcademicOptionDto
+{
+	public Guid Id { get; set; }
+	public Guid AdmissionCycleId { get; set; }
+	public string AdmissionCycleName { get; set; } = string.Empty;
+	public string Name { get; set; } = string.Empty;
+	public string Code { get; set; } = string.Empty;
+	public AdmissionTrack Track { get; set; }
+	public bool CanCreateInquiry { get; set; }
+	public string? UnavailableReason { get; set; }
 }
 
 public class PublicAdmissionInquiryFormDto
@@ -91,6 +121,14 @@ public class PublicAdmissionInquiryFieldDto
 public class SubmitPublicAdmissionInquiryDto
 {
 	private string? _guardianEmail;
+	[Required]
+	public Guid AdmissionOfferingId { get; set; }
+	[Required]
+	public Guid BoardId { get; set; }
+	[Required]
+	public Guid MediumId { get; set; }
+	[Required]
+	public Guid StandardId { get; set; }
 
 	[StringLength(128)]
 	public string ApplicantFirstName { get; set; } = string.Empty;

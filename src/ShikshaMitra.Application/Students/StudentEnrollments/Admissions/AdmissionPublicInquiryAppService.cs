@@ -7,6 +7,10 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Application.Communication;
+using ShikshaMitra.TenantSettings.EducationBoards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
@@ -29,6 +33,12 @@ public class AdmissionPublicInquiryAppService(
 	IRepository<AdmissionActivity, Guid> activities,
 	AdmissionInquiryPeopleService people,
 	AdmissionInquiryAppService inquiryService,
+	IRepository<EducationBoard, Guid> boards,
+	IRepository<EducationMedium, Guid> mediums,
+	IRepository<EducationMediumStage, Guid> academicStages,
+	IRepository<Standard, Guid> standards,
+	AdmissionInquiryAvailabilityService availabilityService,
+	CommunicationAppService communications,
 	IDataFilter dataFilter) : ApplicationService, IAdmissionPublicInquiryAppService
 {
 	private const string LinkUnavailable = "Admissions.PublicInquiry.LinkUnavailable";
@@ -36,6 +46,22 @@ public class AdmissionPublicInquiryAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
 	public async Task<List<AdmissionPublicInquiryLinkDto>> GetLinksAsync() =>
 		(await links.GetListAsync()).OrderByDescending(item => item.CreationTime).Select(Map).ToList();
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
+	public async Task<List<AdmissionPublicInquiryLinkOptionDto>> GetLinkOptionsAsync(Guid admissionCycleId)
+	{
+		if ((await cycles.FindAsync(admissionCycleId))?.Status != AdmissionCycleStatus.Published) return [];
+		var query = from offering in await people.GetCurrentInquiryOfferingsQueryAsync(admissionCycleId)
+			join setup in await setups.GetQueryableAsync() on offering.CounsellorAssignmentProfileId equals setup.CounsellorAssignmentProfileId
+			join form in await forms.GetQueryableAsync() on offering.InquiryFormDefinitionId equals form.Id
+			where !setup.IsArchived && form.Status == AdmissionFormStatus.Published && form.Purpose == AdmissionFormPurpose.Inquiry
+			select new AdmissionPublicInquiryLinkOptionDto
+			{
+				CounsellorAssignmentProfileId = setup.CounsellorAssignmentProfileId,
+				InquiryFormDefinitionId = form.Id
+			};
+		return await AsyncExecuter.ToListAsync(query.Distinct());
+	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	public async Task<AdmissionPublicInquiryLinkCreatedDto> CreateLinkAsync(CreateAdmissionPublicInquiryLinkDto input)
@@ -69,18 +95,29 @@ public class AdmissionPublicInquiryAppService(
 		{
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
 		}
-		if (!await offerings.AnyAsync(offering => offering.AdmissionCycleId == cycle.Id &&
-			offering.IsActive && offering.EntryMode != AdmissionEntryMode.DirectRegistration))
-			throw new BusinessException(AdmissionErrorCodes.PublicInquiryOfferingRequired)
-				.WithData("PeriodName", cycle.Name);
+		var activeOfferings = await offerings.GetListAsync(offering => offering.AdmissionCycleId == cycle.Id &&
+			offering.IsActive && offering.EntryMode != AdmissionEntryMode.DirectRegistration);
+		var setupOfferings = activeOfferings.Where(offering => offering.CounsellorAssignmentProfileId == profile.Id).ToList();
+		var matchingOfferings = setupOfferings.Where(offering => !input.InquiryFormDefinitionId.HasValue ||
+			offering.InquiryFormDefinitionId == input.InquiryFormDefinitionId).ToList();
+		if (matchingOfferings.Count == 0)
+		{
+			var reason = activeOfferings.Count == 0 ? "NoActiveInquiryOffering" : setupOfferings.Count == 0 ? "SetupNotLinked" : "FormNotLinked";
+			var message = activeOfferings.Count == 0
+				? $"Cannot create an inquiry link: '{cycle.Name}' has no active Offering that accepts inquiries. Configure and activate an Offering with Inquiry or Both entry mode, then retry."
+				: $"Cannot create an inquiry link: no active inquiry Offering in '{cycle.Name}' uses both intake setup '{profile.Name}' and the selected inquiry form. Attach this setup and form to the same Offering, activate it, then retry.";
+			throw new BusinessException(AdmissionErrorCodes.PublicInquiryOfferingRequired, message)
+				.WithData("PeriodName", cycle.Name).WithData("SetupName", profile.Name).WithData("Reason", reason);
+		}
+		var matchingOfferingIds = matchingOfferings.Select(offering => offering.Id).ToArray();
 		var hasEligibleOwner = false;
 		foreach (var userId in rules.CounsellorUserIds)
-			if (await people.CanAccessCycleAsync(userId, cycle.Id)) { hasEligibleOwner = true; break; }
+			if (await people.CanAccessAnyOfferingAsync(userId, matchingOfferingIds)) { hasEligibleOwner = true; break; }
 		if (!hasEligibleOwner)
 			throw new BusinessException(AdmissionErrorCodes.PublicInquiryCounsellorUnavailable)
 				.WithData("SetupName", profile.Name).WithData("PeriodName", cycle.Name);
 		if (managedSetup != null && rules.FallbackManagerUserId.HasValue &&
-			!await people.CanAccessCycleAsync(rules.FallbackManagerUserId.Value, cycle.Id))
+			!await people.CanAccessAnyOfferingAsync(rules.FallbackManagerUserId.Value, matchingOfferingIds))
 			throw new BusinessException(AdmissionErrorCodes.PublicInquiryFallbackUnavailable)
 				.WithData("SetupName", profile.Name).WithData("PeriodName", cycle.Name);
 		var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
@@ -126,7 +163,7 @@ public class AdmissionPublicInquiryAppService(
 	}
 
 	[AllowAnonymous]
-	public async Task<PublicAdmissionInquiryContextDto> GetPublicAsync(string token)
+	public async Task<PublicAdmissionInquiryContextDto> GetPublicAsync(string token, Guid? offeringId = null)
 	{
 		var (link, cycle) = await ResolveLinkAsync(token);
 		var context = new PublicAdmissionInquiryContextDto
@@ -134,10 +171,33 @@ public class AdmissionPublicInquiryAppService(
 			AdmissionCycleName = cycle.Name,
 			Source = link.Source
 		};
-		if (!link.InquiryFormDefinitionId.HasValue) return context;
 		using (CurrentTenant.Change(link.TenantId))
 		{
-			var formId = link.InquiryFormDefinitionId.Value;
+			context.AcademicOptions = await GetAcademicOptionsAsync(cycle);
+			var choices = await GetLinkOfferingsAsync(link);
+			foreach (var offering in choices.OrderBy(item => item.Name))
+			{
+				var academic = context.AcademicOptions.FirstOrDefault(item => item.StandardId == offering.StandardId &&
+					item.MediumId == offering.MediumId && item.BoardId == offering.BoardId);
+				if (academic == null) continue;
+				var available = await availabilityService.ReadForPublicAsync(offering);
+				context.Offerings.Add(new PublicAdmissionInquiryOfferingDto
+				{
+					Id = offering.Id, AdmissionCycleId = cycle.Id, AdmissionCycleName = cycle.Name,
+					BoardId = academic.BoardId, BoardName = academic.BoardName,
+					MediumId = academic.MediumId, MediumName = academic.MediumName,
+					StandardId = academic.StandardId, StandardName = academic.StandardName,
+					Name = offering.Name, Code = offering.Code, Track = offering.Track,
+					CanCreateInquiry = available.CanCreateInquiry, UnavailableReason = available.Reason
+				});
+			}
+			if (!offeringId.HasValue) return context;
+			var selected = choices.FirstOrDefault(item => item.Id == offeringId.Value) ??
+				throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable,
+					"Admission is not open for this class.");
+			await availabilityService.EnsureAvailableForPublicAsync(selected);
+			var formId = selected.InquiryFormDefinitionId ??
+				throw new BusinessException(AdmissionErrorCodes.OfferingConfigurationIncomplete);
 			var form = await forms.GetAsync(formId);
 			var sections = await formSections.GetListAsync(item => item.FormDefinitionId == formId);
 			var fields = await formFields.GetListAsync(item => item.FormDefinitionId == formId);
@@ -174,15 +234,15 @@ public class AdmissionPublicInquiryAppService(
 		if (!input.ConsentToContact)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Consent to be contacted is required.");
-		if (!link.InquiryFormDefinitionId.HasValue &&
-			(string.IsNullOrWhiteSpace(input.ApplicantFirstName) ||
-			 string.IsNullOrWhiteSpace(input.GuardianFirstName) ||
-			 string.IsNullOrWhiteSpace(input.GuardianPhone) ||
-			 input.FormValues.Count > 0))
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
-				"Enter the required student and guardian details.");
 		using (CurrentTenant.Change(link.TenantId))
 		{
+			var offering = (await GetLinkOfferingsAsync(link)).FirstOrDefault(item => item.Id == input.AdmissionOfferingId) ??
+				throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable,
+					"Admission is not open for this class.");
+			if (input.BoardId != offering.BoardId || input.MediumId != offering.MediumId || input.StandardId != offering.StandardId)
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
+					"Choose the board, medium and class belonging to this admission option.");
+			await availabilityService.EnsureAvailableForPublicAsync(offering);
 			var details = link.SourceDetail ?? link.Name;
 			if (!string.IsNullOrWhiteSpace(input.ClassInterest))
 				details = $"{details}; Class interest: {input.ClassInterest.Trim()}";
@@ -192,6 +252,8 @@ public class AdmissionPublicInquiryAppService(
 				var inquiry = await inquiryService.CreateFromPublicLinkAsync(new CreateAdmissionInquiryDto
 				{
 					AdmissionCycleId = cycle.Id,
+					AdmissionOfferingId = offering.Id,
+					BoardId = input.BoardId, MediumId = input.MediumId, StandardId = input.StandardId,
 					ApplicantFirstName = input.ApplicantFirstName?.Trim() ?? string.Empty,
 					ApplicantLastName = input.ApplicantLastName?.Trim(),
 					ApplicantName = string.Join(" ", new[] { input.ApplicantFirstName, input.ApplicantLastName }
@@ -205,7 +267,9 @@ public class AdmissionPublicInquiryAppService(
 					Source = link.Source,
 					SourceDetail = details,
 					FormValues = input.FormValues
-				}, link.CounsellorAssignmentProfileId, link.InquiryFormDefinitionId);
+				}, link.CounsellorAssignmentProfileId, offering.InquiryFormDefinitionId);
+				await communications.RecordPublicInquiryConsentAsync(
+					await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionInquiry, Guid>>().GetAsync(inquiry.Id), link.Id);
 				await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
 					"PublicInquiryConsent", "Guardian consented to admission inquiry contact.",
 					inquiry.ApplicantId, null, inquiry.Id,
@@ -216,6 +280,28 @@ public class AdmissionPublicInquiryAppService(
 				// A public caller receives the same acknowledgement for an existing phone.
 			}
 		}
+	}
+
+	private Task<List<AdmissionOffering>> GetLinkOfferingsAsync(AdmissionPublicInquiryLink link) =>
+		offerings.GetListAsync(item => item.AdmissionCycleId == link.AdmissionCycleId &&
+			item.CounsellorAssignmentProfileId == link.CounsellorAssignmentProfileId &&
+			item.EntryMode != AdmissionEntryMode.DirectRegistration &&
+			(!link.InquiryFormDefinitionId.HasValue || item.InquiryFormDefinitionId == link.InquiryFormDefinitionId));
+
+	private async Task<List<PublicAdmissionInquiryAcademicOptionDto>> GetAcademicOptionsAsync(AdmissionCycle cycle)
+	{
+		var query = from board in await boards.GetQueryableAsync()
+			join medium in await mediums.GetQueryableAsync() on board.Id equals medium.EducationBoardId
+			join stage in await academicStages.GetQueryableAsync() on medium.Id equals stage.EducationMediumId
+			join standard in await standards.GetQueryableAsync() on stage.Id equals standard.EducationMediumStageId
+			where board.AcademicYearId == cycle.AcademicYearId
+			select new { BoardId = board.Id, board.Type, MediumId = medium.Id, MediumName = medium.Name,
+				StandardId = standard.Id, StandardName = standard.Name };
+		return (await AsyncExecuter.ToListAsync(query)).Select(item => new PublicAdmissionInquiryAcademicOptionDto
+		{
+			BoardId = item.BoardId, BoardName = item.Type.ToString(), MediumId = item.MediumId,
+			MediumName = item.MediumName, StandardId = item.StandardId, StandardName = item.StandardName
+		}).ToList();
 	}
 
 	private async Task<(AdmissionPublicInquiryLink Link, AdmissionCycle Cycle)> ResolveLinkAsync(string token)

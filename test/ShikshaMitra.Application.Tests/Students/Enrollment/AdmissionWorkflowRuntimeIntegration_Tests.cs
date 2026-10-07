@@ -250,6 +250,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentCountBeforeInquiry);
 			guardian.Mobile.ShouldBe("9876543210");
 
+			inquiry = await inquiryService.UpdateAsync(inquiry.Id, InquiryStatusUpdate(inquiry, AdmissionInquiryStatus.Interested));
 			var application = await _applicationAppService.StartAsync(applicant.Id, offering.Id, inquiry.Id);
 			application.StudentId.ShouldBeNull();
 			(await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(applicant.Id)))
@@ -911,7 +912,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					$"ASSIGN_{Guid.NewGuid():N}", "Duplicate offering assignment fixture",
 					JsonSerializer.Serialize(new AdmissionCounsellorAssignmentRules
 					{
-						CounsellorUserIds = [outOfScopeUserId]
+						CounsellorUserIds = [TestUserId]
 					})), autoSave: true);
 				return (InquiryId: inquiryProfile.Id, AssignmentId: assignmentProfile.Id);
 			});
@@ -948,7 +949,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			generalCapacity.RemainingSeats.ShouldBe(0);
 			generalCapacity.Warning.ShouldNotBeNull();
 			var generalApplicant = await CreateApplicantAsync("General");
-			(await StartFixtureApplicationAsync(generalApplicant.Id, generalOffering.Id)).Id.ShouldNotBe(Guid.Empty);
+			(await Should.ThrowAsync<BusinessException>(() => StartFixtureApplicationAsync(generalApplicant.Id, generalOffering.Id)))
+				.Code.ShouldBe(AdmissionApplicationErrorCodes.OfferingNotAvailable);
 		}
 	}
 
@@ -1244,6 +1246,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				$"{applicant.FirstName} {applicant.LastName}".Trim(), "9876543210", null,
 				AdmissionInquirySource.Manual, "Integration fixture");
 			inquiry.LinkIdentity(applicant.FamilyId, applicantId);
+			inquiry.SetStatus(AdmissionInquiryStatus.Interested);
 			await GetRequiredService<IRepository<AdmissionInquiry, Guid>>().InsertAsync(inquiry, autoSave: true);
 			return inquiry.Id;
 		});

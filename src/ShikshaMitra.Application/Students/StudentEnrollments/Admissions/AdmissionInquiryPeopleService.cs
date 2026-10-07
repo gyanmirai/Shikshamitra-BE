@@ -39,15 +39,22 @@ public class AdmissionInquiryPeopleService(
 
 	public async Task<List<AdmissionInquiryCounsellorDto>> GetCounsellorsAsync(
 		string? filter,
-		Guid? admissionOfferingId = null)
+		Guid? admissionOfferingId = null,
+		IReadOnlyCollection<Guid>? candidateIds = null)
 	{
 		if (filter?.Length > 128) throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidPolicy);
 		var query = (await users.GetQueryableAsync()).Where(user => user.IsActive);
+		if (candidateIds != null)
+		{
+			var ids = candidateIds.ToArray();
+			query = query.Where(user => Enumerable.Contains(ids, user.Id));
+		}
 		if (!string.IsNullOrWhiteSpace(filter))
 			query = query.Where(user => user.UserName.Contains(filter) || user.Name.Contains(filter) || user.Surname.Contains(filter));
 		var result = new List<AdmissionInquiryCounsellorDto>();
 		const int batchSize = 100;
-		for (var offset = 0; result.Count < 50; offset += batchSize)
+		var resultLimit = candidateIds == null ? 50 : Math.Min(candidateIds.Count, 51);
+		for (var offset = 0; result.Count < resultLimit; offset += batchSize)
 		{
 			var rows = await AsyncExecuter.ToListAsync(query.OrderBy(user => user.UserName)
 				.Skip(offset).Take(batchSize));
@@ -57,7 +64,7 @@ public class AdmissionInquiryPeopleService(
 				if (resolvedScopes[user.Id].HasAnyAccess &&
 					(!admissionOfferingId.HasValue || await CanAccessOfferingAsync(user.Id, admissionOfferingId.Value)))
 					result.Add(new() { Id = user.Id, UserName = user.UserName, Name = Display(user) });
-				if (result.Count == 50) break;
+				if (result.Count == resultLimit) break;
 			}
 			if (rows.Count < batchSize) break;
 		}
@@ -98,6 +105,24 @@ public class AdmissionInquiryPeopleService(
 			await divisions.GetQueryableAsync(), await scopes.GetUserScopeAsync(userId));
 		return await AsyncExecuter.AnyAsync(query.Where(item => item.AdmissionCycleId == cycleId && item.IsActive &&
 			item.EntryMode != AdmissionEntryMode.DirectRegistration));
+	}
+
+	internal async Task<IQueryable<AdmissionOffering>> GetCurrentInquiryOfferingsQueryAsync(Guid cycleId)
+	{
+		var query = await offerings.GetQueryableAsync();
+		if (!CurrentUser.Id.HasValue) return query.Where(_ => false);
+		return AdmissionOfferingScopeQuery.Apply(query, await cycles.GetQueryableAsync(),
+			await divisions.GetQueryableAsync(), await scopes.GetUserScopeAsync(CurrentUser.Id.Value))
+			.Where(item => item.AdmissionCycleId == cycleId && item.IsActive &&
+				item.EntryMode != AdmissionEntryMode.DirectRegistration);
+	}
+
+	internal async Task<bool> CanAccessAnyOfferingAsync(Guid userId, Guid[] offeringIds)
+	{
+		if (!await IsActiveAsync(userId)) return false;
+		var query = AdmissionOfferingScopeQuery.Apply(await offerings.GetQueryableAsync(), await cycles.GetQueryableAsync(),
+			await divisions.GetQueryableAsync(), await scopes.GetUserScopeAsync(userId));
+		return await AsyncExecuter.AnyAsync(query.Where(item => Enumerable.Contains(offeringIds, item.Id)));
 	}
 
 	public async Task<bool> CanAccessOfferingAsync(Guid userId, Guid offeringId)

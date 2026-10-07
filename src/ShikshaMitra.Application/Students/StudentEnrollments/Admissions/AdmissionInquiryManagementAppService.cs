@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
@@ -17,6 +18,8 @@ public class AdmissionInquiryManagementAppService(
 	AdmissionInquiryScopeAccessService access,
 	AdmissionInquiryRuntimeService runtime,
 	AdmissionInquiryAssignmentService assignments,
+	AdmissionOfferingRuntimeService offeringRuntime,
+	AdmissionInquiryAvailabilityService availability,
 	IRepository<AdmissionInquiry, Guid> inquiries,
 	IRepository<AdmissionInquiryManagement, Guid> management,
 	IRepository<AdmissionInquiryFollowUp, Guid> followUps,
@@ -62,7 +65,9 @@ public class AdmissionInquiryManagementAppService(
 		if (open >= policy.MaxOpenFollowUps)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.FollowUpLimitReached,
 				$"This policy allows up to {policy.MaxOpenFollowUps} open follow-ups.");
-		var assignee = input.AssignedCounsellorId ?? inquiry.AssignedCounsellorId;
+		if (input.AssignedCounsellorId.HasValue && input.AssignedCounsellorId != inquiry.AssignedCounsellorId)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Follow-ups belong to the inquiry's assigned counsellor. Transfer the inquiry owner to change responsibility.");
+		var assignee = inquiry.AssignedCounsellorId;
 		if (assignee.HasValue)
 			await assignments.EnsureValidAsync(assignee.Value,
 				inquiry.AdmissionOfferingId ?? throw new BusinessException(AdmissionErrorCodes.InquiryOfferingRequired));
@@ -123,7 +128,7 @@ public class AdmissionInquiryManagementAppService(
 		var (inquiry, state, policy) = await GetMutableAsync(inquiryId, input.ConcurrencyStamp);
 		EnsureActor(policy, inquiry);
 		state.Reopen();
-		inquiry.SetStatus(AdmissionInquiryStatus.FollowUp);
+		inquiry.SetStatus(AdmissionInquiryStatus.New);
 		await inquiries.UpdateAsync(inquiry, false);
 		await management.UpdateAsync(state, false);
 		await AddActivityAsync(inquiry, "InquiryQualificationReopened", "Inquiry qualification reopened",
@@ -155,7 +160,7 @@ public class AdmissionInquiryManagementAppService(
 		Guid inquiryId, string concurrencyStamp)
 	{
 		var inquiry = await access.GetAsync(inquiryId);
-		if (inquiry.Status is AdmissionInquiryStatus.ApplicationStarted or AdmissionInquiryStatus.Converted)
+		if (AdmissionInquiryStatusRules.IsTransferred(inquiry.Status) || await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplication, Guid>>().AnyAsync(application => application.InquiryId == inquiry.Id))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState,
 				"Inquiry management is locked after the application has started.");
 		var state = await runtime.EnsureManagementAsync(inquiry) ??
@@ -202,9 +207,25 @@ public class AdmissionInquiryManagementAppService(
 
 	private async Task<AdmissionInquiryManagementDto> MapAsync(AdmissionInquiry inquiry, AdmissionInquiryManagement? state)
 	{
-		if (state == null) return new AdmissionInquiryManagementDto { InquiryId = inquiry.Id };
+		var isLocked = AdmissionInquiryStatusRules.IsTransferred(inquiry.Status) ||
+			await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplication, Guid>>().AnyAsync(application => application.InquiryId == inquiry.Id);
+		var blockers = new List<string>();
+		AdmissionOffering? offering = null;
+		if (isLocked) blockers.Add("This inquiry has already moved to Pipeline.");
+		if (inquiry.Status != AdmissionInquiryStatus.Interested) blockers.Add("Mark the inquiry Interested before moving to the next stage.");
+		if (!inquiry.AdmissionOfferingId.HasValue) blockers.Add("Resolve the admission offering before moving this legacy inquiry.");
+		if (!isLocked && inquiry.AdmissionOfferingId.HasValue)
+		{
+			try { offering = (await offeringRuntime.GetAvailableAsync(inquiry.AdmissionOfferingId.Value)).Offering; await availability.EnsureAvailableAsync(offering); }
+			catch (BusinessException exception) { blockers.Add(exception.Message); }
+		}
+		if (!isLocked && offering == null && inquiry.AdmissionOfferingId.HasValue)
+			offering = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionOffering, Guid>>().FindAsync(inquiry.AdmissionOfferingId.Value);
+		var canReassign = !isLocked && offering?.CounsellorAssignmentProfileId.HasValue == true && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Assign) && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
+		var emailStatus = inquiry.GetProperty<string>("QualificationEmailStatus") ?? (inquiry.GetProperty<DateTime?>("QualificationEmailRequestedAt").HasValue ? "Pending" : null);
+		var emailMessage = inquiry.GetProperty<string>("QualificationEmailMessage");
+		if (state == null) return new AdmissionInquiryManagementDto { InquiryId = inquiry.Id, IsLocked = isLocked, CanStartApplication = blockers.Count == 0, CanReassign = canReassign, Blockers = blockers, QualificationEmailStatus = emailStatus, QualificationEmailMessage = emailMessage };
 		var policy = AdmissionInquiryPolicyResolver.ReadSnapshot(state.PolicySnapshotJson);
-		var isLocked = inquiry.Status is AdmissionInquiryStatus.ApplicationStarted or AdmissionInquiryStatus.Converted;
 		return new AdmissionInquiryManagementDto
 		{
 			InquiryId = inquiry.Id, Managed = true, Policy = policy, ConcurrencyStamp = state.ConcurrencyStamp,
@@ -214,8 +235,9 @@ public class AdmissionInquiryManagementAppService(
 			OutcomeReasonCode = state.OutcomeReasonCode,
 			OutcomeAt = state.OutcomeAt, OutcomeBy = state.OutcomeBy,
 			IsOverdue = AdmissionInquiryRuntimeService.IsOverdue(state, Clock.Now), IsLocked = isLocked,
-			CanStartApplication = !isLocked,
-			Blockers = [], QualificationAnswers = ReadAnswers(state.QualificationAnswersJson),
+			CanStartApplication = blockers.Count == 0, CanReassign = canReassign,
+			QualificationEmailStatus = emailStatus, QualificationEmailMessage = emailMessage,
+			Blockers = blockers, QualificationAnswers = ReadAnswers(state.QualificationAnswersJson),
 			FollowUps = (await followUps.GetListAsync(item => item.InquiryId == inquiry.Id)).OrderBy(item => item.ScheduledAt).Select(Map).ToList()
 		};
 	}
@@ -244,9 +266,9 @@ public class AdmissionInquiryManagementAppService(
 	private static AdmissionInquiryStatus MapStatus(AdmissionInquiryQualificationOutcome outcome) => outcome switch
 	{
 		AdmissionInquiryQualificationOutcome.Qualified => AdmissionInquiryStatus.Interested,
-		AdmissionInquiryQualificationOutcome.FollowUp => AdmissionInquiryStatus.FollowUp,
+		AdmissionInquiryQualificationOutcome.FollowUp => AdmissionInquiryStatus.New,
 		AdmissionInquiryQualificationOutcome.NotInterested => AdmissionInquiryStatus.NotInterested,
-		AdmissionInquiryQualificationOutcome.Lost => AdmissionInquiryStatus.Lost,
+		AdmissionInquiryQualificationOutcome.Lost => AdmissionInquiryStatus.NotInterested,
 		AdmissionInquiryQualificationOutcome.Duplicate => AdmissionInquiryStatus.Duplicate,
 		_ => throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput)
 	};

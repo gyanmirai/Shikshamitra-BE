@@ -19,6 +19,10 @@ public class AdmissionPublicInquiryLinksController(IAdmissionPublicInquiryAppSer
 	public async Task<Result<List<AdmissionPublicInquiryLinkDto>>> GetListAsync() =>
 		Result.Success(await service.GetLinksAsync());
 
+	[HttpGet("options"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
+	public async Task<Result<List<AdmissionPublicInquiryLinkOptionDto>>> GetOptionsAsync([FromQuery] Guid admissionCycleId) =>
+		Result.Success(await service.GetLinkOptionsAsync(admissionCycleId));
+
 	[HttpPost, Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	public async Task<Result<AdmissionPublicInquiryLinkCreatedDto>> CreateAsync(
 		[FromBody] CreateAdmissionPublicInquiryLinkDto input) =>
@@ -46,7 +50,8 @@ public class RevokeAdmissionPublicInquiryLinkDto
 public class PublicAdmissionInquiriesController(IAdmissionPublicInquiryAppService service) : AbpController
 {
 	[HttpGet("{token}")]
-	public Task<PublicAdmissionInquiryContextDto> GetAsync(string token) => service.GetPublicAsync(token);
+	public Task<PublicAdmissionInquiryContextDto> GetAsync(string token, [FromQuery] Guid? offeringId = null) =>
+		service.GetPublicAsync(token, offeringId);
 
 	[HttpPost("{token}")]
 	[EnableRateLimiting("public-admission-inquiry")]

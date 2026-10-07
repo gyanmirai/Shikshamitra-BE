@@ -78,7 +78,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var inquiry = await GetRequiredService<IAdmissionInquiryAppService>().GetAsync(returned.AdmissionInquiryId!.Value);
 		var management = GetRequiredService<IAdmissionInquiryManagementAppService>();
 		var state = await management.GetAsync(inquiry.Id); state.Managed.ShouldBeTrue(); state.ContactCount.ShouldBe(0); state.CanStartApplication.ShouldBeFalse();
-		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, fixture.Offering.Id, inquiry.Id))).Code.ShouldBe(AdmissionInquiryManagementErrorCodes.ContactRequired);
+		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, fixture.Offering.Id, inquiry.Id))).Code.ShouldBe(AdmissionInquiryManagementErrorCodes.QualificationRequired);
 		state = await management.RecordContactAsync(inquiry.Id, new() { ConcurrencyStamp = state.ConcurrencyStamp, Channel = "PHONE", Direction = "OUTBOUND", Outcome = "CONNECTED", Note = "Reviewed returning contact" });
 		state = await management.QualifyAsync(inquiry.Id, new() { ConcurrencyStamp = state.ConcurrencyStamp, Outcome = AdmissionInquiryQualificationOutcome.Qualified,
 			Reason = "Returning eligibility checked", Answers = [new() { Code = "AGE", Passed = true }] });

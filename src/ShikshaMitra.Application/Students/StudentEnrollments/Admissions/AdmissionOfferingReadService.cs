@@ -31,7 +31,8 @@ public class AdmissionOfferingReadService(
 	IUserScopeAccessService scopeAccessService,
 	AdmissionEligibilityOfferingValidator eligibilityValidator,
 	AdmissionOfferingConfigurationValidator configurationValidator,
-	AdmissionClassCapacityAppService classCapacityService)
+	AdmissionClassCapacityAppService classCapacityService,
+	AdmissionInquiryAvailabilityService inquiryAvailability)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<PagedResultDto<AdmissionOfferingListDto>> GetListAsync(AdmissionOfferingListInput input)
@@ -70,17 +71,19 @@ public class AdmissionOfferingReadService(
 	public async Task<AdmissionOfferingAvailabilityDto> GetAvailabilityAsync(Guid id)
 	{
 		var detail = await GetAsync(id);
+		var offering = await AsyncExecuter.FirstAsync(
+			(await offeringRepository.GetQueryableAsync()).Where(item => item.Id == id));
+		var intake = await inquiryAvailability.ReadAsync(offering);
 		return new AdmissionOfferingAvailabilityDto
 		{
 			ClassCapacity = detail.ClassCapacity,
 			IsAvailable = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
 			Status = detail.AvailabilityStatus,
-			CanCreateInquiry = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open &&
-				detail.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both,
+			CanCreateInquiry = intake.CanCreateInquiry,
 			CanStartApplication = detail.AvailabilityStatus == AdmissionOfferingAvailabilityStatus.Open,
 			ReasonCode = detail.Configuration.IsValid ? StatusReasonCode(detail.AvailabilityStatus) : AdmissionErrorCodes.OfferingConfigurationIncomplete,
-			ReasonMessage = detail.Configuration.IsValid ? StatusReasonMessage(detail.AvailabilityStatus) :
-				detail.Configuration.Errors.FirstOrDefault()?.Message
+			ReasonMessage = intake.Reason ?? (detail.Configuration.IsValid ? StatusReasonMessage(detail.AvailabilityStatus) :
+				detail.Configuration.Errors.FirstOrDefault()?.Message)
 		};
 	}
 

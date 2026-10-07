@@ -302,7 +302,7 @@ public class AdmissionApplicationFormService(
 		catch (JsonException) { return []; }
 	}
 
-	private static AdmissionFormDto MapDefinition(
+	internal static AdmissionFormDto MapDefinition(
 		AdmissionFormDefinition definition,
 		IEnumerable<AdmissionFormSectionDefinition> sections,
 		IReadOnlyCollection<AdmissionFormFieldDefinition> fields)

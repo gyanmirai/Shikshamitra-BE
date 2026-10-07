@@ -48,6 +48,15 @@ public class AdmissionInquiryManagement : FullAuditedAggregateRoot<Guid>, IMulti
 
 	public void Touch() => Revision++;
 
+	public void UpdatePolicy(Guid? stageDefinitionId, string snapshotJson, DateTime inquiryCreatedAt, int? firstContactDueInHours, int? qualificationDueInDays)
+	{
+		StageDefinitionId = stageDefinitionId;
+		PolicySnapshotJson = Check.NotNullOrWhiteSpace(snapshotJson, nameof(snapshotJson));
+		FirstContactDueAt = firstContactDueInHours.HasValue ? inquiryCreatedAt.ToUniversalTime().AddHours(firstContactDueInHours.Value) : null;
+		QualificationDueAt = qualificationDueInDays.HasValue ? inquiryCreatedAt.ToUniversalTime().AddDays(qualificationDueInDays.Value) : null;
+		Revision++;
+	}
+
 	public void RecordOutcome(AdmissionInquiryQualificationOutcome outcome, string answersJson, string? reasonCode, string reason,
 		Guid actor, DateTime decidedAt)
 	{

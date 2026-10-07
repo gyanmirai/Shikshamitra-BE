@@ -20,6 +20,45 @@ public class AdmissionIntakeAssignmentService(
 	IRepository<IdentityUser, Guid> users,
 	AdmissionInquiryPeopleService people) : ApplicationService, ITransientDependency
 {
+	public async Task<AdmissionCounsellorAssignmentRules> GetRulesAsync(Guid offeringId)
+	{
+		var offering = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionOffering, Guid>>().GetAsync(offeringId);
+		if (!offering.CounsellorAssignmentProfileId.HasValue)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.CounsellorRequired, "Configure an intake counsellor pool before transferring this inquiry.");
+		var profile = await profiles.GetAsync(offering.CounsellorAssignmentProfileId.Value);
+		if (profile.Kind != AdmissionIntakeProfileKind.CounsellorAssignment)
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
+		try
+		{
+			var rules = JsonSerializer.Deserialize<AdmissionCounsellorAssignmentRules>(profile.ConfigurationJson,
+				new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? throw new ArgumentException("Assignment settings are missing.");
+			rules.Validate();
+			return rules;
+		}
+		catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+		{
+			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration, exception.Message);
+		}
+	}
+
+	public async Task EnsureManualTransferAsync(Guid offeringId, Guid counsellorId, Guid inquiryId)
+	{
+		var rules = await GetRulesAsync(offeringId);
+		if (!rules.CounsellorUserIds.Contains(counsellorId) && rules.FallbackManagerUserId != counsellorId)
+			throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid, "Choose a counsellor from the offering's configured pool.");
+		await people.EnsureCanAccessOfferingAsync(counsellorId, offeringId);
+		var offering = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionOffering, Guid>>().GetAsync(offeringId);
+		await profiles.AcquireAssignmentLockAsync(offering.CounsellorAssignmentProfileId!.Value);
+		var load = await inquiries.CountAsync(item => item.Id != inquiryId && item.AssignedCounsellorId == counsellorId &&
+			item.Status != AdmissionInquiryStatus.ApplicationStarted && item.Status != AdmissionInquiryStatus.Converted &&
+			item.Status != AdmissionInquiryStatus.NotInterested && item.Status != AdmissionInquiryStatus.Lost && item.Status != AdmissionInquiryStatus.Duplicate);
+		load += await applications.CountAsync(item => item.AssignedCounsellorId == counsellorId && item.Status != AdmissionApplicationStatus.Withdrawn &&
+			item.Status != AdmissionApplicationStatus.Rejected && item.Status != AdmissionApplicationStatus.OfferDeclined && item.Status != AdmissionApplicationStatus.Enrolled && item.Status != AdmissionApplicationStatus.AdmissionFinalized);
+		load += await onboardingCases.CountAsync(item => item.AssignedToUserId == counsellorId && item.Status != StudentOnboardingStatus.Completed && item.Status != StudentOnboardingStatus.Cancelled);
+		if (load >= rules.MaxActiveCasesPerCounsellor)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.CounsellorRequired, "The selected counsellor is at capacity.");
+	}
+
 	public async Task<Guid?> ResolveAsync(AdmissionOffering offering)
 	{
 		if (!offering.CounsellorAssignmentProfileId.HasValue) return null;

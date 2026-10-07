@@ -13,7 +13,7 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Application.Communication;
 
-public class CommunicationAppService : ApplicationService, ICommunicationAppService
+public partial class CommunicationAppService : ApplicationService, ICommunicationAppService
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
 	{
@@ -166,6 +166,11 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Add,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Add);
 
+		return await CreateCampaignCoreAsync(input);
+	}
+
+	private async Task<CommunicationCampaignDto> CreateCampaignCoreAsync(CreateUpdateCommunicationCampaignDto input)
+	{
 		var campaign = new CommunicationCampaign(GuidGenerator.Create(), CurrentTenant.Id);
 		ApplyCampaignInput(campaign, input);
 
@@ -302,6 +307,11 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 			ShikshaMitraSubmodulePermissions.Communication.Campaigns.Send,
 			ShikshaMitraSubmodulePermissions.Communication.Announcements.Send);
 
+		return await PublishCampaignCoreAsync(campaign);
+	}
+
+	private async Task<CommunicationCampaignDto> PublishCampaignCoreAsync(CommunicationCampaign campaign)
+	{
 		if (campaign.PublishedAt.HasValue || await HasCampaignHistoryAsync(campaign.Id))
 		{
 			throw new BusinessException("Communication:CampaignAlreadyPublished");
@@ -369,6 +379,11 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 				{
 					MarkAttemptSkipped(attempt, "DESTINATION_MISSING", "Recipient does not have a usable destination for this channel.");
 				}
+				else if (campaign.SourceEntityType == InquiryQualificationSource &&
+					await HasWithdrawnInquiryConsentAsync(recipient, channel, attempt.Destination))
+				{
+					MarkAttemptSkipped(attempt, "CONSENT_WITHDRAWN", "Recipient withdrew consent for inquiry notifications.");
+				}
 				else if (provider.ConsentRequired && !await HasOptedInConsentAsync(recipient, channel, attempt.Destination))
 				{
 					MarkAttemptSkipped(attempt, "CONSENT_REQUIRED", "Recipient has no opt-in consent for this channel destination.");
@@ -427,12 +442,7 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 		campaign.QueuedCount = attempts.Count(x => x.Status == CommunicationDeliveryStatus.Queued);
 		campaign.DeliveredCount = attempts.Count(x => x.Status == CommunicationDeliveryStatus.Delivered);
 		campaign.FailedCount = attempts.Count(x => x.Status is CommunicationDeliveryStatus.Failed or CommunicationDeliveryStatus.Bounced or CommunicationDeliveryStatus.Skipped);
-		campaign.Status = campaign.QueuedCount switch
-		{
-			> 0 when campaign.FailedCount > 0 => CommunicationCampaignStatus.PartiallyFailed,
-			> 0 => CommunicationCampaignStatus.Queued,
-			_ => CommunicationCampaignStatus.Failed
-		};
+		campaign.Status = CommunicationCampaignDeliveryStatusResolver.Resolve(attempts.Select(attempt => attempt.Status));
 
 		await _campaignRepository.UpdateAsync(campaign, autoSave: true);
 		return MapCampaign(campaign);
@@ -1349,7 +1359,8 @@ public class CommunicationAppService : ApplicationService, ICommunicationAppServ
 
 	private ICommunicationChannelGateway GetGateway(CommunicationChannelType channel, string providerName)
 	{
-		return _channelGateways.FirstOrDefault(x => x.CanHandle(channel, providerName))
+		return _channelGateways.FirstOrDefault(x => x is not QueueOnlyCommunicationChannelGateway && x.CanHandle(channel, providerName))
+			?? _channelGateways.FirstOrDefault(x => x.CanHandle(channel, providerName))
 			?? throw new BusinessException("Communication:GatewayMissing")
 				.WithData("Channel", channel.ToString())
 				.WithData("ProviderName", providerName);

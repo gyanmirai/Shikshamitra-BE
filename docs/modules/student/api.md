@@ -12,6 +12,10 @@ audience: humans-and-agents
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
 
+## Public inquiry link options
+
+Public-link creation options are exposed through `GET /api/student/enrollment/admissions/public-inquiry-links/options?admissionCycleId={guid}` with Admission Offerings View authority. The response envelope contains distinct `{counsellorAssignmentProfileId, inquiryFormDefinitionId}` pairs from active Inquiry/Both Offerings in the published period and the current user's academic scope. Archived setups and unpublished/non-Inquiry forms are excluded. An unknown or unpublished period returns an empty list. Create keeps its existing payload and Add authority; `Admissions.PublicInquiry.OfferingRequired` remains HTTP 400 and includes corrective text plus `PeriodName`, `SetupName`, and `Reason` for absent Offerings or unmatched profile/form linkage.
+
 ## Admission student field contracts
 
 | Contract | Behavior |

@@ -12,7 +12,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
-	public async Task Legacy_inquiry_policy_should_allow_application_start_without_contact_or_qualification()
+	public async Task Legacy_inquiry_policy_should_require_interest_before_application_start()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -28,15 +28,18 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var state = await management.GetAsync(inquiry.Id);
 			state.Managed.ShouldBeTrue();
 			state.ContactCount.ShouldBe(0);
-			state.CanStartApplication.ShouldBeTrue();
-			state.Blockers.ShouldBeEmpty();
+			state.CanStartApplication.ShouldBeFalse();
+			state.Blockers.ShouldNotBeEmpty();
 			state.Policy.ApplicationStartRequirement.ShouldBe(AdmissionInquiryApplicationStartRequirement.Captured);
 			var immediate = await inquiries.CreateAsync(ManagedInquiryInput(offering));
+			(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.StartAsync(immediate.ApplicantId!.Value, offering.Id, immediate.Id)))
+				.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.QualificationRequired);
+			immediate = await inquiries.UpdateAsync(immediate.Id, InquiryStatusUpdate(immediate, AdmissionInquiryStatus.Interested));
 			var immediateApplication = await _applicationAppService.StartAsync(immediate.ApplicantId!.Value, offering.Id, immediate.Id);
 			(await _applicationRepository.GetAsync(immediateApplication.Id)).InquiryId.ShouldBe(immediate.Id);
 			var immediateState = await management.GetAsync(immediate.Id);
 			immediateState.ContactCount.ShouldBe(0);
-			immediateState.Outcome.ShouldBeNull();
+			immediateState.Outcome.ShouldBe(AdmissionInquiryQualificationOutcome.Qualified);
 			immediateState.IsLocked.ShouldBeTrue();
 
 			state = await management.RecordContactAsync(inquiry.Id, new()
@@ -67,7 +70,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	[Fact]
-	public async Task Basic_inquiry_workflow_should_keep_the_existing_application_start_behavior()
+	public async Task Basic_inquiry_workflow_should_require_interest_and_preserve_duplicate_handling()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -86,6 +89,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			input.DuplicateOverrideReason = "Verified separate family sharing the mobile number.";
 			var separate = await inquiries.CreateAsync(input);
 			separate.Id.ShouldNotBe(inquiry.Id);
+			inquiry = await inquiries.UpdateAsync(inquiry.Id, InquiryStatusUpdate(inquiry, AdmissionInquiryStatus.Interested));
 			var application = await _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, offering.Id, inquiry.Id);
 			(await _applicationRepository.GetAsync(application.Id)).InquiryId.ShouldBe(inquiry.Id);
 		}
@@ -106,8 +110,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var inquiryInput = ManagedInquiryInput(offering);
 			inquiryInput.Email = "family@example.com";
 			var inquiry = await inquiries.CreateAsync(inquiryInput);
-			(await inquiries.GetAssignableCounsellorsAsync(offering.Id))
-				.ShouldContain(item => item.Id == counsellorId);
+			(await Should.ThrowAsync<BusinessException>(() => inquiries.GetAssignableCounsellorsAsync(offering.Id)))
+				.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.CounsellorRequired);
 
 			var unassigned = await inquiries.GetListAsync(new() { IsAssigned = false, MaxResultCount = 50 });
 			unassigned.Items.ShouldContain(item => item.Id == inquiry.Id);
@@ -123,11 +127,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			queueItem.AdmissionCycleName.ShouldNotBeNullOrWhiteSpace();
 			queueItem.AdmissionOfferingCode.ShouldBe(offering.Code);
 
-			await inquiries.AssignCounsellorAsync(inquiry.Id, new()
+			(await Should.ThrowAsync<BusinessException>(() => inquiries.AssignCounsellorAsync(inquiry.Id, new()
 			{
 				Mode = AdmissionCounsellorAssignmentMode.Manual,
-				CounsellorId = counsellorId
-			});
+				CounsellorId = counsellorId,
+				Reason = "Transfer the case to the covering counsellor."
+			}))).Code.ShouldBe(AdmissionInquiryManagementErrorCodes.CounsellorRequired);
+			// Preserve a historical owner fixture to verify queue and follow-up projections independently.
+			var inquiryRepository = GetRequiredService<Volo.Abp.Domain.Repositories.IRepository<AdmissionInquiry, Guid>>();
+			var ownedInquiry = await inquiryRepository.GetAsync(inquiry.Id);
+			ownedInquiry.AssignCounsellor(counsellorId);
+			await inquiryRepository.UpdateAsync(ownedInquiry, true);
 
 			var assigned = await inquiries.GetListAsync(new()
 			{

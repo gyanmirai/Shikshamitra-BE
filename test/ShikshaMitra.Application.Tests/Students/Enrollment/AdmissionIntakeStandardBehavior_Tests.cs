@@ -62,12 +62,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 		var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
-		var input = new CreateAdmissionInquiryDto
-		{
-			AdmissionCycleId = offering.AdmissionCycleId,
-			ApplicantFirstName = "Aanya", GuardianFirstName = "Meera",
-			GuardianPhone = "9876543210", Source = AdmissionInquirySource.QrCode
-		};
+		var input = ManagedInquiryInput(offering);
+		input.GuardianPhone = "9876543210";
+		input.Source = AdmissionInquirySource.QrCode;
 		var inquiry = await inquiries.CreateAsync(input);
 		inquiry.SourceDetail.ShouldBeNull();
 		var duplicate = await Should.ThrowAsync<BusinessException>(() => inquiries.CreateAsync(input));
@@ -78,10 +75,6 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		input.DuplicateOverrideReason = "A separate family sharing a contact number.";
 		var separate = await inquiries.CreateAsync(input);
 		separate.FamilyId.ShouldNotBe(inquiry.FamilyId);
-		inquiry = await inquiries.ConfirmOfferingAsync(inquiry.Id, new()
-		{
-			OfferingId = offering.Id, ConcurrencyStamp = inquiry.ConcurrencyStamp
-		});
 
 		// Simulate the snapshot already stored by a previous release. Reading it must
 		// retire the gates without rewriting the captured policy or its deadlines.
@@ -96,12 +89,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 		var management = GetRequiredService<IAdmissionInquiryManagementAppService>();
 		var state = await management.GetAsync(inquiry.Id);
-		state.CanStartApplication.ShouldBeTrue();
-		state.Blockers.ShouldBeEmpty();
+		state.CanStartApplication.ShouldBeFalse();
+		state.Blockers.ShouldNotBeEmpty();
 		state.Policy!.RequireGuardianEmail.ShouldBeFalse();
 		state.ContactCount.ShouldBe(0);
 		state.Outcome.ShouldBeNull();
 		(await states.GetAsync(item => item.InquiryId == inquiry.Id)).PolicySnapshotJson.ShouldBe(oldSnapshot);
+		inquiry = await inquiries.UpdateAsync(inquiry.Id, InquiryStatusUpdate(inquiry, AdmissionInquiryStatus.Interested));
+		(await management.GetAsync(inquiry.Id)).CanStartApplication.ShouldBeTrue();
 		var application = await _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, offering.Id, inquiry.Id);
 		application.Id.ShouldNotBe(Guid.Empty);
 		(await management.GetAsync(inquiry.Id)).IsLocked.ShouldBeTrue();

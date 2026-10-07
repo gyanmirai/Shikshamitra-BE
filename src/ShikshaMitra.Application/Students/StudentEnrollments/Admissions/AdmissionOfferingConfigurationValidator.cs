@@ -44,10 +44,13 @@ public class AdmissionOfferingConfigurationValidator(
 		,AdmissionOfferingValidationCodes.CounsellorAssignmentProfileMissing
 	];
 
-	public async Task<AdmissionOfferingValidationResult> ValidateAsync(
+	public Task<AdmissionOfferingValidationResult> ValidateAsync(
 		Guid admissionCycleId,
 		AdmissionOfferingWriteDto input,
-		Guid? excludingOfferingId = null)
+		Guid? excludingOfferingId = null) => ValidateCoreAsync(admissionCycleId, input, excludingOfferingId, enforceUserScope: true);
+
+	private async Task<AdmissionOfferingValidationResult> ValidateCoreAsync(Guid admissionCycleId,
+		AdmissionOfferingWriteDto input, Guid? excludingOfferingId, bool enforceUserScope)
 	{
 		var errors = new List<AdmissionOfferingValidationError>();
 		var cycle = await cycleRepository.FindAsync(admissionCycleId);
@@ -63,7 +66,7 @@ public class AdmissionOfferingConfigurationValidator(
 				"Admission Cycle must be published before this Offering can be activated."));
 		}
 
-		await ValidateHierarchyAsync(cycle, input, errors);
+		await ValidateHierarchyAsync(cycle, input, errors, enforceUserScope);
 		ValidateDates(cycle, input, errors);
 		if (input.Track == AdmissionTrack.Rte && input.EntryMode != AdmissionEntryMode.DirectRegistration)
 			errors.Add(Error(AdmissionOfferingValidationCodes.RteRequiresDirectRegistration,
@@ -77,7 +80,14 @@ public class AdmissionOfferingConfigurationValidator(
 	}
 
 	public Task<AdmissionOfferingValidationResult> ValidateStoredAsync(AdmissionOffering offering) =>
-		ValidateAsync(offering.AdmissionCycleId, new CreateAdmissionOfferingDto
+		ValidateStoredCoreAsync(offering, enforceUserScope: true);
+
+	// The public inquiry caller has already resolved the offering under its verified link's tenant and cycle.
+	internal Task<AdmissionOfferingValidationResult> ValidateStoredForPublicAsync(AdmissionOffering offering) =>
+		ValidateStoredCoreAsync(offering, enforceUserScope: false);
+
+	private Task<AdmissionOfferingValidationResult> ValidateStoredCoreAsync(AdmissionOffering offering, bool enforceUserScope) =>
+		ValidateCoreAsync(offering.AdmissionCycleId, new CreateAdmissionOfferingDto
 		{
 			Name = offering.Name,
 			Track = offering.Track,
@@ -97,7 +107,7 @@ public class AdmissionOfferingConfigurationValidator(
 			InquiryIntakeProfileId = offering.InquiryIntakeProfileId,
 			CounsellorAssignmentProfileId = offering.CounsellorAssignmentProfileId,
 			IsActive = offering.IsActive
-		}, offering.Id);
+		}, offering.Id, enforceUserScope);
 
 	public static void EnsureCanSave(AdmissionOfferingValidationResult validation, bool isActive)
 	{
@@ -125,7 +135,7 @@ public class AdmissionOfferingConfigurationValidator(
 	private async Task ValidateHierarchyAsync(
 		AdmissionCycle cycle,
 		AdmissionOfferingWriteDto input,
-		ICollection<AdmissionOfferingValidationError> errors)
+		ICollection<AdmissionOfferingValidationError> errors, bool enforceUserScope)
 	{
 		if (input.CampusId.HasValue)
 		{
@@ -155,6 +165,7 @@ public class AdmissionOfferingConfigurationValidator(
 			return;
 		}
 
+		if (!enforceUserScope) return;
 		var canAccessStage = await scopeAccessService.CanAccessMediumStageAsync(
 			stage.Id, medium.Id, board.Id, cycle.AcademicYearId);
 		var visibleStandards = await scopeAccessService.FilterStandardsAsync([standard]);

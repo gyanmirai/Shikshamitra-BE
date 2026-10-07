@@ -13,6 +13,20 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 public class AdmissionIntakeSetupApiContract_Tests
 {
 	[Fact]
+	public void Public_Link_Options_Should_Require_Offering_View_And_Bind_The_Period_From_Query()
+	{
+		var method = typeof(AdmissionPublicInquiryLinksController).GetMethod(nameof(AdmissionPublicInquiryLinksController.GetOptionsAsync))!;
+		method.GetCustomAttributes(typeof(HttpGetAttribute), true).Cast<HttpGetAttribute>().Single().Template.ShouldBe("options");
+		method.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>()
+			.ShouldContain(attribute => attribute.Policy == ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View);
+		method.GetCustomAttributes(typeof(AllowAnonymousAttribute), true).ShouldBeEmpty();
+		method.GetParameters().Single().GetCustomAttributes(typeof(FromQueryAttribute), true).Length.ShouldBe(1);
+		typeof(AdmissionPublicInquiryAppService).GetMethod(nameof(AdmissionPublicInquiryAppService.GetLinkOptionsAsync))!
+			.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>()
+			.ShouldContain(attribute => attribute.Policy == ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View);
+	}
+
+	[Fact]
 	public void Controller_Should_Expose_Explicit_Setup_Lifecycle_Routes()
 	{
 		var controller = typeof(AdmissionIntakeSetupsController);

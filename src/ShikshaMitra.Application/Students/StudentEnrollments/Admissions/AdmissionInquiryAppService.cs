@@ -42,6 +42,8 @@ public class AdmissionInquiryAppService(
 	AdmissionInquiryAssignmentService assignmentService,
 	AdmissionIntakeAssignmentService intakeAssignmentService,
 	AdmissionInquiryPeopleService peopleService,
+	AdmissionInquiryFormEditService formEditService,
+	AdmissionInquiryAvailabilityService inquiryAvailability,
 	ICommunicationAppService communicationService) : ApplicationService, IAdmissionInquiryAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
@@ -55,6 +57,8 @@ public class AdmissionInquiryAppService(
 		if (rows.Count == 0) return new PagedResultDto<AdmissionInquiryDto>(count, []);
 
 		var inquiryIds = rows.Select(row => row.Id).ToList();
+		var linkedApplications = (await applicationRepository.GetListAsync(application => application.InquiryId.HasValue && inquiryIds.Contains(application.InquiryId.Value)))
+			.GroupBy(application => application.InquiryId!.Value).ToDictionary(group => group.Key, group => group.OrderByDescending(application => application.CreationTime).First().Id);
 		var managementRows = await managementRepository.GetListAsync(state => inquiryIds.Contains(state.InquiryId));
 		var openFollowUps = await followUpRepository.GetListAsync(followUp =>
 			inquiryIds.Contains(followUp.InquiryId) && followUp.Status == AdmissionInquiryFollowUpStatus.Scheduled);
@@ -71,12 +75,18 @@ public class AdmissionInquiryAppService(
 		var followUpsByInquiry = openFollowUps.GroupBy(followUp => followUp.InquiryId)
 			.ToDictionary(group => group.Key, group => group.OrderBy(followUp => followUp.ScheduledAt).ToList());
 
-		return new PagedResultDto<AdmissionInquiryDto>(count, rows.Select(row => Map(row,
+		return new PagedResultDto<AdmissionInquiryDto>(count, rows.Select(row =>
+		{
+			var dto = Map(row,
 			managementByInquiry.GetValueOrDefault(row.Id), followUpsByInquiry.GetValueOrDefault(row.Id) ?? [],
 			cycleNames.GetValueOrDefault(row.AdmissionCycleId),
 			row.AdmissionOfferingId.HasValue ? offeringCodes.GetValueOrDefault(row.AdmissionOfferingId.Value) : null,
 			row.AssignedCounsellorId.HasValue ? counsellorNames.GetValueOrDefault(row.AssignedCounsellorId.Value) : null,
-			now)).ToList());
+				now);
+			dto.ApplicationId = linkedApplications.GetValueOrDefault(row.Id) is var applicationId && applicationId != Guid.Empty ? applicationId : null;
+			dto.IsTransferred |= dto.ApplicationId.HasValue;
+			return dto;
+		}).ToList());
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View)]
@@ -84,6 +94,23 @@ public class AdmissionInquiryAppService(
 	{
 		var inquiry = await GetInquiryAsync(id);
 		var result = Map(inquiry);
+		result.ApplicationId = (await applicationRepository.FindAsync(application => application.InquiryId == inquiry.Id))?.Id;
+		result.IsTransferred |= result.ApplicationId.HasValue;
+		if (inquiry.AdmissionOfferingId.HasValue && await offeringRepository.FindAsync(inquiry.AdmissionOfferingId.Value) is { } offering)
+		{
+			result.BoardId = offering.BoardId; result.MediumId = offering.MediumId; result.StandardId = offering.StandardId;
+		}
+		var applicant = inquiry.ApplicantId.HasValue ? await applicantRepository.FindAsync(inquiry.ApplicantId.Value) : null;
+		var family = inquiry.FamilyId.HasValue ? await familyRepository.FindAsync(inquiry.FamilyId.Value) : null;
+		var guardian = family?.PrimaryGuardianId is Guid guardianId ? await guardianRepository.FindAsync(guardianId) : null;
+		if (applicant != null)
+		{
+			result.ApplicantFirstName = applicant.FirstName; result.ApplicantLastName = applicant.LastName; result.ApplicantDateOfBirth = applicant.DateOfBirth;
+		}
+		if (guardian != null)
+		{
+			result.GuardianFirstName = guardian.FirstName; result.GuardianLastName = guardian.LastName;
+		}
 		if (inquiry.FormResponseDefinitionId is not Guid formId ||
 			string.IsNullOrWhiteSpace(inquiry.FormResponseSnapshotJson)) return result;
 		var snapshot = JsonSerializer.Deserialize<Dictionary<string, string>>(
@@ -91,9 +118,20 @@ public class AdmissionInquiryAppService(
 		if (snapshot == null) return result;
 		var answers = new Dictionary<string, string>(snapshot, StringComparer.OrdinalIgnoreCase);
 		var fields = await formFieldRepository.GetListAsync(field => field.FormDefinitionId == formId);
+		// Older intake forms captured mandatory identity outside the form response.
+		foreach (var field in fields.Where(field => field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey)))
+			if (!answers.ContainsKey(field.BindingKey!) && applicant != null)
+				answers[field.BindingKey!] = JsonSerializer.Serialize(AdmissionFormBindingRegistry.GetValue(field.BindingKey!, applicant, guardian));
 		var sections = await formSectionRepository.GetListAsync(section => section.FormDefinitionId == formId);
+		if (await formRepository.FindAsync(formId) is { } formDefinition)
+			result.FormDefinition = AdmissionApplicationFormService.MapDefinition(formDefinition, sections, fields);
 		var sectionOrder = sections.ToDictionary(section => section.Id, section => section.DisplayOrder);
 		result.FormResponseDefinitionId = formId;
+		result.FormValues = fields.Select(field => new AdmissionFormValueDto
+		{
+			FieldCode = field.Code,
+			ValueJson = answers.GetValueOrDefault(string.IsNullOrWhiteSpace(field.BindingKey) ? field.Code : field.BindingKey!)
+		}).ToList();
 		result.FormAnswers = fields
 			.OrderBy(field => sectionOrder.GetValueOrDefault(field.SectionId))
 			.ThenBy(field => field.DisplayOrder)
@@ -146,7 +184,7 @@ public class AdmissionInquiryAppService(
 			{
 				Csv(row.InquiryNumber), Csv(row.ApplicantName), Csv(row.NormalizedPhone), Csv(row.Email),
 				Csv(row.PreferredLanguageCode), Csv(row.Source.ToString()), Csv(row.SourceDetail),
-				Csv(row.Status.ToString()), Csv(row.AssignedCounsellorId.HasValue
+				Csv(AdmissionInquiryStatusRules.Display(row.Status) switch { AdmissionInquiryStatus.New => "Pending", AdmissionInquiryStatus.Interested => "Interested", _ => "Not interested" }), Csv(row.AssignedCounsellorId.HasValue
 					? counsellorNames.GetValueOrDefault(row.AssignedCounsellorId.Value) : null),
 				Csv(row.CreationTime.ToString("O"))
 			}));
@@ -171,35 +209,27 @@ public class AdmissionInquiryAppService(
 		if (!Enum.IsDefined(input.Source))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose a valid inquiry source.");
-		AdmissionOffering? offering = null;
-		AdmissionCycle cycle;
-		if (input.AdmissionOfferingId.HasValue)
-		{
-			var runtime = await offeringRuntimeService.GetAvailableAsync(input.AdmissionOfferingId.Value);
-			offering = runtime.Offering;
-			cycle = runtime.Cycle;
-			if (offering.EntryMode is not (AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both))
-				throw new BusinessException(AdmissionErrorCodes.InquiryEntryNotAllowed,
-					"This Admission Offering starts directly with Registration.");
-			if (isPublic)
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput);
-			await scopeAccess.EnsureOfferingAccessAsync(offering.Id);
-			AdmissionInquiryAcademicSelectionValidator.EnsureMatches(input, offering);
-		}
-		else
-		{
-			cycle = await cycleRepository.FindAsync(input.AdmissionCycleId) ??
-				throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound);
-			if (cycle.Status != AdmissionCycleStatus.Published ||
-				(!isPublic && !await AsyncExecuter.AnyAsync((await applicationScope.GetScopedOfferingsAsync())
-					.Where(candidate => candidate.AdmissionCycleId == cycle.Id))))
-				throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound);
-			if (input.FormValues.Count > 0 && (!isPublic || !publicFormDefinitionId.HasValue))
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
-					"Choose an offering before submitting an offering-specific inquiry form.");
-		}
+		if (!input.AdmissionOfferingId.HasValue)
+			throw new BusinessException(AdmissionErrorCodes.InquiryOfferingRequired,
+				"Select a class with an open admission offering before capturing an inquiry.");
+		var runtime = isPublic
+			? await offeringRuntimeService.GetAvailableForPublicAsync(input.AdmissionOfferingId.Value, input.AdmissionCycleId)
+			: await offeringRuntimeService.GetAvailableAsync(input.AdmissionOfferingId.Value);
+		var offering = runtime.Offering;
+		var cycle = runtime.Cycle;
+		if (offering.EntryMode is not (AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both))
+			throw new BusinessException(AdmissionErrorCodes.InquiryEntryNotAllowed,
+				"This Admission Offering starts directly with Registration.");
+		if (isPublic) await inquiryAvailability.EnsureAvailableForPublicAsync(offering);
+		else await inquiryAvailability.EnsureAvailableAsync(offering);
+		if (!isPublic) await scopeAccess.EnsureOfferingAccessAsync(offering.Id);
+		AdmissionInquiryAcademicSelectionValidator.EnsureMatches(input, offering);
+		if (isPublic && (offering.CounsellorAssignmentProfileId != publicAssignmentProfileId ||
+			(publicFormDefinitionId.HasValue && offering.InquiryFormDefinitionId != publicFormDefinitionId)))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
+				"Choose an admission option configured for this public inquiry link.");
 
-		if (isPublic && input.FormValues.GroupBy(item => item.FieldCode, StringComparer.OrdinalIgnoreCase)
+		if (input.FormValues.GroupBy(item => item.FieldCode, StringComparer.OrdinalIgnoreCase)
 			.Any(group => group.Count() > 1))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Submit each inquiry field once.");
@@ -216,7 +246,6 @@ public class AdmissionInquiryAppService(
 			if (form == null || form.Status != AdmissionFormStatus.Published ||
 				(isPublic && form.Purpose != AdmissionFormPurpose.Inquiry))
 				throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
-			if (isPublic)
 			{
 				var fieldCodes = fields.Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
 				if (values.Keys.Any(code => !fieldCodes.Contains(code)))
@@ -227,15 +256,6 @@ public class AdmissionInquiryAppService(
 				if (validation.Errors.Count > 0)
 					throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed)
 						.WithData("Fields", string.Join(", ", validation.FieldErrors.Keys));
-			}
-			else
-			{
-				var missing = fields.Where(x => x.Required && IsVisible(x.VisibilityRuleJson, values) &&
-					(!values.TryGetValue(x.Code, out var value) || string.IsNullOrWhiteSpace(value)) &&
-					string.IsNullOrWhiteSpace(x.DefaultValue)).Select(x => x.Code).ToList();
-				if (missing.Count > 0)
-					throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed)
-						.WithData("Fields", string.Join(", ", missing));
 			}
 		}
 		input.ApplicantName = AdmissionInquiryIdentityFieldResolver.Resolve(values, inquiryFields,
@@ -359,7 +379,7 @@ public class AdmissionInquiryAppService(
 		else if (managedPolicy != null && offering != null &&
 			await assignmentService.ResolvePolicyAssignmentAsync(managedPolicy.Policy, offering.Id) is Guid counsellorId)
 			inquiry.AssignCounsellor(counsellorId);
-		if (input.FormValues.Count > 0)
+		if (inquiryFormId.HasValue)
 		{
 			var snapshot = input.FormValues
 				.Join(inquiryFields, value => value.FieldCode, field => field.Code,
@@ -371,8 +391,7 @@ public class AdmissionInquiryAppService(
 				.GroupBy(value => value.Key, StringComparer.OrdinalIgnoreCase)
 				.ToDictionary(group => group.Key, group => group.Last().ValueJson,
 					StringComparer.OrdinalIgnoreCase);
-			if (snapshot.Count > 0)
-				inquiry.RecordFormResponseSnapshot(JsonSerializer.Serialize(snapshot), inquiryFormId);
+			inquiry.RecordFormResponseSnapshot(JsonSerializer.Serialize(snapshot), inquiryFormId);
 		}
 		await inquiryRepository.InsertAsync(inquiry, autoSave: false);
 		await inquiryRuntime.EnsureManagementAsync(inquiry);
@@ -392,6 +411,7 @@ public class AdmissionInquiryAppService(
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState,
 				"This inquiry already has a confirmed offering.");
 		var offering = (await offeringRuntimeService.GetAvailableAsync(input.OfferingId)).Offering;
+		await inquiryAvailability.EnsureAvailableAsync(offering);
 		await scopeAccess.EnsureOfferingAccessAsync(offering.Id);
 		if (offering.AdmissionCycleId != inquiry.AdmissionCycleId ||
 			offering.EntryMode is not (AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both))
@@ -434,7 +454,7 @@ public class AdmissionInquiryAppService(
 	public async Task<AdmissionInquiryDto> UpdateAsync(Guid id, UpdateAdmissionInquiryDto input)
 	{
 		var inquiry = await GetInquiryAsync(id);
-		if (inquiry.Status is AdmissionInquiryStatus.ApplicationStarted or AdmissionInquiryStatus.Converted)
+		if (AdmissionInquiryStatusRules.IsTransferred(inquiry.Status) || await applicationRepository.AnyAsync(application => application.InquiryId == inquiry.Id))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState,
 				"Inquiry details are locked after the application has started.");
 		if (string.IsNullOrWhiteSpace(input.ConcurrencyStamp) ||
@@ -444,11 +464,37 @@ public class AdmissionInquiryAppService(
 		if (!Enum.IsDefined(input.Source))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose a valid inquiry source.");
+		var offeringId = input.AdmissionOfferingId ?? inquiry.AdmissionOfferingId ?? throw new BusinessException(AdmissionErrorCodes.InquiryOfferingRequired);
+		if (input.Status.HasValue) AdmissionInquiryRuntimeService.EnsureValidStatusChange(inquiry, input.Status.Value, input.StatusReason);
+		var offering = offeringId != inquiry.AdmissionOfferingId
+			? (await offeringRuntimeService.GetAvailableAsync(offeringId)).Offering : await offeringRepository.GetAsync(offeringId);
+		if (offeringId == inquiry.AdmissionOfferingId && (input.BoardId.HasValue || input.MediumId.HasValue || input.StandardId.HasValue))
+			AdmissionInquiryAcademicSelectionValidator.EnsureMatches(new CreateAdmissionInquiryDto
+			{
+				AdmissionCycleId = inquiry.AdmissionCycleId, BoardId = input.BoardId ?? offering.BoardId,
+				MediumId = input.MediumId ?? offering.MediumId, StandardId = input.StandardId ?? offering.StandardId
+			}, offering);
+		if (offeringId != inquiry.AdmissionOfferingId)
+		{
+			await inquiryAvailability.EnsureAvailableAsync(offering);
+			await scopeAccess.EnsureOfferingAccessAsync(offering.Id);
+			if (offering.AdmissionCycleId != inquiry.AdmissionCycleId || offering.EntryMode == AdmissionEntryMode.DirectRegistration)
+				throw new BusinessException(AdmissionErrorCodes.InquiryEntryNotAllowed);
+			var newPolicy = await policyResolver.ResolveAsync(offering.Id);
+			if (newPolicy?.Policy.AllowedSources.Count > 0 && !newPolicy.Policy.AllowedSources.Contains(input.Source))
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceNotAllowed);
+			AdmissionInquiryAcademicSelectionValidator.EnsureMatches(new CreateAdmissionInquiryDto
+			{
+				AdmissionCycleId = inquiry.AdmissionCycleId, BoardId = input.BoardId ?? Guid.Empty,
+				MediumId = input.MediumId ?? Guid.Empty, StandardId = input.StandardId ?? Guid.Empty
+			}, offering);
+		}
+		await formEditService.ApplyAsync(inquiry, input, offering);
 		var normalizedPhone = AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(input.Phone);
 		var duplicate = await AsyncExecuter.AnyAsync((await inquiryRepository.GetQueryableAsync()).Where(candidate =>
 			candidate.Id != inquiry.Id && candidate.AdmissionCycleId == inquiry.AdmissionCycleId &&
 			candidate.NormalizedPhone == normalizedPhone));
-		if (duplicate)
+		if (duplicate && normalizedPhone != inquiry.NormalizedPhone)
 			throw new BusinessException(AdmissionErrorCodes.InquiryDuplicate,
 				"Another inquiry in this admission cycle already uses this mobile number.");
 		var before = new
@@ -462,23 +508,52 @@ public class AdmissionInquiryAppService(
 		};
 		inquiry.UpdateDetails(input.ApplicantName, normalizedPhone, input.Email, input.Source,
 			input.SourceDetail, input.PreferredLanguageCode);
+		if (offering.Id != inquiry.AdmissionOfferingId)
+		{
+			inquiry.ConfirmOffering(offering.Id);
+			await inquiryRuntime.RefreshPolicyAsync(inquiry);
+			var ownerInPool = true;
+			if (offering.CounsellorAssignmentProfileId.HasValue && inquiry.AssignedCounsellorId.HasValue)
+			{
+				var assignmentRules = await intakeAssignmentService.GetRulesAsync(offering.Id);
+				ownerInPool = assignmentRules.CounsellorUserIds.Contains(inquiry.AssignedCounsellorId.Value) || assignmentRules.FallbackManagerUserId == inquiry.AssignedCounsellorId;
+			}
+			if (!inquiry.AssignedCounsellorId.HasValue || !ownerInPool || !await peopleService.CanAccessOfferingAsync(inquiry.AssignedCounsellorId.Value, offering.Id))
+			{
+				var owner = await intakeAssignmentService.ResolveAsync(offering);
+				if (!owner.HasValue && inquiry.AssignedCounsellorId.HasValue)
+					throw new BusinessException(AdmissionInquiryManagementErrorCodes.CounsellorRequired, "Configure a counsellor pool for the selected admission option before transferring this inquiry.");
+				if (owner.HasValue)
+				{
+					inquiry.AssignCounsellor(owner.Value);
+					foreach (var followUp in await followUpRepository.GetListAsync(item => item.InquiryId == inquiry.Id && item.Status == AdmissionInquiryFollowUpStatus.Scheduled))
+					{ followUp.Reassign(owner.Value); await followUpRepository.UpdateAsync(followUp, false); }
+				}
+			}
+		}
+		if (input.Status.HasValue)
+		{
+			var previousStatus = inquiry.Status;
+			await inquiryRuntime.UpdateStatusAsync(inquiry, input.Status.Value, input.StatusReason);
+			if (previousStatus != inquiry.Status)
+				await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
+					"InquiryStatusChanged", $"Inquiry status changed to {(input.Status == AdmissionInquiryStatus.New ? "Pending" : input.Status == AdmissionInquiryStatus.Interested ? "Interested" : "Not interested")}", inquiry.ApplicantId, null, inquiry.Id,
+					JsonSerializer.Serialize(new { PreviousStatus = previousStatus, Status = input.Status, input.StatusReason, Actor = CurrentUser.Id })), false);
+		}
 		await inquiryRepository.UpdateAsync(inquiry, autoSave: false);
 		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
 			"InquiryDetailsUpdated", "Inquiry details updated", inquiry.ApplicantId, null, inquiry.Id,
 			JsonSerializer.Serialize(new { Before = before, After = input, Actor = CurrentUser.Id })), autoSave: true);
-		return Map(inquiry);
+		return await GetAsync(inquiry.Id);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
 	public async Task<AdmissionInquiryDto> SetStatusAsync(Guid id, AdmissionInquiryStatus status, Guid? duplicateOfId = null)
 	{
 		var inquiry = await GetInquiryAsync(id);
-		if (await inquiryRuntime.EnsureManagementAsync(inquiry) != null)
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState,
-				"Use the managed qualification action to change this inquiry status.");
-		if (status == AdmissionInquiryStatus.Duplicate && (!duplicateOfId.HasValue || duplicateOfId == id || await inquiryRepository.FindAsync(duplicateOfId.Value) == null))
-			throw new BusinessException(AdmissionErrorCodes.InquiryDuplicateTargetInvalid);
-		inquiry.SetStatus(status, duplicateOfId);
+		if (await applicationRepository.AnyAsync(application => application.InquiryId == inquiry.Id))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+		await inquiryRuntime.UpdateStatusAsync(inquiry, status, null);
 		await inquiryRepository.UpdateAsync(inquiry, autoSave: true);
 		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "InquiryStatusChanged", $"Inquiry status changed to {status}", inquiry.ApplicantId, null, inquiry.Id), autoSave: true);
 		return Map(inquiry);
@@ -562,19 +637,32 @@ public class AdmissionInquiryAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Assign)]
-	public Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(
+	public async Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(
 		Guid? admissionOfferingId = null,
-		string? filter = null) => peopleService.GetCounsellorsAsync(filter, admissionOfferingId);
+		string? filter = null)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
+		if (!admissionOfferingId.HasValue) return [];
+		await scopeAccess.EnsureOfferingAccessAsync(admissionOfferingId.Value);
+		var rules = await intakeAssignmentService.GetRulesAsync(admissionOfferingId.Value);
+		var candidates = rules.CounsellorUserIds.ToList();
+		if (rules.FallbackManagerUserId.HasValue) candidates.Add(rules.FallbackManagerUserId.Value);
+		return await peopleService.GetCounsellorsAsync(filter, admissionOfferingId, candidates);
+	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Assign)]
 	public async Task<AdmissionInquiryDto> AssignCounsellorAsync(Guid id, AssignAdmissionCounsellorDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
+		if (string.IsNullOrWhiteSpace(input.Reason) || input.Mode != AdmissionCounsellorAssignmentMode.Manual)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Choose a counsellor and provide a transfer reason.");
 		var inquiry = await GetInquiryAsync(id);
 		if (await applicationRepository.AnyAsync(application => application.InquiryId == inquiry.Id))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState,
 				"Change the owner on the linked application so the full case moves together.");
 		var counsellorId = await assignmentService.ResolveExplicitAsync(input,
 			inquiry.AdmissionOfferingId ?? throw new BusinessException(AdmissionErrorCodes.InquiryOfferingRequired));
+		await intakeAssignmentService.EnsureManualTransferAsync(inquiry.AdmissionOfferingId.Value, counsellorId, inquiry.Id);
 		inquiry.AssignCounsellor(counsellorId);
 		await inquiryRepository.UpdateAsync(inquiry, false);
 		foreach (var followUp in await followUpRepository.GetListAsync(item => item.InquiryId == inquiry.Id &&
@@ -585,13 +673,16 @@ public class AdmissionInquiryAppService(
 		}
 		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
 			"CounsellorAssigned", $"Counsellor assigned: {counsellorId}", inquiry.ApplicantId, null, inquiry.Id,
-			JsonSerializer.Serialize(new { AssignedBy = CurrentUser.Id })), true);
+			JsonSerializer.Serialize(new { AssignedBy = CurrentUser.Id, input.Reason })), true);
 		return Map(inquiry);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Assign)]
 	public async Task<BulkAdmissionInquiryResultDto> BulkAssignCounsellorAsync(BulkAssignAdmissionInquiriesDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
+		if (string.IsNullOrWhiteSpace(input.Assignment.Reason) || input.Assignment.Mode != AdmissionCounsellorAssignmentMode.Manual)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Choose a counsellor and provide a transfer reason.");
 		var inquiryIds = input.InquiryIds.Distinct().ToList();
 		if (inquiryIds.Count is < 1 or > 100)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
@@ -609,6 +700,7 @@ public class AdmissionInquiryAppService(
 		{
 			var counsellorId = await assignmentService.ResolveExplicitAsync(input.Assignment,
 				inquiry.AdmissionOfferingId ?? throw new BusinessException(AdmissionErrorCodes.InquiryOfferingRequired));
+			await intakeAssignmentService.EnsureManualTransferAsync(inquiry.AdmissionOfferingId.Value, counsellorId, inquiry.Id);
 			inquiry.AssignCounsellor(counsellorId);
 			await inquiryRepository.UpdateAsync(inquiry, autoSave: false);
 			foreach (var followUp in await followUpRepository.GetListAsync(item => item.InquiryId == inquiry.Id &&
@@ -619,7 +711,7 @@ public class AdmissionInquiryAppService(
 			}
 			await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
 				"CounsellorAssigned", $"Counsellor assigned: {counsellorId}", inquiry.ApplicantId, null,
-				inquiry.Id, JsonSerializer.Serialize(new { Bulk = true, Actor = CurrentUser.Id })), autoSave: false);
+				inquiry.Id, JsonSerializer.Serialize(new { Bulk = true, Actor = CurrentUser.Id, input.Assignment.Reason })), autoSave: false);
 		}
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return new BulkAdmissionInquiryResultDto
@@ -786,11 +878,28 @@ public class AdmissionInquiryAppService(
 		var now = Clock.Now.ToUniversalTime();
 		var normalizedSearch = input.Search?.Trim();
 		var pipelineGroup = NormalizePipelineGroup(input.PipelineGroup);
+		var applications = await applicationRepository.GetQueryableAsync();
+		if (input.IsTransferred.HasValue || input.ExcludePostApplication || pipelineGroup != null)
+		{
+			var transferred = input.IsTransferred ?? (!input.ExcludePostApplication && pipelineGroup == "handoff");
+			query = transferred
+				? query.Where(inquiry => inquiry.Status == AdmissionInquiryStatus.ApplicationStarted || inquiry.Status == AdmissionInquiryStatus.Converted || applications.Any(application => application.InquiryId == inquiry.Id))
+				: query.Where(inquiry => inquiry.Status != AdmissionInquiryStatus.ApplicationStarted && inquiry.Status != AdmissionInquiryStatus.Converted && !applications.Any(application => application.InquiryId == inquiry.Id));
+		}
+		if (input.Status.HasValue)
+		{
+			query = input.Status.Value switch
+			{
+				AdmissionInquiryStatus.New => query.Where(inquiry => inquiry.Status == AdmissionInquiryStatus.New || inquiry.Status == AdmissionInquiryStatus.Contacted || inquiry.Status == AdmissionInquiryStatus.FollowUp),
+				AdmissionInquiryStatus.Interested => query.Where(inquiry => inquiry.Status == AdmissionInquiryStatus.Interested || inquiry.Status == AdmissionInquiryStatus.ApplicationStarted || inquiry.Status == AdmissionInquiryStatus.Converted),
+				AdmissionInquiryStatus.NotInterested => query.Where(inquiry => inquiry.Status == AdmissionInquiryStatus.NotInterested || inquiry.Status == AdmissionInquiryStatus.Lost || inquiry.Status == AdmissionInquiryStatus.Duplicate),
+				_ => query.Where(inquiry => inquiry.Status == input.Status.Value)
+			};
+		}
 		query = query.Where(x => (!input.AdmissionCycleId.HasValue || x.AdmissionCycleId == input.AdmissionCycleId) &&
 			(!input.AdmissionOfferingId.HasValue || x.AdmissionOfferingId == input.AdmissionOfferingId) &&
 			(!input.ExcludePostApplication ||
 				(x.Status != AdmissionInquiryStatus.ApplicationStarted && x.Status != AdmissionInquiryStatus.Converted)) &&
-			(!input.Status.HasValue || x.Status == input.Status) &&
 			(!input.Source.HasValue || x.Source == input.Source) &&
 			(!input.AssignedCounsellorId.HasValue || x.AssignedCounsellorId == input.AssignedCounsellorId) &&
 			(!input.IsAssigned.HasValue ||
@@ -798,17 +907,6 @@ public class AdmissionInquiryAppService(
 			(string.IsNullOrWhiteSpace(normalizedSearch) || x.ApplicantName.Contains(normalizedSearch) ||
 				x.NormalizedPhone.Contains(normalizedSearch) || x.InquiryNumber.Contains(normalizedSearch) ||
 				(x.Email != null && x.Email.Contains(normalizedSearch))));
-		if (pipelineGroup == "active")
-			query = query.Where(x => x.Status == AdmissionInquiryStatus.New ||
-				x.Status == AdmissionInquiryStatus.Contacted ||
-				x.Status == AdmissionInquiryStatus.Interested ||
-				x.Status == AdmissionInquiryStatus.FollowUp);
-		if (pipelineGroup == "handoff")
-			query = query.Where(x => x.Status == AdmissionInquiryStatus.ApplicationStarted ||
-				x.Status == AdmissionInquiryStatus.Converted ||
-				x.Status == AdmissionInquiryStatus.NotInterested ||
-				x.Status == AdmissionInquiryStatus.Lost ||
-				x.Status == AdmissionInquiryStatus.Duplicate);
 		var inquiryNumber = input.InquiryNumber?.Trim();
 		if (!string.IsNullOrWhiteSpace(inquiryNumber))
 		{
@@ -907,7 +1005,9 @@ public class AdmissionInquiryAppService(
 		AdmissionOfferingCode = offeringCode,
 		ApplicantName = x.ApplicantName, NormalizedPhone = x.NormalizedPhone, Email = x.Email,
 		PreferredLanguageCode = x.PreferredLanguageCode,
-		Source = x.Source, SourceDetail = x.SourceDetail, Status = x.Status, DuplicateOfId = x.DuplicateOfId,
+			Source = x.Source, SourceDetail = x.SourceDetail, Status = AdmissionInquiryStatusRules.Display(x.Status), LegacyStatus = x.Status,
+			IsTransferred = AdmissionInquiryStatusRules.IsTransferred(x.Status), IsDuplicate = x.Status == AdmissionInquiryStatus.Duplicate || x.DuplicateOfId.HasValue,
+			FormResponseDefinitionId = x.FormResponseDefinitionId, DuplicateOfId = x.DuplicateOfId,
 		ContactedAt = x.ContactedAt, LastActivityAt = x.LastActivityAt, CreationTime = x.CreationTime, CreatorId = x.CreatorId,
 		LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId,
 		Managed = management != null,

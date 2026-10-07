@@ -26,7 +26,21 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 	public string? SourceDetail { get; set; }
 	public Guid? FormResponseDefinitionId { get; set; }
 	public List<AdmissionInquiryFormAnswerDto> FormAnswers { get; set; } = [];
+	public List<AdmissionFormValueDto> FormValues { get; set; } = [];
+	public AdmissionFormDto? FormDefinition { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? MediumId { get; set; }
+	public Guid? StandardId { get; set; }
+	public string? GuardianFirstName { get; set; }
+	public string? GuardianLastName { get; set; }
+	public string? ApplicantFirstName { get; set; }
+	public string? ApplicantLastName { get; set; }
+	public DateTime? ApplicantDateOfBirth { get; set; }
 	public AdmissionInquiryStatus Status { get; set; }
+	public AdmissionInquiryStatus LegacyStatus { get; set; }
+	public bool IsTransferred { get; set; }
+	public bool IsDuplicate { get; set; }
+	public Guid? ApplicationId { get; set; }
 	public Guid? DuplicateOfId { get; set; }
 	public DateTime? ContactedAt { get; set; }
 	public DateTime? LastActivityAt { get; set; }
@@ -103,12 +117,20 @@ public class AdmissionInquiryListInput : PagedAndSortedResultRequestDto
 	public Guid? AssignedCounsellorId { get; set; }
 	public bool? IsAssigned { get; set; }
 	public bool ExcludePostApplication { get; set; }
+	public bool? IsTransferred { get; set; }
 	public AdmissionInquiryWorkQueue? WorkQueue { get; set; }
 	public string? Search { get; set; }
 }
 
 public class UpdateAdmissionInquiryDto
 {
+	public Guid? AdmissionOfferingId { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? MediumId { get; set; }
+	public Guid? StandardId { get; set; }
+	public List<AdmissionFormValueDto>? FormValues { get; set; }
+	public AdmissionInquiryStatus? Status { get; set; }
+	[StringLength(1024)] public string? StatusReason { get; set; }
 	[Required, StringLength(256, MinimumLength = 1)]
 	public string ApplicantName { get; set; } = string.Empty;
 	[Required, StringLength(32, MinimumLength = 7)]
@@ -164,7 +186,7 @@ public class BulkAdmissionInquiryResultDto
 
 public class AdmissionInquiryDuplicateCheckInput { public Guid AdmissionCycleId { get; set; } public string GuardianPhone { get; set; } = string.Empty; public string? GuardianEmail { get; set; } public string ApplicantName { get; set; } = string.Empty; public DateTime? ApplicantDateOfBirth { get; set; } }
 public class AdmissionInquiryDuplicateMatchDto { public Guid ApplicantId { get; set; } public Guid FamilyId { get; set; } public Guid? ExistingInquiryId { get; set; } public string? ExistingInquiryNumber { get; set; } public string ApplicantName { get; set; } = string.Empty; public string? GuardianPhone { get; set; } public string? GuardianEmail { get; set; } public DateTime? DateOfBirth { get; set; } public bool CanLinkFamily { get; set; } }
-public class AssignAdmissionCounsellorDto { public AdmissionCounsellorAssignmentMode Mode { get; set; } public Guid? CounsellorId { get; set; } public List<Guid> CandidateCounsellorIds { get; set; } = []; }
+public class AssignAdmissionCounsellorDto { public AdmissionCounsellorAssignmentMode Mode { get; set; } public Guid? CounsellorId { get; set; } public List<Guid> CandidateCounsellorIds { get; set; } = []; [StringLength(1024)] public string? Reason { get; set; } }
 
 public class CreateAdmissionInquiryCommunicationDto
 {

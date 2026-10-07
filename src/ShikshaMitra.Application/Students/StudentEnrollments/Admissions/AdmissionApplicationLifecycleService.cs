@@ -29,6 +29,7 @@ public class AdmissionApplicationLifecycleService(
 	IRepository<AdmissionActivity, Guid> activityRepository,
 	IAdmissionReferenceSequenceRepository referenceSequenceRepository,
 	AdmissionOfferingRuntimeService offeringRuntimeService,
+	AdmissionInquiryAvailabilityService inquiryAvailability,
 	AdmissionInquiryRuntimeService inquiryRuntime,
 	AdmissionWorkflowStageHandlerRegistry stageHandlerRegistry)
 	: ApplicationService, ITransientDependency
@@ -36,7 +37,13 @@ public class AdmissionApplicationLifecycleService(
 	public async Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId)
 	{
 		var existing = await FindExistingAsync(applicantId, offeringId);
-		if (existing != null) return AdmissionApplicationMapper.ToDto(existing);
+		if (existing != null)
+		{
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().EnsureCanAccessAsync(existing);
+			if (inquiryId.HasValue && existing.InquiryId != inquiryId)
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "An application already exists for this applicant and offering.");
+			return AdmissionApplicationMapper.ToDto(existing);
+		}
 		var applicant = await applicantRepository.FindAsync(applicantId) ??
 			throw new EntityNotFoundException(typeof(AdmissionApplicant), applicantId);
 		var offering = (await offeringRuntimeService.GetAvailableAsync(offeringId)).Offering;
@@ -49,6 +56,7 @@ public class AdmissionApplicationLifecycleService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable,
 				"This Admission Offering starts directly with Registration.");
 		await inquiryRuntime.EnsureCanStartApplicationAsync(offering.Id, inquiry);
+		if (inquiry != null) await inquiryAvailability.EnsureAvailableAsync(offering);
 		var workflow = await workflowRepository.FindAsync(offering.WorkflowDefinitionId!.Value);
 		var form = await formRepository.FindAsync(offering.ApplicationFormDefinitionId!.Value);
 		if (workflow == null || !workflow.Status.IsRuntimeVersion() || form?.Status != AdmissionFormStatus.Published)

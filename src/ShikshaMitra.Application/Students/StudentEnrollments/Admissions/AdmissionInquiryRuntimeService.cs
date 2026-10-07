@@ -15,6 +15,43 @@ public class AdmissionInquiryRuntimeService(
 	IRepository<AdmissionInquiryManagement, Guid> management,
 	AdmissionInquiryPolicyResolver policies) : ApplicationService, ITransientDependency
 {
+	public async Task UpdateStatusAsync(AdmissionInquiry inquiry, AdmissionInquiryStatus status, string? reason)
+	{
+		EnsureValidStatusChange(inquiry, status, reason);
+		if (inquiry.Status == status) return;
+		var state = await EnsureManagementAsync(inquiry);
+		if (state != null)
+		{
+			var policy = AdmissionInquiryPolicyResolver.ReadSnapshot(state.PolicySnapshotJson);
+			if (policy.RestrictActionsToAssignedCounsellor && inquiry.AssignedCounsellorId != CurrentUser.Id)
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "Only the assigned counsellor can update the inquiry status.");
+			if (status == AdmissionInquiryStatus.New) { if (state.Outcome.HasValue) state.Reopen(); }
+			else state.RecordOutcome(status == AdmissionInquiryStatus.Interested ? AdmissionInquiryQualificationOutcome.Qualified : AdmissionInquiryQualificationOutcome.NotInterested,
+				"[]", status == AdmissionInquiryStatus.NotInterested ? "OTHER" : null, string.IsNullOrWhiteSpace(reason) ? "Family confirmed interest in admission." : reason, CurrentUser.Id ?? Guid.Empty, Clock.Now);
+			await management.UpdateAsync(state, false);
+		}
+		inquiry.SetStatus(status);
+	}
+
+	public static void EnsureValidStatusChange(AdmissionInquiry inquiry, AdmissionInquiryStatus status, string? reason)
+	{
+		if (!AdmissionInquiryStatusRules.IsBusinessStatus(status) || AdmissionInquiryStatusRules.IsTransferred(inquiry.Status) || inquiry.Status == AdmissionInquiryStatus.Duplicate)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "Choose Pending, Interested, or Not interested for an open inquiry.");
+		if (inquiry.Status == status) return;
+		if ((status == AdmissionInquiryStatus.NotInterested || status == AdmissionInquiryStatus.New && AdmissionInquiryStatusRules.Display(inquiry.Status) == AdmissionInquiryStatus.NotInterested) && string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Provide a reason for closing or reopening the inquiry.");
+	}
+
+	public async Task RefreshPolicyAsync(AdmissionInquiry inquiry)
+	{
+		var state = await management.FindAsync(item => item.InquiryId == inquiry.Id);
+		if (state == null) { await EnsureManagementAsync(inquiry); return; }
+		var context = await policies.ResolveAsync(inquiry.AdmissionOfferingId);
+		if (context == null) return;
+		state.UpdatePolicy(context.Definition?.Id, context.SnapshotJson, inquiry.CreationTime,
+			context.Policy.FirstContactDueInHours, context.Policy.QualificationDueInDays);
+		await management.UpdateAsync(state, false);
+	}
 	public async Task<AdmissionInquiryManagement?> EnsureManagementAsync(AdmissionInquiry inquiry)
 	{
 		var existing = await management.FindAsync(item => item.InquiryId == inquiry.Id);
@@ -28,6 +65,9 @@ public class AdmissionInquiryRuntimeService(
 
 	public async Task EnsureCanStartApplicationAsync(Guid offeringId, AdmissionInquiry? inquiry)
 	{
+		if (inquiry != null && inquiry.Status != AdmissionInquiryStatus.Interested)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.QualificationRequired,
+				"Mark the inquiry Interested before moving to the next stage.");
 		var context = await policies.ResolveAsync(offeringId);
 		if (context == null) return;
 		if (inquiry == null)

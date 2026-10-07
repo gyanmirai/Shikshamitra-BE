@@ -76,13 +76,17 @@ public class AdmissionInquiry : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void MarkContacted(DateTime contactedAt)
 	{
-		Status = AdmissionInquiryStatus.Contacted;
 		ContactedAt = contactedAt;
 		LastActivityAt = contactedAt;
 	}
 
 	public void SetStatus(AdmissionInquiryStatus status, Guid? duplicateOfId = null)
 	{
+		if (status == AdmissionInquiryStatus.Interested && !this.GetProperty<DateTime?>("QualificationEmailRequestedAt").HasValue)
+		{
+			this.SetProperty("QualificationEmailRequestedAt", DateTime.UtcNow);
+			AddDistributedEvent(new AdmissionInquiryInterestedEto(Id, TenantId));
+		}
 		Status = status;
 		DuplicateOfId = duplicateOfId;
 		LastActivityAt = DateTime.UtcNow;

@@ -24,7 +24,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var offering = await CreateAvailableOfferingAsync(workflow.Id);
 			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>()
 				.CreateAsync(ValidSetupInput("Expiry readiness"));
-			var input = LinkInput(offering, setup);
+			var input = await LinkInputAsync(offering, setup);
 			input.ExpiresAtUtc = GetRequiredService<IClock>().Now.ToUniversalTime().AddMinutes(minutesFromNow);
 			var error = await Should.ThrowAsync<BusinessException>(() =>
 				GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(input));
@@ -50,10 +50,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				if (!active) stored.Deactivate();
 				await _offeringRepository.UpdateAsync(stored, autoSave: true);
 			});
+			var input = await LinkInputAsync(offering, setup);
 			var error = await Should.ThrowAsync<BusinessException>(() =>
-				GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(LinkInput(offering, setup)));
+				GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(input));
 			error.Code.ShouldBe(AdmissionErrorCodes.PublicInquiryOfferingRequired);
 			error.Data["PeriodName"].ShouldBe((await _cycleRepository.GetAsync(offering.AdmissionCycleId)).Name);
+			error.Data["Reason"].ShouldBe("NoActiveInquiryOffering");
+			error.Message.ShouldContain("Configure and activate an Offering");
 			(await GetRequiredService<IRepository<AdmissionPublicInquiryLink, Guid>>()
 				.GetListAsync(item => item.AdmissionCycleId == offering.AdmissionCycleId)).ShouldBeEmpty();
 		});
@@ -81,8 +84,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					await users.UpdateAsync(user, autoSave: true);
 				});
 			await SetLinkAssignmentRulesAsync(setup, userId, TestUserId);
+			var input = await LinkInputAsync(offering, setup);
 			var error = await Should.ThrowAsync<BusinessException>(() =>
-				GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(LinkInput(offering, setup)));
+				GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(input));
 			error.Code.ShouldBe(AdmissionErrorCodes.PublicInquiryCounsellorUnavailable);
 			error.Data["SetupName"].ShouldBe(setup.Name);
 		});
@@ -98,8 +102,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var fallbackId = Guid.NewGuid();
 			await EnsureTestIdentityUserAsync(fallbackId, $"link-fallback-{fallbackId:N}");
 			await SetLinkAssignmentRulesAsync(setup, TestUserId, fallbackId);
+			var input = await LinkInputAsync(offering, setup);
 			var error = await Should.ThrowAsync<BusinessException>(() =>
-				GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(LinkInput(offering, setup)));
+				GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(input));
 			error.Code.ShouldBe(AdmissionErrorCodes.PublicInquiryFallbackUnavailable);
 			error.Data["SetupName"].ShouldBe(setup.Name);
 		});
@@ -114,7 +119,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var offering = await CreateAvailableOfferingAsync(workflow.Id);
 			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>()
 				.CreateAsync(ValidSetupInput("Ready intake"));
-			var input = LinkInput(offering, setup);
+			var input = await LinkInputAsync(offering, setup);
 			if (withExpiry)
 				input.ExpiresAtUtc = GetRequiredService<IClock>().Now.ToUniversalTime().AddDays(1);
 			var created = await GetRequiredService<IAdmissionPublicInquiryAppService>().CreateLinkAsync(input);
@@ -124,6 +129,107 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var stored = (await GetRequiredService<IRepository<AdmissionPublicInquiryLink, Guid>>()
 				.GetListAsync(item => item.AdmissionCycleId == offering.AdmissionCycleId)).Single();
 			stored.TokenHash.ShouldNotBe(created.Token);
+		});
+
+	[Theory]
+	[InlineData(true, "SetupNotLinked")]
+	[InlineData(false, "FormNotLinked")]
+	public Task Public_link_should_explain_unlinked_setup_or_form_and_allow_corrected_retry(bool changeSetup, string reason) =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var workflow = await CreateAndPublishWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var setupService = GetRequiredService<IAdmissionIntakeSetupAppService>();
+			var setup = await setupService.CreateAsync(ValidSetupInput("Linked setup"));
+			var input = await LinkInputAsync(offering, setup);
+			var correctProfileId = input.CounsellorAssignmentProfileId;
+			var correctFormId = input.InquiryFormDefinitionId;
+			if (changeSetup)
+				input.CounsellorAssignmentProfileId = (await setupService.CreateAsync(ValidSetupInput("Unlinked setup"))).CounsellorAssignmentProfileId;
+			else
+				input.InquiryFormDefinitionId = (await CreateAvailableOfferingAsync(workflow.Id)).InquiryFormDefinitionId;
+			var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+			var error = await Should.ThrowAsync<BusinessException>(() => service.CreateLinkAsync(input));
+			error.Code.ShouldBe(AdmissionErrorCodes.PublicInquiryOfferingRequired);
+			error.Data["Reason"].ShouldBe(reason);
+			error.Message.ShouldContain("Attach this setup and form to the same Offering");
+			(await GetRequiredService<IRepository<AdmissionPublicInquiryLink, Guid>>()
+				.GetListAsync(item => item.AdmissionCycleId == offering.AdmissionCycleId)).ShouldBeEmpty();
+			input.CounsellorAssignmentProfileId = correctProfileId;
+			input.InquiryFormDefinitionId = correctFormId;
+			(await service.CreateLinkAsync(input)).IsActive.ShouldBeTrue();
+		});
+
+	[Fact]
+	public Task Public_link_options_should_return_only_linked_pairs_in_the_selected_period() =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var workflow = await CreateAndPublishWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>().CreateAsync(ValidSetupInput("Compatible setup"));
+			await LinkInputAsync(offering, setup);
+			var otherOffering = await CreateAvailableOfferingAsync(workflow.Id);
+			await LinkInputAsync(otherOffering, setup);
+			var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+			var options = await service.GetLinkOptionsAsync(offering.AdmissionCycleId);
+			options.Count.ShouldBe(1);
+			options.Single().CounsellorAssignmentProfileId.ShouldBe(setup.CounsellorAssignmentProfileId);
+			options.Single().InquiryFormDefinitionId.ShouldBe(offering.InquiryFormDefinitionId!.Value);
+			(await service.GetLinkOptionsAsync(Guid.NewGuid())).ShouldBeEmpty();
+			await WithUnitOfWorkAsync(async () =>
+			{
+				var stored = await _offeringRepository.GetAsync(offering.Id);
+				stored.Deactivate();
+				await _offeringRepository.UpdateAsync(stored, true);
+			});
+			(await service.GetLinkOptionsAsync(offering.AdmissionCycleId)).ShouldBeEmpty();
+		});
+
+	[Theory]
+	[InlineData("DirectRegistration")]
+	[InlineData("ArchivedSetup")]
+	[InlineData("DraftForm")]
+	[InlineData("UnscopedUser")]
+	public Task Public_link_options_should_exclude_unavailable_or_out_of_scope_pairs(string condition) =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var workflow = await CreateAndPublishWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>().CreateAsync(ValidSetupInput("Options readiness"));
+			await LinkInputAsync(offering, setup);
+			await WithUnitOfWorkAsync(async () =>
+			{
+				if (condition == "DirectRegistration")
+				{
+					var stored = await _offeringRepository.GetAsync(offering.Id);
+					stored.UpdateRouting(stored.Track, AdmissionEntryMode.DirectRegistration, false);
+					await _offeringRepository.UpdateAsync(stored, true);
+				}
+				if (condition == "ArchivedSetup")
+				{
+					var repo = GetRequiredService<IRepository<AdmissionIntakeSetup, Guid>>();
+					var stored = await repo.GetAsync(setup.Id);
+					stored.Archive(DateTime.UtcNow, TestUserId);
+					await repo.UpdateAsync(stored, true);
+				}
+				if (condition == "DraftForm")
+				{
+					var draft = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Draft inquiry", $"DRAFT_{Guid.NewGuid():N}"[..24], AdmissionFormLayoutType.SinglePage, purpose: AdmissionFormPurpose.Inquiry);
+					await _formRepository.InsertAsync(draft, true);
+					var stored = await _offeringRepository.GetAsync(offering.Id);
+					stored.ConfigureReferences(stored.WorkflowDefinitionId, draft.Id, stored.ApplicationFormDefinitionId);
+					await _offeringRepository.UpdateAsync(stored, true);
+				}
+			});
+			var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
+			if (condition == "UnscopedUser")
+			{
+				var userId = Guid.NewGuid();
+				using (_principalAccessor.Change(new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
+					new[] { new System.Security.Claims.Claim(Volo.Abp.Security.Claims.AbpClaimTypes.UserId, userId.ToString()) }, "test"))))
+					(await service.GetLinkOptionsAsync(offering.AdmissionCycleId)).ShouldBeEmpty();
+			}
+			else (await service.GetLinkOptionsAsync(offering.AdmissionCycleId)).ShouldBeEmpty();
 		});
 
 	private Task SetLinkAssignmentRulesAsync(AdmissionIntakeSetupDto setup, Guid counsellorId, Guid fallbackId) =>
@@ -138,11 +244,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await profiles.UpdateAsync(profile, autoSave: true);
 		});
 
-	private static CreateAdmissionPublicInquiryLinkDto LinkInput(AdmissionOffering offering, AdmissionIntakeSetupDto setup) => new()
+	private Task<CreateAdmissionPublicInquiryLinkDto> LinkInputAsync(AdmissionOffering offering, AdmissionIntakeSetupDto setup) => WithUnitOfWorkAsync(async () =>
 	{
-		AdmissionCycleId = offering.AdmissionCycleId,
-		CounsellorAssignmentProfileId = setup.CounsellorAssignmentProfileId,
-		InquiryFormDefinitionId = offering.InquiryFormDefinitionId,
-		Name = "Readiness test link", Source = AdmissionInquirySource.Website
-	};
+		var stored = await _offeringRepository.GetAsync(offering.Id);
+		stored.ConfigureIntake(setup.InquiryIntakeProfileId, setup.CounsellorAssignmentProfileId);
+		await _offeringRepository.UpdateAsync(stored, true);
+		return new CreateAdmissionPublicInquiryLinkDto
+		{
+			AdmissionCycleId = offering.AdmissionCycleId,
+			CounsellorAssignmentProfileId = setup.CounsellorAssignmentProfileId,
+			InquiryFormDefinitionId = offering.InquiryFormDefinitionId,
+			Name = "Readiness test link", Source = AdmissionInquirySource.Website
+		};
+	});
 }

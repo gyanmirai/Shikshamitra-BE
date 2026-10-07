@@ -44,6 +44,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				json.RootElement.TryGetProperty("APPLICANT_FIRST_NAME", out _).ShouldBeFalse();
 				return persisted.FormResponseSnapshotJson!;
 			});
+			inquiry = await GetRequiredService<IAdmissionInquiryAppService>().UpdateAsync(inquiry.Id, InquiryStatusUpdate(inquiry, AdmissionInquiryStatus.Interested));
 			var application = await _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, fixture.Offering.Id, inquiry.Id);
 			(await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
 			var workflow = await _applicationAppService.GetWorkflowAsync(application.Id);

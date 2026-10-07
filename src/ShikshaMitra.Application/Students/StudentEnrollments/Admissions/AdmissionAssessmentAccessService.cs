@@ -67,6 +67,14 @@ public class AdmissionAssessmentAccessService(
 
 	public async Task<AdmissionWorkflowStageDefinition> GetSessionDefinitionAsync(Guid offeringId, Guid definitionId)
 	{
+		var definition = await GetManagedDefinitionAsync(offeringId, definitionId);
+		if (ReadPolicy(definition)?.SchedulingEnabled != true)
+			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Choose a scheduled assessment stage belonging to this offering.");
+		return definition;
+	}
+
+	public async Task<AdmissionWorkflowStageDefinition> GetManagedDefinitionAsync(Guid offeringId, Guid definitionId)
+	{
 		var offering = await GetOfferingAsync(offeringId);
 		var definition = await definitions.FindAsync(definitionId) ?? throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), definitionId);
 		var workflow = await workflows.FindAsync(definition.WorkflowDefinitionId);
@@ -75,10 +83,10 @@ public class AdmissionAssessmentAccessService(
 		if (workflow.Status == AdmissionWorkflowStatus.Archived && !await applications.AnyAsync(application =>
 			application.AdmissionOfferingId == offeringId && application.WorkflowDefinitionId == workflow.Id))
 			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Archived workflows only support their existing applications.");
-		if (definition.StageType != AdmissionWorkflowStageType.Assessment || ReadPolicy(definition)?.SchedulingEnabled != true ||
+		if (definition.StageType != AdmissionWorkflowStageType.Assessment || ReadPolicy(definition) == null ||
 			(offering.WorkflowDefinitionId != definition.WorkflowDefinitionId && !await applications.AnyAsync(application =>
 				application.AdmissionOfferingId == offeringId && application.WorkflowDefinitionId == definition.WorkflowDefinitionId)))
-			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Choose a scheduled assessment stage belonging to this offering.");
+			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Choose a managed assessment stage belonging to this offering.");
 		return definition;
 	}
 

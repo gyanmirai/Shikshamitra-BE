@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-07
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -222,6 +222,7 @@ Permission names below use only `Students.Admissions.Assessments.View`, `.Add`, 
 | Method and suffix | Permission | Behavior |
 |---|---|---|
 | `GET /scopes` | `View` | Scoped offering/stage choices, including versions pinned to existing applications |
+| `GET /applicants` | `View` | Paged assessment work queues and session rosters with scoped counts, evidence, blockers and permitted actions |
 | `GET /sessions?admissionOfferingId=...&workflowStageDefinitionId=...` | `View` | Scheduled sessions for an offering and managed stage |
 | `POST /sessions` | `ManageSessions` | Create a future session |
 | `PUT /sessions/{id}` | `ManageSessions` | Update dates, location, name, or capacity before start |
@@ -236,6 +237,7 @@ Permission names below use only `Students.Admissions.Assessments.View`, `.Add`, 
 | `POST /applications/{applicationId}/stages/{stageInstanceId}/waive` | `Waive` | Record an authorized waiver with a reason |
 
 Workflow stage metadata advertises `assessment` in `SupportedConfiguration` and runtime stage DTOs expose `AssessmentEnabled`.
+Scope choices also include optional `offeringCode` and `workflowName` for readable disambiguation of offerings and pinned workflow versions; these labels reuse already-loaded records and do not affect identity or authorization.
 The configuration shape is `{ "assessment": { "version": 1, "enabled": true, "schedulingEnabled": false, "attendanceRequired": false, "scoringEnabled": true, "totalMarks": 100, "passingMarks": 40, "reviewRequired": false, "maxAttempts": 1 } }`.
 Version 1 supports 1 to 10 attempts and positive total marks up to 10000, with passing marks between zero and the total.
 Attendance can also be required in result-only mode.
@@ -246,6 +248,10 @@ Attempt creation and stage waiver require the application stamp returned in the 
 Other attempt mutations require that attempt's concurrency stamp.
 Review uses `approved: false` plus notes to request correction, and waiver uses `reason`.
 Attempt mutations return the refreshed assessment summary.
+
+The applicant workbench requires `admissionOfferingId` and `workflowStageDefinitionId`; optional filters are `sessionId`, `search` (name/application number), and `queue` (`toBook`, `attendance`, `result`, `review`, `ready`, `attention`, `completed`). It accepts `skipCount`, `maxResultCount` (1-1000), and allow-listed `sorting` (`applicantName`, `applicationNumber`, `sessionStartsAt`, `enteredAt`, with optional `asc`/`desc`). The result contains `totalCount`, paged `items`, and `counts`; counts honor offering, workflow version, session, academic authorization and search before the queue/page filter. Each row contains application/stage identity and the same assessment summary as the individual read. Active stages without attempts are included; completed stage history remains readable. For active stages, a selected session roster requires the latest non-cancelled attempt to belong to that session, so a retake booked elsewhere is excluded from the old session's actionable roster. Inactive/completed stages retain historical non-cancelled bookings to the selected session; their actions are disabled.
+
+`ready` means completed evidence has an eligible route under the existing workflow rules, independently of the caller's advance permission. Failed/absent results without an explicit matching route remain `attention`. Pending-review results remain `review` even for their recorder, whose review action stays denied. Result-only attempts use `toBook` for the initial start action. Classification batches scoped candidates, latest non-cancelled attempts, grouped attempt counts, sessions and route facts without per-application queries. Complete history and action DTOs are expanded only for the requested page. Configured JSON routes still require candidate classification before queue pagination, so memory/CPU scale with the selected offering/stage/search population. This is a workbench query, not a tenant-wide reporting export; concurrent production load and very large scopes require separate staging acceptance.
 
 Available condition facts are `assessment.outcome`, `assessment.marks`, `assessment.attemptNumber`, `assessment.attendance`, and `assessment.reviewed`.
 Unreviewed evidence exposes a pending outcome and no authoritative marks.

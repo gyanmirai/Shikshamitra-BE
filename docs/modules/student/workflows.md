@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-07
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -251,6 +251,8 @@ An **Admission decision** stage is the structured terminal decision point. Its r
 
 The assessment summary returns capability flags for each permitted action and explains missing evidence, pending review, future sessions, and missing outcome routes.
 Changes after an assessment stage has completed are rejected; its attempts remain readable within tenant and academic scope.
+
+The assessment workbench reads one authorized offering and pinned workflow stage at a time. Its `toBook`, `attendance`, `result`, `review`, `ready`, `attention`, and `completed` queues are derived from existing evidence and configured routes. A session roster includes its non-cancelled bookings and retains completed-stage history. Counts respect the selected session and search before pagination. Recording a result never advances the workflow; staff use the existing explicit advance action when evidence and route requirements are satisfied.
 
 ## Verify applicant documents
 

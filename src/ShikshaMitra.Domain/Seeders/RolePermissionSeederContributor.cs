@@ -325,6 +325,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 
 	private static IEnumerable<string> HostPlatformPermissions()
 	{
+		yield return HostTenants.HostTenantConsts.ManageStatusPermission;
 		yield return TenantManagementPermissions.Tenants.Create;
 		yield return "AbpTenantManagement.Tenants.Add";
 		yield return TenantManagementPermissions.Tenants.Delete;

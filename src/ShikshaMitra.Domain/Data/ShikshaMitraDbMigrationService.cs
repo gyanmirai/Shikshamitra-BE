@@ -22,7 +22,8 @@ public class ShikshaMitraDbMigrationService(
 	IEnumerable<IShikshaMitraDbSchemaMigrator> dbSchemaMigrators,
 	ITenantRepository tenantRepository,
 	ICurrentTenant currentTenant,
-	IConfiguration configuration)
+	IConfiguration configuration,
+	HostTenants.HostAdministratorBootstrapper hostAdministrator)
 	: ITransientDependency
 {
     public ILogger<ShikshaMitraDbMigrationService> Logger { get; set; } = NullLogger<ShikshaMitraDbMigrationService>.Instance;
@@ -114,10 +115,21 @@ public class ShikshaMitraDbMigrationService(
     {
         Logger.LogInformation($"Executing {(tenant == null ? "host" : tenant.Name + " tenant")} database seed...");
 
-        await dataSeeder.SeedAsync(new DataSeedContext(tenant?.Id)
-            .WithProperty(IdentityDataSeedContributor.AdminEmailPropertyName, IdentityDataSeedContributor.AdminEmailDefaultValue)
-            .WithProperty(IdentityDataSeedContributor.AdminPasswordPropertyName, IdentityDataSeedContributor.AdminPasswordDefaultValue)
-        );
+		var context = new DataSeedContext(tenant?.Id);
+		if (tenant == null)
+		{
+			var admin = await hostAdministrator.EnsureAsync();
+			context.WithProperty("AdminUserName", admin.UserName)
+				.WithProperty(IdentityDataSeedContributor.AdminEmailPropertyName, admin.Email)
+				// The identity seeder requires a value even when it reuses the existing account.
+				.WithProperty(IdentityDataSeedContributor.AdminPasswordPropertyName, Guid.NewGuid().ToString("N") + "Aa!9");
+		}
+		else
+		{
+			context.WithProperty(IdentityDataSeedContributor.AdminEmailPropertyName, IdentityDataSeedContributor.AdminEmailDefaultValue)
+				.WithProperty(IdentityDataSeedContributor.AdminPasswordPropertyName, IdentityDataSeedContributor.AdminPasswordDefaultValue);
+		}
+		await dataSeeder.SeedAsync(context);
     }
 
     private bool AddInitialMigrationIfNotExist()

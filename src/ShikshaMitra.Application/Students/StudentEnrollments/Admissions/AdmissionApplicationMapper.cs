@@ -14,6 +14,7 @@ internal static class AdmissionApplicationMapper
 		ConcurrencyStamp = application.ConcurrencyStamp,
 		ApplicationNumber = application.ApplicationNumber,
 		ApplicantId = application.ApplicantId,
+		InquiryId = application.InquiryId,
 		ApplicantName = applicantName,
 		AdmissionCycleId = application.AdmissionCycleId,
 		AdmissionOfferingId = application.AdmissionOfferingId,

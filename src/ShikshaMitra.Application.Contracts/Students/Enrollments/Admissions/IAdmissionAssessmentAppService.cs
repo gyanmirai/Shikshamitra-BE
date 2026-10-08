@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public interface IAdmissionAssessmentAppService : IApplicationService
 {
 	Task<List<AdmissionAssessmentScopeDto>> GetScopesAsync();
+	Task<AdmissionAssessmentRosterDto> GetApplicantsAsync(AdmissionAssessmentRosterInput input);
 	Task<List<AdmissionAssessmentSessionDto>> GetSessionsAsync(Guid admissionOfferingId, Guid workflowStageDefinitionId);
 	Task<AdmissionAssessmentSessionDto> CreateSessionAsync(AdmissionAssessmentSessionInput input);
 	Task<AdmissionAssessmentSessionDto> UpdateSessionAsync(Guid id, AdmissionAssessmentSessionInput input);

@@ -16,6 +16,9 @@ public class AdmissionAssessmentsController(IAdmissionAssessmentAppService servi
 {
 	[HttpGet("scopes"), Authorize(Permissions.View)]
 	public async Task<Result<List<AdmissionAssessmentScopeDto>>> GetScopesAsync() => Result.Success(await service.GetScopesAsync());
+	[HttpGet("applicants"), Authorize(Permissions.View)]
+	public async Task<Result<AdmissionAssessmentRosterDto>> GetApplicantsAsync([FromQuery] AdmissionAssessmentRosterInput input) =>
+		Result.Success(await service.GetApplicantsAsync(input));
 	[HttpGet("sessions"), Authorize(Permissions.View)]
 	public async Task<Result<List<AdmissionAssessmentSessionDto>>> GetSessionsAsync([FromQuery] Guid admissionOfferingId, [FromQuery] Guid workflowStageDefinitionId) =>
 		Result.Success(await service.GetSessionsAsync(admissionOfferingId, workflowStageDefinitionId));

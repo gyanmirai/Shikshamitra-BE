@@ -162,7 +162,7 @@ public class BulkCreateAdmissionOfferingsDto
 	public Guid? CampusId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid MediumId { get; set; }
-	public Guid StageId { get; set; }
+	public Guid? StageId { get; set; }
 	public bool UseCycleDates { get; set; }
 	public DateTimeOffset? OpenDate { get; set; }
 	public DateTimeOffset? CloseDate { get; set; }

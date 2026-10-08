@@ -162,7 +162,8 @@ public class AdmissionInquiryAppService(
 				ActivityType = activity.ActivityType,
 				Description = activity.Description,
 				OccurredAt = activity.OccurredAt,
-				CreatorId = activity.CreatorId
+				CreatorId = activity.CreatorId,
+				MetadataJson = activity.MetadataJson
 			})
 			.ToList();
 	}

@@ -174,6 +174,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				PolicyCode = $"CP-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}",
 				Status = "Active",
 				EnableLateFee = enableLateFee,
+				LateFeeIncomeCategoryId = incomeCategoryId,
 				GracePeriodDays = 0,
 				LateFeeApplyOnFeeHeads = new() { feeHeadId },
 				LateFeeType = percentageLateFee ? "Percentage" : "PerDay",

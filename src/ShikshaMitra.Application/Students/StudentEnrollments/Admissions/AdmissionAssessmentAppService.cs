@@ -9,11 +9,13 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [Authorize]
 public class AdmissionAssessmentAppService(AdmissionAssessmentSessionService sessions,
-	AdmissionAssessmentReadService reader, AdmissionAssessmentCommandService commands)
+	AdmissionAssessmentReadService reader, AdmissionAssessmentCommandService commands, AdmissionAssessmentRosterService roster)
 	: ApplicationService, IAdmissionAssessmentAppService
 {
 	[Authorize(Permissions.View)]
 	public Task<List<AdmissionAssessmentScopeDto>> GetScopesAsync() => sessions.GetScopesAsync();
+	[Authorize(Permissions.View)]
+	public Task<AdmissionAssessmentRosterDto> GetApplicantsAsync(AdmissionAssessmentRosterInput input) => roster.GetAsync(input);
 	[Authorize(Permissions.View)]
 	public Task<List<AdmissionAssessmentSessionDto>> GetSessionsAsync(Guid admissionOfferingId, Guid workflowStageDefinitionId) =>
 		sessions.GetListAsync(admissionOfferingId, workflowStageDefinitionId);

@@ -18,6 +18,33 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public async Task<Result<Volo.Abp.Application.Dtos.PagedResultDto<AdmissionApplicationDto>>> GetListAsync([FromQuery] AdmissionApplicationListInput input) => Result.Success(await service.GetListAsync(input));
 
+	[HttpGet("pipeline")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<Volo.Abp.Application.Dtos.PagedResultDto<AdmissionPipelineItemDto>>> GetPipelineAsync([FromQuery] AdmissionPipelineListInput input) => Result.Success(await service.GetPipelineAsync(input));
+
+	[HttpGet("pipeline/options")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<AdmissionPipelineOptionsDto>> GetPipelineOptionsAsync([FromQuery] AdmissionPipelineListInput input) => Result.Success(await service.GetPipelineOptionsAsync(input));
+
+	[HttpGet("{id:guid}/follow-ups")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<Result<AdmissionInquiryManagementDto>> GetFollowUpsAsync(Guid id) => Result.Success(await service.GetFollowUpsAsync(id));
+
+	[HttpPost("{id:guid}/follow-ups")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<Result<AdmissionInquiryManagementDto>> ScheduleFollowUpAsync(Guid id, ScheduleAdmissionInquiryFollowUpDto input) => Result.Success(await service.ScheduleFollowUpAsync(id, input));
+
+	[HttpPost("{id:guid}/follow-ups/{followUpId:guid}/complete")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<Result<AdmissionInquiryManagementDto>> CompleteFollowUpAsync(Guid id, Guid followUpId, CompleteAdmissionInquiryFollowUpDto input) => Result.Success(await service.CompleteFollowUpAsync(id, followUpId, input));
+
+	[HttpPost("{id:guid}/follow-ups/{followUpId:guid}/cancel")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<Result<AdmissionInquiryManagementDto>> CancelFollowUpAsync(Guid id, Guid followUpId, CancelAdmissionInquiryFollowUpDto input) => Result.Success(await service.CancelFollowUpAsync(id, followUpId, input));
+
 	[HttpGet("{id:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public async Task<ActionResult<Result<AdmissionApplicationDto>>> GetAsync(Guid id)

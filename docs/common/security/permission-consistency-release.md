@@ -3,12 +3,31 @@ module: common
 domain: security
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-10-07
 owner: backend-team
 audience: humans-and-agents
 ---
 
-# Release permission consistency with a fresh FullDemo database
+# Release permission consistency and schema-only deployments
+
+## Routine staging deployments (October 7)
+
+The current backend deployment runs only for a push or merge to `main`; both the caller and reusable security job enforce that branch guard.
+Security Regression, the .NET 9 SDK check, startup regression tests, publishing, and publish-profile validation must succeed before DbMigrator runs.
+DbMigrator still applies schema migrations using the `DB_CONNECTION_STRING` secret, but `ShikshaMitra__Seeders__Enabled=false` disables demo/business/permission seeding.
+The retained `FullDemo` profile setting is inactive while seeding is disabled, and `SeedTestLogins=false` disables deployment-time synthetic login creation.
+Existing identities and grants are not repaired or reset by this routine release.
+Deployment runs are serialized without cancelling an in-progress migration.
+After migration, the API is deployed and its startup endpoint is checked; a startup response does not replace authenticated feature and authorization acceptance.
+
+The accompanying regression fixture corrections preserve current business rules: active late-fee policy fixtures supply their existing income category, Finance deletion protection checks the exact PostgreSQL 17/18 error code, and the FullDemo ESI integration expects the insurance-number readiness issue only for its known pending-registration counselor.
+Other demo employees remain issue-free, preview calculation assertions remain in place, and no production seeder, enrollment, grant, or monetary behavior is changed by these test corrections.
+The assignment policy-edit HTTP fixture selects an existing hierarchy in the current effective academic year for that case, submits the three supported policy families, and explicitly verifies that a three-item request containing unsupported proration is rejected without changing the existing obligation and concurrency checks.
+
+The September fresh-database procedure below is historical and requires separate operator approval.
+Routine deployments no longer seed an empty database: any approved fresh installation requires an explicit, separately reviewed seeding operation before its demo-specific verification steps apply.
+
+## Historical September fresh FullDemo procedure
 
 This runbook is for the operator-approved clean DDVS staging setup, not an automatic live-access repair.
 The security changes do not require a database reset.
@@ -39,15 +58,15 @@ The exposed credential remains an outstanding security risk; neither deleting a 
 | Repository | Trigger | Current target | Behavior |
 | --- | --- | --- | --- |
 | Backend | Push or merge to `main` | Azure `stg-gyanmirai-be` | Security checks, build, startup tests, publish validation, DbMigrator, API deployment, startup check |
-| Frontend | Push or merge to `main`, or manual workflow dispatch | Azure `dev-gyanmirai-fe` | Security checks, HR checks, build, UI deployment |
+| Frontend | Push or merge to `main` | Azure `dev-gyanmirai-fe` | Security checks, HR checks, build, UI deployment |
 | Either feature branch | Push alone | No deployment | Does not run the deployment seeder |
 
-The backend DbMigrator step explicitly enables `FullDemo` using `ShikshaMitra__Seeders__Enabled=true` and `ShikshaMitra__Seeders__Profile=FullDemo`.
+The backend DbMigrator step applies schema migrations with `ShikshaMitra__Seeders__Enabled=false`; the retained `ShikshaMitra__Seeders__Profile=FullDemo` does not enable seeding.
 Its database comes from the GitHub `DB_CONNECTION_STRING` secret.
 The deployed API connection setting must identify that same intended database.
 Target names are verified from the workflows, not proof of the current Azure or secret configuration.
 Both deployment workflows wait for their reusable Security Regression job.
-Backend migration and seeding occur only after tests and publish-profile validation succeed.
+Backend migration occurs only after tests and publish-profile validation succeed; a fresh FullDemo seed is a separate approved operation.
 Deployment concurrency is serialized without cancelling an in-progress release.
 
 ## Before deleting anything
@@ -88,7 +107,7 @@ Credential rotation is an explicitly deferred risk, not evidence that the exposu
    HR-wide scope is not automatically created by the ESI seeder.
    FullDemo ESI starts **Ready**, not Active; an authorized HR user must review and activate it.
 6. Secure or disable synthetic seed logins and rotate bootstrap passwords before broader access.
-   The current staging workflow enables test logins; this is demo configuration, not a production identity policy.
+   The routine staging workflow disables test logins; a separately approved demo seed must not be treated as a production identity policy.
 7. Verify role/user grants through authoritative API reads, allowed and denied requests, scope-limited reads, and the ESI Ready state on the deployed pair.
    Removing a direct user grant does not remove access inherited from a role.
    Verify the effective result and remaining providers instead of treating an unchecked direct-grant switch as proof of complete access removal.

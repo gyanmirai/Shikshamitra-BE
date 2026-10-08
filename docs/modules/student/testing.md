@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-07
+updated_on: 2026-10-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -529,75 +529,16 @@ The existing 50-result limit remains part of this endpoint and must not be mista
 After deploying the backend build to staging, verify the same endpoint with the QA account and representative tenant data.
 Require a successful response before declaring QA unblocked, then follow the [frontend browser checks](../../../../Shikshamitra-FE/docs/student/testing.md) for visible options, selection, setup save and reload.
 Local synthetic tests alone do not certify staging or production performance.
+## Student dashboard validation
 
-## Atomic inquiry follow-up notes and reminder timing (2026-10-07)
-
-The final focused Application run passed **27/27**, with zero failures or skips, in 2 minutes 16 seconds.
-`AdmissionWorkflowRuntimeIntegration_FollowUpNotes_Tests.cs` covers atomic Interested/email intent, persisted note author and task linkage, closure without a reminder, invalid dates without partial status changes, both stale stamps, actor/scope restrictions, transferred/duplicate locks, replacement at the maximum-open limit, preserved historical notes, UTC/Local/Unspecified provider binding and projection, exact-task snapshot recovery, late-local-evening validation and selected IST-midnight save/reload/closure.
-The same selection includes the existing Legacy/Basic Inquiry workflows and both Pipeline follow-up scope/lifecycle regressions.
-The result is `.artifacts/inquiry-follow-up-notes-test-results/admission-reminder-postgres-final.trx`.
+Run from the backend repository:
 
 ```powershell
-$env:DOTNET_PROCESSOR_COUNT = '2'
-dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --artifacts-path .artifacts/assessment-host --no-build --no-restore -m:1 --filter "FullyQualifiedName~Follow_up_note|FullyQualifiedName~Pipeline_followups|FullyQualifiedName~Pipeline_and_application_followups|FullyQualifiedName~Legacy_inquiry_policy|FullyQualifiedName~Basic_inquiry_workflow" --logger "trx;LogFileName=admission-reminder-postgres-final.trx" --results-directory .artifacts/inquiry-follow-up-notes-test-results -v minimal
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter FullyQualifiedName~StudentModuleDashboardApi_Tests --artifacts-path .artifacts/student-module-dashboard/build --logger "trx;LogFileName=student-module-dashboard.trx"
+powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules
+git diff --check
 ```
 
-That command requires the fresh test assembly and source dependencies; the test assembly was built with zero errors using `BuildProjectReferences=false`, disabled analyzers/shared compilation and one build worker.
-It reused verified unchanged Domain.Tests/TestBase libraries and the freshly compiled combined runtime outputs under `.artifacts/assessment-host`; it did not reuse the earlier unchanged EF binary for these converter checks.
-The fresh EF assembly timestamp was `2026-10-07T12:59:23Z`, after both ScheduledAt and CompletedAt converters were saved.
-The EF DLL in the test output and fresh Host/runtime output had the same SHA-256: `E4FC7142FCEC713D272ED0BA55E3AE829E7728CD81E482E3F6A8F690EA4AAEEE`.
+Tests use real application services, scope resolution, active database identities and SQLite persistence; the permission test header only controls exact grants. Coverage includes anonymous/denied callers, action-without-visibility, unknown identity/tenant/year/section, translated aggregates, direct service authorization, forged administrator claims, no academic scope, sibling-division exclusion and verified Parent-only associations despite staff grants. The workload scenario grows owned inquiries from 10 to 510, retains 10 other-owner inquiries and one owned/one other-owner setup case, checks constant query count and payload under 16 KiB, and records cold latency plus 20 samples after three warmups. Fixture latency is local SQLite API evidence, not a production PostgreSQL SLA or query-plan benchmark.
 
-A read-only PostgreSQL parameter-binding/read-back check used legacy Npgsql timestamp behavior with the database session in Asia/Calcutta.
-For selected `2026-10-09T00:00:00+05:30`, a UTC DateTime bound as `timestamp without time zone` and was interpreted as `2026-10-08T13:00:00Z`; the converter's zero-offset DateTimeOffset bound as `timestamp with time zone` and read back exactly `2026-10-08T18:30:00+00:00`.
-This verifies the actual provider binding and read-back without mutating existing school data.
-Existing shifted stored tasks are not migrated; exact linked history can recover their display instant, and a later atomic note supersedes the old task with a correctly bound new task.
-Until that replacement, any due/overdue processing of the old row still uses its originally persisted timestamp; the read projection does not rewrite task scheduling.
-Final authenticated browser save/reload and Not interested checks remain separate acceptance evidence in [frontend Student testing](../../../../Shikshamitra-FE/docs/student/testing.md); these backend checks do not establish deployed delivery or production acceptance.
-Student documentation validation and the owned diff whitespace check passed; the all-module documentation gate remains blocked by existing mojibake in `docs/modules/finance/references/charge-management-e2e-test-plan.md`.
-
-## Active admissions Pipeline validation (2026-10-07)
-
-| Focused suite | Evidence it exercises |
-|---|---|
-| `AdmissionWorkflowRuntimeIntegration_Pipeline_Tests.cs` | Actual application progress and owner, sorted server pagination, complete scoped filter choices, unique stage-code options across differing names, configured manager default, My cases, search/year filters, closed-state exclusion, unavailable inquiry recovery, historical unlinked application exclusion, denied academic scope, retained follow-up dates/history, repeat handoff and terminal follow-up locks; configured ABP serializer UTC offsets, SQLite stage kind-loss handling, IST reminder round-trip, future/past overdue classification, matching Pipeline/workflow stage dates, zero-offset ScheduledAt/CompletedAt provider binding and completion UTC-window checks after reload |
-| `AdmissionPipelineApiContract_Tests.cs` | Explicit route contracts and exact application/inquiry permission policies at controller and application-service boundaries |
-| `AdmissionPipelineApi_Tests.cs` | Executable HTTP read denial, application read permission without inquiry View, and allowed/denied follow-up mutation permissions |
-
-```powershell
-dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Pipeline_|FullyQualifiedName~Inquiry_redesign_should_require_open_offering"
-dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter "FullyQualifiedName~AdmissionPipelineApi"
-```
-
-Pipeline projections reuse existing workflow stage guidance; configured Form and Payment deadlines are shown only when present. These tests do not certify every managed stage's readiness checks or deployed performance. The frontend acceptance gate additionally covers continued application work, retained return context, refreshed stage/follow-up information, restricted users and narrow layouts; see [frontend Student testing](../../../../Shikshamitra-FE/docs/student/testing.md).
-
-Application activity history additionally exercises the scoped `GetForApplicationAsync` reader: authorized active and closed cases retain history, while an application in an unauthorized Offering scope throws not-found before exposing its activities.
-The current shared local host's Application assembly, built at `2026-10-07T13:13:49Z` before process startup, contains the scoped `AdmissionApplicationReadService.GetEntityAsync` call in that reader's state-machine IL.
-Authenticated HTTPS API checks with the existing DDVS academic-admin session confirmed application-configuration `200`, Applications.View granted, an existing application's activity history `200`, and a random missing application's history `404`, using normal platform certificate trust.
-The applicant-wide activity endpoint remains outside this narrow change.
-
-Pipeline and application follow-up/workflow DTOs emit explicit UTC point-in-time values. Domain-authored stage, follow-up and history timestamps retain their UTC ticks after SQL returns an unspecified kind; audited application creation timestamps instead follow the configured ABP clock, whose default uses server-local time. Date-only fields and global clock configuration are unchanged.
-
-The initial 2026-10-07 focused run passed 11 Application checks and 17 HTTP checks, with zero failures or skips after correcting a historical-case fixture to respect the existing applicant/offering uniqueness constraint. Fresh Application, HTTP API and Host builds passed. Local builds used isolated `.artifacts/pipeline-tests` outputs, disabled analyzers and constrained compilation concurrency. That earlier run reused verified unchanged EF implementation/reference assemblies. Subsequent live PostgreSQL checks identified legacy Npgsql timestamp-binding risk, and the shared inquiry/pipeline implementation now adds focused ScheduledAt and CompletedAt provider conversions.
-
-The final run passed all 12 focused Application checks with zero failures or skips using the latest isolated Application/Contracts build and the fresh EF assembly containing both conversions (SHA256 `E4FC7142FCEC713D272ED0BA55E3AE829E7728CD81E482E3F6A8F690EA4AAEEE`). The test output is `.artifacts/pipeline-final-results/pipeline-final-full.trx`. Both actual EF property converters retained UTC instants and zero offsets, including reverse/null handling. Authenticated local PostgreSQL-backed QA saved a near-future reminder as 7:25 pm IST, retained that time after a full reload and in Pipeline, and showed one open follow-up without a false overdue flag. Complete and Cancel persisted their notes/history after reload; Pipeline then showed no open follow-ups. This fresh EF and live reminder evidence supersedes the earlier reused-EF date acceptance. No schema deployment was performed. Previously stored incorrect instants are not automatically repaired; broader workflow timestamp write bindings and historical data need a separate audit.
-
-An explicitly reviewed local DDVS repair corrected exactly five legacy ScheduledAt values only where matching tenant/inquiry activity metadata proved one unique offset-bearing original instant.
-The default dry-run, private before-snapshot hash, exact IDs/old timestamps/status/concurrency/evidence guards, and transactional post-update checks constrained the one-time correction; new concurrency stamps and appended repair activities recorded original source activity IDs, before/after values, operator and reason.
-Six evidence self-tests rejected missing, conflicting, invalid and timezone-less evidence and verified equivalent offsets/UTC-kind handling; read-only PostgreSQL plan tests rejected changed status and stale stamps.
-The read-only post-repair report `.artifacts/pipeline-final-qa/legacy-reminder-post-repair.json` verified five exact corrections and audit events, unchanged original evidence, preserved status/completion fields/owner/source links, and notes matching original activity metadata.
-At that check, all eight local reminders matched their proven original instants, including the two already-correct reminders and an additional synthetic reminder outside the five-record repair.
-No blanket timezone shift, historical CompletedAt inference, production data correction, or broader workflow timestamp write audit is implied.
-
-The fresh Inquiry-to-Application walkthrough also finalized synthetic APP4 into one Student identity with lifecycle Admission and one Pending onboarding case owned by the application counsellor.
-Read-only PostgreSQL evidence in `.artifacts/pipeline-final-qa/application-finalization-onboarding.json` confirmed application status AdmissionFinalized, consistent Student/case links, no duplicate case, no enrollment rows or activation links, and pending division/roll/identifier/seat allocation.
-Its inherited reminder remained Completed with no Scheduled reminders; onboarding persisted nine steps, seven required with identity already completed, matching the frontend's one-of-seven preparation progress.
-The existing Interested-status rule had recorded a qualification-email request, but this no-email synthetic inquiry persisted email status Skipped with no recipient snapshot, campaign link or related Communication campaign.
-This confirms the Admissions-to-Onboarding preparation boundary and skipped communication state, not completed enrollment activation or inbox delivery.
-
-Fresh normal-trust HTTPS checks confirmed the counsellor, teacher and `student-crm-denied` account identities and effective Applications.View access; Pipeline/options returned empty scoped results, and the synthetic finalized application's details/history/follow-ups returned not-found outside their academic access.
-This establishes scope isolation, not live missing-feature-permission denial: every checked account currently has the effective feature grant.
-The denied-named principal has no matching direct/current-role Applications.View database grant but still receives that permission in fresh runtime configuration/self-permission reads; the discrepancy remains unresolved.
-Read-only proof is under `.artifacts/pipeline-final-qa/limited-user-api-proof*.json` and `established-qa-applications-view-audit.json`; no permission, scope, credential, seed or cache changes were made to force a denied fixture.
-An existing principal that actually lacks the effective feature grant remains necessary for live feature-denied browser acceptance.
-
-Student documentation validation and diff whitespace checks passed. The all-module documentation gate remains blocked by pre-existing mojibake in `docs/modules/finance/references/charge-management-e2e-test-plan.md`. No new dependency, entity migration file, deployed release or permission-grant change is part of this Pipeline implementation. The provider conversions use the existing timestamp-with-time-zone columns; no production schema or data repair is claimed.
+For release, verify selected-year and scoped counts against the owning worklists using a signed-in school environment and measure PostgreSQL execution plans/p95 with representative tenant sizes. Local browser sample-response evidence remains owned by [frontend tests](../../../../Shikshamitra-FE/docs/student/testing.md#student-dashboard-validation).

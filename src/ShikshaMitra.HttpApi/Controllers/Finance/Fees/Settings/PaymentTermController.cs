@@ -28,6 +28,16 @@ public class PaymentTermController(
 	public async Task<PagedResultDto<PaymentTermListDto>> GetListAsync(PaymentTermGetListInput input)
 		=> await paymentTermAppService.GetListAsync(input);
 
+	[HttpGet("{paymentTermId}/usage")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.View)]
+	public Task<PaymentTermUsageDto> GetUsageAsync(Guid paymentTermId, Guid? versionId = null)
+		=> paymentTermAppService.GetUsageAsync(paymentTermId, versionId);
+
+	[HttpGet("default-impact")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.Add)]
+	public Task<PaymentTermDefaultImpactDto> GetDefaultImpactAsync(Guid academicYearId, Guid boardId, Guid? paymentTermId = null)
+		=> paymentTermAppService.GetDefaultImpactAsync(academicYearId, boardId, paymentTermId);
+
 	[HttpGet("{paymentTermId}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.View)]
 	public async Task<PaymentTermDto> GetAsync(Guid paymentTermId)

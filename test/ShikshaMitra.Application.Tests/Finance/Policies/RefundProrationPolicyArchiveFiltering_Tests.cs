@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Policies;
 using Shouldly;
@@ -8,6 +9,30 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 public partial class FeeStructureAppService_CollectionPolicy_Tests
 {
+	[Fact]
+	public async Task Collection_List_Filters_And_Sorts_Grace_Days_Before_Paging()
+	{
+		using var reviewer = Reviewer();
+		using var tenant = _currentTenant.Change(TestTenantId);
+		var (year, _, _, head) = await SeedStandardAsync();
+		var shortId = await CreateCollectionPolicyAsync(year, head, "Short grace policy", graceDays: 2);
+		var longId = await CreateCollectionPolicyAsync(year, head, "Long grace policy", graceDays: 8);
+
+		var filtered = await _collectionPolicies.GetListAsync(new()
+		{
+			AcademicYearId = year, GraceDaysOperator = "greaterThan", GraceDaysValue = 3
+		});
+		filtered.TotalCount.ShouldBe(1);
+		filtered.Items[0].Id.ShouldBe(longId);
+
+		var firstPage = await _collectionPolicies.GetListAsync(new()
+		{
+			AcademicYearId = year, Sorting = "gracePeriodDays asc", MaxResultCount = 1
+		});
+		firstPage.TotalCount.ShouldBe(2);
+		firstPage.Items[0].Id.ShouldBe(shortId);
+	}
+
 	[Fact]
 	public async Task Refund_List_Separates_Current_And_Archived_And_Restores_To_Draft()
 	{
@@ -21,6 +46,12 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 			AcademicYearId = year, PolicyName = "Active refund", Status = "Active",
 			ExpenseCategoryId = await CreateRefundExpenseCategoryAsync(year), AllowedPayoutMethods = ["Cash"]
 		});
+		var activeDetails = await service.GetAsync(active.Id);
+		activeDetails.ExpenseCategoryName.ShouldNotBeNullOrWhiteSpace();
+		var activeVersions = await service.GetVersionsAsync(active.Id, new FinancePolicyVersionListRequestDto());
+		using (var recorded = JsonDocument.Parse(activeVersions.Items[0].SnapshotJson))
+			recorded.RootElement.GetProperty("ExpenseCategoryName").GetString()
+				.ShouldBe(activeDetails.ExpenseCategoryName);
 		var archived = await service.CreateAsync(new() { AcademicYearId = year, PolicyName = "Archived refund" });
 		await service.ArchiveAsync(archived.Id);
 		await service.CreateAsync(new() { AcademicYearId = year, PolicyName = "Other archived refund" });
@@ -32,6 +63,23 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var activePage = await service.GetListAsync(new() { AcademicYearId = year, Status = "Active" });
 		activePage.TotalCount.ShouldBe(1);
 		activePage.Items[0].Id.ShouldBe(active.Id);
+		var payoutPage = await service.GetListAsync(new()
+		{
+			AcademicYearId = year, AllowedPayoutMethod = "Cheque", Sorting = "allowedPayoutMethods desc"
+		});
+		payoutPage.TotalCount.ShouldBe(2);
+		payoutPage.Items.ShouldNotContain(x => x.Id == active.Id);
+		var sortedPayouts = await service.GetListAsync(new()
+		{
+			AcademicYearId = year, Sorting = "allowedPayoutMethods asc", MaxResultCount = 1
+		});
+		sortedPayouts.TotalCount.ShouldBe(3);
+		sortedPayouts.Items[0].Id.ShouldBe(active.Id);
+		var partialPage = await service.GetListAsync(new()
+		{
+			AcademicYearId = year, AllowPartialRefund = true, PolicyNameFilter = "Current", PolicyNameOperator = "startsWith"
+		});
+		partialPage.Items.ShouldContain(x => x.Id == draft.Id);
 		var archivePage = await service.GetListAsync(new() { AcademicYearId = year, Status = "Archived", Search = "Archived", MaxResultCount = 1 });
 		archivePage.TotalCount.ShouldBe(1);
 		archivePage.Items[0].Id.ShouldBe(archived.Id);
@@ -66,6 +114,13 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
 		var activePage = await service.GetListAsync(new() { AcademicYearId = year, Status = "Active" });
 		activePage.TotalCount.ShouldBe(1);
 		activePage.Items[0].Id.ShouldBe(active.Id);
+		var ruleCountPage = await service.GetListAsync(new()
+		{
+			AcademicYearId = year, RuleCountOperator = "equals", RuleCountValue = 1,
+			Sorting = "feeHeadRules desc", MaxResultCount = 1
+		});
+		ruleCountPage.TotalCount.ShouldBe(2);
+		ruleCountPage.Items.Count.ShouldBe(1);
 		var archivePage = await service.GetListAsync(new() { AcademicYearId = year, Status = "Archived", Search = "Archived", MaxResultCount = 1 });
 		archivePage.TotalCount.ShouldBe(1);
 		archivePage.Items[0].Id.ShouldBe(archived.Id);

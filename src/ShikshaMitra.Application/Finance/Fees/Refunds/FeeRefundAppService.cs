@@ -10,6 +10,7 @@ using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
+using ShikshaMitra.Security.UserScope;
 using System;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -41,6 +42,7 @@ public partial class FeeRefundAppService(
 	FinanceAuditWriter financeAuditWriter,
 	FinanceScopeAccessService financeScopeAccessService,
 	ICurrentUser currentUser,
+	IUserScopeService userScopeService,
 	IUnitOfWorkManager unitOfWorkManager,
 	IDistributedEventBus eventBus
 ) : ApplicationService, IFeeRefundAppService;

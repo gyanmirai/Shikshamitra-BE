@@ -21,6 +21,9 @@ public partial class FeeRefundAppService
     [UnitOfWork(IsDisabled = true)]
     public async Task<FeeRefundRequestDto> CreateAsync(CreateFeeRefundRequestDto input)
     {
+        var autoApprove = await userScopeService.IsAdminUserAsync(currentUser.GetId());
+        if (autoApprove)
+            await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve);
         if (string.IsNullOrWhiteSpace(input.IdempotencyKey))
             throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
         var replay = (await feeRefundRepository.GetListAsync(x => x.RequestIdempotencyKey == input.IdempotencyKey)).SingleOrDefault();
@@ -68,6 +71,8 @@ public partial class FeeRefundAppService
                 input.Reason, input.IdempotencyKey, replaced.Id);
             await WriteAuditAsync(concessionReplacement, FinanceAuditActions.Create,
                 $"Linked refund replacement {concessionReplacement.VoucherNumber} submitted.", input.Reason);
+            if (autoApprove)
+                await ApproveOnAdministratorSubmissionAsync(concessionReplacement, replaced);
             await uow.CompleteAsync();
             return await MapAsync(concessionReplacement);
         }
@@ -85,6 +90,8 @@ public partial class FeeRefundAppService
             currentUser.GetId(), input.IdempotencyKey, input.ReplacesRefundRequestId);
         await WriteAuditAsync(request, FinanceAuditActions.Create,
             $"Refund request {request.VoucherNumber} submitted for review.", input.Reason);
+        if (autoApprove)
+            await ApproveOnAdministratorSubmissionAsync(request);
         await uow.CompleteAsync();
         return await MapAsync(request);
     }
@@ -130,15 +137,53 @@ public partial class FeeRefundAppService
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Submit)]
+    [UnitOfWork(IsDisabled = true)]
     public async Task<FeeRefundRequestDto> SubmitAsync(Guid id)
     {
+        using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
+            { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
         await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        var autoApprove = request.CreatorId == currentUser.GetId() &&
+            await userScopeService.IsAdminUserAsync(currentUser.GetId());
+        if (autoApprove)
+            await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve);
         request.Submit(currentUser.GetId());
         await feeRefundRepository.UpdateAsync(request, autoSave: true);
         await WriteAuditAsync(request, FinanceAuditActions.Update,
             $"Refund request {request.VoucherNumber} submitted for review.");
+        if (autoApprove)
+            await ApproveOnAdministratorSubmissionAsync(request);
+        await uow.CompleteAsync();
         return await MapAsync(request);
+    }
+
+    private async Task ApproveOnAdministratorSubmissionAsync(FeeRefundRequest request,
+        FeeRefundRequest? replaced = null)
+    {
+        var policy = string.IsNullOrWhiteSpace(request.PolicySnapshotJson)
+            ? null
+            : JsonSerializer.Deserialize<ShikshaMitra.Domain.Finance.Policies.RefundPolicySnapshot>(request.PolicySnapshotJson);
+        var category = await routingManager.RequireCategoryAsync(request.AcademicYearId,
+            policy?.ExpenseCategoryId ?? replaced?.ExpenseCategoryId,
+            ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense);
+        var method = request.RefundMethod ?? "Cash";
+        EnsureSettlementMethodAllowed(request, method);
+        var bankId = method == "Cash" ? null
+            : policy?.DefaultPayingBankAccountId ?? replaced?.PayingBankAccountId;
+        var bank = bankId.HasValue || method != "Cash"
+            ? await routingManager.RequireBankAsync(request.AcademicYearId, bankId) : null;
+        request.SetApprovalRouting(category.Id, category.Name, bank?.Id,
+            bank == null ? null : $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}", method);
+        var existingReservationIds = request.Reservations.Select(x => x.Id).ToHashSet();
+        await feeRefundManager.ApproveAsync(request, currentUser.GetId(),
+            "Automatically approved on administrator submission.");
+        await feeRefundRepository.StageNewReservationsAsync(
+            request.Reservations.Where(x => !existingReservationIds.Contains(x.Id)));
+        await WriteAuditAsync(request, FinanceAuditActions.Approve,
+            $"Refund request {request.VoucherNumber} automatically approved and payment allocations reserved.",
+            "Administrator submission; automatic approval.",
+            new { request.ExpenseCategoryId, request.PayingBankAccountId, request.RefundMethod });
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.StartReview)]

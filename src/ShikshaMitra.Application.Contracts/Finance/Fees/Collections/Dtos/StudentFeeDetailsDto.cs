@@ -22,6 +22,7 @@ public class StudentSummaryDto
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string GrNo { get; set; } = string.Empty;
     public string StandardName { get; set; } = string.Empty;
     public string DivisionName { get; set; } = string.Empty;
     public string RollNo { get; set; } = string.Empty;

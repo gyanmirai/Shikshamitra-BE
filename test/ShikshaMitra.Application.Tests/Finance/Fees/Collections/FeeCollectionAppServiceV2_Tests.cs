@@ -4,10 +4,12 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Students;
@@ -86,6 +88,42 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
                 new Volo.Abp.Application.Dtos.PagedAndSortedResultRequestDto { MaxResultCount = 10 });
             thread.EventCount.ShouldBeGreaterThan(0);
             thread.Events.ShouldContain(e => e.EntityType == FinanceAuditEntityTypes.FeePayment);
+        }
+    }
+
+    [Fact]
+    public async Task Cash_Charges_Can_Be_Collected_Without_A_Bank()
+    {
+        using (_currentTenant.Change(TestTenantId))
+        {
+            var (yearId, headId, studentId, _) = await SeedCoreDataAsync();
+            var student = await _studentRepo.GetAsync(studentId);
+            var head = await _feeHeadRepo.GetAsync(headId);
+            var charge = new Charge(
+                Guid.NewGuid(), TestTenantId, yearId, Guid.NewGuid(), "Cash charge", Guid.NewGuid(),
+                studentId, student.AcademicBoardId!.Value, student.AcademicMediumId,
+                Guid.NewGuid(), Guid.NewGuid(), "Cash charge collection", 100m,
+                DateTimeOffset.UtcNow.AddDays(1), ChargePriority.Medium, ChargeStatus.Pending,
+                Guid.NewGuid());
+            charge.SetIncomeCategory(head.IncomeCategoryId, "Collection Tuition");
+            charge.Approve(Guid.NewGuid());
+            await GetRequiredService<IRepository<Charge, Guid>>().InsertAsync(charge, autoSave: true);
+
+            var output = await _service.CollectFeeAsync(new CollectFeeInput
+            {
+                IdempotencyKey = Guid.NewGuid().ToString("N"), StudentId = studentId, AcademicYearId = yearId,
+                ChargePayments = [new() { ChargeId = charge.Id, Amount = 100d }],
+                Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 100d }],
+            });
+
+            output.TotalAmount.ShouldBe(100d);
+            output.ChargeReceiptNumber.ShouldNotBeNullOrWhiteSpace();
+            output.PaidCharges.ShouldNotBeEmpty();
+            var record = await GetRequiredService<IRepository<PaymentMethodRecord, Guid>>()
+                .GetAsync(x => x.FeeRecordMetadataId == output.Id);
+            record.BankAccountId.ShouldBeNull();
+            record.BankLabelSnapshot.ShouldBeNull();
+            record.Amount.ShouldBe(100m);
         }
     }
 

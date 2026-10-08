@@ -22,6 +22,10 @@ namespace ShikshaMitra.HttpApi.Controllers.Finance.Fees.Concessions;
 public class ConcessionRequestController(IConcessionRequestAppService concessionRequestAppService)
 	: AbpController
 {
+	[HttpPost("{id:guid}/refund-requests")]
+	public Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateRefundRequestsAsync(
+		Guid id, [FromBody] CreateConcessionRefundRequestsDto input) =>
+		concessionRequestAppService.CreateRefundRequestsAsync(id, input);
 	[HttpPost]
 	[ProducesResponseType(typeof(ApiDataResponseDto<ConcessionRequestDetailDto>), StatusCodes.Status200OK)]
 	public Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(

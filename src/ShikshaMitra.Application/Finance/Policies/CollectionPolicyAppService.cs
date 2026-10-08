@@ -58,11 +58,78 @@ public class CollectionPolicyAppService(
 			var search = input.Search.Trim().ToLower();
 			query = query.Where(x => x.PolicyName.ToLower().Contains(search));
 		}
+		if (!string.IsNullOrWhiteSpace(input.PolicyNameFilter))
+		{
+			var name = input.PolicyNameFilter.Trim().ToLower();
+			query = input.PolicyNameOperator?.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => x.PolicyName.ToLower() == name),
+				"startswith" => query.Where(x => x.PolicyName.ToLower().StartsWith(name)),
+				"endswith" => query.Where(x => x.PolicyName.ToLower().EndsWith(name)),
+				_ => query.Where(x => x.PolicyName.ToLower().Contains(name))
+			};
+		}
+		if (input.EnableLateFee.HasValue)
+			query = query.Where(x => x.EnableLateFee == input.EnableLateFee.Value);
+		if (Enum.TryParse<LateFeeCalculationType>(input.LateFeeType, true, out var lateFeeType) &&
+			Enum.IsDefined(lateFeeType))
+			query = query.Where(x => x.LateFeeType == lateFeeType);
+		if (input.GraceDaysValue.HasValue)
+		{
+			var days = input.GraceDaysValue.Value;
+			var max = input.GraceDaysMax ?? days;
+			query = input.GraceDaysOperator?.ToLowerInvariant() switch
+			{
+				"greaterthan" => query.Where(x => x.GracePeriodDays > days),
+				"lessthan" => query.Where(x => x.GracePeriodDays < days),
+				"between" => query.Where(x => x.GracePeriodDays >= days && x.GracePeriodDays <= max),
+				_ => query.Where(x => x.GracePeriodDays == days)
+			};
+		}
+		if (input.AllowOnlineCollection.HasValue)
+			query = query.Where(x => x.AllowOnlineCollection == input.AllowOnlineCollection.Value);
+		if (input.UpdatedAt.HasValue && input.UpdatedAtEnd.HasValue)
+		{
+			var start = input.UpdatedAt.Value;
+			var end = input.UpdatedAtEnd.Value;
+			query = input.UpdatedAtOperator?.ToLowerInvariant() switch
+			{
+				"after" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start),
+				"before" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) < end),
+				_ => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start &&
+					(x.LastModificationTime ?? x.CreationTime) < end)
+			};
+		}
 
 		var total = await AsyncExecuter.CountAsync(query);
-		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderByDescending(x => x.IsDefault)
-			.ThenByDescending(x => x.CreationTime)
+		var sortParts = input.Sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+		var sortColumn = sortParts.Length > 0 ? sortParts[0].ToLowerInvariant() : string.Empty;
+		var descending = sortParts.Length > 1 && sortParts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
+		var sorted = sortColumn switch
+		{
+			"policyname" => descending ? query.OrderByDescending(x => x.PolicyName) : query.OrderBy(x => x.PolicyName),
+			"enablelatefee" => descending ? query.OrderByDescending(x => x.EnableLateFee) : query.OrderBy(x => x.EnableLateFee),
+			"latefeetype" => descending
+				? query.OrderByDescending(x => x.LateFeeType == LateFeeCalculationType.Compound ? 0 :
+					x.LateFeeType == LateFeeCalculationType.Flat ? 1 :
+						x.LateFeeType == LateFeeCalculationType.PerDay ? 2 :
+							x.LateFeeType == LateFeeCalculationType.PerMonth ? 3 :
+								x.LateFeeType == LateFeeCalculationType.PerWeek ? 4 :
+									x.LateFeeType == LateFeeCalculationType.Percentage ? 5 : 6)
+				: query.OrderBy(x => x.LateFeeType == LateFeeCalculationType.Compound ? 0 :
+					x.LateFeeType == LateFeeCalculationType.Flat ? 1 :
+						x.LateFeeType == LateFeeCalculationType.PerDay ? 2 :
+							x.LateFeeType == LateFeeCalculationType.PerMonth ? 3 :
+								x.LateFeeType == LateFeeCalculationType.PerWeek ? 4 :
+									x.LateFeeType == LateFeeCalculationType.Percentage ? 5 : 6),
+			"graceperioddays" => descending ? query.OrderByDescending(x => x.GracePeriodDays) : query.OrderBy(x => x.GracePeriodDays),
+			"allowonlinecollection" => descending ? query.OrderByDescending(x => x.AllowOnlineCollection) : query.OrderBy(x => x.AllowOnlineCollection),
+			"updatedat" => descending ? query.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime) : query.OrderBy(x => x.LastModificationTime ?? x.CreationTime),
+			"status" => descending ? query.OrderByDescending(x => x.Status) : query.OrderBy(x => x.Status),
+			_ => query.OrderByDescending(x => x.IsDefault).ThenByDescending(x => x.CreationTime)
+		};
+		var rows = await AsyncExecuter.ToListAsync(sorted
+			.ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
 

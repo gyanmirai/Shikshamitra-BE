@@ -250,7 +250,7 @@ public class LateFeeCalculationService_Tests
 		var policy = BuildPolicy(b =>
 		{
 			b.LateFeeType = LateFeeCalculationType.Percentage;
-			b.Percentage = 100m / 3m; // produces a repeating-decimal amount to exercise rounding
+			b.Percentage = 33.33m; // valid two-decimal rate produces a fractional amount to exercise rounding
 			b.PercentageBase = PercentageBaseType.OutstandingAmount;
 			b.GracePeriodDays = 0;
 			b.RoundingMethod = method;

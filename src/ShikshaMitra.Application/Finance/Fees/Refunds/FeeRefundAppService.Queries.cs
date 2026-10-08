@@ -111,7 +111,12 @@ public partial class FeeRefundAppService
         var dues = await dueFeeRepository.GetListAsync(x => x.StudentId == studentId &&
             x.StudentFeeStructureId == assignment.Id && x.PaidAmount > 0);
         if (policy.FeeHeadScope == RefundFeeHeadScope.SelectedFeeHeads)
+        {
+            var hasPaidDues = dues.Count > 0;
             dues = dues.Where(x => policy.ApplicableFeeHeadIds.Contains(x.FeeHeadId)).ToList();
+            if (hasPaidDues && dues.Count == 0)
+                throw new BusinessException(FeeRefundErrorCodes.FeeHeadNotEligible);
+        }
         var dueIds = dues.Select(x => x.Id).ToList();
         var collections = await collectionRepository.GetListAsync(x => x.StudentId == studentId &&
             x.AcademicYearId == academicYearId && x.Status != FeeCollectionStatus.Reversed &&
@@ -155,16 +160,21 @@ public partial class FeeRefundAppService
         var totalPaid = allocations.Sum(x => Convert.ToDecimal(x.Amount));
         var totalCommitted = allocationIds.Sum(x => committed.GetValueOrDefault(x));
         var studentYearCommitted = await feeRefundRepository.GetStudentYearCommittedAmountAsync(studentId, academicYearId);
-        var calculation = refundPolicyCalculationService.Calculate(policy, new RefundPolicyCalculationInput(
-            totalPaid, totalCommitted, 0m, studentYearCommitted,
-            policy.AmountMode == RefundAmountMode.ManualUpToEligible ? grouped.Sum(x => x.TotalRefundable) : null));
+        var refundableFromAllocations = grouped.Sum(x => x.TotalRefundable);
+        // Eligibility is a read of the current balance, not a request for a manual amount.
+        // The manual calculator deliberately rejects zero requested amounts on write paths.
+        var totalRefundable = refundableFromAllocations > 0m
+            ? refundPolicyCalculationService.Calculate(policy, new RefundPolicyCalculationInput(
+                totalPaid, totalCommitted, 0m, studentYearCommitted,
+                policy.AmountMode == RefundAmountMode.ManualUpToEligible ? refundableFromAllocations : null)).FinalRefund
+            : 0m;
         return new RefundEligibilityDto
         {
             StudentId = studentId, AcademicYearId = academicYearId, StudentFeeStructureId = assignment.Id,
             RefundPolicyId = version.PolicyId, RefundPolicyVersionId = version.Id, RefundPolicyName = policy.PolicyName,
             AllowedPayoutMethods = policy.AllowedPayoutMethods.Select(ToPayoutMethodLabel).ToList(),
             ProcessingTargetDays = policy.ProcessingTargetDays, AllowPartialRefund = policy.AllowPartialRefund, TotalPaid = totalPaid,
-            TotalRefunded = totalCommitted, TotalRefundable = calculation.FinalRefund, FeeHeads = grouped,
+            TotalRefunded = totalCommitted, TotalRefundable = totalRefundable, FeeHeads = grouped,
             Receipts = rows.GroupBy(x => x.SourceReceiptId).Select(g =>
             {
                 var receipt = receipts.Single(x => x.Id == g.Key);

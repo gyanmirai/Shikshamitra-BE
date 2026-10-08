@@ -8,8 +8,6 @@ public class CreateChargeRequest
 	public string ChargeName { get; set; } = string.Empty;
 
 	public Guid ChargeCategoryId { get; set; }
-	public Guid? IncomeCategoryId { get; set; }
-	public Guid? ReceivingBankAccountId { get; set; }
 
 	public string PurposeDescription { get; set; } = string.Empty;
 
@@ -34,8 +32,6 @@ public class UpdateChargeRequest
 	public string? ChargeName { get; set; }
 
 	public Guid? ChargeCategoryId { get; set; }
-	public Guid? IncomeCategoryId { get; set; }
-	public Guid? ReceivingBankAccountId { get; set; }
 
 	public string? PurposeDescription { get; set; }
 

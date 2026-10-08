@@ -92,6 +92,9 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public void Update(CollectionPolicyUpdateModel model)
+		=> ApplyUpdate(model, validateInputBounds: true);
+
+	private void ApplyUpdate(CollectionPolicyUpdateModel model, bool validateInputBounds)
 	{
 		if (IsDefault && (!model.IsDefault || model.Status != CollectionPolicyStatus.Active))
 			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyCannotBeRemoved);
@@ -125,7 +128,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyMustBeActive);
 		}
 
-		ValidateRules(model, model.Status == CollectionPolicyStatus.Active);
+		ValidateRules(model, model.Status == CollectionPolicyStatus.Active, validateInputBounds);
 
 		PolicyName = model.PolicyName.Trim();
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
@@ -231,7 +234,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		return feeHeadOverride is not null;
 	}
 
-	private static void ValidateFeeHeadOverrides(IReadOnlyList<CollectionPolicyFeeHeadOverride>? overrides)
+	private static void ValidateFeeHeadOverrides(IReadOnlyList<CollectionPolicyFeeHeadOverride>? overrides, bool validateInputBounds)
 	{
 		if (overrides is null || overrides.Count == 0)
 		{
@@ -258,9 +261,13 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 					.WithData("feeHeadId", feeHeadOverride.FeeHeadId);
 			}
 
-			if (feeHeadOverride.LateFeeRule.LateFeeType == LateFeeCalculationType.Slab)
+			var rule = feeHeadOverride.LateFeeRule;
+			if (validateInputBounds)
+				ValidateNumericRule(rule.FlatAmount, rule.Percentage, rule.AmountPerDay, rule.AmountPerWeek,
+					rule.AmountPerMonth, rule.MaximumLateFeeAmount, rule.MaximumChargingDays);
+			if (rule.LateFeeType == LateFeeCalculationType.Slab)
 			{
-				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(feeHeadOverride.LateFeeRule.EscalationRules);
+				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(rule.EscalationRules, rule.MaximumChargingDays, validateInputBounds);
 			}
 		}
 	}
@@ -308,12 +315,14 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		int version,
 		CollectionPolicySnapshot snapshot)
 	{
-		var entity = new CollectionPolicy(policyId, tenantId, academicYearId, snapshot.ToUpdateModel());
+		// Input limits apply to new writes; immutable historical versions retain their original economics.
+		var entity = new CollectionPolicy { Id = policyId, TenantId = tenantId, AcademicYearId = academicYearId };
+		entity.ApplyUpdate(snapshot.ToUpdateModel(), validateInputBounds: false);
 		entity.Version = version;
 		return entity;
 	}
 
-	private static void ValidateRules(CollectionPolicyUpdateModel model, bool requireComplete)
+	private static void ValidateRules(CollectionPolicyUpdateModel model, bool requireComplete, bool validateInputBounds)
 	{
 		if (model.EffectiveFrom.HasValue && model.EffectiveTo.HasValue &&
 			model.EffectiveFrom.Value.Date > model.EffectiveTo.Value.Date)
@@ -321,11 +330,14 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidEffectiveDates);
 		}
 
-		if (model.GracePeriodDays is < 0 or > 365 || model.MaximumChargingDays is <= 0 ||
-			model.MaximumLateFeeAmount is < 0)
+		if (model.GracePeriodDays is < 0 or > CollectionPolicyNumericLimits.MaximumDays ||
+			model.MaximumChargingDays is <= 0 || model.MaximumLateFeeAmount is < 0)
 		{
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule);
 		}
+		if (validateInputBounds)
+			ValidateNumericRule(model.FlatAmount, model.Percentage, model.AmountPerDay, model.AmountPerWeek,
+				model.AmountPerMonth, model.MaximumLateFeeAmount, model.MaximumChargingDays);
 
 		if (model.Status == CollectionPolicyStatus.Active && model.GracePeriodType == GracePeriodType.WorkingDay)
 		{
@@ -356,7 +368,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 			if (model.LateFeeType == LateFeeCalculationType.Slab && model.EscalationRules.Count > 0)
 			{
-				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(model.EscalationRules);
+				CollectionPolicySlabValidator.EnsureNoOverlapsOrGaps(model.EscalationRules, model.MaximumChargingDays, validateInputBounds);
 			}
 
 
@@ -379,7 +391,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidWaiverRule);
 		}
 
-		ValidateFeeHeadOverrides(model.FeeHeadOverrides);
+		ValidateFeeHeadOverrides(model.FeeHeadOverrides, validateInputBounds);
 		var lateFeeHeads = model.LateFeeApplyOnFeeHeads.ToHashSet();
 		if (model.FeeHeadOverrides.Any(x => !lateFeeHeads.Contains(x.FeeHeadId)))
 		{
@@ -390,6 +402,19 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private static string SerializeFeeHeadOverrides(IReadOnlyList<CollectionPolicyFeeHeadOverride>? overrides) =>
 		overrides is null || overrides.Count == 0 ? "[]" : JsonSerializer.Serialize(overrides);
+
+	private static void ValidateNumericRule(decimal? flat, decimal? percentage, decimal? perDay,
+		decimal? perWeek, decimal? perMonth, decimal? ceiling, int? cutoff)
+	{
+		// A draft may omit a formula, but any supplied value must still be safe to persist.
+		if (new[] { flat, perDay, perWeek, perMonth, ceiling }.Any(value =>
+			value.HasValue && !CollectionPolicyNumericLimits.IsAmount(value.Value)) ||
+			percentage.HasValue && !CollectionPolicyNumericLimits.IsPercentage(percentage.Value) ||
+			cutoff is < 1 or > CollectionPolicyNumericLimits.MaximumDays)
+		{
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidLateFeeRule);
+		}
+	}
 
 	private static string SerializeGuids(IReadOnlyList<Guid>? values) =>
 		values is null || values.Count == 0 ? "[]" : JsonSerializer.Serialize(values);

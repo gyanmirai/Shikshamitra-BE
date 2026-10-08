@@ -81,6 +81,9 @@ public class ConcessionSubmittedDocumentDto
 
 public class ConcessionRequestDetailDto
 {
+	public bool AutoCreateRefund { get; set; }
+	public decimal PaidConcessionAmount { get; set; }
+	public bool CanCreateRefundRequests { get; set; }
 	public Guid ConcessionRequestId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid StudentId { get; set; }
@@ -156,6 +159,7 @@ public class ConcessionDocumentFileUploadResponseDto
 public class ConcessionApplicationItemDto
 {
 	public Guid Id { get; set; }
+	public Guid? RequesterId { get; set; }
 	public Guid StudentId { get; set; }
 	public Guid ConcessionTypeId { get; set; }
 	public string StudentName { get; set; } = string.Empty;
@@ -249,12 +253,22 @@ public class PreviewConcessionApprovalDto
 
 public class ConcessionApprovalPreviewDto
 {
+	public bool AutoCreateRefund { get; set; }
 	public Guid ConcessionRequestId { get; set; }
 	public string RequestConcurrencyStamp { get; set; } = string.Empty;
 	public string PreviewFingerprint { get; set; } = string.Empty;
 	public decimal TotalApprovedAmount { get; set; }
 	public decimal RefundRequestAmount { get; set; }
 	public List<ApprovedDueFeeAllocationDto> DueFeeAllocations { get; set; } = [];
+}
+
+public class CreateConcessionRefundRequestsDto
+{
+	[System.ComponentModel.DataAnnotations.Required]
+	public string RequestConcurrencyStamp { get; set; } = string.Empty;
+	[System.ComponentModel.DataAnnotations.Required]
+	[System.ComponentModel.DataAnnotations.StringLength(128, MinimumLength = 1)]
+	public string IdempotencyKey { get; set; } = string.Empty;
 }
 
 public class DeleteConcessionRequestDto
@@ -380,6 +394,7 @@ public class ConcessionRequestContextDto
 
 public class ConcessionPolicyOptionDto
 {
+	public bool AutoCreateRefund { get; set; }
 	public Guid ConcessionPolicyId { get; set; }
 	public Guid ConcessionPolicyVersionId { get; set; }
 	public string PolicyName { get; set; } = string.Empty;
@@ -507,6 +522,10 @@ public class ConcessionReversalResponseDto
 
 public class StudentConcessionRequestItemDto
 {
+	public bool AutoCreateRefund { get; set; }
+	public Guid? RequesterId { get; set; }
+	public decimal PaidConcessionAmount { get; set; }
+	public bool CanCreateRefundRequests { get; set; }
 	public Guid StudentConcessionTypeRequestId { get; set; }
 	public Guid ConcessionTypeId { get; set; }
 	public string ConcessionTypeName { get; set; } = string.Empty;

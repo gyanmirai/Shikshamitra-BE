@@ -10,9 +10,7 @@ public class ChargeRequestConfiguration : IEntityTypeConfiguration<ChargeRequest
 	{
 		builder.ToTable("Finance_ChargeRequests", ShikshaMitraConsts.DbSchema);
         builder.Property(x=>x.IncomeCategoryName).HasMaxLength(500);
-        builder.Property(x=>x.ReceivingBankLabel).HasMaxLength(500);
         builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory>().WithMany().HasForeignKey(x=>x.IncomeCategoryId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.ReceivingBankAccountId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
 
 		builder.Property(x => x.ChargeName)

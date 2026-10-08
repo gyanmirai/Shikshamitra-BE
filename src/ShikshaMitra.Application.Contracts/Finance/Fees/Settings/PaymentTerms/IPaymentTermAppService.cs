@@ -10,6 +10,9 @@ public interface IPaymentTermAppService : IApplicationService
 {
 	Task<PagedResultDto<PaymentTermListDto>> GetListAsync(PaymentTermGetListInput input);
 
+	Task<PaymentTermUsageDto> GetUsageAsync(Guid paymentTermId, Guid? versionId = null);
+	Task<PaymentTermDefaultImpactDto> GetDefaultImpactAsync(Guid academicYearId, Guid boardId, Guid? paymentTermId = null);
+
 	Task<PaymentTermDto> GetAsync(Guid paymentTermId);
 
 	Task<PagedResultDto<PaymentTermVersionHistoryDto>> GetVersionHistoryAsync(

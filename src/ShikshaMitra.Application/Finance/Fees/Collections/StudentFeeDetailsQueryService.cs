@@ -43,7 +43,6 @@ public partial class StudentFeeDetailsQueryService(
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<ChargeWaiverApplication, Guid> chargeWaiverRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
-	IRepository<FeeStructureDetail, Guid> feeStructureDetailRepository,
 	IRepository<FeeRefundRequest, Guid> feeRefundRepository,
 	IConcessionRequestRepository concessionRequestRepository,
 	FinanceScopeAccessService financeScopeAccessService,
@@ -265,8 +264,6 @@ public partial class StudentFeeDetailsQueryService(
 				return new ChargeDetailDto
 				{
 					ChargeId = c.Id,
-                    IncomeCategoryId = c.IncomeCategoryId, ReceivingBankAccountId = c.ReceivingBankAccountId,
-                    IncomeCategoryName = c.IncomeCategoryName, ReceivingBankLabel = c.ReceivingBankLabel,
 					SourceId = c.Id,
 					SourceType = "Charge",
 					IsSystemGenerated = false,

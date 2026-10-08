@@ -36,9 +36,7 @@ public class ChargeRequestManager(
 		ChargeAudience audience,
 		string audienceSnapshot,
 		Guid requestorId,
-		string? additionalNotes = null,
-		Guid? incomeCategoryId = null,
-		Guid? receivingBankAccountId = null)
+		string? additionalNotes = null)
 	{
 		var category = await GetActiveCategoryAsync(chargeCategoryId, academicYearId);
 		var studentIds = await audienceResolver.ResolveAsync(audience, academicYearId);
@@ -60,9 +58,7 @@ public class ChargeRequestManager(
 			audienceSnapshot,
 			additionalNotes);
 
-		var income = await routingManager.RequireCategoryAsync(academicYearId, incomeCategoryId, TransactionType.Income);
-		var bank = await routingManager.RequireBankAsync(academicYearId, receivingBankAccountId);
-		request.SetFinancialRouting(income.Id, income.Name, bank.Id, BankLabel(bank));
+		await SetIncomeCategoryFromChargeCategoryAsync(request, category);
 		await chargeRequestRepository.InsertAsync(request, autoSave: false);
 
 		var lines = await CreateLinesAsync(
@@ -122,6 +118,7 @@ public class ChargeRequestManager(
 			audienceSnapshot);
 
 		var category = await GetActiveCategoryAsync(request.ChargeCategoryId, academicYearId);
+		await SetIncomeCategoryFromChargeCategoryAsync(request, category);
 		var existingStudentIds = existingLines.Select(l => l.StudentId).ToHashSet();
 		var newStudentIds = resolvedIds.Where(id => !existingStudentIds.Contains(id)).ToList();
 
@@ -142,7 +139,7 @@ public class ChargeRequestManager(
 				request.DueDate,
 				request.Priority,
 				request.AdditionalNotes);
-			line.SetFinancialRouting(request.IncomeCategoryId!.Value, request.IncomeCategoryName!, request.ReceivingBankAccountId!.Value, request.ReceivingBankLabel!);
+			line.SetIncomeCategory(request.IncomeCategoryId!.Value, request.IncomeCategoryName!);
 		}
 
 		return existingLines.Concat(newLines).ToList();
@@ -155,7 +152,6 @@ public class ChargeRequestManager(
 		string? approvalNotes)
 	{
 		await routingManager.RequireCategoryAsync(request.AcademicYearId, request.IncomeCategoryId, TransactionType.Income);
-		await routingManager.RequireBankAsync(request.AcademicYearId, request.ReceivingBankAccountId);
 		var lines = await GetActionableLinesAsync(request.Id, studentIds, ChargeStatus.Pending);
 
 		foreach (var line in lines)
@@ -240,7 +236,7 @@ public class ChargeRequestManager(
 				initialStatus,
 				requestorId,
 				request.AdditionalNotes);
-			line.SetFinancialRouting(request.IncomeCategoryId!.Value, request.IncomeCategoryName!, request.ReceivingBankAccountId!.Value, request.ReceivingBankLabel!);
+			line.SetIncomeCategory(request.IncomeCategoryId!.Value, request.IncomeCategoryName!);
 
 			await chargeRepository.InsertAsync(line, autoSave: false);
 			lines.Add(line);
@@ -249,7 +245,18 @@ public class ChargeRequestManager(
 		return lines;
 	}
 
-	public static string BankLabel(BankAccount bank) => $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}";
+	public async Task SetIncomeCategoryFromChargeCategoryAsync(ChargeRequest request)
+	{
+		var category = await GetActiveCategoryAsync(request.ChargeCategoryId, request.AcademicYearId);
+		await SetIncomeCategoryFromChargeCategoryAsync(request, category);
+	}
+
+	private async Task SetIncomeCategoryFromChargeCategoryAsync(ChargeRequest request, ChargeCategory category)
+	{
+		var income = await routingManager.RequireCategoryAsync(request.AcademicYearId,
+			category.IncomeCategoryId, TransactionType.Income);
+		request.SetIncomeCategory(income.Id, income.Name);
+	}
 
 	private async Task<ChargeCategory> GetActiveCategoryAsync(Guid chargeCategoryId, Guid academicYearId)
 	{

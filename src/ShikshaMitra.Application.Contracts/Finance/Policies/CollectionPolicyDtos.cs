@@ -123,9 +123,36 @@ public class CreateUpdateCollectionPolicyDtoValidator : AbstractValidator<Create
 	public CreateUpdateCollectionPolicyDtoValidator()
 	{
 		RuleFor(x => x.ChangeReason).MaximumLength(500);
+		RuleFor(x => x.GracePeriodDays).InclusiveBetween(0, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.MaximumChargingDays).InclusiveBetween(1, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.FlatAmount).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals.");
+		RuleFor(x => x.AmountPerDay).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals.");
+		RuleFor(x => x.AmountPerWeek).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals.");
+		RuleFor(x => x.AmountPerMonth).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals.");
+		RuleFor(x => x.MaximumLateFeeAmount).Must(IsOptionalAmount).WithMessage("Enter an amount between 0.01 and 999999 with up to 2 decimals, or leave empty for no limit.");
+		RuleFor(x => x.Percentage).Must(value => !value.HasValue || CollectionPolicyNumericLimits.IsPercentage(value.Value))
+			.WithMessage("Enter a percentage between 0.01 and 100 with up to 2 decimals.");
+		RuleForEach(x => x.EscalationRules).SetValidator(new CollectionPolicyEscalationRuleDtoValidator());
 		RuleFor(x => x).Must(x => !x.IsDefault ||
 			string.Equals(x.Status, "Active", StringComparison.OrdinalIgnoreCase))
 			.WithMessage("Only an Active collection policy can be the default.");
+	}
+
+	private static bool IsOptionalAmount(decimal? value) => !value.HasValue || CollectionPolicyNumericLimits.IsAmount(value.Value);
+}
+
+public class CollectionPolicyEscalationRuleDtoValidator : AbstractValidator<CollectionPolicyEscalationRuleDto>
+{
+	public CollectionPolicyEscalationRuleDtoValidator()
+	{
+		RuleFor(x => x.StartDay).InclusiveBetween(1, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.EndDay).InclusiveBetween(1, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.EndDay).Must((rule, end) => !end.HasValue || end >= rule.StartDay)
+			.WithMessage("To Day must be greater than or equal to From Day.");
+		RuleFor(x => x.Value).Must((rule, value) => string.Equals(rule.CalculationType, "Percentage", StringComparison.OrdinalIgnoreCase)
+			? CollectionPolicyNumericLimits.IsPercentage(value) : CollectionPolicyNumericLimits.IsAmount(value))
+			.WithMessage("Enter a valid slab amount or percentage with up to 2 decimals.");
+		RuleFor(x => x.MaxFee).Must(value => !value.HasValue || CollectionPolicyNumericLimits.IsAmount(value.Value));
 	}
 }
 
@@ -135,6 +162,17 @@ public class CollectionPolicyListRequestDto : PagedAndSortedResultRequestDto
 	public string? Status { get; set; }
 	public bool IncludeArchived { get; set; }
 	public string? Search { get; set; }
+	public string? PolicyNameFilter { get; set; }
+	public string? PolicyNameOperator { get; set; }
+	public bool? EnableLateFee { get; set; }
+	public string? LateFeeType { get; set; }
+	public string? GraceDaysOperator { get; set; }
+	public int? GraceDaysValue { get; set; }
+	public int? GraceDaysMax { get; set; }
+	public bool? AllowOnlineCollection { get; set; }
+	public string? UpdatedAtOperator { get; set; }
+	public DateTime? UpdatedAt { get; set; }
+	public DateTime? UpdatedAtEnd { get; set; }
 }
 
 public class CollectionPolicyCloneRequestDto
@@ -155,6 +193,21 @@ public class CollectionPolicySimulateRequestDto
 	public Guid? FeeStructureId { get; set; }
 	public bool IsLateFeeExempt { get; set; }
 	public int? CustomGracePeriodDays { get; set; }
+}
+
+public class CollectionPolicySimulateRequestDtoValidator : AbstractValidator<CollectionPolicySimulateRequestDto>
+{
+	public CollectionPolicySimulateRequestDtoValidator()
+	{
+		RuleFor(x => x.DaysLate).InclusiveBetween(0, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.CustomGracePeriodDays).InclusiveBetween(0, CollectionPolicyNumericLimits.MaximumDays);
+		RuleFor(x => x.OutstandingAmount).Must(IsSimulationAmount);
+		RuleFor(x => x.OriginalFeeAmount).Must(value => !value.HasValue || IsSimulationAmount(value.Value));
+		RuleFor(x => x.RemainingBalance).Must(value => !value.HasValue || IsSimulationAmount(value.Value));
+	}
+
+	private static bool IsSimulationAmount(decimal value) => value >= 0 &&
+		value <= CollectionPolicyNumericLimits.MaximumAmount && CollectionPolicyNumericLimits.HasCurrencyPrecision(value);
 }
 
 public class CollectionPolicySimulateResponseDto

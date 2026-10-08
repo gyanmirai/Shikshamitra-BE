@@ -2,18 +2,21 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Cache;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
+using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionType.Dtos;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Dynamic.Core;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Auditing;
 using Volo.Abp.AuditLogging;
 using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
@@ -32,6 +35,7 @@ public class ConcessionTypeAppService(
 	IGuidGenerator guidGenerator,
 	IDataFilter<ISoftDelete> softDeleteFilter,
 	IAuditLogRepository auditLogRepository,
+	IAuditingManager auditingManager,
 	IRepository<IdentityUser, Guid> userRepository
 ) : ApplicationService, IConcessionTypeAppService
 {
@@ -52,6 +56,15 @@ public class ConcessionTypeAppService(
 
 		AddDocuments(concessionType, input.Documents);
 		await concessionTypeRepository.InsertAsync(concessionType, autoSave: true);
+		RecordDocumentChanges(concessionType, input.Documents
+			.OrderBy(document => ConcessionTypeConsts.NormalizeNameKey(document.DocumentName), StringComparer.Ordinal)
+			.Select((document, index) => new EntityPropertyChangeInfo
+			{
+				PropertyName = $"Document {index + 1}",
+				PropertyTypeFullName = typeof(string).FullName!,
+				NewValue = FormatDocumentDefinition(document.DocumentName, document.MaxFileSizeBytes,
+					document.IsRequired, document.AcceptedFormats)
+			}).ToList(), EntityChangeType.Created);
 		await referenceCache.InvalidateConcessionTypesAsync();
 	}
 
@@ -157,8 +170,8 @@ public class ConcessionTypeAppService(
 					.Select(propertyChange => new ConcessionTypeVersionFieldChangeDto
 					{
 						FieldName = propertyChange.PropertyName,
-						OriginalValue = propertyChange.OriginalValue,
-						NewValue = propertyChange.NewValue
+						OriginalValue = FormatHistoryValue(propertyChange.PropertyName, propertyChange.OriginalValue),
+						NewValue = FormatHistoryValue(propertyChange.PropertyName, propertyChange.NewValue)
 					})
 					.ToList()
 			};
@@ -207,18 +220,28 @@ public class ConcessionTypeAppService(
 		await EnsureNameIsUniqueAsync(concessionType.AcademicYearId, input.Name, id);
 
 		var isUsed = await IsUsedAsync(id);
-		if (isUsed && DocumentDefinitionsChanged(concessionType, input.Documents))
+		var documentsChanged = DocumentDefinitionsChanged(concessionType, input.Documents);
+		if (isUsed && documentsChanged)
 		{
 			throw new BusinessException(ConcessionTypeErrorCodes.DocumentDefinitionsLocked);
 		}
 
+		var previousName = concessionType.Name;
+		var previousDescription = concessionType.Description;
 		concessionType.Update(input.Name, input.Description);
-		if (!isUsed)
+		if (!documentsChanged && previousName == concessionType.Name &&
+			previousDescription == concessionType.Description)
+			return;
+		var documentChanges = documentsChanged
+			? GetDocumentChanges(concessionType, input.Documents)
+			: [];
+		if (documentsChanged)
 		{
 			concessionType.ReplaceDocuments(input.Documents.Select(ToDocumentTuple).ToList());
 		}
 
 		await concessionTypeRepository.UpdateAsync(concessionType, autoSave: true);
+		RecordDocumentChanges(concessionType, documentChanges);
 		await referenceCache.InvalidateConcessionTypesAsync();
 	}
 
@@ -346,6 +369,71 @@ public class ConcessionTypeAppService(
 		IEnumerable<ShikshaMitra.Common.DocumentType> formats) =>
 		$"{ConcessionTypeConsts.NormalizeNameKey(name)}|{size}|{isRequired}|{string.Join(',', formats.Order())}";
 
+	private static List<EntityPropertyChangeInfo> GetDocumentChanges(
+		ConcessionType concessionType,
+		IEnumerable<ConcessionTypeDocumentDto> incomingDocuments)
+	{
+		var before = concessionType.ConcessionTypeDocuments.ToDictionary(
+			document => ConcessionTypeConsts.NormalizeNameKey(document.DocumentName),
+			document => FormatDocumentDefinition(document.DocumentName, document.MaxFileSizeBytes,
+				document.IsRequired, document.AcceptedFormats.Select(format => format.DocumentType)));
+		var after = incomingDocuments.ToDictionary(
+			document => ConcessionTypeConsts.NormalizeNameKey(document.DocumentName),
+			document => FormatDocumentDefinition(document.DocumentName, document.MaxFileSizeBytes,
+				document.IsRequired, document.AcceptedFormats));
+
+		return before.Keys.Union(after.Keys).Order(StringComparer.Ordinal)
+			.Select((key, index) => new { Key = key, Index = index })
+			.Where(item => before.GetValueOrDefault(item.Key) != after.GetValueOrDefault(item.Key))
+			.Select(item => new EntityPropertyChangeInfo
+			{
+				PropertyName = $"Document {item.Index + 1}",
+				PropertyTypeFullName = typeof(string).FullName!,
+				OriginalValue = before.GetValueOrDefault(item.Key),
+				NewValue = after.GetValueOrDefault(item.Key)
+			}).ToList();
+	}
+
+	private static string FormatDocumentDefinition(
+		string name,
+		long maxFileSizeBytes,
+		bool isRequired,
+		IEnumerable<ShikshaMitra.Common.DocumentType> acceptedFormats) =>
+		$"{name.Trim()} · Max file size: {maxFileSizeBytes} bytes · " +
+		$"Accepted formats: {string.Join(", ", acceptedFormats.Order())} · " +
+		$"{(isRequired ? "Mandatory" : "Optional")}";
+
+	private void RecordDocumentChanges(
+		ConcessionType concessionType,
+		List<EntityPropertyChangeInfo> documentChanges,
+		EntityChangeType changeType = EntityChangeType.Updated)
+	{
+		if (documentChanges.Count == 0 || auditingManager.Current?.Log is not { } auditLog)
+			return;
+
+		// ABP audits document children separately; attach their readable diff to the
+		// parent event consumed by the Concession Type version-history endpoint.
+		var entityChange = auditLog.EntityChanges.LastOrDefault(change =>
+			change.EntityTypeFullName == typeof(ConcessionType).FullName &&
+			change.EntityId == concessionType.Id.ToString() &&
+			change.ChangeType == changeType);
+		if (entityChange is null)
+		{
+			entityChange = new EntityChangeInfo
+			{
+				EntityTypeFullName = typeof(ConcessionType).FullName,
+				EntityId = concessionType.Id.ToString(),
+				EntityTenantId = concessionType.TenantId,
+				ChangeTime = DateTime.UtcNow,
+				ChangeType = changeType,
+				PropertyChanges = []
+			};
+			auditLog.EntityChanges.Add(entityChange);
+		}
+
+		entityChange.PropertyChanges.AddRange(documentChanges);
+	}
+
 	private static ConcessionTypeResponse MapResponse(ConcessionType concessionType, bool isUsed) => new()
 	{
 		Id = concessionType.Id,
@@ -381,5 +469,24 @@ public class ConcessionTypeAppService(
 		nameof(ConcessionType.Description) or
 		nameof(ConcessionType.IsActive) or
 		nameof(ConcessionType.DeactivationReason) or
-		nameof(ConcessionType.DiscountType);
+		nameof(ConcessionType.DiscountType) ||
+		propertyName.StartsWith("Document ", StringComparison.Ordinal);
+
+	private static string? FormatHistoryValue(string propertyName, string? value)
+	{
+		if (propertyName != nameof(ConcessionType.DiscountType) || string.IsNullOrWhiteSpace(value))
+			return value;
+
+		var normalized = value.Trim().Trim('"');
+		if (string.Equals(normalized, "null", StringComparison.OrdinalIgnoreCase))
+			return null;
+		if (int.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) &&
+			Enum.IsDefined(typeof(AmountType), number))
+			return ((AmountType)number).ToString();
+
+		return Enum.TryParse<AmountType>(normalized, true, out var amountType) &&
+			Enum.IsDefined(amountType)
+			? amountType.ToString()
+			: value;
+	}
 }

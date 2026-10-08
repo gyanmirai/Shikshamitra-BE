@@ -1,4 +1,5 @@
 using ShikshaMitra.Common;
+using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using System;
 using System.Collections.Generic;
@@ -51,6 +52,19 @@ public class ConcessionTypeLifecycle_Tests
 		Assert.False(document.IsRequired);
 		Assert.Equal(5 * 1024 * 1024, document.MaxFileSizeBytes);
 		Assert.Equal(2, document.AcceptedFormats.Count);
+	}
+
+	[Fact]
+	public void Update_Does_Not_Clear_Legacy_Discount_Type()
+	{
+		var concessionType = new ConcessionType(
+			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "Sibling Discount",
+			"Before", discountType: AmountType.Flat);
+
+		concessionType.Update("Sibling Discount", "After");
+
+		Assert.Equal(AmountType.Flat, concessionType.DiscountType);
+		Assert.Equal("After", concessionType.Description);
 	}
 
 	private static ConcessionType Create(string name) =>

@@ -157,19 +157,21 @@ The backend derives and stores the academic-year start and end dates for version
 | Grace-period days | Late fee enabled | Integer 0-365 |
 | Late-fee fee heads | Late fee enabled | At least one valid, active fee head from the same tenant/year |
 | Calculation type | Late fee enabled | `Flat`, `Percentage`, `PerDay`, `PerWeek`, `PerMonth`, `Compound`, `Slab` |
-| Flat amount | Type = Flat | Greater than zero, currency precision |
-| Percentage | Type = Percentage/Compound | Greater than zero and at most 100 |
+| Flat amount | Type = Flat | 0.01-999999, at most two decimal places |
+| Percentage | Type = Percentage/Compound | 0.01-100, at most two decimal places |
 | Percentage base | Percentage/Compound | `OutstandingAmount`, `OriginalFee`, or approved meaning of `RemainingBalance` |
-| Amount per day/week/month | Matching type | Greater than zero, currency precision |
+| Amount per day/week/month | Matching type | 0.01-999999, at most two decimal places |
 | Compound frequency | Compound | `Daily`, `Weekly`, `Monthly` |
-| Slabs | Slab | At least one; start at day 1 after grace; ordered; no gap/overlap; last slab may be open-ended |
+| Slabs | Slab | At least one; start at day 1 after grace; finite endpoints 1-365; ordered; no gap/overlap; last slab may be open-ended; when a charging cutoff is supplied, cover through it without finite endpoints beyond it; values use the corresponding amount/percentage limits |
 | Rounding | Late fee enabled | `None`, `RoundUp`, `RoundDown`, `NearestRupee` |
-| Maximum late-fee amount | No | Positive; final fee cannot exceed it |
-| Maximum charging days | No | Integer greater than zero; accrual freezes after this many effective late days |
+| Maximum late-fee amount | No | Empty means no limit; otherwise 0.01-999999 with at most two decimal places; final fee cannot exceed it |
+| Maximum charging days | No | Integer 1-365; accrual freezes after this many effective late days |
 | Consider as income | Always | When true, an active tenant-owned income head is required |
 | Late-fee income head | Consider as income = true | Must be active and valid for posting |
 
 `RemainingBalance` does not currently have a distinct runtime meaning because the server supplies the current outstanding amount for both fields.
+
+The same numeric bounds apply to supplied draft values and custom fee-head overrides. Simulation accepts 0-365 overdue days, 0-365 optional custom grace days, and 0-999999 for monetary inputs with at most two decimal places. These are configuration/input bounds; calculated outputs remain governed by the selected formula, cutoff, ceiling, and rounding, rather than being silently clamped to the input maximum. Immutable historical version snapshots retain their original numeric configuration when restored for calculation; new writes, including revisions and clones, must satisfy current bounds.
 Keep it hidden or label it experimental until Finance approves a precise definition; do not let staff select an ambiguous calculation base.
 
 ### Per-fee-head override section

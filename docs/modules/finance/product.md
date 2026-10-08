@@ -22,7 +22,7 @@ Treat incorrect Finance reports or due balances as production defects.
 | Fee collection | Implemented | Collect fees, allocate payments to due rows, expose student fee details, summaries, and exports |
 | Receipts | Implemented | Read receipt lists and receipt details after payment activity |
 | Charges | Partial | Create ad hoc per-student charges, approve/reject them, collect approved balances, and issue charge receipts. Release-critical scope, concurrency, correction/refund, policy, accounting, and frontend-permission gaps are tracked in [Charge management end to end](./references/charge-management-end-to-end.md) |
-| Concession policy and requests | Implemented | Select an active academic-year policy while creating the request and pin that version. `AllFees` permits concessions on paid installments; approval creates a submitted refund request for any resulting overpayment. See [the end-to-end reference](./references/concession-policy-end-to-end.md) |
+| Concession policy and requests | Implemented | Select an active academic-year policy while creating the request and pin that version. `AllFees` permits concessions on paid installments; the snapshotted `AutoCreateRefund` setting selects automatic creation on approval or later manual creation of linked refunds. See [the end-to-end reference](./references/concession-policy-end-to-end.md) |
 | Fee adjustments | Implemented | Create credit pools from paid due rows and apply them to pending obligations |
 | Refunds | Implemented | Request and process fee refunds separately from adjustments |
 | Accounts | Implemented | Income, expense, bank account, transaction categories, transactions, and reconciliation |
@@ -45,6 +45,17 @@ Treat incorrect Finance reports or due balances as production defects.
 | Concession types are lifecycle-controlled master data | Active types cannot be deleted; inactive unused types may be deleted, while used types remain resolvable in requests, reports, and version history |
 | Every policy type has an active academic-year default | Where active policies exist, Concession, Collection, Refund, and Proration each have exactly one Default per tenant and academic year. The first Active policy becomes Default; selecting another replaces it. The current Default cannot be cleared, moved to Draft, or archived until another Active policy is designated. A filtered unique index prevents duplicate Active defaults. |
 | Concession evidence definitions are server-enforced | Each document declares mandatory/optional, maximum bytes, and accepted formats; only mandatory evidence blocks approval |
+
+## Archived Fee Categories
+
+Fee Heads under an archived Fee Category are read-only. Status changes require restoring the category first; active-head choices for new assignments exclude archived categories. Existing published Fee Structure references remain intact.
+
+## Payment Term invoice scheduling
+
+Template generation configures payment due and invoice rules together and returns a complete validated schedule before application.
+For specific-date rules, authors supply one explicit invoice date per generated installment; generated dates and manual installment edits share the same server validation.
+
+Payment Terms keep each invoice date on or after its installment start and on or before its payment due date. Coverage and schedule dates remain within the selected Education Board period. The days-before-due rule is limited by the smallest installment start-to-due gap; a same-day start and due date requires another invoice rule. These rules apply when saving drafts, publishing, previewing templates, and customizing resolved fee-structure schedules. Dates are calendar dates; valid historical schedules remain allowed for backfill without a today restriction. Existing published versions and downstream financial history are preserved. Due dates after the coverage end remain supported within the board period.
 
 ## Fee Ledger overdue classification
 

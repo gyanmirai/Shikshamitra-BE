@@ -45,12 +45,121 @@ public class ConcessionPolicyAppService(
 			var search = input.Search.Trim().ToLower();
 			query = query.Where(x => x.PolicyName.ToLower().Contains(search) || x.PolicyCode.ToLower().Contains(search));
 		}
+		if (!string.IsNullOrWhiteSpace(input.PolicyNameFilter))
+		{
+			var name = input.PolicyNameFilter.Trim().ToLower();
+			query = input.PolicyNameOperator?.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => x.PolicyName.ToLower() == name),
+				"startswith" => query.Where(x => x.PolicyName.ToLower().StartsWith(name)),
+				"endswith" => query.Where(x => x.PolicyName.ToLower().EndsWith(name)),
+				_ => query.Where(x => x.PolicyName.ToLower().Contains(name))
+			};
+		}
+		if (!string.IsNullOrWhiteSpace(input.ValueSource))
+		{
+			var valueSource = ConcessionPolicyMapping.ParseValueSource(input.ValueSource);
+			query = query.Where(x => x.ValueSource == valueSource);
+		}
+		if (!string.IsNullOrWhiteSpace(input.CalculationMethod))
+		{
+			var method = ConcessionPolicyMapping.ParseCalculationMethod(input.CalculationMethod);
+			query = query.Where(x => x.CalculationMethod == method);
+		}
+		if (!string.IsNullOrWhiteSpace(input.ApplyOn))
+		{
+			var applyOn = ConcessionPolicyMapping.ParseApplyOn(input.ApplyOn);
+			query = query.Where(x => x.ApplyOn == applyOn);
+		}
+		if (input.LimitOperator is not null && input.LimitValue.HasValue)
+		{
+			var limit = input.LimitValue.Value;
+			var max = input.LimitMax ?? limit;
+			// Match the numeric value shown in the table. Calculation Method identifies its unit.
+			query = input.LimitOperator.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => (x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+					x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) == limit),
+				"greaterthan" => query.Where(x => (x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+					x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) > limit),
+				"lessthan" => query.Where(x => (x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+					x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) < limit),
+				"between" => query.Where(x => (x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+					x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+						(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) >= limit &&
+					(x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+						x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)) <= max),
+				_ => query
+			};
+		}
+		if (input.UpdatedAtOperator is not null && input.UpdatedAt.HasValue && input.UpdatedAtEnd.HasValue)
+		{
+			var start = input.UpdatedAt.Value;
+			var end = input.UpdatedAtEnd.Value;
+			query = input.UpdatedAtOperator.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start &&
+					(x.LastModificationTime ?? x.CreationTime) < end),
+				"after" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start),
+				"before" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) < end),
+				_ => query
+			};
+		}
 
 		var total = await AsyncExecuter.CountAsync(query);
-		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderByDescending(x => x.IsDefault)
-			.ThenByDescending(x => x.Status == ConcessionPolicyStatus.Active)
-			.ThenByDescending(x => x.CreationTime)
+		var sortParts = input.Sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+		var sortColumn = sortParts.Length > 0 ? sortParts[0].ToLowerInvariant() : string.Empty;
+		var descending = sortParts.Length > 1 && sortParts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
+		var sorted = sortColumn switch
+		{
+			"policyname" => descending ? query.OrderByDescending(x => x.PolicyName) : query.OrderBy(x => x.PolicyName),
+			"valuesource" => descending
+				? query.OrderByDescending(x => x.ValueSource == ConcessionValueSource.PolicyFixed)
+				: query.OrderBy(x => x.ValueSource == ConcessionValueSource.PolicyFixed),
+			"calculationmethod" => descending
+				? query.OrderByDescending(x => x.CalculationMethod == ConcessionCalculationMethod.FixedAmount ? 0 :
+					x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 1 : 2)
+				: query.OrderBy(x => x.CalculationMethod == ConcessionCalculationMethod.FixedAmount ? 0 :
+					x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 1 : 2),
+			"policylimit" => descending
+				? query.OrderByDescending(x => x.CalculationMethod == ConcessionCalculationMethod.FixedAmount)
+					.ThenByDescending(x => (double?)(x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+						x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount)))
+				: query.OrderBy(x => x.CalculationMethod == ConcessionCalculationMethod.FixedAmount)
+					.ThenBy(x => (double?)(x.CalculationMethod == ConcessionCalculationMethod.FullWaiver ? 100m :
+						x.CalculationMethod == ConcessionCalculationMethod.Percentage ?
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.PercentageValue : x.MaximumPercentage) :
+							(x.ValueSource == ConcessionValueSource.PolicyFixed ? x.FixedAmount : x.MaximumFixedAmount))),
+			"applyon" => descending
+				? query.OrderByDescending(x => x.ApplyOn == ConcessionApplyOn.AllFees ? 0 :
+					x.ApplyOn == ConcessionApplyOn.AllOutstanding ? 1 :
+						x.ApplyOn == ConcessionApplyOn.CurrentInstallment ? 2 : 3)
+				: query.OrderBy(x => x.ApplyOn == ConcessionApplyOn.AllFees ? 0 :
+					x.ApplyOn == ConcessionApplyOn.AllOutstanding ? 1 :
+						x.ApplyOn == ConcessionApplyOn.CurrentInstallment ? 2 : 3),
+			"updatedat" => descending ? query.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime) : query.OrderBy(x => x.LastModificationTime ?? x.CreationTime),
+			"status" => descending
+				? query.OrderByDescending(x => x.Status == ConcessionPolicyStatus.Active ? 0 :
+					x.Status == ConcessionPolicyStatus.Archived ? 1 : 2)
+				: query.OrderBy(x => x.Status == ConcessionPolicyStatus.Active ? 0 :
+					x.Status == ConcessionPolicyStatus.Archived ? 1 : 2),
+			_ => query.OrderByDescending(x => x.IsDefault)
+				.ThenByDescending(x => x.Status == ConcessionPolicyStatus.Active)
+				.ThenByDescending(x => x.CreationTime)
+		};
+		var rows = await AsyncExecuter.ToListAsync(sorted
+			.ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
 		var usedIds = await GetUsedIdsAsync(rows.Select(x => x.Id).ToList());
@@ -165,6 +274,7 @@ public class ConcessionPolicyAppService(
 			MaximumPercentage = source.MaximumPercentage,
 			MaximumFixedAmount = source.MaximumFixedAmount,
 			ApplyOn = source.ApplyOn.ToString(),
+			AutoCreateRefund = source.AutoCreateRefund,
 			RoundingMethod = source.RoundingMethod.ToString(),
 			ApplicableConcessionTypeIds = [],
 			FeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure.ToString(),

@@ -32,7 +32,10 @@ public class StudentPortalAccessService(
 
 		var activeLinks = await links.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id &&
 			(x.AccountType == "guardian" || (x.AccountType == "student" && x.Relationship == "self")));
-		var selfStudents = await students.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id && x.Status != StudentLifeCycleStatusEnum.Left);
+		var studentQuery = await students.GetQueryableAsync();
+		// Association lists need names, not the Student aggregate's auto-included relationships.
+		var selfStudents = await AsyncExecuter.ToListAsync(studentQuery.Where(x => x.TenantId == CurrentTenant.Id && x.UserId == user.Id && x.Status != StudentLifeCycleStatusEnum.Left)
+			.Select(x => new PersonalStudent { Id = x.Id, FirstName = x.FirstName, LastName = x.LastName }));
 		List<StudentPortalAccountLink> selfLinkHistory;
 		// A soft-deleted explicit self link must not regain access through Student.UserId.
 		// Tenant filtering remains enabled while inspecting revocations.
@@ -42,7 +45,8 @@ public class StudentPortalAccessService(
 
 		var linkedIds = activeLinks.Select(x => x.StudentId).Distinct().ToArray();
 		var linkedStudents = linkedIds.Length == 0 ? [] :
-			await students.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(linkedIds, x.Id) && x.Status != StudentLifeCycleStatusEnum.Left);
+			await AsyncExecuter.ToListAsync(studentQuery.Where(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(linkedIds, x.Id) && x.Status != StudentLifeCycleStatusEnum.Left)
+				.Select(x => new PersonalStudent { Id = x.Id, FirstName = x.FirstName, LastName = x.LastName }));
 		var result = new List<StudentPortalAccountDto>();
 		foreach (var link in activeLinks)
 		{
@@ -65,7 +69,14 @@ public class StudentPortalAccessService(
 			?? throw new AbpAuthorizationException();
 	}
 
-	private static StudentPortalAccountDto Map(Student student, IdentityUser user, string accountType, string relationship) => new()
+	private sealed class PersonalStudent
+	{
+		public Guid Id { get; init; }
+		public string? FirstName { get; init; }
+		public string? LastName { get; init; }
+	}
+
+	private static StudentPortalAccountDto Map(PersonalStudent student, IdentityUser user, string accountType, string relationship) => new()
 	{
 		StudentId = student.Id, UserId = user.Id,
 		StudentName = string.Join(" ", new[] { student.FirstName, student.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))),

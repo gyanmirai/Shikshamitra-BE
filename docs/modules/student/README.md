@@ -3,7 +3,7 @@ module: student
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-10-01
+updated_on: 2026-10-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -80,3 +80,6 @@ Run from `Shikshamitra-BE`:
 powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module student
 git diff --check
 ```
+## Student dashboard
+
+The shared dashboard supplies role-prioritized, permission- and scope-constrained live summaries. Use [product.md](./product.md#student-dashboard) for definitions, [api.md](./api.md#student-dashboard-live-reads) for contracts and [testing.md](./testing.md#student-dashboard-validation) for verification. Frontend presentation remains owned by the [Student frontend](../../../../Shikshamitra-FE/docs/student/README.md).

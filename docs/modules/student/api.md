@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -105,7 +105,7 @@ Student submodules normally expose `View`, `Add`, and `Delete`. Workflow Builder
 exposes `Approve`, `ManageGovernance`, and `Rollback` so maker-checker decisions, tenant policy,
 and recovery actions can be assigned independently.
 Module visibility permissions under `ShikshaMitra.Module.Students.*` remain separate and only control whether the corresponding module or submodule is visible.
-Student Dashboard reads require `Students.Dashboard.View`; an explicit dashboard refresh requires `Students.Dashboard.Add`.
+Student Dashboard live reads require `Students.Dashboard.View`; the legacy Reporting snapshot refresh command requires `Students.Dashboard.Add`.
 
 ## Admission Cycle endpoints
 
@@ -525,3 +525,13 @@ Base: `/api/student/enrollment/admissions/seats/applications/{applicationId}/sta
 | PUT `/capacity` | `ManageCapacity` | Change offering capacity; going below occupancy requires `OverrideCapacity` and a reason |
 
 Commands carry the application stamp, allocation stamp when present, and an idempotency key. Capacity changes also carry the pool stamp. Workflow facts are `seat.status`, `seat.remainingCapacity`, `seat.isExpired`, and `seat.waitlistPosition`.
+## Student dashboard live reads
+
+Base route: `/api/students/dashboard`. DTOs and interface: `src/ShikshaMitra.Application.Contracts/Students/Dashboard/StudentModuleDashboardDtos.cs`.
+
+| Method and path | Contract and authority |
+|---|---|
+| GET `/context` | Dashboard.View; active tenant database identity. Returns `{mode,displayName,scopeLabel,sections,links,myStudents}`. Links include their exact action/visibility grants. Sections appear only with destination access and academic scope. Portal-only context returns verified linked student names. |
+| GET `/sections/{section}?academicYearId={guid}` | Dashboard.View plus context section eligibility, destination action/visibility, tenant-owned year and current academic scope. `section` is records/admissions/attendance. Returns `{key,academicYearId,generatedAt,description,metrics,classStrength}`. Metric rows carry id/label/value/tone/href/permission; strength is bounded to 12. |
+
+These live GET reads and frontend refresh require View authority and repeat reads without writes or jobs. Legacy Reporting-backed preview refresh retains its separate Dashboard.Add command authority. Unknown section raises `Students:Dashboard:InvalidSection` (400); denied identity/section/year raises authorization failure (403). Anonymous callers receive 401. ABP rejects an unknown tenant before this controller, normally with 404. No student contacts, compliance identifiers, credentials or raw student records are returned in staff aggregates.

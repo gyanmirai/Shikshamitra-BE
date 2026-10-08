@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -284,3 +284,13 @@ Section verification is reconstructed from immutable form change history. A corr
 | Tenant tables, unique ownership and operational indexes | EF `AdmissionSeatConfiguration.cs` |
 
 The pool concurrency stamp serializes changes to shared offering capacity, while the application and reservation stamps protect applicant state. Filtered unique indexes prevent duplicate live pools and duplicate application-stage allocations. The additive `20260911084131_AddManagedAdmissionSeats` migration creates only the pool and reservation tables, indexes, and restrictive ownership links.
+## Student dashboard ownership
+
+| Layer | Source |
+|---|---|
+| HTTP | `src/ShikshaMitra.HttpApi/Controllers/Student/StudentModuleDashboardController.cs` |
+| Context, role priorities, destination grants | `src/ShikshaMitra.Application/Students/Dashboard/StudentModuleDashboardAppService.cs`, `StudentModuleDashboardCatalog.cs` |
+| SQL summaries | `StudentModuleDashboardRecordsReader.cs`, `StudentModuleDashboardAdmissionsReader.cs`, `StudentModuleDashboardAttendanceReader.cs` in that directory |
+| Contract/errors | `src/ShikshaMitra.Application.Contracts/Students/Dashboard/`, `src/ShikshaMitra.Domain.Shared/Students/Dashboard/` |
+
+Readers reuse Records enrollment scope, Admission inquiry/application scope, exact division scope and Portal association services. Counts/grouping/projections execute in SQL; full populations are not materialized. Queries run sequentially on the request DbContext. The frontend independently loads authorized sections, so one failed section can be retried alone. There is no server aggregate cache that could cross identity/scope boundaries and no new persistence schema. Existing Reporting dashboard providers remain separate for compatible consumers.

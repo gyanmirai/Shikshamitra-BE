@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -519,3 +519,16 @@ The existing 50-result limit remains part of this endpoint and must not be mista
 After deploying the backend build to staging, verify the same endpoint with the QA account and representative tenant data.
 Require a successful response before declaring QA unblocked, then follow the [frontend browser checks](../../../../Shikshamitra-FE/docs/student/testing.md) for visible options, selection, setup save and reload.
 Local synthetic tests alone do not certify staging or production performance.
+## Student dashboard validation
+
+Run from the backend repository:
+
+```powershell
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter FullyQualifiedName~StudentModuleDashboardApi_Tests --artifacts-path .artifacts/student-module-dashboard/build --logger "trx;LogFileName=student-module-dashboard.trx"
+powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -AllModules
+git diff --check
+```
+
+Tests use real application services, scope resolution, active database identities and SQLite persistence; the permission test header only controls exact grants. Coverage includes anonymous/denied callers, action-without-visibility, unknown identity/tenant/year/section, translated aggregates, direct service authorization, forged administrator claims, no academic scope, sibling-division exclusion and verified Parent-only associations despite staff grants. The workload scenario grows owned inquiries from 10 to 510, retains 10 other-owner inquiries and one owned/one other-owner setup case, checks constant query count and payload under 16 KiB, and records cold latency plus 20 samples after three warmups. Fixture latency is local SQLite API evidence, not a production PostgreSQL SLA or query-plan benchmark.
+
+For release, verify selected-year and scoped counts against the owning worklists using a signed-in school environment and measure PostgreSQL execution plans/p95 with representative tenant sizes. Local browser sample-response evidence remains owned by [frontend tests](../../../../Shikshamitra-FE/docs/student/testing.md#student-dashboard-validation).

@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-08
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -338,3 +338,10 @@ Seat is not selectable in new workflow drafts. Published workflow versions and a
 For those historical journeys, capacity, expiry, and waitlist facts remain server-computed. Confirm, renew, release, promote, or adjust capacity only when the returned server capability permits it; every action records immutable history. Staff should refresh and retry after a concurrency conflict instead of overwriting a newer allocation decision.
 
 Room-derived class capacity is configured by assigning Institute Setup rooms to a class from Admission Offering details. Its shared remaining-seat count is a warning only and does not reserve seats or implement a waitlist. Any future offering-level reservation and waitlist contract remains separate from this class-capacity display and from the historical managed Seat stage.
+## Student dashboard reads
+
+1. Authenticate with Dashboard.View; resolve an active user and role membership from the tenant database.
+2. For Student/Parent-only identities, resolve verified personal associations and return only those names/relationships.
+3. For staff, resolve current academic scope and exact destination grants; return section eligibility and permitted links.
+4. On each section GET, repeat the authority/context check, validate the selected tenant year and scope, and run only permitted aggregate reads. There is no write side effect.
+5. Follow the owning route to perform work under that module's existing action authorization. Client refresh repeats live reads; the Reporting snapshot refresh command remains a separate workflow.

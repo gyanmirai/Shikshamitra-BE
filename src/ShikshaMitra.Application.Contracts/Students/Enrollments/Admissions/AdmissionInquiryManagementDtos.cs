@@ -21,6 +21,7 @@ public class AdmissionInquiryManagementDto
 	public DateTime? FirstContactDueAt { get; set; }
 	public DateTime? QualificationDueAt { get; set; }
 	public DateTime? LastContactAt { get; set; }
+	public DateTimeOffset? NextReminderAt { get; set; }
 	public int ContactCount { get; set; }
 	public AdmissionInquiryQualificationOutcome? Outcome { get; set; }
 	public string? OutcomeReason { get; set; }
@@ -29,6 +30,7 @@ public class AdmissionInquiryManagementDto
 	public Guid? OutcomeBy { get; set; }
 	public bool IsOverdue { get; set; }
 	public bool IsLocked { get; set; }
+	public bool CanManageFollowUps { get; set; }
 	public bool CanStartApplication { get; set; }
 	public bool CanReassign { get; set; }
 	public string? QualificationEmailStatus { get; set; }
@@ -36,6 +38,25 @@ public class AdmissionInquiryManagementDto
 	public List<string> Blockers { get; set; } = [];
 	public List<AdmissionInquiryQualificationAnswerDto> QualificationAnswers { get; set; } = [];
 	public List<AdmissionInquiryFollowUpDto> FollowUps { get; set; } = [];
+	public List<AdmissionInquiryFollowUpNoteDto> Notes { get; set; } = [];
+}
+
+public class AdmissionInquiryFollowUpNoteDto
+{
+	public Guid Id { get; set; }
+	public DateTime OccurredAt { get; set; }
+	public string Note { get; set; } = string.Empty;
+	public AdmissionInquiryStatus? Status { get; set; }
+	public DateTimeOffset? ReminderAt { get; set; }
+	public string AuthorName { get; set; } = string.Empty;
+}
+
+public class RecordAdmissionInquiryFollowUpNoteDto : AdmissionInquiryManagementCommandDto
+{
+	[Required, MaxLength(40)] public string InquiryConcurrencyStamp { get; set; } = string.Empty;
+	[Required] public string Note { get; set; } = string.Empty;
+	public AdmissionInquiryStatus Status { get; set; }
+	public DateTimeOffset? ReminderAt { get; set; }
 }
 
 public class AdmissionInquiryQualificationAnswerDto

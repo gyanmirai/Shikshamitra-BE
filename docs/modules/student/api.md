@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-07
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,23 @@ audience: humans-and-agents
 # Find Student Enrollment Admissions APIs
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
+
+## Active admission Pipeline and follow-ups
+
+`GET /api/student/enrollment/admissions/applications/pipeline` requires AdmissionApplications.View and projects active inquiry-linked applications within existing tenant and offering scope.
+It accepts academic hierarchy, MyCases, assigned counsellor, status, stage code, search, whitelisted sorting and bounded paging.
+`GET /api/student/enrollment/admissions/applications/pipeline/options` supplies complete scoped active counsellor/stage choices, current user and the authoritative default queue without page/search truncation.
+Administrators identified by the existing user scope and configured fallback managers default to All; other staff default to My.
+The queue preference never changes academic access.
+Terminal applications and failed/cancelled workflows are excluded; a completed workflow awaiting finalization stays active.
+Next-action guidance comes from the existing stage registry, due dates from published Form/Payment policies and follow-up reminders from existing scheduled inquiry records.
+Missing source inquiries remain visible through an application-backed projection with `sourceInquiryAvailable=false`.
+
+Application `GET /{applicationId}/follow-ups` requires Application View; schedule `POST /follow-ups` and complete/cancel `POST /follow-ups/{followUpId}/complete|cancel` additionally require exact Inquiry Manage.
+These routes reuse inquiry management, policy, owner restrictions and concurrency stamps, and return `canManageFollowUps`.
+Inquiry details/qualification remain locked after transfer, while follow-up commands require an active linked application.
+Closed cases reject follow-up writes; an unavailable source inquiry returns a corrective business error.
+No new workflow, messaging store or finalization path is created.
 
 ## Public inquiry link options
 
@@ -136,6 +153,10 @@ description is optional and limited to 1000 characters.
 
 ## Offering endpoints
 
+Create, clone and bulk writes normalize new offerings to General/Inquiry. Application form references are resolved from the selected workflow's configured Form stages; the caller cannot override an explicit workflow form. Inquiry form remains selectable. Bulk `stageId` is optional and each item's actual stage is resolved from its Standard before tenant, hierarchy and UserScope validation. Read DTOs retain historical enums and references for compatibility.
+
+Fresh Admissions direct-registration and direct-registration family-match endpoints reject with the existing direct-entry error. Ordinary application start requires Inquiry evidence. The server-internal Records return coordinator and existing applications retain their historical lifecycle.
+
 | Method | Route | Permission |
 |---|---|---|
 | GET | `/api/student/enrollment/admissions/offerings` | `Students.Admissions.Offerings.View` |
@@ -222,6 +243,7 @@ Permission names below use only `Students.Admissions.Assessments.View`, `.Add`, 
 | Method and suffix | Permission | Behavior |
 |---|---|---|
 | `GET /scopes` | `View` | Scoped offering/stage choices, including versions pinned to existing applications |
+| `GET /applicants` | `View` | Paged assessment work queues and session rosters with scoped counts, evidence, blockers and permitted actions |
 | `GET /sessions?admissionOfferingId=...&workflowStageDefinitionId=...` | `View` | Scheduled sessions for an offering and managed stage |
 | `POST /sessions` | `ManageSessions` | Create a future session |
 | `PUT /sessions/{id}` | `ManageSessions` | Update dates, location, name, or capacity before start |
@@ -236,6 +258,7 @@ Permission names below use only `Students.Admissions.Assessments.View`, `.Add`, 
 | `POST /applications/{applicationId}/stages/{stageInstanceId}/waive` | `Waive` | Record an authorized waiver with a reason |
 
 Workflow stage metadata advertises `assessment` in `SupportedConfiguration` and runtime stage DTOs expose `AssessmentEnabled`.
+Scope choices also include optional `offeringCode` and `workflowName` for readable disambiguation of offerings and pinned workflow versions; these labels reuse already-loaded records and do not affect identity or authorization.
 The configuration shape is `{ "assessment": { "version": 1, "enabled": true, "schedulingEnabled": false, "attendanceRequired": false, "scoringEnabled": true, "totalMarks": 100, "passingMarks": 40, "reviewRequired": false, "maxAttempts": 1 } }`.
 Version 1 supports 1 to 10 attempts and positive total marks up to 10000, with passing marks between zero and the total.
 Attendance can also be required in result-only mode.
@@ -246,6 +269,10 @@ Attempt creation and stage waiver require the application stamp returned in the 
 Other attempt mutations require that attempt's concurrency stamp.
 Review uses `approved: false` plus notes to request correction, and waiver uses `reason`.
 Attempt mutations return the refreshed assessment summary.
+
+The applicant workbench requires `admissionOfferingId` and `workflowStageDefinitionId`; optional filters are `sessionId`, `search` (name/application number), and `queue` (`toBook`, `attendance`, `result`, `review`, `ready`, `attention`, `completed`). It accepts `skipCount`, `maxResultCount` (1-1000), and allow-listed `sorting` (`applicantName`, `applicationNumber`, `sessionStartsAt`, `enteredAt`, with optional `asc`/`desc`). The result contains `totalCount`, paged `items`, and `counts`; counts honor offering, workflow version, session, academic authorization and search before the queue/page filter. Each row contains application/stage identity and the same assessment summary as the individual read. Active stages without attempts are included; completed stage history remains readable. For active stages, a selected session roster requires the latest non-cancelled attempt to belong to that session, so a retake booked elsewhere is excluded from the old session's actionable roster. Inactive/completed stages retain historical non-cancelled bookings to the selected session; their actions are disabled.
+
+`ready` means completed evidence has an eligible route under the existing workflow rules, independently of the caller's advance permission. Failed/absent results without an explicit matching route remain `attention`. Pending-review results remain `review` even for their recorder, whose review action stays denied. Result-only attempts use `toBook` for the initial start action. Classification batches scoped candidates, latest non-cancelled attempts, grouped attempt counts, sessions and route facts without per-application queries. Complete history and action DTOs are expanded only for the requested page. Configured JSON routes still require candidate classification before queue pagination, so memory/CPU scale with the selected offering/stage/search population. This is a workbench query, not a tenant-wide reporting export; concurrent production load and very large scopes require separate staging acceptance.
 
 Available condition facts are `assessment.outcome`, `assessment.marks`, `assessment.attemptNumber`, `assessment.attendance`, and `assessment.reviewed`.
 Unreviewed evidence exposes a pending outcome and no authoritative marks.
@@ -261,7 +288,7 @@ The inquiry collection route prefix is `/api/student/enrollment/admissions/inqui
 | `GET` | none | `Students.Admissions.Inquiries.View` | Page and server-sort the CRM queue; filters include cycle, offering, status, source, `assignedCounsellorId`, `isAssigned`, `workQueue`, and search |
 | `GET` | `export` | `Students.Admissions.Inquiries.View` | Export the complete filtered/sorted queue as injection-safe UTF-8 CSV, capped at 50,000 rows |
 | `GET` | `{inquiryId}` | `Students.Admissions.Inquiries.View` | Read one scoped inquiry, including language and concurrency stamp |
-| `GET` | `{inquiryId}/timeline` | `Students.Admissions.Inquiries.View` | Read up to 200 most recent inquiry audit and communication activities |
+| `GET` | `{inquiryId}/timeline` | `Students.Admissions.Inquiries.View` | Read up to 200 most recent inquiry audit and communication activities, including optional `metadataJson` for distinguishing form edits from status-only changes |
 | `PUT` | `{inquiryId}` | `Students.Admissions.Inquiries.Manage` | Update pre-application identity, contact, source, and preferred language using the concurrency stamp |
 | `GET` | `counsellors` | `Students.Admissions.Inquiries.Assign` | Find up to 50 active counsellors; an optional `admissionOfferingId` limits results to staff with access to that offering |
 | `POST` | `{inquiryId}/assign` | `Students.Admissions.Inquiries.Assign` | Assign manually or through the configured candidate pool after rechecking active status and offering scope |
@@ -279,8 +306,9 @@ The route prefix is `/api/student/enrollment/admissions/inquiries/{inquiryId}/ma
 
 | Method | Route suffix | Permission | Purpose |
 | --- | --- | --- | --- |
-| `GET` | none | `Students.Admissions.Inquiries.View` | Read safe policy, deadlines, blockers, capabilities, qualification, and follow-ups |
+| `GET` | none | `Students.Admissions.Inquiries.View` | Read safe policy, deadlines, blockers, capabilities, qualification, follow-ups, notes and offset-safe `nextReminderAt` |
 | `POST` | `contact` | `Students.Admissions.Inquiries.Manage` | Record a structured contact channel, direction, outcome, and note; advance contact readiness |
+| `POST` | `follow-up-notes` | `Students.Admissions.Inquiries.Manage` | Atomically record a note and inquiry status, clear previous open reminders and optionally create the replacement reminder |
 | `POST` | `follow-ups` | `Students.Admissions.Inquiries.Manage` | Schedule a bounded future follow-up |
 | `POST` | `follow-ups/{followUpId}/complete` | `Students.Admissions.Inquiries.Manage` | Complete an open follow-up with an optional note |
 | `POST` | `follow-ups/{followUpId}/cancel` | `Students.Admissions.Inquiries.Manage` | Cancel an open follow-up with a reason |
@@ -289,6 +317,15 @@ The route prefix is `/api/student/enrollment/admissions/inquiries/{inquiryId}/ma
 
 Workflow setup continues to use `GET /api/student/enrollment/admissions/inquiry-settings/counsellors` with workflow view permission. Runtime assignment uses the inquiry collection `counsellors` route with the dedicated Inquiry Assign permission.
 Every management command requires the current management concurrency stamp.
+`follow-up-notes` additionally requires the inquiry's current `inquiryConcurrencyStamp`, a trimmed nonblank `note` of at most 500 characters and `status` exactly `0` (Pending), `2` (Interested) or `6` (Not interested).
+Pending and Interested require an offset-bearing `reminderAt` strictly in the future and within one year, validated against the UTC clock instant.
+Not interested ignores any supplied reminder and clears open reminders without creating another.
+Scope, actor restrictions, both stamps, locked/duplicate state and counsellor eligibility are checked before mutation.
+Replacement cancels prior Scheduled reminders with an audited superseded/closure reason and preserves their history; an existing maximum-open limit does not block this replacement, while the general schedule endpoint retains its limit.
+The status, note and reminder changes commit in one transactional unit of work; first Interested retains the existing qualification-email intent guard.
+The response contains `notes: [{id,occurredAt,note,status,reminderAt,authorName}]`; older notes without a recorded status expose null, and automated reminder cancellations do not create staff-note cards.
+`nextReminderAt` uses the original offset snapshot only when activity metadata identifies the exact active task, then falls back to UTC normalization for older tasks without that evidence.
+New note metadata includes `followUpId`; `ScheduledAt` binds through a field-level timezone-aware converter, with no global clock change or rewrite of existing persisted tasks.
 Internal policy snapshot JSON and qualification-answer JSON are never returned directly.
 Create Inquiry accepts `duplicateOverrideReason`; enabled policies can block duplicates or require this reason when staff explicitly create a separate family.
 `existingFamilyId` is accepted only for an active, admission-scope-visible family whose primary guardian mobile
@@ -508,7 +545,7 @@ Base: `/api/student/enrollment/admissions/offers`. All routes use the standard `
 
 Every command body includes `concurrencyStamp` and `idempotencyKey`; route identifiers stay in the URL. Workflow facts are `offer.status`, `offer.versionNumber`, `offer.extensionCount`, and `offer.isExpired`. Non-acceptance outcomes can continue only through a transition whose evaluated condition explicitly matches `offer.status`.
 
-Application counsellor routes use `/api/student/enrollment/admissions/applications`: `GET /counsellors?offeringId=` requires Applications View and returns active tenant users who can access that Offering. Without `offeringId`, it returns counsellors already assigned to visible applications for tracking filters. `POST /{id}/assign-counsellor` requires Applications Edit, a current `concurrencyStamp`, and an active counsellor with access to the application's Offering; it records the change in Admission activity. Application list accepts `assignedCounsellorId` and returns assigned counsellor names. Direct registration accepts optional `counsellorId`; an inquiry-linked application initially inherits its inquiry counsellor. Both legacy and managed offer issuance accept optional `counsellorId` for existing clients, but it must match the application owner; offer issuance never assigns or changes that owner. Use the dedicated application assignment action first.
+Application counsellor routes use `/api/student/enrollment/admissions/applications`: `GET /counsellors?offeringId=` requires Applications View and returns active tenant users who can access that Offering. Without `offeringId`, it returns counsellors already assigned to visible applications for tracking filters. `POST /{id}/assign-counsellor` requires Applications Edit, a current `concurrencyStamp`, and an active counsellor with access to the application's Offering; it records the change in Admission activity. Application list accepts `assignedCounsellorId` and returns assigned counsellor names. Fresh direct registration is retired; an inquiry-linked application initially inherits its inquiry counsellor. Historical application ownership is preserved. Both legacy and managed offer issuance accept optional `counsellorId` for existing clients, but it must match the application owner; offer issuance never assigns or changes that owner. Use the dedicated application assignment action first.
 
 ## Managed Seat stage APIs
 
@@ -525,3 +562,9 @@ Base: `/api/student/enrollment/admissions/seats/applications/{applicationId}/sta
 | PUT `/capacity` | `ManageCapacity` | Change offering capacity; going below occupancy requires `OverrideCapacity` and a reason |
 
 Commands carry the application stamp, allocation stamp when present, and an idempotency key. Capacity changes also carry the pool stamp. Workflow facts are `seat.status`, `seat.remainingCapacity`, `seat.isExpired`, and `seat.waitlistPosition`.
+
+## Application activity history scope
+
+`GET /api/student/enrollment/admissions/activities/application/{applicationId}` requires `Students.Admissions.Applications.View` at the controller and application-service boundaries. `AdmissionActivityAppService.GetForApplicationAsync` first resolves the application through the existing scoped `AdmissionApplicationReadService.GetEntityAsync`; an application outside the caller's tenant or Offering academic scope is not exposed. Authorized closed applications retain their activity history. This application-only read returns explicit UTC point-in-time activity dates through the existing UTC helper.
+
+The applicant-wide activity endpoint and shared activity mapper are unchanged. This read normalization does not repair already shifted historical PostgreSQL timestamps.

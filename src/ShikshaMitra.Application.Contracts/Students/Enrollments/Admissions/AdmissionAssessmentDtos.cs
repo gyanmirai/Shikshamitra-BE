@@ -11,9 +11,11 @@ public class AdmissionAssessmentScopeDto
 	public Guid StandardId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string OfferingName { get; set; } = string.Empty;
+	public string? OfferingCode { get; set; }
 	public Guid WorkflowStageDefinitionId { get; set; }
 	public string StageName { get; set; } = string.Empty;
 	public Guid WorkflowDefinitionId { get; set; }
+	public string? WorkflowName { get; set; }
 	public int WorkflowVersion { get; set; }
 	public bool SchedulingEnabled { get; set; }
 }

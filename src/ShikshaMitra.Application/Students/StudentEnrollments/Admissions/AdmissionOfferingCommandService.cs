@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -13,6 +14,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionOfferingCommandService(
 	IRepository<AdmissionOffering, Guid> offeringRepository,
 	IRepository<AdmissionApplication, Guid> applicationRepository,
+	IStandardRepository standardRepository,
+	AdmissionOfferingWorkflowConfigurationResolver workflowConfiguration,
 	AdmissionOfferingConfigurationValidator configurationValidator,
 	AdmissionOfferingReadService readService)
 	: ApplicationService, ITransientDependency
@@ -68,8 +71,7 @@ public class AdmissionOfferingCommandService(
 	{
 		var offering = await GetOfferingAsync(id);
 		EnsureConcurrency(offering, concurrencyStamp);
-		var validation = await configurationValidator.ValidateAsync(
-			offering.AdmissionCycleId, ToWriteDto(offering), offering.Id);
+		var validation = await configurationValidator.ValidateStoredAsync(offering);
 		AdmissionOfferingConfigurationValidator.EnsureCanSave(validation, isActive: true);
 		offering.Activate();
 		await offeringRepository.UpdateAsync(offering, autoSave: true);
@@ -137,10 +139,20 @@ public class AdmissionOfferingCommandService(
 	{
 		var result = new BulkAdmissionOfferingResultDto { IsPreview = input.PreviewOnly };
 		var pending = new List<(BulkAdmissionOfferingItemDto Item, CreateAdmissionOfferingDto Input)>();
+		var standardIds = input.Items.Select(item => item.StandardId).Distinct().ToArray();
+		var standards = (await standardRepository.GetListAsync(standard => Enumerable.Contains(standardIds, standard.Id)))
+			.ToDictionary(standard => standard.Id);
+		var sharedConfiguration = ToCreateDto(input, input.Items[0]);
+		await workflowConfiguration.ResolveAsync(sharedConfiguration, preserveRouting: false);
 		foreach (var item in input.Items)
 		{
 			var createInput = ToCreateDto(input, item);
-			var validation = await configurationValidator.ValidateAsync(admissionCycleId, createInput);
+			createInput.StageId = standards.GetValueOrDefault(item.StandardId)?.EducationMediumStageId ?? Guid.Empty;
+			createInput.Track = sharedConfiguration.Track;
+			createInput.EntryMode = sharedConfiguration.EntryMode;
+			createInput.InquiryFormDefinitionId = sharedConfiguration.InquiryFormDefinitionId;
+			createInput.ApplicationFormDefinitionId = sharedConfiguration.ApplicationFormDefinitionId;
+			var validation = await configurationValidator.ValidateResolvedAsync(admissionCycleId, createInput);
 			var canSaveInactive = AdmissionOfferingConfigurationValidator.CanSave(validation, isActive: false);
 			var canActivate = validation.IsValid;
 			result.Items.Add(new BulkAdmissionOfferingResultItemDto
@@ -210,28 +222,6 @@ public class AdmissionOfferingCommandService(
 		}
 	}
 
-	private static CreateAdmissionOfferingDto ToWriteDto(AdmissionOffering offering) => new()
-	{
-		Name = offering.Name,
-		Track = offering.Track,
-		EntryMode = offering.EntryMode,
-		CampusId = offering.CampusId,
-		BoardId = offering.BoardId,
-		MediumId = offering.MediumId,
-		StageId = offering.StageId,
-		StandardId = offering.StandardId,
-		Code = offering.Code,
-		UseCycleDates = !offering.OpenDate.HasValue && !offering.CloseDate.HasValue,
-		OpenDate = offering.OpenDate,
-		CloseDate = offering.CloseDate,
-		WorkflowDefinitionId = offering.WorkflowDefinitionId,
-		InquiryFormDefinitionId = offering.InquiryFormDefinitionId,
-		ApplicationFormDefinitionId = offering.ApplicationFormDefinitionId,
-		InquiryIntakeProfileId = offering.InquiryIntakeProfileId,
-		CounsellorAssignmentProfileId = offering.CounsellorAssignmentProfileId,
-		IsActive = offering.IsActive
-	};
-
 	private static bool IsUniqueConstraintViolation(Exception exception)
 	{
 		for (var current = exception; current is not null; current = current.InnerException)
@@ -254,7 +244,7 @@ public class AdmissionOfferingCommandService(
 		CampusId = input.CampusId,
 		BoardId = input.BoardId,
 		MediumId = input.MediumId,
-		StageId = input.StageId,
+		StageId = input.StageId ?? Guid.Empty,
 		StandardId = item.StandardId,
 		Code = item.Code,
 		UseCycleDates = input.UseCycleDates,

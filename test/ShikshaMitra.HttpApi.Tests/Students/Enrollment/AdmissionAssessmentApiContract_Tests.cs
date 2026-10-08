@@ -14,6 +14,7 @@ public class AdmissionAssessmentApiContract_Tests
 {
 	[Theory]
 	[InlineData(nameof(AdmissionAssessmentAppService.GetAsync), Permissions.View)]
+	[InlineData(nameof(AdmissionAssessmentAppService.GetApplicantsAsync), Permissions.View)]
 	[InlineData(nameof(AdmissionAssessmentAppService.CreateSessionAsync), Permissions.ManageSessions)]
 	[InlineData(nameof(AdmissionAssessmentAppService.BookAsync), Permissions.Book)]
 	[InlineData(nameof(AdmissionAssessmentAppService.RecordAttendanceAsync), Permissions.RecordAttendance)]
@@ -33,5 +34,15 @@ public class AdmissionAssessmentApiContract_Tests
 		typeof(AdmissionApplicationStageDto).GetProperty("AssessmentEnabled")!.PropertyType.ShouldBe(typeof(bool));
 		AdmissionWorkflowStageTypeRegistry.All.Single(item => item.Type == AdmissionWorkflowStageType.Assessment)
 			.SupportedConfiguration.ShouldContain("assessment");
+	}
+
+	[Fact]
+	public void Applicant_roster_is_a_query_bound_additive_endpoint()
+	{
+		var method = typeof(AdmissionAssessmentsController).GetMethod(nameof(AdmissionAssessmentsController.GetApplicantsAsync))!;
+		method.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("applicants");
+		method.GetParameters().Single().GetCustomAttribute<FromQueryAttribute>().ShouldNotBeNull();
+		typeof(IAdmissionAssessmentAppService).GetMethod(nameof(IAdmissionAssessmentAppService.GetApplicantsAsync))!.ReturnType
+			.ShouldBe(typeof(System.Threading.Tasks.Task<AdmissionAssessmentRosterDto>));
 	}
 }

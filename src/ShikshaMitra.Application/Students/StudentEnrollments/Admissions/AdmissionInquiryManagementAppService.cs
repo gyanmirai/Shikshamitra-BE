@@ -10,6 +10,7 @@ using Volo.Abp.Data;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
@@ -54,18 +55,79 @@ public class AdmissionInquiryManagementAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
-	public async Task<AdmissionInquiryManagementDto> ScheduleFollowUpAsync(Guid inquiryId, ScheduleAdmissionInquiryFollowUpDto input)
+	[UnitOfWork(true)]
+	public async Task<AdmissionInquiryManagementDto> RecordFollowUpNoteAsync(Guid inquiryId, RecordAdmissionInquiryFollowUpNoteDto input)
 	{
 		var (inquiry, state, policy) = await GetMutableAsync(inquiryId, input.ConcurrencyStamp);
 		EnsureActor(policy, inquiry);
+		if (string.IsNullOrWhiteSpace(input.InquiryConcurrencyStamp) || !string.Equals(inquiry.ConcurrencyStamp, input.InquiryConcurrencyStamp, StringComparison.Ordinal))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.ConcurrencyConflict);
+		var actor = CurrentUser.Id ?? throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState);
+		var note = input.Note.Trim();
+		AdmissionInquiryRuntimeService.EnsureValidStatusChange(inquiry, input.Status, note);
+		var reminderAt = input.Status == AdmissionInquiryStatus.NotInterested ? null : input.ReminderAt;
+		Guid? assignee = null;
+		if (input.Status != AdmissionInquiryStatus.NotInterested)
+		{
+			if (!reminderAt.HasValue)
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Choose the next follow-up reminder.");
+			assignee = await ValidateScheduleAsync(inquiry, policy, reminderAt.Value.UtcDateTime, null, replacingReminder: true, utcNow: GetUtcNow());
+		}
+		var previousReminders = await followUps.GetListAsync(item => item.InquiryId == inquiry.Id && item.Status == AdmissionInquiryFollowUpStatus.Scheduled);
+		foreach (var previous in previousReminders)
+		{
+			var reason = input.Status == AdmissionInquiryStatus.NotInterested
+				? "Reminder cleared because the inquiry was marked Not interested."
+				: "Reminder superseded by the next follow-up note.";
+			previous.Cancel(actor, Clock.Now, reason);
+			await followUps.UpdateAsync(previous, false);
+			await AddActivityAsync(inquiry, "InquiryFollowUpCancelled", reason,
+				new { previous.Id, Note = reason, Actor = actor, SystemGenerated = true }, autoSave: false);
+		}
+		await runtime.UpdateStatusAsync(inquiry, input.Status, note);
+		await inquiries.UpdateAsync(inquiry, false);
+		Guid? followUpId = reminderAt.HasValue
+			? await InsertFollowUpAsync(inquiry, state, assignee, reminderAt.Value.UtcDateTime, note)
+			: null;
+		state.Touch();
+		await management.UpdateAsync(state, false);
+		var authorName = string.Join(" ", new[] { CurrentUser.Name, CurrentUser.SurName }.Where(value => !string.IsNullOrWhiteSpace(value)));
+		if (string.IsNullOrWhiteSpace(authorName)) authorName = CurrentUser.UserName ?? "Staff";
+		await AddActivityAsync(inquiry, "InquiryFollowUpNoteRecorded", "Inquiry follow-up note recorded",
+			new { Note = note, input.Status, ReminderAt = reminderAt, FollowUpId = followUpId, AuthorName = authorName, Actor = actor });
+		return await MapAsync(inquiry, state);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<AdmissionInquiryManagementDto> ScheduleFollowUpAsync(Guid inquiryId, ScheduleAdmissionInquiryFollowUpDto input)
+		=> await ScheduleFollowUpCoreAsync(inquiryId, input);
+
+	private async Task<AdmissionInquiryManagementDto> ScheduleFollowUpCoreAsync(Guid inquiryId, ScheduleAdmissionInquiryFollowUpDto input, AdmissionApplication? application = null)
+	{
+		var (inquiry, state, policy) = await GetMutableAsync(inquiryId, input.ConcurrencyStamp, application);
+		EnsureActor(policy, inquiry);
 		var scheduledAt = input.ScheduledAt.UtcDateTime;
-		if (scheduledAt <= Clock.Now || scheduledAt > Clock.Now.AddDays(365))
+		var utcNow = application == null ? (DateTime?)null : GetUtcNow();
+		var assignee = await ValidateScheduleAsync(inquiry, policy, scheduledAt, input.AssignedCounsellorId, utcNow: utcNow);
+		state.Touch();
+		await management.UpdateAsync(state, false);
+		await InsertFollowUpAsync(inquiry, state, assignee, scheduledAt, input.Purpose, application?.Id);
+		return await MapFollowUpResultAsync(inquiry, state, application?.Id);
+	}
+
+	private async Task<Guid?> ValidateScheduleAsync(AdmissionInquiry inquiry, AdmissionInquiryPolicy policy, DateTime scheduledAt, Guid? requestedAssignee, bool replacingReminder = false, DateTime? utcNow = null)
+	{
+		var now = utcNow ?? Clock.Now;
+		if (scheduledAt <= now || scheduledAt > now.AddDays(365))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Schedule the follow-up within the next year.");
-		var open = await followUps.CountAsync(item => item.InquiryId == inquiry.Id && item.Status == AdmissionInquiryFollowUpStatus.Scheduled);
-		if (open >= policy.MaxOpenFollowUps)
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.FollowUpLimitReached,
+		if (!replacingReminder)
+		{
+			var open = await followUps.CountAsync(item => item.InquiryId == inquiry.Id && item.Status == AdmissionInquiryFollowUpStatus.Scheduled);
+			if (open >= policy.MaxOpenFollowUps)
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.FollowUpLimitReached,
 				$"This policy allows up to {policy.MaxOpenFollowUps} open follow-ups.");
-		if (input.AssignedCounsellorId.HasValue && input.AssignedCounsellorId != inquiry.AssignedCounsellorId)
+		}
+		if (requestedAssignee.HasValue && requestedAssignee != inquiry.AssignedCounsellorId)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Follow-ups belong to the inquiry's assigned counsellor. Transfer the inquiry owner to change responsibility.");
 		var assignee = inquiry.AssignedCounsellorId;
 		if (assignee.HasValue)
@@ -73,14 +135,109 @@ public class AdmissionInquiryManagementAppService(
 				inquiry.AdmissionOfferingId ?? throw new BusinessException(AdmissionErrorCodes.InquiryOfferingRequired));
 		if (policy.RestrictActionsToAssignedCounsellor && !assignee.HasValue)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.CounsellorRequired);
-		var followUp = await followUps.InsertAsync(new AdmissionInquiryFollowUp(GuidGenerator.Create(), CurrentTenant.Id,
-			inquiry.Id, state.Id, assignee, scheduledAt, input.Purpose), false);
-		state.Touch();
-		await management.UpdateAsync(state, false);
-		await AddActivityAsync(inquiry, "InquiryFollowUpScheduled", "Inquiry follow-up scheduled",
-			new { followUp.Id, followUp.ScheduledAt, followUp.Purpose, followUp.AssignedCounsellorId });
-		return await MapAsync(inquiry, state);
+		return assignee;
 	}
+
+	private async Task<Guid> InsertFollowUpAsync(AdmissionInquiry inquiry, AdmissionInquiryManagement state, Guid? assignee, DateTime scheduledAt, string purpose, Guid? applicationId = null)
+	{
+		var followUp = await followUps.InsertAsync(new AdmissionInquiryFollowUp(GuidGenerator.Create(), CurrentTenant.Id,
+			inquiry.Id, state.Id, assignee, scheduledAt, purpose), false);
+		await AddActivityAsync(inquiry, "InquiryFollowUpScheduled", "Inquiry follow-up scheduled",
+			new { followUp.Id, followUp.ScheduledAt, followUp.Purpose, followUp.AssignedCounsellorId }, applicationId);
+		return followUp.Id;
+	}
+
+	[RemoteService(false)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public async Task<AdmissionInquiryManagementDto> GetApplicationFollowUpsAsync(Guid applicationId)
+	{
+		var application = await GetLinkedApplicationAsync(applicationId);
+		var inquiry = await access.GetAsync(application.InquiryId!.Value);
+		var state = await runtime.EnsureManagementAsync(inquiry);
+		var result = await MapAsync(inquiry, state);
+		result.CanManageFollowUps = state != null && await IsOpenApplicationAsync(application) &&
+			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage) &&
+			(!result.Policy!.RestrictActionsToAssignedCounsellor || inquiry.AssignedCounsellorId == CurrentUser.Id && CurrentUser.Id.HasValue);
+		NormalizeApplicationFollowUpDates(result, state);
+		return result;
+	}
+
+	[RemoteService(false)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<AdmissionInquiryManagementDto> ScheduleApplicationFollowUpAsync(Guid applicationId, ScheduleAdmissionInquiryFollowUpDto input)
+	{
+		var application = await GetLinkedApplicationAsync(applicationId);
+		return await ScheduleFollowUpCoreAsync(application.InquiryId!.Value, input, application);
+	}
+
+	[RemoteService(false)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<AdmissionInquiryManagementDto> CompleteApplicationFollowUpAsync(Guid applicationId, Guid followUpId, CompleteAdmissionInquiryFollowUpDto input)
+	{
+		var application = await GetLinkedApplicationAsync(applicationId);
+		return await FinishFollowUpAsync(application.InquiryId!.Value, followUpId, input, false, application);
+	}
+
+	[RemoteService(false)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<AdmissionInquiryManagementDto> CancelApplicationFollowUpAsync(Guid applicationId, Guid followUpId, CancelAdmissionInquiryFollowUpDto input)
+	{
+		var application = await GetLinkedApplicationAsync(applicationId);
+		return await FinishFollowUpAsync(application.InquiryId!.Value, followUpId, input, true, application);
+	}
+
+	private async Task<AdmissionApplication> GetLinkedApplicationAsync(Guid applicationId)
+	{
+		var application = await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationReadService>().GetEntityAsync(applicationId);
+		if (!application.InquiryId.HasValue) throw new EntityNotFoundException(typeof(AdmissionInquiry), applicationId);
+		if (!await inquiries.AnyAsync(item => item.Id == application.InquiryId.Value))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "The source inquiry is unavailable. Continue admission work in the application; follow-ups require its linked inquiry.")
+				.WithData("Reason", "SourceInquiryUnavailable");
+		return application;
+	}
+
+	private async Task<bool> IsOpenApplicationAsync(AdmissionApplication application) => application.Status is not
+		(AdmissionApplicationStatus.Withdrawn or AdmissionApplicationStatus.Rejected or AdmissionApplicationStatus.OfferDeclined or
+		AdmissionApplicationStatus.Enrolled or AdmissionApplicationStatus.AdmissionFinalized) &&
+		!await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplicationWorkflowInstance, Guid>>().AnyAsync(item =>
+			item.ApplicationId == application.Id && (item.Status == AdmissionWorkflowInstanceStatus.Cancelled || item.Status == AdmissionWorkflowInstanceStatus.Failed));
+
+	private async Task<AdmissionInquiryManagementDto> MapFollowUpResultAsync(AdmissionInquiry inquiry, AdmissionInquiryManagement state, Guid? applicationId)
+	{
+		var result = await MapAsync(inquiry, state);
+		if (applicationId.HasValue)
+		{
+			result.CanManageFollowUps = true; // Both actor and active application have been validated by the command.
+			NormalizeApplicationFollowUpDates(result, state);
+		}
+		return result;
+	}
+
+	private void NormalizeApplicationFollowUpDates(AdmissionInquiryManagementDto result, AdmissionInquiryManagement? state)
+	{
+		// SQL timestamps can lose DateTime.Kind; the application API must emit their authoritative UTC offset.
+		result.IsOverdue = state != null && AdmissionInquiryRuntimeService.IsOverdue(state, GetUtcNow());
+		result.FirstContactDueAt = NormalizeUtc(result.FirstContactDueAt);
+		result.QualificationDueAt = NormalizeUtc(result.QualificationDueAt);
+		result.LastContactAt = NormalizeUtc(result.LastContactAt);
+		result.OutcomeAt = NormalizeUtc(result.OutcomeAt);
+		foreach (var followUp in result.FollowUps)
+		{
+			followUp.ScheduledAt = AdmissionOfferUtcTime.Normalize(followUp.ScheduledAt);
+			followUp.CompletedAt = NormalizeUtc(followUp.CompletedAt);
+		}
+		foreach (var note in result.Notes) note.OccurredAt = AdmissionOfferUtcTime.Normalize(note.OccurredAt);
+	}
+
+	private static DateTime? NormalizeUtc(DateTime? value) => value.HasValue ? AdmissionOfferUtcTime.Normalize(value.Value) : null;
+
+	private DateTime GetUtcNow() => NormalizeFollowUpClockNow(Clock.Now, Clock.Kind);
+
+	internal static DateTime NormalizeFollowUpClockNow(DateTime now, DateTimeKind configuredKind) =>
+		configuredKind == DateTimeKind.Utc ? AdmissionOfferUtcTime.Normalize(now) : now.ToUniversalTime();
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
 	public Task<AdmissionInquiryManagementDto> CompleteFollowUpAsync(Guid inquiryId, Guid followUpId,
@@ -137,9 +294,9 @@ public class AdmissionInquiryManagementAppService(
 	}
 
 	private async Task<AdmissionInquiryManagementDto> FinishFollowUpAsync(Guid inquiryId, Guid followUpId,
-		CompleteAdmissionInquiryFollowUpDto input, bool cancel)
+		CompleteAdmissionInquiryFollowUpDto input, bool cancel, AdmissionApplication? application = null)
 	{
-		var (inquiry, state, policy) = await GetMutableAsync(inquiryId, input.ConcurrencyStamp);
+		var (inquiry, state, policy) = await GetMutableAsync(inquiryId, input.ConcurrencyStamp, application);
 		EnsureActor(policy, inquiry);
 		var followUp = await followUps.FindAsync(item => item.Id == followUpId && item.InquiryId == inquiry.Id && item.ManagementId == state.Id) ??
 			throw new EntityNotFoundException(typeof(AdmissionInquiryFollowUp), followUpId);
@@ -152,15 +309,20 @@ public class AdmissionInquiryManagementAppService(
 		await management.UpdateAsync(state, false);
 		await AddActivityAsync(inquiry, cancel ? "InquiryFollowUpCancelled" : "InquiryFollowUpCompleted",
 			cancel ? "Inquiry follow-up cancelled" : "Inquiry follow-up completed",
-			new { followUp.Id, input.Note, Actor = actor });
-		return await MapAsync(inquiry, state);
+			new { followUp.Id, input.Note, Actor = actor }, application?.Id);
+		return await MapFollowUpResultAsync(inquiry, state, application?.Id);
 	}
 
 	private async Task<(AdmissionInquiry Inquiry, AdmissionInquiryManagement State, AdmissionInquiryPolicy Policy)> GetMutableAsync(
-		Guid inquiryId, string concurrencyStamp)
+		Guid inquiryId, string concurrencyStamp, AdmissionApplication? application = null)
 	{
 		var inquiry = await access.GetAsync(inquiryId);
-		if (AdmissionInquiryStatusRules.IsTransferred(inquiry.Status) || await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplication, Guid>>().AnyAsync(application => application.InquiryId == inquiry.Id))
+		if (application != null)
+		{
+			if (application.InquiryId != inquiry.Id || !await IsOpenApplicationAsync(application))
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "This admission is closed. Follow-ups cannot be changed.");
+		}
+		else if (AdmissionInquiryStatusRules.IsTransferred(inquiry.Status) || await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionApplication, Guid>>().AnyAsync(application => application.InquiryId == inquiry.Id))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState,
 				"Inquiry management is locked after the application has started.");
 		var state = await runtime.EnsureManagementAsync(inquiry) ??
@@ -224,13 +386,18 @@ public class AdmissionInquiryManagementAppService(
 		var canReassign = !isLocked && offering?.CounsellorAssignmentProfileId.HasValue == true && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Assign) && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
 		var emailStatus = inquiry.GetProperty<string>("QualificationEmailStatus") ?? (inquiry.GetProperty<DateTime?>("QualificationEmailRequestedAt").HasValue ? "Pending" : null);
 		var emailMessage = inquiry.GetProperty<string>("QualificationEmailMessage");
-		if (state == null) return new AdmissionInquiryManagementDto { InquiryId = inquiry.Id, IsLocked = isLocked, CanStartApplication = blockers.Count == 0, CanReassign = canReassign, Blockers = blockers, QualificationEmailStatus = emailStatus, QualificationEmailMessage = emailMessage };
+		var inquiryActivities = await activities.GetListAsync(item => item.InquiryId == inquiry.Id);
+		var notes = inquiryActivities.OrderByDescending(item => item.OccurredAt)
+			.Select(ReadNote).Where(item => item != null).Select(item => item!).ToList();
+		if (state == null) return new AdmissionInquiryManagementDto { InquiryId = inquiry.Id, IsLocked = isLocked, CanStartApplication = blockers.Count == 0, CanReassign = canReassign, Blockers = blockers, QualificationEmailStatus = emailStatus, QualificationEmailMessage = emailMessage, Notes = notes };
 		var policy = AdmissionInquiryPolicyResolver.ReadSnapshot(state.PolicySnapshotJson);
+		var projectedFollowUps = (await followUps.GetListAsync(item => item.InquiryId == inquiry.Id)).OrderBy(item => item.ScheduledAt).Select(Map).ToList();
 		return new AdmissionInquiryManagementDto
 		{
 			InquiryId = inquiry.Id, Managed = true, Policy = policy, ConcurrencyStamp = state.ConcurrencyStamp,
 			AssignedCounsellorId = inquiry.AssignedCounsellorId, FirstContactDueAt = state.FirstContactDueAt,
 			QualificationDueAt = state.QualificationDueAt, LastContactAt = state.LastContactAt,
+			NextReminderAt = FindNextReminderAt(projectedFollowUps, inquiryActivities),
 			ContactCount = state.ContactCount, Outcome = state.Outcome, OutcomeReason = state.OutcomeReason,
 			OutcomeReasonCode = state.OutcomeReasonCode,
 			OutcomeAt = state.OutcomeAt, OutcomeBy = state.OutcomeBy,
@@ -238,14 +405,15 @@ public class AdmissionInquiryManagementAppService(
 			CanStartApplication = blockers.Count == 0, CanReassign = canReassign,
 			QualificationEmailStatus = emailStatus, QualificationEmailMessage = emailMessage,
 			Blockers = blockers, QualificationAnswers = ReadAnswers(state.QualificationAnswersJson),
-			FollowUps = (await followUps.GetListAsync(item => item.InquiryId == inquiry.Id)).OrderBy(item => item.ScheduledAt).Select(Map).ToList()
+			FollowUps = projectedFollowUps,
+			Notes = notes
 		};
 	}
 
-	private async Task AddActivityAsync(AdmissionInquiry inquiry, string type, string description, object metadata)
+	private async Task AddActivityAsync(AdmissionInquiry inquiry, string type, string description, object metadata, Guid? applicationId = null, bool autoSave = true)
 	{
 		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, type, description,
-			inquiry.ApplicantId, inquiryId: inquiry.Id, metadataJson: JsonSerializer.Serialize(metadata, JsonOptions)), true);
+			inquiry.ApplicantId, applicationId, inquiryId: inquiry.Id, metadataJson: JsonSerializer.Serialize(metadata, JsonOptions)), autoSave);
 	}
 
 	private static List<AdmissionInquiryQualificationAnswerDto> ReadAnswers(string? json)
@@ -254,6 +422,66 @@ public class AdmissionInquiryManagementAppService(
 		try { return JsonSerializer.Deserialize<List<AdmissionInquiryQualificationAnswerDto>>(json,
 			new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? []; }
 		catch (JsonException) { return []; }
+	}
+
+	private static AdmissionInquiryFollowUpNoteDto? ReadNote(AdmissionActivity activity)
+	{
+		var noteKey = activity.ActivityType switch
+		{
+			"InquiryFollowUpNoteRecorded" or "InquiryContactRecorded" or "InquiryFollowUpCompleted" or "InquiryFollowUpCancelled" => "note",
+			"InquiryQualificationRecorded" or "InquiryQualificationReopened" => "reason",
+			_ => null
+		};
+		if (noteKey == null || string.IsNullOrWhiteSpace(activity.MetadataJson)) return null;
+		try
+		{
+			using var document = JsonDocument.Parse(activity.MetadataJson);
+			var metadata = document.RootElement;
+			if (metadata.ValueKind != JsonValueKind.Object || metadata.TryGetProperty("systemGenerated", out var generated) && generated.ValueKind == JsonValueKind.True) return null;
+			if (!metadata.TryGetProperty(noteKey, out var note) || note.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(note.GetString())) return null;
+			AdmissionInquiryStatus? status = null;
+			DateTimeOffset? reminderAt = null;
+			if (activity.ActivityType == "InquiryFollowUpNoteRecorded")
+			{
+				if (metadata.TryGetProperty("status", out var savedStatus) && savedStatus.ValueKind == JsonValueKind.Number && savedStatus.TryGetInt32(out var number) && AdmissionInquiryStatusRules.IsBusinessStatus((AdmissionInquiryStatus)number))
+					status = (AdmissionInquiryStatus)number;
+				if (metadata.TryGetProperty("reminderAt", out var reminder) && reminder.ValueKind == JsonValueKind.String && reminder.TryGetDateTimeOffset(out var time)) reminderAt = time;
+			}
+			var authorName = metadata.TryGetProperty("authorName", out var author) && author.ValueKind == JsonValueKind.String ? author.GetString() : null;
+			return new AdmissionInquiryFollowUpNoteDto
+			{
+				Id = activity.Id, OccurredAt = activity.OccurredAt, Note = note.GetString()!, Status = status,
+				ReminderAt = reminderAt, AuthorName = string.IsNullOrWhiteSpace(authorName) ? "Staff" : authorName
+			};
+		}
+		catch (JsonException) { return null; }
+	}
+
+	internal static DateTimeOffset? FindNextReminderAt(IEnumerable<AdmissionInquiryFollowUpDto> tasks, IEnumerable<AdmissionActivity>? history = null)
+	{
+		var originalInstants = new Dictionary<Guid, DateTimeOffset>();
+		foreach (var activity in (history ?? []).OrderBy(item => item.OccurredAt))
+		{
+			var isNote = activity.ActivityType == "InquiryFollowUpNoteRecorded";
+			if (!isNote && activity.ActivityType != "InquiryFollowUpScheduled" || string.IsNullOrWhiteSpace(activity.MetadataJson)) continue;
+			try
+			{
+				using var document = JsonDocument.Parse(activity.MetadataJson);
+				var metadata = document.RootElement;
+				if (metadata.ValueKind != JsonValueKind.Object ||
+					!metadata.TryGetProperty(isNote ? "followUpId" : "id", out var id) || id.ValueKind != JsonValueKind.String || !id.TryGetGuid(out var taskId) ||
+					!metadata.TryGetProperty(isNote ? "reminderAt" : "scheduledAt", out var saved) || saved.ValueKind != JsonValueKind.String) continue;
+				var text = saved.GetString()!;
+				// Older timezone-less snapshots do not prove an absolute instant.
+				if (!(text.EndsWith('Z') || text.LastIndexOf('+') > 10 || text.LastIndexOf('-') > 10) || !saved.TryGetDateTimeOffset(out var instant)) continue;
+				originalInstants[taskId] = instant.ToUniversalTime();
+			}
+			catch (JsonException) { }
+		}
+		return tasks.Where(item => item.Status == AdmissionInquiryFollowUpStatus.Scheduled)
+			.Select(item => (DateTimeOffset?)(originalInstants.TryGetValue(item.Id, out var instant)
+				? instant : new DateTimeOffset(AdmissionOfferUtcTime.Normalize(item.ScheduledAt))))
+			.OrderBy(instant => instant).FirstOrDefault();
 	}
 
 	private static AdmissionInquiryFollowUpDto Map(AdmissionInquiryFollowUp item) => new()

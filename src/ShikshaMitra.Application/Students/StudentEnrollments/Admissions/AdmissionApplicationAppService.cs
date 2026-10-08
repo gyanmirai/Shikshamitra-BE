@@ -12,9 +12,10 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [Authorize]
 public class AdmissionApplicationAppService(
 	AdmissionApplicationReadService readService,
+	AdmissionPipelineReadService pipelineService,
+	AdmissionInquiryManagementAppService inquiryManagement,
 	AdmissionApplicationLifecycleService lifecycleService,
 	AdmissionDirectRegistrationService directRegistrationService,
-	AdmissionDirectFamilyMatchService directFamilyMatchService,
 	AdmissionApplicationCounsellorService counsellorService,
 	AdmissionApplicationWorkflowReadService workflowReadService,
 	AdmissionApplicationWorkflowService workflowService,
@@ -25,6 +26,27 @@ public class AdmissionApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<PagedResultDto<AdmissionApplicationDto>> GetListAsync(AdmissionApplicationListInput input) =>
 		readService.GetListAsync(input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public Task<PagedResultDto<AdmissionPipelineItemDto>> GetPipelineAsync(AdmissionPipelineListInput input) => pipelineService.GetListAsync(input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public Task<AdmissionPipelineOptionsDto> GetPipelineOptionsAsync(AdmissionPipelineListInput input) => pipelineService.GetOptionsAsync(input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	public Task<AdmissionInquiryManagementDto> GetFollowUpsAsync(Guid id) => inquiryManagement.GetApplicationFollowUpsAsync(id);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public Task<AdmissionInquiryManagementDto> ScheduleFollowUpAsync(Guid id, ScheduleAdmissionInquiryFollowUpDto input) => inquiryManagement.ScheduleApplicationFollowUpAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public Task<AdmissionInquiryManagementDto> CompleteFollowUpAsync(Guid id, Guid followUpId, CompleteAdmissionInquiryFollowUpDto input) => inquiryManagement.CompleteApplicationFollowUpAsync(id, followUpId, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public Task<AdmissionInquiryManagementDto> CancelFollowUpAsync(Guid id, Guid followUpId, CancelAdmissionInquiryFollowUpDto input) => inquiryManagement.CancelApplicationFollowUpAsync(id, followUpId, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<AdmissionApplicationDto> GetAsync(Guid id) => readService.GetAsync(id);
@@ -47,7 +69,9 @@ public class AdmissionApplicationAppService(
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	public Task<List<AdmissionDirectFamilyMatchDto>> FindDirectRegistrationFamiliesAsync(
-		Guid offeringId, string guardianMobile) => directFamilyMatchService.FindAsync(offeringId, guardianMobile);
+		Guid offeringId, string guardianMobile) =>
+		throw new Volo.Abp.BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
+			"Direct admission has been removed. Start with an inquiry for this Admission Offering.");
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(Guid? offeringId = null, string? filter = null) =>

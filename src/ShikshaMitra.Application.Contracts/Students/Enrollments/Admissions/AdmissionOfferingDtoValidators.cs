@@ -76,7 +76,6 @@ public sealed class BulkCreateAdmissionOfferingsDtoValidator : AbstractValidator
 		RuleFor(x => x.EntryMode).IsInEnum();
 		RuleFor(x => x.BoardId).NotEmpty();
 		RuleFor(x => x.MediumId).NotEmpty();
-		RuleFor(x => x.StageId).NotEmpty();
 		RuleFor(x => x.Items).Cascade(CascadeMode.Stop).NotEmpty().Must(items => items.Count <= 100)
 			.WithMessage("Between 1 and 100 Admission Offerings can be created in one request.");
 		RuleForEach(x => x.Items).ChildRules(item =>

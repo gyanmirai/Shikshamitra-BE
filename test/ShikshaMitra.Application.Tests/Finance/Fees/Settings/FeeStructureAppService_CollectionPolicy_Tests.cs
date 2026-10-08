@@ -106,7 +106,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 		return (yearId, standard.Id, metadata.Id, feeHead.Id);
 	}
 
-	private async Task<Guid> CreateCollectionPolicyAsync(Guid academicYearId, Guid feeHeadId, string name)
+	private async Task<Guid> CreateCollectionPolicyAsync(Guid academicYearId, Guid feeHeadId, string name, int graceDays = 7)
 	{
 		var policy = await _collectionPolicies.CreateAsync(new CreateUpdateCollectionPolicyDto
 		{
@@ -116,7 +116,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests : ShikshaMitr
 			Status = "Active",
 			EnableLateFee = true,
             LateFeeIncomeCategoryId = (await _feeHeadRepo.GetAsync(feeHeadId)).IncomeCategoryId,
-			GracePeriodDays = 7,
+			GracePeriodDays = graceDays,
 			LateFeeApplyOnFeeHeads = new() { feeHeadId },
 			LateFeeType = "PerDay",
 			AmountPerDay = 10,

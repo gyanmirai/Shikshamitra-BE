@@ -54,6 +54,7 @@ public partial class StudentFeeDetailsQueryService
 	{
 		Id = student.Id,
 		Name = BuildFullName(student.FirstName, student.MiddleName, student.LastName),
+		GrNo = student.GrNo?.ToString() ?? string.Empty,
 		StandardName = student.StandardName, DivisionName = student.DivisionName,
 		RollNo = student.RollNo?.ToString() ?? string.Empty,
 		MobileNo = string.IsNullOrWhiteSpace(student.ContactNo) ? null : student.ContactNo,

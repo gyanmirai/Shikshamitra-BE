@@ -52,12 +52,10 @@ public class ConcessionType : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Update(
 		string name,
-		string? description,
-		AmountType? discountType = null
+		string? description
 	)
 	{
 		SetDetails(name, description);
-		DiscountType = discountType;
 	}
 
 	public void Activate()

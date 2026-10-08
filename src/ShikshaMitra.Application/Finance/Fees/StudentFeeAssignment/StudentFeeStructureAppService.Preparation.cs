@@ -106,11 +106,8 @@ public partial class StudentFeeStructureAppService
 					amountInput.ChargeStartDate.HasValue || amountInput.ChargeEndDate.HasValue)
 					throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 				if (amountInput.Amount != detail.Amount)
-				{
-					await AuthorizationService.CheckAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_StructureAssign.OverrideAmount);
-					if (string.IsNullOrWhiteSpace(input.OverrideReason)) throw new BusinessException(AssignmentErrorCodes.InvalidInput);
-					head.EffectiveAmount = amountInput.Amount;
-				}
+					throw new BusinessException(AssignmentErrorCodes.InvalidInput)
+						.WithData("FeeHeadId", detail.FeeHeadId);
 			}
 			var requested = input.ServicePeriods.FirstOrDefault(x => x.FeeHeadId == detail.FeeHeadId)
 				?? new AssignmentServicePeriodDto { FeeHeadId = detail.FeeHeadId, Source = input.ChargePeriodSource,

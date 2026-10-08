@@ -9345,6 +9345,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<int>("ApplyOn")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("AutoCreateRefund")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("CalculationMethod")
                         .HasColumnType("integer");
 
@@ -10767,13 +10770,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<Guid?>("ReceivingBankAccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ReceivingBankLabel")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
                     b.Property<Guid>("RequestorId")
                         .HasColumnType("uuid");
 
@@ -10800,8 +10796,6 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("DueDate")
                         .HasDatabaseName("IX_Charges_DueDate");
-
-                    b.HasIndex("ReceivingBankAccountId");
 
                     b.HasIndex("StudentId")
                         .HasDatabaseName("IX_Charges_StudentId");
@@ -10911,13 +10905,6 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<Guid?>("ReceivingBankAccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ReceivingBankLabel")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
                     b.Property<Guid>("RequestorId")
                         .HasColumnType("uuid");
 
@@ -10928,8 +10915,6 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("IncomeCategoryId");
-
-                    b.HasIndex("ReceivingBankAccountId");
 
                     b.HasIndex("AcademicYearId", "BoardId", "EducationMediumId")
                         .HasDatabaseName("IX_ChargeRequests_AcademicYear_Board_Medium");
@@ -37589,24 +37574,11 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("ShikshaMitra.Finance.Fees.Charges.Charge", b =>
-                {
-                    b.HasOne("ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount", null)
-                        .WithMany()
-                        .HasForeignKey("ReceivingBankAccountId")
-                        .OnDelete(DeleteBehavior.Restrict);
-                });
-
             modelBuilder.Entity("ShikshaMitra.Finance.Fees.Charges.ChargeRequest", b =>
                 {
                     b.HasOne("ShikshaMitra.Domain.Finance.Accounts.Settings.TransactionCategory", null)
                         .WithMany()
                         .HasForeignKey("IncomeCategoryId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount", null)
-                        .WithMany()
-                        .HasForeignKey("ReceivingBankAccountId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

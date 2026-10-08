@@ -16,10 +16,6 @@ public class ChargeData
 	public string ChargeName { get; set; } = string.Empty;
 	public int ResolvedStudentCount { get; set; }
 	public Guid ChargeCategoryId { get; set; }
-	public Guid? IncomeCategoryId { get; set; }
-	public string? IncomeCategoryName { get; set; }
-	public Guid? ReceivingBankAccountId { get; set; }
-	public string? ReceivingBankLabel { get; set; }
 	public string CategoryName { get; set; } = string.Empty;
 	public string PurposeDescription { get; set; } = string.Empty;
 	public decimal Amount { get; set; }
@@ -63,10 +59,6 @@ public class ChargeListItem
 	public Guid ChargeId { get; set; }
 	public string ChargeName { get; set; } = string.Empty;
 	public Guid ChargeCategoryId { get; set; }
-	public Guid? IncomeCategoryId { get; set; }
-	public string? IncomeCategoryName { get; set; }
-	public Guid? ReceivingBankAccountId { get; set; }
-	public string? ReceivingBankLabel { get; set; }
 	public string CategoryName { get; set; } = string.Empty;
 	public decimal Amount { get; set; }
 	public string PurposeDescription { get; set; } = string.Empty;
@@ -110,10 +102,6 @@ public class ChargeLineListItem
 	public string StandardName { get; set; } = string.Empty;
 	public string DivisionName { get; set; } = string.Empty;
 	public Guid ChargeCategoryId { get; set; }
-	public Guid? IncomeCategoryId { get; set; }
-	public string? IncomeCategoryName { get; set; }
-	public Guid? ReceivingBankAccountId { get; set; }
-	public string? ReceivingBankLabel { get; set; }
 	public string CategoryName { get; set; } = string.Empty;
 	public decimal Amount { get; set; }
 	public string PurposeDescription { get; set; } = string.Empty;
@@ -137,10 +125,6 @@ public class ChargeDetailData
 	public Guid ChargeId { get; set; }
 	public string ChargeName { get; set; } = string.Empty;
 	public Guid ChargeCategoryId { get; set; }
-	public Guid? IncomeCategoryId { get; set; }
-	public string? IncomeCategoryName { get; set; }
-	public Guid? ReceivingBankAccountId { get; set; }
-	public string? ReceivingBankLabel { get; set; }
 	public string CategoryName { get; set; } = string.Empty;
 	public string PurposeDescription { get; set; } = string.Empty;
 	public decimal Amount { get; set; }

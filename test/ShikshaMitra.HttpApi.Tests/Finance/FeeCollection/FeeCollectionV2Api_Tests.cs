@@ -392,6 +392,25 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
     }
 
     [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Get_Student_Fee_Details_From_Dues_Without_A_Structure_Assignment()
+    {
+        var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var feeHeadId = await FeeCollectionTestHelper.CreateFeeHeadAsync(Client);
+        await FeeCollectionTestHelper.SeedDueFeeAsync(Factory.Services, studentId, feeHeadId, 106_000d);
+
+        var response = await Client.GetAsync(
+            $"{BaseUrl}/{studentId}/fee-details?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<StudentFeeDetailsDto>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.FeeOverview.TotalFee.ShouldBe(106_000d);
+        body.FeeOverview.PendingFee.ShouldBe(106_000d);
+        body.FeeHeads.Single().Amount.ShouldBe(106_000d);
+    }
+
+    [Fact]
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Get_Student_Fee_Details_Reflects_Payment_History_After_Collection()
     {
@@ -407,6 +426,7 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
         body.Payments.ShouldNotBeNull();
         body.Payments.ShouldNotBeEmpty();
         body.Payments![0].ReceiptNumber.ShouldBe(output.ReceiptNumber);
+        body.Payments[0].PaymentMethods.ShouldContain(PaymentMethodEnum.Cash);
     }
 
     // ── GET /api/v2/fee-collections/{studentId}/collect-form ─────────────────

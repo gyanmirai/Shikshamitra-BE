@@ -9,6 +9,26 @@ namespace ShikshaMitra.Domain.Finance.Fees;
 public class ConcessionRequestLifecycle_Tests
 {
 	[Fact]
+	public void Administrator_creation_transition_requires_the_original_creator()
+	{
+		var request = CreateDraft();
+		var creator = Guid.NewGuid();
+		typeof(ConcessionRequest).GetProperty(nameof(ConcessionRequest.CreatorId))!
+			.SetValue(request, creator);
+		request.PrepareSubmissionEvidence([Guid.NewGuid()], "{\"inputs\":[]}", "[]");
+		request.Submit(DateTime.UtcNow);
+
+		Assert.Throws<BusinessException>(() =>
+			request.Approve(creator, null, [], DateTime.UtcNow));
+		Assert.Throws<BusinessException>(() =>
+			request.ApproveOnAdministratorCreation(Guid.NewGuid(), null, [], DateTime.UtcNow));
+
+		request.ApproveOnAdministratorCreation(creator, "Automatically approved", [], DateTime.UtcNow);
+		Assert.Equal(ConcessionRequestStatus.Approved, request.Status);
+		Assert.Equal(creator, request.GetApprovedBy());
+	}
+
+	[Fact]
 	public void Submission_freezes_draft_and_cancel_preserves_reason_and_actor()
 	{
 		var request = CreateDraft();

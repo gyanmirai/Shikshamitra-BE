@@ -11,14 +11,37 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 /// </summary>
 public static class CollectionPolicySlabValidator
 {
-	public static void EnsureNoOverlapsOrGaps(IReadOnlyList<CollectionPolicyEscalationRule> rules)
+	public static void EnsureNoOverlapsOrGaps(IReadOnlyList<CollectionPolicyEscalationRule> rules, int? maximumChargingDays = null, bool validateInputBounds = true)
 	{
-		if (rules.Count < 2)
+		if (rules.Count == 0)
 		{
 			return;
 		}
 
 		var sorted = rules.OrderBy(r => r.StartDay).ToList();
+		if (validateInputBounds)
+		{
+			foreach (var rule in sorted)
+			{
+				if (rule.StartDay is < 1 or > CollectionPolicyNumericLimits.MaximumDays ||
+					rule.EndDay is < 1 or > CollectionPolicyNumericLimits.MaximumDays ||
+					rule.EndDay < rule.StartDay ||
+					maximumChargingDays.HasValue && (rule.StartDay > maximumChargingDays || rule.EndDay > maximumChargingDays) ||
+					(rule.CalculationType == EscalationCalculationType.Percentage
+						? !CollectionPolicyNumericLimits.IsPercentage(rule.Value)
+						: rule.CalculationType != EscalationCalculationType.Flat || !CollectionPolicyNumericLimits.IsAmount(rule.Value)) ||
+					rule.MaxFee.HasValue && !CollectionPolicyNumericLimits.IsAmount(rule.MaxFee.Value))
+				{
+					throw new BusinessException(CollectionPolicyErrorCodes.InvalidEscalationSlabs).WithData("reason", "invalid_range_or_value");
+				}
+			}
+			// Slab days are chargeable days after grace, and an open final slab remains supported.
+			if (sorted[0].StartDay != 1 || maximumChargingDays.HasValue &&
+				sorted[^1].EndDay.HasValue && sorted[^1].EndDay < maximumChargingDays)
+			{
+				throw new BusinessException(CollectionPolicyErrorCodes.InvalidEscalationSlabs).WithData("reason", "gap");
+			}
+		}
 
 		for (var i = 0; i < sorted.Count - 1; i++)
 		{

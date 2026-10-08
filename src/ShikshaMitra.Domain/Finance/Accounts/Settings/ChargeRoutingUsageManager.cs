@@ -17,7 +17,7 @@ public class ChargeRoutingUsageManager(
     IRepository<FeeRecordMetadata, Guid> receipts,
     IRepository<ChargeWaiverApplication, Guid> waivers) : DomainService
 {
-    public async Task<bool> HasOpenChargesAsync(Guid? categoryId = null, Guid? bankId = null)
+    public async Task<bool> HasOpenChargesAsync(Guid? categoryId = null)
     {
         var requestQuery = await requests.GetQueryableAsync();
         var chargeQuery = await charges.GetQueryableAsync();
@@ -25,7 +25,6 @@ public class ChargeRoutingUsageManager(
             from request in requestQuery
             join charge in chargeQuery on request.Id equals charge.ChargeRequestId
             where (!categoryId.HasValue || request.IncomeCategoryId == categoryId) &&
-                  (!bankId.HasValue || request.ReceivingBankAccountId == bankId) &&
                   (charge.Status == ChargeStatus.Pending || charge.Status == ChargeStatus.Approved)
             select new { charge.Id, charge.Amount, charge.Status });
         if (linked.Any(x => x.Status == ChargeStatus.Pending)) return true;

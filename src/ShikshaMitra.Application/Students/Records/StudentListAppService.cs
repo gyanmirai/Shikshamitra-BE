@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
+using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Attendance;
 using ShikshaMitra.Students.StudentEnrollments;
@@ -15,6 +18,7 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
@@ -33,6 +37,7 @@ public class StudentListAppService(
 	IRepository<StudentDocument, Guid> studentDocumentRepository,
 	IRepository<DocumentTypeEntity, Guid> documentTypeRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
+	IRepository<Charge, Guid> chargeRepository,
 	IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository,
 	IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
 	IBlobContainer blobContainer,
@@ -400,6 +405,14 @@ public class StudentListAppService(
 
 	public async Task<List<StudentLookupDto>> GetStudentsByScopeAsync(GetStudentsByScopeRequest input)
 	{
+		if ((input.ChargeCategoryId.HasValue || input.AlreadyCharged.HasValue)
+			&& !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View)
+			&& !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Add)
+			&& !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update))
+		{
+			throw new AbpAuthorizationException("Charge permission is required to view students' charge status.");
+		}
+
 		var classIdSet = input.ClassIds.Distinct().ToList();
 
 		// Division selection is only allowed/applied when exactly one standard is selected.
@@ -440,24 +453,51 @@ public class StudentListAppService(
 			query = query.Where(s => s.DivisionId != null && divisionIdSet.Contains(s.DivisionId.Value));
 		}
 
-		if (input.OnlyWithFeeStructureAssignment)
+		if (input.RollNoFrom.HasValue && input.RollNoTo.HasValue && input.RollNoFrom > input.RollNoTo)
+			throw new UserFriendlyException("Roll No. from must not exceed Roll No. to.");
+		if (input.AlreadyCharged.HasValue && !input.ChargeCategoryId.HasValue)
+			throw new UserFriendlyException("Select a charge category before filtering charged students.");
+		if (!string.IsNullOrWhiteSpace(input.Search))
 		{
-			var assignments = await studentFeeStructureRepository.GetQueryableAsync();
+			var search = input.Search.Trim().ToLower();
+			query = query.Where(s => (s.FirstName + " " + (s.MiddleName ?? "") + " " + s.LastName).ToLower().Contains(search)
+				|| (s.GrNo.HasValue && s.GrNo.Value.ToString().Contains(search))
+				|| (s.RollNo.HasValue && s.RollNo.Value.ToString().Contains(search)));
+		}
+		if (input.Gender.HasValue) query = query.Where(s => s.AdditionalDetail != null && s.AdditionalDetail.Gender == input.Gender);
+		if (input.RollNoFrom.HasValue) query = query.Where(s => s.RollNo >= input.RollNoFrom);
+		if (input.RollNoTo.HasValue) query = query.Where(s => s.RollNo <= input.RollNoTo);
+
+		var assignments = await studentFeeStructureRepository.GetQueryableAsync();
+		var charges = await chargeRepository.GetQueryableAsync();
+		if (input.OnlyWithFeeStructureAssignment || input.HasFeeStructureAssignment == true)
+		{
 			query = query.Where(student => assignments.Any(assignment =>
 				assignment.StudentId == student.Id
 				&& assignment.AcademicYearId == input.AcademicYearId));
 		}
+		if (input.HasFeeStructureAssignment == false)
+			query = query.Where(student => !assignments.Any(assignment => assignment.StudentId == student.Id && assignment.AcademicYearId == input.AcademicYearId));
+		if (input.AlreadyCharged.HasValue)
+			query = query.Where(student => charges.Any(charge => charge.StudentId == student.Id
+				&& charge.AcademicYearId == input.AcademicYearId && charge.ChargeCategoryId == input.ChargeCategoryId
+				&& (charge.Status == ChargeStatus.Pending || charge.Status == ChargeStatus.Approved)) == input.AlreadyCharged.Value);
 
 		// 4. Enforce row-level query filtering based on user scope
 		query = await studentScopeAccessService.ApplyCurrentUserScopeAsync(query);
 
-		return await AsyncExecuter.ToListAsync(
-			query
+		var lookup = query
 				.OrderBy(s => s.RollNo)
 				.ThenBy(s => s.FirstName)
+				.ThenBy(s => s.Id)
 				.Select(s => new StudentLookupDto
 				{
 					StudentId = s.Id,
+					Gender = s.AdditionalDetail != null ? s.AdditionalDetail.Gender : null,
+					HasFeeStructureAssignment = assignments.Any(assignment => assignment.StudentId == s.Id && assignment.AcademicYearId == input.AcademicYearId),
+					HasChargeInCategory = input.ChargeCategoryId.HasValue && charges.Any(charge => charge.StudentId == s.Id
+						&& charge.AcademicYearId == input.AcademicYearId && charge.ChargeCategoryId == input.ChargeCategoryId
+						&& (charge.Status == ChargeStatus.Pending || charge.Status == ChargeStatus.Approved)),
 					StudentName = (s.FirstName + " " + (s.MiddleName ?? string.Empty) + " " + s.LastName).Trim(),
 					GrNo = s.GrNo,
 					RollNo = s.RollNo,
@@ -465,7 +505,10 @@ public class StudentListAppService(
 					StandardName = s.Standard != null ? s.Standard.Name : string.Empty,
 					DivisionId = s.DivisionId,
 					DivisionName = s.Division != null ? s.Division.Name : string.Empty
-				}));
+				});
+		if (input.SkipCount > 0) lookup = lookup.Skip(input.SkipCount);
+		if (input.MaxResultCount.HasValue) lookup = lookup.Take(input.MaxResultCount.Value);
+		return await AsyncExecuter.ToListAsync(lookup);
 	}
 
 	private async Task<IQueryable<Student>> GetScopedEnrolledStudentsQueryAsync()

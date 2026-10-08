@@ -118,6 +118,14 @@ public class ProrationPolicyListRequestDto : PagedAndSortedResultRequestDto
 	public Guid AcademicYearId { get; set; }
 	public string? Status { get; set; }
 	public string? Search { get; set; }
+	public string? PolicyNameFilter { get; set; }
+	public string? PolicyNameOperator { get; set; }
+	public string? RuleCountOperator { get; set; }
+	public int? RuleCountValue { get; set; }
+	public int? RuleCountMax { get; set; }
+	public string? UpdatedAtOperator { get; set; }
+	public DateTime? UpdatedAt { get; set; }
+	public DateTime? UpdatedAtEnd { get; set; }
 }
 
 public class ProrationPolicyListRequestDtoValidator : AbstractValidator<ProrationPolicyListRequestDto>

@@ -1,4 +1,3 @@
-using ShikshaMitra.Finance.Accounts.Transactions;
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Constants.Permissions;
@@ -21,8 +20,13 @@ namespace ShikshaMitra.Finance.Fees.Charges;
 public partial class ChargeAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Add)]
+	[UnitOfWork(IsDisabled = true)]
 	public async Task<ChargeResponse> CreateAsync(Guid academicYearId, CreateChargeRequest input)
 	{
+		var autoApprove = await userScopeService.IsAdminUserAsync(currentUser.Id!.Value);
+		if (autoApprove)
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve);
+		using var uow = unitOfWorkManager.Begin(isTransactional: true);
 		await EnsureAcademicYearExistsAsync(academicYearId);
 
 		var audienceDto = await ResolveAudienceDtoAsync(input);
@@ -35,7 +39,7 @@ public partial class ChargeAppService
 			CurrentTenant.Id, academicYearId,
 			input.ChargeName, input.ChargeCategoryId, input.PurposeDescription,
 			input.Amount, input.DueDate, (ChargePriority)input.Priority,
-			audience, snapshot, currentUser.Id!.Value, input.AdditionalNotes, input.IncomeCategoryId, input.ReceivingBankAccountId);
+			audience, snapshot, currentUser.Id!.Value, input.AdditionalNotes);
 
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
@@ -43,11 +47,26 @@ public partial class ChargeAppService
 			academicYearId, FinanceAuditEntityTypes.FeeCharge, request.Id, request.ChargeName,
 			FinanceAuditActions.AddCharge, $"Charge request created for {lines.Count} student(s).",
 			context: new { request.Id, StudentCount = lines.Count });
+		if (autoApprove)
+		{
+			await chargeRequestManager.ApproveLinesAsync(request, null, currentUser.Id!.Value,
+				"Automatically approved on administrator creation.");
+			await chargeRequestRepository.UpdateAsync(request, autoSave: false);
+			await CurrentUnitOfWork!.SaveChangesAsync();
+			await financeAuditWriter.WriteAsync(
+				academicYearId, FinanceAuditEntityTypes.FeeCharge, request.Id, request.ChargeName,
+				FinanceAuditActions.Approve, $"Automatically approved charge lines for {lines.Count} student(s).",
+				reason: "Administrator creation; automatic approval.");
+		}
+		await uow.CompleteAsync();
+		if (autoApprove)
+			await PublishApprovedEventsAsync(request, lines);
 
 		logger.LogInformation("Charge request created: {ChargeRequestId}, Lines={Count}", request.Id, lines.Count);
 
-		return await BuildChargeResponseAsync(request, lines.Count,
-			"Charge created successfully and pending approval");
+		return await BuildChargeResponseAsync(request, lines.Count, autoApprove
+			? "Charge created and approved successfully"
+			: "Charge created successfully and pending approval");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update)]
@@ -57,9 +76,6 @@ public partial class ChargeAppService
 		await EnsureRequestAccessibleAsync(chargeId);
 		EnsureConcurrencyStamp(request, input.ConcurrencyStamp);
 		await EnsureAllLinesPendingOrThrowAsync(chargeId, forDelete: false);
-		var income = await routingManager.RequireCategoryAsync(request.AcademicYearId, input.IncomeCategoryId ?? request.IncomeCategoryId, TransactionType.Income);
-		var bank = await routingManager.RequireBankAsync(request.AcademicYearId, input.ReceivingBankAccountId ?? request.ReceivingBankAccountId);
-		request.SetFinancialRouting(income.Id, income.Name, bank.Id, ChargeRequestManager.BankLabel(bank));
 
 		if (input.Audience is not null)
 		{
@@ -80,11 +96,12 @@ public partial class ChargeAppService
 				input.Amount, input.DueDate,
 				input.Priority.HasValue ? (ChargePriority)input.Priority.Value : null,
 				input.AdditionalNotes);
+			await chargeRequestManager.SetIncomeCategoryFromChargeCategoryAsync(request);
 
 			var lines = await chargeRepository.GetListAsync(c => c.ChargeRequestId == chargeId && c.Status == ChargeStatus.Pending);
 			foreach (var line in lines)
 			{
-				line.SetFinancialRouting(income.Id, income.Name, bank.Id, ChargeRequestManager.BankLabel(bank));
+				line.SetIncomeCategory(request.IncomeCategoryId!.Value, request.IncomeCategoryName!);
 				line.Update(request.ChargeCategoryId, request.PurposeDescription, request.Amount,
 					request.DueDate, request.Priority, request.AdditionalNotes);
 			}

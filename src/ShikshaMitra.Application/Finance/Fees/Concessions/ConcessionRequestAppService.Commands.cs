@@ -54,6 +54,9 @@ public partial class ConcessionRequestAppService
 	public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateAsync(
 		Guid academicYearId, CreateConcessionRequestDto input)
 	{
+		var autoApprove = await userScopeService.IsAdminUserAsync(currentUser.GetId());
+		if (autoApprove)
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
 		using var uow = unitOfWorkManager.Begin(isTransactional: true);
 		var replayId = await FindCommandReplayAsync("create_submit", input.IdempotencyKey, input);
@@ -78,9 +81,13 @@ public partial class ConcessionRequestAppService
 		request.ReplaceDocuments(await ValidateAndBuildDocumentsAsync(request, input.Documents));
 		EnsureRequiredDocumentsPresent(request);
 		request.Submit(Clock.Now);
+		await WriteRequestAuditAsync(request, "submit", autoApprove
+			? "Concession request submitted for automatic administrator approval."
+			: "Concession request submitted for approval.");
+		var approvedTotal = autoApprove
+			? await ApproveOnAdministratorSubmissionAsync(request, currentFingerprint) : 0m;
 		await concessionRequestRepository.UpdateAsync(request, autoSave: false);
 		await RecordCommandReceiptAsync("create_submit", input.IdempotencyKey, input, request.Id);
-		await WriteRequestAuditAsync(request, "submit", "Concession request submitted for approval.");
 		try
 		{
 			await uow.CompleteAsync();
@@ -90,6 +97,8 @@ public partial class ConcessionRequestAppService
 		{
 			throw new BusinessException(FinanceConcessionErrorCodes.DuplicatePendingRequest);
 		}
+		if (autoApprove)
+			await PublishAdministratorApprovalAsync(request, approvedTotal);
 		return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(await MapDetailAsync(request));
 	}
 
@@ -126,6 +135,9 @@ public partial class ConcessionRequestAppService
 	public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> SubmitAsync(
 		Guid id, SubmitConcessionRequestDto input)
 	{
+		var autoApprove = await userScopeService.IsAdminUserAsync(currentUser.GetId());
+		if (autoApprove)
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve);
 		using var uow = unitOfWorkManager.Begin(isTransactional: true);
 		var replayId = await FindCommandReplayAsync("submit", input.IdempotencyKey, input);
 		if (replayId.HasValue)
@@ -151,9 +163,13 @@ public partial class ConcessionRequestAppService
 			request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id))
 			throw new BusinessException(FinanceConcessionErrorCodes.DuplicatePendingRequest);
 		request.Submit(Clock.Now);
+		await WriteRequestAuditAsync(request, "submit", autoApprove
+			? "Concession request submitted for automatic administrator approval."
+			: "Concession request submitted for approval.");
+		var approvedTotal = autoApprove
+			? await ApproveOnAdministratorSubmissionAsync(request, currentFingerprint) : 0m;
 		await concessionRequestRepository.UpdateAsync(request, autoSave: false);
 		await RecordCommandReceiptAsync("submit", input.IdempotencyKey, input, request.Id);
-		await WriteRequestAuditAsync(request, "submit", "Concession request submitted for approval.");
 		try
 		{
 			await uow.CompleteAsync();
@@ -163,8 +179,62 @@ public partial class ConcessionRequestAppService
 		{
 			throw new BusinessException(FinanceConcessionErrorCodes.DuplicatePendingRequest);
 		}
+		if (autoApprove)
+			await PublishAdministratorApprovalAsync(request, approvedTotal);
 		return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(await MapDetailAsync(request));
 	}
+
+	private async Task<decimal> ApproveOnAdministratorSubmissionAsync(
+		ConcessionRequest request, string previewFingerprint)
+	{
+		EnsureRequiredDocumentsPresent(request);
+		var evaluation = await concessionRequestManager.EvaluateSubmittedAsync(request);
+		var dueFees = evaluation.DueFees.ToList();
+		var fingerprint = ComputePreviewFingerprint(
+			request.ConcessionPolicyVersionId, dueFees, evaluation.Mappings);
+		if (!string.Equals(previewFingerprint, fingerprint, StringComparison.OrdinalIgnoreCase))
+			throw new BusinessException(FinanceConcessionErrorCodes.PreviewChanged);
+		var allocations = BuildSubmittedApprovalAllocations(request, dueFees,
+			evaluation.Policy, evaluation.Mappings);
+		if (allocations.Count == 0 || allocations.Sum(x => x.ConcessionAmount) <= 0m)
+			throw new BusinessException(FinanceConcessionErrorCodes.ApprovalAllocationsRequired);
+		var approvedTotal = allocations.Sum(x => x.ConcessionAmount);
+		request.ApproveOnAdministratorCreation(currentUser.GetId(),
+			"Automatically approved on administrator submission.", allocations, Clock.Now);
+		var affectedDueFees = allocations.Select(a => dueFees.First(df => df.Id == a.DueFeeId))
+			.DistinctBy(x => x.Id).ToList();
+		var previousOverpayment = affectedDueFees.ToDictionary(x => x.Id, x => x.OverpaymentAmount);
+		foreach (var allocation in allocations)
+		{
+			var dueFee = affectedDueFees.First(df => df.Id == allocation.DueFeeId);
+			dueFee.ApplyConcession(allocation.ConcessionAmount);
+		}
+		var newOverpayment = affectedDueFees.ToDictionary(x => x.Id,
+			x => Math.Max(0m, x.OverpaymentAmount - previousOverpayment[x.Id]));
+		request.RecordPaidConcessionAmounts(newOverpayment, evaluation.Policy.ShouldAutoCreateRefund);
+		var refunds = evaluation.Policy.ShouldAutoCreateRefund
+			? await CreateConcessionRefundRequestsAsync(request, newOverpayment, affectedDueFees.ToDictionary(x => x.Id))
+			: [];
+		if (refunds.Count > 0) request.MarkRefundRequestsCreated();
+		await dueFeeRepository.UpdateManyAsync(affectedDueFees, autoSave: false);
+		await WriteRequestAuditAsync(request, "approve",
+			$"Administrator creation automatically approved concession for {approvedTotal:0.00}.",
+			"Administrator submission; automatic approval.",
+			new { Requested = request.GetTotalRequestedConcession(), Approved = approvedTotal,
+				Allocations = allocations.Count, RefundRequestIds = refunds.Select(x => x.Id).ToList() });
+		return approvedTotal;
+	}
+
+	private Task PublishAdministratorApprovalAsync(ConcessionRequest request, decimal approvedTotal) =>
+		eventBus.PublishAsync(new Finance.Events.ConcessionApprovedEto
+		{
+			ConcessionRequestId = request.Id,
+			StudentId = request.StudentId,
+			ConcessionTypeId = request.ConcessionTypeId,
+			TotalConcessionAmount = approvedTotal,
+			TenantId = CurrentTenant.Id,
+			ApprovedAt = request.GetApprovedOn() ?? Clock.Now,
+		});
 
 	public async Task<ConcessionRequestPreviewDto> PreviewAsync(
 		Guid academicYearId, ConcessionRequestPreviewInputDto input)
@@ -447,6 +517,7 @@ public partial class ConcessionRequestAppService
 			RequestConcurrencyStamp = request.ConcurrencyStamp,
 			PreviewFingerprint = fingerprint,
 			TotalApprovedAmount = allocations.Sum(x => x.ConcessionAmount),
+			AutoCreateRefund = evaluation.Policy.ShouldAutoCreateRefund,
 			RefundRequestAmount = allocations.Sum(x =>
 				Math.Max(0m, x.ConcessionAmount - dueFees.First(d => d.Id == x.DueFeeId).OutstandingAmount)),
 			DueFeeAllocations = allocations.Select(allocation =>
@@ -492,10 +563,12 @@ public partial class ConcessionRequestAppService
 			if (replayId.Value != id) throw new BusinessException(FinanceConcessionErrorCodes.IdempotencyKeyConflict);
 			var replay = await concessionRequestRepository.GetWithDetailsAsync(id);
 			await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId);
+			EnsureIndependentApprover(replay);
 			return await BuildApprovalResponseAsync(replay);
 		}
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+		EnsureIndependentApprover(request);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
 		await PromoteDraftToPendingAsync(request);
 		var evaluation = await concessionRequestManager.EvaluateSubmittedAsync(request);
@@ -525,8 +598,11 @@ public partial class ConcessionRequestAppService
 		}
 		var newOverpayment = affectedDueFees.ToDictionary(x => x.Id,
 			x => Math.Max(0m, x.OverpaymentAmount - previousOverpayment[x.Id]));
-		var refundRequests = await CreateConcessionRefundRequestsAsync(request,
-			newOverpayment, affectedDueFees.ToDictionary(x => x.Id));
+		request.RecordPaidConcessionAmounts(newOverpayment, evaluation.Policy.ShouldAutoCreateRefund);
+		var refundRequests = evaluation.Policy.ShouldAutoCreateRefund
+			? await CreateConcessionRefundRequestsAsync(request, newOverpayment, affectedDueFees.ToDictionary(x => x.Id))
+			: [];
+		if (refundRequests.Count > 0) request.MarkRefundRequestsCreated();
 
 		await dueFeeRepository.UpdateManyAsync(affectedDueFees, autoSave: false);
 		await concessionRequestRepository.UpdateAsync(request, autoSave: false);
@@ -595,10 +671,12 @@ public partial class ConcessionRequestAppService
 			if (replayId.Value != id) throw new BusinessException(FinanceConcessionErrorCodes.IdempotencyKeyConflict);
 			var replay = await concessionRequestRepository.GetWithDetailsAsync(id);
 			await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId);
+			EnsureIndependentApprover(replay);
 			return BuildRejectionResponse(replay);
 		}
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+		EnsureIndependentApprover(request);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
 
 		await PromoteDraftToPendingAsync(request);

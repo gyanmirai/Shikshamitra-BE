@@ -140,8 +140,6 @@ public partial class ChargeAppService
 			Data = new ChargeDetailData
 			{
 				ChargeId = detail.Request.Id, ChargeName = detail.Request.ChargeName,
-				IncomeCategoryId = detail.Request.IncomeCategoryId, IncomeCategoryName = detail.Request.IncomeCategoryName,
-				ReceivingBankAccountId = detail.Request.ReceivingBankAccountId, ReceivingBankLabel = detail.Request.ReceivingBankLabel,
 				ChargeCategoryId = detail.Request.ChargeCategoryId, CategoryName = detail.Category.Name,
 				PurposeDescription = detail.Request.PurposeDescription, Amount = detail.Request.Amount,
 				DueDate = detail.Request.DueDate, AppliedOn = detail.Request.AppliedOn,

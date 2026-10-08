@@ -1,4 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Finance.Audit;
+using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.Services;
@@ -26,6 +30,9 @@ public class PaymentTermAppService(
 	IRepository<EducationBoard, Guid> boardRepository,
 	IAcademicYearRepository academicYearRepository,
 	IRepository<IdentityUser, Guid> userRepository,
+	IRepository<Standard, Guid> standardRepository,
+	FinanceAuditWriter auditWriter,
+	IUserScopeAccessService scopeAccess,
 	PaymentTermScheduleResolver scheduleResolver
 ) : ApplicationService, IPaymentTermAppService
 {
@@ -63,10 +70,11 @@ public class PaymentTermAppService(
 		var items = await AsyncExecuter.ToListAsync(query);
 		var termIds = items.Select(t => t.Id).ToList();
 		var referenceCounts = await GetReferenceCountsAsync(termIds);
+		var usage = await GetUsageRowsAsync(termIds);
 
 		return new PagedResultDto<PaymentTermListDto>(
 			totalCount,
-			items.Select(t => MapListDto(t, referenceCounts.GetValueOrDefault(t.Id))).ToList());
+			items.Select(t => { var dto = MapListDto(t, referenceCounts.GetValueOrDefault(t.Id)); dto.Usage = SummarizeUsage(t.Id, null, usage.GetValueOrDefault(t.Id) ?? new()); return dto; }).ToList());
 	}
 
 	public async Task<PaymentTermDto> GetAsync(Guid paymentTermId)
@@ -74,6 +82,86 @@ public class PaymentTermAppService(
 		var term = await GetTermWithVersionsAsync(paymentTermId);
 		var referenceCount = (await GetReferenceCountsAsync(new[] { term.Id })).GetValueOrDefault(term.Id);
 		return await MapDetailDtoAsync(term, referenceCount);
+	}
+
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.View)]
+	public async Task<PaymentTermUsageDto> GetUsageAsync(Guid paymentTermId, Guid? versionId = null)
+	{
+		var term = await GetTermWithVersionsAsync(paymentTermId);
+		if (versionId.HasValue && !term.Versions.Any(v => v.Id == versionId.Value))
+			throw new BusinessException(PaymentTermErrorCodes.NotFound).WithData("VersionId", versionId);
+		var rows = await GetUsageRowsAsync(new[] { term.Id });
+		return SummarizeUsage(term.Id, versionId, rows.GetValueOrDefault(term.Id) ?? new());
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_PaymentTerms.Add)]
+	public async Task<PaymentTermDefaultImpactDto> GetDefaultImpactAsync(Guid academicYearId, Guid boardId, Guid? paymentTermId = null)
+	{
+		var board = await boardRepository.GetAsync(boardId);
+		if (board.AcademicYearId != academicYearId) throw new BusinessException(PaymentTermErrorCodes.TermYearMismatch);
+		if (paymentTermId.HasValue)
+		{
+			var target = await GetTermWithVersionsAsync(paymentTermId.Value);
+			if (target.BoardId != boardId || target.AcademicYearId != academicYearId)
+				throw new BusinessException(PaymentTermErrorCodes.TermYearMismatch);
+		}
+		var current = await paymentTermRepository.FirstOrDefaultAsync(t => t.AcademicYearId == academicYearId && t.BoardId == boardId && t.IsDefault);
+		return new PaymentTermDefaultImpactDto {
+			CurrentDefaultId = current?.Id, CurrentDefaultName = current?.Name,
+			CurrentDefaultVersionNumber = current?.GetPublishedVersion()?.VersionNumber,
+			CurrentDefaultUsage = current == null ? null : await GetUsageAsync(current.Id),
+			ReplacesExistingDefault = current != null && current.Id != paymentTermId
+		};
+	}
+
+	private async Task<Dictionary<Guid, List<PaymentTermUsageAssignmentDto>>> GetUsageRowsAsync(IEnumerable<Guid> termIds)
+	{
+		var ids = termIds.Distinct().ToArray();
+		if (ids.Length == 0) return new();
+		var structures = await feeStructureRepository.GetQueryableAsync();
+		var standards = await scopeAccess.ApplyCurrentUserScopeAsync(
+			(await standardRepository.GetQueryableAsync()).Select(c => new UsageClass {
+				StandardId = c.Id, Name = c.Name, EducationMediumStageId = c.EducationMediumStageId,
+				EducationMediumId = c.EducationMediumStage.EducationMediumId,
+				EducationBoardId = c.EducationMediumStage.EducationMedium.EducationBoardId,
+				AcademicYearId = c.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId
+			}));
+		var rows = await AsyncExecuter.ToListAsync(
+			from structure in structures
+			from detail in structure.FeeStructureDetails
+			join standard in standards on structure.StandardId equals standard.StandardId
+			where detail.PaymentTermId.HasValue && Enumerable.Contains(ids, detail.PaymentTermId.Value)
+			select new { TermId = detail.PaymentTermId.Value, Assignment = new PaymentTermUsageAssignmentDto {
+				ClassId = standard.StandardId!.Value, ClassName = standard.Name, FeeStructureId = structure.Id,
+				FeeStructureName = structure.Name, FeeHeadId = detail.FeeHeadId, FeeHeadName = detail.FeeHead.Name,
+				VersionId = detail.PaymentTermVersionId
+			} });
+		var terms = await paymentTermRepository.GetListAsync(t => Enumerable.Contains(ids, t.Id));
+		var versions = terms.SelectMany(t => t.Versions).ToDictionary(v => v.Id, v => v.VersionNumber);
+		foreach (var row in rows)
+			row.Assignment.VersionNumber = row.Assignment.VersionId.HasValue ? versions.GetValueOrDefault(row.Assignment.VersionId.Value) : null;
+		return rows.GroupBy(r => r.TermId).ToDictionary(g => g.Key, g => g.Select(r => r.Assignment).ToList());
+	}
+
+	private sealed class UsageClass : IUserScopedEntity
+	{
+		public string Name { get; set; } = string.Empty;
+		public Guid? AcademicYearId { get; set; }
+		public Guid? EducationBoardId { get; set; }
+		public Guid? EducationMediumId { get; set; }
+		public Guid? EducationMediumStageId { get; set; }
+		public Guid? StandardId { get; set; }
+		public Guid? DivisionId { get; set; }
+	}
+
+	private static PaymentTermUsageDto SummarizeUsage(Guid termId, Guid? versionId, List<PaymentTermUsageAssignmentDto> all)
+	{
+		var rows = all.Where(r => !versionId.HasValue || r.VersionId == versionId).ToList();
+		return new PaymentTermUsageDto { PaymentTermId = termId, VersionId = versionId,
+			FeeHeadCount = rows.Select(r => r.FeeHeadId).Distinct().Count(),
+			FeeStructureCount = rows.Select(r => r.FeeStructureId).Distinct().Count(),
+			ClassCount = rows.Select(r => r.ClassId).Distinct().Count(), Assignments = rows };
 	}
 
 	public async Task<PaymentTermTemplatePreviewDto> PreviewTemplateAsync(PreviewPaymentTermTemplateDto input)
@@ -183,7 +271,7 @@ public class PaymentTermAppService(
 		}
 		if (input.IsDefault)
 		{
-			await ReplaceDefaultForBoardAsync(input.AcademicYearId, input.BoardId, excludeId: null);
+			await ReplaceDefaultForBoardAsync(term);
 			term.SetDefault(true);
 		}
 
@@ -255,7 +343,7 @@ public class PaymentTermAppService(
 		}
 		if (input.IsDefault)
 		{
-			await ReplaceDefaultForBoardAsync(term.AcademicYearId, term.BoardId, term.Id);
+			await ReplaceDefaultForBoardAsync(term);
 		}
 		term.SetDefault(input.IsDefault);
 
@@ -610,16 +698,17 @@ public class PaymentTermAppService(
 		}
 	}
 
-	private async Task ReplaceDefaultForBoardAsync(Guid academicYearId, Guid boardId, Guid? excludeId)
+	private async Task ReplaceDefaultForBoardAsync(PaymentTerm replacement)
 	{
 		var defaults = await paymentTermRepository.GetListAsync(t =>
-			t.AcademicYearId == academicYearId &&
-			t.BoardId == boardId &&
-			t.IsDefault &&
-			(!excludeId.HasValue || t.Id != excludeId.Value));
+			t.AcademicYearId == replacement.AcademicYearId &&
+			t.BoardId == replacement.BoardId &&
+			t.IsDefault && t.Id != replacement.Id);
 
 		foreach (var item in defaults)
 		{
+			await auditWriter.WriteAsync(replacement.AcademicYearId, FinanceAuditEntityTypes.PaymentTerm, replacement.Id, replacement.Name, FinanceAuditActions.Update,
+				$"Default changed from {item.Name} to {replacement.Name}.", context: new { BoardId = replacement.BoardId, OldDefault = new { item.Id, item.Name, VersionNumber = item.GetPublishedVersion()?.VersionNumber }, NewDefault = new { replacement.Id, replacement.Name, VersionNumber = replacement.GetPublishedVersion()?.VersionNumber } });
 			item.SetDefault(false);
 			await paymentTermRepository.UpdateAsync(item, autoSave: true);
 		}

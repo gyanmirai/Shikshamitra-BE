@@ -50,10 +50,6 @@ public partial class CollectFeeWorkflow
      var bank = payment.BankAccountId.HasValue || payment.PaymentMethod != PaymentMethodEnum.Cash
        ? await routingManager.RequireBankAsync(input.AcademicYearId, payment.BankAccountId) : null;
      banks.Add((bank?.Id, bank == null ? null : $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}"));
-     if (input.ChargePayments.Any(selected => !charges.ChargeMap[selected.ChargeId].ReceivingBankAccountId.HasValue))
-       throw new BusinessException(FinanceRoutingErrorCodes.BankRequired);
-     if (input.ChargePayments.Any(selected => charges.ChargeMap[selected.ChargeId].ReceivingBankAccountId != bank?.Id))
-       throw new UserFriendlyException("Collect charges using their selected receiving bank. Collect charges with different receiving banks separately.");
    }
    if (lines.Sum(x => x.Amount) != input.Payments.Sum(x => Money(x.Amount)))
      throw new BusinessException(FinanceRoutingErrorCodes.AllocationMismatch);

@@ -112,6 +112,7 @@ public class PaymentTermDto : EntityDto<Guid>
 
 public class PaymentTermListDto : EntityDto<Guid>
 {
+	public PaymentTermUsageDto? Usage { get; set; }
 	public Guid? PublishedVersionId { get; set; }
 	public int? PublishedVersionNumber { get; set; }
 	public string Name { get; set; } = string.Empty;
@@ -196,6 +197,9 @@ public class PreviewPaymentTermTemplateDto
 	public DemandGenerationRule DemandGenerationRule { get; set; } = DemandGenerationRule.OnInstallmentStartDate;
 	[Range(1, 365)]
 	public int? DemandOffsetDays { get; set; }
+	/// <summary>One invoice calendar date per generated installment, in sequence order. Required for SpecificDate.</summary>
+	[JsonConverter(typeof(PaymentTermCalendarDateListJsonConverter))]
+	public List<DateTime>? SpecificDemandDates { get; set; }
 }
 
 public class ArchivePaymentTermDto

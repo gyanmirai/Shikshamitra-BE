@@ -3,6 +3,7 @@ using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Volo.Abp;
 
 namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
@@ -24,6 +25,22 @@ internal static class PaymentTermTemplateGenerator
 		var periods = input.TemplateKind == PaymentTermTemplateKind.Monthly
 			? BuildMonthlyPeriods(start, end)
 			: BuildBalancedPeriods(start, end, ResolveCount(input));
+		if (input.DemandGenerationRule == DemandGenerationRule.SpecificDate &&
+			input.SpecificDemandDates?.Count != periods.Count)
+		{
+			throw Invalid($"Provide one invoice date for each of the {periods.Count} generated installments.");
+		}
+		if (input.DemandGenerationRule == DemandGenerationRule.XDaysBeforeDue)
+		{
+			var maximum = Math.Min(365, periods.Min(period =>
+				(ResolveDueDate(period.Start, period.End, input) - period.Start).Days));
+			if (input.DemandOffsetDays > maximum)
+			{
+				throw new BusinessException(PaymentTermErrorCodes.DemandOffsetDaysExceedsMaximum)
+					.WithData("Maximum", maximum)
+					.WithData("Actual", input.DemandOffsetDays);
+			}
+		}
 
 		var installments = new List<CreatePaymentTermInstallmentDto>(periods.Count);
 		var baseAllocation = Math.Floor(10000m / periods.Count) / 100m;
@@ -32,7 +49,7 @@ internal static class PaymentTermTemplateGenerator
 			var period = periods[index];
 			var dueDate = ResolveDueDate(period.Start, period.End, input);
 			var specificDemandDate = input.DemandGenerationRule == DemandGenerationRule.SpecificDate
-				? period.Start
+				? input.SpecificDemandDates![index]
 				: (DateTime?)null;
 			var demandDate = PaymentTermDemandDateCalculator.Calculate(
 				input.DemandGenerationRule,

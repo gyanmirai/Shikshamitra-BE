@@ -166,7 +166,7 @@ Student lines retain Pending/Approved/Rejected/Voided decision evidence
 Approved and unpaid -> Voided with reason and checker (existing correction flow)
 ```
 
-The current API always begins at Pending. The legacy category approval flag no longer bypasses the checker. Introduce Draft/Submit only if the product needs resumable authoring. Whether Draft exists or not, line state remains authoritative and the server returns `availableActions`.
+The current API begins at Pending for ordinary staff and creates approved lines for a configured administrator with Add and Approve grants. The legacy category approval flag does not decide the outcome. The administrator exception is specified in [Admin request approval](./admin-request-auto-approval-contract.md). Introduce Draft/Submit only if the product needs resumable authoring. Whether Draft exists or not, line state remains authoritative and the server returns `availableActions`.
 
 ### Monetary invariants
 
@@ -189,7 +189,7 @@ outstanding          = effective obligation - cleared collection + charge-refund
 2. **Resolve audience.** The author selects an explicit mode: all eligible students in scope or selected students. Eligible students are enrolled in the selected academic scope and have a fee-structure assignment for that academic year. A server preview returns the resolved count, exclusions, category/account/policy snapshot, total amount, and fingerprint. Empty selection never silently changes to all students.
 3. **Create safely.** Frontend sends the preview fingerprint and one idempotency key. Backend re-resolves scope, validates category year/status, enforces the maximum batch size, and creates one line per student atomically.
 4. **Review.** Detail shows immutable scope, origin, amount, line states, creator, and timeline. Update is allowed only when the server returns Edit and the submitted concurrency stamp matches.
-5. **Approve or reject.** The checker selects pending lines and submits a reason where required. Backend enforces the exact action permission, maker-checker without role-name exceptions, scope, line stamps, and one legal transition per line.
+5. **Approve or reject.** For ordinary staff requests, the checker selects pending lines and submits a reason where required. Backend enforces the exact action permission, maker-checker, scope, line stamps, and one legal transition per line. A configured administrator's new batch is approved atomically during creation under the documented exception.
 6. **Collect or waive.** Student collection reads approved outstanding charge lines with due date, category, origin, and account classification. It atomically allocates payment or, when the user has the dedicated permission, uses a reason-only row toggle to waive the full live remaining balance. Fees and charges remain separate receipt scopes even when paid in one user journey.
 7. **Post and receipt.** After commit, an outbox publishes collection/account/audit/notification events. The charge receipt lists the exact allocations and links to the source charge.
 8. **Correct.** Incorrect unpaid obligations use void rules; paid obligations use linked reversal/refund commands. An incorrect posted waiver uses a linked reversal rather than editing history. UI previews the monetary impact and requires reason, permission, stamp, and idempotency key.

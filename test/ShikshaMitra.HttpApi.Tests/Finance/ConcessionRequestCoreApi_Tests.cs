@@ -9,6 +9,7 @@ using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.Concessions.Dtos;
 using ShikshaMitra.Infrastructure.Traits;
+using ShikshaMitra.Infrastructure.Auth;
 using Shouldly;
 using Xunit;
 using Volo.Abp.Application.Dtos;
@@ -125,6 +126,10 @@ public class ConcessionRequestCoreApi_Tests : ConcessionRequestApiTestsBase
 		body.ShouldNotBeNull();
 		body!.Items.ShouldNotBeNull();
 		body.TotalCount.ShouldBeGreaterThanOrEqualTo(1);
+		var ownRequest = body.Items.Single(x => x.Id == requestId);
+		ownRequest.RequesterId.ShouldBe(Guid.Parse(TestAuthHandler.TestUserId));
+		ownRequest.AvailableActions.ShouldNotContain("approve");
+		ownRequest.AvailableActions.ShouldNotContain("reject");
 	}
 
 	[Fact]

@@ -20,6 +20,7 @@ public class ConcessionPolicyConfiguration : IEntityTypeConfiguration<Concession
 		builder.Property(x => x.ValueSource).IsRequired().HasConversion<int>();
 		builder.Property(x => x.CalculationMethod).IsRequired().HasConversion<int>();
 		builder.Property(x => x.ApplyOn).IsRequired().HasConversion<int>();
+		builder.Property(x => x.AutoCreateRefund).IsRequired();
 		builder.Property(x => x.RoundingMethod).IsRequired().HasConversion<int>();
 		builder.Property(x => x.PercentageValue).HasPrecision(9, 4);
 		builder.Property(x => x.FixedAmount).HasPrecision(18, 2);

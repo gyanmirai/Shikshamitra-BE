@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
@@ -75,9 +76,12 @@ public class FeeCategoryAppService(
 		return await MapToResponseAsync(feeCategory, feeHeads);
 	}
 
-	public async Task<FeeCategoryListResponse> GetListAsync(Guid academicYearId, string? search = null, int page = 1, int pageSize = 10, bool? isActive = null)
+	public async Task<FeeCategoryListResponse> GetListAsync(Guid academicYearId, string? search = null, int page = 1, int pageSize = 10, bool? isActive = null, string? filters = null, string? sortBy = null, string? sortDirection = null)
 	{
+		page = Math.Max(1, page);
+		pageSize = Math.Clamp(pageSize, 1, 100);
 		var query = await feeCategoryRepository.GetQueryableAsync();
+		var headQuery = await feeHeadRepository.GetQueryableAsync();
 
 		query = query.Where(x => x.AcademicYearId == academicYearId);
 
@@ -92,16 +96,100 @@ public class FeeCategoryAppService(
 			query = query.Where(x => x.Name.ToLower().Contains(normalizedSearch));
 		}
 
+		if (!string.IsNullOrWhiteSpace(filters))
+		{
+			FeeCategoryTableFilter[] requestedFilters;
+			try
+			{
+				requestedFilters = JsonSerializer.Deserialize<FeeCategoryTableFilter[]>(filters,
+					new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+			}
+			catch (JsonException)
+			{
+				throw new UserFriendlyException("Invalid fee category filters.");
+			}
+			if (requestedFilters.Length > 20)
+				throw new UserFriendlyException("Too many fee category filters.");
+			foreach (var filter in requestedFilters)
+			{
+				if (filter.Column is "name" or "description")
+				{
+					if (filter.Value.ValueKind != JsonValueKind.String || filter.Type is not ("contains" or "equals" or "startsWith" or "endsWith"))
+						throw new UserFriendlyException("Invalid fee category text filter.");
+					var value = (filter.Value.GetString() ?? string.Empty).Trim().ToLower();
+					if (value.Length > 200)
+						throw new UserFriendlyException("Fee category filter text is too long.");
+					if (filter.Column == "name")
+						query = filter.Type switch
+						{
+							"equals" => query.Where(x => x.Name.ToLower() == value),
+							"startsWith" => query.Where(x => x.Name.ToLower().StartsWith(value)),
+							"endsWith" => query.Where(x => x.Name.ToLower().EndsWith(value)),
+							_ => query.Where(x => x.Name.ToLower().Contains(value))
+						};
+					else
+						query = filter.Type switch
+						{
+							"equals" => query.Where(x => (x.Description ?? "").ToLower() == value),
+							"startsWith" => query.Where(x => (x.Description ?? "").ToLower().StartsWith(value)),
+							"endsWith" => query.Where(x => (x.Description ?? "").ToLower().EndsWith(value)),
+							_ => query.Where(x => (x.Description ?? "").ToLower().Contains(value))
+						};
+				}
+				else if (filter.Column == "totalFeeHeads")
+				{
+					if (filter.Type == "between" && filter.Value.ValueKind == JsonValueKind.Object &&
+						filter.Value.TryGetProperty("min", out var minValue) && minValue.TryGetInt32(out var min) &&
+						filter.Value.TryGetProperty("max", out var maxValue) && maxValue.TryGetInt32(out var max) && min <= max)
+						query = query.Where(category => headQuery.Count(h => h.FeeCategoryId == category.Id) >= min && headQuery.Count(h => h.FeeCategoryId == category.Id) <= max);
+					else if (filter.Value.ValueKind == JsonValueKind.Number && filter.Value.TryGetInt32(out var number) && number >= 0)
+						query = filter.Type switch
+						{
+							"equals" => query.Where(category => headQuery.Count(h => h.FeeCategoryId == category.Id) == number),
+							"greaterThan" => query.Where(category => headQuery.Count(h => h.FeeCategoryId == category.Id) > number),
+							"lessThan" => query.Where(category => headQuery.Count(h => h.FeeCategoryId == category.Id) < number),
+							_ => throw new UserFriendlyException("Invalid fee head count filter.")
+						};
+					else
+						throw new UserFriendlyException("Invalid fee head count filter.");
+				}
+				else if (filter.Column == "isActive")
+				{
+					if (filter.Type != "equals")
+						throw new UserFriendlyException("Invalid fee category status filter.");
+					bool? expectedStatus = filter.Value.ValueKind switch
+					{
+						JsonValueKind.True => true,
+						JsonValueKind.False => false,
+						JsonValueKind.String when bool.TryParse(filter.Value.GetString(), out var parsed) => parsed,
+						_ => null
+					};
+					if (!expectedStatus.HasValue)
+						throw new UserFriendlyException("Invalid fee category status filter.");
+					query = query.Where(x => x.IsActive == expectedStatus.Value);
+				}
+				else
+					throw new UserFriendlyException("Unsupported fee category filter.");
+			}
+		}
+
 		var totalCount = await feeCategoryRepository.AsyncExecuter.CountAsync(query);
 
-		query = query.OrderByDescending(x => x.CreationTime)
+		var descending = string.Equals(sortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+		query = sortBy switch
+		{
+			"name" => descending ? query.OrderByDescending(x => x.Name).ThenBy(x => x.Id) : query.OrderBy(x => x.Name).ThenBy(x => x.Id),
+			"description" => descending ? query.OrderByDescending(x => x.Description).ThenBy(x => x.Id) : query.OrderBy(x => x.Description).ThenBy(x => x.Id),
+			"totalFeeHeads" => descending ? query.OrderByDescending(x => headQuery.Count(h => h.FeeCategoryId == x.Id)).ThenBy(x => x.Id) : query.OrderBy(x => headQuery.Count(h => h.FeeCategoryId == x.Id)).ThenBy(x => x.Id),
+			_ => query.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id)
+		};
+		query = query
 					 .Skip((page - 1) * pageSize)
 					 .Take(pageSize);
 
 		var categories = await feeCategoryRepository.AsyncExecuter.ToListAsync(query);
 		var categoryIds = categories.Select(x => x.Id).ToList();
 
-		var headQuery = await feeHeadRepository.GetQueryableAsync();
 		var allHeads = await feeHeadRepository.AsyncExecuter.ToListAsync(
 			headQuery.Where(x => categoryIds.Contains(x.FeeCategoryId))
 		);
@@ -124,6 +212,8 @@ public class FeeCategoryAppService(
 			Items = items
 		};
 	}
+
+	private sealed record FeeCategoryTableFilter(string Column, string Type, JsonElement Value);
 
 	public async Task<FeeCategoryResponse> GetByIdAsync(Guid id)
 	{

@@ -71,6 +71,7 @@ public partial class ConcessionRequestAppService
 				MaximumPercentage = policy.MaximumPercentage,
 				MaximumFixedAmount = policy.MaximumFixedAmount,
 				ApplyOn = policy.ApplyOn.ToString(),
+				AutoCreateRefund = policy.AutoCreateRefund,
 				RoundingMethod = policy.RoundingMethod.ToString(),
 				ApplicableConcessionTypeIds = policy.ApplicableConcessionTypeIds.ToList(),
 				FeeHeadScope = policy.FeeHeadScope.ToString(),
@@ -265,6 +266,7 @@ public partial class ConcessionRequestAppService
 				return new ConcessionApplicationItemDto
 				{
 					Id = r.Id, StudentId = r.StudentId, ConcessionTypeId = r.ConcessionTypeId,
+					RequesterId = r.CreatorId,
 					StudentName        = FormatStudentName(student),
 					GrNumber           = student?.GrNo?.ToString() ?? string.Empty,
 					RollNo             = student?.RollNo?.ToString() ?? string.Empty,

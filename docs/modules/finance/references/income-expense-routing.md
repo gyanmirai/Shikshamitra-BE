@@ -3,7 +3,7 @@ module: finance
 domain: accounts
 content_type: Reference
 status: active
-updated_on: 2026-10-02
+updated_on: 2026-10-06
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -18,8 +18,8 @@ Account Heads are retired from active account settings. Fee Heads remain, and ea
 |---|---|---|
 | Create an Income or Expense Category | Academic year and category type | Independent master; no Account Head required |
 | Create a Bank Account | School account details | Independent master; no Account Head required |
-| Create or edit a pending charge | Required Income Category and receiving bank | Snapshots on the request and student charges; no income yet |
-| Approve charge lines | Revalidate saved active category and bank | Charge becomes collectible; routing remains fixed |
+| Create or edit a pending charge | Charge Category | Backend snapshots its Income Category on the request and student charges; no income yet |
+| Approve charge lines | Revalidate the saved active Income Category | Charge becomes collectible; category routing remains fixed |
 | Activate a Collection Policy with late fees | Required Late Fee Income Category | Pinned with the policy version |
 | Activate a Refund Policy | Required Expense Category; default paying bank if any non-cash method is allowed | Defaults are pinned in the refund policy snapshot |
 | Collect fees or charges | Actual school bank on each instrument | Confirmed payment creates Income; deferred payment stores hidden routing snapshots |
@@ -28,15 +28,15 @@ Account Heads are retired from active account settings. Fee Heads remain, and ea
 | Confirm a refund payout | Verification evidence and existing maker-checker rules | Creates Expense exactly once |
 | Return a confirmed refund payout | Evidence and reason | Creates an opposite signed Expense correction |
 
-Cash fee collections may omit a bank. Charges require their configured receiving bank during collection, including cash charge collections. Non-cash instruments require a school bank. Charges configured for different banks must be collected separately. There is no implicit receiving-bank override.
+Cash fee and charge collections may omit a bank. Non-cash instruments require an active school bank selected for the payment. Charges carry no receiving-bank restriction.
 
 Refund approval may use another active category or paying bank; changing a configured policy default requires approval notes. Payout recording must use the approved bank and method. Confirmation uses the saved payout evidence, so later master deactivation does not invalidate an already recorded payout.
 
 ## Contracts and access
 
-`GET /api/finance-routing-options?academicYearId=...&operation=...` supplies active, effective, tenant-scoped categories and masked school-bank labels. Supported operations are `charge`, `collection`, `refund`, `refund-policy`, `collection-policy`, `fee-head`, and `charge-category`. Each operation checks its owning write/approval permission; a setting module or unrelated action grant does not grant access. The response contains `incomeCategories`, `expenseCategories`, and `bankAccounts`, with `id` and `label` options.
+`GET /api/finance-routing-options?academicYearId=...&operation=...` supplies active, effective, tenant-scoped categories and masked school-bank labels. Supported operations are `collection`, `refund`, `refund-policy`, `collection-policy`, `fee-head`, and `charge-category`. Each operation checks its owning write/approval permission; a setting module or unrelated action grant does not grant access. The response contains `incomeCategories`, `expenseCategories`, and `bankAccounts`, with `id` and `label` options.
 
-Charge create/update DTOs include `incomeCategoryId` and `receivingBankAccountId`. Collection instruments include `bankAccountId`. Collection policies include `lateFeeIncomeCategoryId`. Refund policies include `expenseCategoryId` and `defaultPayingBankAccountId`. Refund approval accepts `expenseCategoryId`, `bankAccountId`, and `method`, alongside notes; omitted approval defaults are resolved from the request's saved policy version.
+Charge create/update DTOs include `chargeCategoryId`; the backend resolves its Income Category mapping. Collection instruments include `bankAccountId`. Collection policies include `lateFeeIncomeCategoryId`. Refund policies include `expenseCategoryId` and `defaultPayingBankAccountId`. Refund approval accepts `expenseCategoryId`, `bankAccountId`, and `method`, alongside notes; omitted approval defaults are resolved from the request's saved policy version.
 
 `/api/account-heads` returns HTTP 410 for authenticated requests. Legacy category head lookups return no options. Historical head fields are compatibility data rather than inputs to new financial routing.
 

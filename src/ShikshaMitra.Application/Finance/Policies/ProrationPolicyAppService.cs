@@ -48,12 +48,58 @@ public class ProrationPolicyAppService(
 			var search = input.Search.Trim().ToLower();
 			query = query.Where(x => x.PolicyName.ToLower().Contains(search) || x.PolicyCode.ToLower().Contains(search));
 		}
+		if (!string.IsNullOrWhiteSpace(input.PolicyNameFilter))
+		{
+			var name = input.PolicyNameFilter.Trim().ToLower();
+			query = input.PolicyNameOperator?.ToLowerInvariant() switch
+			{
+				"equals" => query.Where(x => x.PolicyName.ToLower() == name),
+				"startswith" => query.Where(x => x.PolicyName.ToLower().StartsWith(name)),
+				"endswith" => query.Where(x => x.PolicyName.ToLower().EndsWith(name)),
+				_ => query.Where(x => x.PolicyName.ToLower().Contains(name))
+			};
+		}
+		if (input.RuleCountValue.HasValue)
+		{
+			var count = input.RuleCountValue.Value;
+			var max = input.RuleCountMax ?? count;
+			query = input.RuleCountOperator?.ToLowerInvariant() switch
+			{
+				"greaterthan" => query.Where(x => x.Rules.Count > count),
+				"lessthan" => query.Where(x => x.Rules.Count < count),
+				"between" => query.Where(x => x.Rules.Count >= count && x.Rules.Count <= max),
+				_ => query.Where(x => x.Rules.Count == count)
+			};
+		}
+		if (input.UpdatedAt.HasValue && input.UpdatedAtEnd.HasValue)
+		{
+			var start = input.UpdatedAt.Value;
+			var end = input.UpdatedAtEnd.Value;
+			query = input.UpdatedAtOperator?.ToLowerInvariant() switch
+			{
+				"after" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start),
+				"before" => query.Where(x => (x.LastModificationTime ?? x.CreationTime) < end),
+				_ => query.Where(x => (x.LastModificationTime ?? x.CreationTime) >= start &&
+					(x.LastModificationTime ?? x.CreationTime) < end)
+			};
+		}
 
 		var total = await AsyncExecuter.CountAsync(query);
-		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderByDescending(x => x.Status == ProrationPolicyStatus.Active)
-			.ThenByDescending(x => x.IsDefault)
-			.ThenByDescending(x => x.CreationTime)
+		var sortParts = input.Sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+		var sortColumn = sortParts.Length > 0 ? sortParts[0].ToLowerInvariant() : string.Empty;
+		var descending = sortParts.Length > 1 && sortParts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
+		var sorted = sortColumn switch
+		{
+			"policyname" => descending ? query.OrderByDescending(x => x.PolicyName) : query.OrderBy(x => x.PolicyName),
+			"feeheadrules" => descending ? query.OrderByDescending(x => x.Rules.Count) : query.OrderBy(x => x.Rules.Count),
+			"updatedat" => descending ? query.OrderByDescending(x => x.LastModificationTime ?? x.CreationTime) : query.OrderBy(x => x.LastModificationTime ?? x.CreationTime),
+			"status" => descending ? query.OrderByDescending(x => x.Status) : query.OrderBy(x => x.Status),
+			_ => query.OrderByDescending(x => x.Status == ProrationPolicyStatus.Active)
+				.ThenByDescending(x => x.IsDefault)
+				.ThenByDescending(x => x.CreationTime)
+		};
+		var rows = await AsyncExecuter.ToListAsync(sorted
+			.ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
 		var usedIds = await GetUsedIdsAsync(rows.Select(x => x.Id).ToList());

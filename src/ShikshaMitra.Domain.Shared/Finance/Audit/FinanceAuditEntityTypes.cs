@@ -2,6 +2,7 @@ namespace ShikshaMitra.Finance.Audit;
 
 public static class FinanceAuditEntityTypes
 {
+	public const string PaymentTerm = "payment_term";
 	public const string FeePayment = "fee_payment";
 	public const string FeeReceipt = "fee_receipt";
 	public const string DueFee = "due_fee";

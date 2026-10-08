@@ -58,6 +58,8 @@ public partial class FeeRefundAppService
 	{
 		studentMap.TryGetValue(r.StudentId, out var student);
 		var isLegacy = !r.RefundPolicyVersionId.HasValue && !r.ConcessionRequestId.HasValue;
+		var policy = string.IsNullOrWhiteSpace(r.PolicySnapshotJson)
+			? null : JsonSerializer.Deserialize<RefundPolicySnapshot>(r.PolicySnapshotJson);
 		var legacyFinancialAmount = isLegacy && r.Status == FeeRefundStatus.Approved ? r.TotalAmount : 0m;
 		var fullName = student is null ? string.Empty
 			: string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
@@ -71,7 +73,7 @@ public partial class FeeRefundAppService
 			VoucherNumber = r.VoucherNumber, TotalAmount = r.TotalAmount,
 			CalculatedAmount = isLegacy ? r.TotalAmount : r.CalculatedAmount,
 			StudentFeeStructureId = r.StudentFeeStructureId, RefundPolicyId = r.RefundPolicyId,
-			RefundPolicyVersionId = r.RefundPolicyVersionId, RefundPolicyName = GetPolicyName(r.PolicySnapshotJson),
+			RefundPolicyVersionId = r.RefundPolicyVersionId, RefundPolicyName = policy?.PolicyName,
 			ConcessionRequestId = r.ConcessionRequestId,
 			OriginalReceiptId = r.OriginalReceiptId,
 			OriginalReceiptNumber = r.OriginalReceiptNumber, Currency = string.IsNullOrWhiteSpace(r.Currency) ? "INR" : r.Currency,
@@ -79,8 +81,11 @@ public partial class FeeRefundAppService
 			ProcessedAmount = isLegacy ? legacyFinancialAmount : r.ProcessedAmount, ReversedAmount = r.ReversedAmount,
 			ExpenseCategoryId = r.ExpenseCategoryId, PayingBankAccountId = r.PayingBankAccountId,
             ExpenseCategoryName = r.ExpenseCategoryName, PayingBankLabel = r.PayingBankLabel,
-            DefaultExpenseCategoryId = string.IsNullOrWhiteSpace(r.PolicySnapshotJson) ? null : JsonSerializer.Deserialize<RefundPolicySnapshot>(r.PolicySnapshotJson)?.ExpenseCategoryId,
-            DefaultPayingBankAccountId = string.IsNullOrWhiteSpace(r.PolicySnapshotJson) ? null : JsonSerializer.Deserialize<RefundPolicySnapshot>(r.PolicySnapshotJson)?.DefaultPayingBankAccountId,
+            DefaultExpenseCategoryId = policy?.ExpenseCategoryId,
+            DefaultPayingBankAccountId = policy?.DefaultPayingBankAccountId,
+            AllowedPayoutMethods = (r.ConcessionRequestId.HasValue
+                ? Enum.GetValues<RefundPayoutMethod>()
+                : policy?.AllowedPayoutMethods ?? []).Select(ToPayoutMethodLabel).ToList(),
             RefundMethod = r.RefundMethod, PaymentDetails = MaskPaymentDetails(MapRefundPaymentDetailsToDict(r.RefundPaymentDetails)),
 			Reason = r.Reason, ApproverNotes = r.ApproverNotes,
 			ProcessedByUserId = r.ProcessedByUserId, ProcessedAt = r.ProcessedAt,
@@ -109,13 +114,6 @@ public partial class FeeRefundAppService
 			BoardId = student?.AcademicBoardId, BoardName = student?.BoardName,
 			EducationMediumId = student?.AcademicMediumId, EducationMediumName = student?.AcademicMediumName,
 		};
-	}
-
-	private static string? GetPolicyName(string? snapshotJson)
-	{
-		if (string.IsNullOrWhiteSpace(snapshotJson)) return null;
-		try { return JsonSerializer.Deserialize<RefundPolicySnapshot>(snapshotJson)?.PolicyName; }
-		catch (JsonException) { return null; }
 	}
 
 	private static List<string> GetAvailableActions(FeeRefundRequest request)

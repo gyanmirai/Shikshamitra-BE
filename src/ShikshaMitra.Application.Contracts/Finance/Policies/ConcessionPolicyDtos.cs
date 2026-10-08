@@ -25,6 +25,7 @@ public class ConcessionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public decimal? MaximumPercentage { get; set; }
 	public decimal? MaximumFixedAmount { get; set; }
 	public string ApplyOn { get; set; } = "AllOutstanding";
+	public bool AutoCreateRefund { get; set; }
 	public string RoundingMethod { get; set; } = "RoundUp";
 	public int Version { get; set; }
 	public List<Guid> ApplicableConcessionTypeIds { get; set; } = [];
@@ -53,6 +54,7 @@ public class CreateUpdateConcessionPolicyDto
 	public decimal? MaximumPercentage { get; set; }
 	public decimal? MaximumFixedAmount { get; set; }
 	public string ApplyOn { get; set; } = "AllOutstanding";
+	public bool? AutoCreateRefund { get; set; }
 	public string RoundingMethod { get; set; } = "RoundUp";
 	public List<Guid> ApplicableConcessionTypeIds { get; set; } = [];
 	public string FeeHeadScope { get; set; } = "EntireFeeStructure";
@@ -79,6 +81,9 @@ public class CreateUpdateConcessionPolicyDtoValidator : AbstractValidator<Create
 		RuleFor(x => x.ValueSource).Must(x => EnumValue(x, "PolicyFixed", "RequestEnteredWithinLimits"));
 		RuleFor(x => x.CalculationMethod).Must(x => EnumValue(x, "Percentage", "FixedAmount", "FullWaiver"));
 		RuleFor(x => x.ApplyOn).Must(x => EnumValue(x, "AllOutstanding", "CurrentInstallment", "FutureInstallments", "AllFees"));
+		RuleFor(x => x.AutoCreateRefund).Must((input, value) => value != true ||
+			string.Equals(input.ApplyOn, "AllFees", StringComparison.OrdinalIgnoreCase))
+			.WithMessage("Automatic refunds require a scope that includes paid installments.");
 		RuleFor(x => x.RoundingMethod).Must(x => EnumValue(x, "None", "RoundUp", "RoundDown", "NearestRupee"));
 		RuleFor(x => x).Must(x => !string.Equals(x.ValueSource, "RequestEnteredWithinLimits", StringComparison.OrdinalIgnoreCase) ||
 			!string.Equals(x.CalculationMethod, "FullWaiver", StringComparison.OrdinalIgnoreCase))
@@ -118,6 +123,17 @@ public class ConcessionPolicyListRequestDto : PagedAndSortedResultRequestDto
 	public Guid AcademicYearId { get; set; }
 	public string? Status { get; set; }
 	public string? Search { get; set; }
+	public string? PolicyNameFilter { get; set; }
+	public string? PolicyNameOperator { get; set; }
+	public string? ValueSource { get; set; }
+	public string? CalculationMethod { get; set; }
+	public string? ApplyOn { get; set; }
+	public string? LimitOperator { get; set; }
+	public decimal? LimitValue { get; set; }
+	public decimal? LimitMax { get; set; }
+	public string? UpdatedAtOperator { get; set; }
+	public DateTime? UpdatedAt { get; set; }
+	public DateTime? UpdatedAtEnd { get; set; }
 }
 
 public class ConcessionPolicyListRequestDtoValidator : AbstractValidator<ConcessionPolicyListRequestDto>
@@ -129,6 +145,17 @@ public class ConcessionPolicyListRequestDtoValidator : AbstractValidator<Concess
 		RuleFor(x => x.MaxResultCount).InclusiveBetween(1, 100);
 		RuleFor(x => x.Status).Must(x => x is null || EnumValue(x, "Draft", "Active", "Archived"))
 			.WithMessage("Status must be Draft, Active, or Archived.");
+		RuleFor(x => x.PolicyNameOperator).Must(x => x is null || EnumValue(x, "contains", "equals", "startsWith", "endsWith"));
+		RuleFor(x => x.ValueSource).Must(x => x is null || EnumValue(x, "PolicyFixed", "RequestEnteredWithinLimits"));
+		RuleFor(x => x.CalculationMethod).Must(x => x is null || EnumValue(x, "Percentage", "FixedAmount", "FullWaiver"));
+		RuleFor(x => x.ApplyOn).Must(x => x is null || EnumValue(x, "AllOutstanding", "CurrentInstallment", "FutureInstallments", "AllFees"));
+		RuleFor(x => x.LimitOperator).Must(x => x is null || EnumValue(x, "equals", "greaterThan", "lessThan", "between"));
+		RuleFor(x => x).Must(x => x.LimitOperator is null ||
+			x.LimitValue.HasValue && (!string.Equals(x.LimitOperator, "between", StringComparison.OrdinalIgnoreCase) ||
+			x.LimitMax.HasValue && x.LimitMax >= x.LimitValue));
+		RuleFor(x => x.UpdatedAtOperator).Must(x => x is null || EnumValue(x, "equals", "after", "before"));
+		RuleFor(x => x).Must(x => x.UpdatedAtOperator is null ||
+			x.UpdatedAt.HasValue && x.UpdatedAtEnd.HasValue && x.UpdatedAtEnd > x.UpdatedAt);
 	}
 
 	private static bool EnumValue(string value, params string[] allowed) =>

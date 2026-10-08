@@ -9,6 +9,12 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public interface IAdmissionApplicationAppService : IApplicationService
 {
 	Task<PagedResultDto<AdmissionApplicationDto>> GetListAsync(AdmissionApplicationListInput input);
+	Task<PagedResultDto<AdmissionPipelineItemDto>> GetPipelineAsync(AdmissionPipelineListInput input);
+	Task<AdmissionPipelineOptionsDto> GetPipelineOptionsAsync(AdmissionPipelineListInput input);
+	Task<AdmissionInquiryManagementDto> GetFollowUpsAsync(Guid id);
+	Task<AdmissionInquiryManagementDto> ScheduleFollowUpAsync(Guid id, ScheduleAdmissionInquiryFollowUpDto input);
+	Task<AdmissionInquiryManagementDto> CompleteFollowUpAsync(Guid id, Guid followUpId, CompleteAdmissionInquiryFollowUpDto input);
+	Task<AdmissionInquiryManagementDto> CancelFollowUpAsync(Guid id, Guid followUpId, CancelAdmissionInquiryFollowUpDto input);
 	Task<AdmissionApplicationDto> GetAsync(Guid id);
 	Task<AdmissionApplicationDto?> FindAsync(Guid id);
 	Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId = null);

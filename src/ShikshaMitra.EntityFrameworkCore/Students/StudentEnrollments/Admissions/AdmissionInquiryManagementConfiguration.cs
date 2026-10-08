@@ -1,5 +1,7 @@
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp.EntityFrameworkCore.Modeling;
 
@@ -31,6 +33,13 @@ public class AdmissionInquiryManagementConfiguration :
 		builder.ConfigureByConvention();
 		builder.Property(item => item.IsDeleted).ValueGeneratedNever().HasDefaultValue(false);
 		builder.Property(item => item.Purpose).HasMaxLength(512).IsRequired();
+		// DateTime binds as timestamp-without-zone under legacy Npgsql. Use an explicit instant for this column.
+		builder.Property(item => item.ScheduledAt).HasConversion(new ValueConverter<DateTime, DateTimeOffset>(
+			value => new DateTimeOffset(value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc)),
+			value => value.UtcDateTime));
+		builder.Property(item => item.CompletedAt).HasConversion(new ValueConverter<DateTime, DateTimeOffset>(
+			value => new DateTimeOffset(value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc)),
+			value => value.UtcDateTime));
 		builder.Property(item => item.CompletionNote).HasMaxLength(1024);
 		builder.HasIndex(item => new { item.TenantId, item.InquiryId, item.Status, item.ScheduledAt }).HasDatabaseName("IX_AdmissionInquiryFollowUp_Inquiry_Status_Due");
 		builder.HasIndex(item => new { item.TenantId, item.AssignedCounsellorId, item.Status, item.ScheduledAt }).HasDatabaseName("IX_AdmissionInquiryFollowUp_Assigned_Status_Due");

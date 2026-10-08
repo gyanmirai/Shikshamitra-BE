@@ -44,10 +44,10 @@ public class AdmissionAssessmentSessionService(
 			if (policy == null || !workflowRows.TryGetValue(stage.WorkflowDefinitionId, out var workflow)) continue;
 			result.Add(new AdmissionAssessmentScopeDto
 			{
-				AdmissionOfferingId = offering.Id, OfferingName = offering.Name, WorkflowStageDefinitionId = stage.Id,
+				AdmissionOfferingId = offering.Id, OfferingName = offering.Name, OfferingCode = offering.Code, WorkflowStageDefinitionId = stage.Id,
 				AcademicYearId = academicYears.GetValueOrDefault(offering.AdmissionCycleId),
 				BoardId = offering.BoardId, MediumId = offering.MediumId, StandardId = offering.StandardId,
-				StageName = stage.Name, WorkflowDefinitionId = workflow.Id, WorkflowVersion = workflow.Version,
+				StageName = stage.Name, WorkflowDefinitionId = workflow.Id, WorkflowName = workflow.Name, WorkflowVersion = workflow.Version,
 				SchedulingEnabled = policy.SchedulingEnabled
 			});
 		}

@@ -168,6 +168,7 @@ public class AdmissionInquiryTimelineItemDto
 	public string Description { get; set; } = string.Empty;
 	public DateTime OccurredAt { get; set; }
 	public Guid? CreatorId { get; set; }
+	public string? MetadataJson { get; set; }
 }
 
 public class BulkAssignAdmissionInquiriesDto

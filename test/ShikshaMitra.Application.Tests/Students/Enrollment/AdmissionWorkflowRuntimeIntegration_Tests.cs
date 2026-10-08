@@ -609,7 +609,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
-	public async Task Rte_direct_registration_starts_at_form_and_reuses_family_without_inquiry(bool withOptionalOffer)
+	public async Task Legacy_rte_applications_keep_frozen_form_family_and_finalization_after_direct_entry_removal(bool withOptionalOffer)
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -670,7 +670,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				GuardianFirstName = "Ravi", GuardianLastName = "Patel",
 				GuardianMobile = "9876543210", GuardianRelationship = AdmissionGuardianRelationship.Parent
 			};
-			var first = await _applicationAppService.StartDirectRegistrationAsync(input);
+			(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.StartDirectRegistrationAsync(input)))
+				.Code.ShouldBe(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed);
+			var first = await SeedLegacyDirectApplicationAsync(input);
 			first.AssignedCounsellorId.ShouldBe(TestUserId);
 			(await _applicationRepository.GetAsync(first.Id)).InquiryId.ShouldBeNull();
 			var reservedStudentId = (await _applicantRepository.GetAsync(first.ApplicantId)).ReservedStudentId;
@@ -678,7 +680,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var runtime = await _applicationAppService.GetWorkflowAsync(first.Id);
 			runtime.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.Form)
 				.Status.ShouldBe(AdmissionRuntimeStageStatus.Active);
-			(await _applicationAppService.StartDirectRegistrationAsync(input)).Id.ShouldBe(first.Id);
+			(await _applicationAppService.StartAsync(first.ApplicantId, offering.Id)).Id.ShouldBe(first.Id);
 			(await _applicantRepository.GetAsync(first.ApplicantId)).ReservedStudentId.ShouldBe(reservedStudentId);
 			(await Should.ThrowAsync<BusinessException>(() =>
 				_applicationAppService.StartDirectRegistrationAsync(new StartAdmissionDirectRegistrationDto
@@ -688,13 +690,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					ApplicantDateOfBirth = input.ApplicantDateOfBirth, ApplicantGender = input.ApplicantGender,
 					GuardianFirstName = input.GuardianFirstName, GuardianLastName = input.GuardianLastName,
 					GuardianMobile = input.GuardianMobile, GuardianRelationship = input.GuardianRelationship
-				}))).Code.ShouldBe(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict);
+				}))).Code.ShouldBe(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed);
 
-			var matches = await _applicationAppService.FindDirectRegistrationFamiliesAsync(
-				offering.Id, input.GuardianMobile);
+			(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.FindDirectRegistrationFamiliesAsync(
+				offering.Id, input.GuardianMobile))).Code.ShouldBe(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed);
+			var matches = await WithUnitOfWorkAsync(() => GetRequiredService<AdmissionDirectFamilyMatchService>().FindAsync(
+				offering.Id, input.GuardianMobile));
 			matches.Count.ShouldBe(1);
 			matches[0].Applicants.ShouldContain("Asha Patel");
-			var second = await _applicationAppService.StartDirectRegistrationAsync(new StartAdmissionDirectRegistrationDto
+			var second = await SeedLegacyDirectApplicationAsync(new StartAdmissionDirectRegistrationDto
 			{
 				RequestId = Guid.NewGuid(), AdmissionOfferingId = offering.Id,
 				ExistingFamilyId = matches[0].FamilyId,
@@ -921,6 +925,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					new CreateAdmissionOfferingDto
 					{
 						Name = "Duplicate General class",
+						IsActive = false,
 						InquiryIntakeProfileId = duplicateProfiles.InquiryId,
 						CounsellorAssignmentProfileId = duplicateProfiles.AssignmentId,
 						Track = AdmissionTrack.General,
@@ -1225,6 +1230,38 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		return applicant;
 	}
 
+	// Fixture for applications created before direct admission was retired. This
+	// bypasses the removed public command while retaining its frozen runtime data.
+	private Task<AdmissionApplicationDto> SeedLegacyDirectApplicationAsync(StartAdmissionDirectRegistrationDto input) =>
+		WithUnitOfWorkAsync(async () =>
+		{
+			var familyId = input.ExistingFamilyId;
+			if (!familyId.HasValue)
+			{
+				var family = new AdmissionFamily(Guid.NewGuid(), TestTenantId, $"LEGACY-{Guid.NewGuid():N}");
+				var guardian = new AdmissionGuardian(Guid.NewGuid(), TestTenantId, family.Id,
+					input.GuardianFirstName, input.GuardianLastName, input.GuardianMobile,
+					input.GuardianEmail, input.GuardianRelationship, true);
+				family.SetPrimaryGuardian(guardian.Id);
+				await _familyRepository.InsertAsync(family);
+				await _guardianRepository.InsertAsync(guardian);
+				familyId = family.Id;
+			}
+			var applicant = new AdmissionApplicant(input.RequestId, TestTenantId, familyId.Value,
+				input.ApplicantFirstName, null, input.ApplicantLastName, input.ApplicantDateOfBirth,
+				input.ApplicantGender, null, Guid.NewGuid());
+			await _applicantRepository.InsertAsync(applicant, autoSave: true);
+			var application = await GetRequiredService<AdmissionApplicationLifecycleService>().StartForReturnAsync(applicant.Id, input.AdmissionOfferingId);
+			if (input.CounsellorId.HasValue)
+			{
+				var stored = await _applicationRepository.GetAsync(application.Id);
+				stored.AssignCounsellor(input.CounsellorId.Value);
+				await _applicationRepository.UpdateAsync(stored, autoSave: true);
+				application = AdmissionApplicationMapper.ToDto(stored);
+			}
+			return application;
+		});
+
 	private Task EnsureTestIdentityUserAsync(Guid userId, string userName) => WithUnitOfWorkAsync(async () =>
 	{
 		var users = GetRequiredService<IRepository<IdentityUser, Guid>>();
@@ -1237,7 +1274,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		var offering = await _offeringRepository.GetAsync(offeringId);
 		if (offering.EntryMode != AdmissionEntryMode.Inquiry)
-			return await _applicationAppService.StartAsync(applicantId, offeringId);
+			// Historical direct applications are seeded through the internal lifecycle;
+			// the public fresh direct admission command is deliberately unavailable.
+			return await WithUnitOfWorkAsync(() => GetRequiredService<AdmissionApplicationLifecycleService>().StartForReturnAsync(applicantId, offeringId));
 		var applicant = await _applicantRepository.GetAsync(applicantId);
 		var inquiryId = await WithUnitOfWorkAsync(async () =>
 		{

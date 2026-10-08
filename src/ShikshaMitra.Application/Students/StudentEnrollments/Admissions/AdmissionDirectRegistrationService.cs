@@ -26,8 +26,9 @@ public class AdmissionDirectRegistrationService(
 	AdmissionApplicationLifecycleService lifecycleService)
 	: ApplicationService, ITransientDependency
 {
-	public async Task<AdmissionApplicationDto> StartAsync(StartAdmissionDirectRegistrationDto input)
-		=> await StartCoreAsync(input, null);
+	public Task<AdmissionApplicationDto> StartAsync(StartAdmissionDirectRegistrationDto input) =>
+		throw new BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
+			"Direct admission has been removed. Start with an inquiry for this Admission Offering.");
 
 	internal Task<AdmissionApplicationDto> StartForReturnAsync(StartAdmissionDirectRegistrationDto input, Student student)
 		=> StartCoreAsync(input, student);
@@ -107,7 +108,7 @@ public class AdmissionDirectRegistrationService(
 			input.ApplicantDateOfBirth, input.ApplicantGender, existingStudentId: returningStudent?.Id,
 			reservedStudentId: GuidGenerator.Create());
 		await applicantRepository.InsertAsync(applicant, autoSave: true);
-		var application = await lifecycleService.StartAsync(applicant.Id, offering.Id, inquiryId: null);
+		var application = await lifecycleService.StartForReturnAsync(applicant.Id, offering.Id);
 		if (selectedCounsellorId.HasValue)
 		{
 			var created = await applicationRepository.GetAsync(application.Id);

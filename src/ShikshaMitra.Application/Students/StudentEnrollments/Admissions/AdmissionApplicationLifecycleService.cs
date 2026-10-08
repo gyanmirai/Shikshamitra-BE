@@ -34,7 +34,13 @@ public class AdmissionApplicationLifecycleService(
 	AdmissionWorkflowStageHandlerRegistry stageHandlerRegistry)
 	: ApplicationService, ITransientDependency
 {
-	public async Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId)
+	public Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId) =>
+		StartCoreAsync(applicantId, offeringId, inquiryId, allowRecordsReturn: false);
+
+	internal Task<AdmissionApplicationDto> StartForReturnAsync(Guid applicantId, Guid offeringId) =>
+		StartCoreAsync(applicantId, offeringId, null, allowRecordsReturn: true);
+
+	private async Task<AdmissionApplicationDto> StartCoreAsync(Guid applicantId, Guid offeringId, Guid? inquiryId, bool allowRecordsReturn)
 	{
 		var existing = await FindExistingAsync(applicantId, offeringId);
 		if (existing != null)
@@ -49,6 +55,9 @@ public class AdmissionApplicationLifecycleService(
 		var offering = (await offeringRuntimeService.GetAvailableAsync(offeringId)).Offering;
 		inquiryId = await ResolveInquiryAsync(applicantId, offeringId, inquiryId);
 		var inquiry = await EnsureInquiryMatchesAsync(inquiryId, applicantId, offering);
+		if (inquiry == null && !allowRecordsReturn)
+			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
+				"Direct admission has been removed. Start with an inquiry for this Admission Offering.");
 		if (offering.EntryMode == AdmissionEntryMode.Inquiry && inquiry == null)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.LinkedInquiryRequired,
 				"Start with an inquiry for this Admission Offering.");

@@ -31,8 +31,8 @@ public class AdmissionApplicationWorkflowReadService(
 		{
 			WorkflowDefinitionId = application.WorkflowDefinitionId,
 			Status = workflow.Status,
-			StartedAt = workflow.StartedAt,
-			CompletedAt = workflow.CompletedAt,
+			StartedAt = AdmissionOfferUtcTime.Normalize(workflow.StartedAt),
+			CompletedAt = NormalizeUtc(workflow.CompletedAt),
 			CurrentStageInstanceId = application.CurrentStageInstanceId,
 			NextRequiredAction = workflow.Status != AdmissionWorkflowInstanceStatus.Active || current == null
 				? null : AdmissionWorkflowStageTypeRegistry.Find(current.StageType)?.NextRequiredAction,
@@ -69,8 +69,8 @@ public class AdmissionApplicationWorkflowReadService(
 					AdmissionEligibilityAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
 				ReviewEnabled = stage.StageType == AdmissionWorkflowStageType.Review &&
 					AdmissionReviewAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
-				EnteredAt = stage.EnteredAt,
-				CompletedAt = stage.CompletedAt,
+				EnteredAt = NormalizeUtc(stage.EnteredAt),
+				CompletedAt = NormalizeUtc(stage.CompletedAt),
 				CompletedBy = stage.CompletedBy,
 				CompletionReason = stage.CompletionReason
 			}).ToList(),
@@ -97,10 +97,12 @@ public class AdmissionApplicationWorkflowReadService(
 				Action = item.Action,
 				Reason = item.Reason,
 				ConditionEvaluationSnapshotJson = item.ConditionEvaluationSnapshotJson,
-				OccurredAt = item.OccurredAt
+				OccurredAt = AdmissionOfferUtcTime.Normalize(item.OccurredAt)
 			}).ToList()
 		};
 	}
+
+	private static DateTime? NormalizeUtc(DateTime? value) => value.HasValue ? AdmissionOfferUtcTime.Normalize(value.Value) : null;
 
 	public async Task<AdmissionApplicationWorkflowInstance> GetInstanceAsync(Guid applicationId) =>
 		await workflowRepository.FindAsync(instance => instance.ApplicationId == applicationId) ??

@@ -3,17 +3,19 @@ module: finance
 domain: accounts
 content_type: Reference
 status: active
-updated_on: 2026-10-02
+updated_on: 2026-10-06
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Fee refund payout workflow
 
-New fee refund requests use workflow version 1. The stored enum values remain unchanged: Submitted (0) is shown as **Pending**, Approved (2), Processed (7), Rejected (3), and Failed (8). Historical Draft, UnderReview, Processing, Cancelled, and Reversed records keep their original meanings.
+New fee refund requests use workflow version 1. The stored enum values remain unchanged: Submitted (0) is shown as **Pending**, Approved (2), Processed (7), Rejected (3), and Failed (8). Configured administrators with Add and Approve grants create an Approved request directly under the [administrator exception](./admin-request-auto-approval-contract.md). Historical Draft, UnderReview, Processing, Cancelled, and Reversed records keep their original meanings.
 
-1. `POST /api/fee-refunds` calculates receipt-linked eligibility and creates a Pending request with a required `idempotencyKey`. A failed refund can be replaced with `replacesRefundRequestId` after the receipt, student, allocation, and amount are checked again.
-2. A different checker approves or rejects. Approval reserves the full amount. Rejection requires a reason; an Approved request can only be rejected before a payout is recorded.
+Refund policies require a nonempty `allowedPayoutMethods` selection, persisted as part of every immutable policy version. Policy read/write values are `Cash`, `Cheque`, `DemandDraft`, `BankTransfer`, and `Upi`. Eligibility and refund request responses expose `allowedPayoutMethods` using the payment labels `Cash`, `Cheque`, `Demand Draft (DD)`, `Bank Transfer (NEFT/RTGS/IMPS)`, and `UPI`. Request and review responses use the request's pinned policy snapshot; subsequent policy edits do not change its permitted methods. The server rejects disallowed request and payout methods with `FeeRefundErrorCodes.PayoutMethodNotAllowed`. Concession-generated refunds, which have no refund policy snapshot, retain all five supported payout methods. Historical requests without a policy snapshot expose an empty list.
+
+1. `POST /api/fee-refunds` calculates receipt-linked eligibility and creates a Pending request for ordinary staff or an Approved request for an eligible administrator, with a required `idempotencyKey`. A failed refund can be replaced with `replacesRefundRequestId` after the receipt, student, allocation, and amount are checked again.
+2. A different checker approves or rejects an ordinary staff request. Approval reserves the full amount; administrator creation reserves it in the same transaction. Rejection requires a reason; an Approved request can only be rejected before a payout is recorded.
 3. `POST /api/fee-refunds/{id}/payout` records one full payment attempt. Record the method, source school bank account for non-cash methods, reference, date, and evidence. Cash needs only a signed handover evidence reference; if its external reference is omitted, the system generates a unique `CASH-` reference from the refund voucher. The request remains Approved while the result is unknown. A concession-generated request selects its method here.
 4. `POST /api/fee-refunds/{id}/payout/{attemptId}/confirm` confirms payment and updates refunded fee amounts. `.../fail` records evidenced failure and releases the reservation. Non-cash verification requires a user different from the payout recorder. Cash confirmation uses the signed handover reference.
 5. `POST /api/fee-refunds/{id}/payout/return` records an evidenced return of a previously confirmed non-cash payout, reverses refunded fee amounts, and moves the request to Failed. A linked replacement needs a fresh approval.

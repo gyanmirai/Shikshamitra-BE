@@ -242,4 +242,11 @@ public sealed record RefundPolicySnapshot(
 	int? ProcessingTargetDays,
 	int Version,
 	Guid? ExpenseCategoryId = null,
-	Guid? DefaultPayingBankAccountId = null);
+	Guid? DefaultPayingBankAccountId = null)
+{
+	// Display names are captured with the version so later renames and archives do not
+	// change what an auditor sees. Older snapshots deserialize with null names.
+	public IReadOnlyDictionary<Guid, string>? FeeHeadNames { get; init; }
+	public string? ExpenseCategoryName { get; init; }
+	public string? DefaultPayingBankAccountName { get; init; }
+}

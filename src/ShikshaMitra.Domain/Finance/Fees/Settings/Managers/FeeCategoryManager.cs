@@ -13,6 +13,15 @@ public class FeeCategoryManager(
 	IRepository<FeeHead, Guid> feeHeadRepository
 ) : DomainService
 {
+	public async Task EnsureFeeHeadStatusChangeAllowedAsync(Guid feeCategoryId)
+	{
+		var category = await feeCategoryRepository.GetAsync(feeCategoryId);
+		if (!category.IsActive)
+		{
+			throw new BusinessException(FinanceFeeHeadErrorCodes.CategoryArchived);
+		}
+	}
+
 	public async Task EnsureNameIsUniqueAsync(Guid academicYearId, string name, Guid? excludeId = null)
 	{
 		var normalizedName = name.Trim();

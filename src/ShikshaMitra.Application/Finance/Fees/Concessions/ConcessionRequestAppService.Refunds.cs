@@ -12,11 +12,59 @@ using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.Receipts;
 using Volo.Abp;
 using Volo.Abp.Users;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Common;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Domain.Finance.Policies;
+using ShikshaMitra.Finance.Fees.Concessions.Dtos;
+using Volo.Abp.Domain.Entities;
+using Volo.Abp.Data;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.Fees.Concessions;
 
 public partial class ConcessionRequestAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.View)]
+	public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> CreateRefundRequestsAsync(
+		Guid id, CreateConcessionRefundRequestsDto input)
+	{
+		using var uow = unitOfWorkManager.Begin(isTransactional: true);
+		var replayId = await FindCommandReplayAsync("create_refunds", input.IdempotencyKey, input);
+		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+		if (replayId.HasValue)
+		{
+			if (replayId.Value != id) throw new BusinessException(FinanceConcessionErrorCodes.IdempotencyKeyConflict);
+			return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(await MapDetailAsync(request));
+		}
+		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
+		if (request.Status is not (ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed))
+			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition);
+		var version = await financePolicyVersionRepository.GetAsync(request.ConcessionPolicyVersionId);
+		var policy = JsonSerializer.Deserialize<ConcessionPolicySnapshot>(version.SnapshotJson)
+			?? throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+		if (policy.ApplyOn != ConcessionApplyOn.AllFees || policy.ShouldAutoCreateRefund ||
+			request.HaveRefundRequestsBeenCreated() ||
+			(await feeRefundRepository.GetListAsync(x => x.ConcessionRequestId == id)).Count > 0)
+			throw new BusinessException(FinanceConcessionErrorCodes.InvalidTransition);
+		var amounts = request.GetRemainingPaidConcessionAmounts();
+		if (!amounts.Any(x => x.Value > 0m))
+			throw new BusinessException(FinanceConcessionErrorCodes.RefundSourceUnavailable);
+		var dueIds = amounts.Keys.ToList();
+		var dueFees = await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id));
+		var refunds = await CreateConcessionRefundRequestsAsync(request, amounts, dueFees.ToDictionary(x => x.Id));
+		request.MarkRefundRequestsCreated();
+		await concessionRequestRepository.UpdateAsync(request, autoSave: false);
+		await RecordCommandReceiptAsync("create_refunds", input.IdempotencyKey, input, request.Id);
+		await WriteRequestAuditAsync(request, "create_refunds", "Linked concession refunds created manually.", null,
+			new { Amount = amounts.Values.Sum(), RefundRequestIds = refunds.Select(x => x.Id).ToList() });
+		try { await uow.CompleteAsync(); }
+		catch (AbpDbConcurrencyException) { throw new BusinessException(FinanceConcessionErrorCodes.ConcurrencyConflict); }
+		return ApiDataResponseDto<ConcessionRequestDetailDto>.SuccessResult(await MapDetailAsync(request));
+	}
+
 	private async Task<List<FeeRefundRequest>> CreateConcessionRefundRequestsAsync(
 		ConcessionRequest request,
 		IReadOnlyDictionary<Guid, decimal> newOverpaymentByDueId,

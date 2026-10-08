@@ -20,6 +20,8 @@ public class RefundPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public string PolicyType { get; set; } = "refund";
 	public string FeeHeadScope { get; set; } = "AllFeeHeads";
 	public List<Guid> ApplicableFeeHeadIds { get; set; } = [];
+	public Dictionary<Guid, string> FeeHeadNames { get; set; } = [];
+	public Dictionary<Guid, string> FeeHeadStatuses { get; set; } = [];
 	public bool IncludePaidCharges { get; set; }
 	public bool IncludePaidLateFee { get; set; }
 	public bool AllowPartialRefund { get; set; }
@@ -37,6 +39,8 @@ public class RefundPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public int? ProcessingTargetDays { get; set; }
 	public Guid? ExpenseCategoryId { get; set; }
 	public Guid? DefaultPayingBankAccountId { get; set; }
+	public string? ExpenseCategoryName { get; set; }
+	public string? DefaultPayingBankAccountName { get; set; }
 	public int Version { get; set; }
 	public bool IsUsedInDownstream { get; set; }
 	public DateTime CreationTime { get; set; }
@@ -130,6 +134,15 @@ public class RefundPolicyListRequestDto : PagedAndSortedResultRequestDto
 	public Guid AcademicYearId { get; set; }
 	public string? Status { get; set; }
 	public string? Search { get; set; }
+	public string? PolicyNameFilter { get; set; }
+	public string? PolicyNameOperator { get; set; }
+	public string? AmountMode { get; set; }
+	public string? FeeHeadScope { get; set; }
+	public string? AllowedPayoutMethod { get; set; }
+	public bool? AllowPartialRefund { get; set; }
+	public string? UpdatedAtOperator { get; set; }
+	public DateTime? UpdatedAt { get; set; }
+	public DateTime? UpdatedAtEnd { get; set; }
 }
 
 public class RefundPolicyListRequestDtoValidator : AbstractValidator<RefundPolicyListRequestDto>

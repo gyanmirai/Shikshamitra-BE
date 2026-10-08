@@ -2,6 +2,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.Infrastructure.Auth;
+using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
@@ -18,6 +25,41 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 	}
 
 	#region Tier 0 — Critical
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Administrator_creation_returns_approved_charge()
+	{
+		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
+		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: true);
+		var administratorId = Guid.NewGuid();
+		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
+		using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+			.Begin(requiresNew: true, isTransactional: true))
+		{
+			var db = scope.ServiceProvider.GetRequiredService<ShikshaMitraDbContext>();
+			var role = await db.Set<IdentityRole>().FirstOrDefaultAsync(x => x.Name == "admin")
+				?? new IdentityRole(Guid.NewGuid(), "admin", tenantId);
+			if (db.Entry(role).State == EntityState.Detached)
+				db.Set<IdentityRole>().Add(role);
+			var user = new IdentityUser(administratorId, $"charge-admin-{administratorId:N}",
+				$"charge-admin-{administratorId:N}@example.test", tenantId);
+			user.AddRole(role.Id);
+			db.Set<IdentityUser>().Add(user);
+			await uow.CompleteAsync();
+		}
+		using var adminClient = CreateClientAs(administratorId);
+		var response = await adminClient.PostAsJsonAsync(
+			$"{BaseUrl}?academicYearId={ChargeTestHelper.DefaultAcademicYearId}",
+			ChargeTestHelper.BuildCreateDto(studentId, categoryId), JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var body = await response.Content.ReadFromJsonAsync<ChargeResponse>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.Data.Status.ShouldBe(1);
+		body.Data.ResolvedStudentCount.ShouldBe(1);
+	}
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]

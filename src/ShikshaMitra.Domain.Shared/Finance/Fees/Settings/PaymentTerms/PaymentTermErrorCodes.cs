@@ -40,4 +40,6 @@ public static class PaymentTermErrorCodes
 	public const string DefaultTermRequired = $"{Prefix}:000037";
 	public const string DefaultTermMustBeActive = $"{Prefix}:000038";
 	public const string InvalidTemplateConfiguration = $"{Prefix}:000039";
+	public const string DemandDateBeforeCoverageStart = $"{Prefix}:000040";
+	public const string DemandOffsetDaysExceedsMaximum = $"{Prefix}:000041";
 }

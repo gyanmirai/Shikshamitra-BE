@@ -2,6 +2,7 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 public static class ConcessionPolicyErrorCodes
 {
+	public const string RefundRequiresPaidScope = "Finance:ConcessionPolicy:010026";
 	public const string DefaultPolicyCannotBeRemoved = "Finance:ConcessionPolicy:010026";
 	private const string Prefix = "Finance:ConcessionPolicy:";
 

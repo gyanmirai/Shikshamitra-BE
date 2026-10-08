@@ -10,4 +10,5 @@ public static class FinanceFeeHeadErrorCodes
 	public const string NotFound = $"{Prefix}:010004";
 	public const string InvalidIncomeCategory = $"{Prefix}:010005";
 	public const string IncomeCategoryChangeBlocked = $"{Prefix}:010006";
+	public const string CategoryArchived = $"{Prefix}:010007";
 }

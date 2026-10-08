@@ -16,6 +16,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionOfferingConfigurationValidator(
 	IRepository<AdmissionOffering, Guid> offeringRepository,
+	IRepository<AdmissionApplication, Guid> applicationRepository,
 	IRepository<AdmissionCampus, Guid> campusRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
@@ -31,7 +32,8 @@ public class AdmissionOfferingConfigurationValidator(
 	AdmissionEligibilityOfferingValidator eligibilityValidator,
 	AdmissionInquiryOfferingValidator inquiryValidator,
 	AdmissionInquiryPeopleService people,
-	AdmissionReviewOfferingValidator reviewValidator)
+	AdmissionReviewOfferingValidator reviewValidator,
+	AdmissionOfferingWorkflowConfigurationResolver workflowConfiguration)
 	: ApplicationService, ITransientDependency
 {
 	private static readonly HashSet<string> IncompleteConfigurationCodes =
@@ -44,10 +46,19 @@ public class AdmissionOfferingConfigurationValidator(
 		,AdmissionOfferingValidationCodes.CounsellorAssignmentProfileMissing
 	];
 
-	public Task<AdmissionOfferingValidationResult> ValidateAsync(
+	public async Task<AdmissionOfferingValidationResult> ValidateAsync(
 		Guid admissionCycleId,
 		AdmissionOfferingWriteDto input,
-		Guid? excludingOfferingId = null) => ValidateCoreAsync(admissionCycleId, input, excludingOfferingId, enforceUserScope: true);
+		Guid? excludingOfferingId = null)
+	{
+		var existing = excludingOfferingId.HasValue ? await offeringRepository.FindAsync(excludingOfferingId.Value) : null;
+		var preserveRouting = existing != null && await applicationRepository.AnyAsync(application => application.AdmissionOfferingId == existing.Id);
+		await workflowConfiguration.ResolveAsync(input, existing, preserveRouting);
+		return await ValidateCoreAsync(admissionCycleId, input, excludingOfferingId, enforceUserScope: true);
+	}
+
+	internal Task<AdmissionOfferingValidationResult> ValidateResolvedAsync(Guid admissionCycleId, AdmissionOfferingWriteDto input) =>
+		ValidateCoreAsync(admissionCycleId, input, null, enforceUserScope: true);
 
 	private async Task<AdmissionOfferingValidationResult> ValidateCoreAsync(Guid admissionCycleId,
 		AdmissionOfferingWriteDto input, Guid? excludingOfferingId, bool enforceUserScope)
@@ -331,13 +342,14 @@ public class AdmissionOfferingConfigurationValidator(
 		Guid? formId,
 		ICollection<AdmissionOfferingValidationError> errors)
 	{
-		if (!workflowId.HasValue || !formId.HasValue) return;
+		if (!workflowId.HasValue) return;
 		var stages = await workflowStageRepository.GetListAsync(stage =>
 			stage.WorkflowDefinitionId == workflowId.Value && stage.StageType == AdmissionWorkflowStageType.Form);
-		if (stages.Select(stage => AdmissionFormStageAccessService.ReadFormDefinitionId(stage.ConfigurationJson))
-			.Any(configured => configured.HasValue && configured.Value != formId.Value))
+		var configuredForms = stages.Select(stage => AdmissionFormStageAccessService.ReadFormDefinitionId(stage.ConfigurationJson))
+			.Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToArray();
+		if (configuredForms.Length > 1 || formId.HasValue && configuredForms.Any(id => id != formId.Value))
 			errors.Add(Error(AdmissionOfferingValidationCodes.WorkflowFormMismatch,
-				"Every Form stage in the workflow must use the same published Application Form selected for this offering."));
+				"Every Form stage in the workflow must use the same published Registration Form version."));
 	}
 
 	private async Task ValidateFormAsync(
@@ -352,7 +364,9 @@ public class AdmissionOfferingConfigurationValidator(
 	{
 		if (!formId.HasValue)
 		{
-			if (required) errors.Add(Error(missingCode, $"Published {label} is required."));
+			if (required) errors.Add(Error(missingCode, purpose == AdmissionFormPurpose.Registration
+				? "Select a published Registration Form in the workflow's Form stage before activating this offering."
+				: $"Published {label} is required."));
 			return;
 		}
 

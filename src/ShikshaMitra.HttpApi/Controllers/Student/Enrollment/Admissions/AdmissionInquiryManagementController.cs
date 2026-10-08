@@ -24,6 +24,10 @@ public class AdmissionInquiryManagementController(IAdmissionInquiryManagementApp
 	public async Task<Result<AdmissionInquiryManagementDto>> ScheduleFollowUpAsync(Guid inquiryId, ScheduleAdmissionInquiryFollowUpDto input) =>
 		Result.Success(await service.ScheduleFollowUpAsync(inquiryId, input));
 
+	[HttpPost("follow-up-notes"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
+	public async Task<Result<AdmissionInquiryManagementDto>> RecordFollowUpNoteAsync(Guid inquiryId, RecordAdmissionInquiryFollowUpNoteDto input) =>
+		Result.Success(await service.RecordFollowUpNoteAsync(inquiryId, input));
+
 	[HttpPost("follow-ups/{followUpId:guid}/complete"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.Manage)]
 	public async Task<Result<AdmissionInquiryManagementDto>> CompleteFollowUpAsync(Guid inquiryId, Guid followUpId,
 		CompleteAdmissionInquiryFollowUpDto input) => Result.Success(await service.CompleteFollowUpAsync(inquiryId, followUpId, input));

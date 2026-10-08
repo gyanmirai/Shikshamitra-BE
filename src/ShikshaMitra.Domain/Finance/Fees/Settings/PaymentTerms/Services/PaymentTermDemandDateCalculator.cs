@@ -18,7 +18,15 @@ public static class PaymentTermDemandDateCalculator
 		int? offsetDays,
 		DateTime? specificDate)
 	{
-		return rule switch
+		var maxOffsetDays = (dueDate.Date - coverageStartDate.Date).Days;
+		if (rule == DemandGenerationRule.XDaysBeforeDue && offsetDays > maxOffsetDays)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.DemandOffsetDaysExceedsMaximum)
+				.WithData("Maximum", Math.Max(0, maxOffsetDays))
+				.WithData("Actual", offsetDays);
+		}
+
+		var demandDate = rule switch
 		{
 			DemandGenerationRule.OnInstallmentStartDate => coverageStartDate.Date,
 			DemandGenerationRule.XDaysBeforeDue when offsetDays is >= 1 => dueDate.Date.AddDays(-offsetDays.Value),
@@ -30,5 +38,24 @@ public static class PaymentTermDemandDateCalculator
 				PaymentTermErrorCodes.DemandDateRequired),
 			_ => throw new BusinessException(PaymentTermErrorCodes.DemandDateRequired)
 		};
+		ValidateRange(coverageStartDate, dueDate, demandDate);
+		return demandDate;
+	}
+
+	public static void ValidateRange(DateTime coverageStartDate, DateTime dueDate, DateTime demandDate)
+	{
+		if (demandDate.Date < coverageStartDate.Date)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.DemandDateBeforeCoverageStart)
+				.WithData("CoverageStart", coverageStartDate.Date)
+				.WithData("DemandDate", demandDate.Date);
+		}
+
+		if (demandDate.Date > dueDate.Date)
+		{
+			throw new BusinessException(PaymentTermErrorCodes.DemandDateAfterDueDate)
+				.WithData("DemandDate", demandDate.Date)
+				.WithData("DueDate", dueDate.Date);
+		}
 	}
 }

@@ -292,21 +292,23 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Assign_Custom_Optional_Annual_And_OneTime_Amounts()
+	public async Task Should_Reject_Fixed_Fee_Changes_And_Assign_Configured_Amounts()
 	{
 		var (input, heads) = await CreateFixtureAsync(optionalHeads: true);
 		input.SelectedOptionalFeeHeadIds = [heads[1], heads[2]];
-		input.OverrideReason = "Synthetic approved total amount overrides";
 		input.FeeHeadDetails = [new() { FeeHeadId = heads[1], Amount = 1500m }, new() { FeeHeadId = heads[2], Amount = 2500m }];
+		var changed = await Client.PostAsJsonAsync($"{BaseUrl}/preview", input, JsonOptions);
+		changed.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		input.FeeHeadDetails = [new() { FeeHeadId = heads[1], Amount = 6000m }, new() { FeeHeadId = heads[2], Amount = 2000m }];
 		await PreviewAndAssignAsync(input);
 		var result = await GetAndReadAsync<StudentFeeStructureResponseDto>($"{BaseUrl}/student/{input.StudentId}?academicYearId={input.AcademicYearId}");
-		result.FeeHeads.Single(x => x.FeeHeadId == heads[1]).SelectedAmount.ShouldBe(1500m);
-		result.FeeHeads.Single(x => x.FeeHeadId == heads[2]).SelectedAmount.ShouldBe(2500m);
+		result.FeeHeads.Single(x => x.FeeHeadId == heads[1]).SelectedAmount.ShouldBe(6000m);
+		result.FeeHeads.Single(x => x.FeeHeadId == heads[2]).SelectedAmount.ShouldBe(2000m);
 		result.Assignment.ShouldNotBeNull();
-		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[1]).Sum(x => x.ProratedAmount).ShouldBe(1500m);
-		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[2]).Sum(x => x.ProratedAmount).ShouldBe(2500m);
+		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[1]).Sum(x => x.ProratedAmount).ShouldBe(6000m);
+		result.Assignment.Lines.Where(x => x.FeeHeadId == heads[2]).Sum(x => x.ProratedAmount).ShouldBe(2000m);
 		var form = await GetAndReadAsync<FeeCollectFormDto>($"/api/fee-collections/{input.StudentId}/collect-form?academicYearId={input.AcademicYearId}");
-		form.Summary.TotalFee.ShouldBe(16_000d, "Recurring overrides are annual totals, not unapproved per-month replacements.");
+		form.Summary.TotalFee.ShouldBe(20_000d);
 	}
 
 	[Fact]

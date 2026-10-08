@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Finance.ConcessionRequests;
 using ShikshaMitra.Finance.FeeCollectionTests;
 using ShikshaMitra.Finance.FeeRefundTests;
@@ -43,6 +44,65 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
 
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Refund_Request_And_Review_Should_Expose_Only_Policy_Payment_Methods()
+    {
+        var (studentId, dueFeeId) = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(
+            Client, Factory.Services, 1000d, [RefundPayoutMethod.Cash]);
+        var eligibility = await Client.GetFromJsonAsync<RefundEligibilityDto>(
+            $"{BaseUrl}/eligibility?studentId={studentId}&academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}",
+            JsonOptions);
+        eligibility!.AllowedPayoutMethods.ShouldBe(new[] { "Cash" });
+
+        var denied = await Should.ThrowAsync<InvalidOperationException>(() =>
+            FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 100d,
+                "Bank Transfer (NEFT/RTGS/IMPS)"));
+        denied.Message.ShouldContain(FeeRefundErrorCodes.PayoutMethodNotAllowed);
+
+        var request = await FeeRefundTestHelper.CreateRefundRequestAsync(Client, studentId, dueFeeId, 100d);
+        request.AllowedPayoutMethods.ShouldBe(new[] { "Cash" });
+        var policyUrl = $"/api/finance/refund-policies/{request.RefundPolicyId}";
+        var policy = await Client.GetFromJsonAsync<RefundPolicyDto>(policyUrl, JsonOptions);
+        var update = await Client.PutAsJsonAsync(policyUrl, new CreateUpdateRefundPolicyDto
+        {
+            AcademicYearId = policy!.AcademicYearId, PolicyName = policy.PolicyName,
+            PolicyCode = policy.PolicyCode, Status = policy.Status, IsDefault = policy.IsDefault,
+            AllowedPayoutMethods = ["BankTransfer", "Upi"], ProcessingTargetDays = policy.ProcessingTargetDays,
+            ChangeReason = "Future assignments use bank and UPI refunds", ConcurrencyStamp = policy.ConcurrencyStamp
+        }, JsonOptions);
+        update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
+        var savedPolicy = await Client.GetFromJsonAsync<RefundPolicyDto>(policyUrl, JsonOptions);
+        savedPolicy!.AllowedPayoutMethods.ShouldBe(new[] { "BankTransfer", "Upi" });
+
+        var detail = await Client.GetFromJsonAsync<FeeRefundRequestDto>($"{BaseUrl}/{request.Id}", JsonOptions);
+        detail!.AllowedPayoutMethods.ShouldBe(new[] { "Cash" });
+
+        var checkerId = Guid.NewGuid();
+        var expenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services);
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var deniedApproval = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve",
+            new FeeRefundActionDto { ExpenseCategoryId = expenseCategoryId, Notes = "Attempt unsupported method", Method = "UPI" }, JsonOptions);
+        deniedApproval.IsSuccessStatusCode.ShouldBeFalse();
+        (await deniedApproval.Content.ReadAsStringAsync()).ShouldContain(FeeRefundErrorCodes.PayoutMethodNotAllowed);
+        var approval = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve",
+            new FeeRefundActionDto { ExpenseCategoryId = expenseCategoryId, Notes = "Source checked" }, JsonOptions);
+        approval.StatusCode.ShouldBe(HttpStatusCode.OK, await approval.Content.ReadAsStringAsync());
+        var reviewed = await approval.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
+        reviewed!.AllowedPayoutMethods.ShouldBe(new[] { "Cash" });
+
+        var deniedPayout = await Client.PostAsJsonAsync($"{BaseUrl}/{request.Id}/payout",
+            new RecordRefundPayoutDto
+            {
+                IdempotencyKey = Guid.NewGuid().ToString("N"), Method = "UPI", Amount = 100m,
+                PaymentDate = DateTimeOffset.UtcNow, ExternalReference = "UPI-reference",
+                EvidenceReference = "Transfer evidence"
+            }, JsonOptions);
+        deniedPayout.IsSuccessStatusCode.ShouldBeFalse();
+        (await deniedPayout.Content.ReadAsStringAsync()).ShouldContain(FeeRefundErrorCodes.PayoutMethodNotAllowed);
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Get_Eligibility_Returns_Error_When_No_Refund_Policy_Is_Assigned()
     {
         var studentId = await FeeRefundTestHelper.SeedStudentOnlyAsync(Factory.Services);
@@ -68,6 +128,24 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         body.ShouldNotBeNull();
         body.TotalRefundable.ShouldBeGreaterThan(0m);
         body.FeeHeads.ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Should_Get_Zero_Eligibility_For_Student_With_No_Payments()
+    {
+        var studentId = await FeeRefundTestHelper.SeedStudentWithUnpaidDueFeeAsync(Factory.Services);
+
+        var response = await Client.GetAsync(
+            $"{BaseUrl}/eligibility?studentId={studentId}&academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadFromJsonAsync<RefundEligibilityDto>(JsonOptions);
+        body.ShouldNotBeNull();
+        body.TotalPaid.ShouldBe(0m);
+        body.TotalRefundable.ShouldBe(0m);
+        body.FeeHeads.ShouldBeEmpty();
+        body.Receipts.ShouldBeEmpty();
     }
 
     // ── GET /api/fee-refunds ─────────────────────────────────────────────────
@@ -310,6 +388,7 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
         var body = await response.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions);
         body.ShouldNotBeNull();
         body.BoardId.ShouldNotBeNull();
+        body.AllowedPayoutMethods.ShouldBe(new[] { "Cash", "Bank Transfer (NEFT/RTGS/IMPS)" });
         body.BoardId.Value.ShouldNotBe(Guid.Empty);
         body.BoardName.ShouldNotBeNullOrWhiteSpace();
         body.EducationMediumId.ShouldNotBeNull();

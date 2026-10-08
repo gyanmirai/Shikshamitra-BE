@@ -133,10 +133,14 @@ not inherit Offering/Application records, preventing accidental exposure of last
 
 1. The controller authorizes the granular operation.
 2. FluentValidation checks request shape and date presence.
-3. `AdmissionOfferingConfigurationValidator` checks cycle, hierarchy, UserScope, dates, published references, and full Offering-identity uniqueness. The operational code is not used as an identity key. RTE offerings additionally require direct Registration entry and a workflow without Inquiry or Assessment stages; the other tracks retain configurable entry modes.
+3. New offering writes use General/Inquiry routing. The workflow's one distinct configured Form-stage reference supplies the Application form, ignoring a separately supplied Application form ID. Multiple different Form-stage references remain invalid because application runtime freezes one form instance. Inquiry form selection remains independent, with a workflow default as a fallback. `AdmissionOfferingConfigurationValidator` still checks cycle, hierarchy, UserScope, dates, published references, and full Offering-identity uniqueness; an operational code is not an identity key.
 4. Active offerings require complete readiness; inactive offerings may save missing runtime references for later completion.
 5. The command service persists through the aggregate and returns a scoped detail projection.
-6. Update compares the concurrency stamp and locks academic identity after an application exists.
+6. Update compares the concurrency stamp and locks academic identity after an application exists. Routing on an offering already used by applications remains historical. An unused legacy offering can be explicitly saved as General/Inquiry. A stored legacy Application form is retained only when the same workflow has no explicit Form-stage reference; changing workflows resolves the new workflow's form.
+
+Bulk preview and creation resolve each selected Standard's own school level before hierarchy and scope validation, so one medium can include classes from different levels. No shared first-class school-level filter is required.
+
+Fresh public direct-registration and family-match commands are retired, and ordinary application start requires a linked Inquiry. Existing applications and their frozen runtime continue. The internal Student Records return coordinator retains its governed direct path for historical offering configurations; this is not a public bypass.
 
 ## Activate, deactivate, and delete
 
@@ -155,8 +159,8 @@ when every row is valid for the requested inactive or active state.
 ## Configure intake and assignment for new Offerings
 
 1. An Admission Head or administrator creates one reusable Admission Intake Setup. The setup combines allowed inquiry sources, deadlines, and follow-up defaults with Counsellor routing rules; its fallback manager is required. Duplicate handling uses automatic detection with a reason for a separate family, and application start does not require contact or qualification. Source detail, guardian email, and applicant date of birth have no policy-level requirement. Published form validation still applies. Counsellors do not configure these rules and only work the inquiries assigned to them.
-2. Select the setup on a new Inquiry or Both-mode Offering. The system stores both underlying profile references. For Direct Registration, it stores only the setup's assignment-profile reference. New active Offerings require the applicable references. Historical Offerings keep their existing references until an administrator explicitly replaces them.
-3. At inquiry creation, the Offering supplies the policy and assignment pool. Assignment counts open inquiry, application, and onboarding cases, then chooses the least-loaded counsellor below capacity. A database transaction lock serializes assignments for one profile. Direct Registration uses the same assignment when no owner is selected manually; the mandatory fallback receives the case only when every configured counsellor is at capacity.
+2. Select the setup on a new Inquiry Offering. The system stores both underlying profile references, which are required for activation. Historical Offerings retain their stored references and routing once applications exist; editing an unused legacy Offering converts it to the current Inquiry route.
+3. At inquiry creation, the Offering supplies the policy and assignment pool. Assignment counts open inquiry, application, and onboarding cases, then chooses the least-loaded counsellor below capacity. A database transaction lock serializes assignments for one profile. The mandatory fallback receives the case only when every configured counsellor is at capacity. Governed Student Records returns retain their internal assignment route; fresh public Direct Registration is retired.
 4. A staff-captured inquiry with no known Offering is tied to a published cycle and remains unassigned for triage. Staff confirm an open Offering later; its current setup policy and assignment then apply. Linked inquiry and application ownership is kept together when the application owner changes, and scheduled follow-ups move with it. Finalization seeds onboarding ownership from the application.
 5. An administrator may create a revocable public inquiry link for one published cycle and Admission Intake Setup, with a fixed source, optional campaign detail, and optional expiry. The link initially uses the setup's assignment profile; the confirmed Offering supplies its Inquiry policy later. The raw link token is returned only on creation; only its SHA-256 hash is stored. The anonymous basic inquiry form records class interest in source detail and requires contact consent. Repeated phone submissions receive the same acknowledgement without creating another inquiry. Requests are limited per link in the HTTP host. The lead is assigned before the Offering is known, then staff confirm a suitable open Offering.
    Link creation requires an active Offering in the selected cycle with Inquiry or Both entry mode using the selected assignment profile and, when supplied, the selected Inquiry form. At least one active pool counsellor and the managed setup's fallback manager must have academic access to a matching Offering. The authenticated `GET public-inquiry-links/options?admissionCycleId=...` projection requires Admission Offerings View and returns distinct compatible profile/form pairs within the current user's Offering scope, excluding archived setups and unpublished or non-Inquiry forms. Missing Offering, counsellor access, fallback access, and past expiry return distinct `Admissions.PublicInquiry.OfferingRequired`, `CounsellorUnavailable`, `FallbackUnavailable`, and `ExpiryInvalid` errors with corrective guidance. `OfferingRequired` includes `Reason` (`NoActiveInquiryOffering`, `SetupNotLinked`, or `FormNotLinked`) and explicit corrective text. A rejection does not create a link; staff may correct the selection and retry.
@@ -171,9 +175,15 @@ when every row is valid for the requested inactive or active state.
 5. Work from All, My inquiries, Unassigned, a specific counsellor, Overdue, Awaiting first contact, Awaiting qualification, or Open follow-ups. Operational queues are filtered before server paging, URL-backed clients can restore the same view, and each row carries its next-action and SLA summary.
 6. Assign one inquiry or atomically assign up to 100 inquiries. Manual assignment lists only active staff who can access the inquiry's offering and rechecks that scope on save; default and round-robin workflow policies remain available for historical Offerings.
 7. Edit identity, contact, source, source detail, or language before application start. The concurrency stamp rejects stale edits, and the activity timeline preserves the change.
-8. Compose a preferred-language family communication from the Inquiry list or Pipeline. Staff with Communication Add permission can create a draft; staff with Communication Send permission can request immediate delivery. Existing Communication approval, provider, consent, tracking, retry, and usage rules stay authoritative.
+8. Compose a preferred-language family communication from the Inquiry list. Staff with Communication Add permission can create a draft; staff with Communication Send permission can request immediate delivery. Existing Communication approval, provider, consent, tracking, retry, and usage rules stay authoritative.
+
+Pipeline projects active inquiry-linked applications from existing workflow state, current application ownership and retained inquiry follow-ups.
+Explicit inquiry handoff remains idempotent and never resets scheduled reminder dates.
+Post-handoff follow-up commands use the linked active application, existing management policy/owner restrictions and concurrency stamps; they do not unlock inquiry qualification or details.
+Successful admission finalization removes the case from the active projection and retains the existing Onboarding handoff; failed finalization does not remove it.
+Historical direct applications and governed Student Records return admissions remain outside the fresh inquiry Pipeline.
 9. Record structured contact channel, direction, and outcome; schedule, complete, or cancel follow-ups; then record the checklist-backed qualification outcome and standard closure reason where required.
-10. Start an application after the exact linked Inquiry is saved and its open Offering and staff scope are valid. Contact and qualification remain optional CRM actions and do not gate start or historical Inquiry-stage completion.
+10. Start an application only after the exact linked Inquiry is Interested and its open Offering and staff scope are valid. Structured contact and the separate legacy qualification checklist remain optional CRM actions; saving Interested does not perform the explicit handoff.
 11. Read the unified historical timeline after application start; mutable Inquiry details and management close when the inquiry reaches application-started or converted state.
 
 Basic workflows retain the existing inquiry commands and do not create managed records.
@@ -188,6 +198,14 @@ staff must verify or update a changed guardian number through a separate family-
 Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values. Create-time duplicate enforcement stays in the selected admission cycle. The duplicate precheck additionally suggests scoped prior-cycle families with the same guardian mobile for sibling linking; a name/email-only signal does not cross cycles.
 Application start checks the same availability service, validates any linked inquiry, and freezes the offering's published workflow and application form references.
 Later changes to offering defaults affect only future runtime records.
+
+The compact pre-handoff follow-up command records the staff note, Pending/Interested/Not interested status and next reminder atomically.
+Saving Pending or Interested supersedes previous open reminders and creates one replacement; Not interested cancels the remaining open reminders without scheduling another.
+The old tasks and their cancellation reasons remain in history, and separate general scheduling keeps its maximum-open limit.
+First Interested schedules the existing durable qualification-email intent once; it does not move the inquiry to Pipeline.
+Reminder inputs retain an absolute offset-bearing instant, and new scheduled tasks persist through the field-level timezone-aware binding.
+For previously shifted tasks, the current-reminder projection can recover an original offset only through exact task-ID history; existing database rows are not migrated or repaired by this read.
+Once the inquiry is handed off, its details and qualification remain locked and the linked active application owns subsequent follow-up commands.
 
 ## Configure and publish a workflow
 
@@ -331,7 +349,7 @@ Transition rules may use only `payment.status`, `payment.settledAmount`, and `pa
 6. Record acceptance with the required confirmations, or record a decline reason. Expired, declined, and withdrawn offers may be reissued within the configured limit.
 7. Continue only after the server reports an allowed completed outcome and safe route.
 
-The application card shows the current version, type, expiry, conditions, assigned counsellor, blockers, available actions, and permanent event history. Direct Registration may select a counsellor at entry; authorized staff may later reassign an open application with an auditable note. The application queue supports a server-side assigned-counsellor filter. This workflow records staff-mediated responses; communication delivery and applicant self-service are separate integrations.
+The application card shows the current version, type, expiry, conditions, assigned counsellor, blockers, available actions, and permanent event history. Authorized staff may reassign an open application with an auditable note. The application queue supports a server-side assigned-counsellor filter. This workflow records staff-mediated responses; communication delivery and applicant self-service are separate integrations.
 
 ## Run a legacy managed Seat stage
 

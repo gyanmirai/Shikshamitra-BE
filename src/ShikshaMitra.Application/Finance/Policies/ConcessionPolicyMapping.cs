@@ -78,7 +78,7 @@ internal static class ConcessionPolicyMapping
 		ParseRounding(input.RoundingMethod),
 		[],
 		ConcessionFeeHeadScope.EntireFeeStructure,
-		[]);
+		[], input.AutoCreateRefund);
 
 	public static ConcessionPolicyDto ToDto(ConcessionPolicy entity) => new()
 	{
@@ -96,6 +96,7 @@ internal static class ConcessionPolicyMapping
 		MaximumPercentage = entity.MaximumPercentage,
 		MaximumFixedAmount = entity.MaximumFixedAmount,
 		ApplyOn = entity.ApplyOn.ToString(),
+		AutoCreateRefund = entity.AutoCreateRefund,
 		RoundingMethod = entity.RoundingMethod.ToString(),
 		ApplicableConcessionTypeIds = entity.ApplicableConcessionTypeIds.ToList(),
 		FeeHeadScope = entity.FeeHeadScope.ToString(),

@@ -143,6 +143,23 @@ public static class FeeRefundTestHelper
         return id;
     }
 
+    public static async Task<Guid> SeedRefundExpenseCategoryAsync(IServiceProvider services)
+    {
+        var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        using var scope = services.CreateScope();
+        var categories = scope.ServiceProvider.GetRequiredService<IRepository<TransactionCategory, Guid>>();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        using var tenant = currentTenant.Change(tenantId);
+        using var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+        var id = Guid.NewGuid();
+        await categories.InsertAsync(new TransactionCategory(id, tenantId, DefaultAcademicYearId,
+            TransactionType.Expense, TestDataHelper.UniqueName("RefundExpense"), "Refund test expense category"),
+            autoSave: false);
+        await uow.CompleteAsync();
+        return id;
+    }
+
     // ── Composite seed helper ─────────────────────────────────────────────────
 
     /// <summary>
@@ -153,18 +170,28 @@ public static class FeeRefundTestHelper
     public static async Task<(Guid StudentId, Guid DueFeeId)> SeedStudentWithPaidDueFeeAsync(
         HttpClient client,
         IServiceProvider services,
-        double feeAmount = 1000d)
+        double feeAmount = 1000d,
+        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods = null)
     {
         var studentId = await SeedStudentOnlyAsync(services);
         var feeHeadId = await SeedFeeHeadAsync(services);
 
         // Seed DueFee record first
         var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(services, studentId, feeHeadId, feeAmount);
-        await AttachRefundPolicyAsync(services, studentId, dueFeeId);
+        await AttachRefundPolicyAsync(services, studentId, dueFeeId, allowedPayoutMethods);
 
         await SeedSettledCollectionAsync(services, studentId, dueFeeId, feeAmount);
 
         return (studentId, dueFeeId);
+    }
+
+    public static async Task<Guid> SeedStudentWithUnpaidDueFeeAsync(IServiceProvider services)
+    {
+        var studentId = await SeedStudentOnlyAsync(services);
+        var feeHeadId = await SeedFeeHeadAsync(services);
+        var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(services, studentId, feeHeadId, 1000d);
+        await AttachRefundPolicyAsync(services, studentId, dueFeeId, null);
+        return studentId;
     }
 
     private static async Task SeedSettledCollectionAsync(IServiceProvider services, Guid studentId,
@@ -210,7 +237,8 @@ public static class FeeRefundTestHelper
         await uow.CompleteAsync();
     }
 
-    private static async Task AttachRefundPolicyAsync(IServiceProvider services, Guid studentId, Guid dueFeeId)
+    private static async Task AttachRefundPolicyAsync(IServiceProvider services, Guid studentId, Guid dueFeeId,
+        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods)
     {
         var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         using var scope = services.CreateScope();
@@ -233,7 +261,7 @@ public static class FeeRefundTestHelper
                 [], false, false, true,
                 RefundAmountMode.ManualUpToEligible, null, null, null, null,
                 RoundingMethodType.None, RefundDeductionType.None, null, null, null,
-                [RefundPayoutMethod.Cash, RefundPayoutMethod.BankTransfer], 2));
+                allowedPayoutMethods ?? [RefundPayoutMethod.Cash, RefundPayoutMethod.BankTransfer], 2));
         var snapshot = JsonSerializer.Serialize(policy.ToSnapshot());
         var version = new FinancePolicyVersion(versionId, tenantId, "refund", policyId,
             DefaultAcademicYearId, policy.Version, policy.PolicyName, policy.Status.ToString(),

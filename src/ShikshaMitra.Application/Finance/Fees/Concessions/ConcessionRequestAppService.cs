@@ -15,6 +15,7 @@ using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using ShikshaMitra.Finance.Audit;
 using ShikshaMitra.Students;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
@@ -51,6 +52,7 @@ public partial class ConcessionRequestAppService(
 	FinanceScopeAccessService financeScopeAccessService,
 	IFileStorageAppService fileStorageAppService,
 	ICurrentUser currentUser,
+	IUserScopeService userScopeService,
 	IGuidGenerator guidGenerator,
 	FinanceAuditWriter financeAuditWriter,
 	IUnitOfWorkManager unitOfWorkManager,

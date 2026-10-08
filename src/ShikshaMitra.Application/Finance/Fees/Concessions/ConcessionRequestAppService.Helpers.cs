@@ -167,6 +167,14 @@ public partial class ConcessionRequestAppService
 			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ScopeMismatch);
 	}
 
+	private void EnsureIndependentApprover(ConcessionRequest request)
+	{
+		if (!currentUser.Id.HasValue || !request.CreatorId.HasValue ||
+			currentUser.Id == request.CreatorId)
+			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor)
+				.WithData("Message", "A request must be decided by a different user from its creator.");
+	}
+
 	private static void EnsureRequiredDocumentsPresent(ConcessionRequest request)
 	{
 		IReadOnlyList<ConcessionTypeRequirementSnapshot> requirements;
@@ -408,6 +416,11 @@ public partial class ConcessionRequestAppService
             ConcessionPolicyName = policy.PolicyName,
             ConcessionPolicyCode = policy.PolicyCode,
             ConcessionPolicyVersion = policy.Version,
+			AutoCreateRefund = policy.ShouldAutoCreateRefund,
+			PaidConcessionAmount = request.GetRemainingPaidConcessionAmounts().Values.Sum(),
+			CanCreateRefundRequests = !policy.ShouldAutoCreateRefund && !request.HaveRefundRequestsBeenCreated() &&
+				request.Status is ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed &&
+				request.GetRemainingPaidConcessionAmounts().Values.Sum() > 0m,
             StudentName = FormatStudentName(student), ConcessionTypeId = request.ConcessionTypeId,
 			ConcessionTypeName = type.Name, Status = request.Status, StatusName = request.Status.ToString(),
 			ConcurrencyStamp = request.ConcurrencyStamp,
@@ -465,11 +478,13 @@ public partial class ConcessionRequestAppService
 	private List<string> BuildAvailableActions(ConcessionRequest request)
 	{
 		var isOwner = request.CreatorId.HasValue && request.CreatorId == currentUser.Id;
+		var canDecide = request.CreatorId.HasValue && currentUser.Id.HasValue && !isOwner;
 		return request.Status switch
 		{
 			ConcessionRequestStatus.Draft =>
-				["view", "edit", "approve", "reject", "delete", "upload-document"],
-			ConcessionRequestStatus.Pending => ["view", "approve", "reject"],
+				["view", "edit", "delete", "upload-document"],
+			ConcessionRequestStatus.Pending =>
+				canDecide ? ["view", "approve", "reject"] : ["view"],
 			ConcessionRequestStatus.Rejected or ConcessionRequestStatus.Cancelled when isOwner =>
 				["view", "create-replacement"],
 			ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed =>
@@ -680,6 +695,7 @@ public partial class ConcessionRequestAppService
         return new StudentConcessionRequestItemDto
         {
             StudentConcessionTypeRequestId = request.Id, ConcessionTypeId = request.ConcessionTypeId,
+            RequesterId = request.CreatorId,
             ConcessionTypeName = type?.Name ?? string.Empty, Status = request.Status,
             TotalAmount = request.GetTotalRequestedConcession(),
             TotalRequestedAmount = request.GetTotalRequestedConcession(),
@@ -687,6 +703,11 @@ public partial class ConcessionRequestAppService
             TotalReversedAmount = request.GetTotalReversedConcession(),
             NetApprovedAmount = request.GetNetApprovedConcession(),
 			RefundRequests = refundRequests.ToList(),
+			AutoCreateRefund = request.ShouldAutoCreateRefund(),
+			PaidConcessionAmount = request.GetRemainingPaidConcessionAmounts().Values.Sum(),
+			CanCreateRefundRequests = !request.ShouldAutoCreateRefund() && !request.HaveRefundRequestsBeenCreated() &&
+				request.Status is ConcessionRequestStatus.Approved or ConcessionRequestStatus.PartiallyReversed &&
+				request.GetRemainingPaidConcessionAmounts().Values.Sum() > 0m,
             FeeHeads = request.ConcessionFeeHeadMappings.Select(m => new FeeHeadConcessionDetailDto
             {
                 FeeHeadId = m.FeeHeadId, FeeHeadName = feeHeadMap.GetValueOrDefault(m.FeeHeadId, string.Empty),

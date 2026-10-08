@@ -81,10 +81,6 @@ public class FeeHeadDetailDto
 /// <summary>Breakdown of a single additional charge including payment status.</summary>
 public class ChargeDetailDto
 {
-    public Guid? IncomeCategoryId { get; set; }
-    public Guid? ReceivingBankAccountId { get; set; }
-    public string? IncomeCategoryName { get; set; }
-    public string? ReceivingBankLabel { get; set; }
     /// <summary>Included paid allocations awaiting instrument clearance; separate from pending balance.</summary>
     public decimal ReconciliationAmount { get; set; }
     public Guid ChargeId { get; set; }

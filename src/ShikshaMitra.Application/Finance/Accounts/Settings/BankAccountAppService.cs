@@ -23,8 +23,6 @@ public class BankAccountAppService(
 	IRepository<ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundRequest, Guid> refundRequestRepository,
 	IRepository<ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundAccountingEntry, Guid> refundAccountingRepository,
 	IRepository<ShikshaMitra.Finance.Accounts.Posting.PaymentDestinationRule, Guid> destinationRuleRepository,
-	IRepository<ShikshaMitra.Finance.Fees.Charges.ChargeRequest, Guid> chargeRequests,
- ChargeRoutingUsageManager chargeRoutingUsage,
  IRepository<ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion, Guid> policyVersions,
  IRepository<ShikshaMitra.Domain.Finance.Policies.RefundPolicy, Guid> refundPolicies,
  IRepository<ShikshaMitra.Finance.Fees.FeeCollection.PaymentMethodRecord, Guid> payments,
@@ -150,18 +148,14 @@ public class BankAccountAppService(
 	private Task EnsureScopeAsync(Guid academicYearId) =>
 		financeScopeAccessService.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
 
- private async Task<bool> IsConfiguredForFuturePaymentsAsync(Guid id)
- {
-   if (await destinationRuleRepository.AnyAsync(x=>x.BankAccountId == id && x.IsActive) ||
+ private async Task<bool> IsConfiguredForFuturePaymentsAsync(Guid id) =>
+   await destinationRuleRepository.AnyAsync(x=>x.BankAccountId == id && x.IsActive) ||
        await refundPolicies.AnyAsync(x=>x.DefaultPayingBankAccountId == id && x.Status == ShikshaMitra.Domain.Finance.Policies.RefundPolicyStatus.Active) ||
-       await refundRequestRepository.AnyAsync(x=>x.PayingBankAccountId == id && x.Status == ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundStatus.Approved && !x.Settlements.Any())) return true;
-   return await chargeRoutingUsage.HasOpenChargesAsync(bankId: id);
- }
+       await refundRequestRepository.AnyAsync(x=>x.PayingBankAccountId == id && x.Status == ShikshaMitra.Finance.Fees.FeeRefund.FeeRefundStatus.Approved && !x.Settlements.Any());
 	private async Task<bool> IsUsedAsync(Guid id) =>
 		await refundRequestRepository.AnyAsync(x => x.Settlements.Any(s => s.BankAccountId == id)) ||
 		await refundAccountingRepository.AnyAsync(x => x.BankAccountId == id) ||
 		await destinationRuleRepository.AnyAsync(x => x.BankAccountId == id) ||
-        await chargeRequests.AnyAsync(x => x.ReceivingBankAccountId == id) ||
         await refundPolicies.AnyAsync(x => x.DefaultPayingBankAccountId == id) ||
         await refundRequestRepository.AnyAsync(x => x.PayingBankAccountId == id) ||
         await payments.AnyAsync(x => x.BankAccountId == id) ||

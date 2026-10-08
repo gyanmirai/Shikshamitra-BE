@@ -1,5 +1,6 @@
 using Shouldly;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.Settings.ConcessionTypes;
 using Volo.Abp.Domain.Repositories;
@@ -60,6 +61,75 @@ public class ConcessionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		currentPage.Items.ShouldNotContain(x => x.Id == archived.Id);
 		archivedPage.Items.ShouldContain(x => x.Id == archived.Id);
 		archivedPage.Items.ShouldNotContain(x => x.Id == current.Id);
+	}
+
+	[Fact]
+	public async Task List_Should_Filter_And_Sort_Before_Pagination()
+	{
+		var year = _guidGenerator.Create();
+		var alpha = await _concessionPolicies.CreateAsync(BuildInput(year, "Alpha support"));
+		var betaInput = BuildInput(year, "Beta support");
+		betaInput.MaximumPercentage = 40;
+		var beta = await _concessionPolicies.CreateAsync(betaInput);
+		var gammaInput = BuildInput(year, "Gamma support");
+		gammaInput.ValueSource = "PolicyFixed";
+		gammaInput.CalculationMethod = "FixedAmount";
+		gammaInput.MaximumPercentage = null;
+		gammaInput.FixedAmount = 1500;
+		gammaInput.ApplyOn = "FutureInstallments";
+		await _concessionPolicies.CreateAsync(gammaInput);
+
+		var sorted = await _concessionPolicies.GetListAsync(new ConcessionPolicyListRequestDto
+		{
+			AcademicYearId = year,
+			Sorting = "policyName desc",
+			MaxResultCount = 1,
+			SkipCount = 1
+		});
+		sorted.TotalCount.ShouldBe(3);
+		sorted.Items.Single().Id.ShouldBe(beta.Id);
+
+		var filtered = await _concessionPolicies.GetListAsync(new ConcessionPolicyListRequestDto
+		{
+			AcademicYearId = year,
+			CalculationMethod = "Percentage",
+			ValueSource = "RequestEnteredWithinLimits",
+			LimitOperator = "greaterThan",
+			LimitValue = 25,
+			PolicyNameFilter = "Beta",
+			PolicyNameOperator = "startsWith",
+			MaxResultCount = 1
+		});
+		filtered.TotalCount.ShouldBe(1);
+		filtered.Items.Single().Id.ShouldBe(beta.Id);
+		filtered.Items.ShouldNotContain(x => x.Id == alpha.Id);
+
+		var amountFirst = await _concessionPolicies.GetListAsync(new ConcessionPolicyListRequestDto
+		{
+			AcademicYearId = year,
+			Sorting = "policyLimit desc",
+			MaxResultCount = 1
+		});
+		amountFirst.Items.Single().PolicyName.ShouldBe("Gamma support");
+
+		var future = await _concessionPolicies.GetListAsync(new ConcessionPolicyListRequestDto
+		{
+			AcademicYearId = year,
+			ApplyOn = "FutureInstallments",
+			MaxResultCount = 20
+		});
+		future.TotalCount.ShouldBe(1);
+		future.Items.Single().PolicyName.ShouldBe("Gamma support");
+
+		var updatedOnCreationDay = await _concessionPolicies.GetListAsync(new ConcessionPolicyListRequestDto
+		{
+			AcademicYearId = year,
+			UpdatedAtOperator = "equals",
+			UpdatedAt = beta.CreationTime.Date,
+			UpdatedAtEnd = beta.CreationTime.Date.AddDays(1),
+			MaxResultCount = 20
+		});
+		updatedOnCreationDay.Items.ShouldContain(x => x.Id == beta.Id);
 	}
 
 	[Fact]

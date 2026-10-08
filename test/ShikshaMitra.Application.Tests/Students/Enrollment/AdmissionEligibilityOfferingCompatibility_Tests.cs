@@ -14,7 +14,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[Theory]
 	[InlineData("application")]
 	[InlineData("inquiry")]
-	public Task Eligibility_offering_rejects_incompatible_create_update_and_activation(string source) =>
+	public Task Eligibility_offering_uses_workflow_registration_form_and_rejects_inquiry_or_stored_mismatches(string source) =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var fixture = await CreateEligibilityOfferingFixtureAsync(source);
@@ -22,23 +22,31 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var original = await service.GetAsync(fixture.Offering.Id);
 			original.Configuration.IsValid.ShouldBeTrue();
 			(await service.GetAvailabilityAsync(original.Id)).IsAvailable.ShouldBeTrue();
+			await ConfigureOfferingWorkflowFormAsync(fixture.Offering);
 			var cycleId = await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId);
 			var unrelatedForm = await CreateEligibilityAnswerFormAsync(AdmissionFormFieldType.Number,
 				source == "inquiry" ? AdmissionFormPurpose.Inquiry : AdmissionFormPurpose.Registration);
 			var create = await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(original);
 			SelectEligibilityOfferingForm(create, source, unrelatedForm);
-			var createError = await Should.ThrowAsync<BusinessException>(() => service.CreateAsync(cycleId, create));
-			createError.Code.ShouldBe(AdmissionEligibilityErrorCodes.OfferingFormMismatch);
-			(await WithUnitOfWorkAsync(() => _offeringRepository.CountAsync(item => item.AdmissionCycleId == cycleId))).ShouldBe(0);
-
-			SelectEligibilityOfferingForm(create, source, SelectedEligibilityOfferingForm(original, source));
+			if (source == "inquiry")
+			{
+				var createError = await Should.ThrowAsync<BusinessException>(() => service.CreateAsync(cycleId, create));
+				createError.Code.ShouldBe(AdmissionEligibilityErrorCodes.OfferingFormMismatch);
+				(await WithUnitOfWorkAsync(() => _offeringRepository.CountAsync(item => item.AdmissionCycleId == cycleId))).ShouldBe(0);
+				SelectEligibilityOfferingForm(create, source, SelectedEligibilityOfferingForm(original, source));
+			}
 			var created = await service.CreateAsync(cycleId, create);
 			created.Configuration.IsValid.ShouldBeTrue();
+			created.ApplicationFormDefinitionId.ShouldBe(original.ApplicationFormDefinitionId);
 			var update = await EligibilityOfferingInputAsync<UpdateAdmissionOfferingDto>(created);
 			update.ConcurrencyStamp = created.ConcurrencyStamp;
 			SelectEligibilityOfferingForm(update, source, unrelatedForm);
-			var updateError = await Should.ThrowAsync<BusinessException>(() => service.UpdateAsync(created.Id, update));
-			updateError.Code.ShouldBe(AdmissionEligibilityErrorCodes.OfferingFormMismatch);
+			if (source == "inquiry")
+			{
+				var updateError = await Should.ThrowAsync<BusinessException>(() => service.UpdateAsync(created.Id, update));
+				updateError.Code.ShouldBe(AdmissionEligibilityErrorCodes.OfferingFormMismatch);
+			}
+			else await service.UpdateAsync(created.Id, update);
 			SelectedEligibilityOfferingForm(await service.GetAsync(created.Id), source)
 				.ShouldBe(SelectedEligibilityOfferingForm(original, source));
 
@@ -46,7 +54,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await SetStoredEligibilityOfferingFormAsync(inactive.Id, source, unrelatedForm);
 			inactive = await service.GetAsync(inactive.Id);
 			var activationError = await Should.ThrowAsync<BusinessException>(() => service.ActivateAsync(inactive.Id, inactive.ConcurrencyStamp));
-			activationError.Code.ShouldBe(AdmissionEligibilityErrorCodes.OfferingFormMismatch);
+			activationError.Code.ShouldBe(source == "application" ? AdmissionFormStageErrorCodes.OfferingFormMismatch : AdmissionEligibilityErrorCodes.OfferingFormMismatch);
 			(await service.GetAsync(inactive.Id)).IsActive.ShouldBeFalse();
 		});
 
@@ -59,6 +67,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var fixture = await CreateEligibilityOfferingFixtureAsync(source);
 			var service = GetRequiredService<IAdmissionOfferingAppService>();
 			var original = await service.GetAsync(fixture.Offering.Id);
+			if (source == "inquiry") await ConfigureOfferingWorkflowFormAsync(fixture.Offering);
 			var cycleId = await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId);
 			var create = await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(original);
 			SelectEligibilityOfferingForm(create, source, null);
@@ -72,6 +81,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			activationError.Code.ShouldBe(AdmissionErrorCodes.OfferingConfigurationIncomplete);
 
 			var update = await EligibilityOfferingInputAsync<UpdateAdmissionOfferingDto>(await service.GetAsync(draft.Id));
+			if (source == "application") await ConfigureOfferingWorkflowFormAsync(fixture.Offering);
 			update.ConcurrencyStamp = (await service.GetAsync(draft.Id)).ConcurrencyStamp;
 			SelectEligibilityOfferingForm(update, source, SelectedEligibilityOfferingForm(original, source));
 			draft = await service.UpdateAsync(draft.Id, update);
@@ -133,6 +143,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var service = GetRequiredService<IAdmissionOfferingAppService>();
 			var original = await service.GetAsync(fixture.Offering.Id);
 			original.ApplicationFormDefinitionId.ShouldNotBe(referencedForm);
+			await ConfigureOfferingWorkflowFormAsync(fixture.Offering);
 			var cycleId = await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId);
 			var created = await service.CreateAsync(cycleId, await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(original));
 			created.Configuration.IsValid.ShouldBeTrue();

@@ -46,6 +46,8 @@ public class FeeRefundRequestDto
     public string? ExpenseCategoryName { get; set; }
     public string? PayingBankLabel { get; set; }
     public string? RefundMethod { get; set; }
+    /// <summary>Payment method labels allowed by the request's pinned refund policy version.</summary>
+    public List<string> AllowedPayoutMethods { get; set; } = [];
 
     /// <summary>
     /// Method-specific disbursement details returned as a flat key/value map,

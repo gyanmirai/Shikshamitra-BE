@@ -185,6 +185,8 @@ public class FeeHeadAppService(
     {
         var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
+		await feeCategoryManager.EnsureFeeHeadStatusChangeAllowedAsync(feeHead.FeeCategoryId);
+
 		if (input.IsActive)
 		{
 			await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, feeHead.IncomeCategoryId);

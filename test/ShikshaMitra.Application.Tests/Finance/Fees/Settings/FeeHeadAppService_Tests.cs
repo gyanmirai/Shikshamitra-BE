@@ -85,6 +85,32 @@ public class FeeHeadAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMi
 		exception.Code.ShouldBe(FinanceFeeHeadErrorCodes.InvalidIncomeCategory);
 	}
 
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Archived_Category_Rejects_Any_Fee_Head_Status_Change(bool requestedActive)
+	{
+		var academicYearId = Guid.NewGuid();
+		var category = new FeeCategory(Guid.NewGuid(), null, academicYearId, "Archived", null);
+		category.SetStatus(false, "Archived for regression test");
+		await _feeCategoryRepository.InsertAsync(category, autoSave: true);
+		var income = await CreateIncomeCategoryAsync(academicYearId, "Archived head");
+		var head = new FeeHead(Guid.NewGuid(), null, academicYearId, category.Id, "Read only head",
+			null, false, null, income.Id);
+		head.SetActiveStatus(!requestedActive, "Initial state");
+		await _feeHeadRepository.InsertAsync(head, autoSave: true);
+
+		var exception = await Should.ThrowAsync<BusinessException>(() => _feeHeads.UpdateStatusAsync(
+			head.Id, new Dtos.FeeHeadStatusUpdateRequest
+			{
+				IsActive = requestedActive,
+				DeactivationReason = "Attempted change"
+			}));
+
+		exception.Code.ShouldBe(FinanceFeeHeadErrorCodes.CategoryArchived);
+		(await _feeHeadRepository.GetAsync(head.Id)).IsActive.ShouldBe(!requestedActive);
+	}
+
 	private async Task<TransactionCategory> CreateIncomeCategoryAsync(Guid academicYearId, string prefix)
 	{
 		var accountHead = new AccountHead(

@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-07
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -437,3 +437,23 @@ The target must be recalculated and reviewed before locking after settlement.
 Repeated settlement of the same correction in the same month returns its existing outcome; retargeting an applied correction is rejected.
 Signed component differences retain source document, correction and source-period evidence in the calculated target components.
 Payment and document-detail replacement return HR:Payroll:030048 while a correction is pending.
+
+## Staff payroll profile details
+
+`PATCH /api/employees/{employeeId}/payroll/profile-details` accepts the typed `EmployeePayrollProfileDetailsPatch` and returns 204.
+It requires both `HR.Employee.EmployeeList.Edit` and `HR.PayrollManagement.PayrollStructure.Add`, plus employee modify scope within the current tenant.
+The application service repeats the employee-scope check for direct service callers.
+At least one non-null group is required: `bankDetails`, `statutoryIdentifiers`, or `attendanceIntegration`.
+Omitted groups remain unchanged; supplied groups replace their fields after validation in a single unit of work.
+Bank fields use the existing bank validator; identifiers and attendance fields use the dedicated patch validator.
+Null or empty optional identifiers clear those fields, and working hours accept null or a value from 0 through 744.
+Unknown top-level properties are rejected rather than silently ignored.
+This endpoint cannot change compensation revisions, salary components, salary-template metadata, PF calculation rules, or policy assignments.
+Stored temporary components and historical finalized payroll remain unchanged.
+The write refreshes the employee cache and invalidates unlocked payroll reviews using the existing payroll-details behavior.
+Salary and policy changes retain their separate APIs and permission requirements.
+
+Contract and security coverage is in `test/ShikshaMitra.HttpApi.Tests/HR/Employees/EmployeePayrollApi_Tests.cs`, in the ProfileDetailsPatch tests.
+
+Compensation revision reads expose `estimatedStatutoryDeductions` from the saved calculation snapshot for display alongside persisted recurring component lines.
+These PF, professional-tax, and ESI estimates do not include employer contributions and are never copied into manual salary components.

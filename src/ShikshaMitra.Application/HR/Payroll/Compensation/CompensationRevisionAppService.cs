@@ -259,6 +259,7 @@ public class CompensationRevisionAppService(
 			Overrides = overrides,
 			CustomizationReason = revision.CustomizationReason,
 			Warnings = calculation?.Warnings ?? [],
+			EstimatedStatutoryDeductions = calculation?.Deductions.Where(x => x.IsStatutory && !x.Persistable).ToList() ?? [],
 			ActivationReadiness = readiness,
 			CalculationSnapshotJson = includeAudit ? revision.CalculationSnapshotJson : null,
 			CreatorId = includeAudit ? revision.CreatorId : null,

@@ -68,6 +68,8 @@ public class CompensationRevisionDto : EntityDto<Guid>
 	public Guid? SavedByUserId { get; set; }
 	public DateTime? SavedAt { get; set; }
 	public List<CompensationRevisionLineDto> Lines { get; set; } = [];
+	// Saved calculation amounts for display only; never persisted as manual salary components.
+	public List<CalculatedSalaryLineDto> EstimatedStatutoryDeductions { get; set; } = [];
 }
 
 public class CompensationRevisionListDto

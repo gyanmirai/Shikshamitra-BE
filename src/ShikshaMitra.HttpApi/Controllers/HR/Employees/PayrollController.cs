@@ -21,6 +21,17 @@ namespace ShikshaMitra.Controllers.HR.Employees;
 [Authorize]
 public class PayrollController : AbpControllerBase
 {
+	[HttpPatch("{employeeId}/payroll/profile-details")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
+	public virtual async Task<IActionResult> UpdateProfileDetailsAsync(
+		[FromRoute, Required] Guid employeeId,
+		[FromBody, Required] EmployeePayrollProfileDetailsPatch request)
+	{
+		await _payrollAppService.UpdateProfileDetailsAsync(employeeId, request);
+		return NoContent();
+	}
+
 	private readonly IEmployeePayrollAppService _payrollAppService;
 	private readonly IEmployeeAuthorizationService _authorizationService;
 

@@ -27,9 +27,48 @@ public class EmployeePayrollAppService(
 	IEmployeeCacheManager employeeCacheManager,
 	IGuidGenerator guidGenerator,
 	EmployeePayrollContractWorkflow payrollContractWorkflow,
+	IEmployeeAuthorizationService employeeAuthorizationService,
 	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator)
 	: ApplicationService, IEmployeePayrollAppService
 {
+	[UnitOfWork]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_PayrollStructure.Add)]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
+	public async Task UpdateProfileDetailsAsync(Guid employeeId, EmployeePayrollProfileDetailsPatch input)
+	{
+		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
+		var validation = await new EmployeePayrollProfileDetailsPatchValidator().ValidateAsync(input);
+		if (!validation.IsValid)
+			throw new Volo.Abp.Validation.AbpValidationException("Invalid payroll profile details.",
+				validation.Errors.Select(x => new System.ComponentModel.DataAnnotations.ValidationResult(x.ErrorMessage, new[] { x.PropertyName })).ToList());
+
+		var details = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+		var isNew = details == null;
+		details ??= new EmployeePayrollDetails(guidGenerator.Create(), employeeId);
+		if (input.BankDetails is { } bank)
+		{
+			details.BankName = bank.BankName;
+			details.BranchName = bank.BranchName;
+			details.AccountHolderName = bank.AccountHolderName;
+			details.AccountNumber = bank.AccountNumber;
+			details.IfscCode = bank.IfscCode;
+		}
+		if (input.StatutoryIdentifiers is { } statutory)
+		{
+			details.EpfNumber = statutory.EpfNumber;
+			details.UanNumber = statutory.UanNumber;
+		}
+		if (input.AttendanceIntegration is { } attendance)
+		{
+			details.PunchId = attendance.PunchId;
+			details.TotalWorkingHourPerMonth = attendance.TotalWorkingHourPerMonth;
+		}
+		if (isNew) await payrollDetailsRepository.InsertAsync(details);
+		else await payrollDetailsRepository.UpdateAsync(details);
+		await employeeCacheManager.InvalidateEmployeeAsync(employeeId);
+		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync(new[] { employeeId });
+	}
+
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<EmployeePayrollDetailsDto> GetPayrollDetailsAsync(Guid employeeId)
 	{

@@ -44,6 +44,8 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 		first.ShouldNotBeNull();
 		first.Status.ShouldBe("EFFECTIVE");
 		first.RevisionNumber.ShouldBe(1);
+		first.EstimatedStatutoryDeductions.ShouldNotBeEmpty();
+		(first.Lines.Where(x => x.IsEarning).Sum(x => x.Amount) - first.Lines.Where(x => !x.IsEarning).Sum(x => x.Amount) - first.EstimatedStatutoryDeductions.Sum(x => x.Amount)).ShouldBe(first.NetSalary);
 		first.IsCurrent.ShouldBeTrue();
 		first.ActivationReadiness.CanActivate.ShouldBeTrue();
 

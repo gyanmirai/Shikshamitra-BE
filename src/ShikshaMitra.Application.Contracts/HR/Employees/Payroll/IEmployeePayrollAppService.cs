@@ -9,6 +9,7 @@ namespace ShikshaMitra.HR.Employees.Payroll;
 /// </summary>
 public interface IEmployeePayrollAppService : IApplicationService
 {
+	Task UpdateProfileDetailsAsync(Guid employeeId, EmployeePayrollProfileDetailsPatch input);
 	Task<EmployeePayrollDetailsDto> GetPayrollDetailsAsync(Guid employeeId);
 	Task UpdatePayrollDetailsAsync(Guid employeeId, UpdateEmployeePayrollDetailsDto input);
 	Task<EmployeePayrollResponse> GetPayrollContractAsync(Guid employeeId);

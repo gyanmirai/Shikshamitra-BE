@@ -1,6 +1,11 @@
 {
     "Culture": "en",
     "Texts": {
+        "Permission:Tenants.ManageStatus": "Manage tenant status",
+        "HostTenants:StatusReadOnly": "Use the host tenant status action to change school access.",
+        "HostTenants:CodeReadOnly": "The school code cannot be changed after creation.",
+        "HostTenants:ReasonRequired": "Enter a reason to deactivate the tenant.",
+        "HostTenants:InvalidSorting": "Choose a supported tenant sort column.",
         "HR:Payroll:030044": "The issued payslip document is invalid. Contact payroll support.",
         "HR:Payroll:030045": "No issued document is available. Complete payslip issuance before downloading.",
         "HR:Payroll:030046": "Configure the school name and address in Payslip settings before finalizing payroll.",

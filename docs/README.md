@@ -28,6 +28,7 @@ This documentation is backend-first, module-first, and agent-friendly.
 - [HR Module](./modules/hr/README.md)
 - [Examination Module](./modules/examination/README.md)
 - [Institute Setup Module](./modules/institute-setup/README.md)
+- [Host Tenant Management](./modules/host-tenants/README.md)
 - [Module Docs Standard](./common/standards/module-docs-standard.md)
 - [HR product](./modules/hr/product.md)
 - [HR API](./modules/hr/api.md)

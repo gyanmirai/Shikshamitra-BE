@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-08
+updated_on: 2026-10-09
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -16,7 +16,10 @@ TL;DR: Admissions remains inside the Student modular-monolith boundary and separ
 
 | Concern | Source |
 |---|---|
-| Persisted policy and document overrides | `Domain/Students/StudentEnrollments/Onboarding/OnboardingRuleConfiguration.cs`, `StudentOnboardingCase.Documents.cs`; audited existing case extra properties store exact override evidence. |
+| Frozen Offering requirements | `Application/Students/StudentEnrollments/Onboarding/OnboardingRequirementSnapshotService.cs`, `Domain/Students/StudentEnrollments/Onboarding/OnboardingRuleConfiguration.cs`; case extra properties preserve readiness and published workflow document policy. Missing snapshots require explicit adoption review. Required document overrides are rejected. |
+| Canonical documents | `Application/Students/StudentEnrollments/Onboarding/OnboardingWorkflowDocumentsAppService.cs` delegates finalized-application upload/original/review to existing Admissions owners and permissions. |
+| Fee intent | `StudentOnboardingAppService.Fees.cs` reads existing matching published Finance structures and saves admission selection/confirmation only; no Finance writes or payment gates. |
+| Identifier group policy | `StudentOnboardingAppService.IdentifierLocks.cs`, `StudentOnboardingAppService.LockedGroupAssignments.cs`; Division extra properties persist independent year-specific GR/Roll policies, including empty groups. Student/domain and Records correction paths enforce locks. |
 | Readiness and automatic orchestration | `Application/Students/StudentEnrollments/Onboarding/StudentOnboardingCredentialEligibilityResolver.cs`, `StudentOnboardingAppService.CredentialEmails.cs`; uses current Enrollment, Student, Admissions document evidence and existing completion truth. |
 | Durable email | `Domain/Students/Portal/Entities/StudentCredentialEmailRequest.cs`, `Application/Students/StudentEnrollments/Onboarding/StudentCredentialEmailAppService.cs` and `StudentCredentialEmailDispatcher.cs`; durable preparation commits before SMTP, frozen link/mailbox and optimistic claim prevent duplicate intent. |
 | Persistence/worker | `EntityFrameworkCore/Students/Portal/StudentCredentialEmailRequestConfiguration.cs`, `HttpApi.Host/BackgroundWorkers/StudentCredentialEmailWorker.cs`; worker changes to each intent's tenant and delegates checks. |
@@ -24,6 +27,8 @@ TL;DR: Admissions remains inside the Student modular-monolith boundary and separ
 
 The source paths above use the corresponding backend layer's source folder.
 HR employee email and the queue-only generic communications gateway are unchanged.
+
+Offering activation commits the enrollment in a serializable transaction before account preparation. A separate preparation transaction may fail without rolling back enrollment; a fresh repair transaction records access pending for retry. Student Directory, Records access and dashboard eligibility recognize the persisted activated enrollment. Historical renewal Finance rules are separate.
 
 ## Student Attendance ownership
 

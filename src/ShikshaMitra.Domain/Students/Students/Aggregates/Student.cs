@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using ShikshaMitra.Common;
@@ -594,6 +594,8 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 
 	public void AssignRollNo(int? rollNo)
 	{
+		if (RollNo.HasValue && RollNo != rollNo && IsIdentifierLocked("roll"))
+			throw new BusinessException("Students:Onboarding:IdentifierLocked");
 		RollNo = rollNo;
 	}
 
@@ -606,16 +608,30 @@ public class Student : FullAuditedAggregateRoot<Guid>, IMultiTenant, IUserScoped
 		UserId = userId;
 	}
 
-	public void AssignGrNo(int? grNo)
+	public void AssignGrNo(int? grNo, string? reason = null)
 	{
+		if ((GrNo.HasValue || !string.IsNullOrWhiteSpace(GrNumber)) && GrNo != grNo && IsIdentifierLocked("gr"))
+			throw new BusinessException("Students:Onboarding:IdentifierLocked");
+		if ((GrNo.HasValue || !string.IsNullOrWhiteSpace(GrNumber)) && GrNo != grNo && string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingErrorCodes.WaiverReasonRequired);
+		if (GrNo != grNo && !string.IsNullOrWhiteSpace(GrNumber)) GrNumber = grNo?.ToString();
 		GrNo = grNo;
 	}
 
-	public void AssignGrNumber(string grNumber, int? legacyGrNo = null)
+	public void AssignGrNumber(string grNumber, int? legacyGrNo = null, string? reason = null)
 	{
+		if ((!string.IsNullOrWhiteSpace(GrNumber) || GrNo.HasValue) &&
+			(GrNumber != grNumber.Trim() || GrNo != legacyGrNo) && IsIdentifierLocked("gr"))
+			throw new BusinessException("Students:Onboarding:IdentifierLocked");
+		if ((!string.IsNullOrWhiteSpace(GrNumber) || GrNo.HasValue) &&
+			(GrNumber != grNumber.Trim() || GrNo != legacyGrNo) && string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingErrorCodes.WaiverReasonRequired);
 		GrNumber = Check.NotNullOrWhiteSpace(grNumber, nameof(grNumber), 100).Trim();
 		GrNo = legacyGrNo;
 	}
+
+	public bool IsIdentifierLocked(string type) => ExtraProperties.TryGetValue($"IdentifierLocked:{type}", out var value) && bool.TryParse(value?.ToString(), out var locked) && locked;
+	public void SetIdentifierLocked(string type, bool locked) => ExtraProperties[$"IdentifierLocked:{type}"] = locked;
 
 	public void UpdateFamilyInfo(
 		ParentGuardianDetails? fatherDetails,

@@ -15,6 +15,35 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 [Route("api/student/onboarding")]
 public class StudentOnboardingController(IStudentOnboardingAppService service) : AbpController
 {
+	[HttpPost("{id:guid}/requirements/review")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	public async Task<Result<StudentOnboardingCaseDto>> ReviewRequirementsAsync(Guid id, [FromQuery] string? concurrencyStamp) => Result.Success(await service.ReviewRequirementsAsync(id, concurrencyStamp));
+	[HttpPost("{id:guid}/gr-number")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
+	public async Task<Result<StudentOnboardingCaseDto>> AssignGrNumberAsync(Guid id, AssignStudentOnboardingGrNumberDto input) => Result.Success(await service.AssignGrNumberAsync(id, input));
+
+	[HttpPost("{id:guid}/roll-number")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
+	public async Task<Result<StudentOnboardingCaseDto>> AssignRollNumberAsync(Guid id, AssignStudentOnboardingRollNumberDto input) => Result.Success(await service.AssignRollNumberAsync(id, input));
+
+	[HttpPost("identifier-locks")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
+	public async Task<Result> SetIdentifierLockAsync(SetStudentIdentifierLockDto input)
+	{
+		await service.SetIdentifierLockAsync(input); return Result.Success();
+	}
+
+	[HttpGet("{id:guid}/fee-structure")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task<Result<Admissions.AdmissionFeeSelectionDto>> GetFeeStructureAsync(Guid id) => Result.Success(await service.GetFeeStructureAsync(id));
+
+	[HttpGet("{id:guid}/fee-structure/candidates")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task<Result<List<Admissions.AdmissionFeeStructureCandidateDto>>> GetFeeStructureCandidatesAsync(Guid id) => Result.Success(await service.GetFeeStructureCandidatesAsync(id));
+
+	[HttpPut("{id:guid}/fee-structure")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	public async Task<Result<Admissions.AdmissionFeeSelectionDto>> SaveFeeStructureAsync(Guid id, SaveStudentOnboardingFeeStructureDto input) => Result.Success(await service.SaveFeeStructureAsync(id, input));
 	[HttpGet("{id:guid}/portal-accounts")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<IReadOnlyList<StudentPortalAccountDto>>> GetPortalAccountsAsync(Guid id) =>
@@ -39,6 +68,10 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<StudentOnboardingFilterOptionsDto>> GetFilterOptionsAsync([FromQuery] Guid? academicYearId = null) =>
 		Result.Success(await service.GetFilterOptionsAsync(academicYearId));
+
+	[HttpGet("settings/offerings")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	public async Task<Result<IReadOnlyList<OnboardingAvailableOfferingDto>>> GetAvailableOfferingsAsync([FromQuery] Guid? academicYearId = null) => Result.Success(await service.GetAvailableOfferingsAsync(academicYearId));
 
 	[HttpGet("settings/campuses")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]

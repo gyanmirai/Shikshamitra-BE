@@ -3,12 +3,36 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-08
+updated_on: 2026-10-09
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Five-stage admission acceptance (2026-10-08)
+
+New application workflows permit Form (1), Assessment (2), Payment (4), Document verification (5), and Admission Decision (7), retaining numeric persistence. Eligibility, Review, and Offer configuration/direct operations are retired. Ordinary managed-stage skip cannot bypass required evidence; separately authorized route override and unrelated historical stage behavior remain governed by existing contracts. Approved completed applications finalize without Offer while retaining identity, guardian, duplicate, scope, concurrency and idempotency checks.
+
+Focused Application runtime/finalization verification passed 17 tests, and the initial Domain proof passed 25 tests. The later affected Domain run passed 66 tests. The final fee-reader/Onboarding-reader/no-Offer finalization run passed 14 tests, including snapshot timestamps from UTC, Local and Unspecified clocks. Counts overlap between reruns and must not be summed. The final Host artifact build passed with zero warnings/errors and was copied into the separate local QA runtime before acceptance. Focused tests do not imply the complete backend suite or production deployment passed.
+
+Persisted local DDVS application `APP-2026-000001` (**QA FiveStage Journey**) completed all five stages through authenticated UI actions: draft/submit/required Form verification, attendance and scored Assessment, published Finance fee confirmation, rejected document replacement and acceptance, Waitlist followed by Approval, and workflow completion. API probes confirmed incomplete Assessment, absent fee selection, missing/rejected documents, pending Waitlist, and premature decision actions fail. Payment summary retained zero transactions and no settled amount. UI finalization created Student `3a242eb1-43e9-34f6-8b9e-ac328c6a9c19` and case `3a242ecd-7c87-f241-29a4-e0bfedee099f`; two repeated requests returned those same identities.
+
+Normal Onboarding readiness/placement/identifiers/activation created enrollment `3a242ed1-a50a-4d98-e012-3c34d14ae88a`, Class1/A, GR `QA5-000001`, roll4. Activated profile was readable under the existing Provisioning policy, while Directory correctly excluded the student before completion. Normal Finance signed-preview/assignment APIs assigned the exact selected structure, then the Cash collection API recorded the synthetic local QA first installment ₹291 (₹83 + ₹208), receipt `FIN-2026-000001`. Exact idempotent replay returned the same receipt; both first-installment ledger dues became zero. Existing Finance service-handoff retry completed Onboarding (status4), and Directory returned one `CompletedOnboarding` student with full profile access. This was persisted synthetic ledger data, with no real money or external transaction. No fake Paid flag, account provisioning, waiver or override was used. Student Records profile correctly rejected access before activation. Frontend layout and exact browser checks are recorded in [Student testing](../../../../Shikshamitra-FE/docs/student/testing.md).
+
+QA references were created through normal APIs: a separate published structure using existing fee heads/terms, a QA collection policy and a class/year-scoped GR series. With no prior active collection policy, ordinary Finance behavior made the first QA active policy the year's default; existing configuration was not overwritten. Custom document codes were generated on workflow save; the local Student document category catalog was empty, so the uploaded synthetic PNG was uncategorized. Future fee snapshot and Onboarding confirmation timestamps now convert the clock to UTC; existing saved QA timestamps were preserved, and a live Onboarding confirmation after the fix persisted correct UTC. No school data reset, migration, production deployment or full-suite claim was made.
+
+## Synthetic Student records
+
+`StudentRecordsDemoRepairSeederContributor` runs immediately after `StudentSeeder` in FullDemo and FastDemo with its own `StudentRecordsDemoRepairSeeder:v1` completion marker. It adds an active academic-year enrollment and an explicitly synthetic historical-record approval for the existing StudentSeeder accounts. Minimal does not run it. Normal seeding reaches this new step even when `StudentSeeder:v1` was already completed.
+
+The repair requires the seed-generated student/account ID link, `student-*` username, matching `@example.invalid` email, seeded GR/roll values, and valid tenant-owned year/class/division placement. It uses the existing synthetic `admin-ddvs` account as the distinct decision actor. It does not assert completed Admissions, onboarding checklist, or Finance evidence. Existing enrollment, onboarding, or historical-approval records (including deleted and rejected records) block repair, preserving operator decisions. Occupied active roll numbers also block insertion.
+
+Run the `Demo_record_repair_` application scenarios and the Directory/dashboard regressions. Verify repeatability, year filtering, real-account exclusion, profile/tenant boundaries, existing onboarding, and deleted/rejected approval preservation. Separately reload the authenticated local Directory and dashboard for the selected academic year; automated fixtures alone do not prove a deployed seed run.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Demo_record_repair|FullyQualifiedName~Directory_|FullyQualifiedName~StudentModuleDashboard"
+```
 
 ## Offering simplification regressions
 
@@ -200,7 +224,7 @@ Before production release, verify the new Admissions return entry/enrollment reu
 
 TL;DR: run domain, application contract, EF mapping, and HTTP contract tests for Admission Offering changes, then validate module docs and migration safety.
 
-For onboarding service consent, run `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter FullyQualifiedName~Onboarding_service_consent_requires_an_audited_confirmation_without_bypassing_first_payment` and `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter FullyQualifiedName~StudentOnboardingApiContract_Tests`. The application scenario covers invalid and stale confirmation, an audited consent handoff, the still-required confirmed first payment, idempotent retry, and one enrollment; the HTTP contract checks route and permission. These do not replace live signed-record review or an authorized school-data walkthrough.
+For retained historical route-based onboarding service consent, run `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter FullyQualifiedName~Onboarding_service_consent_requires_an_audited_confirmation_without_bypassing_first_payment` and `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter FullyQualifiedName~StudentOnboardingApiContract_Tests`. This legacy scenario covers invalid and stale confirmation, an audited consent handoff, historical first-payment requirements, idempotent retry, and one enrollment. It does not define the current Offering-linked flow: that flow confirms a fee structure only, has no first-payment or service-consent gate, and preserves active enrollment when app access fails. These tests do not replace a deployed school-data walkthrough.
 
 The room-derived class-capacity integration scenario allocates a persisted room, finalizes a direct RTE application, verifies the same occupied and remaining seats from a parallel General offering, and confirms that a full class still allows a new registration. Run `AdmissionWorkflowRuntimeIntegration_Tests` after changing routing or capacity; a calculator-only test does not cover the shared query. Applying the new migrations to a disposable PostgreSQL database and checking the live API remain release gates.
 
@@ -542,3 +566,26 @@ git diff --check
 Tests use real application services, scope resolution, active database identities and SQLite persistence; the permission test header only controls exact grants. Coverage includes anonymous/denied callers, action-without-visibility, unknown identity/tenant/year/section, translated aggregates, direct service authorization, forged administrator claims, no academic scope, sibling-division exclusion and verified Parent-only associations despite staff grants. The workload scenario grows owned inquiries from 10 to 510, retains 10 other-owner inquiries and one owned/one other-owner setup case, checks constant query count and payload under 16 KiB, and records cold latency plus 20 samples after three warmups. Fixture latency is local SQLite API evidence, not a production PostgreSQL SLA or query-plan benchmark.
 
 For release, verify selected-year and scoped counts against the owning worklists using a signed-in school environment and measure PostgreSQL execution plans/p95 with representative tenant sizes. Local browser sample-response evidence remains owned by [frontend tests](../../../../Shikshamitra-FE/docs/student/testing.md#student-dashboard-validation).
+
+## Offering-linked Onboarding verification (2026-10-09)
+
+Current-source focused Domain tests passed **37/37**, zero failures or skips, in 71 ms. Current-source focused Application tests passed **8/8**, zero failures or skips, in 3 minutes 14 seconds. The final runs retained repository `Nullable=enable` and normal analyzers. The running compiler's generated response file was inspected to confirm nullable analysis, analyzer arguments and the serial compiler response file.
+
+The Domain filter is `FullyQualifiedName~StudentOnboardingIdentifierRules_Tests|FullyQualifiedName~StudentOnboardingLegacyVersion_Tests`. Coverage includes independent identifier locks, legacy/canonical GR protection, correction reasons, duplicate Offering rules, saved Draft before Publish, immutable published/superseded history, stale sibling publication, history-removal/status-demotion rejection, and authoritative school-history inheritance when first creating a year override.
+
+The Application filter is `FullyQualifiedName~Offering_fee_reference_confirmation_should_gate_activation_without_finance_payment_or_assignment|FullyQualifiedName~Document_handoff_accepted_workflow_evidence_satisfies_frozen_onboarding_requirements_without_waivers`, in the partial `AdmissionWorkflowRuntimeIntegration_Tests` fixture. The selected cases are:
+
+- Offering fee reference: `(prepareAccess:false, failAutomaticAccounts:false)`, `(true,false)` and `(true,true)`.
+- Frozen document evidence: Upload, Both, Original and Custom accepted cases, plus a Waiver case whose readiness must remain false.
+
+The Offering cases exercise actual finalization, frozen initial checklist truth, independent GR/Roll assignment, fee-structure confirmation without Finance assignment/dues/payment, activated Records visibility after fresh reads, and an aborted automatic-account database transaction that preserves enrollment and records access pending. They also test persisted policies for an initially empty locked division, automatic next GR/Roll despite manual configuration, Roll 1 in separate divisions, editable placement with locked Roll collision rejection, canonical-only GR preservation, and CBSE numeric projection beyond a canonical-only GR held by another board. The numeric Records API's first assignment is verified through persisted `GrNo`; it does not introduce a new formatted-GR editor contract.
+
+Final TRX artifacts are `.artifacts/onboarding-standard-results/onboarding-domain-standard.trx` and `.artifacts/onboarding-standard-results/onboarding-application-standard.trx`. Logs are `.artifacts/onboarding-standard-domain-tests.log` and `.artifacts/onboarding-standard-application-tests.log`.
+
+Builds used `--no-restore --artifacts-path .artifacts/onboarding-build -p:BuildProjectReferences=false -p:BuildInParallel=false -p:UseSharedCompilation=false -m:1`, with `-p:CompilerResponseFile=C:\Repo\2026\Shikshamitra-BE\.artifacts\onboarding-compiler-serial.rsp`; that response file contains `/parallel-`. Process-only `DOTNET_GCHeapHardLimit=0xC0000000` and `DOTNET_GCConserveMemory=7` bounded the verification process. No nullable or analyzer override was used in these final checks.
+
+Current Domain.Shared, Domain, Application.Contracts, Application, Domain.Tests, Application.Tests, HttpApi and Host compiled with normal repository options. Production module results were respectively 7, 269, 314, 141, 3 and 1 warnings, all with zero errors. The final HttpApi and Host builds took 11.48 and 8.71 seconds. The existing EF artifact was deliberately reused after confirming its source was unchanged and its successful binary postdated that source; dependencies were built in order and rechecked against fresh shared output. This is current changed-module compilation and focused test evidence, not a claim that every repository project was rebuilt or every legacy test ran. Earlier full-reference attempts exhausted local memory in unchanged EF compilation; diagnostic builds with reduced compiler checks are superseded by the normal changed-module checks above.
+
+The latest task-owned API at `http://localhost:5001` started from staged current normal-compiled modules while preserving the verified unchanged EF binary. Health returned 200; CORS preflight returned 204 for `http://localhost:3001`. Background jobs, background workers, startup migrations and test-login seeding were disabled only for that process. The existing port 5000 host was untouched. Actual synthetic Admissions-to-Onboarding-to-Records browser evidence is recorded in [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md).
+
+No Finance source/API or EF schema change is required. GSEB school-level uniqueness and promotion decisions remain backlog. QA credential emails were disabled; SMTP acceptance, inbox arrival, staging and production deployment are not certified by these local checks.

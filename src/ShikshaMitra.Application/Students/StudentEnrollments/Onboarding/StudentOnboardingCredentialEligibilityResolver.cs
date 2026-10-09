@@ -19,6 +19,8 @@ public class StudentOnboardingCredentialEligibilityResolver(
 	IRepository<StudentEnrollment, Guid> enrollments,
 	IRepository<StudentPortalAccountLink, Guid> links,
 	IRepository<AdmissionOffering, Guid> offerings,
+	IRepository<AdmissionApplication, Guid> applications,
+	OnboardingRequirementSnapshotService snapshots,
 	IStudentRepository students,
 	IStudentOnboardingAppService onboarding,
 	OnboardingConfigurationManager configuration,
@@ -40,6 +42,10 @@ public class StudentOnboardingCredentialEligibilityResolver(
 		var student = await students.GetWithDetailsAsync(item.StudentId);
 		var settings = await configuration.GetAsync(item.AcademicYearId);
 		var rules = settings?.Readiness(item);
+        if (item.ExtraProperties.TryGetValue("ReadinessRulesSnapshot", out var snapshot) && snapshot is string text)
+        {
+            using var saved = System.Text.Json.JsonDocument.Parse(text); rules = saved.RootElement.Clone();
+        }
 		var enabled = rules.HasValue && OnboardingRuleConfiguration.Boolean(rules.Value,
 			accountType == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail");
 		var link = await links.FindAsync(x => x.StudentId == item.StudentId && x.AccountType == accountType);
@@ -59,12 +65,18 @@ public class StudentOnboardingCredentialEligibilityResolver(
 			enrollment.DivisionId != student.DivisionId || enrollment.RollNumber != student.RollNo ||
 			item.Status != StudentOnboardingStatus.Completed && enrollment.DivisionId != item.DivisionId)
 			return Result("Complete and commit the GR number, roll number and division before sending credentials.");
-		var required = await documents.GetRequiredDocumentsStatusAsync(student.Id);
-		var accepted = await evidence.GetAcceptedUploadDocumentTypeIdsAsync(student.Id);
-		var overridden = item.GetDocumentOverrides().Select(value => value.DocumentTypeId).ToHashSet();
-		if (required.Where(value => value.documentType.IsRequired).Any(value => value.uploadedDocument?.ValidatedAt.HasValue != true &&
-			!accepted.Contains(value.documentType.Id) && !overridden.Contains(value.documentType.Id)))
-			return Result("Validate or explicitly override every required document before sending credentials.");
+		if (item.ExtraProperties.ContainsKey("DocumentPoliciesSnapshot"))
+		{
+			if (!await snapshots.DocumentsReadyAsync(item, await applications.GetAsync(item.ApplicationId)))
+				return Result("Verify every applicable Offering document before sending credentials.");
+		}
+		else
+		{
+			var required = await documents.GetRequiredDocumentsStatusAsync(student.Id);
+			var accepted = await evidence.GetAcceptedUploadDocumentTypeIdsAsync(student.Id);
+			if (required.Where(value => value.documentType.IsRequired).Any(value => value.uploadedDocument?.ValidatedAt.HasValue != true && !accepted.Contains(value.documentType.Id)))
+				return Result("Validate every required document before sending credentials.");
+		}
 		if (link == null || user == null || user.TenantId != tenant.Id || !user.IsActive || link.VerifiedByUserId == Guid.Empty)
 			return Result(AccountRequired);
 		var recordedEmail = accountType == "student" && link.Relationship == "self" ? student.ContactDetail?.Email : link.Relationship switch
@@ -81,7 +93,7 @@ public class StudentOnboardingCredentialEligibilityResolver(
 			return Result("The linked identity must have only the expected portal role.");
 		if (OnboardingRuleConfiguration.Text(rules!.Value, "credentialSendingTime", "activation") == "completion" &&
 			item.Status != StudentOnboardingStatus.Completed)
-			return Result("The school sends credentials after full onboarding completion, including the Finance handoff.");
+			return Result("The school sends credentials after full onboarding completion, including requested app access.");
 		return Result(null);
 	}
 }

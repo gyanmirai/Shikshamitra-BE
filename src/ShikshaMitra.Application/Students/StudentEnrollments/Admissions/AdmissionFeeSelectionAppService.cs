@@ -49,7 +49,7 @@ public class AdmissionFeeSelectionAppService(
 		if (context.HasPaymentEvidence) throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked,
 			"Payment evidence already exists. Ask Finance to review a correction or refund.");
 		if (!context.IsEditable) throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState,
-			"Select the fee structure in the first active Offer or Payment stage.");
+			"Confirm the fee structure in the first active Payment stage.");
 		var snapshot = await structures.CreateSnapshotAsync(application, context.Owner!.Id, context.Currency, input, Actor());
 		var previous = application.GetFeeSelection();
 		application.SaveFeeSelection(snapshot, context.HasPaymentEvidence);
@@ -69,7 +69,7 @@ public class AdmissionFeeSelectionAppService(
 		EnsureConcurrency(application, input.ConcurrencyStamp);
 		var blocker = await onboarding.GetBlockerAsync(application, requireConfirmation: false);
 		if (blocker != null) throw new BusinessException(AdmissionFeeSelectionErrorCodes.AssignmentMismatch, blocker);
-		application.ConfirmOnboardingFeeSelection(Actor(), new DateTimeOffset(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc)));
+		application.ConfirmOnboardingFeeSelection(Actor(), new DateTimeOffset(Clock.Now.ToUniversalTime()));
 		await SaveAsync(application, "AdmissionFeeSelectionConfirmedInOnboarding", application.GetFeeSelection()!);
 		return await ReadAsync(application);
 	}
@@ -124,7 +124,7 @@ public class AdmissionFeeSelectionAppService(
 	{
 		await applications.UpdateAsync(application, false);
 		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, eventType,
-			eventType == "AdmissionFeeSelectionSaved" ? "Admissions fee structure selection saved." : "Saved fee structure confirmed in Onboarding.",
+			eventType == "AdmissionFeeSelectionSaved" ? "Admissions fee structure confirmed." : "Saved fee structure confirmed in Onboarding.",
 			application.ApplicantId, application.Id, metadataJson: JsonSerializer.Serialize(evidence)), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 	}

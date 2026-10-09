@@ -27,6 +27,8 @@ public class AdmissionEligibilityAccessService(IRepository<AdmissionApplication,
 	{
 		var application = await applications.GetAsync(applicationId);
 		await scope.EnsureCanAccessAsync(application);
+		if (AdmissionWorkflowStageTypeRegistry.Find(AdmissionWorkflowStageType.Eligibility)?.IsSelectable != true)
+			throw new BusinessException(AdmissionEligibilityErrorCodes.InvalidState, "Eligibility stages are retired.");
 		var stage = await stages.GetAsync(stageId);
 		var workflow = await workflows.FindAsync(stage.WorkflowInstanceId);
 		if (workflow?.ApplicationId != applicationId || workflow.WorkflowDefinitionId != application.WorkflowDefinitionId || stage.StageType != AdmissionWorkflowStageType.Eligibility)

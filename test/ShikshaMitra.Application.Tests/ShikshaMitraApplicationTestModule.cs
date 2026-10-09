@@ -201,6 +201,11 @@ public class ShikshaMitraApplicationTestModule : AbpModule
         context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
         context.Services.AddTransient<IEmployeeLeaveRepository, FakeEmployeeLeaveRepository>();
         context.Services.AddTransient<IPayrollInputRevisionStore, NonTransactionalPayrollInputRevisionStore>();
+        context.Services.AddSingleton<OnboardingAccountFailureProbe>();
+        context.Services.Replace(ServiceDescriptor.Transient<ShikshaMitra.Students.StudentEnrollments.Onboarding.IStudentCredentialEmailEligibilityResolver>(sp =>
+            new FaultingOnboardingCredentialEligibilityResolver(
+                sp.GetRequiredService<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingCredentialEligibilityResolver>(),
+                sp.GetRequiredService<OnboardingAccountFailureProbe>(), sp.GetRequiredService<IUnitOfWorkManager>())));
         context.Services.AddSingleton<FakeEmployeeEmailService>();
         context.Services.Replace(ServiceDescriptor.Singleton<IEmployeeEmailService>(sp =>
             sp.GetRequiredService<FakeEmployeeEmailService>()));

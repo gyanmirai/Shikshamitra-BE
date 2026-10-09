@@ -28,19 +28,32 @@ public class StudentRecordsAccessService(
 	StudentRecordsPolicyResolver policies,
 	IdentityUserManager users) : ApplicationService, ITransientDependency
 {
+    public async Task<IQueryable<Guid>> GetOnboardingEligibleStudentIdsAsync()
+    {
+        var caseQuery = await cases.GetQueryableAsync();
+        var enrollmentQuery = await enrollments.GetQueryableAsync();
+        return caseQuery.Where(c => c.TenantId == CurrentTenant.Id &&
+            (c.Status == StudentOnboardingStatus.Completed || c.Status != StudentOnboardingStatus.Cancelled && c.StudentEnrollmentId.HasValue &&
+                enrollmentQuery.Any(e => e.TenantId == CurrentTenant.Id && e.Id == c.StudentEnrollmentId && e.StudentId == c.StudentId && e.AcademicYearId == c.AcademicYearId)))
+            .Select(c => c.StudentId).Distinct();
+    }
+
 	public async Task<StudentRecordsAccess> EnsureReadableAsync(Guid studentId)
 	{
 		var student = await GetScopedStudentAsync(studentId);
 		var policy = (await policies.ResolveAsync(student.AcademicYearId)).Policy;
 		var caseQuery = await cases.GetQueryableAsync();
 		var currentProvisioning = await AsyncExecuter.AnyAsync(caseQuery.Where(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId &&
-			x.AcademicYearId == student.AcademicYearId && x.Status == StudentOnboardingStatus.Provisioning));
+			x.AcademicYearId == student.AcademicYearId && x.Status == StudentOnboardingStatus.Provisioning && !x.StudentEnrollmentId.HasValue));
 		var renewalQuery = await renewals.GetQueryableAsync();
 		currentProvisioning = currentProvisioning || await AsyncExecuter.AnyAsync(renewalQuery.Where(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId &&
 			x.AcademicYearId == student.AcademicYearId && x.Status == "Provisioning"));
 		var placementEditable = !currentProvisioning || policy.Provisioning.AllowPlacementEdits;
-		if (await AsyncExecuter.AnyAsync(caseQuery.Where(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Status == StudentOnboardingStatus.Completed)))
-			return new(student, "Full", "CompletedOnboarding", placementEditable, policy);
+        if (await AsyncExecuter.AnyAsync((await GetOnboardingEligibleStudentIdsAsync()).Where(id => id == studentId)))
+        {
+            var completed = await AsyncExecuter.AnyAsync(caseQuery.Where(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Status == StudentOnboardingStatus.Completed));
+            return new(student, "Full", completed ? "CompletedOnboarding" : "ActivatedOnboarding", placementEditable, policy);
+        }
 		var overrideQuery = await overrides.GetQueryableAsync();
 		if (await AsyncExecuter.AnyAsync(overrideQuery.Where(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.Status == "Approved")))
 			return new(student, "Full", "LegacyOverride", placementEditable, policy);

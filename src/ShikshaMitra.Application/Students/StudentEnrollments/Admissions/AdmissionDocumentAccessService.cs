@@ -1,4 +1,5 @@
 using System;
+using Microsoft.AspNetCore.Authorization;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
@@ -17,7 +18,8 @@ public sealed record AdmissionDocumentContext(AdmissionApplication Application, 
 	AdmissionWorkflowStageDefinition Definition, AdmissionDocumentPolicy? Policy, AdmissionWorkflowInstanceStatus WorkflowStatus)
 {
 	public bool CanCollectDuringForm { get; init; }
-	public bool IsActive => WorkflowStatus == AdmissionWorkflowInstanceStatus.Active && Application.CurrentStageInstanceId == Stage.Id &&
+	public bool IsOnboarding { get; init; }
+	public bool IsActive => IsOnboarding || WorkflowStatus == AdmissionWorkflowInstanceStatus.Active && Application.CurrentStageInstanceId == Stage.Id &&
 		Stage.Status == AdmissionRuntimeStageStatus.Active && Application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted or
 		AdmissionApplicationStatus.InReview or AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Waitlisted or
 		AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted;
@@ -29,9 +31,10 @@ public class AdmissionDocumentAccessService(IRepository<AdmissionApplication, Gu
 	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions, IRepository<AdmissionOffering, Guid> offerings,
 	IRepository<AdmissionCycle, Guid> cycles, IRepository<Division, Guid> divisions, IUserScopeAccessService scopes,
 	IRepository<DocumentType, Guid> documentTypes, IRepository<Standard, Guid> standards,
-	IRepository<AdmissionWorkflowTransitionDefinition, Guid> transitions) : ApplicationService, ITransientDependency
+	IRepository<AdmissionWorkflowTransitionDefinition, Guid> transitions,
+	IRepository<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingCase, Guid> onboardingCases) : ApplicationService, ITransientDependency
 {
-	public async Task<AdmissionDocumentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true)
+	public async Task<AdmissionDocumentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true, bool onboarding = false)
 	{
 		var application = await applications.FindAsync(applicationId) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), applicationId);
 		var offeringQuery = AdmissionOfferingScopeQuery.Apply(await offerings.GetQueryableAsync(), await cycles.GetQueryableAsync(),
@@ -46,6 +49,21 @@ public class AdmissionDocumentAccessService(IRepository<AdmissionApplication, Gu
 		if (definition.WorkflowDefinitionId != application.WorkflowDefinitionId || definition.StageType != AdmissionWorkflowStageType.DocumentVerification)
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), definition.Id);
 		var context = new AdmissionDocumentContext(application, stage, definition, ReadPolicy(definition), workflow.Status);
+		if (onboarding)
+		{
+			var item = application.OnboardingCaseId.HasValue ? await onboardingCases.FindAsync(application.OnboardingCaseId.Value) : null;
+			if (item == null || item.ApplicationId != application.Id || item.StudentId != application.StudentId ||
+				application.Status != AdmissionApplicationStatus.AdmissionFinalized || item.Status == ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingStatus.Cancelled)
+				throw Invalid("Document actions are available only before Onboarding activation.");
+			if (requireActive)
+			{
+				await AuthorizationService.CheckAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
+				if (item.StudentEnrollmentId.HasValue) throw Invalid("Document changes are available only before activation.");
+			}
+			var snapshot = ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingRequirementSnapshotService.Read(item).SingleOrDefault(p => p.StageId == stageId);
+			if (snapshot == null) throw Invalid("This stage is not part of the saved onboarding document requirements.");
+			context = context with { Policy = snapshot.Policy, IsOnboarding = !item.StudentEnrollmentId.HasValue };
+		}
 		if (context.Policy?.CollectionFormStageCode != null && workflow.Status == AdmissionWorkflowInstanceStatus.Active &&
 			stage.Status == AdmissionRuntimeStageStatus.Pending && application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted &&
 			application.CurrentStageInstanceId.HasValue)
@@ -80,7 +98,7 @@ public class AdmissionDocumentAccessService(IRepository<AdmissionApplication, Gu
 	}
 	public static AdmissionDocumentPolicy? ReadPolicy(AdmissionWorkflowStageDefinition definition)
 	{
-		try { return AdmissionDocumentPolicy.Read(definition.ConfigurationJson); }
+		try { return AdmissionDocumentPolicy.Read(AdmissionStageConfiguration.Normalize(AdmissionWorkflowStageType.DocumentVerification, definition.ConfigurationJson)); }
 		catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
 		{ throw new BusinessException(AdmissionDocumentErrorCodes.InvalidPolicy, exception.Message); }
 	}

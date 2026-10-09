@@ -41,6 +41,7 @@ public class PendingAssignmentStudentDto
 	public DateTimeOffset AdmissionDate { get; set; }
 	public string? FormNo { get; set; }
 	public int? GrNo { get; set; }
+	public string? GrNumber { get; set; }
 	public int? RollNo { get; set; }
 	public string? AcademicYearName { get; set; }
 	public string? AcademicMediumName { get; set; }

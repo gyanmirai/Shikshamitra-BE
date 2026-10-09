@@ -39,7 +39,7 @@ public class StudentOnboardingDocumentAppService(
 		{
 			CaseId = caseId, StudentId = student.Id, ConcurrencyStamp = onboarding.ConcurrencyStamp,
 			CanUpload = CanEdit(onboarding, student) && await permissions.IsGrantedAsync(Permissions.Edit),
-			CanOverride = CanEdit(onboarding, student) && await permissions.IsGrantedAsync(Permissions.Edit) && await permissions.IsGrantedAsync(Permissions.Waive),
+			CanOverride = false,
 			Documents = status.Select(item => new StudentOnboardingDocumentDto
 			{
 				DocumentTypeId = item.documentType.Id, Name = item.documentType.Name,
@@ -77,29 +77,8 @@ public class StudentOnboardingDocumentAppService(
 	[Authorize(Permissions.Waive)]
 	[Authorize(Permissions.Edit)]
 	[Volo.Abp.Uow.UnitOfWork(true)]
-	public async Task<StudentOnboardingDocumentsDto> OverrideAsync(Guid caseId, StudentOnboardingDocumentOverrideInput input)
-	{
-		var (onboarding, student) = await GetContextAsync(caseId);
-		if (!CanEdit(onboarding, student)) throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
-		if (!CurrentUser.Id.HasValue) throw new Volo.Abp.Authorization.AbpAuthorizationException();
-		if (string.IsNullOrWhiteSpace(input.ConcurrencyStamp) || input.ConcurrencyStamp != onboarding.ConcurrencyStamp)
-			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
-		if (string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Trim().Length > 2000)
-			throw OnboardingRuleConfiguration.Invalid("An override note is required (maximum 2000 characters).");
-		var status = await documents.GetRequiredDocumentsStatusAsync(student.Id);
-		var required = status.Where(item => item.documentType.IsRequired).Select(item => item.documentType.Id).ToHashSet();
-		var selected = input.OverrideAll ? required.ToArray() : (input.DocumentTypeIds ?? []).Distinct().ToArray();
-		if (selected.Length == 0 || selected.Any(id => !required.Contains(id)))
-			throw OnboardingRuleConfiguration.Invalid("Only current required documents may be overridden.");
-		onboarding.OverrideRequiredDocuments(selected, input.Reason, CurrentUser.Id.Value, Clock.Now);
-		await cases.UpdateAsync(onboarding, false);
-		await events.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id, caseId,
-			"RequiredDocumentsOverridden", $"Staff overrode {selected.Length} required document(s) with a recorded note.",
-			System.Text.Json.JsonSerializer.Serialize(new { DocumentTypeIds = selected, Reason = input.Reason.Trim(), StaffUserId = CurrentUser.Id })), false);
-		await CurrentUnitOfWork!.SaveChangesAsync();
-		await onboardingService.RefreshReadinessAsync(caseId, onboarding.ConcurrencyStamp);
-		return await GetAsync(caseId);
-	}
+	public Task<StudentOnboardingDocumentsDto> OverrideAsync(Guid caseId, StudentOnboardingDocumentOverrideInput input) =>
+		throw new BusinessException(StudentOnboardingErrorCodes.InvalidStep).WithData("Reason", "Required documents must be verified. Overrides cannot satisfy activation.");
 
 	private async Task<(StudentOnboardingCase Onboarding, Student Student)> GetContextAsync(Guid caseId)
 	{

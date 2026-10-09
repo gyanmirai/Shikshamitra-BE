@@ -108,6 +108,8 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		var configuration = context.Services.GetConfiguration();
 		var hostingEnvironment = context.Services.GetHostingEnvironment();
 		var services = context.Services;
+        Configure<AbpBackgroundWorkerOptions>(options => options.IsEnabled = configuration.GetValue<bool>("BackgroundWorkers:IsEnabled", true));
+        Configure<Volo.Abp.BackgroundJobs.AbpBackgroundJobOptions>(options => options.IsJobExecutionEnabled = configuration.GetValue<bool>("BackgroundJobs:IsJobExecutionEnabled", true));
 		services.AddHttpClient();
 		services.AddRateLimiter(options =>
 		{
@@ -589,6 +591,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 	public override async Task OnApplicationInitializationAsync(ApplicationInitializationContext context)
 	{
 		OnApplicationInitialization(context);
+        if (!context.ServiceProvider.GetRequiredService<IConfiguration>().GetValue<bool>("BackgroundWorkers:IsEnabled", true)) return;
 		await ConfigureSmtpPasswordAsync(context.ServiceProvider);
 		await context.AddBackgroundWorkerAsync<AssignmentScheduledPublicationWorker>();
 		await context.AddBackgroundWorkerAsync<AdmissionCycleScheduleWorker>();

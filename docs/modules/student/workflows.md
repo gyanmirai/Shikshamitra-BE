@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-08
+updated_on: 2026-10-09
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -88,6 +88,26 @@ The permanent profile stays visible during a pending renewal. Before activation,
 The schedulers poll every minute. Transition dates use the Admissions institution-date helper; change timestamps use the same application clock as their due selector. A case becomes eligible at its effective date/time and applies on a due worker tick. Failed transitions retain a code and become Exception; staff resolves the source issue and uses Apply to retry. Failed changes become Conflict and require a reviewed replacement request. Policy republishing affects new requests, while live authority and privacy rules are rechecked for existing requests and report download.
 
 ## Reserve an identity and finalize admission
+
+### Current Offering-linked onboarding
+
+Admission finalization links a Student and an onboarding case without creating operational enrollment. One effective readiness rule must cover the Admission Offering; a rule may cover multiple Offerings. Academic context comes from those Offerings. New cases freeze the readiness, applicable published workflow document policies, approval and access requirements. An older unactivated case without that snapshot requires an explicit requirements review; reading it does not silently adopt current settings. Completed and activated historical cases retain their history.
+
+Applicable required documents and fee-structure selection may be deferred from Admissions into Onboarding. Activation requires confirmed admission, verified required workflow documents, Class/Division placement, assigned GR and Roll numbers, confirmation of an existing matching Finance fee structure, and configured approval. Waivers and manual document-complete overrides cannot satisfy required evidence. Existing Admissions validation owns required profile data; legacy blanket family, medical, contact and service-consent settings do not add requirements to an Offering snapshot.
+
+Fee selection and confirmation save admission intent only. Onboarding does not assign Finance obligations, create dues, collect payments or wait for first payment before activation, completion or credentials. Finance source and APIs remain unchanged.
+
+GR and Roll assignment are separate commands. GR assignment does not require Roll; Roll assignment does not require a GR series. GR duplicates are rejected across boards. Roll uniqueness is academic year, Class and Division, starting at 1, so the same Roll is allowed in different divisions. First manual GR assignment needs no correction reason; later GR corrections require one. Exact GSEB school-level uniqueness and promotion policy remain backlog.
+
+GR and Roll settings are saved as Draft and then Published. Published edits create a new Draft version; published and superseded history remains immutable. Unassigned numbers use the currently published applicable numbering rule; requirements snapshots do not freeze an unselected number format. Existing assigned numbers are not renumbered by publication.
+
+GR and Roll locks are independent policies for a selected division group. They lock identifiers rather than Division placement. Authorized administrators may unlock with an audited reason and correct identifiers. A new entrant into a locked group receives the next automatic GR and division Roll even if the school's ordinary mode is manual. Placement remains editable; a preserved locked Roll cannot move into a conflicting occupied number.
+
+Activation commits an enrollment before preparing app access. The active student is visible in Student Records even if account preparation or credential delivery fails. Automatic or staff-operated credentials run after activation; failures retain the enrollment and expose access pending for retry in Credentials. No credential email is sent before activation. A completed case is not reopened by a settings edit.
+
+### Historical route-based onboarding and Records renewal
+
+The following paragraphs describe retained historical and renewal behavior. They do not add first-payment, service-consent or other legacy gates to the current Offering-linked flow above.
 
 Admission finalization links a Student and onboarding case, without operational enrollment.
 Saved year-specific onboarding configuration takes precedence over school configuration; the matching admission route, optional campus, and academic path select readiness and numbering rules. A campus-specific rule matches the campus captured from the finalized Admission Offering; a rule without campus targeting continues to cover all campuses. Older cases without a campus snapshot use their linked Offering when available, without writing a snapshot merely by reading the case; this preserves the returned concurrency stamp. A case with no campus cannot match a campus-specific rule.
@@ -210,15 +230,15 @@ Once the inquiry is handed off, its details and qualification remain locked and 
 ## Configure and publish a workflow
 
 1. Create a draft identity and, optionally, its stages and routes in the same request. A selected template's published Registration form is attached to its Form stage. The workflow may also store a published Inquiry form as a default for future Offerings; it does not replace the Offering's own Inquiry form reference. Clone, new-version, and rollback operations preserve this default.
-2. Add selectable stages from the server stage-type registry. Inquiry, Seat, Enrollment, and Custom remain registered for immutable historical workflows but are deprecated and not selectable for new stages. Appointment remains non-selectable until its runtime scheduling and completion flow is available. The Approval enum value is retained for compatibility and is presented to schools as **Admission decision**.
+2. Select only Form (1), Assessment (2), Payment (4), Documents (5), or Admission decision (7) from the server registry. Eligibility (3), Review (6) and Offer (8) are retired and reject publication/runtime commands without renumbering stored enum values. Inquiry, Seat, Enrollment, and Custom remain registered for immutable historical workflows but are deprecated and not selectable for new stages. Appointment remains non-selectable until its runtime scheduling and completion flow is available. The Approval enum value is retained for compatibility and is presented to schools as **Admission decision**.
 3. Mark exactly one entry stage and at least one terminal stage. Schools may choose any stage type as an ending, including Form and Assessment. A single stage may be both entry and ending. Ending stages have no outgoing routes; their configured completion requirements still apply.
-4. Add controlled conditional transitions and at most one default route per source stage. Each conditional route from a stage uses a unique non-negative priority; a route without a condition is always the single default route. Condition fields must use the server allowlist (`application`, `inquiry`, `assessment`, `documents`, `payment`, `eligibility`, `approval`, `offer`, `seat`, `enrollment`, or `appointment`).
+4. Add controlled conditional transitions and at most one default route per source stage. Each conditional route from a stage uses a unique non-negative priority; a route without a condition is always the single default route. Condition fields must use the server allowlist for supported application, assessment, document and admission-decision facts; Payment status is feeStructureConfirmed rather than monetary settlement. Retired stage and old payment balance facts are not valid new transition conditions.
    A required stage cannot enable ordinary manual skip. Stage types without a runtime-ready handler are publication errors, not advisory warnings.
 
 Admission forms use the same controlled rule foundation for section visibility, field visibility, and conditional requiredness. The form runtime supports 100 canonical Student field bindings: 15 original Applicant, Guardian, and Address bindings plus 85 additional profile, family, address, previous-school, health, eligibility, identity, and admission-preference bindings. Financial assistance fields are excluded from the expanded catalogue. The original bindings update admission identity and contact properties. Additional bindings persist on the applicant, prefill registration after inquiry, and are copied to the Student record's captured admission fields during finalization. Staff can review those captured values on the onboarding case detail; they are not automatically treated as verified SIS profile values. Clearing an additional answer removes its applicant value before finalization.
 
 Every new form version carries an Inquiry or Registration purpose. Clone and new-version operations preserve it, and changing it is allowed only on a Draft. Earlier Correction and Consent values may remain on existing test records but cannot be used for new forms. Workflow publication requires a published Registration form on each Form stage and a published Inquiry form for any configured workflow default. Offering readiness rejects a purpose mismatch before activation.
-5. Validate reachability, dead ends, duplicate routes, cycles, terminal reachability, published form references, and every enabled managed-stage policy. Form, Review, Payment, Offer, and Seat policies are parsed with the same domain validators used by runtime, so malformed or out-of-range settings cannot pass publication validation.
+5. Validate reachability, dead ends, duplicate routes, cycles, terminal reachability, published form references, and every enabled managed-stage policy. Form, Assessment and Documents policies are parsed with the same domain validators used by runtime, so malformed or out-of-range settings cannot pass publication validation.
 6. If school maker-checker governance is disabled, publish the validated version directly with a
    change reason. If it is enabled, submit it with a change reason and select a different active
    user who has the workflow `Approve` permission.
@@ -234,7 +254,7 @@ Every new form version carries an Inquiry or Registration purpose. Clone and new
 11. Archive a Published or Superseded version only when the usage rule permits it. Use governance
     history and notifications to audit actors, decisions, reasons, and effective times.
 
-Publication and Offering activation validate different scopes. Workflow publication owns graph, runtime-handler, managed-policy, and SLA/deadline-range validation. People assignments cannot be fully checked until the workflow is attached to an Offering with a concrete academic hierarchy. Activation therefore verifies the new Offering's assignment profile has eligible active staff in that hierarchy, and that a default Review assignee is active, has the configured role, and can access the same hierarchy. Historical Offerings using pinned Inquiry-stage assignment rules retain their existing compatibility checks. A reusable published workflow is not coupled to one campus, but an Offering with unusable staff assignments cannot become active.
+Publication and Offering activation validate different scopes. Workflow publication owns graph, runtime-handler, managed-policy, and SLA/deadline-range validation. People assignments cannot be fully checked until the workflow is attached to an Offering with a concrete academic hierarchy. Activation therefore verifies the new Offering's assignment profile has eligible active staff in that hierarchy, without adding retired Review assignee requirements. Historical Offerings using pinned Inquiry-stage assignment rules retain their existing compatibility checks. A reusable published workflow is not coupled to one campus, but an Offering with unusable staff assignments cannot become active.
 
 Version-history reads include every version's complete stages and transitions plus Offering, distinct Campus, and Application usage counts. School-wide offerings with no Campus are reported as school-wide scope rather than being invented as a Campus. This lets authorized clients compare historical configuration and copy a selected immutable version into the next Draft without changing published versions or applications already pinned to them.
 
@@ -253,103 +273,57 @@ The frontend presents routes under **What happens next?** on their source stage 
 7. Every transition creates immutable history and an Applicant 360 activity entry.
 8. The response derives a deterministic next required action from the active stage type; completed workflows return no next action.
 
-An **Admission decision** stage is the structured terminal decision point. Its retained enum value is `Approval` for API and database compatibility, but the stage can complete after an authorized Approved, Waitlisted, or Rejected decision. This lets negative decisions end at the same governed stage without adding fake Rejected or Waitlisted stages.
+An **Admission decision** stage retains enum value Approval (7). Approve, Waitlist and Reject require the active Decision stage with existing authorization, scope and concurrency. Approved and Rejected may complete it; Waitlisted remains pending until a later decision. General admissions finalize from Approved plus a completed journey without OfferAccepted, while identity, guardian, duplicate, capacity, scope and idempotency guards remain.
 
 ## Run a managed entrance assessment
 
-1. Add an Assessment stage to a draft workflow, enable its assessment policy, and select result-only or scheduled operation.
-2. Configure attendance, scoring, review, and attempts; add explicit routes for negative outcomes when those outcomes should leave the stage.
-3. Validate and publish a new version, then attach it to an offering for future applications.
-4. For scheduled operation, create shared future sessions for the offering and exact workflow stage.
-5. While an applicant is in the assessment stage, create an attempt and reserve a matching session when required.
-6. Record attendance and results after the session starts, or directly in result-only mode according to its attendance requirement.
-7. If review is required, a different authorized reviewer approves the result or returns it for correction.
-8. For failed or absent results, request an allowed retake and create another attempt, record an authorized waiver, or use an explicit configured outcome route.
-9. Complete the stage through the existing workflow advance command; completion remains separate from recording evidence.
+1. Configure managed Assessment with optional scheduling, attendance, scoring and Maximum attempts; independent result review is disabled.
+2. Publish and attach the workflow to an Offering. Scheduled assessments require a matching future session and booking; result-only assessments do not.
+3. Create an attempt, record attendance and result under the existing scope, permission and concurrency checks.
+4. Retakes respect Maximum attempts and retain earlier evidence. Failed, absent and retake outcomes require valid explicit routes when leaving the stage.
+5. Advance explicitly after the evidence and route gates pass. Recording a result does not itself advance the journey.
 
-The assessment summary returns capability flags for each permitted action and explains missing evidence, pending review, future sessions, and missing outcome routes.
-Changes after an assessment stage has completed are rejected; its attempts remain readable within tenant and academic scope.
-
-The assessment workbench reads one authorized offering and pinned workflow stage at a time. Its `toBook`, `attendance`, `result`, `review`, `ready`, `attention`, and `completed` queues are derived from existing evidence and configured routes. A session roster includes its non-cancelled bookings and retains completed-stage history. Counts respect the selected session and search before pagination. Recording a result never advances the workflow; staff use the existing explicit advance action when evidence and route requirements are satisfied.
+The workbench exposes To book, Attendance, Result, Ready, Attention and Completed queues; no separate result-review queue is part of the supported flow. Completed-stage attempts remain readable within tenant and academic scope.
 
 ## Verify applicant documents
 
-1. Configure a managed Document Verification stage in a new workflow version, including applicability, collection mode, formats, limits, catalog mapping, independent review, and optional waivers.
-2. Publish validated settings and use the new version for future applications. Existing applicants keep their pinned requirements.
-3. Collect uploads at the active document stage, or during its explicitly linked earlier Form stage. Original-document observations remain available only in the active document stage. Each action creates a new evidence revision with its collector identities.
-4. A permitted reviewer accepts complete evidence or requests replacement with a reason. Rejection is available before an original check; acceptance still requires every configured collection component.
-5. Replace rejected evidence, record a fresh original check when required, and review the new revision. Earlier revisions and decisions remain available as history.
-6. Resolve all mandatory and matched conditional requirements, or record a separately authorized policy-supported waiver with a reason. Missing condition inputs block continuation.
-7. Complete the workflow stage explicitly. Normal completion, manual skip, and administrator override share the mandatory-evidence gate.
-8. Finalize admission through the existing accepted-offer and completed-workflow process. Link canonical evidence to the Student in the finalization unit of work and continue operational onboarding.
+1. Configure managed Documents with required/optional upload requirements, class applicability, formats/limits and optional Student document category. Codes are hidden from UI and generated uniquely on workflow save, then preserved on subsequent saves.
+2. Publication normalizes uploads at the active stage, disables waivers/independent review and clears earlier Form-stage collection.
+3. Upload evidence, accept it or request a reasoned replacement through existing permission, scope and concurrency checks. Replacements need fresh acceptance; prior revisions remain readable.
+4. Resolve every applicable mandatory requirement before advancing. Missing required uploads and unavailable class context fail closed.
+5. Finalize an Approved completed journey; link accepted evidence to the Student in the finalization unit of work and continue operational Onboarding. Mapped uploads can satisfy corresponding onboarding documents; unmet onboarding requirements retain their scoped upload flow.
 
-Mapped accepted uploads may satisfy corresponding onboarding document uploads. Where an admission waiver, physical-only check, or custom document leaves a mandatory onboarding upload outstanding, authorized staff use the scoped active-onboarding document upload flow. This preserves the separate onboarding readiness rule while providing a route to complete it.
-
-Class applicability uses the offering's authoritative `StandardId`, combined with any existing conditional rule.
-Missing class context fails closed; an applicant's typed class answer cannot change applicability.
-`standardIds: null` or omission means all classes; selected IDs must be nonempty, unique, and belong to the tenant at publication.
-Early collection requires a configured `collectionFormStageCode`, an active matching Form stage, a pending document stage, a Draft or Submitted application, and a forward route in the same frozen workflow.
-Only uploads are permitted early; original checks, review, waiver, and document-stage completion are rejected until that stage is active.
-Early and later uploads use the same application/stage/requirement evidence history, and replacement still requires fresh acceptance.
+`standardIds: null` or omitted means All classes. Selected IDs must be nonempty, unique and tenant-local. Conditional requirement configuration and physical-original/evidence-mode setup are not offered in the supported editor.
 
 ## Check eligibility
 
-1. Enable managed Eligibility in a draft workflow and add only the school's required criteria. Select published source forms or earlier managed source stages explicitly.
-   Select those same application and inquiry form versions when configuring the Offering; incompatible selections cannot be activated or used for new applicants.
-2. Validate and publish a new version. Existing applications retain their pinned policy and source stage identities.
-3. At Eligibility, check the saved information. Review each criterion's expected value, actual value, source and explanation.
-4. Correct unknown or invalid information at its source. If the application form must be reopened, resubmit it, then check eligibility again; resubmission does not automatically complete managed Eligibility.
-5. For a genuine failing criterion, request an allowed exception with a reason. The configured authorized reviewer decides it independently when required; the original result remains in history.
-6. Continue only with fresh evidence. Explicit negative-result routes may send an ineligible or incomplete application for review, while admission rejection remains a separate decision.
-7. Recheck a visited Eligibility stage if source information changes later. First-time finalization verifies fresh passing or exception-approved evidence; successful finalization retries remain idempotent.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
 
 ## Managed Review workflow
 
-1. Publish a version 1 Review policy with any earlier managed prerequisites, reviewer/approver restrictions and checklist.
-2. Enter Review; the server initializes the assignment/deadline work item without making an admission decision.
-3. Read the current evidence and blockers, optionally assign an authorized reviewer, and save a draft or submit a reasoned recommendation.
-4. An authorized approver uses the existing admission Approve, Waitlist or Reject command, or explicitly requests an application-form correction.
-5. A correction reopens the form; save and resubmit remain at Review and require a new recommendation.
-6. Complete Review normally after the actual decision; negative outcomes require an explicit matching route.
-7. Before offering or finalization, check that the approved recommendation still matches current evidence; refresh the completed Review and reaffirm approval when a correction made it stale.
-
-Changing an assignment or saving a newer draft supersedes an earlier recommendation until resubmitted.
-Review history and actual decisions remain immutable, with the actor, time and safe prerequisite/checklist snapshots retained.
-An overdue queue is available for scoped active Review stages; this delivery does not send deadline reminders.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
 
 ## Run a managed Form stage
 
-1. Enable Form management in a draft workflow, select the same published application form used by the Offering, and configure only the optional behavior the school needs.
-2. Publish the workflow and activate a compatible Offering. New applications freeze both versions; existing applications keep their original configuration.
-3. Save drafts when permitted, then submit through the existing dynamic form. Required-field, deadline, and attempt checks run on the server.
-4. If verification is configured, authorized staff verify each selected section. Revoking verification requires a reason.
-5. Request a correction with a reason when allowed. The form returns to draft and every previous verification becomes stale.
-6. Resubmit and repeat verification. Continue only when the server reports no blockers; automatic advancement is used only when the policy permits it.
-
-All actions retain immutable form submissions and change history. Managed Form settings require no new persistence table or database migration.
+1. Form is managed Submission with rules by default. Attach the published Registration form and configure responsibility, deadline/late behavior, corrections and optional section verification.
+2. Applicant Save Draft remains enabled. Submission-limit and automatic-next configuration controls are hidden; server submission/correction safeguards remain.
+3. Submit validates frozen fields and policy. Without required verification, submit advances automatically.
+4. With verification, authorized staff verify configured sections and Continue explicitly only after all blockers resolve. Revocation/correction requires a reason; correction makes earlier verification stale.
+5. Preserve immutable submissions/change history and current concurrency through every command.
 
 ## Run a managed Payment stage
 
-1. Add Payment to a draft workflow and choose **Managed collection with financial controls**.
-2. Set the purpose, currency, amount, payer, staff methods, deadline, installment rules, second-person verification, and waiver policy.
-3. Validate and publish the workflow. Online gateway choices block publishing until the tenant has a trusted gateway.
-4. In the application, record received money. Non-cash methods require the bank or provider reference; the server generates the admission receipt number.
-5. If independent verification is enabled, a different authorized staff member verifies or rejects the payment.
-6. Continue after the full amount settles, or record an authorized full waiver with a reason. A reversal reopens the outstanding balance while the stage is active.
+1. Add Payment as Finance fee-structure confirmation; no independent admission collection policy is authored.
+2. Read only published structures matching the Offering tenant, academic year, Board, Medium and Class. Missing candidates block fee confirmation with a clear error.
+3. Save the structure and optional heads using application concurrency. Mandatory heads and an immutable structure-version snapshot are included by the server.
+4. Advance with the valid saved snapshot, or defer selection to Onboarding when the effective Offering-linked readiness rule supports that handoff. Onboarding still requires structure confirmation before activation. The runtime reports feeStructureRequired or feeStructureConfirmed; it never equates confirmation with Paid.
+5. Finalization hands the saved intent to Onboarding. Finance alone assigns fees, creates dues and records/allocates actual payments.
 
-Transition rules may use only `payment.status`, `payment.settledAmount`, and `payment.outstandingAmount`.
+Admission record, verification, waiver and reversal commands are unavailable in this flow. No database migration or Finance ledger mutation is required by confirmation.
 
 ## Run a managed Offer stage
 
-1. Add Offer to a draft workflow and enable the managed offer process.
-2. Choose unconditional or conditional content, terms and confirmations, validity and override limits, decline reasons, extension/reissue limits, allowed completion outcomes, and acceptance continuation.
-3. Add explicit `offer.status` transitions for every enabled declined, expired, or withdrawn outcome. Acceptance may use the normal default path.
-4. Validate and publish the workflow. Existing applications and basic Offer stages keep their pinned behavior.
-5. At the active stage, issue the offer and optionally select an eligible Admission counsellor; an inquiry-linked application starts with its inquiry counsellor. Staff may extend or withdraw only when the server capability permits the action. Reissue may change the counsellor.
-6. Record acceptance with the required confirmations, or record a decline reason. Expired, declined, and withdrawn offers may be reissued within the configured limit.
-7. Continue only after the server reports an allowed completed outcome and safe route.
-
-The application card shows the current version, type, expiry, conditions, assigned counsellor, blockers, available actions, and permanent event history. Authorized staff may reassign an open application with an auditable note. The application queue supports a server-side assigned-counsellor filter. This workflow records staff-mediated responses; communication delivery and applicant self-service are separate integrations.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
 
 ## Run a legacy managed Seat stage
 

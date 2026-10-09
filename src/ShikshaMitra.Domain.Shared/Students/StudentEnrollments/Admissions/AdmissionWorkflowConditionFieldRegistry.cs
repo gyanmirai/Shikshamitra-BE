@@ -9,18 +9,10 @@ public static class AdmissionWorkflowConditionFieldRegistry
 	{
 		"application.status",
 		"payment.status",
-		"payment.settledAmount",
-		"payment.outstandingAmount",
-		"offer.status",
-		"offer.versionNumber",
-		"offer.extensionCount",
-		"offer.isExpired",
 		"seat.status",
 		"seat.remainingCapacity",
 		"seat.isExpired",
-		"seat.waitlistPosition",
-		"review.status",
-		"review.decision"
+		"seat.waitlistPosition"
 	};
 
 	private static readonly string[] ExtensiblePrefixes =
@@ -29,7 +21,6 @@ public static class AdmissionWorkflowConditionFieldRegistry
 		"inquiry.",
 		"assessment.",
 		"documents.",
-		"eligibility.",
 		"approval.",
 		"seat.",
 		"enrollment.",

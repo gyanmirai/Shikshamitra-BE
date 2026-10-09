@@ -13,9 +13,9 @@ public partial class StudentOnboardingAppService
 {
 	private async Task PrepareAutomaticPortalAccountsAsync(StudentOnboardingCase item)
 	{
-		var settings = await configurationManager.GetAsync(item.AcademicYearId);
-		if (settings == null || !item.StudentEnrollmentId.HasValue || item.Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled) return;
-		var rules = settings.Readiness(item);
+		var savedRules = await ReadSavedRulesAsync(item);
+        if (!savedRules.HasValue || !item.StudentEnrollmentId.HasValue || item.Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled) return;
+        var rules = savedRules.Value;
 		if (OnboardingRuleConfiguration.Text(rules, "credentialProvisioningMode", "manual") != "automatic" ||
 			!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit) ||
 			!await AuthorizationService.IsGrantedAsync(IdentityPermissions.Users.Create)) return;
@@ -54,8 +54,8 @@ public partial class StudentOnboardingAppService
 
 	private async Task QueueAutomaticCredentialEmailsAsync(StudentOnboardingCase item)
 	{
-		var settings = await configurationManager.GetAsync(item.AcademicYearId);
-		if (settings == null || OnboardingRuleConfiguration.Text(settings.Readiness(item), "credentialProvisioningMode", "manual") != "automatic" ||
+		var rules = await ReadSavedRulesAsync(item);
+        if (!rules.HasValue || OnboardingRuleConfiguration.Text(rules.Value, "credentialProvisioningMode", "manual") != "automatic" ||
 			!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)) return;
 		var emails = LazyServiceProvider.LazyGetRequiredService<StudentCredentialEmailAppService>();
 		await emails.QueueAsync(item.Id, "student");

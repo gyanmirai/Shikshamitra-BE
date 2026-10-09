@@ -1,4 +1,4 @@
-﻿using ShikshaMitra.Students.Records.Settings;
+using ShikshaMitra.Students.Records.Settings;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
@@ -141,7 +141,7 @@ public class StudentManagementAppService(
 			.Where(s => s.StandardId == input.StandardId
 				&& s.DivisionId == input.DivisionId
 				&& s.Status == StudentLifeCycleStatusEnum.Enrolled
-				&& (!s.GrNo.HasValue || !s.RollNo.HasValue));
+				&& ((!s.GrNo.HasValue && (s.GrNumber == null || s.GrNumber == "")) || !s.RollNo.HasValue));
 
 		if (input.AdmissionDateFrom.HasValue)
 		{
@@ -179,10 +179,11 @@ public class StudentManagementAppService(
 					StateName = s.ContactDetail != null && s.ContactDetail.State != null ? s.ContactDetail.State.Name : null,
 					CountryName = s.ContactDetail != null && s.ContactDetail.Country != null ? s.ContactDetail.Country.Name : null,
 					ApplicationNo = s.AdditionalDetail != null ? s.AdditionalDetail.InquiryNo : null,
-					AdmissionNo = s.GrNo.HasValue ? s.GrNo.Value.ToString() : null,
+					AdmissionNo = s.GrNumber ?? (s.GrNo.HasValue ? s.GrNo.Value.ToString() : null),
 					AdmissionDate = s.CreationTime,
 					FormNo = s.AdditionalDetail != null ? s.AdditionalDetail.RegistrationFormNo : null,
 					GrNo = s.GrNo,
+					GrNumber = s.GrNumber,
 					RollNo = s.RollNo,
 					AcademicYearName = s.AcademicYear != null ? s.AcademicYear.Name : null,
 					AcademicMediumName = s.AcademicMedium != null ? s.AcademicMedium.Name : null,
@@ -226,6 +227,7 @@ public class StudentManagementAppService(
 			AdmissionDate = s.AdmissionDate,
 			FormNo = s.FormNo,
 			GrNo = s.GrNo,
+			GrNumber = s.GrNumber,
 			RollNo = s.RollNo,
 			AcademicYearName = s.AcademicYearName,
 			AcademicMediumName = s.AcademicMediumName,
@@ -398,6 +400,9 @@ public class StudentManagementAppService(
 			var requestedStudentByGrNo = updateStudentGrNumberDto
 				.Where(x => x.GrNo.HasValue)
 				.ToDictionary(x => x.GrNo!.Value, x => x.StudentId);
+            var canonicalAssignments = await AsyncExecuter.ToListAsync(studentQuery.Where(s => s.GrNumber != null).Select(s => new { s.Id, s.GrNumber }));
+            if (canonicalAssignments.Any(s => int.TryParse(s.GrNumber, out var number) && requestedStudentByGrNo.TryGetValue(number, out var requestedStudentId) && s.Id != requestedStudentId))
+                throw new BusinessException(StudentErrorCodes.DuplicateGrNo, "This GR number is already assigned to another student.");
 			var existingAssignments = await AsyncExecuter.ToListAsync(
 				studentQuery
 					.Where(s => s.GrNo.HasValue && requestedGrNumbers.Contains(s.GrNo.Value))
@@ -424,7 +429,15 @@ public class StudentManagementAppService(
 			var student = studentsById[studentGrNumberDto.StudentId];
 			await EnsureCanAccessStudentAsync(student, nameof(StoreGrNumbers));
 
-			student.AssignGrNo(studentGrNumberDto.GrNo);
+			var previousGr = student.GrNumber ?? student.GrNo?.ToString();
+            var allocations = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentIdentifierAllocation, Guid>>()
+                .GetListAsync(a => a.StudentId != student.Id && a.IdentifierType == ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentIdentifierType.GrNumber);
+            if (studentGrNumberDto.GrNo.HasValue && allocations.Any(a => int.TryParse(a.Value, out var number) && number == studentGrNumberDto.GrNo.Value))
+                throw new BusinessException(StudentErrorCodes.DuplicateGrNo, "This GR number is already reserved for another student.");
+            student.AssignGrNo(studentGrNumberDto.GrNo, studentGrNumberDto.Reason);
+            if (previousGr != (student.GrNumber ?? student.GrNo?.ToString()))
+                student.ExtraProperties["GrCorrectionAudit"] = System.Text.Json.JsonSerializer.Serialize(new
+                { previousValue = previousGr, value = student.GrNumber ?? student.GrNo?.ToString(), reason = studentGrNumberDto.Reason, changedBy = CurrentUser.Id, changedAt = Clock.Now });
 			await studentRepository.UpdateAsync(student, autoSave: false);
 		}
 
@@ -449,6 +462,7 @@ public class StudentManagementAppService(
 					s.MiddleName,
 					s.LastName,
 					s.GrNo,
+					s.GrNumber,
 					s.CreationTime
 				}));
 
@@ -463,15 +477,18 @@ public class StudentManagementAppService(
 			var projectedGrNumbers = new Dictionary<Guid, int>();
 			if (board == EducationBoardType.CBSE)
 			{
-				var studentsWithoutGrNo = students.Where(s => s.GrNo == null).OrderBy(s => s.CreationTime);
+				var studentsWithoutGrNo = students.Where(s => s.GrNo == null && string.IsNullOrWhiteSpace(s.GrNumber)).OrderBy(s => s.CreationTime);
 
 				var queryable = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
 
-				var lastGrNoStudent = await AsyncExecuter.FirstOrDefaultAsync(
-					queryable
-						.Where(s => s.AcademicBoardId == educationBoard.Id && s.GrNo != null)
-						.OrderByDescending(s => s.GrNo)
-						.Select(s => s.GrNo)) ?? 0;
+                var assigned = await AsyncExecuter.ToListAsync(queryable
+                    .Where(s => s.GrNo.HasValue || s.GrNumber != null).Select(s => new { s.GrNo, s.GrNumber }));
+                var lastGrNoStudent = assigned.SelectMany(s => new[]
+                    { s.GrNo ?? 0, int.TryParse(s.GrNumber, out var number) ? number : 0 }).DefaultIfEmpty(0).Max();
+                var reservations = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentIdentifierAllocation, Guid>>()
+                    .GetListAsync(a => a.IdentifierType == ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentIdentifierType.GrNumber);
+                foreach (var reservation in reservations)
+                    if (int.TryParse(reservation.Value, out var reservedNumber)) lastGrNoStudent = Math.Max(lastGrNoStudent, reservedNumber);
 
 				foreach (var student in studentsWithoutGrNo)
 				{
@@ -480,7 +497,7 @@ public class StudentManagementAppService(
 			}
 			else if (board == EducationBoardType.GSEB)
 			{
-				var studentsWithoutGrNo = students.Where(s => s.GrNo == null).OrderBy(s => s.CreationTime);
+				var studentsWithoutGrNo = students.Where(s => s.GrNo == null && string.IsNullOrWhiteSpace(s.GrNumber)).OrderBy(s => s.CreationTime);
 
 				var queryable = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
 				var lastGrNoStudent = await AsyncExecuter.FirstOrDefaultAsync(
@@ -514,6 +531,7 @@ public class StudentManagementAppService(
 				{
 					StudentId = student.Id,
 					GrNumber = grNumber,
+					CurrentGrNumber = student.GrNumber ?? student.GrNo?.ToString(),
 					StudentName = $"{student.FirstName} {student.MiddleName} {student.LastName}"
 				});
 			}
@@ -804,6 +822,8 @@ public class StudentManagementAppService(
 			assignmentsByStudentId.TryGetValue(student.Id, out var assignment);
 			var oldRollNo = assignment?.RollNo;
 			var newRollNo = studentRollNumberDto.RollNo;
+            if (student.IsIdentifierLocked("roll") && student.RollNo.HasValue && student.RollNo != newRollNo)
+                throw new BusinessException("Students:Onboarding:IdentifierLocked");
 			var status = oldRollNo == newRollNo
 				? "Skipped"
 				: newRollNo.HasValue

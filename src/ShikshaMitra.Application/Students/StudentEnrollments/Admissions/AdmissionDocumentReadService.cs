@@ -13,12 +13,12 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [RemoteService(false)]
 public class AdmissionDocumentReadService(AdmissionDocumentAccessService access, AdmissionDocumentEvaluationService evaluator,
-	IRepository<AdmissionWorkflowTransitionDefinition, Guid> transitions, AdmissionWorkflowTransitionSelector selector, IPermissionChecker permissions)
+	IRepository<AdmissionWorkflowTransitionDefinition, Guid> transitions, AdmissionWorkflowTransitionSelector selector, IPermissionChecker permissions, ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingRequirementSnapshotService onboardingRequirements)
 	: ApplicationService, ITransientDependency
 {
-	public async Task<AdmissionDocumentVerificationDto> GetAsync(Guid applicationId, Guid stageId)
+	public async Task<AdmissionDocumentVerificationDto> GetAsync(Guid applicationId, Guid stageId, bool onboarding = false)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId, false);
+		var context = await access.GetContextAsync(applicationId, stageId, false, onboarding);
 		var result = new AdmissionDocumentVerificationDto
 		{
 			ApplicationId = applicationId, StageInstanceId = stageId, Policy = context.Policy,
@@ -33,16 +33,20 @@ public class AdmissionDocumentReadService(AdmissionDocumentAccessService access,
 			? "Documents can be uploaded now. Staff verification starts when the document stage becomes active."
 			: "This document verification stage is read-only.");
 		else if (context.Application.Status == AdmissionApplicationStatus.Draft) result.Blockers.Add("Submit the application before completing document verification.");
-		if (result.Blockers.Count == 0)
+		var canDefer = !onboarding && context.IsActive && context.Application.Status != AdmissionApplicationStatus.Draft && await onboardingRequirements.CanDeferAsync(context.Application);
+        var routeReady = false;
+		if (!onboarding && (result.Blockers.Count == 0 || canDefer))
 		{
 			var values = new Dictionary<string, string>(evaluation.Values, StringComparer.OrdinalIgnoreCase);
 			foreach (var fact in evaluation.Facts) values[fact.Key] = fact.Value;
-			try { selector.Select(await transitions.GetListAsync(item => item.FromStageId == context.Definition.Id), values, null, false); }
+			try { selector.Select(await transitions.GetListAsync(item => item.FromStageId == context.Definition.Id), values, null, false); routeReady = true; }
 			catch (BusinessException) { result.Blockers.Add("Configure an eligible next-stage route before completing document verification."); }
 		}
-		result.CanComplete = result.Blockers.Count == 0;
+		result.CanComplete = !onboarding && routeReady && (result.Blockers.Count == 0 || canDefer);
 		var grants = new Dictionary<string, bool>();
 		foreach (var permission in Permissions.All) grants[permission] = await permissions.IsGrantedAsync(permission);
+		if (onboarding && !await permissions.IsGrantedAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit))
+			foreach (var permission in new[] { Permissions.Upload, Permissions.RecordOriginal, Permissions.Review, Permissions.Waive }) grants[permission] = false;
 		result.Requirements = evaluation.Requirements.Select(item => MapRequirement(item, context, grants)).ToList();
 		foreach (var row in result.Requirements)
 		{

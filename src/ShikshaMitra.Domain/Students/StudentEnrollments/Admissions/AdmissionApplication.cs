@@ -40,6 +40,15 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{ ConfirmedBy = actorId, OnboardingConfirmedAt = now.ToUniversalTime() }));
 	}
 
+	public void SaveOnboardingFeeSelection(AdmissionFeeSelectionSnapshot selection)
+	{
+		if (Status != AdmissionApplicationStatus.AdmissionFinalized || !OnboardingCaseId.HasValue || !StudentId.HasValue ||
+			selection.StructureId == Guid.Empty || selection.SavedBy == Guid.Empty || selection.Heads.Count == 0)
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState);
+		this.SetProperty(FeeSelectionProperty, JsonSerializer.Serialize(selection));
+		ConfirmOnboardingFeeSelection(selection.SavedBy, selection.SavedAt);
+	}
+
 	public Guid? TenantId { get; private set; }
 	public string ApplicationNumber { get; private set; }
 	public Guid ApplicantId { get; private set; }
@@ -193,6 +202,9 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public void FinalizeApprovedDirectAdmission(Guid studentId, Guid onboardingCaseId, DateTime finalizedAt)
+		=> FinalizeApprovedAdmission(studentId, onboardingCaseId, finalizedAt);
+
+	public void FinalizeApprovedAdmission(Guid studentId, Guid onboardingCaseId, DateTime finalizedAt)
 	{
 		if (Status == AdmissionApplicationStatus.AdmissionFinalized &&
 		    StudentId == studentId && OnboardingCaseId == onboardingCaseId)

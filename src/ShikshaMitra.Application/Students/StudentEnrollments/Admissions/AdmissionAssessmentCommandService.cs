@@ -57,8 +57,9 @@ public class AdmissionAssessmentCommandService(
 		});
 
 	public Task<AdmissionAssessmentDto> ReviewAsync(Guid id, AdmissionAssessmentReviewInput input) =>
-		MutateAsync(id, input, "AssessmentResultReviewed", (_, attempt) =>
+		MutateAsync(id, input, "AssessmentResultReviewed", (context, attempt) =>
 		{
+			if (context.Policy?.ReviewRequired != true) throw Invalid("Assessment result review is not enabled. Record the result directly.");
 			attempt.Review(input.Approved, input.Notes, Actor(), DateTime.UtcNow);
 			return Task.CompletedTask;
 		});

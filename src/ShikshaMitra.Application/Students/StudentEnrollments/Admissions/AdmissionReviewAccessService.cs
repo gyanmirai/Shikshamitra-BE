@@ -26,6 +26,8 @@ public class AdmissionReviewAccessService(IRepository<AdmissionApplication, Guid
 	public async Task<AdmissionReviewContext> GetContextAsync(Guid applicationId, Guid stageId, bool mutable = false)
 	{
 		var application = await applications.GetAsync(applicationId); await scope.EnsureCanAccessAsync(application);
+		if (AdmissionWorkflowStageTypeRegistry.Find(AdmissionWorkflowStageType.Review)?.IsSelectable != true)
+			throw new BusinessException(AdmissionReviewErrorCodes.InvalidState, "Review stages are retired. Record the admission decision instead.");
 		var stage = await stages.GetAsync(stageId); var workflow = await workflows.GetAsync(stage.WorkflowInstanceId);
 		if (workflow.ApplicationId != application.Id || workflow.WorkflowDefinitionId != application.WorkflowDefinitionId || stage.StageType != AdmissionWorkflowStageType.Review)
 			throw new EntityNotFoundException(typeof(AdmissionApplicationStageInstance), stageId);

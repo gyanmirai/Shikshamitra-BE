@@ -11,13 +11,14 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [RemoteService(false)]
 public class AdmissionDocumentRuntimeService(AdmissionDocumentAccessService access, AdmissionDocumentEvaluationService evaluator,
 	IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows, IRepository<AdmissionApplicationStageInstance, Guid> stages,
-	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions) : ITransientDependency
+	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions,
+	ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingRequirementSnapshotService onboarding) : ITransientDependency
 {
 	public async Task<AdmissionDocumentEvaluation> EnsureCompleteAsync(Guid applicationId, Guid stageId)
 	{
 		var context = await access.GetContextAsync(applicationId, stageId);
 		var evaluation = await evaluator.EvaluateAsync(context.Application, stageId, context.Policy!);
-		evaluation.EnsureComplete();
+		if (!await onboarding.CanDeferAsync(context.Application)) evaluation.EnsureComplete();
 		return evaluation;
 	}
 

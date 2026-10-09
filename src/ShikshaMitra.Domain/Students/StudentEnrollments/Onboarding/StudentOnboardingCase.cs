@@ -140,6 +140,9 @@ public partial class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMu
 	public void RecordIdentifier(Guid? allocationId, int rollNumber, DateTime at)
 	{
 		EnsureEditable();
+		if (RollNumber.HasValue && RollNumber != rollNumber && IsIdentifierLocked("roll") ||
+			IdentifierAllocationId.HasValue && IdentifierAllocationId != allocationId && IsIdentifierLocked("gr"))
+			throw new BusinessException("Students:Onboarding:IdentifierLocked");
 		if (rollNumber <= 0) throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
 		Start(at);
 		IdentifierAllocationId = allocationId;
@@ -148,9 +151,22 @@ public partial class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMu
 		ReadyAt = null;
 	}
 
+	public void RecordGrIdentifier(Guid allocationId, DateTime at)
+	{
+		EnsureEditable();
+		if (IdentifierAllocationId.HasValue && IdentifierAllocationId != allocationId && IsIdentifierLocked("gr"))
+			throw new BusinessException("Students:Onboarding:IdentifierLocked");
+		IdentifierAllocationId = Check.NotDefaultOrNull<Guid>(allocationId, nameof(allocationId));
+		RecordProgress(at);
+	}
+
+	public bool IsIdentifierLocked(string type) => ExtraProperties.TryGetValue($"IdentifierLocked:{type}", out var value) && bool.TryParse(value?.ToString(), out var locked) && locked;
+	public void SetIdentifierLocked(string type, bool locked) => ExtraProperties[$"IdentifierLocked:{type}"] = locked;
+
 	public void ClearRollNumberForPlacementChange(DateTime at)
 	{
 		EnsureEditable();
+		if (RollNumber.HasValue && IsIdentifierLocked("roll")) throw new BusinessException("Students:Onboarding:IdentifierLocked");
 		RollNumber = null;
 		Start(at);
 		Status = StudentOnboardingStatus.InProgress;
@@ -221,9 +237,11 @@ public partial class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMu
 	public void ChangeProvisioningPlacement(Guid boardId, Guid mediumId, Guid stageId, Guid standardId,
 		Guid divisionId, Guid reservationId, int rollNumber)
 	{
-		if (Status != StudentOnboardingStatus.Provisioning || !StudentEnrollmentId.HasValue)
+		if (Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled || !StudentEnrollmentId.HasValue)
 			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
 		if (rollNumber <= 0) throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
+        if (RollNumber.HasValue && RollNumber != rollNumber && IsIdentifierLocked("roll"))
+            throw new BusinessException("Students:Onboarding:IdentifierLocked");
 		IntendedBoardId = boardId; IntendedMediumId = mediumId; IntendedStageId = stageId;
 		IntendedStandardId = standardId; DivisionId = divisionId; SeatReservationId = reservationId;
 		RollNumber = rollNumber;

@@ -12,6 +12,10 @@ audience: humans-and-agents
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
 
+## Academic list filters
+
+Admissions Application, Inquiry (including CSV export), Offering, Pipeline/options, and Review queue list inputs accept `StandardIds` in addition to the existing optional `StandardId`. Student Onboarding list accepts `StandardIds` and `DivisionIds` alongside the scalar filters. Collections bind from repeated query keys, for example `standardIds={guid1}&standardIds={guid2}`. Nonempty collections match any member; scalar, Board, Medium, academic year and other supplied criteria intersect with that match. Empty collections do not restrict classes or divisions. Existing tenant and authorized academic scope applies before counting and paging; these filters do not broaden permissions. No persistence change is required.
+
 ## Active admission Pipeline and follow-ups
 
 `GET /api/student/enrollment/admissions/applications/pipeline` requires AdmissionApplications.View and projects active inquiry-linked applications within existing tenant and offering scope.
@@ -137,9 +141,9 @@ Existing finalization permissions, scope checks, idempotency and onboarding boun
 
 ## Permission catalog
 
-Student submodules normally expose `View`, `Add`, and `Delete`. Workflow Builder additionally
-exposes `Approve`, `ManageGovernance`, and `Rollback` so maker-checker decisions, tenant policy,
-and recovery actions can be assigned independently.
+Student submodules normally expose `View`, `Add`, and `Delete`. Workflow Builder retains compatibility
+`Approve`, `ManageGovernance`, and `Rollback` grants; current direct publication still requires
+Workflow Add and does not depend on those retired builder controls.
 Module visibility permissions under `ShikshaMitra.Module.Students.*` remain separate and only control whether the corresponding module or submodule is visible.
 Student Dashboard live reads require `Students.Dashboard.View`; the legacy Reporting snapshot refresh command requires `Students.Dashboard.Add`.
 
@@ -221,12 +225,13 @@ Class capacity is shared by all tracks for the same academic year and Standard. 
 | POST | `/api/student/enrollment/admissions/workflows/governance/notifications/{notificationId}/read` | `Students.Admissions.Workflows.View` |
 | GET | `/api/student/enrollment/admissions/workflows/stage-types` | `Students.Admissions.Workflows.View` |
 
-When maker-checker is enabled, the legacy publish route is rejected and the workflow must follow
-Validated, Submitted, Approved, and Published/Scheduled states. Submission requires a different
-active approver who has the workflow `Approve` permission and a change reason. Governed publication
-accepts an optional future effective time. Rollback always creates a new Draft copied from the
-selected historical version; it never
-rewrites an Offering or Application reference.
+Both workflow publish endpoints execute immediate publication with the existing Workflow Add,
+tenant ownership, graph validation and concurrency checks. Stored maker-checker settings do not
+block publication. The compatibility governance payload's effective time no longer schedules work;
+old schedule rows and audit/notification read endpoints remain available without automatic
+publication or new workflow-specific notification delivery. Compatibility approval/settings and
+rollback endpoints keep their original permission enforcement and historical data contracts.
+Rollback still creates a separate Draft and never rewrites an Offering or Application reference.
 
 ## Runtime workflow endpoint
 
@@ -247,7 +252,7 @@ The response returns current workflow status, stage timestamps, immutable transi
 
 Published form definitions are immutable versions. Existing applications retain their original `FormDefinitionId` and `FormVersion` when an offering is moved to a later version.
 
-Inquiry and Registration form definitions publish directly from Draft after validation, with the existing form publish permission and concurrency checks. Form create/update do not create an approval state, and the form API no longer exposes submit-for-review, approve, reject, or admin-override review commands. Historical form approval metadata and audit entries remain readable in storage for compatibility but do not gate publication; workflow-builder governance and application decision approvals are separate and unchanged.
+Inquiry and Registration form definitions publish directly from Draft after validation, with the existing form publish permission and concurrency checks. Form create/update do not create an approval state, and the form API no longer exposes submit-for-review, approve, reject, or admin-override review commands. Historical form approval metadata and audit entries remain readable in storage for compatibility but do not gate publication; application decision approvals are separate and unchanged; workflow publication follows the direct command described above.
 
 Choice fields support either static option arrays or an approved source descriptor such as `{ "source": "EducationBoards" }` or `{ "source": "EducationMediums", "parentField": "BOARD_FIELD" }`. Approved source metadata is exposed by `GET /api/student/enrollment/admissions/forms/metadata/data-sources`; tenant-scoped options are read through `GET /api/student/enrollment/admissions/forms/metadata/options?sourceKey=...&parentId=...`. Arbitrary URLs and executable data sources are not accepted, and submission validates selected values against the authoritative source.
 

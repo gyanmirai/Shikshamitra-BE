@@ -132,6 +132,7 @@ public class AdmissionOfferingReadService(
 				(!input.MediumId.HasValue || offering.MediumId == input.MediumId.Value) &&
 				(!input.StageId.HasValue || offering.StageId == input.StageId.Value) &&
 				(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value) &&
+				(input.StandardIds.Count == 0 || Enumerable.Contains(input.StandardIds, offering.StandardId)) &&
 				(!input.IsActive.HasValue || offering.IsActive == input.IsActive.Value) &&
 				(string.IsNullOrWhiteSpace(input.Search) || offering.Name.Contains(input.Search) || offering.Code.Contains(input.Search) ||
 					cycle.Name.Contains(input.Search) || (campus != null && campus.Name.Contains(input.Search)) || medium.Name.Contains(input.Search) ||

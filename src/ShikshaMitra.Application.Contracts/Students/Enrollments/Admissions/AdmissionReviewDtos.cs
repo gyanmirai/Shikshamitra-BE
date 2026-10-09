@@ -117,6 +117,7 @@ public class AdmissionReviewQueueInput : PagedResultRequestDto
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 	public Guid? StandardId { get; set; }
+	public List<Guid> StandardIds { get; set; } = [];
 	public bool OverdueOnly { get; set; }
 	public bool AssignedToMe { get; set; }
 }

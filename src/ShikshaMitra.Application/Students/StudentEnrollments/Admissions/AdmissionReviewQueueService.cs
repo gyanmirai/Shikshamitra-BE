@@ -32,7 +32,8 @@ public class AdmissionReviewQueueService(IRepository<AdmissionReviewWorkItem, Gu
 				visible.Any(offering => offering.Id == application.AdmissionOfferingId &&
 					(!input.BoardId.HasValue || offering.BoardId == input.BoardId.Value) &&
 					(!input.MediumId.HasValue || offering.MediumId == input.MediumId.Value) &&
-					(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value)) &&
+					(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value) &&
+				(input.StandardIds.Count == 0 || Enumerable.Contains(input.StandardIds, offering.StandardId))) &&
 				(!input.AcademicYearId.HasValue || cycleQuery.Any(cycle =>
 					cycle.Id == application.AdmissionCycleId && cycle.AcademicYearId == input.AcademicYearId.Value)) &&
 				(!input.AssignedToMe || work.AssignedReviewerId == CurrentUser.Id) &&

@@ -142,6 +142,7 @@ public class AdmissionOfferingListInput : PagedAndSortedResultRequestDto
 	public Guid? MediumId { get; set; }
 	public Guid? StageId { get; set; }
 	public Guid? StandardId { get; set; }
+	public List<Guid> StandardIds { get; set; } = [];
 	public bool? IsActive { get; set; }
 	public AdmissionOfferingAvailabilityStatus? AvailabilityStatus { get; set; }
 	public AdmissionOfferingConfigurationStatus? ConfigurationStatus { get; set; }

@@ -239,20 +239,15 @@ Admission forms use the same controlled rule foundation for section visibility, 
 
 Every new form version carries an Inquiry or Registration purpose. Clone and new-version operations preserve it, and changing it is allowed only on a Draft. Earlier Correction and Consent values may remain on existing test records but cannot be used for new forms. Workflow publication requires a published Registration form on each Form stage and a published Inquiry form for any configured workflow default. Offering readiness rejects a purpose mismatch before activation.
 5. Validate reachability, dead ends, duplicate routes, cycles, terminal reachability, published form references, and every enabled managed-stage policy. Form, Assessment and Documents policies are parsed with the same domain validators used by runtime, so malformed or out-of-range settings cannot pass publication validation.
-6. If school maker-checker governance is disabled, publish the validated version directly with a
-   change reason. If it is enabled, submit it with a change reason and select a different active
-   user who has the workflow `Approve` permission.
-7. The assigned approver reviews validation, impact, and version comparison, then approves or
-   requests changes. A request for changes records the reason and returns the version to Draft.
-8. Publish an approved version immediately or set a future effective time. A scheduled worker
-   publishes due versions; the previously current version becomes Superseded.
-9. Create a new immutable version for later edits. Existing Offerings and Applications continue to
+6. Publish the validated version immediately with Workflow Add authority and a current concurrency
+   stamp. Stored maker-checker settings do not gate publication; no scheduling or notification
+   configuration is part of this flow. The previous published version becomes Superseded.
+7. Create a new immutable version for later edits. Existing Offerings and Applications continue to
    use their pinned Published, Superseded, or Archived version.
-10. For rollback, select a historical Published, Superseded, or Archived version and create a new
-    Draft with a required reason. Validate and govern that Draft normally; never repoint existing
-    runtime records silently.
-11. Archive a Published or Superseded version only when the usage rule permits it. Use governance
-    history and notifications to audit actors, decisions, reasons, and effective times.
+8. Historical scheduled records do not auto-publish. An explicit publish request revalidates and
+   publishes an eligible historical schedule immediately, preserving its existing audit history.
+9. Archive a Published or Superseded version only when the existing usage rule permits it.
+   Historical audit records and compatibility recovery contracts remain intact.
 
 Publication and Offering activation validate different scopes. Workflow publication owns graph, runtime-handler, managed-policy, and SLA/deadline-range validation. People assignments cannot be fully checked until the workflow is attached to an Offering with a concrete academic hierarchy. Activation therefore verifies the new Offering's assignment profile has eligible active staff in that hierarchy, without adding retired Review assignee requirements. Historical Offerings using pinned Inquiry-stage assignment rules retain their existing compatibility checks. A reusable published workflow is not coupled to one campus, but an Offering with unusable staff assignments cannot become active.
 

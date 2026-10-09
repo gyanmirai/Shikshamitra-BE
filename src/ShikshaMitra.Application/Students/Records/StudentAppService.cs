@@ -141,6 +141,7 @@ public class StudentAppService(
 				(s.MiddleName != null && s.MiddleName.ToLower().Contains(normalizedSearchTerm)) ||
 				(s.LastName != null && s.LastName.ToLower().Contains(normalizedSearchTerm)) ||
 				(s.GrNo.HasValue && s.GrNo.ToString().Contains(normalizedSearchTerm)) ||
+				(s.GrNumber != null && s.GrNumber.ToLower().Contains(normalizedSearchTerm)) ||
 				(s.RollNo.HasValue && s.RollNo.ToString().Contains(normalizedSearchTerm))
 			);
 		}
@@ -179,6 +180,9 @@ public class StudentAppService(
 			return new StudentDto
 			{
 				StudentId = student.Id,
+				GrNo = student.GrNo,
+				GrNumber = student.GrNumber,
+				RollNo = student.RollNo,
 				InquiryNo = student.AdditionalDetail?.InquiryNo ?? string.Empty,
 				FormNo = student.AdditionalDetail?.RegistrationFormNo,
 				StudentName = BuildFullName(student.FirstName, student.MiddleName, student.LastName),

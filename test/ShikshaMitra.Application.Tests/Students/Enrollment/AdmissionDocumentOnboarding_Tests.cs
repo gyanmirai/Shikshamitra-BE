@@ -13,10 +13,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[Theory]
 	[InlineData("upload", true)]
 	[InlineData("both", true)]
-	[InlineData("original", false)]
+	[InlineData("original", true)]
 	[InlineData("waiver", false)]
-	[InlineData("custom", false)]
-	public Task Document_handoff_only_accepted_mapped_files_satisfy_independent_onboarding_requirements(string mode, bool ready) =>
+	[InlineData("custom", true)]
+	public Task Document_handoff_accepted_workflow_evidence_satisfies_frozen_onboarding_requirements_without_waivers(string mode, bool ready) =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var type = await CreateHandoffDocumentTypeAsync();
@@ -25,14 +25,16 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Code = "CERTIFICATE", Name = "Certificate", DocumentTypeId = mode == "custom" ? null : type.Id,
 				CollectionMode = mode is "waiver" or "custom" ? "upload" : mode
 			};
-			var fixture = await CreateDocumentHandoffFixtureAsync(HandoffPolicy(requirement));
+			var fixture = await CreateOnboardingDocumentFixtureAsync(HandoffPolicy(requirement));
 			var kind = mode is "original" or "both" ? "original" : mode == "waiver" ? "waiver" : "upload";
 			await AddHandoffEvidenceAsync(fixture, requirement, kind: kind);
-			var application = await CompleteDocumentHandoffApplicationAsync(fixture);
-			var finalized = await FinalizeAsync(application, true, $"document-readiness-{mode}");
+			var application = await CompleteOnboardingDecisionAsync(fixture.Application.Id);
+			var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
+            await ConfigureOfferingReadinessAsync(fixture.Offering, cycle.AcademicYearId);
+            var finalized = await FinalizeAsync(application, true, $"document-readiness-{mode}");
 			var reader = GetRequiredService<AdmissionStudentEvidenceReader>();
 			(await WithUnitOfWorkAsync(() => reader.GetAcceptedUploadDocumentTypeIdsAsync(finalized.StudentId)))
-				.Contains(type.Id).ShouldBe(ready);
+				.Contains(type.Id).ShouldBe(mode is "upload" or "both");
 			var onboarding = GetRequiredService<IStudentOnboardingAppService>();
 			var current = await onboarding.GetAsync(finalized.OnboardingCaseId);
 			var refreshed = await onboarding.RefreshReadinessAsync(current.Id, current.ConcurrencyStamp);

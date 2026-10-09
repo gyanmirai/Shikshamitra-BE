@@ -71,16 +71,8 @@ public partial class StudentOnboardingAppService
 		var reviewedReturn = ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(item).HasValue;
 		if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(item, false);
 		var handoffs = await handoffRepository.GetListAsync(h => h.OnboardingCaseId == item.Id);
-		var finance = handoffs.SingleOrDefault(h => h.ServiceKey == "finance-first-payment");
-		if (finance == null)
-			throw OnboardingRuleConfiguration.Invalid("The required Finance handoff is missing. Reconcile this case before completion.");
 		var now = DateTime.UtcNow;
-		var readiness = await feeReadinessReader.GetAsync(item.StudentId, item.AcademicYearId);
-		var application = await applicationRepository.GetAsync(item.ApplicationId);
-		var feeSelectionBlocker = await admissionFeeSelectionReader.GetBlockerAsync(application);
-		if (readiness.Assigned && readiness.FirstInstallmentSettled && feeSelectionBlocker == null) finance.Acknowledge(now);
-		else finance.Fail(feeSelectionBlocker ?? readiness.Detail, now);
-		await handoffRepository.UpdateAsync(finance, false);
+		handoffs = handoffs.Where(h => h.ServiceKey != "finance-first-payment" && (h.ServiceKey != "service-consent" || !item.ExtraProperties.ContainsKey("ReadinessRulesSnapshot"))).ToList();
 		foreach (var account in handoffs.Where(h => h.ServiceKey is "student-account" or "guardian-account"))
 		{
 			var type = account.ServiceKey.Replace("-account", "");
@@ -97,11 +89,16 @@ public partial class StudentOnboardingAppService
 			item.RequireAttention(string.Join("; ", pending.Select(h => h.LastError ?? $"Complete required {h.ServiceKey} provisioning.")));
 			await AddEventAsync(item.Id, "ProvisioningChecked", "Required provisioning is still incomplete.");
 		}
+        else if (await CredentialsPendingAsync(item) && OnboardingRuleConfiguration.Text((await ReadSavedRulesAsync(item))!.Value, "credentialSendingTime", "activation") == "activation")
+        {
+            item.RequireAttention("Student is active. Complete or retry the requested credential emails in the Credentials tab.");
+            await AddEventAsync(item.Id, "AccessPending", "Requested credential delivery is still pending after activation.");
+        }
 		else
 		{
 			item.CompleteProvisioning(now);
 			if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().CompleteAsync(item);
-			await AddEventAsync(item.Id, "Completed", "Onboarding completed after Finance confirmed the first installment and all required handoffs were acknowledged.");
+			await AddEventAsync(item.Id, "Completed", "Onboarding completed after all requested access handoffs were acknowledged.");
 			await distributedEventBus.PublishAsync(new StudentOnboardingCompletedEto(item.Id, item.StudentId,
 				item.StudentEnrollmentId!.Value, item.AcademicYearId, item.IntendedStandardId, item.DivisionId!.Value, CurrentTenant.Id, now));
 		}

@@ -25,7 +25,7 @@ public class AdmissionApplicationDecisionService(
 	IRepository<AdmissionGuardian, Guid> guardianRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
-	IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
+	IRepository<AdmissionApplicationStageInstance, Guid> stageRepository,
 	IRepository<AdmissionApplicationWorkflowInstance, Guid> workflowRepository,
 	IRepository<AdmissionApplicationDecisionHistory, Guid> historyRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository,
@@ -36,18 +36,17 @@ public class AdmissionApplicationDecisionService(
 	IStudentRepository studentRepository,
 	IRepository<StudentEnrollment, Guid> enrollmentRepository,
 	AdmissionDocumentHandoffService documentHandoff,
-	AdmissionEligibilityRuntimeService eligibilityRuntime,
-	AdmissionReviewDecisionGuard reviewGuard,
 	AdmissionSeatRuntimeService seatRuntime,
-	AdmissionOfferCommandService offerCommands,
-	AdmissionInquiryPeopleService peopleService,
 	AdmissionApplicationScopeAccessService applicationScope,
 	IAdmissionFinalizationConflictClassifier finalizationConflicts,
 	AdmissionFeeSelectionAccessService feeSelection)
 	: ApplicationService, ITransientDependency
 {
-	public Task<AdmissionApplicationDto> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) =>
-		ChangeAsync(id, input, application => application.MarkInReview(CurrentUser.Id, input.Reason));
+	public async Task<AdmissionApplicationDto> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input)
+	{
+		await GetApplicationAsync(id);
+		throw new BusinessException(AdmissionReviewErrorCodes.InvalidState, "Review is retired. Complete the admission stages and record the admission decision.");
+	}
 
 	public Task<AdmissionApplicationDto> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input) =>
 		ChangeAsync(id, input, application => application.Approve(CurrentUser.Id, input.Reason), "approve");
@@ -60,35 +59,20 @@ public class AdmissionApplicationDecisionService(
 
 	public async Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input)
 	{
-		if (await offerCommands.TryIssueLegacyAsync(id, input)) return await GetDecisionResultAsync(id);
-		var target = await GetApplicationAsync(id);
-		await feeSelection.EnsureSelectionAsync(target);
-		if (input.CounsellorId.HasValue && input.CounsellorId != target.AssignedCounsellorId)
-			throw new BusinessException(AdmissionOfferStageErrorCodes.InvalidState,
-				"Change the journey counsellor through the application assignment action before issuing an offer.");
-		var effectiveCounsellorId = input.CounsellorId ?? target.AssignedCounsellorId;
-		if (effectiveCounsellorId.HasValue)
-			await peopleService.EnsureCanAccessOfferingAsync(effectiveCounsellorId.Value, target.AdmissionOfferingId);
-		return await ChangeAsync(id, input, application =>
-		{
-			application.IssueOffer(
-				input.OfferExpiresAt.HasValue
-					? input.OfferExpiresAt.Value.UtcDateTime
-					: throw new BusinessException(AdmissionErrorCodes.ApplicationOfferExpiryInvalid),
-				CurrentUser.Id, input.Reason);
-		}, "issueOffer");
+		await EnsureOfferAvailableAsync(id);
+		throw new BusinessException(AdmissionOfferStageErrorCodes.InvalidState);
 	}
 
 	public async Task<AdmissionApplicationDto> AcceptOfferAsync(Guid id, AdmissionApplicationDecisionDto input)
 	{
-		if (await offerCommands.TryRespondLegacyAsync(id, input, true)) return await GetDecisionResultAsync(id);
-		return await ChangeAsync(id, input, application => application.AcceptOffer(CurrentUser.Id, input.Reason), "acceptOffer");
+		await EnsureOfferAvailableAsync(id);
+		throw new BusinessException(AdmissionOfferStageErrorCodes.InvalidState);
 	}
 
 	public async Task<AdmissionApplicationDto> DeclineOfferAsync(Guid id, AdmissionApplicationDecisionDto input)
 	{
-		if (await offerCommands.TryRespondLegacyAsync(id, input, false)) return await GetDecisionResultAsync(id);
-		return await ChangeAsync(id, input, application => application.DeclineOffer(CurrentUser.Id, input.Reason ?? string.Empty));
+		await EnsureOfferAvailableAsync(id);
+		throw new BusinessException(AdmissionOfferStageErrorCodes.InvalidState);
 	}
 
 	public async Task<AdmissionFinalizationPreviewDto> GetFinalizationPreviewAsync(Guid id)
@@ -96,19 +80,15 @@ public class AdmissionApplicationDecisionService(
 		var context = await LoadFinalizationContextAsync(id);
 		var matches = await FindPossibleMatchesAsync(context.Applicant);
 		var items = BuildReadinessItems(context, matches);
-		try { await documentHandoff.EnsureCompleteAsync(context.Application); }
-		catch (BusinessException exception) when (exception.Code is AdmissionDocumentErrorCodes.EvidenceRequired or AdmissionDocumentErrorCodes.InvalidPolicy)
+		if (!await LazyServiceProvider.LazyGetRequiredService<OnboardingRequirementSnapshotService>().CanDeferAsync(context.Application))
 		{
-			items.Add(Item("admission_documents", "Admission document evidence accepted", false, exception.Message));
+			try { await feeSelection.EnsureSelectionAsync(context.Application); }
+			catch (BusinessException exception) when (exception.Code == AdmissionFeeSelectionErrorCodes.Required)
+			{ items.Add(Item("fee_structure", "Finance fee structure confirmed", false, exception.Message)); }
+			try { await documentHandoff.EnsureCompleteAsync(context.Application); }
+			catch (BusinessException exception) when (exception.Code is AdmissionDocumentErrorCodes.EvidenceRequired or AdmissionDocumentErrorCodes.InvalidPolicy)
+			{ items.Add(Item("admission_documents", "Admission document evidence accepted", false, exception.Message)); }
 		}
-		try { await eligibilityRuntime.EnsureApplicationCompleteAsync(context.Application); }
-		catch (BusinessException exception) when (exception.Code is AdmissionEligibilityErrorCodes.EvaluationRequired or AdmissionEligibilityErrorCodes.StaleEvaluation or AdmissionEligibilityErrorCodes.InvalidPolicy)
-		{
-			items.Add(Item("admission_eligibility", "Admission eligibility checked", false, "Check the latest eligibility information and resolve unmet criteria before finalizing admission."));
-		}
-		try { await reviewGuard.EnsureApplicationCompleteAsync(context.Application); }
-		catch (BusinessException exception) when (exception.Code?.StartsWith("Admissions:Review:", StringComparison.Ordinal) == true)
-		{ items.Add(Item("admission_review", "Admission review approved", false, AdmissionReviewDecisionGuard.Message(exception.Code))); }
 		try { await seatRuntime.EnsureApplicationCompleteAsync(context.Application); }
 		catch (BusinessException exception) when (exception.Code is AdmissionSeatStageErrorCodes.CompletionRequired or AdmissionSeatStageErrorCodes.InvalidPolicy)
 		{ items.Add(Item("admission_seat", "Admission seat confirmed", false, exception.Message)); }
@@ -178,9 +158,11 @@ public class AdmissionApplicationDecisionService(
 		existingCase ??= idempotentCase;
 		if (existingCase != null)
 		{
-			await documentHandoff.EnsureCompleteAsync(context.Application);
-			await eligibilityRuntime.EnsureApplicationCompleteAsync(context.Application);
-			await reviewGuard.EnsureApplicationCompleteAsync(context.Application);
+			if (!await LazyServiceProvider.LazyGetRequiredService<OnboardingRequirementSnapshotService>().CanDeferAsync(context.Application))
+			{
+				await feeSelection.EnsureSelectionAsync(context.Application);
+				await documentHandoff.EnsureCompleteAsync(context.Application);
+			}
 			await seatRuntime.EnsureApplicationCompleteAsync(context.Application);
 			context.Applicant.LinkStudent(existingCase.StudentId);
 			FinalizeApplication(context, existingCase.StudentId, existingCase.Id, existingCase.CreationTime);
@@ -203,9 +185,11 @@ public class AdmissionApplicationDecisionService(
 				.WithData("Blockers", string.Join(", ", blockingItems.Select(item => item.Label)));
 		if (!input.ConfirmGuardianContactVerified)
 			throw new BusinessException(StudentOnboardingErrorCodes.GuardianContactUnverified);
-		await documentHandoff.EnsureCompleteAsync(context.Application);
-		await eligibilityRuntime.EnsureApplicationCompleteAsync(context.Application);
-		await reviewGuard.EnsureApplicationCompleteAsync(context.Application);
+		if (!await LazyServiceProvider.LazyGetRequiredService<OnboardingRequirementSnapshotService>().CanDeferAsync(context.Application))
+		{
+			await feeSelection.EnsureSelectionAsync(context.Application);
+			await documentHandoff.EnsureCompleteAsync(context.Application);
+		}
 		await seatRuntime.EnsureApplicationCompleteAsync(context.Application);
 
 		var selectedStudentId = context.Applicant.ExistingStudentId ?? input.ExistingStudentId;
@@ -268,6 +252,7 @@ public class AdmissionApplicationDecisionService(
 			context.Offering.StageId, context.Offering.StandardId, input.IdempotencyKey, now,
 			now.AddHours(policy?.SlaHours ?? 72));
 		onboardingCase.SetCampusId(context.Offering.CampusId);
+		await LazyServiceProvider.LazyGetRequiredService<OnboardingRequirementSnapshotService>().CaptureAsync(onboardingCase);
 		if (reviewedReturn != null)
 		{
 			onboardingCase.SetAdmissionRoute("Returning student");
@@ -319,17 +304,33 @@ public class AdmissionApplicationDecisionService(
 
 	private async Task CreateDefaultStepsAsync(StudentOnboardingCase onboardingCase, StudentOnboardingPolicy? policy, DateTime now)
 	{
+		var offeringSnapshot = onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot");
+		var documentsReady = offeringSnapshot && await LazyServiceProvider.LazyGetRequiredService<OnboardingRequirementSnapshotService>()
+			.DocumentsReadyAsync(onboardingCase, await applicationRepository.GetAsync(onboardingCase.ApplicationId));
 		for (var index = 0; index < StudentOnboardingStepKeys.Defaults.Length; index++)
 		{
 			var definition = StudentOnboardingStepKeys.Defaults[index];
 			var required = IsRequired(definition.Key, policy);
+            if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot") && definition.Key is
+                StudentOnboardingStepKeys.Identity or StudentOnboardingStepKeys.Family or StudentOnboardingStepKeys.Communication or StudentOnboardingStepKeys.MedicalAndPreviousSchool)
+                required = false;
+            if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot") && definition.Key is StudentOnboardingStepKeys.Documents or StudentOnboardingStepKeys.FinanceAccountsServices) required = true;
 			var initialStatus = required ? StudentOnboardingStepStatus.Pending : StudentOnboardingStepStatus.NotRequired;
 			var step = new StudentOnboardingStep(GuidGenerator.Create(), CurrentTenant.Id, onboardingCase.Id,
 				definition.Key, definition.Label, index + 1, required, initialStatus);
-			if (definition.Key == StudentOnboardingStepKeys.Identity)
+			if (definition.Key == StudentOnboardingStepKeys.Identity && required)
 				step.Complete(CurrentUser.Id, now, "Core identity verified during admission finalization.");
+			if (definition.Key == StudentOnboardingStepKeys.Documents && documentsReady)
+				step.Complete(CurrentUser.Id, now, "Applicable Offering documents verified during admission finalization.");
 			await stepRepository.InsertAsync(step, false);
 		}
+        if (onboardingCase.ExtraProperties.TryGetValue("ReadinessRulesSnapshot", out var snapshot) && snapshot is string json)
+        {
+            using var saved = System.Text.Json.JsonDocument.Parse(json);
+            if (OnboardingRuleConfiguration.Text(saved.RootElement, "approvalMode") == "always")
+                await stepRepository.InsertAsync(new StudentOnboardingStep(GuidGenerator.Create(), CurrentTenant.Id, onboardingCase.Id,
+                    StudentOnboardingStepKeys.ApprovalReview, "Onboarding approval", 85, true), false);
+        }
 	}
 
 	private async Task<StudentOnboardingPolicy?> ResolvePolicyAsync(Guid academicYearId, Guid offeringId, Guid standardId)
@@ -434,14 +435,7 @@ public class AdmissionApplicationDecisionService(
 	{
 		var application = context.Application;
 		var applicant = context.Applicant;
-		var usesDirectApproval = context.AllowsApprovedDirectFinalization &&
-			application.Status is not (AdmissionApplicationStatus.Offered or
-				AdmissionApplicationStatus.OfferAccepted or AdmissionApplicationStatus.OfferDeclined);
-		var offerReady = usesDirectApproval
-			? application.Status == AdmissionApplicationStatus.Approved
-			: application.Status == AdmissionApplicationStatus.OfferAccepted &&
-				application.OfferAcceptedAt.HasValue &&
-				(!application.OfferExpiresAt.HasValue || application.OfferExpiresAt.Value > DateTime.UtcNow);
+		var decisionReady = application.Status == AdmissionApplicationStatus.Approved;
 		var identityReady = !string.IsNullOrWhiteSpace(applicant.FirstName) &&
 			!string.IsNullOrWhiteSpace(applicant.LastName) && applicant.DateOfBirth.HasValue &&
 			Enum.TryParse<GenderEnum>(applicant.Gender, true, out _);
@@ -452,9 +446,8 @@ public class AdmissionApplicationDecisionService(
 			!application.CurrentStageInstanceId.HasValue;
 		return
 		[
-			Item("offer", usesDirectApproval ? "Direct admission approved" : "Accepted, unexpired offer",
-				offerReady, offerReady ? "Ready" : usesDirectApproval
-					? "Approve this direct admission before finalizing." : "Offer must be accepted and unexpired."),
+			Item("decision", "Admission approved", decisionReady,
+				decisionReady ? "Ready" : "Approve the admission decision before finalizing."),
 			Item("workflow", "Admission workflow completed", workflowReady, workflowReady ? "Ready" : "Complete the admission workflow first."),
 			Item("identity", "Core identity complete", identityReady, identityReady ? "Ready" : "Name, date of birth, and gender are required."),
 			Item("guardian", "Primary guardian contact valid", guardianReady, guardianReady ? "Verification confirmation is required when finalizing." : "Enter a valid 10-digit Indian mobile number or email for the primary guardian."),
@@ -468,10 +461,7 @@ public class AdmissionApplicationDecisionService(
 
 	private static void FinalizeApplication(FinalizationContext context, Guid studentId, Guid caseId, DateTime finalizedAt)
 	{
-		if (context.AllowsApprovedDirectFinalization && context.Application.Status == AdmissionApplicationStatus.Approved)
-			context.Application.FinalizeApprovedDirectAdmission(studentId, caseId, finalizedAt);
-		else
-			context.Application.FinalizeAdmission(studentId, caseId, finalizedAt);
+		context.Application.FinalizeApprovedAdmission(studentId, caseId, finalizedAt);
 	}
 
 
@@ -512,27 +502,18 @@ public class AdmissionApplicationDecisionService(
 		var offering = await offeringRepository.FindAsync(application.AdmissionOfferingId) ??
 			throw new EntityNotFoundException(typeof(AdmissionOffering), application.AdmissionOfferingId);
 		var workflow = await workflowRepository.FindAsync(item => item.ApplicationId == id);
-		var hasOfferStage = await workflowStageRepository.AnyAsync(stage =>
-			stage.WorkflowDefinitionId == application.WorkflowDefinitionId &&
-			stage.StageType == AdmissionWorkflowStageType.Offer);
-		var allowsApprovedDirectFinalization = offering.EntryMode == AdmissionEntryMode.DirectRegistration &&
-			offering.Track != AdmissionTrack.General && !hasOfferStage;
-		return new FinalizationContext(application, applicant, guardian, cycle, offering, workflow,
-			allowsApprovedDirectFinalization);
+		return new FinalizationContext(application, applicant, guardian, cycle, offering, workflow);
 	}
 
 	private async Task<AdmissionApplicationDto> ChangeAsync(Guid id, AdmissionApplicationDecisionDto input, Action<AdmissionApplication> change, string? decision = null)
 	{
 		var application = await GetApplicationAsync(id);
 		EnsureConcurrency(application, input.ConcurrencyStamp);
-		var review = decision is "approve" or "reject" or "waitlist" ? await reviewGuard.EnsureDecisionAsync(application, decision) : null;
-		if (decision is "issueOffer" or "acceptOffer") await reviewGuard.EnsureApplicationCompleteAsync(application);
-		var reaffirm = review != null && decision == "approve" && application.Status is AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted;
-		if (!reaffirm) change(application);
+		if (decision is "approve" or "reject" or "waitlist") await EnsureDecisionStageAsync(application);
+		change(application);
 		if (decision == "reject")
 			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnClosureService>()
 				.CloseRejectedApplicationAsync(application, input.Reason ?? string.Empty);
-		if (review != null) await reviewGuard.RecordDecisionAsync(review, decision!, input.Reason);
 		await applicationRepository.UpdateAsync(application, false);
 		await historyRepository.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(), CurrentTenant.Id,
 			application.Id, application.Status, input.Reason, CurrentUser.Id), false);
@@ -540,7 +521,6 @@ public class AdmissionApplicationDecisionService(
 			"ApplicationDecisionChanged", $"Application status changed to {application.Status}", application.ApplicantId, application.Id), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		var result = AdmissionApplicationMapper.ToDto(application);
-		result.ReviewDecision = await reviewGuard.GetCapabilitiesAsync(application);
 		return result;
 	}
 
@@ -552,12 +532,21 @@ public class AdmissionApplicationDecisionService(
 		return application;
 	}
 
-	private async Task<AdmissionApplicationDto> GetDecisionResultAsync(Guid id)
+	private async Task EnsureOfferAvailableAsync(Guid id)
 	{
-		var application = await GetApplicationAsync(id);
-		var result = AdmissionApplicationMapper.ToDto(application);
-		result.ReviewDecision = await reviewGuard.GetCapabilitiesAsync(application);
-		return result;
+		await GetApplicationAsync(id);
+		if (AdmissionWorkflowStageTypeRegistry.Find(AdmissionWorkflowStageType.Offer)?.IsSelectable != true)
+			throw new BusinessException(AdmissionOfferStageErrorCodes.InvalidState, "Offer actions are retired. Finalize the approved admission after completing its journey.");
+	}
+
+	private async Task EnsureDecisionStageAsync(AdmissionApplication application)
+	{
+		var workflow = await workflowRepository.FindAsync(item => item.ApplicationId == application.Id);
+		var stage = application.CurrentStageInstanceId.HasValue ? await stageRepository.FindAsync(application.CurrentStageInstanceId.Value) : null;
+		if (workflow?.Status != AdmissionWorkflowInstanceStatus.Active || stage?.WorkflowInstanceId != workflow.Id ||
+			stage.Status != AdmissionRuntimeStageStatus.Active || stage.StageType != AdmissionWorkflowStageType.Approval)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionInvalidState,
+				"Complete the preceding stages and open the active Admission decision stage before recording this decision.");
 	}
 
 	private static void EnsureConcurrency(AdmissionApplication application, string? stamp)
@@ -582,6 +571,5 @@ public class AdmissionApplicationDecisionService(
 		AdmissionGuardian? Guardian,
 		AdmissionCycle Cycle,
 		AdmissionOffering Offering,
-		AdmissionApplicationWorkflowInstance? Workflow,
-		bool AllowsApprovedDirectFinalization);
+		AdmissionApplicationWorkflowInstance? Workflow);
 }

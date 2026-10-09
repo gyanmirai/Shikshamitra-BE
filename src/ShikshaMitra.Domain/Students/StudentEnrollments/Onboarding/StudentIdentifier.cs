@@ -66,6 +66,13 @@ public class StudentIdentifierSeries : FullAuditedAggregateRoot<Guid>, IMultiTen
 
 	public void Deactivate() => IsActive = false;
 
+	public void AdvancePastManualSequence(long sequence)
+	{
+		if (sequence < 1 || sequence == long.MaxValue || MaximumSequence.HasValue && sequence > MaximumSequence.Value)
+			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesUnavailable);
+		NextSequence = Math.Max(NextSequence, sequence + 1);
+	}
+
 	public void ApplyRule(string name, string prefix, string suffix, int padding, long startingNumber, long? maximumNumber)
 	{
 		if (padding is < 1 or > 20 || startingNumber < 1) throw new ArgumentOutOfRangeException(nameof(padding));
@@ -127,6 +134,15 @@ public class StudentIdentifierAllocation : FullAuditedAggregateRoot<Guid>, IMult
 			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierAlreadyAllocated);
 		Status = StudentIdentifierAllocationStatus.Committed;
 		CommittedAt = at.ToUniversalTime();
+	}
+
+	public void CorrectReservation(Guid seriesId, long sequence, string value, string reason, DateTime at)
+	{
+		if (Status != StudentIdentifierAllocationStatus.Reserved) throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
+		Reason = Check.NotNullOrWhiteSpace(reason, nameof(reason), 2000).Trim();
+		NumberSeriesId = seriesId; Sequence = sequence;
+		Value = Check.NotNullOrWhiteSpace(value, nameof(value), 100).Trim();
+		IsManual = true; AllocatedAt = at.ToUniversalTime();
 	}
 
 	public void Release()

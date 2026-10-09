@@ -57,11 +57,11 @@ public class StudentRecordPlacementService(
 			throw new BusinessException(StudentOnboardingErrorCodes.RollNumberDuplicate);
 		if (input.RollNumber.HasValue && await cases.AnyAsync(c => c.TenantId == CurrentTenant.Id && c.StudentId != studentId &&
 			c.AcademicYearId == input.AcademicYearId && c.DivisionId == input.DivisionId && c.RollNumber == input.RollNumber &&
-			c.Status != StudentOnboardingStatus.Completed && c.Status != StudentOnboardingStatus.Cancelled))
+			!c.StudentEnrollmentId.HasValue && c.Status != StudentOnboardingStatus.Completed && c.Status != StudentOnboardingStatus.Cancelled))
 			throw new BusinessException(StudentOnboardingErrorCodes.RollNumberDuplicate);
 		var stage = standard.EducationMediumStage; var medium = stage.EducationMedium;
 		var provisioningCase = await cases.FindAsync(c => c.TenantId == CurrentTenant.Id && c.StudentId == studentId &&
-			c.StudentEnrollmentId == enrollment.Id && c.Status == StudentOnboardingStatus.Provisioning);
+			c.StudentEnrollmentId == enrollment.Id && c.Status != StudentOnboardingStatus.Completed && c.Status != StudentOnboardingStatus.Cancelled);
 		if (provisioningCase != null)
 		{
 			if (!input.RollNumber.HasValue) throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);

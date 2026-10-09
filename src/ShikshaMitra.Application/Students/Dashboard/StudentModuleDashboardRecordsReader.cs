@@ -23,13 +23,13 @@ public class StudentModuleDashboardRecordsReader(IStudentRepository students,
 	{
 		await AuthorizationService.CheckAsync(P.Records_StudentList.View);
 		var query = await scope.ApplyStudentScopeAsync(await students.GetQueryableWithoutAutoIncludesAsync());
-		var onboarding = await cases.GetQueryableAsync();
+		var onboardingEligibleIds = await LazyServiceProvider.LazyGetRequiredService<StudentRecordsAccessService>().GetOnboardingEligibleStudentIdsAsync();
 		var legacy = await overrides.GetQueryableAsync();
 		var enrollments = (await scope.GetQueryableAsync()).Where(e => e.AcademicYearId == result.AcademicYearId);
 		var allEnrollmentQuery = await allEnrollments.GetQueryableAsync();
 		// Match permanent directory eligibility and historical enrollment membership.
 		query = query.Where(s => (s.Status == StudentLifeCycleStatusEnum.Enrolled || s.Status == StudentLifeCycleStatusEnum.InActive || s.Status == StudentLifeCycleStatusEnum.Left) &&
-			(onboarding.Any(c => c.TenantId == CurrentTenant.Id && c.StudentId == s.Id && c.Status == StudentOnboardingStatus.Completed) ||
+			(onboardingEligibleIds.Contains(s.Id) ||
 			 legacy.Any(o => o.TenantId == CurrentTenant.Id && o.StudentId == s.Id && o.Status == "Approved")) &&
 			(enrollments.Any(e => e.StudentId == s.Id) || s.Status == StudentLifeCycleStatusEnum.Left && s.AcademicYearId == result.AcademicYearId &&
 			 !allEnrollmentQuery.Any(e => e.TenantId == CurrentTenant.Id && e.StudentId == s.Id)));

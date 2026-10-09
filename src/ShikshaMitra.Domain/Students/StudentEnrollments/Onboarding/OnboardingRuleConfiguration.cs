@@ -29,11 +29,12 @@ public sealed class OnboardingRuleConfiguration
 				if (profile.ValueKind != JsonValueKind.Object ||
 					!profile.TryGetProperty("applicability", out var applicability) || applicability.ValueKind != JsonValueKind.Object ||
 					!profile.TryGetProperty("rules", out var rules) || rules.ValueKind != JsonValueKind.Object ||
-					string.IsNullOrWhiteSpace(Text(profile, "id")) || Strings(profile, "admissionRoutes").Length == 0 ||
+					string.IsNullOrWhiteSpace(Text(profile, "id")) || Strings(profile, "offeringIds").Length == 0 && Strings(profile, "admissionRoutes").Length == 0 ||
 					Strings(profile, "admissionRoutes").Any(route => string.IsNullOrWhiteSpace(route) ||
 						route.Length > 100 || route != route.Trim() || route.Any(char.IsControl)))
 					throw Invalid("Each readiness rule needs an ID, admission route, applicability and rules.");
 				ValidateReadinessRules(rules);
+				_ = Ids(profile, "offeringIds");
 			}
 			if (Profiles.Select(p => Text(p, "id")).Distinct().Count() != Profiles.Count())
 				throw Invalid("Readiness rule IDs must be unique.");
@@ -44,6 +45,7 @@ public sealed class OnboardingRuleConfiguration
 				{
 					if (rule.ValueKind != JsonValueKind.Object) throw Invalid($"Invalid {section} rule.");
 					ValidateBoolean(rule, "isActive");
+					ValidateChoice(rule, "status", "draft", "published", "superseded");
 					ValidateInteger(rule, "maximumNumber", true);
 					if (section == "grNumber")
 					{
@@ -172,13 +174,25 @@ public sealed class OnboardingRuleConfiguration
 	public IEnumerable<JsonElement> Applicabilities => Profiles.Select(p => p.GetProperty("applicability"))
 		.Concat(Rules("grNumber")).Concat(Rules("rollNumber")).Concat(Rules("divisionChange"));
 
-	public JsonElement? ResolveProfile(StudentOnboardingCase item, string? route = null) =>
-		Resolve(Profiles.Where(p => Strings(p, "admissionRoutes").Any(value =>
+	public JsonElement? ResolveProfile(StudentOnboardingCase item, string? route = null)
+	{
+		var linked = Profiles.Where(p => Ids(p, "offeringIds").Contains(item.OfferingId)).ToList();
+		if (linked.Count > 1) throw Invalid("Only one readiness rule may cover an Offering.");
+		if (linked.Count == 1) return linked[0];
+		return Resolve(Profiles.Where(p => Strings(p, "offeringIds").Length == 0 && Strings(p, "admissionRoutes").Any(value =>
 			string.Equals(value, route ?? item.GetAdmissionRoute(), StringComparison.OrdinalIgnoreCase))), item, true);
-	public JsonElement Readiness(StudentOnboardingCase item) =>
-		ResolveProfile(item)?.GetProperty("rules") ?? Root.GetProperty("readinessAccess");
+	}
+	public JsonElement Readiness(StudentOnboardingCase item)
+	{
+		if (item.ExtraProperties.TryGetValue("ReadinessRulesSnapshot", out var json) && json is string text)
+		{
+			using var document = JsonDocument.Parse(text); return document.RootElement.Clone();
+		}
+		return ResolveProfile(item)?.GetProperty("rules") ?? Root.GetProperty("readinessAccess");
+	}
+	public static bool IsPublished(JsonElement rule) => Text(rule, "status", Boolean(rule, "isActive", true) ? "published" : "superseded") == "published";
 	public JsonElement? ResolveRule(string section, StudentOnboardingCase item, DateTime at, Guid? divisionId = null) =>
-		Resolve(Rules(section).Where(r => Boolean(r, "isActive", true) &&
+		Resolve(Rules(section).Where(r => IsPublished(r) &&
 			(!DateTime.TryParse(Text(r, section == "divisionChange" ? "effectiveDate" : "effectiveFrom"), out var from) || from.Date <= at.Date)), item, false, divisionId);
 
 	/// <summary>Resolves the same owner rule for a real academic path without manufacturing an Admission case.</summary>
@@ -186,7 +200,7 @@ public sealed class OnboardingRuleConfiguration
 		Guid? divisionId, Guid? campusId, DateTime at)
 	{
 		Guid?[] path = [boardId, mediumId, stageId, standardId, divisionId];
-		var matches = Rules(section).Where(rule => Boolean(rule, "isActive", true) &&
+		var matches = Rules(section).Where(rule => IsPublished(rule) &&
 			(!DateTime.TryParse(Text(rule, section == "divisionChange" ? "effectiveDate" : "effectiveFrom"), out var from) || from.Date <= at.Date) &&
 			(Text(rule, "campusMode", "all") != "selected" || campusId.HasValue && Ids(rule, "campusIds").Contains(campusId.Value)) &&
 			Levels.Select((level, i) => Text(rule, level.Mode) == "all" || path[i].HasValue && Ids(rule, level.Ids).Contains(path[i]!.Value)).All(x => x))

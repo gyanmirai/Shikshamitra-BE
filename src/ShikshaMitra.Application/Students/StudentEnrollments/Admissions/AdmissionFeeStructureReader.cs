@@ -27,14 +27,16 @@ public class AdmissionFeeStructureReader(
 	{
 		var offering = await offerings.GetAsync(application.AdmissionOfferingId);
 		var cycle = await cycles.GetAsync(application.AdmissionCycleId);
-		var metadataIds = (await metadata.GetListAsync(m => m.AcademicYearId == cycle.AcademicYearId &&
+		if (offering.TenantId != application.TenantId || cycle.TenantId != application.TenantId || offering.AdmissionCycleId != cycle.Id)
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidSelection, "The fee selection does not belong to this admission scope.");
+		var metadataIds = (await metadata.GetListAsync(m => m.TenantId == application.TenantId && m.AcademicYearId == cycle.AcademicYearId &&
 			m.AcademicBoardId == offering.BoardId && m.AcademicMediumId == offering.MediumId)).Select(m => m.Id).ToArray();
-		var rows = await structures.GetListAsync(s => s.IsLocked && s.StandardId == offering.StandardId &&
+		var rows = await structures.GetListAsync(s => s.TenantId == application.TenantId && s.IsLocked && s.StandardId == offering.StandardId &&
 			Enumerable.Contains(metadataIds, s.FeeStructureMetadataId));
 		var ids = rows.Select(s => s.Id).ToArray();
-		var lines = await details.GetListAsync(d => Enumerable.Contains(ids, d.FeeStructureId));
+		var lines = await details.GetListAsync(d => d.TenantId == application.TenantId && Enumerable.Contains(ids, d.FeeStructureId));
 		var headIds = lines.Select(d => d.FeeHeadId).Distinct().ToArray();
-		var names = (await heads.GetListAsync(h => Enumerable.Contains(headIds, h.Id) && h.IsActive && h.AcademicYearId == cycle.AcademicYearId))
+		var names = (await heads.GetListAsync(h => h.TenantId == application.TenantId && Enumerable.Contains(headIds, h.Id) && h.IsActive && h.AcademicYearId == cycle.AcademicYearId))
 			.ToDictionary(h => h.Id, h => h.Name);
 		return rows.Where(s => lines.Where(d => d.FeeStructureId == s.Id).All(d => names.ContainsKey(d.FeeHeadId)))
 			.OrderBy(s => s.Name).ThenByDescending(s => s.RevisionNumber).Select(s => new AdmissionFeeStructureCandidateDto
@@ -63,6 +65,6 @@ public class AdmissionFeeStructureReader(
 			structure.Heads.Where(h => !h.IsOptional || input.OptionalHeadIds.Contains(h.FeeHeadId))
 				.Select(h => new AdmissionFeeSelectionHead(h.FeeHeadId, h.FeeHeadName, h.ConfiguredAmount,
 					h.IsOptional, h.IsOneTime, h.PaymentTermId, h.PaymentTermVersionId, h.IsVariable)).ToList(), actorId,
-			new DateTimeOffset(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc)));
+			new DateTimeOffset(Clock.Now.ToUniversalTime()));
 	}
 }

@@ -12,10 +12,14 @@ public class StudentOnboardingListInput : PagedAndSortedResultRequestDto
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 	public Guid? DivisionId { get; set; }
+	public List<Guid> DivisionIds { get; set; } = [];
 	public Guid? StandardId { get; set; }
+	public List<Guid> StandardIds { get; set; } = [];
 	public Guid? AssignedToUserId { get; set; }
 	public bool? OverdueOnly { get; set; }
 	public bool? UnassignedOnly { get; set; }
+	public bool? EnteredToday { get; set; }
+	public string? PendingTask { get; set; }
 }
 
 public class StudentOnboardingFilterOptionDto : EntityDto<Guid>
@@ -32,6 +36,7 @@ public class StudentOnboardingCampusDto : EntityDto<Guid>
 
 public class StudentOnboardingFilterOptionsDto
 {
+    public bool CanUnlockIdentifiers { get; set; }
 	public IReadOnlyList<StudentOnboardingFilterOptionDto> AcademicYears { get; set; } = [];
 	public IReadOnlyList<StudentOnboardingFilterOptionDto> Boards { get; set; } = [];
 	public IReadOnlyList<StudentOnboardingFilterOptionDto> Mediums { get; set; } = [];
@@ -96,6 +101,16 @@ public class CapturedStudentFieldDto
 
 public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 {
+	public bool GrNumberLocked { get; set; }
+	public bool RollNumberLocked { get; set; }
+	public bool RollChangeReasonRequired { get; set; }
+	public bool GrManualEntryAllowed { get; set; }
+	public bool RequirementsNeedReview { get; set; }
+	public bool AdmissionConfirmed { get; set; }
+    public bool HasDocumentRequirementsSnapshot { get; set; }
+	public bool CredentialsPending { get; set; }
+	public Guid? SelectedFeeStructureId { get; set; }
+	public bool FeeStructureConfirmed { get; set; }
 	public IReadOnlyList<CapturedStudentFieldDto> CapturedStudentFields { get; set; } = [];
 	public string AdmissionRoute { get; set; } = "Fresh admission";
 	public bool? FeeAssignmentConfirmed { get; set; }
@@ -195,6 +210,39 @@ public class AllocateStudentOnboardingIdentifierDto
 	public string? ManualValue { get; set; }
 	public long? ManualSequence { get; set; }
 	public string? OverrideReason { get; set; }
+}
+
+public class AssignStudentOnboardingGrNumberDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public Guid NumberSeriesId { get; set; }
+	public string? ManualValue { get; set; }
+	public long? ManualSequence { get; set; }
+	public string? Reason { get; set; }
+}
+
+public class AssignStudentOnboardingRollNumberDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public int RollNumber { get; set; }
+	public string? RollAssignmentMode { get; set; }
+	public string? Reason { get; set; }
+}
+
+public class SetStudentIdentifierLockDto
+{
+	public Guid AcademicYearId { get; set; }
+	public Guid DivisionId { get; set; }
+	public string IdentifierType { get; set; } = "gr";
+	public bool IsLocked { get; set; }
+	public string? Reason { get; set; }
+}
+
+public class SaveStudentOnboardingFeeStructureDto
+{
+	public string? ConcurrencyStamp { get; set; }
+	public Guid StructureId { get; set; }
+	public List<Guid> OptionalHeadIds { get; set; } = [];
 }
 
 public class StudentOnboardingRollPreviewInput
@@ -335,4 +383,10 @@ public class HistoricalAdmissionReconciliationDto
 	public int Backfilled { get; set; }
 	public int Invalid { get; set; }
 	public List<HistoricalAdmissionReconciliationIssueDto> Issues { get; set; } = [];
+}
+
+public class OnboardingAvailableOfferingDto : ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionOfferingListDto
+{
+    public Guid AcademicYearId { get; set; }
+    public Guid? WorkflowDefinitionId { get; set; }
 }

@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-08
+updated_on: 2026-10-09
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,10 @@ audience: humans-and-agents
 # Find Student Enrollment Admissions APIs
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
+
+## Academic list filters
+
+Admissions Application, Inquiry (including CSV export), Offering, Pipeline/options, and Review queue list inputs accept `StandardIds` in addition to the existing optional `StandardId`. Student Onboarding list accepts `StandardIds` and `DivisionIds` alongside the scalar filters. Collections bind from repeated query keys, for example `standardIds={guid1}&standardIds={guid2}`. Nonempty collections match any member; scalar, Board, Medium, academic year and other supplied criteria intersect with that match. Empty collections do not restrict classes or divisions. Existing tenant and authorized academic scope applies before counting and paging; these filters do not broaden permissions. No persistence change is required.
 
 ## Active admission Pipeline and follow-ups
 
@@ -50,13 +54,32 @@ Student captured summaries exclude Aadhaar, APAAR, PEN, UDISE, PAN and raw photo
 |---|---|
 | GET `/api/student/onboarding/{caseId}/credential-emails` | Onboarding.View and current academic scope; returns student/guardian rows including NotRequested/Blocked, mailbox, enabled flag and server canSend. No password/token fields. |
 | POST same route | Onboarding.Edit and current scope; `{accountType, concurrencyStamp?}` uses the onboarding case stamp and current mandatory readiness. Returns durable status; already-pending requests are idempotent. |
-| POST `/api/student/onboarding/{caseId}/documents/override` | Onboarding.Edit plus Onboarding.Waive and finalized-application scope; `{documentTypeIds, overrideAll, reason, concurrencyStamp}`. Requires note/current case stamp; only current required types; returns refreshed documents with canOverride, isValidated, isOverridden and overrideReason. |
+| POST `/api/student/onboarding/{caseId}/documents/override` | Retained route rejects required-document override attempts; use canonical workflow evidence and verification. |
 
 Email status DTO includes id, accountType, email, status, message, sentAt, attemptCount, emailEnabled and canSend.
 Manual resends/retries require the current saved readiness and sender permission, with a two-minute cooldown.
 Automatic dispatch preserves the initial account creation grants; exact sender grants and academic scope are checked again before transport.
 Email/mobile/username login aliases apply to exclusive Student/Parent identities with email and eligible child access.
 An ambiguous mobile match fails closed; the owner verifies the mailbox and changes an initial password through the existing Account setup route.
+
+## Offering-linked Onboarding operations
+
+All routes below are under `/api/student/onboarding`, enforce tenant/academic scope, and retain existing Onboarding permission aliases.
+
+| Route | Contract |
+|---|---|
+| GET `/settings/offerings?academicYearId=...` | Configure permission; scoped Offering names, academic context and published workflow references for readiness settings. |
+| POST `/{id}/requirements/review?concurrencyStamp=...` | Edit permission; explicitly adopts current effective Offering requirements for an eligible unactivated legacy case. |
+| POST `/{id}/gr-number` | AllocateIdentifier; `{numberSeriesId, manualValue?, manualSequence?, reason?, concurrencyStamp?}`. First manual assignment needs no correction reason. |
+| POST `/{id}/roll-number` | AllocateIdentifier; `{rollNumber, rollAssignmentMode?, reason?, concurrencyStamp?}`. Independent from GR assignment. |
+| POST `/identifier-locks` | AllocateIdentifier; `{academicYearId, divisionId, identifierType: gr|roll, isLocked, reason?}`. Unlock also requires Repair, trusted administrator scope and a reason. No Division placement lock. |
+| GET `/{id}/fee-structure` and `/fee-structure/candidates` | View; existing Admissions selection/candidate DTOs backed by published Finance structure reads. |
+| PUT `/{id}/fee-structure` | Edit; `{structureId, optionalHeadIds, concurrencyStamp?}` confirms admission intent only. No Finance mutation. |
+| GET `/{id}/workflow-documents` | View; frozen applicable workflow requirements and canonical evidence. |
+| POST `/{id}/workflow-documents/{stageId}/{code}/upload` or `/original` | Edit plus AdmissionDocuments.Upload or RecordOriginal respectively; reuses canonical Admissions evidence contracts. |
+| POST `/{id}/workflow-documents/evidence/{evidenceId}/review` | Edit plus AdmissionDocuments.Review; canonical verification, with no required-document waiver bypass. |
+
+Case DTOs expose requirements review, frozen document availability, admission confirmation, fee confirmation, identifier lock and credential pending flags. Filter options expose trusted `canUnlockIdentifiers`; list supports `enteredToday` and task filters including fees/credentials. A successful activation persists enrollment before access preparation; access failure leaves Records-visible enrollment and a retriable credential state.
 
 ## Student Attendance API families
 
@@ -118,9 +141,9 @@ Existing finalization permissions, scope checks, idempotency and onboarding boun
 
 ## Permission catalog
 
-Student submodules normally expose `View`, `Add`, and `Delete`. Workflow Builder additionally
-exposes `Approve`, `ManageGovernance`, and `Rollback` so maker-checker decisions, tenant policy,
-and recovery actions can be assigned independently.
+Student submodules normally expose `View`, `Add`, and `Delete`. Workflow Builder retains compatibility
+`Approve`, `ManageGovernance`, and `Rollback` grants; current direct publication still requires
+Workflow Add and does not depend on those retired builder controls.
 Module visibility permissions under `ShikshaMitra.Module.Students.*` remain separate and only control whether the corresponding module or submodule is visible.
 Student Dashboard live reads require `Students.Dashboard.View`; the legacy Reporting snapshot refresh command requires `Students.Dashboard.Add`.
 
@@ -202,12 +225,13 @@ Class capacity is shared by all tracks for the same academic year and Standard. 
 | POST | `/api/student/enrollment/admissions/workflows/governance/notifications/{notificationId}/read` | `Students.Admissions.Workflows.View` |
 | GET | `/api/student/enrollment/admissions/workflows/stage-types` | `Students.Admissions.Workflows.View` |
 
-When maker-checker is enabled, the legacy publish route is rejected and the workflow must follow
-Validated, Submitted, Approved, and Published/Scheduled states. Submission requires a different
-active approver who has the workflow `Approve` permission and a change reason. Governed publication
-accepts an optional future effective time. Rollback always creates a new Draft copied from the
-selected historical version; it never
-rewrites an Offering or Application reference.
+Both workflow publish endpoints execute immediate publication with the existing Workflow Add,
+tenant ownership, graph validation and concurrency checks. Stored maker-checker settings do not
+block publication. The compatibility governance payload's effective time no longer schedules work;
+old schedule rows and audit/notification read endpoints remain available without automatic
+publication or new workflow-specific notification delivery. Compatibility approval/settings and
+rollback endpoints keep their original permission enforcement and historical data contracts.
+Rollback still creates a separate Draft and never rewrites an Offering or Application reference.
 
 ## Runtime workflow endpoint
 
@@ -228,7 +252,7 @@ The response returns current workflow status, stage timestamps, immutable transi
 
 Published form definitions are immutable versions. Existing applications retain their original `FormDefinitionId` and `FormVersion` when an offering is moved to a later version.
 
-Inquiry and Registration form definitions publish directly from Draft after validation, with the existing form publish permission and concurrency checks. Form create/update do not create an approval state, and the form API no longer exposes submit-for-review, approve, reject, or admin-override review commands. Historical form approval metadata and audit entries remain readable in storage for compatibility but do not gate publication; workflow-builder governance and application decision approvals are separate and unchanged.
+Inquiry and Registration form definitions publish directly from Draft after validation, with the existing form publish permission and concurrency checks. Form create/update do not create an approval state, and the form API no longer exposes submit-for-review, approve, reject, or admin-override review commands. Historical form approval metadata and audit entries remain readable in storage for compatibility but do not gate publication; application decision approvals are separate and unchanged; workflow publication follows the direct command described above.
 
 Choice fields support either static option arrays or an approved source descriptor such as `{ "source": "EducationBoards" }` or `{ "source": "EducationMediums", "parentField": "BOARD_FIELD" }`. Approved source metadata is exposed by `GET /api/student/enrollment/admissions/forms/metadata/data-sources`; tenant-scoped options are read through `GET /api/student/enrollment/admissions/forms/metadata/options?sourceKey=...&parentId=...`. Arbitrary URLs and executable data sources are not accepted, and submission validates selected values against the authoritative source.
 
@@ -270,12 +294,12 @@ Other attempt mutations require that attempt's concurrency stamp.
 Review uses `approved: false` plus notes to request correction, and waiver uses `reason`.
 Attempt mutations return the refreshed assessment summary.
 
-The applicant workbench requires `admissionOfferingId` and `workflowStageDefinitionId`; optional filters are `sessionId`, `search` (name/application number), and `queue` (`toBook`, `attendance`, `result`, `review`, `ready`, `attention`, `completed`). It accepts `skipCount`, `maxResultCount` (1-1000), and allow-listed `sorting` (`applicantName`, `applicationNumber`, `sessionStartsAt`, `enteredAt`, with optional `asc`/`desc`). The result contains `totalCount`, paged `items`, and `counts`; counts honor offering, workflow version, session, academic authorization and search before the queue/page filter. Each row contains application/stage identity and the same assessment summary as the individual read. Active stages without attempts are included; completed stage history remains readable. For active stages, a selected session roster requires the latest non-cancelled attempt to belong to that session, so a retake booked elsewhere is excluded from the old session's actionable roster. Inactive/completed stages retain historical non-cancelled bookings to the selected session; their actions are disabled.
+The applicant workbench requires `admissionOfferingId` and `workflowStageDefinitionId`; optional filters are `sessionId`, `search` (name/application number), and `queue` (`toBook`, `attendance`, `result`, `ready`, `attention`, `completed`). It accepts `skipCount`, `maxResultCount` (1-1000), and allow-listed `sorting` (`applicantName`, `applicationNumber`, `sessionStartsAt`, `enteredAt`, with optional `asc`/`desc`). The result contains `totalCount`, paged `items`, and `counts`; counts honor offering, workflow version, session, academic authorization and search before the queue/page filter. Each row contains application/stage identity and the same assessment summary as the individual read. Active stages without attempts are included; completed stage history remains readable. For active stages, a selected session roster requires the latest non-cancelled attempt to belong to that session, so a retake booked elsewhere is excluded from the old session's actionable roster. Inactive/completed stages retain historical non-cancelled bookings to the selected session; their actions are disabled.
 
-`ready` means completed evidence has an eligible route under the existing workflow rules, independently of the caller's advance permission. Failed/absent results without an explicit matching route remain `attention`. Pending-review results remain `review` even for their recorder, whose review action stays denied. Result-only attempts use `toBook` for the initial start action. Classification batches scoped candidates, latest non-cancelled attempts, grouped attempt counts, sessions and route facts without per-application queries. Complete history and action DTOs are expanded only for the requested page. Configured JSON routes still require candidate classification before queue pagination, so memory/CPU scale with the selected offering/stage/search population. This is a workbench query, not a tenant-wide reporting export; concurrent production load and very large scopes require separate staging acceptance.
+`ready` means completed evidence has an eligible route under the existing workflow rules, independently of the caller's advance permission. Failed/absent results without an explicit matching route remain `attention`. Independent result review is disabled in new saved Assessment policies; the frontend does not expose a Review queue or result-review action. Result-only attempts use `toBook` for the initial start action. Classification batches scoped candidates, latest non-cancelled attempts, grouped attempt counts, sessions and route facts without per-application queries. Complete history and action DTOs are expanded only for the requested page. Configured JSON routes still require candidate classification before queue pagination, so memory/CPU scale with the selected offering/stage/search population. This is a workbench query, not a tenant-wide reporting export; concurrent production load and very large scopes require separate staging acceptance.
 
 Available condition facts are `assessment.outcome`, `assessment.marks`, `assessment.attemptNumber`, `assessment.attendance`, and `assessment.reviewed`.
-Unreviewed evidence exposes a pending outcome and no authoritative marks.
+Current configured results become authoritative without a separate result-review step.
 Negative outcome routes must contain a matching `Equals` or array-valued `In` condition on `assessment.outcome` and satisfy the complete route expression.
 Unknown policy versions, stale stamps, unavailable capacity, missing evidence, and missing negative-outcome routes are rejected using `Admissions:Assessment:*` error codes.
 
@@ -394,16 +418,15 @@ Base: `/api/student/enrollment/admissions/document-verification`. Responses use 
 |---|---|---|
 | GET `applications/{applicationId}/stages/{stageInstanceId}` | `Students.Admissions.Documents.View` | Pinned requirements, applicability, chronological evidence/reviews, blockers, effective file limits, action flags, application concurrency stamp |
 | POST `applications/{applicationId}/stages/{stageInstanceId}/requirements/{code}/upload` | `Students.Admissions.Documents.Add` | Multipart `file`, `concurrencyStamp`, optional `notes`; appends a fresh revision |
-| POST same requirement route `/original` | `Students.Admissions.Documents.Add` | JSON `concurrencyStamp`, required observation `notes`; retains any latest upload and resets review |
-| POST same requirement route `/waive` | `Students.Admissions.Documents.Delete` | JSON `concurrencyStamp`, required `reason`; requires policy permission |
+| POST same requirement route `/original` | `Students.Admissions.Documents.Add` | Retained endpoint; unavailable for current upload-only stage policies |
+| POST same requirement route `/waive` | `Students.Admissions.Documents.Delete` | Retained endpoint; unavailable because current stage policies disable waivers |
 | POST `evidence/{evidenceId}/review` | `Students.Admissions.Documents.Add` | JSON `concurrencyStamp`, `decision: accepted/rejected`, optional `reason` (required for rejection) |
 | GET `evidence/{evidenceId}/download` | `Students.Admissions.Documents.View` | Scoped private attachment, no-store response, audit activity; storage keys never exposed |
 | GET `document-types` | `Students.Admissions.Workflows.View` | Tenant catalog mappings, allowed extensions and maximum file size |
 | GET `classes` | `Students.Admissions.Workflows.View` | Tenant class IDs, names, and academic-year/board/medium/stage context for requirement applicability |
 
 All mutations return refreshed stage state and serialize against the application stamp. History is read-only after leaving the stage. Server authorization validates tenant, offering UserScope, application-stage ownership, frozen workflow version, current stage, policy, and evidence revision. Error family `Admissions:Documents:*` provides localized invalid-policy/state/evidence/review, stale-stamp, and completion-gate messages.
-The stage summary adds `canCollectDuringForm`; workflow stage rows add `documentCollectionAvailable` for configured early uploads.
-An early upload uses the existing upload endpoint and permission, targeting the pending document stage; this does not authorize review, original verification, waiver, or stage completion.
+The current stage policy clears collectionFormStageCode and disables early Form collection, original checks and waivers. Uploads require the active Documents stage; accepted/rejected evidence review remains available. Student document category mapping is retained.
 
 Linked Student evidence uses GET `/api/student/records/students/{studentId}/admission-evidence` with both `Students.Records.StudentList.View` and `Students.Admissions.Documents.View`. Its `/{evidenceId}/download` uses the same Admissions document `View` permission and verifies the finalized source application and Student link.
 
@@ -445,55 +468,11 @@ Case list/detail responses include configured `intendedBoardName` and `intendedM
 
 ## Eligibility APIs
 
-Base: `/api/student/enrollment/admissions/eligibility`. Responses use `Result<T>`. All applicant endpoints require `Students.Admissions.Eligibility.View`; mutations additionally require the action permission below and the current application `concurrencyStamp`.
-
-| Method and relative route | Additional permission | Behavior |
-|---|---|---|
-| GET `applications/{applicationId}/stages/{stageId}` | None | Pinned policy, latest evaluation, freshness, blockers, concurrency and action flags |
-| POST same stage route `/evaluate` | `Students.Admissions.Eligibility.Add` | Check declared saved facts and append an immutable evaluation |
-| GET same stage route `/history` | None | Evaluations, criterion results, exception requests and decisions |
-| POST same stage route `/evaluations/{evaluationId}/exceptions` | `Students.Admissions.Eligibility.Add` | Required reason, fresh latest ineligible result, policy permission; append request |
-| POST same stage route `/exceptions/{exceptionId}/review` | `Students.Admissions.Eligibility.Add` | Required reason and `decision: approved/rejected`; enforce configured role and reviewer separation |
-| GET `reviewer-roles` | `Students.Admissions.Workflows.View` only | School roles as `{id,name}` choices |
-
-The summary reports `notChecked`, `eligible`, `ineligible`, `needsInformation`, or `exceptionApproved`, plus a separate `isStale`. Each criterion returns its expected value, actual value, source, outcome and message. Saved evaluation outcomes remain `eligible/ineligible/needsInformation`; exception approval is an additional audited decision. GET does not create an evaluation. Mutations return refreshed summary state. Historical completed stages can be rechecked before finalization; finalized or closed admissions cannot mutate.
-
-Policy fields are `version`, `enabled`, `allowExceptions`, nullable `exceptionApprovalRole`, `requireIndependentReviewer`, and 1-30 `criteria`. Each criterion has a unique `code`, `name`, `kind`, optional `failureMessage`, and kind-specific properties: age uses `minAgeMonths/maxAgeMonths/cutoffDate`; answers use `formDefinitionId/conditionJson`; assessment/documents use `sourceStageCode`, with optional assessment `minimumPercentage/requiredOutcome`. A waived assessment cannot also require a score. The existing complete stage JSON limit remains 8000 characters.
-
-Authoritative transition facts are `eligibility.status`, `eligibility.failedCount`, and `eligibility.unknownCount`. A stale result exposes status `stale`; an unrecorded result exposes `notChecked`. Negative routes must actually depend on the matching status, not merely contain an unused OR branch. Error family `Admissions:Eligibility:*` covers invalid configuration/state, stale application stamps, missing/stale evaluations, unauthorized exceptions, and missing negative-result routes.
-
-Offering configuration errors include `EligibilityFormMismatch` when an enabled criterion references a different application or inquiry form version from the Offering. Create/update/activate use the localized `Admissions:Eligibility:OfferingFormMismatch` business error, and detail/list/availability report incomplete configuration. Missing form selections retain the established draft-save and activation rules.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
 
 ## Review APIs
 
-Base: `/api/student/enrollment/admissions/reviews`.
-Responses use the standard `Result<T>` envelope, and mutations require the application `concurrencyStamp`.
-Applicant endpoints enforce `Students.Admissions.Reviews.View` on both HTTP and application-service boundaries, plus the additional permission below.
-
-| Method and relative route | Additional permission | Behavior |
-|---|---|---|
-| GET `applications/{applicationId}/stages/{stageId}` | None | Pinned policy, current evidence, assignment, deadline, safe record, blockers and action flags |
-| GET same stage route `/history` | None | Immutable recommendation, checklist, assignment and actual-decision history |
-| POST same stage route `/draft` | `Students.Admissions.Reviews.Add` | Save current checklist, notes, optional recommendation and reason |
-| POST same stage route `/submit` | `Students.Admissions.Reviews.Add` | Submit a complete checklist and reasoned recommendation |
-| POST same stage route `/assignment` | `Students.Admissions.Reviews.Add` | Reasoned reviewer/deadline change; validate tenant, configured role and offering scope |
-| POST same stage route `/request-correction` | `Students.Admissions.Reviews.Add`, `Students.Admissions.Applications.Add` | Record the actual correction decision and reopen the application form |
-| GET `queue` | None | Scoped paged active Review queue with `assignedToMe` and `overdueOnly` filters |
-| GET `reviewer-roles` | `Students.Admissions.Workflows.View` only | Tenant roles as `{id,name}` choices |
-| GET `reviewers?filter=...&role=...` | `Students.Admissions.Workflows.View` or `Students.Admissions.Reviews.Add` | Bounded active tenant user choices with applicable role and scope checks |
-
-Save/submit payloads contain `notes`, `recommendation`, `reason`, and `checklist: [{code,checked,notes}]`; labels and required flags come exclusively from the pinned policy.
-Recommendation values are `approve`, `waitlist`, `reject`, and `requestCorrection`.
-All notes and reasons are limited to 1024 characters; submit requires a nonblank reason and every required confirmation.
-Assignment contains nullable `assignedReviewerId` and `dueAt`, plus a required reason; an explicit past deadline is valid and appears overdue.
-The summary reports `notStarted`, `draft`, `submitted`, `approved`, `waitlisted`, `rejected`, `correctionRequested`, or `stale`, with separate freshness and action flags.
-
-Existing application Approve/Reject/Waitlist commands retain their routes and permissions and additionally enforce managed Review approval rules and `Students.Admissions.Reviews.Add`.
-The main application detail adds nullable `reviewDecision` with `managedReviewEnabled`, `isSatisfied`, decision capabilities and blockers; absent values preserve the legacy client contract.
-No new competing approval endpoint or automatic decision is introduced.
-Transition facts are `review.status` and `review.decision`; the server overwrites reserved Review facts when managed Review exists.
-Error family `Admissions:Review:*` provides localized policy, scope/state, stale-stamp, evidence, assignment, recommendation and route guidance.
-Offering validation reports `ReviewAssigneeUnavailable` when the configured default reviewer is inactive, outside the configured role or outside the exact hierarchy; save and activation use `Admissions:Review:ReviewerNotAllowed`.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
 
 ## Managed Form stage APIs
 
@@ -526,26 +505,15 @@ Saving requires `Students.Admissions.Applications.Add`; confirmation requires th
 These endpoints preserve the standard `Result<T>` envelope.
 They do not create Finance assignments, dues, allocations or receipts.
 
-Payment routes use `/api/student/enrollment/admissions/payments`. Stage reads are `GET /applications/{applicationId}/stages/{stageId}`; staff collection posts to `/transactions`; verification posts to `/transactions/{transactionId}/review`; full waivers post to the stage `/waive` route; reversals post to `/transactions/{transactionId}/reverse`.
+Payment summary reads remain at `/api/student/enrollment/admissions/payments/applications/{applicationId}/stages/{stageId}` and expose feeStructureRequired/feeStructureConfirmed, blockers and completion readiness. Record/review/waive/reverse capabilities are false; the supported Payment stage has no admission monetary collection policy and rejects those commands. Existing payment permission identifiers remain intact.
 
-The distinct permissions are `Students.Admissions.Payments.View`, `Record`, `Verify`, `Waive`, and `Reverse`. Every command uses optimistic concurrency. Record, review, waiver, and reversal requests also use idempotency keys. Responses expose required, settled, pending, and outstanding amounts, due state, blockers, allowed actions, and safe transaction evidence; they do not expose policy snapshots or internal retry keys.
+Confirmation saves through the existing fee-selection PUT with structureId, optionalHeadIds and current application concurrencyStamp. Workflow advancement remains a separate permissioned/idempotent command. Finance assignment and payment APIs are unchanged.
 
 ## Managed Offer stage APIs
 
-Base: `/api/student/enrollment/admissions/offers`. All routes use the standard `Result<T>` envelope, repeat authorization at the controller and application-service boundaries, and verify tenant, Offering UserScope, pinned workflow, active stage, application concurrency, and idempotency.
+Eligibility, Review, and Offer are retired Admission Stage types. New drafts cannot select them, publication rejects them, application workspaces do not mount their working panels, and their direct admission operations reject unsupported stages. Existing enum numbers and stored audit records remain intact. Inquiry qualification, Student Records reviews, class capacity, and Finance ownership are separate contracts.
 
-| Method and relative route | Permission | Behavior |
-|---|---|---|
-| GET `applications/{applicationId}/stages/{stageId}` | `Students.Admissions.Offers.View` | Return pinned content, status, expiry, assigned counsellor, counters, blockers, capabilities and safe history |
-| POST same stage route `/issue` | `Issue` | Issue the first version with configured or permitted expiry and optionally assign an eligible counsellor |
-| POST same stage route `/respond` | `Respond` | Record acceptance confirmations or a reasoned decline |
-| POST same stage route `/extend` | `Extend` | Extend an active offer within policy limits |
-| POST same stage route `/withdraw` | `Withdraw` | Withdraw an active offer with a permanent reason |
-| POST same stage route `/reissue` | `Reissue` | Issue a new bounded version after decline, expiry, or withdrawal; optionally change the counsellor |
-
-Every command body includes `concurrencyStamp` and `idempotencyKey`; route identifiers stay in the URL. Workflow facts are `offer.status`, `offer.versionNumber`, `offer.extensionCount`, and `offer.isExpired`. Non-acceptance outcomes can continue only through a transition whose evaluated condition explicitly matches `offer.status`.
-
-Application counsellor routes use `/api/student/enrollment/admissions/applications`: `GET /counsellors?offeringId=` requires Applications View and returns active tenant users who can access that Offering. Without `offeringId`, it returns counsellors already assigned to visible applications for tracking filters. `POST /{id}/assign-counsellor` requires Applications Edit, a current `concurrencyStamp`, and an active counsellor with access to the application's Offering; it records the change in Admission activity. Application list accepts `assignedCounsellorId` and returns assigned counsellor names. Fresh direct registration is retired; an inquiry-linked application initially inherits its inquiry counsellor. Historical application ownership is preserved. Both legacy and managed offer issuance accept optional `counsellorId` for existing clients, but it must match the application owner; offer issuance never assigns or changes that owner. Use the dedicated application assignment action first.
+Application counsellor list/assignment endpoints remain under `/api/student/enrollment/admissions/applications`, with current tenant, Offering hierarchy and concurrency enforcement. Retired Offer operations do not change application ownership.
 
 ## Managed Seat stage APIs
 

@@ -20,7 +20,9 @@ public class OnboardingConfigurationManager(
 	IRepository<EducationMediumStage, Guid> stagesRepository,
 	IRepository<Standard, Guid> standardsRepository,
 	IRepository<Division, Guid> divisionsRepository,
-	IRepository<AdmissionCampus, Guid> campusesRepository) : DomainService
+	IRepository<AdmissionCampus, Guid> campusesRepository,
+	IRepository<AdmissionOffering, Guid> offeringsRepository,
+	IRepository<AdmissionCycle, Guid> cyclesRepository) : DomainService
 {
 	public async Task<OnboardingRuleConfiguration?> GetAsync(Guid yearId)
 	{
@@ -32,6 +34,16 @@ public class OnboardingConfigurationManager(
 	public async Task ValidateAsync(string json, Guid? yearId)
 	{
 		var config = new OnboardingRuleConfiguration(json);
+		var offeringIds = config.Profiles.SelectMany(p => OnboardingRuleConfiguration.Ids(p, "offeringIds")).ToArray();
+		if (offeringIds.Distinct().Count() != offeringIds.Length) throw OnboardingRuleConfiguration.Invalid("An Offering can belong to only one readiness rule.");
+		if (offeringIds.Length > 0 && await offeringsRepository.CountAsync(o => Enumerable.Contains(offeringIds, o.Id)) != offeringIds.Length)
+			throw OnboardingRuleConfiguration.Invalid("One or more selected Offerings are unavailable.");
+		if (yearId.HasValue && offeringIds.Length > 0)
+		{
+			var cycleIds = (await offeringsRepository.GetListAsync(o => Enumerable.Contains(offeringIds, o.Id))).Select(o => o.AdmissionCycleId).Distinct().ToArray();
+			if (await cyclesRepository.CountAsync(c => Enumerable.Contains(cycleIds, c.Id) && c.AcademicYearId == yearId.Value) != cycleIds.Length)
+				throw OnboardingRuleConfiguration.Invalid("Selected Offerings must belong to the selected academic year.");
+		}
 		var boards = await boardsRepository.GetListAsync();
 		var mediums = await mediumsRepository.GetListAsync();
 		var stages = await stagesRepository.GetListAsync();
@@ -97,14 +109,14 @@ public class OnboardingConfigurationManager(
 				parents = mode == "all" ? available : ids.ToHashSet();
 			}
 		}
-		ValidateConflicts(config.Profiles.ToList(), true);
+		ValidateConflicts(config.Profiles.Where(p => OnboardingRuleConfiguration.Ids(p, "offeringIds").Length == 0).ToList(), true);
 		foreach (var section in new[] { "grNumber", "rollNumber", "divisionChange" })
 		{
 			var rules = config.Rules(section).ToList();
 			if (rules.Select(r => OnboardingRuleConfiguration.Text(r, "id")).Distinct().Count() != rules.Count ||
 				rules.Any(r => string.IsNullOrWhiteSpace(OnboardingRuleConfiguration.Text(r, "id"))))
 				throw OnboardingRuleConfiguration.Invalid($"Duplicate or missing {section} rule IDs.");
-			ValidateConflicts(rules.Where(r => OnboardingRuleConfiguration.Boolean(r, "isActive", true)).ToList(), false);
+			ValidateConflicts(rules.Where(OnboardingRuleConfiguration.IsPublished).ToList(), false);
 			foreach (var rule in rules)
 			{
 				var date = OnboardingRuleConfiguration.Text(rule, section == "divisionChange" ? "effectiveDate" : "effectiveFrom");

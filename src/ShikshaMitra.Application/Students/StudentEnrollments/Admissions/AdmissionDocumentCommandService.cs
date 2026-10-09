@@ -17,9 +17,9 @@ public class AdmissionDocumentCommandService(IRepository<AdmissionDocumentEviden
 	AdmissionDocumentEvaluationService evaluator, AdmissionDocumentReadService reader, AdmissionDocumentFileService files)
 	: ApplicationService, ITransientDependency
 {
-	public async Task<AdmissionDocumentVerificationDto> UploadAsync(Guid applicationId, Guid stageId, string code, AdmissionDocumentUploadInput input)
+	public async Task<AdmissionDocumentVerificationDto> UploadAsync(Guid applicationId, Guid stageId, string code, AdmissionDocumentUploadInput input, bool onboarding = false)
 	{
-		var (context, item) = await PrepareAsync(applicationId, stageId, code, input, allowEarlyCollection: true);
+		var (context, item) = await PrepareAsync(applicationId, stageId, code, input, allowEarlyCollection: true, onboarding: onboarding);
 		if (item.Requirement.CollectionMode == "original") throw Invalid("This requirement records an original document check only.");
 		var id = GuidGenerator.Create();
 		var file = await files.SaveAsync(context, item.Requirement, id, input.File);
@@ -28,9 +28,9 @@ public class AdmissionDocumentCommandService(IRepository<AdmissionDocumentEviden
 		return await SaveAsync(context, row, "AdmissionDocumentUploaded");
 	}
 
-	public async Task<AdmissionDocumentVerificationDto> RecordOriginalAsync(Guid applicationId, Guid stageId, string code, AdmissionDocumentActionInput input)
+	public async Task<AdmissionDocumentVerificationDto> RecordOriginalAsync(Guid applicationId, Guid stageId, string code, AdmissionDocumentActionInput input, bool onboarding = false)
 	{
-		var (context, item) = await PrepareAsync(applicationId, stageId, code, input);
+		var (context, item) = await PrepareAsync(applicationId, stageId, code, input, onboarding: onboarding);
 		if (item.Requirement.CollectionMode == "upload") throw Invalid("This requirement collects an uploaded document only.");
 		await access.ValidateMappingAsync(item.Requirement);
 		var row = NewEvidence(GuidGenerator.Create(), context, item, "original", input.Notes, item.Latest?.GetFile());
@@ -47,10 +47,10 @@ public class AdmissionDocumentCommandService(IRepository<AdmissionDocumentEviden
 		return await SaveAsync(context, row, "AdmissionDocumentWaived");
 	}
 
-	public async Task<AdmissionDocumentVerificationDto> ReviewAsync(Guid id, AdmissionDocumentReviewInput input)
+	public async Task<AdmissionDocumentVerificationDto> ReviewAsync(Guid id, AdmissionDocumentReviewInput input, bool onboarding = false)
 	{
 		var row = await evidence.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionDocumentEvidence), id);
-		var (context, item) = await PrepareAsync(row.ApplicationId, row.StageInstanceId, row.RequirementCode, input);
+		var (context, item) = await PrepareAsync(row.ApplicationId, row.StageInstanceId, row.RequirementCode, input, onboarding: onboarding);
 		if (item.Latest?.Id != id || item.Status != "pendingReview") throw Invalid("Only the latest unreviewed document revision can be reviewed.");
 		var review = new AdmissionDocumentReview(GuidGenerator.Create(), CurrentTenant.Id, row, context.Policy!, input.Decision,
 			input.Reason, Actor(), DateTime.UtcNow);
@@ -59,9 +59,9 @@ public class AdmissionDocumentCommandService(IRepository<AdmissionDocumentEviden
 	}
 
 	private async Task<(AdmissionDocumentContext Context, AdmissionDocumentRequirementEvaluation Item)> PrepareAsync(
-		Guid applicationId, Guid stageId, string code, AdmissionDocumentActionInput input, bool allowEarlyCollection = false)
+		Guid applicationId, Guid stageId, string code, AdmissionDocumentActionInput input, bool allowEarlyCollection = false, bool onboarding = false)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId, !allowEarlyCollection);
+		var context = await access.GetContextAsync(applicationId, stageId, !allowEarlyCollection, onboarding);
 		if (context.Policy == null || !context.IsActive && !(allowEarlyCollection && context.CanCollectDuringForm))
 			throw Invalid("Upload documents during the configured Form stage or the active Document Verification stage.");
 		if (input.Notes?.Length > 1024) throw Invalid("Document notes allow 1024 characters.");
@@ -85,7 +85,7 @@ public class AdmissionDocumentCommandService(IRepository<AdmissionDocumentEviden
 			metadataJson: JsonSerializer.Serialize(new { ActorUserId = Actor(), EvidenceId = row.Id, row.StageInstanceId, row.RequirementCode,
 				row.VersionNumber, row.Kind, row.Sha256Hash, row.OriginalSeen, row.Notes, ReviewId = review?.Id, review?.Decision, review?.Reason })), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		return await reader.GetAsync(context.Application.Id, context.Stage.Id);
+		return await reader.GetAsync(context.Application.Id, context.Stage.Id, context.IsOnboarding);
 	}
 	private Guid Actor() => CurrentUser.Id ?? throw Invalid("An authenticated staff member is required.");
 	private static BusinessException Invalid(string message) => new(AdmissionDocumentErrorCodes.InvalidState, message);

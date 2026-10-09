@@ -75,6 +75,7 @@ public class HostTenantApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMi
 		(await host.PutAsJsonAsync($"{Url}/{first.Id}", update)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
 		var search = (await host.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<HostTenantDto>>(Url + "?filter=Renamed%20synthetic"))!;
 		search.Items.ShouldContain(x => x.Id == first.Id);
+		search.Items.Single(x => x.Id == first.Id).InstituteName.ShouldBe(update.InstituteName);
 	}
 
 	[Fact]
@@ -144,6 +145,15 @@ public class HostTenantApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMi
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var inactive = (await response.Content.ReadFromJsonAsync<HostTenantDto>())!;
 		inactive.IsActive.ShouldBeFalse();
+		var list = (await host.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<HostTenantDto>>(
+			$"{Url}?filter={created.Name}"))!;
+		list.Items.Single(x => x.Id == created.Id).IsActive.ShouldBeFalse();
+		list.Items.Single(x => x.Id == created.Id).InstituteName.ShouldBe(created.InstituteName);
+		list.Items.Single(x => x.Id == created.Id).ConcurrencyStamp.ShouldBe(inactive.ConcurrencyStamp);
+		var inactiveList = (await host.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<HostTenantDto>>(
+			$"{Url}?filter={created.Name}&isActive=false"))!;
+		inactiveList.Items.Single(x => x.Id == created.Id).IsActive.ShouldBeFalse();
+		(await host.GetFromJsonAsync<HostTenantDto>($"{Url}/{created.Id}"))!.IsActive.ShouldBeFalse();
 		(await host.PutAsJsonAsync($"{Url}/{created.Id}/status", Status(created, true))).StatusCode.ShouldBe(HttpStatusCode.Conflict);
 		var blocked = await school.GetAsync("/api/multi-tenancy/tenants/" + created.Id);
 		blocked.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -155,8 +165,12 @@ public class HostTenantApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMi
 			history[0].PreviousStatus.ShouldBeTrue(); history[0].IsActive.ShouldBeFalse();
 			history[0].Reason.ShouldBe("Contract suspended");
 		});
-		var activate = await host.PutAsJsonAsync($"{Url}/{created.Id}/status", Status(inactive, true));
+		var activate = await host.PutAsJsonAsync($"{Url}/{created.Id}/status", Status(list.Items.Single(x => x.Id == created.Id), true));
 		activate.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var activeList = (await host.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<HostTenantDto>>(
+			$"{Url}?filter={created.Name}&isActive=true"))!;
+		activeList.Items.Single(x => x.Id == created.Id).IsActive.ShouldBeTrue();
+		activeList.Items.Single(x => x.Id == created.Id).InstituteName.ShouldBe(created.InstituteName);
 		(await school.GetAsync("/api/multi-tenancy/tenants/" + created.Id)).StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
 

@@ -30,7 +30,7 @@ using ClassTeacherEntity = ShikshaMitra.Academic.ClassTeacher.ClassTeacher;
 
 namespace ShikshaMitra.Academic.Dashboard;
 
-[Authorize(ShikshaMitraSubModulePermissions.AcademicsDashboard)]
+[Authorize(ShikshaMitraSubmodulePermissions.Academics.Dashboard.View)]
 [RemoteService(false)]
 public partial class AcademicDashboardAppService : ApplicationService, IAcademicDashboardAppService
 {

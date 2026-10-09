@@ -80,6 +80,8 @@ public class HostTenantDto : EntityDto<Guid>
 
 public class HostSessionContextDto
 {
+	public bool SetupCompleted { get; set; } = true;
+	public bool CanManageSetup { get; set; }
 	public string AccountMode { get; set; } = string.Empty;
 	public Guid? TenantId { get; set; }
 	public bool CanViewTenants { get; set; }

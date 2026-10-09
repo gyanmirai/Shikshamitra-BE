@@ -19,7 +19,8 @@ public class EfCoreHostTenantQueryRepository(IDbContextProvider<ShikshaMitraDbCo
 	public async Task<(long Count, System.Collections.Generic.List<Tenant> Items)> GetPageAsync(
 		string? filter, bool? isActive, string? sorting, int skip, int take)
 	{
-		var query = (await provider.GetDbContextAsync()).Tenants.AsNoTracking();
+		// ABP hydrates mapped extra properties (status and institute name) when entities are tracked.
+		var query = (await provider.GetDbContextAsync()).Tenants.AsTracking();
 		if (!string.IsNullOrWhiteSpace(filter))
 		{
 			var search = filter.Trim().ToUpperInvariant();

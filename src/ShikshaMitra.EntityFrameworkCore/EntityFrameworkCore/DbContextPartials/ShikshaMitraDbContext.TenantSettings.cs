@@ -39,6 +39,7 @@ public partial class ShikshaMitraDbContext
     // ───────────────────────────────────────────────
     public DbSet<ShiftManagement> ShiftManagements { get; set; }
     public DbSet<InstituteSetupExtraProperties> InstituteSetupExtraProperties { get; set; }
+    public DbSet<ShikshaMitra.TenantSettings.InitialSetup.InstituteSetupProgress> InstituteSetupProgress { get; set; }
 
     // ───────────────────────────────────────────────
     // Tenant Settings — Rooms Management

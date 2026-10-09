@@ -3,11 +3,12 @@ using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Authorization;
 using Volo.Abp.TenantManagement;
+using ShikshaMitra.TenantSettings.InitialSetup;
 
 namespace ShikshaMitra.HostTenants;
 
 [Authorize, RemoteService(false)]
-public class HostSessionAppService(HostIdentityGuard guard) : ShikshaMitraAppService, IHostSessionAppService
+public class HostSessionAppService(HostIdentityGuard guard, InitialSetupStatusReader setup) : ShikshaMitraAppService, IHostSessionAppService
 {
 	public async Task<HostSessionContextDto> GetAsync()
 	{
@@ -15,7 +16,9 @@ public class HostSessionAppService(HostIdentityGuard guard) : ShikshaMitraAppSer
 		if (CurrentUser.TenantId.HasValue)
 		{
 			if (CurrentTenant.Id != CurrentUser.TenantId) throw new AbpAuthorizationException();
-			return new HostSessionContextDto { AccountMode = "tenant", TenantId = CurrentUser.TenantId };
+			var progress = await setup.ReadAsync();
+			return new HostSessionContextDto { AccountMode = "tenant", TenantId = CurrentUser.TenantId,
+				SetupCompleted = progress.CompletedAt.HasValue, CanManageSetup = await setup.CanManageAsync() };
 		}
 		await guard.CheckAsync();
 		return new HostSessionContextDto

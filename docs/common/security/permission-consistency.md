@@ -40,18 +40,31 @@ The editor must not invent distinct grants for those aliases.
 
 Bulk operations use the complete mapped navigation subtree, deduplicate names, and include collapsed descendants.
 Expanding or collapsing a group never changes a grant.
-Only changed direct grants are submitted.
-Role-inherited grants remain effective after a direct user grant is removed.
-Explain remaining inherited providers in control tooltips and do not describe removal of direct grants as revocation of role access.
+Only changed direct role grants or explicit user override states are submitted.
+Users follow live role grants by default. Multiple role grants combine; role edits affect only permissions without an explicit user override.
+A user Allow is a direct ABP user grant. A user Deny is an audited, tenant-scoped `UserPermissionDeny` record and takes precedence over role grants, aliases, and assignment-derived access in both single and batch checks.
+Follow role removes both the direct user grant and the denial. Role edits never rewrite these user exceptions.
+Overrides do not widen tenant or record scope. An authorized permission manager configures them; users cannot grant themselves access through the self-read exception.
+Explain both the role source and the effective result in the editor.
 
 Retain drafts across loading failures, background refetches, and provider changes.
 Never submit one provider's draft to another provider.
-Refetch and verify persisted direct grants after saving.
+Refetch and verify persisted direct grants or explicit override states after saving.
 A pre-save comparison reduces accidental concurrent overwrites but is not a compare-and-swap guarantee under the unchanged API contract.
 
 ## Server enforcement
 
-Both permission-service entry points use the same validation and ABP permission manager.
+The flat, nested, and user-override permission-service entry points share provider policy and catalogue validation.
+
+| API | Contract |
+| --- | --- |
+| `GET /api/shikshamitra-permissions/users/{userId}/permissions` | Flat ABP catalogue plus `overrides`, a dictionary of exact permission names to `allow` or `deny`. Missing entries mean `inherit`. Grant sources remain available even when a denial makes `isGranted` false. |
+| `PUT /api/shikshamitra-permissions/users/{userId}/permissions` | `{ "permissions": [{ "name": "<exact catalogue name>", "state": "inherit|allow|deny" }] }`; changed entries only; 204 on success. |
+
+The legacy binary U update remains compatible: true means direct Allow, false removes that direct grant, and either clears any prior explicit Deny for that entry. New user editors must use the override API to express Deny.
+Existing direct U grants migrate logically to Allow without copying role permissions or reseeding users.
+Apply the `AddUserPermissionDenies` migration before starting a backend with override support; it adds storage only and does not alter existing role/user grants.
+The deny value provider and the replacement permission checker enforce denial precedence, including legacy catalogue reads. Denial lookup reuse is limited to a unit of work and invalidated by persisted denial changes.
 Role management requires the configured R provider policy, normally `AbpIdentity.Roles.ManagePermissions`.
 User management requires the configured U provider policy, normally `AbpIdentity.Users.ManagePermissions`.
 Authenticated users may read their own effective grants without receiving permission to grant themselves access.
@@ -124,6 +137,7 @@ Never use a database reset or blanket reseed as an access repair.
 - Preserve approved frontend grouping without inventing API permission names, role-name action bypasses, development bypasses, or blanket reseeding.
 - Allowed and denied action tests, direct/inherited grant round trips, invalid-batch rollback, tenant/scope tests, and upgrade-seeding tests pass.
 - Direct application calls are covered where controllers duplicate a security boundary.
+- `PermissionConsistencyApi_Tests` covers user overrides, role-update persistence, Follow role, invalid-batch rollback, management policy, tenant isolation, and real single/principal/batch checker denial precedence.
 - Revocations and membership changes take effect on subsequent requests.
 - Permission changes in unrelated module PRs and reverts receive explicit review.
 - Browser tests cover dirty state, focus, accessible labels, 44px targets, narrow layouts, and contained scrolling.

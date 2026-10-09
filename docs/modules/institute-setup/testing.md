@@ -3,7 +3,7 @@ module: institute-setup
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-10-09
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,27 @@ audience: humans-and-agents
 
 TL;DR: run the docs validator for documentation changes and targeted Tenant Settings or Academic tests for behavior changes.
 Rooms Management does not currently have a dedicated test inventory in this compact doc set.
+
+## Initial setup checks
+
+| Scope | Command |
+| --- | --- |
+| State invariants | `dotnet test test/ShikshaMitra.Domain.Tests/ShikshaMitra.Domain.Tests.csproj --filter InitialSetupProgress_Tests --artifacts-path .artifacts/initial-setup-build` |
+| HTTP integration | `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter InitialSetupApi_Tests --artifacts-path .artifacts/initial-setup-build` |
+| Host provisioning regression | `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter HostTenantApi_Tests --artifacts-path .artifacts/initial-setup-build` |
+| Model consistency | `dotnet ef migrations has-pending-model-changes --project src/ShikshaMitra.EntityFrameworkCore --startup-project src/ShikshaMitra.DbMigrator --configuration InitialSetup` |
+
+HTTP checks exercise real services and persistence: new-school provisioning, reload, stale drafts, confirmed steps, staff retry, review edits, idempotent completion, denied writes, masked reads, anonymous/host denial and cross-school year selection.
+The clean setup fixture avoids unrelated demo-data initialization.
+
+Host tenant regressions also read the list after deactivation and reactivation, with and without a status filter.
+They verify saved status, institute names, detail responses, concurrency protection, audit history and blocked school access.
+
+Validate generated migration UP and DOWN scripts on a disposable PostgreSQL database before deployment.
+Include explicit legacy completion, legacy partial progress, operational schools without markers, blank schools, mixed-tenant branches and deleted tenants.
+Confirm rollback preserves all old school records.
+Do not run a fixture or rollback against a live school database.
+The [frontend testing page](../../../../Shikshamitra-FE/docs/initial-setup/testing.md) owns wizard and browser checks.
 
 ## Documentation checks
 

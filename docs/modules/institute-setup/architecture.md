@@ -3,19 +3,43 @@ module: institute-setup
 domain: architecture
 content_type: Conceptual
 status: canonical
-updated_on: 2026-09-16
+updated_on: 2026-10-09
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Understand Institute Setup backend architecture
 
-TL;DR: Institute Setup Rooms Management lives under Tenant Settings.
+TL;DR: initial setup progress and Rooms Management live under Tenant Settings.
 Controllers expose Institute Setup routes, while application services and domain entities remain in `TenantSettings/RoomsManagement`.
 Shared academic setup and room-management tables use the `academic_` prefix.
 See [academic performance and table naming](../examination/references/academic-performance-and-table-prefix.md) for the complete ownership boundary and migration deployment/rollback procedure.
 
 ## Layer map
+
+### Initial setup
+
+| Layer | Source | Responsibility |
+| --- | --- | --- |
+| HTTP | `src/ShikshaMitra.HttpApi/Controllers/TenantSettings/InitialSetupController.cs` | Explicit body binding and thin delegation |
+| Contracts | `src/ShikshaMitra.Application.Contracts/TenantSettings/InitialSetup/` | Typed drafts, action inputs, snapshots and service interface |
+| Application | `src/ShikshaMitra.Application/TenantSettings/InitialSetup/` | Authorization, transactional orchestration, readers, writers, confirmation and readiness |
+| Domain | `src/ShikshaMitra.Domain/TenantSettings/InitialSetup/InstituteSetupProgress.cs` | Ordered durable workflow and completion audit |
+| EF | `src/ShikshaMitra.EntityFrameworkCore/TenantSettings/InitialSetup/` | Aggregate mapping and unique tenant index |
+| Migration | `src/ShikshaMitra.EntityFrameworkCore/Migrations/20261008120117_AddInstituteSetupProgress.cs` | Progress table and legacy classification |
+
+`AppInstituteSetupProgress` uses TenantId as its primary identity and a unique tenant index.
+DraftJson is bounded to 16384 characters and accepts only whitelisted typed fields.
+Confirmed profile/year/structure projections and non-secret user summaries live in aggregate ExtraProperties.
+The audited aggregate stores completion user/time and uses ABP/EF optimistic concurrency.
+Writes run in transactional units of work so configuration and step advancement cannot partially commit.
+Academic writes reuse domain managers; staff creation delegates to Identity.
+
+Explicit tenant predicates apply to every academic join and target lookup, in addition to ABP filters.
+The legacy InstituteSetup service maps reads to durable progress and routes only safe welcome/completion writes through the new service.
+Rollback drops the new progress table and preserves the pre-existing tenant, identity, academic and legacy-state tables.
+
+### Rooms Management
 
 Use this map before changing Rooms Management behavior.
 

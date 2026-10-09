@@ -11,13 +11,16 @@ using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.Uow;
+using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.TenantSettings.InitialSetup;
 
 namespace ShikshaMitra.HostTenants;
 
 [Authorize, RemoteService(false)]
 public class HostTenantAppService(
 	HostIdentityGuard guard, ITenantRepository tenants, ITenantManager tenantManager,
-	IHostTenantQueryRepository query, TenantIdentityInitializer initializer, TenantStatusManager statusManager)
+	IHostTenantQueryRepository query, TenantIdentityInitializer initializer, TenantStatusManager statusManager,
+	IRepository<InstituteSetupProgress, Guid> setupProgress)
 	: ShikshaMitraAppService, IHostTenantAppService
 {
 	public async Task<PagedResultDto<HostTenantDto>> GetListAsync(GetHostTenantsInput input)
@@ -46,6 +49,8 @@ public class HostTenantAppService(
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		// Intentionally avoid IDataSeeder: production tenant creation must not import demo school data.
 		await initializer.InitializeAsync(tenant.Id, input.AdminEmailAddress, input.AdminPassword);
+		using (CurrentTenant.Change(tenant.Id))
+			await setupProgress.InsertAsync(new InstituteSetupProgress(tenant.Id));
 		return Map(tenant);
 	}
 

@@ -39,6 +39,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 	];
 
 	private readonly ICurrentUser _currentUser;
+	private readonly IUserPermissionDenyStore _denies;
 	private readonly IClassTeacherAccessService _classTeacherAccessService;
 	private readonly IReportingManagerAccessService _reportingManagerAccessService;
 	private readonly IHostEnvironment _hostEnvironment;
@@ -52,10 +53,12 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		ICurrentUser currentUser,
 		IClassTeacherAccessService classTeacherAccessService,
 		IReportingManagerAccessService reportingManagerAccessService,
-		IHostEnvironment hostEnvironment)
+		IHostEnvironment hostEnvironment,
+		IUserPermissionDenyStore denies)
 		: base(currentPrincipalAccessor, permissionDefinitionManager, currentTenant, permissionValueProviderManager, stateCheckerManager)
 	{
 		_currentUser = currentUser;
+		_denies = denies;
 		_classTeacherAccessService = classTeacherAccessService;
 		_reportingManagerAccessService = reportingManagerAccessService;
 		_hostEnvironment = hostEnvironment;
@@ -63,6 +66,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 
 	public override async Task<bool> IsGrantedAsync(string name)
 	{
+		if (_currentUser.Id.HasValue && (await _denies.GetDeniedAsync(_currentUser.Id.Value)).Contains(name)) return false;
 		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
 		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
 		{
@@ -131,6 +135,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 
 	public override async Task<bool> IsGrantedAsync(ClaimsPrincipal? claimsPrincipal, string name)
 	{
+		if (TryGetUserId(claimsPrincipal, out var deniedUser) && (await _denies.GetDeniedAsync(deniedUser)).Contains(name)) return false;
 		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
 		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
 		{
@@ -212,6 +217,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		Func<string[], Task<MultiplePermissionGrantResult>> checkBasePermissions,
 		Guid? userId)
 	{
+		var denied = userId.HasValue ? await _denies.GetDeniedAsync(userId.Value) : new HashSet<string>();
 		var distinctNames = names.Distinct(StringComparer.Ordinal).ToArray();
 		var aliases = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 		var aliasNames = new HashSet<string>(StringComparer.Ordinal);
@@ -243,6 +249,11 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		var needsReportingManager = false;
 		foreach (var name in distinctNames)
 		{
+			if (denied.Contains(name))
+			{
+				result.Result[name] = PermissionGrantResult.Prohibited;
+				continue;
+			}
 			var granted = baseGrants[name] == PermissionGrantResult.Granted ||
 				(_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name)) ||
 				aliases[name].Any(alias => baseGrants[alias] == PermissionGrantResult.Granted);
@@ -258,14 +269,14 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		var hasAssignment = await _classTeacherAccessService.HasAssignmentAsync(userId.Value);
 		if (hasAssignment)
 		{
-			foreach (var name in distinctNames.Where(IsClassTeacherOperationalAcademicPermission))
+			foreach (var name in distinctNames.Where(name => !denied.Contains(name) && IsClassTeacherOperationalAcademicPermission(name)))
 				result.Result[name] = PermissionGrantResult.Granted;
 			return result;
 		}
 		if (needsReportingManager && await _reportingManagerAccessService.HasReporteesAsync(userId.Value))
 		{
 			foreach (var name in distinctNames.Where(name =>
-				name.EndsWith(".View", StringComparison.Ordinal) && IsClassTeacherOperationalAcademicPermission(name)))
+				!denied.Contains(name) && name.EndsWith(".View", StringComparison.Ordinal) && IsClassTeacherOperationalAcademicPermission(name)))
 				result.Result[name] = PermissionGrantResult.Granted;
 		}
 		return result;

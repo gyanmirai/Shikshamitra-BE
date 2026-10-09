@@ -3,15 +3,29 @@ module: institute-setup
 domain: workflows
 content_type: How-to
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-10-09
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Trace Institute Setup workflows
 
-TL;DR: trace Rooms Management workflows from route to controller, then contract, application service, domain entity, and database configuration.
+TL;DR: trace initial setup and Rooms Management through controller, contracts, application orchestration, domain rules and persistence.
 Use this page for building, room type, and room changes.
+
+## Initial setup lifecycle
+
+1. Host provisioning creates the tenant, initial administrator and blank progress in one transaction.
+2. School session context reads progress and reports whether completion is recorded.
+3. The administrator saves partial drafts; reopening reads the latest server snapshot.
+4. Profile, year and structure actions validate permissions, tenant ownership and the latest stamp before committing configuration and progress.
+5. Optional users are created through Identity with retry IDs; passwords never enter progress JSON.
+6. Review completion verifies confirmed changes, required profile data, a coherent academic branch and an active administrator.
+7. Completion stores the operator/time and changes subsequent session context to completed.
+
+Migration classifies pre-existing schools without granting or reseeding access.
+Explicit completed markers remain complete; legacy partial states preserve their corresponding step; operational schools without markers remain complete only with a tenant-owned academic branch.
+The [frontend workflows](../../../../Shikshamitra-FE/docs/initial-setup/workflows.md) own redirects, autosave feedback, explicit reload and working-year selection.
 
 ## Trace building changes
 

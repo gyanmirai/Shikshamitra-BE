@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Volo.Abp.Identity;
+using Volo.Abp.TenantManagement;
+using ShikshaMitra.HostTenants;
 using Volo.Abp.ObjectExtending;
 using Volo.Abp.Threading;
 
@@ -16,6 +18,10 @@ public static class ShikshaMitraEfCoreEntityExtensionMappings
 
         OneTimeRunner.Run(() =>
         {
+			ObjectExtensionManager.Instance.MapEfCoreProperty<Tenant, bool>(
+				HostTenantConsts.IsActiveProperty, (_, property) => property.HasDefaultValue(true).HasSentinel(false));
+			ObjectExtensionManager.Instance.MapEfCoreProperty<Tenant, string>(
+				HostTenantConsts.InstituteNameProperty, (_, property) => property.HasMaxLength(HostTenantConsts.MaxInstituteNameLength));
                 /* You can configure extra properties for the
                  * entities defined in the modules used by your application.
                  *

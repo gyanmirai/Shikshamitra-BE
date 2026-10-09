@@ -10,6 +10,8 @@ using Volo.Abp.EventBus.Distributed;
 using Volo.Abp.EventBus.Local;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.TenantManagement;
+using ShikshaMitra.HostTenants;
+using Volo.Abp;
 
 namespace ShikshaMitra.TenantSettings;
 
@@ -54,12 +56,14 @@ public class MultiTenancyAppService : TenantAppService
 	public override async Task<TenantDto> CreateAsync(TenantCreateDto input)
 	{
 		await CheckHostTenantOperationAsync(TenantManagementPermissions.Tenants.Create);
+		CheckReservedProperties(input);
 		return await base.CreateAsync(input);
 	}
 
 	public override async Task<TenantDto> UpdateAsync(Guid id, TenantUpdateDto input)
 	{
 		await CheckTenantUpdatePermissionAsync();
+		CheckReservedProperties(input);
 
 		var tenantId = GetEffectiveTenantId();
 		if (tenantId != null && tenantId != id)
@@ -120,8 +124,9 @@ public class MultiTenancyAppService : TenantAppService
 	{
 		if (!await _permissionChecker.IsGrantedAsync(TenantManagementPermissions.Tenants.Default))
 		{
-			
+			throw new AbpAuthorizationException("You are not authorized to view tenants.");
 		}
+		if (!CurrentUser.IsAuthenticated) throw new AbpAuthorizationException();
 	}
 
 	private async Task CheckTenantUpdatePermissionAsync()
@@ -134,7 +139,7 @@ public class MultiTenancyAppService : TenantAppService
 
 	private async Task CheckHostTenantOperationAsync(string permissionName)
 	{
-		if (GetEffectiveTenantId() != null)
+		if (!CurrentUser.IsAuthenticated || GetEffectiveTenantId() != null)
 		{
 			throw new AbpAuthorizationException("Only host users can manage tenants.");
 		}
@@ -151,6 +156,12 @@ public class MultiTenancyAppService : TenantAppService
 		{
 			throw new AbpAuthorizationException("You are not authorized to view tenant information.");
 		}
+	}
+
+	private static void CheckReservedProperties(IHasExtraProperties input)
+	{
+		if (input.ExtraProperties.ContainsKey(HostTenantConsts.IsActiveProperty))
+			throw new BusinessException(HostTenantConsts.StatusReadOnly);
 	}
 
 	private Guid? GetEffectiveTenantId()

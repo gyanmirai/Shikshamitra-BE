@@ -28,7 +28,7 @@ using Xunit;
 namespace ShikshaMitra.Security.Permissions;
 
 [Collection(ApiTestCollection.Name)]
-public class PermissionConsistencyApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
+public partial class PermissionConsistencyApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
     private const string Edit = ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit;
     private const string View = ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View;

@@ -8,6 +8,7 @@ New or refactored modules should follow the [module docs standard](../common/sta
 | Examination | [docs/modules/examination/README.md](./examination/README.md) |
 | Finance | [docs/modules/finance/README.md](./finance/README.md) |
 | HR | [docs/modules/hr/README.md](./hr/README.md) |
+| Host tenants | [docs/modules/host-tenants/README.md](./host-tenants/README.md) |
 | Institute Setup | [docs/modules/institute-setup/README.md](./institute-setup/README.md) |
 | Library | [docs/modules/library/README.md](./library/README.md) |
 | Student | [docs/modules/student/README.md](./student/README.md) |

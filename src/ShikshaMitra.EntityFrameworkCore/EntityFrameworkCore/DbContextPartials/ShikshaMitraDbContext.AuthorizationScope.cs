@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.Permissions;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Identity;
 using Volo.Abp.Uow;
@@ -16,15 +17,20 @@ public partial class ShikshaMitraDbContext
         // including direct context writes, role join changes, imports, and deletions.
         if (LazyServiceProvider == null || !ChangeTracker.Entries().Any(entry =>
             entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted &&
-            entry.Entity is UserScopeAssignment or Employee or IdentityUser or IdentityRole or IdentityUserRole))
+            entry.Entity is UserPermissionDeny or UserScopeAssignment or Employee or IdentityUser or IdentityRole or IdentityUserRole))
             return null;
         var manager = LazyServiceProvider.LazyGetRequiredService<IUnitOfWorkManager>();
         ScopeLocalReuseInvalidator.ClearCurrentUnitOfWork(manager);
+        UserPermissionDenyStore.ClearLocalReuse(manager);
         return new AuthorizationScopeChange(manager);
     }
 
     private sealed class AuthorizationScopeChange(IUnitOfWorkManager manager) : IDisposable
     {
-        public void Dispose() => ScopeLocalReuseInvalidator.ClearCurrentUnitOfWork(manager);
+        public void Dispose()
+        {
+            ScopeLocalReuseInvalidator.ClearCurrentUnitOfWork(manager);
+            UserPermissionDenyStore.ClearLocalReuse(manager);
+        }
     }
 }

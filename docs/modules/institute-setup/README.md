@@ -3,7 +3,7 @@ module: institute-setup
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-07-08
+updated_on: 2026-10-09
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,16 +11,16 @@ audience: humans-and-agents
 # Understand the Institute Setup backend module
 
 TL;DR: use this page as the entrypoint for Institute Setup behavior, API families, architecture, workflows, and validation.
-The active curated docs currently focus on Rooms Management under Tenant Settings.
+The curated surface includes durable institute initial setup and Rooms Management under Tenant Settings.
 
 ## Read order
 
 | Step | File | Use it to |
 |---|---|---|
-| 1 | [product.md](./product.md) | Understand Rooms Management product behavior |
-| 2 | [api.md](./api.md) | Find building, room type, and room routes |
+| 1 | [product.md](./product.md) | Understand initial setup and Rooms Management behavior |
+| 2 | [api.md](./api.md) | Find initial setup, building, room type, and room routes |
 | 3 | [architecture.md](./architecture.md) | Locate Tenant Settings source paths |
-| 4 | [workflows.md](./workflows.md) | Trace building, room type, and room flows |
+| 4 | [workflows.md](./workflows.md) | Trace setup persistence, completion and room flows |
 | 5 | [testing.md](./testing.md) | Pick focused validation commands |
 
 ## Source of truth
@@ -35,6 +35,8 @@ The active curated docs currently focus on Rooms Management under Tenant Setting
 | Tests | `test/ShikshaMitra.*.Tests/TenantSettings/**` |
 
 ## For agents
+
+The [frontend initial setup docs](../../../../Shikshamitra-FE/docs/initial-setup/README.md) own route guards, wizard layout and browser workflows.
 
 Use this table before searching code:
 

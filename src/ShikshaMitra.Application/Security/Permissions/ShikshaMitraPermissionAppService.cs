@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -30,12 +30,13 @@ namespace ShikshaMitra.Security.Permissions;
 [RemoteService(false)]
 [Dependency(ReplaceServices = true)]
 [ExposeServices(typeof(IPermissionAppService), typeof(IShikshaMitraPermissionAppService), typeof(ShikshaMitraPermissionAppService))]
-public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionAppService, IShikshaMitraPermissionAppService
+public partial class ShikshaMitraPermissionAppService : ApplicationService, IPermissionAppService, IShikshaMitraPermissionAppService
 {
 	private readonly IIdentityRoleRepository _roles;
 	private readonly IIdentityUserRepository _users;
 	private readonly IUnitOfWorkManager _unitOfWorkManager;
 	private readonly IServiceProvider _services;
+	private readonly IUserPermissionDenyStore _denies;
 	protected PermissionManagementOptions Options { get; }
 	protected IPermissionManager PermissionManager { get; }
 	protected IPermissionDefinitionManager PermissionDefinitionManager { get; }
@@ -53,12 +54,14 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 		IIdentityRoleRepository roles,
 		IIdentityUserRepository users,
 		IUnitOfWorkManager unitOfWorkManager,
-		IServiceProvider services)
+		IServiceProvider services,
+		IUserPermissionDenyStore denies)
 	{
 		_roles = roles;
 		_users = users;
 		_unitOfWorkManager = unitOfWorkManager;
 		_services = services;
+		_denies = denies;
 		Options = options.Value;
 		PermissionManager = permissionManager;
 		PermissionDefinitionManager = permissionDefinitionManager;
@@ -132,6 +135,7 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 			enabledGroups.Add((groupDto, grantInfoDtos));
 		}
 
+		var denied = providerName == "U" ? await _denies.GetDeniedAsync(Guid.Parse(providerKey)) : new HashSet<string>();
 		var permissionNames = enabledGroups.SelectMany(group => group.Permissions).Select(permission => permission.Name).ToArray();
 		if (permissionNames.Length == 0) return result;
 		var catalogueMs = timer.ElapsedMilliseconds - policyMs;
@@ -149,9 +153,9 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 			foreach (var grantInfoDto in grantInfoDtos)
 			{
 				var grantInfo = grantInfoLookup[grantInfoDto.Name];
-				grantInfoDto.IsGranted = effectiveGrantLookup != null
+				grantInfoDto.IsGranted = !denied.Contains(grantInfoDto.Name) && (effectiveGrantLookup != null
 					? effectiveGrantLookup[grantInfoDto.Name] == PermissionGrantResult.Granted
-					: grantInfo.IsGranted;
+					: grantInfo.IsGranted);
 
 				foreach (var provider in grantInfo.Providers)
 				{
@@ -237,7 +241,10 @@ public class ShikshaMitraPermissionAppService : ApplicationService, IPermissionA
 				.SingleOrDefault(candidate => candidate.Name == providerName)
 				?? throw new AbpException("The permission management provider is unavailable.");
 			foreach (var item in input.Permissions)
+			{
 				await provider.SetAsync(item.Name, providerKey, item.IsGranted);
+				if (providerName == "U") await _denies.SetDeniedAsync(Guid.Parse(providerKey), item.Name, false);
+			}
 			if (ownedTransaction != null) await ownedTransaction.CompleteAsync();
 		}
 		catch

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using ShikshaMitra.Students.Portal;
+using ShikshaMitra.HostTenants;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Identity;
 using Volo.Abp.OpenIddict.Controllers;
@@ -18,6 +19,7 @@ public class StudentPortalTokenController : TokenController
 {
 	private Guid? verifiedTemporaryUserId;
 	private StudentPortalLoginService PortalLogin => LazyServiceProvider.LazyGetRequiredService<StudentPortalLoginService>();
+	private TenantActivityChecker TenantActivity => LazyServiceProvider.LazyGetRequiredService<TenantActivityChecker>();
 
 	protected override async Task ReplaceEmailToUsernameOfInputIfNeeds(OpenIddictRequest request)
 	{
@@ -46,6 +48,7 @@ public class StudentPortalTokenController : TokenController
 
 	protected override async Task<IActionResult> SetSuccessResultAsync(OpenIddictRequest request, IdentityUser user)
 	{
+		if (!await TenantActivity.IsActiveAsync(user.TenantId)) return DenyInactiveTenant();
 		if (!await PortalLogin.IsPortalUserAsync(user)) return await base.SetSuccessResultAsync(request, user);
 		if (!await PortalLogin.CanAccessAsync(user) || user.ShouldChangePasswordOnNextLogin) return Deny();
 		if (!user.EmailConfirmed && verifiedTemporaryUserId == user.Id)
@@ -66,6 +69,7 @@ public class StudentPortalTokenController : TokenController
 
 	protected override async Task<bool> PreSignInCheckAsync(IdentityUser user)
 	{
+		if (!await TenantActivity.IsActiveAsync(user.TenantId)) return false;
 		if (!await base.PreSignInCheckAsync(user)) return false;
 		return !await PortalLogin.IsPortalUserAsync(user) ||
 			user.EmailConfirmed && !user.ShouldChangePasswordOnNextLogin && await PortalLogin.CanAccessAsync(user);
@@ -75,5 +79,11 @@ public class StudentPortalTokenController : TokenController
 	{
 		[OpenIddictServerAspNetCoreConstants.Properties.Error] = OpenIddictConstants.Errors.InvalidGrant,
 		[OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "Invalid username or password, or portal access is unavailable."
+	}), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+
+	private ForbidResult DenyInactiveTenant() => Forbid(new AuthenticationProperties(new Dictionary<string, string?>
+	{
+		[OpenIddictServerAspNetCoreConstants.Properties.Error] = OpenIddictConstants.Errors.InvalidGrant,
+		[OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "This school is inactive. Contact the platform administrator."
 	}), OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
 }

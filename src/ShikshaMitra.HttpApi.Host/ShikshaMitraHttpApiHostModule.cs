@@ -138,6 +138,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		}
 
 		ConfigureAuthentication(context);
+		Configure<AbpAspNetCoreMultiTenancyOptions>(InactiveTenantResponse.Configure);
 		ConfigureBundles();
 		ConfigureUrls(configuration);
 		ConfigureConventionalControllers();

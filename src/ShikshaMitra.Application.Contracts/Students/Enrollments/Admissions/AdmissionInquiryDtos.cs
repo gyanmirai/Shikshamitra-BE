@@ -92,6 +92,7 @@ public class AdmissionInquiryListInput : PagedAndSortedResultRequestDto
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 	public Guid? StandardId { get; set; }
+	public List<Guid> StandardIds { get; set; } = [];
 	public Guid? AdmissionCycleId { get; set; }
 	public Guid? AdmissionOfferingId { get; set; }
 	[StringLength(64)]

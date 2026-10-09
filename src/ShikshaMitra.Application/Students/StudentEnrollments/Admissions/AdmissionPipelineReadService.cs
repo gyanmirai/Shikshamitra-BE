@@ -157,6 +157,7 @@ public class AdmissionPipelineReadService(
 				(!input.AcademicYearId.HasValue || cycle.AcademicYearId == input.AcademicYearId) &&
 				(!input.BoardId.HasValue || offering.BoardId == input.BoardId) && (!input.MediumId.HasValue || offering.MediumId == input.MediumId) &&
 				(!input.StandardId.HasValue || offering.StandardId == input.StandardId) &&
+				(input.StandardIds.Count == 0 || Enumerable.Contains(input.StandardIds, offering.StandardId)) &&
 				(!input.AdmissionCycleId.HasValue || cycle.Id == input.AdmissionCycleId) && (!input.AdmissionOfferingId.HasValue || offering.Id == input.AdmissionOfferingId)
 			select new AdmissionPipelineItemDto
 			{

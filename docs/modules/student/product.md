@@ -131,25 +131,21 @@ Admission Cycle uses exactly three assignable permissions: `View` for lists/deta
 `Add` for create/edit/publish/reopen/clone/window/schedule, and `Delete` for close/archive/permanent
 draft deletion.
 
-## Workflow Builder governance
+## Workflow Builder publication
 
-Each school can choose direct publication or maker-checker governance. With maker-checker disabled,
-an authorized workflow editor can validate and publish directly. With it enabled, a workflow moves
-through `Draft`, `Validated`, `Submitted for approval`, `Approved`, then either `Scheduled` or
-`Published`. The maker selects a different active user as checker and provides a change reason.
-Only the assigned checker with the workflow `Approve` permission can approve or request changes.
-A requested change returns the version to Draft while preserving the decision in audit history.
+Admission workflows publish immediately through the existing Workflow Add-authorized command after
+server validation and concurrency checks. Stored maker-checker settings do not gate this command.
+The compatibility governed-publish endpoint uses the same immediate command and ignores its old
+optional effective time. Workflow-specific notifications are no longer generated, and the Workflow
+schedule worker is no longer registered. Historical approval, schedule, notification and audit data
+remain stored; a historical scheduled version changes only through an explicit publish command.
 
-Every governance action records the actor, time, status transition, reason, assigned approver, and
-effective time where applicable. Schools can enable in-app and email notifications independently.
-Published versions become `Superseded` when a later version is published, but remain valid for
-Offerings and Applications already pinned to them. A rollback never mutates a live historical
-version: an authorized user selects Published, Superseded, or Archived history and creates a new
-Draft with the old configuration and a required rollback reason.
-
-Validated workflows may be edited; the first saved change returns them to Draft and clears the old
-validation evidence. Submitted, Approved, Scheduled, Published, Superseded, and Archived versions
-remain read-only.
+Publication continues to record actor/time/status history and supersede a previously published
+version of the same workflow. Existing Offerings and Applications remain pinned to their original
+versions. Validated workflows can still be edited; the first saved change returns them to Draft and
+clears old validation evidence. Published and historical versions remain immutable. Compatibility
+approval/recovery endpoints retain their existing authorization; they are absent from the current
+builder UI and do not gate immediate publication.
 
 ## Offering identity
 

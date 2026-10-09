@@ -12,7 +12,9 @@ public class StudentOnboardingListInput : PagedAndSortedResultRequestDto
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 	public Guid? DivisionId { get; set; }
+	public List<Guid> DivisionIds { get; set; } = [];
 	public Guid? StandardId { get; set; }
+	public List<Guid> StandardIds { get; set; } = [];
 	public Guid? AssignedToUserId { get; set; }
 	public bool? OverdueOnly { get; set; }
 	public bool? UnassignedOnly { get; set; }

@@ -75,6 +75,8 @@ public partial class StudentOnboardingAppService(
 		if (input.MediumId.HasValue) query = query.Where(item => item.IntendedMediumId == input.MediumId.Value);
 		if (input.StandardId.HasValue) query = query.Where(item => item.IntendedStandardId == input.StandardId.Value);
 		if (input.DivisionId.HasValue) query = query.Where(item => item.DivisionId == input.DivisionId.Value);
+		if (input.StandardIds.Count > 0) query = query.Where(item => Enumerable.Contains(input.StandardIds, item.IntendedStandardId));
+		if (input.DivisionIds.Count > 0) query = query.Where(item => item.DivisionId.HasValue && Enumerable.Contains(input.DivisionIds, item.DivisionId.Value));
 		if (input.AssignedToUserId.HasValue) query = query.Where(item => item.AssignedToUserId == input.AssignedToUserId.Value);
 		if (input.UnassignedOnly == true) query = query.Where(item => !item.AssignedToUserId.HasValue);
 		if (input.OverdueOnly == true)

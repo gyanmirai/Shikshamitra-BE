@@ -30,7 +30,8 @@ public class AdmissionApplicationReadService(
 			offering.Id == application.AdmissionOfferingId &&
 			(!input.BoardId.HasValue || offering.BoardId == input.BoardId.Value) &&
 			(!input.MediumId.HasValue || offering.MediumId == input.MediumId.Value) &&
-			(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value)) &&
+			(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value) &&
+			(input.StandardIds.Count == 0 || Enumerable.Contains(input.StandardIds, offering.StandardId))) &&
 			(!input.AcademicYearId.HasValue || cycles.Any(cycle =>
 				cycle.Id == application.AdmissionCycleId && cycle.AcademicYearId == input.AcademicYearId.Value)));
 		var applicantIds = await GetMatchingApplicantIdsAsync(input.Search);

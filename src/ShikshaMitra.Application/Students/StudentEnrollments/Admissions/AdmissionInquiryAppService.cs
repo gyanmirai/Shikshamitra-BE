@@ -865,14 +865,15 @@ public class AdmissionInquiryAppService(
 			query = query.Where(inquiry => cycles.Any(cycle => cycle.Id == inquiry.AdmissionCycleId &&
 				cycle.AcademicYearId == input.AcademicYearId.Value));
 		}
-		if (input.BoardId.HasValue || input.MediumId.HasValue || input.StandardId.HasValue)
+		if (input.BoardId.HasValue || input.MediumId.HasValue || input.StandardId.HasValue || input.StandardIds.Count > 0)
 		{
 			var offerings = await offeringRepository.GetQueryableAsync();
 			query = query.Where(inquiry => inquiry.AdmissionOfferingId.HasValue &&
 				offerings.Any(offering => offering.Id == inquiry.AdmissionOfferingId.Value &&
 					(!input.BoardId.HasValue || offering.BoardId == input.BoardId.Value) &&
 					(!input.MediumId.HasValue || offering.MediumId == input.MediumId.Value) &&
-					(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value)));
+					(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value) &&
+					(input.StandardIds.Count == 0 || Enumerable.Contains(input.StandardIds, offering.StandardId))));
 		}
 		var managementQuery = await managementRepository.GetQueryableAsync();
 		var followUpQuery = await followUpRepository.GetQueryableAsync();

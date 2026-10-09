@@ -14,6 +14,7 @@ env:
 
 jobs:
     build-and-deploy:
+        if: github.ref == 'refs/heads/main'
         runs-on: ubuntu-latest
 
         steps:
@@ -35,7 +36,8 @@ jobs:
               run: dotnet restore
 
             - name: Install ABP CLI
-              run: dotnet tool install -g Volo.Abp.Cli
+              # Match the ABP 9.0.0 packages and .NET 9 SDK used by this solution.
+              run: dotnet tool install -g Volo.Abp.Cli --version 9.0.0
 
             - name: Download ABP libraries
               run: abp install-libs

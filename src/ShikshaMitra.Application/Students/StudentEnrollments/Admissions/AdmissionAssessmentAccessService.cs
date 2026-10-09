@@ -92,7 +92,7 @@ public class AdmissionAssessmentAccessService(
 
 	public static AdmissionAssessmentPolicy? ReadPolicy(AdmissionWorkflowStageDefinition definition)
 	{
-		try { return AdmissionAssessmentPolicy.Read(definition.ConfigurationJson); }
+		try { return AdmissionAssessmentPolicy.Read(definition.ConfigurationJson) is { } policy ? policy with { ReviewRequired = false } : null; }
 		catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
 		{ throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message); }
 	}

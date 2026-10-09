@@ -98,6 +98,7 @@ public class StudentListAppService(
 					Gender = s.AdditionalDetail != null ? s.AdditionalDetail.Gender : null,
 					RollNo = s.RollNo,
 					GrNo = s.GrNo,
+					GrNumber = s.GrNumber,
 					Category = s.AdditionalDetail != null ? s.AdditionalDetail.Category : Category.General,
 					IsLibraryMember = s.AdditionalDetail != null && s.AdditionalDetail.IsLibraryMember == true,
 					IsTransportMember = s.AdditionalDetail != null && s.AdditionalDetail.IsTransportMember == true,

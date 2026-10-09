@@ -34,6 +34,8 @@ public class StudentOnboardingRollRuleReader(OnboardingConfigurationManager conf
 		var rule = settings.ResolveRule("rollNumber", medium.EducationBoardId, medium.Id, stage.Id, standard.Id, divisionId, previous?.GetCampusId(),
 			ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now));
 		var frozen = rule.HasValue ? JsonNode.Parse(rule.Value.GetRawText())!.AsObject() : new JsonObject();
+		frozen["numberingScope"] = "class-division";
+		frozen["startingNumber"] = 1;
 		frozen["assignmentMode"] = OnboardingRuleConfiguration.Text(settings.Root.GetProperty("rollNumber"), "assignmentMode", "both");
 		return frozen.ToJsonString();
 	}
@@ -42,9 +44,12 @@ public class StudentOnboardingRollRuleReader(OnboardingConfigurationManager conf
 		var settings = await configuration.GetAsync(item.AcademicYearId); if (settings == null) return "null";
 		var rule = settings.ResolveRule("rollNumber", item, ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now));
 		var frozen = rule.HasValue ? JsonNode.Parse(rule.Value.GetRawText())!.AsObject() : new JsonObject();
+		frozen["numberingScope"] = "class-division";
+		frozen["startingNumber"] = 1;
 		frozen["assignmentMode"] = OnboardingRuleConfiguration.Text(settings.Root.GetProperty("rollNumber"), "assignmentMode", "both");
 		// The owning identifier command checks its actual before/after change.
 		frozen["requireChangeReason"] = false;
+		if (item.IsIdentifierLocked("roll") && !item.RollNumber.HasValue) frozen["assignmentMode"] = "automatic";
 		return frozen.ToJsonString();
 	}
 	public static JsonElement? Parse(string json)

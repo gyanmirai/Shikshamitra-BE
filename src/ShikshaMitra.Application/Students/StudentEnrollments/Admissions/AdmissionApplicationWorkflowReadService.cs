@@ -48,10 +48,8 @@ public class AdmissionApplicationWorkflowReadService(
 				AllowManualSkip = definitions.First(definition => definition.Id == stage.DefinitionStageId).AllowManualSkip,
 				FormStageEnabled = stage.StageType == AdmissionWorkflowStageType.Form &&
 					AdmissionFormStageAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
-				PaymentStageEnabled = stage.StageType == AdmissionWorkflowStageType.Payment &&
-					AdmissionPaymentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
-				OfferStageEnabled = stage.StageType == AdmissionWorkflowStageType.Offer &&
-					AdmissionOfferAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				PaymentStageEnabled = stage.StageType == AdmissionWorkflowStageType.Payment,
+				OfferStageEnabled = false,
 				SeatStageEnabled = stage.StageType == AdmissionWorkflowStageType.Seat &&
 					AdmissionSeatAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
 				AssessmentEnabled = stage.StageType == AdmissionWorkflowStageType.Assessment &&
@@ -65,10 +63,8 @@ public class AdmissionApplicationWorkflowReadService(
 					AdmissionDocumentAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) is { CollectionFormStageCode: not null } documentPolicy &&
 					AdmissionDocumentCollectionRules.IsLinkedForm(definitions.First(item => item.Id == current.DefinitionStageId),
 						definitions.First(item => item.Id == stage.DefinitionStageId), documentPolicy, allTransitions),
-				EligibilityEnabled = stage.StageType == AdmissionWorkflowStageType.Eligibility &&
-					AdmissionEligibilityAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
-				ReviewEnabled = stage.StageType == AdmissionWorkflowStageType.Review &&
-					AdmissionReviewAccessService.ReadPolicy(definitions.First(definition => definition.Id == stage.DefinitionStageId)) != null,
+				EligibilityEnabled = false,
+				ReviewEnabled = false,
 				EnteredAt = NormalizeUtc(stage.EnteredAt),
 				CompletedAt = NormalizeUtc(stage.CompletedAt),
 				CompletedBy = stage.CompletedBy,

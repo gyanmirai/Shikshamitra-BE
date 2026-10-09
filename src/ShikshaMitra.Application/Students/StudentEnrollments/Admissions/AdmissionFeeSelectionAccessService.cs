@@ -78,8 +78,7 @@ public class AdmissionFeeSelectionAccessService(
 		var owner = snapshot == null ? ResolveOwner(entered, events) : entered.SingleOrDefault(s => s.Id == snapshot.OwnerStageId);
 		var paymentDefinitions = await definitions.GetListAsync(d => d.WorkflowDefinitionId == application.WorkflowDefinitionId &&
 			d.StageType == AdmissionWorkflowStageType.Payment);
-		var policies = paymentDefinitions.Select(AdmissionPaymentAccessService.ReadPolicy).Where(p => p != null).ToList();
-		return new(application, owner, workflow, policies.Any(p => p!.RequiresFeeStructureSelection),
+		return new(application, owner, workflow, paymentDefinitions.Count > 0,
 			await payments.AnyAsync(p => p.ApplicationId == application.Id && p.Amount > 0m),
 			snapshot?.Currency ?? AdmissionFeeStructureReader.ReferenceCurrency);
 	}
@@ -93,19 +92,19 @@ public class AdmissionFeeSelectionAccessService(
 		var visited = new HashSet<Guid>();
 		while (next != null && visited.Add(next.Id))
 		{
-			if (next.StageType is AdmissionWorkflowStageType.Offer or AdmissionWorkflowStageType.Payment) return next;
+			if (next.StageType == AdmissionWorkflowStageType.Payment) return next;
 			var to = events.FirstOrDefault(h => h.FromStageInstanceId == next.Id)?.ToStageInstanceId;
 			next = entered.FirstOrDefault(s => s.Id == to);
 		}
-		return entered.Where(s => s.StageType is AdmissionWorkflowStageType.Offer or AdmissionWorkflowStageType.Payment)
+		return entered.Where(s => s.StageType == AdmissionWorkflowStageType.Payment)
 			.OrderBy(s => s.EnteredAt).ThenBy(s => s.CompletedAt ?? DateTime.MaxValue).ThenBy(s => s.Id).FirstOrDefault();
 	}
 
 	public async Task EnsureSelectionAsync(AdmissionApplication application)
 	{
 		var context = await GetContextAsync(application);
-		if (context.Owner != null && context.IsRequired && application.GetFeeSelection() == null)
+		if (context.IsRequired && (context.Owner == null || application.GetFeeSelection() is not { } selection || selection.OwnerStageId != context.Owner.Id))
 			throw new BusinessException(AdmissionFeeSelectionErrorCodes.Required,
-				"Save the required fee structure selection before issuing the offer, collecting payment, or completing this stage.");
+				"Confirm the Finance fee structure before completing this stage or finalizing admission.");
 	}
 }

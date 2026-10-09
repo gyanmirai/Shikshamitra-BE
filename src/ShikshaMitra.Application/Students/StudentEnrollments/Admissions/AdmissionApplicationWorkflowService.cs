@@ -29,7 +29,6 @@ public class AdmissionApplicationWorkflowService(
 	AdmissionDocumentRuntimeService documentRuntime,
 	AdmissionEligibilityRuntimeService eligibilityRuntime,
 	AdmissionReviewRuntimeService reviewRuntime,
-	AdmissionPaymentRuntimeService paymentRuntime,
 	AdmissionOfferRuntimeService offerRuntime,
 	AdmissionSeatRuntimeService seatRuntime,
 	AdmissionWorkflowRuntimeValueService runtimeValueService,
@@ -95,7 +94,9 @@ public class AdmissionApplicationWorkflowService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.InvalidCurrentStage);
 		var definition = await stageDefinitionRepository.FindAsync(current.DefinitionStageId) ??
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), current.DefinitionStageId);
-		if (current.StageType is AdmissionWorkflowStageType.Offer or AdmissionWorkflowStageType.Payment)
+		if (current.StageType is AdmissionWorkflowStageType.Eligibility or AdmissionWorkflowStageType.Review or AdmissionWorkflowStageType.Offer)
+			throw new BusinessException(AdmissionApplicationErrorCodes.StageCannotAdvance, "This stage type is retired. Configure a journey using the five supported stage types.");
+		if (current.StageType is AdmissionWorkflowStageType.Offer or AdmissionWorkflowStageType.Payment && !await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingRequirementSnapshotService>().CanDeferAsync(application))
 			await feeSelection.EnsureSelectionAsync(application);
 		if (input.SkipCurrentStage && definition.IsRequired && !input.AdminOverride)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed)
@@ -105,6 +106,9 @@ public class AdmissionApplicationWorkflowService(
 		if (managedInquiry && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
 		var inquiry = managedInquiry ? await inquiryRuntime.EnsureStageCompleteAsync(application, definition) : null;
 		var managedAssessment = current.StageType == AdmissionWorkflowStageType.Assessment && AdmissionAssessmentAccessService.ReadPolicy(definition) != null;
+		if (input.SkipCurrentStage && !input.AdminOverride && (managedForm || managedAssessment))
+			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed,
+				"Complete the stage requirements before continuing.");
 		if (managedAssessment) await assessmentRuntime.EnsureAccessAsync(application.Id, current.Id);
 		var managedDocuments = current.StageType == AdmissionWorkflowStageType.DocumentVerification && AdmissionDocumentAccessService.ReadPolicy(definition) != null;
 		AdmissionDocumentEvaluation? documents = managedDocuments ? await documentRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
@@ -113,9 +117,9 @@ public class AdmissionApplicationWorkflowService(
 		var managedReview = current.StageType == AdmissionWorkflowStageType.Review && AdmissionReviewAccessService.ReadPolicy(definition) != null;
 		if (managedReview && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
 		var review = managedReview ? await reviewRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
-		var managedPayment = current.StageType == AdmissionWorkflowStageType.Payment && AdmissionPaymentAccessService.ReadPolicy(definition) != null;
+		var managedPayment = current.StageType == AdmissionWorkflowStageType.Payment;
 		if (managedPayment && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
-		var payment = managedPayment ? await paymentRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
+		AdmissionPaymentStageDto? payment = null;
 		var managedOffer = current.StageType == AdmissionWorkflowStageType.Offer && AdmissionOfferAccessService.ReadPolicy(definition) != null;
 		if (managedOffer && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
 		var offer = managedOffer ? await offerRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
@@ -143,6 +147,9 @@ public class AdmissionApplicationWorkflowService(
 		runtimeValues = await eligibilityRuntime.AddFactsAsync(application, runtimeValues, eligibility);
 		runtimeValues = await reviewRuntime.AddFactsAsync(application, runtimeValues, review);
 		runtimeValues = AdmissionPaymentRuntimeService.AddFacts(runtimeValues, payment);
+		if (managedPayment)
+			runtimeValues = new Dictionary<string, string>(runtimeValues, StringComparer.OrdinalIgnoreCase)
+			{ ["payment.status"] = "feeStructureConfirmed" };
 		runtimeValues = AdmissionOfferRuntimeService.AddFacts(runtimeValues, offer);
 		runtimeValues = AdmissionSeatRuntimeService.AddFacts(runtimeValues, seat);
 		var selected = definition.IsTerminalStage ? null : transitionSelector.Select(

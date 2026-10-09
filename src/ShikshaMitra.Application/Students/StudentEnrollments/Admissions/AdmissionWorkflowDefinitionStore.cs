@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Entities;
@@ -43,6 +45,7 @@ public class AdmissionWorkflowDefinitionStore(
 
 	public async Task ReplaceChildrenAsync(Guid workflowId, CreateUpdateAdmissionWorkflowDto input)
 	{
+		foreach (var stage in input.Stages) EnsureSupported(stage.StageType);
 		var existingStages = await GetStagesAsync(workflowId);
 		var existingStagesById = existingStages.ToDictionary(stage => stage.Id);
 		var stageIdMap = new Dictionary<Guid, Guid>();
@@ -61,6 +64,12 @@ public class AdmissionWorkflowDefinitionStore(
 		}
 		foreach (var inputStage in input.Stages.OrderBy(stage => stage.DisplayOrder))
 		{
+			if (inputStage.StageType is AdmissionWorkflowStageType.Form or AdmissionWorkflowStageType.Assessment or
+				AdmissionWorkflowStageType.Payment or AdmissionWorkflowStageType.DocumentVerification)
+				inputStage.AllowManualSkip = false;
+			try { inputStage.ConfigurationJson = AdmissionStageConfiguration.Normalize(inputStage.StageType, inputStage.ConfigurationJson); }
+			catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+			{ throw new BusinessException(AdmissionWorkflowErrorCodes.InvalidTransition, exception.Message).WithData("Stage", inputStage.Name); }
 			var requestedId = inputStage.Id.GetValueOrDefault();
 			var stageId = requestedId != Guid.Empty && existingStagesById.ContainsKey(requestedId)
 				? requestedId : GuidGenerator.Create();
@@ -90,12 +99,14 @@ public class AdmissionWorkflowDefinitionStore(
 		var stageIdMap = new Dictionary<Guid, Guid>();
 		foreach (var sourceStage in sourceStages)
 		{
+			EnsureSupported(sourceStage.StageType);
 			var stageId = GuidGenerator.Create();
 			stageIdMap[sourceStage.Id] = stageId;
 			await stageRepository.InsertAsync(new AdmissionWorkflowStageDefinition(
 				stageId, targetWorkflowId, sourceStage.Code, sourceStage.Name, sourceStage.StageType,
-				sourceStage.DisplayOrder, sourceStage.IsRequired, sourceStage.AllowManualSkip,
-				sourceStage.Description, sourceStage.ConfigurationJson, sourceStage.IsEntryStage,
+				sourceStage.DisplayOrder, sourceStage.IsRequired, sourceStage.AllowManualSkip &&
+					sourceStage.StageType == AdmissionWorkflowStageType.Approval,
+				sourceStage.Description, AdmissionStageConfiguration.Normalize(sourceStage.StageType, sourceStage.ConfigurationJson), sourceStage.IsEntryStage,
 				sourceStage.IsTerminalStage), autoSave: false);
 		}
 		foreach (var sourceTransition in sourceTransitions)
@@ -155,4 +166,11 @@ public class AdmissionWorkflowDefinitionStore(
 			id, workflowId, input.Code, input.Name, input.StageType, input.DisplayOrder,
 			input.IsRequired, input.AllowManualSkip, input.Description, input.ConfigurationJson,
 			input.IsEntryStage, input.IsTerminalStage);
+
+	private static void EnsureSupported(AdmissionWorkflowStageType type)
+	{
+		if (AdmissionWorkflowStageTypeRegistry.Find(type)?.IsSelectable != true)
+			throw new BusinessException(AdmissionWorkflowErrorCodes.RuntimeHandlerUnavailable,
+				"Choose Form, Assessment, Payment, Document verification, or Admission decision.");
+	}
 }

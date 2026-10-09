@@ -52,6 +52,7 @@ public partial class StudentDirectoryAppService(
 		var query = await enrollmentScope.ApplyStudentScopeAsync(await students.GetQueryableWithoutAutoIncludesAsync());
 		if (input.StudentId.HasValue) query = query.Where(s => s.Id == input.StudentId);
 		var caseQuery = await cases.GetQueryableAsync();
+        var onboardingEligibleIds = await access.GetOnboardingEligibleStudentIdsAsync();
 		var overrideQuery = await overrides.GetQueryableAsync();
 		query = query.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled || s.Status == StudentLifeCycleStatusEnum.InActive || s.Status == StudentLifeCycleStatusEnum.Left);
 		if (legacyCandidates)
@@ -61,7 +62,7 @@ public partial class StudentDirectoryAppService(
 				!caseQuery.Any(c => c.TenantId == CurrentTenant.Id && c.StudentId == s.Id && (c.Status == StudentOnboardingStatus.Completed || !c.IsHistoricalBackfill)) &&
 				!overrideQuery.Any(o => o.TenantId == CurrentTenant.Id && o.StudentId == s.Id && (o.Status == "Pending" || o.Status == "Approved")));
 		}
-		else query = query.Where(s => caseQuery.Any(c => c.TenantId == CurrentTenant.Id && c.StudentId == s.Id && c.Status == StudentOnboardingStatus.Completed) ||
+		else query = query.Where(s => onboardingEligibleIds.Contains(s.Id) ||
 			 overrideQuery.Any(o => o.TenantId == CurrentTenant.Id && o.StudentId == s.Id && o.Status == "Approved"));
 		if (input.Population == "Active") query = query.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled);
 		if (input.Population == "Former") query = query.Where(s => s.Status == StudentLifeCycleStatusEnum.InActive || s.Status == StudentLifeCycleStatusEnum.Left);
@@ -131,7 +132,7 @@ public partial class StudentDirectoryAppService(
 			DivisionId = s.DivisionId, DivisionName = s.Division != null ? s.Division.Name : null,
 			AcademicMediumId = s.AcademicMediumId, AcademicMediumName = s.AcademicMedium != null ? s.AcademicMedium.Name : null,
 			HasPhoto = s.PhotoBlobName != null,
-			EntrySource = caseQuery.Any(c => c.TenantId == CurrentTenant.Id && c.StudentId == s.Id && c.Status == StudentOnboardingStatus.Completed) ? "CompletedOnboarding" : "LegacyOverride"
+			EntrySource = caseQuery.Any(c => c.TenantId == CurrentTenant.Id && c.StudentId == s.Id && c.Status == StudentOnboardingStatus.Completed) ? "CompletedOnboarding" : onboardingEligibleIds.Contains(s.Id) ? "ActivatedOnboarding" : "LegacyOverride"
 		}));
 		if (input.AcademicYearId.HasValue && rows.Count > 0)
 		{

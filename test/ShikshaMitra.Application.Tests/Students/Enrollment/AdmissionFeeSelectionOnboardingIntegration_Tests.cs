@@ -2,14 +2,13 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
-using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
-using ShikshaMitra.TenantSettings.AcademicSetups;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.AcademicSetups;
 using Shouldly;
+using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Xunit;
 
@@ -17,62 +16,150 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
-	[Fact]
-	public Task Fee_selection_confirmation_should_hold_actual_onboarding_completion_even_when_finance_is_settled() =>
-		RunCertificationScenarioAsync(async () =>
-		{
-			var fixture = await CreateCertificationFixtureAsync("FeeConfirm");
-			var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
-			var structure = await CreateFeeSelectionReferenceAsync(fixture.Offering, cycle.AcademicYearId);
-			var head = structure.FeeStructureDetails.Single().FeeHeadId;
-			await WithUnitOfWorkAsync(async () => {
-				var application = await _applicationRepository.GetAsync(fixture.Application.Id);
-				application.SaveFeeSelection(new(structure.Id, structure.Name, structure.RevisionNumber, cycle.AcademicYearId,
-					fixture.Offering.StandardId, Guid.NewGuid(), "INR", [new(head, "QA Form", 200m, false, true, null, null)],
-					TestUserId, DateTimeOffset.UtcNow), false);
-				await _applicationRepository.UpdateAsync(application, true);
-			});
-			var service = GetRequiredService<IStudentOnboardingAppService>();
-			await service.CreatePolicyAsync(new() { AcademicYearId = cycle.AcademicYearId, Name = "Saved fee selection confirmation",
-				RequireDocuments = false, RequireFamilyDetails = false, RequireCommunicationDetails = false,
-				RequireStudentAccount = false, RequireGuardianAccount = false });
-			var fresh = await _applicationAppService.GetAsync(fixture.Application.Id);
-			var finalized = await FinalizeAsync(fresh, true, "fee-confirm-finalize");
-			var division = await WithUnitOfWorkAsync(async () => {
-				var value = await GetRequiredService<DivisionManager>().CreateAsync(fixture.Offering.StandardId, "FeeConfirmA", 40);
-				return await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(value, true);
-			});
-			var item = await service.GetAsync(finalized.OnboardingCaseId);
-			item = await service.SetPlacementAsync(item.Id, new() { DivisionId = division.Id, ConcurrencyStamp = item.ConcurrencyStamp });
-			var series = await service.CreateIdentifierSeriesAsync(new() { AcademicYearId = cycle.AcademicYearId,
-				Code = "FEECONF", Name = "Saved fee selection", EffectiveFrom = DateTime.UtcNow.AddDays(-1) });
-			item = await service.AllocateIdentifierAsync(item.Id, new() { NumberSeriesId = series.Id, RollNumber = 1, ConcurrencyStamp = item.ConcurrencyStamp });
-			item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
-			item = await service.ActivateAsync(item.Id, new() { IdempotencyKey = "fee-confirm-activate", ConcurrencyStamp = item.ConcurrencyStamp });
-			var assignment = new StudentFeeStructure(Guid.NewGuid(), TestTenantId, finalized.StudentId, structure.Id, cycle.AcademicYearId);
-			var due = new DueFee(Guid.NewGuid(), TestTenantId, finalized.StudentId, head, (MonthEnum)5, 2026, false, 200m, new DateTime(2026, 6, 10));
-			due.BindAssignment(assignment.Id); due.ApplyPayment(200m);
-			assignment.CaptureAssignment("fee-confirm-qa", JsonSerializer.Serialize(new StudentFeeAssignmentPreviewDto {
-				StudentId = finalized.StudentId, AcademicYearId = cycle.AcademicYearId, StructureId = structure.Id,
-				RevisionNumber = structure.RevisionNumber, ProratedTotal = 200m,
-				Heads = [new() { FeeHeadId = head, Included = true }], Lines = [new() { DueFeeId = due.Id }] }));
-			var receipt = new FeeRecordMetadata(Guid.NewGuid(), TestTenantId, finalized.StudentId, cycle.AcademicYearId, 200, "QA-FEE-CONFIRM", FeeCollectionStatus.Paid);
-			await WithUnitOfWorkAsync(async () => {
-				await GetRequiredService<IRepository<StudentFeeStructure, Guid>>().InsertAsync(assignment, true);
-				await GetRequiredService<IRepository<DueFee, Guid>>().InsertAsync(due, true);
-				await GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(receipt, true);
-				await GetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>().InsertAsync(new(Guid.NewGuid(), TestTenantId, receipt.Id, due.Id, 200), true);
-			});
-			item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
-			item.FirstPaymentConfirmed.ShouldBe(true); item.Status.ShouldBe(StudentOnboardingStatus.NeedsAttention);
-			item.LastError.ShouldContain("Confirm the fee structure");
-			var fees = GetRequiredService<IAdmissionFeeSelectionAppService>();
-			var state = await fees.GetAsync(fixture.Application.Id); state.CanConfirmOnboarding.ShouldBeTrue();
-			state = await fees.ConfirmOnboardingAsync(fixture.Application.Id, new() { ConcurrencyStamp = state.ConcurrencyStamp });
-			state.OnboardingConfirmed.ShouldBeTrue();
-			item = await service.GetAsync(item.Id);
-			item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
-			item.Status.ShouldBe(StudentOnboardingStatus.Completed, item.LastError);
-			(await GetRequiredService<IRepository<StudentFeeStructure, Guid>>().GetAsync(assignment.Id)).AssignmentSnapshotJson.ShouldBe(assignment.AssignmentSnapshotJson);
-		});
+    private async Task ConfigureOfferingReadinessAsync(AdmissionOffering offering, Guid yearId, bool prepareAccess = false, bool automatic = false)
+    {
+        var coverage = new { boardMode = "all", mediumMode = "all", stageMode = "all", classMode = "all", divisionMode = "all" };
+        var rules = new { requireDocuments = true, studentAccount = prepareAccess, guardianAccount = false, approvalMode = "none", credentialProvisioningMode = automatic ? "automatic" : "manual", sendStudentCredentialEmail = automatic };
+        var config = JsonSerializer.Serialize(new
+        {
+            readinessAccess = rules,
+            onboardingProfiles = new[] { new { id = "offering-ready", offeringIds = new[] { offering.Id }, applicability = coverage, rules } },
+            grNumber = new { assignmentMode = "both", configurations = new[] { new
+            {
+                id = "gr-fixture", boardMode = "all", mediumMode = "all", stageMode = "all", classMode = "all", divisionMode = "all",
+                status = "published", version = 1, isActive = true, startingNumber = 1001, padding = 4, formatPattern = "{PREFIX}{SEQUENCE}{SUFFIX}", manualEntryAllowed = true
+            } } },
+            rollNumber = new { assignmentMode = "automatic", configurations = Array.Empty<object>() },
+            divisionChange = new { configurations = Array.Empty<object>() }
+        });
+        var service = GetRequiredService<IStudentOnboardingAppService>();
+        var settings = (await service.GetSettingsAsync(yearId)).SingleOrDefault(s => s.AcademicYearId == yearId);
+        var saved = System.Text.Json.Nodes.JsonNode.Parse(config)!.AsObject();
+        var row = saved["grNumber"]!["configurations"]![0]!;
+        var initial = settings == null || !JsonDocument.Parse(settings.ConfigurationJson).RootElement.TryGetProperty("grNumber", out _);
+        if (initial) { row["status"] = "draft"; row["isActive"] = false; }
+        var result = await service.SaveSettingsAsync(new() { AcademicYearId = yearId, ConfigurationJson = saved.ToJsonString(), ConcurrencyStamp = settings?.ConcurrencyStamp });
+        if (initial)
+        {
+            row["status"] = "published"; row["isActive"] = true;
+            await service.SaveSettingsAsync(new() { AcademicYearId = yearId, ConfigurationJson = saved.ToJsonString(), ConcurrencyStamp = result.ConcurrencyStamp });
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task Offering_fee_reference_confirmation_should_gate_activation_without_finance_payment_or_assignment(bool prepareAccess, bool failAutomaticAccounts) =>
+        RunCertificationScenarioAsync(async () =>
+        {
+            var fixture = await CreateOnboardingFlowFixtureAsync("FeeConfirm", null, prepareAccess, failAutomaticAccounts);
+            var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
+            var structure = await CreateFeeSelectionReferenceAsync(fixture.Offering, cycle.AcademicYearId);
+            await ConfigureOfferingReadinessAsync(fixture.Offering, cycle.AcademicYearId, prepareAccess, failAutomaticAccounts);
+            var service = GetRequiredService<IStudentOnboardingAppService>();
+            await service.CreatePolicyAsync(new() { AcademicYearId = cycle.AcademicYearId, Name = "Offering readiness", RequireDocuments = false,
+                RequireFamilyDetails = true, RequireCommunicationDetails = true, RequireMedicalDetails = true, RequireServiceConsent = true, RequireStudentAccount = false, RequireGuardianAccount = false });
+            var finalized = await FinalizeAsync(await _applicationAppService.GetAsync(fixture.Application.Id), true, "fee-reference-finalize");
+            var division = await WithUnitOfWorkAsync(async () => {
+                var value = await GetRequiredService<DivisionManager>().CreateAsync(fixture.Offering.StandardId, "FeeReferenceA", 40);
+                return await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(value, true);
+            });
+            var item = await service.GetAsync(finalized.OnboardingCaseId);
+            item.RequirementsNeedReview.ShouldBeFalse();
+            item.Steps.Single(s => s.Key == StudentOnboardingStepKeys.Documents).Status.ShouldBe(StudentOnboardingStepStatus.Completed);
+            item = await service.SetPlacementAsync(item.Id, new() { DivisionId = division.Id, ConcurrencyStamp = item.ConcurrencyStamp });
+            // Roll preparation succeeds independently before a GR series has been assigned.
+            item = await service.AssignRollNumberAsync(item.Id, new() { RollNumber = 1, RollAssignmentMode = "automatic", ConcurrencyStamp = item.ConcurrencyStamp });
+            item.RollNumber.ShouldBe(1);
+            item.GrNumber.ShouldBeNullOrEmpty();
+            var series = (await service.GetAvailableIdentifierSeriesAsync(item.Id)).Single();
+            item = await service.AssignGrNumberAsync(item.Id, new() { NumberSeriesId = series.Id, ConcurrencyStamp = item.ConcurrencyStamp });
+            item.GrNumber.ShouldBe("1001");
+            item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
+            (await service.PreviewActivationAsync(item.Id)).LastError.ShouldContain("fee structure");
+            await Should.ThrowAsync<BusinessException>(() => service.ActivateAsync(item.Id, new() { IdempotencyKey = "fee-reference-blocked", ConcurrencyStamp = item.ConcurrencyStamp }));
+            item = await service.GetAsync(item.Id);
+            var selection = await service.SaveFeeStructureAsync(item.Id, new() { StructureId = structure.Id, ConcurrencyStamp = item.ConcurrencyStamp });
+            selection.OnboardingConfirmed.ShouldBeTrue();
+            item = await service.GetAsync(item.Id);
+            var failure = GetRequiredService<OnboardingAccountFailureProbe>();
+            if (failAutomaticAccounts) failure.CaseId = item.Id;
+            item = await service.ActivateAsync(item.Id, new() { IdempotencyKey = "fee-reference-active", ConcurrencyStamp = item.ConcurrencyStamp });
+            failure.CaseId = null;
+            if (failAutomaticAccounts) { failure.Attempts.ShouldBeGreaterThan(0); item.Events.ShouldContain(e => e.EventType == "AccessPending"); }
+            item.StudentEnrollmentId.ShouldNotBeNull();
+            item.Status.ShouldBe(prepareAccess ? StudentOnboardingStatus.NeedsAttention : StudentOnboardingStatus.Completed, item.LastError);
+            item.CredentialsPending.ShouldBe(prepareAccess);
+            (await service.GetServiceHandoffsAsync(item.Id)).ShouldNotContain(h => h.ServiceKey == "service-consent");
+            item.Steps.Where(s => s.Key is StudentOnboardingStepKeys.Identity or StudentOnboardingStepKeys.Family or StudentOnboardingStepKeys.Communication or StudentOnboardingStepKeys.MedicalAndPreviousSchool)
+                .ShouldAllBe(s => !s.Required);
+            // Reload through canonical Records query and profile access after persisted activation.
+            var directory = await GetRequiredService<ShikshaMitra.Students.Records.IStudentDirectoryAppService>().GetListAsync(new()
+                { AcademicYearId = cycle.AcademicYearId, StudentId = finalized.StudentId, Population = "Active", MaxResultCount = 10 });
+            directory.Items.Single().StudentId.ShouldBe(finalized.StudentId);
+            (await WithUnitOfWorkAsync(() => GetRequiredService<ShikshaMitra.Students.Records.StudentRecordsAccessService>().EnsureReadableAsync(finalized.StudentId))).Access.ShouldBe("Full");
+            item.FirstPaymentConfirmed.ShouldBeNull();
+            (await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentEnrollment, Guid>>().GetAsync(item.StudentEnrollmentId!.Value))).StudentId.ShouldBe(finalized.StudentId);
+            (await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentFeeStructure, Guid>>().CountAsync(x => x.StudentId == finalized.StudentId))).ShouldBe(0);
+            (await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<DueFee, Guid>>().CountAsync(x => x.StudentId == finalized.StudentId))).ShouldBe(0);
+            // GR and Roll locks remain independent after the enrollment handoff, including Records-only groups.
+            var students = GetRequiredService<IRepository<ShikshaMitra.Students.Student, Guid>>();
+            await service.SetIdentifierLockAsync(new() { AcademicYearId = cycle.AcademicYearId, DivisionId = division.Id, IdentifierType = "gr", IsLocked = true });
+            await service.SetIdentifierLockAsync(new() { AcademicYearId = cycle.AcademicYearId, DivisionId = division.Id, IdentifierType = "roll", IsLocked = true });
+            (await WithUnitOfWorkAsync(() => students.GetAsync(finalized.StudentId))).IsIdentifierLocked("gr").ShouldBeTrue();
+            await service.SetIdentifierLockAsync(new() { AcademicYearId = cycle.AcademicYearId, DivisionId = division.Id, IdentifierType = "gr", IsLocked = false, Reason = "Correct identifier" });
+            var unlocked = await WithUnitOfWorkAsync(() => students.GetAsync(finalized.StudentId));
+            unlocked.IsIdentifierLocked("gr").ShouldBeFalse(); unlocked.IsIdentifierLocked("roll").ShouldBeTrue();
+            (await service.GetAsync(item.Id)).GrNumberLocked.ShouldBeFalse();
+            await service.SetIdentifierLockAsync(new() { AcademicYearId = cycle.AcademicYearId, DivisionId = division.Id, IdentifierType = "roll", IsLocked = false, Reason = "Change roll" });
+            var recordsDivision = await WithUnitOfWorkAsync(async () => {
+                var value = await GetRequiredService<DivisionManager>().CreateAsync(fixture.Offering.StandardId, "RecordsReferenceB", 40);
+                await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(value, true);
+                var stored = await students.GetAsync(finalized.StudentId); stored.AssignDivision(value.Id); await students.UpdateAsync(stored, true);
+                return value;
+            });
+            await service.SetIdentifierLockAsync(new() { AcademicYearId = cycle.AcademicYearId, DivisionId = division.Id, IdentifierType = "gr", IsLocked = true });
+            (await WithUnitOfWorkAsync(() => students.GetAsync(finalized.StudentId))).IsIdentifierLocked("gr").ShouldBeFalse();
+            await service.SetIdentifierLockAsync(new() { AcademicYearId = cycle.AcademicYearId, DivisionId = recordsDivision.Id, IdentifierType = "gr", IsLocked = true });
+            (await WithUnitOfWorkAsync(() => students.GetAsync(finalized.StudentId))).IsIdentifierLocked("gr").ShouldBeTrue();
+            await service.SetIdentifierLockAsync(new() { AcademicYearId = cycle.AcademicYearId, DivisionId = recordsDivision.Id, IdentifierType = "gr", IsLocked = false, Reason = "Records correction" });
+            (await WithUnitOfWorkAsync(() => students.GetAsync(finalized.StudentId))).IsIdentifierLocked("gr").ShouldBeFalse();
+            await WithUnitOfWorkAsync(async () => {
+                var stored = await students.GetAsync(finalized.StudentId); stored.AssignGrNumber("QA-1001", null, "Preserve imported formatted identifier");
+                await students.UpdateAsync(stored, true);
+            });
+            var management = GetRequiredService<ShikshaMitra.Students.Records.IStudentManagementAppService>();
+            var projection = (await management.GetGrProjections(recordsDivision.Id)).Single(s => s.StudentId == finalized.StudentId);
+            projection.GrNumber.ShouldBeNull(); projection.CurrentGrNumber.ShouldBe("QA-1001");
+            (await management.GetPendingAssignmentsAsync(new() { StandardId = fixture.Offering.StandardId, DivisionId = recordsDivision.Id })).Items.ShouldBeEmpty();
+            (await GetRequiredService<ShikshaMitra.Students.Records.IStudentAppService>().GetStudentsByDivisionAsync(recordsDivision.Id)).Items.Single().GrNumber.ShouldBe("QA-1001");
+            await WithUnitOfWorkAsync(async () => {
+                var stored = await students.GetAsync(finalized.StudentId); stored.AssignGrNumber("0012345", null, "Preserve historical numeric formatting");
+                await students.UpdateAsync(stored, true);
+            });
+            var duplicateCandidate = await CreateExistingStudentAsync(fixture.Offering, "Duplicate", "GR");
+            (await Should.ThrowAsync<BusinessException>(() => management.StoreGrNumbers([new() { StudentId = duplicateCandidate.Id, GrNo = 12345 }])))
+                .Code.ShouldBe(StudentErrorCodes.DuplicateGrNo);
+            // CBSE numeric proposals must include canonical-only historical numbers from another board.
+            await WithUnitOfWorkAsync(async () => {
+                var board = (await _boardRepository.GetListAsync(b => b.AcademicYearId == cycle.AcademicYearId &&
+                    b.Type == ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards.EducationBoardType.GSEB)).FirstOrDefault();
+                board ??= await _boardRepository.InsertAsync(await GetRequiredService<EducationBoardManager>().CreateAsync(
+                    cycle.AcademicYearId, ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards.EducationBoardType.GSEB), true);
+                var medium = await _mediumRepository.InsertAsync(await GetRequiredService<EducationMediumManager>().CreateAsync(board.Id, "Gujarati projection"), true);
+                var level = await _stageRepository.InsertAsync(await GetRequiredService<EducationMediumStageManager>().CreateAsync(medium.Id, "Primary projection"), true);
+                var standard = await _standardRepository.InsertAsync(await _standardManager.CreateAsync(level.Id, "Class 1 projection", 1, null), true);
+                var historical = await students.GetAsync(finalized.StudentId);
+                historical.UpdateAcademicPlacement(cycle.AcademicYearId, board.Id, medium.Id, level.Id, standard.Id, null);
+                await students.UpdateAsync(historical, true);
+                var candidate = await students.GetAsync(duplicateCandidate.Id); candidate.AssignDivision(recordsDivision.Id);
+                await students.UpdateAsync(candidate, true);
+            });
+            var nextProjection = (await management.GetGrProjections(recordsDivision.Id)).Single(s => s.StudentId == duplicateCandidate.Id);
+            nextProjection.GrNumber.ShouldBe(12346);
+            await management.StoreGrNumbers([new() { StudentId = duplicateCandidate.Id, GrNo = nextProjection.GrNumber }]);
+            (await WithUnitOfWorkAsync(() => students.GetAsync(duplicateCandidate.Id))).GrNo.ShouldBe(12346);
+            await AssertLockedGroupNewEntrantAsync(service, fixture.Offering, cycle.AcademicYearId, division.Id);
+        });
 }

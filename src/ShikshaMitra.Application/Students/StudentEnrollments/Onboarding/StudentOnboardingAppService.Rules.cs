@@ -9,8 +9,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 public partial class StudentOnboardingAppService
 {
-	private static string ConfigurationHash(OnboardingRuleConfiguration configuration) =>
-		Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(configuration.Root.GetRawText())));
+	private static string ConfigurationHash(OnboardingRuleConfiguration configuration, StudentOnboardingCase item) =>
+		Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(configuration.Readiness(item).GetRawText())));
 
 	private async Task InvalidateApprovalAsync(Guid caseId, string detail)
 	{
@@ -30,7 +30,16 @@ public partial class StudentOnboardingAppService
 		var scope = OnboardingRuleConfiguration.Text(value, "sequenceScope") == "academic-year" ||
 			OnboardingRuleConfiguration.Text(value, "resetPolicy") == "academic-year" ? item.AcademicYearId.ToString("N") : "school";
 		// A stable rule identity preserves its counter when labels, coverage, or academic years change.
-		var key = $"{CurrentTenant.Id}:onboarding-gr:{OnboardingRuleConfiguration.Text(value, "id")}:{scope}";
+		var ruleKey = OnboardingRuleConfiguration.Text(value, "id");
+		var predecessor = OnboardingRuleConfiguration.Text(value, "previousVersionId");
+		var visited = new System.Collections.Generic.HashSet<string> { ruleKey };
+		while (!string.IsNullOrWhiteSpace(predecessor) && visited.Add(predecessor))
+		{
+			ruleKey = predecessor;
+			var previous = configuration.Rules("grNumber").FirstOrDefault(r => OnboardingRuleConfiguration.Text(r, "id") == predecessor);
+			predecessor = OnboardingRuleConfiguration.Text(previous, "previousVersionId");
+		}
+		var key = $"{CurrentTenant.Id}:onboarding-gr:{ruleKey}:{scope}";
 		var seriesId = new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(key)).AsSpan(0, 16));
 		var year = await academicYearRepository.GetAsync(item.AcademicYearId);
 		var yearShort = string.Join("-", Regex.Matches(year.Name, @"\d{2,4}").Select(m => m.Value[^2..]));

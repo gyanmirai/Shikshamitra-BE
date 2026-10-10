@@ -29095,7 +29095,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("ConcurrencyStamp");
 
-                    b.Property<Guid>("CounsellorAssignmentProfileId")
+                    b.Property<Guid?>("CounsellorAssignmentProfileId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreationTime")

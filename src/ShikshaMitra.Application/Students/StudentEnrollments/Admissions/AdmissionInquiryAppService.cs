@@ -201,7 +201,7 @@ public class AdmissionInquiryAppService(
 
 	[AllowAnonymous, RemoteService(false)]
 	public Task<AdmissionInquiryDto> CreateFromPublicLinkAsync(CreateAdmissionInquiryDto input,
-		Guid assignmentProfileId, Guid? inquiryFormDefinitionId = null) =>
+		Guid? assignmentProfileId, Guid? inquiryFormDefinitionId = null) =>
 		CreateCoreAsync(input, isPublic: true, assignmentProfileId, inquiryFormDefinitionId);
 
 	private async Task<AdmissionInquiryDto> CreateCoreAsync(CreateAdmissionInquiryDto input, bool isPublic,
@@ -225,7 +225,7 @@ public class AdmissionInquiryAppService(
 		else await inquiryAvailability.EnsureAvailableAsync(offering);
 		if (!isPublic) await scopeAccess.EnsureOfferingAccessAsync(offering.Id);
 		AdmissionInquiryAcademicSelectionValidator.EnsureMatches(input, offering);
-		if (isPublic && (offering.CounsellorAssignmentProfileId != publicAssignmentProfileId ||
+		if (isPublic && (publicAssignmentProfileId.HasValue && offering.CounsellorAssignmentProfileId != publicAssignmentProfileId ||
 			(publicFormDefinitionId.HasValue && offering.InquiryFormDefinitionId != publicFormDefinitionId)))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose an admission option configured for this public inquiry link.");
@@ -371,13 +371,13 @@ public class AdmissionInquiryAppService(
 			input.ApplicantName, phone, input.Email, input.Source, input.SourceDetail);
 		inquiry.SetPreferredLanguage(input.PreferredLanguageCode);
 		inquiry.LinkIdentity(family.Id, applicant.Id);
-		if (offering?.CounsellorAssignmentProfileId.HasValue == true &&
+		if ((!isPublic || publicAssignmentProfileId.HasValue) && offering?.CounsellorAssignmentProfileId.HasValue == true &&
 			await intakeAssignmentService.ResolveAsync(offering) is Guid assignedCounsellorId)
 			inquiry.AssignCounsellor(assignedCounsellorId);
 		else if (offering == null && publicAssignmentProfileId.HasValue &&
 			await intakeAssignmentService.ResolveForCycleAsync(publicAssignmentProfileId.Value, cycle.Id) is Guid publicOwnerId)
 			inquiry.AssignCounsellor(publicOwnerId);
-		else if (managedPolicy != null && offering != null &&
+		else if ((!isPublic || publicAssignmentProfileId.HasValue) && managedPolicy != null && offering != null &&
 			await assignmentService.ResolvePolicyAssignmentAsync(managedPolicy.Policy, offering.Id) is Guid counsellorId)
 			inquiry.AssignCounsellor(counsellorId);
 		if (inquiryFormId.HasValue)
@@ -523,7 +523,7 @@ public class AdmissionInquiryAppService(
 			{
 				var owner = await intakeAssignmentService.ResolveAsync(offering);
 				if (!owner.HasValue && inquiry.AssignedCounsellorId.HasValue)
-					throw new BusinessException(AdmissionInquiryManagementErrorCodes.CounsellorRequired, "Configure a counsellor pool for the selected admission option before transferring this inquiry.");
+					throw new BusinessException(AdmissionInquiryManagementErrorCodes.CounsellorRequired, "Assign an active counsellor with access to the selected admission option before transferring this inquiry.");
 				if (owner.HasValue)
 				{
 					inquiry.AssignCounsellor(owner.Value);
@@ -645,6 +645,9 @@ public class AdmissionInquiryAppService(
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
 		if (!admissionOfferingId.HasValue) return [];
 		await scopeAccess.EnsureOfferingAccessAsync(admissionOfferingId.Value);
+		var offering = await offeringRepository.GetAsync(admissionOfferingId.Value);
+		if (!offering.CounsellorAssignmentProfileId.HasValue)
+			return await peopleService.GetCounsellorsAsync(filter, admissionOfferingId, counsellorOnly: true);
 		var rules = await intakeAssignmentService.GetRulesAsync(admissionOfferingId.Value);
 		var candidates = rules.CounsellorUserIds.ToList();
 		if (rules.FallbackManagerUserId.HasValue) candidates.Add(rules.FallbackManagerUserId.Value);

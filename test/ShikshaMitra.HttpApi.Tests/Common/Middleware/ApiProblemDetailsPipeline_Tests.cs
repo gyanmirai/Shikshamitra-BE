@@ -15,6 +15,7 @@ using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.HR;
 using ShikshaMitra.Localization;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using Shouldly;
 using Volo.Abp;
 using Xunit;
@@ -24,6 +25,52 @@ namespace ShikshaMitra.Common.Tests.Middleware;
 public class ApiProblemDetailsPipeline_Tests
 {
 	private const string GenericInternalDetail = "An internal error occurred during your request!";
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Roll_preview_duplicate_should_include_localized_reason_and_recovery(bool useResultFilter)
+	{
+		var code = StudentOnboardingErrorCodes.RollNumberDuplicate;
+		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
+		var resourceName = assembly.GetManifestResourceNames()
+			.Single(name => name.EndsWith("Localization.ShikshaMitra.en.json"));
+		using var resource = assembly.GetManifestResourceStream(resourceName)!;
+		using var messages = await JsonDocument.ParseAsync(resource);
+		var template = messages.RootElement.GetProperty("Texts").GetProperty(code).GetString()!;
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = template });
+		var httpContext = new DefaultHttpContext();
+		httpContext.Request.Path = "/api/student/onboarding/test-case/roll-preview";
+		if (useResultFilter)
+		{
+			var source = new ProblemDetails { Status = 400, Detail = ApiProblemDetailsMapper.GetDefaultDetail(400) };
+			source.Extensions["errorCode"] = code;
+			var context = new ResultExecutingContext(
+				new ActionContext(httpContext, new RouteData(), new ActionDescriptor()),
+				new List<IFilterMetadata>(), new ObjectResult(source) { StatusCode = 400 }, new object());
+			await new ApiProblemDetailsResultFilter(resolver).OnResultExecutionAsync(context,
+				() => Task.FromResult(new ResultExecutedContext(context, new List<IFilterMetadata>(), context.Result, new object())));
+			var output = ((ObjectResult)context.Result).Value.ShouldBeOfType<ProblemDetails>();
+			output.Status.ShouldBe(400);
+			output.Extensions["errorCode"].ShouldBe(code);
+			output.Detail.ShouldBe(template);
+		}
+		else
+		{
+			httpContext.Response.Body = new MemoryStream();
+			var middleware = new ApiProblemDetailsMiddleware(_ => throw new BusinessException(code),
+				NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver);
+			await middleware.InvokeAsync(httpContext);
+			httpContext.Response.StatusCode.ShouldBe(400);
+			httpContext.Response.Body.Position = 0;
+			using var output = await JsonDocument.ParseAsync(httpContext.Response.Body);
+			output.RootElement.GetProperty("errorCode").GetString().ShouldBe(code);
+			output.RootElement.GetProperty("detail").GetString().ShouldBe(template);
+		}
+		template.ShouldContain("already assigned or reserved");
+		template.ShouldContain("Enter an unused number");
+		template.ShouldContain("Automatic if available");
+	}
 
 	[Theory]
 	[InlineData(AdmissionErrorCodes.PublicInquiryOfferingRequired, "activate an offering")]

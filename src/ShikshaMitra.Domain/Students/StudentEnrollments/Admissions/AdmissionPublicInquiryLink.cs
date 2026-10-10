@@ -9,7 +9,7 @@ public class AdmissionPublicInquiryLink : FullAuditedAggregateRoot<Guid>, IMulti
 {
 	public Guid? TenantId { get; private set; }
 	public Guid AdmissionCycleId { get; private set; }
-	public Guid CounsellorAssignmentProfileId { get; private set; }
+	public Guid? CounsellorAssignmentProfileId { get; private set; }
 	public Guid? InquiryFormDefinitionId { get; private set; }
 	public string Name { get; private set; } = string.Empty;
 	public string TokenHash { get; private set; } = string.Empty;
@@ -20,14 +20,15 @@ public class AdmissionPublicInquiryLink : FullAuditedAggregateRoot<Guid>, IMulti
 
 	private AdmissionPublicInquiryLink() { }
 
-	public AdmissionPublicInquiryLink(Guid id, Guid? tenantId, Guid cycleId, Guid assignmentProfileId,
+	public AdmissionPublicInquiryLink(Guid id, Guid? tenantId, Guid cycleId, Guid? assignmentProfileId,
 		string name, string tokenHash, AdmissionInquirySource source, string? sourceDetail, DateTime? expiresAtUtc,
 		Guid? inquiryFormDefinitionId = null)
 		: base(id)
 	{
 		TenantId = tenantId;
 		AdmissionCycleId = Check.NotDefaultOrNull<Guid>(cycleId, nameof(cycleId));
-		CounsellorAssignmentProfileId = Check.NotDefaultOrNull<Guid>(assignmentProfileId, nameof(assignmentProfileId));
+		if (assignmentProfileId == Guid.Empty) throw new ArgumentOutOfRangeException(nameof(assignmentProfileId));
+		CounsellorAssignmentProfileId = assignmentProfileId;
 		if (inquiryFormDefinitionId == Guid.Empty) throw new ArgumentOutOfRangeException(nameof(inquiryFormDefinitionId));
 		InquiryFormDefinitionId = inquiryFormDefinitionId;
 		Name = Check.NotNullOrWhiteSpace(name, nameof(name), 128).Trim();

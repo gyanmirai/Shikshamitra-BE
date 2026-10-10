@@ -15,7 +15,9 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public sealed record AdmissionAssessmentContext(AdmissionApplication Application,
 	AdmissionApplicationStageInstance Stage, AdmissionWorkflowStageDefinition Definition, AdmissionAssessmentPolicy? Policy)
 {
-	public bool IsActive => Application.CurrentStageInstanceId == Stage.Id && Stage.Status == AdmissionRuntimeStageStatus.Active &&
+	public AdmissionWorkflowInstanceStatus WorkflowStatus { get; init; } = AdmissionWorkflowInstanceStatus.Active;
+	public bool CanPrepare => AdmissionStagePreparationRules.CanPrepare(Application, WorkflowStatus, Stage.Status);
+	public bool IsActive => WorkflowStatus == AdmissionWorkflowInstanceStatus.Active && Application.CurrentStageInstanceId == Stage.Id && Stage.Status == AdmissionRuntimeStageStatus.Active &&
 		Application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted or
 		AdmissionApplicationStatus.InReview or AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Waitlisted or
 		AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted;
@@ -47,7 +49,7 @@ public class AdmissionAssessmentAccessService(
 		await AsyncExecuter.FirstOrDefaultAsync((await GetScopedOfferingsAsync()).Where(item => item.Id == id)) ??
 		throw new EntityNotFoundException(typeof(AdmissionOffering), id);
 
-	public async Task<AdmissionAssessmentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true)
+	public async Task<AdmissionAssessmentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true, bool requirePreparation = false)
 	{
 		var application = await applications.FindAsync(applicationId) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), applicationId);
 		await GetOfferingAsync(application.AdmissionOfferingId);
@@ -59,9 +61,11 @@ public class AdmissionAssessmentAccessService(
 		var definition = await definitions.GetAsync(stage.DefinitionStageId);
 		if (definition.WorkflowDefinitionId != application.WorkflowDefinitionId)
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), definition.Id);
-		var context = new AdmissionAssessmentContext(application, stage, definition, ReadPolicy(definition));
+		var context = new AdmissionAssessmentContext(application, stage, definition, ReadPolicy(definition)) { WorkflowStatus = workflow.Status };
 		if (requireActive && (!context.IsActive || context.Policy == null || workflow.Status != AdmissionWorkflowInstanceStatus.Active))
 			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "The managed assessment stage must be active.");
+		if (requirePreparation && (!context.CanPrepare || context.Policy == null))
+			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Assessment changes require an open admission journey and an unfinished assessment stage.");
 		return context;
 	}
 

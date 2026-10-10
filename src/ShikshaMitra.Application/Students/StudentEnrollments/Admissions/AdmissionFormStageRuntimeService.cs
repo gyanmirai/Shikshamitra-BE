@@ -18,7 +18,11 @@ public class AdmissionFormStageRuntimeService(
 	public async Task EnsureCanSubmitAsync(Guid applicationId)
 	{
 		var context = await GetCurrentManagedContextAsync(applicationId);
-		if (context?.Policy == null) return;
+		if (context?.Policy == null)
+		{
+			await EnsureFormIsNotPendingAsync(applicationId);
+			return;
+		}
 		var attempts = await submissions.CountAsync(item => item.FormInstanceId == context.Form.Id);
 		if (attempts >= context.Policy.MaxSubmissionAttempts)
 			throw new BusinessException(AdmissionFormStageErrorCodes.AttemptLimitReached,
@@ -26,6 +30,23 @@ public class AdmissionFormStageRuntimeService(
 		if (!context.Policy.AllowLateSubmission && context.DueAt is DateTime dueAt && dueAt < Clock.Now)
 			throw new BusinessException(AdmissionFormStageErrorCodes.DeadlinePassed,
 				"The form submission deadline has passed.");
+	}
+
+	private async Task EnsureFormIsNotPendingAsync(Guid applicationId)
+	{
+		var application = await applications.FindAsync(applicationId);
+		if (application?.CurrentStageInstanceId is not Guid currentId) return;
+		var current = await stages.FindAsync(currentId);
+		// Older Inquiry entry flows submit the form and then enter its Form stage in the same handoff.
+		if (current == null || current.StageType == AdmissionWorkflowStageType.Inquiry) return;
+		foreach (var pending in await stages.GetListAsync(item => item.WorkflowInstanceId == current.WorkflowInstanceId &&
+			item.StageType == AdmissionWorkflowStageType.Form && item.Status == AdmissionRuntimeStageStatus.Pending))
+		{
+			var definition = await definitions.GetAsync(pending.DefinitionStageId);
+			if (AdmissionFormStageAccessService.ReadPolicy(definition) != null)
+				throw new BusinessException(AdmissionFormStageErrorCodes.InvalidState,
+					"Save the form as a draft until its Form stage becomes the current journey stage.");
+		}
 	}
 
 	public async Task<bool> ShouldAdvanceAfterSubmitAsync(Guid applicationId)

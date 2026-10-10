@@ -72,3 +72,12 @@ public class AdmissionApplicationDecisionDtoValidator : AbstractValidator<Admiss
 			.When(input => input.CounsellorId.HasValue);
 	}
 }
+
+public class EndAdmissionJourneyDtoValidator : AbstractValidator<EndAdmissionJourneyDto>
+{
+	public EndAdmissionJourneyDtoValidator()
+	{
+		RuleFor(input => input.ConcurrencyStamp).NotEmpty();
+		RuleFor(input => input.Reason).NotEmpty().MaximumLength(512);
+	}
+}

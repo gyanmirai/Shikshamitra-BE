@@ -6,6 +6,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionApplicationListInput : PagedAndSortedResultRequestDto
 {
+	/// <summary>Restricts the decision/finalization menu without limiting applicant history queries.</summary>
+	public bool DecisionWorkspaceOnly { get; set; }
 	public string? Search { get; set; }
 	public AdmissionApplicationStatus? Status { get; set; }
 	public Guid? AcademicYearId { get; set; }
@@ -31,7 +33,9 @@ public class UpdateAdmissionApplicationFormValuesDto { public string? Concurrenc
 public class AdmissionApplicationSubmitResultDto { public AdmissionApplicationDto Application { get; set; } = new(); public List<string> ValidationErrors { get; set; } = []; public Dictionary<string, string> FieldErrors { get; set; } = []; }
 public class AdmissionFormChangeHistoryDto { public Guid Id { get; set; } public string ChangeType { get; set; } = string.Empty; public string? ChangedFieldsJson { get; set; } public Guid? ChangedBy { get; set; } public DateTime OccurredAt { get; set; } }
 public class AdmissionApplicationDecisionDto { public string? Reason { get; set; } public DateTimeOffset? OfferExpiresAt { get; set; } public Guid? CounsellorId { get; set; } public string? ConcurrencyStamp { get; set; } public string? IdempotencyKey { get; set; } public bool ConfirmTermsAccepted { get; set; } public bool ConfirmConditionsSatisfied { get; set; } }
-public class AdmissionApplicationDecisionHistoryDto { public Guid Id { get; set; } public AdmissionApplicationStatus Status { get; set; } public string? Reason { get; set; } public Guid? ActorId { get; set; } public DateTime OccurredAt { get; set; } }
+public class EndAdmissionJourneyDto { public string Reason { get; set; } = string.Empty; public string ConcurrencyStamp { get; set; } = string.Empty; }
+public partial class AdmissionApplicationDto { public bool CanEndJourney { get; set; } }
+public class AdmissionApplicationDecisionHistoryDto { public Guid Id { get; set; } public AdmissionApplicationStatus Status { get; set; } public string? Reason { get; set; } public Guid? ActorId { get; set; } public string? ActorName { get; set; } public DateTime OccurredAt { get; set; } }
 public class EnrollAdmissionApplicationDto { public string? ConcurrencyStamp { get; set; } public Guid? DivisionId { get; set; } }
 public class AdmissionEnrollmentResultDto { public AdmissionApplicationDto Application { get; set; } = new(); public Guid StudentId { get; set; } public Guid StudentEnrollmentId { get; set; } public Guid AcademicYearId { get; set; } public Guid StandardId { get; set; } public Guid? DivisionId { get; set; } }
 public class AdmissionEnrollmentDivisionOptionDto { public Guid Id { get; set; } public string Name { get; set; } = string.Empty; public int Strength { get; set; } public int OccupiedSeats { get; set; } public int AvailableSeats { get; set; } public bool IsAvailable { get; set; } }

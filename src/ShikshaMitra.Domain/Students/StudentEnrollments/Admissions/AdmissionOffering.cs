@@ -124,11 +124,11 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		InquiryIntakeProfileId = inquiryIntakeProfileId;
 		CounsellorAssignmentProfileId = counsellorAssignmentProfileId;
-		if (inquiryIntakeProfileId.HasValue || counsellorAssignmentProfileId.HasValue)
-			IntakeConfigurationRequired = true;
+		IntakeConfigurationRequired = inquiryIntakeProfileId.HasValue || counsellorAssignmentProfileId.HasValue;
 	}
 
-	public void RequireIntakeConfiguration() => IntakeConfigurationRequired = true;
+	public void RequireIntakeConfiguration() =>
+		IntakeConfigurationRequired = InquiryIntakeProfileId.HasValue || CounsellorAssignmentProfileId.HasValue;
 
 	public DateTimeOffset GetEffectiveOpenDate(DateTime cycleStartDate) =>
 		OpenDate ?? ToUtcDateOffset(cycleStartDate);

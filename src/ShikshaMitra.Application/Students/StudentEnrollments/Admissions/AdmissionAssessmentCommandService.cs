@@ -21,7 +21,7 @@ public class AdmissionAssessmentCommandService(
 {
 	public async Task<AdmissionAssessmentDto> BookAsync(Guid applicationId, Guid stageId, AdmissionAssessmentBookingInput input)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId);
+		var context = await access.GetContextAsync(applicationId, stageId, requireActive: false, requirePreparation: true);
 		AdmissionAssessmentAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		var rows = await attempts.GetListAsync(item => item.StageInstanceId == stageId);
 		var current = rows.Where(item => item.Status != "cancelled").OrderByDescending(item => item.AttemptNumber).FirstOrDefault();
@@ -81,7 +81,7 @@ public class AdmissionAssessmentCommandService(
 
 	public async Task<AdmissionAssessmentDto> WaiveAsync(Guid applicationId, Guid stageId, AdmissionAssessmentWaiverInput input)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId);
+		var context = await access.GetContextAsync(applicationId, stageId, requireActive: false, requirePreparation: true);
 		AdmissionAssessmentAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		var rows = await attempts.GetListAsync(item => item.StageInstanceId == stageId);
 		var attempt = rows.Where(item => item.Status != "cancelled").OrderByDescending(item => item.AttemptNumber).FirstOrDefault();
@@ -105,7 +105,7 @@ public class AdmissionAssessmentCommandService(
 		Func<AdmissionAssessmentContext, AdmissionAssessmentAttempt, Task> change)
 	{
 		var attempt = await attempts.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionAssessmentAttempt), id);
-		var context = await access.GetContextAsync(attempt.ApplicationId, attempt.StageInstanceId);
+		var context = await access.GetContextAsync(attempt.ApplicationId, attempt.StageInstanceId, requireActive: false, requirePreparation: true);
 		AdmissionAssessmentAccessService.EnsureConcurrency(attempt, input.ConcurrencyStamp);
 		if (await attempts.AnyAsync(item => item.StageInstanceId == attempt.StageInstanceId && item.Status != "cancelled" && item.AttemptNumber > attempt.AttemptNumber))
 			throw Invalid("Only the latest assessment attempt can be changed.");

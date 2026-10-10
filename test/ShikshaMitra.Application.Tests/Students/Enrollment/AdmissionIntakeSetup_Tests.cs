@@ -58,8 +58,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await EnsureSelectableAdmissionUserAsync();
 		var service = GetRequiredService<IAdmissionIntakeSetupAppService>();
 		var created = await service.CreateAsync(ValidSetupInput("Archive policy"));
-		var workflow = await CreateAndPublishWorkflowAsync();
-		var offering = await CreateAvailableOfferingAsync(workflow.Id, assertValid: false);
+		var offering = await CreateOptionalIntakeOfferingAsync();
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var offeringRepository = GetRequiredService<IRepository<AdmissionOffering, Guid>>();

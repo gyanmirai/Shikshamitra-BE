@@ -51,7 +51,8 @@ public class AdmissionAssessmentReadService(
 		var latest = rows.Where(item => item.Status != "cancelled").OrderBy(item => item.AttemptNumber).LastOrDefault();
 		var blockers = GetBlockers(context, latest, routes, facts);
 		var active = context.IsActive && context.Policy != null;
-		var pending = active && latest?.Status == "pending";
+		var editable = context.CanPrepare && context.Policy != null;
+		var pending = editable && latest?.Status == "pending";
 		var currentSession = latest?.SessionId is Guid sessionId ? sessionRows.GetValueOrDefault(sessionId) : null;
 		var sessionStarted = currentSession == null || !currentSession.IsCancelled && currentSession.StartsAt <= now;
 		if (pending && !sessionStarted) blockers.Add("Attendance and results become available when the session starts.");
@@ -64,12 +65,12 @@ public class AdmissionAssessmentReadService(
 			ConcurrencyStamp = context.Application.ConcurrencyStamp, Outcome = latest?.Outcome, Blockers = blockers,
 			CanComplete = active && blockers.Count == 0 && grants.Contains(
 				ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance),
-			CanBook = active && remaining && (latest == null || latest.Outcome == "retake") && grants.Contains(Permissions.Book),
+			CanBook = editable && remaining && (latest == null || latest.Outcome == "retake") && grants.Contains(Permissions.Book),
 			CanRecordAttendance = pending && sessionStarted && grants.Contains(Permissions.RecordAttendance),
 			CanRecordResult = pending && sessionStarted && (!context.Policy!.AttendanceRequired || latest!.Attendance == "present") && grants.Contains(Permissions.RecordResults),
-			CanReview = active && latest?.Status == "pendingReview" && latest.RecordedBy != userId && grants.Contains(Permissions.Review),
-			CanRetake = active && remaining && latest?.Status == "completed" && latest.Outcome is "failed" or "absent" && grants.Contains(Permissions.Book),
-			CanWaive = active && latest?.Outcome != "waived" && grants.Contains(Permissions.Waive),
+			CanReview = editable && latest?.Status == "pendingReview" && latest.RecordedBy != userId && grants.Contains(Permissions.Review),
+			CanRetake = editable && remaining && latest?.Status == "completed" && latest.Outcome is "failed" or "absent" && grants.Contains(Permissions.Book),
+			CanWaive = editable && latest?.Outcome != "waived" && grants.Contains(Permissions.Waive),
 			CanCancel = pending && latest!.Attendance == "pending" && grants.Contains(Permissions.Book),
 			Attempts = rows.OrderBy(item => item.AttemptNumber).Select(item => MapAttempt(item, item.SessionId.HasValue ? sessionRows.GetValueOrDefault(item.SessionId.Value) : null)).ToList()
 		};
@@ -81,7 +82,7 @@ public class AdmissionAssessmentReadService(
 	{
 		var blockers = context.Policy == null ? new List<string> { "This stage uses the existing manual assessment process." } :
 			AdmissionAssessmentEvidence.GetBlockers(latest);
-		if (!context.IsActive) blockers.Add("This assessment stage is not active.");
+		if (!context.CanPrepare && !context.IsActive) blockers.Add("Assessment history is read-only for this stage.");
 		if (latest?.Status == "completed" && context.IsActive)
 		{
 			try { AdmissionAssessmentEvidence.EnsureRoute(latest, context.Definition.IsTerminalStage ? null : selector.Select(routes, facts), facts); }

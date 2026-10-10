@@ -20,8 +20,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_should_explain_expiry_at_or_before_now(int minutesFromNow) =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>()
 				.CreateAsync(ValidSetupInput("Expiry readiness"));
 			var input = await LinkInputAsync(offering, setup);
@@ -39,8 +38,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_should_explain_missing_active_inquiry_offering(bool active, AdmissionEntryMode entryMode) =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>()
 				.CreateAsync(ValidSetupInput("Link readiness"));
 			await WithUnitOfWorkAsync(async () =>
@@ -67,8 +65,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_should_explain_inactive_or_unscoped_counsellor(bool active) =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>()
 				.CreateAsync(ValidSetupInput("Counsellor readiness"));
 			var userId = Guid.NewGuid();
@@ -95,8 +92,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_should_explain_unscoped_fallback_even_when_pool_is_eligible() =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>()
 				.CreateAsync(ValidSetupInput("Fallback readiness"));
 			var fallbackId = Guid.NewGuid();
@@ -115,8 +111,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_should_still_create_with_eligible_pool_and_fallback(bool withExpiry) =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>()
 				.CreateAsync(ValidSetupInput("Ready intake"));
 			var input = await LinkInputAsync(offering, setup);
@@ -137,8 +132,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_should_explain_unlinked_setup_or_form_and_allow_corrected_retry(bool changeSetup, string reason) =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var setupService = GetRequiredService<IAdmissionIntakeSetupAppService>();
 			var setup = await setupService.CreateAsync(ValidSetupInput("Linked setup"));
 			var input = await LinkInputAsync(offering, setup);
@@ -147,7 +141,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			if (changeSetup)
 				input.CounsellorAssignmentProfileId = (await setupService.CreateAsync(ValidSetupInput("Unlinked setup"))).CounsellorAssignmentProfileId;
 			else
-				input.InquiryFormDefinitionId = (await CreateAvailableOfferingAsync(workflow.Id)).InquiryFormDefinitionId;
+				input.InquiryFormDefinitionId = (await CreateOptionalIntakeOfferingAsync()).InquiryFormDefinitionId;
 			var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
 			var error = await Should.ThrowAsync<BusinessException>(() => service.CreateLinkAsync(input));
 			error.Code.ShouldBe(AdmissionErrorCodes.PublicInquiryOfferingRequired);
@@ -164,17 +158,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_options_should_return_only_linked_pairs_in_the_selected_period() =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>().CreateAsync(ValidSetupInput("Compatible setup"));
 			await LinkInputAsync(offering, setup);
-			var otherOffering = await CreateAvailableOfferingAsync(workflow.Id);
+			var otherOffering = await CreateOptionalIntakeOfferingAsync();
 			await LinkInputAsync(otherOffering, setup);
 			var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
 			var options = await service.GetLinkOptionsAsync(offering.AdmissionCycleId);
-			options.Count.ShouldBe(1);
-			options.Single().CounsellorAssignmentProfileId.ShouldBe(setup.CounsellorAssignmentProfileId);
-			options.Single().InquiryFormDefinitionId.ShouldBe(offering.InquiryFormDefinitionId!.Value);
+			options.Count.ShouldBe(2);
+			options.Single(option => option.CounsellorAssignmentProfileId.HasValue).CounsellorAssignmentProfileId.ShouldBe(setup.CounsellorAssignmentProfileId);
+			options.ShouldContain(option => option.CounsellorAssignmentProfileId == null && option.InquiryFormDefinitionId == offering.InquiryFormDefinitionId);
+			options.ShouldAllBe(option => option.InquiryFormDefinitionId == offering.InquiryFormDefinitionId!.Value);
 			(await service.GetLinkOptionsAsync(Guid.NewGuid())).ShouldBeEmpty();
 			await WithUnitOfWorkAsync(async () =>
 			{
@@ -193,8 +187,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_options_should_exclude_unavailable_or_out_of_scope_pairs(string condition) =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>().CreateAsync(ValidSetupInput("Options readiness"));
 			await LinkInputAsync(offering, setup);
 			await WithUnitOfWorkAsync(async () =>

@@ -83,7 +83,7 @@ public class AdmissionOfferingConfigurationValidator(
 			errors.Add(Error(AdmissionOfferingValidationCodes.RteRequiresDirectRegistration,
 				"RTE offerings must start with Registration, without an Inquiry."));
 		await ValidatePublishedConfigurationAsync(input, errors);
-		await ValidateIntakeProfilesAsync(cycle, input, excludingOfferingId, errors);
+		await ValidateIntakeProfilesAsync(cycle, input, errors);
 		errors.AddRange(await inquiryValidator.ValidateAsync(cycle, input));
 		errors.AddRange(await reviewValidator.ValidateAsync(cycle, input));
 		await ValidateUniquenessAsync(admissionCycleId, input, excludingOfferingId, errors);
@@ -244,13 +244,10 @@ public class AdmissionOfferingConfigurationValidator(
 	}
 
 	private async Task ValidateIntakeProfilesAsync(AdmissionCycle cycle, AdmissionOfferingWriteDto input,
-		Guid? existingOfferingId,
 		ICollection<AdmissionOfferingValidationError> errors)
 	{
-		// Existing offerings retain their published workflow behavior until an admin opts in.
 		var usingProfiles = input.InquiryIntakeProfileId.HasValue || input.CounsellorAssignmentProfileId.HasValue;
-		if (!usingProfiles && existingOfferingId.HasValue &&
-			(await offeringRepository.FindAsync(existingOfferingId.Value))?.IntakeConfigurationRequired != true) return;
+		if (!usingProfiles) return;
 		if (input.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both)
 			await ValidateIntakeProfileAsync(input.InquiryIntakeProfileId, AdmissionIntakeProfileKind.Inquiry,
 				AdmissionOfferingValidationCodes.InquiryIntakeProfileMissing,

@@ -685,6 +685,7 @@
         "Students:Records:UnsupportedCertificateType": "Choose a supported certificate type.",
         "Students:Records:RollNumberRequired": "Choose a next-year roll number before submitting.",
         "Students:Records:RollNumberDuplicate": "The target roll number is already assigned or duplicated in this batch.",
+        "Students.Onboarding.RollNumberDuplicate": "This roll number is already assigned or reserved in the selected class/division for this academic year. Enter an unused number, or use Automatic if available.",
         "Students:Records:DivisionFull": "The selected division has no available seats for this batch.",
         "Students:Records:AcademicResultRequired": "Publish the source-class academic result before continuing.",
         "Students:Records:FinanceClearanceRequired": "Complete Finance clearance in the owning module before continuing.",

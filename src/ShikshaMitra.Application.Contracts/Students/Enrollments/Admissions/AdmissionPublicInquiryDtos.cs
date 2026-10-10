@@ -6,7 +6,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionPublicInquiryLinkOptionDto
 {
-	public Guid CounsellorAssignmentProfileId { get; set; }
+	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public Guid InquiryFormDefinitionId { get; set; }
 }
 
@@ -14,8 +14,7 @@ public class CreateAdmissionPublicInquiryLinkDto
 {
 	[Required]
 	public Guid AdmissionCycleId { get; set; }
-	[Required]
-	public Guid CounsellorAssignmentProfileId { get; set; }
+	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public Guid? InquiryFormDefinitionId { get; set; }
 	[Required, StringLength(128, MinimumLength = 1)]
 	public string Name { get; set; } = string.Empty;
@@ -29,7 +28,7 @@ public class AdmissionPublicInquiryLinkDto
 {
 	public Guid Id { get; set; }
 	public Guid AdmissionCycleId { get; set; }
-	public Guid CounsellorAssignmentProfileId { get; set; }
+	public Guid? CounsellorAssignmentProfileId { get; set; }
 	public Guid? InquiryFormDefinitionId { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public AdmissionInquirySource Source { get; set; }

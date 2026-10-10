@@ -29,8 +29,8 @@ public class AdmissionDocumentReadService(AdmissionDocumentAccessService access,
 		if (context.Policy == null) return result;
 		var evaluation = await evaluator.EvaluateAsync(context.Application, stageId, context.Policy);
 		result.Blockers = evaluation.Blockers;
-		if (!context.IsActive) result.Blockers.Add(context.CanCollectDuringForm
-			? "Documents can be uploaded now. Staff verification starts when the document stage becomes active."
+		if (!context.IsActive) result.Blockers.Add(context.CanPrepare
+			? "Documents can be prepared now. Continue admission from the current journey stage."
 			: "This document verification stage is read-only.");
 		else if (context.Application.Status == AdmissionApplicationStatus.Draft) result.Blockers.Add("Submit the application before completing document verification.");
 		var canDefer = !onboarding && context.IsActive && context.Application.Status != AdmissionApplicationStatus.Draft && await onboardingRequirements.CanDeferAsync(context.Application);
@@ -72,8 +72,8 @@ public class AdmissionDocumentReadService(AdmissionDocumentAccessService access,
 		Dictionary<string, bool> grants)
 	{
 		var latest = item.Latest;
-		var active = context.IsActive && item.ConditionStatus is not "notMatched" and not "undetermined";
-		var canCollect = (context.IsActive || context.CanCollectDuringForm) && item.ConditionStatus is not "notMatched" and not "undetermined";
+		var active = context.CanPrepare && item.ConditionStatus is not "notMatched" and not "undetermined";
+		var canCollect = active;
 		var reviewerAllowed = !context.Policy!.RequireIndependentReview || latest != null &&
 			latest.SubmittedBy != CurrentUser.Id && latest.FileSubmittedBy != CurrentUser.Id && latest.OriginalSeenBy != CurrentUser.Id;
 		return new()

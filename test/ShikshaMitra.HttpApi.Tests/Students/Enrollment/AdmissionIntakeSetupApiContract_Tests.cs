@@ -13,6 +13,22 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 public class AdmissionIntakeSetupApiContract_Tests
 {
 	[Fact]
+	public void Counsellor_Lookup_Should_Keep_View_Permission_And_Optional_Role_Filter()
+	{
+		var method = typeof(AdmissionIntakeProfilesController).GetMethod(nameof(AdmissionIntakeProfilesController.GetCounsellorsAsync))!;
+		method.GetCustomAttributes(typeof(HttpGetAttribute), true).Cast<HttpGetAttribute>().Single().Template.ShouldBe("counsellors");
+		method.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>()
+			.ShouldContain(attribute => attribute.Policy == ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View);
+		var parameter = method.GetParameters().Single(item => item.Name == "counsellorOnly");
+		parameter.ParameterType.ShouldBe(typeof(bool));
+		parameter.DefaultValue.ShouldBe(false);
+		parameter.GetCustomAttributes(typeof(FromQueryAttribute), true).Length.ShouldBe(1);
+		typeof(AdmissionIntakeProfileAppService).GetMethod(nameof(AdmissionIntakeProfileAppService.GetCounsellorsAsync))!
+			.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>()
+			.ShouldContain(attribute => attribute.Policy == ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View);
+	}
+
+	[Fact]
 	public void Public_Link_Options_Should_Require_Offering_View_And_Bind_The_Period_From_Query()
 	{
 		var method = typeof(AdmissionPublicInquiryLinksController).GetMethod(nameof(AdmissionPublicInquiryLinksController.GetOptionsAsync))!;

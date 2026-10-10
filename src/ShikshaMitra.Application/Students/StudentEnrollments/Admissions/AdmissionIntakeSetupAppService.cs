@@ -47,7 +47,8 @@ public class AdmissionIntakeSetupAppService(
 		var now = Clock.Now.ToUniversalTime();
 		var activeLinkRows = await publicLinks.GetListAsync(item => item.IsActive &&
 			(!item.ExpiresAtUtc.HasValue || item.ExpiresAtUtc.Value > now) &&
-			Enumerable.Contains(assignmentProfileIds, item.CounsellorAssignmentProfileId));
+			item.CounsellorAssignmentProfileId.HasValue &&
+			Enumerable.Contains(assignmentProfileIds, item.CounsellorAssignmentProfileId.Value));
 
 		return rows.Select(setup => Map(setup, profileMap,
 			activeOfferingRows.Count(offering => Uses(setup, offering)),

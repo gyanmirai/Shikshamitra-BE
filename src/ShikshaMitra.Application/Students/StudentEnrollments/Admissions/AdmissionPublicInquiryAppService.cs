@@ -51,22 +51,35 @@ public class AdmissionPublicInquiryAppService(
 	public async Task<List<AdmissionPublicInquiryLinkOptionDto>> GetLinkOptionsAsync(Guid admissionCycleId)
 	{
 		if ((await cycles.FindAsync(admissionCycleId))?.Status != AdmissionCycleStatus.Published) return [];
-		var query = from offering in await people.GetCurrentInquiryOfferingsQueryAsync(admissionCycleId)
-			join setup in await setups.GetQueryableAsync() on offering.CounsellorAssignmentProfileId equals setup.CounsellorAssignmentProfileId
-			join form in await forms.GetQueryableAsync() on offering.InquiryFormDefinitionId equals form.Id
+		var availableOfferings = await people.GetCurrentInquiryOfferingsQueryAsync(admissionCycleId);
+		var setupQuery = await setups.GetQueryableAsync();
+		var formQuery = await forms.GetQueryableAsync();
+		var query = from offering in availableOfferings
+			join setup in setupQuery on offering.CounsellorAssignmentProfileId equals setup.CounsellorAssignmentProfileId
+			join form in formQuery on offering.InquiryFormDefinitionId equals form.Id
 			where !setup.IsArchived && form.Status == AdmissionFormStatus.Published && form.Purpose == AdmissionFormPurpose.Inquiry
 			select new AdmissionPublicInquiryLinkOptionDto
 			{
 				CounsellorAssignmentProfileId = setup.CounsellorAssignmentProfileId,
 				InquiryFormDefinitionId = form.Id
 			};
-		return await AsyncExecuter.ToListAsync(query.Distinct());
+		var manualOptions = from offering in availableOfferings
+			join form in formQuery on offering.InquiryFormDefinitionId equals form.Id
+			where form.Status == AdmissionFormStatus.Published && form.Purpose == AdmissionFormPurpose.Inquiry &&
+				!setupQuery.Any(setup => setup.IsArchived && setup.CounsellorAssignmentProfileId == offering.CounsellorAssignmentProfileId)
+			select new AdmissionPublicInquiryLinkOptionDto
+			{
+				CounsellorAssignmentProfileId = null,
+				InquiryFormDefinitionId = form.Id
+			};
+		return await AsyncExecuter.ToListAsync(query.Union(manualOptions));
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	public async Task<AdmissionPublicInquiryLinkCreatedDto> CreateLinkAsync(CreateAdmissionPublicInquiryLinkDto input)
 	{
 		if (input.AdmissionCycleId == Guid.Empty || input.CounsellorAssignmentProfileId == Guid.Empty ||
+			(!input.CounsellorAssignmentProfileId.HasValue && !input.InquiryFormDefinitionId.HasValue) ||
 			string.IsNullOrWhiteSpace(input.Name) || !Enum.IsDefined(input.Source))
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
 		if (input.ExpiresAtUtc.HasValue && input.ExpiresAtUtc.Value.ToUniversalTime() <= Clock.Now.ToUniversalTime())
@@ -74,55 +87,71 @@ public class AdmissionPublicInquiryAppService(
 		var cycle = await cycles.FindAsync(input.AdmissionCycleId);
 		if (cycle?.Status != AdmissionCycleStatus.Published)
 			throw new BusinessException(AdmissionErrorCodes.InquiryCycleNotFound);
-		var profile = await profiles.FindAsync(input.CounsellorAssignmentProfileId);
-		if (profile?.Kind != AdmissionIntakeProfileKind.CounsellorAssignment)
+		var profile = input.CounsellorAssignmentProfileId.HasValue
+			? await profiles.FindAsync(input.CounsellorAssignmentProfileId.Value) : null;
+		if (input.CounsellorAssignmentProfileId.HasValue && profile?.Kind != AdmissionIntakeProfileKind.CounsellorAssignment)
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
-		var managedSetup = await setups.FirstOrDefaultAsync(setup =>
-			setup.CounsellorAssignmentProfileId == profile.Id);
+		var managedSetup = profile != null ? await setups.FirstOrDefaultAsync(setup =>
+			setup.CounsellorAssignmentProfileId == profile.Id) : null;
 		if (managedSetup?.IsArchived == true)
 			throw new BusinessException(AdmissionIntakeProfileErrorCodes.SetupArchived,
 				"Archived intake setups cannot be used to create public inquiry links.");
 		if (input.InquiryFormDefinitionId.HasValue)
 			await EnsurePublishedInquiryFormAsync(input.InquiryFormDefinitionId.Value);
-		AdmissionCounsellorAssignmentRules rules;
-		try
+		AdmissionCounsellorAssignmentRules? rules = null;
+		if (profile != null)
 		{
-			rules = JsonSerializer.Deserialize<AdmissionCounsellorAssignmentRules>(profile.ConfigurationJson,
-				new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
-			rules.Validate();
+			try
+			{
+				rules = JsonSerializer.Deserialize<AdmissionCounsellorAssignmentRules>(profile.ConfigurationJson,
+					new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+				rules.Validate();
+			}
+			catch (Exception error) when (error is JsonException or ArgumentException or NullReferenceException)
+			{
+				throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
+			}
 		}
-		catch (Exception error) when (error is JsonException or ArgumentException or NullReferenceException)
+		var activeOfferings = await AsyncExecuter.ToListAsync(await people.GetCurrentInquiryOfferingsQueryAsync(cycle.Id));
+		var setupOfferings = activeOfferings.Where(offering => profile == null ||
+			offering.CounsellorAssignmentProfileId == profile.Id).ToList();
+		if (profile == null)
 		{
-			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
+			var archivedProfileIds = (await setups.GetListAsync(setup => setup.IsArchived))
+				.Select(setup => setup.CounsellorAssignmentProfileId).ToHashSet();
+			setupOfferings = setupOfferings.Where(offering => !offering.CounsellorAssignmentProfileId.HasValue ||
+				!archivedProfileIds.Contains(offering.CounsellorAssignmentProfileId.Value)).ToList();
 		}
-		var activeOfferings = await offerings.GetListAsync(offering => offering.AdmissionCycleId == cycle.Id &&
-			offering.IsActive && offering.EntryMode != AdmissionEntryMode.DirectRegistration);
-		var setupOfferings = activeOfferings.Where(offering => offering.CounsellorAssignmentProfileId == profile.Id).ToList();
 		var matchingOfferings = setupOfferings.Where(offering => !input.InquiryFormDefinitionId.HasValue ||
 			offering.InquiryFormDefinitionId == input.InquiryFormDefinitionId).ToList();
 		if (matchingOfferings.Count == 0)
 		{
-			var reason = activeOfferings.Count == 0 ? "NoActiveInquiryOffering" : setupOfferings.Count == 0 ? "SetupNotLinked" : "FormNotLinked";
+			var reason = activeOfferings.Count == 0 ? "NoActiveInquiryOffering" : profile != null && setupOfferings.Count == 0 ? "SetupNotLinked" : "FormNotLinked";
 			var message = activeOfferings.Count == 0
 				? $"Cannot create an inquiry link: '{cycle.Name}' has no active Offering that accepts inquiries. Configure and activate an Offering with Inquiry or Both entry mode, then retry."
-				: $"Cannot create an inquiry link: no active inquiry Offering in '{cycle.Name}' uses both intake setup '{profile.Name}' and the selected inquiry form. Attach this setup and form to the same Offering, activate it, then retry.";
+				: profile == null
+					? $"Cannot create an inquiry link: no accessible active inquiry Offering in '{cycle.Name}' uses the selected published inquiry form. Attach the form to an Offering, activate it, then retry."
+					: $"Cannot create an inquiry link: no active inquiry Offering in '{cycle.Name}' uses both intake setup '{profile.Name}' and the selected inquiry form. Attach this setup and form to the same Offering, activate it, then retry.";
 			throw new BusinessException(AdmissionErrorCodes.PublicInquiryOfferingRequired, message)
-				.WithData("PeriodName", cycle.Name).WithData("SetupName", profile.Name).WithData("Reason", reason);
+				.WithData("PeriodName", cycle.Name).WithData("SetupName", profile?.Name ?? "Manual assignment").WithData("Reason", reason);
 		}
 		var matchingOfferingIds = matchingOfferings.Select(offering => offering.Id).ToArray();
-		var hasEligibleOwner = false;
-		foreach (var userId in rules.CounsellorUserIds)
-			if (await people.CanAccessAnyOfferingAsync(userId, matchingOfferingIds)) { hasEligibleOwner = true; break; }
-		if (!hasEligibleOwner)
-			throw new BusinessException(AdmissionErrorCodes.PublicInquiryCounsellorUnavailable)
-				.WithData("SetupName", profile.Name).WithData("PeriodName", cycle.Name);
-		if (managedSetup != null && rules.FallbackManagerUserId.HasValue &&
-			!await people.CanAccessAnyOfferingAsync(rules.FallbackManagerUserId.Value, matchingOfferingIds))
-			throw new BusinessException(AdmissionErrorCodes.PublicInquiryFallbackUnavailable)
-				.WithData("SetupName", profile.Name).WithData("PeriodName", cycle.Name);
+		if (rules != null)
+		{
+			var hasEligibleOwner = false;
+			foreach (var userId in rules.CounsellorUserIds)
+				if (await people.CanAccessAnyOfferingAsync(userId, matchingOfferingIds)) { hasEligibleOwner = true; break; }
+			if (!hasEligibleOwner)
+				throw new BusinessException(AdmissionErrorCodes.PublicInquiryCounsellorUnavailable)
+					.WithData("SetupName", profile!.Name).WithData("PeriodName", cycle.Name);
+			if (managedSetup != null && rules.FallbackManagerUserId.HasValue &&
+				!await people.CanAccessAnyOfferingAsync(rules.FallbackManagerUserId.Value, matchingOfferingIds))
+				throw new BusinessException(AdmissionErrorCodes.PublicInquiryFallbackUnavailable)
+					.WithData("SetupName", profile!.Name).WithData("PeriodName", cycle.Name);
+		}
 		var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 		var link = new AdmissionPublicInquiryLink(GuidGenerator.Create(), CurrentTenant.Id,
-			cycle.Id, profile.Id, input.Name, Hash(token), input.Source,
+			cycle.Id, profile?.Id, input.Name, Hash(token), input.Source,
 			input.SourceDetail, input.ExpiresAtUtc, input.InquiryFormDefinitionId);
 		await links.InsertAsync(link, autoSave: true);
 		var result = new AdmissionPublicInquiryLinkCreatedDto
@@ -284,7 +313,7 @@ public class AdmissionPublicInquiryAppService(
 
 	private Task<List<AdmissionOffering>> GetLinkOfferingsAsync(AdmissionPublicInquiryLink link) =>
 		offerings.GetListAsync(item => item.AdmissionCycleId == link.AdmissionCycleId &&
-			item.CounsellorAssignmentProfileId == link.CounsellorAssignmentProfileId &&
+			(!link.CounsellorAssignmentProfileId.HasValue || item.CounsellorAssignmentProfileId == link.CounsellorAssignmentProfileId) &&
 			item.EntryMode != AdmissionEntryMode.DirectRegistration &&
 			(!link.InquiryFormDefinitionId.HasValue || item.InquiryFormDefinitionId == link.InquiryFormDefinitionId));
 

@@ -39,16 +39,21 @@ public class AdmissionIntakeProfileRules_Tests
 	}
 
 	[Fact]
-	public void New_offering_marks_intake_as_required_while_old_records_can_remain_legacy()
+	public void Offering_intake_marker_tracks_selected_profiles_and_can_be_cleared()
 	{
 		var offering = new AdmissionOffering(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null,
 			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "GRADE-1", true,
 			null, null);
 		offering.IntakeConfigurationRequired.ShouldBeFalse();
 		offering.RequireIntakeConfiguration();
-		offering.IntakeConfigurationRequired.ShouldBeTrue();
+		offering.IntakeConfigurationRequired.ShouldBeFalse();
 		offering.ConfigureIntake(Guid.NewGuid(), Guid.NewGuid());
+		offering.IntakeConfigurationRequired.ShouldBeTrue();
 		offering.InquiryIntakeProfileId.ShouldNotBeNull();
 		offering.CounsellorAssignmentProfileId.ShouldNotBeNull();
+		offering.ConfigureIntake(null, null);
+		offering.InquiryIntakeProfileId.ShouldBeNull();
+		offering.CounsellorAssignmentProfileId.ShouldBeNull();
+		offering.IntakeConfigurationRequired.ShouldBeFalse();
 	}
 }

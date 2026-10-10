@@ -104,14 +104,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Inquiry owner queue"), autoSave: true);
 			var counsellorId = await CreateReviewUserAsync();
-			var workflow = await CreateAndPublishManagedInquiryWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync(legacyPolicy: true);
 			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
 			var inquiryInput = ManagedInquiryInput(offering);
 			inquiryInput.Email = "family@example.com";
-			var inquiry = await inquiries.CreateAsync(inquiryInput);
-			(await Should.ThrowAsync<BusinessException>(() => inquiries.GetAssignableCounsellorsAsync(offering.Id)))
-				.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.CounsellorRequired);
+			var inquiry = await WithUnitOfWorkAsync(() => GetRequiredService<AdmissionInquiryAppService>().CreateFromPublicLinkAsync(
+				inquiryInput, null, offering.InquiryFormDefinitionId));
+			(await inquiries.GetAssignableCounsellorsAsync(offering.Id)).ShouldBeEmpty();
 
 			var unassigned = await inquiries.GetListAsync(new() { IsAssigned = false, MaxResultCount = 50 });
 			unassigned.Items.ShouldContain(item => item.Id == inquiry.Id);
@@ -132,7 +131,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Mode = AdmissionCounsellorAssignmentMode.Manual,
 				CounsellorId = counsellorId,
 				Reason = "Transfer the case to the covering counsellor."
-			}))).Code.ShouldBe(AdmissionInquiryManagementErrorCodes.CounsellorRequired);
+			}))).Code.ShouldBe(AdmissionErrorCodes.InquiryCounsellorInvalid);
 			// Preserve a historical owner fixture to verify queue and follow-up projections independently.
 			var inquiryRepository = GetRequiredService<Volo.Abp.Domain.Repositories.IRepository<AdmissionInquiry, Guid>>();
 			var ownedInquiry = await inquiryRepository.GetAsync(inquiry.Id);

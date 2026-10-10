@@ -22,7 +22,7 @@ public class AdmissionFormStageCommandService(
 	public async Task<AdmissionFormStageDto> VerifySectionAsync(
 		Guid applicationId, Guid stageId, Guid sectionId, VerifyAdmissionFormSectionDto input)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId, true);
+		var context = await access.GetContextAsync(applicationId, stageId, requirePreparation: true);
 		AdmissionFormStageAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		if (context.Form.Status != AdmissionFormInstanceStatus.Submitted || context.Policy?.RequireSectionVerification != true)
 			throw new BusinessException(AdmissionFormStageErrorCodes.InvalidState,
@@ -53,7 +53,7 @@ public class AdmissionFormStageCommandService(
 	public async Task<AdmissionFormStageDto> RequestCorrectionAsync(
 		Guid applicationId, Guid stageId, RequestAdmissionFormCorrectionDto input)
 	{
-		var context = await access.GetContextAsync(applicationId, stageId, true);
+		var context = await access.GetContextAsync(applicationId, stageId, requirePreparation: true);
 		AdmissionFormStageAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		if (context.Policy?.AllowCorrectionRequests != true || context.Form.Status != AdmissionFormInstanceStatus.Submitted)
 			throw new BusinessException(AdmissionFormStageErrorCodes.CorrectionNotAllowed,

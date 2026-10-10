@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-09
+updated_on: 2026-10-10
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -530,6 +530,19 @@ The local Host build succeeded and its refreshed process served a successful aut
 Student documentation validation passed; the all-module gate stops on existing Finance reference frontmatter/mojibake issues.
 This change introduces no schema migration and was not deployed to production.
 
+## Intake counsellor role lookup validation (2026-10-10)
+
+The focused Application selection passed 3 tests with zero failures or skips: the two `Counsellor_role_lookup` integration regressions and the existing broad candidate-scan regression.
+The role cases prove canonical `Admissions Counselor` membership before the 50-result limit, active identity and admission scope exclusions, default broad lookup compatibility, and membership revocation on the next lookup.
+The five `AdmissionIntakeSetupApiContract_Tests` passed, including optional query-bound `counsellorOnly=false` and unchanged Admission Offerings View enforcement on the controller and application service.
+The isolated Host build passed with zero warnings or errors; these checks used single-worker builds with Roslyn analyzers and shared compilation disabled after the initial build exhausted available local memory.
+No permissions, migrations, runtime assignment validation, or deployed data were changed by the role lookup implementation.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --artifacts-path .artifacts/intake-role-review --filter "FullyQualifiedName~Counsellor_role_lookup|FullyQualifiedName~Counsellor_lookup_should_scan" -m:1 -p:RunAnalyzers=false -p:RunAnalyzersDuringBuild=false -p:UseSharedCompilation=false
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --artifacts-path .artifacts/intake-role-review --filter FullyQualifiedName~AdmissionIntakeSetupApiContract_Tests -m:1 -p:RunAnalyzers=false -p:RunAnalyzersDuringBuild=false -p:UseSharedCompilation=false
+```
+
 ## Counsellor lookup scale regression
 
 The intake counsellor lookup resolves each candidate page in a batch rather than resolving scope separately for every user.
@@ -589,3 +602,17 @@ Current Domain.Shared, Domain, Application.Contracts, Application, Domain.Tests,
 The latest task-owned API at `http://localhost:5001` started from staged current normal-compiled modules while preserving the verified unchanged EF binary. Health returned 200; CORS preflight returned 204 for `http://localhost:3001`. Background jobs, background workers, startup migrations and test-login seeding were disabled only for that process. The existing port 5000 host was untouched. Actual synthetic Admissions-to-Onboarding-to-Records browser evidence is recorded in [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md).
 
 No Finance source/API or EF schema change is required. GSEB school-level uniqueness and promotion decisions remain backlog. QA credential emails were disabled; SMTP acceptance, inbox arrival, staging and production deployment are not certified by these local checks.
+
+## Optional Intake setup and manual public links (2026-10-10)
+
+Local verification passed 36 focused application cases across the initial successful cases and repaired fixture reruns, plus three `AdmissionIntakeProfileRules_Tests` domain cases. Coverage includes no-profile Offering create/activate/readiness, clearing setup and stale-marker readiness, manual-link persistence/options/anonymous form loading, duplicate submission idempotency, null-profile capture against both configured and unconfigured Offerings, suppression of historical workflow defaults, active-role/scope manual assignment, Unassigned queues, configured pool/capacity, setup usage/archive, and public-link compatibility/expiry/owner/fallback errors. Fixtures use currently supported Form and Admission decision definitions; historical policies are persisted only when explicitly testing legacy runtime behavior. Direct concrete-service calls run inside an explicit test unit of work.
+
+The local DbMigrator and isolated HttpApi Host compiled with zero errors using serialized builds and disabled analyzer execution; existing compiler warnings remain. EF reports no pending model changes. `20261010034554_MakePublicInquiryAssignmentOptional` changes only `AppAdmissionPublicInquiryLinks.CounsellorAssignmentProfileId` to nullable. Generated Up/Down scripts were reviewed; Down fails before altering rows when manual links exist instead of assigning fabricated profile IDs. The generated Up script was applied only to the verified localhost `postgres` database at baseline `20261007120000_RemoveChargeBankRouting`; the column is nullable and the new migration marker is present.
+
+Evidence logs are `.artifacts/optional-intake-be-tests-final.log` (initial successful cases), `.artifacts/optional-intake-be-repaired.log` (fixture repairs), `.artifacts/optional-intake-domain-tests.log`, `.artifacts/optional-intake-host-build.log`, and generated `.artifacts/optional-public-link-up.sql` / `optional-public-link-down.sql`. Relevant application cases that initially stopped on retired workflow fixtures or missing test units of work were rerun after test-only repairs. The additional inactive/unscoped routing guard passed in its separate rerun, recorded in `.artifacts/optional-intake-inactive-guard.log`.
+
+Actual requested localhost inquiry-link creation remains pending the user's restart of the latest API build; frontend draft and UI proof are recorded in [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md). The existing API still uses the earlier process build. No staging migration, deployment, commit or seed change was performed.
+
+## Finalized admission history display (2026-10-10)
+
+The focused decision contract and history actor-projection run passed 17 tests. Known actors resolve to their saved display name; unknown actors remain in the history with a null name. Existing Applications View authorization and scoped application lookup remain in front of the history read. Contracts, Application, EntityFrameworkCore and HttpApi Host compiled with zero errors using serialized incremental builds; existing warnings remain. The first unrestricted build exhausted available disk space and the first reference-limited test build found an unrelated stale EF migration assembly, so EF was rebuilt before the successful test run. No persistence or migration change belongs to this display-field change. Local API/browser verification confirmed the actual recorded finalizing staff name. Evidence logs are `.artifacts/finalized-summary-tests.log`, `.artifacts/finalized-summary-contract-build.log`, `.artifacts/finalized-summary-app-build.log`, `.artifacts/finalized-summary-ef-build.log` and `.artifacts/finalized-summary-host-build.log`.

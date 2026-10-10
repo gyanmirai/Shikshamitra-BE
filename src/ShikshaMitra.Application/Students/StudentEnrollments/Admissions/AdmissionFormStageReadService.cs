@@ -64,15 +64,15 @@ public class AdmissionFormStageReadService(
 			IsOverdue = overdue,
 			SubmissionAttempts = attempts.Count,
 			ConcurrencyStamp = context.Application.ConcurrencyStamp,
-			CanSaveDraft = context.IsActive && context.Form.Status != AdmissionFormInstanceStatus.Submitted &&
+			CanSaveDraft = context.CanPrepare && context.Form.Status != AdmissionFormInstanceStatus.Submitted &&
 				(policy?.AllowSaveAndResume ?? true),
 			CanSubmit = context.IsActive && context.Application.Status == AdmissionApplicationStatus.Draft &&
 				context.Form.Status != AdmissionFormInstanceStatus.Submitted && attemptAvailable && deadlineAllowsSubmit,
-			CanVerify = context.IsActive && policy?.RequireSectionVerification == true &&
+			CanVerify = context.CanPrepare && policy?.RequireSectionVerification == true &&
 				context.Form.Status == AdmissionFormInstanceStatus.Submitted,
-			CanRequestCorrection = context.IsActive && policy?.AllowCorrectionRequests == true &&
+			CanRequestCorrection = context.CanPrepare && policy?.AllowCorrectionRequests == true &&
 				context.Form.Status == AdmissionFormInstanceStatus.Submitted && attemptAvailable,
-			CanComplete = policy != null && blockers.Count == 0,
+			CanComplete = context.IsActive && policy != null && blockers.Count == 0,
 			Blockers = blockers,
 			Sections = sectionDtos
 		};

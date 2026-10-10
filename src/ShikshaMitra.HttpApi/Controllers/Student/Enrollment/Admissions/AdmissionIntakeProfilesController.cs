@@ -18,8 +18,9 @@ public class AdmissionIntakeProfilesController(IAdmissionIntakeProfileAppService
 		Result.Success(await service.GetListAsync(kind));
 
 	[HttpGet("counsellors"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
-	public async Task<Result<List<AdmissionInquiryCounsellorDto>>> GetCounsellorsAsync([FromQuery] string? filter = null) =>
-		Result.Success(await service.GetCounsellorsAsync(filter));
+	public async Task<Result<List<AdmissionInquiryCounsellorDto>>> GetCounsellorsAsync(
+		[FromQuery] string? filter = null, [FromQuery] bool counsellorOnly = false) =>
+		Result.Success(await service.GetCounsellorsAsync(filter, counsellorOnly));
 
 	[HttpPost, Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	public async Task<Result<AdmissionIntakeProfileDto>> CreateAsync([FromBody] SaveAdmissionIntakeProfileDto input) =>

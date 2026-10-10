@@ -19,6 +19,7 @@ public sealed record AdmissionDocumentContext(AdmissionApplication Application, 
 {
 	public bool CanCollectDuringForm { get; init; }
 	public bool IsOnboarding { get; init; }
+	public bool CanPrepare => IsOnboarding || AdmissionStagePreparationRules.CanPrepare(Application, WorkflowStatus, Stage.Status);
 	public bool IsActive => IsOnboarding || WorkflowStatus == AdmissionWorkflowInstanceStatus.Active && Application.CurrentStageInstanceId == Stage.Id &&
 		Stage.Status == AdmissionRuntimeStageStatus.Active && Application.Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted or
 		AdmissionApplicationStatus.InReview or AdmissionApplicationStatus.Approved or AdmissionApplicationStatus.Waitlisted or

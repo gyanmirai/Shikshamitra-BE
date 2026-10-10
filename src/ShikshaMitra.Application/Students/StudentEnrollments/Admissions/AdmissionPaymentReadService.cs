@@ -24,7 +24,7 @@ public class AdmissionPaymentReadService(AdmissionPaymentAccessService access,
 			Status = confirmed ? "feeStructureConfirmed" : "feeStructureRequired",
 			ConcurrencyStamp = context.Application.ConcurrencyStamp,
 			Blockers = confirmed ? [] : ["Confirm the applicable Finance fee structure before continuing."],
-			CanComplete = confirmed, CanRecord = false, CanVerify = false,
+			CanComplete = context.IsActive && confirmed, CanRecord = false, CanVerify = false,
 			CanWaive = false, CanReverse = false, CanStartOnlinePayment = false
 		};
 	}

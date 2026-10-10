@@ -85,7 +85,7 @@ public class AdmissionAssessmentRosterService(
 		var countsByStage = countRows.ToDictionary(row => row.StageId, row => row.Count);
 		var routes = await transitions.GetListAsync(transition => transition.FromStageId == definition.Id);
 		var readinessContexts = contexts.Where(row => row.WorkflowActive).Select(row =>
-			new AdmissionAssessmentContext(row.Application, row.Stage, definition, policy))
+			new AdmissionAssessmentContext(row.Application, row.Stage, definition, policy) { WorkflowStatus = AdmissionWorkflowInstanceStatus.Active })
 			.Where(context => context.IsActive && latestByStage.GetValueOrDefault(context.Stage.Id)?.Status == "completed").ToList();
 		// Runtime facts choose by creation time, exactly as the individual workflow read does.
 		var readinessIds = readinessContexts.Select(context => context.Stage.Id).ToArray();
@@ -106,7 +106,8 @@ public class AdmissionAssessmentRosterService(
 		var sessionRows = (await sessions.GetListAsync(session => Enumerable.Contains(sessionIds, session.Id))).ToDictionary(session => session.Id);
 		var rows = contexts.Select(row =>
 		{
-			var context = new AdmissionAssessmentContext(row.Application, row.Stage, definition, policy);
+			var context = new AdmissionAssessmentContext(row.Application, row.Stage, definition, policy)
+				{ WorkflowStatus = row.WorkflowActive ? AdmissionWorkflowInstanceStatus.Active : AdmissionWorkflowInstanceStatus.Cancelled };
 			var active = context.IsActive && row.WorkflowActive;
 			var latest = latestByStage.GetValueOrDefault(row.Stage.Id);
 			var ready = active && latest?.Status == "completed" && reader.GetBlockers(context, latest, routes,
@@ -135,10 +136,11 @@ public class AdmissionAssessmentRosterService(
 		return new() { Counts = counts, TotalCount = filtered.Count, Items = page.Select(summary =>
 		{
 			var row = summary.Context;
-			var context = new AdmissionAssessmentContext(row.Application, row.Stage, definition, policy);
+			var context = new AdmissionAssessmentContext(row.Application, row.Stage, definition, policy)
+				{ WorkflowStatus = row.WorkflowActive ? AdmissionWorkflowInstanceStatus.Active : AdmissionWorkflowInstanceStatus.Cancelled };
 			var evidence = reader.Build(context, historyByStage[row.Stage.Id].ToList(), sessionRows, routes,
 				factsByStage.GetValueOrDefault(row.Stage.Id) ?? [], grants, CurrentUser.Id, now);
-			if (!row.WorkflowActive && context.IsActive)
+			if (!row.WorkflowActive)
 			{
 				evidence.Blockers.Add("This application workflow is not active.");
 				evidence.CanBook = evidence.CanCancel = evidence.CanComplete = evidence.CanRecordAttendance = evidence.CanRecordResult =

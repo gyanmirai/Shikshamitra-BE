@@ -27,6 +27,7 @@ public class AdmissionPipelineReadService(
 	IRepository<AdmissionIntakeProfile, Guid> profiles,
 	IRepository<Standard, Guid> standards,
 	AdmissionApplicationScopeAccessService access,
+	AdmissionApplicationWorkspaceQueryService workspace,
 	AdmissionInquiryPeopleService people,
 	IUserScopeAccessService userScopes) : ApplicationService, ITransientDependency
 {
@@ -132,6 +133,7 @@ public class AdmissionPipelineReadService(
 	private async Task<IQueryable<AdmissionPipelineItemDto>> GetQueryAsync(AdmissionPipelineListInput input)
 	{
 		var applicationQuery = await applications.GetQueryableAsync();
+		applicationQuery = (await workspace.ProjectAsync(applicationQuery)).Where(row => !row.HasReachedDecision).Select(row => row.Application);
 		var scopedOfferings = await access.GetScopedOfferingsAsync();
 		var applicantQuery = await applicants.GetQueryableAsync();
 		var inquiryQuery = await inquiries.GetQueryableAsync();

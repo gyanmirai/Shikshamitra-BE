@@ -26,9 +26,36 @@ internal static class SalarySlipSnapshotMatcher
 		SalarySlip salarySlip,
 		PayrollRunItemSnapshot snapshot,
 		IReadOnlyList<SalarySlipLineItem> snapshotEarnings,
-		IReadOnlyList<SalarySlipLineItem> snapshotDeductions) =>
+		IReadOnlyList<SalarySlipLineItem> snapshotDeductions,
+		IReadOnlyList<SalarySlipLineItem> snapshotEmployerContributions) =>
 		SalarySlipPolicyMetadataMatchesSnapshot(salarySlip, snapshot) &&
+		StatutoryAndCompensationMetadataMatches(salarySlip, snapshot) &&
+		salarySlip.EmployerContributionTotal == snapshot.EmployerContributionTotal &&
+		LineItemsMatch(salarySlip.EmployerContributions, snapshotEmployerContributions) &&
 		SalarySlipOutputMatchesSnapshot(salarySlip, snapshot, snapshotEarnings, snapshotDeductions);
+
+	private static bool StatutoryAndCompensationMetadataMatches(SalarySlip salarySlip, PayrollRunItemSnapshot snapshot) =>
+		salarySlip.ProvidentFundRuleId == snapshot.ProvidentFundRuleId &&
+		salarySlip.ProvidentFundRuleVersion == snapshot.ProvidentFundRuleVersion &&
+		salarySlip.ProfessionalTaxRuleId == snapshot.ProfessionalTaxRuleId &&
+		salarySlip.ProfessionalTaxRuleVersion == snapshot.ProfessionalTaxRuleVersion &&
+		salarySlip.EmployeeStateInsuranceRuleId == snapshot.EmployeeStateInsuranceRuleId &&
+		salarySlip.EmployeeStateInsuranceRuleVersion == snapshot.EmployeeStateInsuranceRuleVersion &&
+		salarySlip.EmployeeStateInsuranceWages == snapshot.EmployeeStateInsuranceWages &&
+		salarySlip.EmployeeStateInsuranceGovernmentContribution == snapshot.EmployeeStateInsuranceGovernmentContribution &&
+		salarySlip.EmployeeStateInsuranceCoverageDecision == snapshot.EmployeeStateInsuranceCoverageDecision &&
+		salarySlip.EmployeeStateInsuranceNumber == snapshot.EmployeeStateInsuranceNumber &&
+		salarySlip.EmployeeStateInsuranceContributionPeriodStart == snapshot.EmployeeStateInsuranceContributionPeriodStart &&
+		salarySlip.EmployeeStateInsuranceContributionPeriodEnd == snapshot.EmployeeStateInsuranceContributionPeriodEnd &&
+		salarySlip.EsiConfigurationId == snapshot.EsiConfigurationId &&
+		salarySlip.CompensationRevisionId == snapshot.CompensationRevisionId &&
+		salarySlip.CompensationRevisionNumber == snapshot.CompensationRevisionNumber &&
+		salarySlip.CompensationSalaryBasis == snapshot.CompensationSalaryBasis &&
+		salarySlip.CompensationProtectionPolicy == snapshot.CompensationProtectionPolicy &&
+		salarySlip.CompensationQuotedAmount == snapshot.CompensationQuotedAmount &&
+		salarySlip.CompensationProtectedAmount == snapshot.CompensationProtectedAmount &&
+		salarySlip.CompensationNormalizedProtectedAmount == snapshot.CompensationNormalizedProtectedAmount &&
+		salarySlip.CompensationTargetDifference == snapshot.CompensationTargetDifference;
 
 	public static bool SalarySlipFinancialLinesMatchSnapshot(
 		SalarySlip salarySlip,

@@ -186,12 +186,12 @@ public static class PayrollAttendanceCalculator
 		PayrollLeaveUnits leaveUnits,
 		decimal maxUnitsForDate)
 	{
+		maxUnitsForDate = Math.Max(0m, maxUnitsForDate);
+		currentUnits = Math.Clamp(currentUnits, 0m, maxUnitsForDate);
 		var paidUnitsForDate = Math.Clamp(leaveUnits.PaidUnits, 0m, maxUnitsForDate);
 		var unpaidUnitsForDate = Math.Clamp(leaveUnits.UnpaidUnits, 0m, maxUnitsForDate);
 		var attendanceCapacityAfterUnpaidLeave = Math.Max(0m, maxUnitsForDate - unpaidUnitsForDate);
-		var attendanceUnitsAfterUnpaidLeave = Math.Min(currentUnits, attendanceCapacityAfterUnpaidLeave);
-
-		return Math.Clamp(Math.Max(attendanceUnitsAfterUnpaidLeave, paidUnitsForDate), 0m, maxUnitsForDate);
+		return Math.Clamp(Math.Min(attendanceCapacityAfterUnpaidLeave, currentUnits + paidUnitsForDate), 0m, maxUnitsForDate);
 	}
 
 	private static bool IsWorkingDay(DateOnly date, IReadOnlyDictionary<DateOnly, decimal> workingUnitsByDate) =>

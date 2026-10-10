@@ -47,6 +47,13 @@ public class PayrollPreviewBackgroundJob(
 		{
 			run = await runs.GetAsync(args.RunId);
 			if (run.Status is "SUCCEEDED" or "FAILED" or "SUPERSEDED") return;
+			if (!run.HasCurrentCalculationVersion)
+			{
+				run.Supersede(clock.Now);
+				await runs.UpdateAsync(run, autoSave: true);
+				await lookup.CompleteAsync();
+				return;
+			}
 			var user = await users.FindByIdAsync(run.RequestedBy.ToString());
 			if (user == null || !user.IsActive || user.TenantId != args.TenantId)
 			{
@@ -76,6 +83,13 @@ public class PayrollPreviewBackgroundJob(
 					await revisions.LockAsync();
 					run = await runs.GetAsync(args.RunId);
 					if (run.IsTerminal) return true;
+					if (!run.HasCurrentCalculationVersion)
+					{
+						run.Supersede(clock.Now);
+						await runs.UpdateAsync(run, autoSave: true);
+						await start.CompleteAsync();
+						return true;
+					}
 					if (run.Attempts >= 3)
 					{
 						run.Fail(HRErrorCodes.PayrollPreviewFailed, clock.Now);

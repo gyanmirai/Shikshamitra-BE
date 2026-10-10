@@ -78,5 +78,5 @@ public static class PayrollLockPreconditionGuard
 		IssueCodes.AttendanceSalaryDeductionConfiguration or IssueCodes.PayrollPolicyConfiguration or
 		IssueCodes.NoWorkingDays or IssueCodes.EsiEstablishmentInactive or IssueCodes.EsiWageClassificationRequired or
 		IssueCodes.EsiEnrollmentReviewRequired or IssueCodes.EsiInsuranceNumberRequired or
-		IssueCodes.CompensationRevisionRequired or IssueCodes.CompensationTargetVariance;
+		IssueCodes.CompensationRevisionRequired or IssueCodes.CompensationTargetVariance or IssueCodes.PfWageBasisRequired;
 }

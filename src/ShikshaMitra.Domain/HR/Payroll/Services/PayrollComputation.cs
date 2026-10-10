@@ -49,6 +49,7 @@ public static class PayrollComputation
 		}
 
 		var employerContributions = new List<PayrollComputedEmployerContribution>();
+		var statutoryIssueCodes = new List<string>();
 		Guid? pfRuleId = null;
 		int? pfRuleVersion = null;
 		var pfSource = components.FirstOrDefault(x =>
@@ -56,17 +57,10 @@ public static class PayrollComputation
 		var pfRule = statutoryRules?.ProvidentFund;
 		if (pfSource != null && pfRule is { IsActive: true })
 		{
-			var contributionBase = basicSalary;
-			if (pfRule.ContributionBasis == PfContributionBasis.BasicAndDearnessAllowance)
-			{
-				contributionBase += earnings
-					.Where(x => x.Source.SemanticType == Templates.PayrollComponentSemanticType.DearnessAllowance)
-					.Sum(x => x.Amount);
-			}
-			if (contributionBase <= 0m)
-			{
-				contributionBase = totalEarnings;
-			}
+			var eligibleEarnings = earnings.Where(x => PayrollProvidentFundBasis.IsEligible(x.Source, pfRule.ContributionBasis)).ToList();
+			if (eligibleEarnings.Count == 0)
+				statutoryIssueCodes.Add(RunPayroll.IssueCodes.PfWageBasisRequired);
+			var contributionBase = Math.Max(0m, eligibleEarnings.Sum(x => x.Amount));
 			if (pfRule.WageCeiling.HasValue)
 			{
 				contributionBase = Math.Min(contributionBase, pfRule.WageCeiling.Value);
@@ -119,7 +113,6 @@ public static class PayrollComputation
 		string? esiInsuranceNumber = null;
 		DateTime? esiContributionPeriodStart = null;
 		DateTime? esiContributionPeriodEnd = null;
-		var statutoryIssueCodes = new List<string>();
 		var esiContext = statutoryRules?.EmployeeStateInsurance;
 		if (esiContext != null)
 		{

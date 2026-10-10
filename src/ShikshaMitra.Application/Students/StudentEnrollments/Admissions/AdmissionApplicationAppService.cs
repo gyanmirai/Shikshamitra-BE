@@ -20,6 +20,7 @@ public class AdmissionApplicationAppService(
 	AdmissionApplicationWorkflowReadService workflowReadService,
 	AdmissionApplicationWorkflowService workflowService,
 	AdmissionApplicationFormService formService,
+	AdmissionJourneyClosureService journeyClosure,
 	AdmissionApplicationDecisionService decisionService)
 	: ApplicationService, IAdmissionApplicationAppService
 {
@@ -127,6 +128,10 @@ public class AdmissionApplicationAppService(
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
 	public Task<AdmissionApplicationDto> WaitlistAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.WaitlistAsync(id, input);
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	[UnitOfWork(true)]
+	public Task<AdmissionApplicationDto> EndJourneyAsync(Guid id, EndAdmissionJourneyDto input) => journeyClosure.EndAsync(id, input);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
 	public Task<AdmissionApplicationDto> IssueOfferAsync(Guid id, AdmissionApplicationDecisionDto input) => decisionService.IssueOfferAsync(id, input);

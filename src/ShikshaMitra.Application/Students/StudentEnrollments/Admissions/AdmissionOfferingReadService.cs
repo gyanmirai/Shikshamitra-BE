@@ -244,9 +244,8 @@ public class AdmissionOfferingReadService(
 				row.InquiryForm != null && row.InquiryForm.Purpose == AdmissionFormPurpose.Inquiry) &&
 			(!row.Offering.InquiryIntakeProfileId.HasValue || row.InquiryProfile != null && row.InquiryProfile.Kind == AdmissionIntakeProfileKind.Inquiry) &&
 			(!row.Offering.CounsellorAssignmentProfileId.HasValue || row.AssignmentProfile != null && row.AssignmentProfile.Kind == AdmissionIntakeProfileKind.CounsellorAssignment) &&
-			(!row.Offering.IntakeConfigurationRequired ||
-				(row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration || row.InquiryProfile != null) &&
-				row.AssignmentProfile != null) &&
+			(!(row.Offering.InquiryIntakeProfileId.HasValue || row.Offering.CounsellorAssignmentProfileId.HasValue) ||
+				(row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration || row.InquiryProfile != null) && row.AssignmentProfile != null) &&
 			row.ApplicationForm != null && row.ApplicationForm.Status == AdmissionFormStatus.Published &&
 			row.ApplicationForm.Purpose == AdmissionFormPurpose.Registration);
 
@@ -273,9 +272,8 @@ public class AdmissionOfferingReadService(
 				(row.InquiryForm == null || row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)) ||
 			(row.Offering.InquiryIntakeProfileId.HasValue && (row.InquiryProfile == null || row.InquiryProfile.Kind != AdmissionIntakeProfileKind.Inquiry)) ||
 			(row.Offering.CounsellorAssignmentProfileId.HasValue && (row.AssignmentProfile == null || row.AssignmentProfile.Kind != AdmissionIntakeProfileKind.CounsellorAssignment)) ||
-			(row.Offering.IntakeConfigurationRequired &&
-				(row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryProfile == null ||
-				row.AssignmentProfile == null)) ||
+			((row.Offering.InquiryIntakeProfileId.HasValue || row.Offering.CounsellorAssignmentProfileId.HasValue) &&
+				(row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryProfile == null || row.AssignmentProfile == null)) ||
 			row.ApplicationForm == null || row.ApplicationForm.Status != AdmissionFormStatus.Published ||
 			row.ApplicationForm.Purpose != AdmissionFormPurpose.Registration);
 
@@ -397,11 +395,12 @@ public class AdmissionOfferingReadService(
 			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormNotPublished, "Application Form is not published."));
 		else if (row.ApplicationForm.Purpose != AdmissionFormPurpose.Registration)
 			errors.Add(new(AdmissionOfferingValidationCodes.ApplicationFormPurposeMismatch, "The selected Application Form must have the Registration purpose."));
+		var usingIntake = row.Offering.InquiryIntakeProfileId.HasValue || row.Offering.CounsellorAssignmentProfileId.HasValue;
 		if (row.Offering.InquiryIntakeProfileId.HasValue && row.InquiryProfile?.Kind != AdmissionIntakeProfileKind.Inquiry ||
-			row.Offering.IntakeConfigurationRequired && row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryProfile == null)
+			usingIntake && row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryProfile == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.InquiryIntakeProfileInvalid, "Inquiry profile is unavailable."));
 		if (row.Offering.CounsellorAssignmentProfileId.HasValue && row.AssignmentProfile?.Kind != AdmissionIntakeProfileKind.CounsellorAssignment ||
-			row.Offering.IntakeConfigurationRequired && row.AssignmentProfile == null)
+			usingIntake && row.AssignmentProfile == null)
 			errors.Add(new(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid, "Counsellor assignment profile is unavailable."));
 		return new AdmissionOfferingValidationResult(errors);
 	}

@@ -33,6 +33,15 @@ public class AdmissionApplicationWorkflowInstance : FullAuditedAggregateRoot<Gui
 		Status = AdmissionWorkflowInstanceStatus.Completed;
 		CompletedAt = DateTime.UtcNow;
 	}
+
+	public void Cancel()
+	{
+		if (Status == AdmissionWorkflowInstanceStatus.Cancelled) return;
+		if (Status is not (AdmissionWorkflowInstanceStatus.Active or AdmissionWorkflowInstanceStatus.Completed))
+			throw new BusinessException(AdmissionApplicationErrorCodes.WorkflowAlreadyCompleted);
+		Status = AdmissionWorkflowInstanceStatus.Cancelled;
+		CompletedAt ??= DateTime.UtcNow;
+	}
 }
 
 public class AdmissionApplicationStageInstance : Entity<Guid>, IMultiTenant
@@ -89,6 +98,15 @@ public class AdmissionApplicationStageInstance : Entity<Guid>, IMultiTenant
 			throw new BusinessException(AdmissionApplicationErrorCodes.InvalidCurrentStage);
 		Status = AdmissionRuntimeStageStatus.Active;
 		EnteredAt = DateTime.UtcNow;
+	}
+
+	public void Cancel(Guid actorId, string reason)
+	{
+		if (Status is not (AdmissionRuntimeStageStatus.Active or AdmissionRuntimeStageStatus.Pending)) return;
+		Status = AdmissionRuntimeStageStatus.Cancelled;
+		CompletedAt = DateTime.UtcNow;
+		CompletedBy = actorId;
+		CompletionReason = Check.NotNullOrWhiteSpace(reason, nameof(reason), 512).Trim();
 	}
 
 	private void EnsureActive()

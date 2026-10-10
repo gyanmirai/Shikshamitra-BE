@@ -17,6 +17,7 @@ public sealed record AdmissionFormStageContext(
 	AdmissionFormInstance Form,
 	AdmissionFormStagePolicy? Policy)
 {
+	public bool CanPrepare => AdmissionStagePreparationRules.CanPrepare(Application, Workflow.Status, Stage.Status);
 	public bool IsActive => Workflow.Status == AdmissionWorkflowInstanceStatus.Active &&
 		Application.CurrentStageInstanceId == Stage.Id && Stage.Status == AdmissionRuntimeStageStatus.Active;
 	public DateTime? DueAt => Policy?.DueInDays is int days && Stage.EnteredAt.HasValue
@@ -31,7 +32,7 @@ public class AdmissionFormStageAccessService(
 	IRepository<AdmissionFormInstance, Guid> forms,
 	AdmissionApplicationReadService applications) : ApplicationService, ITransientDependency
 {
-	public async Task<AdmissionFormStageContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireManaged = false)
+	public async Task<AdmissionFormStageContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireManaged = false, bool requirePreparation = false)
 	{
 		var application = await applications.GetEntityAsync(applicationId);
 		var stage = await stages.FindAsync(stageId) ??
@@ -53,6 +54,8 @@ public class AdmissionFormStageAccessService(
 		var context = new AdmissionFormStageContext(application, workflow, stage, definition, form, ReadPolicy(definition));
 		if (requireManaged && (context.Policy == null || !context.IsActive))
 			throw new BusinessException(AdmissionFormStageErrorCodes.InvalidState, "The managed Form stage must be active.");
+		if (requirePreparation && (context.Policy == null || !context.CanPrepare))
+			throw new BusinessException(AdmissionFormStageErrorCodes.InvalidState, "Form changes require an open admission journey and an unfinished Form stage.");
 		return context;
 	}
 

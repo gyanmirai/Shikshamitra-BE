@@ -122,6 +122,11 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
 	public async Task<Result<AdmissionApplicationDto>> MarkInReviewAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.MarkInReviewAsync(id, input));
 
+	[HttpPost("{id:guid}/end-journey")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public async Task<Result<AdmissionApplicationDto>> EndJourneyAsync(Guid id, [FromBody] EndAdmissionJourneyDto input) =>
+		Result.Success(await service.EndJourneyAsync(id, input));
+
 	[HttpPost("{id:guid}/decision/approve")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
 	public async Task<Result<AdmissionApplicationDto>> ApproveAsync(Guid id, AdmissionApplicationDecisionDto input) => Result.Success(await service.ApproveAsync(id, input));

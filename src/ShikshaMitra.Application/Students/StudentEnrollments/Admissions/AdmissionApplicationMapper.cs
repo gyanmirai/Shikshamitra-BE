@@ -22,6 +22,7 @@ internal static class AdmissionApplicationMapper
 		OfferingCode = offeringCode,
 		CurrentStageName = currentStageName,
 		Status = application.Status,
+		CanEndJourney = application.CanEndJourney,
 		DecisionReason = application.DecisionReason,
 		DecisionBy = application.DecisionBy,
 		DecisionAt = application.DecisionAt,

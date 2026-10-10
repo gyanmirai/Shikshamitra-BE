@@ -201,7 +201,6 @@ public class AdmissionOfferingCommandService(
 		offering.ConfigureReferences(
 			input.WorkflowDefinitionId, input.InquiryFormDefinitionId, input.ApplicationFormDefinitionId);
 		offering.ConfigureIntake(input.InquiryIntakeProfileId, input.CounsellorAssignmentProfileId);
-		offering.RequireIntakeConfiguration();
 		if (input.IsActive)
 			offering.Activate();
 		else

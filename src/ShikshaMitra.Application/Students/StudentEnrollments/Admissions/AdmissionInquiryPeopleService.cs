@@ -15,6 +15,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [RemoteService(false)]
 public class AdmissionInquiryPeopleService(
 	IRepository<IdentityUser, Guid> users,
+	IRepository<IdentityRole, Guid> roles,
 	IUserScopeService scopes,
 	IRepository<AdmissionOffering, Guid> offerings,
 	IRepository<AdmissionCycle, Guid> cycles,
@@ -40,10 +41,17 @@ public class AdmissionInquiryPeopleService(
 	public async Task<List<AdmissionInquiryCounsellorDto>> GetCounsellorsAsync(
 		string? filter,
 		Guid? admissionOfferingId = null,
-		IReadOnlyCollection<Guid>? candidateIds = null)
+		IReadOnlyCollection<Guid>? candidateIds = null,
+		bool counsellorOnly = false)
 	{
 		if (filter?.Length > 128) throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidPolicy);
 		var query = (await users.GetQueryableAsync()).Where(user => user.IsActive);
+		if (counsellorOnly)
+		{
+			var role = await roles.FindAsync(item => item.NormalizedName == "ADMISSIONS COUNSELOR");
+			if (role == null) return [];
+			query = query.Where(user => user.Roles.Any(item => item.RoleId == role.Id));
+		}
 		if (candidateIds != null)
 		{
 			var ids = candidateIds.ToArray();

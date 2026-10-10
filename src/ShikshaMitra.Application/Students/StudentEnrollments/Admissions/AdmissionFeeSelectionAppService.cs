@@ -49,7 +49,7 @@ public class AdmissionFeeSelectionAppService(
 		if (context.HasPaymentEvidence) throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked,
 			"Payment evidence already exists. Ask Finance to review a correction or refund.");
 		if (!context.IsEditable) throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState,
-			"Confirm the fee structure in the first active Payment stage.");
+			"Confirm the fee structure in an unfinished Fee structure confirmation stage while the admission journey is open.");
 		var snapshot = await structures.CreateSnapshotAsync(application, context.Owner!.Id, context.Currency, input, Actor());
 		var previous = application.GetFeeSelection();
 		application.SaveFeeSelection(snapshot, context.HasPaymentEvidence);

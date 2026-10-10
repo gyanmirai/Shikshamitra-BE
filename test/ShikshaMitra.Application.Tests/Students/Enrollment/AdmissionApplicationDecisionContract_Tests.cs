@@ -20,6 +20,7 @@ public class AdmissionApplicationDecisionContract_Tests
 	[InlineData(nameof(AdmissionApplicationAppService.AcceptOfferAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
 	[InlineData(nameof(AdmissionApplicationAppService.DeclineOfferAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Offer)]
 	[InlineData(nameof(AdmissionApplicationAppService.GetFinalizationPreviewAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
+	[InlineData(nameof(AdmissionApplicationAppService.GetDecisionHistoryAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	[InlineData(nameof(AdmissionApplicationAppService.FinalizeAsync), ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	[InlineData("EnrollAsync", ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]
 	[InlineData("GetEnrollmentOptionsAsync", ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize)]

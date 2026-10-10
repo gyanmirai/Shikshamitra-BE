@@ -296,9 +296,13 @@ public class AdmissionApplicationDecisionService(
 	{
 		await GetApplicationAsync(id);
 		var rows = await historyRepository.GetListAsync(item => item.ApplicationId == id);
+		var actorNames = await LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryPeopleService>()
+			.GetNamesAsync(rows.Where(item => item.ActorId.HasValue).Select(item => item.ActorId!.Value));
 		return rows.OrderByDescending(item => item.OccurredAt).Select(item => new AdmissionApplicationDecisionHistoryDto
 		{
-			Id = item.Id, Status = item.Status, Reason = item.Reason, ActorId = item.ActorId, OccurredAt = item.OccurredAt
+			Id = item.Id, Status = item.Status, Reason = item.Reason, ActorId = item.ActorId,
+			ActorName = item.ActorId.HasValue && actorNames.TryGetValue(item.ActorId.Value, out var actorName) ? actorName : null,
+			OccurredAt = item.OccurredAt
 		}).ToList();
 	}
 

@@ -43,11 +43,19 @@ public class AdmissionIntakeAssignmentService(
 
 	public async Task EnsureManualTransferAsync(Guid offeringId, Guid counsellorId, Guid inquiryId)
 	{
+		var offering = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionOffering, Guid>>().GetAsync(offeringId);
+		if (!offering.CounsellorAssignmentProfileId.HasValue)
+		{
+			var eligible = await people.GetCounsellorsAsync(null, offeringId, [counsellorId], counsellorOnly: true);
+			if (eligible.Count != 1)
+				throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid,
+					"Choose an active Admissions Counselor with access to this admission offering.");
+			return;
+		}
 		var rules = await GetRulesAsync(offeringId);
 		if (!rules.CounsellorUserIds.Contains(counsellorId) && rules.FallbackManagerUserId != counsellorId)
 			throw new BusinessException(AdmissionErrorCodes.InquiryCounsellorInvalid, "Choose a counsellor from the offering's configured pool.");
 		await people.EnsureCanAccessOfferingAsync(counsellorId, offeringId);
-		var offering = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionOffering, Guid>>().GetAsync(offeringId);
 		await profiles.AcquireAssignmentLockAsync(offering.CounsellorAssignmentProfileId!.Value);
 		var load = await inquiries.CountAsync(item => item.Id != inquiryId && item.AssignedCounsellorId == counsellorId &&
 			item.Status != AdmissionInquiryStatus.ApplicationStarted && item.Status != AdmissionInquiryStatus.Converted &&

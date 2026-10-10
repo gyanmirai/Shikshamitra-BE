@@ -86,6 +86,25 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void AssignCounsellor(Guid counsellorId) =>
 		AssignedCounsellorId = Check.NotDefaultOrNull<Guid>(counsellorId, nameof(counsellorId));
 	public void CompleteWorkflow() => CurrentStageInstanceId = null;
+	public bool CanEndJourney => !StudentId.HasValue && !OnboardingCaseId.HasValue &&
+		!EnrolledStudentId.HasValue && !StudentEnrollmentId.HasValue &&
+		Status is AdmissionApplicationStatus.Draft or AdmissionApplicationStatus.Submitted or
+		AdmissionApplicationStatus.InReview or AdmissionApplicationStatus.Waitlisted or AdmissionApplicationStatus.Approved or
+		AdmissionApplicationStatus.Offered or AdmissionApplicationStatus.OfferAccepted;
+
+	public void EndJourney(Guid actorId, string reason)
+	{
+		if (actorId == Guid.Empty || string.IsNullOrWhiteSpace(reason))
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionReasonRequired,
+				"Enter a reason for ending the admission journey.");
+		var normalized = Check.Length(reason.Trim(), nameof(reason), 512);
+		if (Status == AdmissionApplicationStatus.Withdrawn && DecisionReason == normalized) return;
+		if (!CanEndJourney)
+			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionInvalidState,
+				"Only an open admission journey can be ended. Finalized admissions are managed in Student Onboarding.");
+		SetDecision(AdmissionApplicationStatus.Withdrawn, actorId, normalized, requireReason: true);
+		CurrentStageInstanceId = null;
+	}
 	public void RecordWorkflowStarted(Guid workflowInstanceId, Guid entryStageInstanceId) =>
 		AddLocalEvent(new ApplicationWorkflowStartedEvent(Id, workflowInstanceId, WorkflowDefinitionId, entryStageInstanceId, TenantId));
 	public void RecordStageEntered(Guid workflowInstanceId, Guid stageInstanceId) =>

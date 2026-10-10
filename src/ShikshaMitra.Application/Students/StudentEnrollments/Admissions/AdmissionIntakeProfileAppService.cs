@@ -32,8 +32,8 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
-	public Task<List<AdmissionInquiryCounsellorDto>> GetCounsellorsAsync(string? filter = null) =>
-		people.GetCounsellorsAsync(filter);
+	public Task<List<AdmissionInquiryCounsellorDto>> GetCounsellorsAsync(string? filter = null, bool counsellorOnly = false) =>
+		people.GetCounsellorsAsync(filter, counsellorOnly: counsellorOnly);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	public async Task<AdmissionIntakeProfileDto> CreateAsync(SaveAdmissionIntakeProfileDto input)

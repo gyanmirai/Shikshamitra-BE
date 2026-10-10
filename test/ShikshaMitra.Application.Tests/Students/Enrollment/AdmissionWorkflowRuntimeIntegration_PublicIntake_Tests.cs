@@ -16,8 +16,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Inactive_offering_can_save_an_unscoped_assignment_but_cannot_activate() =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var profileRepository = GetRequiredService<IRepository<AdmissionIntakeProfile, Guid>>();
 			var profile = new AdmissionIntakeProfile(Guid.NewGuid(), TestTenantId,
 				AdmissionIntakeProfileKind.CounsellorAssignment,
@@ -30,8 +29,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await WithUnitOfWorkAsync(async () =>
 			{
 				await profileRepository.InsertAsync(profile, autoSave: true);
-				offering.Deactivate();
-				await _offeringRepository.UpdateAsync(offering, autoSave: true);
+				var storedOffering = await _offeringRepository.GetAsync(offering.Id);
+				storedOffering.Deactivate();
+				await _offeringRepository.UpdateAsync(storedOffering, autoSave: true);
 			});
 			var service = GetRequiredService<IAdmissionOfferingAppService>();
 			var current = await service.GetAsync(offering.Id);
@@ -71,8 +71,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_checks_selected_offering_before_showing_published_form_and_persists_answers() =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var profiles = GetRequiredService<IRepository<AdmissionIntakeProfile, Guid>>();
 			var inquiries = GetRequiredService<IRepository<AdmissionInquiry, Guid>>();
 			var service = GetRequiredService<IAdmissionPublicInquiryAppService>();
@@ -159,8 +158,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Public_link_requires_matching_offering_and_hides_duplicate_phone() =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var profiles = GetRequiredService<IRepository<AdmissionIntakeProfile, Guid>>();
 			var inquiries = GetRequiredService<IRepository<AdmissionInquiry, Guid>>();
 			var service = GetRequiredService<IAdmissionPublicInquiryAppService>();

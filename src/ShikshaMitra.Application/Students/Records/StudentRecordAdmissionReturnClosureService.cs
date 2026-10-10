@@ -23,18 +23,25 @@ public class StudentRecordAdmissionReturnClosureService(
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
 	public async Task CloseRejectedApplicationAsync(AdmissionApplication application, string reason)
+		=> await CloseApplicationAsync(application, reason, AdmissionApplicationStatus.Rejected, "AdmissionRejected");
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Decide)]
+	public async Task CloseWithdrawnApplicationAsync(AdmissionApplication application, string reason)
+		=> await CloseApplicationAsync(application, reason, AdmissionApplicationStatus.Withdrawn, "AdmissionWithdrawn");
+
+	private async Task CloseApplicationAsync(AdmissionApplication application, string reason, AdmissionApplicationStatus expectedStatus, string action)
 	{
 		var handoff = await handoffs.FindAsync(x => x.TenantId == CurrentTenant.Id && x.TransitionId.HasValue &&
 			x.AdmissionApplicationId == application.Id);
 		if (handoff == null) return;
-		if (application.TenantId != CurrentTenant.Id || application.Status != AdmissionApplicationStatus.Rejected ||
+		if (application.TenantId != CurrentTenant.Id || application.Status != expectedStatus ||
 			application.OnboardingCaseId.HasValue || application.StudentEnrollmentId.HasValue ||
 			handoff.AdmissionOfferingId != application.AdmissionOfferingId)
 			throw new BusinessException("Students:Records:InvalidReturnApplication");
 		var applicant = await applicants.GetAsync(x => x.Id == application.ApplicantId && x.TenantId == CurrentTenant.Id);
 		if (applicant.ExistingStudentId != handoff.StudentId)
 			throw new BusinessException("Students:Records:InvalidReturnApplication");
-		await CloseAsync(handoff, "AdmissionRejected", reason.Trim());
+		await CloseAsync(handoff, action, reason.Trim());
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Cancel)]

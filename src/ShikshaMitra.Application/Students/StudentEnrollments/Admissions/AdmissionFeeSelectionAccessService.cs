@@ -17,10 +17,8 @@ public sealed record AdmissionFeeSelectionContext(AdmissionApplication Applicati
 	AdmissionApplicationStageInstance? Owner, AdmissionApplicationWorkflowInstance? Workflow,
 	bool IsRequired, bool HasPaymentEvidence, string? Currency)
 {
-	public bool IsEditable => Owner != null && Workflow?.Status == AdmissionWorkflowInstanceStatus.Active &&
-		Owner.Id == Application.CurrentStageInstanceId && Owner.Status == AdmissionRuntimeStageStatus.Active &&
-		!HasPaymentEvidence && Application.Status is not (AdmissionApplicationStatus.Withdrawn or AdmissionApplicationStatus.Rejected or
-			AdmissionApplicationStatus.OfferDeclined or AdmissionApplicationStatus.AdmissionFinalized or AdmissionApplicationStatus.Enrolled);
+	public bool IsEditable => Owner != null && Workflow != null && !HasPaymentEvidence &&
+		AdmissionStagePreparationRules.CanPrepare(Application, Workflow.Status, Owner.Status);
 }
 
 [RemoteService(false)]
@@ -71,11 +69,14 @@ public class AdmissionFeeSelectionAccessService(
 	public async Task<AdmissionFeeSelectionContext> GetContextAsync(AdmissionApplication application)
 	{
 		var workflow = await workflows.FindAsync(w => w.ApplicationId == application.Id);
-		var entered = workflow == null ? [] : (await stages.GetListAsync(s => s.WorkflowInstanceId == workflow.Id))
-			.Where(s => s.EnteredAt.HasValue).ToList();
+		var workflowStages = workflow == null ? [] : await stages.GetListAsync(s => s.WorkflowInstanceId == workflow.Id);
+		var entered = workflowStages.Where(s => s.EnteredAt.HasValue).ToList();
 		var events = workflow == null ? [] : await history.GetListAsync(h => h.WorkflowInstanceId == workflow.Id);
 		var snapshot = application.GetFeeSelection();
-		var owner = snapshot == null ? ResolveOwner(entered, events) : entered.SingleOrDefault(s => s.Id == snapshot.OwnerStageId);
+		var owner = snapshot == null ? ResolveOwner(entered, events) ?? workflowStages
+			.Where(s => s.StageType == AdmissionWorkflowStageType.Payment && s.Status == AdmissionRuntimeStageStatus.Pending)
+			.OrderBy(s => s.DisplayOrder).ThenBy(s => s.Id).FirstOrDefault()
+			: workflowStages.SingleOrDefault(s => s.Id == snapshot.OwnerStageId);
 		var paymentDefinitions = await definitions.GetListAsync(d => d.WorkflowDefinitionId == application.WorkflowDefinitionId &&
 			d.StageType == AdmissionWorkflowStageType.Payment);
 		return new(application, owner, workflow, paymentDefinitions.Count > 0,

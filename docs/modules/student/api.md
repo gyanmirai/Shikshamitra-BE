@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-09
+updated_on: 2026-10-10
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,18 +12,26 @@ audience: humans-and-agents
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
 
+## Decision history display
+
+The existing application decision-history read also returns nullable `actorName`, resolved in one batch from recorded `actorId` values using the tenant-filtered Admissions people service. Missing/deleted actors retain their history with a null name. The existing Applications View grant and application academic/counsellor scope check run before history or people are read. This is an additive display field; no endpoint, workflow command, entity or migration changes are required.
+
 ## Academic list filters
 
 Admissions Application, Inquiry (including CSV export), Offering, Pipeline/options, and Review queue list inputs accept `StandardIds` in addition to the existing optional `StandardId`. Student Onboarding list accepts `StandardIds` and `DivisionIds` alongside the scalar filters. Collections bind from repeated query keys, for example `standardIds={guid1}&standardIds={guid2}`. Nonempty collections match any member; scalar, Board, Medium, academic year and other supplied criteria intersect with that match. Empty collections do not restrict classes or divisions. Existing tenant and authorized academic scope applies before counting and paging; these filters do not broaden permissions. No persistence change is required.
 
 ## Active admission Pipeline and follow-ups
 
-`GET /api/student/enrollment/admissions/applications/pipeline` requires AdmissionApplications.View and projects active inquiry-linked applications within existing tenant and offering scope.
+`GET /api/student/enrollment/admissions/applications/pipeline` requires AdmissionApplications.View and projects active inquiry-linked applications before Admission Decision within existing tenant and offering scope.
 It accepts academic hierarchy, MyCases, assigned counsellor, status, stage code, search, whitelisted sorting and bounded paging.
 `GET /api/student/enrollment/admissions/applications/pipeline/options` supplies complete scoped active counsellor/stage choices, current user and the authoritative default queue without page/search truncation.
 Administrators identified by the existing user scope and configured fallback managers default to All; other staff default to My.
 The queue preference never changes academic access.
-Terminal applications and failed/cancelled workflows are excluded; a completed workflow awaiting finalization stays active.
+Terminal applications, failed/cancelled workflows and cases that have reached Admission Decision are excluded.
+`GET /api/student/enrollment/admissions/applications?decisionWorkspaceOnly=true` applies the shared persisted phase rule before search, count, sort and paging and includes Withdrawn cases in the Applications archive; generic list consumers can omit this flag.
+Application list/detail DTOs expose `hasReachedDecision`, `decisionEnteredAt`, `standardName`, `contactPhone` and `contactEmail` from existing authorized application, workflow, class and family/inquiry data.
+Once a case has entered Admission Decision, correction back to Form or Documents does not restore Pipeline ownership.
+An admission journey ended before Admission Decision remains discoverable in Applications with `hasReachedDecision=false` and no invented decision-stage entry.
 Next-action guidance comes from the existing stage registry, due dates from published Form/Payment policies and follow-up reminders from existing scheduled inquiry records.
 Missing source inquiries remain visible through an application-backed projection with `sourceInquiryAvailable=false`.
 
@@ -33,9 +41,32 @@ Inquiry details/qualification remain locked after transfer, while follow-up comm
 Closed cases reject follow-up writes; an unavailable source inquiry returns a corrective business error.
 No new workflow, messaging store or finalization path is created.
 
+## Admission journey preparation and closure
+
+| Contract | Authority and behavior |
+|---|---|
+| POST `/api/student/enrollment/admissions/applications/{id}/end-journey` | Existing AdmissionApplications.Decide (`Students.Admissions.Applications.Add`) and tenant/academic scope. Requires `{reason, concurrencyStamp}`; the trimmed reason is mandatory and limited to 512 characters. Returns the updated Application DTO with `canEndJourney=false`. |
+| Application `canEndJourney` | Available before finalization for Draft, Submitted, InReview, Waitlisted, Approved, Offered and OfferAccepted applications without Student/Onboarding/enrollment links. Rejected, OfferDeclined, Withdrawn, finalized and enrolled applications cannot be closed again. |
+| Future-stage preparation | Existing Form draft/verification/correction, Documents evidence/review, Assessment booking/attendance/results and fee-selection permissions remain authoritative. Capabilities permit Pending or Active stages only while the workflow is Active and the application is open; published configuration and independent review rules still apply. |
+| Current-stage progression | Form submission (except the existing Inquiry entry handoff), Continue, completion and admission decisions retain their current-stage guards. Preparing evidence does not enter or complete a Pending stage. Fee selection confirms Admissions intent only and never collects payment. |
+
+Ending a journey records Withdrawn with actor, reason, decision history and activity; cancels unfinished stages and unused assessment bookings; releases provisional seat reservations; and cancels scheduled inquiry follow-ups. Completed stage/evidence history and Finance records are retained. A matching pending Records return is closed through its owner service. The transaction validates the application stamp; a repeated successful withdrawal with the same reason returns the saved outcome without duplicating history, even when the retry carries the prior stamp.
+
+## Intake counsellor options
+
+`GET /api/student/enrollment/admissions/intake-profiles/counsellors` requires Admission Offerings View and returns up to 50 active current-tenant identities with admission scope access in the shared response envelope.
+Optional `filter` searches username and display-name parts; optional `counsellorOnly` defaults to `false`, preserving the existing broad staff lookup.
+With `counsellorOnly=true`, database membership in the canonical seeded `Admissions Counselor` role (`ADMISSIONS COUNSELOR` normalized name) is applied before candidate batching and the 50-result cap.
+A missing role or no eligible members returns an empty list without broadening to other staff.
+Selectability retains active identity and admission scope checks without adding a mandatory HR Employee link; existing account-only candidates and runtime assignment validation remain unchanged.
+
+Offering create, update, clone, bulk and activation accept both intake profile IDs omitted. Selecting a setup still validates its paired Inquiry and assignment references, active counsellor access, fallback and rules; omitting both does not bypass published workflow, form, hierarchy, dates or UserScope validation. Clearing both references resets the intake marker, and a historical marker alone does not make an otherwise ready Offering incomplete.
+
+Inquiry `GET /api/student/enrollment/admissions/inquiries/counsellors?admissionOfferingId=...` and manual assignment retain Inquiry Assign, Offering Add and academic scope checks. An Offering without an assignment profile lists only active canonical `Admissions Counselor` identities with access to that Offering; manual assignment rechecks that membership and access. Configured Offerings retain their stored pool/fallback restrictions and manual capacity checks. An unassigned inquiry can be transferred to an eligible Offering without inventing an owner; an existing owner must remain eligible or the transfer must use configured routing.
+
 ## Public inquiry link options
 
-Public-link creation options are exposed through `GET /api/student/enrollment/admissions/public-inquiry-links/options?admissionCycleId={guid}` with Admission Offerings View authority. The response envelope contains distinct `{counsellorAssignmentProfileId, inquiryFormDefinitionId}` pairs from active Inquiry/Both Offerings in the published period and the current user's academic scope. Archived setups and unpublished/non-Inquiry forms are excluded. An unknown or unpublished period returns an empty list. Create keeps its existing payload and Add authority; `Admissions.PublicInquiry.OfferingRequired` remains HTTP 400 and includes corrective text plus `PeriodName`, `SetupName`, and `Reason` for absent Offerings or unmatched profile/form linkage.
+Public-link creation options are exposed through `GET /api/student/enrollment/admissions/public-inquiry-links/options?admissionCycleId={guid}` with Admission Offerings View authority. The response envelope contains distinct `{counsellorAssignmentProfileId, inquiryFormDefinitionId}` pairs from active Inquiry/Both Offerings in the published period and the current user's academic scope, including null-profile manual-routing options. Archived setups and unpublished/non-Inquiry forms are excluded. An unknown or unpublished period returns an empty list. Create retains Add authority and accepts omitted/null `counsellorAssignmentProfileId` when a compatible published `inquiryFormDefinitionId` is supplied. That null value explicitly suppresses automatic assignment, including Offering and legacy workflow defaults; captured inquiries remain Unassigned until staff assign them. Configured links retain exact profile/form matching and pool/fallback eligibility validation. `Admissions.PublicInquiry.OfferingRequired` remains HTTP 400 and includes corrective text plus `PeriodName`, `SetupName`, and `Reason` for absent Offerings or unmatched profile/form linkage. Persistence uses the nullable-column migration `MakePublicInquiryAssignmentOptional`.
 
 ## Admission student field contracts
 

@@ -48,7 +48,7 @@ public class StudentGeneralInfoAppService(
 				(input.StandardId.HasValue && input.StandardId != student.StandardId) ||
 				(input.DivisionId.HasValue && input.DivisionId != student.DivisionId))
 				throw new BusinessException(StudentRegistrationErrorCodes.InvalidStudentStatusForGeneralInfo,
-					"Use Student Management to change an enrolled student's placement.");
+					"Use the Student Records placement workflow to change an enrolled student's placement.");
 		}
 		else await UpdateAcademicPlacementAsync(student, input);
 

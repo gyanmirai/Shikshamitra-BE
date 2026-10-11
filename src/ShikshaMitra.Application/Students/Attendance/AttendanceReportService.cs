@@ -13,7 +13,7 @@ namespace ShikshaMitra.Students.Attendance;
 
 [RemoteService(false)]
 public class AttendanceReportService(AttendanceRosterService rosters, AttendanceApplicabilityResolver applicability,
-	IRepository<StudentAttendancePolicyVersion, Guid> policies, IRepository<AcademicYear, Guid> years,
+	IRepository<AcademicYear, Guid> years,
 	IAttendanceDayRepository days, IAttendanceEntryRepository entries, IStudentRepository students,
 	StudentScopeAccessService scope) : ApplicationService, ITransientDependency
 {
@@ -23,7 +23,8 @@ public class AttendanceReportService(AttendanceRosterService rosters, Attendance
 			.Select(y => new { y.TenantId, y.StartDate, y.EndDate })) ?? throw new BusinessException(AttendanceOperationErrorCodes.AcademicYearOutsideTenant);
 		if (year.TenantId != CurrentTenant.Id) throw new BusinessException(AttendanceOperationErrorCodes.AcademicYearOutsideTenant);
 		start = start == default ? year.StartDate.Date : start.Date;
-		end = end == default ? (Clock.Now.Date < year.EndDate.Date ? Clock.Now.Date : year.EndDate.Date) : end.Date;
+		var today = AttendanceSchoolDate.Today(new AttendancePolicyOptions(), Clock.Now);
+		end = end == default ? (today < year.EndDate.Date ? today : year.EndDate.Date) : end.Date;
 		if (start < year.StartDate.Date || end > year.EndDate.Date || start > end || (end - start).TotalDays > 1096)
 			throw new BusinessException(AttendanceOperationErrorCodes.InvalidDateRange);
 		return (start, end);
@@ -34,13 +35,10 @@ public class AttendanceReportService(AttendanceRosterService rosters, Attendance
 	{
 		await scope.EnsureCanAccessAttendanceScopeAsync(yearId, standardId, divisionId, "attendance report");
 		var context = await applicability.LoadAsync(yearId, standardId, divisionId, start, end, members.Select(e => e.Id).ToArray());
-		var versions = await policies.GetListAsync(v => v.TenantId == CurrentTenant.Id && (v.AcademicYearId == yearId || v.AcademicYearId == null) && v.EffectiveFrom <= end);
 		var options = new Dictionary<DateTime, AttendancePolicyOptions>();
 		for (var date = start; date <= end; date = date.AddDays(1))
 		{
-			var version = versions.Where(v => v.EffectiveFrom <= date).OrderByDescending(v => v.AcademicYearId.HasValue)
-				.ThenByDescending(v => v.EffectiveFrom).ThenByDescending(v => v.VersionNumber).FirstOrDefault();
-			options[date] = (version == null ? new AttendancePolicy() : AttendancePolicy.FromJson(version.PolicyJson)).Resolve(context.Scope);
+			options[date] = new AttendancePolicyOptions();
 		}
 		var ids = members.Select(e => e.StudentId).ToArray();
 		var identities = await AsyncExecuter.ToListAsync((await students.GetQueryableWithoutAutoIncludesAsync()).Where(s => s.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, s.Id)));
@@ -62,9 +60,12 @@ public class AttendanceReportService(AttendanceRosterService rosters, Attendance
 			var daily = new List<AttendanceSummaryDayDto>();
 			for (var date = start; date <= end; date = date.AddDays(1))
 			{
-				var placement = member.AttendancePlacementOn(date); var applicable = context.For(member.Id, date);
-				var memberExpected = member.AttendanceStartDate.HasValue && member.AttendanceStartDate <= date && placement?.IsActive == true &&
-					placement.StandardId == standardId && placement.DivisionId == divisionId;
+				var placement = member.AttendancePlacementOn(date); var currentSchoolDate = AttendanceSchoolDate.Today(options[date], Clock.Now);
+				var applicable = context.For(member.Id, date, currentSchoolDate);
+				var memberExpected = (member.AttendanceStartDate.HasValue && member.AttendanceStartDate <= date && placement?.IsActive == true &&
+					placement.StandardId == standardId && placement.DivisionId == divisionId) ||
+					(date == currentSchoolDate && !member.AttendanceStartDate.HasValue && member.IsActive &&
+					member.StandardId == standardId && member.DivisionId == divisionId);
 				var dateRecords = memberRecords.GetValueOrDefault(date);
 				var ambiguous = dateRecords?.Count > 1;
 				var record = ambiguous ? null : dateRecords?.SingleOrDefault(); var entry = record?.Entry;

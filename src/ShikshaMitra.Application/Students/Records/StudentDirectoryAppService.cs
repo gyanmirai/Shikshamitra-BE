@@ -15,7 +15,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.Records;
 
 [RemoteService(false)]
-[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
+[Authorize]
 public partial class StudentDirectoryAppService(
 	IStudentRepository students,
 	StudentScopeAccessService scope,
@@ -33,13 +33,16 @@ public partial class StudentDirectoryAppService(
 	}
 	public async Task<PagedResultDto<StudentDirectoryItemDto>> GetListAsync(StudentDirectoryRequest input)
 	{
-		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
+		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View) &&
+			!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View))
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View);
 		return await GetDirectoryAsync(input, false);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Request)]
 	public async Task<PagedResultDto<StudentDirectoryItemDto>> GetLegacyCandidatesAsync(StudentDirectoryRequest input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Request);
 		return await GetDirectoryAsync(input, true);
 	}
@@ -48,6 +51,9 @@ public partial class StudentDirectoryAppService(
 	{
 		EnsureTenant();
 		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 100 || input.Population is not ("All" or "Active" or "Former"))
+			throw new BusinessException("Students:Records:InvalidDirectoryQuery");
+		if (input.BoardIds.Count > 100 || input.MediumIds.Count > 100 || input.StandardIds.Count > 100 || input.DivisionIds.Count > 100 ||
+			input.BoardIds.Contains(Guid.Empty) || input.MediumIds.Contains(Guid.Empty) || input.StandardIds.Contains(Guid.Empty) || input.DivisionIds.Contains(Guid.Empty))
 			throw new BusinessException("Students:Records:InvalidDirectoryQuery");
 		var query = await enrollmentScope.ApplyStudentScopeAsync(await students.GetQueryableWithoutAutoIncludesAsync());
 		if (input.StudentId.HasValue) query = query.Where(s => s.Id == input.StudentId);
@@ -86,6 +92,10 @@ public partial class StudentDirectoryAppService(
 			if (input.BoardId.HasValue) query = query.Where(s => s.AcademicBoardId == input.BoardId);
 			if (input.MediumId.HasValue) query = query.Where(s => s.AcademicMediumId == input.MediumId);
 		}
+		if (input.BoardIds.Count > 0) query = query.Where(s => s.AcademicBoardId.HasValue && input.BoardIds.Contains(s.AcademicBoardId.Value));
+		if (input.MediumIds.Count > 0) query = query.Where(s => input.MediumIds.Contains(s.AcademicMediumId));
+		if (input.StandardIds.Count > 0) query = query.Where(s => s.StandardId.HasValue && input.StandardIds.Contains(s.StandardId.Value));
+		if (input.DivisionIds.Count > 0) query = query.Where(s => s.DivisionId.HasValue && input.DivisionIds.Contains(s.DivisionId.Value));
 		var roles = await access.GetDatabaseRoleNamesAsync();
 		var years = await AsyncExecuter.ToListAsync(query.Select(s => s.AcademicYearId).Distinct());
 		var yearPolicies = new Dictionary<Guid, StudentRecordsPolicy>();

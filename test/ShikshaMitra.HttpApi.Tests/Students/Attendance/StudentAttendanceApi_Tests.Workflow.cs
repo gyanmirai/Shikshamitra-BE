@@ -269,35 +269,16 @@ public partial class StudentAttendanceApi_Tests
 	}
 
 	[Fact, TestTier(TestTraits.Tiers.Important)]
-	public async Task Register_uses_published_ninety_percent_threshold_for_eighty_percent_attendance()
+	public async Task Register_uses_fixed_attendance_credit_and_threshold()
 	{
 		var context = await ResolveSeededDivisionContextAsync(currentYear: true);
-		var division = await CreateDivisionAsync(context.StandardId, "PublishedThreshold");
+		var division = await CreateDivisionAsync(context.StandardId, "FixedThreshold");
 		var date = context.ReferenceDate;
-		var student = await CreateEnrolledStudentAsync(context, "ThresholdEighty", division, attendanceStartDate: date);
+		var student = await CreateEnrolledStudentAsync(context, "ThresholdHalfDay", division, attendanceStartDate: date);
 		await EnsureWorkingDateAsync(context, date);
-		var beforeResponse = await Client.GetAsync($"{AttendanceBaseUrl}/settings?academicYearId={context.AcademicYearId}");
-		beforeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await beforeResponse.Content.ReadAsStringAsync());
-		var before = (await beforeResponse.Content.ReadFromJsonAsync<AttendanceSettingsDto>(JsonOptions))!;
-		var policy = before.DraftPolicy;
-		policy.Exceptions.Add(new AttendancePolicyException { Id = Guid.NewGuid(), Name = "Isolated threshold regression",
-			BoardId = context.AcademicBoardId, MediumId = context.AcademicMediumId, StageId = context.AcademicMediumStageId,
-			StandardId = context.StandardId, DivisionId = division,
-			Options = new AttendancePolicyOptions { HalfDayCredit = .8m, LowAttendanceThreshold = 90m } });
-		var save = await Client.PutAsJsonAsync($"{AttendanceBaseUrl}/settings/draft", new SaveAttendanceSettingsDto
-			{ AcademicYearId = context.AcademicYearId, ConcurrencyStamp = before.ConcurrencyStamp, Policy = policy }, JsonOptions);
-		save.StatusCode.ShouldBe(HttpStatusCode.OK, await save.Content.ReadAsStringAsync());
-		var draft = (await save.Content.ReadFromJsonAsync<AttendanceSettingsDto>(JsonOptions))!;
-		var preview = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/settings/preview", new SaveAttendanceSettingsDto
-			{ AcademicYearId = context.AcademicYearId, ConcurrencyStamp = draft.ConcurrencyStamp, Policy = policy }, JsonOptions);
-		preview.StatusCode.ShouldBe(HttpStatusCode.OK, await preview.Content.ReadAsStringAsync());
-		var publish = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/settings/publish", new PublishAttendanceSettingsDto
-			{ AcademicYearId = context.AcademicYearId, ConcurrencyStamp = draft.ConcurrencyStamp!, EffectiveFrom = date }, JsonOptions);
-		publish.StatusCode.ShouldBe(HttpStatusCode.OK, await publish.Content.ReadAsStringAsync());
-		var baseline = await ReadRosterAsync(context, context.DivisionId, date);
-		baseline.Policy.HalfDayCredit.ShouldBe(before.DraftPolicy.Defaults.HalfDayCredit);
-		baseline.Policy.LowAttendanceThreshold.ShouldBe(before.DraftPolicy.Defaults.LowAttendanceThreshold);
 		var roster = await ReadRosterAsync(context, division, date);
+		roster.Policy.HalfDayCredit.ShouldBe(.5m);
+		roster.Policy.LowAttendanceThreshold.ShouldBe(75m);
 		var input = Input(context, division, date, roster, student.StudentId, AttendanceStatus.Present);
 		input.Entries[0].HalfDay = true; input.Submit = true;
 		var mark = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/mark", input, JsonOptions);
@@ -305,8 +286,8 @@ public partial class StudentAttendanceApi_Tests
 		var response = await Client.GetAsync($"{AttendanceBaseUrl}/register?academicYearId={context.AcademicYearId}&standardId={context.StandardId}&divisionId={division}&startDate={date:yyyy-MM-dd}&endDate={date:yyyy-MM-dd}");
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var row = (await response.Content.ReadFromJsonAsync<AttendanceRegisterDto>(JsonOptions))!.Rows.Single();
-		row.StudentId.ShouldBe(student.StudentId); row.Percentage.ShouldBe(80d);
-		row.LowAttendanceThreshold.ShouldBe(90m); row.IsBelowThreshold.ShouldBeTrue();
+		row.StudentId.ShouldBe(student.StudentId); row.Percentage.ShouldBe(50d);
+		row.LowAttendanceThreshold.ShouldBe(75m); row.IsBelowThreshold.ShouldBeTrue();
 		row.ExpectedDays.ShouldBe(1); row.RecordedDays.ShouldBe(1); row.MissingDays.ShouldBe(0); row.IsProvisional.ShouldBeFalse();
 	}
 
@@ -395,19 +376,15 @@ public partial class StudentAttendanceApi_Tests
 		(await ReadRosterAsync(context, division, date)).Students.Single(s => s.StudentId == student.StudentId).Status.ShouldBe(AttendanceStatus.Present);
 	}
 	[Fact, TestTier(TestTraits.Tiers.Important)]
-	public async Task Individual_weekday_exception_blocks_marking_without_fabricating_absence()
+	public async Task Removed_individual_schedule_does_not_override_calendar()
 	{
 		var context = await ResolveSeededDivisionContextAsync(); var division = await CreateDivisionAsync(context.StandardId, "IndividualDay");
 		var student = await CreateEnrolledStudentAsync(context, "IndividualDay", division); var date = context.ReferenceDate.AddDays(-18);
 		await EnsureWorkingDateAsync(context, date);
-		var roster = await ReadRosterAsync(context, division, date); var enrollment = roster.Students.Single(s => s.StudentId == student.StudentId).EnrollmentId!.Value;
-		var schedule = new SaveAttendanceScheduleDto { EnrollmentId = enrollment, Name = "Approved therapy schedule", Kind = "Temporary",
-			StartDate = date, EndDate = date.AddDays(3), WeekDays = [((int)date.DayOfWeek + 1) % 7], StartTime = "09:00", EndTime = "11:00" };
-		var saved = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/schedules", schedule, JsonOptions); saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
-		roster = await ReadRosterAsync(context, division, date); var row = roster.Students.Single(s => s.StudentId == student.StudentId);
-		row.IsExpected.ShouldBeFalse(); row.Status.ShouldBe(AttendanceStatus.Pending); row.NotExpectedReason.ShouldBe("Not scheduled");
-		var mark = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/mark", Input(context, division, date, roster, student.StudentId, AttendanceStatus.Absent), JsonOptions);
-		mark.IsSuccessStatusCode.ShouldBeFalse();
+		var roster = await ReadRosterAsync(context, division, date); var row = roster.Students.Single(s => s.StudentId == student.StudentId);
+		row.IsExpected.ShouldBeTrue(); row.Status.ShouldBe(AttendanceStatus.Pending);
+		var saved = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/schedules", new { }, JsonOptions);
+		saved.StatusCode.ShouldBe(HttpStatusCode.NotFound);
 	}
 	[Fact, TestTier(TestTraits.Tiers.Important)]
 	public async Task Past_day_correction_requires_review_and_requester_cannot_self_approve()
@@ -425,6 +402,24 @@ public partial class StudentAttendanceApi_Tests
 		(await ReadRosterAsync(context, division, date)).Students.Single(s => s.StudentId == student.StudentId).Status.ShouldBe(AttendanceStatus.Present);
 		var approve = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/corrections/{correction.Id}/approve", new AttendanceCorrectionDecisionInput { Revision = correction.Revision, Reason = "Self review attempt" }, JsonOptions);
 		approve.IsSuccessStatusCode.ShouldBeFalse(); (await approve.Content.ReadAsStringAsync()).ShouldContain("SelfApproval");
+	}
+	[Fact, TestTier(TestTraits.Tiers.Important)]
+	public async Task Current_day_active_enrollment_can_be_marked_before_historical_start_is_confirmed()
+	{
+		var context = await ResolveSeededDivisionContextAsync(currentYear: true);
+		var division = await CreateDivisionAsync(context.StandardId, "CurrentUnconfirmedStart");
+		var student = await CreateEnrolledStudentAsync(context, "CurrentUnconfirmedStart", division, confirmStart: false);
+		var date = context.ReferenceDate;
+		await EnsureWorkingDateAsync(context, date);
+		var roster = await ReadRosterAsync(context, division, date);
+		roster.IsExpected.ShouldBeTrue();
+		roster.CanMark.ShouldBeTrue();
+		roster.Students.Single(s => s.StudentId == student.StudentId).IsExpected.ShouldBeTrue();
+		var save = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/mark",
+			Input(context, division, date, roster, student.StudentId, AttendanceStatus.Present), JsonOptions);
+		save.StatusCode.ShouldBe(HttpStatusCode.OK, await save.Content.ReadAsStringAsync());
+		(await ReadRosterAsync(context, division, date)).Students.Single(s => s.StudentId == student.StudentId)
+			.Status.ShouldBe(AttendanceStatus.Present);
 	}
 	[Fact, TestTier(TestTraits.Tiers.Important)]
 	public async Task Unconfirmed_start_remains_unmarked_and_cannot_be_counted_as_an_absence()

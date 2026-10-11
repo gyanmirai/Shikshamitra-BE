@@ -36,17 +36,17 @@ The applicant retains original captured evidence. Finalization retries preserve 
 ## Configure and operate daily attendance
 
 1. Use the existing academic hierarchy and published Academic Calendar; Attendance does not duplicate their definitions.
-2. Save/preview/publish school defaults or an academic-year policy with scoped exceptions and an effective date.
-3. Confirm formal enrollments' attendance-start dates and add individual recurring or temporary schedules when required.
-4. Read the dated roster and its capabilities/revisions; show expected, not scheduled, approved leave and unconfirmed membership distinctly.
-5. Mark Present/Absent, add optional details and save a partial draft if needed.
+2. Manage the available student leave types in Attendance Settings; attendance calculation uses fixed defaults.
+3. Keep historical attendance-start dates in their owning student records workflow. An active student in today's class can be marked before that date is confirmed.
+4. Read the dated roster and its capabilities/revisions; show expected, approved leave and unconfirmed membership distinctly.
+5. Mark Full day, Half day, Absent or Pending, add optional details and save a partial draft if needed. The current school date can be marked while calendar setup is missing; published closures still exclude marking.
 6. Submit only after all expected observations are known; the server pins membership and policy-credit snapshots.
-7. Correct recorded observations with the configured reason/review flow; independent approval records immutable evidence and preserves day-lock state.
-8. Read register, profile and dashboard metrics from the common calculation, including missing observations, provisional state and effective school target.
+7. Correct recorded observations with the fixed reason/review flow; independent approval records immutable evidence and preserves day-lock state.
+8. Read register, profile and dashboard metrics from the common calculation, including missing observations, provisional state and the 75% school target.
 
 A working-day cutoff is a pending-completion reminder, not an automatic observation or lock.
-Approved leave remains visible for explicit teacher marking; school leave policy determines credited denominator treatment.
-Leave approved after submission does not change the stored percentage automatically. The teacher requests a leave correction, retaining Present/Absent if appropriate; the school rule determines audited direct application or independent approval. Until application, reports retain the submitted credits and the roster identifies the needed correction. Changed leave facts during review invalidate the request.
+Approved leave remains visible for explicit teacher marking; the fixed leave rule determines credited denominator treatment.
+Leave approved after submission does not change the stored percentage automatically. The teacher requests a leave correction, retaining Present/Absent if appropriate; the fixed rule determines audited direct application or independent approval. Until application, reports retain the submitted credits and the roster identifies the needed correction. Changed leave facts during review invalidate the request.
 Records placement and exit/return operations supply dated enrollment membership so a later class change does not alter earlier attendance.
 
 ## Upgrade historical attendance
@@ -54,7 +54,7 @@ Records placement and exit/return operations supply dated enrollment membership 
 Apply the Attendance migration after `20261001021100_AddStudentRecordRenewalHistory`.
 Unambiguous existing observations gain school-date/enrollment references; ambiguous same-date observations remain intact for review.
 Valid enrolled students missing formal enrollment receive a marked legacy bridge with no invented attendance-start date.
-Confirm membership before new daily marking.
+Set attendance start dates through the owning Student Records workflow before new daily marking.
 The down migration permits an untouched-feature rollback but rejects removal once policy, schedules, operations, submitted snapshots or confirmed membership have been used; use a forward fix in that case.
 
 ## Operate a permanent student record

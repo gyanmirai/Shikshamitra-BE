@@ -1,8 +1,10 @@
 using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using QRCoder;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -15,6 +17,49 @@ namespace ShikshaMitra.Students.Records;
 
 public partial class StudentIdCardAppService
 {
+	public async Task<StudentCertificatePdfDto> ExportPdfAsync(StudentIdCardsPdfRequestDto input)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add);
+		EnsureTenant(); ValidateStudents(input);
+		if (input.CardsPerPage is < 1 or > 10) throw new BusinessException("Students:Records:InvalidIdTemplate");
+		var template = await LoadTemplateAsync();
+		var cards = new List<(StudentIdCardDto Card, byte[]? Photo)>();
+		foreach (var studentId in input.StudentIds)
+		{
+			var snapshot = await snapshots.CaptureAsync(studentId);
+			var photo = await LoadPhotoAsync(template, snapshot.Fields);
+			cards.Add((new StudentIdCardDto { StudentId = studentId, HasPhoto = photo != null,
+				StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = template }, photo));
+		}
+		QuestPDF.Settings.License = LicenseType.Community;
+		var vertical = template.Orientation == "Vertical";
+		var perPage = Math.Min(input.CardsPerPage, vertical ? 9 : 10);
+		var content = Document.Create(container =>
+		{
+			foreach (var pageCards in cards.Chunk(perPage))
+			{
+				container.Page(page =>
+				{
+					page.Size(PageSizes.A4); page.Margin(7, Unit.Millimetre);
+					page.Content().Column(column =>
+					{
+						column.Spacing(2, Unit.Millimetre);
+						foreach (var rowCards in pageCards.Chunk(vertical ? 3 : 2))
+						{
+							column.Item().Row(row =>
+							{
+								row.Spacing(2, Unit.Millimetre);
+								foreach (var item in rowCards)
+									row.ConstantItem(vertical ? 54 : 85.6f, Unit.Millimetre).Element(c => ComposeCard(c, item.Card, item.Photo));
+							});
+						}
+					});
+				});
+			}
+		}).GeneratePdf();
+		return new() { FileName = $"Student-I-Cards-{Clock.Now:yyyy-MM-dd}.pdf", Content = content };
+	}
+
 	public async Task<StudentCertificatePdfDto> GetPdfAsync(Guid id)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View);
@@ -43,29 +88,59 @@ public partial class StudentIdCardAppService
 	private async Task<StudentCertificatePdfDto> RenderPdfAsync(StudentIdCard card)
 	{
 		var dto = Map(card); var template = dto.TemplateSnapshot;
-		byte[]? photo = null;
 		var snapshot = JsonSerializer.Deserialize<Dictionary<string, string?>>(card.StudentSnapshotJson, JsonOptions)!;
-		if (template.ShowPhoto && snapshot.TryGetValue("_PhotoBlobName", out var photoBlob) && !string.IsNullOrWhiteSpace(photoBlob))
-		{
-			photo = await blobs.GetAllBytesAsync(photoBlob);
-			if (photo.Length > 5 * 1024 * 1024) throw new BusinessException("Students:Records:PhotoTooLarge");
-		}
+		var photo = await LoadPhotoAsync(template, snapshot);
 		QuestPDF.Settings.License = LicenseType.Community;
+		var vertical = template.Orientation == "Vertical";
 		var content = Document.Create(container => container.Page(page =>
 		{
-			page.Size(85.6f, 54, Unit.Millimetre); page.Margin(4, Unit.Millimetre); page.DefaultTextStyle(t => t.FontSize(7));
-			page.Header().Column(col => { col.Item().Text(template.SchoolName).FontSize(11).Bold().FontColor(template.PrimaryColor).ClampLines(1); col.Item().Text(template.HeaderText).FontSize(8).ClampLines(1); });
-			page.Content().PaddingVertical(3).Row(row =>
-			{
-				if (photo != null) row.ConstantItem(19, Unit.Millimetre).Height(25, Unit.Millimetre).PaddingRight(3).Image(photo).FitArea();
-				row.RelativeItem().Column(col =>
-				{
-				foreach (var field in template.Fields) if (dto.StudentSnapshot.TryGetValue(field, out var value)) col.Item().Text($"{field}: {value ?? "-"}").ClampLines(1);
-				col.Item().Text($"Card: {dto.CardNumber}").SemiBold().ClampLines(1);
-				});
-			});
-			page.Footer().Text(template.FooterText).FontSize(6).ClampLines(2);
+			page.Size(vertical ? 54 : 85.6f, vertical ? 85.6f : 54, Unit.Millimetre);
+			page.Margin(0); page.Content().Element(c => ComposeCard(c, dto, photo));
 		})).GeneratePdf();
 		return new() { FileName = $"{card.CardNumber}.pdf", Content = content };
+	}
+
+	private async Task<byte[]?> LoadPhotoAsync(StudentIdCardTemplateDto template, Dictionary<string, string?> snapshot)
+	{
+		if (!template.ShowPhoto || !snapshot.TryGetValue("_PhotoBlobName", out var blobName) || string.IsNullOrWhiteSpace(blobName)) return null;
+		var photo = await blobs.GetAllBytesAsync(blobName);
+		if (photo.Length > 5 * 1024 * 1024) throw new BusinessException("Students:Records:PhotoTooLarge");
+		return photo;
+	}
+
+	internal static void ComposeCard(IContainer container, StudentIdCardDto card, byte[]? photo)
+	{
+		var template = card.TemplateSnapshot;
+		var vertical = template.Orientation == "Vertical";
+		var photoFirst = template.PresetKey == "photo-first";
+		var minimal = template.PresetKey == "minimal";
+		var background = template.BackgroundColor;
+		container.Background(background).Border(0.5f).BorderColor(template.PrimaryColor).Padding(3, Unit.Millimetre).Column(column =>
+		{
+			column.Item().Text(template.SchoolName).FontSize(vertical ? 9 : 11).Bold().FontColor(template.PrimaryColor).ClampLines(1);
+			if (!string.IsNullOrWhiteSpace(template.SchoolAddress)) column.Item().Text(template.SchoolAddress).FontSize(5).ClampLines(1);
+			if (!minimal) column.Item().LineHorizontal(1).LineColor(template.PrimaryColor);
+			column.Item().PaddingTop(2, Unit.Millimetre).Text(template.HeaderText).FontSize(7).SemiBold().ClampLines(1);
+			column.Item().PaddingTop(2, Unit.Millimetre).Row(row =>
+			{
+				if (template.ShowPhoto) row.ConstantItem(photoFirst ? 25 : vertical ? 15 : 19, Unit.Millimetre).Height(photoFirst ? 29 : vertical ? 19 : 25, Unit.Millimetre).PaddingRight(2, Unit.Millimetre).Element(c =>
+				{
+					if (photo != null) c.Image(photo).FitArea(); else c.Border(0.5f).BorderColor(template.PrimaryColor).AlignCenter().AlignMiddle().Text("PHOTO").FontSize(5);
+				});
+				row.RelativeItem().Column(fields =>
+				{
+					foreach (var field in template.Fields)
+						if (card.StudentSnapshot.TryGetValue(field, out var value)) fields.Item().Text($"{field}: {value ?? "-"}").FontSize(vertical ? 5.5f : 6.5f).ClampLines(1);
+					if (card.CardNumber != "Preview") fields.Item().Text($"Card: {card.CardNumber}").FontSize(6).SemiBold().ClampLines(1);
+				});
+				if (template.ShowQrCode)
+				{
+					using var generator = new QRCodeGenerator();
+					using var qrData = generator.CreateQrCode(card.StudentId.ToString("N"), QRCodeGenerator.ECCLevel.Q);
+					row.ConstantItem(12, Unit.Millimetre).Height(12, Unit.Millimetre).Svg(new SvgQRCode(qrData).GetGraphic(4));
+				}
+			});
+			column.Item().ExtendVertical().AlignBottom().Text(template.FooterText).FontSize(5).ClampLines(2);
+		});
 	}
 }

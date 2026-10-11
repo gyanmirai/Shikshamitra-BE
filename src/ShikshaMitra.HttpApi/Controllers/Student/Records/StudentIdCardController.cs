@@ -23,6 +23,8 @@ public class StudentIdCardController(IStudentIdCardAppService service) : AbpCont
 	public async Task<Result<List<StudentIdCardDto>>> PreviewAsync([FromBody] StudentIdCardPreviewRequestDto input) => Result.Success(await service.PreviewAsync(input));
 	[HttpPost("issue")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]
 	public async Task<Result<List<StudentIdCardDto>>> IssueAsync([FromBody] IssueStudentIdCardsDto input) => Result.Success(await service.IssueAsync(input));
+	[HttpPost("export")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]
+	public async Task<IActionResult> ExportAsync([FromBody] StudentIdCardsPdfRequestDto input) { var pdf = await service.ExportPdfAsync(input); return File(pdf.Content, pdf.ContentType, pdf.FileName); }
 	[HttpGet("students/{studentId:guid}/history")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
 	public async Task<Result<List<StudentIdCardDto>>> HistoryAsync(Guid studentId) => Result.Success(await service.GetHistoryAsync(studentId));
 	[HttpGet("{id:guid}/pdf")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]

@@ -41,6 +41,7 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 		var context = await applicability.LoadAsync(yearId, standardId, divisionId, date, date, candidates.Select(e => e.Id).ToArray());
 		var policy = await policies.ResolveAsync(yearId, date, context.Scope);
 		var options = day?.PolicySnapshotJson != null ? JsonSerializer.Deserialize<AttendancePolicyOptions>(day.PolicySnapshotJson)! : policy.Options;
+		var currentSchoolDate = AttendanceSchoolDate.Today(options, Clock.Now);
 		var studentIds = candidates.Select(e => e.StudentId).ToArray();
 		var identities = await AsyncExecuter.ToListAsync((await students.GetQueryableWithoutAutoIncludesAsync())
 			.Where(s => s.TenantId == CurrentTenant.Id && Enumerable.Contains(studentIds, s.Id)));
@@ -58,23 +59,27 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 			var identity = identities.SingleOrDefault(s => s.Id == enrollment.StudentId);
 			if (identity == null) continue;
 			var placement = enrollment.AttendancePlacementOn(date);
-			var expected = context.For(enrollment.Id, date);
+			var expected = context.For(enrollment.Id, date, currentSchoolDate);
 			var startConfirmed = enrollment.AttendanceStartDate.HasValue && enrollment.AttendanceStartDate.Value.Date <= date;
+			// Today's active class roster is sufficient to take today's observation while older
+			// imported enrollments are still waiting for their historical start date to be confirmed.
+			var currentEnrollment = date == currentSchoolDate && !enrollment.AttendanceStartDate.HasValue &&
+				enrollment.IsActive && enrollment.StandardId == standardId && enrollment.DivisionId == divisionId;
 			var matches = approvedLeaves.Where(l => l.StudentId == enrollment.StudentId).ToList();
 			if (matches.Count > 1) throw new BusinessException(AttendanceOperationErrorCodes.OverlappingApprovedLeave);
 			var entry = day?.Entries.SingleOrDefault(e => e.StudentId == identity.Id);
 			var snapshotExpected = day?.IsSubmitted == true && entry?.ExpectedAtSubmission == true;
 			var alreadyRecorded = otherRecorded.Any(e => e.EnrollmentId == enrollment.Id);
 			rows.Add(new(enrollment, identity, snapshotExpected ? entry!.HistoricalRollNo : placement?.RollNumber ?? enrollment.RollNumber,
-				!alreadyRecorded && (snapshotExpected || startConfirmed && expected.IsExpected),
-				alreadyRecorded ? "Already recorded in another division for this date" : !startConfirmed ? "Attendance start date not confirmed for this date" : expected.Reason,
+				!alreadyRecorded && (snapshotExpected || (startConfirmed || currentEnrollment) && expected.IsExpected),
+				alreadyRecorded ? "Already recorded in another division for this date" : !startConfirmed && !currentEnrollment ? "Attendance start date not confirmed for this date" : expected.Reason,
 				expected.ScheduleLabel, matches.SingleOrDefault(), entry));
 		}
 		var revision = Hash(JsonSerializer.Serialize(new { yearId, standardId, divisionId, date, options,
 			rows = rows.OrderBy(r => r.Enrollment.Id).Select(r => new { r.Enrollment.Id, r.Enrollment.AttendanceStartDate,
 				r.Enrollment.AttendancePlacementHistoryJson, r.Expected, r.ScheduleLabel, leave = r.Leave?.Id, leaveRevision = r.Leave?.ConcurrencyStamp }) }));
 		return new(yearId, standardId, divisionId, date, day, rows.OrderBy(r => r.RollNumber).ThenBy(r => r.Student.FirstName).ToList(),
-			options, revision, day?.IsSubmitted == true ? new AttendanceApplicabilityResult(true, "Submitted school day") : context.For(Guid.Empty, date));
+			options, revision, day?.IsSubmitted == true ? new AttendanceApplicabilityResult(true, "Submitted school day") : context.For(Guid.Empty, date, currentSchoolDate));
 	}
 
 	public async Task<List<StudentEnrollment>> LoadMembersAsync(Guid yearId, Guid divisionId)

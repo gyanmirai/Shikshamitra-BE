@@ -18,6 +18,10 @@ public class StudentDirectoryRequest : PagedAndSortedResultRequestDto
 	public Guid? MediumId { get; set; }
 	public Guid? StandardId { get; set; }
 	public Guid? DivisionId { get; set; }
+	public List<Guid> BoardIds { get; set; } = [];
+	public List<Guid> MediumIds { get; set; } = [];
+	public List<Guid> StandardIds { get; set; } = [];
+	public List<Guid> DivisionIds { get; set; } = [];
 }
 
 public class StudentDirectoryItemDto : EntityDto<Guid>

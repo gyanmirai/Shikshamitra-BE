@@ -16,6 +16,7 @@ public partial class StudentDirectoryAppService
 {
 	public async Task<PagedResultDto<StudentLegacyOverrideDto>> GetLegacyOverridesAsync(PagedResultRequestDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Request))
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Approve);
 		EnsureTenant();
@@ -45,6 +46,7 @@ public partial class StudentDirectoryAppService
 	[UnitOfWork]
 	public async Task<StudentLegacyOverrideDto> RequestLegacyOverrideAsync(Guid studentId, RequestStudentLegacyOverrideDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Request);
 		EnsureTenant();
 		if (!CurrentUser.Id.HasValue) throw new BusinessException("Students:Records:UserRequired");
@@ -65,6 +67,7 @@ public partial class StudentDirectoryAppService
 
 	private async Task<StudentLegacyOverrideDto> DecideOverrideAsync(Guid id, DecideStudentLegacyOverrideDto input, bool approve)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Approve);
 		EnsureTenant();
 		if (!CurrentUser.Id.HasValue) throw new BusinessException("Students:Records:UserRequired");

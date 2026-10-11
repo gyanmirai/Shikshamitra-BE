@@ -46,6 +46,7 @@ public class StudentRecordsAuthorizationApi_Tests(ShikshaMitraApiTestFactory fac
 	[InlineData("transitions/{id}/apply", "Students.Records.Transitions.View,Students.Records.Transitions.Create")]
 	[InlineData("guardian-access/reviews/{id}/resolve", "Students.Records.GuardianAccess.View")]
 	[InlineData("ids/issue", "Students.Records.StudentICard.View")]
+	[InlineData("ids/export", "Students.Records.StudentICard.View")]
 	[InlineData("certificates/{id}/void", "Students.Records.Certificates.View,Students.Records.Certificates.Add")]
 	[InlineData("reports", "Students.Records.Reports.View")]
 	public async Task Records_HTTP_denies_exact_action_even_with_related_view_or_create_grants(string route, string permissions)

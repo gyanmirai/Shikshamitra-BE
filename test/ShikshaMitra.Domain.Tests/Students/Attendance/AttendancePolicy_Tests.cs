@@ -68,23 +68,20 @@ public class AttendancePolicy_Tests
 		AttendancePolicy.FromJson(version.PolicyJson).Defaults.HalfDayCredit.ShouldBe(.5m);
 	}
 	[Fact]
-	public void Temporary_schedule_overrides_fixed_schedule_without_reducing_present_credit()
+	public void Calendar_day_is_used_without_individual_schedule_configuration()
 	{
 		var monday = new DateTime(2026, 10, 5); var enrollment = Guid.NewGuid();
-		var regular = Schedule(enrollment, "Fixed", monday, monday.AddDays(30), [1, 2, 3, 4, 5]);
-		var temporary = Schedule(enrollment, "Temporary", monday, monday.AddDays(2), [2]);
 		var context = new AttendanceApplicabilityContext(new(), new Dictionary<DateTime, AttendanceApplicabilityResult>
-			{ [monday] = new(true, "School day"), [monday.AddDays(1)] = new(true, "School day") }, [regular, temporary]);
-		context.For(enrollment, monday).IsExpected.ShouldBeFalse();
+			{ [monday] = new(true, "School day"), [monday.AddDays(1)] = new(true, "School day") });
+		context.For(enrollment, monday).IsExpected.ShouldBeTrue();
 		context.For(enrollment, monday.AddDays(1)).IsExpected.ShouldBeTrue();
 		new AttendancePolicy().Defaults.LateCredit.ShouldBe(1m);
 	}
 	[Fact]
-	public void School_closure_takes_precedence_over_individual_schedule()
+	public void School_closure_blocks_attendance()
 	{
 		var date = new DateTime(2026, 10, 5); var enrollment = Guid.NewGuid();
-		var context = new AttendanceApplicabilityContext(new(), new Dictionary<DateTime, AttendanceApplicabilityResult> { [date] = new(false, "Emergency closure") },
-			[Schedule(enrollment, "Fixed", date, date.AddDays(7), [1])]);
+		var context = new AttendanceApplicabilityContext(new(), new Dictionary<DateTime, AttendanceApplicabilityResult> { [date] = new(false, "Emergency closure") });
 		context.For(enrollment, date).IsExpected.ShouldBeFalse(); context.For(enrollment, date).Reason.ShouldBe("Emergency closure");
 	}
 	[Fact]

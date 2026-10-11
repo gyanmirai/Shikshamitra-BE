@@ -15,7 +15,6 @@ public static class StudentErrorCodes
     // ── Core Student: 01xxxx ─────────────────────────────────────
 
     public const string StudentNotFound                 = "ST:Student:010001";
-    public const string DuplicateGrNo                   = "ST:Student:010002";
     public const string StudentFirstNameRequired        = "ST:Student:010003";
     public const string StudentLastNameRequired         = "ST:Student:010004";
     public const string StudentDobInFuture              = "ST:Student:010005";
@@ -79,9 +78,6 @@ public static class StudentErrorCodes
     public const string HouseSettingsNotFound                = "ST:Records:050002";
     public const string CertificateTypeNotFound              = "ST:Records:050003";
     public const string HouseSettingsAlreadyExists           = "ST:Records:050004";
-    public const string DuplicateRollNumber                  = "ST:Records:050005";
-    public const string RollNumberBatchInvalid               = "ST:Records:050006";
-    public const string AcademicTermAlreadyExists            = "ST:Records:050007";
     public const string CertificateNotFound                  = "ST:Records:050008";
     public const string CertificateTemplateNotFound          = "ST:Records:050009";
     public const string CertificateNumberGenerationConflict  = "ST:Records:050010";

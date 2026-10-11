@@ -129,37 +129,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
                 var stored = await students.GetAsync(finalized.StudentId); stored.AssignGrNumber("QA-1001", null, "Preserve imported formatted identifier");
                 await students.UpdateAsync(stored, true);
             });
-            var management = GetRequiredService<ShikshaMitra.Students.Records.IStudentManagementAppService>();
-            var projection = (await management.GetGrProjections(recordsDivision.Id)).Single(s => s.StudentId == finalized.StudentId);
-            projection.GrNumber.ShouldBeNull(); projection.CurrentGrNumber.ShouldBe("QA-1001");
-            (await management.GetPendingAssignmentsAsync(new() { StandardId = fixture.Offering.StandardId, DivisionId = recordsDivision.Id })).Items.ShouldBeEmpty();
             (await GetRequiredService<ShikshaMitra.Students.Records.IStudentAppService>().GetStudentsByDivisionAsync(recordsDivision.Id)).Items.Single().GrNumber.ShouldBe("QA-1001");
-            await WithUnitOfWorkAsync(async () => {
-                var stored = await students.GetAsync(finalized.StudentId); stored.AssignGrNumber("0012345", null, "Preserve historical numeric formatting");
-                await students.UpdateAsync(stored, true);
-            });
-            var duplicateCandidate = await CreateExistingStudentAsync(fixture.Offering, "Duplicate", "GR");
-            (await Should.ThrowAsync<BusinessException>(() => management.StoreGrNumbers([new() { StudentId = duplicateCandidate.Id, GrNo = 12345 }])))
-                .Code.ShouldBe(StudentErrorCodes.DuplicateGrNo);
-            // CBSE numeric proposals must include canonical-only historical numbers from another board.
-            await WithUnitOfWorkAsync(async () => {
-                var board = (await _boardRepository.GetListAsync(b => b.AcademicYearId == cycle.AcademicYearId &&
-                    b.Type == ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards.EducationBoardType.GSEB)).FirstOrDefault();
-                board ??= await _boardRepository.InsertAsync(await GetRequiredService<EducationBoardManager>().CreateAsync(
-                    cycle.AcademicYearId, ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards.EducationBoardType.GSEB), true);
-                var medium = await _mediumRepository.InsertAsync(await GetRequiredService<EducationMediumManager>().CreateAsync(board.Id, "Gujarati projection"), true);
-                var level = await _stageRepository.InsertAsync(await GetRequiredService<EducationMediumStageManager>().CreateAsync(medium.Id, "Primary projection"), true);
-                var standard = await _standardRepository.InsertAsync(await _standardManager.CreateAsync(level.Id, "Class 1 projection", 1, null), true);
-                var historical = await students.GetAsync(finalized.StudentId);
-                historical.UpdateAcademicPlacement(cycle.AcademicYearId, board.Id, medium.Id, level.Id, standard.Id, null);
-                await students.UpdateAsync(historical, true);
-                var candidate = await students.GetAsync(duplicateCandidate.Id); candidate.AssignDivision(recordsDivision.Id);
-                await students.UpdateAsync(candidate, true);
-            });
-            var nextProjection = (await management.GetGrProjections(recordsDivision.Id)).Single(s => s.StudentId == duplicateCandidate.Id);
-            nextProjection.GrNumber.ShouldBe(12346);
-            await management.StoreGrNumbers([new() { StudentId = duplicateCandidate.Id, GrNo = nextProjection.GrNumber }]);
-            (await WithUnitOfWorkAsync(() => students.GetAsync(duplicateCandidate.Id))).GrNo.ShouldBe(12346);
             await AssertLockedGroupNewEntrantAsync(service, fixture.Offering, cycle.AcademicYearId, division.Id);
         });
 }

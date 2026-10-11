@@ -99,11 +99,8 @@ public partial class ShikshaMitraDbContext
     // Students — Records
     // ───────────────────────────────────────────────
     public DbSet<HouseSettings> HouseSettings { get; set; }
-    public DbSet<StudentManagementSettings> StudentManagementSettings { get; set; }
     public DbSet<StudentStatusHistory> StudentStatusHistories { get; set; }
     public DbSet<StudentDashboardPreview> StudentDashboardPreviews { get; set; }
-    public DbSet<AcademicTerm> AcademicTerms { get; set; }
-    public DbSet<StudentRollNumberAssignment> StudentRollNumberAssignments { get; set; }
     public DbSet<StudentCertificate> StudentCertificates { get; set; }
     public DbSet<StudentCertificateTemplate> StudentCertificateTemplates { get; set; }
 	public DbSet<StudentRecordChange> StudentRecordChanges { get; set; }

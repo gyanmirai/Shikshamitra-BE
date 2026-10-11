@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Constants.Permissions;
@@ -68,7 +69,10 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
             IsHalfDay = false,
             LeaveDate = leaveDate,
             EndDate = leaveDate,
-            Description = "Medical appointment regression leave"
+            Description = "Medical appointment regression leave",
+            Attachment = [1, 2, 3],
+            AttachmentFileName = "medical-note.pdf",
+            AttachmentContentType = "application/pdf"
         };
 
         var createResponse = await Client.PostAsJsonAsync(LeaveBaseUrl, createInput, JsonOptions);
@@ -82,6 +86,40 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
 
         var pendingList = await GetLeaveListAsync(student.StudentId, StudentLeaveStatusEnum.Pending);
         pendingList.Items.ShouldContain(l => l.Id == created.Id);
+        var countsUrl = $"{LeaveBaseUrl}/status-counts?academicYearId={context.AcademicYearId}&organizationId={context.AcademicMediumStageId}&studentId={student.StudentId}";
+        var pendingCounts = await Client.GetFromJsonAsync<StudentLeaveStatusCountsDto>(countsUrl, JsonOptions);
+        pendingCounts.ShouldNotBeNull();
+        pendingCounts.PendingCount.ShouldBe(1);
+        pendingCounts.ApprovedCount.ShouldBe(0);
+        pendingCounts.RejectedCount.ShouldBe(0);
+
+        var organizationList = await Client.GetFromJsonAsync<PagedResultDto<StudentLeaveDto>>(
+            $"{LeaveBaseUrl}?academicYearId={context.AcademicYearId}&organizationId={context.AcademicMediumStageId}&studentId={student.StudentId}", JsonOptions);
+        organizationList.ShouldNotBeNull();
+        organizationList.Items.ShouldContain(l => l.Id == created.Id);
+        var otherOrganizationList = await Client.GetFromJsonAsync<PagedResultDto<StudentLeaveDto>>(
+            $"{LeaveBaseUrl}?academicYearId={context.AcademicYearId}&organizationId={Guid.NewGuid()}&studentId={student.StudentId}", JsonOptions);
+        otherOrganizationList.ShouldNotBeNull();
+        otherOrganizationList.Items.ShouldBeEmpty();
+        var otherOrganizationCounts = await Client.GetFromJsonAsync<StudentLeaveStatusCountsDto>(
+            $"{LeaveBaseUrl}/status-counts?academicYearId={context.AcademicYearId}&organizationId={Guid.NewGuid()}&studentId={student.StudentId}", JsonOptions);
+        otherOrganizationCounts.ShouldNotBeNull();
+        otherOrganizationCounts.PendingCount.ShouldBe(0);
+
+        var updateResponse = await Client.PutAsJsonAsync($"{LeaveBaseUrl}/{created.Id}", new UpdateStudentLeaveDto
+        {
+            StudentLeaveTypeId = leaveType.Id,
+            IsHalfDay = false,
+            LeaveDate = leaveDate,
+            EndDate = leaveDate,
+            Description = "Updated while pending"
+        }, JsonOptions);
+        updateResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await updateResponse.Content.ReadAsStringAsync());
+        var updated = await updateResponse.Content.ReadFromJsonAsync<StudentLeaveDto>(JsonOptions);
+        updated.ShouldNotBeNull();
+        updated.Status.ShouldBe(StudentLeaveStatusEnum.Pending);
+        updated.Description.ShouldBe("Updated while pending");
+        updated.HasAttachment.ShouldBeTrue();
 
         var approveResponse = await Client.PostAsJsonAsync(
             $"{LeaveBaseUrl}/{created.Id}/approve",
@@ -100,6 +138,26 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
 
         var approvedList = await GetLeaveListAsync(student.StudentId, StudentLeaveStatusEnum.Approved);
         approvedList.Items.Single(l => l.Id == created.Id).Status.ShouldBe(StudentLeaveStatusEnum.Approved);
+        var approvedCounts = await Client.GetFromJsonAsync<StudentLeaveStatusCountsDto>(countsUrl, JsonOptions);
+        approvedCounts.ShouldNotBeNull();
+        approvedCounts.PendingCount.ShouldBe(0);
+        approvedCounts.ApprovedCount.ShouldBe(1);
+        approvedCounts.RejectedCount.ShouldBe(0);
+
+        var rejectedLeave = await CreateLeaveAsync(student.StudentId, leaveType.Id,
+            leaveDate.AddDays(1), "Leave for rejection count");
+        var rejectResponse = await Client.PostAsJsonAsync($"{LeaveBaseUrl}/{rejectedLeave.Id}/reject",
+            new ApproveRejectStudentLeaveDto
+            {
+                Status = StudentLeaveStatusEnum.Rejected,
+                RejectionReason = "Schedule conflict"
+            }, JsonOptions);
+        rejectResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await rejectResponse.Content.ReadAsStringAsync());
+        var finalCounts = await Client.GetFromJsonAsync<StudentLeaveStatusCountsDto>(countsUrl, JsonOptions);
+        finalCounts.ShouldNotBeNull();
+        finalCounts.PendingCount.ShouldBe(0);
+        finalCounts.ApprovedCount.ShouldBe(1);
+        finalCounts.RejectedCount.ShouldBe(1);
     }
 
     [Fact]
@@ -134,6 +192,34 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
         ascendingFirstPage.Items.Single().Id.ShouldBe(earlier.Id);
         ascendingSecondPage.Items.Single().Id.ShouldBe(later.Id);
         descendingFirstPage.Items.Single().Id.ShouldBe(later.Id);
+
+        var schoolDayStart = new DateTimeOffset(earlierDate.Date, earlierDate.Offset);
+        var filters = Uri.EscapeDataString(JsonSerializer.Serialize(new[]
+        {
+            new { column = "studentName", type = "contains", value = earlier.StudentName.Split(' ')[0], min = (string?)null, max = (string?)null },
+            new { column = "formattedLeaveDate", type = "equals", value = earlierDate.ToString("dd-MM-yyyy"),
+                min = schoolDayStart.ToUniversalTime().ToString("O"), max = schoolDayStart.AddDays(1).ToUniversalTime().ToString("O") }
+        }));
+        var filtered = await Client.GetFromJsonAsync<PagedResultDto<StudentLeaveDto>>(
+            $"{LeaveBaseUrl}?studentId={student.StudentId}&tableFilters={filters}&skipCount=0&maxResultCount=1", JsonOptions);
+        filtered.ShouldNotBeNull();
+        filtered.TotalCount.ShouldBe(1);
+        filtered.Items.Single().Id.ShouldBe(earlier.Id);
+        var nextPage = await Client.GetFromJsonAsync<PagedResultDto<StudentLeaveDto>>(
+            $"{LeaveBaseUrl}?studentId={student.StudentId}&tableFilters={filters}&skipCount=1&maxResultCount=1", JsonOptions);
+        nextPage.ShouldNotBeNull();
+        nextPage.TotalCount.ShouldBe(1);
+        nextPage.Items.ShouldBeEmpty();
+
+        var dayCountFilter = Uri.EscapeDataString(JsonSerializer.Serialize(new[]
+        {
+            new { column = "totalDays", type = "greaterThan", value = "1" }
+        }));
+        var noLongLeaves = await Client.GetFromJsonAsync<PagedResultDto<StudentLeaveDto>>(
+            $"{LeaveBaseUrl}?studentId={student.StudentId}&tableFilters={dayCountFilter}", JsonOptions);
+        noLongLeaves.ShouldNotBeNull();
+        noLongLeaves.TotalCount.ShouldBe(0);
+        noLongLeaves.Items.ShouldBeEmpty();
     }
 
     [Fact]
@@ -180,6 +266,28 @@ public class StudentLeaveApi_Tests : ShikshaMitraApiTestBase
         (await invalid.Content.ReadAsStringAsync()).ShouldContain("InvalidApproveStatus");
         (await GetLeaveListAsync(student.StudentId, StudentLeaveStatusEnum.Pending)).Items.Single().Id.ShouldBe(leave.Id);
         (await GetLeaveListAsync(student.StudentId, StudentLeaveStatusEnum.Approved)).Items.ShouldBeEmpty();
+    }
+
+    [Fact]
+    [TestTier(TestTraits.Tiers.Important)]
+    public async Task Leave_type_settings_support_table_filter_edit_and_delete()
+    {
+        var created = await CreateLeaveTypeAsync();
+        var filtered = await Client.GetAsync($"{LeaveTypeBaseUrl}?filterText={Uri.EscapeDataString(created.LeaveTypeName)}&isActive=true&skipCount=0&maxResultCount=10");
+        filtered.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var page = await filtered.Content.ReadFromJsonAsync<PagedResultDto<StudentLeaveTypeDto>>(JsonOptions);
+        page!.Items.ShouldContain(item => item.Id == created.Id);
+
+        var update = await Client.PutAsJsonAsync($"{LeaveTypeBaseUrl}/{created.Id}",
+            new CreateUpdateStudentLeaveTypeDto { LeaveTypeName = created.LeaveTypeName, Color = "#008080", IsActive = false }, JsonOptions);
+        update.StatusCode.ShouldBe(HttpStatusCode.OK, await update.Content.ReadAsStringAsync());
+        var inactive = await Client.GetAsync($"{LeaveTypeBaseUrl}?filterText={Uri.EscapeDataString(created.LeaveTypeName)}&isActive=false&skipCount=0&maxResultCount=10");
+        (await inactive.Content.ReadFromJsonAsync<PagedResultDto<StudentLeaveTypeDto>>(JsonOptions))!.Items.Single().Color.ShouldBe("#008080");
+
+        var delete = await Client.DeleteAsync($"{LeaveTypeBaseUrl}/{created.Id}");
+        delete.IsSuccessStatusCode.ShouldBeTrue(await delete.Content.ReadAsStringAsync());
+        var after = await Client.GetAsync($"{LeaveTypeBaseUrl}?filterText={Uri.EscapeDataString(created.LeaveTypeName)}&skipCount=0&maxResultCount=10");
+        (await after.Content.ReadFromJsonAsync<PagedResultDto<StudentLeaveTypeDto>>(JsonOptions))!.Items.ShouldNotContain(item => item.Id == created.Id);
     }
 
     private HttpClient PermissionClient(params string[] permissions)

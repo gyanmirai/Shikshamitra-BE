@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -32,22 +33,8 @@ public class StudentLeaveAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
 	public async Task<PagedResultDto<StudentLeaveDto>> GetListAsync(GetStudentLeaveListInput input)
 	{
-		var scopedStudents = await studentScopeAccessService.ApplyCurrentUserScopeAsync(
-			await studentRepository.GetQueryableWithoutAutoIncludesAsync());
-		var scopedStudentIds = await AsyncExecuter.ToListAsync(scopedStudents.Select(s => s.Id));
-		if (input.AcademicYearId.HasValue)
-		{
-			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(input.AcademicYearId.Value, "read attendance leave requests");
-			var year = await years.GetAsync(y => y.Id == input.AcademicYearId.Value && y.TenantId == CurrentTenant.Id);
-			var membership = await enrollments.GetListAsync(e => e.TenantId == CurrentTenant.Id && e.AcademicYearId == year.Id);
-			scopedStudentIds = scopedStudentIds.Intersect(membership.Select(e => e.StudentId)).ToList();
-			var policy = await attendancePolicies.ResolveAsync(year.Id, Clock.Now.Date);
-			var zone = TimeZoneInfo.FindSystemTimeZoneById(policy.Options.SchoolTimeZone);
-			var yearStart = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(year.StartDate.Date, DateTimeKind.Unspecified), zone));
-			var yearEnd = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(year.EndDate.Date.AddDays(1), DateTimeKind.Unspecified), zone)).AddTicks(-1);
-			input.StartDate = input.StartDate.HasValue && input.StartDate > yearStart ? input.StartDate : yearStart;
-			input.EndDate = input.EndDate.HasValue && input.EndDate < yearEnd ? input.EndDate : yearEnd;
-		}
+		var scopedStudentIds = await GetScopedStudentIdsAsync(input);
+		var tableFilters = ParseTableFilters(input.TableFilters);
 
 		var totalCount = await studentLeaveRepository.GetCountAsync(
 			input.FilterText,
@@ -60,7 +47,8 @@ public class StudentLeaveAppService(
 			input.StartDate,
 			input.EndDate,
 			scopedStudentIds,
-			CurrentTenant.Id);
+			CurrentTenant.Id,
+			tableFilters: tableFilters);
 
 		var leaves = await studentLeaveRepository.GetListWithDetailsAsync(
 			input.FilterText,
@@ -76,11 +64,86 @@ public class StudentLeaveAppService(
 			input.MaxResultCount,
 			input.SkipCount,
 			scopedStudentIds,
-			CurrentTenant.Id);
+			CurrentTenant.Id,
+			tableFilters: tableFilters);
 
 		var leaveDtos = leaves.Select(leave => MapToDto(leave)).ToList();
 
 		return new PagedResultDto<StudentLeaveDto>(totalCount, leaveDtos);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
+	public async Task<StudentLeaveStatusCountsDto> GetStatusCountsAsync(GetStudentLeaveListInput input)
+	{
+		var scopedStudentIds = await GetScopedStudentIdsAsync(input);
+		var tableFilters = ParseTableFilters(input.TableFilters)
+			.Where(filter => !filter.Column.Equals("status", StringComparison.OrdinalIgnoreCase)).ToList();
+		async Task<long> CountAsync(StudentLeaveStatusEnum status) => await studentLeaveRepository.GetCountAsync(
+			input.FilterText,
+			input.StudentId,
+			input.EducationMediumId,
+			input.StandardId,
+			input.DivisionId,
+			input.StudentLeaveTypeId,
+			status,
+			input.StartDate,
+			input.EndDate,
+			scopedStudentIds,
+			CurrentTenant.Id,
+			tableFilters: tableFilters);
+
+		return new StudentLeaveStatusCountsDto
+		{
+			PendingCount = await CountAsync(StudentLeaveStatusEnum.Pending),
+			ApprovedCount = await CountAsync(StudentLeaveStatusEnum.Approved),
+			RejectedCount = await CountAsync(StudentLeaveStatusEnum.Rejected)
+		};
+	}
+
+	private static IReadOnlyList<StudentLeaveTableFilter> ParseTableFilters(string? json)
+	{
+		if (string.IsNullOrWhiteSpace(json)) return [];
+		if (json.Length > 4096) throw new BusinessException("StudentLeave:InvalidTableFilters");
+		try
+		{
+			var filters = JsonSerializer.Deserialize<List<StudentLeaveTableFilter>>(json,
+				new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+			if (filters.Count > 20 || filters.Any(filter => filter == null ||
+				string.IsNullOrWhiteSpace(filter.Column) || string.IsNullOrWhiteSpace(filter.Type) ||
+				filter.Value?.Length > 200 || filter.Min?.Length > 64 || filter.Max?.Length > 64))
+				throw new BusinessException("StudentLeave:InvalidTableFilters");
+			return filters;
+		}
+		catch (JsonException)
+		{
+			throw new BusinessException("StudentLeave:InvalidTableFilters");
+		}
+	}
+
+	private async Task<List<Guid>> GetScopedStudentIdsAsync(GetStudentLeaveListInput input)
+	{
+		var scopedStudents = await studentScopeAccessService.ApplyCurrentUserScopeAsync(
+			await studentRepository.GetQueryableWithoutAutoIncludesAsync());
+		if (input.OrganizationId.HasValue)
+		{
+			scopedStudents = scopedStudents.Where(s => s.AcademicMediumStageId == input.OrganizationId.Value);
+		}
+		var scopedStudentIds = await AsyncExecuter.ToListAsync(scopedStudents.Select(s => s.Id));
+		if (input.AcademicYearId.HasValue)
+		{
+			await studentScopeAccessService.EnsureCanAccessAcademicYearAsync(input.AcademicYearId.Value, "read attendance leave requests");
+			var year = await years.GetAsync(y => y.Id == input.AcademicYearId.Value && y.TenantId == CurrentTenant.Id);
+			var membership = await enrollments.GetListAsync(e => e.TenantId == CurrentTenant.Id && e.AcademicYearId == year.Id);
+			scopedStudentIds = scopedStudentIds.Intersect(membership.Select(e => e.StudentId)).ToList();
+			var policy = await attendancePolicies.ResolveAsync(year.Id, Clock.Now.Date);
+			var zone = TimeZoneInfo.FindSystemTimeZoneById(policy.Options.SchoolTimeZone);
+			var yearStart = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(year.StartDate.Date, DateTimeKind.Unspecified), zone));
+			var yearEnd = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(year.EndDate.Date.AddDays(1), DateTimeKind.Unspecified), zone)).AddTicks(-1);
+			input.StartDate = input.StartDate.HasValue && input.StartDate > yearStart ? input.StartDate : yearStart;
+			input.EndDate = input.EndDate.HasValue && input.EndDate < yearEnd ? input.EndDate : yearEnd;
+		}
+
+		return scopedStudentIds;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
@@ -140,9 +203,9 @@ public class StudentLeaveAppService(
 			input.LeaveDate,
 			input.EndDate,
 			input.Description,
-			input.Attachment,
-			input.AttachmentFileName,
-			input.AttachmentContentType);
+			input.Attachment ?? leave.Attachment,
+			input.Attachment == null ? leave.AttachmentFileName : input.AttachmentFileName,
+			input.Attachment == null ? leave.AttachmentContentType : input.AttachmentContentType);
 
 		await studentLeaveRepository.UpdateAsync(leave, autoSave: true);
 

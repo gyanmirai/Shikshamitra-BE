@@ -43,8 +43,11 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add); EnsureTenant();
 		await access.EnsureActiveActorAsync();
-		if (input.SchoolName == null || input.HeaderText == null || input.FooterText == null || input.PrimaryColor == null || input.SchoolName.Length > 150 || input.HeaderText.Length > 300 || input.FooterText.Length > 500 ||
-			!Regex.IsMatch(input.PrimaryColor, "^#[0-9a-fA-F]{6}$") || input.Fields == null || input.Fields.Count is < 1 or > 6 ||
+		if (input.Name == null || input.Name.Length is < 1 or > 150 || input.SchoolName == null || input.HeaderText == null || input.FooterText == null || input.PrimaryColor == null || input.BackgroundColor == null || input.SchoolAddress == null ||
+			input.SchoolName.Length > 150 || input.SchoolAddress.Length > 300 || input.HeaderText.Length > 300 || input.FooterText.Length > 500 ||
+			!new[] { "formal-student", "modern-student", "vertical-badge", "visitor-style", "minimal", "photo-first" }.Contains(input.PresetKey) ||
+			!new[] { "Horizontal", "Vertical" }.Contains(input.Orientation) || input.CardsPerPage is < 1 or > 10 ||
+			!Regex.IsMatch(input.PrimaryColor, "^#[0-9a-fA-F]{6}$") || !Regex.IsMatch(input.BackgroundColor, "^#[0-9a-fA-F]{6}$") || input.Fields == null || input.Fields.Count is < 1 or > 6 ||
 			input.Fields.Distinct().Count() != input.Fields.Count || input.Fields.Any(f => !AllowedFields.Contains(f))) throw new BusinessException("Students:Records:InvalidIdTemplate");
 		var template = await templates.FindAsync(t => t.TenantId == CurrentTenant.Id);
 		if (template != null && template.ConcurrencyStamp != input.ConcurrencyStamp) throw new BusinessException("Students:Records:IdTemplateConflict");

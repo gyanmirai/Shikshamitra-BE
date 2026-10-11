@@ -32,7 +32,8 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 		int skipCount = 0,
 		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null,
-		CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default,
+		IReadOnlyList<StudentLeaveTableFilter>? tableFilters = null);
 
 	/// <summary>
 	/// Gets the count of student leaves based on filters
@@ -49,7 +50,8 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 		DateTimeOffset? endDate = null,
 		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null,
-		CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default,
+		IReadOnlyList<StudentLeaveTableFilter>? tableFilters = null);
 
 	/// <summary>
 	/// Gets a single student leave with navigation properties included
@@ -76,8 +78,11 @@ public interface IStudentLeaveRepository : IRepository<StudentLeave, Guid>
 		int skipCount = 0,
 		IReadOnlyCollection<Guid>? studentIds = null,
 		Guid? tenantId = null,
-		CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default,
+		IReadOnlyList<StudentLeaveTableFilter>? tableFilters = null);
 }
+
+public sealed record StudentLeaveTableFilter(string Column, string Type, string? Value, string? Min, string? Max);
 
 public sealed record AttendanceApprovedLeave(Guid Id, Guid StudentId, bool IsHalfDay,
 	DateTimeOffset LeaveDate, DateTimeOffset? EndDate, string ConcurrencyStamp);

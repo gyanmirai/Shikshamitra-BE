@@ -35,15 +35,15 @@ Offering activation commits the enrollment in a serializable transaction before 
 | Layer | Owner |
 |---|---|
 | Shared rules | `src/ShikshaMitra.Domain.Shared/Students/Attendance/`: typed policy, centralized operation errors and pure credit/completeness calculation. |
-| Domain | `src/ShikshaMitra.Domain/Students/Attendance/`: day/entry, published configuration, individual schedule, correction and durable operation journal. Applicability consumes existing Academic Calendar without creating competing holiday definitions. |
+| Domain | `src/ShikshaMitra.Domain/Students/Attendance/`: day/entry, correction and durable operation journal. New applicability consumes existing Academic Calendar and fixed attendance defaults. Legacy policy and schedule entities remain mapped only to preserve stored data. |
 | Enrollment | `src/ShikshaMitra.Domain/Students/StudentEnrollments/Aggregates/StudentEnrollment.Attendance.cs`: confirmed start and dated membership snapshots. Existing Records placement/transition/renewal commands supply their effective dates. |
-| Application | `src/ShikshaMitra.Application/Students/Attendance/`: focused roster/register/report reads, daily and correction commands, enrollment setup and policy/schedule services. Thin entry services retain action permissions and academic-scope checks. |
+| Application | `src/ShikshaMitra.Application/Students/Attendance/`: focused roster/register/report reads, daily and correction commands, enrollment setup and leave-type management. Thin entry services retain action permissions and academic-scope checks. |
 | Persistence | `src/ShikshaMitra.EntityFrameworkCore/Students/Attendance/`: policy/version/schedule, correction and operation mappings plus enrollment/date uniqueness. Migration `20261001043143_AddUniversalStudentAttendance` preserves legacy identity and leaves unknown membership dates unknown. |
 | Integration | `StudentListAppService` and `DashboardStudentAttendanceSliceProvider` use canonical credit and provisional metrics. Student Leave approval remains explicit and never writes fabricated daily presence. |
 
 Daily/correction/leave-approval transactions use serializable units of work and map database concurrency conflicts to a reviewable business response.
 Daily entry persistence reads existing rows once per day and batches inserts/updates.
-Submitted snapshots pin historical policy and eligibility; mutable school configuration cannot silently recalculate finalized credit.
+Submitted snapshots pin historical policy and eligibility. Removed policy and schedule configuration no longer affects new attendance.
 Tenant filters remain enabled; historical paths are independently scoped rather than authorized through a student's current placement.
 
 ## Student Records ownership

@@ -16,24 +16,21 @@ namespace ShikshaMitra.Students.Attendance;
 public sealed record AttendanceApplicabilityResult(bool IsExpected, string Reason, string? ScheduleLabel = null, bool IsProvisional = false);
 
 /// <summary>A bounded, request-local snapshot. No per-student database queries are made when calculating a register.</summary>
-public sealed class AttendanceApplicabilityContext(AttendancePolicyScope scope, IReadOnlyDictionary<DateTime, AttendanceApplicabilityResult> days,
-	IReadOnlyList<StudentAttendanceSchedule> schedules)
+public sealed class AttendanceApplicabilityContext(AttendancePolicyScope scope, IReadOnlyDictionary<DateTime, AttendanceApplicabilityResult> days)
 {
 	public AttendancePolicyScope Scope { get; } = scope;
-	public AttendanceApplicabilityResult For(Guid enrollmentId, DateTime date)
+	public AttendanceApplicabilityResult For(Guid enrollmentId, DateTime date, DateTime? currentSchoolDate = null)
 	{
-		var day = days.GetValueOrDefault(date.Date) ?? new(false, "Calendar not configured", IsProvisional: true);
-		if (!day.IsExpected) return day;
-		var schedule = schedules.Where(x => x.EnrollmentId == enrollmentId && x.InRange(date))
-			.OrderByDescending(x => x.Kind == "Temporary").ThenByDescending(x => x.StartDate).FirstOrDefault();
-		if (schedule == null) return day;
-		var label = schedule.StartTime == null ? schedule.Name : $"{schedule.Name} ({schedule.StartTime}–{schedule.EndTime})";
-		return schedule.Expected(date) ? new(true, "Individual schedule", label) : new(false, "Not scheduled", label);
+		var result = days.GetValueOrDefault(date.Date) ?? new(false, "Calendar not configured", IsProvisional: true);
+		if (date.Date == currentSchoolDate?.Date && result.IsProvisional &&
+			result.Reason is ("Calendar not configured" or "Working day not configured"))
+			return new(true, "Current school day (calendar setup pending)", IsProvisional: true);
+		return result;
 	}
 }
 
 public class AttendanceApplicabilityResolver(IRepository<AcademicCalendar, Guid> calendars, IRepository<AcademicCalendarDay, Guid> days,
-	IRepository<AcademicCalendarSetting, Guid> settings, IRepository<StudentAttendanceSchedule, Guid> schedules,
+	IRepository<AcademicCalendarSetting, Guid> settings,
 	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions, IRepository<EducationMediumStage, Guid> stages,
 	IRepository<EducationMedium, Guid> mediums, IRepository<EducationBoard, Guid> boards) : DomainService
 {
@@ -65,15 +62,12 @@ public class AttendanceApplicabilityResolver(IRepository<AcademicCalendar, Guid>
 		var settingList = await AsyncExecuter.ToListAsync(settingQuery.Where(x => x.TenantId == CurrentTenant.Id &&
 			(x.AcademicYearId == academicYearId || x.AcademicYearId == null) && (x.AcademicMediumId == scope.MediumId || x.AcademicMediumId == null)));
 		var calendarSetting = settingList.OrderByDescending(x => x.AcademicYearId.HasValue).ThenByDescending(x => x.AcademicMediumId.HasValue).FirstOrDefault();
-		var scheduleQuery = await schedules.GetQueryableAsync(); var ids = enrollmentIds.ToArray();
-		var scheduleList = await AsyncExecuter.ToListAsync(scheduleQuery.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == academicYearId &&
-			Enumerable.Contains(ids, x.EnrollmentId) && x.StartDate <= endDate.Date && (!x.EndDate.HasValue || x.EndDate >= startDate.Date)));
 		var resolved = new Dictionary<DateTime, AttendanceApplicabilityResult>();
 		for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
 		{
 			resolved[date] = AttendanceCalendarDayEvaluator.Resolve(date, calendarList, dayList, calendarSetting);
 		}
-		return new(scope, resolved, scheduleList);
+		return new(scope, resolved);
 	}
 }
 

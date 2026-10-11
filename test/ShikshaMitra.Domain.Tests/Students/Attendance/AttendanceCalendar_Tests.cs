@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Students.Attendance;
 using Shouldly;
@@ -9,6 +10,24 @@ namespace ShikshaMitra.Students;
 public class AttendanceCalendar_Tests
 {
 	private static readonly DateTime Sunday = new(2026, 10, 4);
+	[Fact]
+	public void Current_day_without_calendar_can_be_marked_but_explicit_closures_remain_excluded()
+	{
+		var missing = new AttendanceApplicabilityContext(new(), new Dictionary<DateTime, AttendanceApplicabilityResult>());
+		missing.For(Guid.Empty, Sunday, Sunday).IsExpected.ShouldBeTrue();
+		missing.For(Guid.Empty, Sunday, Sunday).IsProvisional.ShouldBeTrue();
+		missing.For(Guid.Empty, Sunday, Sunday.AddDays(1)).IsExpected.ShouldBeFalse();
+		var unconfigured = new AttendanceApplicabilityContext(new(), new Dictionary<DateTime, AttendanceApplicabilityResult>
+		{
+			[Sunday] = new(false, "Working day not configured", IsProvisional: true)
+		});
+		unconfigured.For(Guid.Empty, Sunday, Sunday).IsExpected.ShouldBeTrue();
+		var closure = new AttendanceApplicabilityContext(new(), new Dictionary<DateTime, AttendanceApplicabilityResult>
+		{
+			[Sunday] = new(false, "Weather closure")
+		});
+		closure.For(Guid.Empty, Sunday, Sunday).IsExpected.ShouldBeFalse();
+	}
 	[Fact]
 	public void Unpublished_or_missing_calendar_never_assumes_a_school_day()
 	{

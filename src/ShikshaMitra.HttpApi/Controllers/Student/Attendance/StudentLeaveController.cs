@@ -31,6 +31,13 @@ public class StudentLeaveController(
 		return studentLeaveAppService.GetListAsync(input);
 	}
 
+	[HttpGet("status-counts")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.View)]
+	public Task<StudentLeaveStatusCountsDto> GetStatusCountsAsync([FromQuery] GetStudentLeaveListInput input)
+	{
+		return studentLeaveAppService.GetStatusCountsAsync(input);
+	}
+
 	/// <summary>
 	/// Gets a student leave request by ID
 	/// GET: api/students/attendance/leaves/{id}

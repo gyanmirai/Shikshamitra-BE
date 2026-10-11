@@ -106,26 +106,10 @@ public class AttendanceCorrectionDto
 	public string Status { get; set; } = "Pending";
 	public string Revision { get; set; } = "";
 }
-public class AttendanceEnrollmentDto
-{
-	public Guid EnrollmentId { get; set; }
-	public Guid StudentId { get; set; }
-	public string FullName { get; set; } = "";
-	public int? RollNo { get; set; }
-	public DateTime? AttendanceStartDate { get; set; }
-	public string Revision { get; set; } = "";
-}
-public class ConfirmAttendanceStartInput
-{
-	public DateTime Date { get; set; }
-	[Required] public string Revision { get; set; } = "";
-}
 public interface IAttendanceManagementAppService : IApplicationService
 {
 	Task<AttendanceRegisterDto> GetRegisterAsync(AttendanceRegisterInput input);
 	Task<AttendanceSummaryDto> GetSummaryAsync(AttendanceSummaryInput input);
-	Task<PagedResultDto<AttendanceEnrollmentDto>> GetEnrollmentsAsync(AttendanceRegisterInput input);
-	Task<AttendanceEnrollmentDto> ConfirmStartAsync(Guid enrollmentId, ConfirmAttendanceStartInput input);
 	Task<PagedResultDto<AttendanceCorrectionDto>> GetCorrectionsAsync(AttendanceCorrectionListInput input);
 	Task<AttendanceCorrectionDto> RequestCorrectionAsync(AttendanceCorrectionInput input);
 	Task<AttendanceCorrectionDto> ApproveCorrectionAsync(Guid id, AttendanceCorrectionDecisionInput input);

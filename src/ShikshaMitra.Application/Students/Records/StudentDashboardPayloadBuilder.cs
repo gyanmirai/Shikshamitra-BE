@@ -241,7 +241,7 @@ public class StudentDashboardPayloadBuilder(
 	{
 		var alerts = new List<StudentReportingAlertDto>
 		{
-			Alert("missing-gr", "warning", "Missing GR numbers", missingGr, "Enrolled students without GR numbers.", "Open GR generation", "/student/management?tab=grGeneration"),
+			Alert("missing-gr", "warning", "Missing GR numbers", missingGr, "Enrolled students without GR numbers.", "Review student records", "/student/profile"),
 			Alert("missing-photos", "info", "Missing student photos", missingPhotos, "Student profiles without uploaded photos.", "Upload photos", "/student/upload-student-photo"),
 			Alert("missing-documents", "warning", "Required documents pending", missingDocuments, "Students missing one or more required documents.", "Upload documents", "/student/upload-student-documents"),
 			Alert("attendance-unmarked", "critical", "Attendance not marked today", unmarkedAttendanceGroups, "Class/division groups without a saved attendance day.", "Take attendance", "/student/attendance/take-attendance")
@@ -260,9 +260,7 @@ public class StudentDashboardPayloadBuilder(
 	private static List<StudentReportingQuickLinkDto> BuildQuickLinks() =>
 	[
 		QuickLink("student-list", "Student list", "Search and inspect student records.", "/student/profile", "solar:users-group-rounded-bold"),
-		QuickLink("gr-generation", "GR generation", "Assign or fix student GR numbers.", "/student/management?tab=grGeneration", "solar:hashtag-circle-bold"),
-		QuickLink("roll-generation", "Roll generation", "Manage roll numbers by division.", "/student/management?tab=rollGeneration", "solar:sort-by-time-bold"),
-		QuickLink("change-division", "Change division", "Move students between classes or divisions.", "/student/management?tab=changeDivision", "solar:transfer-horizontal-bold"),
+		QuickLink("records-reports", "Records reports", "Review student reports.", "/student/reports", "solar:documents-bold-duotone"),
 		QuickLink("attendance-dashboard", "Attendance dashboard", "Review class/division attendance health.", "/student/attendance/dashboard", "solar:chart-2-bold")
 	];
 

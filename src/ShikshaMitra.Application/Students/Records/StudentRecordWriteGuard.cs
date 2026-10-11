@@ -22,7 +22,7 @@ public class StudentRecordWriteGuard(StudentRecordApplyContext applying, Student
 		"UpdateGeneralInfoAsync" => "general", "UpdateFamilyInfoAsync" => "family",
 		"UpdateCommunicationInfoAsync" => "communication", "UpdateAdditionalDetailsAsync" => "additional",
 		"UpdateMedicalRecordsAsync" => "medical", "UpdateBankDetailsAsync" => "bank",
-		"UpdatePreviousSchoolDetailsAsync" => "previous-school", "ChangeDivision" => "placement",
+		"UpdatePreviousSchoolDetailsAsync" => "previous-school",
 		"ChangeStudentStatusAsync" => "status", "UploadPhotoAsync" => "photo", _ => throw new BusinessException("Students:Records:InvalidSection")
 	};
 }

@@ -22,6 +22,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var student = await CreateExistingStudentAsync(offering, "IDOriginal", "Student"); await GrantCompletedRecordAsync(student);
 		var service = GetRequiredService<IStudentIdCardAppService>();
+		var bulkPdf = await service.ExportPdfAsync(new StudentIdCardsPdfRequestDto { StudentIds = [student.Id], CardsPerPage = 8 });
+		bulkPdf.Content.Take(4).ToArray().ShouldBe("%PDF"u8.ToArray());
 		var input = new IssueStudentIdCardsDto { StudentIds = [student.Id], IdempotencyKey = "id-stable-request" };
 		var issued = (await service.IssueAsync(input)).Single();
 		(await service.IssueAsync(input)).Single().Id.ShouldBe(issued.Id);

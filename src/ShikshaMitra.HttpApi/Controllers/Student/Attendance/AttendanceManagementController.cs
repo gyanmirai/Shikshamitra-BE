@@ -15,8 +15,6 @@ public class AttendanceManagementController(IAttendanceManagementAppService serv
 {
 	[HttpGet("register")] public Task<AttendanceRegisterDto> Register([FromQuery] AttendanceRegisterInput input) => service.GetRegisterAsync(input);
 	[HttpGet("summary")] public Task<AttendanceSummaryDto> Summary([FromQuery] AttendanceSummaryInput input) => service.GetSummaryAsync(input);
-	[HttpGet("enrollments")] public Task<PagedResultDto<AttendanceEnrollmentDto>> Enrollments([FromQuery] AttendanceRegisterInput input) => service.GetEnrollmentsAsync(input);
-	[HttpPost("enrollments/{enrollmentId:guid}/start-date")] public Task<AttendanceEnrollmentDto> ConfirmStart(Guid enrollmentId, [FromBody] ConfirmAttendanceStartInput input) => service.ConfirmStartAsync(enrollmentId, input);
 	[HttpGet("corrections")] public Task<PagedResultDto<AttendanceCorrectionDto>> Corrections([FromQuery] AttendanceCorrectionListInput input) => service.GetCorrectionsAsync(input);
 	[HttpPost("corrections")] public Task<AttendanceCorrectionDto> RequestCorrection([FromBody] AttendanceCorrectionInput input) => service.RequestCorrectionAsync(input);
 	[HttpPost("corrections/{id:guid}/approve")] public Task<AttendanceCorrectionDto> Approve(Guid id, [FromBody] AttendanceCorrectionDecisionInput input) => service.ApproveCorrectionAsync(id, input);

@@ -15,6 +15,9 @@ public interface IStudentLeaveAppService : IApplicationService
 	/// </summary>
 	Task<PagedResultDto<StudentLeaveDto>> GetListAsync(GetStudentLeaveListInput input);
 
+	/// <summary>Gets status totals for the same filters as the leave list.</summary>
+	Task<StudentLeaveStatusCountsDto> GetStatusCountsAsync(GetStudentLeaveListInput input);
+
 	/// <summary>
 	/// Gets a single student leave request by ID
 	/// </summary>

@@ -6,10 +6,14 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Employees.Settings;
 using ShikshaMitra.Infrastructure.Data;
+using ShikshaMitra.Infrastructure.Auth;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.HR.Employees;
 
@@ -19,6 +23,21 @@ namespace ShikshaMitra.HR.Employees;
 /// </summary>
 public static class EmployeeTestHelper
 {
+	// Arrange persisted status for read-only search tests independently of onboarding activation.
+	public static async Task SetActiveStatusForTestAsync(ShikshaMitraApiTestFactory factory, Guid employeeId)
+	{
+		using var scope = factory.Services.CreateScope();
+		using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>()
+			.Change(Guid.Parse(TestAuthHandler.TestTenantId));
+		using var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+			.Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+		var manager = scope.ServiceProvider.GetRequiredService<EmployeeManager>();
+		var repository = scope.ServiceProvider.GetRequiredService<IEmployeeRepository>();
+		var employee = await manager.UpdateEmployeeStatusAsync(employeeId, EmployeeStatusType.Active, "Active employee search fixture");
+		await repository.UpdateAsync(employee, autoSave: true);
+		await unit.CompleteAsync();
+	}
+
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
 	public static Guid DefaultRoleId { get; set; }

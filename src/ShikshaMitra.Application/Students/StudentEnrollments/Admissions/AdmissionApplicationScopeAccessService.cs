@@ -11,24 +11,34 @@ using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-/// <summary>Authorizes application operations against the complete offering scope.</summary>
+/// <summary>Authorizes application operations against Offering and linked student placement scope.</summary>
 [RemoteService(false)]
 public class AdmissionApplicationScopeAccessService(
 	IRepository<AdmissionOffering, Guid> offerings,
 	IRepository<AdmissionCycle, Guid> cycles,
 	IRepository<Division, Guid> divisions,
-	IUserScopeAccessService userScopes) : ApplicationService, ITransientDependency
+	IUserScopeAccessService userScopes,
+	IRepository<AdmissionApplication, Guid> applications,
+	AdmissionApplicationPlacementScopeService placementScope) : ApplicationService, ITransientDependency
 {
 	public async Task<IQueryable<AdmissionOffering>> GetScopedOfferingsAsync() =>
-		AdmissionOfferingScopeQuery.Apply(await offerings.GetQueryableAsync(), await cycles.GetQueryableAsync(),
-			await divisions.GetQueryableAsync(), await userScopes.GetCurrentUserScopeAsync());
+		AdmissionOfferingScopeQuery.Apply((await offerings.GetQueryableAsync()).Where(offering => offering.TenantId == CurrentTenant.Id),
+			(await cycles.GetQueryableAsync()).Where(cycle => cycle.TenantId == CurrentTenant.Id),
+			(await divisions.GetQueryableAsync()).Where(division => division.TenantId == CurrentTenant.Id), await userScopes.GetCurrentUserScopeAsync());
+
+	public async Task<IQueryable<AdmissionApplication>> GetScopedApplicationsAsync()
+	{
+		var offerings = await GetScopedOfferingsAsync();
+		return await placementScope.ApplyAsync((await applications.GetQueryableAsync()).Where(application =>
+			offerings.Any(offering => offering.Id == application.AdmissionOfferingId)));
+	}
 
 	public async Task<bool> CanAccessAsync(AdmissionApplication application)
 	{
 		if (application.TenantId != CurrentTenant.Id)
 			return false;
-		var query = await GetScopedOfferingsAsync();
-		return await AsyncExecuter.AnyAsync(query.Where(item => item.Id == application.AdmissionOfferingId));
+		var query = await GetScopedApplicationsAsync();
+		return await AsyncExecuter.AnyAsync(query.Where(item => item.Id == application.Id));
 	}
 
 	public async Task EnsureCanAccessAsync(AdmissionApplication application)

@@ -10,6 +10,25 @@ namespace ShikshaMitra.Application.Tests.Students.Records;
 public class StudentRecordScope_Tests
 {
 	[Fact]
+	public void Complete_division_assignment_must_not_authorize_sibling_or_unallocated_placements()
+	{
+		var year = Guid.NewGuid(); var board = Guid.NewGuid(); var medium = Guid.NewGuid();
+		var stage = Guid.NewGuid(); var standard = Guid.NewGuid(); var division = Guid.NewGuid();
+		var scope = new UserScopeContext { AcademicYearIds = [year], BoardIds = [board],
+			MediumIds = [medium], MediumStageIds = [stage], StandardIds = [standard], DivisionIds = [division] };
+		var assigned = new Placement(year, board, medium, stage, standard, division);
+		StudentRecordScope.HasAccess(assigned, scope).ShouldBeTrue();
+		StudentRecordScope.HasAccess(assigned with { DivisionId = Guid.NewGuid() }, scope).ShouldBeFalse();
+		StudentRecordScope.HasAccess(assigned with { DivisionId = null }, scope).ShouldBeFalse();
+		StudentRecordScope.HasAccess(assigned with { AcademicYearId = Guid.NewGuid() }, scope).ShouldBeFalse();
+		scope.WildcardDivisionStandardIds.Add(standard);
+		StudentRecordScope.HasAccess(assigned with { DivisionId = null }, scope).ShouldBeTrue();
+	}
+
+	private sealed record Placement(Guid? AcademicYearId, Guid? EducationBoardId, Guid? EducationMediumId,
+		Guid? EducationMediumStageId, Guid? StandardId, Guid? DivisionId) : IUserScopedEntity;
+
+	[Fact]
 	public void Query_scope_should_not_treat_a_narrow_year_assignment_as_year_wide_access()
 	{
 		var year = Guid.NewGuid();

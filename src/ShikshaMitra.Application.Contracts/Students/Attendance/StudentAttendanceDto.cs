@@ -40,6 +40,7 @@ public class StudentAttendanceDto
 	public Guid? ApprovedLeaveId { get; set; }
 	public string? ScheduleLabel { get; set; }
 	public int? GrNo { get; set; }
+	public string? GrNumber { get; set; }
 	public int? RollNo { get; set; }
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }

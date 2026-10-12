@@ -17,6 +17,7 @@ public class AdmissionOfferingCommandService(
 	IStandardRepository standardRepository,
 	AdmissionOfferingWorkflowConfigurationResolver workflowConfiguration,
 	AdmissionOfferingConfigurationValidator configurationValidator,
+	AdmissionApplicationScopeAccessService applicationScope,
 	AdmissionOfferingReadService readService)
 	: ApplicationService, ITransientDependency
 {
@@ -209,7 +210,8 @@ public class AdmissionOfferingCommandService(
 	}
 
 	private async Task<AdmissionOffering> GetOfferingAsync(Guid id) =>
-		await offeringRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionOffering), id);
+		await AsyncExecuter.FirstOrDefaultAsync((await applicationScope.GetScopedOfferingsAsync()).Where(offering => offering.Id == id))
+		?? throw new EntityNotFoundException(typeof(AdmissionOffering), id);
 
 	private static void EnsureConcurrency(AdmissionOffering offering, string concurrencyStamp)
 	{

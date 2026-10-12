@@ -156,10 +156,20 @@ public class AdmissionAssessmentRosterPostgres_Tests(ITestOutputHelper output)
 				new AdmissionWorkflowTransitionSelector(new AdmissionWorkflowConditionEvaluator()), access);
 			var currentUser = Substitute.For<ICurrentUser>();
 			currentUser.Id.Returns(userId);
+			var tenant = Substitute.For<Volo.Abp.MultiTenancy.ICurrentTenant>();
+			tenant.Id.Returns(db.TenantId);
+			var cycleRepository = Substitute.For<IRepository<AdmissionCycle, Guid>>();
+			cycleRepository.GetQueryableAsync().Returns(Task.FromResult(Array.Empty<AdmissionCycle>().AsQueryable()));
+			var divisionRepository = Substitute.For<IRepository<Division, Guid>>();
+			divisionRepository.GetQueryableAsync().Returns(Task.FromResult(Array.Empty<Division>().AsQueryable()));
+			var placement = new AdmissionApplicationPlacementScopeService(scope, null!, null!, null!, null!, null!, null!);
+			var applicationScope = new AdmissionApplicationScopeAccessService(Repository<AdmissionOffering>(), cycleRepository,
+				divisionRepository, scope, applications, placement);
 			var provider = new ServiceCollection().AddSingleton<IAsyncQueryableExecuter>(new AsyncQueryableExecuter([new EfCoreAsyncQueryableProvider()]))
-				.AddSingleton(currentUser).BuildServiceProvider();
-			Service = new(applications, Repository<AdmissionApplicant>(), instances, stages, attempts, sessions, transitions, runtime, access, reader);
-			foreach (var service in new ApplicationService[] { Service, access, reader }) service.LazyServiceProvider = new AbpLazyServiceProvider(provider);
+				.AddSingleton(currentUser).AddSingleton(tenant).AddSingleton(applicationScope).BuildServiceProvider();
+			Service = new(Repository<AdmissionApplicant>(), instances, stages, attempts, sessions, transitions, runtime, access, reader);
+			foreach (var service in new ApplicationService[] { Service, access, reader, applicationScope, placement })
+				service.LazyServiceProvider = new AbpLazyServiceProvider(provider);
 		}
 
 		private IRepository<T, Guid> Repository<T>() where T : class, IEntity<Guid>

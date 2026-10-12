@@ -406,6 +406,10 @@ public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
                     tenantId,
                     userId: userId,
                     academicYearId: academicYearId ?? context.AcademicYearId,
+                    educationBoardId: context.AcademicBoardId,
+                    educationMediumId: context.AcademicMediumId,
+                    educationMediumStageId: context.AcademicMediumStageId,
+                    standardId: context.StandardId,
                     divisionId: divisionId,
                     description: "Student attendance scope regression test"),
                 autoSave: false);

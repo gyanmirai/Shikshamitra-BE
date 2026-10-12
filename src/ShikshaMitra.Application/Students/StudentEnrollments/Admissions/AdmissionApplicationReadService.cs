@@ -21,7 +21,7 @@ public class AdmissionApplicationReadService(
 {
 	public async Task<PagedResultDto<AdmissionApplicationDto>> GetListAsync(AdmissionApplicationListInput input)
 	{
-		var query = await applicationRepository.GetQueryableAsync();
+		var query = await scopeAccess.GetScopedApplicationsAsync();
 		var visibleOfferings = await scopeAccess.GetScopedOfferingsAsync();
 		var cycles = await cycleRepository.GetQueryableAsync();
 		query = query.Where(application => visibleOfferings.Any(offering =>

@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-11
+updated_on: 2026-10-12
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,26 @@ audience: humans-and-agents
 # Understand Student Enrollment Admissions behavior
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
+
+## Staff data scope
+
+The browser Student module uses the authenticated staff member's existing Academic UserScope assignments. It does not require a student browser login or a separate Student assignment table. Action permissions, tenant ownership and data scope are checked independently; Academic subject access does not confer Student action permissions.
+
+| Boundary | Rule |
+| --- | --- |
+| Academic placement | Ancestor IDs on a division assignment describe its path. Only explicit wildcard grants authorize descendants; a division assignment cannot authorize sibling divisions. |
+| Attendance | Year, class and division must match the stored hierarchy. Lists use the same strict division boundary, and batches reject missing or inaccessible student IDs. |
+| Registration | An allocated placement requires its exact division scope. A placement without a division requires class-wide or broader scope. |
+| Applicant identity | Reads and notes require an accessible linked application or inquiry. Applicant 360 includes only scoped applications and activity references. Shared profile changes reject links outside scope, including family links when guardian contact is edited. |
+| Unallocated inquiries | Year-wide staff can read the year backlog. Narrow staff can read their own created or assigned unallocated inquiries within an authorized year. |
+| Offerings | Lists, details and existing-offering commands share the canonical class-level offering scope. A division grant makes its class offering accessible because pre-enrollment admissions have no division placement. |
+| Linked applications | Offering access governs pre-placement applications. Reserved Onboarding placement and current cycle-year enrollment add the student division boundary. Current enrollment overrides completed Onboarding snapshots after a Records move. Converted inquiry/identity reads cannot bypass an outside placed application. |
+| Admission cycles | List/detail counts include only scoped offerings/applications. Whole-cycle lifecycle, history, validation, impact and capacity operations require year-wide scope. |
+| Shared settings | Records policy changes require year-wide scope, or tenant-wide scope for school policy. Academic-term changes require year-wide scope. House configuration changes require medium-wide or broader scope; scoped staff may read their medium's catalogue. |
+
+Existing student/guardian portal association and credential provisioning remain separate from staff browser scope. Manual Academic assignments are retained.
+
+Admission event instants use UTC and timezone-aware persistence parameters. Previously shifted stored audit data is not automatically rewritten; historical correction requires reviewed evidence. Attendance returns canonical `GrNumber` alongside legacy numeric `GrNo` for identifier compatibility.
 
 ## Onboarding credential emails and portal access
 

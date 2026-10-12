@@ -33,7 +33,7 @@ public class StudentScopeAccessService(
 	public async Task<IQueryable<Student>> ApplyCurrentUserScopeAsync(IQueryable<Student> query)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-		return ApplyScope(query, scope);
+		return ApplyScope(query.Where(student => student.TenantId == CurrentTenant.Id), scope);
 	}
 
 	public static IQueryable<Student> ApplyScope(
@@ -74,8 +74,9 @@ public class StudentScopeAccessService(
 	public async Task<IQueryable<AttendanceDay>> ApplyCurrentUserAttendanceDayScopeAsync(IQueryable<AttendanceDay> query)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		query = query.Where(day => day.TenantId == CurrentTenant.Id);
 
-		if (scope.IsAdmin)
+		if (scope.HasTenantWideScope())
 		{
 			return query;
 		}
@@ -89,24 +90,24 @@ public class StudentScopeAccessService(
 		var mediumStages = await educationMediumStageRepository.GetQueryableAsync();
 		var mediums = await educationMediumRepository.GetQueryableAsync();
 		var boards = await educationBoardRepository.GetQueryableAsync();
+		var divisions = await divisionRepository.GetQueryableAsync();
 
 		var scopedQuery =
 			from day in query
+			join division in divisions on day.DivisionId equals division.Id
 			join standard in standards on day.StandardId equals standard.Id
 			join stage in mediumStages on standard.EducationMediumStageId equals stage.Id
 			join medium in mediums on stage.EducationMediumId equals medium.Id
 			join board in boards on medium.EducationBoardId equals board.Id
-			where scope.HasWildcardAcademicYear ||
+			where division.StandardId == day.StandardId && board.AcademicYearId == day.AcademicYearId &&
+				division.TenantId == CurrentTenant.Id && standard.TenantId == CurrentTenant.Id &&
+				stage.TenantId == CurrentTenant.Id && medium.TenantId == CurrentTenant.Id && board.TenantId == CurrentTenant.Id && (
 			      scope.WildcardBoardAcademicYearIds.Contains(day.AcademicYearId) ||
 			      scope.DivisionIds.Contains(day.DivisionId) ||
-			      (scope.HasWildcardDivision && scope.WildcardDivisionStandardIds.Contains(day.StandardId)) ||
-			      scope.StandardIds.Contains(day.StandardId) ||
-			      (scope.HasWildcardStandard && scope.WildcardStandardMediumStageIds.Contains(stage.Id)) ||
-			      scope.MediumStageIds.Contains(stage.Id) ||
-			      (scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(medium.Id)) ||
-			      scope.MediumIds.Contains(medium.Id) ||
-			      (scope.HasWildcardMedium && scope.WildcardMediumBoardIds.Contains(board.Id)) ||
-			      scope.BoardIds.Contains(board.Id)
+			      scope.WildcardDivisionStandardIds.Contains(day.StandardId) ||
+			      scope.WildcardStandardMediumStageIds.Contains(stage.Id) ||
+			      scope.WildcardMediumStageMediumIds.Contains(medium.Id) ||
+			      scope.WildcardMediumBoardIds.Contains(board.Id))
 			select day;
 
 		if (scope.HasWildcardAcademicYear)
@@ -127,7 +128,7 @@ public class StudentScopeAccessService(
 	public async Task EnsureCanAccessStudentAsync(Student student, string operation)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-		if (!StudentRecordScope.HasAccess(student, scope))
+		if (student.TenantId != CurrentTenant.Id || !StudentRecordScope.HasAccess(student, scope))
 		{
 			Logger.LogInformation("UserScope denied Student access. UserId: {UserId}, TenantId: {TenantId}, StudentId: {StudentId}, Operation: {Operation}",
 				scope.UserId, scope.TenantId, student.Id, operation);
@@ -160,14 +161,17 @@ public class StudentScopeAccessService(
 
 	public async Task EnsureCanAccessStudentsAsync(IEnumerable<Guid> studentIds, string operation)
 	{
-		foreach (var studentId in studentIds.Distinct())
-		{
-			await GetStudentAsync(studentId, operation);
-		}
+		var ids = studentIds.Distinct().ToList();
+		var query = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
+		var scoped = await ApplyCurrentUserScopeAsync(query);
+		if (await AsyncExecuter.CountAsync(scoped.Where(student => ids.Contains(student.Id))) != ids.Count)
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
 	}
 
 	public async Task EnsureCanAccessLeaveAsync(StudentLeave leave, string operation)
 	{
+		if (leave.TenantId != CurrentTenant.Id)
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
 		if (leave.Student == null)
 		{
 			await GetStudentAsync(leave.StudentId, operation);
@@ -181,14 +185,64 @@ public class StudentScopeAccessService(
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		var standardScope = await BuildStandardScopeAsync(standardId);
-		userScopeAccessService.EnsureCanAccess(standardScope, scope, operation: operation);
+		if (StudentRecordScope.HasAccess(standardScope, scope) ||
+			(CanAccessAcademicYear(scope, standardScope.AcademicYearId!.Value) && scope.StandardIds.Contains(standardId))) return;
+		var divisions = await ApplyCurrentUserDivisionScopeAsync(await divisionRepository.GetQueryableAsync(), standardScope.AcademicYearId!.Value);
+		if (!await AsyncExecuter.AnyAsync(divisions.Where(division => division.StandardId == standardId)))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
 	}
 
 	public async Task EnsureCanAccessMediumAsync(Guid mediumId, string operation)
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		var mediumScope = await BuildMediumScopeAsync(mediumId);
-		userScopeAccessService.EnsureCanAccess(mediumScope, scope, operation: operation);
+		if (StudentRecordScope.HasAccess(mediumScope, scope) ||
+			(CanAccessAcademicYear(scope, mediumScope.AcademicYearId!.Value) && scope.MediumIds.Contains(mediumId))) return;
+		if (!CanAccessAcademicYear(scope, mediumScope.AcademicYearId!.Value))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
+		var divisions = await ApplyCurrentUserDivisionScopeAsync(await divisionRepository.GetQueryableAsync(), mediumScope.AcademicYearId!.Value);
+		var standards = await standardRepository.GetQueryableAsync();
+		var stages = await educationMediumStageRepository.GetQueryableAsync();
+		if (!await AsyncExecuter.AnyAsync(from standard in standards
+			join stage in stages on standard.EducationMediumStageId equals stage.Id
+			where stage.EducationMediumId == mediumId && standard.TenantId == CurrentTenant.Id && stage.TenantId == CurrentTenant.Id &&
+				(scope.StandardIds.Contains(standard.Id) || scope.MediumStageIds.Contains(stage.Id) || divisions.Any(division => division.StandardId == standard.Id))
+			select standard))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
+	}
+
+	public async Task EnsureCanAccessPlacementAsync(Guid academicYearId, Guid standardId, Guid? divisionId, string operation)
+	{
+		if (divisionId.HasValue)
+		{
+			await EnsureCanAccessAttendanceScopeAsync(academicYearId, standardId, divisionId.Value, operation);
+			return;
+		}
+		var placement = await BuildStandardScopeAsync(standardId);
+		if (placement.AcademicYearId != academicYearId ||
+			!StudentRecordScope.HasAccess(placement, await userScopeAccessService.GetCurrentUserScopeAsync()))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
+	}
+
+	public async Task EnsureCanManageMediumAsync(Guid mediumId, string operation)
+	{
+		var medium = await BuildMediumScopeAsync(mediumId);
+		if (!StudentRecordScope.HasAccess(medium, await userScopeAccessService.GetCurrentUserScopeAsync()))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
+	}
+
+	public async Task EnsureSettingsScopeAsync(Guid? academicYearId, bool writing, string operation)
+	{
+		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
+		if (!academicYearId.HasValue)
+		{
+			if (!scope.HasTenantWideScope())
+				throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
+			return;
+		}
+		await EnsureCanAccessAcademicYearAsync(academicYearId.Value, operation);
+		if (writing && !await CurrentUserHasAcademicYearWideScopeAsync(academicYearId.Value))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
 	}
 
 	public async Task EnsureCanAccessAcademicYearAsync(Guid academicYearId, string operation)
@@ -255,7 +309,8 @@ public class StudentScopeAccessService(
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		var divisionScope = await BuildDivisionScopeAsync(divisionId);
-		userScopeAccessService.EnsureCanAccess(divisionScope, scope, operation: operation);
+		if (!StudentRecordScope.HasAccess(divisionScope, scope))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
 	}
 
 	public async Task<IQueryable<Division>> ApplyCurrentUserDivisionScopeAsync(
@@ -274,7 +329,9 @@ public class StudentScopeAccessService(
 			join stage in mediumStages on standard.EducationMediumStageId equals stage.Id
 			join medium in mediums on stage.EducationMediumId equals medium.Id
 			join board in boards on medium.EducationBoardId equals board.Id
-			where board.AcademicYearId == academicYearId
+			where board.AcademicYearId == academicYearId && division.TenantId == CurrentTenant.Id &&
+				standard.TenantId == CurrentTenant.Id && stage.TenantId == CurrentTenant.Id &&
+				medium.TenantId == CurrentTenant.Id && board.TenantId == CurrentTenant.Id
 			select new { Division = division, Standard = standard, Stage = stage, Medium = medium, Board = board };
 
 		if (scope.IsAdmin ||
@@ -311,8 +368,9 @@ public class StudentScopeAccessService(
 	{
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
 		var divisionScope = await BuildDivisionScopeAsync(divisionId);
-		var attendanceScope = divisionScope with { AcademicYearId = academicYearId, StandardId = standardId };
-		userScopeAccessService.EnsureCanAccess(attendanceScope, scope, operation: operation);
+		if (divisionScope.AcademicYearId != academicYearId || divisionScope.StandardId != standardId ||
+		    !StudentRecordScope.HasAccess(divisionScope, scope))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
 	}
 
 	public async Task EnsureStudentsMatchAttendanceScopeAsync(
@@ -326,6 +384,8 @@ public class StudentScopeAccessService(
 		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
 		var students = await AsyncExecuter.ToListAsync(
 			studentQuery.Where(s => requestedStudentIds.Contains(s.Id)));
+		if (students.Count != requestedStudentIds.Count)
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied).WithData("Operation", operation);
 
 		foreach (var student in students)
 		{
@@ -353,6 +413,9 @@ public class StudentScopeAccessService(
 		var stage = await educationMediumStageRepository.GetAsync(standard.EducationMediumStageId);
 		var medium = await educationMediumRepository.GetAsync(stage.EducationMediumId);
 		var board = await educationBoardRepository.GetAsync(medium.EducationBoardId);
+		if (standard.TenantId != CurrentTenant.Id || stage.TenantId != CurrentTenant.Id ||
+			medium.TenantId != CurrentTenant.Id || board.TenantId != CurrentTenant.Id)
+			throw new EntityNotFoundException(typeof(Standard), standardId);
 
 		return new AcademicOrganizationScopeRow(
 			board.AcademicYearId,
@@ -367,6 +430,8 @@ public class StudentScopeAccessService(
 	{
 		var medium = await educationMediumRepository.GetAsync(mediumId);
 		var board = await educationBoardRepository.GetAsync(medium.EducationBoardId);
+		if (medium.TenantId != CurrentTenant.Id || board.TenantId != CurrentTenant.Id)
+			throw new EntityNotFoundException(typeof(EducationMedium), mediumId);
 
 		return new AcademicOrganizationScopeRow(
 			board.AcademicYearId,
@@ -385,7 +450,9 @@ public class StudentScopeAccessService(
 			join stage in await educationMediumStageRepository.GetQueryableAsync() on standard.EducationMediumStageId equals stage.Id
 			join medium in await educationMediumRepository.GetQueryableAsync() on stage.EducationMediumId equals medium.Id
 			join board in await educationBoardRepository.GetQueryableAsync() on medium.EducationBoardId equals board.Id
-			where division.Id == divisionId
+			where division.Id == divisionId && division.TenantId == CurrentTenant.Id &&
+				standard.TenantId == CurrentTenant.Id && stage.TenantId == CurrentTenant.Id &&
+				medium.TenantId == CurrentTenant.Id && board.TenantId == CurrentTenant.Id
 			select new AcademicOrganizationScopeRow(board.AcademicYearId, board.Id, medium.Id, stage.Id, standard.Id, division.Id);
 		return await AsyncExecuter.SingleOrDefaultAsync(query) ?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Division), divisionId);
 	}

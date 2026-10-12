@@ -137,7 +137,9 @@ public class StudentGeneralInfoAppService(
 			throw new BusinessException(StudentRegistrationErrorCodes.StandardNotFound, "Standard does not belong to the specified Academic Medium");
 		}
 
-		await studentScopeAccessService.EnsureCanAccessStandardAsync(standardId, nameof(CreateDirectRegistrationAsync));
+		await studentScopeAccessService.EnsureCanAccessPlacementAsync(
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			standardId, createRegistrationDto.DivisionId, nameof(CreateDirectRegistrationAsync));
 		if (createRegistrationDto.DivisionId.HasValue)
 		{
 			await EnsureDivisionMatchesStandardAsync(
@@ -252,6 +254,9 @@ public class StudentGeneralInfoAppService(
 			divisionId = student.DivisionId;
 		}
 
+		await studentScopeAccessService.EnsureCanAccessPlacementAsync(
+			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
+			standardId, divisionId, nameof(UpdateGeneralInfoAsync));
 		student.UpdateAcademicPlacement(
 			standard.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId,
 			standard.EducationMediumStage.EducationMedium.EducationBoardId,

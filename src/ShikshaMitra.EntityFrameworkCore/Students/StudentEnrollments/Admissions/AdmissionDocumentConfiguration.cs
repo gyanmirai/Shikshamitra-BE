@@ -12,7 +12,7 @@ public class AdmissionDocumentConfiguration : IEntityTypeConfiguration<Admission
 	public void Configure(EntityTypeBuilder<AdmissionDocumentEvidence> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionDocumentEvidence", ShikshaMitraConsts.DbSchema);
-		builder.ConfigureByConvention();
+		builder.ConfigureByConvention(); AdmissionEventTimeConfiguration.Configure(builder, nameof(AdmissionDocumentEvidence.OriginalSeenAt), nameof(AdmissionDocumentEvidence.SubmittedAt), nameof(AdmissionDocumentEvidence.StudentLinkedAt));
 		builder.Property(item => item.IsDeleted).ValueGeneratedNever().HasDefaultValue(false);
 		builder.Property(item => item.RequirementCode).HasMaxLength(64).IsRequired();
 		builder.Property(item => item.RequirementLabel).HasMaxLength(128).IsRequired();
@@ -37,7 +37,7 @@ public class AdmissionDocumentConfiguration : IEntityTypeConfiguration<Admission
 	public void Configure(EntityTypeBuilder<AdmissionDocumentReview> builder)
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "AdmissionDocumentReviews", ShikshaMitraConsts.DbSchema);
-		builder.ConfigureByConvention();
+		builder.ConfigureByConvention(); AdmissionEventTimeConfiguration.Configure(builder, nameof(AdmissionDocumentReview.ReviewedAt));
 		builder.Property(item => item.IsDeleted).ValueGeneratedNever().HasDefaultValue(false);
 		builder.Property(item => item.Decision).HasMaxLength(16).IsRequired();
 		builder.Property(item => item.Reason).HasMaxLength(1024);

@@ -103,6 +103,8 @@ public class AdmissionOfferingReadService(
 		var intakeProfiles = await intakeProfileRepository.GetQueryableAsync();
 		var applications = await applicationRepository.GetQueryableAsync();
 		var divisions = await divisionRepository.GetQueryableAsync();
+		var scope = await scopeAccessService.GetCurrentUserScopeAsync();
+		offerings = AdmissionOfferingScopeQuery.Apply(offerings.Where(offering => offering.TenantId == CurrentTenant.Id), cycles, divisions, scope);
 
 		var query =
 			from offering in offerings
@@ -153,18 +155,6 @@ public class AdmissionOfferingReadService(
 				AssignmentProfile = assignmentProfile,
 				ApplicationCount = applications.Count(application => application.AdmissionOfferingId == offering.Id)
 			};
-
-		var scope = await scopeAccessService.GetCurrentUserScopeAsync();
-		if (!scope.IsAdmin && !scope.HasTenantWideScope())
-		{
-			query = query.Where(row =>
-				scope.WildcardBoardAcademicYearIds.Contains(row.Cycle.AcademicYearId) ||
-				scope.BoardIds.Contains(row.Offering.BoardId) || scope.WildcardMediumBoardIds.Contains(row.Offering.BoardId) ||
-				scope.MediumIds.Contains(row.Offering.MediumId) || scope.WildcardMediumStageMediumIds.Contains(row.Offering.MediumId) ||
-				scope.MediumStageIds.Contains(row.Offering.StageId) || scope.WildcardStandardMediumStageIds.Contains(row.Offering.StageId) ||
-				scope.StandardIds.Contains(row.Offering.StandardId) || scope.WildcardDivisionStandardIds.Contains(row.Offering.StandardId) ||
-				divisions.Any(division => division.StandardId == row.Offering.StandardId && scope.DivisionIds.Contains(division.Id)));
-		}
 
 		var eligibilityErrors = await eligibilityValidator.GetErrorsAsync(query.Select(row => row.Offering));
 		query = ApplyDerivedFilters(query, input, Clock.Now.Date, eligibilityErrors.Keys.ToList());

@@ -12,6 +12,12 @@ audience: humans-and-agents
 
 TL;DR: Admissions remains inside the Student modular-monolith boundary and separates aggregate invariants, authoritative validation, reads, commands, and runtime availability.
 
+## Staff scope gateways
+
+`StudentScopeAccessService` owns strict Student placement, division/attendance tuple checks, bulk existence checks, ancestor navigation and settings authority. `StudentRecordScope` matches exact division or explicit ancestor wildcard grants; the generic Academic ancestor-visibility matcher is not a Student record authorization check.
+
+`AdmissionApplicationScopeAccessService` and `AdmissionOfferingScopeQuery` authorize class-level offerings. Offering reads and source commands use that same query. `AdmissionInquiryScopeAccessService` handles offering-linked and unallocated inquiries. `AdmissionApplicantScopeAccessService` guards applicant identity, shared profile changes and activity references; application services and controllers retain exact action permissions.
+
 ## Onboarding email and access ownership
 
 | Concern | Source |

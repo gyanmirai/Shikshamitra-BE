@@ -3,39 +3,44 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-11
+updated_on: 2026-10-12
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
 
-## Special-track offerings and Registration entry (2026-10-11)
+## Student scope repairs (2026-10-12)
 
-`AdmissionSpecialRegistration_Tests.cs` covers General/RTE same-cycle/class coexistence, same-track duplicate rejection, selected-type bulk preview/commit, unused RTE updates, frozen used routing, and invalid enum rejection.
-The focused special Registration scenarios exercise RTE/Management/Staff and retained Management Both entry, same-request retry, explicit sibling linking/mobile mismatch, inaccessible families, General/Inquiry-first rejection, inactive/closed/unconfigured offerings, tenant denial and scoped replay denial.
-`Special_registration_finalizes_through_common_decision_and_onboarding` exercises the real Registration endpoint through the current Form/Admission Decision workflow, idempotent finalization and Onboarding handoff without an Offer stage.
-These scenarios reuse the accepted current Form/Admission Decision fixture; unrelated historical Inquiry/Custom/Offer fixtures and governed Records return tests remain unchanged.
+Finalized application reads now share a placement-aware scoped query across lists, applicant identity, converted inquiries, activities, documents, assessments, queues and related projections. Before placement, Offering access remains authoritative; after placement, reserved Onboarding division or current academic-year enrollment controls access. Enrollment takes precedence over a completed case's older placement snapshot. Tenant and action permissions remain required.
 
-```powershell
-dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Special_registration|FullyQualifiedName~Offering_simplification_uses_workflow_form|FullyQualifiedName~Offering_simplification_preserves_unused_special|FullyQualifiedName~Offering_creation_allows_parallel|FullyQualifiedName~Bulk_offering_preview_and_commit|FullyQualifiedName~Used_offering_routing|FullyQualifiedName~Offering_write_rejects_invalid|FullyQualifiedName~AdmissionOfferingContract_Tests" --artifacts-path .artifacts/special-admission-tests -m:1 -p:UseSharedCompilation=false -p:RunAnalyzers=false --logger "trx;LogFileName=special-admission-current.trx"
-```
+The focused Application regression passed 12/12, including reserved/activated placement, class-wide access, shared applicant protection, same-principal revocation and UTC event round-trip. Actual PostgreSQL probes allowed Alpha after its Records move, denied Beta application/applicant/note/download, confirmed no denied note persisted, and excluded Beta from the list. Deactivating the temporary scope restored the original HOD assignment and denied Alpha with the same token.
 
-These changes reuse existing tracks, routing, identity and workflow persistence; no schema migration is added.
-The current focused gate passed **43/43 tests** (zero failures/skips) on 2026-10-11. Its TRX is `D:\CodexArtifacts\special-admission-tests-20261011\results\special-admission-current.trx`.
-Application was freshly compiled into task-isolated outputs, and Application.Tests was freshly compiled with project references disabled, analyzers disabled and the existing `/parallel-` compiler response file.
-The unchanged EF assembly/reference compiled on 2026-10-11 10:30:47 was reused after confirming every EF source predates it and copied-artifact SHA-256 values match; this is not a fresh EF or full-solution build pass. An initial isolated EF build exhausted C: disk space, and a subsequent 3 GB compiler-heap attempt ran out of memory; task-owned artifacts/temp/results were moved to D: without changing normal runtime outputs.
-Existing nullable and obsolete-member compiler warnings outside the changed tests remain.
+Attendance adds nullable canonical `GrNumber` while retaining legacy numeric `GrNo`. Live roster verification returned `QAS26-000001`. Admission event fields use timezone-aware Npgsql parameters for the existing timestamptz columns; a new local end-journey decision persisted and reloaded the same UTC instant. Previously shifted historical rows were preserved and require a separately reviewed backfill. The synthetic Class 3 probe application is now withdrawn.
 
-An earlier broader probe selected 54 tests: 24 passed and 30 failed before reaching the behavior under test because the old shared factories attempted to create retired Inquiry/Custom stages (`AdmissionWorkflowDefinitionStore.EnsureSupported`: "Choose Form, Assessment, Payment, Document verification, or Admission decision."). New/modified scenarios were adapted to the current supported fixture for the 43-test gate above. Unrelated legacy factories, historical RTE/Offer tests and Records-return scenarios were not rewritten; the wider suite is not claimed green.
-Source/test-host proof does not establish a restarted localhost API, populated browser creation, staging deployment or production acceptance.
+The final current Attendance HTTP class passed 23/23, zero skips, including prefixed/numeric-only GR, marking, historical scope, action permissions, leave reconciliation and locked corrections. Its identifier-only run passed 2/2; those cases are included in the 23 and should not be summed. The new fixture uses the existing narrow update reader rather than loading the full Student navigation graph. Earlier stalled runs were superseded by these passing current-source checks. Evidence is `.artifacts/student-scope-repair/results/repair-attendance-all-final.trx` and `repair-attendance-identifiers-final.trx`; the command uses `--filter FullyQualifiedName~StudentAttendanceApi_Tests --artifacts-path .artifacts/student-scope-repair/http-final --no-build`.
 
-## Offering clone cycle dates (2026-10-11)
+The current Host build passed with zero errors and 747 compiler warnings. Only the user-approved `20261012061916_MobileAcademicResponses` migration was applied to the verified localhost `postgres` database, without seeding; no migrations remain pending. A design-time model comparison reports three unrelated table drops (`AppStudentManagementSettings`, `AppStudentRollNumberAssignments`, `AppAcademicTerms`); no extra migration or schema deletion was generated or applied. Frontend checks and supporting browser evidence are in [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md#student-scope-repair-verification-2026-10-12). This is local evidence, not full-suite or deployment acceptance.
 
-`AdmissionOfferingCloneWindow_Tests.cs` uses the current Form/Admission Decision fixture for General and RTE.
-It saves source custom dates through the unchanged update API, verifies clone null overrides/target-cycle inheritance and retained routing/forms/state, then revises the target cycle through its controlled command and verifies refreshed clone effective dates without changing the source.
-Run `FullyQualifiedName~Offering_clone_inherits_target_cycle_window|FullyQualifiedName~AdmissionOfferingContract_Tests` with the Application test project and isolated artifacts.
-No EF/schema, live database or running API change belongs to this clone-only adjustment.
+## Local Student scope end-to-end QA (2026-10-12)
+
+Actual localhost DDVS writes completed two synthetic Admissions and Onboarding activations. Coverage included required Form validation, qualification, Assessment capacity/future-attendance/mark limits, published Finance fee selection, required documents and replacement history, waitlist finalization denial, idempotent finalization/activation, readiness snapshots, placement guards, GR/Roll allocation, independently approved Records placement, Attendance draft/submit/lock/corrections, forged mixed-roster atomic rejection, action-permission denial, leave scope, and locked leave-credit reconciliation. Student accounts were not required or provisioned; no QA payment or receipt was posted. The existing staff Academic UserScope was the authorization reference.
+
+The original QA confirmed three defects: finalized Admission authorization used the class Offering for outside-division students; Attendance omitted canonical prefixed `GrNumber`; Admission event timestamps reloaded with shifted instants. Reproduction evidence is preserved in the frontend `.artifacts/student-e2e-20261012/`. Their subsequent repair status is recorded above; the original QA did not change source behavior.
+
+Focused Application validation passed 16/16 plus six additional Admissions/ancestor scope cases. `StudentAttendanceApi_Tests` passed 21/21. These are focused results, not the complete backend suite. API denial responses for several Student scope operations are HTTP 400 with safe domain-error data; they were classified as denial after inspecting the body, rather than as data leaks. The same HOD token lost QA Records/Attendance access after scope revocation, and the old generated export was denied with `Students:Records:ReportAuthorityChanged`. Original HOD active scope and Admin/HOD permission overrides were restored and verified. QA students, documents, workflow/configuration, published fee setup, dedicated division, audited placement, attendance and leave records remain locally for reproduction. The first active QA Collection Policy became the default during normal policy creation; it remains referenced by the QA fee structure.
+
+Tests used isolated artifact output paths and TRX files under `.artifacts/student-e2e-20261012/results/`. The additional test filter names methods in the partial `AdmissionWorkflowRuntimeIntegration_Tests` class; filtering by the fixture filename `AdmissionApplicantUserScope_Tests` alone does not select those cases. The local API was restarted externally during QA; checks resumed afterward. Supporting browser coverage and unresolved frontend suite failures are recorded in [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md#local-student-scope-end-to-end-qa-2026-10-12). Cross-tenant live credentials, complete certificate/ID issuance, student portals/email delivery, year-end transitions, staging and deployment remain outside this acceptance evidence.
+
+## Staff Academic UserScope checks (2026-10-09)
+
+Student browser scope belongs to the logged-in staff member. The final focused Application run passed 24 tests with no skips: strict placement matching, full Academic ancestor tuples, division/class/medium/year/tenant boundaries, spoofed attendance IDs, missing bulk IDs, cross-tenant rejection, applicant direct-ID protection, scoped overview/activity rows, shared identity edit rejection, and settings publication rules. Profile fixtures use persisted completed historical-import cases so scope assertions do not depend on retired Admission stage fixtures. Settings success fixtures explicitly assign tenant scope.
+
+The focused `StudentAttendanceApi_Tests` run passed all 20 tests with no skips, including historical attendance filtering under full Academic assignment tuples. Application build and test-project compilation passed. These focused runs do not certify the complete backend suite or PostgreSQL provider acceptance. Browser verification was omitted at the user's request.
+
+From the backend repository, run `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter 'FullyQualifiedName~StudentRecordScope_Tests|FullyQualifiedName~Applicant_identity_notes_and_activity_direct_ids_require_academic_scope|FullyQualifiedName~Division_scope_checks_must_use_the_persisted_year_and_class|FullyQualifiedName~Applicant_overview_filters_sibling_applications|FullyQualifiedName~Academic_ancestors_allow_navigation|FullyQualifiedName~Student_record_profile_respects_division_boundary|FullyQualifiedName~AdmissionAssessmentScope_Tests|FullyQualifiedName~StudentRecordsSettings_Tests'`, then `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter FullyQualifiedName~StudentAttendanceApi_Tests`. This verification used isolated `--artifacts-path` outputs. Evidence is in ignored `.artifacts/student-user-scope/results/student-scope-release.trx` and `student-attendance.trx`.
+
+Student documentation passes `pwsh -NoProfile -File scripts/docs/validate-docs.ps1 -Module student`. Windows PowerShell 5's default text decoding reports a false mojibake error on existing Unicode text; PowerShell 7 reads the UTF-8 documents correctly.
 
 ## Five-stage admission acceptance (2026-10-08)
 

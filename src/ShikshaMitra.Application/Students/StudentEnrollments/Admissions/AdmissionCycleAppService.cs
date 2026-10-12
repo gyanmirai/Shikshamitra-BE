@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -23,13 +24,19 @@ public class AdmissionCycleAppService(
 	IRepository<AdmissionSeatPool, Guid> seatPoolRepository,
 	IRepository<AdmissionSeatReservation, Guid> seatReservationRepository,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> workflowStageRepository,
-	IRepository<AcademicYear, Guid> academicYearRepository) : ApplicationService, IAdmissionCycleAppService
+	IRepository<AcademicYear, Guid> academicYearRepository,
+	StudentScopeAccessService studentScope,
+	AdmissionApplicationScopeAccessService applicationScope) : ApplicationService, IAdmissionCycleAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
 	public async Task<PagedResultDto<AdmissionCycleDto>> GetListAsync(AdmissionCycleListInput input)
 	{
 		var today = AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now);
 		var queryable = await cycleRepository.GetQueryableAsync();
+		var scope = await studentScope.GetCurrentUserAcademicYearScopeAsync();
+		queryable = queryable.Where(cycle => cycle.TenantId == CurrentTenant.Id);
+		if (!scope.HasAllAcademicYears)
+			queryable = queryable.Where(cycle => scope.AcademicYearIds.Contains(cycle.AcademicYearId));
 		queryable = queryable.Where(x =>
 			(string.IsNullOrWhiteSpace(input.Search) || x.Name.Contains(input.Search) || x.Code.Contains(input.Search)) &&
 			(!input.AcademicYearId.HasValue || x.AcademicYearId == input.AcademicYearId.Value) &&
@@ -48,7 +55,7 @@ public class AdmissionCycleAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.View)]
 	public async Task<AdmissionCycleDto> GetAsync(Guid id)
 	{
-		var cycle = await GetCycleAsync(id);
+		var cycle = await GetCycleAsync(id, requireYearWideScope: false);
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
@@ -489,12 +496,14 @@ public class AdmissionCycleAppService(
 		var years = yearIds.Count == 0
 			? []
 			: await academicYearRepository.GetListAsync(x => yearIds.Contains(x.Id));
+		var scopedOfferings = await applicationScope.GetScopedOfferingsAsync();
 		var offerings = cycleIds.Count == 0
 			? []
-			: await offeringRepository.GetListAsync(x => cycleIds.Contains(x.AdmissionCycleId));
+			: await AsyncExecuter.ToListAsync(scopedOfferings.Where(x => cycleIds.Contains(x.AdmissionCycleId)));
 		var applications = cycleIds.Count == 0
 			? []
-			: await applicationRepository.GetListAsync(x => cycleIds.Contains(x.AdmissionCycleId));
+			: await AsyncExecuter.ToListAsync((await applicationScope.GetScopedApplicationsAsync()).Where(x =>
+				cycleIds.Contains(x.AdmissionCycleId) && scopedOfferings.Any(offering => offering.Id == x.AdmissionOfferingId)));
 
 		return new AdmissionCycleMapContext(
 			years.ToDictionary(x => x.Id, x => x.Name),
@@ -543,8 +552,15 @@ public class AdmissionCycleAppService(
 		};
 	}
 
-	private async Task<AdmissionCycle> GetCycleAsync(Guid id) =>
-		await cycleRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionCycle), id);
+	private async Task<AdmissionCycle> GetCycleAsync(Guid id, bool requireYearWideScope = true)
+	{
+		var cycle = await cycleRepository.FindAsync(x => x.Id == id && x.TenantId == CurrentTenant.Id)
+			?? throw new EntityNotFoundException(typeof(AdmissionCycle), id);
+		await studentScope.EnsureCanAccessAcademicYearAsync(cycle.AcademicYearId, "AdmissionCycle");
+		if (requireYearWideScope && !await studentScope.CurrentUserHasAcademicYearWideScopeAsync(cycle.AcademicYearId))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
+		return cycle;
+	}
 
 	private async Task EnsureAcademicYearExistsAsync(Guid id)
 	{
@@ -552,6 +568,8 @@ public class AdmissionCycleAppService(
 		{
 			throw new EntityNotFoundException(typeof(AcademicYear), id);
 		}
+		if (!await studentScope.CurrentUserHasAcademicYearWideScopeAsync(id))
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
 	}
 
 	private async Task EnsureCodeIsUniqueAsync(string code, Guid? excludingId = null)

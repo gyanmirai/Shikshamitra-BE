@@ -32,7 +32,7 @@ public class AdmissionApplicationCounsellorService(
 				throw new EntityNotFoundException(typeof(AdmissionOffering), offeringId.Value);
 			return await people.GetCounsellorsAsync(filter, offeringId.Value);
 		}
-		var query = await applications.GetQueryableAsync();
+		var query = await scope.GetScopedApplicationsAsync();
 		var assignedIds = await AsyncExecuter.ToListAsync(query
 			.Where(application => application.AssignedCounsellorId.HasValue &&
 				offerings.Any(offering => offering.Id == application.AdmissionOfferingId))

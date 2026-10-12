@@ -12,7 +12,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [RemoteService(false)]
 public class AdmissionReviewQueueService(IRepository<AdmissionReviewWorkItem, Guid> workItems,
-	IRepository<AdmissionApplication, Guid> applications, IRepository<AdmissionApplicationStageInstance, Guid> stages,
+	IRepository<AdmissionApplicationStageInstance, Guid> stages,
 	IRepository<AdmissionApplicant, Guid> applicants, IRepository<AdmissionCycle, Guid> cycles,
 	AdmissionApplicationScopeAccessService scope,
 	AdmissionReviewReadService reader) : ApplicationService, ITransientDependency
@@ -20,7 +20,7 @@ public class AdmissionReviewQueueService(IRepository<AdmissionReviewWorkItem, Gu
 	public async Task<PagedResultDto<AdmissionReviewQueueItemDto>> GetAsync(AdmissionReviewQueueInput input)
 	{
 		var visible = await scope.GetScopedOfferingsAsync();
-		var workQuery = await workItems.GetQueryableAsync(); var applicationQuery = await applications.GetQueryableAsync();
+		var workQuery = await workItems.GetQueryableAsync(); var applicationQuery = await scope.GetScopedApplicationsAsync();
 		var stageQuery = await stages.GetQueryableAsync(); var applicantQuery = await applicants.GetQueryableAsync();
 		var cycleQuery = await cycles.GetQueryableAsync();
 		var now = DateTime.UtcNow;

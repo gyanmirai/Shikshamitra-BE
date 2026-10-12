@@ -19,6 +19,16 @@ public class StudentIdCardController(IStudentIdCardAppService service) : AbpCont
 	public async Task<Result<StudentIdCardTemplateDto>> GetTemplateAsync() => Result.Success(await service.GetTemplateAsync());
 	[HttpPut("templates")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]
 	public async Task<Result<StudentIdCardTemplateDto>> SaveTemplateAsync([FromBody] StudentIdCardTemplateDto input) => Result.Success(await service.SaveTemplateAsync(input));
+	[HttpGet("templates/list")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
+	public async Task<Result<List<StudentIdCardTemplateDto>>> TemplatesAsync() => Result.Success(await service.GetTemplatesAsync());
+	[HttpGet("templates/{id:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
+	public async Task<Result<StudentIdCardTemplateDto>> TemplateAsync(Guid id) => Result.Success(await service.GetTemplateByIdAsync(id));
+	[HttpPost("templates")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]
+	public async Task<Result<StudentIdCardTemplateDto>> CreateTemplateAsync([FromBody] StudentIdCardTemplateDto input) => Result.Success(await service.CreateTemplateAsync(input));
+	[HttpPut("templates/{id:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]
+	public async Task<Result<StudentIdCardTemplateDto>> UpdateTemplateAsync(Guid id, [FromBody] StudentIdCardTemplateDto input) => Result.Success(await service.UpdateTemplateAsync(id, input));
+	[HttpDelete("templates/{id:guid}")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Delete)]
+	public async Task<IActionResult> DeleteTemplateAsync(Guid id) { await service.DeleteTemplateAsync(id); return NoContent(); }
 	[HttpPost("preview")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View)]
 	public async Task<Result<List<StudentIdCardDto>>> PreviewAsync([FromBody] StudentIdCardPreviewRequestDto input) => Result.Success(await service.PreviewAsync(input));
 	[HttpPost("issue")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]

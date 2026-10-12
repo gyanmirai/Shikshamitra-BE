@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.Records;
 
 public class StudentIdCardTemplateDto
 {
+	public Guid? Id { get; set; }
 	[StringLength(150)] public string Name { get; set; } = "Student I-Card";
 	[StringLength(40)] public string PresetKey { get; set; } = "formal-student";
 	[StringLength(10)] public string Orientation { get; set; } = "Horizontal";
@@ -26,6 +27,7 @@ public class StudentIdCardTemplateDto
 
 public class StudentIdCardPreviewRequestDto
 {
+	public Guid? TemplateId { get; set; }
 	public List<Guid> StudentIds { get; set; } = [];
 }
 public class IssueStudentIdCardsDto : StudentIdCardPreviewRequestDto
@@ -53,6 +55,11 @@ public interface IStudentIdCardAppService : IApplicationService
 {
 	Task<StudentIdCardTemplateDto> GetTemplateAsync();
 	Task<StudentIdCardTemplateDto> SaveTemplateAsync(StudentIdCardTemplateDto input);
+	Task<List<StudentIdCardTemplateDto>> GetTemplatesAsync();
+	Task<StudentIdCardTemplateDto> GetTemplateByIdAsync(Guid id);
+	Task<StudentIdCardTemplateDto> CreateTemplateAsync(StudentIdCardTemplateDto input);
+	Task<StudentIdCardTemplateDto> UpdateTemplateAsync(Guid id, StudentIdCardTemplateDto input);
+	Task DeleteTemplateAsync(Guid id);
 	Task<List<StudentIdCardDto>> PreviewAsync(StudentIdCardPreviewRequestDto input);
 	Task<List<StudentIdCardDto>> IssueAsync(IssueStudentIdCardsDto input);
 	Task<List<StudentIdCardDto>> GetHistoryAsync(Guid studentId);

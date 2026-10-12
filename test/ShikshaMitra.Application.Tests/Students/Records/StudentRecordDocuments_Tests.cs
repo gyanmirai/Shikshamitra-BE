@@ -17,6 +17,24 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public Task Student_ID_templates_support_multiple_designs_and_CRUD() => RunCertificationScenarioAsync(async () =>
+	{
+		var service = GetRequiredService<IStudentIdCardAppService>();
+		var first = await service.CreateTemplateAsync(new() { Name = "First design", SchoolName = "Test school" });
+		var second = await service.CreateTemplateAsync(new() { Name = "Second design", SchoolName = "Test school" });
+		first.Id.ShouldNotBeNull(); second.Id.ShouldNotBeNull();
+		(await service.GetTemplatesAsync()).Select(item => item.Id).ShouldContain(first.Id);
+		(await service.GetTemplatesAsync()).Select(item => item.Id).ShouldContain(second.Id);
+		(await service.GetTemplateByIdAsync(second.Id!.Value)).Name.ShouldBe("Second design");
+		second.Name = "Updated design";
+		var updated = await service.UpdateTemplateAsync(second.Id.Value, second);
+		updated.Name.ShouldBe("Updated design");
+		await service.DeleteTemplateAsync(first.Id.Value);
+		await service.DeleteTemplateAsync(updated.Id!.Value);
+		(await service.GetTemplatesAsync()).ShouldNotContain(item => item.Id == first.Id || item.Id == updated.Id);
+	});
+
+	[Fact]
 	public Task Record_ID_issuance_is_idempotent_snapshot_is_frozen_and_reprint_and_void_are_audited() => RunCertificationScenarioAsync(async () =>
 	{
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);

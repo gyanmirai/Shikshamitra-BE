@@ -31,35 +31,89 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 		await access.EnsureActiveActorAsync();
 		return await LoadTemplateAsync();
 	}
-	private async Task<StudentIdCardTemplateDto> LoadTemplateAsync()
+	public async Task<List<StudentIdCardTemplateDto>> GetTemplatesAsync()
 	{
-		var template = await templates.FindAsync(t => t.TenantId == CurrentTenant.Id);
-		if (template == null) return new() { SchoolName = CurrentTenant.Name ?? "School" };
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View); EnsureTenant();
+		await access.EnsureActiveActorAsync();
+		var query = await templates.GetQueryableAsync();
+		var items = await AsyncExecuter.ToListAsync(query.Where(t => t.TenantId == CurrentTenant.Id).OrderBy(t => t.CreationTime).ThenBy(t => t.Id));
+		return items.Select(MapTemplate).ToList();
+	}
+	public async Task<StudentIdCardTemplateDto> GetTemplateByIdAsync(Guid id)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View); EnsureTenant();
+		await access.EnsureActiveActorAsync();
+		return await LoadTemplateAsync(id);
+	}
+	private static StudentIdCardTemplateDto MapTemplate(StudentIdCardTemplate template)
+	{
 		var dto = JsonSerializer.Deserialize<StudentIdCardTemplateDto>(template.ConfigurationJson, JsonOptions)!;
-		dto.ConcurrencyStamp = template.ConcurrencyStamp; return dto;
+		dto.Id = template.Id; dto.ConcurrencyStamp = template.ConcurrencyStamp;
+		return dto;
+	}
+	private async Task<StudentIdCardTemplateDto> LoadTemplateAsync(Guid? templateId = null)
+	{
+		var query = await templates.GetQueryableAsync();
+		var template = await AsyncExecuter.FirstOrDefaultAsync(query.Where(t => t.TenantId == CurrentTenant.Id &&
+			(!templateId.HasValue || t.Id == templateId.Value)).OrderBy(t => t.CreationTime).ThenBy(t => t.Id));
+		if (template == null && templateId.HasValue) throw new EntityNotFoundException(typeof(StudentIdCardTemplate), templateId.Value);
+		return template == null ? new() { SchoolName = CurrentTenant.Name ?? "School" } : MapTemplate(template);
+	}
+	[UnitOfWork(true)]
+	public async Task<StudentIdCardTemplateDto> CreateTemplateAsync(StudentIdCardTemplateDto input)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add); EnsureTenant();
+		await access.EnsureActiveActorAsync(); ValidateTemplate(input);
+		input.Id = null; input.ConcurrencyStamp = null;
+		var template = new StudentIdCardTemplate(GuidGenerator.Create(), CurrentTenant.Id!.Value, JsonSerializer.Serialize(input, JsonOptions));
+		await templates.InsertAsync(template, autoSave: true);
+		return MapTemplate(template);
+	}
+	[UnitOfWork(true)]
+	public async Task<StudentIdCardTemplateDto> UpdateTemplateAsync(Guid id, StudentIdCardTemplateDto input)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add); EnsureTenant();
+		await access.EnsureActiveActorAsync(); ValidateTemplate(input);
+		var template = await templates.FindAsync(t => t.Id == id && t.TenantId == CurrentTenant.Id)
+			?? throw new EntityNotFoundException(typeof(StudentIdCardTemplate), id);
+		if (template.ConcurrencyStamp != input.ConcurrencyStamp) throw new BusinessException("Students:Records:IdTemplateConflict");
+		input.Id = null; input.ConcurrencyStamp = null;
+		template.Update(JsonSerializer.Serialize(input, JsonOptions));
+		await templates.UpdateAsync(template, autoSave: true);
+		return MapTemplate(template);
+	}
+	[UnitOfWork(true)]
+	public async Task DeleteTemplateAsync(Guid id)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Delete); EnsureTenant();
+		await access.EnsureActiveActorAsync();
+		var template = await templates.FindAsync(t => t.Id == id && t.TenantId == CurrentTenant.Id)
+			?? throw new EntityNotFoundException(typeof(StudentIdCardTemplate), id);
+		await templates.DeleteAsync(template, autoSave: true);
 	}
 	[UnitOfWork(true)]
 	public async Task<StudentIdCardTemplateDto> SaveTemplateAsync(StudentIdCardTemplateDto input)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add); EnsureTenant();
-		await access.EnsureActiveActorAsync();
+		await access.EnsureActiveActorAsync(); ValidateTemplate(input);
+		var query = await templates.GetQueryableAsync();
+		var template = await AsyncExecuter.FirstOrDefaultAsync(query.Where(t => t.TenantId == CurrentTenant.Id).OrderBy(t => t.CreationTime).ThenBy(t => t.Id));
+		if (template == null) return await CreateTemplateAsync(input);
+		return await UpdateTemplateAsync(template.Id, input);
+	}
+	private static void ValidateTemplate(StudentIdCardTemplateDto input)
+	{
 		if (input.Name == null || input.Name.Length is < 1 or > 150 || input.SchoolName == null || input.HeaderText == null || input.FooterText == null || input.PrimaryColor == null || input.BackgroundColor == null || input.SchoolAddress == null ||
 			input.SchoolName.Length > 150 || input.SchoolAddress.Length > 300 || input.HeaderText.Length > 300 || input.FooterText.Length > 500 ||
 			!new[] { "formal-student", "modern-student", "vertical-badge", "visitor-style", "minimal", "photo-first" }.Contains(input.PresetKey) ||
 			!new[] { "Horizontal", "Vertical" }.Contains(input.Orientation) || input.CardsPerPage is < 1 or > 10 ||
 			!Regex.IsMatch(input.PrimaryColor, "^#[0-9a-fA-F]{6}$") || !Regex.IsMatch(input.BackgroundColor, "^#[0-9a-fA-F]{6}$") || input.Fields == null || input.Fields.Count is < 1 or > 6 ||
 			input.Fields.Distinct().Count() != input.Fields.Count || input.Fields.Any(f => !AllowedFields.Contains(f))) throw new BusinessException("Students:Records:InvalidIdTemplate");
-		var template = await templates.FindAsync(t => t.TenantId == CurrentTenant.Id);
-		if (template != null && template.ConcurrencyStamp != input.ConcurrencyStamp) throw new BusinessException("Students:Records:IdTemplateConflict");
-		input.ConcurrencyStamp = null;
-		if (template == null) await templates.InsertAsync(new StudentIdCardTemplate(GuidGenerator.Create(), CurrentTenant.Id!.Value, JsonSerializer.Serialize(input, JsonOptions)), autoSave: true);
-		else { template.Update(JsonSerializer.Serialize(input, JsonOptions)); await templates.UpdateAsync(template, autoSave: true); }
-		return await LoadTemplateAsync();
 	}
 	public async Task<List<StudentIdCardDto>> PreviewAsync(StudentIdCardPreviewRequestDto input)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View); EnsureTenant(); ValidateStudents(input);
-		var template = await LoadTemplateAsync(); var result = new List<StudentIdCardDto>();
+		var template = await LoadTemplateAsync(input.TemplateId); var result = new List<StudentIdCardDto>();
 		foreach (var studentId in input.StudentIds)
 		{
 			var snapshot = await snapshots.CaptureAsync(studentId);
@@ -76,7 +130,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 			try
 			{
 				using var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true);
-				var template = await LoadTemplateAsync(); var result = new List<StudentIdCardDto>(); var sequences = new Dictionary<string, int>();
+				var template = await LoadTemplateAsync(input.TemplateId); var result = new List<StudentIdCardDto>(); var sequences = new Dictionary<string, int>();
 				foreach (var studentId in input.StudentIds)
 				{
 					var snapshot = await snapshots.CaptureAsync(studentId);

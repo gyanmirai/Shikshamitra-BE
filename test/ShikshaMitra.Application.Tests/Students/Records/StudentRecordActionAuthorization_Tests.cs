@@ -44,6 +44,11 @@ public class StudentRecordActionAuthorization_Tests
 	[Theory]
 	[InlineData("issue", "Students.Records.StudentICard.Add")]
 	[InlineData("template", "Students.Records.StudentICard.Add")]
+	[InlineData("template-create", "Students.Records.StudentICard.Add")]
+	[InlineData("template-update", "Students.Records.StudentICard.Add")]
+	[InlineData("template-delete", "Students.Records.StudentICard.Delete")]
+	[InlineData("template-list", "Students.Records.StudentICard.View")]
+	[InlineData("template-view", "Students.Records.StudentICard.View")]
 	[InlineData("reprint", "Students.Records.StudentICard.Add")]
 	[InlineData("void", "Students.Records.StudentICard.Delete")]
 	[InlineData("download", "Students.Records.StudentICard.View")]
@@ -53,6 +58,11 @@ public class StudentRecordActionAuthorization_Tests
 		Func<Task> call = action switch
 		{
 			"issue" => () => service.IssueAsync(new()), "template" => () => service.SaveTemplateAsync(new()),
+			"template-create" => () => service.CreateTemplateAsync(new()),
+			"template-update" => () => service.UpdateTemplateAsync(Guid.NewGuid(), new()),
+			"template-delete" => () => service.DeleteTemplateAsync(Guid.NewGuid()),
+			"template-list" => () => service.GetTemplatesAsync(),
+			"template-view" => () => service.GetTemplateByIdAsync(Guid.NewGuid()),
 			"reprint" => () => service.ReprintAsync(Guid.NewGuid(), new() { Reason = "Replacement print" }),
 			"void" => () => service.VoidAsync(Guid.NewGuid(), new() { Reason = "Invalid issued card" }),
 			_ => () => service.GetPdfAsync(Guid.NewGuid())

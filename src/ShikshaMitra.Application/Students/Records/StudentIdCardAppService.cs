@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -65,9 +66,12 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add); EnsureTenant();
 		await access.EnsureActiveActorAsync(); ValidateTemplate(input);
+		using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+		await EnsureStudentsAvailableAsync(input.Selection, null);
 		input.Id = null; input.ConcurrencyStamp = null;
 		var template = new StudentIdCardTemplate(GuidGenerator.Create(), CurrentTenant.Id!.Value, JsonSerializer.Serialize(input, JsonOptions));
 		await templates.InsertAsync(template, autoSave: true);
+		await work.CompleteAsync();
 		return MapTemplate(template);
 	}
 	[UnitOfWork(true)]
@@ -75,13 +79,28 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add); EnsureTenant();
 		await access.EnsureActiveActorAsync(); ValidateTemplate(input);
+		using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
 		var template = await templates.FindAsync(t => t.Id == id && t.TenantId == CurrentTenant.Id)
 			?? throw new EntityNotFoundException(typeof(StudentIdCardTemplate), id);
 		if (template.ConcurrencyStamp != input.ConcurrencyStamp) throw new BusinessException("Students:Records:IdTemplateConflict");
+		await EnsureStudentsAvailableAsync(input.Selection, id);
 		input.Id = null; input.ConcurrencyStamp = null;
 		template.Update(JsonSerializer.Serialize(input, JsonOptions));
 		await templates.UpdateAsync(template, autoSave: true);
+		await work.CompleteAsync();
 		return MapTemplate(template);
+	}
+	private async Task EnsureStudentsAvailableAsync(StudentIdCardSelectionDto selection, Guid? currentTemplateId)
+	{
+		if (selection.StudentIds.Count == 0) return;
+		var selected = selection.StudentIds.ToHashSet();
+		var query = await templates.GetQueryableAsync();
+		var otherTemplates = await AsyncExecuter.ToListAsync(query.Where(t => t.TenantId == CurrentTenant.Id && t.Id != currentTemplateId));
+		if (otherTemplates.Any(t =>
+		{
+			var existing = MapTemplate(t).Selection;
+			return existing.AcademicYearId == selection.AcademicYearId && existing.StudentIds.Any(selected.Contains);
+		})) throw new BusinessException("Students:Records:IdTemplateStudentConflict");
 	}
 	[UnitOfWork(true)]
 	public async Task DeleteTemplateAsync(Guid id)

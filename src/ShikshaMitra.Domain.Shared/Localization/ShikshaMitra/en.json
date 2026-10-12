@@ -647,6 +647,7 @@
         "Students:Records:GuardianReviewInvalid": "The guardian access review request is invalid.",
         "Students:Records:IdNumberConflict": "This ID card number is already in use.",
         "Students:Records:IdTemplateConflict": "The ID template changed. Refresh before saving.",
+        "Students:Records:IdTemplateStudentConflict": "One or more selected students already belong to another Student I-Card template in this academic year.",
         "Students:Records:InvalidCertificateFields": "One or more certificate fields are invalid.",
         "Students:Records:InvalidDuplicatePair": "Choose two different accessible student profiles for duplicate review.",
         "Students:Records:InvalidIdStudentSelection": "Choose eligible students to issue ID cards.",

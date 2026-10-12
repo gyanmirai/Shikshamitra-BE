@@ -30,11 +30,28 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await service.GetTemplateByIdAsync(second.Id!.Value)).Name.ShouldBe("Second design");
 		(await service.GetTemplateByIdAsync(second.Id.Value)).Selection.StudentIds.Single().ShouldBe(studentId);
 		second.Selection.AcademicYearId.ShouldBe(yearId);
+		(await Should.ThrowAsync<BusinessException>(() => service.CreateTemplateAsync(new()
+		{
+			Name = "Conflicting design", Selection = new() { AcademicYearId = yearId, StudentIds = [studentId] }
+		}))).Code.ShouldBe("Students:Records:IdTemplateStudentConflict");
+		var otherYear = await service.CreateTemplateAsync(new()
+		{
+			Name = "Next year design", Selection = new() { AcademicYearId = Guid.NewGuid(), StudentIds = [studentId] }
+		});
+		var otherStudent = await service.CreateTemplateAsync(new()
+		{
+			Name = "Other student design", Selection = new() { AcademicYearId = yearId, StudentIds = [Guid.NewGuid()] }
+		});
+		otherStudent.Selection.StudentIds = [studentId];
+		(await Should.ThrowAsync<BusinessException>(() => service.UpdateTemplateAsync(otherStudent.Id!.Value, otherStudent)))
+			.Code.ShouldBe("Students:Records:IdTemplateStudentConflict");
 		second.Name = "Updated design";
 		var updated = await service.UpdateTemplateAsync(second.Id.Value, second);
 		updated.Name.ShouldBe("Updated design");
 		updated.Selection.BoardIds.Single().ShouldBe(boardId);
 		await service.DeleteTemplateAsync(first.Id.Value);
+		await service.DeleteTemplateAsync(otherYear.Id!.Value);
+		await service.DeleteTemplateAsync(otherStudent.Id!.Value);
 		await service.DeleteTemplateAsync(updated.Id!.Value);
 		(await service.GetTemplatesAsync()).ShouldNotContain(item => item.Id == first.Id || item.Id == updated.Id);
 	});

@@ -58,6 +58,13 @@ public class AttendanceEntry : FullAuditedEntity<Guid>, IMultiTenant
 	/// Optional remarks about the attendance (e.g., "Late arrival", "Medical leave")
 	/// </summary>
 	public string? Remarks { get; private set; }
+	public string? GuardianAbsenceReason { get; private set; }
+
+	public void SetGuardianAbsenceReason(string reason)
+	{
+		if (Status != AttendanceStatus.Absent) throw new BusinessException("MobileAcademics:AbsenceRequired");
+		GuardianAbsenceReason = Check.Length(Check.NotNullOrWhiteSpace(reason, nameof(reason)).Trim(), nameof(reason), 500);
+	}
 
 	/// <summary>
 	/// User who marked this attendance

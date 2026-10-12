@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Calendar;
 using ShikshaMitra.Academic.Curriculum;
@@ -21,6 +23,7 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Account;
 using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
@@ -34,6 +37,65 @@ namespace ShikshaMitra.Academic.Timetable.Portal;
 public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private IPortalTimetableAppService Service => GetRequiredService<IPortalTimetableAppService>();
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public Task My_profile_includes_the_authorized_full_student_context(bool parent, bool legacySelf) => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id, parent: parent, legacySelf: legacySelf); using var identity = SignIn(f.User.Id);
+        var service = GetRequiredService<IProfileAppService>();
+        var profile = await service.GetAsync();
+        profile.UserName.ShouldBe(f.User.UserName);
+        var contexts = ((List<PortalTimetableContextDto>)profile.ExtraProperties["studentContexts"]!).Single();
+        contexts.Student.Id.ShouldBe(f.Student.Id);
+        contexts.Student.StandardId.ShouldBe(f.Student.StandardId);
+        contexts.Student.StandardName.ShouldBe("Class 8");
+        contexts.Student.DivisionName.ShouldBe("A");
+        contexts.Student.RollNumber.ShouldBe(12);
+        contexts.CurrentAcademicYear!.Id.ShouldBe(f.Year.Id);
+        contexts.AvailableAcademicYears.Single().Id.ShouldBe(f.Year.Id);
+        contexts.WorkingDays.ShouldBe(["monday"]);
+        contexts.Timezone.ShouldBe("Asia/Kolkata");
+        contexts.Availability.ShouldBe("available");
+        var json = JsonSerializer.SerializeToElement(profile, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        json.GetProperty("extraProperties").GetProperty("studentContexts")[0].GetProperty("student").GetProperty("id").GetGuid().ShouldBe(f.Student.Id);
+    });
+
+    [Fact]
+    public Task My_profile_does_not_include_revoked_or_unconfirmed_portal_data() => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id, legacySelf: true); await Insert(f.Link); using var identity = SignIn(f.User.Id);
+        var service = GetRequiredService<IProfileAppService>();
+        ((List<PortalTimetableContextDto>)(await service.GetAsync()).ExtraProperties["studentContexts"]!).Count.ShouldBe(1);
+        f.User.SetEmailConfirmed(false); await GetRequiredService<IRepository<IdentityUser, Guid>>().UpdateAsync(f.User, true);
+        ((List<PortalTimetableContextDto>)(await service.GetAsync()).ExtraProperties["studentContexts"]!).ShouldBeEmpty();
+        f.User.SetEmailConfirmed(true); await GetRequiredService<IRepository<IdentityUser, Guid>>().UpdateAsync(f.User, true);
+        await GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().DeleteAsync(f.Link, true);
+        ((List<PortalTimetableContextDto>)(await service.GetAsync()).ExtraProperties["studentContexts"]!).ShouldBeEmpty();
+    });
+
+    [Fact]
+    public Task My_profile_does_not_include_foreign_tenant_links_and_preserves_no_enrollment() => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id); using var identity = SignIn(f.User.Id);
+        using (GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid()))
+        {
+            var foreignTenant = GetRequiredService<ICurrentTenant>().Id!.Value;
+            var foreign = await Seed(foreignTenant);
+            await Insert(new StudentPortalAccountLink(Guid.NewGuid(), foreignTenant, foreign.Student.Id, f.User.Id, "guardian", "mother", Guid.NewGuid()));
+        }
+        f.Enrollment.Deactivate(); await GetRequiredService<IRepository<StudentEnrollment, Guid>>().UpdateAsync(f.Enrollment, true);
+        var context = ((List<PortalTimetableContextDto>)(await GetRequiredService<IProfileAppService>().GetAsync()).ExtraProperties["studentContexts"]!).Single();
+        context.Student.Id.ShouldBe(f.Student.Id);
+        context.Availability.ShouldBe("noEnrollment");
+        context.CurrentAcademicYear.ShouldBeNull();
+    });
+
     private async Task<T> Insert<T>(T entity) where T : class, Volo.Abp.Domain.Entities.IEntity<Guid> =>
         await GetRequiredService<IRepository<T, Guid>>().InsertAsync(entity, autoSave: true);
     private IDisposable SignIn(Guid userId) => GetRequiredService<ICurrentPrincipalAccessor>().Change(

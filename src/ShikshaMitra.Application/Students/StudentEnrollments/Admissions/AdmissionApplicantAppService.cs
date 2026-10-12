@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
+using Volo.Abp.Authorization;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
@@ -12,7 +13,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [Authorize]
-public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> applicantRepository, IRepository<AdmissionFamily, Guid> familyRepository, IRepository<AdmissionGuardian, Guid> guardianRepository, IRepository<AdmissionApplication, Guid> applicationRepository, IRepository<AdmissionApplicationWorkflowInstance, Guid> workflowInstanceRepository, IRepository<AdmissionApplicationStageInstance, Guid> stageInstanceRepository, IRepository<AdmissionActivity, Guid> activityRepository, IRepository<AdmissionNote, Guid> noteRepository, AdmissionInquiryPeopleService peopleService) : ApplicationService, IAdmissionApplicantAppService
+public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> applicantRepository, IRepository<AdmissionFamily, Guid> familyRepository, IRepository<AdmissionGuardian, Guid> guardianRepository, IRepository<AdmissionApplication, Guid> applicationRepository, IRepository<AdmissionApplicationWorkflowInstance, Guid> workflowInstanceRepository, IRepository<AdmissionApplicationStageInstance, Guid> stageInstanceRepository, IRepository<AdmissionActivity, Guid> activityRepository, IRepository<AdmissionNote, Guid> noteRepository, AdmissionInquiryPeopleService peopleService, AdmissionApplicantScopeAccessService applicantScope) : ApplicationService, IAdmissionApplicantAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View)]
 	public async Task<AdmissionApplicant360Dto> GetAsync(Guid id)
@@ -21,7 +22,7 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 		var family = await familyRepository.FindAsync(applicant.FamilyId);
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
-		var applications = (await applicationRepository.GetListAsync(x => x.ApplicantId == id))
+		var applications = (await AsyncExecuter.ToListAsync(await applicantScope.GetApplicationsAsync(id)))
 			.OrderByDescending(x => x.CreationTime).ToList();
 		var workflows = await workflowInstanceRepository.GetListAsync(x => applications.Select(a => a.Id).Contains(x.ApplicationId));
 		var stages = await stageInstanceRepository.GetListAsync(x => workflows.Select(w => w.Id).Contains(x.WorkflowInstanceId));
@@ -46,14 +47,16 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 				return result;
 			}).ToList(),
 			Activities = await GetActivitiesAsync(id),
-			Notes = await GetNotesAsync(id)
+			Notes = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesView)
+				? await GetNotesAsync(id) : []
 		};
 	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.Edit)]
 	public async Task<AdmissionApplicantDto> UpdateProfileAsync(Guid id, UpdateAdmissionApplicantProfileDto input)
 	{
+		await applicantScope.EnsureCanUpdateProfileAsync(id, input.GuardianMobile != null || input.GuardianEmail != null);
 		var applicant = await GetApplicantAsync(id);
-		var applications = await applicationRepository.GetListAsync(x => x.ApplicantId == id);
+		var applications = await applicationRepository.GetListAsync(x => x.ApplicantId == id && x.TenantId == CurrentTenant.Id);
 		if (applicant.ExistingStudentId.HasValue || applications.Any(x => x.Status is AdmissionApplicationStatus.Enrolled or AdmissionApplicationStatus.AdmissionFinalized))
 			throw new BusinessException(AdmissionErrorCodes.ApplicationDecisionInvalidState,
 				"A finalized applicant profile must be updated from the Student record.");
@@ -81,7 +84,7 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View)]
 	public async Task<List<AdmissionActivityDto>> GetActivitiesAsync(Guid id)
 	{
-		var query = await activityRepository.GetQueryableAsync();
+		var query = await applicantScope.ApplyActivityScopeAsync(await activityRepository.GetQueryableAsync(), id);
 		var rows = await AsyncExecuter.ToListAsync(query.Where(x => x.ApplicantId == id)
 			.OrderByDescending(x => x.OccurredAt).Take(200));
 		return rows.Select(x => new AdmissionActivityDto
@@ -91,10 +94,16 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 			OccurredAt = x.OccurredAt, CreatorId = x.CreatorId
 		}).ToList();
 	}
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesView)] public async Task<List<AdmissionNoteDto>> GetNotesAsync(Guid id) => (await noteRepository.GetListAsync(x => x.ApplicantId == id)).OrderByDescending(x => x.CreationTime).Select(Map).ToList();
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesView)]
+	public async Task<List<AdmissionNoteDto>> GetNotesAsync(Guid id)
+	{
+		await GetApplicantAsync(id);
+		return (await noteRepository.GetListAsync(x => x.ApplicantId == id && x.TenantId == CurrentTenant.Id))
+			.OrderByDescending(x => x.CreationTime).Select(Map).ToList();
+	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesCreate)] public async Task<AdmissionNoteDto> CreateNoteAsync(Guid id, CreateAdmissionNoteDto input) { await GetApplicantAsync(id); var note = new AdmissionNote(GuidGenerator.Create(), CurrentTenant.Id, id, input.Text); await noteRepository.InsertAsync(note, false); await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "NoteAdded", "Applicant note added", id, null, null), true); return Map(note); }
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesEdit)] public async Task<AdmissionNoteDto> UpdateNoteAsync(Guid id, Guid noteId, UpdateAdmissionNoteDto input) { await GetApplicantAsync(id); var note = await noteRepository.FindAsync(x => x.Id == noteId && x.ApplicantId == id) ?? throw new EntityNotFoundException(typeof(AdmissionNote), noteId); note.UpdateText(input.Text); await noteRepository.UpdateAsync(note, false); await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "NoteModified", "Applicant note modified", id), true); return Map(note); }
-	private async Task<AdmissionApplicant> GetApplicantAsync(Guid id) => await applicantRepository.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionApplicant), id);
+	private Task<AdmissionApplicant> GetApplicantAsync(Guid id) => applicantScope.GetAsync(id);
 	private static AdmissionApplicantDto Map(AdmissionApplicant x) => new() { Id = x.Id, FamilyId = x.FamilyId, FirstName = x.FirstName, MiddleName = x.MiddleName, LastName = x.LastName, DateOfBirth = x.DateOfBirth, Gender = x.Gender, AddressLine1 = x.AddressLine1, AddressLine2 = x.AddressLine2, City = x.City, State = x.State, Country = x.Country, PostalCode = x.PostalCode, Status = x.Status, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId };
 	private static AdmissionGuardianDto Map(AdmissionGuardian x) => new() { Id = x.Id, FamilyId = x.FamilyId, FirstName = x.FirstName, LastName = x.LastName, Mobile = x.Mobile, Email = x.Email, Relationship = x.Relationship, IsPrimaryContact = x.IsPrimaryContact, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId };
 	private static AdmissionApplicationDto Map(AdmissionApplication x) => new() { Id = x.Id, ApplicationNumber = x.ApplicationNumber, ApplicantId = x.ApplicantId, AdmissionCycleId = x.AdmissionCycleId, AdmissionOfferingId = x.AdmissionOfferingId, Status = x.Status, CurrentStageInstanceId = x.CurrentStageInstanceId, LastSavedAt = x.LastSavedAt, SubmittedAt = x.SubmittedAt, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId };

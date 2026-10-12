@@ -10,10 +10,15 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 [Authorize]
 public class AdmissionActivityAppService(IRepository<AdmissionActivity, Guid> repository,
-	AdmissionApplicationReadService applicationReadService) : ApplicationService, IAdmissionActivityAppService
+	AdmissionApplicationReadService applicationReadService,
+	AdmissionApplicantScopeAccessService applicantScope) : ApplicationService, IAdmissionActivityAppService
 {
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
-	public async Task<System.Collections.Generic.List<AdmissionActivityDto>> GetForApplicantAsync(Guid applicantId) => (await repository.GetListAsync(x => x.ApplicantId == applicantId)).OrderByDescending(x => x.OccurredAt).Select(Map).ToList();
+	public async Task<System.Collections.Generic.List<AdmissionActivityDto>> GetForApplicantAsync(Guid applicantId)
+	{
+		var query = await applicantScope.ApplyActivityScopeAsync(await repository.GetQueryableAsync(), applicantId);
+		return (await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.OccurredAt))).Select(Map).ToList();
+	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public async Task<System.Collections.Generic.List<AdmissionActivityDto>> GetForApplicationAsync(Guid applicationId)
 	{

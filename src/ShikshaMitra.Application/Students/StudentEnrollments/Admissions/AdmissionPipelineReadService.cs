@@ -16,7 +16,6 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 /// <summary>Batch projection of existing admission progress; never mutates workflow state.</summary>
 [RemoteService(false)]
 public class AdmissionPipelineReadService(
-	IRepository<AdmissionApplication, Guid> applications,
 	IRepository<AdmissionApplicant, Guid> applicants,
 	IRepository<AdmissionInquiry, Guid> inquiries,
 	IRepository<AdmissionCycle, Guid> cycles,
@@ -132,7 +131,7 @@ public class AdmissionPipelineReadService(
 
 	private async Task<IQueryable<AdmissionPipelineItemDto>> GetQueryAsync(AdmissionPipelineListInput input)
 	{
-		var applicationQuery = await applications.GetQueryableAsync();
+		var applicationQuery = await access.GetScopedApplicationsAsync();
 		applicationQuery = (await workspace.ProjectAsync(applicationQuery)).Where(row => !row.HasReachedDecision).Select(row => row.Application);
 		var scopedOfferings = await access.GetScopedOfferingsAsync();
 		var applicantQuery = await applicants.GetQueryableAsync();

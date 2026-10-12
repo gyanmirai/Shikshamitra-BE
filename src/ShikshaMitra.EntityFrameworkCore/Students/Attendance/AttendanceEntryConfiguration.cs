@@ -23,6 +23,7 @@ public class AttendanceEntryConfiguration : IEntityTypeConfiguration<AttendanceE
 			.HasFilter("\"EnrollmentId\" IS NOT NULL AND \"IsDeleted\" = false")
 			.HasDatabaseName("UX_AttendanceEntry_EnrollmentDate");
 		builder.Property(ae => ae.MarkedByUserId).IsRequired();
+		builder.Property(ae => ae.LastModificationTime).IsConcurrencyToken();
 
 		builder.Property(ae => ae.Status)
 			.IsRequired()

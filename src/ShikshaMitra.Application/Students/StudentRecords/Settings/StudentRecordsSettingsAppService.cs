@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
@@ -17,12 +18,17 @@ namespace ShikshaMitra.Students.StudentRecords;
 [Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Settings.View)]
 public class StudentRecordsSettingsAppService(IRepository<StudentRecordsConfiguration, Guid> configurations,
 	IRepository<StudentRecordsPolicyVersion, Guid> versions, IRepository<AcademicYear, Guid> years,
-	IIdentityRoleRepository roles, StudentRecordsPolicyResolver resolver, StudentRecordsActorService actor)
+	IIdentityRoleRepository roles, StudentRecordsPolicyResolver resolver, StudentRecordsActorService actor,
+	StudentScopeAccessService studentScope)
 	: ApplicationService, IStudentRecordsSettingsAppService
 {
 	public async Task<StudentRecordsRoleNamesDto> GetRoleNamesAsync()
 	{
-		await EnsureYearAsync(null);
+		if (!CurrentTenant.Id.HasValue) throw new BusinessException(StudentRecordsErrorCodes.TenantRequired);
+		await actor.EnsureActiveAsync();
+		var scope = await studentScope.GetCurrentUserAcademicYearScopeAsync();
+		if (!scope.HasAllAcademicYears && scope.AcademicYearIds.Count == 0)
+			throw new BusinessException(UserScopeErrorCodes.AccessDenied);
 		return new() { Items = (await roles.GetListAsync()).Where(x => x.TenantId == CurrentTenant.Id)
 			.OrderBy(x => x.Name).Select(x => new StudentRecordsRoleNameDto { Name = x.Name }).ToList() };
 	}
@@ -79,7 +85,7 @@ public class StudentRecordsSettingsAppService(IRepository<StudentRecordsConfigur
 	[UnitOfWork(true)]
 	public async Task<StudentRecordsSettingsDto> PublishAsync(PublishStudentRecordsSettingsDto input)
 	{
-		await EnsureYearAsync(input.AcademicYearId);
+		await EnsureYearAsync(input.AcademicYearId, writing: true);
 		var configuration = await FindAsync(input.AcademicYearId)
 			?? throw new BusinessException(StudentRecordsErrorCodes.DraftRequired);
 		EnsureConcurrency(configuration, input.ConcurrencyStamp);
@@ -93,16 +99,17 @@ public class StudentRecordsSettingsAppService(IRepository<StudentRecordsConfigur
 	}
 
 	private Task<StudentRecordsConfiguration?> FindAsync(Guid? yearId) => configurations.FindAsync(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId);
-	private async Task EnsureYearAsync(Guid? yearId)
+	private async Task EnsureYearAsync(Guid? yearId, bool writing = false)
 	{
 		if (!CurrentTenant.Id.HasValue) throw new BusinessException(StudentRecordsErrorCodes.TenantRequired);
 		await actor.EnsureActiveAsync();
 		if (yearId.HasValue && !await years.AnyAsync(x => x.Id == yearId && x.TenantId == CurrentTenant.Id))
 			throw new BusinessException(StudentRecordsErrorCodes.InvalidAcademicYear);
+		await studentScope.EnsureSettingsScopeAsync(yearId, writing, "StudentRecordsSettings");
 	}
 	private async Task ValidateAsync(StudentRecordsPolicy policy, Guid? yearId)
 	{
-		await EnsureYearAsync(yearId);
+		await EnsureYearAsync(yearId, writing: true);
 		StudentRecordsPolicyValidator.Validate(policy);
 		var available = (await roles.GetListAsync()).Where(x => x.TenantId == CurrentTenant.Id).Select(x => x.Name).ToList();
 		var unknown = StudentRecordsPolicyValidator.RoleNames(policy).Where(x => !available.Contains(x, StringComparer.OrdinalIgnoreCase)).ToArray();

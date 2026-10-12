@@ -594,7 +594,7 @@ public class AdmissionInquiryAppService(
 		var scopedInquiries = await AsyncExecuter.ToListAsync((await scopeAccess.GetScopedQueryAsync())
 			.Where(x => x.ApplicantId.HasValue && applicantIds.Contains(x.ApplicantId.Value)));
 		var candidateApplications = await AsyncExecuter.ToListAsync(
-			(await applicationRepository.GetQueryableAsync()).Where(application =>
+			(await applicationScope.GetScopedApplicationsAsync()).Where(application =>
 				applicantIds.Contains(application.ApplicantId))
 			.Select(application => new { application.ApplicantId, application.AdmissionOfferingId }));
 		var candidateOfferingIds = candidateApplications.Select(application => application.AdmissionOfferingId)

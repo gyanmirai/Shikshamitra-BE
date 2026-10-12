@@ -52,6 +52,7 @@ public class AdmissionAssessmentAccessService(
 	public async Task<AdmissionAssessmentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true, bool requirePreparation = false)
 	{
 		var application = await applications.FindAsync(applicationId) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), applicationId);
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().EnsureCanAccessAsync(application);
 		await GetOfferingAsync(application.AdmissionOfferingId);
 		var stage = await stages.FindAsync(stageId) ?? throw new EntityNotFoundException(typeof(AdmissionApplicationStageInstance), stageId);
 		var workflow = await instances.FindAsync(stage.WorkflowInstanceId);

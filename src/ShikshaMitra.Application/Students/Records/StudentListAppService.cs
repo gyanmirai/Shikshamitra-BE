@@ -368,6 +368,7 @@ public class StudentListAppService(
 	}
 
 	private sealed record AttendanceDashboardSlice(Guid StandardId, Guid DivisionId, List<AttendanceSummaryDto> Rows);
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add)]
 	public async Task ChangeStudentStatusAsync(Guid studentId, ChangeStudentStatusDto input)
 	{
 		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
@@ -377,7 +378,7 @@ public class StudentListAppService(
 			throw new EntityNotFoundException(typeof(Student), studentId);
 		}
 
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, nameof(ChangeStudentStatusAsync));
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(ChangeStudentStatusAsync));
 		await LazyServiceProvider.LazyGetRequiredService<StudentRecordWriteGuard>()
 			.EnsureAsync(studentId, nameof(ChangeStudentStatusAsync));
 
@@ -393,10 +394,11 @@ public class StudentListAppService(
 		await studentRepository.UpdateAsync(student);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<List<StudentStatusHistoryDto>> GetStatusHistoryAsync(Guid studentId)
 	{
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
-		await userScopeAccessService.EnsureCurrentUserCanAccessAsync(student, nameof(GetStatusHistoryAsync));
+		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(GetStatusHistoryAsync));
 
 		return student.StatusHistories
 			.OrderByDescending(h => h.CreationTime)

@@ -44,6 +44,17 @@ public class StudentSubmissionEntity : FullAuditedEntity<Guid>, IMultiTenant
 	public string? SubmittedDocumentUrl { get; set; }
 	public string? OriginalFileName { get; set; }
 	public string? SubmittedContent { get; set; }
+	public string? MobileAttachmentsJson { get; private set; }
+
+	public void SaveMobileResponse(string? text, string? attachmentsJson, string? firstBlob, string? firstName, bool draft, DateTimeOffset now)
+	{
+		SubmittedContent = text;
+		MobileAttachmentsJson = attachmentsJson;
+		SubmittedDocumentUrl = firstBlob;
+		OriginalFileName = firstName;
+		Status = draft ? SubmissionStatus.Draft : SubmissionStatus.Submitted;
+		SubmissionDate = draft ? null : now;
+	}
 
 	public Guid? ReviewedBy { get; set; }
 	public DateTimeOffset? ReviewedAt { get; set; }

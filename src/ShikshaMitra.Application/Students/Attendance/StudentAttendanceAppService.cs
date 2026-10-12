@@ -25,7 +25,8 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 		var cumulative = (await register.BuildRowsAsync(input.AcademicYearId, range.Start, range.End,
 			roster.Members.Select(r => r.Enrollment).ToList(), includeDaily: false)).ToDictionary(r => r.StudentId);
 		var students = roster.Members.Select(r => new StudentAttendanceDto {
-			StudentId = r.Student.Id, EnrollmentId = r.Enrollment.Id, GrNo = r.Student.GrNo, RollNo = r.RollNumber,
+			StudentId = r.Student.Id, EnrollmentId = r.Enrollment.Id, GrNo = r.Student.GrNo,
+			GrNumber = r.Student.GrNumber ?? r.Student.GrNo?.ToString(System.Globalization.CultureInfo.InvariantCulture), RollNo = r.RollNumber,
 			FirstName = r.Student.FirstName, MiddleName = r.Student.MiddleName, LastName = r.Student.LastName,
 			Status = r.Entry?.Status ?? AttendanceStatus.Pending, Remarks = r.Entry?.Remarks, Late = r.Entry?.Late ?? false,
 			HalfDay = r.Entry?.HalfDay ?? false, IsExpected = r.Expected, NotExpectedReason = r.Reason,

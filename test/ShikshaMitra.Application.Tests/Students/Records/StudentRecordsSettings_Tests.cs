@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentRecords;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
@@ -142,6 +143,8 @@ public class StudentRecordsSettings_Tests : ShikshaMitraApplicationTestBase<Shik
 		var id = Guid.NewGuid();
 		await GetRequiredService<IRepository<IdentityUser, Guid>>().InsertAsync(
 			new IdentityUser(id, $"records-settings-{id:N}", $"{id:N}@example.test", _tenant.Id), autoSave: true);
+		await GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(
+			new UserScopeAssignment(Guid.NewGuid(), _tenant.Id, userId: id, description: "Settings test tenant scope"), autoSave: true);
 		return id;
 	});
 

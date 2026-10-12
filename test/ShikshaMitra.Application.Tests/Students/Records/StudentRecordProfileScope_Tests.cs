@@ -19,11 +19,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[InlineData(true)]
 	public Task Student_record_profile_respects_division_boundary_and_explicit_wider_grants(bool standardWide) => RunCertificationScenarioAsync(async () =>
 	{
-		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
+		var offering = await CreateUserScopeOfferingAsync();
 		var assigned = await CreateExistingStudentAsync(offering, "Assigned", "Student");
 		var other = await CreateExistingStudentAsync(offering, "Other", "Division");
 		var unplaced = await CreateExistingStudentAsync(offering, "Unplaced", "Student");
-		await GrantCompletedRecordAsync(assigned); await GrantCompletedRecordAsync(other); await GrantCompletedRecordAsync(unplaced);
+		await CompleteScopeFixtureRecordAsync(assigned, offering);
+		await CompleteScopeFixtureRecordAsync(other, offering);
+		await CompleteScopeFixtureRecordAsync(unplaced, offering);
 		var staffId = Guid.NewGuid();
 		await EnsureTestIdentityUserAsync(staffId, $"profile-staff-{staffId:N}");
 		await WithUnitOfWorkAsync(async () =>
@@ -54,4 +56,26 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			else (await Should.ThrowAsync<BusinessException>(() => service.GetAsync(studentId))).Code.ShouldBe(UserScopeErrorCodes.AccessDenied);
 		}
 	});
+
+	private async Task CompleteScopeFixtureRecordAsync(Student student, AdmissionOffering offering)
+	{
+		var applicant = await CreateApplicantAsync($"Scope record {student.Id:N}");
+		var application = await _applicationRepository.InsertAsync(new AdmissionApplication(Guid.NewGuid(), TestTenantId,
+			$"PROFILE-{Guid.NewGuid():N}", applicant.Id, null, offering.AdmissionCycleId, offering.Id,
+			offering.WorkflowDefinitionId!.Value, offering.ApplicationFormDefinitionId!.Value), true);
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var current = await _studentRepository.GetAsync(student.Id);
+			current.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
+			await _studentRepository.UpdateAsync(current, true);
+			var enrollment = ShikshaMitra.Students.StudentEnrollments.StudentEnrollment.Create(Guid.NewGuid(), TestTenantId,
+				student.Id, student.AcademicYearId!.Value, student.StandardId, student.DivisionId);
+			await GetRequiredService<IRepository<ShikshaMitra.Students.StudentEnrollments.StudentEnrollment, Guid>>().InsertAsync(enrollment, true);
+			var completed = new ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingCase(Guid.NewGuid(), TestTenantId,
+				application.Id, applicant.Id, student.Id, offering.Id, student.AcademicYearId.Value, offering.BoardId,
+				offering.MediumId, offering.StageId, offering.StandardId, $"profile-scope-{student.Id:N}", null, DateTime.UtcNow.AddDays(3));
+			completed.CompleteHistoricalImport(enrollment.Id, student.DivisionId, student.RollNo, DateTime.UtcNow);
+			await GetRequiredService<IRepository<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingCase, Guid>>().InsertAsync(completed, true);
+		});
+	}
 }

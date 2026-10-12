@@ -13,7 +13,6 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 /// <summary>Scoped workbench projection, with batched evidence and route evaluation and no applicant-by-applicant reads.</summary>
 [RemoteService(false)]
 public class AdmissionAssessmentRosterService(
-	IRepository<AdmissionApplication, Guid> applications,
 	IRepository<AdmissionApplicant, Guid> applicants,
 	IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows,
 	IRepository<AdmissionApplicationStageInstance, Guid> stages,
@@ -38,7 +37,7 @@ public class AdmissionAssessmentRosterService(
 			session.AdmissionOfferingId == input.AdmissionOfferingId && session.WorkflowStageDefinitionId == definition.Id))
 			throw new EntityNotFoundException(typeof(AdmissionAssessmentSession), input.SessionId.Value);
 
-		var applicationQuery = await applications.GetQueryableAsync();
+		var applicationQuery = await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().GetScopedApplicationsAsync();
 		var applicantQuery = await applicants.GetQueryableAsync();
 		var workflowQuery = await workflows.GetQueryableAsync();
 		var stageQuery = await stages.GetQueryableAsync();

@@ -2,9 +2,7 @@ using System;
 using Microsoft.AspNetCore.Authorization;
 using System.Linq;
 using System.Threading.Tasks;
-using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students.StudentEnrollments.Settings;
-using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -29,8 +27,7 @@ public sealed record AdmissionDocumentContext(AdmissionApplication Application, 
 [RemoteService(false)]
 public class AdmissionDocumentAccessService(IRepository<AdmissionApplication, Guid> applications,
 	IRepository<AdmissionApplicationStageInstance, Guid> stages, IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows,
-	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions, IRepository<AdmissionOffering, Guid> offerings,
-	IRepository<AdmissionCycle, Guid> cycles, IRepository<Division, Guid> divisions, IUserScopeAccessService scopes,
+	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions, AdmissionApplicationScopeAccessService applicationScope,
 	IRepository<DocumentType, Guid> documentTypes, IRepository<Standard, Guid> standards,
 	IRepository<AdmissionWorkflowTransitionDefinition, Guid> transitions,
 	IRepository<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingCase, Guid> onboardingCases) : ApplicationService, ITransientDependency
@@ -38,10 +35,7 @@ public class AdmissionDocumentAccessService(IRepository<AdmissionApplication, Gu
 	public async Task<AdmissionDocumentContext> GetContextAsync(Guid applicationId, Guid stageId, bool requireActive = true, bool onboarding = false)
 	{
 		var application = await applications.FindAsync(applicationId) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), applicationId);
-		var offeringQuery = AdmissionOfferingScopeQuery.Apply(await offerings.GetQueryableAsync(), await cycles.GetQueryableAsync(),
-			await divisions.GetQueryableAsync(), await scopes.GetCurrentUserScopeAsync());
-		if (!await AsyncExecuter.AnyAsync(offeringQuery.Where(item => item.Id == application.AdmissionOfferingId)))
-			throw new EntityNotFoundException(typeof(AdmissionOffering), application.AdmissionOfferingId);
+		await applicationScope.EnsureCanAccessAsync(application);
 		var stage = await stages.FindAsync(stageId) ?? throw new EntityNotFoundException(typeof(AdmissionApplicationStageInstance), stageId);
 		var workflow = await workflows.FindAsync(stage.WorkflowInstanceId);
 		if (workflow?.ApplicationId != applicationId || workflow.WorkflowDefinitionId != application.WorkflowDefinitionId || stage.StageType != AdmissionWorkflowStageType.DocumentVerification)

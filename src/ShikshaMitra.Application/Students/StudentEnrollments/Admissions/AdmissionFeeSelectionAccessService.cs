@@ -39,7 +39,11 @@ public class AdmissionFeeSelectionAccessService(
 		if (application != null) return application;
 		var item = await cases.FindAsync(c => c.ApplicationId == id);
 		if (item != null && item.TenantId == CurrentTenant.Id && await CanAccessCaseAsync(item))
-			return await applicationRepository.GetAsync(id);
+		{
+			application = await applicationRepository.GetAsync(id);
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().EnsureCanAccessAsync(application);
+			return application;
+		}
 		throw new EntityNotFoundException(typeof(AdmissionApplication), id);
 	}
 

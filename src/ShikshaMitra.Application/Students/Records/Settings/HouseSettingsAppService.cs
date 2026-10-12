@@ -1,5 +1,7 @@
 ﻿using ShikshaMitra.TenantSettings.EducationMediums;
 using System;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,13 +21,14 @@ public class HouseSettingsAppService(
 	StudentScopeAccessService studentScopeAccessService
 ) : ApplicationService, IHouseSettingsAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Settings.Add)]
 	public async Task CreateHouseSettingsAsync(Guid academicMediumId, CreateUpdateHouseSettingsDto createHouseSettingsDto)
 	{
 		try
 		{
 			// validate academic medium exists
 			var academicMedium = await academicMediumRepository.GetAsync(academicMediumId) ?? throw new EntityNotFoundException("Academic medium not found.");
-			await studentScopeAccessService.EnsureCanAccessMediumAsync(
+			await studentScopeAccessService.EnsureCanManageMediumAsync(
 				academicMediumId,
 				nameof(CreateHouseSettingsAsync));
 
@@ -57,6 +60,7 @@ public class HouseSettingsAppService(
 		}
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Settings.View)]
 	public async Task<HouseSettingsDto> GetHouseSettingsAsync(Guid houseSettingsId)
 	{
 		try
@@ -81,6 +85,7 @@ public class HouseSettingsAppService(
 		}
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Settings.View)]
 	public async Task<List<HouseSettingsDto>> GetHouseSettingsByAcademicMediumAsync(Guid academicMediumId)
 	{
 		try
@@ -107,12 +112,13 @@ public class HouseSettingsAppService(
 		}
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Settings.Add)]
 	public async Task<HouseSettingsDto> UpdateHouseSettingsAsync(Guid houseSettingsId, CreateUpdateHouseSettingsDto updateHouseSettingsDto)
 	{
 		try
 		{
 			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
-			await studentScopeAccessService.EnsureCanAccessMediumAsync(
+			await studentScopeAccessService.EnsureCanManageMediumAsync(
 				houseSetting.AcademicMediumId,
 				nameof(UpdateHouseSettingsAsync));
 
@@ -143,13 +149,14 @@ public class HouseSettingsAppService(
 		}
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Settings.Delete)]
 	public async Task DeleteHouseSettingsAsync(Guid houseSettingsId)
 	{
 
 		try
 		{
 			var houseSetting = await houseSettingsRepository.GetAsync(houseSettingsId) ?? throw new EntityNotFoundException("House setting not found.");
-			await studentScopeAccessService.EnsureCanAccessMediumAsync(
+			await studentScopeAccessService.EnsureCanManageMediumAsync(
 				houseSetting.AcademicMediumId,
 				nameof(DeleteHouseSettingsAsync));
 			await houseSettingsRepository.DeleteAsync(houseSetting, autoSave: true);

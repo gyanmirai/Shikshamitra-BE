@@ -14,7 +14,6 @@ public class AdmissionDirectFamilyMatchService(
 	IRepository<AdmissionFamily, Guid> families,
 	IRepository<AdmissionGuardian, Guid> guardians,
 	IRepository<AdmissionApplicant, Guid> applicants,
-	IRepository<AdmissionApplication, Guid> applications,
 	AdmissionInquiryScopeAccessService inquiryScope,
 	AdmissionApplicationScopeAccessService applicationScope,
 	AdmissionOfferingRuntimeService offeringRuntime)
@@ -53,12 +52,8 @@ public class AdmissionDirectFamilyMatchService(
 		var familyApplicants = await applicants.GetListAsync(item => familyIds.Contains(item.FamilyId));
 		if (familyApplicants.Count == 0) return [];
 		var applicantIds = familyApplicants.Select(item => item.Id).ToList();
-		var scopedOfferings = await applicationScope.GetScopedOfferingsAsync();
-		var scopedOfferingIds = await AsyncExecuter.ToListAsync(scopedOfferings.Select(item => item.Id));
 		var scopedApplicationApplicantIds = await AsyncExecuter.ToListAsync(
-			(await applications.GetQueryableAsync()).Where(application =>
-				applicantIds.Contains(application.ApplicantId) &&
-				scopedOfferingIds.Contains(application.AdmissionOfferingId))
+			(await applicationScope.GetScopedApplicationsAsync()).Where(application => applicantIds.Contains(application.ApplicantId))
 			.Select(application => application.ApplicantId).Distinct());
 		var scopedInquiryApplicantIds = await AsyncExecuter.ToListAsync(
 			(await inquiryScope.GetScopedQueryAsync()).Where(inquiry =>

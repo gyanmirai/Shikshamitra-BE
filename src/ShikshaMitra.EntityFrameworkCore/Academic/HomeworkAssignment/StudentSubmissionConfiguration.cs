@@ -24,6 +24,7 @@ public class StudentSubmissionConfiguration : IEntityTypeConfiguration<StudentSu
 		builder.Property(x => x.DivisionId).IsRequired();
 		builder.Property(x => x.DueDate).IsRequired();
 		builder.Property(x => x.Status).IsRequired();
+		builder.Property(x => x.LastModificationTime).IsConcurrencyToken();
 
 		builder.Property(x => x.Feedback).HasMaxLength(2000);
 		builder.Property(x => x.Remarks).HasMaxLength(1000);

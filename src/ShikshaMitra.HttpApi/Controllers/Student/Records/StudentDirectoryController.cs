@@ -18,7 +18,6 @@ public class StudentDirectoryController(IStudentDirectoryAppService service) : A
 	[HttpGet]
 	public async Task<Result<PagedResultDto<StudentDirectoryItemDto>>> GetAsync([FromQuery] StudentDirectoryRequest input) => Result.Success(await service.GetListAsync(input));
 	[HttpGet("options")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<Result<StudentDirectoryOptionsDto>> OptionsAsync([FromQuery] Guid? academicYearId) => Result.Success(await service.GetOptionsAsync(academicYearId));
 	[HttpGet("legacy-candidates")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]

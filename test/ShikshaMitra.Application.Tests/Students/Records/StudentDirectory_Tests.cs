@@ -14,6 +14,24 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
+	private async Task<AdmissionOffering> CreateCertificateStudentOfferingAsync()
+	{
+		var payment = Guid.NewGuid(); var decision = Guid.NewGuid();
+		var workflow = await _workflowAppService.CreateAsync(new()
+		{
+			Name = "Certificate student fixture", Code = $"CERT_{Guid.NewGuid():N}"[..24],
+			Stages = [
+				new() { Id = payment, Code = "FEES", Name = "Confirm fee structure", StageType = AdmissionWorkflowStageType.Payment,
+					IsEntryStage = true, IsRequired = true },
+				new() { Id = decision, Code = "DECISION", Name = "Admission decision", StageType = AdmissionWorkflowStageType.Approval,
+					DisplayOrder = 1, IsTerminalStage = true, IsRequired = true }
+			],
+			Transitions = [new() { FromStageId = payment, ToStageId = decision, IsDefault = true, Priority = 1 }]
+		});
+		workflow = await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
+		return await CreateAvailableOfferingAsync(workflow.Id);
+	}
+
 	private async Task GrantCompletedRecordAsync(Student student)
 	{
 		var offering = await WithUnitOfWorkAsync(async () => (await _offeringRepository.GetListAsync(o => o.StandardId == student.StandardId)).First());
@@ -149,6 +167,37 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await service.GetListAsync(new() { Search = "Directory", Population = "Former" })).Items.Single().Id.ShouldBe(second.Id);
 		(await service.GetListAsync(new() { Search = "Directory", Population = "Active" })).Items.Single().Id.ShouldBe(first.Id);
 		(await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IStudentRecordProfileAppService>().GetAsync(pending.Id))).Code.ShouldBe("Students:Records:OnboardingIncomplete");
+	});
+
+	[Fact]
+	public Task Certificate_directory_includes_active_student_list_without_widening_records_directory() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateCertificateStudentOfferingAsync();
+		var active = await CreateExistingStudentAsync(offering, "CertificateListActive", "Student");
+		var former = await CreateExistingStudentAsync(offering, "CertificateListFormer", "Student");
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var activeRow = await _studentRepository.GetAsync(active.Id);
+			activeRow.AssignGrNo(839001);
+			activeRow.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
+			await _studentRepository.UpdateAsync(activeRow, autoSave: true);
+			var formerRow = await _studentRepository.GetAsync(former.Id);
+			formerRow.ChangeStatus(StudentLifeCycleStatusEnum.Left);
+			await _studentRepository.UpdateAsync(formerRow, autoSave: true);
+		});
+		var directory = GetRequiredService<IStudentDirectoryAppService>();
+		(await directory.GetListAsync(new() { StudentId = active.Id })).TotalCount.ShouldBe(0);
+		var certificateRow = (await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true })).Items.Single();
+		certificateRow.EntrySource.ShouldBe("ActiveStudentList");
+		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, Search = "839001" })).TotalCount.ShouldBe(1);
+		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicYearId = active.AcademicYearId,
+			AcademicMediumStageId = active.AcademicMediumStageId })).TotalCount.ShouldBe(1);
+		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicYearId = Guid.NewGuid() })).TotalCount.ShouldBe(0);
+		(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true, AcademicMediumStageId = Guid.NewGuid() })).TotalCount.ShouldBe(0);
+		(await directory.GetListAsync(new() { StudentId = former.Id, IncludeActiveStudentList = true })).TotalCount.ShouldBe(0);
+		var noScopeId = Guid.NewGuid(); await EnsureTestIdentityUserAsync(noScopeId, $"certificate-directory-scope-{noScopeId:N}");
+		using (_principalAccessor.Change(ProfilePrincipal(noScopeId)))
+			(await directory.GetListAsync(new() { StudentId = active.Id, IncludeActiveStudentList = true })).TotalCount.ShouldBe(0);
 	});
 
 	[Fact]

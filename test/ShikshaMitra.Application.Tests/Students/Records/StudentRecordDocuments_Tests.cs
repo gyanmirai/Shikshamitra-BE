@@ -37,6 +37,63 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	[Fact]
+	public Task Certificate_batches_group_selected_students_and_enforce_month_and_scope() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateCertificateStudentOfferingAsync();
+		var first = await CreateExistingStudentAsync(offering, "BatchFirst", "Student");
+		var second = await CreateExistingStudentAsync(offering, "BatchSecond", "Student");
+		await WithUnitOfWorkAsync(async () =>
+		{
+			foreach (var id in new[] { first.Id, second.Id })
+			{
+				var row = await _studentRepository.GetAsync(id); row.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
+				await _studentRepository.UpdateAsync(row, autoSave: true);
+			}
+		});
+		var batchId = Guid.NewGuid(); var service = GetRequiredService<IStudentCertificateAppService>();
+		foreach (var id in new[] { first.Id, second.Id })
+			await service.GenerateAsync(new() { StudentId = id, CertificateType = StudentCertificateType.Bonafide, IdempotencyKey = $"{batchId:D}-{id:D}" });
+		var now = DateTimeOffset.UtcNow;
+		var page = await service.GetBatchesAsync(new() { CertificateType = StudentCertificateType.Bonafide, GeneratedFrom = now.AddMinutes(-10), GeneratedTo = now.AddMinutes(10), MaxResultCount = 10 });
+		page.Items.Single().Id.ShouldBe(batchId); page.Items.Single().StudentCount.ShouldBe(2);
+		(await service.GetBatchAsync(batchId, StudentCertificateType.Bonafide)).Certificates.Select(c => c.Student.StudentName)
+			.ShouldBe(new[] { "BatchFirst Student", "BatchSecond Student" });
+		(await service.GetBatchesAsync(new() { CertificateType = StudentCertificateType.Bonafide, GeneratedFrom = now.AddMonths(-2), GeneratedTo = now.AddMonths(-2).AddDays(2), MaxResultCount = 10 })).TotalCount.ShouldBe(0);
+		var noScopeId = Guid.NewGuid(); await EnsureTestIdentityUserAsync(noScopeId, $"certificate-batch-scope-{noScopeId:N}");
+		using (_principalAccessor.Change(ProfilePrincipal(noScopeId)))
+		{
+			(await service.GetBatchesAsync(new() { CertificateType = StudentCertificateType.Bonafide, GeneratedFrom = now.AddDays(-1), GeneratedTo = now.AddDays(1), MaxResultCount = 10 })).TotalCount.ShouldBe(0);
+			await Should.ThrowAsync<BusinessException>(() => service.GetBatchAsync(batchId, StudentCertificateType.Bonafide));
+		}
+	});
+
+	[Fact]
+	public Task Active_student_without_records_onboarding_can_generate_certificate_only() => RunCertificationScenarioAsync(async () =>
+	{
+		var offering = await CreateCertificateStudentOfferingAsync();
+		var student = await CreateExistingStudentAsync(offering, "CertificateListOnly", "Student");
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var row = await _studentRepository.GetAsync(student.Id);
+			row.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
+			await _studentRepository.UpdateAsync(row, autoSave: true);
+		});
+		var certificates = GetRequiredService<IStudentCertificateAppService>();
+		var request = new CreateStudentCertificateDto
+		{
+			StudentId = student.Id, CertificateType = StudentCertificateType.Bonafide,
+			IdempotencyKey = $"active-student-{student.Id:N}"
+		};
+		(await certificates.PreviewAsync(request)).Student.StudentName.ShouldBe("CertificateListOnly Student");
+		var generated = await certificates.GenerateAsync(request);
+		generated.CertificateId.ShouldNotBeNull();
+		(await certificates.GetHistoryAsync(student.Id)).ShouldContain(x => x.CertificateId == generated.CertificateId);
+		(await certificates.GeneratePdfAsync(generated.CertificateId.Value)).Content.Take(4).ToArray().ShouldBe("%PDF"u8.ToArray());
+		(await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IStudentRecordProfileAppService>().GetAsync(student.Id)))
+			.Code.ShouldBe("Students:Records:OnboardingIncomplete");
+	});
+
+	[Fact]
 	public Task Record_certificate_snapshots_idempotency_and_leaving_exit_are_enforced() => RunCertificationScenarioAsync(async () =>
 	{
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);

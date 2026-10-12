@@ -53,15 +53,15 @@ public class StudentRecordsEnrollmentScopeService(IUserScopeAccessService scopes
 		return scope.IsAdmin || scope.HasTenantWideScope() ? query : StudentScopeAccessService.ApplyScope(query, scope);
 	}
 
-	public async Task<IQueryable<StudentEnrollment>> FilterHierarchyAsync(IQueryable<StudentEnrollment> query, Guid? boardId, Guid? mediumId)
+	public async Task<IQueryable<StudentEnrollment>> FilterHierarchyAsync(IQueryable<StudentEnrollment> query, Guid? boardId, Guid? mediumId, Guid? stageId = null)
 	{
 		await LazyServiceProvider.LazyGetRequiredService<StudentRecordsActorService>().EnsureActiveAsync();
-		if (!boardId.HasValue && !mediumId.HasValue) return query;
+		if (!boardId.HasValue && !mediumId.HasValue && !stageId.HasValue) return query;
 		var standardQuery = await standards.GetQueryableAsync();
 		var stageQuery = await stages.GetQueryableAsync();
 		var mediumQuery = await mediums.GetQueryableAsync();
 		return query.Where(e => standardQuery.Any(s => s.TenantId == CurrentTenant.Id && s.Id == e.StandardId &&
-			stageQuery.Any(stage => stage.TenantId == CurrentTenant.Id && stage.Id == s.EducationMediumStageId &&
+			stageQuery.Any(stage => stage.TenantId == CurrentTenant.Id && stage.Id == s.EducationMediumStageId && (!stageId.HasValue || stage.Id == stageId) &&
 				mediumQuery.Any(medium => medium.TenantId == CurrentTenant.Id && medium.Id == stage.EducationMediumId &&
 					(!mediumId.HasValue || medium.Id == mediumId) && (!boardId.HasValue || medium.EducationBoardId == boardId)))));
 	}

@@ -44,7 +44,8 @@ public class StudentDirectoryOptionsService(IUserScopeAccessService scopes, IRep
 		var boardOptions = await AsyncExecuter.ToListAsync(hierarchy.Select(h => new { h.Board.Id, h.Board.Type, h.Board.AcademicYearId }).Distinct());
 		result.Boards = boardOptions.Select(b => new StudentDirectoryOptionDto { Id = b.Id, Name = b.Type.ToString(), ParentId = b.AcademicYearId }).OrderBy(b => b.Name).ToList();
 		result.Mediums = await AsyncExecuter.ToListAsync(hierarchy.Select(h => new StudentDirectoryOptionDto { Id = h.Medium.Id, Name = h.Medium.Name, ParentId = h.Board.Id }).Distinct().OrderBy(o => o.Name));
-		result.Standards = await AsyncExecuter.ToListAsync(hierarchy.Select(h => new StudentDirectoryOptionDto { Id = h.Standard.Id, Name = h.Standard.Name, ParentId = h.Medium.Id }).Distinct().OrderBy(o => o.Name));
+		result.Stages = await AsyncExecuter.ToListAsync(hierarchy.Select(h => new StudentDirectoryOptionDto { Id = h.Stage.Id, Name = h.Stage.Name, ParentId = h.Medium.Id }).Distinct().OrderBy(o => o.Name));
+		result.Standards = await AsyncExecuter.ToListAsync(hierarchy.Select(h => new StudentDirectoryOptionDto { Id = h.Standard.Id, Name = h.Standard.Name, ParentId = h.Medium.Id, StageId = h.Stage.Id }).Distinct().OrderBy(o => o.Name));
 		result.Divisions = await AsyncExecuter.ToListAsync(from h in hierarchy join d in divisionQuery on h.Standard.Id equals d.StandardId
 			where wide || scope.WildcardBoardAcademicYearIds.Contains(h.Board.AcademicYearId) || scope.WildcardMediumBoardIds.Contains(h.Board.Id) || scope.WildcardMediumStageMediumIds.Contains(h.Medium.Id) ||
 				scope.WildcardStandardMediumStageIds.Contains(h.Stage.Id) || scope.WildcardDivisionStandardIds.Contains(h.Standard.Id) || scope.DivisionIds.Contains(d.Id)

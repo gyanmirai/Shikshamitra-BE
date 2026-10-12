@@ -27,6 +27,8 @@ public partial class StudentCertificateAppService(
 	IRepository<global::ShikshaMitra.TenantSettings.Standards.Standard, Guid> standardRepository,
 	IRepository<global::ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
 	StudentRecordsAccessService recordsAccess, StudentRecordsPolicyResolver recordsPolicies,
+	StudentRecordsEnrollmentScopeService enrollmentScope,
+	IRepository<StudentRecordLegacyOverride, Guid> legacyOverrides,
 	IRepository<StudentRecordDocumentEvent, Guid> documentEvents,
 	IRepository<StudentRecordTransition, Guid> transitions) : ApplicationService, IStudentCertificateAppService
 {
@@ -318,8 +320,11 @@ public partial class StudentCertificateAppService(
 
 	private async Task<Student> LoadScopedStudentAsync(Guid studentId, string operation)
 	{
-		var access = await recordsAccess.EnsureWritableAsync(studentId);
-		if (access.Policy.IsMasked("Identity", await recordsAccess.GetDatabaseRoleNamesAsync())) throw new BusinessException("Students:Records:DocumentFieldsRestricted");
+		var scopedStudent = await recordsAccess.GetScopedStudentAsync(studentId);
+		if (scopedStudent.Status != StudentLifeCycleStatusEnum.Enrolled)
+			await recordsAccess.EnsureWritableAsync(studentId);
+		var policy = (await recordsPolicies.ResolveAsync(scopedStudent.AcademicYearId)).Policy;
+		if (policy.IsMasked("Identity", await recordsAccess.GetDatabaseRoleNamesAsync())) throw new BusinessException("Students:Records:DocumentFieldsRestricted");
 		var student = await studentRepository.GetInquiryForUpdateAsync(studentId);
 		if (student == null || student.TenantId != CurrentTenant.Id)
 		{
@@ -450,7 +455,7 @@ public partial class StudentCertificateAppService(
 		{
 			StudentId = student.Id,
 			StudentName = name,
-			GrNo = student.GrNo?.ToString(),
+			GrNo = student.GrNumber ?? student.GrNo?.ToString(),
 			AdmissionNo = student.AdditionalDetail?.RegistrationFormNo,
 			AcademicYearName = academicYear?.Name,
 			ClassName = standard?.Name,

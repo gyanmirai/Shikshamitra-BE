@@ -72,6 +72,7 @@
         "Students:Records:InvalidConfigurationScope": "Choose a valid school and academic year for these settings.",
         "Students:Records:InvalidCorrection": "Select an eligible recorded change to correct and explain the correction.",
         "Students:Records:InvalidDirectoryQuery": "Review the student search filters and page size.",
+        "Students:Records:InvalidCertificateBatchQuery": "Choose a valid certificate type, month, and page size from 1 to 100.",
         "Students:Records:InvalidDirectorySort": "Choose an available student directory sort option.",
         "Students:Records:InvalidLegacyEvidence": "Provide valid evidence for this historical student's directory access request.",
         "Students:Records:InvalidLegacyRemarks": "Explain why this historical student needs directory access.",

@@ -14,8 +14,11 @@ public class StudentDirectoryRequest : PagedAndSortedResultRequestDto
 	public string Population { get; set; } = "All";
 	public Guid? AcademicYearId { get; set; }
 	public Guid? StudentId { get; set; }
+	public List<Guid> StudentIds { get; set; } = [];
+	public bool IncludeActiveStudentList { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
+	public Guid? AcademicMediumStageId { get; set; }
 	public Guid? StandardId { get; set; }
 	public Guid? DivisionId { get; set; }
 	public List<Guid> BoardIds { get; set; } = [];
@@ -102,12 +105,14 @@ public class StudentDirectoryOptionDto
 	public Guid Id { get; set; }
 	public string Name { get; set; } = "";
 	public Guid? ParentId { get; set; }
+	public Guid? StageId { get; set; }
 }
 public class StudentDirectoryOptionsDto
 {
 	public List<StudentDirectoryOptionDto> AcademicYears { get; set; } = [];
 	public List<StudentDirectoryOptionDto> Boards { get; set; } = [];
 	public List<StudentDirectoryOptionDto> Mediums { get; set; } = [];
+	public List<StudentDirectoryOptionDto> Stages { get; set; } = [];
 	public List<StudentDirectoryOptionDto> Standards { get; set; } = [];
 	public List<StudentDirectoryOptionDto> Divisions { get; set; } = [];
 }

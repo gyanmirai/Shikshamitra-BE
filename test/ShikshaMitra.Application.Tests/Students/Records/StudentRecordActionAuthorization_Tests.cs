@@ -65,14 +65,18 @@ public class StudentRecordActionAuthorization_Tests
 	[InlineData("reprint", "Students.Records.Certificates.Add")]
 	[InlineData("void", "Students.Records.Certificates.Delete")]
 	[InlineData("download", "Students.Records.Certificates.View")]
+	[InlineData("batches", "Students.Records.Certificates.View")]
+	[InlineData("batch-view", "Students.Records.Certificates.View")]
 	public async Task Record_action_certificate_direct_service_rejects_denied_exact_permission(string action, string deniedPermission)
 	{
-		var service = new StudentCertificateAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(deniedPermission) };
+		var service = new StudentCertificateAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(deniedPermission) };
 		Func<Task> call = action switch
 		{
 			"issue" => () => service.GenerateAsync(new()), "duplicate" => () => service.DuplicateAsync(Guid.NewGuid(), new() { Reason = "Additional numbered copy" }),
 			"reprint" => () => service.ReprintAsync(Guid.NewGuid(), new() { Reason = "Replacement print" }),
 			"void" => () => service.VoidAsync(Guid.NewGuid(), new() { Reason = "Invalid issued certificate" }),
+			"batches" => () => service.GetBatchesAsync(new()),
+			"batch-view" => () => service.GetBatchAsync(Guid.NewGuid(), ShikshaMitra.Students.StudentRecords.StudentCertificateType.Bonafide),
 			_ => () => service.GeneratePdfAsync(Guid.NewGuid())
 		};
 		(await Should.ThrowAsync<AbpAuthorizationException>(call)).Data["PolicyName"].ShouldBe(deniedPermission);

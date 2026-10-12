@@ -136,6 +136,15 @@ public partial class StudentOnboardingAppService
 		return result;
 	}
 
+	// Use the same current profile fields as ProvisionPortalAccountAsync, never admission snapshots.
+	private static IReadOnlyList<StudentPortalAccountOwnerDto> MapPortalAccountOwners(Student student) =>
+	[
+		new() { AccountType = "student", Relationship = "self", Name = $"{student.FirstName} {student.LastName}".Trim(), Email = student.ContactDetail?.Email?.Trim() },
+		new() { AccountType = "guardian", Relationship = "father", Name = student.FamilyDetail?.FatherDetails?.FullName, Email = student.FamilyDetail?.FatherDetails?.Email?.Trim() },
+		new() { AccountType = "guardian", Relationship = "mother", Name = student.FamilyDetail?.MotherDetails?.FullName, Email = student.FamilyDetail?.MotherDetails?.Email?.Trim() },
+		new() { AccountType = "guardian", Relationship = "guardian", Name = student.FamilyDetail?.GuardianDetails?.FullName, Email = student.FamilyDetail?.GuardianDetails?.Email?.Trim() }
+	];
+
 	private static BusinessException PortalInvalid(string reason) =>
 		new BusinessException(StudentOnboardingErrorCodes.PortalAccountInvalid).WithData("Reason", reason);
 }

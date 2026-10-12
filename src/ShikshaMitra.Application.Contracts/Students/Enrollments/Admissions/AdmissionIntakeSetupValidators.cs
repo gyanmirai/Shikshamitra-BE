@@ -60,3 +60,9 @@ public sealed class ArchiveAdmissionIntakeSetupDtoValidator : AbstractValidator<
 	public ArchiveAdmissionIntakeSetupDtoValidator() =>
 		RuleFor(item => item.ConcurrencyStamp).NotEmpty().MaximumLength(40);
 }
+
+public sealed class RestoreAdmissionIntakeSetupDtoValidator : AbstractValidator<RestoreAdmissionIntakeSetupDto>
+{
+	public RestoreAdmissionIntakeSetupDtoValidator() =>
+		RuleFor(item => item.ConcurrencyStamp).NotEmpty().MaximumLength(40);
+}

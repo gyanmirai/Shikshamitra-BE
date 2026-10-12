@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -57,7 +58,12 @@ public class AdmissionInquiryRuntimeService(
 		var existing = await management.FindAsync(item => item.InquiryId == inquiry.Id);
 		if (existing != null) return existing;
 		var context = await policies.ResolveAsync(inquiry.AdmissionOfferingId);
-		if (context == null) return null;
+		if (context == null)
+		{
+			// Notes and reminders are available even when optional intake settings are not configured.
+			var policy = new AdmissionInquiryPolicy { Version = 1, Enabled = true };
+			context = new AdmissionInquiryPolicyContext(null, policy, JsonSerializer.Serialize(policy));
+		}
 		return await management.InsertAsync(new AdmissionInquiryManagement(GuidGenerator.Create(), CurrentTenant.Id,
 			inquiry.Id, context.Definition?.Id, context.SnapshotJson, inquiry.CreationTime == default ? Clock.Now : inquiry.CreationTime,
 			context.Policy.FirstContactDueInHours, context.Policy.QualificationDueInDays), false);

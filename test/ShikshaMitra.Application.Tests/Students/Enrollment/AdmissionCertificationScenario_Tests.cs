@@ -121,7 +121,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Certification_01_new_student_completes_the_realistic_journey_and_stops_at_the_admissions_boundary() =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var fixture = await CreateCertificationFixtureAsync("Aarav", realisticWorkflow: true, campusScoped: true);
+			var fixture = await CreateCertificationFixtureAsync("Aarav", campusScoped: true, currentWorkflow: true);
 			fixture.Offering.CampusId.ShouldNotBeNull();
 			var campusId = fixture.Offering.CampusId.Value;
 			var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
@@ -466,12 +466,22 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		bool acceptOffer = true,
 		bool campusScoped = false,
 		Guid? existingStudentId = null,
-		AdmissionApplicant? existingApplicant = null)
+		AdmissionApplicant? existingApplicant = null,
+		bool currentWorkflow = false)
 	{
-		var workflow = realisticWorkflow
+		var workflow = currentWorkflow
+			? await CreateCurrentCertificationWorkflowAsync()
+			: realisticWorkflow
 			? await CreateAndPublishRealisticWorkflowAsync()
 			: await CreateAndPublishWorkflowAsync();
-		var offering = await CreateAvailableOfferingAsync(workflow.Id, campusScoped: campusScoped);
+		Guid? registrationFormId = null;
+		if (currentWorkflow)
+		{
+			using var configuration = System.Text.Json.JsonDocument.Parse(
+				workflow.Stages.Single(stage => stage.StageType == AdmissionWorkflowStageType.Form).ConfigurationJson!);
+			registrationFormId = configuration.RootElement.GetProperty("formDefinitionId").GetGuid();
+		}
+		var offering = await CreateAvailableOfferingAsync(workflow.Id, campusScoped: campusScoped, registrationFormId: registrationFormId);
 		if (linkExistingStudent)
 			existingStudentId = (await CreateExistingStudentAsync(offering, firstName, "Patel")).Id;
 		var applicant = existingApplicant ?? await CreateCertificationApplicantAsync(
@@ -494,6 +504,16 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await CompleteCertificationWorkflowAsync(application.Id, stopBeforeApproval: true);
 
 		application = await _applicationAppService.GetAsync(application.Id);
+		if (currentWorkflow)
+		{
+			application = await _applicationAppService.ApproveAsync(application.Id,
+				Decision(application, "Eligibility and submitted application approved"));
+			if (completeWorkflow)
+				await CompleteCertificationWorkflowAsync(application.Id);
+			return new AdmissionCertificationFixture(applicant, offering,
+				await _applicationAppService.GetAsync(application.Id), existingStudentId);
+		}
+
 		application = await _applicationAppService.MarkInReviewAsync(application.Id,
 			Decision(application, "Application review started"));
 		application = await _applicationAppService.ApproveAsync(application.Id,
@@ -507,6 +527,38 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			application = await _applicationAppService.AcceptOfferAsync(application.Id,
 				Decision(application, "Guardian accepted the admission offer"));
 		return new AdmissionCertificationFixture(applicant, offering, application, existingStudentId);
+	}
+
+	private async Task<AdmissionWorkflowDto> CreateCurrentCertificationWorkflowAsync()
+	{
+		var registrationForm = await WithUnitOfWorkAsync(async () =>
+		{
+			var definition = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Certification registration form",
+				$"CERT_FORM_{Guid.NewGuid():N}"[..24], AdmissionFormLayoutType.SinglePage);
+			definition.Publish(TestUserId);
+			return await _formRepository.InsertAsync(definition, true);
+		});
+		var form = Guid.NewGuid();
+		var decision = Guid.NewGuid();
+		var workflow = await _workflowAppService.CreateAsync(new()
+		{
+			Name = "Current certification journey", Code = $"CURRENT_{Guid.NewGuid():N}"[..24],
+			Stages = [new() { Id = form, Code = "FORM", Name = "Admission form",
+				StageType = AdmissionWorkflowStageType.Form, IsRequired = true, IsEntryStage = true,
+				ConfigurationJson = System.Text.Json.JsonSerializer.Serialize(new
+				{
+					formDefinitionId = registrationForm.Id,
+					form = new AdmissionFormStagePolicy { Version = 1, Enabled = true, AutoAdvanceOnSubmit = true }
+				}) },
+				new() { Id = decision, Code = "DECISION", Name = "Admission decision", DisplayOrder = 1,
+					StageType = AdmissionWorkflowStageType.Approval, IsRequired = true, IsTerminalStage = true }],
+			Transitions = [new() { FromStageId = form, ToStageId = decision, IsDefault = true, Priority = 1 }]
+		});
+		var validation = await _workflowAppService.ValidateAsync(workflow.Id);
+		validation.Issues.Where(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error)
+			.Select(issue => issue.Message).ShouldBeEmpty();
+		workflow = await _workflowAppService.GetAsync(workflow.Id);
+		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
 	}
 
 	private async Task<AdmissionApplicant> CreateCertificationApplicantAsync(

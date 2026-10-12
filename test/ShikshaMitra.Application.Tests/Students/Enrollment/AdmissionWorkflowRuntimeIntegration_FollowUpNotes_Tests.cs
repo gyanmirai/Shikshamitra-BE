@@ -16,6 +16,53 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public Task Follow_up_note_should_support_inquiries_without_optional_intake_settings(bool legacyInquiry) =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var offering = await CreateOptionalIntakeOfferingAsync();
+			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
+			var inquiry = await inquiries.CreateAsync(ManagedInquiryInput(offering));
+			var states = GetRequiredService<IRepository<AdmissionInquiryManagement, Guid>>();
+			if (legacyInquiry)
+			{
+				// Historical rows predate management state; seed that shape without deleting a current aggregate.
+				var historical = new AdmissionInquiry(Guid.NewGuid(), TestTenantId, inquiry.InquiryNumber + "-OLD",
+					inquiry.AdmissionCycleId, offering.Id, inquiry.ApplicantName, inquiry.NormalizedPhone, inquiry.Email,
+					AdmissionInquirySource.Website, null);
+				historical.LinkIdentity(inquiry.FamilyId!.Value, inquiry.ApplicantId!.Value);
+				await GetRequiredService<IRepository<AdmissionInquiry, Guid>>().InsertAsync(historical, autoSave: true);
+				inquiry = await inquiries.GetAsync(historical.Id);
+			}
+			(await states.GetListAsync(item => item.InquiryId == inquiry.Id)).Count.ShouldBe(legacyInquiry ? 0 : 1);
+			inquiry = await inquiries.GetAsync(inquiry.Id);
+			var service = GetRequiredService<IAdmissionInquiryManagementAppService>();
+			var state = await service.GetAsync(inquiry.Id);
+			// Initialization is a persisted aggregate change; read the inquiry stamp after management is ready.
+			inquiry = await inquiries.GetAsync(inquiry.Id);
+			state.ConcurrencyStamp.ShouldNotBeNullOrWhiteSpace();
+			state.Policy!.FirstContactDueInHours.ShouldBeNull();
+			state.Policy.QualificationDueInDays.ShouldBeNull();
+			state.Policy.RestrictActionsToAssignedCounsellor.ShouldBeFalse();
+			(await service.GetAsync(inquiry.Id)).ConcurrencyStamp.ShouldBe(state.ConcurrencyStamp);
+			(await states.GetListAsync(item => item.InquiryId == inquiry.Id)).Count.ShouldBe(1);
+			var reminder = DateTimeOffset.UtcNow.AddDays(2);
+			await service.RecordFollowUpNoteAsync(inquiry.Id, NoteInput(inquiry, state, AdmissionInquiryStatus.Interested, reminder));
+			state = await service.GetAsync(inquiry.Id);
+			state.Notes.Single().Status.ShouldBe(AdmissionInquiryStatus.Interested);
+			state.NextReminderAt.ShouldBe(reminder);
+			state.FollowUps.Single().AssignedCounsellorId.ShouldBeNull();
+			inquiry = await inquiries.GetAsync(inquiry.Id);
+			inquiry.Status.ShouldBe(AdmissionInquiryStatus.Interested);
+			await service.RecordFollowUpNoteAsync(inquiry.Id, NoteInput(inquiry, state, AdmissionInquiryStatus.NotInterested, null));
+			state = await service.GetAsync(inquiry.Id);
+			state.Notes.Count.ShouldBe(2);
+			state.NextReminderAt.ShouldBeNull();
+			state.FollowUps.Single().Status.ShouldBe(AdmissionInquiryFollowUpStatus.Cancelled);
+		});
+
+	[Theory]
 	[InlineData(DateTimeKind.Utc)]
 	[InlineData(DateTimeKind.Local)]
 	[InlineData(DateTimeKind.Unspecified)]
@@ -202,12 +249,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 	[Theory]
-	[InlineData(true)]
-	[InlineData(false)]
-	public Task Follow_up_note_should_reject_either_stale_concurrency_stamp(bool staleInquiry) =>
+	[InlineData(true, false)]
+	[InlineData(false, false)]
+	[InlineData(true, true)]
+	[InlineData(false, true)]
+	public Task Follow_up_note_should_reject_either_stale_concurrency_stamp(bool staleInquiry, bool basicInquiry) =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var inquiry = await CreateFollowUpNoteInquiryAsync();
+			var inquiry = await CreateFollowUpNoteInquiryAsync(basicInquiry);
 			var service = GetRequiredService<IAdmissionInquiryManagementAppService>();
 			var input = NoteInput(inquiry, await service.GetAsync(inquiry.Id), AdmissionInquiryStatus.Interested, DateTimeOffset.UtcNow.AddDays(1));
 			if (staleInquiry) input.InquiryConcurrencyStamp = "stale"; else input.ConcurrencyStamp = "stale";
@@ -322,9 +371,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			result.Notes.Single().AuthorName.ShouldBe("Staff");
 		});
 
-	private async Task<AdmissionInquiryDto> CreateFollowUpNoteInquiryAsync()
+	private async Task<AdmissionInquiryDto> CreateFollowUpNoteInquiryAsync(bool basicInquiry = false)
 	{
-		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishManagedInquiryWorkflowAsync()).Id);
+		var offering = await CreateOptionalIntakeOfferingAsync(legacyPolicy: !basicInquiry);
 		var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
 		var inquiry = await inquiries.CreateAsync(ManagedInquiryInput(offering));
 		var repository = GetRequiredService<IRepository<AdmissionInquiry, Guid>>();

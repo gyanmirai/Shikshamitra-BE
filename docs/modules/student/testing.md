@@ -3,12 +3,39 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-10
+updated_on: 2026-10-11
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Special-track offerings and Registration entry (2026-10-11)
+
+`AdmissionSpecialRegistration_Tests.cs` covers General/RTE same-cycle/class coexistence, same-track duplicate rejection, selected-type bulk preview/commit, unused RTE updates, frozen used routing, and invalid enum rejection.
+The focused special Registration scenarios exercise RTE/Management/Staff and retained Management Both entry, same-request retry, explicit sibling linking/mobile mismatch, inaccessible families, General/Inquiry-first rejection, inactive/closed/unconfigured offerings, tenant denial and scoped replay denial.
+`Special_registration_finalizes_through_common_decision_and_onboarding` exercises the real Registration endpoint through the current Form/Admission Decision workflow, idempotent finalization and Onboarding handoff without an Offer stage.
+These scenarios reuse the accepted current Form/Admission Decision fixture; unrelated historical Inquiry/Custom/Offer fixtures and governed Records return tests remain unchanged.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Special_registration|FullyQualifiedName~Offering_simplification_uses_workflow_form|FullyQualifiedName~Offering_simplification_preserves_unused_special|FullyQualifiedName~Offering_creation_allows_parallel|FullyQualifiedName~Bulk_offering_preview_and_commit|FullyQualifiedName~Used_offering_routing|FullyQualifiedName~Offering_write_rejects_invalid|FullyQualifiedName~AdmissionOfferingContract_Tests" --artifacts-path .artifacts/special-admission-tests -m:1 -p:UseSharedCompilation=false -p:RunAnalyzers=false --logger "trx;LogFileName=special-admission-current.trx"
+```
+
+These changes reuse existing tracks, routing, identity and workflow persistence; no schema migration is added.
+The current focused gate passed **43/43 tests** (zero failures/skips) on 2026-10-11. Its TRX is `D:\CodexArtifacts\special-admission-tests-20261011\results\special-admission-current.trx`.
+Application was freshly compiled into task-isolated outputs, and Application.Tests was freshly compiled with project references disabled, analyzers disabled and the existing `/parallel-` compiler response file.
+The unchanged EF assembly/reference compiled on 2026-10-11 10:30:47 was reused after confirming every EF source predates it and copied-artifact SHA-256 values match; this is not a fresh EF or full-solution build pass. An initial isolated EF build exhausted C: disk space, and a subsequent 3 GB compiler-heap attempt ran out of memory; task-owned artifacts/temp/results were moved to D: without changing normal runtime outputs.
+Existing nullable and obsolete-member compiler warnings outside the changed tests remain.
+
+An earlier broader probe selected 54 tests: 24 passed and 30 failed before reaching the behavior under test because the old shared factories attempted to create retired Inquiry/Custom stages (`AdmissionWorkflowDefinitionStore.EnsureSupported`: "Choose Form, Assessment, Payment, Document verification, or Admission decision."). New/modified scenarios were adapted to the current supported fixture for the 43-test gate above. Unrelated legacy factories, historical RTE/Offer tests and Records-return scenarios were not rewritten; the wider suite is not claimed green.
+Source/test-host proof does not establish a restarted localhost API, populated browser creation, staging deployment or production acceptance.
+
+## Offering clone cycle dates (2026-10-11)
+
+`AdmissionOfferingCloneWindow_Tests.cs` uses the current Form/Admission Decision fixture for General and RTE.
+It saves source custom dates through the unchanged update API, verifies clone null overrides/target-cycle inheritance and retained routing/forms/state, then revises the target cycle through its controlled command and verifies refreshed clone effective dates without changing the source.
+Run `FullyQualifiedName~Offering_clone_inherits_target_cycle_window|FullyQualifiedName~AdmissionOfferingContract_Tests` with the Application test project and isolated artifacts.
+No EF/schema, live database or running API change belongs to this clone-only adjustment.
 
 ## Five-stage admission acceptance (2026-10-08)
 
@@ -36,7 +63,7 @@ dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.c
 
 ## Offering simplification regressions
 
-Run the `Offering_simplification_` cases in `AdmissionWorkflowRuntimeIntegration_Tests` (defined in `AdmissionOfferingSimplification_Tests.cs`), `AdmissionOfferingContract_Tests`, `AdmissionEligibilityOfferingCompatibility_Tests`, and the legacy RTE cases in `AdmissionWorkflowRuntimeIntegration_Tests`. Cover workflow-owned Registration forms, ignored stale caller form IDs, missing/conflicting workflow forms, independent Inquiry forms, mixed-level bulk classes, unused legacy routing conversion, and denied fresh direct entry. Include Form/Inquiry runtime and Student Records return/resume/cancellation suites to preserve historical frozen forms and governed returns. Authenticated local preview/save/reload and the absence of the Applications Direct registration action remain separate browser checks.
+Use the current special-track gate above for workflow-owned Registration forms, ignored stale caller form IDs, preserved unused special routing, frozen used routing, General/RTE coexistence, same-track duplicate rejection, and guarded special Registration entry. Fresh General direct entry remains denied; configured RTE/Management/Staff Registration is supported. Broader `Offering_simplification_`, `AdmissionEligibilityOfferingCompatibility_Tests`, historical Form/Inquiry/RTE, and Student Records return/resume/cancellation cases still provide intended regression coverage, but legacy factories must be adapted to supported stages before they can establish a green wider gate. Authenticated preview/save/reload and special-entry visibility/permission checks remain separate [frontend browser evidence](../../../../Shikshamitra-FE/docs/student/testing.md).
 
 ## Predefined admission fields and profile handoff
 
@@ -616,3 +643,13 @@ Actual requested localhost inquiry-link creation remains pending the user's rest
 ## Finalized admission history display (2026-10-10)
 
 The focused decision contract and history actor-projection run passed 17 tests. Known actors resolve to their saved display name; unknown actors remain in the history with a null name. Existing Applications View authorization and scoped application lookup remain in front of the history read. Contracts, Application, EntityFrameworkCore and HttpApi Host compiled with zero errors using serialized incremental builds; existing warnings remain. The first unrestricted build exhausted available disk space and the first reference-limited test build found an unrelated stale EF migration assembly, so EF was rebuilt before the successful test run. No persistence or migration change belongs to this display-field change. Local API/browser verification confirmed the actual recorded finalizing staff name. Evidence logs are `.artifacts/finalized-summary-tests.log`, `.artifacts/finalized-summary-contract-build.log`, `.artifacts/finalized-summary-app-build.log`, `.artifacts/finalized-summary-ef-build.log` and `.artifacts/finalized-summary-host-build.log`.
+
+## Intake setup restore (2026-10-11)
+
+The focused `Intake_Setup` application filter passed four tests, including restore/rearchive, current-stamp idempotency, stale-stamp rejection, cross-tenant rejection, preserved profile references and inactive historical Offering/link state. `AdmissionIntakeSetupApiContract_Tests` passed five tests and retains Admission Offerings Add authority on the Restore controller and application service. The isolated HttpApi Host build succeeded without a schema change. These tests establish source/integration behavior; the existing localhost host needs a rebuild/restart before browser restore persistence can be accepted.
+
+## Portal owner-email guidance (2026-10-12)
+
+The two Student/Guardian portal workflow scenarios passed after asserting case-detail saved-owner values, missing Mother email, mismatch rejection, Father-versus-Other-guardian separation, successful correct-owner provisioning, idempotency, tenant/user scope and unchanged owner password setup. The expanded guardian scenario verifies the case-only email correction, required reason, stale stamp and cross-tenant rejection, preservation of all other snapshot values and school settings, one audit event on idempotent retry, and no email request/account creation during correction. Pending credential delivery keeps an enabled case incomplete after account provisioning.
+
+Contracts, Application, HttpApi and Host compiled with zero errors using incremental serialized builds; existing warnings remain. Local Host was rebuilt/restarted against the verified localhost Development database without seed-grant changes. The affected case's parent rule correction persisted, while Father email is submitted to Records and awaits its existing one-reviewer approval. No real portal account or credential email was created/sent. Sender acceptance, inbox receipt, staging and deployment remain unverified. No schema migration or dispatcher/password logic changes belong to this fix. Evidence: `.artifacts/guardian-email-correction-be-tests.log`, the `.artifacts/guardian-email-correction-*-build.log` files and frontend screenshots under `.artifacts/guardian-email-ui/`.

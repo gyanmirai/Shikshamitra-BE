@@ -113,6 +113,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Source = AdmissionInquirySource.Website
 			}));
 		archivedLink.Code.ShouldBe(AdmissionIntakeProfileErrorCodes.SetupArchived);
+		await service.RestoreAsync(archived.Id,
+			new RestoreAdmissionIntakeSetupDto { ConcurrencyStamp = archived.ConcurrencyStamp });
+		var restoredUsage = await service.GetUsageAsync(archived.Id);
+		restoredUsage.Offerings.Single().IsActive.ShouldBeFalse();
+		restoredUsage.PublicInquiryLinks.Single().IsOperational.ShouldBeFalse();
 	}
 
 	[Fact]
@@ -122,6 +127,38 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		input.CounsellorAssignmentRules.FallbackManagerUserId = Guid.Empty;
 		new CreateAdmissionIntakeSetupDtoValidator().Validate(input).Errors
 			.ShouldContain(error => error.PropertyName.EndsWith(nameof(AdmissionCounsellorAssignmentRulesDto.FallbackManagerUserId)));
+	}
+
+	[Fact]
+	public async Task Intake_Setup_Restore_Should_Preserve_Profiles_Reject_Stale_Writes_And_Allow_Rearchive()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		await EnsureSelectableAdmissionUserAsync();
+		var service = GetRequiredService<IAdmissionIntakeSetupAppService>();
+		var created = await service.CreateAsync(ValidSetupInput("Restorable intake"));
+		var archived = await service.ArchiveAsync(created.Id,
+			new ArchiveAdmissionIntakeSetupDto { ConcurrencyStamp = created.ConcurrencyStamp });
+		using (_currentTenant.Change(Guid.NewGuid()))
+			await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(() => service.RestoreAsync(created.Id,
+				new RestoreAdmissionIntakeSetupDto { ConcurrencyStamp = archived.ConcurrencyStamp }));
+		var conflict = await Should.ThrowAsync<BusinessException>(() => service.RestoreAsync(created.Id,
+			new RestoreAdmissionIntakeSetupDto { ConcurrencyStamp = "stale-stamp" }));
+		conflict.Code.ShouldBe(AdmissionIntakeProfileErrorCodes.ConcurrencyConflict);
+		var restored = await service.RestoreAsync(created.Id,
+			new RestoreAdmissionIntakeSetupDto { ConcurrencyStamp = archived.ConcurrencyStamp });
+		restored.IsArchived.ShouldBeFalse();
+		restored.ArchivedTime.ShouldBeNull();
+		restored.InquiryIntakeProfileId.ShouldBe(created.InquiryIntakeProfileId);
+		restored.CounsellorAssignmentProfileId.ShouldBe(created.CounsellorAssignmentProfileId);
+		restored.CounsellorAssignmentRules.FallbackManagerUserId.ShouldBe(TestUserId);
+		(await service.GetListAsync()).Select(item => item.Id).ShouldContain(created.Id);
+		var repeated = await service.RestoreAsync(restored.Id,
+			new RestoreAdmissionIntakeSetupDto { ConcurrencyStamp = restored.ConcurrencyStamp });
+		repeated.ConcurrencyStamp.ShouldBe(restored.ConcurrencyStamp);
+		var rearchived = await service.ArchiveAsync(repeated.Id,
+			new ArchiveAdmissionIntakeSetupDto { ConcurrencyStamp = repeated.ConcurrencyStamp });
+		rearchived.IsArchived.ShouldBeTrue();
 	}
 
 	private async Task EnsureSelectableAdmissionUserAsync()

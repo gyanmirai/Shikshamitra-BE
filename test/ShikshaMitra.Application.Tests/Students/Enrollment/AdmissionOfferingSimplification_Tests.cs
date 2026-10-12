@@ -15,23 +15,22 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[Fact]
 	public Task Offering_simplification_uses_workflow_form_and_preserves_legacy_references() => RunCertificationScenarioAsync(async () =>
 	{
-		var workflow = await CreateAndPublishWorkflowAsync();
-		var original = await CreateAvailableOfferingAsync(workflow.Id);
+		var original = await CreateOptionalIntakeOfferingAsync();
 		await ConfigureOfferingWorkflowFormAsync(original);
 		var cycleId = await CreateEligibilityOfferingCycleAsync(original.AdmissionCycleId);
 		var input = await EligibilityOfferingInputAsync<CreateAdmissionOfferingDto>(await GetRequiredService<IAdmissionOfferingAppService>().GetAsync(original.Id));
 		input.ApplicationFormDefinitionId = Guid.NewGuid();
-		input.Track = AdmissionTrack.Rte;
-		input.EntryMode = AdmissionEntryMode.DirectRegistration;
+		input.Track = AdmissionTrack.Management;
+		input.EntryMode = AdmissionEntryMode.Inquiry;
 		input.IsActive = false;
 		var created = await GetRequiredService<IAdmissionOfferingAppService>().CreateAsync(cycleId, input);
 		created.ApplicationFormDefinitionId.ShouldBe(original.ApplicationFormDefinitionId);
 		created.InquiryFormDefinitionId.ShouldBe(original.InquiryFormDefinitionId);
-		created.Track.ShouldBe(AdmissionTrack.General);
+		created.Track.ShouldBe(AdmissionTrack.Management);
 		created.EntryMode.ShouldBe(AdmissionEntryMode.Inquiry);
 		created.Configuration.Errors.ShouldNotContain(error => error.Code == AdmissionOfferingValidationCodes.WorkflowFormMismatch);
 
-		var legacy = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
+		var legacy = await CreateOptionalIntakeOfferingAsync();
 		var update = await EligibilityOfferingInputAsync<UpdateAdmissionOfferingDto>(await GetRequiredService<IAdmissionOfferingAppService>().GetAsync(legacy.Id));
 		update.ApplicationFormDefinitionId = Guid.NewGuid();
 		await WithUnitOfWorkAsync(async () =>
@@ -42,21 +41,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	});
 
 	[Fact]
-	public Task Offering_simplification_converts_unused_legacy_direct_offering_when_edited() => RunCertificationScenarioAsync(async () =>
+	public Task Offering_simplification_preserves_unused_special_offering_when_edited() => RunCertificationScenarioAsync(async () =>
 	{
-		var legacy = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
-		await WithUnitOfWorkAsync(async () =>
-		{
-			var stored = await _offeringRepository.GetAsync(legacy.Id);
-			stored.UpdateRouting(AdmissionTrack.Rte, AdmissionEntryMode.DirectRegistration, false);
-			await _offeringRepository.UpdateAsync(stored, autoSave: true);
-		});
+		var legacy = await CreateSpecialRegistrationOfferingAsync();
 		var service = GetRequiredService<IAdmissionOfferingAppService>();
 		var input = await EligibilityOfferingInputAsync<UpdateAdmissionOfferingDto>(await service.GetAsync(legacy.Id));
+		input.Track = legacy.Track;
+		input.EntryMode = legacy.EntryMode;
 		input.ConcurrencyStamp = (await service.GetAsync(legacy.Id)).ConcurrencyStamp;
 		var updated = await service.UpdateAsync(legacy.Id, input);
-		updated.Track.ShouldBe(AdmissionTrack.General);
-		updated.EntryMode.ShouldBe(AdmissionEntryMode.Inquiry);
+		updated.Track.ShouldBe(AdmissionTrack.Rte);
+		updated.EntryMode.ShouldBe(AdmissionEntryMode.DirectRegistration);
 		updated.ApplicationFormDefinitionId.ShouldBe(legacy.ApplicationFormDefinitionId);
 	});
 

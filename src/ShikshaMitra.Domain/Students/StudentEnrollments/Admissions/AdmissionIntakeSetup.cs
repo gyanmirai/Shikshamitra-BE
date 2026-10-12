@@ -44,4 +44,11 @@ public class AdmissionIntakeSetup : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ArchivedTime = archivedTime.ToUniversalTime();
 		ArchivedByUserId = archivedByUserId;
 	}
+
+	public void Restore()
+	{
+		IsArchived = false;
+		ArchivedTime = null;
+		ArchivedByUserId = null;
+	}
 }

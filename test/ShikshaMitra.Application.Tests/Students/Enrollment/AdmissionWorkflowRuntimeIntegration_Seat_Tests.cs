@@ -158,7 +158,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			MinimumDurationHours = 72, MaximumDurationHours = 72, AllowRenewal = true,
 			MaximumRenewals = 1, AllowWaitlist = true, AllowCapacityOverride = true,
 			AllowedCompletionOutcomes = ["confirmed", "waitlisted"] };
-		var workflow = await _workflowAppService.CreateAsync(new()
+		var workflow = await SeedPublishedHistoricalWorkflowAsync(new()
 		{
 			Name = "Managed seat", Code = $"SEAT_{Guid.NewGuid():N}"[..24],
 			Stages =
@@ -176,6 +176,6 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				new() { FromStageId = seatId, ToStageId = doneId, Priority = 1, IsDefault = true }
 			]
 		});
-		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
+		return workflow;
 	}
 }

@@ -1266,7 +1266,9 @@ public partial class StudentOnboardingAppService(
 		var division = onboardingCase.DivisionId.HasValue
 			? await divisionRepository.FindAsync(onboardingCase.DivisionId.Value)
 			: null;
-		var student = await studentRepository.FindAsync(onboardingCase.StudentId);
+		var student = includeEvents
+			? await studentRepository.GetWithDetailsAsync(onboardingCase.StudentId)
+			: await studentRepository.FindAsync(onboardingCase.StudentId);
 		var owner = onboardingCase.AssignedToUserId.HasValue
 			? await identityUserRepository.FindAsync(onboardingCase.AssignedToUserId.Value)
 			: null;
@@ -1318,6 +1320,7 @@ public partial class StudentOnboardingAppService(
 				: [],
 			Id = onboardingCase.Id,
 			CredentialsPending = await CredentialsPendingAsync(onboardingCase),
+			PortalAccountOwners = includeEvents && student != null ? MapPortalAccountOwners(student) : null,
 			AdmissionRoute = onboardingCase.GetAdmissionRoute(),
 			FeeAssignmentConfirmed = feeSelection?.OnboardingConfirmedAt.HasValue == true,
 			FirstPaymentConfirmed = null,

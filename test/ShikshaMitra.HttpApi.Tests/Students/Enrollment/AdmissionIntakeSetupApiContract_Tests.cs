@@ -57,6 +57,9 @@ public class AdmissionIntakeSetupApiContract_Tests
 		controller.GetMethod(nameof(AdmissionIntakeSetupsController.ArchiveAsync))!
 			.GetCustomAttributes(typeof(HttpPostAttribute), true).Cast<HttpPostAttribute>()
 			.Single().Template.ShouldBe("{id:guid}/archive");
+		controller.GetMethod(nameof(AdmissionIntakeSetupsController.RestoreAsync))!
+			.GetCustomAttributes(typeof(HttpPostAttribute), true).Cast<HttpPostAttribute>()
+			.Single().Template.ShouldBe("{id:guid}/restore");
 	}
 
 	[Fact]
@@ -72,6 +75,11 @@ public class AdmissionIntakeSetupApiContract_Tests
 			ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
 		AssertPolicy(nameof(AdmissionIntakeSetupsController.ArchiveAsync),
 			ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
+		AssertPolicy(nameof(AdmissionIntakeSetupsController.RestoreAsync),
+			ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
+		typeof(AdmissionIntakeSetupAppService).GetMethod(nameof(AdmissionIntakeSetupAppService.RestoreAsync))!
+			.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>()
+			.ShouldContain(attribute => attribute.Policy == ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
 	}
 
 	[Fact]

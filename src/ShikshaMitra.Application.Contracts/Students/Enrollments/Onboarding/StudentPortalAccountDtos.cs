@@ -36,3 +36,19 @@ public class StudentPortalAccountDto
 	public bool EmailConfirmed { get; set; }
 	public bool IsActive { get; set; }
 }
+
+public class EnableGuardianCredentialEmailDto
+{
+	public string Reason { get; set; } = string.Empty;
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+}
+
+public class EnableGuardianCredentialEmailDtoValidator : AbstractValidator<EnableGuardianCredentialEmailDto>
+{
+	public EnableGuardianCredentialEmailDtoValidator()
+	{
+		RuleFor(x => x.Reason).Must(value => !string.IsNullOrWhiteSpace(value) && value.Trim().Length >= 3)
+			.WithMessage("Explain the case-specific email correction.").MaximumLength(400);
+		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
+	}
+}

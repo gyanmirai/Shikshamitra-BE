@@ -67,7 +67,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add); EnsureTenant();
 		await access.EnsureActiveActorAsync(); ValidateTemplate(input);
 		using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
-		await EnsureStudentsAvailableAsync(input.Selection, null);
+		await TransferStudentsAsync(input.Selection, null);
 		input.Id = null; input.ConcurrencyStamp = null;
 		var template = new StudentIdCardTemplate(GuidGenerator.Create(), CurrentTenant.Id!.Value, JsonSerializer.Serialize(input, JsonOptions));
 		await templates.InsertAsync(template, autoSave: true);
@@ -83,24 +83,29 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 		var template = await templates.FindAsync(t => t.Id == id && t.TenantId == CurrentTenant.Id)
 			?? throw new EntityNotFoundException(typeof(StudentIdCardTemplate), id);
 		if (template.ConcurrencyStamp != input.ConcurrencyStamp) throw new BusinessException("Students:Records:IdTemplateConflict");
-		await EnsureStudentsAvailableAsync(input.Selection, id);
+		await TransferStudentsAsync(input.Selection, id);
 		input.Id = null; input.ConcurrencyStamp = null;
 		template.Update(JsonSerializer.Serialize(input, JsonOptions));
 		await templates.UpdateAsync(template, autoSave: true);
 		await work.CompleteAsync();
 		return MapTemplate(template);
 	}
-	private async Task EnsureStudentsAvailableAsync(StudentIdCardSelectionDto selection, Guid? currentTemplateId)
+	private async Task TransferStudentsAsync(StudentIdCardSelectionDto selection, Guid? currentTemplateId)
 	{
 		if (selection.StudentIds.Count == 0) return;
 		var selected = selection.StudentIds.ToHashSet();
 		var query = await templates.GetQueryableAsync();
 		var otherTemplates = await AsyncExecuter.ToListAsync(query.Where(t => t.TenantId == CurrentTenant.Id && t.Id != currentTemplateId));
-		if (otherTemplates.Any(t =>
+		foreach (var otherTemplate in otherTemplates)
 		{
-			var existing = MapTemplate(t).Selection;
-			return existing.AcademicYearId == selection.AcademicYearId && existing.StudentIds.Any(selected.Contains);
-		})) throw new BusinessException("Students:Records:IdTemplateStudentConflict");
+			var other = MapTemplate(otherTemplate);
+			if (other.Selection.AcademicYearId != selection.AcademicYearId || !other.Selection.StudentIds.Any(selected.Contains)) continue;
+			other.Selection.StudentIds.RemoveAll(selected.Contains);
+			other.Id = null;
+			other.ConcurrencyStamp = null;
+			otherTemplate.Update(JsonSerializer.Serialize(other, JsonOptions));
+			await templates.UpdateAsync(otherTemplate, autoSave: true);
+		}
 	}
 	[UnitOfWork(true)]
 	public async Task DeleteTemplateAsync(Guid id)

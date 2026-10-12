@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FluentValidation;
@@ -11,6 +12,7 @@ namespace ShikshaMitra.HR.Payroll.Compensation;
 
 public class SaveEmployeeCompensationDto
 {
+	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public Guid TemplateVersionId { get; set; }
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
 	[System.Text.Json.Serialization.JsonIgnore]
@@ -40,6 +42,8 @@ public class CompensationRevisionLineDto : EntityDto<Guid>
 
 public class CompensationRevisionDto : EntityDto<Guid>
 {
+	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
+	public PfEligibilityDecision? PfEligibility { get; set; }
 	public Guid EmployeeId { get; set; }
 	public int RevisionNumber { get; set; }
 	public DateTime EffectiveMonth { get; set; }

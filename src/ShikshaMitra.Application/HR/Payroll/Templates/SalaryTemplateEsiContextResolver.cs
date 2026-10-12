@@ -65,7 +65,8 @@ public class SalaryTemplateEsiContextResolver(
 				x => x.Key,
 				x => x.OrderByDescending(item => item.EffectiveFrom).First().Treatment);
 		EmployeeStatutoryEnrollment? enrollment = null;
-		foreach (var earning in await earningComponentRepository.GetListAsync(x => x.IsActive))
+		var activeEarnings = await earningComponentRepository.GetListAsync(x => x.IsActive);
+		foreach (var earning in activeEarnings)
 			treatments.TryAdd(earning.Id, EsiWageDefaults.ByName.GetValueOrDefault(earning.Name, StatutoryWageTreatment.Unclassified));
 		foreach (var treatment in configuration!.GetTreatments()) treatments[treatment.Key] = treatment.Value;
 		IReadOnlyList<StatutoryOverride> overrides = [];
@@ -88,7 +89,7 @@ public class SalaryTemplateEsiContextResolver(
 			treatments,
 			overrides,
 			canonicalDeduction?.Id ?? Guid.Empty,
-			canonicalDeduction?.Name ?? CanonicalEsiComponentName);
+			canonicalDeduction?.Name ?? CanonicalEsiComponentName) { CalculationSettings = configuration.GetCalculationSettings() with { BasicComponentIsActive = configuration.GetCalculationSettings().BasicComponentId == null || activeEarnings.Any(x => x.Id == configuration.GetCalculationSettings().BasicComponentId) } };
 		return new SalaryTemplateEsiResolution(
 			context,
 			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending

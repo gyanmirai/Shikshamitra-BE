@@ -14,6 +14,7 @@ public class EsiPayrollConfigurationMapping : IEntityTypeConfiguration<EsiPayrol
 		builder.Property(x => x.CoveredSince).HasColumnType("date");
 		builder.Property(x => x.RegistrationNumber).HasMaxLength(100);
 		builder.Property(x => x.CancellationReason).HasMaxLength(500);
+		builder.Property(x => x.CalculationSettingsJson).IsRequired().HasDefaultValue("{}");
 		builder.Property(x => x.RequestFingerprint).HasMaxLength(64).IsRequired();
 		builder.HasIndex(x => new { x.TenantId, x.EffectiveMonth }).IsUnique()
 			.HasFilter("\"IsDeleted\" = false AND \"IsCancelled\" = false");

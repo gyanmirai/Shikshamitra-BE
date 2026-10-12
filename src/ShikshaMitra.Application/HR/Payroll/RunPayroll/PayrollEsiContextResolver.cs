@@ -64,7 +64,8 @@ public class PayrollEsiContextResolver(
 				x => x.Key,
 				x => x.OrderByDescending(item => item.EffectiveFrom).First().Treatment);
 		var requestedEmployeeIds = employeeIds.Distinct().ToHashSet();
-		foreach (var earning in await earningComponentRepository.GetListAsync(x => x.IsActive))
+		var activeEarnings = await earningComponentRepository.GetListAsync(x => x.IsActive);
+		foreach (var earning in activeEarnings)
 			treatments.TryAdd(earning.Id, EsiWageDefaults.ByName.GetValueOrDefault(earning.Name, StatutoryWageTreatment.Unclassified));
 		foreach (var treatment in configuration!.GetTreatments()) treatments[treatment.Key] = treatment.Value;
 		var enrollments = await enrollmentResolver.ResolveAsync(payrollMonth, requestedEmployeeIds);
@@ -90,7 +91,7 @@ public class PayrollEsiContextResolver(
 				enrollments.GetValueOrDefault(employeeId),
 				treatments,
 				overrides.GetValueOrDefault(employeeId) ?? [],
-				source);
+				source) { CalculationSettings = configuration.GetCalculationSettings() with { BasicComponentIsActive = configuration.GetCalculationSettings().BasicComponentId == null || activeEarnings.Any(x => x.Id == configuration.GetCalculationSettings().BasicComponentId) } };
 		}
 
 		return result;

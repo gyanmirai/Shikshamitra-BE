@@ -42,7 +42,7 @@ public class PayrollSnapshotRefresher(
 	EsiPayrollConfigurationResolver esiConfigurationResolver,
 	IProfessionalTaxRepository professionalTaxRepository,
 	IRepository<PayslipCorrection, Guid> payslipCorrections,
-	ILogger<PayrollSnapshotRefresher> logger)
+	ILogger<PayrollSnapshotRefresher> logger, PfEligibilityResolver pfEligibilityResolver)
 	: ITransientDependency
 {
 	public async Task RefreshForEmployeeIdsAsync(
@@ -384,6 +384,20 @@ public class PayrollSnapshotRefresher(
 				await reportProgress(computedItems.Count + immutableCount);
 		}
 
+		var pfMonth = new DateTime(year, month, DateTime.DaysInMonth(year, month));
+		var pfCoverage = await pfEligibilityResolver.GetCoverageAsync(pfMonth);
+		var pfMemberHistory = await pfEligibilityResolver.GetMemberHistoryAsync(computedItems.Select(x => x.EmployeeId).ToList(), pfMonth);
+		foreach (var item in computedItems.Where(x => !x.IsLocked))
+		{
+			var resolution = compensationByEmployee.GetValueOrDefault(item.EmployeeId);
+			var wages = resolution?.Components.Where(x => x.IsEarning && !x.IsTemp &&
+				x.SemanticType is Templates.PayrollComponentSemanticType.Basic or Templates.PayrollComponentSemanticType.DearnessAllowance).Sum(x => x.Amount) ?? 0m;
+			var declaration = PfEligibilityResolver.Declaration(resolution?.Revision);
+			var decision = PfEligibilityCalculator.Calculate(pfMonth, wages, pfCoverage, declaration,
+				pfMemberHistory.GetValueOrDefault(item.EmployeeId), item.ProvidentFundRuleId.HasValue);
+			item.PfEligibilityDetailsJson = System.Text.Json.JsonSerializer.Serialize(decision);
+			if (decision.IssueCode != null) item.IssueCodes.Add(decision.IssueCode);
+		}
 		var settlementEmployees = computedItems.Select(x => x.EmployeeId).ToList();
 		var settlements = await payslipCorrections.GetListAsync(x => x.Status == "APPLIED" &&
 			x.SettlementMonth == internalMonthYear && settlementEmployees.Contains(x.EmployeeId));

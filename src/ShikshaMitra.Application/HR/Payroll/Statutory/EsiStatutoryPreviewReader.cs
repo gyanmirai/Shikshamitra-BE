@@ -36,7 +36,7 @@ public sealed class EsiStatutoryPreviewReader(
 		var savedConfiguration = await configurationResolver.ResolveAsync(payrollMonth);
 		var configuration = draft == null ? savedConfiguration
 			: new EsiPayrollConfiguration(Guid.Empty, null, payrollMonth, draft.Enabled, draft.RegistrationNumber,
-				draft.CoveredSince, "PREVIEW");
+				draft.CoveredSince, "PREVIEW", calculationSettings: draft.CalculationSettings);
 		var establishment = configuration?.ToCalculationEstablishment();
 		if (establishment == null)
 			return new EsiStatutoryPreviewCalculation(monthYear, [], new StatutoryImpactSummaryDto { CanActivate = true },
@@ -75,6 +75,9 @@ public sealed class EsiStatutoryPreviewReader(
 			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance && employeeIds.Contains(x.EmployeeId) &&
 			x.EffectiveFrom <= payrollMonth && x.EffectiveTo >= payrollMonth))
 			.ToLookup(x => x.EmployeeId);
+		var activeEarnings = await earningComponentRepository.GetListAsync(x => x.IsActive);
+		var calculationSettings = configuration!.GetCalculationSettings() with { BasicComponentIsActive =
+			configuration.GetCalculationSettings().BasicComponentId == null || activeEarnings.Any(x => x.Id == configuration.GetCalculationSettings().BasicComponentId) };
 		var items = new List<EmployeeStatutoryImpactDto>();
 
 		foreach (var employee in employees.OrderBy(x => x.EmployeeName).ThenBy(x => x.EmployeeCode))
@@ -105,11 +108,11 @@ public sealed class EsiStatutoryPreviewReader(
 					x.ComponentId ?? x.Id,
 					x.Name,
 					x.Amount,
-					treatments.GetValueOrDefault(x.ComponentId ?? x.Id, StatutoryWageTreatment.Unclassified)))
+					treatments.GetValueOrDefault(x.ComponentId ?? x.Id, StatutoryWageTreatment.Unclassified), x.IsTemp, x.SemanticType == PayrollComponentSemanticType.Basic))
 				.ToList();
 			var calculation = EsiStatutoryCalculator.Calculate(
 				payrollMonth, rule, establishment, enrollment, wageLines,
-				overrides[employee.Id].ToList());
+				overrides[employee.Id].ToList(), calculationSettings: calculationSettings);
 			items.Add(new EmployeeStatutoryImpactDto
 			{
 				EmployeeId = employee.Id,
@@ -120,6 +123,8 @@ public sealed class EsiStatutoryPreviewReader(
 				CoverageDecisionCode = calculation.CoverageDecision,
 				CoverageDecisionLabel = EsiStatutoryPresentation.GetCoverageDecisionLabel(calculation.CoverageDecision),
 				StatutoryWages = calculation.StatutoryWages,
+				EligibilityWages = calculation.EligibilityWages, EmployeePercentage = calculation.EmployeePercentage,
+				EmployerPercentage = calculation.EmployerPercentage, CalculationSettings = configuration.GetCalculationSettings(),
 				WageCeiling = calculation.WageCeiling,
 				EmployeeContribution = calculation.EmployeeContribution,
 				EmployerContribution = calculation.EmployerContribution,
@@ -133,15 +138,14 @@ public sealed class EsiStatutoryPreviewReader(
 		}
 
 		var issueCodes = items.SelectMany(x => x.Issues).Select(x => x.Code).Distinct().ToList();
-		var activeEarnings = await earningComponentRepository.GetListAsync(x => x.IsActive);
-		if (activeEarnings.Any(x => treatments.GetValueOrDefault(x.Id, StatutoryWageTreatment.Unclassified) == StatutoryWageTreatment.Unclassified))
+		if (calculationSettings.WageBasis != "GROSS" && activeEarnings.Any(x => treatments.GetValueOrDefault(x.Id, StatutoryWageTreatment.Unclassified) == StatutoryWageTreatment.Unclassified))
 			issueCodes.Add(EsiStatutoryCalculator.WageClassificationIssue);
 		if (establishment is null || !establishment.CanActivate())
 		{
 			issueCodes.Add(EsiStatutoryCalculator.EstablishmentInactiveIssue);
 		}
 		issueCodes = issueCodes.Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToList();
-		var blockingIssues = issueCodes.Select(code => EsiStatutoryPresentation.CreateIssue(
+		var blockingIssues = issueCodes.Where(code => code != EsiStatutoryCalculator.RateOverrideIssue).Select(code => EsiStatutoryPresentation.CreateIssue(
 			code, items.Count(item => item.Issues.Any(issue => issue.Code == code)))).ToList();
 		var summary = new StatutoryImpactSummaryDto
 		{
@@ -156,6 +160,7 @@ public sealed class EsiStatutoryPreviewReader(
 		};
 		var inputEvidence = new
 		{
+			CalculationSettings = calculationSettings,
 			Employees = employees.OrderBy(x => x.Id).Select(x => new { x.Id, x.ConcurrencyStamp }).ToList(),
 			Earnings = activeEarnings.OrderBy(x => x.Id).Select(x => new { x.Id, x.ConcurrencyStamp }).ToList(),
 			Compensation = compensation.OrderBy(x => x.Key).Select(x => new
@@ -334,6 +339,8 @@ internal static class EsiStatutoryPresentation
 {
 	public static StatutoryIssueDto CreateIssue(string code, int affectedEmployeeCount = 0) => code switch
 	{
+		EsiStatutoryCalculator.RateOverrideIssue => new StatutoryIssueDto { Code = code, Severity = "warning", Title = "Administrator rate override", Message = "The documented school rates differ from the statutory reference. Review the recorded reason and evidence.", ResolutionTarget = "general", AffectedEmployeeCount = affectedEmployeeCount },
+		EsiStatutoryCalculator.BasicComponentIssue => Create(code, "Review Basic component", "Select an active Basic component used exactly once as Basic in the salary template.", "earningClassifications", affectedEmployeeCount),
 		EsiStatutoryCalculator.EstablishmentInactiveIssue => Create(code, "Complete establishment details",
 			"Add the ESI registration and coverage dates before activation.", "establishment", affectedEmployeeCount),
 		EsiStatutoryCalculator.WageClassificationIssue => Create(code, "Classify earning components",

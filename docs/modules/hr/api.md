@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-07
+updated_on: 2026-10-12
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -457,3 +457,33 @@ Contract and security coverage is in `test/ShikshaMitra.HttpApi.Tests/HR/Employe
 
 Compensation revision reads expose `estimatedStatutoryDeductions` from the saved calculation snapshot for display alongside persisted recurring component lines.
 These PF, professional-tax, and ESI estimates do not include employer contributions and are never copied into manual salary components.
+
+## PF enrollment and ESIC calculation settings
+
+Gross and CTC retain their existing single monthly amount input and calculation contracts.
+Salary calculation and compensation save accept `pfEnrollment` with `membership` (`UNKNOWN`, `EXISTING_MEMBER`, or `NOT_MEMBER`) and an optional `consentReference`.
+Responses expose `pfEligibility` with status, full-month PF wages, effective coverage ceiling, enrollment requirement, save readiness, and issue code.
+HR records the declaration through the existing scoped compensation permissions; there is no employee self-service or new approval workflow.
+Existing membership continues above the ceiling; unknown membership or school coverage requires review, and voluntary enrollment above the ceiling requires consent evidence.
+The coverage ceiling is INR 15,000 before 2026-09-17 and INR 25,000 from that date, using Basic plus Dearness Allowance wages rather than Gross.
+An assigned PF rule requires a positive full-month PF wage base; there is no fallback to Gross.
+Employee and employer PF amounts round independently to the nearest whole rupee, with midpoint rounding away from zero.
+
+`GET /api/payroll/pf-rules/coverage` requires `HR.PayrollManagement.Settings.PfRule.View` and returns immutable configuration history and `hasSchoolWideScope`.
+`PUT` requires `HR.PayrollManagement.Settings.PfRule.Add` and school-wide UserScope.
+Its payload contains `effectiveMonth` (first day of the current or a future month), `isCovered`, `evidenceReference`, `expectedConfigurationId`, and `idempotencyKey`.
+Identical retries reuse the saved outcome; stale version IDs and changed retry payloads return 409.
+
+ESIC configuration save accepts `effectiveMonth` (`yyyy-MM`) and `calculationSettings` in addition to the existing configuration fields.
+`wageBasis` is `CLASSIFIED_EARNINGS`, `GROSS`, or `BASIC_COMPONENT`; the last requires an active tenant earning-component ID that is marked Basic in each affected salary template.
+Basic can use the existing percentage-of-Gross template formula, including 60 percent.
+Selecting Basic does not suppress other statutory included wages, exclusion add-back, in-kind caps, contribution-period continuity, or daily-wage exemptions.
+Eligibility uses full-month statutory wages, while contributions use actual payable statutory wages.
+Optional `employeePercentage` and `employerPercentage` overrides require `overrideReason` and `evidenceReference`; omitted rates resolve from the statutory rule.
+Saving configuration requires the exact Edit, Activate, and `HR.PayrollManagement.Settings.StatutorySchemes.ConfigureCalculation` capabilities plus school-wide UserScope.
+New built-in administrator roles receive ConfigureCalculation during creation; existing roles are never granted it by reseeding.
+Impact preview accepts an optional `configurationDraft`, requires ConfigureCalculation for that draft, and rejects a draft whose effective month differs from `monthYear` (`MM-yyyy`).
+Past-month configuration writes are rejected; saving versions invalidates unlocked affected payroll only.
+Payroll items expose `esiCalculationDetailsJson` and `pfEligibilityDetailsJson` containing the resolved calculation evidence.
+Locked and finalized snapshots retain their recorded settings and amounts.
+`ESI_RATE_OVERRIDE` is a visible warning; missing Basic, PF enrollment, consent, coverage, or wage evidence blocks readiness as applicable.

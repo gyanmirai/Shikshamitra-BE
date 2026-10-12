@@ -49,7 +49,7 @@ public class EsiStatutoryApi_Tests(ShikshaMitraApiTestFactory factory) : Shiksha
         saved.Current!.Enabled.ShouldBeTrue();
         saved.Current.RegistrationNumber.ShouldBeNull();
         saved.Current.CoveredSince.ShouldBeNull();
-        saved.Current.EffectiveMonth.ShouldBe(saved.SuggestedEffectiveMonth);
+        saved.Current.EffectiveMonth.ShouldBe(DateTime.ParseExact(saved.SuggestedEffectiveMonth, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture).AddMonths(-1).ToString("yyyy-MM"));
         var retry = await Client.PutAsJsonAsync(Url, draft);
         retry.StatusCode.ShouldBe(HttpStatusCode.OK);
         (await retry.Content.ReadFromJsonAsync<EsiConfigurationSettingsDto>(JsonOptions))!.Current!.Id.ShouldBe(saved.Current.Id);
@@ -70,7 +70,7 @@ public class EsiStatutoryApi_Tests(ShikshaMitraApiTestFactory factory) : Shiksha
         responses.Count(x => x.StatusCode == HttpStatusCode.OK).ShouldBe(1);
         responses.Count(x => x.StatusCode == HttpStatusCode.Conflict).ShouldBe(1);
         var settings = await GetAndReadAsync<EsiConfigurationSettingsDto>(Url);
-        settings.History.Count(x => !x.IsCancelled && x.EffectiveMonth == settings.SuggestedEffectiveMonth).ShouldBe(1);
+        settings.History.Count(x => !x.IsCancelled && x.EffectiveMonth == DateTime.ParseExact(settings.SuggestedEffectiveMonth, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture).AddMonths(-1).ToString("yyyy-MM")).ShouldBe(1);
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public class EsiStatutoryApi_Tests(ShikshaMitraApiTestFactory factory) : Shiksha
     {
         await EnsureDefaultTestUserHasTenantWideScopeAsync();
         var settings = await GetAndReadAsync<EsiConfigurationSettingsDto>(Url);
-        var month = DateTime.ParseExact(settings.SuggestedEffectiveMonth, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture);
+        var month = DateTime.ParseExact(settings.SuggestedEffectiveMonth, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture).AddMonths(-1);
         var earlierId = Guid.NewGuid();
         var lockedId = Guid.NewGuid();
         var unlockedId = Guid.NewGuid();

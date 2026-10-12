@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -8,7 +8,7 @@ public sealed record StatutoryWageLine(
 	Guid ComponentId,
 	string Name,
 	decimal Amount,
-	StatutoryWageTreatment Treatment);
+	StatutoryWageTreatment Treatment, bool IsAdditional = false, bool IsBasic = false);
 
 public sealed record EsiStatutoryCalculationResult(
 	bool IsCovered,
@@ -26,10 +26,18 @@ public sealed record EsiStatutoryCalculationResult(
 	decimal GovernmentContribution,
 	DateTime ContributionPeriodStart,
 	DateTime ContributionPeriodEnd,
-	IReadOnlyList<string> IssueCodes);
+	IReadOnlyList<string> IssueCodes)
+{
+	public decimal EligibilityWages { get; init; }
+	public decimal EmployeePercentage { get; init; }
+	public decimal EmployerPercentage { get; init; }
+	public EsiCalculationSettings CalculationSettings { get; init; } = new();
+}
 
 public static class EsiStatutoryCalculator
 {
+	public const string BasicComponentIssue = "ESI_BASIC_COMPONENT_REQUIRED";
+	public const string RateOverrideIssue = "ESI_RATE_OVERRIDE";
 	public const string EstablishmentInactiveIssue = "ESI_ESTABLISHMENT_INACTIVE";
 	public const string WageClassificationIssue = "ESI_WAGE_CLASSIFICATION_REQUIRED";
 	public const string EnrollmentReviewIssue = "ESI_ENROLLMENT_REVIEW_REQUIRED";
@@ -44,7 +52,7 @@ public static class EsiStatutoryCalculator
 		IReadOnlyList<StatutoryWageLine> wageLines,
 		IReadOnlyList<StatutoryOverride>? overrides = null,
 		bool assumeEstablishmentActive = false,
-		IReadOnlyList<StatutoryWageLine>? coverageWageLines = null)
+		IReadOnlyList<StatutoryWageLine>? coverageWageLines = null, EsiCalculationSettings? calculationSettings = null)
 	{
 		var monthStart = new DateTime(payrollMonth.Year, payrollMonth.Month, 1);
 		var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -63,6 +71,17 @@ public static class EsiStatutoryCalculator
 			return Empty("ESTABLISHMENT_INACTIVE", wageCeiling, periodStart, periodEnd, issueCodes);
 		}
 
+		calculationSettings ??= new EsiCalculationSettings();
+		calculationSettings.Validate();
+		if (calculationSettings.WageBasis == "BASIC_COMPONENT" &&
+			(!calculationSettings.BasicComponentIsActive ||
+			 (coverageWageLines ?? wageLines).Count(x => x.ComponentId == calculationSettings.BasicComponentId && x.IsBasic && x.Amount > 0m) != 1))
+			return Empty("BASIC_COMPONENT_REQUIRED", wageCeiling, periodStart, periodEnd, [BasicComponentIssue]);
+		wageLines = ResolveWages(wageLines, calculationSettings);
+		if (coverageWageLines != null) coverageWageLines = ResolveWages(coverageWageLines, calculationSettings);
+		if (calculationSettings.HasRateOverride) issueCodes.Add(RateOverrideIssue);
+		var employeePercentage = calculationSettings.EmployeePercentage ?? rule.EmployeePercentage;
+		var employerPercentage = calculationSettings.EmployerPercentage ?? rule.EmployerPercentage;
 		var unclassified = wageLines.Concat(coverageWageLines ?? [])
 			.Where(x => x.Treatment == StatutoryWageTreatment.Unclassified).ToList();
 		if (unclassified.Count > 0)
@@ -111,7 +130,7 @@ public static class EsiStatutoryCalculator
 			return new EsiStatutoryCalculationResult(
 				false, true, decision, totalRemuneration, includedWages, specifiedExclusions,
 				exclusionAddBack, inKindWages, statutoryWages, wageCeiling, 0m, 0m, 0m,
-				periodStart, periodEnd, issueCodes);
+				periodStart, periodEnd, issueCodes) { EligibilityWages = coverageWages, EmployeePercentage = employeePercentage, EmployerPercentage = employerPercentage, CalculationSettings = calculationSettings };
 		}
 
 		if (string.IsNullOrWhiteSpace(enrollment?.InsuranceNumber))
@@ -122,8 +141,8 @@ public static class EsiStatutoryCalculator
 		// Monthly-rated average daily wages use full contractual wages divided by 26,
 		// so unpaid days cannot create an employee-share exemption.
 		var employeeContribution = coverageWages / 26m <= rule.EmployeeShareDailyWageExemption
-			? 0m : ApplyRounding(statutoryWages * rule.EmployeePercentage / 100m, rule.RoundingPolicy);
-		var employerContribution = ApplyRounding(statutoryWages * rule.EmployerPercentage / 100m, rule.RoundingPolicy);
+			? 0m : ApplyRounding(statutoryWages * employeePercentage / 100m, rule.RoundingPolicy);
+		var employerContribution = ApplyRounding(statutoryWages * employerPercentage / 100m, rule.RoundingPolicy);
 		var employeeAmountOverride = activeOverrides.FirstOrDefault(x => x.OverrideType == StatutoryOverrideType.EmployeeAmount);
 		var employerAmountOverride = activeOverrides.FirstOrDefault(x => x.OverrideType == StatutoryOverrideType.EmployerAmount);
 		if (employeeAmountOverride?.Amount is { } employeeOverrideAmount)
@@ -157,7 +176,10 @@ public static class EsiStatutoryCalculator
 		return new EsiStatutoryCalculationResult(
 			true, true, decision, totalRemuneration, includedWages, specifiedExclusions,
 			exclusionAddBack, inKindWages, statutoryWages, wageCeiling,
-			employeeContribution, employerContribution, governmentContribution, periodStart, periodEnd, issueCodes);
+			employeeContribution, employerContribution, governmentContribution, periodStart, periodEnd, issueCodes) {
+			EligibilityWages = coverageWages, EmployeePercentage = employeePercentage,
+			EmployerPercentage = employerPercentage, CalculationSettings = calculationSettings
+		};
 	}
 
 	private static (decimal TotalRemuneration, decimal IncludedWages, decimal SpecifiedExclusions,
@@ -190,6 +212,14 @@ public static class EsiStatutoryCalculator
 			: date.Month is >= 10 and <= 12
 				? (new DateTime(date.Year, 10, 1), new DateTime(date.Year + 1, 3, 31))
 				: (new DateTime(date.Year - 1, 10, 1), new DateTime(date.Year, 3, 31));
+
+	private static IReadOnlyList<StatutoryWageLine> ResolveWages(IReadOnlyList<StatutoryWageLine> lines, EsiCalculationSettings settings) =>
+		lines.Select(line => line with {
+			Treatment = settings.WageBasis == "GROSS" && !line.IsAdditional && line.Treatment != StatutoryWageTreatment.InKind
+				? StatutoryWageTreatment.Included
+				: settings.WageBasis == "BASIC_COMPONENT" && line.ComponentId == settings.BasicComponentId
+					? StatutoryWageTreatment.Included : line.Treatment
+		}).ToList();
 
 	private static decimal ApplyRounding(decimal value, StatutoryRoundingPolicy policy) => policy switch
 	{

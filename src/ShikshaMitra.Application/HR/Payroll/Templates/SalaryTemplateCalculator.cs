@@ -18,7 +18,7 @@ internal sealed record SalaryTemplateEsiEvaluationContext(
 	IReadOnlyDictionary<Guid, StatutoryWageTreatment> ComponentTreatments,
 	IReadOnlyList<StatutoryOverride> Overrides,
 	Guid DeductionComponentId,
-	string DeductionComponentName);
+	string DeductionComponentName) { public EsiCalculationSettings CalculationSettings { get; init; } = new(); }
 
 internal sealed record SalaryTemplateEvaluation(
 	decimal Gross,
@@ -388,8 +388,8 @@ internal static class SalaryTemplateCalculator
 					{
 						eligibleWage = Math.Min(eligibleWage, pfRule.WageCeiling.Value);
 					}
-					amount = Round(eligibleWage * pfRule.EmployeePercentage / 100m);
-					var employerAmount = Round(eligibleWage * pfRule.EmployerPercentage / 100m);
+					amount = Math.Round(eligibleWage * pfRule.EmployeePercentage / 100m, 0, MidpointRounding.AwayFromZero);
+					var employerAmount = Math.Round(eligibleWage * pfRule.EmployerPercentage / 100m, 0, MidpointRounding.AwayFromZero);
 					statutoryRuleId = pfRule.Id;
 					employerContributions.Add(new CalculatedSalaryLineDto
 					{
@@ -433,7 +433,7 @@ internal static class SalaryTemplateCalculator
 				line.ComponentId,
 				line.Name,
 				line.Amount,
-				esiContext.ComponentTreatments.GetValueOrDefault(line.ComponentId, StatutoryWageTreatment.Unclassified)))
+				esiContext.ComponentTreatments.GetValueOrDefault(line.ComponentId, StatutoryWageTreatment.Unclassified), IsBasic: line.SemanticType == "BASIC"))
 				.ToList();
 			esiResult = EsiStatutoryCalculator.Calculate(
 				esiContext.EffectiveMonth,
@@ -441,7 +441,7 @@ internal static class SalaryTemplateCalculator
 				esiContext.Establishment,
 				esiContext.Enrollment,
 				wageLines,
-				esiContext.Overrides);
+				esiContext.Overrides, calculationSettings: esiContext.CalculationSettings);
 			if (esiResult.IsCovered && esiResult.CanCalculate)
 			{
 				deductions.Add(new CalculatedSalaryLineDto

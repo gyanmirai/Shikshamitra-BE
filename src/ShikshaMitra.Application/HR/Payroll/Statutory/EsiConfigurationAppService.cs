@@ -22,7 +22,7 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 public class EsiConfigurationAppService(IRepository<EsiPayrollConfiguration, Guid> configurations,
 	EsiPayrollConfigurationResolver resolver, EsiStatutoryAppService statutoryService,
 	EsiConfigurationPeriodGuard periodGuard, IPayrollInputRevisionStore revisions,
-	IUserScopeService userScopeService) : ApplicationService, IEsiConfigurationAppService
+	IUserScopeService userScopeService, ShikshaMitra.HR.Payroll.Settings.IEarningComponentRepository earnings) : ApplicationService, IEsiConfigurationAppService
 {
 	[Authorize(EsiPermissions.View)]
 	public async Task<EsiConfigurationSettingsDto> GetAsync()
@@ -36,14 +36,16 @@ public class EsiConfigurationAppService(IRepository<EsiPayrollConfiguration, Gui
 	public async Task<EsiConfigurationSettingsDto> SaveAsync(SaveEsiConfigurationDto input)
 	{
 		await AuthorizeMutationAsync();
+		ArgumentNullException.ThrowIfNull(input);
 		if (!new SaveEsiConfigurationDtoValidator().Validate(input).IsValid)
 			throw new Volo.Abp.Validation.AbpValidationException("Review the ESIC configuration.");
+		input.CalculationSettings.Validate();
 		await resolver.EnsureDefaultAsync();
 		await revisions.LockAsync();
 		var key = input.IdempotencyKey.ToString("N");
 		var fingerprint = key + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
 			JsonSerializer.Serialize(new {
-				input.Enabled, RegistrationNumber = input.RegistrationNumber?.Trim(),
+				input.EffectiveMonth, input.CalculationSettings, input.Enabled, RegistrationNumber = input.RegistrationNumber?.Trim(),
 				CoveredSince = input.CoveredSince?.Date, input.ConcurrencyStamp,
 				Treatments = input.Treatments.OrderBy(x => x.ComponentId)
 			}))))[..32];
@@ -54,8 +56,13 @@ public class EsiConfigurationAppService(IRepository<EsiPayrollConfiguration, Gui
 				throw new BusinessException(HRErrorCodes.StatutoryPreviewStale);
 			return await ReadAsync();
 		}
-		var month = CurrentMonth();
+		var month = input.EffectiveMonth == null ? CurrentMonth() :
+			DateTime.ParseExact(input.EffectiveMonth, "yyyy-MM", CultureInfo.InvariantCulture);
+		if (month < CurrentMonth()) throw new BusinessException("HR:Payroll:EsiConfigurationPastMonth");
 		var current = await resolver.ResolveAsync(month);
+		if (input.CalculationSettings.BasicComponentId is { } basicId &&
+			!await earnings.AnyAsync(x => x.Id == basicId && x.IsActive))
+			throw new BusinessException("HR:Payroll:EsiBasicComponentInvalid");
 		if (current == null || current.ConcurrencyStamp != input.ConcurrencyStamp)
 			throw new BusinessException(HRErrorCodes.StatutoryPreviewStale);
 		var catalog = await statutoryService.ReadComponentTreatmentsAsync(month);
@@ -71,7 +78,7 @@ public class EsiConfigurationAppService(IRepository<EsiPayrollConfiguration, Gui
 		}
 		await configurations.InsertAsync(new EsiPayrollConfiguration(GuidGenerator.Create(), CurrentTenant.Id,
 			month, input.Enabled, input.RegistrationNumber, input.CoveredSince, fingerprint,
-			current.EffectiveMonth == month ? current.Id : null, treatments));
+			current.EffectiveMonth == month ? current.Id : null, treatments, input.CalculationSettings));
 		await periodGuard.InvalidateAsync(month, null);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await ReadAsync();
@@ -85,11 +92,11 @@ public class EsiConfigurationAppService(IRepository<EsiPayrollConfiguration, Gui
 				HrUserScopeAccess.HasHrWideAccess(await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value)),
 			Current = history.Where(x => !x.IsCancelled && x.EffectiveMonth <= CurrentMonth()).Select(Map).FirstOrDefault(),
 			History = history.Select(Map).ToList(),
-			SuggestedEffectiveMonth = CurrentMonth().ToString("yyyy-MM", CultureInfo.InvariantCulture)
+			SuggestedEffectiveMonth = CurrentMonth().AddMonths(1).ToString("yyyy-MM", CultureInfo.InvariantCulture)
 		};
 	}
 	private static EsiConfigurationVersionDto Map(EsiPayrollConfiguration x) => new() {
-		Id = x.Id, EffectiveMonth = x.EffectiveMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture),
+		CalculationSettings = x.GetCalculationSettings(), Id = x.Id, EffectiveMonth = x.EffectiveMonth.ToString("yyyy-MM", CultureInfo.InvariantCulture),
 		Enabled = x.Enabled, RegistrationNumber = x.RegistrationNumber, CoveredSince = x.CoveredSince,
 		IsCancelled = x.IsCancelled, CancellationReason = x.CancellationReason, ConcurrencyStamp = x.ConcurrencyStamp
 	};
@@ -104,6 +111,7 @@ public class EsiConfigurationAppService(IRepository<EsiPayrollConfiguration, Gui
 	{
 		await AuthorizationService.CheckAsync(EsiPermissions.Edit);
 		await AuthorizationService.CheckAsync(EsiPermissions.Activate);
+		await AuthorizationService.CheckAsync(EsiPermissions.ConfigureCalculation);
 		await EnsureHrWideAsync();
 	}
 	private async Task EnsureHrWideAsync()

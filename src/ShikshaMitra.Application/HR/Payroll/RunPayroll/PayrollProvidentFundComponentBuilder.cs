@@ -69,7 +69,7 @@ public class PayrollProvidentFundComponentBuilder(
 			return result;
 		}
 
-		var amount = Math.Round(baseAmount * (decimal)rule.EmployeePercentage / 100m, 2, MidpointRounding.AwayFromZero);
+		var amount = Math.Round(baseAmount * (decimal)rule.EmployeePercentage / 100m, 0, MidpointRounding.AwayFromZero);
 		var existing = result.FirstOrDefault(x => x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund);
 		if (existing != null)
 		{
@@ -164,9 +164,7 @@ public class PayrollProvidentFundComponentBuilder(
 			.Where(x => x.IsEarning && IsBasicSalaryComponentName(x.Name))
 			.Sum(x => x.Amount);
 
-		return basic > 0m
-			? basic
-			: components.Where(x => x.IsEarning).Sum(x => x.Amount);
+		return basic;
 	}
 
 	private static bool IsBasicSalaryComponentName(string? name)

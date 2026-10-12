@@ -83,7 +83,8 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			ShikshaMitraModulePermissions.HR,
 			ShikshaMitraModulePermissions.Communication,
 			ShikshaMitraModulePermissions.Calendar,
-			ShikshaMitraModulePermissions.InstituteSetup);
+			ShikshaMitraModulePermissions.InstituteSetup)
+			.Where(name => name != ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.ConfigureCalculation).ToArray();
 		var studentFamilyPermissions = ModulePermissions(
 			ShikshaMitraModulePermissions.Dashboard,
 			ShikshaMitraModulePermissions.Students,
@@ -114,7 +115,7 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair
 			]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 		// Defaults apply only while creating a new built-in role, never to existing grants.
-		return new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+		var defaults = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
 		{
 			["admin"] = tenantAdminPermissions,
 			["super-admin"] = tenantAdminPermissions,
@@ -135,6 +136,9 @@ public class RolePermissionSeederContributor : BaseSeederContributor
 			["Student"] = studentFamilyPermissions,
 			["Parent"] = studentFamilyPermissions
 		};
+		var configure = ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsStatutorySchemes.ConfigureCalculation;
+		return defaults.ToDictionary(x => x.Key, x => x.Key is "admin" or "super-admin"
+			? x.Value : x.Value.Where(permission => permission != configure).ToArray(), StringComparer.OrdinalIgnoreCase);
 	}
 
 	private static string[] AdmissionsBasePermissions() =>

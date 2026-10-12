@@ -30,7 +30,7 @@ A missing visibility grant must not lock an authorized administrator out of conf
 
 Frontend grouping follows the staging mappings and dependencies; it does not change backend permission definitions or endpoint enforcement.
 The user-approved Statutory Schemes exception retains the same UI with View/Edit/Delete controls.
-Edit groups the existing Edit, Activate, ManageEnrollment, and ApproveOverride permissions; View remains independent.
+Edit groups Edit, Activate, ManageEnrollment, ApproveOverride, and ConfigureCalculation permissions when present in the server catalogue; View remains independent.
 Delete is disabled unless the server defines that action; this permission-editor change does not add a deletion operation.
 Statutory Schemes Revoke All clears every provider-eligible direct grant at or beneath its exact feature namespace, including undisplayed actions, without touching neighboring features or inherited role grants.
 It remains available for partial direct grants, while Grant All only grants explicitly mapped catalogue actions.

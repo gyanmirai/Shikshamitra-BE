@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-11
+updated_on: 2026-10-10
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,14 +11,6 @@ audience: humans-and-agents
 # Find Student Enrollment Admissions APIs
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
-
-## Portal account owner profiles and case correction
-
-The scoped Onboarding case-detail GET includes optional `portalAccountOwners` with account type, relationship, display name and saved email from the current Student contact/family profile. Student/self, guardian/father, guardian/mother and guardian/guardian are distinct recipients. List responses do not load these profile details. The existing case View grant, tenant isolation and case scope apply; provisioning still validates the current saved email and explicit ownership confirmation, and preserves identity/sibling checks. This additive response field has no new endpoint, write or migration.
-
-`POST /api/student/onboarding/{id}/guardian-credential-email/enable` accepts `{reason,concurrencyStamp}` and returns the updated case detail. Controller and application service require Onboarding Configure (currently `Students.Onboarding.Add`), a current tenant/user, scoped case access, current stamp, an activated open case, a reviewed `ReadinessRulesSnapshot` and `guardianAccount=true`. The reason is required (3–400 characters). The command enables only `sendGuardianCredentialEmail` in this case's pinned snapshot, retains every other rule and school/Offering settings, and adds a creation-audited `GuardianCredentialEmailEnabled` event with previous/new values. An already-enabled current-stamp retry is a no-op. The command never provisions accounts, refreshes provisioning or enqueues emails. No schema migration is needed.
-
-Canonical Father/Mother/Guardian contact corrections continue through the existing Records snapshot/change APIs, including their section authority, stale snapshot check, approval policy and guardian-access review. The selected saved email and ownership checks remain mandatory during portal provisioning.
 
 ## Decision history display
 
@@ -59,10 +51,6 @@ No new workflow, messaging store or finalization path is created.
 | Current-stage progression | Form submission (except the existing Inquiry entry handoff), Continue, completion and admission decisions retain their current-stage guards. Preparing evidence does not enter or complete a Pending stage. Fee selection confirms Admissions intent only and never collects payment. |
 
 Ending a journey records Withdrawn with actor, reason, decision history and activity; cancels unfinished stages and unused assessment bookings; releases provisional seat reservations; and cancels scheduled inquiry follow-ups. Completed stage/evidence history and Finance records are retained. A matching pending Records return is closed through its owner service. The transaction validates the application stamp; a repeated successful withdrawal with the same reason returns the saved outcome without duplicating history, even when the retry carries the prior stamp.
-
-## Intake setup lifecycle
-
-POST `/api/student/enrollment/admissions/intake-setups/{id}/restore` requires Admission Offerings Add authority in both controller and application service. It accepts `{concurrencyStamp}` and returns the shared envelope containing the updated setup DTO. Tenant filtering and the same stale-write guard used by archive apply; blank or oversized stamps fail validation, and stale stamps return `Admissions.Intake.ConcurrencyConflict`. Restore clears the archive flag, time and actor without replacing profile IDs or rules. A repeated restore using the current stamp is a no-op. It does not reactivate historical Offerings or links, or change existing inquiry assignments; ordinary configuration and staff checks still govern subsequent usage. No schema migration is required.
 
 ## Intake counsellor options
 
@@ -146,7 +134,7 @@ Stale roster/revision, incomplete submission, invalid status/detail, conflicting
 
 ## Student Records API families
 
-Records preserve each controller's response contract: Directory/Profile, Settings, Transitions, Guardian Access and certificate/ID metadata use the shared `Result<T>` envelope. Changes, Duplicates, Reports and photo-upload metadata return their DTO or paged DTO directly. PDF, photo and Excel downloads return file responses. Permission names use the central `Students.Records.*` catalogue. Profile and directory options require `Students.Records.StudentList.View`; directory search also accepts Student I-Card or Certificates View so those submodules can select students. Scope and policy masking still apply.
+Records preserve each controller's response contract: Directory/Profile, Settings, Transitions, Guardian Access and certificate/ID metadata use the shared `Result<T>` envelope. Changes, Duplicates, Reports and photo-upload metadata return their DTO or paged DTO directly. PDF, photo and Excel downloads return file responses. Permission names use the central `Students.Records.*` catalogue. Profile requires `Students.Records.StudentList.View`; directory search and academic options accept Student List, Student I-Card or Certificates View. Scope and policy masking still apply.
 
 | API family | Commands and permissions |
 |---|---|
@@ -155,7 +143,8 @@ Records preserve each controller's response contract: Directory/Profile, Setting
 | Transition requests | POST `/preview`, `/batches`, `/{id}/cancel`, `/{id}/correct`, `/returns`, `/returns/preview`, `/renewals/{id}/confirm` under Transitions.Create. POST `/{id}/approve` and `/reject` under Transitions.Approve. POST `/{id}/apply` and `/renewals/{id}/activate` under Transitions.Apply. |
 | Renewal portal handoff | GET `/renewals/{id}/portal-options` exposes required accounts, recorded email/guardian choices, existing links and `canProvision`. POST `/renewals/{id}/portal-accounts` uses the existing Onboarding account DTO; requires Transitions.Create, Onboarding.Edit and Identity.Users.Create, plus Identity.Users.Update for verified existing guardian linkage. |
 | Other Records surfaces | Directory, profile, changes, historical overrides, duplicate review, documents/IDs, guardian reviews, and reports use their source-owned controllers in `HttpApi/Controllers/Student/Records/`. Existing certificate/ID permission compatibility is preserved. |
-| Student I-Card | GET/PUT `/api/students/records/ids/templates` reads and saves the school card design. POST `/preview` validates up to 100 student IDs; POST `/issue` creates numbered snapshot cards with an idempotency key. POST `/export` returns an A4 bulk PDF for up to 100 IDs and requires StudentICard.Add. Individual PDF, reprint and void keep their existing permissions. Directory accepts repeated `boardIds`, `mediumIds`, `standardIds` and `divisionIds` query parameters for the multi-select student step; scope and identity masking still apply. |
+| Certificates | Directory requests with `includeActiveStudentList=true` require Certificates.View and include enrolled Student List students without records onboarding; former students retain records eligibility. `academicMediumStageId` filters the academic stage. Directory options expose `stages` under Medium and `stageId` on Classes. Certificate preview, generation, history and downloads accept active scoped students while retaining identity masking and Leaving exit rules. GET `/api/students/records/certificates/batches` accepts `certificateType`, `generatedFrom`, `generatedTo` (offset-bearing timestamps spanning at most 32 days), `skipCount` and `maxResultCount` (1–100). It returns paged generation groups. GET `/batches/{batchId}?certificateType=...` returns the saved certificate snapshots for visible students. Both require Certificates.View. A multi-student generation uses one stable UUID followed by each student UUID as its idempotency key; older independent requests appear as individual groups. |
+| Student I-Card | GET `/api/students/records/ids/templates/list` lists saved designs; POST `/templates` creates one, and GET/PUT/DELETE `/templates/{id}` views, edits, or deletes it. The existing GET/PUT `/templates` remains for older clients and addresses the oldest design. List and read require StudentICard.View, create and update require StudentICard.Add, and delete requires StudentICard.Delete. A student can belong to only one saved template in an academic year; creating or updating a template moves selected students from any other template in that year to the saved template. The same student may use a different template in another year. POST `/preview`, `/issue`, and `/export` accept an optional `templateId` to select a saved design; omitted ID uses the oldest design for compatibility. Preview validates up to 100 student IDs; issue creates numbered snapshot cards with an idempotency key; export returns an A4 bulk PDF for up to 100 IDs and requires StudentICard.Add. Deleting a design leaves issued card snapshots intact. Individual PDF, reprint and void keep their existing permissions. Directory accepts repeated `boardIds`, `mediumIds`, `standardIds` and `divisionIds` query parameters for the multi-select student step; scope and identity masking still apply. |
 
 Batch requests contain one to 100 distinct students, source academic year, stable idempotency key, per-row outcome/reason/effective date, and preview student/enrollment concurrency stamps. Promote/Repeat/Return additionally require target year/class/division and roll number. Submission validates stamps and school batch behavior again. Reusing a key for a different request is rejected.
 
@@ -220,28 +209,9 @@ description is optional and limited to 1000 characters.
 
 ## Offering endpoints
 
-Create, clone and bulk writes retain the requested supported admission Track and EntryMode rather than normalizing them to General/Inquiry.
-Routing on an Offering already used by applications remains frozen; an unused Offering retains the routing supplied on update.
-Application form references are resolved from the selected workflow's configured Form stages; the caller cannot override an explicit workflow form.
-Direct-only writes clear Inquiry form and Inquiry intake-profile references, while Inquiry-compatible offerings retain independent Inquiry form selection and workflow-default fallback.
-Bulk `stageId` is optional and each item's actual stage is resolved from its Standard before tenant, hierarchy and UserScope validation.
-Uniqueness includes admission Track, so General and RTE may coexist for the same cycle/class/academic scope, but two non-deleted offerings of the same identity and Track are rejected even when inactive.
-Offering clone always uses the target cycle window (`useCycleDates=true`, null `openDate`/`closeDate` overrides), without copying or changing the source's custom dates.
-Generic create/update/bulk date contracts retain validated custom-date compatibility.
+Create, clone and bulk writes normalize new offerings to General/Inquiry. Application form references are resolved from the selected workflow's configured Form stages; the caller cannot override an explicit workflow form. Inquiry form remains selectable. Bulk `stageId` is optional and each item's actual stage is resolved from its Standard before tenant, hierarchy and UserScope validation. Read DTOs retain historical enums and references for compatibility.
 
-Fresh special Registration and family matching accept only RTE, Management, or Staff offerings configured for DirectRegistration or retained Both entry.
-RTE configuration still requires DirectRegistration, Form entry, no Inquiry stage and no Assessment stage.
-General and Inquiry-first offerings reject these special-entry commands with `Admissions.DirectRegistration.EntryNotAllowed`.
-New starts and family lookups require active/open/published-ready, current-tenant, accessible offerings; lookup returns only scoped active families matching the primary guardian mobile.
-Ordinary application start still requires Inquiry evidence; the server-internal Records return coordinator and existing applications retain their governed lifecycle.
-
-| Method | Application route suffix | Permission | Contract |
-| --- | --- | --- | --- |
-| POST | `direct-registration` | `Students.Admissions.Applications.Add` | System-owned applicant/guardian identity, Offering ID, stable `requestId`, optional counsellor and explicit existing/separate family choice; creates a Registration-first application transactionally. |
-| GET | `direct-registration/family-matches?offeringId=...&guardianMobile=...` | `Students.Admissions.Applications.Add` | Matching scoped family identities and visible sibling names for an available special Registration offering. |
-
-These existing routes are under `/api/student/enrollment/admissions/applications` and enforce the same Start permission on both controller and application service.
-The same-request/same-payload retry returns the existing scoped application without creating a second family/applicant; changed identity, offering, or initial counsellor conflicts.
+Fresh Admissions direct-registration and direct-registration family-match endpoints reject with the existing direct-entry error. Ordinary application start requires Inquiry evidence. The server-internal Records return coordinator and existing applications retain their historical lifecycle.
 
 | Method | Route | Permission |
 |---|---|---|
@@ -404,7 +374,6 @@ The route prefix is `/api/student/enrollment/admissions/inquiries/{inquiryId}/ma
 
 Workflow setup continues to use `GET /api/student/enrollment/admissions/inquiry-settings/counsellors` with workflow view permission. Runtime assignment uses the inquiry collection `counsellors` route with the dedicated Inquiry Assign permission.
 Every management command requires the current management concurrency stamp.
-An inquiry without optional intake settings receives the default management policy and a persisted management stamp. Read management before refreshing inquiry details, since initializing a historical inquiry may change its inquiry stamp.
 `follow-up-notes` additionally requires the inquiry's current `inquiryConcurrencyStamp`, a trimmed nonblank `note` of at most 500 characters and `status` exactly `0` (Pending), `2` (Interested) or `6` (Not interested).
 Pending and Interested require an offset-bearing `reminderAt` strictly in the future and within one year, validated against the UTC clock instant.
 Not interested ignores any supplied reminder and clears open reminders without creating another.

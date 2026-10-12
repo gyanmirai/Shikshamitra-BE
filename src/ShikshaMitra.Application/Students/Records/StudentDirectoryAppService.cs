@@ -28,12 +28,16 @@ public partial class StudentDirectoryAppService(
 {
 	public async Task<StudentDirectoryOptionsDto> GetOptionsAsync(Guid? academicYearId = null)
 	{
-		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
+		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View) &&
+			!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View))
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View);
 		return await options.GetAsync(academicYearId);
 	}
 	public async Task<PagedResultDto<StudentDirectoryItemDto>> GetListAsync(StudentDirectoryRequest input)
 	{
-		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View) &&
+		if (input.IncludeActiveStudentList)
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View);
+		else if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View) &&
 			!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View))
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View);
 		return await GetDirectoryAsync(input, false);
@@ -68,22 +72,32 @@ public partial class StudentDirectoryAppService(
 				!caseQuery.Any(c => c.TenantId == CurrentTenant.Id && c.StudentId == s.Id && (c.Status == StudentOnboardingStatus.Completed || !c.IsHistoricalBackfill)) &&
 				!overrideQuery.Any(o => o.TenantId == CurrentTenant.Id && o.StudentId == s.Id && (o.Status == "Pending" || o.Status == "Approved")));
 		}
-		else query = query.Where(s => onboardingEligibleIds.Contains(s.Id) ||
+		else query = query.Where(s => input.IncludeActiveStudentList && s.Status == StudentLifeCycleStatusEnum.Enrolled || onboardingEligibleIds.Contains(s.Id) ||
 			 overrideQuery.Any(o => o.TenantId == CurrentTenant.Id && o.StudentId == s.Id && o.Status == "Approved"));
 		if (input.Population == "Active") query = query.Where(s => s.Status == StudentLifeCycleStatusEnum.Enrolled);
 		if (input.Population == "Former") query = query.Where(s => s.Status == StudentLifeCycleStatusEnum.InActive || s.Status == StudentLifeCycleStatusEnum.Left);
-		if (input.AcademicYearId.HasValue)
+		if (input.AcademicYearId.HasValue && input.IncludeActiveStudentList && input.Population == "Active")
 		{
-			var enrollmentQuery = await enrollmentScope.FilterHierarchyAsync(await enrollmentScope.GetQueryableAsync(), input.BoardId, input.MediumId);
+			query = query.Where(s => s.AcademicYearId == input.AcademicYearId &&
+				(!input.BoardId.HasValue || s.AcademicBoardId == input.BoardId) && (!input.MediumId.HasValue || s.AcademicMediumId == input.MediumId) &&
+				(!input.AcademicMediumStageId.HasValue || s.AcademicMediumStageId == input.AcademicMediumStageId) &&
+				(!input.StandardId.HasValue || s.StandardId == input.StandardId) && (!input.DivisionId.HasValue || s.DivisionId == input.DivisionId));
+		}
+		else if (input.AcademicYearId.HasValue)
+		{
+			var enrollmentQuery = await enrollmentScope.FilterHierarchyAsync(await enrollmentScope.GetQueryableAsync(), input.BoardId, input.MediumId, input.AcademicMediumStageId);
 			var allEnrollmentQuery = await enrollments.GetQueryableAsync();
 			query = query.Where(s => enrollmentQuery.Any(e => e.TenantId == CurrentTenant.Id && e.StudentId == s.Id && e.AcademicYearId == input.AcademicYearId &&
 				(!input.StandardId.HasValue || e.StandardId == input.StandardId) && (!input.DivisionId.HasValue || e.DivisionId == input.DivisionId)) ||
-				!allEnrollmentQuery.Any(e => e.TenantId == CurrentTenant.Id && e.StudentId == s.Id) && s.Status == StudentLifeCycleStatusEnum.Left && s.AcademicYearId == input.AcademicYearId &&
+				((input.IncludeActiveStudentList && s.Status == StudentLifeCycleStatusEnum.Enrolled) ||
+				 !allEnrollmentQuery.Any(e => e.TenantId == CurrentTenant.Id && e.StudentId == s.Id) && s.Status == StudentLifeCycleStatusEnum.Left) && s.AcademicYearId == input.AcademicYearId &&
 				(!input.BoardId.HasValue || s.AcademicBoardId == input.BoardId) && (!input.MediumId.HasValue || s.AcademicMediumId == input.MediumId) &&
+				(!input.AcademicMediumStageId.HasValue || s.AcademicMediumStageId == input.AcademicMediumStageId) &&
 				(!input.StandardId.HasValue || s.StandardId == input.StandardId) && (!input.DivisionId.HasValue || s.DivisionId == input.DivisionId));
 		}
 		else
 		{
+			if (input.AcademicMediumStageId.HasValue) query = query.Where(s => s.AcademicMediumStageId == input.AcademicMediumStageId);
 			if (input.StandardId.HasValue) query = query.Where(s => s.StandardId == input.StandardId);
 			if (input.DivisionId.HasValue) query = query.Where(s => s.DivisionId == input.DivisionId);
 		}
@@ -114,7 +128,8 @@ public partial class StudentDirectoryAppService(
 			query = query.Where(s => (input.AcademicYearId.HasValue ? selectedYearVisible :
 				((s.AcademicYearId.HasValue && Enumerable.Contains(visibleIdentityYears, s.AcademicYearId.Value)) || (!s.AcademicYearId.HasValue && showNullYear))) &&
 				((s.FirstName != null && s.FirstName.ToLower().Contains(term)) || (s.LastName != null && s.LastName.ToLower().Contains(term)) ||
-				 (s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) || (s.GrNumber != null && s.GrNumber.ToLower().Contains(term))));
+				 (s.MiddleName != null && s.MiddleName.ToLower().Contains(term)) || (s.GrNumber != null && s.GrNumber.ToLower().Contains(term)) ||
+				 (s.GrNo.HasValue && s.GrNo.Value.ToString().Contains(term))));
 		}
 		var total = await AsyncExecuter.CountAsync(query);
 		var sorting = input.Sorting?.Trim().ToLowerInvariant();
@@ -142,9 +157,10 @@ public partial class StudentDirectoryAppService(
 			DivisionId = s.DivisionId, DivisionName = s.Division != null ? s.Division.Name : null,
 			AcademicMediumId = s.AcademicMediumId, AcademicMediumName = s.AcademicMedium != null ? s.AcademicMedium.Name : null,
 			HasPhoto = s.PhotoBlobName != null,
-			EntrySource = caseQuery.Any(c => c.TenantId == CurrentTenant.Id && c.StudentId == s.Id && c.Status == StudentOnboardingStatus.Completed) ? "CompletedOnboarding" : onboardingEligibleIds.Contains(s.Id) ? "ActivatedOnboarding" : "LegacyOverride"
+			EntrySource = caseQuery.Any(c => c.TenantId == CurrentTenant.Id && c.StudentId == s.Id && c.Status == StudentOnboardingStatus.Completed) ? "CompletedOnboarding" : onboardingEligibleIds.Contains(s.Id) ? "ActivatedOnboarding" :
+				overrideQuery.Any(o => o.TenantId == CurrentTenant.Id && o.StudentId == s.Id && o.Status == "Approved") ? "LegacyOverride" : "ActiveStudentList"
 		}));
-		if (input.AcademicYearId.HasValue && rows.Count > 0)
+		if (input.AcademicYearId.HasValue && rows.Count > 0 && !(input.IncludeActiveStudentList && input.Population == "Active"))
 		{
 			var studentIds = rows.Select(r => r.StudentId).ToArray();
 			var enrollmentQuery = await enrollmentScope.GetDirectoryProjectionAsync();

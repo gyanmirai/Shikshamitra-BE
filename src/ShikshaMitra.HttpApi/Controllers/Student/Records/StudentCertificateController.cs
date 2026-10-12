@@ -14,6 +14,16 @@ namespace ShikshaMitra.HttpApi.Controllers.Students.Records;
 public class StudentCertificateController(
 	IStudentCertificateAppService certificateAppService) : AbpController
 {
+	[HttpGet("batches")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]
+	public async Task<Result<Volo.Abp.Application.Dtos.PagedResultDto<StudentCertificateBatchDto>>> GetBatches([FromQuery] StudentCertificateBatchQuery input) =>
+		Result.Success(await certificateAppService.GetBatchesAsync(input));
+
+	[HttpGet("batches/{batchId:guid}")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]
+	public async Task<Result<StudentCertificateBatchDetailDto>> GetBatch(Guid batchId, [FromQuery] StudentCertificateType certificateType) =>
+		Result.Success(await certificateAppService.GetBatchAsync(batchId, certificateType));
+
 	[HttpGet("placeholders")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View)]
 	public async Task<Result<List<string>>> GetSupportedPlaceholders()

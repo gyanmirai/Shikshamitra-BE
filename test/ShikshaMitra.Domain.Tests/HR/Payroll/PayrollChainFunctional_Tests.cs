@@ -77,7 +77,7 @@ public class PayrollChainFunctional_Tests
 	}
 
 	[Fact]
-	public void Pf_Should_Fall_Back_To_Gross_When_Custom_Earning_Has_No_Basic_Classification()
+	public void Pf_Should_Block_When_Custom_Earning_Has_No_Basic_Classification()
 	{
 		var employeeId = Guid.NewGuid();
 		var pfRule = new ProvidentFund(
@@ -108,8 +108,9 @@ public class PayrollChainFunctional_Tests
 			components,
 			new PayrollStatutoryRuleSet(pfRule, [], IsEmploymentCessationMonth: false));
 
-		result.Deductions.Single().Amount.ShouldBe(1800m);
-		result.EmployerContributions.Single().Amount.ShouldBe(1800m);
+		result.Deductions.ShouldBeEmpty();
+		result.EmployerContributions.ShouldBeEmpty();
+		result.StatutoryIssueCodes.ShouldContain(RunPayroll.IssueCodes.PfWageBasisRequired);
 		result.ProvidentFundRuleId.ShouldBe(pfRule.Id);
 	}
 

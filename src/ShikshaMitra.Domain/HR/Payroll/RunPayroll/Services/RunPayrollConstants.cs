@@ -9,6 +9,7 @@ public static class ReviewStatuses
 
 public static class IssueCodes
 {
+	public const string PfWageBasisRequired = "PF_WAGE_BASIS_REQUIRED";
 	public const string MissingSalaryStructure = "MISSING_SALARY_STRUCTURE";
 	public const string NoAttendance = "NO_ATTENDANCE";
 	public const string LowAttendance = "LOW_ATTENDANCE";

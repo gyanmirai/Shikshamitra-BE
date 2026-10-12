@@ -19,7 +19,7 @@ public class PayrollPreviewReviewGuard(PayrollPreviewRunAppService previews, IPa
 		var run = await previews.GetAuthorizedRunAsync(previewRunId);
 		var (year, monthNumber, _) = PayrollRunRules.ParseMonth(month);
 		if (run.Month != $"{year:0000}-{monthNumber:00}" || run.AcademicYearId != academicYearId ||
-			run.Status != "SUCCEEDED" || revision != run.InputRevision)
+			!run.HasCurrentCalculationVersion || run.Status != "SUCCEEDED" || revision != run.InputRevision)
 			throw new BusinessException(HRErrorCodes.PayrollPreviewStale);
 		var ids = employeeIds.Distinct().ToList();
 		if (await employees.CountAsync(x => x.RunId == previewRunId && ids.Contains(x.EmployeeId)) != ids.Count)
@@ -28,6 +28,9 @@ public class PayrollPreviewReviewGuard(PayrollPreviewRunAppService previews, IPa
 
 	public async Task EnsureReviewedAsync(Guid previewRunId, IReadOnlyCollection<Guid> employeeIds)
 	{
+		var run = await previews.GetAuthorizedRunAsync(previewRunId);
+		if (!run.HasCurrentCalculationVersion)
+			throw new BusinessException(HRErrorCodes.PayrollPreviewStale);
 		var ids = employeeIds.Distinct().ToList();
 		if (await reviews.CountAsync(x => x.PreviewRunId == previewRunId && ids.Contains(x.EmployeeId)) != ids.Count)
 			throw new BusinessException(HRErrorCodes.PayrollReviewRequiredBeforeLock);

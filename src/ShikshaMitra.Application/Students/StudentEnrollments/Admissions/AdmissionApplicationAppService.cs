@@ -71,8 +71,7 @@ public class AdmissionApplicationAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	public Task<List<AdmissionDirectFamilyMatchDto>> FindDirectRegistrationFamiliesAsync(
 		Guid offeringId, string guardianMobile) =>
-		throw new Volo.Abp.BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
-			"Direct admission has been removed. Start with an inquiry for this Admission Offering.");
+		directRegistrationService.FindFamiliesAsync(offeringId, guardianMobile);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(Guid? offeringId = null, string? filter = null) =>

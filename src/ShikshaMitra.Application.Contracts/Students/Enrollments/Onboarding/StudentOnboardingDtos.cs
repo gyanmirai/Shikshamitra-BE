@@ -101,6 +101,7 @@ public class CapturedStudentFieldDto
 
 public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 {
+	public IReadOnlyList<StudentPortalAccountOwnerDto>? PortalAccountOwners { get; set; }
 	public bool GrNumberLocked { get; set; }
 	public bool RollNumberLocked { get; set; }
 	public bool RollChangeReasonRequired { get; set; }
@@ -162,6 +163,14 @@ public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 	public bool IsOverdue { get; set; }
 	public IReadOnlyList<StudentOnboardingStepDto> Steps { get; set; } = [];
 	public IReadOnlyList<StudentOnboardingEventDto> Events { get; set; } = [];
+}
+
+public class StudentPortalAccountOwnerDto
+{
+	public string AccountType { get; set; } = string.Empty;
+	public string Relationship { get; set; } = string.Empty;
+	public string? Name { get; set; }
+	public string? Email { get; set; }
 }
 
 public class SetStudentOnboardingRouteDto

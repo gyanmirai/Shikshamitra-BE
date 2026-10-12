@@ -20,9 +20,17 @@ public class AdmissionDirectFamilyMatchService(
 	AdmissionOfferingRuntimeService offeringRuntime)
 	: ApplicationService, ITransientDependency
 {
-	public async Task<List<AdmissionDirectFamilyMatchDto>> FindAsync(Guid offeringId, string guardianMobile)
+	public Task<List<AdmissionDirectFamilyMatchDto>> FindAsync(Guid offeringId, string guardianMobile) =>
+		FindCoreAsync(offeringId, guardianMobile, requireSpecialTrack: false);
+
+	internal Task<List<AdmissionDirectFamilyMatchDto>> FindForSpecialRegistrationAsync(Guid offeringId, string guardianMobile) =>
+		FindCoreAsync(offeringId, guardianMobile, requireSpecialTrack: true);
+
+	private async Task<List<AdmissionDirectFamilyMatchDto>> FindCoreAsync(Guid offeringId, string guardianMobile, bool requireSpecialTrack)
 	{
 		var offering = (await offeringRuntime.GetAvailableAsync(offeringId)).Offering;
+		if (requireSpecialTrack)
+			AdmissionDirectRegistrationEntryPolicy.EnsureAllowed(offering);
 		if (offering.EntryMode is not (AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both))
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed);
 		return await FindAccessibleMatchesAsync(AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(guardianMobile));

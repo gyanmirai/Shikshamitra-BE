@@ -997,7 +997,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		var entryId = Guid.NewGuid();
 		var terminalId = Guid.NewGuid();
-		var workflow = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto
+		var workflow = await SeedPublishedHistoricalWorkflowAsync(new CreateUpdateAdmissionWorkflowDto
 		{
 			Name = "Grade 5 Admission",
 			Code = $"GRADE5_{Guid.NewGuid():N}"[..24],
@@ -1037,7 +1037,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			]
 		});
 
-		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
+		return workflow;
 	}
 
 	private async Task<AdmissionWorkflowDto> CreateAndPublishRealisticWorkflowAsync()
@@ -1072,7 +1072,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Priority = 1,
 				IsDefault = true
 			}).ToList();
-		var workflow = await _workflowAppService.CreateAsync(new CreateUpdateAdmissionWorkflowDto
+		var workflow = await SeedPublishedHistoricalWorkflowAsync(new CreateUpdateAdmissionWorkflowDto
 		{
 			Name = "Grade 5 Admission",
 			Code = $"GRADE5_REAL_{Guid.NewGuid():N}"[..24],
@@ -1081,11 +1081,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			Transitions = transitions
 		});
 
-		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
+		return workflow;
 	}
 
 	private Task<AdmissionOffering> CreateAvailableOfferingAsync(
-		Guid workflowId, bool assertValid = true, bool campusScoped = false) =>
+		Guid workflowId, bool assertValid = true, bool campusScoped = false, Guid? registrationFormId = null) =>
 		WithUnitOfWorkAsync(async () =>
 	{
 		var userRepository = GetRequiredService<IRepository<IdentityUser, Guid>>();
@@ -1116,14 +1116,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		cycle.Publish(Guid.NewGuid(), DateTime.UtcNow);
 		await _cycleRepository.InsertAsync(cycle, autoSave: true);
 
-		var form = new AdmissionFormDefinition(
+		var form = registrationFormId.HasValue ? await _formRepository.GetAsync(registrationFormId.Value) : new AdmissionFormDefinition(
 			Guid.NewGuid(),
 			TestTenantId,
 			"Grade 5 Application Form",
 			$"FORM_{Guid.NewGuid():N}"[..24],
 			AdmissionFormLayoutType.SinglePage);
-		form.Publish(Guid.NewGuid());
-		await _formRepository.InsertAsync(form, autoSave: true);
+		if (!registrationFormId.HasValue)
+		{
+			form.Publish(Guid.NewGuid());
+			await _formRepository.InsertAsync(form, autoSave: true);
+		}
 		var inquiryForm = new AdmissionFormDefinition(
 			Guid.NewGuid(), TestTenantId, "Grade 5 Inquiry Form",
 			$"INQUIRY_{Guid.NewGuid():N}"[..24], AdmissionFormLayoutType.SinglePage,

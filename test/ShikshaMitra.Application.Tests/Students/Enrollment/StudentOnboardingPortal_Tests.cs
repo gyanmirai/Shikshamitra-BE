@@ -392,12 +392,20 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Onboarding_portal_accounts_are_persisted_idempotent_scoped_and_passwordless(string type, string relationship, string role) =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var fixture = await CreateCertificationFixtureAsync("JayPortal");
+			var fixture = await CreateCertificationFixtureAsync("JayPortal", currentWorkflow: true);
 			var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
 			var service = GetRequiredService<IStudentOnboardingAppService>();
 			await service.CreatePolicyAsync(new() { AcademicYearId = cycle.AcademicYearId, Name = "Portal test policy",
 				RequireDocuments = false, RequireFamilyDetails = false, RequireCommunicationDetails = false,
 				RequireStudentAccount = type == "student", RequireGuardianAccount = type == "guardian" });
+			await ConfigureOfferingReadinessAsync(fixture.Offering, cycle.AcademicYearId, prepareAccess: type == "student");
+			var settings = (await service.GetSettingsAsync(cycle.AcademicYearId)).Single();
+			var configuration = System.Text.Json.Nodes.JsonNode.Parse(settings.ConfigurationJson)!.AsObject();
+			configuration["readinessAccess"]!["guardianAccount"] = type == "guardian";
+			configuration["onboardingProfiles"]![0]!["rules"]!["guardianAccount"] = type == "guardian";
+			await service.SaveSettingsAsync(new() { AcademicYearId = cycle.AcademicYearId,
+				ConfigurationJson = configuration.ToJsonString(), ConcurrencyStamp = settings.ConcurrencyStamp });
+			var structure = await CreateFeeSelectionReferenceAsync(fixture.Offering, cycle.AcademicYearId);
 			var finalized = await FinalizeAsync(fixture.Application, true, "portal-test");
 			var email = $"portal-{Guid.NewGuid():N}@example.test";
 			var users = GetRequiredService<IdentityUserManager>();
@@ -426,16 +434,61 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				RelationshipVerified = true, ConcurrencyStamp = item.ConcurrencyStamp };
 			(await Should.ThrowAsync<BusinessException>(() => service.ProvisionPortalAccountAsync(item.Id, input)))
 				.Code.ShouldBe(StudentOnboardingErrorCodes.CaseNotEditable);
+			(await Should.ThrowAsync<BusinessException>(() => service.EnableGuardianCredentialEmailAsync(item.Id,
+				new() { Reason = "Case-specific delivery correction", ConcurrencyStamp = item.ConcurrencyStamp })))
+				.Code.ShouldBe(StudentOnboardingErrorCodes.CaseNotEditable);
 			item = await service.SetPlacementAsync(item.Id, new() { DivisionId = division.Id, ConcurrencyStamp = item.ConcurrencyStamp });
-			var series = await service.CreateIdentifierSeriesAsync(new() { AcademicYearId = cycle.AcademicYearId,
-				Code = "PORTAL", Name = "Portal test series", EffectiveFrom = DateTime.UtcNow.AddDays(-1) });
+			var series = (await service.GetAvailableIdentifierSeriesAsync(item.Id)).Single();
 			item = await service.AllocateIdentifierAsync(item.Id, new() { NumberSeriesId = series.Id, RollNumber = 1, ConcurrencyStamp = item.ConcurrencyStamp });
 			item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
+			await service.SaveFeeStructureAsync(item.Id, new() { StructureId = structure.Id, ConcurrencyStamp = item.ConcurrencyStamp });
+			item = await service.GetAsync(item.Id);
+			(await service.PreviewActivationAsync(item.Id)).LastError.ShouldBeNullOrEmpty();
 			item = await service.ActivateAsync(item.Id, new() { IdempotencyKey = "portal-activation", ConcurrencyStamp = item.ConcurrencyStamp });
-			item.Status.ShouldBe(StudentOnboardingStatus.Provisioning);
+			item.StudentEnrollmentId.ShouldNotBeNull();
+			item.Status.ShouldBe(StudentOnboardingStatus.NeedsAttention);
 			item.StudentAccountRequired.ShouldBe(type == "student");
 			item.GuardianAccountRequired.ShouldBe(type == "guardian");
 			input.ConcurrencyStamp = item.ConcurrencyStamp;
+			item.PortalAccountOwners.ShouldNotBeNull();
+			item.PortalAccountOwners!.Single(owner => owner.AccountType == "guardian" && owner.Relationship == "father").Email.ShouldBe(email);
+			item.PortalAccountOwners.Single(owner => owner.Relationship == "self").Email.ShouldBe(email);
+			item.PortalAccountOwners.Single(owner => owner.Relationship == "mother").Email.ShouldBeNull();
+			if (type == "guardian")
+			{
+				var caseRepo = GetRequiredService<IRepository<StudentOnboardingCase, Guid>>();
+				var beforeRules = await WithUnitOfWorkAsync(async () =>
+					(await caseRepo.GetAsync(item.Id)).ExtraProperties["ReadinessRulesSnapshot"].ToString()!);
+				var beforeSettings = (await service.GetSettingsAsync(cycle.AcademicYearId)).Single().ConfigurationJson;
+				await Should.ThrowAsync<AbpValidationException>(() => service.EnableGuardianCredentialEmailAsync(item.Id,
+					new() { Reason = "", ConcurrencyStamp = item.ConcurrencyStamp }));
+				(await Should.ThrowAsync<BusinessException>(() => service.EnableGuardianCredentialEmailAsync(item.Id,
+					new() { Reason = "Case-specific delivery correction", ConcurrencyStamp = "stale" })))
+					.Code.ShouldBe(StudentOnboardingErrorCodes.ConcurrencyConflict);
+				using (_currentTenant.Change(Guid.NewGuid()))
+					await Should.ThrowAsync<EntityNotFoundException>(() => service.EnableGuardianCredentialEmailAsync(item.Id,
+						new() { Reason = "Case-specific delivery correction", ConcurrencyStamp = item.ConcurrencyStamp }));
+				item = await service.EnableGuardianCredentialEmailAsync(item.Id,
+					new() { Reason = "Father mailbox confirmed; enable case delivery", ConcurrencyStamp = item.ConcurrencyStamp });
+				var expectedRules = System.Text.Json.Nodes.JsonNode.Parse(beforeRules)!;
+				expectedRules["sendGuardianCredentialEmail"] = true;
+				var afterRules = await WithUnitOfWorkAsync(async () =>
+					(await caseRepo.GetAsync(item.Id)).ExtraProperties["ReadinessRulesSnapshot"].ToString()!);
+				System.Text.Json.Nodes.JsonNode.DeepEquals(expectedRules, System.Text.Json.Nodes.JsonNode.Parse(afterRules)).ShouldBeTrue();
+				(await service.GetSettingsAsync(cycle.AcademicYearId)).Single().ConfigurationJson.ShouldBe(beforeSettings);
+				await service.EnableGuardianCredentialEmailAsync(item.Id,
+					new() { Reason = "Repeat delivery correction", ConcurrencyStamp = item.ConcurrencyStamp });
+				(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentOnboardingEvent, Guid>>()
+					.CountAsync(e => e.OnboardingCaseId == item.Id && e.EventType == "GuardianCredentialEmailEnabled"))).ShouldBe(1);
+				(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>()
+					.CountAsync(e => e.CaseId == item.Id))).ShouldBe(0);
+				(await service.GetPortalAccountsAsync(item.Id)).ShouldBeEmpty();
+				input.ConcurrencyStamp = item.ConcurrencyStamp;
+				input.Relationship = "guardian";
+				var wrongOwner = await Should.ThrowAsync<BusinessException>(() => service.ProvisionPortalAccountAsync(item.Id, input));
+				wrongOwner.Code.ShouldBe(StudentOnboardingErrorCodes.PortalAccountInvalid);
+				input.Relationship = relationship;
+			}
 			input.Email = "not-the-saved-owner@example.test";
 			(await Should.ThrowAsync<BusinessException>(() => service.ProvisionPortalAccountAsync(item.Id, input)))
 				.Code.ShouldBe(StudentOnboardingErrorCodes.PortalAccountInvalid);
@@ -489,7 +542,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				await Should.ThrowAsync<EntityNotFoundException>(() => service.GetPortalAccountsAsync(item.Id));
 			item = await service.GetAsync(item.Id);
 			item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
-			item.Status.ShouldBe(StudentOnboardingStatus.NeedsAttention); // Fee assignment/payment still missing.
+			item.Status.ShouldBe(type == "guardian" ? StudentOnboardingStatus.NeedsAttention : StudentOnboardingStatus.Completed);
 			(type == "student" ? item.StudentAccountStatus : item.GuardianAccountStatus)
 				.ShouldBe(StudentOnboardingServiceHandoffStatus.Acknowledged);
 			(await service.GetServiceHandoffsAsync(item.Id)).Single(x => x.ServiceKey == type + "-account")

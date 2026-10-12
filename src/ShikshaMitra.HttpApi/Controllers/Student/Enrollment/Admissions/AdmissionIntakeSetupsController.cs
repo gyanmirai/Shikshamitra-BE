@@ -34,4 +34,9 @@ public class AdmissionIntakeSetupsController(IAdmissionIntakeSetupAppService ser
 	public async Task<Result<AdmissionIntakeSetupDto>> ArchiveAsync(Guid id,
 		[FromBody] ArchiveAdmissionIntakeSetupDto input) =>
 		Result.Success(await service.ArchiveAsync(id, input));
+
+	[HttpPost("{id:guid}/restore"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	public async Task<Result<AdmissionIntakeSetupDto>> RestoreAsync(Guid id,
+		[FromBody] RestoreAdmissionIntakeSetupDto input) =>
+		Result.Success(await service.RestoreAsync(id, input));
 }

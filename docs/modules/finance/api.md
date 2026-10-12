@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-06
+updated_on: 2026-10-12
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,6 +19,7 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 
 Finance APIs require authenticated access and tenant context through the platform pipeline.
 Mutations must enforce backend permissions and audit important financial actions.
+Year-only setup checks permit users with database-backed tenant-wide scope to configure an existing current-tenant academic year before its first Student exists. Unknown or foreign-tenant years remain denied. Board, medium, class, division and individual Student checks continue to use the scoped Student query.
 
 ## Charge workflow contract
 

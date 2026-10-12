@@ -14,8 +14,14 @@ public class AdmissionOfferingWorkflowConfigurationResolver(
 {
 	public async Task ResolveAsync(AdmissionOfferingWriteDto input, AdmissionOffering? existing = null, bool preserveRouting = true)
 	{
-		input.Track = preserveRouting ? existing?.Track ?? AdmissionTrack.General : AdmissionTrack.General;
-		input.EntryMode = preserveRouting ? existing?.EntryMode ?? AdmissionEntryMode.Inquiry : AdmissionEntryMode.Inquiry;
+		if (!Enum.IsDefined(input.Track) || !Enum.IsDefined(input.EntryMode))
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
+				"Choose a supported admission type and entry mode.");
+		if (preserveRouting && existing != null)
+		{
+			input.Track = existing.Track;
+			input.EntryMode = existing.EntryMode;
+		}
 		var workflow = input.WorkflowDefinitionId.HasValue
 			? await workflows.FindAsync(input.WorkflowDefinitionId.Value) : null;
 		var configuredForms = workflow == null ? [] : (await stages.GetListAsync(stage =>
@@ -25,8 +31,11 @@ public class AdmissionOfferingWorkflowConfigurationResolver(
 		// Published workflow choices are authoritative. Legacy stored references remain
 		// usable only when editing the same workflow without an explicit form choice.
 		var retainLegacy = existing?.WorkflowDefinitionId == input.WorkflowDefinitionId;
-		input.InquiryFormDefinitionId ??= workflow?.DefaultInquiryFormDefinitionId ??
+		input.InquiryFormDefinitionId = input.EntryMode == AdmissionEntryMode.DirectRegistration ? null :
+			input.InquiryFormDefinitionId ?? workflow?.DefaultInquiryFormDefinitionId ??
 			(retainLegacy ? existing?.InquiryFormDefinitionId : null);
+		if (input.EntryMode == AdmissionEntryMode.DirectRegistration)
+			input.InquiryIntakeProfileId = null;
 		input.ApplicationFormDefinitionId = configuredForms.Length == 1 ? configuredForms[0] :
 			configuredForms.Length == 0 && retainLegacy ? existing?.ApplicationFormDefinitionId : null;
 	}

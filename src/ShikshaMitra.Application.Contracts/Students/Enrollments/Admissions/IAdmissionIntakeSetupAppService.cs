@@ -12,4 +12,5 @@ public interface IAdmissionIntakeSetupAppService : IApplicationService
 	Task<AdmissionIntakeSetupDto> UpdateAsync(Guid id, UpdateAdmissionIntakeSetupDto input);
 	Task<AdmissionIntakeSetupUsageDto> GetUsageAsync(Guid id);
 	Task<AdmissionIntakeSetupDto> ArchiveAsync(Guid id, ArchiveAdmissionIntakeSetupDto input);
+	Task<AdmissionIntakeSetupDto> RestoreAsync(Guid id, RestoreAdmissionIntakeSetupDto input);
 }

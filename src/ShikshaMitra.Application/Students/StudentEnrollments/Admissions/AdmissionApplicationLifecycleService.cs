@@ -16,7 +16,7 @@ public class AdmissionApplicationLifecycleService(
 	IRepository<AdmissionApplicant, Guid> applicantRepository,
 	IRepository<AdmissionFamily, Guid> familyRepository,
 	IRepository<AdmissionGuardian, Guid> guardianRepository,
-	IRepository<AdmissionInquiry, Guid> inquiryRepository,
+	IAdmissionInquiryRepository inquiryRepository,
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> stageRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
@@ -35,29 +35,36 @@ public class AdmissionApplicationLifecycleService(
 	: ApplicationService, ITransientDependency
 {
 	public Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId) =>
-		StartCoreAsync(applicantId, offeringId, inquiryId, allowRecordsReturn: false);
+		StartCoreAsync(applicantId, offeringId, inquiryId, allowRecordsReturn: false, allowSpecialRegistration: false);
 
 	internal Task<AdmissionApplicationDto> StartForReturnAsync(Guid applicantId, Guid offeringId) =>
-		StartCoreAsync(applicantId, offeringId, null, allowRecordsReturn: true);
+		StartCoreAsync(applicantId, offeringId, null, allowRecordsReturn: true, allowSpecialRegistration: false);
 
-	private async Task<AdmissionApplicationDto> StartCoreAsync(Guid applicantId, Guid offeringId, Guid? inquiryId, bool allowRecordsReturn)
+	internal Task<AdmissionApplicationDto> StartForSpecialRegistrationAsync(Guid applicantId, Guid offeringId) =>
+		StartCoreAsync(applicantId, offeringId, null, allowRecordsReturn: false, allowSpecialRegistration: true);
+
+	private async Task<AdmissionApplicationDto> StartCoreAsync(Guid applicantId, Guid offeringId, Guid? inquiryId, bool allowRecordsReturn, bool allowSpecialRegistration)
 	{
+		var requestedInquiryId = inquiryId;
 		var existing = await FindExistingAsync(applicantId, offeringId);
 		if (existing != null)
-		{
-			await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().EnsureCanAccessAsync(existing);
-			if (inquiryId.HasValue && existing.InquiryId != inquiryId)
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "An application already exists for this applicant and offering.");
-			return AdmissionApplicationMapper.ToDto(existing);
-		}
+			return await MapExistingAsync(existing, inquiryId);
 		var applicant = await applicantRepository.FindAsync(applicantId) ??
 			throw new EntityNotFoundException(typeof(AdmissionApplicant), applicantId);
 		var offering = (await offeringRuntimeService.GetAvailableAsync(offeringId)).Offering;
+		if (allowSpecialRegistration)
+			AdmissionDirectRegistrationEntryPolicy.EnsureAllowed(offering);
 		inquiryId = await ResolveInquiryAsync(applicantId, offeringId, inquiryId);
 		var inquiry = await EnsureInquiryMatchesAsync(inquiryId, applicantId, offering);
-		if (inquiry == null && !allowRecordsReturn)
+		if (inquiry != null)
+		{
+			// A concurrent handoff may have committed while this request waited for the inquiry lock.
+			existing = await FindExistingAsync(applicantId, offeringId);
+			if (existing != null) return await MapExistingAsync(existing, requestedInquiryId);
+		}
+		if (inquiry == null && !allowRecordsReturn && !allowSpecialRegistration)
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
-				"Direct admission has been removed. Start with an inquiry for this Admission Offering.");
+				"Start with an Inquiry, or use the Registration entry for a configured RTE, Management, or Staff Offering.");
 		if (offering.EntryMode == AdmissionEntryMode.Inquiry && inquiry == null)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.LinkedInquiryRequired,
 				"Start with an inquiry for this Admission Offering.");
@@ -113,6 +120,14 @@ public class AdmissionApplicationLifecycleService(
 			application.Status != AdmissionApplicationStatus.Withdrawn));
 	}
 
+	private async Task<AdmissionApplicationDto> MapExistingAsync(AdmissionApplication existing, Guid? inquiryId)
+	{
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().EnsureCanAccessAsync(existing);
+		if (inquiryId.HasValue && existing.InquiryId != inquiryId)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "An application already exists for this applicant and offering.");
+		return AdmissionApplicationMapper.ToDto(existing);
+	}
+
 	private async Task<Guid?> ResolveInquiryAsync(Guid applicantId, Guid offeringId, Guid? inquiryId)
 	{
 		if (inquiryId.HasValue) return inquiryId;
@@ -125,7 +140,7 @@ public class AdmissionApplicationLifecycleService(
 	private async Task<AdmissionInquiry?> EnsureInquiryMatchesAsync(Guid? inquiryId, Guid applicantId, AdmissionOffering offering)
 	{
 		if (!inquiryId.HasValue) return null;
-		var inquiry = await inquiryRepository.FindAsync(inquiryId.Value) ??
+		var inquiry = await inquiryRepository.FindForApplicationStartAsync(inquiryId.Value) ??
 			throw new EntityNotFoundException(typeof(AdmissionInquiry), inquiryId.Value);
 		if (inquiry.ApplicantId != applicantId || inquiry.AdmissionCycleId != offering.AdmissionCycleId ||
 			inquiry.AdmissionOfferingId != offering.Id)

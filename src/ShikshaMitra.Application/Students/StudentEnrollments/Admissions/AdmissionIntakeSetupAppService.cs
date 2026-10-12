@@ -151,6 +151,24 @@ public class AdmissionIntakeSetupAppService(
 		return Map(setup, profileRows.ToDictionary(item => item.Id), 0, 0);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
+	[UnitOfWork]
+	public async Task<AdmissionIntakeSetupDto> RestoreAsync(Guid id, RestoreAdmissionIntakeSetupDto input)
+	{
+		var setup = await GetSetupAsync(id);
+		EnsureConcurrency(setup, input?.ConcurrencyStamp);
+		if (setup.IsArchived)
+		{
+			setup.Restore();
+			await setups.UpdateAsync(setup, autoSave: true);
+		}
+		var profileRows = await profiles.GetListAsync(item =>
+			item.Id == setup.InquiryIntakeProfileId || item.Id == setup.CounsellorAssignmentProfileId);
+		var usage = await GetUsageCoreAsync(setup);
+		return Map(setup, profileRows.ToDictionary(item => item.Id),
+			usage.ActiveOfferingCount, usage.ActivePublicInquiryLinkCount);
+	}
+
 	private async Task<AdmissionIntakeSetupUsageDto> GetUsageCoreAsync(AdmissionIntakeSetup setup)
 	{
 		var now = Clock.Now.ToUniversalTime();

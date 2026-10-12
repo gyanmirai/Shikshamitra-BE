@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Students;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Authorization;
 using Volo.Abp.Application.Services;
@@ -15,6 +16,7 @@ namespace ShikshaMitra.Finance;
 [RemoteService(false)]
 public class FinanceScopeAccessService(
 	IUserScopeService userScopeService,
+	IAcademicYearRepository academicYearRepository,
 	IReadOnlyRepository<Student, Guid> studentRepository)
 	: ApplicationService, ITransientDependency
 {
@@ -26,6 +28,11 @@ public class FinanceScopeAccessService(
 		Guid? divisionId,
 		CancellationToken cancellationToken = default)
 	{
+		if (await HasTenantWideYearAccessAsync(academicYearId, boardId, educationMediumId, standardId, divisionId, cancellationToken))
+		{
+			return;
+		}
+
 		var scopedStudents = await GetScopedStudentsQueryAsync();
 
 		if (academicYearId.HasValue && academicYearId.Value != Guid.Empty)
@@ -72,6 +79,11 @@ public class FinanceScopeAccessService(
 		Guid? divisionId,
 		CancellationToken cancellationToken = default)
 	{
+		if (await HasTenantWideYearAccessAsync(academicYearId, boardId, educationMediumId, standardId, divisionId, cancellationToken))
+		{
+			return true;
+		}
+
 		var scopedStudents = await GetScopedStudentsQueryAsync();
 
 		if (academicYearId.HasValue && academicYearId.Value != Guid.Empty)
@@ -90,6 +102,34 @@ public class FinanceScopeAccessService(
 			scopedStudents = scopedStudents.Where(s => s.DivisionId == divisionId.Value);
 
 		return await AsyncExecuter.AnyAsync(scopedStudents, cancellationToken);
+	}
+
+	private async Task<bool> HasTenantWideYearAccessAsync(
+		Guid? academicYearId, Guid? boardId, Guid? educationMediumId, Guid? standardId, Guid? divisionId,
+		CancellationToken cancellationToken)
+	{
+		// Year-level Finance setup must be possible before the first student is admitted.
+		// More specific contexts and individual students still use the scoped student query.
+		if (!academicYearId.HasValue || academicYearId.Value == Guid.Empty ||
+			boardId.HasValue || educationMediumId.HasValue || standardId.HasValue || divisionId.HasValue)
+		{
+			return false;
+		}
+
+		if (!CurrentUser.Id.HasValue)
+		{
+			throw new AbpAuthorizationException("Current user context is required.");
+		}
+
+		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
+		if (!scope.HasTenantWideScope())
+		{
+			return false;
+		}
+
+		return await academicYearRepository.AnyAsync(
+			year => year.Id == academicYearId.Value && year.TenantId == CurrentTenant.Id,
+			cancellationToken);
 	}
 
 	public async Task<IQueryable<Guid>> GetScopedStudentIdsQueryAsync()

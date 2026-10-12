@@ -19,8 +19,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Managed inquiry test"), autoSave: true);
-			var workflow = await CreateAndPublishManagedInquiryWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync(legacyPolicy: true);
 			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
 			var management = GetRequiredService<IAdmissionInquiryManagementAppService>();
 			var inquiry = await inquiries.CreateAsync(ManagedInquiryInput(offering));
@@ -77,12 +76,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Basic inquiry compatibility"), autoSave: true);
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
+			var offering = await CreateOptionalIntakeOfferingAsync();
 			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
 			var input = ManagedInquiryInput(offering);
 			var inquiry = await inquiries.CreateAsync(input);
-			(await GetRequiredService<IAdmissionInquiryManagementAppService>().GetAsync(inquiry.Id)).Managed.ShouldBeFalse();
+			(await GetRequiredService<IAdmissionInquiryManagementAppService>().GetAsync(inquiry.Id)).Managed.ShouldBeTrue();
 			input.CreateSeparateFamily = true;
 			var reasonRequired = await Should.ThrowAsync<BusinessException>(() => inquiries.CreateAsync(input));
 			reasonRequired.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.DuplicateReasonRequired);
@@ -220,7 +218,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var terminalId = Guid.NewGuid();
 		var configuration = "{\"inquiry\":{\"version\":1,\"enabled\":true,\"applicationStartRequirement\":2," +
 			"\"qualificationChecklist\":[{\"code\":\"AGE\",\"name\":\"Age confirmed\",\"required\":true}]}}";
-		var workflow = await _workflowAppService.CreateAsync(new()
+		var workflow = await SeedPublishedHistoricalWorkflowAsync(new()
 		{
 			Name = "Managed Inquiry",
 			Code = $"INQUIRY_{Guid.NewGuid():N}"[..24],
@@ -233,7 +231,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			],
 			Transitions = [new() { FromStageId = entryId, ToStageId = terminalId, Priority = 1, IsDefault = true }]
 		});
-		return await _workflowAppService.PublishAsync(workflow.Id, workflow.ConcurrencyStamp);
+		return workflow;
 	}
 
 	private static CreateAdmissionInquiryDto ManagedInquiryInput(AdmissionOffering offering) => new()

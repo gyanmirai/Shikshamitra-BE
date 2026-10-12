@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -27,8 +28,10 @@ public class AdmissionDirectRegistrationService(
 	: ApplicationService, ITransientDependency
 {
 	public Task<AdmissionApplicationDto> StartAsync(StartAdmissionDirectRegistrationDto input) =>
-		throw new BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
-			"Direct admission has been removed. Start with an inquiry for this Admission Offering.");
+		StartCoreAsync(input, null);
+
+	public Task<List<AdmissionDirectFamilyMatchDto>> FindFamiliesAsync(Guid offeringId, string guardianMobile) =>
+		familyMatchService.FindForSpecialRegistrationAsync(offeringId, guardianMobile);
 
 	internal Task<AdmissionApplicationDto> StartForReturnAsync(StartAdmissionDirectRegistrationDto input, Student student)
 		=> StartCoreAsync(input, student);
@@ -44,12 +47,16 @@ public class AdmissionDirectRegistrationService(
 		var existingApplicant = await applicantRepository.FindAsync(input.RequestId);
 		if (existingApplicant != null)
 		{
+			if (returningStudent == null && existingApplicant.ExistingStudentId.HasValue)
+				throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict);
 			if (returningStudent != null && existingApplicant.ExistingStudentId != returningStudent.Id)
 				throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict);
-			return await ResolveReplayAsync(existingApplicant, input);
+			return await ResolveReplayAsync(existingApplicant, input, returningStudent == null);
 		}
 
 		var offering = (await offeringRuntime.GetAvailableAsync(input.AdmissionOfferingId)).Offering;
+		if (returningStudent == null)
+			AdmissionDirectRegistrationEntryPolicy.EnsureAllowed(offering);
 		if (offering.EntryMode is not (AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both))
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
 				"Choose a direct Registration Offering. This Offering starts with Inquiry.");
@@ -108,7 +115,9 @@ public class AdmissionDirectRegistrationService(
 			input.ApplicantDateOfBirth, input.ApplicantGender, existingStudentId: returningStudent?.Id,
 			reservedStudentId: GuidGenerator.Create());
 		await applicantRepository.InsertAsync(applicant, autoSave: true);
-		var application = await lifecycleService.StartForReturnAsync(applicant.Id, offering.Id);
+		var application = returningStudent == null
+			? await lifecycleService.StartForSpecialRegistrationAsync(applicant.Id, offering.Id)
+			: await lifecycleService.StartForReturnAsync(applicant.Id, offering.Id);
 		if (selectedCounsellorId.HasValue)
 		{
 			var created = await applicationRepository.GetAsync(application.Id);
@@ -128,11 +137,13 @@ public class AdmissionDirectRegistrationService(
 	}
 
 	private async Task<AdmissionApplicationDto> ResolveReplayAsync(
-		AdmissionApplicant applicant, StartAdmissionDirectRegistrationDto input)
+		AdmissionApplicant applicant, StartAdmissionDirectRegistrationDto input, bool requireSpecialTrack)
 	{
 		var offering = await offeringRepository.FindAsync(input.AdmissionOfferingId);
 		if (offering == null || offering.EntryMode is not (AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both))
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict);
+		if (requireSpecialTrack)
+			AdmissionDirectRegistrationEntryPolicy.EnsureAllowed(offering);
 		var query = await applicationRepository.GetQueryableAsync();
 		var application = await AsyncExecuter.FirstOrDefaultAsync(query.Where(item =>
 			item.ApplicantId == applicant.Id && item.AdmissionOfferingId == input.AdmissionOfferingId &&

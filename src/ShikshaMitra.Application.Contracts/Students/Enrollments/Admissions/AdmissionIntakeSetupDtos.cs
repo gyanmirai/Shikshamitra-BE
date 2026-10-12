@@ -44,6 +44,11 @@ public class ArchiveAdmissionIntakeSetupDto
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 }
 
+public class RestoreAdmissionIntakeSetupDto
+{
+	public string ConcurrencyStamp { get; set; } = string.Empty;
+}
+
 public class AdmissionIntakeSetupDto : EntityDto<Guid>
 {
 	public string Name { get; set; } = string.Empty;

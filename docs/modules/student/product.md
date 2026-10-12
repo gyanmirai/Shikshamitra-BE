@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-09
+updated_on: 2026-10-11
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -154,8 +154,12 @@ admission Track (General, RTE, Management, or Staff). A class may therefore have
 per track with a distinct process, while a second offering for the same track and identity is rejected.
 Division is not part of Admission Offering identity.
 RTE offerings must use direct Registration entry and a published workflow without Inquiry or
-Assessment stages. General, Management, and Staff tracks can independently choose inquiry or
-direct Registration entry according to their offering workflow. An inactive RTE draft may omit
+Assessment stages. Fresh General admission requires Inquiry evidence.
+RTE, Management, and Staff offerings configured for DirectRegistration (or retained Both for Management/Staff) can start through the authorized special Registration command, then continue the same common application workflow, decision and onboarding lifecycle.
+Inquiry-first Management/Staff offerings remain compatible with Inquiry intake, not the special Registration command.
+New starts and family lookup require an active, open, published-ready Offering in the caller's tenant and academic scope.
+The command requires system-owned applicant/primary-guardian identity, explicit scoped family linking and a stable retry request ID; selecting RTE does not automatically approve or finalize admission.
+An inactive RTE draft may omit
 published references, but cannot save an incompatible entry mode or workflow.
 The database prevents duplicate non-deleted identities with separate filtered indexes for Campus and no-Campus records.
 The Offering code is a normalized operational label, not a second identity key. It may repeat for
@@ -173,6 +177,9 @@ selected or the campus is cleared.
 Inherited dates are persisted as null overrides.
 Explicit dates must be ordered and fall inside the Admission Cycle.
 API payload dates use `DateTimeOffset` while cycle inheritance remains date-based.
+New Offering clones always inherit the target cycle's dates, even when the source has custom overrides.
+The source remains unchanged, and later controlled target-cycle revisions automatically change the clone's effective dates.
+Generic Offering create/update API calls retain validated custom-date compatibility.
 
 ## Readiness and availability
 

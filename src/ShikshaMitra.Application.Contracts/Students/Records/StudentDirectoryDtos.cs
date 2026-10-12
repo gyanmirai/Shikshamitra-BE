@@ -14,6 +14,7 @@ public class StudentDirectoryRequest : PagedAndSortedResultRequestDto
 	public string Population { get; set; } = "All";
 	public Guid? AcademicYearId { get; set; }
 	public Guid? StudentId { get; set; }
+	public List<Guid> StudentIds { get; set; } = [];
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 	public Guid? StandardId { get; set; }

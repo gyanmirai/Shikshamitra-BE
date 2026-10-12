@@ -148,6 +148,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		next.Items.Single().Id.ShouldBe(second.Id);
 		(await service.GetListAsync(new() { Search = "Directory", Population = "Former" })).Items.Single().Id.ShouldBe(second.Id);
 		(await service.GetListAsync(new() { Search = "Directory", Population = "Active" })).Items.Single().Id.ShouldBe(first.Id);
+		(await service.GetListAsync(new() { StudentIds = [first.Id, second.Id], Population = "Active" })).Items.Single().Id.ShouldBe(first.Id);
+		(await service.GetListAsync(new() { StudentIds = [second.Id], Population = "Active" })).TotalCount.ShouldBe(0);
 		(await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IStudentRecordProfileAppService>().GetAsync(pending.Id))).Code.ShouldBe("Students:Records:OnboardingIncomplete");
 	});
 

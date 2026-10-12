@@ -22,7 +22,18 @@ public class StudentIdCardTemplateDto
 	public bool ShowQrCode { get; set; }
 	public bool ShowPhoto { get; set; } = true;
 	public List<string> Fields { get; set; } = ["StudentName", "GRNumber", "Class", "Division", "AcademicYear"];
+	public StudentIdCardSelectionDto Selection { get; set; } = new();
 	public string? ConcurrencyStamp { get; set; }
+}
+
+public class StudentIdCardSelectionDto
+{
+	public Guid? AcademicYearId { get; set; }
+	public List<Guid> BoardIds { get; set; } = [];
+	public List<Guid> MediumIds { get; set; } = [];
+	public List<Guid> StandardIds { get; set; } = [];
+	public List<Guid> DivisionIds { get; set; } = [];
+	public List<Guid> StudentIds { get; set; } = [];
 }
 
 public class StudentIdCardPreviewRequestDto

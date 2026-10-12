@@ -21,14 +21,19 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		var service = GetRequiredService<IStudentIdCardAppService>();
 		var first = await service.CreateTemplateAsync(new() { Name = "First design", SchoolName = "Test school" });
-		var second = await service.CreateTemplateAsync(new() { Name = "Second design", SchoolName = "Test school" });
+		var yearId = Guid.NewGuid(); var boardId = Guid.NewGuid(); var studentId = Guid.NewGuid();
+		var second = await service.CreateTemplateAsync(new() { Name = "Second design", SchoolName = "Test school",
+			Selection = new() { AcademicYearId = yearId, BoardIds = [boardId], StudentIds = [studentId] } });
 		first.Id.ShouldNotBeNull(); second.Id.ShouldNotBeNull();
 		(await service.GetTemplatesAsync()).Select(item => item.Id).ShouldContain(first.Id);
 		(await service.GetTemplatesAsync()).Select(item => item.Id).ShouldContain(second.Id);
 		(await service.GetTemplateByIdAsync(second.Id!.Value)).Name.ShouldBe("Second design");
+		(await service.GetTemplateByIdAsync(second.Id.Value)).Selection.StudentIds.Single().ShouldBe(studentId);
+		second.Selection.AcademicYearId.ShouldBe(yearId);
 		second.Name = "Updated design";
 		var updated = await service.UpdateTemplateAsync(second.Id.Value, second);
 		updated.Name.ShouldBe("Updated design");
+		updated.Selection.BoardIds.Single().ShouldBe(boardId);
 		await service.DeleteTemplateAsync(first.Id.Value);
 		await service.DeleteTemplateAsync(updated.Id!.Value);
 		(await service.GetTemplatesAsync()).ShouldNotContain(item => item.Id == first.Id || item.Id == updated.Id);
@@ -40,10 +45,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var student = await CreateExistingStudentAsync(offering, "IDOriginal", "Student"); await GrantCompletedRecordAsync(student);
 		var service = GetRequiredService<IStudentIdCardAppService>();
+		var template = await service.CreateTemplateAsync(new() { Name = "Issue design", SchoolName = "Test school",
+			Selection = new() { AcademicYearId = Guid.NewGuid(), StudentIds = [student.Id] } });
 		var bulkPdf = await service.ExportPdfAsync(new StudentIdCardsPdfRequestDto { StudentIds = [student.Id], CardsPerPage = 8 });
 		bulkPdf.Content.Take(4).ToArray().ShouldBe("%PDF"u8.ToArray());
-		var input = new IssueStudentIdCardsDto { StudentIds = [student.Id], IdempotencyKey = "id-stable-request" };
+		var input = new IssueStudentIdCardsDto { StudentIds = [student.Id], TemplateId = template.Id, IdempotencyKey = "id-stable-request" };
 		var issued = (await service.IssueAsync(input)).Single();
+		issued.TemplateSnapshot.Selection.StudentIds.ShouldBeEmpty();
 		(await service.IssueAsync(input)).Single().Id.ShouldBe(issued.Id);
 		await WithUnitOfWorkAsync(async () => { var current = await _studentRepository.GetAsync(student.Id); current.UpdateGeneralInformation("Changed", null, "Identity"); await _studentRepository.UpdateAsync(current, true); });
 		(await service.GetHistoryAsync(student.Id)).Single().StudentSnapshot["StudentName"].ShouldBe("IDOriginal Student");

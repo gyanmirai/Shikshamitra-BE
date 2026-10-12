@@ -52,11 +52,17 @@ public partial class StudentDirectoryAppService(
 		EnsureTenant();
 		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 100 || input.Population is not ("All" or "Active" or "Former"))
 			throw new BusinessException("Students:Records:InvalidDirectoryQuery");
-		if (input.BoardIds.Count > 100 || input.MediumIds.Count > 100 || input.StandardIds.Count > 100 || input.DivisionIds.Count > 100 ||
+		if (input.StudentIds.Count > 100 || input.BoardIds.Count > 100 || input.MediumIds.Count > 100 || input.StandardIds.Count > 100 || input.DivisionIds.Count > 100 ||
+			input.StudentIds.Contains(Guid.Empty) ||
 			input.BoardIds.Contains(Guid.Empty) || input.MediumIds.Contains(Guid.Empty) || input.StandardIds.Contains(Guid.Empty) || input.DivisionIds.Contains(Guid.Empty))
 			throw new BusinessException("Students:Records:InvalidDirectoryQuery");
 		var query = await enrollmentScope.ApplyStudentScopeAsync(await students.GetQueryableWithoutAutoIncludesAsync());
 		if (input.StudentId.HasValue) query = query.Where(s => s.Id == input.StudentId);
+		if (input.StudentIds.Count > 0)
+		{
+			var selectedStudentIds = input.StudentIds.ToArray();
+			query = query.Where(s => Enumerable.Contains(selectedStudentIds, s.Id));
+		}
 		var caseQuery = await cases.GetQueryableAsync();
         var onboardingEligibleIds = await access.GetOnboardingEligibleStudentIdsAsync();
 		var overrideQuery = await overrides.GetQueryableAsync();

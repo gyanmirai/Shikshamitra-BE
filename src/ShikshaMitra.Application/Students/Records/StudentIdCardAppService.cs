@@ -48,6 +48,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 	private static StudentIdCardTemplateDto MapTemplate(StudentIdCardTemplate template)
 	{
 		var dto = JsonSerializer.Deserialize<StudentIdCardTemplateDto>(template.ConfigurationJson, JsonOptions)!;
+		dto.Selection ??= new();
 		dto.Id = template.Id; dto.ConcurrencyStamp = template.ConcurrencyStamp;
 		return dto;
 	}
@@ -109,11 +110,24 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 			!new[] { "Horizontal", "Vertical" }.Contains(input.Orientation) || input.CardsPerPage is < 1 or > 10 ||
 			!Regex.IsMatch(input.PrimaryColor, "^#[0-9a-fA-F]{6}$") || !Regex.IsMatch(input.BackgroundColor, "^#[0-9a-fA-F]{6}$") || input.Fields == null || input.Fields.Count is < 1 or > 6 ||
 			input.Fields.Distinct().Count() != input.Fields.Count || input.Fields.Any(f => !AllowedFields.Contains(f))) throw new BusinessException("Students:Records:InvalidIdTemplate");
+		input.Selection ??= new();
+		var selection = input.Selection;
+		if (selection.BoardIds == null || selection.MediumIds == null || selection.StandardIds == null || selection.DivisionIds == null || selection.StudentIds == null ||
+			new[] { selection.BoardIds, selection.MediumIds, selection.StandardIds, selection.DivisionIds, selection.StudentIds }.Any(ids =>
+				ids.Count > 100 || ids.Contains(Guid.Empty) || ids.Distinct().Count() != ids.Count) ||
+			(selection.StudentIds.Count > 0 && !selection.AcademicYearId.HasValue))
+			throw new BusinessException("Students:Records:InvalidIdTemplate");
+	}
+	private static StudentIdCardTemplateDto ForCardSnapshot(StudentIdCardTemplateDto template)
+	{
+		var snapshot = JsonSerializer.Deserialize<StudentIdCardTemplateDto>(JsonSerializer.Serialize(template, JsonOptions), JsonOptions)!;
+		snapshot.Selection = new();
+		return snapshot;
 	}
 	public async Task<List<StudentIdCardDto>> PreviewAsync(StudentIdCardPreviewRequestDto input)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.View); EnsureTenant(); ValidateStudents(input);
-		var template = await LoadTemplateAsync(input.TemplateId); var result = new List<StudentIdCardDto>();
+		var template = ForCardSnapshot(await LoadTemplateAsync(input.TemplateId)); var result = new List<StudentIdCardDto>();
 		foreach (var studentId in input.StudentIds)
 		{
 			var snapshot = await snapshots.CaptureAsync(studentId);
@@ -130,7 +144,7 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 			try
 			{
 				using var uow = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true }, requiresNew: true);
-				var template = await LoadTemplateAsync(input.TemplateId); var result = new List<StudentIdCardDto>(); var sequences = new Dictionary<string, int>();
+				var template = ForCardSnapshot(await LoadTemplateAsync(input.TemplateId)); var result = new List<StudentIdCardDto>(); var sequences = new Dictionary<string, int>();
 				foreach (var studentId in input.StudentIds)
 				{
 					var snapshot = await snapshots.CaptureAsync(studentId);

@@ -22,7 +22,7 @@ public partial class StudentIdCardAppService
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add);
 		EnsureTenant(); ValidateStudents(input);
 		if (input.CardsPerPage is < 1 or > 10) throw new BusinessException("Students:Records:InvalidIdTemplate");
-		var template = await LoadTemplateAsync(input.TemplateId);
+		var template = ForCardSnapshot(await LoadTemplateAsync(input.TemplateId));
 		var cards = new List<(StudentIdCardDto Card, byte[]? Photo)>();
 		foreach (var studentId in input.StudentIds)
 		{

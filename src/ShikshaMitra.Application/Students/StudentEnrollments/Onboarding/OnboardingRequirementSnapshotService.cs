@@ -17,28 +17,41 @@ public class OnboardingRequirementSnapshotService(OnboardingConfigurationManager
 	IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows,
 	IRepository<AdmissionApplicationStageInstance, Guid> stages,
 	IRepository<AdmissionWorkflowStageDefinition, Guid> definitions,
-	IRepository<AdmissionCycle, Guid> cycles,
 	IRepository<AdmissionApplication, Guid> applications,
 	AdmissionDocumentEvaluationService evaluator) : ITransientDependency
 {
-	public async Task<bool> CanDeferAsync(AdmissionApplication application)
+	public Task<bool> CanDeferAsync(AdmissionApplication application) => Task.FromResult(true);
+
+	public async Task<bool> CaptureAsync(StudentOnboardingCase item)
 	{
-		var cycle = await cycles.GetAsync(application.AdmissionCycleId);
-		var config = await configuration.GetAsync(cycle.AcademicYearId);
-		return config != null && config.Profiles.Any(p => OnboardingRuleConfiguration.Ids(p, "offeringIds").Contains(application.AdmissionOfferingId));
+		if (!AutomaticOnboardingReadinessRules.CanAdopt(item)) return false;
+		return await CaptureAsync(item, await configuration.GetAsync(item.AcademicYearId));
 	}
-	public async Task CaptureAsync(StudentOnboardingCase item)
+
+	public async Task<bool> CaptureAsync(StudentOnboardingCase item, OnboardingRuleConfiguration? settings)
 	{
-		if (item.StudentEnrollmentId.HasValue || item.Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled) return;
-		if (!item.ExtraProperties.ContainsKey("ReadinessRulesSnapshot"))
+		if (!AutomaticOnboardingReadinessRules.CanAdopt(item)) return false;
+		var rules = AutomaticOnboardingReadinessRules.Resolve(settings).GetRawText();
+		var changed = !item.ExtraProperties.TryGetValue("ReadinessRulesSnapshot", out var current) ||
+			current is not string saved || saved != rules ||
+			!item.ExtraProperties.TryGetValue(AutomaticOnboardingReadinessRules.SnapshotVersionKey, out var version) ||
+			version?.ToString() != AutomaticOnboardingReadinessRules.SnapshotVersion.ToString();
+		// The application pins a published workflow version. Keep its document policy snapshot
+		// and evidence intact when the school changes account preparation settings later.
+		if (item.ExtraProperties.ContainsKey("DocumentPoliciesSnapshot"))
 		{
-			var config = await configuration.GetAsync(item.AcademicYearId);
-			var profile = config?.Profiles.SingleOrDefault(p => OnboardingRuleConfiguration.Ids(p, "offeringIds").Contains(item.OfferingId));
-            if (!profile.HasValue || profile.Value.ValueKind != JsonValueKind.Object) return;
-            item.ExtraProperties["ReadinessRulesSnapshot"] = profile.Value.GetProperty("rules").GetRawText();
+			if (changed) ApplyReadiness(item, rules);
+			return changed;
 		}
-		if (item.ExtraProperties.ContainsKey("DocumentPoliciesSnapshot")) return;
-		var workflow = await workflows.FindAsync(w => w.ApplicationId == item.ApplicationId);
+		item.ExtraProperties["DocumentPoliciesSnapshot"] =
+			await PrepareDocumentPoliciesAsync(await applications.GetAsync(item.ApplicationId));
+		ApplyReadiness(item, rules);
+		return true;
+	}
+
+	public async Task<string> PrepareDocumentPoliciesAsync(AdmissionApplication application)
+	{
+		var workflow = await workflows.FindAsync(w => w.ApplicationId == application.Id);
 		var snapshots = new List<OnboardingDocumentPolicySnapshot>();
 		if (workflow != null)
 			foreach (var stage in await stages.GetListAsync(s => s.WorkflowInstanceId == workflow.Id && s.StageType == AdmissionWorkflowStageType.DocumentVerification && s.Status != AdmissionRuntimeStageStatus.Pending))
@@ -47,7 +60,7 @@ public class OnboardingRequirementSnapshotService(OnboardingConfigurationManager
                 var policy = AdmissionDocumentPolicy.Read((await definitions.GetAsync(stage.DefinitionStageId)).ConfigurationJson);
 				if (policy != null)
 				{
-					var evaluation = await evaluator.EvaluateAsync(await applications.GetAsync(item.ApplicationId), stage.Id, policy);
+					var evaluation = await evaluator.EvaluateAsync(application, stage.Id, policy);
 					if (evaluation.Requirements.Any(r => r.ConditionStatus == "undetermined"))
 						throw new BusinessException(AdmissionDocumentErrorCodes.EvidenceRequired, "Complete the admission information needed to determine document requirements before transferring to Onboarding.");
 					var applicable = evaluation.Requirements.Where(r => r.ConditionStatus != "notMatched")
@@ -55,7 +68,13 @@ public class OnboardingRequirementSnapshotService(OnboardingConfigurationManager
 					snapshots.Add(new(stage.Id, policy with { AllowWaivers = false, Requirements = applicable }));
 				}
 			}
-		item.ExtraProperties["DocumentPoliciesSnapshot"] = JsonSerializer.Serialize(snapshots);
+		return JsonSerializer.Serialize(snapshots);
+	}
+
+	private static void ApplyReadiness(StudentOnboardingCase item, string rules)
+	{
+		item.ExtraProperties["ReadinessRulesSnapshot"] = rules;
+		item.ExtraProperties[AutomaticOnboardingReadinessRules.SnapshotVersionKey] = AutomaticOnboardingReadinessRules.SnapshotVersion;
 	}
 
 	public static List<OnboardingDocumentPolicySnapshot> Read(StudentOnboardingCase item) =>

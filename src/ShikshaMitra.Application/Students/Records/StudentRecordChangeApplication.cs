@@ -51,7 +51,7 @@ public class StudentRecordChangeApplication(IRepository<StudentRecordChange, Gui
 			var permission = item.RequiredApprovals > 0 ? ShikshaMitraSubmodulePermissions.Students.Records_Changes.Approve
 				: ShikshaMitraSubmodulePermissions.Students.Records_Changes.Create;
 			if (!await permissions.IsGrantedAsync(permission)) throw new AbpAuthorizationException();
-			var before = await payloads.CaptureAsync(item.StudentId, item.Section);
+			var before = await payloads.CaptureAsync(item.StudentId, item.Section, item.Section == "custom-details" ? item.BeforeJson : null);
 			if (StudentRecordPayloadService.Hash(before) != StudentRecordPayloadService.Hash(item.BeforeJson))
 				throw new BusinessException("Students:Records:StaleSnapshot");
 			await payloads.ApplyAsync(item.StudentId, item.Section, item.PayloadJson, item.Id);

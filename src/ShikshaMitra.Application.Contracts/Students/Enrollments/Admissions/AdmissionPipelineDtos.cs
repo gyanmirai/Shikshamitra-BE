@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-/// <summary>Filters the authorized, ongoing inquiry-backed admission work queue.</summary>
+/// <summary>Filters authorized, ongoing inquiry and special-registration admission cases.</summary>
 public class AdmissionPipelineListInput : AdmissionApplicationListInput
 {
 	public bool? MyCases { get; set; }
@@ -17,7 +17,7 @@ public class AdmissionPipelineItemDto
 	public string ApplicationNumber { get; set; } = string.Empty;
 	public Guid ApplicantId { get; set; }
 	public string ApplicantName { get; set; } = string.Empty;
-	public Guid InquiryId { get; set; }
+	public Guid? InquiryId { get; set; }
 	public bool SourceInquiryAvailable { get; set; }
 	public string? InquiryNumber { get; set; }
 	public string? ContactPhone { get; set; }

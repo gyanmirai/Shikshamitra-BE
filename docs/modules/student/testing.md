@@ -1,14 +1,126 @@
----
+﻿---
 module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-12
+updated_on: 2026-10-13
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Finance scope cleanup (2026-10-13)
+
+Local admission fee-account, collection, receipt and refund extensions were removed. Existing Finance source, seeders, dashboard projection, localization and all 70 Finance snapshot blocks match the current branch baseline. Admissions and Onboarding retain published fee-structure selection and confirmation through their existing contracts; finalization and activation retain Student ownership without the removed collection-linking hooks. The Student custom-profile migration and UTC/provider changes remain.
+
+The full solution compiled with zero errors using isolated outputs, serialized compilation and analyzers disabled; existing compiler warnings remain. Focused checks passed 87 Application cases for automatic Onboarding, Credentials, special registration and inline Records, 38 Attendance/Directory/Records HTTP cases and five UTC/provider cases, with zero failures or skips. Student docs and Git whitespace checks passed. All-module docs validation stops on an unchanged encoding issue in `docs/modules/finance/references/charge-management-e2e-test-plan.md`.
+
+Logs, TRX reports, both repository backups and the preservation/boundary audits are under `D:/CodexArtifacts/student-finance-scope-cleanup-20261013-1791913960166/`. Checks used fresh isolated assemblies and synthetic test hosts. No database migration, normal school-data mutation, real payment, email, deployment or authenticated browser journey was performed for this cleanup.
+
+## One-click Credentials (2026-10-13)
+
+The final focused Application run passed **50/50 cases**, with zero failures or skips. It includes 12 one-click command scenarios, saved-recipient/DTO validation, credential dispatcher regressions, current enrollment/identifier/document eligibility and retained idempotent portal preparation. The required Offering-document scenario checks actual published evidence and rejects onboarding overrides. Two older identifier fixtures were repaired to use the current activation prerequisites and a persisted alternate Division; production eligibility guards were not weakened.
+
+The Domain request-state gate passed **7/7 cases**, with zero failures or skips. It covers completion-time deferral and clearing the manual-intent marker when a new legacy request is made. Reports are `D:/CodexOnboardingValidation-20261013/credentials-results/credentials-accepted-final.trx` and `credentials-domain.trx` under the same directory.
+
+The real PostgreSQL HTTP gate passed **1/1 case**, with zero failures or skips (`credentials-postgres.trx`). Its case-specific outbox trigger fails only after account, link, handoff and case changes have been flushed. The failed HTTP command rolls all of those changes and its audit events back; retrying with the original case stamp persists exactly one account, link and marked outbox request. Replaying the same request does not duplicate them. The saved automatic-email settings remain off and unchanged, while a completed case retains its pending Credentials task.
+
+The PostgreSQL factory creates a fresh loopback `records_tests_*` database from the current model, disables background jobs/workers and uses synthetic records. Its permissive test grants establish transaction/HTTP persistence behavior, not production authorization; direct-service grant, tenant, academic scope and owner-provenance denial cases are covered by the Application cohort. It does not run a full Admission or Finance journey. The Application command fixtures separately use the actual Admission/finalization/activation handoff, with a mocked email sender.
+
+Run the Application scope with:
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~One_click_credentials|FullyQualifiedName~StudentCredentialsValidation_Tests|FullyQualifiedName~StudentCredentialEmailDispatcher_Tests|FullyQualifiedName~Credential_email_rechecks|FullyQualifiedName~Onboarding_portal_accounts_are_persisted_idempotent_scoped_and_passwordless" --artifacts-path D:/CodexOnboardingValidation-20261013 -m:1 -nr:false -p:UseSharedCompilation=false
+```
+
+The HTTP filter is `FullyQualifiedName~One_click_credentials_postgres_outbox_failure_rolls_back_flushed_account_and_same_stamp_retry_persists_once`; it requires `STUDENT_RECORDS_APPLICATION_POSTGRES` naming a fresh loopback `records_tests_*` database and refuses an existing or nonlocal database.
+
+These checks freshly compiled current Application, Contracts, Domain, EF, HttpApi and Host dependencies to isolated outputs with serialized builds and analyzers disabled. The validation-only target excludes generated migration `*.Designer.cs` files for memory reasons while retaining migration classes and the current model. This is not a normal full-solution/analyzer or migration-history pass. No schema migration, Finance source change, real portal account/password/email, normal school-data mutation, deployment or inbox delivery was performed. Existing development servers were not stopped or restarted. Latest-source authenticated browser acceptance remains unverified because the frontend localhost port was unavailable; [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md) records focused UI results and the four unrelated retired readiness-screen fixture failures.
+
+## Inline retained Registration form (2026-10-13)
+
+The focused Application gates passed **27 existing custom-record regression cases** and **18 final inline-form/action-permission cases**, with no final failures or skips. The latter contains ten inline scenarios, three direct-form permission denials and five canonical document action denials. It covers atomic mapped/custom save, immutable original submissions, actor/reason/before/after audit, stable retry, stale snapshot rejection, unchanged generic approval policy, retained schema across year context, masked-field storage preservation, repeated hidden answers, nullable/identity/placement preservation, binary summaries, newly-required row rules and empty required structured answers.
+
+The final Application report is `D:/codex-artifacts/student-records-inline-form/test-results/student-record-inline-form-final.trx`; the prior custom regression report is `test-results/student-record-inline-form.trx` under the same artifact root. Its broader first run also contained one inline fixture failure from inserting a second unique school configuration, corrected before the final passing rerun.
+
+The fresh HTTP metadata gate passed **3/3 cases**, zero failures/skips, covering existing Details authority, additive full-form fields and exact snapshot/save routes with read/create grants. Report: `test-results/student-record-details-api-contract-final.trx`. Fresh HttpApi and Host builds completed with zero errors; HttpApi has three existing nullable warnings and Host has no warnings. These metadata cases do not start an authenticated network flow.
+
+Application, Domain and Contracts were compiled to isolated outputs, with serialized compilation, shared compilation and analyzers disabled. Dependent projects reuse the already compiled isolated EF assembly because this change adds no entity/model or migration. These are focused test-host gates, not a full-solution, analyzer, PostgreSQL race, staging/production or authenticated browser save pass. The existing development API is not restarted by these checks.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --artifacts-path D:/codex-artifacts/student-records-inline-form --no-restore -p:BuildProjectReferences=false -m:1 -nodeReuse:false -p:UseSharedCompilation=false -p:RunAnalyzers=false -p:RunAnalyzersDuringBuild=false --filter "FullyQualifiedName~Inline_form_|FullyQualifiedName~Record_document_direct_service"
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --artifacts-path D:/codex-artifacts/student-records-inline-form --no-restore -p:BuildProjectReferences=false -m:1 -nodeReuse:false -p:UseSharedCompilation=false -p:RunAnalyzers=false -p:RunAnalyzersDuringBuild=false --filter "FullyQualifiedName~StudentRecordDetailsApiContract_Tests"
+```
+
+## Automatic onboarding requirements (2026-10-13)
+
+### Scoped worklist query checks
+
+`StudentOnboardingWorklist_Tests.cs` covers combined name/owner/placement/Roll filters, matching counts before paging, duplicate-name stable ordering, academic/tenant isolation and rejected operators/ranges/sorts.
+`StudentOnboardingWorklistPostgres_Tests.cs` covers actual PostgreSQL translation, HTTP query binding, stable pages and restricted staff scope through the existing disposable application factory.
+Run the Application methods with `FullyQualifiedName~Onboarding_worklist`; the HTTP method filter is `FullyQualifiedName~Onboarding_worklist_postgres_filters_scope_counts_and_stable_sorts_before_paging`.
+The HTTP scenario requires `STUDENT_RECORDS_APPLICATION_POSTGRES` with a fresh loopback `records_tests_*` database name and refuses existing or nonlocal databases.
+Use isolated artifact outputs while the normal development Host is running, and keep these read-query gates separate from activation, identifier-write, Finance and browser evidence.
+
+The 2026-10-13 Student Setup worklist gate passed **5/5 Application tests** and **1/1 PostgreSQL HTTP test**, with zero failures or skips. Reports are `test/ShikshaMitra.Application.Tests/TestResults/rajba_RAJ-LAPTOP_2026-10-13_13_36_48.trx` and `test/ShikshaMitra.HttpApi.Tests/TestResults/rajba_RAJ-LAPTOP_2026-10-13_13_41_01.trx`.
+The PostgreSQL factory created a fresh loopback database, seeded mandatory steps through the current requirements owner and persisted real seat reservations; no normal school database, activation, Finance payment, account or email was changed.
+The identifier/case/capacity Domain regression also passed **76/76 tests**, zero failures/skips. Its filter is `FullyQualifiedName~StudentOnboardingIdentifierRules_Tests|FullyQualifiedName~StudentOnboarding_Tests|FullyQualifiedName~AdmissionSeatAllocation_Tests`; the report is `D:/CodexOnboardingValidation-20261013/results/setup-identifier-capacity-regression.trx`.
+
+These runs freshly compiled the current source with serialized builds, isolated outputs and analyzers disabled. A validation-only MSBuild target excluded generated migration `*.Designer.cs` sources after the ordinary compile exhausted available memory; regular migration classes and the current model snapshot remained included.
+This establishes current-model query translation and focused runtime behavior, **not** a normal full-solution, analyzer, migration-history, deployment or live saved-assignment pass. No production project/source configuration was changed for that compilation scope.
+Logs are `.artifacts/onboarding-worklist-application-gate.log`, `.artifacts/onboarding-worklist-postgres-gate.log` and `.artifacts/onboarding-identifier-capacity-regression.log`; the normal development Host was not stopped or restarted by this worklist gate.
+
+`AutomaticOnboardingRequirements_Tests.cs` extends the partial `AdmissionWorkflowRuntimeIntegration_Tests` class; filter its `Automatic_onboarding` methods rather than the source filename.
+The scenarios cover no-profile admission document blockers, atomic failure on undetermined published conditions before Student creation, idempotent pending-case adoption, retained saved delivery/profile metadata and immutable enrolled/terminal snapshots.
+`AutomaticOnboardingRegression_Tests.cs` adds unchanged-preview evidence/stamp preservation, missing actual Student identity blockers, snapshot-less historical reads with dormant profile conflicts and the positive guardian-account completion journey.
+`StudentCredentialReadiness_Tests` covers account requirements independently of dormant email preferences and new-school login defaults.
+Run isolated outputs when the normal development Host is running:
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Automatic_onboarding" --artifacts-path D:/CodexOnboardingValidation-20261013 -m:1 -nr:false -p:UseSharedCompilation=false
+dotnet test test/ShikshaMitra.Domain.Tests/ShikshaMitra.Domain.Tests.csproj --filter "FullyQualifiedName~StudentCredentialReadiness_Tests|FullyQualifiedName~StudentOnboarding_Tests" --artifacts-path D:/CodexOnboardingValidation-20261013 -m:1 -nr:false -p:UseSharedCompilation=false
+```
+
+Final local verification passed **18/18 Application tests** (`Automatic_onboarding` plus `StudentOnboardingSettingsValidation_Tests`) and **54/54 Domain tests**, with zero failures or skips. Reports are `D:/CodexOnboardingValidation-20261013/results/automatic-requirements-final-r4.trx` and `onboarding-domain-final-r2.trx`; earlier reruns overlap and must not be summed.
+
+The positive synthetic journey uses the current Form/Admission decision workflow, confirms the selected fee structure before placement, allocates GR/Roll, activates one enrollment, retains required guardian access as pending, provisions a verified saved guardian email and completes Onboarding with the existing Records handoff. A valid owner reset token establishes the first password; repeated staff provision/activation preserves the same user, link, enrollment and password. No Finance payment, credential-email request or actual external email is created by this test.
+
+The serialized isolated Host build passed with zero errors (`WarningLevel=0`); this is not a claim that existing compiler warnings were fixed. Its Domain/Application copies match the tested assemblies by SHA256: Domain `F8AE1C06D7028C8CA7B9B6AC740B5798013BBE45D4B3A3091D41C3CB9C007DE3`, Application `55F61D08465B675C6498896C03378B76C24899D8912951C6A92ADEEF1A1F7388`. An initial overlapping Host build failed on a compiler-output lock; the successful retry ran after compilation had finished.
+
+The task-owned final Host on `localhost:5001` disabled startup migrations, seeding, background jobs and workers. Authenticated settings save/reload succeeded and DDVS's original Student/Parent choices were restored. Scalar hierarchy validation avoids recursive academic AutoIncludes; the first cold save took 26.67 seconds, while the subsequent save took 183.95 ms. This is local timing, not a production performance guarantee. The existing normal development Host was untouched. [Frontend Student testing](../../../../Shikshamitra-FE/docs/student/testing.md) records UI and responsive evidence. No schema change, deployment or inbox delivery is certified by these checks.
+
+## Attendance workspace alignment (2026-10-12)
+
+`StudentAttendanceApi_Tests.Workspace.cs` covers Directory population parity, server paging/search (including numeric roll), attendance-only read permission, disabled dated eligibility, exact active teacher assignment despite broader scope/forged administrator claims, assignment revocation, admin-only Lock, year/tenant denial and full-roster review before Lock. The attendance test fixture creates real configured database administrator membership for administrator scenarios and restores it after each test; claims and generic staff scope are not administrator authority.
+
+Run the API project with `FullyQualifiedName~StudentAttendanceApi_Tests|FullyQualifiedName~StudentDirectoryApiContract_Tests` and the Application project with `FullyQualifiedName~.Directory_|FullyQualifiedName~.Legacy_override_` using isolated artifacts. Directory scenarios are methods on the partial `AdmissionWorkflowRuntimeIntegration_Tests` class; the source filename is not a test-class filter. The Application regression gate protects the extracted shared Directory inclusion, hierarchy and identity-masking rules. Source tests and a test host do not prove staging or production acceptance; record actual local test and browser results separately.
+
+The current isolated API gate passed **29/29 tests**, zero failures/skips, on 2026-10-12 (`.artifacts/attendance-workspace/results/attendance-workspace-api-r3.trx`). Shared Directory Application regression selected nine scenarios: six passed and three existing provisioning-mode assertions failed (`student-directory-regression-r2.trx`). Their unchanged fixture creates a persisted linked enrollment then expects Directory exclusion; the unchanged HEAD eligibility predicate includes that activated onboarding. The extracted default population predicate was compared with HEAD and is identical apart from whitespace. These unrelated lifecycle assertions remain unchanged; this is not a green Application-suite claim. Authenticated local browser proof is a separate gate; staging/production acceptance is not asserted.
+
+## Special-track offerings and Registration entry (2026-10-11)
+
+`AdmissionSpecialRegistration_Tests.cs` covers General/RTE same-cycle/class coexistence, same-track duplicate rejection, selected-type bulk preview/commit, unused RTE updates, frozen used routing, and invalid enum rejection.
+The focused special Registration scenarios exercise RTE/Management/Staff and retained Management Both entry, same-request retry, explicit sibling linking/mobile mismatch, inaccessible families, General/Inquiry-first rejection, inactive/closed/unconfigured offerings, tenant denial and scoped replay denial.
+`AdmissionSpecialRegistrationLookup_Tests.cs` checks server filtering before count/paging with 25 earlier Inquiry rows, retained Both and Direct options, unchanged default list results, search/scope/tenant denial, and opening/closing at IST midnight while UTC is still on the previous date.
+The 2026-10-12 focused gate passed 49/49 tests (`D:\CodexArtifacts\2026\special-registration\results\special-registration-final.trx`). The larger lookup fixture exposed recursive academic AutoIncludes in entity-valued read projections; the read now projects only academic scalar columns, and the same fixture passes without the large SQLite temporary data expansion. Contracts/Application/Application.Tests were freshly compiled; the unchanged EF assembly was reused after checking every EF source timestamp and copied SHA-256 (`ef-reuse-evidence.json`). This is not a full-solution/EF build or deployment claim. Student docs pass; global docs remain blocked by existing Finance document mojibake. Updated-source authenticated browser acceptance remains separate.
+
+The user-authorized Pipeline extension is covered by `AdmissionSpecialRegistrationPipeline_Tests.cs`: RTE, Management, Staff and retained Management Both registrations appear before Decision with nullable Inquiry identity, guardian contact/search, zero Inquiry follow-ups, scoped options, My Cases/academic/tenant denial, and permanent Applications ownership after Decision entry and later Form correction. Inquiry follow-up reads remain unavailable for direct cases under the existing not-found contract. No Inquiry is created. Existing historical General, missing-source, terminal-case and Inquiry follow-up regressions remain unchanged.
+
+The broader 65-case run passed 61 existing scenarios; four new assertions initially expected the wrong follow-up exception type. After aligning only those assertions with the unchanged not-found contract, all four new scenarios passed (`special-registration-handover-final.trx`). Thus 65 unique scenarios are verified across the broader and focused rerun, rather than claimed as a single green full-suite run. Contracts/Application/Application.Tests compiled with zero errors. No schema change is needed.
+The user subsequently rebuilt and restarted the normal local Host output; its Application and Contracts DLL timestamps postdated the relevant source. Authenticated reads against that Host confirmed both direct RTE drafts in Pipeline, guardian-mobile search, mobile Continue/Back with retained list context, and exclusion from the Decision-only Applications worklist.
+The initial Pipeline/options and list requests returned HTTP 200 in 44.25 and 44.79 seconds; the later search returned HTTP 200 in 1.84 seconds. Initial latency remains an unclassified local performance follow-up, not a production PostgreSQL benchmark.
+Decision transfer, correction permanence and finalization/Onboarding handoff are integration-test evidence; no admission decision or finalization was performed in this browser check. See [frontend Student testing](../../../../Shikshamitra-FE/docs/student/testing.md) for drawer save/reload, viewport and browser artifacts. Staging and deployment remain separate gates.
+`Special_registration_finalizes_through_common_decision_and_onboarding` exercises the real Registration endpoint through the current Form/Admission Decision workflow, idempotent finalization and Onboarding handoff without an Offer stage.
+These scenarios reuse the accepted current Form/Admission Decision fixture; unrelated historical Inquiry/Custom/Offer fixtures and governed Records return tests remain unchanged.
+
+The focused Application regression passed 12/12, including reserved/activated placement, class-wide access, shared applicant protection, same-principal revocation and UTC event round-trip. Actual PostgreSQL probes allowed Alpha after its Records move, denied Beta application/applicant/note/download, confirmed no denied note persisted, and excluded Beta from the list. Deactivating the temporary scope restored the original HOD assignment and denied Alpha with the same token.
+
+Attendance adds nullable canonical `GrNumber` while retaining legacy numeric `GrNo`. Live roster verification returned `QAS26-000001`. Admission event fields use timezone-aware Npgsql parameters for the existing timestamptz columns; a new local end-journey decision persisted and reloaded the same UTC instant. Previously shifted historical rows were preserved and require a separately reviewed backfill. The synthetic Class 3 probe application is now withdrawn.
+
+The final current Attendance HTTP class passed 23/23, zero skips, including prefixed/numeric-only GR, marking, historical scope, action permissions, leave reconciliation and locked corrections. Its identifier-only run passed 2/2; those cases are included in the 23 and should not be summed. The new fixture uses the existing narrow update reader rather than loading the full Student navigation graph. Earlier stalled runs were superseded by these passing current-source checks. Evidence is `.artifacts/student-scope-repair/results/repair-attendance-all-final.trx` and `repair-attendance-identifiers-final.trx`; the command uses `--filter FullyQualifiedName~StudentAttendanceApi_Tests --artifacts-path .artifacts/student-scope-repair/http-final --no-build`.
+
+The current Host build passed with zero errors and 747 compiler warnings. Only the user-approved `20261012061916_MobileAcademicResponses` migration was applied to the verified localhost `postgres` database, without seeding; no migrations remain pending. A design-time model comparison reports three unrelated table drops (`AppStudentManagementSettings`, `AppStudentRollNumberAssignments`, `AppAcademicTerms`); no extra migration or schema deletion was generated or applied. Frontend checks and supporting browser evidence are in [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md#student-scope-repair-verification-2026-10-12). This is local evidence, not full-suite or deployment acceptance.
 
 ## Student scope repairs (2026-10-12)
 
@@ -41,6 +153,13 @@ The focused `StudentAttendanceApi_Tests` run passed all 20 tests with no skips, 
 From the backend repository, run `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter 'FullyQualifiedName~StudentRecordScope_Tests|FullyQualifiedName~Applicant_identity_notes_and_activity_direct_ids_require_academic_scope|FullyQualifiedName~Division_scope_checks_must_use_the_persisted_year_and_class|FullyQualifiedName~Applicant_overview_filters_sibling_applications|FullyQualifiedName~Academic_ancestors_allow_navigation|FullyQualifiedName~Student_record_profile_respects_division_boundary|FullyQualifiedName~AdmissionAssessmentScope_Tests|FullyQualifiedName~StudentRecordsSettings_Tests'`, then `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter FullyQualifiedName~StudentAttendanceApi_Tests`. This verification used isolated `--artifacts-path` outputs. Evidence is in ignored `.artifacts/student-user-scope/results/student-scope-release.trx` and `student-attendance.trx`.
 
 Student documentation passes `pwsh -NoProfile -File scripts/docs/validate-docs.ps1 -Module student`. Windows PowerShell 5's default text decoding reports a false mojibake error on existing Unicode text; PowerShell 7 reads the UTF-8 documents correctly.
+
+## Offering clone cycle dates (2026-10-11)
+
+`AdmissionOfferingCloneWindow_Tests.cs` uses the current Form/Admission Decision fixture for General and RTE.
+It saves source custom dates through the unchanged update API, verifies clone null overrides/target-cycle inheritance and retained routing/forms/state, then revises the target cycle through its controlled command and verifies refreshed clone effective dates without changing the source.
+Run `FullyQualifiedName~Offering_clone_inherits_target_cycle_window|FullyQualifiedName~AdmissionOfferingContract_Tests` with the Application test project and isolated artifacts.
+No EF/schema, live database or running API change belongs to this clone-only adjustment.
 
 ## Five-stage admission acceptance (2026-10-08)
 
@@ -143,6 +262,16 @@ Existing Payment, Offer and Finance-readiness tests remain required regression c
 HTTP reflection contract tests prove routes and declared action grants; they do not establish denied requests through a deployed host.
 
 ## Student Records checks
+
+Run `FullyQualifiedName~Custom_record_` in Application tests for final-submission/draft separation, typed false/zero, immutable original evidence, audited direct/pending corrections, idempotency/stale guards, conditional hide retention, all five privacy groups, legacy empty sections and returning submissions on a reused enrollment. Profile API contract tests cover additive academic-year/milestone fields; Details has the same Records View boundary. Apply the additive custom-profile migration only to an explicitly approved environment. Passing local SQLite fixtures does not establish a migrated live database, PostgreSQL concurrency or authenticated browser acceptance.
+
+The focused captured-detail suite additionally checks independent approval application, source-bound dynamic choices/selected-only hydration, more than twenty school master choices, current canonical enum controllers and public controllers without a Compliance API dependency. Restricted details/options reads must withhold the source option dictionaries as well as values, and change history must withhold any recorded submission that is no longer readable. Repeatable sections validate each row's conditional state, entry bounds and protected structure; hidden unchanged answers retain their saved values. The finalization-only profile/evidence regression uses the current Document verification → Admission decision fixture and preserves its original Records-deny/Admissions-evidence assertions.
+
+Local verification on 2026-10-12 passed 36 of 37 selected Application cases, including all 24 captured-detail cases. The remaining finalization-only profile/evidence test failed before reaching Records because its fixture used a retired Custom workflow stage. After changing that fixture to the supported Document verification/Admission decision owners, the final safeguards run passed all four selected cases with zero skips, including that repaired regression, public scalar rules, a master catalogue larger than twenty choices and restricted history masking. The fresh Host build and four HTTP contract cases also passed. Evidence is retained under `D:\codex-artifacts\student-records-redesign-be\test-results` in `student-record-redesign-regression.trx`, `student-record-durable-safeguards.trx` and `student-record-http-contracts.trx`; these are scoped results rather than a full-suite pass.
+
+With explicit user approval, the tested Host was started on `https://localhost:44332` and only `20261012120000_AddStudentRecordCustomProfiles` was applied to the verified local PostgreSQL database. No seed, backfill, grants or unrelated migrations were applied; the existing RemoveSubstitutionSettings and AddFeeStructureRevisions migrations remain pending. Release must apply the custom-profile migration to its target environment through the normal deployment process.
+
+Authenticated browser verification against this Host loaded active Student List, profile Details, frozen Registration and linked Onboarding, Documents and existing change history. Required-field/reason feedback and dirty-close protection were exercised using a discarded draft; no saved student correction or approval was made. Desktop, tablet and mobile proof and frontend validation are recorded in [Student testing](../../../../Shikshamitra-FE/docs/student/testing.md). Persistent corrections and approval policies are covered by isolated integration fixtures. Staging, production, full-suite acceptance and production PostgreSQL concurrency for custom corrections remain separate gates.
 
 ```powershell
 dotnet test test/ShikshaMitra.Domain.Tests/ShikshaMitra.Domain.Tests.csproj --filter "FullyQualifiedName~StudentRecord"

@@ -104,6 +104,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<StudentCertificate> StudentCertificates { get; set; }
     public DbSet<StudentCertificateTemplate> StudentCertificateTemplates { get; set; }
 	public DbSet<StudentRecordChange> StudentRecordChanges { get; set; }
+	public DbSet<StudentRecordCustomProfile> StudentRecordCustomProfiles { get; set; }
 	public DbSet<StudentRecordChangeDecision> StudentRecordChangeDecisions { get; set; }
 	public DbSet<StudentRecordDocumentEvent> StudentRecordDocumentEvents { get; set; }
 	public DbSet<StudentRecordPhotoDraft> StudentRecordPhotoDrafts { get; set; }

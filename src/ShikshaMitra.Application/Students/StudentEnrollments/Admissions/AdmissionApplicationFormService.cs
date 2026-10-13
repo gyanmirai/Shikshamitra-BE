@@ -28,6 +28,7 @@ public class AdmissionApplicationFormService(
 	AdmissionApplicationReadService applicationReadService,
 	AdmissionApplicationFormValidator formValidator,
 	AdmissionFormDataSourceRegistry dataSourceRegistry,
+	AdmissionFormMasterDataValidator masterDataValidator,
 	AdmissionApplicationWorkflowService workflowService,
 	AdmissionFormStageRuntimeService formStageRuntime,
 	AdmissionReviewDecisionGuard reviewGuard)
@@ -157,7 +158,7 @@ public class AdmissionApplicationFormService(
 			value => AdmissionApplicationValueConverter.Unwrap(value.ValueJson),
 			StringComparer.OrdinalIgnoreCase);
 		var validation = formValidator.Validate(fields, sections, valueMap, experience);
-		await ValidateMasterDataOptionsAsync(fields, sections, valueMap, cycle.AcademicYearId, validation, experience);
+		await masterDataValidator.ValidateAsync(fields, sections, valueMap, cycle.AcademicYearId, validation, experience);
 		if (validation.Errors.Count > 0)
 		{
 			return new AdmissionApplicationSubmitResultDto
@@ -224,84 +225,6 @@ public class AdmissionApplicationFormService(
 			throw new BusinessException(AdmissionApplicationErrorCodes.ConcurrencyConflict);
 	}
 
-	private async Task ValidateMasterDataOptionsAsync(
-		IEnumerable<AdmissionFormFieldDefinition> fields,
-		IEnumerable<AdmissionFormSectionDefinition> sections,
-		IReadOnlyDictionary<string, string> values,
-		Guid academicYearId,
-		AdmissionFormValidationResult validation,
-		AdmissionFormExperienceMetadata experience)
-	{
-		var visibleFieldCodes = formValidator.GetVisibleFieldCodes(fields, sections, values);
-		foreach (var field in fields.Where(field => visibleFieldCodes.Contains(field.Code) && field.FieldType is (AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio)))
-		{
-			if (string.IsNullOrWhiteSpace(field.OptionsJson) || !TryReadSource(field.OptionsJson, out var sourceKey, out var parentField)) continue;
-			if (sourceKey == "StudentSiblings")
-			{
-				var allowed = false;
-				try { allowed = await dataSourceRegistry.AreSiblingIdsAllowedAsync(AdmissionStudentProfileMapping.ReadSiblings(values.GetValueOrDefault(field.Code)) ?? []); }
-				catch (BusinessException) { }
-				if (!allowed)
-				{
-					var message = $"{field.Code} contains an invalid sibling selection.";
-					validation.Errors.Add(message);
-					validation.FieldErrors.TryAdd(field.Code, message);
-				}
-				continue;
-			}
-			var parentId = parentField != null && Guid.TryParse(values.GetValueOrDefault(parentField), out var parsedParentId) ? parsedParentId : (Guid?)null;
-			var allowedValues = (await dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId)).Select(option => option.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
-			var section = sections.First(item => item.Id == field.SectionId);
-			var repeated = experience.Sections.GetValueOrDefault(section.Code)?.IsRepeatable == true;
-			IReadOnlyList<string> submitted;
-			if (repeated)
-			{
-				var entries = ReadMultipleValues(values.GetValueOrDefault(field.Code));
-				submitted = field.FieldType == AdmissionFormFieldType.MultiSelect
-					? entries.SelectMany(ReadMultipleValues).ToList()
-					: entries;
-			}
-			else submitted = field.FieldType == AdmissionFormFieldType.MultiSelect
-				? ReadMultipleValues(values.GetValueOrDefault(field.Code))
-				: new[] { values.GetValueOrDefault(field.Code) ?? string.Empty };
-			if (submitted.Any(value => !string.IsNullOrWhiteSpace(value) && !allowedValues.Contains(value)))
-			{
-				var message = $"{field.Code} contains an invalid option.";
-				validation.Errors.Add(message);
-				validation.FieldErrors.TryAdd(field.Code, message);
-			}
-		}
-	}
-
-	private static bool TryReadSource(string json, out string sourceKey, out string? parentField)
-	{
-		sourceKey = string.Empty;
-		parentField = null;
-		try
-		{
-			using var document = JsonDocument.Parse(json);
-			var root = document.RootElement;
-			if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("source", out var source) || source.ValueKind != JsonValueKind.String) return false;
-			sourceKey = source.GetString() ?? string.Empty;
-			if (root.TryGetProperty("parentField", out var parent) && parent.ValueKind == JsonValueKind.String) parentField = parent.GetString();
-			return !string.IsNullOrWhiteSpace(sourceKey);
-		}
-		catch (JsonException) { return false; }
-	}
-
-	private static IReadOnlyList<string> ReadMultipleValues(string? value)
-	{
-		if (string.IsNullOrWhiteSpace(value)) return [];
-		try
-		{
-			using var document = JsonDocument.Parse(value);
-			return document.RootElement.ValueKind == JsonValueKind.Array
-				? document.RootElement.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString() ?? string.Empty).ToList()
-				: [];
-		}
-		catch (JsonException) { return []; }
-	}
-
 	internal static AdmissionFormDto MapDefinition(
 		AdmissionFormDefinition definition,
 		IEnumerable<AdmissionFormSectionDefinition> sections,
@@ -311,7 +234,7 @@ public class AdmissionApplicationFormService(
 		return new AdmissionFormDto
 		{
 			Id = definition.Id, Name = definition.Name, Code = definition.Code, Description = definition.Description,
-			Version = definition.Version, Status = definition.Status, LayoutType = definition.LayoutType,
+			Version = definition.Version, Status = definition.Status, LayoutType = definition.LayoutType, Purpose = definition.Purpose,
 			FieldsPerRow = definition.FieldsPerRow, DefaultLanguage = experience.DefaultLanguage,
 			SupportedLanguages = experience.SupportedLanguages, ParentVersionId = definition.ParentVersionId,
 			PublishedAt = definition.PublishedAt, PublishedBy = definition.PublishedBy,

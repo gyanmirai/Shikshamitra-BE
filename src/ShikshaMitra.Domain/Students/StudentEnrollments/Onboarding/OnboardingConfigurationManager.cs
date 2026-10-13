@@ -20,9 +20,7 @@ public class OnboardingConfigurationManager(
 	IRepository<EducationMediumStage, Guid> stagesRepository,
 	IRepository<Standard, Guid> standardsRepository,
 	IRepository<Division, Guid> divisionsRepository,
-	IRepository<AdmissionCampus, Guid> campusesRepository,
-	IRepository<AdmissionOffering, Guid> offeringsRepository,
-	IRepository<AdmissionCycle, Guid> cyclesRepository) : DomainService
+	IRepository<AdmissionCampus, Guid> campusesRepository) : DomainService
 {
 	public async Task<OnboardingRuleConfiguration?> GetAsync(Guid yearId)
 	{
@@ -34,23 +32,24 @@ public class OnboardingConfigurationManager(
 	public async Task ValidateAsync(string json, Guid? yearId)
 	{
 		var config = new OnboardingRuleConfiguration(json);
-		var offeringIds = config.Profiles.SelectMany(p => OnboardingRuleConfiguration.Ids(p, "offeringIds")).ToArray();
-		if (offeringIds.Distinct().Count() != offeringIds.Length) throw OnboardingRuleConfiguration.Invalid("An Offering can belong to only one readiness rule.");
-		if (offeringIds.Length > 0 && await offeringsRepository.CountAsync(o => Enumerable.Contains(offeringIds, o.Id)) != offeringIds.Length)
-			throw OnboardingRuleConfiguration.Invalid("One or more selected Offerings are unavailable.");
-		if (yearId.HasValue && offeringIds.Length > 0)
-		{
-			var cycleIds = (await offeringsRepository.GetListAsync(o => Enumerable.Contains(offeringIds, o.Id))).Select(o => o.AdmissionCycleId).Distinct().ToArray();
-			if (await cyclesRepository.CountAsync(c => Enumerable.Contains(cycleIds, c.Id) && c.AcademicYearId == yearId.Value) != cycleIds.Length)
-				throw OnboardingRuleConfiguration.Invalid("Selected Offerings must belong to the selected academic year.");
-		}
-		var boards = await boardsRepository.GetListAsync();
-		var mediums = await mediumsRepository.GetListAsync();
-		var stages = await stagesRepository.GetListAsync();
-		var standards = await standardsRepository.GetListAsync();
-		var divisions = await divisionsRepository.GetListAsync();
-		var activeCampusIds = (await campusesRepository.GetListAsync(c => c.IsActive))
-			.Select(c => c.Id).ToHashSet();
+		// Named readiness profiles are retained as legacy data. They no longer participate
+		// in active setup, so stale Offering links must not block portal access settings.
+		var activeApplicabilities = config.Rules("grNumber").Concat(config.Rules("rollNumber"))
+			.Concat(config.Rules("divisionChange")).ToList();
+		// Only hierarchy keys and display-name parts are needed. Scalar projections keep
+		// recursive academic AutoIncludes out of this configuration-validation read.
+		var boards = await AsyncExecuter.ToListAsync((await boardsRepository.GetQueryableAsync())
+			.Select(b => new { b.Id, b.AcademicYearId, b.Type }));
+		var mediums = await AsyncExecuter.ToListAsync((await mediumsRepository.GetQueryableAsync())
+			.Select(m => new { m.Id, m.EducationBoardId, m.Name }));
+		var stages = await AsyncExecuter.ToListAsync((await stagesRepository.GetQueryableAsync())
+			.Select(s => new { s.Id, s.EducationMediumId, s.Name }));
+		var standards = await AsyncExecuter.ToListAsync((await standardsRepository.GetQueryableAsync())
+			.Select(s => new { s.Id, s.EducationMediumStageId }));
+		var divisions = await AsyncExecuter.ToListAsync((await divisionsRepository.GetQueryableAsync())
+			.Select(d => new { d.Id, d.StandardId }));
+		var activeCampusIds = (await AsyncExecuter.ToListAsync((await campusesRepository.GetQueryableAsync())
+			.Where(c => c.IsActive).Select(c => c.Id))).ToHashSet();
 		var paths = new[]
 		{
 			boards.Where(b => !yearId.HasValue || b.AcademicYearId == yearId).ToDictionary(b => b.Id, _ => (Guid?)null),
@@ -79,13 +78,13 @@ public class OnboardingConfigurationManager(
 			var selectedNames = availableSchoolLevelNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
 			if (selectedNames.Any(name => !levelById.Values.Contains(name, StringComparer.OrdinalIgnoreCase)))
 				throw OnboardingRuleConfiguration.Invalid("Selected onboarding school levels are not configured for this scope.");
-			foreach (var rule in config.Applicabilities.Where(rule =>
+			foreach (var rule in activeApplicabilities.Where(rule =>
 				OnboardingRuleConfiguration.Text(rule, "stageMode") == "selected"))
 				if (OnboardingRuleConfiguration.Ids(rule, "academicMediumStageIds")
 					.Any(id => levelById.TryGetValue(id, out var name) && !selectedNames.Contains(name)))
 					throw OnboardingRuleConfiguration.Invalid("Existing rules target a hidden onboarding school level.");
 		}
-		foreach (var rule in config.Applicabilities)
+		foreach (var rule in activeApplicabilities)
 		{
 			var campusMode = OnboardingRuleConfiguration.Text(rule, "campusMode", "all");
 			var campusIds = OnboardingRuleConfiguration.Ids(rule, "campusIds");
@@ -109,7 +108,6 @@ public class OnboardingConfigurationManager(
 				parents = mode == "all" ? available : ids.ToHashSet();
 			}
 		}
-		ValidateConflicts(config.Profiles.Where(p => OnboardingRuleConfiguration.Ids(p, "offeringIds").Length == 0).ToList(), true);
 		foreach (var section in new[] { "grNumber", "rollNumber", "divisionChange" })
 		{
 			var rules = config.Rules(section).ToList();

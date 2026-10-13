@@ -21,15 +21,17 @@ public partial class StudentOnboardingAppService
 			!await AuthorizationService.IsGrantedAsync(IdentityPermissions.Users.Create)) return;
 		var student = await studentRepository.GetWithDetailsAsync(item.StudentId);
 		if (student == null) return;
-		var resolver = LazyServiceProvider.LazyGetRequiredService<IStudentCredentialEmailEligibilityResolver>();
+		var resolver = LazyServiceProvider.LazyGetRequiredService<StudentOnboardingCredentialEligibilityResolver>();
 		foreach (var type in new[] { "student", "guardian" })
 		{
-			if (!OnboardingRuleConfiguration.Boolean(rules, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail")) continue;
+			if (!OnboardingRuleConfiguration.Boolean(rules, type == "student" ? "studentAccount" : "guardianAccount")) continue;
 			if (await portalLinkRepository.AnyAsync(link => link.StudentId == student.Id && link.AccountType == type)) continue;
 			// The resolver checks committed placement and current documents before it reports a missing account.
-			var eligibility = await resolver.ResolveAsync(item.Id, type);
+			var eligibility = await resolver.ResolveAccountPreparationAsync(item.Id, type);
 			if (eligibility.BlockedReason != StudentOnboardingCredentialEligibilityResolver.AccountRequired) continue;
-			var relationship = type == "student" ? "self" : OnboardingRuleConfiguration.Text(rules, "guardianAccountRelationship", "guardian");
+			var relationship = type == "student" ? "self" : StudentPortalOwnerSelection.AutomaticRelationship(
+				student.FamilyDetail, OnboardingRuleConfiguration.Text(rules, "guardianAccountRelationship", "guardian"));
+			if (relationship == null) continue;
 			if (type == "guardian" && !item.GuardianContactVerifiedAt.HasValue) continue;
 			var email = type == "student" ? student.ContactDetail?.Email : relationship switch
 			{

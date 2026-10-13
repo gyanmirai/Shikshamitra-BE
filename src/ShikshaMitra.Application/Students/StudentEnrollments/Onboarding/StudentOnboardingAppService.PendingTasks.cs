@@ -34,18 +34,24 @@ public partial class StudentOnboardingAppService
 		}
 		else
 		{
+			var configurations = new Dictionary<Guid, OnboardingRuleConfiguration?>();
+			foreach (var year in scoped.Where(AutomaticOnboardingReadinessRules.CanAdopt).Select(c => c.AcademicYearId).Distinct())
+				configurations[year] = await configurationManager.GetAsync(year);
 			var handoffs = await handoffRepository.GetListAsync(h => Enumerable.Contains(caseIds, h.OnboardingCaseId) && h.Required &&
 				(h.ServiceKey == "student-account" || h.ServiceKey == "guardian-account") && h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged);
 			var emails = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.Portal.StudentCredentialEmailRequest, Guid>>()
 				.GetListAsync(e => Enumerable.Contains(caseIds, e.CaseId));
 			foreach (var item in scoped)
 			{
-				var rules = await ReadSavedRulesAsync(item);
+				var rules = AutomaticOnboardingReadinessRules.CanAdopt(item)
+					? AutomaticOnboardingReadinessRules.Resolve(configurations[item.AcademicYearId])
+					: await ReadSavedRulesAsync(item);
 				var accountPending = handoffs.Any(h => h.OnboardingCaseId == item.Id) || !item.StudentEnrollmentId.HasValue && rules.HasValue &&
 					(OnboardingRuleConfiguration.Boolean(rules.Value, "studentAccount") || OnboardingRuleConfiguration.Boolean(rules.Value, "guardianAccount"));
 				var emailPending = rules.HasValue && new[] { "student", "guardian" }.Any(type =>
 					OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail") &&
 					!emails.Any(e => e.CaseId == item.Id && e.AccountType == type && e.Status == "Sent"));
+				emailPending |= emails.Any(email => email.CaseId == item.Id && email.RequiresSavedOwnerValidation() && email.Status != "Sent");
 				if (accountPending || emailPending) pending.Add(item.Id);
 			}
 		}
@@ -58,7 +64,10 @@ public partial class StudentOnboardingAppService
 		{
 			using var document = JsonDocument.Parse(text); return document.RootElement.Clone();
 		}
-		return (await configurationManager.GetAsync(item.AcademicYearId))?.Readiness(item);
+		var configuration = await configurationManager.GetAsync(item.AcademicYearId);
+		return AutomaticOnboardingReadinessRules.CanAdopt(item)
+			? AutomaticOnboardingReadinessRules.Resolve(configuration)
+			: configuration?.Root.GetProperty("readinessAccess");
 	}
 
 	private async Task<bool> CredentialsPendingAsync(StudentOnboardingCase item)
@@ -69,8 +78,8 @@ public partial class StudentOnboardingAppService
 		var types = new[] { "student", "guardian" };
 		if (!item.StudentEnrollmentId.HasValue && types.Any(type => OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "studentAccount" : "guardianAccount"))) return true;
 		if (await handoffRepository.AnyAsync(h => h.OnboardingCaseId == item.Id && h.Required && (h.ServiceKey == "student-account" || h.ServiceKey == "guardian-account") && h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged)) return true;
-		if (!types.Any(type => OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail"))) return false;
 		var requests = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.Portal.StudentCredentialEmailRequest, Guid>>().GetListAsync(e => e.CaseId == item.Id);
+		if (requests.Any(request => request.RequiresSavedOwnerValidation() && request.Status != "Sent")) return true;
 		return types.Any(type => OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail") && !requests.Any(e => e.AccountType == type && e.Status == "Sent"));
 	}
 }

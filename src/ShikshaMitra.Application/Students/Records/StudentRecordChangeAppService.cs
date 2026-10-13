@@ -14,8 +14,10 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Data;
 using Volo.Abp.Uow;
 using Volo.Abp.Users;
+using Volo.Abp.Identity;
 
 namespace ShikshaMitra.Students.Records;
 
@@ -26,7 +28,7 @@ public partial class StudentRecordChangeAppService(
 	IRepository<StudentRecordChangeDecision, Guid> decisions,
 	IStudentRepository students, StudentRecordsEnrollmentScopeService recordScope, StudentRecordsAccessService access,
 	StudentRecordsPolicyResolver policies, StudentRecordPayloadService payloads,
-	StudentRecordChangeApplication application, IPermissionChecker permissions)
+	StudentRecordChangeApplication application, IPermissionChecker permissions, IRepository<IdentityUser, Guid> actors)
 	: ApplicationService, IStudentRecordChangeAppService
 {
 	public async Task<PagedResultDto<StudentRecordChangeDto>> GetListAsync(StudentRecordChangeQueryDto input)
@@ -49,8 +51,9 @@ public partial class StudentRecordChangeAppService(
 		foreach (var year in items.Select(x => x.AcademicYearId).Distinct()) yearPolicies[year] = (await policies.ResolveAsync(year)).Policy;
 		var canApprove = await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Approve);
 		var canCancel = await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Cancel);
+		var actorNames = await GetActorNamesAsync(items.Select(x => x.RequestedBy).Concat(pageDecisions.Select(x => x.ActorId)).Distinct().ToArray());
 		foreach (var item in items) result.Add(await MapAsync(item, includePayload: false, pageStudents[item.StudentId],
-			yearPolicies[item.AcademicYearId], roles, pageDecisions.Where(x => x.ChangeId == item.Id).ToList(), canApprove, canCancel));
+			yearPolicies[item.AcademicYearId], roles, pageDecisions.Where(x => x.ChangeId == item.Id).ToList(), canApprove, canCancel, actorNames));
 		return new(count, result);
 	}
 	public async Task<StudentRecordChangeDto> GetAsync(Guid id) => await MapAsync(await GetScopedAsync(id), true);
@@ -81,8 +84,13 @@ public partial class StudentRecordChangeAppService(
 		{
 			var allowed = await access.EnsureWritableAsync(input.StudentId, input.Section == "placement");
 			await EnsureVisibleAsync(allowed.Policy, input.Section);
-			var json = await payloads.ValidateAndNormalizeAsync(input.Section, input.Payload);
 			var existing = await changes.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == input.StudentId && x.ClientKey == input.ClientKey);
+			var rawHash = input.Section == "custom-details" ? StudentRecordPayloadService.Hash(input.Payload.GetRawText()) : null;
+			if (input.Section == "custom-details" && await payloads.IsCustomMaskedAsync(input.StudentId))
+				throw new BusinessException("Students:Records:RestrictedFields");
+			var json = existing != null && input.Section == "custom-details" && existing.GetProperty<string>("CustomDetailsRequestHash") == rawHash
+				? StudentRecordPayloadService.Canonical(existing.PayloadJson)
+				: await payloads.ValidateAndNormalizeAsync(input.Section, input.Payload, input.StudentId);
 			if (existing != null)
 			{
 				if (existing.Section != input.Section || StudentRecordPayloadService.Canonical(existing.PayloadJson) != json ||
@@ -123,6 +131,7 @@ public partial class StudentRecordChangeAppService(
 			var item = new StudentRecordChange(GuidGenerator.Create(), CurrentTenant.Id, input.StudentId, year, CurrentUser.GetId(),
 				input.Section, action, input.ClientKey, input.Reason, before, json, snapshot.Policy.ToJson(), snapshot.VersionId,
 				JsonSerializer.Serialize(stages, StudentRecordPayloadService.JsonOptions), stages.Count, effective, input.CorrectsChangeId);
+			if (rawHash != null) item.SetProperty("CustomDetailsRequestHash", rawHash);
 			await changes.InsertAsync(item);
 			id = item.Id;
 			await work.CompleteAsync();
@@ -160,6 +169,8 @@ public partial class StudentRecordChangeAppService(
 		var item = await GetScopedAsync(id);
 		EnsureStamp(item, input.ConcurrencyStamp);
 		await EnsureVisibleAsync((await policies.ResolveAsync(item.AcademicYearId)).Policy, item.Section);
+		if (item.Section == "custom-details" && await payloads.IsCustomMaskedAsync(item.StudentId))
+			throw new BusinessException("Students:Records:RestrictedFields");
 		if (!await IsStageApproverAsync(item)) throw new BusinessException("Students:Records:ApproverRequired");
 		var stage = item.ApprovalCount;
 		if (approve) item.Approve(CurrentUser.GetId()); else item.Reject(CurrentUser.GetId());

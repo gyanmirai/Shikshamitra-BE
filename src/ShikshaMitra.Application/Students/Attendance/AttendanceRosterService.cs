@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Students.StudentEnrollments;
+using ShikshaMitra.Students.Records;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -19,7 +20,7 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 	IStudentRepository students, IRepository<AcademicYear, Guid> years,
 	StudentScopeAccessService scope, AttendanceApplicabilityResolver applicability,
 	AttendancePolicyResolver policies, IAttendanceDayRepository days, IAttendanceEntryRepository entries,
-	IStudentLeaveRepository leaves) : ApplicationService, ITransientDependency
+	IStudentLeaveRepository leaves, StudentDirectoryQueryService directory) : ApplicationService, ITransientDependency
 {
 	public async Task<AttendanceRoster> LoadAsync(Guid yearId, Guid standardId, Guid divisionId, DateTime date)
 	{
@@ -42,6 +43,15 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 		var policy = await policies.ResolveAsync(yearId, date, context.Scope);
 		var options = day?.PolicySnapshotJson != null ? JsonSerializer.Deserialize<AttendancePolicyOptions>(day.PolicySnapshotJson)! : policy.Options;
 		var currentSchoolDate = AttendanceSchoolDate.Today(options, Clock.Now);
+		if (date == currentSchoolDate)
+		{
+			var population = await directory.GetPopulationAsync(new StudentDirectoryRequest {
+				AcademicYearId = yearId, StandardId = standardId, DivisionId = divisionId, Population = "Active" });
+			var visibleIds = (await AsyncExecuter.ToListAsync(population.Select(s => s.Id))).ToHashSet();
+			// Submitted facts remain reviewable when a student leaves during the school day.
+			candidates = candidates.Where(e => visibleIds.Contains(e.StudentId) ||
+				day?.IsSubmitted == true && day.Entries.Any(entry => entry.EnrollmentId == e.Id && entry.ExpectedAtSubmission == true)).ToList();
+		}
 		var studentIds = candidates.Select(e => e.StudentId).ToArray();
 		var identities = await AsyncExecuter.ToListAsync((await students.GetQueryableWithoutAutoIncludesAsync())
 			.Where(s => s.TenantId == CurrentTenant.Id && Enumerable.Contains(studentIds, s.Id)));

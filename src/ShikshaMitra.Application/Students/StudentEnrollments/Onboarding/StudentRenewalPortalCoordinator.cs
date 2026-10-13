@@ -33,7 +33,7 @@ public class StudentRenewalPortalCoordinator(StudentRecordRenewalCoordinator ren
 			CanProvision = item.Status == "Provisioning" && await authority.HasCurrentPermissionsAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create,
 				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit, IdentityPermissions.Users.Create) };
 		if (required.GuardianAccount)
-			foreach (var relation in new[] { "father", "mother", "guardian" })
+			foreach (var relation in StudentPortalOwnerSelection.Relationships(student.FamilyDetail))
 			{
 				var guardian = GetGuardian(student, relation);
 				if (guardian != null && !string.IsNullOrWhiteSpace(guardian.Email)) result.Guardians.Add(new() { Relationship = relation, Name = guardian.FullName, Email = guardian.Email });
@@ -74,6 +74,8 @@ public class StudentRenewalPortalCoordinator(StudentRecordRenewalCoordinator ren
 				throw Invalid("The existing portal link requires a reviewed identity repair.");
 			return await MapAsync(student, item, existing, linked);
 		}
+		if (input.AccountType == "guardian" && !StudentPortalOwnerSelection.Relationships(student.FamilyDetail).Contains(input.Relationship))
+			throw Invalid("Choose a saved Father or Mother profile. Other guardian is available only when neither parent is recorded.");
 		if (!await roles.RoleExistsAsync(role)) throw Invalid("The portal role must be configured by an identity administrator.");
 		var user = await users.FindByEmailAsync(email);
 		if (user != null)

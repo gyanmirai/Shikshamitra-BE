@@ -26,7 +26,8 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 	IStudentCredentialEmailEligibilityResolver eligibility, IdentityUserManager users, IEmailSender sender,
 	IStringEncryptionService encryption, IUnitOfWorkManager units, ICurrentTenant tenant,
 	IUserClaimsPrincipalFactory<IdentityUser> principals, ICurrentPrincipalAccessor currentPrincipal,
-	IPermissionChecker permissions, IStudentOnboardingAppService onboarding) : ITransientDependency
+	IPermissionChecker permissions, IStudentOnboardingAppService onboarding,
+	IStudentCredentialRecipientVerifier? recipients = null) : ITransientDependency
 {
 	public async Task DispatchAsync(Guid id)
 	{
@@ -47,7 +48,19 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 				row.Cancel("The requesting staff member no longer has permission to send this email.");
 				await requests.UpdateAsync(row, false); await prepare.CompleteAsync(); return;
 			}
-			var state = await eligibility.ResolveAsync(row.CaseId, row.AccountType, false);
+			var state = await ResolveDeliveryAsync(row);
+			if (!await SavedRecipientMatchesAsync(row, state))
+			{
+				row.Cancel("The email no longer matches the saved account-owner record. Review the Student record before requesting credentials.");
+				await requests.UpdateAsync(row, false); await prepare.CompleteAsync(); return;
+			}
+			if (state.WaitingForCompletion && MatchesRecipient(row, state))
+			{
+				// Preserve the explicit intent without preparing a password or starving
+				// ready rows in the bounded worker batch while other accounts are pending.
+				row.DeferUntilCompletion(DateTime.UtcNow);
+				await requests.UpdateAsync(row, false); await prepare.CompleteAsync(); return;
+			}
 			if (!Matches(row, state))
 			{
 				row.Cancel("Account access, recipient, school settings or onboarding readiness changed. Email cancelled.");
@@ -83,8 +96,8 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 		try
 		{
 			// Re-read the relationship immediately before sending, including exits and guardian replacements.
-			var state = await eligibility.ResolveAsync(request.CaseId, request.AccountType, false);
-			if (!Matches(request, state) || !await ActorMaySendAsync(request)) request.Cancel("Account access, staff authorization or readiness changed. Email cancelled.");
+			var state = await ResolveDeliveryAsync(request);
+			if (!Matches(request, state) || !await SavedRecipientMatchesAsync(request, state) || !await ActorMaySendAsync(request)) request.Cancel("Account access, staff authorization or readiness changed. Email cancelled.");
 			else
 			{
 				var user = await users.FindByIdAsync(request.UserId.ToString());
@@ -137,8 +150,16 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 		catch (EntityNotFoundException) { return false; }
 	}
 	private static bool Matches(StudentCredentialEmailRequest row, StudentCredentialEmailEligibility state) =>
-		state.EmailEnabled && state.IsReady && state.LinkId == row.LinkId && state.UserId == row.UserId &&
+		state.IsReady && MatchesRecipient(row, state);
+	private static bool MatchesRecipient(StudentCredentialEmailRequest row, StudentCredentialEmailEligibility state) =>
+		state.EmailEnabled && state.LinkId == row.LinkId && state.UserId == row.UserId &&
 		state.StudentId == row.StudentId && string.Equals(state.Email.Trim(), row.Email.Trim(), StringComparison.OrdinalIgnoreCase);
+	private Task<bool> SavedRecipientMatchesAsync(StudentCredentialEmailRequest row, StudentCredentialEmailEligibility state) =>
+		!row.RequiresSavedOwnerValidation() ? Task.FromResult(true) : recipients == null ? Task.FromResult(false)
+			: recipients.IsCurrentOwnerAsync(row.CaseId, row.AccountType, state.Relationship, row.Email);
+	private Task<StudentCredentialEmailEligibility> ResolveDeliveryAsync(StudentCredentialEmailRequest row) =>
+		row.RequiresSavedOwnerValidation() ? eligibility.ResolveExplicitAsync(row.CaseId, row.AccountType, false)
+			: eligibility.ResolveAsync(row.CaseId, row.AccountType, false);
 	private static string Encode(string? value) => HtmlEncoder.Default.Encode(value ?? string.Empty);
 	private static string BuildBody(StudentCredentialEmailEligibility state, IdentityUser user, string? password, string? resetUrl, bool initialSetupPending)
 	{

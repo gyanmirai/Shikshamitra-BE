@@ -18,6 +18,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionPipelineReadService(
 	IRepository<AdmissionApplicant, Guid> applicants,
 	IRepository<AdmissionInquiry, Guid> inquiries,
+	IRepository<AdmissionFamily, Guid> families,
+	IRepository<AdmissionGuardian, Guid> guardians,
 	IRepository<AdmissionCycle, Guid> cycles,
 	IRepository<AdmissionApplicationStageInstance, Guid> stages,
 	IRepository<AdmissionApplicationWorkflowInstance, Guid> workflows,
@@ -50,7 +52,7 @@ public class AdmissionPipelineReadService(
 		var count = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(Sort(query, input.Sorting).Skip(input.SkipCount).Take(input.MaxResultCount));
 		var ownerNames = await people.GetNamesAsync(rows.Where(row => row.AssignedCounsellorId.HasValue).Select(row => row.AssignedCounsellorId!.Value));
-		var inquiryIds = rows.Select(row => row.InquiryId).ToArray();
+		var inquiryIds = rows.Where(row => row.InquiryId.HasValue).Select(row => row.InquiryId!.Value).ToArray();
 		var pending = await followUps.GetListAsync(item => Enumerable.Contains(inquiryIds, item.InquiryId) && item.Status == AdmissionInquiryFollowUpStatus.Scheduled);
 		var stageIds = rows.Where(row => row.CurrentStageInstanceId.HasValue).Select(row => row.CurrentStageInstanceId!.Value).ToArray();
 		var stageRows = await stages.GetListAsync(item => Enumerable.Contains(stageIds, item.Id));
@@ -65,7 +67,7 @@ public class AdmissionPipelineReadService(
 			row.CreationTime = Clock.Kind == DateTimeKind.Utc ? AdmissionOfferUtcTime.Normalize(row.CreationTime) : row.CreationTime.ToUniversalTime();
 			row.EnteredAt = row.EnteredAt.HasValue ? AdmissionOfferUtcTime.Normalize(row.EnteredAt.Value) : null;
 			row.AssignedCounsellorName = row.AssignedCounsellorId.HasValue ? ownerNames.GetValueOrDefault(row.AssignedCounsellorId.Value) : null;
-			var open = pendingByInquiry[row.InquiryId].ToList();
+			var open = row.InquiryId.HasValue ? pendingByInquiry[row.InquiryId.Value].ToList() : [];
 			row.OpenFollowUpCount = open.Count;
 			row.NextFollowUpAt = open.Count > 0 ? AdmissionOfferUtcTime.Normalize(open.Min(item => item.ScheduledAt)) : null;
 			row.HasOverdueFollowUp = row.NextFollowUpAt < utcNow;
@@ -136,6 +138,8 @@ public class AdmissionPipelineReadService(
 		var scopedOfferings = await access.GetScopedOfferingsAsync();
 		var applicantQuery = await applicants.GetQueryableAsync();
 		var inquiryQuery = await inquiries.GetQueryableAsync();
+		var familyQuery = await families.GetQueryableAsync();
+		var guardianQuery = await guardians.GetQueryableAsync();
 		var cycleQuery = await cycles.GetQueryableAsync();
 		var stageQuery = await stages.GetQueryableAsync();
 		var workflowQuery = await workflows.GetQueryableAsync();
@@ -147,11 +151,20 @@ public class AdmissionPipelineReadService(
 			from applicant in linkedApplicants.DefaultIfEmpty()
 			join inquiry in inquiryQuery on application.InquiryId equals (Guid?)inquiry.Id into linkedInquiries
 			from inquiry in linkedInquiries.DefaultIfEmpty()
+			join family in familyQuery on applicant.FamilyId equals family.Id into linkedFamilies
+			from family in linkedFamilies.DefaultIfEmpty()
+			join guardian in guardianQuery on family.PrimaryGuardianId equals (Guid?)guardian.Id into linkedGuardians
+			from guardian in linkedGuardians.DefaultIfEmpty()
 			join standard in standardQuery on offering.StandardId equals standard.Id into linkedStandards
 			from standard in linkedStandards.DefaultIfEmpty()
 			join stage in stageQuery on application.CurrentStageInstanceId equals (Guid?)stage.Id into currentStages
 			from stage in currentStages.DefaultIfEmpty()
-			where application.InquiryId.HasValue && application.Status != AdmissionApplicationStatus.Withdrawn && application.Status != AdmissionApplicationStatus.Rejected &&
+			where (application.InquiryId.HasValue ||
+				(((offering.Track == AdmissionTrack.Rte && offering.EntryMode == AdmissionEntryMode.DirectRegistration) ||
+				  ((offering.Track == AdmissionTrack.Management || offering.Track == AdmissionTrack.Staff) &&
+				   (offering.EntryMode == AdmissionEntryMode.DirectRegistration || offering.EntryMode == AdmissionEntryMode.Both))) &&
+				 workflowQuery.Any(workflow => workflow.ApplicationId == application.Id))) &&
+				application.Status != AdmissionApplicationStatus.Withdrawn && application.Status != AdmissionApplicationStatus.Rejected &&
 				application.Status != AdmissionApplicationStatus.OfferDeclined && application.Status != AdmissionApplicationStatus.Enrolled &&
 				application.Status != AdmissionApplicationStatus.AdmissionFinalized &&
 				!workflowQuery.Any(workflow => workflow.ApplicationId == application.Id && (workflow.Status == AdmissionWorkflowInstanceStatus.Cancelled || workflow.Status == AdmissionWorkflowInstanceStatus.Failed)) &&
@@ -163,9 +176,10 @@ public class AdmissionPipelineReadService(
 			select new AdmissionPipelineItemDto
 			{
 				Id = application.Id, ApplicationNumber = application.ApplicationNumber, ApplicantId = application.ApplicantId,
-				ApplicantName = applicant == null ? (inquiry == null ? "Applicant unavailable" : inquiry.ApplicantName) : applicant.FirstName + " " + (applicant.LastName ?? string.Empty), InquiryId = application.InquiryId!.Value, InquiryNumber = inquiry == null ? null : inquiry.InquiryNumber,
+				ApplicantName = applicant == null ? (inquiry == null ? "Applicant unavailable" : inquiry.ApplicantName) : applicant.FirstName + " " + (applicant.LastName ?? string.Empty), InquiryId = application.InquiryId, InquiryNumber = inquiry == null ? null : inquiry.InquiryNumber,
 				SourceInquiryAvailable = inquiry != null,
-				ContactPhone = inquiry == null ? null : inquiry.NormalizedPhone, ContactEmail = inquiry == null ? null : inquiry.Email, OfferingCode = offering.Code, StandardName = standard == null ? "Class unavailable" : standard.Name,
+				ContactPhone = inquiry == null ? (guardian == null ? null : guardian.Mobile) : inquiry.NormalizedPhone,
+				ContactEmail = inquiry == null ? (guardian == null ? null : guardian.Email) : inquiry.Email, OfferingCode = offering.Code, StandardName = standard == null ? "Class unavailable" : standard.Name,
 				Status = application.Status, CurrentStageInstanceId = application.CurrentStageInstanceId, CurrentStageCode = stage == null ? null : stage.Code,
 				CurrentStageName = stage == null ? null : stage.Name, StageType = stage == null ? null : stage.StageType,
 				CreationTime = application.CreationTime, EnteredAt = stage == null ? null : stage.EnteredAt, AssignedCounsellorId = application.AssignedCounsellorId

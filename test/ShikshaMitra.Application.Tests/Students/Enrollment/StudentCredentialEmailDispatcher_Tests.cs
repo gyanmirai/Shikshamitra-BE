@@ -128,8 +128,86 @@ public class StudentCredentialEmailDispatcher_Tests : ShikshaMitraApplicationTes
 		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
 		(await ReadAsync(fixture.Row.Id)).Status.ShouldBe("Cancelled"); fixture.Sender.ReceivedCalls().ShouldBeEmpty();
 	}
+	[Fact]
+	public async Task Completion_timing_defers_pending_email_without_password_until_other_accounts_are_prepared()
+	{
+		using var school = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
+		var fixture = await CreateAsync(false);
+		fixture.Resolver.ResolveAsync(fixture.Row.CaseId, "guardian", false).Returns(fixture.State with
+			{ IsReady = false, WaitingForCompletion = true, BlockedReason = "Full onboarding completion is pending." });
+		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
+		var deferred = await ReadAsync(fixture.Row.Id);
+		deferred.Status.ShouldBe("Pending"); deferred.AttemptCount.ShouldBe(0); deferred.NextAttemptAt.ShouldBeGreaterThan(DateTime.UtcNow);
+		fixture.Sender.ReceivedCalls().ShouldBeEmpty();
+		(await WithUnitOfWorkAsync(async () => (await GetRequiredService<IdentityUserManager>().FindByIdAsync(fixture.Row.UserId.ToString()))!.PasswordHash)).ShouldBeNull();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var repository = GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>(); var row = await repository.GetAsync(fixture.Row.Id);
+			typeof(StudentCredentialEmailRequest).GetProperty(nameof(StudentCredentialEmailRequest.NextAttemptAt))!.SetValue(row, DateTime.UtcNow.AddMinutes(-1));
+			await repository.UpdateAsync(row, true);
+		});
+		fixture.Resolver.ResolveAsync(fixture.Row.CaseId, "guardian", false).Returns(fixture.State);
+		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
+		(await ReadAsync(fixture.Row.Id)).Status.ShouldBe("Sent");
+		fixture.Sender.ReceivedCalls().Count(call => call.GetMethodInfo().Name == nameof(IEmailSender.SendAsync)).ShouldBe(1);
+	}
+	[Fact]
+	public async Task Changed_recipient_during_completion_wait_is_cancelled_instead_of_deferred()
+	{
+		using var school = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
+		var fixture = await CreateAsync(false);
+		fixture.Resolver.ResolveAsync(fixture.Row.CaseId, "guardian", false).Returns(fixture.State with
+			{ IsReady = false, WaitingForCompletion = true, Email = "different@example.test" });
+		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
+		(await ReadAsync(fixture.Row.Id)).Status.ShouldBe("Cancelled"); fixture.Sender.ReceivedCalls().ShouldBeEmpty();
+	}
+	[Fact]
+	public async Task Explicit_saved_owner_intent_fails_closed_when_provenance_can_no_longer_be_verified()
+	{
+		using var school = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
+		var fixture = await CreateAsync(false);
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var repository = GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>(); var row = await repository.GetAsync(fixture.Row.Id);
+			row.RequireSavedOwnerValidation(); await repository.UpdateAsync(row, true);
+		});
+		// This fixture has no verifier. Explicit saved-owner intents must fail closed.
+		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
+		(await ReadAsync(fixture.Row.Id)).Status.ShouldBe("Cancelled"); fixture.Sender.ReceivedCalls().ShouldBeEmpty();
+		(await WithUnitOfWorkAsync(async () => (await GetRequiredService<IdentityUserManager>().FindByIdAsync(fixture.Row.UserId.ToString()))!.PasswordHash)).ShouldBeNull();
+	}
+	[Fact]
+	public async Task Only_a_marked_manual_intent_uses_explicit_eligibility_in_both_dispatch_phases()
+	{
+		using var school = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
+		var recipients = Substitute.For<IStudentCredentialRecipientVerifier>();
+		recipients.IsCurrentOwnerAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<string>()).Returns(true);
+		var fixture = await CreateAsync(true, recipients);
+		fixture.Resolver.ResolveAsync(fixture.Row.CaseId, "guardian", false).Returns(fixture.State with
+			{ EmailEnabled = false, IsReady = false, BlockedReason = "Automatic email is disabled." });
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var repository = GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>(); var row = await repository.GetAsync(fixture.Row.Id);
+			row.RequireSavedOwnerValidation(); await repository.UpdateAsync(row, true);
+		});
+		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
+		(await ReadAsync(fixture.Row.Id)).Status.ShouldBe("Sent");
+		await fixture.Resolver.Received(2).ResolveExplicitAsync(fixture.Row.CaseId, "guardian", false);
+		await fixture.Resolver.DidNotReceive().ResolveAsync(fixture.Row.CaseId, "guardian", false);
+	}
+	[Fact]
+	public async Task An_unmarked_automatic_intent_cannot_bypass_disabled_school_email_flags()
+	{
+		using var school = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
+		var fixture = await CreateAsync(false);
+		fixture.Resolver.ResolveAsync(fixture.Row.CaseId, "guardian", false).Returns(fixture.State with
+			{ EmailEnabled = false, IsReady = false, BlockedReason = "Automatic email is disabled." });
+		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
+		(await ReadAsync(fixture.Row.Id)).Status.ShouldBe("Cancelled"); fixture.Sender.ReceivedCalls().ShouldBeEmpty();
+		await fixture.Resolver.DidNotReceive().ResolveExplicitAsync(fixture.Row.CaseId, "guardian", false);
+	}
 	private Task<StudentCredentialEmailRequest> ReadAsync(Guid id) => WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>().GetAsync(id));
-	private async Task<Fixture> CreateAsync(bool existingPassword)
+	private async Task<Fixture> CreateAsync(bool existingPassword, IStudentCredentialRecipientVerifier? recipients = null)
 	{
 		var tenant = GetRequiredService<ICurrentTenant>(); var users = GetRequiredService<IdentityUserManager>();
 		var actor = new IdentityUser(Guid.NewGuid(), "staff" + Guid.NewGuid().ToString("N"), "staff" + Guid.NewGuid().ToString("N") + "@example.test", tenant.Id);
@@ -144,12 +222,13 @@ public class StudentCredentialEmailDispatcher_Tests : ShikshaMitraApplicationTes
 		await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>().InsertAsync(row, true));
 		var state = new StudentCredentialEmailEligibility(row.CaseId, row.StudentId, row.LinkId, row.UserId, row.Email, "Child", true, true, null, "https://school.example.test/login", "Example school");
 		var resolver = Substitute.For<IStudentCredentialEmailEligibilityResolver>(); resolver.ResolveAsync(row.CaseId, "guardian", false).Returns(state);
+		resolver.ResolveExplicitAsync(row.CaseId, "guardian", false).Returns(state);
 		var sender = Substitute.For<IEmailSender>(); var permissions = Substitute.For<IPermissionChecker>(); permissions.IsGrantedAsync(Arg.Any<string>()).Returns(true);
 		var onboarding = Substitute.For<IStudentOnboardingAppService>(); onboarding.EnsureCaseAccessAsync(row.CaseId).Returns(Task.CompletedTask);
 		var dispatcher = new StudentCredentialEmailDispatcher(GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>(), resolver, users, sender,
 			GetRequiredService<IStringEncryptionService>(), GetRequiredService<IUnitOfWorkManager>(), tenant,
 			GetRequiredService<IUserClaimsPrincipalFactory<IdentityUser>>(), GetRequiredService<ICurrentPrincipalAccessor>(), permissions,
-			onboarding);
+			onboarding, recipients);
 		return new(row, state, resolver, sender, permissions, dispatcher, onboarding);
 	}
 	private record Fixture(StudentCredentialEmailRequest Row, StudentCredentialEmailEligibility State,

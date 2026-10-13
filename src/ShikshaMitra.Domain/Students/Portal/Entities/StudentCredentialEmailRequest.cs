@@ -23,6 +23,8 @@ public class StudentCredentialEmailRequest : FullAuditedAggregateRoot<Guid>, IMu
 	public DateTime NextAttemptAt { get; private set; }
 	public DateTime? SentAt { get; private set; }
 	public DateTime? ClaimedAt { get; private set; }
+	public bool RequiresSavedOwnerValidation() => ExtraProperties.TryGetValue("SavedOwnerCredentialsRequested", out var value) &&
+		bool.TryParse(value?.ToString(), out var required) && required;
 	protected StudentCredentialEmailRequest() { }
 	public StudentCredentialEmailRequest(Guid id, Guid tenantId, Guid caseId, Guid studentId, Guid linkId,
 		Guid userId, string accountType, string email, Guid? actor, DateTime now) : base(id)
@@ -33,11 +35,25 @@ public class StudentCredentialEmailRequest : FullAuditedAggregateRoot<Guid>, IMu
 		AccountType = accountType; Email = email; RequestedByUserId = actor; RequestedAt = NextAttemptAt = now;
 	}
 	public bool IsDue(DateTime now) => Status == "Pending" && NextAttemptAt <= now;
+	public void RequireSavedOwnerValidation(Guid? actor = null)
+	{
+		ExtraProperties["SavedOwnerCredentialsRequested"] = true;
+		if (actor.HasValue) RequestedByUserId = actor;
+	}
 	public bool CanRequest(DateTime now) => Status is not ("Pending" or "Processing") && RequestedAt.AddMinutes(2) <= now;
+	public void DeferUntilCompletion(DateTime now)
+	{
+		if (Status != "Pending") throw new InvalidOperationException("Only a pending email can wait for onboarding completion.");
+		NextAttemptAt = now.AddMinutes(1);
+		Message = "Credentials are queued for onboarding completion.";
+	}
 	public void Requeue(Guid? actor, DateTime now)
 	{
 		if (!CanRequest(now)) throw new InvalidOperationException("An email is already pending or was requested recently.");
 		RequestedByUserId = actor; RequestedAt = NextAttemptAt = now; Status = "Pending"; Message = null;
+		// This is a new intent. Only the authorized one-click command may mark its
+		// request as explicit manual delivery again; legacy resend keeps school flags.
+		ExtraProperties.Remove("SavedOwnerCredentialsRequested");
 	}
 	public void Claim(DateTime now)
 	{

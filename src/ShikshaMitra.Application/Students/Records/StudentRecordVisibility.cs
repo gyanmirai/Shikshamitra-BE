@@ -12,7 +12,8 @@ public static class StudentRecordVisibility
 		{
 			"general" => ["Identity", "Contact"], "family" => ["Guardian", "Contact"], "photo" => ["Identity"],
 			"communication" => ["Contact"], "medical" => ["Medical"], "bank" => ["Bank"],
-			"additional" => ["Identity", "Medical", "Contact"], _ => []
+			"additional" => ["Identity", "Medical", "Contact"],
+			"custom-details" => ["Identity", "Contact", "Guardian", "Medical", "Bank"], _ => []
 		};
 		return groups.Any(group => policy.IsMasked(group, roles));
 	}

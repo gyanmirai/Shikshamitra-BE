@@ -70,8 +70,6 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		await service.BookAsync(application.Id, stageId, new() { ConcurrencyStamp = state.ConcurrencyStamp, SessionId = session.Id });
 		var otherApplicant = await CreateApplicantAsync("Unbooked roster applicant");
 		var otherApplication = await StartFixtureApplicationAsync(otherApplicant.Id, offering.Id);
-		var otherRuntime = await _applicationAppService.GetWorkflowAsync(otherApplication.Id);
-		await AdvanceAssessmentAsync(otherApplication.Id, otherRuntime.CurrentStageInstanceId!.Value);
 		var roster = await service.GetApplicantsAsync(input);
 		roster.Counts.All.ShouldBe(1);
 		roster.Items.Single().ApplicationId.ShouldBe(application.Id);
@@ -114,7 +112,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	[Fact]
-	public async Task Assessment_roster_keeps_own_result_in_review_queue_without_granting_self_review()
+	public async Task Assessment_roster_keeps_direct_results_ready_without_reopening_retired_review()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
@@ -126,10 +124,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		state = await service.RecordAttendanceAsync(state.Attempts.Single().Id, new() { ConcurrencyStamp = state.Attempts.Single().ConcurrencyStamp, Attendance = "present" });
 		await service.RecordResultAsync(state.Attempts.Single().Id, new() { ConcurrencyStamp = state.Attempts.Single().ConcurrencyStamp, Marks = 80 });
 		var roster = await service.GetApplicantsAsync(new() { AdmissionOfferingId = offering.Id,
-			WorkflowStageDefinitionId = runtime.Stages.Single(stage => stage.Id == stageId).DefinitionStageId, Queue = "review" });
-		roster.Counts.Review.ShouldBe(1);
+			WorkflowStageDefinitionId = runtime.Stages.Single(stage => stage.Id == stageId).DefinitionStageId, Queue = "ready" });
+		roster.Counts.Review.ShouldBe(0);
+		roster.Counts.Ready.ShouldBe(1);
 		roster.Items.Single().Assessment.CanReview.ShouldBeFalse();
-		roster.Items.Single().Assessment.CanComplete.ShouldBeFalse();
+		roster.Items.Single().Assessment.CanComplete.ShouldBeTrue();
+		roster.Items.Single().Assessment.Attempts.Single().Marks.ShouldBe(80);
 	}
 
 	[Fact]

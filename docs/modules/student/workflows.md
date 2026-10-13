@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-11
+updated_on: 2026-10-13
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -22,13 +22,20 @@ TL;DR: setup commands produce validated offering defaults, while inquiry and app
 
 The applicant retains original captured evidence. Finalization retries preserve the existing Student, onboarding case and review requests. Admissions finalization does not activate enrollment; Onboarding retains that responsibility.
 
+## Edit the retained form on an active student profile
+
+1. Read the originally attached Registration version and safe current answers through Records Details. New published questions do not retrofit earlier form versions. Inquiry answers stay owned by Admissions.
+2. Obtain the full form snapshot with existing Records read/change-create authority. Protected or masked fields remain read-only; eligible mapped and school-specific questions share the same retained form rules and dynamic option scope.
+3. Submit changed answers, reason, client key and expected snapshot through the inline form command. Validation, canonical patches, custom value storage and one actor/time/before/after audit commit atomically and apply immediately, without changing generic approval policy.
+4. Read the resulting Applied audit from the existing Changes history API. The original submitted form remains immutable; conditional hidden custom answers remain stored, and guardian changes retain their configured access-review handoff.
+
 ## Deliver student and parent credentials
 
-1. Configure the applicable readiness rule's account/email flags, sending mode, timing and one guardian relationship.
-2. Finalize Admissions and complete placement, identifiers and required document evidence; authorized staff may record document-specific overrides with a note.
-3. Activate enrollment; automatic mode prepares eligible identities using current identity grants, while manual mode retains explicit staff verification/linking.
-4. Activation timing may queue immediately; completion timing waits for existing Finance and required handoffs, without waiting for email delivery to complete onboarding.
-5. Queue a durable request; after commit the worker rechecks actor scope, exact grants, active enrollment, mailbox and documents before preparing/sending credentials.
+1. Configure student and parent/guardian login requirements in Onboarding Settings. Existing delivery mode, timing and guardian relationship preferences retain their compatibility behavior.
+2. Finalize Admissions; common checks and published document requirements are inherited automatically. Pending cases adopt current account requirements without rewriting their frozen document policies. Activated, completed and cancelled cases retain their snapshots. Complete placement, identifiers and required document evidence; required evidence cannot be waived through an onboarding override.
+3. Activate enrollment; automatic mode retains its existing grants and owner checks. In manual Credentials, select the account type and saved recipient, then use Send Credentials.
+4. The command validates current email provenance, saved account requirements and timing, readiness, tenant/scope and identity authority before preparing or safely reusing the account and queuing one intent transactionally. Explicit manual requests may send with automatic email Off; school/case automatic-email flags stay unchanged. Staff authorization is audited without claiming mailbox ownership was verified.
+5. Activation-timed requests dispatch after commit. Completion-timed requests remain Pending until required non-email handoffs complete, avoiding a deadlock when both accounts are required. The worker rechecks actor scope, exact grants, active enrollment, owner provenance, mailbox and documents before preparing/sending credentials. Finance remains unchanged and is not a new payment gate.
 6. The owner uses the secure setup link to confirm email and choose their password. An existing verified Parent links another child without password changes.
 7. Failed/interrupted delivery remains visible for controlled retry; Sent records sender acceptance. Repeated access emails do not reveal an existing password.
 8. Records terminal application unlinks the child immediately; eligible siblings remain available to the Parent. A reviewed correction checks exact recorded links before restoration.

@@ -201,6 +201,11 @@ public class AdmissionApplicationDecisionService(
 		if (input.ExistingStudentId.HasValue && !matches.Any(match => match.Id == input.ExistingStudentId.Value))
 			throw new BusinessException(StudentOnboardingErrorCodes.ExistingStudentInvalid);
 
+		// Determine the pinned document requirements before profile writes can flush a new
+		// Student. Reuse this prepared snapshot when creating the case below.
+		var requirementSnapshots = LazyServiceProvider.LazyGetRequiredService<OnboardingRequirementSnapshotService>();
+		var documentPolicies = await requirementSnapshots.PrepareDocumentPoliciesAsync(context.Application);
+
 		Student student;
 		var reusedExistingStudent = selectedStudentId.HasValue;
 		if (selectedStudentId.HasValue)
@@ -252,7 +257,8 @@ public class AdmissionApplicationDecisionService(
 			context.Offering.StageId, context.Offering.StandardId, input.IdempotencyKey, now,
 			now.AddHours(policy?.SlaHours ?? 72));
 		onboardingCase.SetCampusId(context.Offering.CampusId);
-		await LazyServiceProvider.LazyGetRequiredService<OnboardingRequirementSnapshotService>().CaptureAsync(onboardingCase);
+		onboardingCase.ExtraProperties["DocumentPoliciesSnapshot"] = documentPolicies;
+		await requirementSnapshots.CaptureAsync(onboardingCase);
 		if (reviewedReturn != null)
 		{
 			onboardingCase.SetAdmissionRoute("Returning student");
@@ -262,7 +268,7 @@ public class AdmissionApplicationDecisionService(
 		if (context.Application.AssignedCounsellorId.HasValue)
 			onboardingCase.AssignOwner(context.Application.AssignedCounsellorId);
 		await onboardingRepository.InsertAsync(onboardingCase, false);
-		await CreateDefaultStepsAsync(onboardingCase, policy, now);
+		await CreateDefaultStepsAsync(onboardingCase, policy, student, now);
 
 		context.Applicant.LinkStudent(student.Id);
 		FinalizeApplication(context, student.Id, onboardingCase.Id, now);
@@ -306,7 +312,7 @@ public class AdmissionApplicationDecisionService(
 		}).ToList();
 	}
 
-	private async Task CreateDefaultStepsAsync(StudentOnboardingCase onboardingCase, StudentOnboardingPolicy? policy, DateTime now)
+	private async Task CreateDefaultStepsAsync(StudentOnboardingCase onboardingCase, StudentOnboardingPolicy? policy, Student student, DateTime now)
 	{
 		var offeringSnapshot = onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot");
 		var documentsReady = offeringSnapshot && await LazyServiceProvider.LazyGetRequiredService<OnboardingRequirementSnapshotService>()
@@ -319,11 +325,18 @@ public class AdmissionApplicationDecisionService(
                 StudentOnboardingStepKeys.Identity or StudentOnboardingStepKeys.Family or StudentOnboardingStepKeys.Communication or StudentOnboardingStepKeys.MedicalAndPreviousSchool)
                 required = false;
             if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot") && definition.Key is StudentOnboardingStepKeys.Documents or StudentOnboardingStepKeys.FinanceAccountsServices) required = true;
+			if (AutomaticOnboardingReadinessRules.CanAdopt(onboardingCase) && definition.Key == StudentOnboardingStepKeys.Identity)
+				required = true;
 			var initialStatus = required ? StudentOnboardingStepStatus.Pending : StudentOnboardingStepStatus.NotRequired;
 			var step = new StudentOnboardingStep(GuidGenerator.Create(), CurrentTenant.Id, onboardingCase.Id,
 				definition.Key, definition.Label, index + 1, required, initialStatus);
 			if (definition.Key == StudentOnboardingStepKeys.Identity && required)
-				step.Complete(CurrentUser.Id, now, "Core identity verified during admission finalization.");
+			{
+				if (AutomaticOnboardingReadinessRules.CanAdopt(onboardingCase) && !AutomaticOnboardingReadinessRules.HasCompleteIdentity(student))
+					step.Block("Complete the Student name, date of birth, and gender.");
+				else
+					step.Complete(CurrentUser.Id, now, "Core identity verified during admission finalization.");
+			}
 			if (definition.Key == StudentOnboardingStepKeys.Documents && documentsReady)
 				step.Complete(CurrentUser.Id, now, "Applicable Offering documents verified during admission finalization.");
 			await stepRepository.InsertAsync(step, false);

@@ -16,11 +16,38 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class StudentRecordActionAuthorization_Tests
 {
 	[Theory]
+	[InlineData("list", "Students.Records.StudentList.View")]
+	[InlineData("status", "Students.Records.StudentList.View")]
+	[InlineData("download", "Students.Records.StudentList.View")]
+	[InlineData("upload", "Students.Records.StudentList.Add")]
+	[InlineData("delete", "Students.Records.StudentList.Delete")]
+	public async Task Record_document_direct_service_rejects_denied_exact_permission_before_storage(string operation, string permission)
+	{
+		var service = new StudentDocumentAppService(null!, null!) { LazyServiceProvider = Denying(permission) };
+		Func<Task> call = operation switch
+		{
+			"list" => () => service.GetDocumentListAsync(Guid.NewGuid()), "status" => () => service.GetRequiredDocumentsStatusAsync(Guid.NewGuid()),
+			"download" => () => service.GetDocumentAsync(Guid.NewGuid(), Guid.NewGuid()), "upload" => () => service.UploadDocumentAsync(Guid.NewGuid(), new()),
+			_ => () => service.DeleteDocumentAsync(Guid.NewGuid(), Guid.NewGuid())
+		};
+		(await Should.ThrowAsync<AbpAuthorizationException>(call)).Data["PolicyName"].ShouldBe(permission);
+	}
+	[Theory]
+	[InlineData("Students.Records.StudentList.View")]
+	[InlineData("Students.Records.Changes.View")]
+	[InlineData("Students.Records.Changes.Create")]
+	public async Task Inline_form_direct_service_rejects_denied_exact_permission_before_any_profile_read(string permission)
+	{
+		var service = new StudentRecordFormAppService(null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(permission) };
+		(await Should.ThrowAsync<AbpAuthorizationException>(() => service.GetSnapshotAsync(Guid.NewGuid()))).Data["PolicyName"].ShouldBe(permission);
+		(await Should.ThrowAsync<AbpAuthorizationException>(() => service.SaveAsync(Guid.NewGuid(), new()))).Data["PolicyName"].ShouldBe(permission);
+	}
+	[Theory]
 	[InlineData("Students.Records.Changes.View")]
 	[InlineData("Students.Records.Changes.Create")]
 	public async Task Admission_profile_review_requires_exact_records_permissions_before_repository_access(string permission)
 	{
-		var service = new StudentRecordChangeAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!)
+		var service = new StudentRecordChangeAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!)
 			{ LazyServiceProvider = Denying(permission) };
 		(await Should.ThrowAsync<AbpAuthorizationException>(() => service.CreateAdmissionReviewAsync(new()))).Data["PolicyName"].ShouldBe(permission);
 	}

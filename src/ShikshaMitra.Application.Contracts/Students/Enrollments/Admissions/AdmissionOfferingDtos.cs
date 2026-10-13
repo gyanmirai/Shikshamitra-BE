@@ -134,6 +134,7 @@ public class AdmissionOfferingAvailabilityDto
 
 public class AdmissionOfferingListInput : PagedAndSortedResultRequestDto
 {
+	public bool ForSpecialRegistration { get; set; }
 	public Guid? AdmissionCycleId { get; set; }
 	public AdmissionTrack? Track { get; set; }
 	public AdmissionEntryMode? EntryMode { get; set; }

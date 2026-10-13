@@ -24672,6 +24672,86 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppStudentRecordChangeDecisions", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.Records.StudentRecordCustomProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BaselineSubmissionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("SchemaJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SourcesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("StudentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<string>("ValuesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("TenantId", "StudentId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("AppStudentRecordCustomProfiles", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.Records.StudentRecordDocumentEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -30326,10 +30406,10 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("AllocatedAt")
+                    b.Property<DateTimeOffset>("AllocatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("CommittedAt")
+                    b.Property<DateTimeOffset?>("CommittedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -30558,10 +30638,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<DateTime?>("CancelledAt")
+                    b.Property<DateTimeOffset?>("CancelledAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("CompletedAt")
+                    b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -30590,7 +30670,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("DivisionId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("DueAt")
+                    b.Property<DateTimeOffset>("DueAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -30600,7 +30680,7 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("text")
                         .HasColumnName("ExtraProperties");
 
-                    b.Property<DateTime?>("GuardianContactVerifiedAt")
+                    b.Property<DateTimeOffset?>("GuardianContactVerifiedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("IdempotencyKey")
@@ -30647,7 +30727,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("OfferingId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("ReadyAt")
+                    b.Property<DateTimeOffset?>("ReadyAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("RollNumber")
@@ -30656,7 +30736,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("SeatReservationId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("StartedAt")
+                    b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Status")
@@ -30877,7 +30957,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("AcknowledgedAt")
+                    b.Property<DateTimeOffset?>("AcknowledgedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("AttemptCount")
@@ -30922,7 +31002,7 @@ namespace ShikshaMitra.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("IsDeleted");
 
-                    b.Property<DateTime?>("LastAttemptAt")
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LastError")
@@ -31053,7 +31133,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("CompletedAt")
+                    b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("CompletedByUserId")
@@ -31141,7 +31221,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("AcademicYearId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("CommittedAt")
+                    b.Property<DateTimeOffset?>("CommittedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ConcurrencyStamp")
@@ -31170,7 +31250,7 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("DivisionId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime>("ExpiresAt")
+                    b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ExtraProperties")
@@ -31199,10 +31279,10 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<DateTime?>("ReleasedAt")
+                    b.Property<DateTimeOffset?>("ReleasedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("ReservedAt")
+                    b.Property<DateTimeOffset>("ReservedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("SeatNumber")
@@ -39465,6 +39545,15 @@ namespace ShikshaMitra.Migrations
                     b.HasOne("ShikshaMitra.Students.Records.StudentRecordChange", null)
                         .WithMany()
                         .HasForeignKey("ChangeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.Records.StudentRecordCustomProfile", b =>
+                {
+                    b.HasOne("ShikshaMitra.Students.Student", null)
+                        .WithMany()
+                        .HasForeignKey("StudentId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

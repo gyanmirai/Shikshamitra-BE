@@ -18,10 +18,11 @@ namespace ShikshaMitra.Students.Records;
 [Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 public class StudentRecordProfileAppService(IStudentRepository students, StudentRecordsAccessService access,
 	IRepository<StudentEnrollment, Guid> enrollments, IRepository<AcademicYear, Guid> years,
-	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions, StudentRecordsEnrollmentScopeService enrollmentScope)
+	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions, StudentRecordsEnrollmentScopeService enrollmentScope,
+	StudentRecordRegistrationReader registrationReader)
 	: ApplicationService, IStudentRecordProfileAppService
 {
-	public async Task<StudentRecordProfileDto> GetAsync(Guid studentId)
+	public async Task<StudentRecordProfileDto> GetAsync(Guid studentId, Guid? academicYearId = null)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		var recordsAccess = await access.EnsureReadableAsync(studentId);
@@ -30,6 +31,7 @@ public class StudentRecordProfileAppService(IStudentRepository students, Student
 		{
 			Id = student.Id,
 			StudentId = student.Id,
+			AcademicYearId = student.AcademicYearId,
 			FirstName = student.FirstName,
 			MiddleName = student.MiddleName,
 			LastName = student.LastName,
@@ -66,6 +68,18 @@ public class StudentRecordProfileAppService(IStudentRepository students, Student
 				select new StudentEnrollmentHistoryDto { Id = e.Id, AcademicYearId = e.AcademicYearId, AcademicYearName = y.Name,
 					StandardId = e.StandardId, StandardName = s != null ? s.Name : null, DivisionId = e.DivisionId,
 					DivisionName = d != null ? d.Name : null, RollNumber = e.RollNumber, IsActive = e.IsActive, OnboardingCaseId = e.OnboardingCaseId }));
+			result.AdmissionOnboarding = await registrationReader.GetSummaryAsync(studentId, academicYearId);
+			if (academicYearId.HasValue)
+			{
+				var selected = result.EnrollmentHistory.FirstOrDefault(x => x.AcademicYearId == academicYearId);
+				result.AcademicYearId = academicYearId;
+				result.StandardId = selected?.StandardId; result.StandardName = selected?.StandardName;
+				result.DivisionId = selected?.DivisionId; result.DivisionName = selected?.DivisionName; result.RollNo = selected?.RollNumber;
+				var projection = await AsyncExecuter.FirstOrDefaultAsync((await enrollmentScope.GetDirectoryProjectionAsync())
+					.Where(x => x.Enrollment.StudentId == studentId && x.Enrollment.AcademicYearId == academicYearId)
+					.OrderByDescending(x => x.Enrollment.CreationTime));
+				result.AcademicMediumId = projection?.MediumId ?? Guid.Empty; result.AcademicMediumName = projection?.MediumName;
+			}
 		}
 		else { result.DateOfBirth = null; result.Gender = null; }
 		if (recordsAccess.Policy.IsMasked("Identity", await access.GetDatabaseRoleNamesAsync()))

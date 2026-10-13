@@ -135,9 +135,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Student_record_profile_guid_denies_finalization_only_while_admission_evidence_remains_in_its_own_flow() => RunCertificationScenarioAsync(async () =>
 	{
 		var requirement = new AdmissionDocumentRequirement { Code = "BIRTH", Name = "Birth certificate" };
-		var fixture = await CreateDocumentHandoffFixtureAsync(HandoffPolicy(requirement));
+		var fixture = await CreateOnboardingDocumentFixtureAsync(HandoffPolicy(requirement));
 		var evidence = await AddHandoffEvidenceAsync(fixture, requirement);
-		var ready = await CompleteDocumentHandoffApplicationAsync(fixture);
+		var ready = await CompleteOnboardingDecisionAsync(fixture.Application.Id);
 		var finalized = await FinalizeAsync(ready, true, "profile-evidence-read");
 		(await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IStudentRecordProfileAppService>().GetAsync(finalized.StudentId)))
 			.Code.ShouldBe("Students:Records:OnboardingIncomplete");

@@ -31,6 +31,9 @@ public class StudentAttendanceDto
 {
 	public Guid StudentId { get; set; }
 	public Guid? EnrollmentId { get; set; }
+	public Guid? StandardId { get; set; }
+	public Guid? DivisionId { get; set; }
+	public string? StandardName { get; set; }
 	public bool IsExpected { get; set; } = true;
 	public bool RequiresCorrectionApproval { get; set; }
 	public bool NeedsCreditCorrection { get; set; }
@@ -73,6 +76,8 @@ public class StudentAttendanceListDto
 	public string Revision { get; set; } = "0";
 	public string RosterRevision { get; set; } = "";
 	public bool CanMark { get; set; }
+	public bool CanSubmit { get; set; }
+	public bool CanLock { get; set; }
 	public bool IsExpected { get; set; }
 	public string? NotExpectedReason { get; set; }
 	public AttendancePolicyOptions Policy { get; set; } = new();

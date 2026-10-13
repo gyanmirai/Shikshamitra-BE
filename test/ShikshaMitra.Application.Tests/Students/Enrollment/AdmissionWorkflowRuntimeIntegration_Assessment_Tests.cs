@@ -1,13 +1,11 @@
 using System;
 using System.Linq;
-using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities;
-using Volo.Abp.Security.Claims;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -65,7 +63,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	[Fact]
-	public async Task Managed_assessment_review_requires_a_different_reviewer_and_preserves_the_result()
+	public async Task Managed_assessment_records_results_directly_without_reopening_retired_review()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
@@ -81,25 +79,16 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			ConcurrencyStamp = state.Attempts.Single().ConcurrencyStamp, Marks = 85
 		});
-		state.Attempts.Single().Status.ShouldBe("pendingReview");
-		state.CanComplete.ShouldBeFalse();
+		state.Attempts.Single().Status.ShouldBe("completed");
+		state.Attempts.Single().Marks.ShouldBe(85);
+		state.CanComplete.ShouldBeTrue();
 		state.CanReview.ShouldBeFalse();
 		var reviewInput = new AdmissionAssessmentReviewInput { ConcurrencyStamp = state.Attempts.Single().ConcurrencyStamp, Approved = true };
 		await Should.ThrowAsync<BusinessException>(() => service.ReviewAsync(state.Attempts.Single().Id, reviewInput));
-		var reviewerId = Guid.NewGuid();
-		await EnsureTestIdentityUserAsync(reviewerId, $"assessment-reviewer-{reviewerId:N}");
-		await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId,
-			userId: reviewerId, description: "Assessment reviewer"), autoSave: true);
-		using var reviewer = _principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity(
-		[
-			new Claim(AbpClaimTypes.UserId, reviewerId.ToString()),
-			new Claim(AbpClaimTypes.UserName, "assessment-reviewer"),
-			new Claim(AbpClaimTypes.Role, "admin")
-		], "Test")));
-		var reviewed = await service.ReviewAsync(state.Attempts.Single().Id, reviewInput);
-		reviewed.CanComplete.ShouldBeTrue();
-		reviewed.Attempts.Single().ReviewedBy.ShouldBe(reviewerId);
-		reviewed.Attempts.Single().Marks.ShouldBe(85);
+		var persisted = await service.GetAsync(application.Id, stageId);
+		persisted.Attempts.Single().Marks.ShouldBe(85);
+		persisted.Attempts.Single().ReviewedBy.ShouldBeNull();
+		persisted.CanComplete.ShouldBeTrue();
 	}
 
 	[Fact]
@@ -148,27 +137,31 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId,
 			userId: TestUserId, description: "Assessment integration test"), autoSave: true);
-		var legacy = await CreateAndPublishWorkflowAsync();
-		var draft = await _workflowAppService.CreateNewVersionAsync(legacy.Id);
-		var input = ToUpdateInput(draft);
-		var entry = input.Stages.Single(stage => stage.IsEntryStage);
-		var terminal = input.Stages.Single(stage => stage.IsTerminalStage);
-		terminal.DisplayOrder = 2;
 		var assessmentId = Guid.NewGuid();
+		var terminalId = Guid.NewGuid();
+		var input = new CreateUpdateAdmissionWorkflowDto
+		{
+			Name = "Managed assessment journey", Code = $"ASSESS_{Guid.NewGuid():N}"[..24],
+			Stages = [], Transitions = []
+		};
 		input.Stages.Add(new CreateUpdateAdmissionWorkflowStageDto
 		{
 			Id = assessmentId, Code = "MANAGED_ASSESSMENT", Name = "Entrance assessment",
-			StageType = AdmissionWorkflowStageType.Assessment, DisplayOrder = 1, IsRequired = true,
+			StageType = AdmissionWorkflowStageType.Assessment, DisplayOrder = 0, IsRequired = true, IsEntryStage = true,
 			ConfigurationJson = JsonSerializer.Serialize(new { assessment = new
 			{
 				version = 1, enabled = true, schedulingEnabled = scheduling, attendanceRequired = true,
 				scoringEnabled = true, totalMarks = 100, passingMarks = 40, reviewRequired = review, maxAttempts = 2
 			} })
 		});
+		input.Stages.Add(new()
+		{
+			Id = terminalId, Code = "ADMISSION", Name = "Admission decision",
+			StageType = AdmissionWorkflowStageType.Approval, DisplayOrder = 1, IsRequired = true, IsTerminalStage = true
+		});
 		input.Transitions =
 		[
-			new() { FromStageId = entry.Id!.Value, ToStageId = assessmentId, IsDefault = true },
-			new() { FromStageId = assessmentId, ToStageId = terminal.Id!.Value, IsDefault = true }
+			new() { FromStageId = assessmentId, ToStageId = terminalId, IsDefault = true }
 		];
 		if (failureRoute)
 		{
@@ -176,7 +169,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			input.Stages.Add(new()
 			{
 				Id = failureStageId, Code = "NOT_SELECTED", Name = "Not selected",
-				StageType = AdmissionWorkflowStageType.Custom, DisplayOrder = 3, IsTerminalStage = true
+				StageType = AdmissionWorkflowStageType.Approval, DisplayOrder = 2, IsTerminalStage = true
 			});
 			input.Transitions.Add(new()
 			{
@@ -188,13 +181,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					"""
 			});
 		}
-		draft = await _workflowAppService.UpdateAsync(draft.Id, input);
+		var draft = await _workflowAppService.CreateAsync(input);
 		var published = await _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
 		var offering = await CreateAvailableOfferingAsync(published.Id);
 		var applicant = await CreateApplicantAsync("Assessment applicant");
 		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
 		var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
-		runtime = await AdvanceAssessmentAsync(application.Id, runtime.CurrentStageInstanceId!.Value);
 		return (await _applicationAppService.GetAsync(application.Id), runtime.CurrentStageInstanceId!.Value, offering);
 	}
 

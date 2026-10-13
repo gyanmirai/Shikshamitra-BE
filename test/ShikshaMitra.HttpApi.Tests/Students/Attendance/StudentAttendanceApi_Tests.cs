@@ -33,7 +33,7 @@ namespace ShikshaMitra.Students.Attendance;
 
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Students)]
-public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
+public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase, IAsyncLifetime
 {
     private const string AttendanceBaseUrl = "/api/students/attendance";
 
@@ -274,7 +274,8 @@ public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
         string suffix,
         Guid? divisionId = null,
         bool confirmStart = true,
-        DateTime? attendanceStartDate = null)
+        DateTime? attendanceStartDate = null,
+        bool directoryEligible = true)
     {
         var targetDivisionId = divisionId ?? context.DivisionId;
         using var scope = Factory.Services.CreateScope();
@@ -291,6 +292,13 @@ public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase
                 context.StandardId, targetDivisionId, student.RollNo);
             if (confirmStart) enrollment.ConfirmAttendanceStart(attendanceStartDate ?? context.YearStartDate);
             await services.GetRequiredService<IRepository<StudentEnrollment, Guid>>().InsertAsync(enrollment);
+            if (directoryEligible)
+            {
+                var approval = new ShikshaMitra.Students.Records.StudentRecordLegacyOverride(Guid.NewGuid(), tenantId, student.Id,
+                    Guid.NewGuid(), "Verified historical enrollment for attendance fixture", null);
+                approval.Decide(Guid.NewGuid(), true, "Fixture historical evidence verified", DateTime.UtcNow);
+                await services.GetRequiredService<IRepository<ShikshaMitra.Students.Records.StudentRecordLegacyOverride, Guid>>().InsertAsync(approval);
+            }
             await uow.CompleteAsync();
             return new StudentGeneralDetailsDto { StudentId = student.Id };
         }

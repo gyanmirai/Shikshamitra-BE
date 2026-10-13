@@ -13,6 +13,15 @@ public class StudentOnboardingListInput : PagedAndSortedResultRequestDto
 	public Guid? MediumId { get; set; }
 	public Guid? DivisionId { get; set; }
 	public List<Guid> DivisionIds { get; set; } = [];
+	public Guid? PlacementDivisionId { get; set; }
+	public string? StudentNameFilter { get; set; }
+	public string? StudentNameOperator { get; set; }
+	public string? OwnerNameFilter { get; set; }
+	public string? OwnerNameOperator { get; set; }
+	public int? RollNumberFilter { get; set; }
+	public int? RollNumberMin { get; set; }
+	public int? RollNumberMax { get; set; }
+	public string? RollNumberOperator { get; set; }
 	public Guid? StandardId { get; set; }
 	public List<Guid> StandardIds { get; set; } = [];
 	public Guid? AssignedToUserId { get; set; }

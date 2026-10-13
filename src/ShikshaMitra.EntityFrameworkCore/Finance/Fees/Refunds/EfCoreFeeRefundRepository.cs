@@ -31,7 +31,8 @@ public class EfCoreFeeRefundRepository(
         int maxResultCount = 20,
         string? sorting = null,
         IQueryable<Guid>? scopedStudentIdsQuery = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FeeRefundColumnFilter>? columnFilters = null)
     {
         var dbContext = await GetDbContextAsync();
         var dbSet = dbContext.Set<FeeRefundRequest>();
@@ -89,6 +90,7 @@ public class EfCoreFeeRefundRepository(
                 matchingStudents.Contains(r.StudentId));
         }
 
+        query = FeeRefundColumnFilterQuery.Apply(query, dbContext.Set<Student>(), columnFilters ?? []);
         var totalCount = await query.CountAsync(cancellationToken);
 
         query = ApplySorting(query, sorting);

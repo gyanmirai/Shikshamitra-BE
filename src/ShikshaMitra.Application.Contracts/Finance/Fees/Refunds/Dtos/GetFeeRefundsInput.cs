@@ -17,6 +17,9 @@ public class GetFeeRefundsInput : PagedAndSortedResultRequestDto, IFinanceClassD
 
     public string? Search { get; set; }
 
+    /// <summary>JSON column filters applied before counting and pagination.</summary>
+    public string? Filters { get; set; }
+
     public Guid? StandardId { get; set; }
 
     public Guid? DivisionId { get; set; }

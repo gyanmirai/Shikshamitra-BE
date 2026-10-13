@@ -43,7 +43,7 @@ public partial class StudentCertificateAppService
 			_ => false
 		};
 		if (!permitted) throw new BusinessException("Students:Records:LeavingExitNotReady");
-		return JsonSerializer.Serialize(new { exit.Id, exit.StudentId, exit.Outcome, exit.Status, exit.EffectiveDate, policy.Documents.LeavingCertificateStage }, JsonOptions);
+		return JsonSerializer.Serialize(new { exit.Id, exit.StudentId, exit.Outcome, exit.Status, exit.EffectiveDate, exit.Reason, policy.Documents.LeavingCertificateStage }, JsonOptions);
 	}
 
 	private static void ValidateDocumentReason(StudentDocumentActionDto? input)

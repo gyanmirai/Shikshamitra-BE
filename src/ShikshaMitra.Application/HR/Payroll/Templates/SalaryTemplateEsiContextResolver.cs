@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -81,6 +81,12 @@ public class SalaryTemplateEsiContextResolver(
 		}
 
 		var canonicalDeduction = await deductionComponentRepository.FindByNameAsync(CanonicalEsiComponentName);
+		var calculationSettings = configuration.GetCalculationSettings();
+		calculationSettings = calculationSettings with
+		{
+			BasicComponentIsActive = calculationSettings.BasicComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.BasicComponentId)
+		};
 		var context = new SalaryTemplateEsiEvaluationContext(
 			monthStart,
 			rule,
@@ -89,7 +95,8 @@ public class SalaryTemplateEsiContextResolver(
 			treatments,
 			overrides,
 			canonicalDeduction?.Id ?? Guid.Empty,
-			canonicalDeduction?.Name ?? CanonicalEsiComponentName) { CalculationSettings = configuration.GetCalculationSettings() with { BasicComponentIsActive = configuration.GetCalculationSettings().BasicComponentId == null || activeEarnings.Any(x => x.Id == configuration.GetCalculationSettings().BasicComponentId) } };
+			canonicalDeduction?.Name ?? CanonicalEsiComponentName)
+		{ CalculationSettings = calculationSettings };
 		return new SalaryTemplateEsiResolution(
 			context,
 			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending

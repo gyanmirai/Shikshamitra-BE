@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -75,8 +75,14 @@ public class PayrollEsiContextResolver(
 			x.EffectiveFrom <= monthEnd &&
 			x.EffectiveTo >= payrollMonth))
 			.GroupBy(x => x.EmployeeId)
-			.ToDictionary(x => x.Key, x => (IReadOnlyList<StatutoryOverride>)x.ToList());
+			.ToDictionary(x => x.Key, x => (IReadOnlyList<StatutoryOverride>) x.ToList());
 		var canonicalDeduction = await deductionComponentRepository.FindByNameAsync(CanonicalEsiComponentName);
+		var calculationSettings = configuration.GetCalculationSettings();
+		calculationSettings = calculationSettings with
+		{
+			BasicComponentIsActive = calculationSettings.BasicComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.BasicComponentId)
+		};
 
 		var result = new Dictionary<Guid, PayrollEsiStatutoryContext>();
 		foreach (var employeeId in requestedEmployeeIds)
@@ -91,7 +97,8 @@ public class PayrollEsiContextResolver(
 				enrollments.GetValueOrDefault(employeeId),
 				treatments,
 				overrides.GetValueOrDefault(employeeId) ?? [],
-				source) { CalculationSettings = configuration.GetCalculationSettings() with { BasicComponentIsActive = configuration.GetCalculationSettings().BasicComponentId == null || activeEarnings.Any(x => x.Id == configuration.GetCalculationSettings().BasicComponentId) } };
+				source)
+			{ CalculationSettings = calculationSettings };
 		}
 
 		return result;

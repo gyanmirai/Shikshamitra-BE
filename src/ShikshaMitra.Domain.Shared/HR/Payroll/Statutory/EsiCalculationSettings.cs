@@ -1,13 +1,14 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System;
+using System.Text.Json.Serialization;
 using Volo.Abp;
 
 namespace ShikshaMitra.HR.Payroll.Statutory;
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record EsiCalculationSettings
 {
-	public string WageBasis { get; init; } = "CLASSIFIED_EARNINGS";
+	public string EligibilityBasis { get; init; } = "CLASSIFIED_EARNINGS";
+	public string CalculationBasis { get; init; } = "CLASSIFIED_EARNINGS";
 	public Guid? BasicComponentId { get; init; }
 	public decimal? EmployeePercentage { get; init; }
 	public decimal? EmployerPercentage { get; init; }
@@ -16,9 +17,9 @@ public sealed record EsiCalculationSettings
 
 	public void Validate()
 	{
-		if (WageBasis is not ("CLASSIFIED_EARNINGS" or "GROSS" or "BASIC_COMPONENT") ||
-			(WageBasis == "BASIC_COMPONENT" && (BasicComponentId == null || BasicComponentId == Guid.Empty)) ||
-			(WageBasis != "BASIC_COMPONENT" && BasicComponentId.HasValue) ||
+		if (!IsValidBasis(EligibilityBasis) || !IsValidBasis(CalculationBasis) ||
+			(UsesBasicComponent && (BasicComponentId == null || BasicComponentId == Guid.Empty)) ||
+			(!UsesBasicComponent && BasicComponentId.HasValue) ||
 			EmployeePercentage is < 0m or > 100m || EmployerPercentage is < 0m or > 100m ||
 			OverrideReason?.Length > 500 || EvidenceReference?.Length > 1000)
 			throw new BusinessException("HR:Payroll:EsiCalculationSettingsInvalid");
@@ -27,9 +28,13 @@ public sealed record EsiCalculationSettings
 			throw new BusinessException("HR:Payroll:EsiRateOverrideEvidenceRequired");
 	}
 
-	[System.Text.Json.Serialization.JsonIgnore]
+	[JsonIgnore]
 	public bool BasicComponentIsActive { get; init; } = true;
+
+	[JsonIgnore]
+	public bool UsesBasicComponent => EligibilityBasis == "BASIC_COMPONENT" || CalculationBasis == "BASIC_COMPONENT";
 
 	public bool HasRateOverride => EmployeePercentage.HasValue || EmployerPercentage.HasValue;
 
+	private static bool IsValidBasis(string basis) => basis is "CLASSIFIED_EARNINGS" or "GROSS" or "BASIC_COMPONENT";
 }

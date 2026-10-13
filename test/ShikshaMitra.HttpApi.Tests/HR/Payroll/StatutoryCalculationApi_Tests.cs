@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
@@ -23,6 +23,55 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 {
 	private const string EsiUrl = "/api/payroll/statutory-schemes/esi/configuration";
 	private const string PfUrl = "/api/payroll/pf-rules/coverage";
+	[Fact]
+	public async Task Independent_bases_preserve_history_validate_basic_and_fingerprint_each_source()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var settings = await GetAndReadAsync<EsiConfigurationSettingsDto>(EsiUrl);
+		var month = DateTime.ParseExact(settings.SuggestedEffectiveMonth, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture)
+			.AddMonths(4).ToString("yyyy-MM");
+		var effective = settings.History.Where(x => !x.IsCancelled && string.Compare(x.EffectiveMonth, month) <= 0)
+			.OrderByDescending(x => x.EffectiveMonth).First();
+		var basic = await PayrollTestHelper.CreateEarningComponentAsync(Client, "IndependentEsiBasic");
+		var input = new SaveEsiConfigurationDto
+		{
+			Enabled = true,
+			EffectiveMonth = month,
+			ConcurrencyStamp = effective.ConcurrencyStamp,
+			IdempotencyKey = Guid.NewGuid(),
+			CalculationSettings = new() { EligibilityBasis = "GROSS", CalculationBasis = "BASIC_COMPONENT" }
+		};
+		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		input.CalculationSettings = input.CalculationSettings with { BasicComponentId = Guid.NewGuid() };
+		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		input.CalculationSettings = input.CalculationSettings with { BasicComponentId = basic.Id };
+		var response = await Client.PutAsJsonAsync(EsiUrl, input);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var saved = (await response.Content.ReadFromJsonAsync<EsiConfigurationSettingsDto>(JsonOptions))!;
+		var version = saved.History.Single(x => x.EffectiveMonth == month && !x.IsCancelled);
+		version.CalculationSettings.EligibilityBasis.ShouldBe("GROSS");
+		version.CalculationSettings.CalculationBasis.ShouldBe("BASIC_COMPONENT");
+		version.CalculationSettings.BasicComponentId.ShouldBe(basic.Id);
+		foreach (var original in settings.History)
+		{
+			var retained = saved.History.Single(x => x.Id == original.Id);
+			retained.CalculationSettings.ShouldBe(original.CalculationSettings);
+			retained.ConcurrencyStamp.ShouldBe(original.ConcurrencyStamp);
+		}
+		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.OK);
+		input.CalculationSettings = input.CalculationSettings with { EligibilityBasis = "BASIC_COMPONENT" };
+		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		input.CalculationSettings = input.CalculationSettings with { EligibilityBasis = "GROSS", CalculationBasis = "GROSS", BasicComponentId = null };
+		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+		(await Client.PutAsJsonAsync(EsiUrl, new
+		{
+			Enabled = true,
+			EffectiveMonth = month,
+			ConcurrencyStamp = effective.ConcurrencyStamp,
+			IdempotencyKey = Guid.NewGuid(),
+			CalculationSettings = new { WageBasis = "GROSS" }
+		})).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+	}
 	[Fact]
 	public async Task Direct_application_calls_cannot_bypass_calculation_or_enrollment_permissions()
 	{
@@ -60,16 +109,29 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 		var month = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
 		var coverage = await GetAndReadAsync<PfCoverageSettingsDto>(PfUrl);
 		var current = coverage.History.FirstOrDefault(x => !x.IsCancelled && x.EffectiveMonth <= month);
-		var school = await Client.PutAsJsonAsync(PfUrl, new SavePfCoverageDto { EffectiveMonth = month, IsCovered = true,
-			EvidenceReference = "Synthetic PF registration", ExpectedConfigurationId = current?.Id, IdempotencyKey = Guid.NewGuid() });
+		var school = await Client.PutAsJsonAsync(PfUrl, new SavePfCoverageDto
+		{
+			EffectiveMonth = month,
+			IsCovered = true,
+			EvidenceReference = "Synthetic PF registration",
+			ExpectedConfigurationId = current?.Id,
+			IdempotencyKey = Guid.NewGuid()
+		});
 		school.StatusCode.ShouldBe(HttpStatusCode.OK, await school.Content.ReadAsStringAsync());
 		var employeeId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PfEnrollmentPolicy");
 		var template = (await GetAndReadAsync<SalaryTemplateListDto>("/api/payroll/salary-templates/active")).Items
 			.First(x => x.EditableVersion.Rules.Any(rule => rule.FormulaType == "EMPLOYEE_PROVIDENT_FUND"));
-		var input = new SaveEmployeeCompensationDto { TemplateVersionId = template.EditableVersion.Id,
-			SalaryBasis = "GROSS", ProtectionPolicy = "PROTECT_GROSS", MonthlyAmount = 12000m,
-			EffectiveMonth = month, PfApplicable = false, PfEnrollment = new() { Membership = "NOT_MEMBER" },
-			IdempotencyKey = Guid.NewGuid().ToString("N") };
+		var input = new SaveEmployeeCompensationDto
+		{
+			TemplateVersionId = template.EditableVersion.Id,
+			SalaryBasis = "GROSS",
+			ProtectionPolicy = "PROTECT_GROSS",
+			MonthlyAmount = 12000m,
+			EffectiveMonth = month,
+			PfApplicable = false,
+			PfEnrollment = new() { Membership = "NOT_MEMBER" },
+			IdempotencyKey = Guid.NewGuid().ToString("N")
+		};
 		var url = $"/api/payroll/employees/{employeeId}/compensation";
 		var required = await Client.PutAsJsonAsync(url, input);
 		required.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
@@ -101,9 +163,12 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 		using var denied = Factory.CreateClient();
 		denied.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
 			"HR.PayrollManagement.Settings.StatutorySchemes.View,HR.PayrollManagement.Settings.StatutorySchemes.Edit,HR.PayrollManagement.Settings.StatutorySchemes.Activate");
-		(await denied.PutAsJsonAsync(EsiUrl, new SaveEsiConfigurationDto {
-			Enabled = true, EffectiveMonth = settings.SuggestedEffectiveMonth,
-			ConcurrencyStamp = settings.Current!.ConcurrencyStamp, IdempotencyKey = Guid.NewGuid()
+		(await denied.PutAsJsonAsync(EsiUrl, new SaveEsiConfigurationDto
+		{
+			Enabled = true,
+			EffectiveMonth = settings.SuggestedEffectiveMonth,
+			ConcurrencyStamp = settings.Current!.ConcurrencyStamp,
+			IdempotencyKey = Guid.NewGuid()
 		})).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 	[Fact]
@@ -114,9 +179,13 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 		var month = DateTime.ParseExact(settings.SuggestedEffectiveMonth, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture).AddMonths(2).ToString("yyyy-MM");
 		var effective = settings.History.Where(x => !x.IsCancelled && string.Compare(x.EffectiveMonth, month) <= 0)
 			.OrderByDescending(x => x.EffectiveMonth).First();
-		var input = new SaveEsiConfigurationDto { Enabled = true, EffectiveMonth = month,
-			ConcurrencyStamp = effective.ConcurrencyStamp, IdempotencyKey = Guid.NewGuid(),
-			CalculationSettings = new() { WageBasis = "GROSS", EmployeePercentage = 0.5m, EmployerPercentage = 4m }
+		var input = new SaveEsiConfigurationDto
+		{
+			Enabled = true,
+			EffectiveMonth = month,
+			ConcurrencyStamp = effective.ConcurrencyStamp,
+			IdempotencyKey = Guid.NewGuid(),
+			CalculationSettings = new() { EligibilityBasis = "GROSS", CalculationBasis = "CLASSIFIED_EARNINGS", EmployeePercentage = 0.5m, EmployerPercentage = 4m }
 		};
 		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		input.CalculationSettings = input.CalculationSettings with { OverrideReason = "Documented policy", EvidenceReference = "Policy reference" };
@@ -125,6 +194,8 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 		var saved = (await response.Content.ReadFromJsonAsync<EsiConfigurationSettingsDto>(JsonOptions))!;
 		var version = saved.History.Single(x => x.EffectiveMonth == month && !x.IsCancelled);
 		version.CalculationSettings.EmployeePercentage.ShouldBe(0.5m);
+		version.CalculationSettings.EligibilityBasis.ShouldBe("GROSS");
+		version.CalculationSettings.CalculationBasis.ShouldBe("CLASSIFIED_EARNINGS");
 		version.CalculationSettings.OverrideReason.ShouldBe("Documented policy");
 		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.OK);
 		input.CalculationSettings = input.CalculationSettings with { EmployeePercentage = 0.25m };

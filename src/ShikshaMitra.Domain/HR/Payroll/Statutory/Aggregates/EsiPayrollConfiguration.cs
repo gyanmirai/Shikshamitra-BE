@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -48,8 +49,21 @@ public class EsiPayrollConfiguration : FullAuditedAggregateRoot<Guid>, IMultiTen
 	public Dictionary<Guid, StatutoryWageTreatment> GetTreatments() =>
 		JsonSerializer.Deserialize<Dictionary<Guid, StatutoryWageTreatment>>(ComponentTreatmentsJson)!;
 
-	public EsiCalculationSettings GetCalculationSettings() =>
-		JsonSerializer.Deserialize<EsiCalculationSettings>(CalculationSettingsJson) ?? new();
+	public EsiCalculationSettings GetCalculationSettings()
+	{
+		var stored = JsonNode.Parse(CalculationSettingsJson)?.AsObject() ?? new JsonObject();
+		// Read older immutable versions as their original coupled policy without rewriting their JSON.
+		if (stored.TryGetPropertyValue("WageBasis", out var legacyBasis) &&
+			!stored.ContainsKey(nameof(EsiCalculationSettings.EligibilityBasis)) &&
+			!stored.ContainsKey(nameof(EsiCalculationSettings.CalculationBasis)))
+		{
+			var basis = legacyBasis?.GetValue<string>();
+			stored.Remove("WageBasis");
+			stored[nameof(EsiCalculationSettings.EligibilityBasis)] = basis;
+			stored[nameof(EsiCalculationSettings.CalculationBasis)] = basis;
+		}
+		return stored.Deserialize<EsiCalculationSettings>() ?? new();
+	}
 
 	public void Cancel(string reason)
 	{

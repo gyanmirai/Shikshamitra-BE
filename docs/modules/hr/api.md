@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-12
+updated_on: 2026-10-13
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -486,10 +486,16 @@ Its payload contains `effectiveMonth` (first day of the current or a future mont
 Identical retries reuse the saved outcome; stale version IDs and changed retry payloads return 409.
 
 ESIC configuration save accepts `effectiveMonth` (`yyyy-MM`) and `calculationSettings` in addition to the existing configuration fields.
-`wageBasis` is `CLASSIFIED_EARNINGS`, `GROSS`, or `BASIC_COMPONENT`; the last requires an active tenant earning-component ID that is marked Basic in each affected salary template.
+`eligibilityBasis` and `calculationBasis` are independent choices of `CLASSIFIED_EARNINGS`, `GROSS`, or `BASIC_COMPONENT`.
+If either basis is Basic, `basicComponentId` must identify an active tenant earning component marked Basic in each affected employee's salary template.
+The selected Basic component is shared wherever either basis uses Basic.
 Basic can use the existing percentage-of-Gross template formula, including 60 percent.
 Selecting Basic does not suppress other statutory included wages, exclusion add-back, in-kind caps, contribution-period continuity, or daily-wage exemptions.
-Eligibility uses full-month statutory wages, while contributions use actual payable statutory wages.
+Eligibility uses full-month statutory wages resolved under `eligibilityBasis`, while contributions use actual payable statutory wages resolved under `calculationBasis` after attendance adjustments.
+The employee daily-wage exemption uses full-month wages under the calculation basis, so unpaid days cannot create an exemption.
+Employees outside eligibility do not require a calculation-only Basic component; continuing or forced coverage still requires a valid contribution basis.
+The draft API no longer accepts `wageBasis`.
+Older stored configuration JSON is read as its original coupled policy without rewriting that JSON; locked payroll snapshots remain unchanged.
 Optional `employeePercentage` and `employerPercentage` overrides require `overrideReason` and `evidenceReference`; omitted rates resolve from the statutory rule.
 Saving configuration requires the exact Edit, Activate, and `HR.PayrollManagement.Settings.StatutorySchemes.ConfigureCalculation` capabilities plus school-wide UserScope.
 New built-in administrator roles receive ConfigureCalculation during creation; existing roles are never granted it by reseeding.

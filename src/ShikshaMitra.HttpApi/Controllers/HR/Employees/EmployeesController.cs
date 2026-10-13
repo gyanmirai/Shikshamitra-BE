@@ -79,6 +79,23 @@ public class EmployeesController : AbpControllerBase
 		return await _searchAppService.GetFilteredListAsync(input);
 	}
 
+	[HttpGet("options")]
+	[ProducesResponseType(typeof(EmployeeOptionsResponse), StatusCodes.Status200OK)]
+	public Task<EmployeeOptionsResponse> GetEmployeeOptionsAsync(
+		[FromQuery, Range(1, 1000000)] int page = 1,
+		[FromQuery, Range(1, 50)] int pageSize = 25,
+		[FromQuery] string? search = null,
+		[FromQuery] string? status = null)
+	{
+		return _searchAppService.GetOptionsAsync(new GetEmployeeListInput
+		{
+			SkipCount = (page - 1) * pageSize,
+			MaxResultCount = pageSize,
+			Search = search,
+			Status = status
+		});
+	}
+
 	/// <summary>
 	/// Get current signed-in employee (OpenAPI contract)
 	/// </summary>

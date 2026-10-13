@@ -27,6 +27,16 @@ __tenant: your_tenant_id_here
 Mutating endpoints must enforce backend authorization.
 Hidden frontend buttons are not a security boundary.
 
+## Employee picker lookup
+
+`GET /api/employees/options` accepts one-based `page` (1 to 1,000,000), `pageSize` (1 to 50, default 25), optional `search`, and optional `status`.
+The response contains `items` with `id`, `fullName`, and numeric `status`, plus `hasMore`.
+Name, employee-code, email, and phone searches use the directory's existing search semantics.
+The service applies the same authorization and visibility filters before paging, orders by first name, last name, and ID, and reads at most one extra row to determine `hasMore`.
+The lookup does not calculate a total count or enrich organization, role, or shift details.
+Payroll Structure filters active staff on the server; Payslips leaves status unfiltered for historical staff.
+Deploy this backend endpoint before the frontend picker changes.
+
 ## Employee API families
 
 Employee APIs manage staff identity, profile data, documents, status, reporting, and employee payroll details:
@@ -34,6 +44,7 @@ Employee APIs manage staff identity, profile data, documents, status, reporting,
 | Family | Routes | Permission family |
 |---|---|---|
 | Employee list and profile | `/api/employees`, `/api/employees/{id}` | `HR.Employee.EmployeeList.*` |
+| Employee picker options | `GET /api/employees/options` | `HR.Employee.EmployeeList.View`, same employee visibility and tenant filters as the directory |
 | Employee profile dashboard | `/api/employees/{id}/dashboard` | Own employee or `HR.Employee.EmployeeList.View` with HR user-scope enforcement |
 | Personal info | `/api/employees/{id}/personal-info` | `HR.Employee.EmployeeList.*` |
 | Controlled account email | GET/PUT `/api/employees/{id}/account-email` | `HR.Employee.EmployeeList.Edit` AND `AbpIdentity.Users.Update`, employee scope |

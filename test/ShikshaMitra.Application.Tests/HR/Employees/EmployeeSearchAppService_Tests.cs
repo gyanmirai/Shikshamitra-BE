@@ -130,6 +130,11 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 			ids.ShouldContain(reporteeB.Id);
 			ids.ShouldNotContain(outsider.Id);
 			ids.ShouldNotContain(manager.Id);
+			var options = await _employeeSearchAppService.GetOptionsAsync(new GetEmployeeListInput
+			{
+				MaxResultCount = 50
+			});
+			options.Items.Select(x => x.Id).OrderBy(x => x).ShouldBe(ids.OrderBy(x => x));
 		}
 	}
 
@@ -143,6 +148,12 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		var currentEmployeeInput = await BuildCreateDtoAsync("current.join");
 		currentEmployeeInput.DateOfJoining = DateOnly.FromDateTime(DateTime.UtcNow);
 		var currentEmployee = await _personalInfoAppService.CreateAsync(currentEmployeeInput);
+		foreach (var id in new[] { currentEmployee.Id, futureEmployee.Id })
+		{
+			var employee = await _employeeRepository.GetAsync(id);
+			employee.UpdateEmployeeStatus(EmployeeStatusType.Active, "Active joining-date search fixture", null, DateTimeOffset.UtcNow);
+			await _employeeRepository.UpdateAsync(employee, autoSave: true);
+		}
 
 		var result = await _employeeSearchAppService.GetFilteredListAsync(new GetEmployeeListInput
 		{
@@ -164,6 +175,22 @@ public class EmployeeSearchAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		var activeIds = activeResult.Items.Select(x => x.Id).ToList();
 		activeIds.ShouldContain(currentEmployee.Id);
 		activeIds.ShouldNotContain(futureEmployee.Id);
+	}
+
+	[Fact]
+	public async Task GetOptionsAsync_Should_Not_Return_Another_Tenants_Employees()
+	{
+		var created = await _personalInfoAppService.CreateAsync(await BuildCreateDtoAsync("option.tenant"));
+		using (_currentTenant.Change(Guid.NewGuid()))
+		{
+			var result = await _employeeSearchAppService.GetOptionsAsync(new GetEmployeeListInput
+			{
+				Search = created.FirstName,
+				MaxResultCount = 25
+			});
+			result.Items.ShouldBeEmpty();
+			result.HasMore.ShouldBeFalse();
+		}
 	}
 
 	private ClaimsPrincipal BuildPrincipal(Guid userId)

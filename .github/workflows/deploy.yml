@@ -5,7 +5,7 @@ on:
         branches: ['main']
 
 env:
-    AZURE_WEBAPP_NAME: stg-gyanmirai-be
+    AZURE_WEBAPP_NAME: dev-gyanmirai-be
     DOTNET_VERSION: '9.0.x'
     ASPNETCORE_ENVIRONMENT: Staging
     DOTNET_ENVIRONMENT: Staging

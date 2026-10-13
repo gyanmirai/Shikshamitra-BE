@@ -190,7 +190,17 @@ public class EsiStatutoryAppService(
 	{
 		await AuthorizationService.CheckAsync(EsiPermissions.View);
 		ArgumentNullException.ThrowIfNull(input);
-		var calculation = await previewReader.CalculateAsync(input.MonthYear);
+		if (input.ConfigurationDraft != null)
+		{
+			await AuthorizationService.CheckAsync(EsiPermissions.ConfigureCalculation);
+			if (!new EsiConfigurationDraftDtoValidator().Validate(input.ConfigurationDraft).IsValid)
+				throw new Volo.Abp.Validation.AbpValidationException("Review the ESIC configuration.");
+			input.ConfigurationDraft.CalculationSettings.Validate();
+			if (DateTime.ParseExact(input.ConfigurationDraft.EffectiveMonth, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture)
+				!= DateTime.ParseExact(input.MonthYear, "MM-yyyy", System.Globalization.CultureInfo.InvariantCulture))
+				throw new BusinessException(HRErrorCodes.EsiConfigurationInvalidMonth);
+		}
+		var calculation = await previewReader.CalculateAsync(input.MonthYear, input.ConfigurationDraft);
 		return EsiStatutoryPreviewReader.Project(calculation, input);
 	}
 

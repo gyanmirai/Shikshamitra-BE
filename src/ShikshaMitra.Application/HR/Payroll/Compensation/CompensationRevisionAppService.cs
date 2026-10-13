@@ -28,7 +28,7 @@ public class CompensationRevisionAppService(
 	EmployeeActivationReadinessService activationReadinessService,
 	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator,
 	IAsyncQueryableExecuter asyncExecuter,
-	IClock clock) : ApplicationService, ICompensationRevisionAppService
+	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService) : ApplicationService, ICompensationRevisionAppService
 {
 	public async Task<CompensationRevisionListDto> GetListAsync(Guid employeeId)
 	{
@@ -59,11 +59,16 @@ public class CompensationRevisionAppService(
 
 	public async Task<CompensationRevisionDto> SaveAsync(Guid employeeId, SaveEmployeeCompensationDto input)
 	{
+		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId,
+			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage);
 		var replay = await asyncExecuter.FirstOrDefaultAsync(
 			(await revisionRepository.GetQueryableAsync()).Where(x =>
 				x.EmployeeId == employeeId && x.IdempotencyKey == input.IdempotencyKey));
 		if (replay != null)
 		{
+			var original = TryDeserializeCalculation(replay.CalculationSnapshotJson);
+			if (original != null && (original.PfEnrollment != input.PfEnrollment || replay.PfRuleId != (input.PfApplicable ? input.PfRuleId : null)))
+				throw new BusinessException("HR:Payroll:CompensationSaveConflict");
 			return await MapAsync(replay, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
 		}
 
@@ -90,7 +95,7 @@ public class CompensationRevisionAppService(
 				MonthlyAmount = input.MonthlyAmount,
 				EffectiveMonth = effectiveMonth,
 				EmployeeId = employeeId,
-				PfApplicable = input.PfApplicable,
+				PfEnrollment = input.PfEnrollment, PfApplicable = input.PfApplicable,
 				PfRuleId = input.PfRuleId,
 				StatutoryProfile = input.StatutoryProfile,
 				Overrides = input.Overrides,
@@ -135,6 +140,8 @@ public class CompensationRevisionAppService(
 
 	private static void EnsureCalculationCanBeSaved(SalaryTemplateCalculationDto calculation)
 	{
+		if (calculation.PfEligibility is { CanSave: false } decision)
+			throw new BusinessException("HR:Payroll:PfEnrollmentBlocked").WithData("issueCode", decision.IssueCode);
 		if (!calculation.TargetResult.IsExact)
 		{
 			throw new BusinessException("HR:Payroll:CompensationTargetNotExact")
@@ -147,7 +154,7 @@ public class CompensationRevisionAppService(
 		}
 		var blockingIssues = calculation.EmployeeStateInsurance.IssueCodes.Where(code =>
 			code is EsiStatutoryCalculator.EnrollmentReviewIssue or EsiStatutoryCalculator.InsuranceNumberIssue or
-				EsiStatutoryCalculator.WageClassificationIssue or EsiStatutoryCalculator.EstablishmentInactiveIssue or
+				EsiStatutoryCalculator.BasicComponentIssue or EsiStatutoryCalculator.WageClassificationIssue or EsiStatutoryCalculator.EstablishmentInactiveIssue or
 				EsiStatutoryCalculator.DisabilityReliefEvidenceIssue).ToList();
 		if (calculation.EmployeeStateInsurance.RegistrationPending)
 		{
@@ -231,6 +238,7 @@ public class CompensationRevisionAppService(
 		var overrides = TryDeserializeOverrides(revision.OverridesJson);
 		return new CompensationRevisionDto
 		{
+			PfEnrollment = calculation?.PfEnrollment ?? new(), PfEligibility = calculation?.PfEligibility,
 			Id = revision.Id,
 			EmployeeId = revision.EmployeeId,
 			RevisionNumber = revision.RevisionNumber,

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -64,7 +64,8 @@ public class PayrollEsiContextResolver(
 				x => x.Key,
 				x => x.OrderByDescending(item => item.EffectiveFrom).First().Treatment);
 		var requestedEmployeeIds = employeeIds.Distinct().ToHashSet();
-		foreach (var earning in await earningComponentRepository.GetListAsync(x => x.IsActive))
+		var activeEarnings = await earningComponentRepository.GetListAsync(x => x.IsActive);
+		foreach (var earning in activeEarnings)
 			treatments.TryAdd(earning.Id, EsiWageDefaults.ByName.GetValueOrDefault(earning.Name, StatutoryWageTreatment.Unclassified));
 		foreach (var treatment in configuration!.GetTreatments()) treatments[treatment.Key] = treatment.Value;
 		var enrollments = await enrollmentResolver.ResolveAsync(payrollMonth, requestedEmployeeIds);
@@ -74,8 +75,14 @@ public class PayrollEsiContextResolver(
 			x.EffectiveFrom <= monthEnd &&
 			x.EffectiveTo >= payrollMonth))
 			.GroupBy(x => x.EmployeeId)
-			.ToDictionary(x => x.Key, x => (IReadOnlyList<StatutoryOverride>)x.ToList());
+			.ToDictionary(x => x.Key, x => (IReadOnlyList<StatutoryOverride>) x.ToList());
 		var canonicalDeduction = await deductionComponentRepository.FindByNameAsync(CanonicalEsiComponentName);
+		var calculationSettings = configuration.GetCalculationSettings();
+		calculationSettings = calculationSettings with
+		{
+			BasicComponentIsActive = calculationSettings.BasicComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.BasicComponentId)
+		};
 
 		var result = new Dictionary<Guid, PayrollEsiStatutoryContext>();
 		foreach (var employeeId in requestedEmployeeIds)
@@ -90,7 +97,8 @@ public class PayrollEsiContextResolver(
 				enrollments.GetValueOrDefault(employeeId),
 				treatments,
 				overrides.GetValueOrDefault(employeeId) ?? [],
-				source);
+				source)
+			{ CalculationSettings = calculationSettings };
 		}
 
 		return result;

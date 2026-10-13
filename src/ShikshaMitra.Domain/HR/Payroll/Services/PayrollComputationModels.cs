@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -34,6 +34,7 @@ public sealed record PayrollEsiStatutoryContext(
 	EmployeePayrollComponent DeductionSource)
 {
 	// Set only by the attendance calculator for this calculation's generated overtime row.
+	public EsiCalculationSettings CalculationSettings { get; init; } = new();
 	public Guid? SystemOvertimeComponentId { get; init; }
 }
 
@@ -66,6 +67,7 @@ public sealed record PayrollComputationResult(
 	List<string> StatutoryIssueCodes)
 {
 	public decimal TotalEarnings => NetPay + TotalDeduction;
+	public EsiStatutoryCalculationResult? EsiCalculation { get; init; }
 	public Guid? EsiConfigurationId { get; init; }
 	public decimal AdditionalEarnings => TotalEarnings - GrossSalary;
 }

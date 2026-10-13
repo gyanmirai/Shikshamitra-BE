@@ -8,6 +8,8 @@ namespace ShikshaMitra.HR.Payroll.RunPayroll;
 /// </summary>
 public class RunPayrollItem
 {
+	public string? EsiCalculationDetailsJson { get; set; }
+	public string? PfEligibilityDetailsJson { get; set; }
 	public double TotalEarnings => Math.Round(NetPay + TotalDeduction, 2, MidpointRounding.AwayFromZero);
 	public double AdditionalEarnings => Math.Round(TotalEarnings - GrossSalary, 2, MidpointRounding.AwayFromZero);
 	/// <summary>

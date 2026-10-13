@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -30,6 +30,7 @@ public static class PayrollComputation
 	{
 		var factor = PayrollProrationCalculator.CalculateProrationFactor(basisDays, payableDays);
 		var deductions = new List<PayrollComputedLineItem>();
+		var statutoryIssueCodes = new List<string>();
 		var fullGrossSalary = components.Where(c => c.IsEarning && !c.IsTemp).Sum(c => c.Amount);
 		var grossSalary = Round(fullGrossSalary * factor);
 		var calculator = new PayrollOrdinaryComponentCalculator(components, grossSalary, factor);
@@ -65,20 +66,23 @@ public static class PayrollComputation
 			}
 			if (contributionBase <= 0m)
 			{
-				contributionBase = totalEarnings;
+				var fullWageBasis = components.Where(x => x.IsEarning && !x.IsTemp &&
+					(x.SemanticType == Templates.PayrollComponentSemanticType.Basic ||
+					 pfRule.ContributionBasis == PfContributionBasis.BasicAndDearnessAllowance && x.SemanticType == Templates.PayrollComponentSemanticType.DearnessAllowance)).Sum(x => x.Amount);
+				if (fullWageBasis <= 0m) statutoryIssueCodes.Add("PF_WAGE_BASIS_REQUIRED");
 			}
 			if (pfRule.WageCeiling.HasValue)
 			{
 				contributionBase = Math.Min(contributionBase, pfRule.WageCeiling.Value);
 			}
 
-			var employeePf = Round(contributionBase * pfRule.EmployeePercentage / 100m);
+			var employeePf = Math.Round(contributionBase * pfRule.EmployeePercentage / 100m, 0, MidpointRounding.AwayFromZero);
 			if (employeePf > 0m)
 			{
 				deductions.Add(new PayrollComputedLineItem(pfSource, employeePf));
 			}
 
-			var employerPf = Round(contributionBase * pfRule.EmployerPercentage / 100m);
+			var employerPf = Math.Round(contributionBase * pfRule.EmployerPercentage / 100m, 0, MidpointRounding.AwayFromZero);
 			if (employerPf > 0m)
 			{
 				employerContributions.Add(new PayrollComputedEmployerContribution(
@@ -119,7 +123,7 @@ public static class PayrollComputation
 		string? esiInsuranceNumber = null;
 		DateTime? esiContributionPeriodStart = null;
 		DateTime? esiContributionPeriodEnd = null;
-		var statutoryIssueCodes = new List<string>();
+		EsiStatutoryCalculationResult? esiCalculation = null;
 		var esiContext = statutoryRules?.EmployeeStateInsurance;
 		if (esiContext != null)
 		{
@@ -132,7 +136,7 @@ public static class PayrollComputation
 						? StatutoryWageTreatment.SpecifiedExclusion
 						: esiContext.ComponentTreatments.TryGetValue(x.Source.ComponentId ?? x.Source.Id, out var treatment)
 						? treatment
-						: StatutoryWageTreatment.Unclassified))
+						: StatutoryWageTreatment.Unclassified, x.Source.IsTemp, x.Source.SemanticType == Templates.PayrollComponentSemanticType.Basic))
 				.ToList();
 			var monthlyWageLines = wageLines.Select((line, index) =>
 				line with
@@ -147,7 +151,8 @@ public static class PayrollComputation
 				esiContext.Enrollment,
 				wageLines,
 				esiContext.Overrides,
-				coverageWageLines: monthlyWageLines);
+				coverageWageLines: monthlyWageLines, calculationSettings: esiContext.CalculationSettings);
+			esiCalculation = esiResult;
 
 			esiRuleId = esiContext.Rule.Id;
 			esiRuleVersion = esiContext.Rule.Version;
@@ -209,6 +214,7 @@ public static class PayrollComputation
 			esiContributionPeriodEnd,
 			statutoryIssueCodes)
 		{
+			EsiCalculation = esiCalculation,
 			EsiConfigurationId = statutoryRules?.EsiConfigurationId ?? statutoryRules?.EmployeeStateInsurance?.Establishment.Id
 		};
 	}

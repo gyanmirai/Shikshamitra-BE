@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -65,7 +65,8 @@ public class SalaryTemplateEsiContextResolver(
 				x => x.Key,
 				x => x.OrderByDescending(item => item.EffectiveFrom).First().Treatment);
 		EmployeeStatutoryEnrollment? enrollment = null;
-		foreach (var earning in await earningComponentRepository.GetListAsync(x => x.IsActive))
+		var activeEarnings = await earningComponentRepository.GetListAsync(x => x.IsActive);
+		foreach (var earning in activeEarnings)
 			treatments.TryAdd(earning.Id, EsiWageDefaults.ByName.GetValueOrDefault(earning.Name, StatutoryWageTreatment.Unclassified));
 		foreach (var treatment in configuration!.GetTreatments()) treatments[treatment.Key] = treatment.Value;
 		IReadOnlyList<StatutoryOverride> overrides = [];
@@ -80,6 +81,12 @@ public class SalaryTemplateEsiContextResolver(
 		}
 
 		var canonicalDeduction = await deductionComponentRepository.FindByNameAsync(CanonicalEsiComponentName);
+		var calculationSettings = configuration.GetCalculationSettings();
+		calculationSettings = calculationSettings with
+		{
+			BasicComponentIsActive = calculationSettings.BasicComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.BasicComponentId)
+		};
 		var context = new SalaryTemplateEsiEvaluationContext(
 			monthStart,
 			rule,
@@ -88,7 +95,8 @@ public class SalaryTemplateEsiContextResolver(
 			treatments,
 			overrides,
 			canonicalDeduction?.Id ?? Guid.Empty,
-			canonicalDeduction?.Name ?? CanonicalEsiComponentName);
+			canonicalDeduction?.Name ?? CanonicalEsiComponentName)
+		{ CalculationSettings = calculationSettings };
 		return new SalaryTemplateEsiResolution(
 			context,
 			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending

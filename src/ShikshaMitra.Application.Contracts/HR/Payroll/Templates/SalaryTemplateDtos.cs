@@ -1,4 +1,5 @@
 using System;
+using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using FluentValidation;
@@ -106,6 +107,7 @@ public class SalaryRuleOverrideDto
 
 public class CalculateSalaryTemplateRequestDto
 {
+	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
 	[System.Text.Json.Serialization.JsonIgnore]
 	public string ProtectionPolicy { get => SalaryBasis == "EMPLOYER_COST" ? "PROTECT_EMPLOYER_COST" : "PROTECT_GROSS"; set { } }
@@ -180,6 +182,10 @@ public class SalaryTemplateTargetResultDto
 
 public class SalaryTemplateEsiPreviewDto
 {
+	public decimal EligibilityWages { get; set; }
+	public decimal EmployeePercentage { get; set; }
+	public decimal EmployerPercentage { get; set; }
+	public EsiCalculationSettings CalculationSettings { get; set; } = new();
 	public Guid? ConfigurationId { get; set; }
 	public bool IsConfigured { get; set; }
 	public bool IsCovered { get; set; }
@@ -198,6 +204,8 @@ public class SalaryTemplateEsiPreviewDto
 
 public class SalaryTemplateCalculationDto
 {
+	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
+	public PfEligibilityDecision? PfEligibility { get; set; }
 	public Guid TemplateId { get; set; }
 	public Guid TemplateVersionId { get; set; }
 	public int TemplateVersion { get; set; }

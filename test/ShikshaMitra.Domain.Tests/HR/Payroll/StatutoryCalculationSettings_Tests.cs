@@ -16,19 +16,19 @@ public class StatutoryCalculationSettings_Tests
 	[InlineData(24999, "MANDATORY", false)]
 	[InlineData(25000, "MANDATORY", false)]
 	[InlineData(25001, "VOLUNTARY", true)]
-	public void Pf_coverage_boundary_uses_pf_wages(decimal wages, string status, bool canSave)
+	public void Pf_coverage_boundary_uses_gross_salary(decimal grossSalary, string status, bool canSave)
 	{
-		var result = PfEligibilityCalculator.Calculate(new(2026, 10, 1), wages, true,
+		var result = PfEligibilityCalculator.Calculate(grossSalary, grossSalary * 0.6m, true,
 			new() { Membership = "NOT_MEMBER" }, false, false);
 		result.Status.ShouldBe(status);
 		result.CanSave.ShouldBe(canSave);
+		result.GrossSalary.ShouldBe(grossSalary);
+		result.Wages.ShouldBe(grossSalary * 0.6m);
 	}
 	[Fact]
-	public void Historical_pf_ceiling_and_membership_are_preserved()
+	public void Existing_pf_membership_is_preserved_above_the_gross_ceiling()
 	{
-		PfEligibilityCalculator.CoverageCeiling(new(2026, 9, 16)).ShouldBe(15000m);
-		PfEligibilityCalculator.CoverageCeiling(new(2026, 9, 17)).ShouldBe(25000m);
-		var result = PfEligibilityCalculator.Calculate(new(2026, 10, 1), 60000m, true,
+		var result = PfEligibilityCalculator.Calculate(60000m, 36000m, true,
 			new() { Membership = "NOT_MEMBER" }, true, false);
 		result.Status.ShouldBe("CONTINUING_MEMBER");
 		result.IssueCode.ShouldBe("PF_ENROLLMENT_REQUIRED");
@@ -37,12 +37,37 @@ public class StatutoryCalculationSettings_Tests
 	public void Voluntary_pf_requires_consent_and_unknown_coverage_requires_review()
 	{
 		var declaration = new PfEnrollmentDeclaration { Membership = "NOT_MEMBER" };
-		PfEligibilityCalculator.Calculate(new(2026, 10, 1), 35000m, true, declaration, false, true)
+		PfEligibilityCalculator.Calculate(35000m, 21000m, true, declaration, false, true)
 			.IssueCode.ShouldBe("PF_CONSENT_REQUIRED");
-		PfEligibilityCalculator.Calculate(new(2026, 10, 1), 35000m, true,
+		PfEligibilityCalculator.Calculate(35000m, 21000m, true,
 			declaration with { ConsentReference = "Employee declaration" }, false, true).CanSave.ShouldBeTrue();
-		PfEligibilityCalculator.Calculate(new(2026, 10, 1), 35000m, null, declaration, false, false)
+		PfEligibilityCalculator.Calculate(35000m, 21000m, null, declaration, false, false)
 			.Status.ShouldBe("NEEDS_REVIEW");
+	}
+	[Fact]
+	public void Gross_salary_above_the_ceiling_is_optional_even_when_basic_is_below_it()
+	{
+		var result = PfEligibilityCalculator.Calculate(30000m, 18000m, true,
+			new() { Membership = "NOT_MEMBER" }, false, false);
+		result.Status.ShouldBe("VOLUNTARY");
+		result.CanSave.ShouldBeTrue();
+		result.EnrollmentRequired.ShouldBeFalse();
+	}
+	[Fact]
+	public void Opting_in_still_requires_a_positive_pf_contribution_basis()
+	{
+		var result = PfEligibilityCalculator.Calculate(30000m, 0m, true,
+			new() { Membership = "NOT_MEMBER", ConsentReference = "Employee consent" }, false, true);
+		result.IssueCode.ShouldBe("PF_WAGE_BASIS_REQUIRED");
+	}
+	[Fact]
+	public void Legacy_decisions_can_be_read_without_rewriting_saved_wages()
+	{
+		var original = "{\"Status\":\"MANDATORY\",\"Wages\":18000,\"CoverageCeiling\":25000,\"EnrollmentRequired\":true,\"CanSave\":true,\"IssueCode\":null}";
+		var decision = JsonSerializer.Deserialize<PfEligibilityDecision>(original)!;
+		decision.GrossSalary.ShouldBeNull();
+		decision.Wages.ShouldBe(18000m);
+		decision.Status.ShouldBe("MANDATORY");
 	}
 	[Theory]
 	[InlineData("PF_ENROLLMENT_REQUIRED", true)]

@@ -473,10 +473,15 @@ These PF, professional-tax, and ESI estimates do not include employer contributi
 
 Gross and CTC retain their existing single monthly amount input and calculation contracts.
 Salary calculation and compensation save accept `pfEnrollment` with `membership` (`UNKNOWN`, `EXISTING_MEMBER`, or `NOT_MEMBER`) and an optional `consentReference`.
-Responses expose `pfEligibility` with status, full-month PF wages, effective coverage ceiling, enrollment requirement, save readiness, and issue code.
+Both requests require an explicit Boolean `pfApplicable`; omitting it returns a validation error rather than silently opting the staff out.
+Responses expose `pfEligibility` with status, full-month `grossSalary`, Basic plus Dearness Allowance `wages` for contributions, the enrollment ceiling, enrollment requirement, save readiness, and issue code.
 HR records the declaration through the existing scoped compensation permissions; there is no employee self-service or new approval workflow.
 Existing membership continues above the ceiling; unknown membership or school coverage requires review, and voluntary enrollment above the ceiling requires consent evidence.
-The coverage ceiling is INR 15,000 before 2026-09-17 and INR 25,000 from that date, using Basic plus Dearness Allowance wages rather than Gross.
+The salary-setup enrollment policy requires PF up to and including INR 25,000 full-month Gross, and permits voluntary enrollment above that amount for staff who were not previously members.
+CTC inputs use the calculated Gross rather than the quoted employer cost, and attendance reductions do not change the enrollment decision.
+This school enrollment policy does not change the statutory contribution wage basis, percentages, caps, or existing-member continuity.
+Salary calculation and payroll readiness use the same gross-based decision.
+Previously saved compensation decisions and locked payroll snapshots retain their original values; older decisions without `grossSalary` remain readable without backfilling history.
 An assigned PF rule requires a positive full-month PF wage base; there is no fallback to Gross.
 Employee and employer PF amounts round independently to the nearest whole rupee, with midpoint rounding away from zero.
 

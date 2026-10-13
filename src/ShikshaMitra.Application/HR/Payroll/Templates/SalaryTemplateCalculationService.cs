@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -60,7 +60,7 @@ public class SalaryTemplateCalculationService(
 		var evaluation = SalaryTemplateCalculator.Calculate(
 			basis, input.MonthlyAmount, rules, components, pfRule, professionalTaxSlabs, esiResolution.Context);
 		var pfWages = evaluation.Earnings.Where(x => x.SemanticType is "BASIC" or "DEARNESS_ALLOWANCE").Sum(x => x.Amount);
-		var pfEligibility = await pfEligibilityResolver.ResolveAsync(input.EmployeeId, effectiveMonthEnd, pfWages,
+		var pfEligibility = await pfEligibilityResolver.ResolveAsync(input.EmployeeId, effectiveMonthEnd, evaluation.Gross, pfWages,
 			input.PfEnrollment, input.PfApplicable);
 		MarkCustomizedLines(evaluation.Earnings, input.Overrides);
 		MarkCustomizedLines(evaluation.Deductions, input.Overrides);
@@ -81,7 +81,8 @@ public class SalaryTemplateCalculationService(
 
 		return new SalaryTemplateCalculationDto
 		{
-			PfEnrollment = input.PfEnrollment, PfEligibility = pfEligibility,
+			PfEnrollment = input.PfEnrollment,
+			PfEligibility = pfEligibility,
 			TemplateId = templateId,
 			TemplateVersionId = versionId,
 			TemplateVersion = versionNumber,
@@ -162,7 +163,8 @@ public class SalaryTemplateCalculationService(
 		}
 	}
 
-	private static SalaryInputBasis ParseSalaryBasis(string value) => value switch {
+	private static SalaryInputBasis ParseSalaryBasis(string value) => value switch
+	{
 		"GROSS" => SalaryInputBasis.Gross,
 		"EMPLOYER_COST" => SalaryInputBasis.EmployerCost,
 		_ => throw new BusinessException("HR:Payroll:SalaryTemplateRuleInvalidEnum").WithData("field", "salaryBasis")

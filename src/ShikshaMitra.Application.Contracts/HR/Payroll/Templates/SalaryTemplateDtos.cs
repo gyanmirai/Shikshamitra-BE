@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -114,6 +114,7 @@ public class CalculateSalaryTemplateRequestDto
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; } = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 	public Guid? EmployeeId { get; set; }
+	[System.Text.Json.Serialization.JsonRequired]
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";

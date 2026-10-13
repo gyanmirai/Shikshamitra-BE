@@ -133,12 +133,53 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 			IdempotencyKey = Guid.NewGuid().ToString("N")
 		};
 		var url = $"/api/payroll/employees/{employeeId}/compensation";
+		var undecided = new
+		{
+			input.TemplateVersionId,
+			input.SalaryBasis,
+			MonthlyAmount = 30000m,
+			input.EffectiveMonth,
+			input.PfEnrollment,
+			input.IdempotencyKey,
+			EmployeeId = employeeId
+		};
+		(await Client.PutAsJsonAsync(url, undecided)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await Client.PostAsJsonAsync($"/api/payroll/salary-templates/versions/{input.TemplateVersionId}/calculate", undecided))
+			.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		var required = await Client.PutAsJsonAsync(url, input);
 		required.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		(await required.Content.ReadAsStringAsync()).ShouldContain("PF_ENROLLMENT_REQUIRED");
+		input.MonthlyAmount = 25000m;
+		(await Client.PutAsJsonAsync(url, input)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		input.MonthlyAmount = 25001m;
+		var optedOut = await Client.PutAsJsonAsync(url, input);
+		optedOut.StatusCode.ShouldBe(HttpStatusCode.OK, await optedOut.Content.ReadAsStringAsync());
+		var optedOutRevision = (await optedOut.Content.ReadFromJsonAsync<CompensationRevisionDto>(JsonOptions))!;
+		optedOutRevision.PfRuleId.ShouldBeNull();
+		optedOutRevision.PfEligibility!.Status.ShouldBe("VOLUNTARY");
+		optedOutRevision.PfEligibility.GrossSalary.ShouldBe(25001m);
+		optedOutRevision.PfEligibility.Wages.ShouldBeLessThan(25000m);
+		input.ExpectedRevision = optedOutRevision.RevisionNumber;
+		input.IdempotencyKey = Guid.NewGuid().ToString("N");
 		input.MonthlyAmount = 60000m;
 		input.PfApplicable = true;
 		input.PfRuleId = template.EditableVersion.DefaultPfRuleId ?? (await PayrollTestHelper.CreatePfRuleAsync(Client, "VoluntaryEnrollment")).Id;
+		var ctc = await Client.PostAsJsonAsync($"/api/payroll/salary-templates/versions/{input.TemplateVersionId}/calculate", new CalculateSalaryTemplateRequestDto
+		{
+			SalaryBasis = "EMPLOYER_COST",
+			ProtectionPolicy = "PROTECT_EMPLOYER_COST",
+			MonthlyAmount = 25500m,
+			EffectiveMonth = month,
+			EmployeeId = employeeId,
+			PfApplicable = true,
+			PfRuleId = input.PfRuleId,
+			PfEnrollment = input.PfEnrollment
+		});
+		ctc.StatusCode.ShouldBe(HttpStatusCode.OK, await ctc.Content.ReadAsStringAsync());
+		var ctcCalculation = (await ctc.Content.ReadFromJsonAsync<SalaryTemplateCalculationDto>(JsonOptions))!;
+		ctcCalculation.GrossSalary.ShouldBeLessThanOrEqualTo(25000m);
+		ctcCalculation.PfEligibility!.Status.ShouldBe("MANDATORY");
+		ctcCalculation.PfEligibility.GrossSalary.ShouldBe(ctcCalculation.GrossSalary);
 		var missingConsent = await Client.PutAsJsonAsync(url, input);
 		missingConsent.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 		(await missingConsent.Content.ReadAsStringAsync()).ShouldContain("PF_CONSENT_REQUIRED");
@@ -147,6 +188,10 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 		saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
 		var revision = (await saved.Content.ReadFromJsonAsync<CompensationRevisionDto>(JsonOptions))!;
 		revision.PfEnrollment.ConsentReference.ShouldBe("Synthetic employee consent");
+		var history = await GetAndReadAsync<CompensationRevisionListDto>(url);
+		var retained = history.Items.Single(x => x.Id == optedOutRevision.Id);
+		retained.PfEligibility.ShouldBe(optedOutRevision.PfEligibility);
+		retained.GrossSalary.ShouldBe(optedOutRevision.GrossSalary);
 		input.ExpectedRevision = revision.RevisionNumber;
 		input.IdempotencyKey = Guid.NewGuid().ToString("N");
 		input.PfApplicable = false;

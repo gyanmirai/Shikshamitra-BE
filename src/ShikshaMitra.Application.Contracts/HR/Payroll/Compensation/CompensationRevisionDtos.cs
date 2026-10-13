@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -19,6 +19,7 @@ public class SaveEmployeeCompensationDto
 	public string ProtectionPolicy { get => SalaryBasis == "EMPLOYER_COST" ? "PROTECT_EMPLOYER_COST" : "PROTECT_GROSS"; set { } }
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; }
+	[System.Text.Json.Serialization.JsonRequired]
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";

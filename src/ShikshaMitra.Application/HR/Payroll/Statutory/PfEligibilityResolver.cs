@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -13,7 +13,7 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 public class PfEligibilityResolver(IRepository<PfCoverageConfiguration, Guid> coverage,
 	IRepository<EmployeeCompensationRevision, Guid> revisions) : ITransientDependency
 {
-	public async Task<PfEligibilityDecision> ResolveAsync(Guid? employeeId, DateTime month, decimal wages,
+	public async Task<PfEligibilityDecision> ResolveAsync(Guid? employeeId, DateTime month, decimal grossSalary, decimal contributionWages,
 		PfEnrollmentDeclaration declaration, bool enrolled)
 	{
 		var configuration = (await coverage.GetListAsync(x => !x.IsCancelled && x.EffectiveMonth <= month))
@@ -21,7 +21,7 @@ public class PfEligibilityResolver(IRepository<PfCoverageConfiguration, Guid> co
 		var wasMember = employeeId.HasValue && await revisions.AnyAsync(x => x.EmployeeId == employeeId &&
 			x.EffectiveMonth <= month && x.PfRuleId != null &&
 			(x.Status == CompensationRevisionStatus.Approved || x.Status == CompensationRevisionStatus.Superseded));
-		return PfEligibilityCalculator.Calculate(month, wages, configuration?.IsCovered, declaration, wasMember, enrolled);
+		return PfEligibilityCalculator.Calculate(grossSalary, contributionWages, configuration?.IsCovered, declaration, wasMember, enrolled);
 	}
 
 	public async Task<IReadOnlyDictionary<Guid, bool>> GetMemberHistoryAsync(IReadOnlyCollection<Guid> ids, DateTime month)

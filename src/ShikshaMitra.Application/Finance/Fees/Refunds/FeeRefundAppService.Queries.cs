@@ -26,7 +26,8 @@ public partial class FeeRefundAppService
         var (items, count) = await feeRefundRepository.GetListWithDetailsAsync(input.StudentId, input.AcademicYearId,
             input.AcademicMediumId, input.StandardId, input.DivisionId, input.Status,
             input.LegacyHistory, input.WorkflowVersion, input.Search,
-            input.SkipCount, input.MaxResultCount, input.Sorting, scoped);
+            input.SkipCount, input.MaxResultCount, input.Sorting, scoped,
+            columnFilters: FeeRefundColumnFilter.Parse(input.Filters));
         var students = await BuildStudentMapAsync(items.Select(x => x.StudentId).Distinct());
         var itemIds = items.Select(x => x.Id).ToList();
         var replacements = itemIds.Count == 0 ? new Dictionary<Guid, Guid>() :

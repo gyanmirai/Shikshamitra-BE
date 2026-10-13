@@ -8,7 +8,7 @@ public sealed record StatutoryWageLine(
 	Guid ComponentId,
 	string Name,
 	decimal Amount,
-	StatutoryWageTreatment Treatment);
+	StatutoryWageTreatment Treatment, bool IsAdditional = false, bool IsBasic = false);
 
 public sealed record EsiStatutoryCalculationResult(
 	bool IsCovered,
@@ -26,10 +26,18 @@ public sealed record EsiStatutoryCalculationResult(
 	decimal GovernmentContribution,
 	DateTime ContributionPeriodStart,
 	DateTime ContributionPeriodEnd,
-	IReadOnlyList<string> IssueCodes);
+	IReadOnlyList<string> IssueCodes)
+{
+	public decimal EligibilityWages { get; init; }
+	public decimal EmployeePercentage { get; init; }
+	public decimal EmployerPercentage { get; init; }
+	public EsiCalculationSettings CalculationSettings { get; init; } = new();
+}
 
 public static class EsiStatutoryCalculator
 {
+	public const string BasicComponentIssue = "ESI_BASIC_COMPONENT_REQUIRED";
+	public const string RateOverrideIssue = "ESI_RATE_OVERRIDE";
 	public const string EstablishmentInactiveIssue = "ESI_ESTABLISHMENT_INACTIVE";
 	public const string WageClassificationIssue = "ESI_WAGE_CLASSIFICATION_REQUIRED";
 	public const string EnrollmentReviewIssue = "ESI_ENROLLMENT_REVIEW_REQUIRED";
@@ -44,7 +52,7 @@ public static class EsiStatutoryCalculator
 		IReadOnlyList<StatutoryWageLine> wageLines,
 		IReadOnlyList<StatutoryOverride>? overrides = null,
 		bool assumeEstablishmentActive = false,
-		IReadOnlyList<StatutoryWageLine>? coverageWageLines = null)
+		IReadOnlyList<StatutoryWageLine>? coverageWageLines = null, EsiCalculationSettings? calculationSettings = null)
 	{
 		var monthStart = new DateTime(payrollMonth.Year, payrollMonth.Month, 1);
 		var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -63,9 +71,20 @@ public static class EsiStatutoryCalculator
 			return Empty("ESTABLISHMENT_INACTIVE", wageCeiling, periodStart, periodEnd, issueCodes);
 		}
 
-		var unclassified = wageLines.Concat(coverageWageLines ?? [])
-			.Where(x => x.Treatment == StatutoryWageTreatment.Unclassified).ToList();
-		if (unclassified.Count > 0)
+		calculationSettings ??= new EsiCalculationSettings();
+		calculationSettings.Validate();
+		var fullMonthWageLines = coverageWageLines ?? wageLines;
+		var basicComponentUnavailable = !calculationSettings.BasicComponentIsActive ||
+			fullMonthWageLines.Count(x => x.ComponentId == calculationSettings.BasicComponentId && x.IsBasic && x.Amount > 0m) != 1;
+		if (calculationSettings.EligibilityBasis == "BASIC_COMPONENT" && basicComponentUnavailable)
+			return Empty("BASIC_COMPONENT_REQUIRED", wageCeiling, periodStart, periodEnd, [BasicComponentIssue])
+				with
+			{ CalculationSettings = calculationSettings };
+		var eligibilityWageLines = ResolveWages(fullMonthWageLines, calculationSettings.EligibilityBasis, calculationSettings.BasicComponentId);
+		if (calculationSettings.HasRateOverride) issueCodes.Add(RateOverrideIssue);
+		var employeePercentage = calculationSettings.EmployeePercentage ?? rule.EmployeePercentage;
+		var employerPercentage = calculationSettings.EmployerPercentage ?? rule.EmployerPercentage;
+		if (eligibilityWageLines.Any(x => x.Treatment == StatutoryWageTreatment.Unclassified))
 		{
 			issueCodes.Add(WageClassificationIssue);
 			return Empty("WAGE_CLASSIFICATION_REQUIRED", wageCeiling, periodStart, periodEnd, issueCodes);
@@ -82,12 +101,9 @@ public static class EsiStatutoryCalculator
 			return Empty("FORCE_NOT_COVERED_OVERRIDE", wageCeiling, periodStart, periodEnd, issueCodes, canCalculate: true);
 		}
 
-		var (totalRemuneration, includedWages, specifiedExclusions, exclusionAddBack, inKindWages, statutoryWages)
-			= CalculateWages(rule, wageLines);
 		// Monthly-rated coverage uses agreed monthly remuneration, not pay reduced by unpaid days.
-		// Contributions still use the actual payable wages above. ESIC Revenue Manual, L.6.8.
-		var coverageWages = coverageWageLines == null
-			? statutoryWages : CalculateWages(rule, coverageWageLines).StatutoryWages;
+		// Contributions use the separately selected payable basis. ESIC Revenue Manual, L.6.8.
+		var coverageWages = CalculateWages(rule, eligibilityWageLines).StatutoryWages;
 
 		var forcedCovered = coverageOverride?.OverrideType == StatutoryOverrideType.ForceCovered;
 		var continuingCoverage = enrollment is not null &&
@@ -106,12 +122,43 @@ public static class EsiStatutoryCalculator
 					? "WITHIN_WAGE_CEILING"
 					: "ABOVE_WAGE_CEILING";
 
+		var fullMonthCalculationWageLines = ResolveWages(fullMonthWageLines, calculationSettings.CalculationBasis, calculationSettings.BasicComponentId);
+		wageLines = ResolveWages(wageLines, calculationSettings.CalculationBasis, calculationSettings.BasicComponentId);
+		var calculationIssue = calculationSettings.CalculationBasis == "BASIC_COMPONENT" && basicComponentUnavailable
+			? BasicComponentIssue
+			: wageLines.Concat(fullMonthCalculationWageLines).Any(x => x.Treatment == StatutoryWageTreatment.Unclassified)
+				? WageClassificationIssue : null;
+		if (calculationIssue != null)
+		{
+			// Employees outside coverage do not require a contribution component or calculation classification.
+			if (!isCovered)
+				return Empty(decision, wageCeiling, periodStart, periodEnd, issueCodes, canCalculate: true) with
+				{
+					EligibilityWages = coverageWages,
+					EmployeePercentage = employeePercentage,
+					EmployerPercentage = employerPercentage,
+					CalculationSettings = calculationSettings
+				};
+			issueCodes.Add(calculationIssue);
+			return Empty(calculationIssue == BasicComponentIssue ? "BASIC_COMPONENT_REQUIRED" : "WAGE_CLASSIFICATION_REQUIRED",
+				wageCeiling, periodStart, periodEnd, issueCodes) with
+			{
+				IsCovered = true,
+				EligibilityWages = coverageWages,
+				CalculationSettings = calculationSettings
+			};
+		}
+		var (totalRemuneration, includedWages, specifiedExclusions, exclusionAddBack, inKindWages, statutoryWages)
+			= CalculateWages(rule, wageLines);
+		var fullMonthCalculationWages = CalculateWages(rule, fullMonthCalculationWageLines).StatutoryWages;
+
 		if (!isCovered)
 		{
 			return new EsiStatutoryCalculationResult(
 				false, true, decision, totalRemuneration, includedWages, specifiedExclusions,
 				exclusionAddBack, inKindWages, statutoryWages, wageCeiling, 0m, 0m, 0m,
-				periodStart, periodEnd, issueCodes);
+				periodStart, periodEnd, issueCodes)
+			{ EligibilityWages = coverageWages, EmployeePercentage = employeePercentage, EmployerPercentage = employerPercentage, CalculationSettings = calculationSettings };
 		}
 
 		if (string.IsNullOrWhiteSpace(enrollment?.InsuranceNumber))
@@ -121,9 +168,9 @@ public static class EsiStatutoryCalculator
 
 		// Monthly-rated average daily wages use full contractual wages divided by 26,
 		// so unpaid days cannot create an employee-share exemption.
-		var employeeContribution = coverageWages / 26m <= rule.EmployeeShareDailyWageExemption
-			? 0m : ApplyRounding(statutoryWages * rule.EmployeePercentage / 100m, rule.RoundingPolicy);
-		var employerContribution = ApplyRounding(statutoryWages * rule.EmployerPercentage / 100m, rule.RoundingPolicy);
+		var employeeContribution = fullMonthCalculationWages / 26m <= rule.EmployeeShareDailyWageExemption
+			? 0m : ApplyRounding(statutoryWages * employeePercentage / 100m, rule.RoundingPolicy);
+		var employerContribution = ApplyRounding(statutoryWages * employerPercentage / 100m, rule.RoundingPolicy);
 		var employeeAmountOverride = activeOverrides.FirstOrDefault(x => x.OverrideType == StatutoryOverrideType.EmployeeAmount);
 		var employerAmountOverride = activeOverrides.FirstOrDefault(x => x.OverrideType == StatutoryOverrideType.EmployerAmount);
 		if (employeeAmountOverride?.Amount is { } employeeOverrideAmount)
@@ -157,7 +204,13 @@ public static class EsiStatutoryCalculator
 		return new EsiStatutoryCalculationResult(
 			true, true, decision, totalRemuneration, includedWages, specifiedExclusions,
 			exclusionAddBack, inKindWages, statutoryWages, wageCeiling,
-			employeeContribution, employerContribution, governmentContribution, periodStart, periodEnd, issueCodes);
+			employeeContribution, employerContribution, governmentContribution, periodStart, periodEnd, issueCodes)
+		{
+			EligibilityWages = coverageWages,
+			EmployeePercentage = employeePercentage,
+			EmployerPercentage = employerPercentage,
+			CalculationSettings = calculationSettings
+		};
 	}
 
 	private static (decimal TotalRemuneration, decimal IncludedWages, decimal SpecifiedExclusions,
@@ -190,6 +243,15 @@ public static class EsiStatutoryCalculator
 			: date.Month is >= 10 and <= 12
 				? (new DateTime(date.Year, 10, 1), new DateTime(date.Year + 1, 3, 31))
 				: (new DateTime(date.Year - 1, 10, 1), new DateTime(date.Year, 3, 31));
+
+	private static IReadOnlyList<StatutoryWageLine> ResolveWages(IReadOnlyList<StatutoryWageLine> lines, string basis, Guid? basicComponentId) =>
+		lines.Select(line => line with
+		{
+			Treatment = basis == "GROSS" && !line.IsAdditional && line.Treatment != StatutoryWageTreatment.InKind
+				? StatutoryWageTreatment.Included
+				: basis == "BASIC_COMPONENT" && line.ComponentId == basicComponentId
+					? StatutoryWageTreatment.Included : line.Treatment
+		}).ToList();
 
 	private static decimal ApplyRounding(decimal value, StatutoryRoundingPolicy policy) => policy switch
 	{

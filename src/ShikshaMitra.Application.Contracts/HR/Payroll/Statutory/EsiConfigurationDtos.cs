@@ -10,6 +10,7 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 
 public class EsiConfigurationDraftDto
 {
+	public EsiCalculationSettings CalculationSettings { get; set; } = new();
 	public string EffectiveMonth { get; set; } = string.Empty;
 	public bool Enabled { get; set; }
 	public string? RegistrationNumber { get; set; }
@@ -26,6 +27,8 @@ public class EsiTreatmentDraftDto
 
 public class SaveEsiConfigurationDto
 {
+	public string? EffectiveMonth { get; set; }
+	public EsiCalculationSettings CalculationSettings { get; set; } = new();
 	public bool Enabled { get; set; }
 	public string? RegistrationNumber { get; set; }
 	public DateTime? CoveredSince { get; set; }
@@ -36,6 +39,7 @@ public class SaveEsiConfigurationDto
 
 public class EsiConfigurationVersionDto
 {
+	public EsiCalculationSettings CalculationSettings { get; set; } = new();
 	public Guid Id { get; set; }
 	public string EffectiveMonth { get; set; } = string.Empty;
 	public bool Enabled { get; set; }
@@ -64,6 +68,7 @@ public class EsiConfigurationDraftDtoValidator : AbstractValidator<EsiConfigurat
 {
 	public EsiConfigurationDraftDtoValidator()
 	{
+		RuleFor(x => x.CalculationSettings).NotNull();
 		RuleFor(x => x.EffectiveMonth).Must(x => DateTime.TryParseExact(x, "yyyy-MM", CultureInfo.InvariantCulture,
 			DateTimeStyles.None, out var month) && month.Year >= 2000 && month.Year < 9999);
 		RuleFor(x => x.RegistrationNumber).MaximumLength(100);
@@ -81,6 +86,8 @@ public class SaveEsiConfigurationDtoValidator : AbstractValidator<SaveEsiConfigu
 {
 	public SaveEsiConfigurationDtoValidator()
 	{
+		RuleFor(x => x.EffectiveMonth).Must(x => x == null || DateTime.TryParseExact(x, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out _));
+		RuleFor(x => x.CalculationSettings).NotNull();
 		RuleFor(x => x.ConcurrencyStamp).NotEmpty().MaximumLength(100);
 		RuleFor(x => x.IdempotencyKey).NotEmpty();
 		RuleFor(x => x.RegistrationNumber).MaximumLength(100);

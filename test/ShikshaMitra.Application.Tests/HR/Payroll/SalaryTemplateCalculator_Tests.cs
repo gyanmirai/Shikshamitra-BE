@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Employees.Payroll;
@@ -18,14 +18,27 @@ namespace ShikshaMitra.HR.Payroll;
 public class SalaryTemplateCalculator_Tests
 {
 	[Theory]
-	[InlineData(false)]
-	[InlineData(true)]
-	public void Ctc_boundaries_reconcile_with_payroll_and_never_exceed_monthly_budget(bool includePf)
+	[InlineData(false, "CLASSIFIED_EARNINGS", "CLASSIFIED_EARNINGS")]
+	[InlineData(true, "CLASSIFIED_EARNINGS", "CLASSIFIED_EARNINGS")]
+	[InlineData(false, "GROSS", "BASIC_COMPONENT")]
+	[InlineData(true, "GROSS", "BASIC_COMPONENT")]
+	[InlineData(false, "BASIC_COMPONENT", "GROSS")]
+	[InlineData(true, "BASIC_COMPONENT", "GROSS")]
+	public void Ctc_boundaries_reconcile_with_payroll_and_never_exceed_monthly_budget(
+		bool includePf, string eligibilityBasis, string calculationBasis)
 	{
 		var fixture = BuildFixture(12m, 12m, 15000m);
 		var rules = fixture.Rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning ||
 			(includePf && x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund)).ToList();
 		var esi = BuildEsiContext(fixture.Components.Keys);
+		var basic = rules.Single(x => x.SemanticType == PayrollComponentSemanticType.Basic).ComponentId;
+		if (eligibilityBasis != "CLASSIFIED_EARNINGS" || calculationBasis != "CLASSIFIED_EARNINGS")
+			esi = esi with
+			{
+				ComponentTreatments = fixture.Components.Keys.ToDictionary(x => x,
+					x => x == basic ? StatutoryWageTreatment.Included : StatutoryWageTreatment.SpecifiedExclusion),
+				CalculationSettings = new() { EligibilityBasis = eligibilityBasis, CalculationBasis = calculationBasis, BasicComponentId = basic }
+			};
 		foreach (var budget in new[] { 1.01m, 4576m, 4725m, 10000m, 10000.01m, 10325.01m, 20999.99m, 21000m, 21000.01m, 21683m, 25000m, 100000m })
 		{
 			var quote = SalaryTemplateCalculator.Calculate(SalaryInputBasis.EmployerCost, budget,
@@ -43,7 +56,8 @@ public class SalaryTemplateCalculator_Tests
 			}).ToList();
 			var deduction = BuildComponent(id, "System ESI", 0m, false, PayrollComponentSemanticType.EmployeeStateInsurance);
 			var payrollEsi = new PayrollEsiStatutoryContext(esi.EffectiveMonth, esi.Rule, esi.Establishment,
-				esi.Enrollment, esi.ComponentTreatments, [], deduction);
+				esi.Enrollment, esi.ComponentTreatments, [], deduction)
+			{ CalculationSettings = esi.CalculationSettings };
 			foreach (var days in new[] { 0m, 1m, 15.5m, 31m })
 			{
 				var payroll = PayrollComputation.Calculate(0, 0, days, 31m, components,
@@ -60,23 +74,23 @@ public class SalaryTemplateCalculator_Tests
 		}
 	}
 
-    [Theory]
-    [InlineData(SalaryInputBasis.Gross, 10000, 75, 325, 9925, 10325)]
-    [InlineData(SalaryInputBasis.EmployerCost, 9685, 73, 315, 9612, 10000)]
-    public void Ten_thousand_examples_reconcile_without_an_employer_deduction(
-        SalaryInputBasis basis, decimal gross, decimal employee, decimal employer, decimal net, decimal cost)
-    {
-        var fixture = BuildFixture(0m, 0m, null);
-        var rules = fixture.Rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning).ToList();
-        var result = SalaryTemplateCalculator.Calculate(basis, 10000m, rules, fixture.Components, null, [],
-            BuildEsiContext(fixture.Components.Keys));
-        result.Gross.ShouldBe(gross);
-        result.Net.ShouldBe(net);
-        result.EmployerCost.ShouldBe(cost);
-        result.Deductions.Single().Amount.ShouldBe(employee);
-        result.EmployerContributions.Single().Amount.ShouldBe(employer);
-        result.Deductions.ShouldNotContain(x => x.Code == "EMPLOYER_ESI");
-    }
+	[Theory]
+	[InlineData(SalaryInputBasis.Gross, 10000, 75, 325, 9925, 10325)]
+	[InlineData(SalaryInputBasis.EmployerCost, 9685, 73, 315, 9612, 10000)]
+	public void Ten_thousand_examples_reconcile_without_an_employer_deduction(
+		SalaryInputBasis basis, decimal gross, decimal employee, decimal employer, decimal net, decimal cost)
+	{
+		var fixture = BuildFixture(0m, 0m, null);
+		var rules = fixture.Rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning).ToList();
+		var result = SalaryTemplateCalculator.Calculate(basis, 10000m, rules, fixture.Components, null, [],
+			BuildEsiContext(fixture.Components.Keys));
+		result.Gross.ShouldBe(gross);
+		result.Net.ShouldBe(net);
+		result.EmployerCost.ShouldBe(cost);
+		result.Deductions.Single().Amount.ShouldBe(employee);
+		result.EmployerContributions.Single().Amount.ShouldBe(employer);
+		result.Deductions.ShouldNotContain(x => x.Code == "EMPLOYER_ESI");
+	}
 	[Theory]
 	[InlineData(SalaryInputBasis.Gross)]
 	[InlineData(SalaryInputBasis.TakeHome)]
@@ -115,7 +129,8 @@ public class SalaryTemplateCalculator_Tests
 		var result = SalaryTemplateCalculator.Calculate(SalaryInputBasis.Gross, 20000m, rules,
 			new Dictionary<Guid, SalaryTemplateComponent>
 			{
-				[basicId] = new(basicId, "Basic"), [remainderId] = new(remainderId, "Remainder"),
+				[basicId] = new(basicId, "Basic"),
+				[remainderId] = new(remainderId, "Remainder"),
 				[dependentId] = new(dependentId, "Deduction")
 			}, null, []);
 		result.Deductions.Single().Amount.ShouldBe(800m);

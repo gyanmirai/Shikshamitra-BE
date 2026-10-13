@@ -7,6 +7,7 @@ using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Payroll.Services;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Statutory;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
@@ -25,7 +26,7 @@ public class SalaryTemplateAppService(
 	SalaryTemplateCalculationService calculationService,
 	SalaryTemplatePreviewProofService previewProofService,
 	IAsyncQueryableExecuter asyncExecuter,
-	IClock clock) : ApplicationService, ISalaryTemplateAppService
+	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService) : ApplicationService, ISalaryTemplateAppService
 {
 	private const string CanonicalEsiComponentName = "Employee State Insurance (ESI) - Auto";
 
@@ -254,8 +255,13 @@ public class SalaryTemplateAppService(
 		return await GetAsync(id);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage)]
 	public async Task<SalaryTemplateCalculationDto> CalculateAsync(Guid templateVersionId, CalculateSalaryTemplateRequestDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage);
+		if (input.EmployeeId.HasValue)
+			await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(input.EmployeeId.Value,
+				ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage);
 		var version = await versionRepository.GetAsync(templateVersionId);
 		var template = await templateRepository.GetAsync(version.TemplateId);
 		EnsureNotArchived(template);

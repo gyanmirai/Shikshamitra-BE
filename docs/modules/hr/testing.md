@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-07
+updated_on: 2026-10-13
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -23,6 +23,13 @@ Do not treat that baseline comparison as full payroll workflow acceptance.
 Final authenticated browser acceptance must use a running backend with valid local database configuration.
 
 # Validate HR backend changes
+
+PF eligibility and ESIC basis/rate coverage is in `StatutoryCalculationSettings_Tests` and `StatutoryCalculationApi_Tests`.
+The ESIC cases cover all nine independent basis combinations, full-month eligibility, payable contributions, daily-wage exemption, inactive Basic components, continued coverage, and unchanged older configuration JSON.
+`IndependentEsiBasisPayroll_Tests` uses a fresh loopback `payroll_tests_*` PostgreSQL database through `PAYROLL_TEST_POSTGRES` to verify both mixed Gross/Basic choices through salary setup and actual payroll, with locked results preserved.
+Run `SalaryTemplateCalculator_Tests` to verify Gross/CTC reconciliation across statutory rounding boundaries.
+`StatutoryCalculationPostgres_Tests` requires a separate empty loopback `payroll_tests_*` database through `PAYROLL_TEST_POSTGRES`; it never resets an existing database.
+The `PayrollStatutoryCalculationSettings` migration adds PF coverage history and calculation evidence columns without replacing historical payroll or removing unrelated tables.
 
 TL;DR: run the smallest command that proves the changed HR behavior, then run docs validation before handoff.
 Use broader API tests when a change touches contracts, permissions, payroll, attendance, leave, or policy resolution.

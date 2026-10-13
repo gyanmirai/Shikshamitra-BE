@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -128,6 +128,7 @@ public class StatutoryOverrideDto
 
 public class StatutoryImpactPreviewRequestDto
 {
+	public EsiConfigurationDraftDto? ConfigurationDraft { get; set; }
 	private string? _search;
 	private int _pageSize = 25;
 
@@ -168,6 +169,10 @@ public class StatutoryIssueDto
 
 public class EmployeeStatutoryImpactDto
 {
+	public decimal EligibilityWages { get; set; }
+	public decimal EmployeePercentage { get; set; }
+	public decimal EmployerPercentage { get; set; }
+	public EsiCalculationSettings CalculationSettings { get; set; } = new();
 	public Guid EmployeeId { get; set; }
 	public string EmployeeIdentifier { get; set; } = string.Empty;
 	public string EmployeeName { get; set; } = string.Empty;

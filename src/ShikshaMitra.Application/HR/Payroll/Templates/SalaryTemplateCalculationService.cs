@@ -17,12 +17,14 @@ public class SalaryTemplateCalculationService(
 	IProvidentFundRepository providentFundRepository,
 	IProfessionalTaxRepository professionalTaxRepository,
 	SalaryTemplateEsiContextResolver esiContextResolver,
-	IAsyncQueryableExecuter asyncExecuter, IClock clock) : ITransientDependency
+	IAsyncQueryableExecuter asyncExecuter, IClock clock, PfEligibilityResolver pfEligibilityResolver) : ITransientDependency
 {
 	internal async Task<SalaryTemplateCalculationDto> CalculateAsync(
 		IReadOnlyList<SalaryTemplateRule> rules, CalculateSalaryTemplateRequestDto input,
 		Guid templateId = default, Guid versionId = default, int versionNumber = 0)
 	{
+		if (input.PfEnrollment == null || input.PfEnrollment.Membership is not ("UNKNOWN" or "EXISTING_MEMBER" or "NOT_MEMBER") || input.PfEnrollment.ConsentReference?.Length > 1000)
+			throw new BusinessException("HR:Payroll:PfDeclarationInvalid");
 		SalaryTemplateCalculator.ValidateRules(rules);
 		if (input.PfApplicable && !rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund))
 			throw new BusinessException("HR:Payroll:SalaryTemplatePfFormulaRequired");
@@ -57,6 +59,9 @@ public class SalaryTemplateCalculationService(
 		var esiResolution = await esiContextResolver.ResolveAsync(effectiveMonth, input.StatutoryProfile, input.EmployeeId);
 		var evaluation = SalaryTemplateCalculator.Calculate(
 			basis, input.MonthlyAmount, rules, components, pfRule, professionalTaxSlabs, esiResolution.Context);
+		var pfWages = evaluation.Earnings.Where(x => x.SemanticType is "BASIC" or "DEARNESS_ALLOWANCE").Sum(x => x.Amount);
+		var pfEligibility = await pfEligibilityResolver.ResolveAsync(input.EmployeeId, effectiveMonthEnd, pfWages,
+			input.PfEnrollment, input.PfApplicable);
 		MarkCustomizedLines(evaluation.Earnings, input.Overrides);
 		MarkCustomizedLines(evaluation.Deductions, input.Overrides);
 		var protectedAmount = protectionPolicy switch
@@ -76,6 +81,7 @@ public class SalaryTemplateCalculationService(
 
 		return new SalaryTemplateCalculationDto
 		{
+			PfEnrollment = input.PfEnrollment, PfEligibility = pfEligibility,
 			TemplateId = templateId,
 			TemplateVersionId = versionId,
 			TemplateVersion = versionNumber,
@@ -100,6 +106,10 @@ public class SalaryTemplateCalculationService(
 			EmployeeStateInsurance = new SalaryTemplateEsiPreviewDto
 			{
 				ConfigurationId = esiResolution.ConfigurationId,
+				EligibilityWages = esiResult?.EligibilityWages ?? 0m,
+				EmployeePercentage = esiResult?.EmployeePercentage ?? 0m,
+				EmployerPercentage = esiResult?.EmployerPercentage ?? 0m,
+				CalculationSettings = esiResolution.Context?.CalculationSettings ?? new(),
 				IsConfigured = esiResolution.Context != null,
 				IsCovered = esiResult?.IsCovered ?? false,
 				CanCalculate = esiResult?.CanCalculate ?? esiResolution.Warnings.Count == 0,

@@ -15,6 +15,6 @@ namespace ShikshaMitra.HttpApi.Controllers.Students.Records;
 public class StudentRecordProfileController(IStudentRecordProfileAppService service) : AbpController
 {
 	[HttpGet]
-	public async Task<Result<StudentRecordProfileDto>> GetAsync(Guid studentId) =>
-		Result.Success(await service.GetAsync(studentId));
+	public async Task<Result<StudentRecordProfileDto>> GetAsync(Guid studentId, [FromQuery] Guid? academicYearId = null) =>
+		Result.Success(await service.GetAsync(studentId, academicYearId));
 }

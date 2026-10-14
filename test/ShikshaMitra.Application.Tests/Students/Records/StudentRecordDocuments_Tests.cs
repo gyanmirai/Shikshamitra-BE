@@ -143,6 +143,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 		var certificate = await service.GenerateAsync(input);
 		certificate.TransitionId.ShouldBe(exitId);
+		certificate.Template.Document.ShouldNotBeNull();
+		certificate.Template.Document.Particulars.ShouldContain(x => x.Label == "Reason for leaving" && x.Value == "Family relocation verified");
+		var preview = await service.PreviewAsync(input);
+		preview.Template.Document.ShouldNotBeNull();
+		preview.Template.Document.Particulars.Select(x => (x.Label, x.Value)).ShouldBe(certificate.Template.Document.Particulars.Select(x => (x.Label, x.Value)));
 		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(student.Id))).Status.ShouldBe(StudentLifeCycleStatusEnum.Enrolled);
 		var frozen = (await service.GetAsync(certificate.CertificateId!.Value)).CertificateData["_ExitTransition"];
 		await WithUnitOfWorkAsync(async () =>

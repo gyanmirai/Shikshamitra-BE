@@ -23,7 +23,7 @@ public class StudentRecordPayloadService(
 	IStudentBankDetailsAppService bank, IStudentRepository students, IObjectValidator validator,
 	StudentRecordApplyContext context, StudentRecordPlacementService placement,
 	IRepository<StudentRecordPhotoDraft, Guid> photoDrafts,
-	IRepository<StudentRecordChange, Guid> changes) : ITransientDependency
+	IRepository<StudentRecordChange, Guid> changes, StudentRecordCustomDetailsService customDetails) : ITransientDependency
 {
 	public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
 	{
@@ -31,16 +31,19 @@ public class StudentRecordPayloadService(
 		Converters = { new JsonStringEnumConverter() }
 	};
 	private static readonly JsonSerializerOptions ValueJsonOptions = new(JsonSerializerDefaults.Web);
-	public static readonly string[] Sections = ["general", "family", "communication", "additional", "medical", "bank", "previous-school", "placement", "status", "photo"];
+	public Task<bool> IsCustomMaskedAsync(Guid studentId, string? recordedSourceSet = null) => customDetails.IsMaskedAsync(studentId, recordedSourceSet);
+	public static readonly string[] Sections = ["general", "family", "communication", "additional", "medical", "bank", "previous-school", "placement", "status", "photo", "custom-details"];
 	public static string ActionFor(string section) => section switch
 	{
 		"general" => "Identity", "family" => "Guardian", "communication" => "Contact",
 		"additional" => "Additional", "medical" => "Medical", "bank" => "Bank",
 		"previous-school" => "PreviousSchool", "placement" => "Placement", "status" => "Status", "photo" => "Photo",
+		"custom-details" => "Correction",
 		_ => throw new BusinessException("Students:Records:InvalidSection")
 	};
-	public async Task<string> CaptureAsync(Guid studentId, string section)
+	public async Task<string> CaptureAsync(Guid studentId, string section, string? recordedSourceSet = null)
 	{
+		if (section == "custom-details") return await customDetails.CaptureAsync(studentId, recordedSourceSet);
 		if (section == "photo")
 		{
 			var student = await students.GetAsync(studentId);
@@ -78,10 +81,12 @@ public class StudentRecordPayloadService(
 		}
 		return output.ToJsonString(JsonOptions);
 	}
-	public async Task<string> ValidateAndNormalizeAsync(string section, JsonElement payload)
+	public async Task<string> ValidateAndNormalizeAsync(string section, JsonElement payload, Guid? studentId = null)
 	{
 		if (payload.ValueKind != JsonValueKind.Object || payload.GetRawText().Length > 65536)
 			throw new BusinessException("Students:Records:InvalidPayload");
+		if (section == "custom-details") return await customDetails.ValidateAndNormalizeAsync(studentId ??
+			throw new BusinessException("Students:Records:InvalidCustomSource"), payload);
 		try
 		{
 			var input = JsonSerializer.Deserialize(payload.GetRawText(), PayloadType(section), JsonOptions)
@@ -97,6 +102,7 @@ public class StudentRecordPayloadService(
 		using var applying = context.Begin(studentId, section);
 		switch (section)
 		{
+			case "custom-details": await customDetails.ApplyAsync(studentId, json); break;
 			case "general": await general.UpdateGeneralInfoAsync(studentId, Deserialize<UpdateGeneralInfoDto>(json)); break;
 			case "family": await family.UpdateFamilyInfoAsync(studentId, Deserialize<UpdateFamilyInfoDto>(json)); break;
 			case "communication": await communication.UpdateCommunicationInfoAsync(studentId, Deserialize<UpdateCommunicationInfoDto>(json)); break;

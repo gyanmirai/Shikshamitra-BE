@@ -31,7 +31,8 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
         int maxResultCount = 20,
         string? sorting = null,
         IQueryable<Guid>? scopedStudentIdsQuery = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FeeRefundColumnFilter>? columnFilters = null);
 
     /// <summary>Loads a single request with its <see cref="FeeRefundRequest.Lines"/> collection.</summary>
     Task<FeeRefundRequest?> FindWithLinesAsync(Guid id, CancellationToken cancellationToken = default);

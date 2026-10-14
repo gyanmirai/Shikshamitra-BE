@@ -36,7 +36,7 @@ public class StudentRecordProfileApiContract_Tests
 		[
 			"Id", "StudentId", "FirstName", "MiddleName", "LastName", "GrNo", "GrNumber", "RollNo",
 			"StandardId", "StandardName", "DivisionId", "DivisionName", "AcademicMediumId", "AcademicMediumName",
-			"Status", "DateOfBirth", "Gender", "RecordsAccess", "EntrySource", "PlacementEditable", "MaskedFields", "EnrollmentHistory"
+			"Status", "DateOfBirth", "Gender", "RecordsAccess", "EntrySource", "PlacementEditable", "MaskedFields", "EnrollmentHistory", "AcademicYearId", "AdmissionOnboarding"
 		], ignoreOrder: true);
 	}
 }

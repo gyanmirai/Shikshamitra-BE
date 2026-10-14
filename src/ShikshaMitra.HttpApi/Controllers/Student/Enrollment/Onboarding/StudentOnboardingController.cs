@@ -55,6 +55,16 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 	public async Task<Result<StudentPortalAccountDto>> ProvisionPortalAccountAsync(Guid id, ProvisionStudentPortalAccountDto input) =>
 		Result.Success(await service.ProvisionPortalAccountAsync(id, input));
 
+	[HttpGet("{id:guid}/credentials")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task<Result<StudentCredentialsWorkspaceDto>> GetCredentialsAsync(Guid id) =>
+		Result.Success(await service.GetCredentialsAsync(id));
+
+	[HttpPost("{id:guid}/credentials")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	public async Task<Result<StudentCredentialsWorkspaceDto>> SendCredentialsAsync(Guid id, SendStudentCredentialsDto input) =>
+		Result.Success(await service.SendCredentialsAsync(id, input));
+
 	// Case-only policy correction; never provisions accounts or sends an email.
 	[HttpPost("{id:guid}/guardian-credential-email/enable")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]

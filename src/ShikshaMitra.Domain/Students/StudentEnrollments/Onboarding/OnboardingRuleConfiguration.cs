@@ -86,9 +86,8 @@ public sealed class OnboardingRuleConfiguration
 		ValidateChoice(rules, "credentialSendingTime", "activation", "completion");
 		ValidateChoice(rules, "credentialProvisioningMode", "manual", "automatic");
 		ValidateChoice(rules, "guardianAccountRelationship", "father", "mother", "guardian");
-		if (Boolean(rules, "sendStudentCredentialEmail") && !Boolean(rules, "studentAccount") ||
-			Boolean(rules, "sendGuardianCredentialEmail") && !Boolean(rules, "guardianAccount"))
-			throw Invalid("Enable the corresponding portal account before enabling its credential email.");
+		// Keep saved delivery preferences when account preparation is switched off. Runtime
+		// resolution only enables delivery for accounts required by the current flow.
 		ValidateChoice(rules, "approvalMode", "none", "always", "conditional");
 		if (rules.TryGetProperty("approvalTriggers", out var triggers))
 		{
@@ -188,7 +187,9 @@ public sealed class OnboardingRuleConfiguration
 		{
 			using var document = JsonDocument.Parse(text); return document.RootElement.Clone();
 		}
-		return ResolveProfile(item)?.GetProperty("rules") ?? Root.GetProperty("readinessAccess");
+		// Named readiness profiles are retained only as historical configuration metadata.
+		// Snapshot-less compatibility reads must not reactivate those profiles or their links.
+		return Root.GetProperty("readinessAccess");
 	}
 	public static bool IsPublished(JsonElement rule) => Text(rule, "status", Boolean(rule, "isActive", true) ? "published" : "superseded") == "published";
 	public JsonElement? ResolveRule(string section, StudentOnboardingCase item, DateTime at, Guid? divisionId = null) =>

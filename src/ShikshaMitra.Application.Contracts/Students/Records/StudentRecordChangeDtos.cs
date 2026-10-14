@@ -37,6 +37,7 @@ public class StudentRecordChangeDto : EntityDto<Guid>
 	public string StudentName { get; set; } = string.Empty;
 	public Guid AcademicYearId { get; set; }
 	public Guid RequestedBy { get; set; }
+	public string? RequestedByName { get; set; }
 	public Guid? CorrectsChangeId { get; set; }
 	public Guid? PolicyVersionId { get; set; }
 	public string Section { get; set; } = string.Empty;
@@ -60,6 +61,7 @@ public class StudentRecordChangeDto : EntityDto<Guid>
 public class StudentRecordDecisionHistoryDto
 {
 	public Guid ActorId { get; set; }
+	public string? ActorName { get; set; }
 	public int Stage { get; set; }
 	public string Decision { get; set; } = string.Empty;
 	public string Reason { get; set; } = string.Empty;

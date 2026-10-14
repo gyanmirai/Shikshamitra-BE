@@ -19,7 +19,8 @@ namespace ShikshaMitra.Students.Attendance;
 [RemoteService(false)]
 public class AttendanceDailyCommandService(AttendanceRosterService rosters, AttendanceManager manager,
 	IAttendanceDayRepository days, IRepository<StudentAttendanceOperation, Guid> operations,
-	IRepository<StudentAttendanceCorrection, Guid> corrections, IPermissionChecker permissions, IRepository<StudentEnrollment, Guid> enrollmentRecords)
+	IRepository<StudentAttendanceCorrection, Guid> corrections, IPermissionChecker permissions, IRepository<StudentEnrollment, Guid> enrollmentRecords,
+	AttendanceWorkspaceAccessService workspaceAccess)
 	: ApplicationService, ITransientDependency
 {
 	[UnitOfWork(isTransactional: true)]
@@ -28,6 +29,7 @@ public class AttendanceDailyCommandService(AttendanceRosterService rosters, Atte
 	{
 		await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add);
 		using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
+		await workspaceAccess.EnsureCanMarkClassAsync(input.AcademicYearId, input.StandardId, input.DivisionId);
 		var roster = await rosters.LoadAsync(input.AcademicYearId, input.StandardId, input.DivisionId, input.Date);
 		if (input.Date.Date > AttendanceSchoolDate.Today(roster.Options, Clock.Now)) throw new BusinessException("SM:CannotMarkFutureAttendance");
 		var actor = CurrentUser.GetId();

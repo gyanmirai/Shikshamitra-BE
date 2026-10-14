@@ -5,9 +5,6 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
-using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
 using ShikshaMitra.Students.StudentRecords;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -48,7 +45,9 @@ public partial class StudentCertificateAppService(
 		"IssueDate",
 		"AcademicYear",
 		"OrganizationName",
-		"Reason"
+		"Reason",
+		"Conduct",
+		"FirstTrialDetails"
 	];
 
 	public async Task<List<string>> GetSupportedPlaceholdersAsync()
@@ -112,11 +111,11 @@ public partial class StudentCertificateAppService(
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.View);
 		var student = await LoadScopedStudentAsync(input.StudentId, nameof(PreviewAsync));
-		await ValidateIssuanceAsync(student, input);
+		var exitSnapshot = await ValidateIssuanceAsync(student, input);
 		var issueDate = input.IssueDate ?? Clock.Now;
 		var certificateNo = await GenerateCertificateNumberAsync(input.CertificateType, issueDate.Year, student.AcademicYearId);
 
-		return await BuildCertificateResponseAsync(
+		var response = await BuildCertificateResponseAsync(
 			student,
 			input.CertificateType,
 			issueDate,
@@ -125,6 +124,10 @@ public partial class StudentCertificateAppService(
 			input.CertificateFields,
 			certificateId: null,
 			templateSnapshot: null);
+		response.TransitionId = input.TransitionId;
+		if (exitSnapshot != null) response.CertificateData["_ExitTransition"] = exitSnapshot;
+		response.Template.Document = StudentCertificateDocumentFactory.Create(response);
+		return response;
 	}
 
 	public async Task<StudentCertificateResponseDto> GenerateAsync(CreateStudentCertificateDto input)
@@ -203,29 +206,7 @@ public partial class StudentCertificateAppService(
 		var certificate = await GetAsync(certificateId);
 		if (certificate.Status == StudentCertificateStatus.Cancelled.ToString()) throw new BusinessException("Students:Records:DocumentVoided");
 
-		QuestPDF.Settings.License = LicenseType.Community;
-		var bytes = Document.Create(container =>
-		{
-			container.Page(page =>
-			{
-				page.Size(PageSizes.A4);
-				page.Margin(48);
-				page.DefaultTextStyle(x => x.FontSize(11));
-				page.Content().Column(column =>
-				{
-					column.Spacing(18);
-					column.Item().AlignCenter().Text(certificate.Template.RenderedHeaderContent).FontSize(16).SemiBold();
-					column.Item().Text($"Student: {certificate.Student.StudentName}");
-					column.Item().Text($"GR No: {certificate.Student.GrNo ?? "-"}");
-					column.Item().Text($"Admission No: {certificate.Student.AdmissionNo ?? "-"}");
-					column.Item().Text($"Class: {certificate.Student.ClassName ?? "-"} {certificate.Student.DivisionName ?? string.Empty}".Trim());
-					column.Item().Text($"Date of Birth: {FormatDate(certificate.Student.DateOfBirth)}");
-					column.Item().Text($"Gender: {certificate.Student.Gender ?? "-"}");
-					column.Item().LineHorizontal(1);
-					column.Item().Text(certificate.Template.RenderedFooterContent);
-				});
-			});
-		}).GeneratePdf();
+		var bytes = StudentCertificatePdfRenderer.Render(certificate);
 
 		return new StudentCertificatePdfDto
 		{
@@ -253,6 +234,7 @@ public partial class StudentCertificateAppService(
 			certificateData,
 			template);
 		response.TransitionId = certificate.TransitionId;
+		response.Template.Document ??= StudentCertificateDocumentFactory.Create(response);
 		return response;
 	}
 
@@ -382,6 +364,7 @@ public partial class StudentCertificateAppService(
 				response.TransitionId = transitionId;
 				if (exit != null) response.CertificateData["_ExitTransition"] = exit;
 				if (sourceCertificateId.HasValue) response.CertificateData["_DuplicateReason"] = duplicateReason?.Trim();
+				response.Template.Document ??= StudentCertificateDocumentFactory.Create(response);
 				var certificate = new StudentCertificate(
 					certificateId,
 					CurrentTenant.Id,

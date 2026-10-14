@@ -98,12 +98,16 @@ public partial class StudentOnboardingAppService(
 		}
 
 		query = await FilterPendingTaskAsync(query, input.PendingTask);
-		var totalCount = await AsyncExecuter.CountAsync(query);
-		var cases = await AsyncExecuter.ToListAsync(query.OrderByDescending(item => item.CreationTime)
-			.Skip(input.SkipCount).Take(input.MaxResultCount));
+		var worklist = await GetWorklistQueryAsync(query, input);
+		var totalCount = await AsyncExecuter.CountAsync(worklist);
+		var cases = await AsyncExecuter.ToListAsync(SortWorklist(worklist, input.Sorting)
+			.Skip(input.SkipCount).Take(input.MaxResultCount).Select(row => row.Case));
 		var rows = new List<StudentOnboardingCaseDto>(cases.Count);
+		var configurations = new Dictionary<Guid, OnboardingRuleConfiguration?>();
+		foreach (var year in cases.Where(item => !item.StudentEnrollmentId.HasValue).Select(item => item.AcademicYearId).Distinct())
+			configurations[year] = await configurationManager.GetAsync(year);
 		foreach (var onboardingCase in cases)
-			rows.Add(await MapCaseAsync(onboardingCase, includeEvents: false));
+			rows.Add(await MapCaseAsync(onboardingCase, includeEvents: false, configurations: configurations));
 		return new PagedResultDto<StudentOnboardingCaseDto>(totalCount, rows);
 	}
 
@@ -177,7 +181,16 @@ public partial class StudentOnboardingAppService(
 
 	[RemoteService(false)]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
-	public async Task EnsureCaseAccessAsync(Guid id) => await GetCaseAsync(id);
+	public async Task EnsureCaseAccessAsync(Guid id)
+	{
+		var item = await GetCaseAsync(id);
+		if (await CaptureAutomaticRequirementsAsync(item))
+		{
+			await RefreshProfileReadinessAsync(item, await stepRepository.GetListAsync(step => step.OnboardingCaseId == id),
+				Clock.Now, requirementsCaptured: true);
+			await CurrentUnitOfWork!.SaveChangesAsync();
+		}
+	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat)]
 	public async Task<IReadOnlyList<StudentOnboardingPlacementOptionDto>> GetPlacementOptionsAsync(Guid id)
@@ -578,6 +591,11 @@ public partial class StudentOnboardingAppService(
 	{
 		var onboardingCase = await GetCaseAsync(id);
 		var steps = await stepRepository.GetListAsync(item => item.OnboardingCaseId == id);
+		if (await CaptureAutomaticRequirementsAsync(onboardingCase))
+		{
+			await RefreshProfileReadinessAsync(onboardingCase, steps, Clock.Now, requirementsCaptured: true);
+			await CurrentUnitOfWork!.SaveChangesAsync();
+		}
 		var blockers = await GetActivationBlockersAsync(onboardingCase, steps, DateTime.UtcNow);
 		var dto = await MapCaseAsync(onboardingCase, true, steps);
 		if (blockers.Count == 0 && onboardingCase.Status is not StudentOnboardingStatus.Completed and not StudentOnboardingStatus.Cancelled)
@@ -656,7 +674,9 @@ public partial class StudentOnboardingAppService(
 	{
 		var onboardingCase = await GetCaseAsync(id);
 		if (onboardingCase.StudentEnrollmentId.HasValue)
+		{
 			return await MapCaseAsync(onboardingCase, true);
+		}
 		var reviewedReturn = ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(onboardingCase).HasValue;
 		if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(onboardingCase);
 		EnsureConcurrency(onboardingCase, input.ConcurrencyStamp);
@@ -1074,7 +1094,6 @@ public partial class StudentOnboardingAppService(
 			if (reservation == null || !reservation.IsLive(now)) blockers.Add("The seat reservation has expired.");
 		}
 		if (!onboardingCase.RollNumber.HasValue) blockers.Add("A roll number is required.");
-		if (!onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot")) blockers.Add("Review and confirm the Offering requirements before activation.");
 		if ((await applicationRepository.GetAsync(onboardingCase.ApplicationId)).GetFeeSelection()?.OnboardingConfirmedAt == null) blockers.Add("A confirmed fee structure is required.");
 		var student = await studentRepository.FindAsync(onboardingCase.StudentId);
 		if (student != null && string.IsNullOrWhiteSpace(student.GrNumber) && !student.GrNo.HasValue &&
@@ -1100,10 +1119,10 @@ public partial class StudentOnboardingAppService(
 	}
 
 	private async Task RefreshProfileReadinessAsync(StudentOnboardingCase onboardingCase,
-		List<StudentOnboardingStep> steps, DateTime at)
+		List<StudentOnboardingStep> steps, DateTime at, bool requirementsCaptured = false)
 	{
-		var configuration = await configurationManager.GetAsync(onboardingCase.AcademicYearId);
-		if (!onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot")) OnboardingRuleConfiguration.EnsureAdmissionRouteCovered(onboardingCase, configuration);
+		if (!requirementsCaptured)
+			await CaptureAutomaticRequirementsAsync(onboardingCase);
 		var reviewedReturn = ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(onboardingCase).HasValue;
 		if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(onboardingCase, !onboardingCase.StudentEnrollmentId.HasValue);
 		var student = await studentRepository.GetWithDetailsAsync(onboardingCase.StudentId) ??
@@ -1119,6 +1138,10 @@ public partial class StudentOnboardingAppService(
 				.DocumentsReadyAsync(onboardingCase, await applicationRepository.GetAsync(onboardingCase.ApplicationId));
 		if (onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot"))
 			foreach (var step in steps.Where(s => s.Key is StudentOnboardingStepKeys.Identity or StudentOnboardingStepKeys.Family or StudentOnboardingStepKeys.Communication or StudentOnboardingStepKeys.MedicalAndPreviousSchool)) step.SetRequired(false);
+		// Admission verifies the applicant, but a returning/reused Student may still have
+		// incomplete operational identity. Keep that automatic check mandatory for pending cases.
+		if (AutomaticOnboardingReadinessRules.CanAdopt(onboardingCase))
+			steps.Single(s => s.Key == StudentOnboardingStepKeys.Identity).SetRequired(true);
         var savedRules = await ReadSavedRulesAsync(onboardingCase);
 		if (savedRules.HasValue)
 		{
@@ -1173,8 +1196,7 @@ public partial class StudentOnboardingAppService(
 		else serviceStep.Block("Select and confirm a published fee structure in the Fees tab.");
 		await stepRepository.UpdateAsync(serviceStep, false);
 		SetComputedStep(steps, StudentOnboardingStepKeys.Identity,
-			!string.IsNullOrWhiteSpace(student.FirstName) && !string.IsNullOrWhiteSpace(student.LastName) &&
-			student.AdditionalDetail?.DateOfBirth.HasValue == true && student.AdditionalDetail.Gender.HasValue,
+			AutomaticOnboardingReadinessRules.HasCompleteIdentity(student),
 			"Student name, date of birth, and gender are complete.",
 			"Complete the Student name, date of birth, and gender.", at);
 		SetComputedStep(steps, StudentOnboardingStepKeys.Family,
@@ -1254,8 +1276,20 @@ public partial class StudentOnboardingAppService(
 
 	private async Task<StudentOnboardingCaseDto> MapCaseAsync(
 		StudentOnboardingCase onboardingCase, bool includeEvents,
-		IReadOnlyCollection<StudentOnboardingStep>? loadedSteps = null)
+		IReadOnlyCollection<StudentOnboardingStep>? loadedSteps = null,
+		IReadOnlyDictionary<Guid, OnboardingRuleConfiguration?>? configurations = null)
 	{
+		OnboardingRuleConfiguration? accountConfiguration = null;
+		if (!onboardingCase.StudentEnrollmentId.HasValue)
+			accountConfiguration = configurations != null && configurations.TryGetValue(onboardingCase.AcademicYearId, out var configured)
+				? configured : await configurationManager.GetAsync(onboardingCase.AcademicYearId);
+		if (loadedSteps == null && await CaptureAutomaticRequirementsAsync(onboardingCase, accountConfiguration))
+		{
+			var currentSteps = await stepRepository.GetListAsync(step => step.OnboardingCaseId == onboardingCase.Id);
+			await RefreshProfileReadinessAsync(onboardingCase, currentSteps, Clock.Now, requirementsCaptured: true);
+			await CurrentUnitOfWork!.SaveChangesAsync();
+			loadedSteps = currentSteps;
+		}
 		var application = await applicationRepository.FindAsync(onboardingCase.ApplicationId);
 		var offering = await offeringRepository.FindAsync(onboardingCase.OfferingId);
 		if (!onboardingCase.HasCampusSnapshot) onboardingCase.UseLegacyCampusId(offering?.CampusId);
@@ -1288,8 +1322,6 @@ public partial class StudentOnboardingAppService(
 		var studentAccount = handoffs.Find(h => h.ServiceKey == "student-account");
 		var guardianAccount = handoffs.Find(h => h.ServiceKey == "guardian-account");
 		var accountPolicy = !onboardingCase.StudentEnrollmentId.HasValue ? await ResolvePolicyAsync(onboardingCase) : null;
-		var accountConfiguration = !onboardingCase.StudentEnrollmentId.HasValue
-			? await configurationManager.GetAsync(onboardingCase.AcademicYearId) : null;
 		var accountRules = await ReadSavedRulesAsync(onboardingCase);
 		var satisfied = steps.Count(step => IsSatisfied(step.Status));
 		var primaryBlocker = steps.OrderBy(step => step.DisplayOrder)
@@ -1333,7 +1365,7 @@ public partial class StudentOnboardingAppService(
 			GrManualEntryAllowed = accountConfiguration == null || accountConfiguration.ResolveRule("grNumber", onboardingCase, Clock.Now) is { } grSettings && OnboardingRuleConfiguration.Boolean(grSettings, "manualEntryAllowed"),
 			HasDocumentRequirementsSnapshot = onboardingCase.ExtraProperties.ContainsKey("DocumentPoliciesSnapshot"),
 			AdmissionConfirmed = application?.Status == AdmissionApplicationStatus.AdmissionFinalized,
-			RequirementsNeedReview = !onboardingCase.StudentEnrollmentId.HasValue && !onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot"),
+			RequirementsNeedReview = false,
 			StudentAccountRequired = onboardingCase.StudentEnrollmentId.HasValue ? studentAccount != null
 				: accountRules.HasValue ? OnboardingRuleConfiguration.Boolean(accountRules.Value, "studentAccount") : accountPolicy?.RequireStudentAccount == true,
 			GuardianAccountRequired = onboardingCase.StudentEnrollmentId.HasValue ? guardianAccount != null

@@ -167,26 +167,34 @@ public class StudentAdditionalDetail : FullAuditedEntity<Guid>, IMultiTenant
 	/// <summary>
 	/// Updates additional student details during registration process
 	/// </summary>
+	public void UpdateAdditionalDetails(bool isBPLStudent, string? bplCardNo, string? secondLanguage, bool haveDisability,
+		string? disabilityDetails, string? emergencyRelativeName, string? emergencyRelation, string? emergencyContactNo,
+		bool isSingleChild, bool isSingleParentChild, Category category, bool isLibraryMember, bool isTransportMember) =>
+		UpdateAdditionalDetails((bool?)isBPLStudent, bplCardNo, secondLanguage, haveDisability, disabilityDetails,
+			emergencyRelativeName, emergencyRelation, emergencyContactNo, isSingleChild, isSingleParentChild, category, isLibraryMember, isTransportMember);
+
+	/// <summary>Inline retained forms preserve unrepresented nullable answers and may retain conditionally hidden details.</summary>
 	public void UpdateAdditionalDetails(
-		bool isBPLStudent,
+		bool? isBPLStudent,
 		string? bplCardNo,
 		string? secondLanguage,
-		bool haveDisability,
+		bool? haveDisability,
 		string? disabilityDetails,
 		string? emergencyRelativeName,
 		string? emergencyRelation,
 		string? emergencyContactNo,
-		bool isSingleChild,
-		bool isSingleParentChild,
+		bool? isSingleChild,
+		bool? isSingleParentChild,
 		Category category,
-		bool isLibraryMember,
-		bool isTransportMember)
+		bool? isLibraryMember,
+		bool? isTransportMember,
+		bool retainDisabilityDetails = false)
 	{
 		IsBPLStudent = isBPLStudent;
 		BPLCardNo = bplCardNo;
 		SecondLanguage = secondLanguage;
 		HaveDisability = haveDisability;
-		DisabilityDetails = haveDisability ? disabilityDetails : null;
+		DisabilityDetails = retainDisabilityDetails || haveDisability == true ? disabilityDetails : null;
 		EmergencyRelationName = emergencyRelativeName;
 		EmergencyRelationType = emergencyRelation;
 		EmergencyContactNo = emergencyContactNo;

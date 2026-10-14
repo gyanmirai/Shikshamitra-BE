@@ -34,20 +34,37 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	[UnitOfWork(true)]
 	public async Task<StudentCredentialEmailDto> RequestAsync(Guid caseId, RequestStudentCredentialEmailDto input)
+		=> await RequestCoreAsync(caseId, input, allowCompletionWait: false);
+
+	// Only the scoped one-click command calls this after authoritative account preparation.
+	internal Task<StudentCredentialEmailDto> RequestPreparedAsync(Guid caseId, string accountType, string concurrencyStamp) =>
+		RequestCoreAsync(caseId, new() { AccountType = accountType, ConcurrencyStamp = concurrencyStamp }, allowCompletionWait: true);
+
+	private async Task<StudentCredentialEmailDto> RequestCoreAsync(Guid caseId, RequestStudentCredentialEmailDto input, bool allowCompletionWait)
 	{
 		ValidateType(input.AccountType);
-		var state = await eligibility.ResolveAsync(caseId, input.AccountType);
-		EnsureReady(state);
+		var state = allowCompletionWait ? await eligibility.ResolveExplicitAsync(caseId, input.AccountType)
+			: await eligibility.ResolveAsync(caseId, input.AccountType);
+		EnsureReady(state, allowCompletionWait);
 		var item = await cases.GetAsync(caseId);
 		if (!string.IsNullOrWhiteSpace(input.ConcurrencyStamp) && input.ConcurrencyStamp != item.ConcurrencyStamp)
 			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
 		var row = await FindAsync(caseId, input.AccountType, state.LinkId!.Value);
-		if (row == null) row = await InsertAsync(state, input.AccountType);
-		else if (row.Status is not ("Pending" or "Processing"))
+		if (row == null) row = await InsertAsync(state, input.AccountType, allowCompletionWait);
+		else
 		{
-			if (!row.CanRequest(DateTime.UtcNow)) throw Invalid("Wait at least two minutes between email requests.");
-			row.Requeue(CurrentUser.Id, DateTime.UtcNow);
-			await requests.UpdateAsync(row, false);
+			var changed = false;
+			if (row.Status is not ("Pending" or "Processing"))
+			{
+				if (!row.CanRequest(DateTime.UtcNow)) throw Invalid("Wait at least two minutes between email requests.");
+				row.Requeue(CurrentUser.Id, DateTime.UtcNow); changed = true;
+			}
+			if (allowCompletionWait)
+			{
+				row.RequireSavedOwnerValidation(CurrentUser.Id); changed = true;
+				if (state.WaitingForCompletion && row.Status == "Pending") row.DeferUntilCompletion(DateTime.UtcNow);
+			}
+			if (changed) await requests.UpdateAsync(row, false);
 		}
 		return Map(input.AccountType, state, row);
 	}
@@ -63,24 +80,26 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 	}
 	private Task<StudentCredentialEmailRequest?> FindAsync(Guid caseId, string type, Guid linkId) =>
 		requests.FindAsync(x => x.CaseId == caseId && x.AccountType == type && x.LinkId == linkId);
-	private async Task<StudentCredentialEmailRequest> InsertAsync(StudentCredentialEmailEligibility state, string type)
+	private async Task<StudentCredentialEmailRequest> InsertAsync(StudentCredentialEmailEligibility state, string type, bool savedOwnerIntent = false)
 	{
 		if (!CurrentTenant.Id.HasValue) throw Invalid("A school tenant is required.");
 		var row = new StudentCredentialEmailRequest(GuidGenerator.Create(), CurrentTenant.Id.Value, state.CaseId,
 			state.StudentId, state.LinkId!.Value, state.UserId!.Value, type, state.Email, CurrentUser.Id, DateTime.UtcNow);
+		if (savedOwnerIntent) row.RequireSavedOwnerValidation();
+		if (savedOwnerIntent && state.WaitingForCompletion) row.DeferUntilCompletion(DateTime.UtcNow);
 		return await requests.InsertAsync(row, false);
 	}
 	private static void ValidateType(string type)
 	{
 		if (type is not ("student" or "guardian")) throw Invalid("Select a student or guardian account.");
 	}
-	private static void EnsureReady(StudentCredentialEmailEligibility state)
+	private static void EnsureReady(StudentCredentialEmailEligibility state, bool allowCompletionWait)
 	{
-		if (!state.EmailEnabled || !state.IsReady || !state.LinkId.HasValue || !state.UserId.HasValue)
+		if (!state.EmailEnabled || !state.IsReady && !(allowCompletionWait && state.WaitingForCompletion) || !state.LinkId.HasValue || !state.UserId.HasValue)
 			throw Invalid(state.BlockedReason ?? "The account email is disabled or onboarding prerequisites are incomplete.");
 	}
 	private static BusinessException Invalid(string reason) => new BusinessException(StudentOnboardingErrorCodes.PortalAccountInvalid).WithData("Reason", reason);
-	private static StudentCredentialEmailDto Map(string type, StudentCredentialEmailEligibility state, StudentCredentialEmailRequest? row) => new()
+	internal static StudentCredentialEmailDto Map(string type, StudentCredentialEmailEligibility state, StudentCredentialEmailRequest? row) => new()
 	{
 		Id = row?.Id, AccountType = type, Email = state.Email, EmailEnabled = state.EmailEnabled,
 		Status = row?.Status == "Processing" ? "Pending" : row?.Status ?? (state.EmailEnabled && !state.IsReady ? "Blocked" : "NotRequested"),

@@ -18,6 +18,18 @@ public sealed class FaultingOnboardingCredentialEligibilityResolver(
 {
     public async Task<StudentCredentialEmailEligibility> ResolveAsync(Guid caseId, string accountType, bool enforceStaffScope = true)
     {
+        await CheckFailureAsync(caseId);
+        return await actual.ResolveAsync(caseId, accountType, enforceStaffScope);
+    }
+
+    public async Task<StudentCredentialEmailEligibility> ResolveExplicitAsync(Guid caseId, string accountType, bool enforceStaffScope = true)
+    {
+        await CheckFailureAsync(caseId);
+        return await actual.ResolveExplicitAsync(caseId, accountType, enforceStaffScope);
+    }
+
+    private async Task CheckFailureAsync(Guid caseId)
+    {
         if (probe.CaseId == caseId)
         {
             probe.Attempts++;
@@ -25,6 +37,5 @@ public sealed class FaultingOnboardingCredentialEligibilityResolver(
             await work.Current!.RollbackAsync();
             throw new DbUpdateException("Simulated account preparation database failure.");
         }
-        return await actual.ResolveAsync(caseId, accountType, enforceStaffScope);
     }
 }

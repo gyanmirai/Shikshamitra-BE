@@ -1,14 +1,20 @@
----
+﻿---
 module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-09
+updated_on: 2026-10-13
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Locate Student Enrollment Admissions code
+
+## Attendance workspace reads and authority
+
+`Application/Students/Records/StudentDirectoryQueryService.cs` owns shared scoped Directory inclusion, hierarchy, paging and identity masking; Records keeps its public permissions while Attendance calls this internal read service under Attendance View. `Application/Students/Attendance/AttendanceWorkspaceQueryService.cs` builds context and paged daily rows, enriches only classes present on the page, and batches historical observation fallback for disabled rows. Existing dated roster, report calculations and command APIs retain attendance ownership.
+
+`AttendanceWorkspaceAccessService.cs` checks current database identity/admin roles and exact active ClassTeacher → active Employee.UserId mapping; manual academic scope does not create teaching authority. Mark/Submit checks this authority inside its Serializable command unit of work, alongside current roster/scope checks. No new database entities, grants, seed repair or migration are introduced.
 
 TL;DR: Admissions remains inside the Student modular-monolith boundary and separates aggregate invariants, authoritative validation, reads, commands, and runtime availability.
 
@@ -22,9 +28,10 @@ TL;DR: Admissions remains inside the Student modular-monolith boundary and separ
 
 | Concern | Source |
 |---|---|
-| Frozen Offering requirements | `Application/Students/StudentEnrollments/Onboarding/OnboardingRequirementSnapshotService.cs`, `Domain/Students/StudentEnrollments/Onboarding/OnboardingRuleConfiguration.cs`; case extra properties preserve readiness and published workflow document policy. Missing snapshots require explicit adoption review. Required document overrides are rejected. |
+| Manual one-click credentials | `StudentOnboardingAppService.Credentials.cs` owns the scoped workspace and transactional send; `StudentCredentialsRecipientReader.cs` reads legal current owners and Student email provenance; `StudentCredentialsDtos.cs` supplies bounded DTO validation. The existing portal preparation core and credential outbox remain owners of linking and transport. |
+| Automatic admission requirements | `Application/Students/StudentEnrollments/Onboarding/OnboardingRequirementSnapshotService.cs`, `Domain/Students/StudentEnrollments/Onboarding/Services/AutomaticOnboardingReadinessRules.cs`; finalization determines document requirements before Student profile writes and reuses the prepared JSON at case creation. Pending case extra properties capture common readiness, current account choices and published workflow document policy automatically. Actual snapshot changes receive an adoption audit event; unchanged activation previews do not rewrite step evidence. Activated and terminal snapshots remain fixed. Required document overrides are rejected. |
 | Canonical documents | `Application/Students/StudentEnrollments/Onboarding/OnboardingWorkflowDocumentsAppService.cs` delegates finalized-application upload/original/review to existing Admissions owners and permissions. |
-| Fee intent | `StudentOnboardingAppService.Fees.cs` reads existing matching published Finance structures and saves admission selection/confirmation only; no Finance writes or payment gates. |
+| Fee intent | `StudentOnboardingAppService.Fees.cs` owns selection and confirmation of an existing published fee structure. Fee assignment, dues, collection and refunds remain owned by the existing Finance services. |
 | Identifier group policy | `StudentOnboardingAppService.IdentifierLocks.cs`, `StudentOnboardingAppService.LockedGroupAssignments.cs`; Division extra properties persist independent year-specific GR/Roll policies, including empty groups. Student/domain and Records correction paths enforce locks. |
 | Readiness and automatic orchestration | `Application/Students/StudentEnrollments/Onboarding/StudentOnboardingCredentialEligibilityResolver.cs`, `StudentOnboardingAppService.CredentialEmails.cs`; uses current Enrollment, Student, Admissions document evidence and existing completion truth. |
 | Durable email | `Domain/Students/Portal/Entities/StudentCredentialEmailRequest.cs`, `Application/Students/StudentEnrollments/Onboarding/StudentCredentialEmailAppService.cs` and `StudentCredentialEmailDispatcher.cs`; durable preparation commits before SMTP, frozen link/mailbox and optimistic claim prevent duplicate intent. |
@@ -59,11 +66,14 @@ Tenant filters remain enabled; historical paths are independently scoped rather 
 | Shared policy | `Domain.Shared/Students/StudentRecords/StudentRecordsPolicy.cs`: typed action/stage/condition, provisioning, masks, guardian access, document, and transition choices. Central permission partials remain the only permission catalogue. |
 | Published configuration | `Domain/Students/StudentRecords/`: draft configuration, immutable policy versions, structural validator, and effective resolver. Year-published policy precedes school-published policy; otherwise runtime uses the documented starter. |
 | API contract | `Application.Contracts/Students/Records/`: requests, paged results, state/capability DTOs; settings contracts remain under `Students/StudentRecords/`. |
+| Profile evidence and current custom data | `StudentRecordRegistrationReader` batches frozen Registration definitions/submissions for scoped activated journeys; `StudentRecordDetailsAppService` composes existing canonical section reads and visibility. `StudentRecordCustomDetailsService` resolves real form ancestry plus field code/type, validates definitions/rules server-side and joins the existing change pipeline. Returning cases join their committed enrollment by StudentEnrollmentId, preserving the enrollment's original provenance. |
+| Inline retained Registration form | `StudentRecordFormProjection` projects the full frozen schema with owning masks and field capabilities; `StudentRecordFormMapping` patches changed canonical bindings while preserving fields outside the form. `StudentRecordFormAppService` joins typed custom validation and canonical application into one serializable Applied `StudentRecordChange` audit. No new entity or migration; generic approval commands are unchanged. |
 | Access and governance | `Application/Students/Records/StudentRecordsActorService`, access service, enrollment scope, write guard, change application, and placement services preserve existing write APIs while governing enrolled/former records. Records checks the current tenant's active database identity even when a previously issued login remains valid; settings uses the same guard. |
 | Transitions | Focused Readiness, Options, Authority, Application, Correction, RenewalReadiness, RenewalCoordinator, ReturnCoordinator, AdmissionReturnService, and thin partial TransitionAppService separate source-owner evidence, authorization, lifecycle, and mapping. Internal coordinators disable remote exposure. |
 | History | Transition/batch/event/renewal/return-handoff entities retain policy and source snapshots. Target year/class/division projections are parsed once from immutable input for database scope filtering and paging. |
 | Owner boundary | Initial enrollment stays in Onboarding. Academic/Library/Transport source evidence is read only. `StudentTransitionFinanceClearanceReader` delegates to Finance's canonical collection ledger; renewal delegates to Onboarding's Finance readiness reader. `StudentRenewalPortalCoordinator` owns the account handoff for real annual renewals without fabricating an initial case. Returns call real Admissions commands. |
 | Persistence | `EntityFrameworkCore/Students/Records/` defines tenant-scoped unique request keys, policy version numbering, one active student/year renewal, correction uniqueness, indexes, restrictive relationships, and immutable snapshot payloads. Completed and cancelled renewal reviews remain separate history rows. |
+| Custom current values | Tenant/student-owned `StudentRecordCustomProfile` retains baseline submission, captured schema/source references and current typed JSON, with ABP audit/concurrency. `20261012120000_AddStudentRecordCustomProfiles` adds storage only; existing students derive a read-only baseline until an audited write. Rollback rejects dropping persisted corrections. |
 
 Transition application uses a serializable unit of work for each student and revalidates live approvals. The background scheduler invokes `StudentRecordTransitionApplication.ApplyAsRecordedActorAsync(id)` within the tenant; it processes Approved/Scheduled cases, while Exceptions require manual retry. A school may choose immediate roster removal on approved exits, even when the historical effective date is later.
 

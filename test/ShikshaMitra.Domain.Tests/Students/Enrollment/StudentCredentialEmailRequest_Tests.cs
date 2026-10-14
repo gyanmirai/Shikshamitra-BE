@@ -50,4 +50,22 @@ public class StudentCredentialEmailRequest_Tests
 		row.Requeue(Guid.NewGuid(), Now.AddMinutes(2));
 		row.SentAt.ShouldBe(Now); row.EncryptedInitialPassword.ShouldBeNull(); row.IsDue(Now.AddMinutes(2)).ShouldBeTrue();
 	}
+	[Fact]
+	public void Completion_wait_preserves_pending_intent_without_claim_or_duplicate_request()
+	{
+		var row = NewRequest(); row.RequireSavedOwnerValidation(); row.DeferUntilCompletion(Now);
+		row.RequiresSavedOwnerValidation().ShouldBeTrue(); row.Status.ShouldBe("Pending"); row.AttemptCount.ShouldBe(0);
+		row.EncryptedInitialPassword.ShouldBeNull(); row.ClaimedAt.ShouldBeNull();
+		row.IsDue(Now).ShouldBeFalse(); row.IsDue(Now.AddMinutes(1)).ShouldBeTrue();
+		row.CanRequest(Now.AddHours(1)).ShouldBeFalse();
+		row.Claim(Now.AddMinutes(1));
+		Should.Throw<InvalidOperationException>(() => row.DeferUntilCompletion(Now.AddMinutes(1)));
+	}
+	[Fact]
+	public void A_later_legacy_resend_does_not_inherit_the_manual_delivery_override()
+	{
+		var row = NewRequest(); row.RequireSavedOwnerValidation(); row.Claim(Now); row.Sent(Now);
+		row.Requeue(Guid.NewGuid(), Now.AddMinutes(2)); row.RequiresSavedOwnerValidation().ShouldBeFalse();
+		row.RequireSavedOwnerValidation(); row.RequiresSavedOwnerValidation().ShouldBeTrue();
+	}
 }

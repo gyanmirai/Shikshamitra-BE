@@ -25,10 +25,10 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
-	public Task Onboarding_optional_document_exception_requires_approval_only_while_incomplete() =>
+	public Task Onboarding_document_review_stays_required_without_duplicating_admission_approval() =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var fixture = await CreateCertificationFixtureAsync("OptionalDocs");
+			var fixture = await CreateCertificationFixtureAsync("OptionalDocs", currentWorkflow: true);
 			var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
 			await CreateHandoffDocumentTypeAsync();
 			var service = GetRequiredService<IStudentOnboardingAppService>();
@@ -59,8 +59,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var finalized = await FinalizeAsync(fixture.Application, true, "optional-document-approval");
 			var item = await service.GetAsync(finalized.OnboardingCaseId);
 			item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
-			item.Steps.Single(step => step.Key == StudentOnboardingStepKeys.Documents).Required.ShouldBeFalse();
-			item.Steps.Single(step => step.Key == StudentOnboardingStepKeys.ApprovalReview).Required.ShouldBeTrue();
+			// Optional document rules do not remove the document-review milestone.
+			item.Steps.Single(step => step.Key == StudentOnboardingStepKeys.Documents).Required.ShouldBeTrue();
+			item.Steps.ShouldNotContain(step => step.Key == StudentOnboardingStepKeys.ApprovalReview && step.Required);
 
 			var requiredDocumentsSettings = JsonSerializer.Serialize(settings).Replace(
 				"\"requireDocuments\":false", "\"requireDocuments\":true", StringComparison.Ordinal);
@@ -72,7 +73,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			item = await service.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
 			item.Steps.Single(step => step.Key == StudentOnboardingStepKeys.Documents).Required.ShouldBeTrue();
-			item.Steps.Single(step => step.Key == StudentOnboardingStepKeys.ApprovalReview).Required.ShouldBeFalse();
+			item.Steps.ShouldNotContain(step => step.Key == StudentOnboardingStepKeys.ApprovalReview && step.Required);
 		});
 
 	[Fact]
@@ -304,6 +305,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 						(await roles.CreateAsync(new IdentityRole(Guid.NewGuid(), role, TestTenantId))).Succeeded.ShouldBeTrue();
 				var student = await _studentRepository.GetRegistrationAggregateAsync(finalized.StudentId);
 				student!.ApplyVerifiedRegistrationContact("9000000001", null, studentEmail, "Test address", null, null, null, null, null, null);
+				var capturedApplicant = await _applicantRepository.GetAsync(fixture.Applicant.Id);
+				capturedApplicant.ExtraProperties["AdmissionStudentField.Applicant.Email"] = studentEmail;
+				await _applicantRepository.UpdateAsync(capturedApplicant, true);
 				await _studentRepository.UpdateAsync(student, true);
 				var familyRepo = GetRequiredService<IRepository<StudentFamilyDetail, Guid>>();
 				var family = await familyRepo.FindAsync(student.Id);
@@ -416,12 +420,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					(await roles.CreateAsync(new IdentityRole(Guid.NewGuid(), role, TestTenantId))).Succeeded.ShouldBeTrue();
 				var student = await _studentRepository.GetRegistrationAggregateAsync(finalized.StudentId);
 				student!.ApplyVerifiedRegistrationContact("9000000001", null, email, "Test address", null, null, null, null, null, null);
+				var capturedApplicant = await _applicantRepository.GetAsync(fixture.Applicant.Id);
+				capturedApplicant.ExtraProperties["AdmissionStudentField.Applicant.Email"] = email;
+				await _applicantRepository.UpdateAsync(capturedApplicant, true);
 				await _studentRepository.UpdateAsync(student, true);
 				var familyRepo = GetRequiredService<IRepository<StudentFamilyDetail, Guid>>();
 				var family = await familyRepo.FindAsync(student.Id);
 				var newFamily = family == null;
 				family ??= new StudentFamilyDetail(student.Id, TestTenantId);
 				family.UpdateFatherDetails(new ParentGuardianDetails("Test Father", null, null, email, "9000000002", null, null, null, null, null, null, null, null));
+				family.UpdateMotherDetails(null);
+				family.UpdateGuardianDetails(new ParentGuardianDetails("Other Guardian", null, null, "other-owner@example.test", null, null, null, null, null, null, null, null, null));
 				if (newFamily) await familyRepo.InsertAsync(family, true); else await familyRepo.UpdateAsync(family, true);
 			});
 			var division = await WithUnitOfWorkAsync(async () =>
@@ -453,7 +462,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			item.PortalAccountOwners.ShouldNotBeNull();
 			item.PortalAccountOwners!.Single(owner => owner.AccountType == "guardian" && owner.Relationship == "father").Email.ShouldBe(email);
 			item.PortalAccountOwners.Single(owner => owner.Relationship == "self").Email.ShouldBe(email);
-			item.PortalAccountOwners.Single(owner => owner.Relationship == "mother").Email.ShouldBeNull();
+			item.PortalAccountOwners.ShouldNotContain(owner => owner.Relationship == "mother" || owner.Relationship == "guardian");
 			if (type == "guardian")
 			{
 				var caseRepo = GetRequiredService<IRepository<StudentOnboardingCase, Guid>>();
@@ -485,9 +494,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				(await service.GetPortalAccountsAsync(item.Id)).ShouldBeEmpty();
 				input.ConcurrencyStamp = item.ConcurrencyStamp;
 				input.Relationship = "guardian";
+				input.Email = "other-owner@example.test";
 				var wrongOwner = await Should.ThrowAsync<BusinessException>(() => service.ProvisionPortalAccountAsync(item.Id, input));
 				wrongOwner.Code.ShouldBe(StudentOnboardingErrorCodes.PortalAccountInvalid);
+				wrongOwner.Data["Reason"]!.ToString()!.ShouldContain("Father or Mother");
 				input.Relationship = relationship;
+				input.Email = email;
 			}
 			input.Email = "not-the-saved-owner@example.test";
 			(await Should.ThrowAsync<BusinessException>(() => service.ProvisionPortalAccountAsync(item.Id, input)))

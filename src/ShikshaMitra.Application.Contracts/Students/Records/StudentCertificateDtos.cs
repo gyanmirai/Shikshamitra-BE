@@ -64,6 +64,7 @@ public class StudentCertificateOrganizationDto
 
 public class StudentCertificateTemplateRenderDto
 {
+	public StudentCertificateDocumentDto? Document { get; set; }
 	public string HeaderContent { get; set; } = string.Empty;
 	public string FooterContent { get; set; } = string.Empty;
 	public string RenderedHeaderContent { get; set; } = string.Empty;
@@ -72,6 +73,19 @@ public class StudentCertificateTemplateRenderDto
 	public string? SchoolStampUrl { get; set; }
 	public string? LogoUrl { get; set; }
 	public string? SchoolAddress { get; set; }
+}
+
+public class StudentCertificateDocumentDto
+{
+	public string Title { get; set; } = string.Empty;
+	public string Body { get; set; } = string.Empty;
+	public List<StudentCertificateParticularDto> Particulars { get; set; } = new();
+}
+
+public class StudentCertificateParticularDto
+{
+	public string Label { get; set; } = string.Empty;
+	public string Value { get; set; } = string.Empty;
 }
 
 public class StudentCertificateTemplateDto

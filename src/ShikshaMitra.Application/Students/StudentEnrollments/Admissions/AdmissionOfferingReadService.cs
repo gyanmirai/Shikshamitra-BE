@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
@@ -144,10 +145,19 @@ public class AdmissionOfferingReadService(
 				Offering = offering,
 				Campus = campus,
 				Cycle = cycle,
-				Board = board,
-				Medium = medium,
-				Stage = stage,
-				Standard = standard,
+				// Scalar academic columns avoid the model's recursive hierarchy AutoIncludes.
+				BoardId = board.Id,
+				BoardAcademicYearId = board.AcademicYearId,
+				BoardType = board.Type,
+				MediumId = medium.Id,
+				MediumBoardId = medium.EducationBoardId,
+				MediumName = medium.Name,
+				StageId = stage.Id,
+				StageMediumId = stage.EducationMediumId,
+				StageName = stage.Name,
+				StandardId = standard.Id,
+				StandardStageId = standard.EducationMediumStageId,
+				StandardName = standard.Name,
 				Workflow = workflow,
 				InquiryForm = inquiryForm,
 				ApplicationForm = applicationForm,
@@ -156,8 +166,19 @@ public class AdmissionOfferingReadService(
 				ApplicationCount = applications.Count(application => application.AdmissionOfferingId == offering.Id)
 			};
 
+		// Filter before Count/Skip/Take so inquiry-first rows cannot hide eligible later pages.
+		if (input.ForSpecialRegistration)
+		{
+			query = query.Where(row =>
+				(row.Offering.Track == AdmissionTrack.Rte && row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration) ||
+				((row.Offering.Track == AdmissionTrack.Management || row.Offering.Track == AdmissionTrack.Staff) &&
+					(row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration || row.Offering.EntryMode == AdmissionEntryMode.Both)));
+		}
+
 		var eligibilityErrors = await eligibilityValidator.GetErrorsAsync(query.Select(row => row.Offering));
-		query = ApplyDerivedFilters(query, input, Clock.Now.Date, eligibilityErrors.Keys.ToList());
+		// Availability uses the institution's calendar day, including before 05:30 IST.
+		var today = DateTime.SpecifyKind(AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now.ToUniversalTime()), DateTimeKind.Utc);
+		query = ApplyDerivedFilters(query, input, today, eligibilityErrors.Keys.ToList());
 
 		return new(query, eligibilityErrors);
 	}
@@ -216,10 +237,10 @@ public class AdmissionOfferingReadService(
 			!incompatibleOfferingIds.Contains(row.Offering.Id) &&
 			(!row.Offering.CampusId.HasValue || row.Campus != null && row.Campus.IsActive) &&
 			row.Cycle.Status == AdmissionCycleStatus.Published &&
-			row.Board.AcademicYearId == row.Cycle.AcademicYearId &&
-			row.Medium.EducationBoardId == row.Board.Id &&
-			row.Stage.EducationMediumId == row.Medium.Id &&
-			row.Standard.EducationMediumStageId == row.Stage.Id &&
+			row.BoardAcademicYearId == row.Cycle.AcademicYearId &&
+			row.MediumBoardId == row.BoardId &&
+			row.StageMediumId == row.MediumId &&
+			row.StandardStageId == row.StageId &&
 			(!row.Offering.OpenDate.HasValue || row.Offering.OpenDate.Value.Date >= row.Cycle.StartDate.Date) &&
 			(!row.Offering.CloseDate.HasValue || row.Offering.CloseDate.Value.Date <= row.Cycle.EndDate.Date) &&
 			(!row.Offering.OpenDate.HasValue || !row.Offering.CloseDate.HasValue ||
@@ -244,10 +265,10 @@ public class AdmissionOfferingReadService(
 			incompatibleOfferingIds.Contains(row.Offering.Id) ||
 			(row.Offering.CampusId.HasValue && (row.Campus == null || !row.Campus.IsActive)) ||
 			row.Cycle.Status != AdmissionCycleStatus.Published ||
-			row.Board.AcademicYearId != row.Cycle.AcademicYearId ||
-			row.Medium.EducationBoardId != row.Board.Id ||
-			row.Stage.EducationMediumId != row.Medium.Id ||
-			row.Standard.EducationMediumStageId != row.Stage.Id ||
+			row.BoardAcademicYearId != row.Cycle.AcademicYearId ||
+			row.MediumBoardId != row.BoardId ||
+			row.StageMediumId != row.MediumId ||
+			row.StandardStageId != row.StageId ||
 			(row.Offering.OpenDate.HasValue && row.Offering.OpenDate.Value.Date < row.Cycle.StartDate.Date) ||
 			(row.Offering.CloseDate.HasValue && row.Offering.CloseDate.Value.Date > row.Cycle.EndDate.Date) ||
 			(row.Offering.OpenDate.HasValue && row.Offering.CloseDate.HasValue &&
@@ -280,14 +301,14 @@ public class AdmissionOfferingReadService(
 			AdmissionCycleName = row.Cycle.Name,
 			CampusId = row.Offering.CampusId,
 			CampusName = row.Campus?.Name,
-			BoardId = row.Board.Id,
-			BoardName = row.Board.Type.ToString(),
-			MediumId = row.Medium.Id,
-			MediumName = row.Medium.Name,
-			StageId = row.Stage.Id,
-			StageName = row.Stage.Name,
-			StandardId = row.Standard.Id,
-			StandardName = row.Standard.Name,
+			BoardId = row.BoardId,
+			BoardName = row.BoardType.ToString(),
+			MediumId = row.MediumId,
+			MediumName = row.MediumName,
+			StageId = row.StageId,
+			StageName = row.StageName,
+			StandardId = row.StandardId,
+			StandardName = row.StandardName,
 			Track = row.Offering.Track,
 			EntryMode = row.Offering.EntryMode,
 			Code = row.Offering.Code,
@@ -362,8 +383,8 @@ public class AdmissionOfferingReadService(
 			errors.Add(new(AdmissionOfferingValidationCodes.CampusMissing, "Selected Campus was not found."));
 		else if (row.Campus is { IsActive: false })
 			errors.Add(new(AdmissionOfferingValidationCodes.CampusInactive, "Selected Campus is inactive."));
-		if (row.Board.AcademicYearId != row.Cycle.AcademicYearId || row.Medium.EducationBoardId != row.Board.Id ||
-			row.Stage.EducationMediumId != row.Medium.Id || row.Standard.EducationMediumStageId != row.Stage.Id)
+		if (row.BoardAcademicYearId != row.Cycle.AcademicYearId || row.MediumBoardId != row.BoardId ||
+			row.StageMediumId != row.MediumId || row.StandardStageId != row.StageId)
 			errors.Add(new(AdmissionOfferingValidationCodes.HierarchyInvalid, "Academic hierarchy is invalid."));
 		if (row.Offering.GetEffectiveOpenDate(row.Cycle.StartDate).Date < row.Cycle.StartDate.Date ||
 			row.Offering.GetEffectiveCloseDate(row.Cycle.EndDate).Date > row.Cycle.EndDate.Date ||
@@ -416,17 +437,17 @@ public class AdmissionOfferingReadService(
 		{
 			"name" => descending ? query.OrderByDescending(x => x.Offering.Name) : query.OrderBy(x => x.Offering.Name),
 			"code" => descending ? query.OrderByDescending(x => x.Offering.Code) : query.OrderBy(x => x.Offering.Code),
-			"boardname" => descending ? query.OrderByDescending(x => x.Board.Type) : query.OrderBy(x => x.Board.Type),
-			"mediumname" => descending ? query.OrderByDescending(x => x.Medium.Name) : query.OrderBy(x => x.Medium.Name),
-			"stagename" => descending ? query.OrderByDescending(x => x.Stage.Name) : query.OrderBy(x => x.Stage.Name),
-			"standardname" => descending ? query.OrderByDescending(x => x.Standard.Name) : query.OrderBy(x => x.Standard.Name),
+			"boardname" => descending ? query.OrderByDescending(x => x.BoardType) : query.OrderBy(x => x.BoardType),
+			"mediumname" => descending ? query.OrderByDescending(x => x.MediumName) : query.OrderBy(x => x.MediumName),
+			"stagename" => descending ? query.OrderByDescending(x => x.StageName) : query.OrderBy(x => x.StageName),
+			"standardname" => descending ? query.OrderByDescending(x => x.StandardName) : query.OrderBy(x => x.StandardName),
 			"effectiveopendate" => descending
 				? query.OrderByDescending(x => x.Offering.OpenDate.HasValue ? x.Offering.OpenDate.Value.Date : x.Cycle.StartDate.Date)
 				: query.OrderBy(x => x.Offering.OpenDate.HasValue ? x.Offering.OpenDate.Value.Date : x.Cycle.StartDate.Date),
 			"effectiveclosedate" => descending
 				? query.OrderByDescending(x => x.Offering.CloseDate.HasValue ? x.Offering.CloseDate.Value.Date : x.Cycle.EndDate.Date)
 				: query.OrderBy(x => x.Offering.CloseDate.HasValue ? x.Offering.CloseDate.Value.Date : x.Cycle.EndDate.Date),
-			_ => query.OrderBy(x => x.Standard.Name).ThenBy(x => x.Offering.Code)
+			_ => query.OrderBy(x => x.StandardName).ThenBy(x => x.Offering.Code)
 		};
 	}
 
@@ -454,10 +475,18 @@ public class AdmissionOfferingReadService(
 		public required AdmissionOffering Offering { get; init; }
 		public AdmissionCampus? Campus { get; init; }
 		public required AdmissionCycle Cycle { get; init; }
-		public required EducationBoard Board { get; init; }
-		public required EducationMedium Medium { get; init; }
-		public required EducationMediumStage Stage { get; init; }
-		public required Standard Standard { get; init; }
+		public Guid BoardId { get; init; }
+		public Guid BoardAcademicYearId { get; init; }
+		public EducationBoardType BoardType { get; init; }
+		public Guid MediumId { get; init; }
+		public Guid MediumBoardId { get; init; }
+		public required string MediumName { get; init; }
+		public Guid StageId { get; init; }
+		public Guid StageMediumId { get; init; }
+		public required string StageName { get; init; }
+		public Guid StandardId { get; init; }
+		public Guid StandardStageId { get; init; }
+		public required string StandardName { get; init; }
 		public AdmissionWorkflowDefinition? Workflow { get; init; }
 		public AdmissionFormDefinition? InquiryForm { get; init; }
 		public AdmissionFormDefinition? ApplicationForm { get; init; }

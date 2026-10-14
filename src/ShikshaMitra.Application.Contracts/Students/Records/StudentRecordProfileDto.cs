@@ -9,6 +9,7 @@ namespace ShikshaMitra.Students.Records;
 public class StudentRecordProfileDto : EntityDto<Guid>
 {
 	public Guid StudentId { get; set; }
+	public Guid? AcademicYearId { get; set; }
 	public string? FirstName { get; set; }
 	public string? MiddleName { get; set; }
 	public string? LastName { get; set; }
@@ -29,4 +30,5 @@ public class StudentRecordProfileDto : EntityDto<Guid>
 	public bool PlacementEditable { get; set; }
 	public List<string> MaskedFields { get; set; } = [];
 	public List<StudentEnrollmentHistoryDto> EnrollmentHistory { get; set; } = [];
+	public List<StudentRecordAdmissionOnboardingDto> AdmissionOnboarding { get; set; } = [];
 }

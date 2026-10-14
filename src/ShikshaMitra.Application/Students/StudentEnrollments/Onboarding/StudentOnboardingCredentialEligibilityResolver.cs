@@ -29,10 +29,24 @@ public class StudentOnboardingCredentialEligibilityResolver(
 	IdentityUserManager users,
 	ICurrentTenant tenant,
 	ITenantRepository tenants,
-	IConfiguration appConfiguration) : IStudentCredentialEmailEligibilityResolver, ITransientDependency
+	IConfiguration appConfiguration,
+	StudentCredentialsRecipientReader recipients) : IStudentCredentialEmailEligibilityResolver, ITransientDependency
 {
 	public const string AccountRequired = "Create and verify the selected portal account first.";
 	public async Task<StudentCredentialEmailEligibility> ResolveAsync(Guid caseId, string accountType, bool enforceStaffScope = true)
+		=> await ResolveCoreAsync(caseId, accountType, enforceStaffScope, prepareAccount: false);
+	public async Task<StudentCredentialEmailEligibility> ResolveExplicitAsync(Guid caseId, string accountType, bool enforceStaffScope = true)
+		=> await ResolveCoreAsync(caseId, accountType, enforceStaffScope, prepareAccount: false, allowManualEmail: true);
+
+	public async Task<StudentCredentialEmailEligibility> ResolveAccountPreparationAsync(Guid caseId, string accountType)
+		=> await ResolveCoreAsync(caseId, accountType, enforceStaffScope: true, prepareAccount: true);
+
+	/// <summary>Checks required access/readiness for explicit manual delivery without changing automatic-email settings.</summary>
+	public async Task<StudentCredentialEmailEligibility> ResolveSendPreparationAsync(Guid caseId, string accountType)
+		=> await ResolveCoreAsync(caseId, accountType, enforceStaffScope: true, prepareAccount: false, allowMissingAccount: true, allowManualEmail: true);
+
+	private async Task<StudentCredentialEmailEligibility> ResolveCoreAsync(Guid caseId, string accountType,
+		bool enforceStaffScope, bool prepareAccount, bool allowMissingAccount = false, bool allowManualEmail = false)
 	{
 		if (enforceStaffScope) await onboarding.EnsureCaseAccessAsync(caseId);
 		var item = await cases.FindAsync(caseId);
@@ -46,16 +60,28 @@ public class StudentOnboardingCredentialEligibilityResolver(
         {
             using var saved = System.Text.Json.JsonDocument.Parse(text); rules = saved.RootElement.Clone();
         }
-		var enabled = rules.HasValue && OnboardingRuleConfiguration.Boolean(rules.Value,
-			accountType == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail");
+		var requiredAccount = rules.HasValue && OnboardingRuleConfiguration.Boolean(rules.Value,
+			accountType == "student" ? "studentAccount" : "guardianAccount");
+		var enabled = requiredAccount && (prepareAccount || allowManualEmail || OnboardingRuleConfiguration.Boolean(rules!.Value,
+			accountType == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail"));
 		var link = await links.FindAsync(x => x.StudentId == item.StudentId && x.AccountType == accountType);
 		var user = link == null ? null : await users.FindByIdAsync(link.UserId.ToString());
 		var name = student == null ? "Student" : string.Join(" ", new[] { student.FirstName, student.LastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
 		var school = await tenants.FindAsync(tenant.Id.Value);
 		var loginUrl = (appConfiguration["App:ClientUrl"] ?? appConfiguration["App:AngularUrl"] ?? "").TrimEnd('/') + "/login";
-		StudentCredentialEmailEligibility Result(string? reason) => new(item.Id, item.StudentId, link?.Id, user?.Id,
-			user?.Email ?? "", name, enabled, reason == null, reason, loginUrl, school?.Name ?? "ShikshaMitra");
-		if (!enabled) return Result("Credential email is disabled in the school's applicable readiness rule.");
+		StudentCredentialEmailEligibility Result(string? reason, bool waitingForCompletion = false) => new(item.Id, item.StudentId, link?.Id, user?.Id,
+			user?.Email ?? "", name, enabled, reason == null, reason, loginUrl, school?.Name ?? "ShikshaMitra", waitingForCompletion, link?.Relationship);
+		if (accountType == "student")
+		{
+			// Share capture/approved-correction proof across manual, automatic and queued
+			// delivery. A guardian contact fallback is never a Student email recipient.
+			var owner = (await recipients.GetAsync(item)).FirstOrDefault(value => value.AccountType == "student");
+			if (owner?.BlockedReason != null || owner?.Email == null)
+				return Result(owner?.BlockedReason ?? "Add or review the Student email in Student Records.") with { Email = string.Empty };
+		}
+		if (!enabled) return Result(allowManualEmail
+			? $"{(accountType == "student" ? "Student" : "Parent")} app access is not enabled for this case. Review its saved portal-access requirements."
+			: prepareAccount ? "This portal account is not required by the school." : "Credential email is disabled in the school's portal access settings.");
 		if (student == null || student.Status != StudentLifeCycleStatusEnum.Enrolled || item.Status == StudentOnboardingStatus.Cancelled)
 			return Result("The student must be actively enrolled in the school.");
 		var enrollment = item.StudentEnrollmentId.HasValue ? await enrollments.FindAsync(item.StudentEnrollmentId.Value) : null;
@@ -77,6 +103,8 @@ public class StudentOnboardingCredentialEligibilityResolver(
 			if (required.Where(value => value.documentType.IsRequired).Any(value => value.uploadedDocument?.ValidatedAt.HasValue != true && !accepted.Contains(value.documentType.Id)))
 				return Result("Validate every required document before sending credentials.");
 		}
+		if (link == null && allowMissingAccount && item.Status is not (StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled))
+			return Result(null);
 		if (link == null || user == null || user.TenantId != tenant.Id || !user.IsActive || link.VerifiedByUserId == Guid.Empty)
 			return Result(AccountRequired);
 		var recordedEmail = accountType == "student" && link.Relationship == "self" ? student.ContactDetail?.Email : link.Relationship switch
@@ -91,9 +119,9 @@ public class StudentOnboardingCredentialEligibilityResolver(
 		var roles = await users.GetRolesAsync(user);
 		if (roles.Count != 1 || roles[0] != (accountType == "student" ? "Student" : "Parent"))
 			return Result("The linked identity must have only the expected portal role.");
-		if (OnboardingRuleConfiguration.Text(rules!.Value, "credentialSendingTime", "activation") == "completion" &&
+		if (!prepareAccount && OnboardingRuleConfiguration.Text(rules!.Value, "credentialSendingTime", "activation") == "completion" &&
 			item.Status != StudentOnboardingStatus.Completed)
-			return Result("The school sends credentials after full onboarding completion, including requested app access.");
+			return Result("The school sends credentials after full onboarding completion, including requested app access.", waitingForCompletion: true);
 		return Result(null);
 	}
 }

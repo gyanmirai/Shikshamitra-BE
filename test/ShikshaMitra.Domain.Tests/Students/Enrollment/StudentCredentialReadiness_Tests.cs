@@ -24,9 +24,38 @@ public class StudentCredentialReadiness_Tests
 	[Theory]
 	[InlineData("sendStudentCredentialEmail")]
 	[InlineData("sendGuardianCredentialEmail")]
-	public void Email_requires_corresponding_account_policy(string key)
+	public void Saved_delivery_choice_is_dormant_while_corresponding_account_is_disabled(string key)
 	{
-		Should.Throw<BusinessException>(() => new OnboardingRuleConfiguration(Configuration(new { sendStudentCredentialEmail = key == "sendStudentCredentialEmail", sendGuardianCredentialEmail = key == "sendGuardianCredentialEmail" })));
+		var settings = new OnboardingRuleConfiguration(Configuration(new { studentAccount = false, guardianAccount = false,
+			sendStudentCredentialEmail = key == "sendStudentCredentialEmail", sendGuardianCredentialEmail = key == "sendGuardianCredentialEmail" }));
+		OnboardingRuleConfiguration.Boolean(settings.Root.GetProperty("readinessAccess"), key).ShouldBeTrue();
+		OnboardingRuleConfiguration.Boolean(AutomaticOnboardingReadinessRules.Resolve(settings), key).ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Automatic_readiness_defaults_to_parent_access_without_enabling_emails_or_approval()
+	{
+		var rules = AutomaticOnboardingReadinessRules.Resolve(null);
+		OnboardingRuleConfiguration.Boolean(rules, "studentAccount").ShouldBeFalse();
+		OnboardingRuleConfiguration.Boolean(rules, "guardianAccount").ShouldBeTrue();
+		OnboardingRuleConfiguration.Boolean(rules, "requireDocuments").ShouldBeTrue();
+		OnboardingRuleConfiguration.Boolean(rules, "sendStudentCredentialEmail").ShouldBeFalse();
+		OnboardingRuleConfiguration.Boolean(rules, "sendGuardianCredentialEmail").ShouldBeFalse();
+		OnboardingRuleConfiguration.Text(rules, "approvalMode").ShouldBe("none");
+	}
+
+	[Fact]
+	public void Automatic_readiness_preserves_explicit_saved_access_choices_and_needs_no_profile()
+	{
+		var settings = new OnboardingRuleConfiguration(Configuration(new { studentAccount = true, guardianAccount = false,
+			sendStudentCredentialEmail = false, credentialProvisioningMode = "manual", approvalMode = "always", requireDocuments = false }));
+		var rules = AutomaticOnboardingReadinessRules.Resolve(settings);
+		settings.Profiles.ShouldBeEmpty();
+		OnboardingRuleConfiguration.Boolean(rules, "studentAccount").ShouldBeTrue();
+		OnboardingRuleConfiguration.Boolean(rules, "guardianAccount").ShouldBeFalse();
+		OnboardingRuleConfiguration.Boolean(rules, "sendStudentCredentialEmail").ShouldBeFalse();
+		OnboardingRuleConfiguration.Text(rules, "credentialProvisioningMode").ShouldBe("manual");
+		OnboardingRuleConfiguration.Text(rules, "approvalMode").ShouldBe("none");
 	}
 
 	[Fact]
@@ -36,6 +65,22 @@ public class StudentCredentialReadiness_Tests
 		var rules = settings.Root.GetProperty("readinessAccess");
 		OnboardingRuleConfiguration.Boolean(rules, "sendStudentCredentialEmail").ShouldBeFalse();
 		OnboardingRuleConfiguration.Boolean(rules, "sendGuardianCredentialEmail").ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Snapshotless_readiness_ignores_conflicting_dormant_profiles_but_preserves_a_saved_snapshot()
+	{
+		var item = Case();
+		var json = System.Text.Json.Nodes.JsonNode.Parse(Configuration(new { studentAccount = false, guardianAccount = false }))!.AsObject();
+		json["onboardingProfiles"] = new System.Text.Json.Nodes.JsonArray(
+			System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new { id = "retired-a", offeringIds = new[] { item.OfferingId },
+				applicability = new { }, rules = new { studentAccount = true } })),
+			System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new { id = "retired-b", offeringIds = new[] { item.OfferingId },
+				applicability = new { }, rules = new { studentAccount = true } })));
+		var settings = new OnboardingRuleConfiguration(json.ToJsonString());
+		OnboardingRuleConfiguration.Boolean(settings.Readiness(item), "studentAccount").ShouldBeFalse();
+		item.ExtraProperties["ReadinessRulesSnapshot"] = "{\"studentAccount\":true}";
+		OnboardingRuleConfiguration.Boolean(settings.Readiness(item), "studentAccount").ShouldBeTrue();
 	}
 
 	[Fact]

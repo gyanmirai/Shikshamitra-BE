@@ -30,6 +30,13 @@ public partial class StudentOnboardingAppService
 		// Repeat validation for direct application calls, not just HTTP model binding.
 		var validation = await new ProvisionStudentPortalAccountDtoValidator().ValidateAsync(input);
 		if (!validation.IsValid) throw PortalInvalid(validation.Errors[0].ErrorMessage);
+		return await ProvisionPortalAccountCoreAsync(id, input);
+	}
+
+	// Only trusted, scoped commands call this core after authorizing the saved account owner.
+	private async Task<StudentPortalAccountDto> ProvisionPortalAccountCoreAsync(Guid id,
+		ProvisionStudentPortalAccountDto input, bool credentialsRequested = false)
+	{
 		if (!CurrentTenant.Id.HasValue || !CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
 		var item = await GetCaseAsync(id);
 		var existingLink = await portalLinkRepository.FindAsync(x => x.StudentId == item.StudentId && x.AccountType == input.AccountType);
@@ -51,6 +58,8 @@ public partial class StudentOnboardingAppService
 			?? throw PortalInvalid("This account is not required by the saved onboarding settings.");
 		var student = await studentRepository.GetWithDetailsAsync(item.StudentId)
 			?? throw PortalInvalid("Student record is unavailable.");
+		if (input.AccountType == "guardian" && !StudentPortalOwnerSelection.Relationships(student.FamilyDetail).Contains(input.Relationship))
+			throw PortalInvalid("Choose a saved Father or Mother profile. Other guardian is available only when neither parent is recorded.");
 		var guardian = input.Relationship switch
 		{
 			"father" => student.FamilyDetail?.FatherDetails,
@@ -101,15 +110,15 @@ public partial class StudentOnboardingAppService
 		await portalLinkRepository.InsertAsync(link, false);
 		handoff.Acknowledge(DateTime.UtcNow);
 		await handoffRepository.UpdateAsync(handoff, false);
-		await AddEventAsync(id, "PortalAccountLinked", $"Staff verified and linked the {input.AccountType} account ({input.Relationship}). Owner email verification and password setup remain separate.");
+		await AddEventAsync(id, "PortalAccountLinked", credentialsRequested
+			? $"Staff authorized portal access and requested credentials for the saved {input.AccountType} owner ({input.Relationship}). Owner email verification and password setup remain separate."
+			: $"Staff verified and linked the {input.AccountType} account ({input.Relationship}). Owner email verification and password setup remain separate.");
 		// The identity manager writes through the same unit of work. Flush before the
 		// completion check so it can read the just-created active user and link; this
 		// remains transactional and is rolled back if a later operation fails.
 		await CurrentUnitOfWork!.SaveChangesAsync();
-		// A portal link is a local onboarding handoff. Re-evaluate immediately so a
-		// case completes as soon as its already-settled Finance handoff and required
-		// account handoffs are all acknowledged; Finance remains the source of truth
-		// for the first-payment decision inside RefreshProvisioningAsync.
+		// A portal link is a local access handoff. Re-evaluate the requested account
+		// handoffs immediately; credential delivery still follows the saved timing.
 		await RefreshProvisioningAsync(item);
 		return (await MapPortalLinksAsync([link]))[0];
 	}
@@ -137,13 +146,17 @@ public partial class StudentOnboardingAppService
 	}
 
 	// Use the same current profile fields as ProvisionPortalAccountAsync, never admission snapshots.
-	private static IReadOnlyList<StudentPortalAccountOwnerDto> MapPortalAccountOwners(Student student) =>
-	[
-		new() { AccountType = "student", Relationship = "self", Name = $"{student.FirstName} {student.LastName}".Trim(), Email = student.ContactDetail?.Email?.Trim() },
-		new() { AccountType = "guardian", Relationship = "father", Name = student.FamilyDetail?.FatherDetails?.FullName, Email = student.FamilyDetail?.FatherDetails?.Email?.Trim() },
-		new() { AccountType = "guardian", Relationship = "mother", Name = student.FamilyDetail?.MotherDetails?.FullName, Email = student.FamilyDetail?.MotherDetails?.Email?.Trim() },
-		new() { AccountType = "guardian", Relationship = "guardian", Name = student.FamilyDetail?.GuardianDetails?.FullName, Email = student.FamilyDetail?.GuardianDetails?.Email?.Trim() }
-	];
+	private static IReadOnlyList<StudentPortalAccountOwnerDto> MapPortalAccountOwners(Student student)
+	{
+		var relationships = StudentPortalOwnerSelection.Relationships(student.FamilyDetail);
+		return new StudentPortalAccountOwnerDto[]
+		{
+			new() { AccountType = "student", Relationship = "self", Name = $"{student.FirstName} {student.LastName}".Trim(), Email = student.ContactDetail?.Email?.Trim() },
+			new() { AccountType = "guardian", Relationship = "father", Name = student.FamilyDetail?.FatherDetails?.FullName, Email = student.FamilyDetail?.FatherDetails?.Email?.Trim() },
+			new() { AccountType = "guardian", Relationship = "mother", Name = student.FamilyDetail?.MotherDetails?.FullName, Email = student.FamilyDetail?.MotherDetails?.Email?.Trim() },
+			new() { AccountType = "guardian", Relationship = "guardian", Name = student.FamilyDetail?.GuardianDetails?.FullName, Email = student.FamilyDetail?.GuardianDetails?.Email?.Trim() }
+		}.Where(owner => owner.AccountType == "student" || relationships.Contains(owner.Relationship)).ToArray();
+	}
 
 	private static BusinessException PortalInvalid(string reason) =>
 		new BusinessException(StudentOnboardingErrorCodes.PortalAccountInvalid).WithData("Reason", reason);

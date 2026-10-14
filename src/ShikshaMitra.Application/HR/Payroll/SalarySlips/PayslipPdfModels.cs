@@ -37,6 +37,10 @@ public sealed record PayslipPdfModel(
 	string NetPayInWords,
 	string? Remarks)
 {
+	public SalaryDocumentPresentation Presentation { get; init; } = new();
+	public byte[]? LogoBytes { get; init; }
+	public decimal? CasualLeaveDays { get; init; }
+	public decimal? UnpaidLeaveDays { get; init; }
 	public decimal? FullGrossSalary { get; init; }
 	public decimal GrossSalary { get; init; }
 	public decimal AdditionalEarnings { get; init; }

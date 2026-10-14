@@ -61,10 +61,8 @@ public class EmployeeActivationReadinessService(
 		var wages = earnings.Select(line => new StatutoryWageLine(line.ComponentId ?? line.Id, line.Name, line.Amount,
 			context.ComponentTreatments.GetValueOrDefault(line.ComponentId ?? line.Id, StatutoryWageTreatment.Unclassified))).ToList();
 		var calculation = EsiStatutoryCalculator.Calculate(month, context.Rule, context.Establishment,
-			context.Enrollment, wages, context.Overrides);
-		var blockers = calculation.IssueCodes.ToList();
-		if (calculation.IsCovered && string.IsNullOrWhiteSpace(context.Enrollment?.InsuranceNumber))
-			blockers.Add(EsiStatutoryCalculator.InsuranceNumberIssue);
+			context.Enrollment, wages, context.Overrides, calculationSettings: context.CalculationSettings, payrollProfile: context.PayrollProfile);
+		var blockers = calculation.IssueCodes.Where(x => x is not ("ESI_NUMBER_MISSING" or "ESI_APPLY_DISABLED" or "ESI_BASIS_RECONCILIATION_DIFFERENCE" or "ESI_STATUTORY_ASSESSMENT_UNAVAILABLE")).ToList();
 		return blockers.Distinct().ToList();
 	}
 }

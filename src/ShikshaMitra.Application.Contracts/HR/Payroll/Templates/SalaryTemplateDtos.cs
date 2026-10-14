@@ -107,6 +107,11 @@ public class SalaryRuleOverrideDto
 
 public class CalculateSalaryTemplateRequestDto
 {
+	[Volo.Abp.Auditing.DisableAuditing]
+	public PayrollStatutoryProfile? StatutoryProfileOverride { get; set; }
+	public string? StatutoryProfileConcurrencyStamp { get; set; }
+	public bool StatutoryProfileUpdatePf { get; set; } = true;
+	public bool StatutoryProfileUpdateEsic { get; set; } = true;
 	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
 	[System.Text.Json.Serialization.JsonIgnore]
@@ -178,6 +183,7 @@ public class SalaryTemplateTargetResultDto
 	public decimal Requested { get; set; }
 	public decimal Achieved { get; set; }
 	public decimal Difference { get; set; }
+	public bool IsExplainedByEnrollment { get; set; }
 	public bool IsExact { get; set; }
 }
 
@@ -205,6 +211,7 @@ public class SalaryTemplateEsiPreviewDto
 
 public class SalaryTemplateCalculationDto
 {
+	public PayrollStatutoryApplication? StatutoryApplication { get; set; }
 	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public PfEligibilityDecision? PfEligibility { get; set; }
 	public Guid TemplateId { get; set; }

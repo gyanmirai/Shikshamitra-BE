@@ -59,6 +59,8 @@ internal static class PayrollRunProjection
 		snapshot.ProfessionalTaxRuleVersion != item.ProfessionalTaxRuleVersion ||
 		snapshot.EsiCalculationDetailsJson != item.EsiCalculationDetailsJson ||
 		snapshot.PfEligibilityDetailsJson != item.PfEligibilityDetailsJson ||
+		snapshot.StatutoryApplicationJson != item.StatutoryApplicationJson ||
+		snapshot.LeaveUnitsByTypeJson != item.LeaveUnitsByTypeJson ||
 		snapshot.EsiConfigurationId != item.EsiConfigurationId ||
 		snapshot.EmployeeStateInsuranceRuleId != item.EmployeeStateInsuranceRuleId ||
 		snapshot.EmployeeStateInsuranceRuleVersion != item.EmployeeStateInsuranceRuleVersion ||
@@ -135,6 +137,8 @@ internal static class PayrollRunProjection
 		snapshot.ProfessionalTaxRuleVersion = item.ProfessionalTaxRuleVersion;
 		snapshot.EsiCalculationDetailsJson = item.EsiCalculationDetailsJson;
 		snapshot.PfEligibilityDetailsJson = item.PfEligibilityDetailsJson;
+		snapshot.StatutoryApplicationJson = item.StatutoryApplicationJson;
+		snapshot.LeaveUnitsByTypeJson = item.LeaveUnitsByTypeJson;
 		snapshot.EsiConfigurationId = item.EsiConfigurationId;
 		snapshot.EmployeeStateInsuranceRuleId = item.EmployeeStateInsuranceRuleId;
 		snapshot.EmployeeStateInsuranceRuleVersion = item.EmployeeStateInsuranceRuleVersion;
@@ -206,7 +210,7 @@ internal static class PayrollRunProjection
 			ProvidentFundRuleVersion = row.ProvidentFundRuleVersion,
 			ProfessionalTaxRuleId = row.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = row.ProfessionalTaxRuleVersion,
-			EsiCalculationDetailsJson = row.EsiCalculationDetailsJson, PfEligibilityDetailsJson = row.PfEligibilityDetailsJson,
+			EsiCalculationDetailsJson = row.EsiCalculationDetailsJson, PfEligibilityDetailsJson = row.PfEligibilityDetailsJson, StatutoryApplicationJson = row.StatutoryApplicationJson, LeaveUnitsByTypeJson = row.LeaveUnitsByTypeJson,
 			EsiConfigurationId = row.EsiConfigurationId,
 			EmployeeStateInsuranceRuleId = row.EmployeeStateInsuranceRuleId,
 			EmployeeStateInsuranceRuleVersion = row.EmployeeStateInsuranceRuleVersion,
@@ -223,6 +227,7 @@ internal static class PayrollRunProjection
 	public static RunPayrollComponentItem ToComponentItem(PayrollComputedLineItem item) =>
 		new()
 		{
+			SemanticType = item.Source.SemanticType.ToString(),
 			Name = item.Source.Name,
 			Amount = (double)item.Amount,
 			FullMonthAmount = item.Source.IsTemp ? null : item.Source.Amount,

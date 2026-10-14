@@ -78,7 +78,7 @@ Saving another salary for the same month supersedes the older effective revision
 The revision records effective month, template, quote, permitted overrides, and statutory provenance.
 Employee activation is a separate action and uses the server activation-readiness check.
 The readiness check requires a valid effective revision covering the later of the joining month or current payroll month.
-For an ESIC-covered employee, activation also requires the employee insurance number, even when salary was saved with registration pending.
+Pending registration is a warning and does not block activation when the salary and calculation rules are otherwise valid.
 HR can save registration details while the employee is inactive using the existing scoped enrollment endpoint.
 Readiness recalculates eligibility from saved earnings and applicable ESIC configuration, so off mode and employees outside coverage do not require a number.
 Later template or statutory changes do not silently change saved compensation.

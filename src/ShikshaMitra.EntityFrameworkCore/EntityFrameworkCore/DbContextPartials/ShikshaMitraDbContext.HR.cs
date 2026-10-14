@@ -76,6 +76,7 @@ public partial class ShikshaMitraDbContext
     public DbSet<EsiPayrollConfiguration> EsiPayrollConfigurations { get; set; }
     public DbSet<PfCoverageConfiguration> PfCoverageConfigurations { get; set; }
     public DbSet<EmployeeStatutoryEnrollment> EmployeeStatutoryEnrollments { get; set; }
+    public DbSet<EmployeeStatutoryProfileVersion> EmployeeStatutoryProfileVersions { get; set; }
     public DbSet<PayrollComponentStatutoryTreatment> PayrollComponentStatutoryTreatments { get; set; }
     public DbSet<StatutoryOverride> StatutoryOverrides { get; set; }
 

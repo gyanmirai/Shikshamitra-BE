@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
@@ -19,17 +20,30 @@ public class PayslipIssuanceService(
 	IEmployeePayrollDetailsRepository payrollDetails,
 	SalarySlipSnapshotReader snapshots,
 	PayslipDeliveryQueue deliveryQueue,
-	PayslipPdfService pdfService) : ApplicationService
+	PayslipPdfService pdfService, PayslipLogoService logos) : ApplicationService
 {
-	public async Task<PayslipDocument> IssueAsync(SalarySlip slip, bool fromPayrollLock = false)
+	private IReadOnlyDictionary<Guid, Employee>? employeeBatch;
+	private IReadOnlyDictionary<Guid, EmployeePayrollDetails>? bankBatch;
+	private PayslipSettings? cachedSchool;
+	private readonly Dictionary<string, byte[]> cachedLogos = new();
+	internal async Task<IDisposable> BeginEmployeeReadBatchAsync(IReadOnlyCollection<Guid> ids)
+	{
+		var previousEmployees = employeeBatch; var previousBank = bankBatch;
+		employeeBatch = (await AsyncExecuter.ToListAsync((await employees.GetQueryableAsync()).Where(x => ids.Contains(x.Id)))).ToDictionary(x => x.Id);
+		bankBatch = (await AsyncExecuter.ToListAsync((await payrollDetails.GetQueryableAsync()).Where(x => ids.Contains(x.EmployeeId)))).ToDictionary(x => x.EmployeeId);
+		return new Volo.Abp.DisposeAction(() => { employeeBatch = previousEmployees; bankBatch = previousBank; });
+	}
+	public async Task<PayslipDocument> IssueAsync(SalarySlip slip, bool fromPayrollLock = false, ShikshaMitra.HR.Payroll.RunPayroll.PayrollRunItemSnapshot? snapshotEvidence = null)
 	{
 		var existing = await documents.FindAsync(x => x.SalarySlipId == slip.Id && x.Revision == 1);
 		if (existing != null) return existing;
 		ShikshaMitra.HR.Payroll.Statutory.EsiPayrollReadiness.EnsureInsuranceNumber(
-			slip.EmployeeStateInsuranceRuleId, slip.EmployeeStateInsuranceCoverageDecision, slip.EmployeeStateInsuranceNumber);
-		var employee = await employees.GetAsync(slip.EmployeeId, includeDetails: false);
-		var details = await payrollDetails.GetByEmployeeIdAsync(slip.EmployeeId);
-		var snapshot = await snapshots.GetAsync(slip.EmployeeId, slip.MonthYear);
+			slip.EmployeeStateInsuranceRuleId, slip.EmployeeStateInsuranceCoverageDecision, slip.EmployeeStateInsuranceNumber, slip.StatutoryApplicationJson);
+		var employee = employeeBatch?.GetValueOrDefault(slip.EmployeeId) ?? await employees.GetAsync(slip.EmployeeId, includeDetails: false);
+		var details = bankBatch == null ? await payrollDetails.GetByEmployeeIdAsync(slip.EmployeeId) : bankBatch.GetValueOrDefault(slip.EmployeeId);
+		if (snapshotEvidence != null && (snapshotEvidence.EmployeeId != slip.EmployeeId || snapshotEvidence.MonthYear != slip.MonthYear || snapshotEvidence.TenantId != slip.TenantId))
+			throw new BusinessException(HRErrorCodes.PayslipConflict);
+		var snapshot = snapshotEvidence ?? await snapshots.GetAsync(slip.EmployeeId, slip.MonthYear);
 		var dto = SalarySlipProjection.ToDto(slip, employee, snapshot, details);
 		var documentId = GuidGenerator.Create();
 		dto.DocumentId = documentId;
@@ -37,9 +51,8 @@ public class PayslipIssuanceService(
 		dto.Status = SalarySlipStatus.Finalized;
 		dto.ProcessedDate = Clock.Now;
 		dto.SlipNumber = $"PS-{slip.Id:N}-R1";
-		var school = await settings.FindAsync(x => x.TenantId == slip.TenantId)
-			?? throw new BusinessException(HRErrorCodes.PayslipSchoolDetailsRequired);
-		var model = SalarySlipProjection.ToPdfModel(dto, school.SchoolName) with { InstituteAddress = school.SchoolAddress };
+		var school = await EnsureSchoolConfiguredAsync();
+		var model = await PrepareModelAsync(dto, school);
 		var bytes = pdfService.Generate(model);
 		var document = new PayslipDocument(documentId, slip.TenantId, slip.Id, slip.EmployeeId,
 			slip.MonthYear, 1, dto.ProcessedDate, CurrentUser.Id, JsonSerializer.Serialize(dto), bytes);
@@ -62,8 +75,8 @@ public class PayslipIssuanceService(
 	{
 		if (slip.Status != SalarySlipStatus.Finalized || (await GetCurrentAsync(slip.Id)).Id != previous.Id)
 			throw new BusinessException(HRErrorCodes.PayslipConflict);
-		var employee = await employees.GetAsync(slip.EmployeeId, includeDetails: false);
-		var details = await payrollDetails.GetByEmployeeIdAsync(slip.EmployeeId);
+		var employee = employeeBatch?.GetValueOrDefault(slip.EmployeeId) ?? await employees.GetAsync(slip.EmployeeId, includeDetails: false);
+		var details = bankBatch == null ? await payrollDetails.GetByEmployeeIdAsync(slip.EmployeeId) : bankBatch.GetValueOrDefault(slip.EmployeeId);
 		var snapshot = await snapshots.GetAsync(slip.EmployeeId, slip.MonthYear);
 		var dto = SalarySlipProjection.ToDto(slip, employee, snapshot, details);
 		var school = await EnsureSchoolConfiguredAsync();
@@ -71,7 +84,7 @@ public class PayslipIssuanceService(
 		dto.DocumentRevision = previous.Revision + 1;
 		dto.ProcessedDate = Clock.Now;
 		dto.SlipNumber = $"PS-{slip.Id:N}-R{dto.DocumentRevision}";
-		var model = SalarySlipProjection.ToPdfModel(dto, school.SchoolName) with { InstituteAddress = school.SchoolAddress };
+		var model = await PrepareModelAsync(dto, school);
 		var document = new PayslipDocument(dto.DocumentId.Value, slip.TenantId, slip.Id, slip.EmployeeId,
 			slip.MonthYear, dto.DocumentRevision.Value, dto.ProcessedDate, CurrentUser.Id,
 			JsonSerializer.Serialize(dto), pdfService.Generate(model), previous.Id, reason, requestId);
@@ -93,8 +106,8 @@ public class PayslipIssuanceService(
 			return repeated;
 		}
 		if ((await GetCurrentAsync(slip.Id)).Id != previous.Id) throw new BusinessException(HRErrorCodes.PayslipConflict);
-		var employee = await employees.GetAsync(slip.EmployeeId, includeDetails: false);
-		var details = await payrollDetails.GetByEmployeeIdAsync(slip.EmployeeId);
+		var employee = employeeBatch?.GetValueOrDefault(slip.EmployeeId) ?? await employees.GetAsync(slip.EmployeeId, includeDetails: false);
+		var details = bankBatch == null ? await payrollDetails.GetByEmployeeIdAsync(slip.EmployeeId) : bankBatch.GetValueOrDefault(slip.EmployeeId);
 		var school = await EnsureSchoolConfiguredAsync();
 		// Start from the issued monetary/attendance evidence. Only document identity facts change.
 		var dto = ReadFacts(previous, SalarySlipStatus.Finalized);
@@ -112,7 +125,7 @@ public class PayslipIssuanceService(
 		dto.DocumentRevision = previous.Revision + 1;
 		dto.ProcessedDate = Clock.Now;
 		dto.SlipNumber = $"PS-{slip.Id:N}-R{dto.DocumentRevision}";
-		var model = SalarySlipProjection.ToPdfModel(dto, school.SchoolName) with { InstituteAddress = school.SchoolAddress };
+		var model = await PrepareModelAsync(dto, school);
 		var document = new PayslipDocument(dto.DocumentId.Value, slip.TenantId, slip.Id, slip.EmployeeId, slip.MonthYear,
 			dto.DocumentRevision.Value, dto.ProcessedDate, CurrentUser.Id, JsonSerializer.Serialize(dto), pdfService.Generate(model),
 			previous.Id, reason, requestId);
@@ -121,9 +134,23 @@ public class PayslipIssuanceService(
 		return document;
 	}
 
-	public async Task<PayslipSettings> EnsureSchoolConfiguredAsync() =>
-		await settings.FindAsync(x => x.TenantId == CurrentTenant.Id)
+	internal async Task<PayslipPdfModel> PrepareModelAsync(SalarySlipDto dto, PayslipSettings school)
+	{
+		var options = school.GetPresentation();
+		byte[]? logo = null;
+		if (options.LogoBlobName != null && !cachedLogos.TryGetValue(options.LogoBlobName, out logo))
+			cachedLogos[options.LogoBlobName] = logo = await logos.GetAsync(options.LogoBlobName);
+		dto.Presentation = new(school.PresentationVersionId, school.SchoolName, school.SchoolAddress, options,
+			logo == null ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(logo)));
+		return SalarySlipProjection.ToPdfModel(dto, school.SchoolName) with { InstituteAddress = school.SchoolAddress, LogoBytes = logo };
+	}
+
+	public async Task<PayslipSettings> EnsureSchoolConfiguredAsync()
+	{
+		if (cachedSchool?.TenantId == CurrentTenant.Id && cachedSchool != null) return cachedSchool;
+		return cachedSchool = await settings.FindAsync(x => x.TenantId == CurrentTenant.Id)
 			?? throw new BusinessException(HRErrorCodes.PayslipSchoolDetailsRequired);
+	}
 
 	public static SalarySlipDto ReadFacts(PayslipDocument document, SalarySlipStatus status)
 	{

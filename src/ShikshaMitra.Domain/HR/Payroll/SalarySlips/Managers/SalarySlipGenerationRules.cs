@@ -49,6 +49,7 @@ public static class SalarySlipGenerationRules
 		PayrollRunItemSnapshot snapshot,
 		DayCalculationType dayCalculationMode)
 	{
+		salarySlip.SetStatutoryApplication(snapshot.StatutoryApplicationJson);
 		salarySlip.SetPayrollComputationSnapshot(
 			snapshot.BasisDays,
 			snapshot.PayableDays,

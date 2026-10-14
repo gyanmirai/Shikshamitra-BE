@@ -90,7 +90,6 @@ public class UpdateEmployeeStatutoryEnrollmentDto
 {
 	public string Status { get; set; } = nameof(EmployeeStatutoryEnrollmentStatus.PendingReview);
 	public string WageCeilingCategory { get; set; } = nameof(StatutoryWageCeilingCategory.Standard);
-	public string? InsuranceNumber { get; set; }
 	public DateTime? CoveredFrom { get; set; }
 	public DateTime? CoveredTo { get; set; }
 	public DateTime? ContributionPeriodEnd { get; set; }
@@ -266,7 +265,6 @@ public class UpdateEmployeeStatutoryEnrollmentDtoValidator : AbstractValidator<U
 	{
 		RuleFor(x => x.Status).Must(value => Enum.TryParse<EmployeeStatutoryEnrollmentStatus>(value, true, out _));
 		RuleFor(x => x.WageCeilingCategory).Must(value => Enum.TryParse<StatutoryWageCeilingCategory>(value, true, out _));
-		RuleFor(x => x.InsuranceNumber).MaximumLength(100);
 		RuleFor(x => x.StatusReason).MaximumLength(500);
 		RuleFor(x => x.DisabilityEvidenceReference).MaximumLength(1000);
 		RuleFor(x => x.CoveredTo).GreaterThanOrEqualTo(x => x.CoveredFrom!.Value).When(x => x.CoveredFrom.HasValue && x.CoveredTo.HasValue);

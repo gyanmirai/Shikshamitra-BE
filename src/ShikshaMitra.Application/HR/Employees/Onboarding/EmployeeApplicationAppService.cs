@@ -41,7 +41,7 @@ public class EmployeeApplicationAppService(
 	IUnitOfWorkManager unitOfWorkManager,
 	IStringEncryptionService stringEncryptionService,
 	IEmployeeOnboardingInvitationEmailService invitationEmailService,
-	EmployeeOnboardingAcademicScopeAssigner academicScopeAssigner)
+	EmployeeOnboardingAcademicScopeAssigner academicScopeAssigner, ShikshaMitra.HR.Payroll.Statutory.EmployeeStatutoryProfileAppService statutoryProfiles)
 	: ApplicationService, IEmployeeApplicationAppService
 {
 	private const int TokenExpiryDays = 30;
@@ -267,6 +267,10 @@ public class EmployeeApplicationAppService(
 				input.AcademicYearId.Value,
 				input.AcademicScopes);
 		}
+
+		if (input.StatutoryProfile is { } statutoryProfile)
+			await statutoryProfiles.SaveAsync(employee.Id, new ShikshaMitra.HR.Payroll.Statutory.SaveEmployeeStatutoryProfileDto
+			{ Profile = statutoryProfile, IdempotencyKey = GuidGenerator.Create() });
 
 		var workExperiences = (input.WorkExperiences.Count > 0
 				? input.WorkExperiences

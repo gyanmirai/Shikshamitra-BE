@@ -39,19 +39,19 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 			EffectiveMonth = month,
 			ConcurrencyStamp = effective.ConcurrencyStamp,
 			IdempotencyKey = Guid.NewGuid(),
-			CalculationSettings = new() { EligibilityBasis = "GROSS", CalculationBasis = "BASIC_COMPONENT" }
+			CalculationSettings = new() { EligibilityBasis = "GROSS", CalculationBasis = "COMPONENT" }
 		};
 		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		input.CalculationSettings = input.CalculationSettings with { BasicComponentId = Guid.NewGuid() };
+		input.CalculationSettings = input.CalculationSettings with { CalculationComponentId = Guid.NewGuid() };
 		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		input.CalculationSettings = input.CalculationSettings with { BasicComponentId = basic.Id };
+		input.CalculationSettings = input.CalculationSettings with { CalculationComponentId = basic.Id };
 		var response = await Client.PutAsJsonAsync(EsiUrl, input);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var saved = (await response.Content.ReadFromJsonAsync<EsiConfigurationSettingsDto>(JsonOptions))!;
 		var version = saved.History.Single(x => x.EffectiveMonth == month && !x.IsCancelled);
 		version.CalculationSettings.EligibilityBasis.ShouldBe("GROSS");
-		version.CalculationSettings.CalculationBasis.ShouldBe("BASIC_COMPONENT");
-		version.CalculationSettings.BasicComponentId.ShouldBe(basic.Id);
+		version.CalculationSettings.CalculationBasis.ShouldBe("COMPONENT");
+		version.CalculationSettings.CalculationComponentId.ShouldBe(basic.Id);
 		foreach (var original in settings.History)
 		{
 			var retained = saved.History.Single(x => x.Id == original.Id);
@@ -59,9 +59,9 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 			retained.ConcurrencyStamp.ShouldBe(original.ConcurrencyStamp);
 		}
 		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.OK);
-		input.CalculationSettings = input.CalculationSettings with { EligibilityBasis = "BASIC_COMPONENT" };
+		input.CalculationSettings = input.CalculationSettings with { EligibilityBasis = "COMPONENT", EligibilityComponentId = basic.Id };
 		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
-		input.CalculationSettings = input.CalculationSettings with { EligibilityBasis = "GROSS", CalculationBasis = "GROSS", BasicComponentId = null };
+		input.CalculationSettings = input.CalculationSettings with { EligibilityBasis = "GROSS", EligibilityComponentId = null, CalculationBasis = "GROSS", CalculationComponentId = null };
 		(await Client.PutAsJsonAsync(EsiUrl, input)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
 		(await Client.PutAsJsonAsync(EsiUrl, new
 		{
@@ -102,103 +102,44 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 		finally { http.HttpContext = prior; }
 	}
 	[Fact]
-	public async Task Compensation_rejects_missing_mandatory_enrollment_and_preserves_voluntary_membership()
+	public async Task Compensation_allows_audited_PF_override_but_requires_real_salary_rules()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		await PayrollTestHelper.EnsureActiveEsiTestSetupAsync(Factory);
 		var month = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
 		var coverage = await GetAndReadAsync<PfCoverageSettingsDto>(PfUrl);
-		var current = coverage.History.FirstOrDefault(x => !x.IsCancelled && x.EffectiveMonth <= month);
-		var school = await Client.PutAsJsonAsync(PfUrl, new SavePfCoverageDto
-		{
-			EffectiveMonth = month,
-			IsCovered = true,
-			EvidenceReference = "Synthetic PF registration",
-			ExpectedConfigurationId = current?.Id,
-			IdempotencyKey = Guid.NewGuid()
-		});
-		school.StatusCode.ShouldBe(HttpStatusCode.OK, await school.Content.ReadAsStringAsync());
+		await EsiPayrollWorkflowScenario.RequireSuccess(await Client.PutAsJsonAsync(PfUrl, new SavePfCoverageDto {
+			EffectiveMonth = month, IsCovered = true, EvidenceReference = "Synthetic PF registration",
+			ExpectedConfigurationId = coverage.History.FirstOrDefault(x => !x.IsCancelled && x.EffectiveMonth <= month)?.Id, IdempotencyKey = Guid.NewGuid() }));
 		var employeeId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "PfEnrollmentPolicy");
 		var template = (await GetAndReadAsync<SalaryTemplateListDto>("/api/payroll/salary-templates/active")).Items
 			.First(x => x.EditableVersion.Rules.Any(rule => rule.FormulaType == "EMPLOYEE_PROVIDENT_FUND"));
-		var input = new SaveEmployeeCompensationDto
-		{
-			TemplateVersionId = template.EditableVersion.Id,
-			SalaryBasis = "GROSS",
-			ProtectionPolicy = "PROTECT_GROSS",
-			MonthlyAmount = 12000m,
-			EffectiveMonth = month,
-			PfApplicable = false,
-			PfEnrollment = new() { Membership = "NOT_MEMBER" },
-			IdempotencyKey = Guid.NewGuid().ToString("N")
-		};
+		var profileUrl = $"/api/employees/{employeeId}/payroll/statutory-profile";
+		var profile = await GetAndReadAsync<EmployeeStatutoryProfileDto>(profileUrl);
+		var input = new SaveEmployeeCompensationDto { TemplateVersionId = template.EditableVersion.Id,
+			SalaryBasis = "GROSS", ProtectionPolicy = "PROTECT_GROSS", MonthlyAmount = 25000m, EffectiveMonth = month,
+			PfApplicable = false, PfEnrollment = new() { Membership = "NOT_MEMBER" }, IdempotencyKey = Guid.NewGuid().ToString("N") };
 		var url = $"/api/payroll/employees/{employeeId}/compensation";
-		var undecided = new
-		{
-			input.TemplateVersionId,
-			input.SalaryBasis,
-			MonthlyAmount = 30000m,
-			input.EffectiveMonth,
-			input.PfEnrollment,
-			input.IdempotencyKey,
-			EmployeeId = employeeId
-		};
-		(await Client.PutAsJsonAsync(url, undecided)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		(await Client.PostAsJsonAsync($"/api/payroll/salary-templates/versions/{input.TemplateVersionId}/calculate", undecided))
-			.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		var required = await Client.PutAsJsonAsync(url, input);
-		required.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		(await required.Content.ReadAsStringAsync()).ShouldContain("PF_ENROLLMENT_REQUIRED");
-		input.MonthlyAmount = 25000m;
-		(await Client.PutAsJsonAsync(url, input)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		input.MonthlyAmount = 25001m;
-		var optedOut = await Client.PutAsJsonAsync(url, input);
-		optedOut.StatusCode.ShouldBe(HttpStatusCode.OK, await optedOut.Content.ReadAsStringAsync());
-		var optedOutRevision = (await optedOut.Content.ReadFromJsonAsync<CompensationRevisionDto>(JsonOptions))!;
-		optedOutRevision.PfRuleId.ShouldBeNull();
-		optedOutRevision.PfEligibility!.Status.ShouldBe("VOLUNTARY");
-		optedOutRevision.PfEligibility.GrossSalary.ShouldBe(25001m);
-		optedOutRevision.PfEligibility.Wages.ShouldBeLessThan(25000m);
-		input.ExpectedRevision = optedOutRevision.RevisionNumber;
-		input.IdempotencyKey = Guid.NewGuid().ToString("N");
-		input.MonthlyAmount = 60000m;
-		input.PfApplicable = true;
-		input.PfRuleId = template.EditableVersion.DefaultPfRuleId ?? (await PayrollTestHelper.CreatePfRuleAsync(Client, "VoluntaryEnrollment")).Id;
-		var ctc = await Client.PostAsJsonAsync($"/api/payroll/salary-templates/versions/{input.TemplateVersionId}/calculate", new CalculateSalaryTemplateRequestDto
-		{
-			SalaryBasis = "EMPLOYER_COST",
-			ProtectionPolicy = "PROTECT_EMPLOYER_COST",
-			MonthlyAmount = 25500m,
-			EffectiveMonth = month,
-			EmployeeId = employeeId,
-			PfApplicable = true,
-			PfRuleId = input.PfRuleId,
-			PfEnrollment = input.PfEnrollment
-		});
-		ctc.StatusCode.ShouldBe(HttpStatusCode.OK, await ctc.Content.ReadAsStringAsync());
-		var ctcCalculation = (await ctc.Content.ReadFromJsonAsync<SalaryTemplateCalculationDto>(JsonOptions))!;
-		ctcCalculation.GrossSalary.ShouldBeLessThanOrEqualTo(25000m);
-		ctcCalculation.PfEligibility!.Status.ShouldBe("MANDATORY");
-		ctcCalculation.PfEligibility.GrossSalary.ShouldBe(ctcCalculation.GrossSalary);
-		var missingConsent = await Client.PutAsJsonAsync(url, input);
-		missingConsent.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		(await missingConsent.Content.ReadAsStringAsync()).ShouldContain("PF_CONSENT_REQUIRED");
-		input.PfEnrollment = input.PfEnrollment with { ConsentReference = "Synthetic employee consent" };
-		var saved = await Client.PutAsJsonAsync(url, input);
-		saved.StatusCode.ShouldBe(HttpStatusCode.OK, await saved.Content.ReadAsStringAsync());
-		var revision = (await saved.Content.ReadFromJsonAsync<CompensationRevisionDto>(JsonOptions))!;
-		revision.PfEnrollment.ConsentReference.ShouldBe("Synthetic employee consent");
-		var history = await GetAndReadAsync<CompensationRevisionListDto>(url);
-		var retained = history.Items.Single(x => x.Id == optedOutRevision.Id);
-		retained.PfEligibility.ShouldBe(optedOutRevision.PfEligibility);
-		retained.GrossSalary.ShouldBe(optedOutRevision.GrossSalary);
-		input.ExpectedRevision = revision.RevisionNumber;
-		input.IdempotencyKey = Guid.NewGuid().ToString("N");
-		input.PfApplicable = false;
-		input.PfRuleId = null;
-		var continuing = await Client.PutAsJsonAsync(url, input);
-		continuing.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		(await continuing.Content.ReadAsStringAsync()).ShouldContain("PF_ENROLLMENT_REQUIRED");
+		var missingRule = await Client.PutAsJsonAsync(url, input);
+		missingRule.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		(await missingRule.Content.ReadAsStringAsync()).ShouldContain("PfRuleNotFound");
+		await EsiPayrollWorkflowScenario.RequireSuccess(await Client.PutAsJsonAsync(profileUrl, new SaveEmployeeStatutoryProfileDto {
+			Profile = profile.Profile with { ApplyPf = false, PfDisabledReason = "Pending school registration resolution" },
+			ConcurrencyStamp = profile.ConcurrencyStamp, EffectiveMonth = month.ToString("yyyy-MM"), UpdateEsic = false, IdempotencyKey = Guid.NewGuid() }));
+		var savedResponse = await Client.PutAsJsonAsync(url, input); await EsiPayrollWorkflowScenario.RequireSuccess(savedResponse);
+		var saved = (await savedResponse.Content.ReadFromJsonAsync<CompensationRevisionDto>(JsonOptions))!;
+		saved.PfRuleId.ShouldBeNull(); saved.PfEligibility!.Status.ShouldBe("MANDATORY");
+		saved.PfEligibility.CanSave.ShouldBeTrue();
+		var quote = System.Text.Json.JsonSerializer.Deserialize<SalaryTemplateCalculationDto>(saved.CalculationSnapshotJson!)!;
+		quote.StatutoryApplication!.ProvidentFund.AppliedEmployeeAmount.ShouldBe(0);
+		quote.StatutoryApplication.ProvidentFund.WarningCode.ShouldBe("PF_APPLY_DISABLED");
+		quote.StatutoryApplication.ProvidentFund.Eligible.ShouldBeTrue();
+		using var denied = Factory.CreateClient();
+		denied.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "HR.PayrollManagement.CompensationRevisions.View");
+		(await denied.PutAsJsonAsync(profileUrl, new SaveEmployeeStatutoryProfileDto { Profile = profile.Profile, IdempotencyKey = Guid.NewGuid(), UpdateEsic = false })).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		using var otherTenant = Factory.CreateClient();
+		otherTenant.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, Guid.NewGuid().ToString());
+		(await otherTenant.GetAsync(profileUrl)).IsSuccessStatusCode.ShouldBeFalse();
 	}
 	[Fact]
 	public async Task Calculation_changes_require_the_exact_administrator_capability()

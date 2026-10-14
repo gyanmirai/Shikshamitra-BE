@@ -11,7 +11,7 @@ public class HrReportRowSourceReader(
 	HrReportAttendanceRowReader attendanceRowReader,
 	HrReportLeaveRowReader leaveRowReader,
 	HrReportPerformanceRowReader performanceRowReader,
-	HrReportPolicyRowReader policyRowReader) : ITransientDependency
+	HrReportPolicyRowReader policyRowReader, PayrollSalaryDocumentRowReader salaryDocuments) : ITransientDependency
 {
 	public async Task<HrReportRowsResult> BuildRowsResultAsync(
 		string source,
@@ -19,6 +19,9 @@ public class HrReportRowSourceReader(
 		UserScopeContext scope,
 		bool exportAllRows)
 	{
+		if (source is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister)
+			return await salaryDocuments.BuildAsync(input, scope, exportAllRows);
+
 		if (source == HrReportDataSources.Employee && HrReportDatabaseBackedCapabilities.CanUseEmployeeGroup(input))
 		{
 			return await employeeRowReader.BuildGroupedRowsResultAsync(input, scope, exportAllRows);
@@ -85,4 +88,8 @@ public class HrReportRowSourceReader(
 public record HrReportRowsResult(
 	List<Dictionary<string, string?>> Rows,
 	int TotalCount,
-	bool IsDatabaseBacked);
+	bool IsDatabaseBacked)
+{
+	public Dictionary<string, decimal>? Totals { get; init; }
+	public List<string> Warnings { get; init; } = [];
+}

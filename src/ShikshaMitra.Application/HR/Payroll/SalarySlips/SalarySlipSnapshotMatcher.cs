@@ -66,6 +66,7 @@ internal static class SalarySlipSnapshotMatcher
 		PayrollRunItemSnapshot snapshot,
 		IReadOnlyList<SalarySlipLineItem> snapshotEarnings,
 		IReadOnlyList<SalarySlipLineItem> snapshotDeductions) =>
+		salarySlip.StatutoryApplicationJson == snapshot.StatutoryApplicationJson &&
 		salarySlip.PayrollBasisDays == snapshot.BasisDays &&
 		salarySlip.PayableDays == snapshot.PayableDays &&
 		salarySlip.ProrationFactor == snapshot.ProrationFactor &&

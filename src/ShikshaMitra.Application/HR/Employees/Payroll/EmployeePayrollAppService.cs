@@ -28,7 +28,7 @@ public class EmployeePayrollAppService(
 	IGuidGenerator guidGenerator,
 	EmployeePayrollContractWorkflow payrollContractWorkflow,
 	IEmployeeAuthorizationService employeeAuthorizationService,
-	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator)
+	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator, ShikshaMitra.HR.Payroll.Statutory.EmployeeStatutoryProfileAppService statutoryProfiles)
 	: ApplicationService, IEmployeePayrollAppService
 {
 	[UnitOfWork]
@@ -53,11 +53,7 @@ public class EmployeePayrollAppService(
 			details.AccountNumber = bank.AccountNumber;
 			details.IfscCode = bank.IfscCode;
 		}
-		if (input.StatutoryIdentifiers is { } statutory)
-		{
-			details.EpfNumber = statutory.EpfNumber;
-			details.UanNumber = statutory.UanNumber;
-		}
+		if (input.StatutoryIdentifiers != null) throw new BusinessException("HR:Payroll:UseStatutoryProfile");
 		if (input.AttendanceIntegration is { } attendance)
 		{
 			details.PunchId = attendance.PunchId;
@@ -72,12 +68,17 @@ public class EmployeePayrollAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<EmployeePayrollDetailsDto> GetPayrollDetailsAsync(Guid employeeId)
 	{
+		await employeeAuthorizationService.CheckEmployeeScopeAccessAsync(employeeId);
 		var employee = await employeeRepository.GetAsync(employeeId);
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
 		var earnings = await payrollComponentRepository.GetEarningsByEmployeeIdAsync(employeeId);
 		var deductions = await payrollComponentRepository.GetDeductionsByEmployeeIdAsync(employeeId);
 
-		return EmployeePayrollProjection.ToDetailsDto(employee, payrollDetails, earnings, deductions);
+		var dto = EmployeePayrollProjection.ToDetailsDto(employee, payrollDetails, earnings, deductions);
+		var statutory = await statutoryProfiles.GetProjectionAsync(employeeId);
+		dto.PayrollDetails.EpfNumber = statutory.Profile.PfNumber;
+		dto.PayrollDetails.UanNumber = statutory.Profile.UanNumber;
+		return dto;
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
@@ -88,9 +89,15 @@ public class EmployeePayrollAppService(
 			throw new BusinessException(HRErrorCodes.EmployeePayrollDetailsRequired);
 		}
 
+		await employeeAuthorizationService.CheckEmployeeScopeAccessAsync(employeeId);
+		await employeeAuthorizationService.CheckEmployeeModifyAccessAsync(employeeId);
 		await employeeRepository.GetAsync(employeeId);
 
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
+		var identifiers = (await statutoryProfiles.GetProjectionAsync(employeeId)).Profile;
+		if (ShikshaMitra.HR.Payroll.Statutory.EmployeeStatutoryProfileVersion.NormalizeNumber(input.PayrollDetails.EpfNumber) != identifiers.PfNumber ||
+			ShikshaMitra.HR.Payroll.Statutory.EmployeeStatutoryProfileVersion.NormalizeNumber(input.PayrollDetails.UanNumber) != identifiers.UanNumber)
+			throw new BusinessException("HR:Payroll:UseStatutoryProfile");
 
 		if (payrollDetails == null)
 		{
@@ -99,7 +106,7 @@ public class EmployeePayrollAppService(
 				input.PayrollDetails.BankName, input.PayrollDetails.BranchName,
 				input.PayrollDetails.AccountHolderName, input.PayrollDetails.AccountNumber,
 				input.PayrollDetails.IfscCode, input.PayrollDetails.PfRule,
-				input.PayrollDetails.EpfNumber, input.PayrollDetails.UanNumber,
+				payrollDetails.EpfNumber, payrollDetails.UanNumber,
 				input.PayrollDetails.PunchId, input.PayrollDetails.TotalWorkingHourPerMonth);
 			await payrollDetailsRepository.InsertAsync(payrollDetails);
 		}
@@ -109,7 +116,7 @@ public class EmployeePayrollAppService(
 				input.PayrollDetails.BankName, input.PayrollDetails.BranchName,
 				input.PayrollDetails.AccountHolderName, input.PayrollDetails.AccountNumber,
 				input.PayrollDetails.IfscCode, input.PayrollDetails.PfRule,
-				input.PayrollDetails.EpfNumber, input.PayrollDetails.UanNumber,
+				payrollDetails.EpfNumber, payrollDetails.UanNumber,
 				input.PayrollDetails.PunchId, input.PayrollDetails.TotalWorkingHourPerMonth);
 			await payrollDetailsRepository.UpdateAsync(payrollDetails);
 		}
@@ -144,6 +151,7 @@ public class EmployeePayrollAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	public async Task<EmployeePayrollResponse> GetPayrollContractAsync(Guid employeeId)
 	{
+		await employeeAuthorizationService.CheckEmployeeScopeAccessAsync(employeeId);
 		await employeeRepository.GetAsync(employeeId);
 
 		var payrollDetails = await payrollDetailsRepository.GetByEmployeeIdAsync(employeeId);
@@ -152,13 +160,17 @@ public class EmployeePayrollAppService(
 		var earningComponentIdByName = await GetEarningComponentIdsByNameAsync(earnings);
 		var deductionComponentIdByName = await GetDeductionComponentIdsByNameAsync(deductions);
 
-		return EmployeePayrollProjection.ToContractResponse(
+		var response = EmployeePayrollProjection.ToContractResponse(
 			employeeId,
 			payrollDetails,
 			earnings,
 			deductions,
 			earningComponentIdByName,
 			deductionComponentIdByName);
+		var statutory = await statutoryProfiles.GetProjectionAsync(employeeId);
+		response.SalaryDetails.EpfNumber = statutory.Profile.PfNumber;
+		response.SalaryDetails.UanNumber = statutory.Profile.UanNumber;
+		return response;
 	}
 
 	[UnitOfWork]

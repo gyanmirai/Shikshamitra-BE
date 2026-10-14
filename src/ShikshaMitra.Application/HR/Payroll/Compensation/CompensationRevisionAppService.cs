@@ -28,7 +28,7 @@ public class CompensationRevisionAppService(
 	EmployeeActivationReadinessService activationReadinessService,
 	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator,
 	IAsyncQueryableExecuter asyncExecuter,
-	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService) : ApplicationService, ICompensationRevisionAppService
+	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService, EmployeeStatutoryProfileAppService profileService, EmployeeStatutoryProfileResolver profileResolver) : ApplicationService, ICompensationRevisionAppService
 {
 	public async Task<CompensationRevisionListDto> GetListAsync(Guid employeeId)
 	{
@@ -57,7 +57,8 @@ public class CompensationRevisionAppService(
 			: await MapAsync(revision, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
 	}
 
-	public async Task<CompensationRevisionDto> SaveAsync(Guid employeeId, SaveEmployeeCompensationDto input)
+	[Volo.Abp.Uow.UnitOfWork(true)]
+	public virtual async Task<CompensationRevisionDto> SaveAsync(Guid employeeId, SaveEmployeeCompensationDto input)
 	{
 		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId,
 			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage);
@@ -67,9 +68,11 @@ public class CompensationRevisionAppService(
 		if (replay != null)
 		{
 			var original = TryDeserializeCalculation(replay.CalculationSnapshotJson);
-			if (original != null && (original.PfEnrollment != input.PfEnrollment || replay.PfRuleId != (input.PfApplicable ? input.PfRuleId : null)))
+			if (original != null && (original.PfEnrollment != input.PfEnrollment || input.PfApplicable && replay.PfRuleId != input.PfRuleId || input.StatutoryProfileOverride != null && NormalizeProfile(original.StatutoryApplication?.Profile) != NormalizeProfile(input.StatutoryProfileOverride)))
 				throw new BusinessException("HR:Payroll:CompensationSaveConflict");
-			return await MapAsync(replay, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
+			var replayResult = await MapAsync(replay, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
+			replayResult.SavedStatutoryProfile = await profileService.GetAsync(employeeId, replay.EffectiveMonth.ToString("yyyy-MM"));
+			return replayResult;
 		}
 
 		var effectiveMonth = NormalizeMonth(input.EffectiveMonth);
@@ -86,6 +89,18 @@ public class CompensationRevisionAppService(
 				.WithData("currentRevision", effectiveForMonth?.RevisionNumber);
 		}
 
+		if (input.StatutoryProfileOverride != null)
+		{
+			var draft = await profileService.ValidateDraftAsync(employeeId, effectiveMonth, input.StatutoryProfileOverride,
+				input.StatutoryProfileConcurrencyStamp, input.StatutoryProfileUpdatePf, input.StatutoryProfileUpdateEsic);
+			var previous = await profileResolver.ResolveAsync(employeeId, effectiveMonth);
+			if (draft != previous)
+			{
+				await profileService.SaveAsync(employeeId, new SaveEmployeeStatutoryProfileDto
+				{ Profile = draft, EffectiveMonth = effectiveMonth.ToString("yyyy-MM"), ConcurrencyStamp = input.StatutoryProfileConcurrencyStamp,
+					IdempotencyKey = Guid.NewGuid(), UpdatePf = input.StatutoryProfileUpdatePf, UpdateEsic = input.StatutoryProfileUpdateEsic });
+			}
+		}
 		var calculation = await salaryTemplateAppService.CalculateAsync(
 			input.TemplateVersionId,
 			new CalculateSalaryTemplateRequestDto
@@ -135,14 +150,23 @@ public class CompensationRevisionAppService(
 		await InsertLinesAsync(revision, calculation);
 		await UnitOfWorkManager.Current!.SaveChangesAsync();
 		await payrollSnapshotReviewInvalidator.InvalidateUnlockedForEmployeesAsync([employeeId]);
-		return await MapAsync(revision, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
+		var result = await MapAsync(revision, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
+		result.SavedStatutoryProfile = await profileService.GetAsync(employeeId, effectiveMonth.ToString("yyyy-MM"));
+		return result;
 	}
 
+	private static PayrollStatutoryProfile? NormalizeProfile(PayrollStatutoryProfile? profile) => profile == null ? null : profile with
+	{
+		VersionId = null, EffectiveMonth = default,
+		PfNumber = EmployeeStatutoryProfileVersion.NormalizeNumber(profile.PfNumber), UanNumber = EmployeeStatutoryProfileVersion.NormalizeNumber(profile.UanNumber),
+		EsicInsuranceNumber = EmployeeStatutoryProfileVersion.NormalizeNumber(profile.EsicInsuranceNumber),
+		PfDisabledReason = profile.ApplyPf ? null : profile.PfDisabledReason?.Trim(), EsicDisabledReason = profile.ApplyEsic ? null : profile.EsicDisabledReason?.Trim()
+	};
 	private static void EnsureCalculationCanBeSaved(SalaryTemplateCalculationDto calculation)
 	{
 		if (calculation.PfEligibility is { CanSave: false } decision)
 			throw new BusinessException("HR:Payroll:PfEnrollmentBlocked").WithData("issueCode", decision.IssueCode);
-		if (!calculation.TargetResult.IsExact)
+		if (!calculation.TargetResult.IsExact && !calculation.TargetResult.IsExplainedByEnrollment)
 		{
 			throw new BusinessException("HR:Payroll:CompensationTargetNotExact")
 				.WithData("difference", calculation.TargetResult.Difference);

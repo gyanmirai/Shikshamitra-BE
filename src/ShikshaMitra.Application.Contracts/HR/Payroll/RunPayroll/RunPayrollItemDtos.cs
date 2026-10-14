@@ -10,6 +10,8 @@ public class RunPayrollItem
 {
 	public string? EsiCalculationDetailsJson { get; set; }
 	public string? PfEligibilityDetailsJson { get; set; }
+	public string? StatutoryApplicationJson { get; set; }
+	public string? LeaveUnitsByTypeJson { get; set; }
 	public double TotalEarnings => Math.Round(NetPay + TotalDeduction, 2, MidpointRounding.AwayFromZero);
 	public double AdditionalEarnings => Math.Round(TotalEarnings - GrossSalary, 2, MidpointRounding.AwayFromZero);
 	/// <summary>
@@ -189,6 +191,7 @@ public class RunPayrollItem
 /// </summary>
 public class RunPayrollComponentItem
 {
+	public string? SemanticType { get; set; }
 	public decimal? FullMonthAmount { get; set; }
 	public string? FormulaType { get; set; }
 	public decimal? FormulaValue { get; set; }

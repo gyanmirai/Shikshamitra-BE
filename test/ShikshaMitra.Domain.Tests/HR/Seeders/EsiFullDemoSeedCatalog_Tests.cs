@@ -90,9 +90,12 @@ public class EsiFullDemoSeedCatalog_Tests
 
 		var result = Calculate(email, salary, new DateTime(2026, 8, 1));
 		result.StatutoryWages.ShouldBe(statutoryWages);
-		result.EmployeeContribution.ShouldBe(employeeContribution);
-		result.EmployerContribution.ShouldBe(employerContribution);
-		result.IssueCodes.ShouldBeEmpty();
+		result.Application!.CalculatedEmployeeAmount.ShouldBe(employeeContribution);
+		result.Application.CalculatedEmployerAmount.ShouldBe(employerContribution);
+		result.EmployeeContribution.ShouldBe(result.Application.NumberPresent ? employeeContribution : 0);
+		result.EmployerContribution.ShouldBe(result.Application.NumberPresent ? employerContribution : 0);
+		if (result.IsCovered && !result.Application.NumberPresent) result.IssueCodes.ShouldBe(["ESI_NUMBER_MISSING"]);
+		else result.IssueCodes.ShouldBeEmpty();
 	}
 
 	[Theory]
@@ -206,7 +209,7 @@ public class EsiFullDemoSeedCatalog_Tests
 			establishment,
 			enrollment,
 			wageLines,
-			assumeEstablishmentActive: true);
+			assumeEstablishmentActive: true, payrollProfile: new PayrollStatutoryProfile { EsicInsuranceNumber = enrollment.InsuranceNumber });
 	}
 
 	private static IConfiguration BuildConfiguration(string profile) =>

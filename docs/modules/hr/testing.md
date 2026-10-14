@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-13
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -183,7 +183,7 @@ Empty one-time additions remain valid without removing recurring compensation.
 Validation passed: 49 focused API/security tests, 45 application calculation/contract tests, 24 attendance/proration tests, and the seed-backfill integration test.
 
 For ESIC onboarding, run `CompensationRevisionApi_Tests`, `EmployeeStatusApi_Tests`, and `EsiStatutoryApi_Tests` against the disposable PostgreSQL test database.
-Verify inactive enrollment updates, registration-pending activation rejection, and successful activation after supplying the insurance number and effective compensation.
+Verify inactive enrollment updates, registration-pending activation warnings, zero applied contributions, and recalculation after supplying the insurance number.
 On 2026-10-01, these focused API suites passed all 26 tests and `PermissionConsistencyApi_Tests` passed all 13 security checks.
 The new missing-number activation test reproduced the failure before the guard was added.
 
@@ -1047,3 +1047,13 @@ Current Gujarat applicability, required fields and signature authority for both 
 The existing signature placeholder is not a completed signature or legal certification.
 The approved controlled Identity-managed account-email workflow remains MAIL-07, with its existing joint concurrency, idempotency, permission, tenant, scope and recipient-currency guards.
 No statutory rule, activation restriction or immutable PDF was changed to defer legal review.
+
+## Enrollment and salary document acceptance
+
+Run StatutoryEnrollment_Tests for flags, number formats, independent suppression, school amounts and proration.
+Run SalaryDocumentAndVariance_Tests for exact CTC deltas, frozen PT semantics and logo/presentation validation.
+Run IndependentEsiBasisPayroll_Tests with a fresh loopback PAYROLL_TEST_POSTGRES database for profile retries, stale writes, locked history and saved-evidence statements/registers.
+Run EsiPayrollWorkflowApi_Tests with a separate fresh PAYROLL_REGISTRATION_TEST_POSTGRES database for pending registration, activation, review and lock.
+Use synthetic identities and adjusted test dates.
+Render Compact/Detailed payslips and both reports through the application PDF services, then inspect the rendered pages.
+Apply the migration SQL to a disposable copy of the previous schema and verify known identifier normalization without changing historical money or documents.

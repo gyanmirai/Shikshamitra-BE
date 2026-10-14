@@ -10,6 +10,15 @@ namespace ShikshaMitra.Controllers.HR.Payroll.SalarySlips;
 [Area("app"), RemoteService(Name = "Default"), Authorize, Route("api/payroll/payslip-settings")]
 public class PayslipSettingsController(IPayslipSettingsAppService settings) : AbpControllerBase
 {
+	[HttpPost("logo"), Consumes("multipart/form-data"), RequestSizeLimit(2097152 + 65536)]
+	public async Task<object> UploadLogoAsync([FromForm] Microsoft.AspNetCore.Http.IFormFile file)
+	{
+		if (file == null || file.Length is <= 0 or > 2097152) throw new BusinessException("HR:Payslip:LogoInvalid");
+		await using var stream = file.OpenReadStream();
+		using var memory = new System.IO.MemoryStream();
+		await stream.CopyToAsync(memory);
+		return new { BlobName = await settings.UploadLogoAsync(file.ContentType, memory.ToArray()) };
+	}
 	[HttpGet] public Task<PayslipSettingsDto> GetAsync() => settings.GetAsync();
 	[HttpPut] public Task<PayslipSettingsDto> SaveAsync(PayslipSettingsDto input) => settings.SaveAsync(input);
 }

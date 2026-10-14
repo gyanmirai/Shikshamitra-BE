@@ -303,6 +303,7 @@ public class EfCoreEmployeeLeaveRepository(
 			x.EndDate,
 			x.HalfDay,
 			x.ApprovedPaidType,
-			x.LeavePolicyRule != null ? x.LeavePolicyRule.PaidType : LeavePaidType.Unpaid));
+			x.LeavePolicyRule != null ? x.LeavePolicyRule.PaidType : LeavePaidType.Unpaid,
+			x.LeavePolicyRule != null ? x.LeavePolicyRule.PayrollCategory : "UNPAID"));
 	}
 }

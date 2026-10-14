@@ -14,6 +14,20 @@ public class PayslipPdfService : ITransientDependency
 {
 	public byte[] Generate(PayslipPdfModel model)
 	{
+		model = model with
+		{
+			Department = model.Presentation.ShowStaffDetails ? model.Department : null,
+			Designation = model.Presentation.ShowStaffDetails ? model.Designation : null,
+			DateOfJoining = model.Presentation.ShowStaffDetails ? model.DateOfJoining : null,
+			UanNumber = model.Presentation.ShowStaffDetails ? model.UanNumber : null,
+			EpfNumber = model.Presentation.ShowStaffDetails ? model.EpfNumber : null,
+			InsuranceNumber = model.Presentation.ShowStaffDetails ? model.InsuranceNumber : null,
+			BankName = model.Presentation.ShowBankDetails ? model.BankName : null,
+			MaskedAccountNumber = model.Presentation.ShowBankDetails ? model.MaskedAccountNumber : null,
+			IfscCode = model.Presentation.ShowBankDetails ? model.IfscCode : null,
+			Earnings = model.Presentation.ShowEarningsBreakdown ? model.Earnings : new[] { new PayslipPdfLineItem("Total earnings", model.TotalEarnings) },
+			Deductions = model.Presentation.ShowZeroDeductions ? model.Deductions : System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Where(model.Deductions, x => x.Amount != 0m))
+		};
 		PortablePdfFonts.EnsureRegistered();
 		using var stream = new MemoryStream();
 
@@ -35,9 +49,9 @@ public class PayslipPdfService : ITransientDependency
 
 				page.Content().PaddingTop(10).Column(column =>
 				{
-					column.Spacing(10);
+					column.Spacing(model.Presentation.Layout == "Compact" ? 6 : 10);
 					column.Item().Element(c => ComposeInfoBlocks(c, model));
-					column.Item().Element(c => ComposePayBasis(c, model));
+					if (model.Presentation.ShowAttendance) column.Item().Element(c => ComposePayBasis(c, model));
 					column.Item().Element(c => ComposeSalaryTables(c, model));
 					column.Item().Element(c => ComposeNetPay(c, model));
 				});

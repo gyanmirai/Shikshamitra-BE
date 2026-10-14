@@ -22,7 +22,10 @@ public sealed record PayrollStatutoryRuleSet(
 	IReadOnlyList<ProfessionalTax> ProfessionalTaxSlabs,
 	bool IsEmploymentCessationMonth = false,
 	PayrollEsiStatutoryContext? EmployeeStateInsurance = null,
-	Guid? EsiConfigurationId = null);
+	Guid? EsiConfigurationId = null)
+{
+	public PayrollStatutoryProfile? StatutoryProfile { get; init; }
+}
 
 public sealed record PayrollEsiStatutoryContext(
 	DateTime PayrollMonth,
@@ -68,6 +71,7 @@ public sealed record PayrollComputationResult(
 {
 	public decimal TotalEarnings => NetPay + TotalDeduction;
 	public EsiStatutoryCalculationResult? EsiCalculation { get; init; }
+	public PayrollStatutoryApplication? StatutoryApplication { get; init; }
 	public Guid? EsiConfigurationId { get; init; }
 	public decimal AdditionalEarnings => TotalEarnings - GrossSalary;
 }
@@ -83,7 +87,10 @@ public sealed record PayrollPaidLeaveDay(
 
 public sealed record PayrollLeaveUnits(
 	decimal PaidUnits,
-	decimal UnpaidUnits);
+	decimal UnpaidUnits)
+{
+	public IReadOnlyDictionary<string, decimal> ByType { get; init; } = new Dictionary<string, decimal>();
+}
 
 public sealed record PayrollApprovedAttendanceDay(
 	DateOnly Date,

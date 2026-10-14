@@ -22,6 +22,7 @@ internal static class PayslipPdfSections
 		{
 			column.Item().Row(row =>
 			{
+				if (model.LogoBytes != null) row.ConstantItem(52).PaddingRight(8).Height(44).Image(model.LogoBytes).FitArea();
 				row.RelativeItem().Column(left =>
 				{
 					left.Item().LogicalText(model.InstituteName).FontSize(17).Bold().FontColor(Ink);
@@ -106,12 +107,13 @@ internal static class PayslipPdfSections
 			column.Item().LogicalText("Earnings and attendance").Bold().FontColor(Ink);
 			if (model.FullGrossSalary.HasValue)
 				column.Item().PaddingTop(4).LogicalText($"Full-month earnings: {FormatCurrency(model.FullGrossSalary.Value)}").FontSize(8);
+			column.Item().PaddingTop(4).LogicalText($"CL: {FormatDays(model.CasualLeaveDays)}  |  Leave without pay: {FormatDays(model.UnpaidLeaveDays)}").FontSize(8);
 			column.Item().PaddingTop(4).LogicalText($"Payable days: {FormatDays(model.PayableDays)}  |  Payroll days: {FormatDays(model.PayrollBasisDays)}  |  Non-payable days: {FormatDays(model.LopDays)}").FontSize(8);
 		});
 	}
 	public static void ComposeSalaryTables(IContainer container, PayslipPdfModel model)
 	{
-		var shouldStackTables = model.Earnings.Any(x => x.FullMonthAmount.HasValue) || model.Earnings.Count > SideBySideLineLimit ||
+		var shouldStackTables = model.Presentation.Layout == "Detailed" && model.Earnings.Any(x => x.FullMonthAmount.HasValue) || model.Earnings.Count > SideBySideLineLimit ||
 								model.Deductions.Count > SideBySideLineLimit;
 
 		if (shouldStackTables)

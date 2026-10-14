@@ -79,11 +79,14 @@ public class HRExcelService(IExcelService excelService) : ITransientDependency
 			Cells = report.Columns
 				.Select(column => new ExcelCell
 				{
-					Value = row.TryGetValue(column.Id, out var value) ? value ?? string.Empty : string.Empty
+					Value = row.TryGetValue(column.Id, out var value) ? value ?? (report.DataSource is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister ? "Unavailable" : string.Empty) : (report.DataSource is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister ? "Unavailable" : string.Empty)
 				})
 				.ToList()
 		}));
 
+		if (report.Totals.Count > 0) sheet.Rows.Add(new ExcelRow { Cells = report.Columns.Select((column, index) => new ExcelCell
+		{ Value = report.Totals.TryGetValue(column.Id, out var total) ? total.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : index == 0 ? "Totals for exported rows" : "" }).ToList() });
+		foreach (var warning in report.QueryWarnings) sheet.Rows.Add(new ExcelRow { Cells = [new ExcelCell { Value = warning }] });
 		return excelService.GenerateExcelAsBytes(new ExcelDocument
 		{
 			Sheets = [sheet],

@@ -8,6 +8,8 @@ internal static class HrReportSourceDefinitions
 	{
 		return
 		[
+			PayrollDocumentSource(HrReportDataSources.PayrollStatement, "Employee salary statement"),
+			PayrollDocumentSource(HrReportDataSources.PayrollRegister, "School payroll register"),
 			Source(HrReportDataSources.Employee, "Staff", "Staff Reports", "Staff profile, contact, status, department, and reporting-manager data.",
 				[
 					Field("employeeCode", "Staff Code", groupable: true),
@@ -96,6 +98,23 @@ internal static class HrReportSourceDefinitions
 				["cycle", "employeeCode", "employeeName", "department", "status", "finalScore", "finalRating"],
 				["cycle", "employeeCode"])
 		];
+	}
+
+	private static HrReportSourceDto PayrollDocumentSource(string id, string label)
+	{
+		var fields = new List<HrReportFieldDto> { Field("month", "Month"), Field("employeeCode", "Staff code"), Field("employeeName", "Staff name"),
+			Field("designation", "Designation"), Field("dateOfJoining", "Joining date", "date"), Field("bankAccount", "Bank account"), Field("pfNumber", "PF number"), Field("esicNumber", "ESIC number"), Field("status", "Document status") };
+		foreach (var (code, name) in new[] { ("salary", "Monthly salary"), ("grossSalary", "Earned gross"), ("basicSalary", "Basic salary"),
+			("pfSalary", "PF salary"), ("pf", "PF"), ("pt", "PT"), ("tds", "TDS"), ("esic", "ESIC"), ("otherDeductions", "Other deductions"),
+			("totalEarnings", "Total earnings"), ("totalDeduction", "Total deductions"), ("netPay", "Net pay"), ("casualLeaveDays", "CL"), ("paidLeaveDays", "Paid leave"), ("unpaidLeaveDays", "LWP"), ("payableDays", "Payable days") })
+			fields.Add(Field(code, name, "number"));
+		foreach (var field in fields)
+		{
+			field.Filterable = false;
+			field.Sortable = field.Id is "month" or "employeeCode" or "netPay" or "totalEarnings" or "totalDeduction";
+		}
+		return Source(id, "Payroll", label, "Saved payroll evidence. Missing months and unavailable historical fields remain visible.", fields,
+			["month", "employeeCode", "employeeName", "grossSalary", "pf", "pt", "tds", "esic", "totalEarnings", "totalDeduction", "netPay", "casualLeaveDays", "unpaidLeaveDays", "payableDays", "status"], ["month", "employeeCode"]);
 	}
 
 	private static HrReportSourceDto Source(string id, string category, string label, string description, List<HrReportFieldDto> fields, List<string> defaultColumns, List<string> defaultSorts)

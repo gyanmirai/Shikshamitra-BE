@@ -18,6 +18,7 @@ public class LeavePolicyRuleItem
 {
 	public Guid Id { get; set; }
 	public string PaidType { get; set; } = "Paid";
+	public string PayrollCategory { get; set; } = "PAID";
 	public string EntitlementMode { get; set; } = "Limited";
 	public string AccrualPolicyType { get; set; } = "Monthly";
 	public int? LeaveCount { get; set; }
@@ -51,6 +52,7 @@ public class LeavePolicyItem
 public class LeavePolicyRuleRequest
 {
 	public string PaidType { get; set; } = "Paid";
+	public string PayrollCategory { get; set; } = "PAID";
 	public string EntitlementMode { get; set; } = "Limited";
 	public string AccrualPolicyType { get; set; } = "Monthly";
 	public int? LeaveCount { get; set; }

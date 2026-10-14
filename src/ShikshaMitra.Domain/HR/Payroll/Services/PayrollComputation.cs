@@ -55,6 +55,7 @@ public static class PayrollComputation
 		var pfSource = components.FirstOrDefault(x =>
 			!x.IsEarning && x.SemanticType == Templates.PayrollComponentSemanticType.EmployeeProvidentFund);
 		var pfRule = statutoryRules?.ProvidentFund;
+		PayrollSchemeApplication? pfApplication = null;
 		if (pfSource != null && pfRule is { IsActive: true })
 		{
 			var contributionBase = basicSalary;
@@ -77,12 +78,18 @@ public static class PayrollComputation
 			}
 
 			var employeePf = Math.Round(contributionBase * pfRule.EmployeePercentage / 100m, 0, MidpointRounding.AwayFromZero);
+			var employerPf = Math.Round(contributionBase * pfRule.EmployerPercentage / 100m, 0, MidpointRounding.AwayFromZero);
+			if (statutoryRules?.StatutoryProfile is { } profile)
+			{
+				pfApplication = PayrollSchemeApplication.Decide("PF", profile.ApplyPf, profile.PfNumber, true, employeePf, employerPf, profile.PfDisabledReason) with { ContributionWages = contributionBase };
+				employeePf = pfApplication.AppliedEmployeeAmount;
+				employerPf = pfApplication.AppliedEmployerAmount;
+			}
 			if (employeePf > 0m)
 			{
 				deductions.Add(new PayrollComputedLineItem(pfSource, employeePf));
 			}
 
-			var employerPf = Math.Round(contributionBase * pfRule.EmployerPercentage / 100m, 0, MidpointRounding.AwayFromZero);
 			if (employerPf > 0m)
 			{
 				employerContributions.Add(new PayrollComputedEmployerContribution(
@@ -151,7 +158,7 @@ public static class PayrollComputation
 				esiContext.Enrollment,
 				wageLines,
 				esiContext.Overrides,
-				coverageWageLines: monthlyWageLines, calculationSettings: esiContext.CalculationSettings);
+				coverageWageLines: monthlyWageLines, calculationSettings: esiContext.CalculationSettings, payrollProfile: statutoryRules?.StatutoryProfile);
 			esiCalculation = esiResult;
 
 			esiRuleId = esiContext.Rule.Id;
@@ -159,7 +166,7 @@ public static class PayrollComputation
 			esiWages = esiResult.StatutoryWages;
 			esiGovernmentContribution = esiResult.GovernmentContribution;
 			esiCoverageDecision = esiResult.CoverageDecision;
-			esiInsuranceNumber = esiContext.Enrollment?.InsuranceNumber;
+			esiInsuranceNumber = statutoryRules?.StatutoryProfile is { } statutoryProfile ? statutoryProfile.EsicInsuranceNumber : esiContext.Enrollment?.InsuranceNumber;
 			esiContributionPeriodStart = esiResult.ContributionPeriodStart;
 			esiContributionPeriodEnd = esiResult.ContributionPeriodEnd;
 			statutoryIssueCodes.AddRange(esiResult.IssueCodes);
@@ -183,6 +190,14 @@ public static class PayrollComputation
 			}
 		}
 
+		PayrollStatutoryApplication? statutoryApplication = null;
+		if (statutoryRules?.StatutoryProfile is { } appliedProfile)
+		{
+			pfApplication ??= PayrollSchemeApplication.Decide("PF", appliedProfile.ApplyPf, appliedProfile.PfNumber, false, 0m, 0m, appliedProfile.PfDisabledReason);
+			var esiApplication = esiCalculation?.Application ?? PayrollSchemeApplication.Decide("ESI", appliedProfile.ApplyEsic, appliedProfile.EsicInsuranceNumber, false, 0m, 0m, appliedProfile.EsicDisabledReason);
+			statutoryApplication = new(appliedProfile, pfApplication, esiApplication);
+			statutoryIssueCodes.AddRange(statutoryApplication.Warnings);
+		}
 		var totalDeduction = deductions.Sum(x => x.Amount);
 		var employerContributionTotal = employerContributions.Sum(x => x.Amount);
 
@@ -215,6 +230,7 @@ public static class PayrollComputation
 			statutoryIssueCodes)
 		{
 			EsiCalculation = esiCalculation,
+			StatutoryApplication = statutoryApplication,
 			EsiConfigurationId = statutoryRules?.EsiConfigurationId ?? statutoryRules?.EmployeeStateInsurance?.Establishment.Id
 		};
 	}

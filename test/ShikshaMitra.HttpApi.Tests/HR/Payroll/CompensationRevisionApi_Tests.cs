@@ -112,7 +112,7 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Inactive_employee_can_register_but_pending_registration_cannot_bypass_activation()
+	public async Task Inactive_employee_can_activate_with_pending_registration_warning()
 	{
 		await PayrollTestHelper.EnsureActiveEsiTestSetupAsync(Factory);
 		await EnsureEsiOnlySchoolAsync();
@@ -132,21 +132,15 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 		salary.StatusCode.ShouldBe(HttpStatusCode.OK, await salary.Content.ReadAsStringAsync());
 		var readinessUrl = $"/api/employees/{employeeId}/activation-readiness";
 		var readiness = (await Client.GetFromJsonAsync<EmployeeActivationReadinessDto>(readinessUrl, JsonOptions))!;
-		readiness.CanActivate.ShouldBeFalse();
-		readiness.BlockerCodes.ShouldContain(EsiStatutoryCalculator.InsuranceNumberIssue);
+		readiness.CanActivate.ShouldBeTrue();
+		readiness.BlockerCodes.ShouldNotContain(EsiStatutoryCalculator.InsuranceNumberIssue);
+		(await Client.GetFromJsonAsync<EmployeeStatutoryProfileDto>($"/api/employees/{employeeId}/payroll/statutory-profile", JsonOptions))!.Warnings.ShouldContain("ESI_NUMBER_MISSING");
 		var activation = new { employeeStatusType = 0, remarks = "Onboarding complete" };
-		var denied = await Client.PutAsJsonAsync($"/api/employees/{employeeId}/status", activation, JsonOptions);
-		denied.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await denied.Content.ReadAsStringAsync());
-		(await denied.Content.ReadAsStringAsync()).ShouldContain(EsiStatutoryCalculator.InsuranceNumberIssue);
-
-		var registered = await Client.PutAsJsonAsync(enrollmentUrl, new UpdateEmployeeStatutoryEnrollmentDto
-		{
-			Status = "PendingReview", WageCeilingCategory = "Standard", InsuranceNumber = "1234567890"
-		}, JsonOptions);
-		registered.StatusCode.ShouldBe(HttpStatusCode.OK, await registered.Content.ReadAsStringAsync());
-		(await Client.GetFromJsonAsync<EmployeeActivationReadinessDto>(readinessUrl, JsonOptions))!.CanActivate.ShouldBeTrue();
 		var activated = await Client.PutAsJsonAsync($"/api/employees/{employeeId}/status", activation, JsonOptions);
 		activated.StatusCode.ShouldBe(HttpStatusCode.OK, await activated.Content.ReadAsStringAsync());
+		var workflow = new EsiPayrollWorkflowScenario(Factory);
+		await workflow.EnrollAsync(employeeId, "1234567890");
+		(await Client.GetFromJsonAsync<EmployeeActivationReadinessDto>(readinessUrl, JsonOptions))!.CanActivate.ShouldBeTrue();
 	}
 
 	[Theory]

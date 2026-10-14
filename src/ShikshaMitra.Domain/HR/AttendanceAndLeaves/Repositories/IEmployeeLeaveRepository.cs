@@ -19,7 +19,7 @@ public record PayrollApprovedLeaveRow(
 	DateTimeOffset EndDate,
 	bool HalfDay,
 	LeavePaidType? ApprovedPaidType,
-	LeavePaidType PolicyPaidType);
+	LeavePaidType PolicyPaidType, string PayrollCategory = "PAID");
 
 public record ApprovedAttendanceLeaveRow(
 	Guid LeaveId,

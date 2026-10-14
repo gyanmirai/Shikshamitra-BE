@@ -94,7 +94,8 @@ Custom earnings with the same name remain unclassified until reviewed.
 See the Ministry's [additional labour-code FAQs dated 16 March 2026](https://www.labour.gov.in/static/uploads/2026/03/a4ccf4c6d97c4f1f36a6d83f8c64213d.pdf) for overtime in the 50 percent calculation and the [ESIC Revenue Manual, L.6.11](https://www.esic.gov.in/Publications/RevenueManual.pdf) for the distinction between overtime and coverage wages.
 
 Payroll readiness and locking use the same blocking-issue predicate.
-A missing insurance number, unclassified earning or unresolved compensation variance must not be presented as ready to lock.
+A missing insurance number suppresses ESIC with a reviewable warning.
+Unclassified statutory wages and unexplained compensation variance remain blockers.
 Resolved coverage facts also block missing-number payroll even when its contribution amounts and recorded issue list are empty.
 
 Payslips show actual earnings, employee ESIC deductions, and net pay.
@@ -169,7 +170,8 @@ The settings page explains that stopping platform calculation does not establish
 There is no external-amount entry.
 Employee eligibility, exemptions, and contribution continuity remain automatic.
 Existing employee onboarding, supported registration-pending status, insurance-detail checks, and payroll membership rules still apply.
-Employee activation requires effective compensation and an insurance number when the applicable ESIC calculation covers the employee.
+Employee activation requires valid effective compensation.
+Missing PF or ESIC registration numbers suppress their deductions with warnings and do not block activation.
 Registration pending permits salary preparation but never bypasses the activation check.
 Activation re-evaluates saved full-month earnings using the applicable configuration, employee registration, contribution continuity, and supported exceptions.
 ESIC off and employees outside coverage do not require an insurance number for activation.
@@ -294,10 +296,11 @@ Evidence changes, invalidation, preview publication and locking share the tenant
 A superseded worker cannot publish its earlier calculation.
 Earlier periods and locked, finalized or paid employee snapshots remain unchanged.
 
-Covered payroll requires an insurance number even when registration is pending or the employee contribution is zero.
+A missing insurance number suppresses applied employee and employer ESIC amounts while retaining coverage evidence.
 Unclassified manual earning adjustments appear in the existing earning-classification list for the selected payroll month and permitted employees.
 Saving their statutory treatment removes the classification blocker only after payroll recalculation.
-Salary preparation remains available during pending registration; activation and payroll finalization remain blocked.
+Salary preparation, activation and reviewed payroll finalization remain available during pending registration.
+Missing calculation rules, invalid components and stale evidence remain blockers.
 Exceptions select complete start and end months, with inclusive first-day and last-day API dates.
 Partial-month exception requests are rejected rather than silently adjusted.
 

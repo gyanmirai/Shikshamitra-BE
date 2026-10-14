@@ -197,6 +197,31 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 	}
 
 	[Fact]
+	public async Task Bank_updates_accept_projected_identifiers_without_creating_a_second_statutory_owner()
+	{
+		var employee = await CreateEmployeeAsync(FirstDayOfMonth(CurrentPayrollMonth()));
+		using var principal = await ChangeToAdminPrincipalAsync();
+		var profiles = GetRequiredService<IEmployeeStatutoryProfileAppService>();
+		var current = await profiles.GetAsync(employee.Id);
+		await profiles.SaveAsync(employee.Id, new SaveEmployeeStatutoryProfileDto
+		{
+			Profile = current.Profile with { PfNumber = "7" }, ConcurrencyStamp = current.ConcurrencyStamp,
+			EffectiveMonth = current.EffectiveMonth, IdempotencyKey = Guid.NewGuid(), UpdateEsic = false
+		});
+		var details = await _employeePayrollAppService.GetPayrollDetailsAsync(employee.Id);
+		details.PayrollDetails.EpfNumber.ShouldBe("7");
+		details.PayrollDetails.BankName = "Updated test bank";
+		if (details.Earnings.Count == 0) details.Earnings.Add(new PayrollComponentDto { Name = "Legacy fixture earning", Amount = 10000 });
+		if (details.Deductions.Count == 0) details.Deductions.Add(new PayrollComponentDto { Name = "Legacy fixture deduction", Amount = 0 });
+		await _employeePayrollAppService.UpdatePayrollDetailsAsync(employee.Id, new UpdateEmployeePayrollDetailsDto
+		{ PayrollDetails = details.PayrollDetails, Earnings = details.Earnings, Deductions = details.Deductions });
+		var updated = await _employeePayrollAppService.GetPayrollDetailsAsync(employee.Id);
+		updated.PayrollDetails.BankName.ShouldBe("Updated test bank");
+		updated.PayrollDetails.EpfNumber.ShouldBe("7");
+		(await GetRequiredService<IEmployeePayrollDetailsRepository>().GetByEmployeeIdAsync(employee.Id))!.EpfNumber.ShouldBeNull();
+	}
+
+	[Fact]
 	public async Task GetSalarySlipAsync_Should_Refresh_Draft_From_Current_Unlocked_Payroll_Policy()
 	{
 		var monthYear = CurrentPayrollMonth();
@@ -1030,6 +1055,11 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 		var employee = await GetRequiredService<IEmployeeRepository>().GetAsync(employeeId);
 		var joining = employee.DateOfJoining ?? new DateOnly(2026, 1, 1);
 		var month = new DateTime(joining.Year, joining.Month, 1);
+		// These legacy salary fixtures deliberately have no PF formula or registration.
+		var profiles = GetRequiredService<IRepository<EmployeeStatutoryProfileVersion, Guid>>();
+		if (await profiles.FindAsync(x => x.EmployeeId == employeeId) == null)
+			await profiles.InsertAsync(new EmployeeStatutoryProfileVersion(Guid.NewGuid(), employee.TenantId, employeeId, month,
+				new PayrollStatutoryProfile { ApplyPf = false, PfDisabledReason = "Non-PF payslip fixture" }, Guid.NewGuid(), "FIXTURE"), autoSave: true);
 		// A later salary revision must respect existing immutable payroll.
 		var locked = await _payrollRunItemSnapshotRepository.GetListAsync(x => x.EmployeeId == employeeId && x.IsLocked);
 		if (locked.Count > 0)

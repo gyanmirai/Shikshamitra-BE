@@ -66,6 +66,8 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public int? ProfessionalTaxRuleVersion { get; set; }
 	public string? EsiCalculationDetailsJson { get; set; }
 	public string? PfEligibilityDetailsJson { get; set; }
+	public string? StatutoryApplicationJson { get; set; }
+	public string? LeaveUnitsByTypeJson { get; set; }
 	public Guid? EsiConfigurationId { get; set; }
 	public Guid? EmployeeStateInsuranceRuleId { get; set; }
 	public int? EmployeeStateInsuranceRuleVersion { get; set; }
@@ -114,7 +116,7 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	public void MarkLocked()
 	{
 		ShikshaMitra.HR.Payroll.Statutory.EsiPayrollReadiness.EnsureInsuranceNumber(
-			EmployeeStateInsuranceRuleId, EmployeeStateInsuranceCoverageDecision, EmployeeStateInsuranceNumber);
+			EmployeeStateInsuranceRuleId, EmployeeStateInsuranceCoverageDecision, EmployeeStateInsuranceNumber, StatutoryApplicationJson);
 		IsLocked = true;
 		ReviewStatus = "LOCKED";
 	}

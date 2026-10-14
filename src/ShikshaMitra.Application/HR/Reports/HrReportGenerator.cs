@@ -19,7 +19,7 @@ public class HrReportGenerator(
 	HrReportRequestValidationService requestValidationService,
 	ICurrentTenant currentTenant,
 	IAsyncQueryableExecuter asyncExecuter,
-	IClock clock) : ITransientDependency
+	IClock clock, Volo.Abp.Domain.Repositories.IRepository<ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings, Guid> payslipSettings, ShikshaMitra.HR.Payroll.SalarySlips.PayslipLogoService logos) : ITransientDependency
 {
 	public async Task<HrReportExportScopeSnapshot?> ResolveExportScopeAsync(
 		Guid userId,
@@ -175,8 +175,18 @@ public class HrReportGenerator(
 			totalCount,
 			rowResult.IsDatabaseBacked);
 
+		warnings.AddRange(rowResult.Warnings);
+		var salaryDocument = source is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister;
+		var settings = salaryDocument ? await payslipSettings.FindAsync(x => x.TenantId == currentTenant.Id) : null;
+		var options = settings?.GetPresentation();
+		var logo = options?.LogoBlobName == null ? null : await logos.GetAsync(options.LogoBlobName);
 		return new HrReportPreviewDto
 		{
+			Branding = settings == null ? null : new(settings.PresentationVersionId, settings.SchoolName, settings.SchoolAddress, options!,
+				logo == null ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(logo))),
+			LogoBytes = logo,
+			TotalsLabel = exportAllRows ? "Totals for exported rows" : "Totals for all available payroll in the selected period",
+			Totals = salaryDocument ? exportAllRows ? PayrollSalaryDocumentTotals.Sum(pageRows) : rowResult.Totals ?? PayrollSalaryDocumentTotals.Sum(pageRows) : new(),
 			DataSource = source,
 			ReportType = string.IsNullOrWhiteSpace(input.ReportType) ? HrReportCatalog.GetSource(source).Label : input.ReportType,
 			TotalCount = totalCount,

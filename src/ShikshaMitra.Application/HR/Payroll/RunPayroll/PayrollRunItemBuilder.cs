@@ -73,7 +73,7 @@ internal static class PayrollRunItemBuilder
 		var compensation = BuildCompensationProjection(compensationRevision, components, statutoryRules);
 		if (compensation?.HasVariance == true)
 		{
-			issueCodes.Add(IssueCodes.CompensationTargetVariance);
+			issueCodes.Add(compensation.ExpectedApplicationChange ? "STATUTORY_APPLICATION_COST_VARIANCE" : IssueCodes.CompensationTargetVariance);
 		}
 
 		return new RunPayrollItem
@@ -135,6 +135,10 @@ internal static class PayrollRunItemBuilder
 			ProfessionalTaxRuleId = preview.Computation.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = preview.Computation.ProfessionalTaxRuleVersion,
 			EsiCalculationDetailsJson = System.Text.Json.JsonSerializer.Serialize(preview.Computation.EsiCalculation),
+			StatutoryApplicationJson = System.Text.Json.JsonSerializer.Serialize(preview.Computation.StatutoryApplication),
+			LeaveUnitsByTypeJson = JsonSerializer.Serialize((leaveUnitsByDate ?? new Dictionary<DateOnly, PayrollLeaveUnits>())
+				.Where(x => !employmentStartDate.HasValue || x.Key >= employmentStartDate.Value)
+				.SelectMany(x => x.Value.ByType).GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.Sum(y => y.Value))),
 			EsiConfigurationId = preview.Computation.EsiConfigurationId,
 			EmployeeStateInsuranceRuleId = preview.Computation.EmployeeStateInsuranceRuleId,
 			EmployeeStateInsuranceRuleVersion = preview.Computation.EmployeeStateInsuranceRuleVersion,
@@ -241,6 +245,10 @@ internal static class PayrollRunItemBuilder
 			ProfessionalTaxRuleId = preview.Computation.ProfessionalTaxRuleId,
 			ProfessionalTaxRuleVersion = preview.Computation.ProfessionalTaxRuleVersion,
 			EsiCalculationDetailsJson = System.Text.Json.JsonSerializer.Serialize(preview.Computation.EsiCalculation),
+			StatutoryApplicationJson = System.Text.Json.JsonSerializer.Serialize(preview.Computation.StatutoryApplication),
+			LeaveUnitsByTypeJson = JsonSerializer.Serialize((leaveUnitsByDate ?? new Dictionary<DateOnly, PayrollLeaveUnits>())
+				.Where(x => !employmentStartDate.HasValue || x.Key >= employmentStartDate.Value)
+				.SelectMany(x => x.Value.ByType).GroupBy(x => x.Key).ToDictionary(x => x.Key, x => x.Sum(y => y.Value))),
 			EsiConfigurationId = preview.Computation.EsiConfigurationId,
 			EmployeeStateInsuranceRuleId = preview.Computation.EmployeeStateInsuranceRuleId,
 			EmployeeStateInsuranceRuleVersion = preview.Computation.EmployeeStateInsuranceRuleVersion,
@@ -302,7 +310,14 @@ internal static class PayrollRunItemBuilder
 			normalizedProtectedAmount - revision.ProtectedMonthlyAmount,
 			2,
 			MidpointRounding.AwayFromZero);
-		return new CompensationProjection(normalizedProtectedAmount, difference, Math.Abs(difference) > 0.01m);
+		var expectedChange = false;
+		if (normalized.StatutoryApplication != null)
+		{
+			var previous = JsonSerializer.Deserialize<ShikshaMitra.HR.Payroll.Templates.SalaryTemplateCalculationDto>(revision.CalculationSnapshotJson)!;
+			expectedChange = ShikshaMitra.HR.Payroll.Templates.CompensationStatutoryVariance.IsExplained(previous,
+				normalized.StatutoryApplication, revision.ProtectionPolicy, difference);
+		}
+		return new CompensationProjection(normalizedProtectedAmount, difference, Math.Abs(difference) > 0.01m, expectedChange);
 	}
 
 	private static string ToContractEnum(string value) =>
@@ -312,5 +327,5 @@ internal static class PayrollRunItemBuilder
 	private sealed record CompensationProjection(
 		decimal NormalizedProtectedAmount,
 		decimal Difference,
-		bool HasVariance);
+		bool HasVariance, bool ExpectedApplicationChange);
 }

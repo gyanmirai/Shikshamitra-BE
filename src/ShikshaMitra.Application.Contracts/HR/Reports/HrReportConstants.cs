@@ -67,6 +67,8 @@ public static class HrReportDataSources
 {
 	public const string Employee = "employee";
 	public const string Payroll = "payroll";
+	public const string PayrollStatement = "payroll_statement";
+	public const string PayrollRegister = "payroll_register";
 	public const string Attendance = "attendance";
 	public const string Leave = "leave";
 	public const string Policies = "policies";

@@ -22,7 +22,7 @@ public class SalaryTemplateEsiContextResolver(
 	IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
 	IRepository<StatutoryOverride, Guid> overrideRepository,
 	IEarningComponentRepository earningComponentRepository,
-	IDeductionComponentRepository deductionComponentRepository)
+	IDeductionComponentRepository deductionComponentRepository, EmployeeStatutoryProfileResolver profileResolver)
 	: ITransientDependency
 {
 	private const string SchemeCode = StatutorySchemeCodes.EmployeeStateInsurance;
@@ -84,8 +84,10 @@ public class SalaryTemplateEsiContextResolver(
 		var calculationSettings = configuration.GetCalculationSettings();
 		calculationSettings = calculationSettings with
 		{
-			BasicComponentIsActive = calculationSettings.BasicComponentId == null ||
-			activeEarnings.Any(x => x.Id == calculationSettings.BasicComponentId)
+			EligibilityComponentIsActive = calculationSettings.EligibilityComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.EligibilityComponentId),
+			CalculationComponentIsActive = calculationSettings.CalculationComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.CalculationComponentId)
 		};
 		var context = new SalaryTemplateEsiEvaluationContext(
 			monthStart,
@@ -96,7 +98,7 @@ public class SalaryTemplateEsiContextResolver(
 			overrides,
 			canonicalDeduction?.Id ?? Guid.Empty,
 			canonicalDeduction?.Name ?? CanonicalEsiComponentName)
-		{ CalculationSettings = calculationSettings };
+		{ CalculationSettings = calculationSettings, PayrollProfile = employeeId.HasValue ? await profileResolver.ResolveAsync(employeeId.Value, monthStart) : null };
 		return new SalaryTemplateEsiResolution(
 			context,
 			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending

@@ -203,7 +203,7 @@ public class LeavePolicyManager : DomainService
 				input.AllowHalfDay,
 				input.AttachmentRequiredAfterDays,
 				input.AllowNegativeBalance,
-				input.IsActive));
+				input.IsActive, input.PayrollCategory));
 		}
 
 		return result;
@@ -225,4 +225,4 @@ public sealed record LeavePolicyRuleInput(
 	bool AllowHalfDay,
 	int? AttachmentRequiredAfterDays,
 	bool AllowNegativeBalance,
-	bool IsActive);
+	bool IsActive, string PayrollCategory = "PAID");

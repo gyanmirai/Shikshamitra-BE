@@ -12,6 +12,11 @@ namespace ShikshaMitra.HR.Payroll.Compensation;
 
 public class SaveEmployeeCompensationDto
 {
+	[Volo.Abp.Auditing.DisableAuditing]
+	public PayrollStatutoryProfile? StatutoryProfileOverride { get; set; }
+	public string? StatutoryProfileConcurrencyStamp { get; set; }
+	public bool StatutoryProfileUpdatePf { get; set; } = true;
+	public bool StatutoryProfileUpdateEsic { get; set; } = true;
 	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public Guid TemplateVersionId { get; set; }
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
@@ -43,6 +48,7 @@ public class CompensationRevisionLineDto : EntityDto<Guid>
 
 public class CompensationRevisionDto : EntityDto<Guid>
 {
+	public EmployeeStatutoryProfileDto? SavedStatutoryProfile { get; set; }
 	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public PfEligibilityDecision? PfEligibility { get; set; }
 	public Guid EmployeeId { get; set; }

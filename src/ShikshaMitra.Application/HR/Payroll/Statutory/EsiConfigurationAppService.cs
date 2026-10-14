@@ -39,6 +39,7 @@ public class EsiConfigurationAppService(IRepository<EsiPayrollConfiguration, Gui
 		ArgumentNullException.ThrowIfNull(input);
 		if (!new SaveEsiConfigurationDtoValidator().Validate(input).IsValid)
 			throw new Volo.Abp.Validation.AbpValidationException("Review the ESIC configuration.");
+		if (input.CalculationSettings.IsLegacyRead) throw new BusinessException("HR:ESI:SeparateBasesRequired");
 		input.CalculationSettings.Validate();
 		await resolver.EnsureDefaultAsync();
 		await revisions.LockAsync();
@@ -60,9 +61,9 @@ public class EsiConfigurationAppService(IRepository<EsiPayrollConfiguration, Gui
 			DateTime.ParseExact(input.EffectiveMonth, "yyyy-MM", CultureInfo.InvariantCulture);
 		if (month < CurrentMonth()) throw new BusinessException("HR:Payroll:EsiConfigurationPastMonth");
 		var current = await resolver.ResolveAsync(month);
-		if (input.CalculationSettings.BasicComponentId is { } basicId &&
-			!await earnings.AnyAsync(x => x.Id == basicId && x.IsActive))
-			throw new BusinessException("HR:Payroll:EsiBasicComponentInvalid");
+		if ((input.CalculationSettings.EligibilityComponentId is { } eligibilityId && !await earnings.AnyAsync(x => x.Id == eligibilityId && x.IsActive)) ||
+			(input.CalculationSettings.CalculationComponentId is { } calculationId && !await earnings.AnyAsync(x => x.Id == calculationId && x.IsActive)))
+			throw new BusinessException("HR:Payroll:EsiComponentInvalid");
 		if (current == null || current.ConcurrencyStamp != input.ConcurrencyStamp)
 			throw new BusinessException(HRErrorCodes.StatutoryPreviewStale);
 		var catalog = await statutoryService.ReadComponentTreatmentsAsync(month);

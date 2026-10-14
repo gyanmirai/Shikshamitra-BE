@@ -173,7 +173,7 @@ public class SalarySlipWorkflow(
 			new DateTime(salarySlip.Year, salarySlip.Month, 1), [salarySlip.EmployeeId]);
 		enrollments.TryGetValue(salarySlip.EmployeeId, out var enrollment);
 		EsiPayrollReadiness.EnsureInsuranceNumber(salarySlip.EmployeeStateInsuranceRuleId,
-			salarySlip.EmployeeStateInsuranceCoverageDecision, enrollment?.InsuranceNumber);
+			salarySlip.EmployeeStateInsuranceCoverageDecision, enrollment?.InsuranceNumber, salarySlip.StatutoryApplicationJson);
 		await finalizationGuard.EnsureReviewedAsync(salarySlip);
 		await issuance.IssueAsync(salarySlip);
 		salarySlip.FinalizeSlip();

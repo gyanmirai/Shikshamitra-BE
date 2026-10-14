@@ -53,7 +53,7 @@ public static class LeavePolicyProjection
 	public static LeavePolicyRuleItem ToRuleItem(LeavePolicyRule rule) => new()
 	{
 		Id = rule.Id,
-		PaidType = ToPaidType(rule.PaidType),
+		PaidType = ToPaidType(rule.PaidType), PayrollCategory = rule.PayrollCategory,
 		EntitlementMode = ToEntitlementMode(rule.EntitlementMode),
 		AccrualPolicyType = ToAccrualPolicyType(rule.AccrualPolicyType),
 		LeaveCount = rule.LeaveCount,
@@ -86,7 +86,7 @@ public static class LeavePolicyProjection
 		request.AllowHalfDay,
 		request.AttachmentRequiredAfterDays,
 		request.AllowNegativeBalance,
-		request.IsActive);
+		request.IsActive, request.PayrollCategory);
 
 	public static HrPolicyStatus ParseStatus(string status) => status switch
 	{

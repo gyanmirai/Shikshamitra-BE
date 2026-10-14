@@ -18,7 +18,7 @@ internal sealed record SalaryTemplateEsiEvaluationContext(
 	IReadOnlyDictionary<Guid, StatutoryWageTreatment> ComponentTreatments,
 	IReadOnlyList<StatutoryOverride> Overrides,
 	Guid DeductionComponentId,
-	string DeductionComponentName) { public EsiCalculationSettings CalculationSettings { get; init; } = new(); }
+	string DeductionComponentName) { public EsiCalculationSettings CalculationSettings { get; init; } = new(); public PayrollStatutoryProfile? PayrollProfile { get; init; } }
 
 internal sealed record SalaryTemplateEvaluation(
 	decimal Gross,
@@ -32,6 +32,7 @@ internal sealed record SalaryTemplateEvaluation(
 	List<string> Trace,
 	EsiStatutoryCalculationResult? EmployeeStateInsurance)
 {
+	public PayrollStatutoryApplication? StatutoryApplication { get; init; }
 	public decimal EmployerCost => Math.Round(Gross + EmployerContributionTotal, 2, MidpointRounding.AwayFromZero);
 }
 

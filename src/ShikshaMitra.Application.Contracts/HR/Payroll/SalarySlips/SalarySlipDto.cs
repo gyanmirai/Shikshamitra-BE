@@ -9,10 +9,15 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 /// </summary>
 public class SalarySlipDto
 {
+	public FrozenSalaryDocumentPresentation? Presentation { get; set; }
 	public Guid? DocumentId { get; set; }
 	public int? DocumentRevision { get; set; }
 	public decimal? FullGrossSalary { get; set; }
 	public decimal GrossSalary { get; set; }
+	public decimal? BasicSalary { get; set; }
+	public Dictionary<string, decimal>? StatutoryDeductionAmounts { get; set; }
+	public Dictionary<string, decimal>? LeaveUnitsByType { get; set; }
+	public ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication? StatutoryApplication { get; set; }
 	public decimal AdditionalEarnings { get; set; }
 	/// <summary>
 	/// Salary slip identifier

@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.Payroll.SalarySlips;
@@ -11,7 +11,7 @@ namespace ShikshaMitra.Controllers.HR.Payroll.SalarySlips;
 public class PayslipSettingsController(IPayslipSettingsAppService settings) : AbpControllerBase
 {
 	[HttpPost("logo"), Consumes("multipart/form-data"), RequestSizeLimit(2097152 + 65536)]
-	public async Task<object> UploadLogoAsync([FromForm] Microsoft.AspNetCore.Http.IFormFile file)
+	public async Task<object> UploadLogoAsync(Microsoft.AspNetCore.Http.IFormFile file)
 	{
 		if (file == null || file.Length is <= 0 or > 2097152) throw new BusinessException("HR:Payslip:LogoInvalid");
 		await using var stream = file.OpenReadStream();

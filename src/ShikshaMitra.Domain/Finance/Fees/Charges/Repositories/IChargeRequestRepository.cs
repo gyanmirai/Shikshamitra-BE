@@ -63,7 +63,8 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 		string? sortBy = null,
 		string? sortOrder = null,
 		IReadOnlyCollection<Guid>? scopedStudentIds = null,
-		CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default,
+		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null);
 
 	Task<IQueryable<ChargeLineJoinResult>> GetChargeLinesQueryAsync(
 		Guid academicYearId,
@@ -78,7 +79,9 @@ public interface IChargeRequestRepository : IRepository<ChargeRequest, Guid>
 		Guid? standardId = null,
 		Guid? divisionId = null,
 		IReadOnlyCollection<Guid>? scopedStudentIds = null,
-		CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default,
+		string? search = null,
+		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null);
 }
 
 public record ChargeRequestStatusCounts(int Pending, int Processed, int Completed = 0, int Rejected = 0);

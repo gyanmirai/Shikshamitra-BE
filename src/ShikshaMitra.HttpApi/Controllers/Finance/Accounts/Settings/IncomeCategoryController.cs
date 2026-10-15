@@ -23,7 +23,7 @@ public class IncomeCategoryController(ITransactionCategoryAppService incomeCateg
 
 	[HttpPost]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Settings_IncomeCategory.Add)]
-	public Task<TransactionCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateTransactionCategoryRequest input)
+	public Task<TransactionCategoryResponse> CreateAsync([FromQuery] Guid academicYearId, [FromBody] CreateIncomeCategoryRequest input)
 	{
 		return incomeCategoryAppService.CreateAsync(academicYearId, input, TransactionType.Income);
 	}
@@ -49,7 +49,7 @@ public class IncomeCategoryController(ITransactionCategoryAppService incomeCateg
 
 	[HttpPut("{incomeCategoryId}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Settings_IncomeCategory.Edit)]
-	public Task<TransactionCategoryResponse> UpdateAsync(Guid incomeCategoryId, [FromBody] UpdateTransactionCategoryRequest input)
+	public Task<TransactionCategoryResponse> UpdateAsync(Guid incomeCategoryId, [FromBody] UpdateIncomeCategoryRequest input)
 	{
 		return incomeCategoryAppService.UpdateAsync(incomeCategoryId, input, TransactionType.Income);
 	}

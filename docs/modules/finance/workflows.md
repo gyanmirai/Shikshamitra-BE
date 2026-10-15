@@ -3,7 +3,7 @@ module: finance
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-09-24
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -13,6 +13,19 @@ audience: humans-and-agents
 TL;DR: use this page to understand how Finance changes affect due rows, approvals, receipts, and reports.
 
 ## Core workflows
+
+### Concessions and Collections list queries
+
+Concession applications accepts `tab`, `search`, `filters`, `sortBy` and `sortOrder` alongside existing academic scope, exact status and page/pageSize inputs.
+Operational tabs group Draft/Pending, Approved/PartiallyReversed/Reversed, and Rejected/Cancelled before paging.
+The repository preserves tenant, student scope and creator-only draft visibility, then applies filters and stable sorting before counting or paging.
+Status counts use the same academic scope, search and column filters, without the active tab restriction.
+Student/GR and Class/Division filters match combined display values; amount filters use the canonical requested fee-head total, and date filters use the selected local day's UTC boundaries.
+
+Collections summary accepts `Filters`, `SortBy` and `SortOrder` in addition to existing inputs.
+Header filtering operates on the canonical summary DTO balances/status before counting and paging; it does not introduce another balance calculation.
+Existing `Sorting` remains supported, and a student ID tie-breaker stabilizes page order.
+Both endpoints reject unknown columns/operators, invalid status codes, reversed ranges and unsupported sorts through `FinanceTableQuery` validation.
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
@@ -93,3 +106,7 @@ See [Income and expense routing](./references/income-expense-routing.md) for the
 
 See [variable fee assignment](./references/variable-fee-assignment.md) for the active fixed/variable and required/optional conditions.
 Included variable heads require a student amount before preview and commit; skipped optional heads create no dues.
+
+## Income and Expenses workspaces
+
+See [the workspace contract](./references/income-expense-workspaces.md) for separate registers, academic-year months, selected-record details, manual creation and automatic refund visibility.

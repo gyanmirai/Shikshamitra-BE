@@ -116,7 +116,7 @@ public class TransactionCategoryAppService(
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureCategoryType(entity, categoryType);
 		return await historyReader.ReadAsync<TransactionCategory>(id, entity.CreationTime, entity.CreatorId,
-			HistoryFields, skipCount, maxResultCount);
+			HistoryFields, skipCount, maxResultCount, entity.Version);
 	}
 
 	public async Task<TransactionCategoryResponse> UpdateAsync(Guid id,

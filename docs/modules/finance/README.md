@@ -3,7 +3,7 @@ module: finance
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-09-24
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -88,3 +88,7 @@ git diff --check
 ## Student fee assignment
 
 The current preview/commit, year-scoped history, permission and migration contracts are documented in [Student fee assignment](./references/student-fee-assignment.md). That contract supersedes older assignment descriptions that require concession configuration.
+
+## Income and Expenses workspaces
+
+See [the workspace contract](./references/income-expense-workspaces.md) for separate registers, academic-year months, selected-record details, manual creation and automatic refund visibility.

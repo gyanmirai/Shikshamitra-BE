@@ -7,6 +7,7 @@ namespace ShikshaMitra.Finance.Accounts.Settings.TransactionCategories.Dtos;
 public class CreateTransactionCategoryRequest
 {
 	[Required]
+	[StringLength(AccountSettingConsts.MaxNameLength)]
 	public string Name { get; set; } = string.Empty;
 	public string? Description { get; set; }
 	public List<string> Tags { get; set; } = [];
@@ -16,3 +17,7 @@ public class CreateTransactionCategoryRequest
 }
 
 public class UpdateTransactionCategoryRequest : CreateTransactionCategoryRequest;
+
+// Preserve the JSON shape while allowing the Income route's stricter name limit.
+public class CreateIncomeCategoryRequest : CreateTransactionCategoryRequest;
+public class UpdateIncomeCategoryRequest : UpdateTransactionCategoryRequest;

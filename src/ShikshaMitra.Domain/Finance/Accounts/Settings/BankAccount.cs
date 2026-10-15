@@ -81,13 +81,13 @@ public class BankAccount : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Code = string.IsNullOrWhiteSpace(code) ? null : AccountSettingConsts.NormalizeCode(code);
 		NormalizedCode = Code;
 		AccountHeadId = accountHeadId;
-		BankName = Check.NotNullOrWhiteSpace(bankName, nameof(bankName), AccountSettingConsts.MaxNameLength).Trim();
-		BranchName = Check.NotNullOrWhiteSpace(branchName, nameof(branchName), AccountSettingConsts.MaxNameLength).Trim();
+		BankName = Check.NotNullOrWhiteSpace(bankName?.Trim(), nameof(bankName), AccountSettingConsts.MaxBankNameLength);
+		BranchName = Check.NotNullOrWhiteSpace(branchName?.Trim(), nameof(branchName), AccountSettingConsts.MaxBankNameLength);
 		BranchAddress = string.IsNullOrWhiteSpace(branchAddress) ? null : branchAddress.Trim();
-		AccountHolderName = Check.NotNullOrWhiteSpace(accountHolderName, nameof(accountHolderName), AccountSettingConsts.MaxNameLength).Trim();
+		AccountHolderName = Check.NotNullOrWhiteSpace(accountHolderName?.Trim(), nameof(accountHolderName), AccountSettingConsts.MaxBankNameLength);
 		AccountType = accountType;
 		AccountNumber = Check.NotNullOrWhiteSpace(accountNumber, nameof(accountNumber), 34).Trim();
-		Purpose = string.IsNullOrWhiteSpace(purpose) ? null : purpose.Trim();
+		Purpose = string.IsNullOrWhiteSpace(purpose) ? null : Check.Length(purpose.Trim(), nameof(purpose), AccountSettingConsts.MaxBankPurposeLength);
 		IfscCode = Check.NotNullOrWhiteSpace(ifscCode, nameof(ifscCode), 11).Trim().ToUpperInvariant();
 		UpiId = string.IsNullOrWhiteSpace(upiId) ? null : upiId.Trim().ToLowerInvariant();
 		EffectiveFrom = effectiveFrom;

@@ -70,6 +70,9 @@ public class ShikshaMitraDomainModule : AbpModule
 			options.EntityHistorySelectors.Add(new NamedTypeSelector(
 				"AccountHead",
 				type => type == typeof(AccountHead)));
+			options.EntityHistorySelectors.Add(new NamedTypeSelector(
+				"AccountSettings",
+				type => type == typeof(TransactionCategory) || type == typeof(BankAccount)));
 		});
 
 		Configure<AbpBlobStoringOptions>(options =>

@@ -83,7 +83,10 @@ public class TransactionCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(AccountSettingErrorCodes.InvalidEffectivePeriod);
 		Code = string.IsNullOrWhiteSpace(code) ? null : AccountSettingConsts.NormalizeCode(code);
 		NormalizedCode = Code;
-		Name = Check.NotNullOrWhiteSpace(name, nameof(name), AccountSettingConsts.MaxNameLength).Trim();
+		Name = Check.NotNullOrWhiteSpace(name?.Trim(), nameof(name),
+			CategoryType == TransactionType.Income
+				? AccountSettingConsts.MaxIncomeCategoryNameLength
+				: AccountSettingConsts.MaxNameLength);
 		NormalizedName = AccountSettingConsts.NormalizeName(Name);
 		Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
 		DefaultAccountHeadId = defaultAccountHeadId;

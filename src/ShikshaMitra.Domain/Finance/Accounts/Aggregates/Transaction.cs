@@ -27,6 +27,15 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
  public bool IsConfirmed { get; private set; } = true;
  public bool IsAutomatic => SourceKey != null;
  public void Confirm() => IsConfirmed = true;
+ public void SetManualRouting(string categoryName, Guid? bankId, string? bankLabel, string? reference)
+ {
+   if (IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");
+   if (PaymentMethod != 0 && !bankId.HasValue) throw new BusinessException(AccountsRegisterErrorCodes.BankRequired);
+   if (PaymentMethod == 0 && bankId.HasValue) throw new BusinessException(AccountsRegisterErrorCodes.InvalidCashBank);
+   CategoryNameSnapshot = categoryName; BankAccountId = bankId; BankLabelSnapshot = bankLabel;
+   ExtraProperties["PaymentReference"] = reference?.Trim();
+ }
+
  public static Transaction Automatic(Guid id, Guid? tenantId, Guid yearId, Guid categoryId,
    string categoryName, Guid? bankId, string? bankLabel, string name, decimal amount,
    int method, DateTime at, TransactionType type, string key, Guid sourceId, Guid studentId,

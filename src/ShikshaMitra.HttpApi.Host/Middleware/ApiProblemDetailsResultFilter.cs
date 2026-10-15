@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -16,10 +18,13 @@ namespace ShikshaMitra.Common.Middleware;
 public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITransientDependency
 {
 	private readonly IApiProblemDetailsErrorDetailResolver _errorDetailResolver;
+	private readonly ILogger<ApiProblemDetailsResultFilter> _logger;
 
-	public ApiProblemDetailsResultFilter(IApiProblemDetailsErrorDetailResolver errorDetailResolver)
+	public ApiProblemDetailsResultFilter(IApiProblemDetailsErrorDetailResolver errorDetailResolver,
+		ILogger<ApiProblemDetailsResultFilter>? logger = null)
 	{
 		_errorDetailResolver = errorDetailResolver;
+		_logger = logger ?? NullLogger<ApiProblemDetailsResultFilter>.Instance;
 	}
 
 	public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
@@ -39,6 +44,12 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 
 		var payload = ExtractPayload(context.Result);
 		var problem = BuildProblemDetails(context.HttpContext.Request.Path, status, payload);
+		problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+		if (problem.Status >= StatusCodes.Status500InternalServerError)
+		{
+			_logger.LogError("API request failed with reference {ErrorReference} for {Path}",
+				context.HttpContext.TraceIdentifier, context.HttpContext.Request.Path);
+		}
 		context.Result = new ObjectResult(problem)
 		{
 			StatusCode = problem.Status ?? status,

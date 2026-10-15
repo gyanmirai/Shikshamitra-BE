@@ -51,7 +51,7 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 				throw;
 			}
 
-			_logger.LogError(exception, "Unhandled API exception for {Path}", context.Request.Path);
+			_logger.LogError(exception, "Unhandled API exception {ErrorReference} for {Path}", context.TraceIdentifier, context.Request.Path);
 			var problem = MapException(context, exception);
 			await WriteProblemDetailsAsync(context, problem);
 			return;
@@ -222,6 +222,7 @@ public class ApiProblemDetailsMiddleware : ITransientDependency
 			Detail = string.IsNullOrWhiteSpace(detail) ? title : detail,
 			Instance = context.Request.Path
 		};
+		problem.Extensions["traceId"] = context.TraceIdentifier;
 
 		if (!string.IsNullOrWhiteSpace(errorCode))
 		{

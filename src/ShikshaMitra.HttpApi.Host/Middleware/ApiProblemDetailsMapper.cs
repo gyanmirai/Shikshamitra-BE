@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using ShikshaMitra.HR;
+using ShikshaMitra.Security.Roles;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 
 namespace ShikshaMitra.Common.Middleware;
@@ -17,6 +18,7 @@ public static class ApiProblemDetailsMapper
 
 		return errorCode switch
 		{
+			RoleErrorCodes.AssignedToUsers or RoleErrorCodes.ReferencedByEmployees => StatusCodes.Status409Conflict,
 			TenantSettingsDomainErrorCodes.DuplicateStandardName => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewStale or HRErrorCodes.PayrollPreviewNotReady => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewNotFound => StatusCodes.Status404NotFound,

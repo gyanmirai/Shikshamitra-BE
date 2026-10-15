@@ -1,6 +1,8 @@
 {
     "Culture": "en",
     "Texts": {
+        "ShikshaMitra:RoleAssignedToUsers": "This role is assigned to {UserCount} user(s) and cannot be deleted. Reassign or remove those users first.",
+        "ShikshaMitra:RoleReferencedByEmployees": "This role is referenced by {EmployeeCount} employee record(s) and cannot be deleted. Reassign those employees first, including archived records.",
         "SchoolIdentity:InvalidContext": "Select a board and medium belonging to this school and academic year.",
         "SchoolIdentity:InvalidSelection": "Select inherited, custom or omitted assets. Custom assets require an uploaded image and signatures require principal details.",
         "SchoolIdentity:InvalidAssetKind": "Select a school logo, banner or principal signature.",

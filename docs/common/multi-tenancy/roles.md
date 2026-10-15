@@ -81,6 +81,32 @@ Use this checklist when user creation fails with a missing role error.
 4. Re-run the user creation request
 5. Check `src/ShikshaMitra.HttpApi.Host/Logs/` if the error persists
 
+## Delete an unused role
+
+`DELETE /api/identity/roles/{id}` requires `AbpIdentity.Roles.Delete` and current-tenant ownership.
+`SchoolIdentityRoleAppService` checks dependencies before delegating to ABP, retaining its static-role protection and normal deletion behavior.
+
+| Dependency | Response |
+| --- | --- |
+| Direct user membership or a linked employee account | 409, `ShikshaMitra:RoleAssignedToUsers`, `data.UserCount` (distinct accounts), and instructions to reassign or remove users first |
+| Employee record without a login, including archived records | 409, `ShikshaMitra:RoleReferencedByEmployees`, `data.EmployeeCount`, and instructions to reassign employees first |
+| No user or employee references | 204; the role is deleted |
+
+Employee references are checked with soft-delete filtering disabled while tenant isolation remains enabled.
+PostgreSQL deletion holds a role row lock through the dependency check and commit, so an in-flight foreign-key assignment cannot slip between the check and deletion.
+The `AppEmployees.RoleId` restrictive foreign key remains intact; no migration or automatic reassignment is required.
+Unexpected 500 responses include `traceId`, which is also written to the request's server error log.
+
+Focused validation:
+
+```powershell
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter 'FullyQualifiedName~RoleDeletion|FullyQualifiedName~ApiProblemDetails'
+```
+
+Set `ROLE_DELETION_TEST_POSTGRES` to a loopback administrator connection to include the PostgreSQL gate.
+It creates and removes a new `role_deletion_tests_*` database, reproduces the employee foreign-key violation, verifies the HTTP contracts and checks concurrent assignment.
+It never reuses or resets the configured school database.
+
 ## Related docs
 
 - [Modules index](../../modules/README.md)

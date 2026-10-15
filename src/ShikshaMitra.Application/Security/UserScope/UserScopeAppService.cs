@@ -150,10 +150,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
 
             if (!input.AcademicYearId.HasValue || input.AcademicYearId.Value == Guid.Empty)
             {
-                throw new BusinessException(
-                    code: UserScopeErrorCodes.InvalidInput,
-                    message: "An academic year ID must be provided for bulk scope assignment."
-                );
+                throw InvalidBulkScopeInput("Select an academic year before saving academic permissions.");
             }
             var targetAcademicYearId = input.AcademicYearId.Value;
             var scopeRows = NormalizeBulkScopeRows(input);
@@ -370,7 +367,8 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         scope.DivisionId == Guid.Empty;
 
     private static BusinessException InvalidBulkScopeInput(string message) =>
-        new(code: UserScopeErrorCodes.InvalidInput, message: message);
+        new BusinessException(code: UserScopeErrorCodes.InvalidInput, message: message)
+            .WithData("Reason", message);
 
     [Authorize(ShikshaMitraPermissions.UserScope.Revoke)]
     public async Task RevokeScopeAsync(Guid id)

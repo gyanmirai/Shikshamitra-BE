@@ -60,7 +60,8 @@ public class EmployeesController : AbpControllerBase
 		[FromQuery] bool? isTeaching = null,
 		[FromQuery] Guid? roleId = null,
 		[FromQuery] string? designation = null,
-		[FromQuery] string? search = null)
+		[FromQuery] string? search = null,
+		[FromQuery] Guid? standardId = null)
 	{
 		pageSize = Math.Min(pageSize, MaxEmployeePageSize);
 
@@ -72,6 +73,7 @@ public class EmployeesController : AbpControllerBase
 			IsTeaching = isTeaching,
 			RoleId = roleId,
 			MediumStageId = mediumStageId,
+			StandardId = standardId,
 			Designation = designation,
 			Search = search
 		};

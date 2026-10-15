@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -18,6 +18,8 @@ Use controllers for route truth and contracts for request and response shapes.
 Standards use the ABP routes `POST /api/app/standard` and `PUT /api/app/standard/{id}`. Duplicate names within the same medium stage return HTTP 409 with the existing ProblemDetails format: `errorCode: ShikshaMitra.TenantSettings:DuplicateStandardName`, `detail: A standard named 'Class 3' already exists in this academic stage.`, and `data.name`. Names are compared literally after trimming and case normalization; editing excludes the current standard. Repository tenant filters remain enabled. The same name is allowed in another stage.
 
 Division create/update routes remain `/api/app/division` and `/api/app/division/{id}`. Omitting or passing null for `roomNumber` leaves existing allocations unchanged on update and creates an unassigned division on create. An explicitly supplied empty string clears the room. Academic hierarchy forms no longer expose room allocation; no schema change is required.
+
+Division creation needs only `name`, `strength` (a whole number from 1 to 500), and `standardId`. Neither a room nor a shift is required. Within the current tenant and standard, names are trimmed and compared case-insensitively as literal text. Duplicate creation or renaming returns HTTP 409 with `errorCode: ShikshaMitra.TenantSettings:DuplicateDivisionName` and `detail: A division named '{name}' already exists in this standard.` Editing excludes the current record, including case-only name changes. No database migration is needed for this validation change.
 
 ## Shift Management API
 

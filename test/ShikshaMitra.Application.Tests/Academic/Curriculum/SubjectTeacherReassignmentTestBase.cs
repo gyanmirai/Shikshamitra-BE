@@ -51,13 +51,21 @@ public abstract class SubjectTeacherReassignmentTestBase : LessonPlanProgressTes
 		var teacherRoleId = Guid.NewGuid();
 		await GetRequiredService<IRepository<IdentityRole, Guid>>().InsertAsync(
 			new IdentityRole(teacherRoleId, $"allocation-teacher-{teacherRoleId:N}", TenantId), autoSave: true);
-		await GetRequiredService<IRepository<Employee, Guid>>().InsertManyAsync(
+		Employee[] teachers =
 			[
 				CreateTeacher(OldTeacher, teacherRoleId, "Old", 1),
 				CreateTeacher(NewTeacher, teacherRoleId, "New", 2),
 				CreateTeacher(OtherTeacher, teacherRoleId, "Other", 3)
-			],
-			autoSave: true);
+			];
+		foreach (var teacher in teachers)
+		{
+			var userId = teacher.UserId!.Value;
+			await GetRequiredService<IIdentityUserRepository>().InsertAsync(
+				new IdentityUser(userId, $"allocation-teacher-{userId:N}", $"{userId:N}@example.test", TenantId), autoSave: true);
+			await GetRequiredService<IUserScopeAssignmentRepository>().InsertAsync(
+				new UserScopeAssignment(Guid.NewGuid(), TenantId, userId, standardId: StandardId), autoSave: true);
+		}
+		await GetRequiredService<IRepository<Employee, Guid>>().InsertManyAsync(teachers, autoSave: true);
 		var repository = GetRequiredService<IRepository<AssignedSubject, Guid>>();
 		var assignment = (await repository.GetListAsync(a => a.StandardId == StandardId)).Single();
 		assignment.SetPrimaryTeacher(OldTeacher);
@@ -70,7 +78,7 @@ public abstract class SubjectTeacherReassignmentTestBase : LessonPlanProgressTes
 		new(
 			id,
 			TenantId,
-			null,
+			Guid.NewGuid(),
 			$"ALLOC{sequence:D3}",
 			new EmployeeBasicInfo(
 				ProfilePictureBlobName: null,

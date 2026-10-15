@@ -5,6 +5,7 @@ using ShikshaMitra.Common;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp;
+using ShikshaMitra.Security.UserScope;
 
 namespace ShikshaMitra.HR.Employees.Search;
 
@@ -12,7 +13,8 @@ namespace ShikshaMitra.HR.Employees.Search;
 public class EmployeeSearchReader(
 	IEmployeeRepository employeeRepository,
 	EmployeeOrganizationScopeResolver organizationScopeResolver,
-	EmployeeSearchVisibilityService visibilityService)
+	EmployeeSearchVisibilityService visibilityService,
+	IUserScopeAssignmentRepository scopeAssignmentRepository)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<EmployeeOptionsResponse> GetOptionsAsync(GetEmployeeListInput input)
@@ -20,6 +22,7 @@ public class EmployeeSearchReader(
 		var queryable = await employeeRepository.GetQueryableAsync();
 		queryable = await visibilityService.ApplyVisibilityScopeAsync(queryable);
 		queryable = await EmployeeSearchQuery.ApplyFiltersAsync(queryable, input, organizationScopeResolver);
+		queryable = await ApplyStandardFilterAsync(queryable, input.StandardId);
 		var pageSize = Math.Clamp(input.MaxResultCount, 1, 50);
 
 		// Scalar projection avoids loading employee graphs and organization enrichment.
@@ -50,11 +53,13 @@ public class EmployeeSearchReader(
 		var queryable = await employeeRepository.GetQueryableAsync();
 		queryable = await visibilityService.ApplyVisibilityScopeAsync(queryable);
 		queryable = await EmployeeSearchQuery.ApplyFiltersAsync(queryable, input, organizationScopeResolver);
+		queryable = await ApplyStandardFilterAsync(queryable, input.StandardId);
 
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 		var employees = await AsyncExecuter.ToListAsync(queryable
 			.OrderBy(e => e.FirstName)
 			.ThenBy(e => e.LastName)
+			.ThenBy(e => e.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount));
 
@@ -72,5 +77,12 @@ public class EmployeeSearchReader(
 				.Select(employee => EmployeeSearchProjection.ToSummary(employee, organizationsByUserId))
 				.ToList()
 		};
+	}
+
+	private async Task<IQueryable<Employee>> ApplyStandardFilterAsync(IQueryable<Employee> query, Guid? standardId)
+	{
+		if (!standardId.HasValue) return query;
+		var userIds = await scopeAssignmentRepository.GetUserIdsByStandardAsync(standardId.Value);
+		return query.Where(employee => employee.UserId.HasValue && Enumerable.Contains(userIds, employee.UserId.Value));
 	}
 }

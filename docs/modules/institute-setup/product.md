@@ -3,7 +3,7 @@ module: institute-setup
 domain: product
 content_type: Conceptual
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -14,6 +14,8 @@ TL;DR: Institute Setup owns durable first-login configuration and Rooms Manageme
 Rooms Management stores buildings, floors, room types, and rooms used by academic scheduling and operations.
 
 ## School Identity
+
+School Identity has no Delete permission or profile deletion endpoint. Its action catalogue contains View, ManageDefaults, ManageOverrides and AccessSignature. The shared permission editor keeps Delete disabled by design; this is working as intended. Use configuration updates to hide an asset or reset an override to Inherit. These changes preserve revision history and retained files referenced by issued documents.
 
 School defaults supply logos, letterheads and principal signatures across one tenant. Board and board/medium profiles override individual assets. Resolution is medium override, board override, then school default. Hidden stops inheritance; resetting to Inherit restores it. Signature image, principal name and designation resolve as one selection.
 

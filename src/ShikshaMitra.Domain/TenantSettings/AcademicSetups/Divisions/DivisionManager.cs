@@ -1,5 +1,3 @@
-using ShikshaMitra.Extensions;
-using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.Divisions;
 using System;
@@ -12,15 +10,14 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups;
 
 public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenerator guidGenerator) : DomainService
 {
-	private string EntityName => this.GetType().ToEntityNameFromManager();
-
 	public async Task<Division> CreateAsync(
 		Guid standardId,
 		string name,
 		int strength,
-		string roomNumber = "B101")
+		string roomNumber = "")
 	{
-		// Validate the name is unique within the same Standard.
+		Check.NotNullOrWhiteSpace(name, nameof(name));
+		name = name.Trim();
 		await ValidateDivisionAsync(name, standardId);
 
 		return new Division(
@@ -40,17 +37,17 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 		string? roomNumber = null)
 	{
 		Check.NotNull(division, nameof(division));
+		Check.NotNullOrWhiteSpace(newName, nameof(newName));
+		newName = newName.Trim();
 
 		if (division.Name == newName && division.Strength == newStrength && (roomNumber == null || division.RoomNumber == roomNumber))
 		{
 			return division;
 		}
 
-		// Validate the name is unique within the same Standard.
-		// add condtion to validate only if name is changed
 		if (division.Name != newName)
 		{
-			await ValidateDivisionAsync(newName, division.StandardId);
+			await ValidateDivisionAsync(newName, division.StandardId, division.Id);
 		}
 
 		division.SetName(newName);
@@ -63,11 +60,12 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 		return division;
 	}
 
-	private async Task ValidateDivisionAsync(string name, Guid standardId)
+	private async Task ValidateDivisionAsync(string name, Guid standardId, Guid? excludedId = null)
 	{
-		if (await divisionRepository.FindByNameAndStandardIdAsync(name, standardId) != null)
+		if (await divisionRepository.FindByNameAndStandardIdAsync(name, standardId, excludedId) != null)
 		{
-			throw new AlreadyExistsException(EntityName, name);
+			throw new BusinessException(TenantSettingsDomainErrorCodes.DuplicateDivisionName)
+				.WithData("name", name);
 		}
 	}
 }

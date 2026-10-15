@@ -3,7 +3,7 @@ module: institute-setup
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -74,6 +74,8 @@ Add or update tests when a change affects these areas.
 
 ## Academic Setup validation checks
 
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~DivisionCreationApi_Tests|FullyQualifiedName~AcademicSetupValidationApi_Tests" --artifacts-path .artifacts/division-regression` for division/standard duplicate responses, whitespace/case normalization, literal names, self edits, failed rename persistence, tenant filtering and optional-room persistence. These tests use disposable SQLite through the production HTTP pipeline; they do not establish PostgreSQL deployment acceptance or simultaneous-request uniqueness.
+
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter AcademicSetupValidationApi_Tests --artifacts-path .artifacts/academic-setup-validation`. The disposable SQLite HTTP tests cover exact/case/padded duplicates, rejected rename persistence, self-edits, different stages, literal SQL wildcard characters, and preserved room allocations after an update omits the field.
 
 Run `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~StandardAppService_Tests|FullyQualifiedName~DivisionOnboardingIntegration_Tests" --artifacts-path .artifacts/academic-setup-validation` for existing shift-reference and room-free onboarding regressions.
@@ -92,6 +94,8 @@ The browser bridge starts with `dotnet run --project test/browser/academic-setup
 The bridge listens only on `127.0.0.1:4391`, uses the production HTTP pipeline with test authentication and an isolated SQLite database, and seeds synthetic schools. It disables live background workers and seeding. Stop it after testing. The [frontend testing guide](../../../../Shikshamitra-FE/docs/institute-setup/testing.md) owns grid, dropdown and session-switch evidence. These local checks do not prove a deployment or actual QA data repair.
 
 ## School Identity checks
+
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter "FullyQualifiedName~School_identity|FullyQualifiedName~Invented_school_identity" --artifacts-path .artifacts/school-identity-permissions/build` for the four-action role/user catalogue, inherited grants and overrides, atomic rejection of invented Delete grants, and HTTP 405 for profile deletion. These checks use the disposable HTTP test factory; they do not change school permissions.
 
 | Scope | Command |
 | --- | --- |

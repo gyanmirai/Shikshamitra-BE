@@ -189,25 +189,13 @@ public class EfCoreUserScopeAssignmentRepository :
             .Where(x =>
                 x.IsActive &&
                 !x.IsDeleted &&
-                (
-                    // Exact standard match
-                    x.StandardId == standardScope.StandardId ||
-                    // Wildcard standard WITHIN parent medium stage constraint
-                    (!x.StandardId.HasValue && x.EducationMediumStageId == standardScope.EducationMediumStageId) ||
-                    // Wildcard medium stage WITHIN parent medium constraint
-                    (!x.EducationMediumStageId.HasValue && x.EducationMediumId == standardScope.EducationMediumId) ||
-                    // Wildcard medium WITHIN parent board constraint
-                    (!x.EducationMediumId.HasValue && x.EducationBoardId == standardScope.EducationBoardId) ||
-                    // Wildcard board WITHIN academic year constraint
-                    (!x.EducationBoardId.HasValue && x.AcademicYearId == standardScope.AcademicYearId) ||
-                    // Organization-wide wildcard
-                    (!x.AcademicYearId.HasValue &&
-                     !x.EducationBoardId.HasValue &&
-                     !x.EducationMediumId.HasValue &&
-                     !x.EducationMediumStageId.HasValue &&
-                     !x.StandardId.HasValue &&
-                     !x.DivisionId.HasValue)
-                ));
+                (!x.AcademicYearId.HasValue || x.AcademicYearId == standardScope.AcademicYearId) &&
+                (!x.EducationBoardId.HasValue || x.EducationBoardId == standardScope.EducationBoardId) &&
+                (!x.EducationMediumId.HasValue || x.EducationMediumId == standardScope.EducationMediumId) &&
+                (!x.EducationMediumStageId.HasValue || x.EducationMediumStageId == standardScope.EducationMediumStageId) &&
+                (!x.StandardId.HasValue || x.StandardId == standardScope.StandardId) &&
+                (!x.DivisionId.HasValue || dbContext.Set<Division>().Any(division =>
+                    division.Id == x.DivisionId && division.StandardId == standardScope.StandardId)));
 
         var directUserIds = await matchingAssignments
             .Where(x => x.UserId.HasValue)

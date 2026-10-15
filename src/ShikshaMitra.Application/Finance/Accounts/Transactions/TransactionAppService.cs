@@ -19,7 +19,9 @@ public partial class TransactionAppService(
 	IRepository<Transaction, Guid> transactionRepository,
 	IRepository<TransactionCategory, Guid> transactionCategoryRepository,
 	IRepository<AccountHead, Guid> accountHeadRepository,
-	FinanceScopeAccessService financeScopeAccessService
+	FinanceScopeAccessService financeScopeAccessService,
+    FinanceRoutingManager routingManager,
+    IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid> academicYears
 ) : ApplicationService, ITransactionAppService
 {
 	public async Task<TransactionListResponse> GetListAsync(Guid academicYearId, GetTransactionsRequest input, TransactionType transactionType)
@@ -71,25 +73,54 @@ public partial class TransactionAppService(
 
 	public async Task<TransactionCreateUpdateResponse> CreateAsync(Guid academicYearId, TransactionCreateRequest input, TransactionType transactionType)
 	{
+        var paymentDate = input.PaymentDate.UtcDateTime;
 		await CheckPermissionAsync(transactionType, "Add");
 		Transaction.EnsureValidMoneyAndMethod(input.Amount, input.PaymentMethod);
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
 			academicYearId, null, null, null, null);
 
-		var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
+		if (input.IdempotencyKey == Guid.Empty) throw new BusinessException(AccountsRegisterErrorCodes.ManualEntryKeyConflict);
+        if (input.IdempotencyKey.HasValue)
+        {
+            var prior = await transactionRepository.FindAsync(input.IdempotencyKey.Value);
+            if (prior != null)
+            {
+                prior.ExtraProperties.TryGetValue("PaymentReference", out var reference);
+                prior.ExtraProperties.TryGetValue("Counterparty", out var counterparty);
+                if (prior.IsAutomatic || prior.TenantId != CurrentTenant.Id || prior.AcademicYearId != academicYearId ||
+                    prior.TransactionType != transactionType || prior.CategoryId != input.CategoryId || prior.Amount != input.Amount ||
+                    prior.PaymentMethod != input.PaymentMethod || prior.PaymentDate != paymentDate || prior.BankAccountId != input.BankAccountId ||
+                    prior.Name != input.Name || prior.Notes != input.Notes || reference?.ToString() != input.PaymentReference?.Trim() ||
+                    counterparty?.ToString() != input.Counterparty?.Trim() || !prior.CategoryTags.Select(x => x.Value).OrderBy(x => x).SequenceEqual(input.CategoryTags.Select(x => new Tag(x).Value).Distinct().OrderBy(x => x)))
+                    throw new BusinessException(AccountsRegisterErrorCodes.ManualEntryKeyConflict);
+                return MapToCreateUpdateResponse(prior, await transactionCategoryRepository.GetAsync(prior.CategoryId));
+            }
+        }
+        var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
 			?? throw new BusinessException("ShikshaMitra:TransactionCategoryNotFound").WithData("CategoryId", input.CategoryId);
 
-		if (category.CategoryType.HasValue && category.CategoryType.Value != transactionType)
+		if (category.CategoryType != transactionType)
 			throw new BusinessException("ShikshaMitra:TransactionCategoryTypeMismatch")
 				.WithData("CategoryId", category.Id).WithData("Expected", transactionType).WithData("Actual", category.CategoryType);
-		await EnsureCategoryAvailableAsync(category, academicYearId, input.PaymentDate, transactionType);
+		await EnsureCategoryAvailableAsync(category, academicYearId, paymentDate, transactionType);
 
 		var transaction = new Transaction(
-			GuidGenerator.Create(), CurrentTenant.Id, academicYearId, input.CategoryId,
+			input.IdempotencyKey ?? GuidGenerator.Create(), CurrentTenant.Id, academicYearId, input.CategoryId,
 			input.Name, input.CategoryTags, input.Amount,
-			input.PaymentMethod, input.PaymentDate, input.Notes, transactionType);
+			input.PaymentMethod, paymentDate, input.Notes, transactionType);
 
-		await transactionRepository.InsertAsync(transaction, autoSave: true);
+		if (string.IsNullOrWhiteSpace(input.Name) || input.Name.Length > 200 || input.Counterparty?.Length > 200 || input.PaymentReference?.Length > 100 || input.Notes?.Length > 2000)
+            throw new BusinessException(AccountsRegisterErrorCodes.InvalidManualFields);
+        var year = await academicYears.GetAsync(academicYearId);
+        var period = AccountsRegisterPeriod.Resolve(year.StartDate, year.EndDate, null, null);
+        var at = paymentDate;
+        if (at < period.StartUtc || at >= period.EndUtc) throw new BusinessException(AccountsRegisterErrorCodes.InvalidPeriod);
+        if (input.PaymentMethod == 0 && input.BankAccountId.HasValue) throw new BusinessException(AccountsRegisterErrorCodes.InvalidCashBank);
+        var bank = input.PaymentMethod == 0 ? null : await routingManager.RequireBankAsync(academicYearId, input.BankAccountId, new DateTimeOffset(at));
+        var label = bank == null ? null : $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}";
+        transaction.SetManualRouting(category.Name, bank?.Id, label, input.PaymentReference);
+        transaction.ExtraProperties["Counterparty"] = input.Counterparty?.Trim();
+        await transactionRepository.InsertAsync(transaction, autoSave: true);
 		return MapToCreateUpdateResponse(transaction, category);
 	}
 

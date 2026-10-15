@@ -32,13 +32,14 @@ public partial class ChargeAppService
 		var page = Math.Max(1, input.Page);
 		var pageSize = Math.Clamp(input.PageSize, 1, MaxPageSize);
 		var scopedStudentIds = await GetScopedStudentIdsAsync(input.AcademicYearId);
+		var columnFilters = ChargeColumnFilter.Parse(input.Filters);
 		var (items, totalCount) = await chargeRequestRepository.GetChargeRequestsPagedAsync(
 			input.AcademicYearId, input.Status, page, pageSize,
 			input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId, input.Search,
-			input.SortBy, input.SortOrder, scopedStudentIds);
+			input.SortBy, input.SortOrder, scopedStudentIds, columnFilters: columnFilters);
 		var statusCounts = await chargeRequestRepository.GetStatusCountsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId,
-			input.StandardId, input.DivisionId, scopedStudentIds);
+			input.StandardId, input.DivisionId, scopedStudentIds, search: input.Search, columnFilters: columnFilters);
 		var mappedItems = new System.Collections.Generic.List<ChargeListItem>();
 		foreach (var item in items)
 		{

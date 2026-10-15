@@ -12,6 +12,9 @@ namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 /// </summary>
 public class GetFeeCollectionSummaryInput : PagedAndSortedResultRequestDto, IFinanceClassDivisionFilter
 {
+    public string? Filters { get; set; }
+    public string? SortBy { get; set; }
+    public string? SortOrder { get; set; }
 	/// <summary>Maximum page size cap.</summary>
 	public const int MaxPageSize = 100;
 

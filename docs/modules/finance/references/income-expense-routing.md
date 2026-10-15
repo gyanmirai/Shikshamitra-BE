@@ -3,7 +3,7 @@ module: finance
 domain: accounts
 content_type: Reference
 status: active
-updated_on: 2026-10-06
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -48,7 +48,7 @@ Charge create/update DTOs include `chargeCategoryId`; the backend resolves its I
 
 Reconciliation confirms the existing hidden income rows. Rejected deferred payments never become Income. The existing collection validator rejects deferred transactions with multiple instruments or both fee and charge receipts: receipt-level reconciliation cannot safely decide such payments. Confirmed split payments remain supported.
 
-The combined Accounts register excludes receipt/refund headers when automatic category entries exist, preventing duplicate amounts. Manual entries and historical source activity remain visible.
+The separate Income and Expenses registers exclude receipt/refund headers when automatic category entries exist, preventing duplicate amounts. Manual entries and historical source activity remain visible.
 
 ## Migration and existing records
 
@@ -63,3 +63,6 @@ Run the Finance domain suite, `AccountSettingsPermissionApi_Tests`, `AccountSett
 PostgreSQL migration application, payout replay/concurrency, and authenticated browser payment scenarios must be verified in a disposable test environment before release. Never use a production collection or payout as a smoke test.
 
 Frontend controls and route details: [frontend routing reference](../../../../../Shikshamitra-FE/docs/finance/references/income-expense-routing.md).
+
+Approved refunds have a read-only Awaiting payout projection in Expenses; recognition still occurs only on confirmation.
+See [the workspace contract](./income-expense-workspaces.md) for direction scopes and selected-record details.

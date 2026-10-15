@@ -98,7 +98,7 @@ public class BankAccountAppService(
 		var entity = await bankAccountRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		return await historyReader.ReadAsync<BankAccount>(id, entity.CreationTime, entity.CreatorId,
-			HistoryFields, skipCount, maxResultCount);
+			HistoryFields, skipCount, maxResultCount, entity.Version);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Accounts_Settings_BankAccount.Edit)]
@@ -190,6 +190,7 @@ public class BankAccountAppService(
 			MaskedAccountNumber = Mask(entity.AccountNumber), Purpose = entity.Purpose,
 			IfscCode = includeSensitive ? entity.IfscCode : MaskIfsc(entity.IfscCode),
 			UpiId = includeSensitive ? entity.UpiId : null,
+			MaskedUpiId = MaskUpi(entity.UpiId),
 			EffectiveFrom = entity.EffectiveFrom, EffectiveTo = entity.EffectiveTo,
 			IsActive = entity.IsActive, DeactivationReason = entity.DeactivationReason,
 			Version = entity.Version, ConcurrencyStamp = entity.ConcurrencyStamp,
@@ -199,6 +200,12 @@ public class BankAccountAppService(
 
 	private static string Mask(string value) => value.Length <= 4 ? value : new string('*', value.Length - 4) + value[^4..];
 	private static string MaskIfsc(string value) => value.Length <= 4 ? value : value[..4] + new string('*', value.Length - 4);
+	private static string? MaskUpi(string? value)
+	{
+		if (string.IsNullOrWhiteSpace(value)) return null;
+		var separator = value.IndexOf('@');
+		return separator < 0 ? "***" : $"***{value[separator..]}";
+	}
 
 	private static void EnsureConcurrency(BankAccount entity, string? stamp)
 	{

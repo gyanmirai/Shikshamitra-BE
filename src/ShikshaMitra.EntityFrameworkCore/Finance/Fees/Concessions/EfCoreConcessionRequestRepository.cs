@@ -8,6 +8,7 @@ using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Students;
+using ShikshaMitra.Finance.Common;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 
@@ -57,14 +58,16 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		int take,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+        FinanceTableQuery? tableQuery = null, string? tab = null)
 	{
 		var query = await BuildApplicationsQueryAsync(
 			academicYearId, boardId, educationMediumId, status, standardId, divisionId,
-			scopedStudentIdsQuery, draftCreatorId, cancellationToken);
+			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery, tab);
 
+        query = tableQuery is null ? query.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id) :
+            ConcessionApplicationsTableQuery.Order(query, await GetDbContextAsync(), tableQuery);
 		return await query
-			.OrderByDescending(x => x.CreationTime)
 			.Skip(skip)
 			.Take(take)
 			.ToListAsync(cancellationToken);
@@ -79,11 +82,12 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+        FinanceTableQuery? tableQuery = null, string? tab = null)
 	{
 		var query = await BuildApplicationsQueryAsync(
 			academicYearId, boardId, educationMediumId, status, standardId, divisionId,
-			scopedStudentIdsQuery, draftCreatorId, cancellationToken);
+			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery, tab);
 		return await query.CountAsync(cancellationToken);
 	}
 
@@ -95,11 +99,12 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+        FinanceTableQuery? tableQuery = null)
 	{
 		var query = await BuildApplicationsQueryAsync(
 			academicYearId, boardId, educationMediumId, status: null, standardId, divisionId,
-			scopedStudentIdsQuery, draftCreatorId, cancellationToken);
+			scopedStudentIdsQuery, draftCreatorId, cancellationToken, tableQuery);
 
 		return await query
 			.GroupBy(x => x.Status)
@@ -116,7 +121,8 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery,
 		Guid? draftCreatorId,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken,
+        FinanceTableQuery? tableQuery = null, string? tab = null)
 	{
 		var queryable = await GetQueryableAsync();
 		var query = queryable.Where(c => c.AcademicYearId == academicYearId &&
@@ -136,6 +142,10 @@ public class EfCoreConcessionRequestRepository(IDbContextProvider<ShikshaMitraDb
 			query = query.Where(c => c.Status == status.Value);
 		}
 
+        var statuses = ConcessionApplicationsTable.Statuses(tab);
+        if (statuses.Length > 0) query = query.Where(c => Enumerable.Contains(statuses, c.Status));
+        if (tableQuery is not null)
+            query = ConcessionApplicationsTableQuery.Filter(query, await GetDbContextAsync(), tableQuery);
 		return query;
 	}
 }

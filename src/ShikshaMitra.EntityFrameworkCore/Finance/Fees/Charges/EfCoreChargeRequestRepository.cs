@@ -76,7 +76,8 @@ public class EfCoreChargeRequestRepository(
 		string? sortBy = null,
 		string? sortOrder = null,
 		IReadOnlyCollection<Guid>? scopedStudentIds = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null)
 	{
 		var chargeQuery = await GetQueryableAsync();
 		chargeQuery = chargeQuery.Where(r => r.AcademicYearId == academicYearId);
@@ -117,10 +118,14 @@ public class EfCoreChargeRequestRepository(
 			chargeQuery = chargeQuery.Where(r => requestIds.Contains(r.Id));
 		}
 
+		columnFilters ??= [];
+		chargeQuery = ChargeColumnFilterQuery.Apply(chargeQuery, chargeLineQuery,
+			await chargeCategoryRepository.GetQueryableAsync(), columnFilters);
 		// Class/division and user scope select requests, but their lifecycle uses the entire batch.
 		var candidateIds = await chargeQuery.Select(r => r.Id).ToListAsync(cancellationToken);
 		var workflows = await GetWorkflowsAsync(candidateIds, cancellationToken);
-		var matchingIds = workflows.Where(x => (int)x.Value == status).Select(x => x.Key).ToList();
+		var matchingIds = workflows.Where(x => (int)x.Value == status && ChargeColumnFilter.MatchesStatus(columnFilters, x.Value))
+			.Select(x => x.Key).ToList();
 		chargeQuery = chargeQuery.Where(r => matchingIds.Contains(r.Id));
 
 		// get total count before applying pagination.
@@ -136,7 +141,7 @@ public class EfCoreChargeRequestRepository(
 			"priority" => descending ? chargeQuery.OrderByDescending(r => r.Priority) : chargeQuery.OrderBy(r => r.Priority),
 			_ => chargeQuery.OrderByDescending(r => r.CreationTime)
 		};
-		var charges = await ordered
+		var charges = await ordered.ThenBy(r => r.Id)
 			.Skip((page - 1) * pageSize)
 			.Take(pageSize)
 			.ToListAsync(cancellationToken);
@@ -204,7 +209,9 @@ public class EfCoreChargeRequestRepository(
 		Guid? standardId = null,
 		Guid? divisionId = null,
 		IReadOnlyCollection<Guid>? scopedStudentIds = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+		string? search = null,
+		IReadOnlyCollection<ChargeColumnFilter>? columnFilters = null)
 	{
 		var db = await GetDbContextAsync();
 
@@ -237,6 +244,15 @@ public class EfCoreChargeRequestRepository(
 			requestQuery = requestQuery.Where(r =>
 				chargeLines.Any(c => c.ChargeRequestId == r.Id && c.DivisionId == divisionId.Value));
 
+		if (standardId.HasValue) chargeLines = chargeLines.Where(c => c.StandardId == standardId.Value);
+		if (divisionId.HasValue) chargeLines = chargeLines.Where(c => c.DivisionId == divisionId.Value);
+		if (!string.IsNullOrWhiteSpace(search))
+		{
+			var term = search.Trim().ToLower();
+			requestQuery = requestQuery.Where(r => r.ChargeName.ToLower().Contains(term) || r.PurposeDescription.ToLower().Contains(term));
+		}
+		columnFilters ??= [];
+		requestQuery = ChargeColumnFilterQuery.Apply(requestQuery, chargeLines, db.Set<ChargeCategory>(), columnFilters);
 		// Get all in-scope request IDs.
 		var requestIds = await requestQuery.Select(r => r.Id).ToListAsync(cancellationToken);
 
@@ -244,6 +260,7 @@ public class EfCoreChargeRequestRepository(
 			return new ChargeRequestStatusCounts(0, 0);
 
 		var workflows = await GetWorkflowsAsync(requestIds, cancellationToken);
+		workflows = workflows.Where(x => ChargeColumnFilter.MatchesStatus(columnFilters, x.Value)).ToDictionary(x => x.Key, x => x.Value);
 		return new ChargeRequestStatusCounts(
 			workflows.Count(x => x.Value == ChargeWorkflowStatus.Pending),
 			workflows.Count(x => x.Value == ChargeWorkflowStatus.InProcess),

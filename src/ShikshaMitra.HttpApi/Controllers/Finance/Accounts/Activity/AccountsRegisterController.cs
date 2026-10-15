@@ -1,3 +1,4 @@
+using System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -20,4 +21,7 @@ public class AccountsRegisterController(IAccountsActivityAppService service) : A
     [ProducesResponseType(typeof(AccountsActivityPageDto), StatusCodes.Status200OK)]
     public Task<AccountsActivityPageDto> GetListAsync([FromQuery] AccountsActivityInput input)
         => service.GetListAsync(input);
+    [HttpGet("{source}/{id:guid}")]
+    public Task<AccountsActivityDetailDto> GetDetailAsync([FromQuery] Guid academicYearId, string source, Guid id)
+        => service.GetDetailAsync(academicYearId, source, id);
 }

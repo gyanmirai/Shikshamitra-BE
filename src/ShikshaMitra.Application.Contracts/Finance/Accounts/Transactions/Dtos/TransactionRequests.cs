@@ -6,6 +6,12 @@ namespace ShikshaMitra.Finance.Accounts.Transactions.Dtos;
 
 public class TransactionCreateRequest
 {
+    public Guid? IdempotencyKey { get; set; }
+    [StringLength(200)]
+    public string? Counterparty { get; set; }
+    public Guid? BankAccountId { get; set; }
+    [StringLength(100)]
+    public string? PaymentReference { get; set; }
 	[Required]
 	public Guid CategoryId { get; set; }
 
@@ -23,7 +29,7 @@ public class TransactionCreateRequest
 	public int PaymentMethod { get; set; }
 
 	[Required]
-	public DateTime PaymentDate { get; set; }
+	public DateTimeOffset PaymentDate { get; set; }
 
 	public string? Notes { get; set; }
 }

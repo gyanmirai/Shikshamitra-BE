@@ -49,6 +49,15 @@ public class RevokeAdmissionPublicInquiryLinkDto
 [ApiController, AllowAnonymous, Route("api/public/admission-inquiries")]
 public class PublicAdmissionInquiriesController(IAdmissionPublicInquiryAppService service) : AbpController
 {
+	[HttpGet("{token}/branding/{kind:int}")]
+	public async Task<IActionResult> BrandingAsync(string token, ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityAssetKind kind,
+		[FromQuery] Guid? offeringId = null)
+	{
+		var file = await service.GetPublicBrandingAssetAsync(token, kind, offeringId);
+		Response.Headers.CacheControl = "no-store";
+		Response.Headers["X-Content-Type-Options"] = "nosniff";
+		return File(file.Content, file.ContentType);
+	}
 	[HttpGet("{token}")]
 	public Task<PublicAdmissionInquiryContextDto> GetAsync(string token, [FromQuery] Guid? offeringId = null) =>
 		service.GetPublicAsync(token, offeringId);

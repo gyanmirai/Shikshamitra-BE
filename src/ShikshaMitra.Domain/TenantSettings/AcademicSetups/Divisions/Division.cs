@@ -41,7 +41,7 @@ public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		StandardId = Check.NotNull(standardId, nameof(standardId));
 		SetName(name);
 		SetStrength(strength);
-		RoomNumber = roomNumber;
+		RoomNumber = roomNumber ?? string.Empty;
 	}
 
 	internal Division SetName(string name)

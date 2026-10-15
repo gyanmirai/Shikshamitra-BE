@@ -37,7 +37,7 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 		Division division,
 		string newName,
 		int newStrength,
-		string roomNumber = null)
+		string? roomNumber = null)
 	{
 		Check.NotNull(division, nameof(division));
 

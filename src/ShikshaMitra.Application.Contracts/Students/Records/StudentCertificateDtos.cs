@@ -64,6 +64,8 @@ public class StudentCertificateOrganizationDto
 
 public class StudentCertificateTemplateRenderDto
 {
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityTemplateChoicesDto? IdentityChoices { get; set; }
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityDocumentSnapshotDto? SchoolIdentity { get; set; }
 	public StudentCertificateDocumentDto? Document { get; set; }
 	public string HeaderContent { get; set; } = string.Empty;
 	public string FooterContent { get; set; } = string.Empty;
@@ -90,6 +92,7 @@ public class StudentCertificateParticularDto
 
 public class StudentCertificateTemplateDto
 {
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityTemplateChoicesDto? IdentityChoices { get; set; }
 	public Guid? Id { get; set; }
 	public StudentCertificateType CertificateType { get; set; }
 	public string HeaderContent { get; set; } = string.Empty;

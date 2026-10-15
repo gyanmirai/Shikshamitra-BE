@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentRecords;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -27,7 +28,9 @@ public partial class StudentCertificateAppService(
 	StudentRecordsEnrollmentScopeService enrollmentScope,
 	IRepository<StudentRecordLegacyOverride, Guid> legacyOverrides,
 	IRepository<StudentRecordDocumentEvent, Guid> documentEvents,
-	IRepository<StudentRecordTransition, Guid> transitions) : ApplicationService, IStudentCertificateAppService
+	IRepository<StudentRecordTransition, Guid> transitions,
+	SchoolIdentityDocumentService schoolIdentity,
+	SchoolIdentityTemplateAssetService identityTemplateAssets) : ApplicationService, IStudentCertificateAppService
 {
 	private const int MaxCertificateNumberGenerationAttempts = 3;
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -63,9 +66,12 @@ public partial class StudentCertificateAppService(
 		await recordsAccess.EnsureActiveActorAsync();
 		ValidateCertificateType(certificateType);
 		var template = await GetActiveTemplateEntityAsync(certificateType);
-		return template == null
+		var dto = template == null
 			? BuildDefaultTemplateDto(certificateType)
 			: MapTemplate(template);
+		if (dto.IdentityChoices != null && !await AuthorizationService.IsGrantedAsync(SchoolIdentityPermissions.AccessSignature))
+			dto.IdentityChoices = dto.IdentityChoices with { Signature = null };
+		return dto;
 	}
 
 	public async Task<StudentCertificateTemplateDto> UpsertTemplateAsync(
@@ -90,6 +96,7 @@ public partial class StudentCertificateAppService(
 				input.SchoolStampUrl,
 				input.IsActive);
 
+			await ConfigureIdentityAsync(template, input.IdentityChoices);
 			await templateRepository.InsertAsync(template, autoSave: true);
 			return MapTemplate(template);
 		}
@@ -103,6 +110,7 @@ public partial class StudentCertificateAppService(
 			input.SchoolStampUrl,
 			input.IsActive);
 
+		await ConfigureIdentityAsync(template, input.IdentityChoices);
 		await templateRepository.UpdateAsync(template, autoSave: true);
 		return MapTemplate(template);
 	}
@@ -206,7 +214,8 @@ public partial class StudentCertificateAppService(
 		var certificate = await GetAsync(certificateId);
 		if (certificate.Status == StudentCertificateStatus.Cancelled.ToString()) throw new BusinessException("Students:Records:DocumentVoided");
 
-		var bytes = StudentCertificatePdfRenderer.Render(certificate);
+		var identityAssets = await schoolIdentity.LoadAsync(certificate.Template.SchoolIdentity);
+		var bytes = StudentCertificatePdfRenderer.Render(certificate, identityAssets);
 
 		return new StudentCertificatePdfDto
 		{
@@ -250,6 +259,26 @@ public partial class StudentCertificateAppService(
 	{
 		var studentDto = await BuildStudentDtoAsync(student);
 		var template = templateSnapshot ?? await BuildTemplateRenderDtoAsync(certificateType);
+		if (templateSnapshot == null)
+		{
+			template.SchoolIdentity = await schoolIdentity.CaptureAsync(student.AcademicBoardId,
+				student.AcademicMediumId == Guid.Empty ? null : student.AcademicMediumId, student.AcademicYearId, signature: true);
+			// Existing custom template assets retain precedence over the shared defaults.
+			if (template.IdentityChoices != null)
+			{
+				if (template.IdentityChoices.Logo != null) SchoolIdentityTemplateAssetService.Apply(template.SchoolIdentity, template.IdentityChoices.Logo, SchoolIdentityAssetKind.Logo);
+				if (template.IdentityChoices.Banner != null) SchoolIdentityTemplateAssetService.Apply(template.SchoolIdentity, template.IdentityChoices.Banner, SchoolIdentityAssetKind.Banner);
+				if (template.IdentityChoices.Signature != null)
+					SchoolIdentityTemplateAssetService.Apply(template.SchoolIdentity, template.IdentityChoices.Signature, SchoolIdentityAssetKind.Signature);
+			}
+			if (template.IdentityChoices?.Logo == null && !string.IsNullOrWhiteSpace(template.LogoUrl)) template.SchoolIdentity.LogoAssetId = null;
+			if (template.IdentityChoices?.Signature == null && !string.IsNullOrWhiteSpace(template.PrincipalSignatureUrl))
+			{
+				template.SchoolIdentity.SignatureAssetId = null;
+				template.SchoolIdentity.PrincipalName = null;
+				template.SchoolIdentity.Designation = null;
+			}
+		}
 		var organization = BuildOrganizationDto(template);
 		var certificateData = BuildCertificateData(inputFields, studentDto, organization, certificateNo, issueDate);
 
@@ -282,6 +311,7 @@ public partial class StudentCertificateAppService(
 
 		return new StudentCertificateTemplateRenderDto
 		{
+			IdentityChoices = dto.IdentityChoices,
 			HeaderContent = dto.HeaderContent,
 			FooterContent = dto.FooterContent,
 			PrincipalSignatureUrl = dto.PrincipalSignatureUrl,
@@ -584,6 +614,7 @@ public partial class StudentCertificateAppService(
 	private static StudentCertificateTemplateDto MapTemplate(StudentCertificateTemplate template) =>
 		new()
 		{
+			IdentityChoices = ReadIdentityChoices(template),
 			Id = template.Id,
 			CertificateType = template.CertificateType,
 			HeaderContent = template.HeaderContent,

@@ -1,5 +1,3 @@
-﻿using ShikshaMitra.Extensions;
-using ShikshaMitra.Onboarding.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.Standards;
 using System;
@@ -12,11 +10,10 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups;
 
 public class StandardManager(IStandardRepository standardRepository, IGuidGenerator guidGenerator) : DomainService
 {
-	private string EntityName => this.GetType().ToEntityNameFromManager();
-
 	public async Task<Standard> CreateAsync(Guid educationMediumStageId, string name, int ageLowerLimit, Guid? shiftId)
 	{
 		Check.NotNullOrWhiteSpace(name, nameof(name));
+		name = name.Trim();
 		Check.Positive(ageLowerLimit, nameof(ageLowerLimit));
 		await ValidateStandardAsync(name, educationMediumStageId);
 
@@ -34,6 +31,7 @@ public class StandardManager(IStandardRepository standardRepository, IGuidGenera
 	{
 		Check.NotNull(standard, nameof(standard));
 		Check.NotNullOrWhiteSpace(newName, nameof(newName));
+		newName = newName.Trim();
 		Check.Positive(newAgeLowerLimit, nameof(newAgeLowerLimit));
 		if (standard.Name == newName && standard.AgeLowerLimit == newAgeLowerLimit && standard.ShiftId == shiftId)
 		{
@@ -42,7 +40,7 @@ public class StandardManager(IStandardRepository standardRepository, IGuidGenera
 
 		if (standard.Name != newName)
 		{
-			await ValidateStandardAsync(newName, standard.EducationMediumStageId);
+			await ValidateStandardAsync(newName, standard.EducationMediumStageId, standard.Id);
 		}
 		standard.SetName(newName);
 		standard.AgeLowerLimit = newAgeLowerLimit;
@@ -50,11 +48,12 @@ public class StandardManager(IStandardRepository standardRepository, IGuidGenera
 		return standard;
 	}
 
-	private async Task ValidateStandardAsync(string name, Guid educationMediumStageId)
+	private async Task ValidateStandardAsync(string name, Guid educationMediumStageId, Guid? excludedId = null)
 	{
-		if (await standardRepository.FindByNameAndEducationMediumStageIdAsync(name, educationMediumStageId) != null)
+		if (await standardRepository.FindByNameAndEducationMediumStageIdAsync(name, educationMediumStageId, excludedId) != null)
 		{
-			throw new AlreadyExistsException(EntityName, name);
+			throw new BusinessException(TenantSettingsDomainErrorCodes.DuplicateStandardName)
+				.WithData("name", name);
 		}
 	}
 }

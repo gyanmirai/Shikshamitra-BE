@@ -35,11 +35,13 @@ public class EfCoreStandardRepository(IDbContextProvider<ShikshaMitraDbContext> 
 					.ThenInclude((EducationMedium m) => m.EducationBoard);
 	}
 
-	public async Task<Standard?> FindByNameAndEducationMediumStageIdAsync(string name, Guid educationMediumStageId)
+	public async Task<Standard?> FindByNameAndEducationMediumStageIdAsync(string name, Guid educationMediumStageId, Guid? excludedId = null)
 	{
 		DbSet<Standard> dbSet = await GetDbSetAsync();
+		var normalizedName = name.Trim().ToLower();
 		return await dbSet.FirstOrDefaultAsync(standard =>
-			EF.Functions.Like(standard.Name.ToLower(), name.ToLower()) &&
+			standard.Id != excludedId &&
+			standard.Name.Trim().ToLower() == normalizedName &&
 			standard.EducationMediumStageId == educationMediumStageId
 		);
 	}

@@ -9,7 +9,8 @@ using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.Students.Records;
 
-public record StudentDocumentSnapshot(Guid StudentId, Guid? AcademicYearId, StudentRecordsPolicy Policy, Dictionary<string, string?> Fields);
+public record StudentDocumentSnapshot(Guid StudentId, Guid? AcademicYearId, StudentRecordsPolicy Policy,
+	Dictionary<string, string?> Fields, Guid? BoardId = null, Guid? MediumId = null);
 
 [RemoteService(false)]
 public class StudentDocumentSnapshotService(StudentRecordsAccessService access, IStudentRepository students) : ApplicationService, ITransientDependency
@@ -21,7 +22,7 @@ public class StudentDocumentSnapshotService(StudentRecordsAccessService access, 
 		var query = await students.GetQueryableWithoutAutoIncludesAsync();
 		var row = await AsyncExecuter.FirstAsync(query.Where(s => s.Id == studentId && s.TenantId == CurrentTenant.Id).Select(s => new
 		{
-			s.FirstName, s.MiddleName, s.LastName, s.GrNumber, s.GrNo, s.AcademicYearId, s.PhotoBlobName,
+			s.FirstName, s.MiddleName, s.LastName, s.GrNumber, s.GrNo, s.AcademicYearId, s.PhotoBlobName, s.AcademicBoardId, s.AcademicMediumId,
 			AcademicYear = s.AcademicYear != null ? s.AcademicYear.Name : null,
 			Class = s.Standard != null ? s.Standard.Name : null, Division = s.Division != null ? s.Division.Name : null,
 			Birth = s.AdditionalDetail != null ? s.AdditionalDetail.DateOfBirth : null
@@ -31,6 +32,6 @@ public class StudentDocumentSnapshotService(StudentRecordsAccessService access, 
 			["StudentName"] = string.Join(" ", new[] { row.FirstName, row.MiddleName, row.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))),
 			["GRNumber"] = row.GrNumber ?? row.GrNo?.ToString(), ["AcademicYear"] = row.AcademicYear, ["Class"] = row.Class,
 			["Division"] = row.Division, ["DateOfBirth"] = row.Birth?.ToString("yyyy-MM-dd"), ["_PhotoBlobName"] = row.PhotoBlobName
-		});
+		}, row.AcademicBoardId, row.AcademicMediumId == Guid.Empty ? null : row.AcademicMediumId);
 	}
 }

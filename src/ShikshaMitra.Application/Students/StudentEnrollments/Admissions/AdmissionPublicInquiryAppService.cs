@@ -11,6 +11,7 @@ using ShikshaMitra.Application.Communication;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
@@ -39,7 +40,8 @@ public class AdmissionPublicInquiryAppService(
 	IRepository<Standard, Guid> standards,
 	AdmissionInquiryAvailabilityService availabilityService,
 	CommunicationAppService communications,
-	IDataFilter dataFilter) : ApplicationService, IAdmissionPublicInquiryAppService
+	IDataFilter dataFilter, SchoolIdentityReadService schoolIdentity,
+	SchoolIdentityDocumentService identityDocuments) : ApplicationService, IAdmissionPublicInquiryAppService
 {
 	private const string LinkUnavailable = "Admissions.PublicInquiry.LinkUnavailable";
 
@@ -203,6 +205,7 @@ public class AdmissionPublicInquiryAppService(
 		using (CurrentTenant.Change(link.TenantId))
 		{
 			context.AcademicOptions = await GetAcademicOptionsAsync(cycle);
+			await SetBrandingAsync(context, token, null, null, null, cycle.AcademicYearId);
 			var choices = await GetLinkOfferingsAsync(link);
 			foreach (var offering in choices.OrderBy(item => item.Name))
 			{
@@ -225,6 +228,7 @@ public class AdmissionPublicInquiryAppService(
 				throw new BusinessException(AdmissionApplicationErrorCodes.OfferingNotAvailable,
 					"Admission is not open for this class.");
 			await availabilityService.EnsureAvailableForPublicAsync(selected);
+			await SetBrandingAsync(context, token, offeringId, selected.BoardId, selected.MediumId, cycle.AcademicYearId);
 			var formId = selected.InquiryFormDefinitionId ??
 				throw new BusinessException(AdmissionErrorCodes.OfferingConfigurationIncomplete);
 			var form = await forms.GetAsync(formId);
@@ -253,6 +257,36 @@ public class AdmissionPublicInquiryAppService(
 			AddIdentityFallbacks(context.Form, fields);
 		}
 		return context;
+	}
+
+	private async Task SetBrandingAsync(PublicAdmissionInquiryContextDto context, string token, Guid? offeringId,
+		Guid? boardId, Guid? mediumId, Guid? yearId)
+	{
+		var branding = await schoolIdentity.ReadAsync(boardId, mediumId, yearId, signature: false);
+		var prefix = $"/api/public/admission-inquiries/{token}/branding/";
+		var query = offeringId.HasValue ? $"?offeringId={offeringId}" : "";
+		context.LogoUrl = branding.Effective["logo"].Asset == null ? null : prefix + "0" + query;
+		context.BannerUrl = branding.Effective["banner"].Asset == null ? null : prefix + "1" + query;
+	}
+
+	[AllowAnonymous]
+	public async Task<SchoolIdentityAssetDownloadDto> GetPublicBrandingAssetAsync(string token, SchoolIdentityAssetKind kind, Guid? offeringId = null)
+	{
+		if (kind is not (SchoolIdentityAssetKind.Logo or SchoolIdentityAssetKind.Banner)) throw new BusinessException(LinkUnavailable);
+		var (link, cycle) = await ResolveLinkAsync(token);
+		using var tenantScope = CurrentTenant.Change(link.TenantId);
+		AdmissionOffering? offering = null;
+		if (offeringId.HasValue)
+		{
+			offering = (await GetLinkOfferingsAsync(link)).FirstOrDefault(item => item.Id == offeringId.Value)
+				?? throw new BusinessException(LinkUnavailable);
+			await availabilityService.EnsureAvailableForPublicAsync(offering);
+		}
+		var branding = await schoolIdentity.ReadAsync(offering?.BoardId, offering?.MediumId, cycle.AcademicYearId, signature: false);
+		var file = branding.Effective[kind.ToString().ToLowerInvariant()].Asset ?? throw new BusinessException(LinkUnavailable);
+		var snapshot = SchoolIdentityDocumentService.Snapshot(branding, link.TenantId!.Value);
+		var bytes = await identityDocuments.LoadAsync(snapshot);
+		return new() { Content = kind == SchoolIdentityAssetKind.Logo ? bytes.Logo! : bytes.Banner!, ContentType = file.ContentType, FileName = file.FileName };
 	}
 
 	[AllowAnonymous]

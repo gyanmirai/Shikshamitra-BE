@@ -11,6 +11,8 @@ using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using System.Linq;
 
 namespace ShikshaMitra.TenantSettings.InitialSetup;
 
@@ -48,8 +50,10 @@ public class InitialSetupAcademicWriter(
 			string.IsNullOrWhiteSpace(draft.ClassName) || string.IsNullOrWhiteSpace(draft.DivisionName) ||
 			draft.AgeLowerLimit is null or <= 0 || draft.Strength is null or <= 0)
 			throw new BusinessException(InitialSetupErrorCodes.InvalidStructure);
-		var board = await boards.FindAsync(x => x.TenantId == tenantId && x.AcademicYearId == year.Id && x.Type == draft.BoardType.Value)
-			?? await boards.InsertAsync(await boardManager.CreateAsync(year.Id, draft.BoardType.Value, year.StartDate, year.EndDate));
+		var customName = EducationBoardNames.NormalizeCustomName(draft.BoardType.Value, draft.CustomBoardName);
+		var boardCandidates = await boards.GetListAsync(x => x.TenantId == tenantId && x.AcademicYearId == year.Id && x.Type == draft.BoardType.Value);
+		var board = boardCandidates.FirstOrDefault(x => customName == null || string.Equals(x.CustomName, customName, StringComparison.OrdinalIgnoreCase))
+			?? await boards.InsertAsync(await boardManager.CreateAsync(year.Id, draft.BoardType.Value, year.StartDate, year.EndDate, customName));
 		var mediumName = draft.Medium.Trim(); var stageName = draft.Stage.Trim();
 		var className = draft.ClassName.Trim(); var divisionName = draft.DivisionName.Trim();
 		var medium = await mediums.FindAsync(x => x.TenantId == tenantId && x.EducationBoardId == board.Id && x.Name == mediumName)
@@ -65,11 +69,11 @@ public class InitialSetupAcademicWriter(
 			await standards.UpdateAsync(standard);
 		}
 		var division = await divisions.FindAsync(x => x.TenantId == tenantId && x.StandardId == standard.Id && x.Name == divisionName);
-		if (division == null) division = await divisions.InsertAsync(await divisionManager.CreateAsync(standard.Id, divisionName, draft.Strength.Value, draft.RoomNumber?.Trim() ?? ""));
-		else if (division.Strength != draft.Strength.Value || division.RoomNumber != (draft.RoomNumber?.Trim() ?? ""))
+		if (division == null) division = await divisions.InsertAsync(await divisionManager.CreateAsync(standard.Id, divisionName, draft.Strength.Value, ""));
+		else if (division.Strength != draft.Strength.Value)
 		{
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.InstituteSetup.AcademicSetup.Edit);
-			await divisionManager.UpdateAsync(division, divisionName, draft.Strength.Value, draft.RoomNumber?.Trim() ?? "");
+			await divisionManager.UpdateAsync(division, divisionName, draft.Strength.Value, division.RoomNumber);
 			await divisions.UpdateAsync(division);
 		}
 		return division.Id;

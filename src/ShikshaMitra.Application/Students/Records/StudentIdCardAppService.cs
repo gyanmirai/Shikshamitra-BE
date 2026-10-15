@@ -13,6 +13,7 @@ using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Uow;
 using Volo.Abp.BlobStoring;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 
 namespace ShikshaMitra.Students.Records;
 
@@ -20,7 +21,8 @@ namespace ShikshaMitra.Students.Records;
 [Authorize]
 public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> cards, IRepository<StudentIdCardTemplate, Guid> templates,
 	IRepository<StudentRecordDocumentEvent, Guid> events, StudentDocumentSnapshotService snapshots, StudentRecordsAccessService access,
-	StudentRecordsPolicyResolver policies, IBlobContainer blobs)
+	StudentRecordsPolicyResolver policies, IBlobContainer blobs,
+	SchoolIdentityDocumentService schoolIdentity, SchoolIdentityTemplateAssetService identityAssets)
 	: ApplicationService, IStudentIdCardAppService
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -52,6 +54,8 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 		var template = await templates.FindAsync(t => t.TenantId == CurrentTenant.Id);
 		if (template != null && template.ConcurrencyStamp != input.ConcurrencyStamp) throw new BusinessException("Students:Records:IdTemplateConflict");
 		input.ConcurrencyStamp = null;
+		input.SchoolIdentity = null;
+		await identityAssets.ValidateAndRetainAsync(input.Logo, SchoolIdentityAssetKind.Logo);
 		if (template == null) await templates.InsertAsync(new StudentIdCardTemplate(GuidGenerator.Create(), CurrentTenant.Id!.Value, JsonSerializer.Serialize(input, JsonOptions)), autoSave: true);
 		else { template.Update(JsonSerializer.Serialize(input, JsonOptions)); await templates.UpdateAsync(template, autoSave: true); }
 		return await LoadTemplateAsync();
@@ -63,7 +67,8 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 		foreach (var studentId in input.StudentIds)
 		{
 			var snapshot = await snapshots.CaptureAsync(studentId);
-			result.Add(new() { StudentId = studentId, HasPhoto = !string.IsNullOrWhiteSpace(snapshot.Fields.GetValueOrDefault("_PhotoBlobName")), StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = template });
+			var frozen = await CaptureIdentityTemplateAsync(template, snapshot);
+			result.Add(new() { StudentId = studentId, HasPhoto = !string.IsNullOrWhiteSpace(snapshot.Fields.GetValueOrDefault("_PhotoBlobName")), StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = frozen });
 		}
 		return result;
 	}
@@ -90,8 +95,9 @@ public partial class StudentIdCardAppService(IRepository<StudentIdCard, Guid> ca
 						sequence = numbers.Select(n => int.TryParse(n[prefix.Length..], out var parsed) ? parsed : 0).DefaultIfEmpty().Max();
 					}
 					sequences[prefix] = ++sequence;
+					var frozen = await CaptureIdentityTemplateAsync(template, snapshot);
 					var card = new StudentIdCard(GuidGenerator.Create(), CurrentTenant.Id!.Value, studentId, $"{prefix}{sequence:000000}", key,
-						JsonSerializer.Serialize(snapshot.Fields, JsonOptions), JsonSerializer.Serialize(template, JsonOptions), Clock.Now, CurrentUser.Id!.Value, snapshot.AcademicYearId);
+						JsonSerializer.Serialize(snapshot.Fields, JsonOptions), JsonSerializer.Serialize(frozen, JsonOptions), Clock.Now, CurrentUser.Id!.Value, snapshot.AcademicYearId);
 					await cards.InsertAsync(card); await AddEventAsync(card, "Issued", null); result.Add(Map(card));
 				}
 				await uow.CompleteAsync(); return result;

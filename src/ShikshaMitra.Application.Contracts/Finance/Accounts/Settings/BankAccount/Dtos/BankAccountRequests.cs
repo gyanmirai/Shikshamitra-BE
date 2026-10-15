@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using Volo.Abp.Auditing;
 
 namespace ShikshaMitra.Finance.Accounts.Settings.Dtos;
 
@@ -10,18 +11,25 @@ public class CreateBankAccountRequest
 	[System.Text.Json.Serialization.JsonIgnore]
 	public Guid? AccountHeadId { get; set; }
 	[Required]
+	[StringLength(AccountSettingConsts.MaxBankNameLength)]
 	public string BankName { get; set; } = string.Empty;
 	[Required]
+	[StringLength(AccountSettingConsts.MaxBankNameLength)]
 	public string BranchName { get; set; } = string.Empty;
 	public string? BranchAddress { get; set; }
 	[Required]
+	[StringLength(AccountSettingConsts.MaxBankNameLength)]
 	public string AccountHolderName { get; set; } = string.Empty;
 	public BankAccountType AccountType { get; set; }
 	[Required]
+	[DisableAuditing]
 	public string AccountNumber { get; set; } = string.Empty;
+	[StringLength(AccountSettingConsts.MaxBankPurposeLength)]
 	public string? Purpose { get; set; }
 	[Required]
+	[DisableAuditing]
 	public string IfscCode { get; set; } = string.Empty;
+	[DisableAuditing]
 	public string? UpiId { get; set; }
 	public DateTimeOffset? EffectiveFrom { get; set; }
 	public DateTimeOffset? EffectiveTo { get; set; }

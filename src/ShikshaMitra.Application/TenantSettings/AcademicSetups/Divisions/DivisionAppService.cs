@@ -28,7 +28,7 @@ public class DivisionAppService(
 			input.StandardId,
 			input.Name,
 			input.Strength,
-			input.RoomNumber
+			input.RoomNumber ?? string.Empty
 		);
 
 		await divisionRepository.InsertAsync(division);

@@ -62,7 +62,7 @@ public class TimetableReportsPdfService : ITransientDependency
 				page.Content().Column(col =>
 				{
 					col.Spacing(10);
-					col.Item().Element(c => ComposeHeader(c, report));
+					col.Item().Element(c => AcademicReportIdentityHeader.Compose(c, report, header => ComposeHeader(header, report)));
 					col.Item().Element(c => ComposeSummaryBar(c, report));
 					col.Item().Element(c => ComposeTable(c, report, rows ?? report.Rows, rowCount ?? report.Rows.Count));
 				});

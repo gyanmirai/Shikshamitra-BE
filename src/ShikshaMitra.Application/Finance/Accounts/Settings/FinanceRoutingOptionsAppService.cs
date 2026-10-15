@@ -18,6 +18,8 @@ public class FinanceRoutingOptionsAppService(IRepository<TransactionCategory, Gu
  {
    string[] required = operation switch
    {
+     "income-entry" => [ShikshaMitraSubmodulePermissions.Finance.Accounts_IncomeTracking.Add],
+     "expense-entry" => [ShikshaMitraSubmodulePermissions.Finance.Accounts_ExpenseTracking.Add],
      "collection" => [ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.Add],
      "refund" => [ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Approve, ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.Process],
      "refund-policy" => [ShikshaMitraSubmodulePermissions.Finance.Policies_RefundPolicy.Add],
@@ -38,8 +40,8 @@ public class FinanceRoutingOptionsAppService(IRepository<TransactionCategory, Gu
    // Evaluate DateTimeOffset windows after tenant/year filtering for provider parity.
    categoryRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant);
    bankRows.RemoveAll(x => x.EffectiveFrom > instant || x.EffectiveTo < instant);
-   var income = operation is "collection" or "collection-policy" or "fee-head" or "charge-category";
-   var expense = operation is "refund" or "refund-policy";
+   var income = operation is "income-entry" or "collection" or "collection-policy" or "fee-head" or "charge-category";
+   var expense = operation is "expense-entry" or "refund" or "refund-policy";
    return new(income ? categoryRows.Where(x => x.CategoryType == TransactionType.Income).OrderBy(x=>x.Name).Select(x=>new FinanceRoutingOption(x.Id,x.Name)).ToList() : [],
      expense ? categoryRows.Where(x => x.CategoryType == TransactionType.Expense).OrderBy(x=>x.Name).Select(x=>new FinanceRoutingOption(x.Id,x.Name)).ToList() : [],
      operation is "collection-policy" or "fee-head" or "charge-category" ? [] : bankRows.OrderBy(x=>x.BankName).Select(x=>new FinanceRoutingOption(x.Id,$"{x.BankName} • {x.AccountNumber[^Math.Min(4,x.AccountNumber.Length)..]}")).ToList());

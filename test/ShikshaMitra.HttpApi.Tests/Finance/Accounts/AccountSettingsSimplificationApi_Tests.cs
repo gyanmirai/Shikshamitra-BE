@@ -25,7 +25,7 @@ public class AccountSettingsSimplificationApi_Tests(FinanceRoutingApiTestFactory
  public async Task Categories_create_and_update_without_account_heads(string route)
  {
    await EnsureAcademicScopeAsync();
-   var category = await PostAndReadAsync<JsonElement>($"/api/{route}?academicYearId={Factory.SeededAcademicYearId}",new {name=$"Category {Guid.NewGuid():N}",tags=new[]{"Fees"}});
+   var category = await PostAndReadAsync<JsonElement>($"/api/{route}?academicYearId={Factory.SeededAcademicYearId}",new {name=$"Cat {Guid.NewGuid():N}",tags=new[]{"Fees"}});
    category.GetProperty("defaultAccountHeadId").ValueKind.ShouldBe(JsonValueKind.Null);
    var code=category.GetProperty("code").GetString();
    var response=await Client.PutAsJsonAsync($"/api/{route}/{category.GetProperty("id").GetGuid()}",new {
@@ -74,7 +74,7 @@ public class AccountSettingsSimplificationApi_Tests(FinanceRoutingApiTestFactory
  {
    await EnsureAcademicScopeAsync();
    var category=await PostAndReadAsync<JsonElement>($"/api/income-categories?academicYearId={Factory.SeededAcademicYearId}",
-     new {name=$"Automatic {Guid.NewGuid():N}",tags=Array.Empty<string>()});
+     new {name=$"Auto {Guid.NewGuid():N}",tags=Array.Empty<string>()});
    var categoryId=category.GetProperty("id").GetGuid();
    var sourceId=Guid.NewGuid(); var key=$"collection:{sourceId:N}:0:0";
    var paymentDate=new DateTime(2026,1,15,0,0,0,DateTimeKind.Utc);

@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.HR;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.Standards;
@@ -7,9 +9,11 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Domain.Entities;
 
 namespace ShikshaMitra.TenantSettings;
 
+[Authorize]
 public class ShiftManagementAppService(
 	IRepository<ShiftManagement, Guid> repository,
 	IRepository<Employee, Guid> employeeRepository,
@@ -17,6 +21,17 @@ public class ShiftManagementAppService(
 	: CrudAppService<ShiftManagement, ShiftManagementDto, Guid, PagedAndSortedResultRequestDto, CreateUpdateShiftManagementDto>(repository),
 	IShiftManagementAppService
 {
+	protected override async Task<IQueryable<ShiftManagement>> CreateFilteredQueryAsync(PagedAndSortedResultRequestDto input)
+	{
+		return (await base.CreateFilteredQueryAsync(input)).Where(shift => shift.TenantId == CurrentTenant.Id);
+	}
+
+	protected override async Task<ShiftManagement> GetEntityByIdAsync(Guid id)
+	{
+		return await Repository.FindAsync(shift => shift.Id == id && shift.TenantId == CurrentTenant.Id)
+			?? throw new EntityNotFoundException(typeof(ShiftManagement), id);
+	}
+
 	public override Task<ShiftManagementDto> CreateAsync(CreateUpdateShiftManagementDto input)
 	{
 		ValidateShiftTimeRange(input);
@@ -31,6 +46,7 @@ public class ShiftManagementAppService(
 
 	public override async Task DeleteAsync(Guid id)
 	{
+		await GetEntityByIdAsync(id);
 		var isAssignedToEmployee = await employeeRepository.AnyAsync(x => x.ShiftId == id);
 		var isAssignedToStandard = await standardRepository.AnyAsync(x => x.ShiftId == id);
 

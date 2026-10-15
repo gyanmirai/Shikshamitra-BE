@@ -10,6 +10,8 @@ using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
+using Volo.Abp.Data;
 
 namespace ShikshaMitra.HR.Employees.ICards;
 
@@ -19,7 +21,8 @@ public class EmployeeICardPdfWorkflow(
 	IEmployeeRepository employeeRepository,
 	EmployeeOrganizationScopeResolver organizationScopeResolver,
 	EmployeeICardAssetService assetService,
-	IAsyncQueryableExecuter asyncExecuter) : ApplicationService, ITransientDependency
+	IAsyncQueryableExecuter asyncExecuter,
+	SchoolIdentityDocumentService schoolIdentity) : ApplicationService, ITransientDependency
 {
 	public async Task<byte[]> GenerateEmployeeICardsPdfAsync(Guid templateId, EmployeeICardPdfRequest input)
 	{
@@ -43,7 +46,6 @@ public class EmployeeICardPdfWorkflow(
 			employees.Select(x => x.UserId),
 			template.AcademicYearId);
 		EnsureEmployeesMatchTemplateScope(template, employees, organizationsByUserId);
-		employees = FilterIncompleteEmployees(input, template, employees);
 
 		if (employees.Count == 0)
 		{
@@ -52,6 +54,16 @@ public class EmployeeICardPdfWorkflow(
 
 		var logoBytes = await assetService.TryGetBytesAsync(template.LogoBlobName);
 		var logoIsRaster = IsRasterImage(template.LogoBlobName);
+		var logoMode = (SchoolIdentityAssetMode?)template.GetProperty<int?>("SchoolIdentityLogoMode");
+		if (logoMode == SchoolIdentityAssetMode.Hidden) logoBytes = null;
+		else if (logoMode == SchoolIdentityAssetMode.Inherit || (logoMode == null && string.IsNullOrWhiteSpace(template.LogoBlobName)))
+		{
+			var identitySnapshot = await schoolIdentity.CaptureForStageAsync(template.MediumStageId);
+			logoBytes = (await schoolIdentity.LoadAsync(identitySnapshot)).Logo;
+			logoIsRaster = true;
+		}
+		employees = FilterIncompleteEmployees(input, template, employees, logoMode == SchoolIdentityAssetMode.Hidden || logoBytes != null);
+		if (employees.Count == 0) throw new BusinessException(HRErrorCodes.EmployeeICardPdfEmployeeRequired);
 		var photoBytesByEmployeeId = await GetPhotoBytesByEmployeeIdAsync(employees);
 		var cardsPerPage = Math.Clamp(input.CardsPerPage ?? printSettings.CardsPerPage, 1, 10);
 		return EmployeeICardPdfComposer.Compose(
@@ -100,14 +112,14 @@ public class EmployeeICardPdfWorkflow(
 	private static List<Employee> FilterIncompleteEmployees(
 		EmployeeICardPdfRequest input,
 		EmployeeICardTemplate template,
-		List<Employee> employees)
+		List<Employee> employees, bool hasLogo)
 	{
 		if (!input.ExcludeIncompleteEmployees)
 		{
 			return employees;
 		}
 
-		if (string.IsNullOrWhiteSpace(template.LogoBlobName))
+		if (!hasLogo)
 		{
 			throw new BusinessException(HRErrorCodes.EmployeeICardPdfEmployeeRequired);
 		}

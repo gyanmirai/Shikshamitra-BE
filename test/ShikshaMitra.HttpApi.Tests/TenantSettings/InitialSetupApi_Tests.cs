@@ -18,7 +18,7 @@ using Xunit;
 namespace ShikshaMitra.TenantSettings;
 
 [Collection(InitialSetupTestCollection.Name), Trait("Module", "TenantSettings"), Trait("Tier", "Critical")]
-public class InitialSetupApi_Tests(InitialSetupTestFactory factory) : ShikshaMitraApiTestBase(factory)
+public partial class InitialSetupApi_Tests(InitialSetupTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string Url = "/api/institute-setup/initial";
 	[Fact]

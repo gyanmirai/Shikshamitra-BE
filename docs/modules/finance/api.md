@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-12
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -84,6 +84,20 @@ Every retryable command requires its idempotency key; every mutation of an exist
 Staged concession uploads are tenant- and uploader-bound. Their stored receipt records the concession type and document definition; attaching a URL binds it to one request and rejects another uploader, requirement, type, tenant, request, or an upload older than 24 hours. Removing or replacing evidence on a Draft releases its old upload for cleanup in the same transaction. An hourly worker removes at most 100 expired unattached uploads per tenant per run and never selects evidence still attached to a request. Submitted requirement and due-row selections are immutable snapshots. Only approval changes due balances, and reversal reopens the linked obligation without rewriting payment or receipt history.
 
 ## Accounts API families
+
+### Category and bank settings data
+
+| Contract | Validation and exposure |
+|---|---|
+| Income Category name | Required trimmed business text, maximum 40 characters on create/update; Expense Category maximum remains 128; numbers, punctuation and Unicode are preserved |
+| Bank names | Bank, branch and holder names are required trimmed business text, maximum 100 characters; Purpose maximum 500 |
+| Bank list/status response | Full `accountNumber` and `upiId` remain null; `maskedAccountNumber`, masked `ifscCode` and `maskedUpiId` are the safe display/export values; UPI masks the entire local part (`***@handle`) |
+| Bank detail/edit response | Existing authorized detail route retains full identifiers; list projection is never used as an edit payload |
+| Versions | Categories and banks register with ABP entity-history selectors; edits and status changes record safe field diffs; sensitive bank identifiers remain excluded from entity and input-argument auditing |
+| Older versions | Known versions without recorded details are explicitly unavailable; actors/times/values are never reconstructed |
+
+No schema narrowing or automatic cleanup of historical over-limit names is performed.
+Existing over-limit text must be corrected before a subsequent details save; lifecycle checks do not silently rename it.
 
 | Family | Controller path |
 |---|---|
@@ -176,3 +190,11 @@ The current preview/commit, year-scoped history, permission and migration contra
 ## Category and bank routing
 
 See [Income and expense routing](./references/income-expense-routing.md) for the current category selection, school bank, recognition, historical compatibility, and validation contracts.
+
+## Separate Income and Expenses registers
+
+GET `/api/accounts/register` accepts direction=income|expense, academicYearId, optional month/year/categoryId/source/search and page/pageSize.
+GET `/api/accounts/register/{source}/{id}` accepts academicYearId and enforces the matching Accounts View permission plus year/student scope.
+POST `/api/incomes` and `/api/expenses` accept optional bankAccountId, counterparty, paymentReference and UUID idempotencyKey alongside the existing manual fields.
+Financial routing lookups add income-entry and expense-entry operations using the exact owning Add grant.
+See [the workspace contract](./references/income-expense-workspaces.md) for field meanings, lifecycle, compatibility and integrity.

@@ -8,7 +8,7 @@ namespace ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 
 public interface IStandardRepository : IRepository<Standard, Guid>
 {
-	Task<Standard?> FindByNameAndEducationMediumStageIdAsync(string name, Guid educationMediumStageId);
+	Task<Standard?> FindByNameAndEducationMediumStageIdAsync(string name, Guid educationMediumStageId, Guid? excludedId = null);
 
 	Task<List<Standard>> GetStandardsByEducationMediumStageIdAsync(Guid educationMediumStageId);
 

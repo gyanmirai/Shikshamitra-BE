@@ -42,6 +42,11 @@ public interface IConcessionRequestAppService : IApplicationService
 
 public class GetConcessionApplicationsInput : PagedResultRequestDto, IFinanceClassDivisionFilter
 {
+    public string? Tab { get; set; }
+    public string? Search { get; set; }
+    public string? Filters { get; set; }
+    public string? SortBy { get; set; }
+    public string? SortOrder { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid EducationMediumId { get; set; }

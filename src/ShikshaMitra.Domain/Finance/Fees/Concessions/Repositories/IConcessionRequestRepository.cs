@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.Concessions;
+using ShikshaMitra.Finance.Common;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.ConcessionRequests;
@@ -30,7 +31,8 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		int take,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
-		CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default,
+        FinanceTableQuery? tableQuery = null, string? tab = null);
 
 	Task<int> CountForApplicationsAsync(
 		Guid academicYearId,
@@ -41,7 +43,8 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
-		CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default,
+        FinanceTableQuery? tableQuery = null, string? tab = null);
 
 	Task<Dictionary<ConcessionRequestStatus, int>> GetStatusCountsAsync(
 		Guid academicYearId,
@@ -51,5 +54,6 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		Guid? divisionId,
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
-		CancellationToken cancellationToken = default);
+		CancellationToken cancellationToken = default,
+        FinanceTableQuery? tableQuery = null);
 }

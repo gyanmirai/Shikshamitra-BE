@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-02
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -24,6 +24,25 @@ git diff --check
 ```
 
 ## Focused test map
+
+### Concessions and Collections list queries
+
+`test/ShikshaMitra.EntityFrameworkCore.Tests/Finance/FinanceTableQuery_Tests.cs` covers combined column alternatives, numeric ranges, explicit status zero, local-day date bounds, operational concession tab groups, query allowlists, stable sorting and PostgreSQL translation.
+Build Application, HttpApi and EntityFrameworkCore after changing the contracts or query wiring.
+Verify scoped concession counts/draft visibility and Collections canonical balance filters before pagination against a rebuilt local API.
+
+### Accounts settings QA regression
+
+| Suite | Coverage |
+|---|---|
+| `AccountSettingsTextValidation_Tests` | Income/expense and bank text boundaries; preservation of numbers, symbols and Unicode; constructor/update invariants |
+| `AccountSettingsQaRegressionApi_Tests` | Real category/bank entity-history persistence with auditing enabled; safe UPI list projection; no full payment identifiers in history; invalid text payloads |
+| `AccountSettingsSimplificationApi_Tests`, `AccountSettingsPermissionApi_Tests` | Existing simplified contracts and exact action authorization |
+
+Run `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~AccountSettings`.
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AccountSettingsQaRegressionApi|FullyQualifiedName~AccountSettingsSimplificationApi|FullyQualifiedName~AccountSettingsPermissionApi"`.
+The regression factory deliberately enables auditing, which the default HTTP fixture disables. It disables transactions only inside this shared-connection SQLite fixture because ABP saves audit logs through a separate unit of work; SQLite cannot nest those transactions. Production transaction settings remain unchanged. Use PostgreSQL tests for transaction rollback guarantees.
+Changes before entity-history registration cannot be reconstructed; missing known versions remain explicitly unavailable rather than being invented.
 
 | Change area | First tests |
 |---|---|
@@ -71,3 +90,11 @@ See [Income and expense routing](./references/income-expense-routing.md) for the
 ## Variable fee assignment checks
 
 See [variable fee assignment](./references/variable-fee-assignment.md) for focused suites and the current workflow acceptance checks.
+
+## Income and Expenses workspaces
+
+See [the workspace contract](./references/income-expense-workspaces.md) for separate registers, academic-year months, selected-record details, manual creation and automatic refund visibility.
+
+Accounts workspace coverage: `AccountsRegisterPeriod_Tests`, `IncomeExpenseRouting_Tests` and `AccountsRegisterApi_Tests`.
+The register API suite uses isolated SQLite state fixtures for approval/paid/returned read projections; it does not execute payout commands.
+Actual payout command/replay scenarios remain in `FeeRefundApi_Tests` and require SHIKSHAMITRA_REFUND_TEST_DB pointing to a migrated disposable refund_workflow_test_ PostgreSQL database.

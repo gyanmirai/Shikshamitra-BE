@@ -54,6 +54,8 @@ public class AcademicOrganizationOptionsAppService(
 				board.AcademicYearId));
 
 		var scopedRows = new List<AcademicOrganizationOptionRow>();
+		var boardNames = (await boardRepository.GetListAsync(board => board.AcademicYearId == input.AcademicYearId))
+			.ToDictionary(board => board.Id, board => board.Name);
 		foreach (var row in rows)
 		{
 			if (await scopeAccessService.CanAccessMediumStageAsync(
@@ -62,7 +64,7 @@ public class AcademicOrganizationOptionsAppService(
 				row.BoardId,
 				row.AcademicYearId))
 			{
-				scopedRows.Add(row);
+				scopedRows.Add(row with { BoardName = boardNames.GetValueOrDefault(row.BoardId, row.BoardName) });
 			}
 		}
 

@@ -209,19 +209,22 @@ public partial class ConcessionRequestAppService
 		FinanceClassDivisionFilterValidator.Validate(input);
 
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+        var tableQuery = ShikshaMitra.Finance.Common.FinanceTableQuery.Parse(input.Filters, input.Search,
+            input.SortBy, input.SortOrder, ConcessionApplicationsTable.Columns);
+        ConcessionApplicationsTable.Statuses(input.Tab);
 		var pageSize = Math.Min(input.MaxResultCount, 100);
 		var skip     = input.SkipCount;
 		var status   = input.Status.HasValue ? (ConcessionRequestStatus)input.Status.Value : (ConcessionRequestStatus?)null;
 
 		var counts = await concessionRequestRepository.GetStatusCountsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId,
-			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id);
+			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery);
 		var items  = await concessionRequestRepository.GetListForApplicationsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId, skip, pageSize,
-			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id);
+			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery, tab: input.Tab);
 		var total  = await concessionRequestRepository.CountForApplicationsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId,
-			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id);
+			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery, tab: input.Tab);
 
 		var studentIds  = items.Select(i => i.StudentId).Distinct().ToList();
 		var students    = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));

@@ -14,13 +14,23 @@ public static class InitialSetupDraftState
 		if (progress.CompletedAt.HasValue) return [];
 		var draft = InitialSetupStatusReader.Deserialize(progress.DraftJson);
 		return new[] { 1, 2, 3 }.Where(step => progress.FurthestStep > step &&
-			progress.GetProperty<string>("ConfirmedStep" + step) != Projection(draft, step)).ToArray();
+			NormalizeConfirmed(progress.GetProperty<string>("ConfirmedStep" + step), step) != Projection(draft, step)).ToArray();
+	}
+	private static string? NormalizeConfirmed(string? confirmed, int step)
+	{
+		if (step != 3 || string.IsNullOrWhiteSpace(confirmed)) return confirmed;
+		try
+		{
+			var draft = JsonSerializer.Deserialize<InitialSetupDraftDto>(confirmed);
+			return draft == null ? confirmed : Projection(draft, step);
+		}
+		catch (JsonException) { return confirmed; }
 	}
 	private static string Projection(InitialSetupDraftDto draft, int step) => step switch
 	{
 		1 => JsonSerializer.Serialize(draft.Profile),
 		2 => JsonSerializer.Serialize(new { draft.YearName, draft.StartDate, draft.EndDate, draft.ExistingYearId }),
-		_ => JsonSerializer.Serialize(new { draft.BoardType, draft.Medium, draft.Stage, draft.ClassName,
-			draft.AgeLowerLimit, draft.DivisionName, draft.Strength, draft.RoomNumber })
+		_ => JsonSerializer.Serialize(new { draft.BoardType, draft.CustomBoardName, draft.Medium, draft.Stage, draft.ClassName,
+			draft.AgeLowerLimit, draft.DivisionName, draft.Strength })
 	};
 }

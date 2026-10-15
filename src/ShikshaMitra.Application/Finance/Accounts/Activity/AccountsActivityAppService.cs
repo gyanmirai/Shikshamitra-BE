@@ -23,18 +23,31 @@ namespace ShikshaMitra.Finance.Accounts.Activity;
 /// of a Fees action, not a General Accounts journal posting.
 /// </summary>
 [RemoteService(false)]
-public class AccountsActivityAppService(
+public partial class AccountsActivityAppService(
     IRepository<FeePaymentReceipt, Guid> receiptRepository,
     IRepository<FeeRecordMetadata, Guid> collectionRepository,
     IRepository<FeeRefundAccountingEntry, Guid> refundEntryRepository,
-    IRepository<FeeRefundRequest, Guid> refundRepository,
+    ShikshaMitra.Finance.Fees.FeeRefund.Repositories.IFeeRefundRepository refundRepository,
     IRepository<Transaction, Guid> transactionRepository,
     IRepository<TransactionCategory, Guid> categoryRepository,
     IReadOnlyRepository<Student, Guid> studentRepository,
-    FinanceScopeAccessService scopeAccessService) : ApplicationService, IAccountsActivityAppService
+    FinanceScopeAccessService scopeAccessService,
+    IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid> academicYears,
+    IRepository<FeeCollectionDueFeeAllocation, Guid> allocations,
+    IRepository<FeeCollectionRecord, Guid> feeRecords,
+    IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.FeeHead, Guid> feeHeads,
+    IRepository<LateFeeCollectionAllocation, Guid> lateFeeAllocations,
+    IRepository<DueFee, Guid> dues,
+    IRepository<PaymentMethodRecord, Guid> paymentMethods,
+    IRepository<ChargeCollectionRecord, Guid> chargeCollections,
+    IRepository<ShikshaMitra.Finance.Fees.Charges.Charge, Guid> charges,
+    IRepository<ShikshaMitra.Students.StudentEnrollments.StudentEnrollment, Guid> enrollments,
+    IRepository<ShikshaMitra.TenantSettings.Standards.Standard, Guid> standards,
+    IRepository<ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisions) : ApplicationService, IAccountsActivityAppService
 {
     public async Task<AccountsActivityPageDto> GetListAsync(AccountsActivityInput input)
     {
+        if (input.Direction != null) return await GetWorkspaceListAsync(input);
         if (input.AcademicYearId == Guid.Empty)
             throw new UserFriendlyException("Select an academic year to view Accounts activity.");
         var source = input.Source?.Trim().ToLowerInvariant();

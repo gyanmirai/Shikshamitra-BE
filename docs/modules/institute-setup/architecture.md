@@ -3,7 +3,7 @@ module: institute-setup
 domain: architecture
 content_type: Conceptual
 status: canonical
-updated_on: 2026-10-09
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -73,3 +73,30 @@ Start with the smallest source set that answers the change.
 | Validation or relationship change | `Application/TenantSettings/RoomsManagement/**` and `Domain/TenantSettings/RoomsManagement/**` |
 | Database mapping change | `EntityFrameworkCore/TenantSettings/RoomsManagement/**` |
 | Academic setup behavior | `TenantSettings/AcademicSetups/**` source paths |
+
+## Shift tenant boundary
+
+`TenantSettings/ShiftManagement` implements `IMultiTenant`, enabling ABP filtering in repositories and navigation queries. `ShiftManagementAppService` also uses explicit ownership predicates for list and ID access. ABP's CRUD creation path assigns the server tenant, and `HRSeederContributor.Shifts` sets it for seeded shifts. `ShiftReferenceValidator` checks server ownership for standard and employee assignments.
+
+Migration `20261014063540_AddShiftTenantIsolation` adds only `academic_ShiftManagements.TenantId` and its index. It preserves legacy rows without inferring ownership. Its designer and snapshot retain the preceding migration's unrelated legacy student-table definitions.
+
+## School Identity ownership
+
+| Layer | Source |
+| --- | --- |
+| Constants | `src/ShikshaMitra.Domain.Shared/TenantSettings/SchoolIdentity/SchoolIdentityPermissions.cs` |
+| Error codes/localization | `SchoolIdentityErrorCodes.cs`, the Domain Shared exception-code mapping and English resource |
+| Domain | `src/ShikshaMitra.Domain/TenantSettings/SchoolIdentity/**` |
+| Contracts | `src/ShikshaMitra.Application.Contracts/TenantSettings/SchoolIdentity/**` |
+| Configuration and resolution | `src/ShikshaMitra.Application/TenantSettings/SchoolIdentity/**` |
+| EF mappings/repository | `src/ShikshaMitra.EntityFrameworkCore/TenantSettings/SchoolIdentity/**` |
+| HTTP | `src/ShikshaMitra.HttpApi/Controllers/TenantSettings/SchoolIdentityController.cs` |
+| Cleanup | `src/ShikshaMitra.HttpApi.Host/BackgroundWorkers/SchoolIdentityDraftCleanupWorker.cs` |
+
+Profiles are unique by tenant and scope key. Choices are bounded JSON; ABP owns profile concurrency stamps. Revision records preserve prior selections. Immutable asset metadata points to tenant-owned blobs. Retention and cleanup-reservation flags are concurrency tokens; conditional SQL claims prevent cleanup from racing saved references.
+
+The profile repository maps a concurrent first-insert violation of the tenant/scope unique index to a concurrency conflict. Unrelated database failures retain their original classification. History resolves creator usernames in one bounded tenant-filtered projection.
+
+Migration `20261014053153_AddSchoolIdentity` adds only assets, profiles and revisions. It preserves unrelated snapshot entries for legacy student tables missing from the current source model; those tables are not dropped. Apply the additive migration before running the legacy import contributor or the updated host.
+
+Document consumers enforce their own document action and record scope before using `SchoolIdentityDocumentService`. Configuration read permissions do not replace document authorization. The common template-asset service validates tenant/kind/origin scope and retains custom files.

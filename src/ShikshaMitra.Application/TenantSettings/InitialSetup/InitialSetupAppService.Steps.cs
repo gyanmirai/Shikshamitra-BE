@@ -37,10 +37,11 @@ public partial class InitialSetupAppService
 		var draft = InitialSetupStatusReader.Deserialize(progress.DraftJson);
 		progress.SaveDraft(3, JsonSerializer.Serialize(draft));
 		var divisionId = await academicWriter.WriteStructureAsync(progress.AcademicYearId, input.Draft);
-		draft.BoardType = input.Draft.BoardType; draft.Medium = input.Draft.Medium.Trim();
+		draft.BoardType = input.Draft.BoardType; draft.CustomBoardName = input.Draft.CustomBoardName?.Trim() ?? "";
+		draft.Medium = input.Draft.Medium.Trim();
 		draft.Stage = input.Draft.Stage.Trim(); draft.ClassName = input.Draft.ClassName.Trim();
 		draft.AgeLowerLimit = input.Draft.AgeLowerLimit; draft.DivisionName = input.Draft.DivisionName.Trim();
-		draft.Strength = input.Draft.Strength; draft.RoomNumber = input.Draft.RoomNumber?.Trim() ?? "";
+		draft.Strength = input.Draft.Strength;
 		progress.SaveDraft(3, JsonSerializer.Serialize(draft));
 		InitialSetupDraftState.Confirm(progress, draft, 3);
 		progress.SelectDivision(divisionId);

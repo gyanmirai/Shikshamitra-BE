@@ -24,13 +24,20 @@ public class EducationBoardAppService(
 	PagedAndSortedResultRequestDto,
 	CreateUpdateEducationBoardDto>(educationBoardRepository), IEducationBoardAppService
 {
+	public Task<System.Collections.Generic.List<EducationBoardOptionDto>> GetOptionsAsync() => Task.FromResult(
+		Enum.GetValues<EducationBoardType>().Select(type => new EducationBoardOptionDto
+		{
+			Value = type, Label = EducationBoardNames.DisplayName(type)
+		}).ToList());
+
 	public override async Task<EducationBoardDto> CreateAsync(CreateUpdateEducationBoardDto input)
 	{
 		EducationBoard educationBoard = await educationBoardManager.CreateAsync(
 			input.AcademicYearId,
 			input.Type,
 			input.StartDate,
-			input.EndDate
+			input.EndDate,
+			input.CustomName
 		);
 
 		await educationBoardRepository.InsertAsync(educationBoard);
@@ -40,7 +47,7 @@ public class EducationBoardAppService(
 	public override async Task<EducationBoardDto> UpdateAsync(Guid id, CreateUpdateEducationBoardDto input)
 	{
 		EducationBoard educationBoard = await educationBoardRepository.GetAsync(id);
-		await educationBoardManager.UpdateAsync(educationBoard, input.Type, input.StartDate, input.EndDate);
+		await educationBoardManager.UpdateAsync(educationBoard, input.Type, input.StartDate, input.EndDate, input.CustomName);
 		return ObjectMapper.Map<EducationBoard, EducationBoardDto>(educationBoard);
 	}
 

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.Students.Portal;
 using ShikshaMitra.Students.Records;
@@ -9,7 +10,9 @@ using ShikshaMitra.Students.ValueObjects;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp.Identity;
+using Volo.Abp.Security.Claims;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -19,16 +22,26 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[Fact]
 	public Task Record_ID_issuance_is_idempotent_snapshot_is_frozen_and_reprint_and_void_are_audited() => RunCertificationScenarioAsync(async () =>
 	{
+		using var identityActor = _principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity(
+			BuildAdminPrincipal().Claims.Append(new Claim(AbpClaimTypes.TenantId, TestTenantId.ToString())), "Test")));
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var student = await CreateExistingStudentAsync(offering, "IDOriginal", "Student"); await GrantCompletedRecordAsync(student);
 		var service = GetRequiredService<IStudentIdCardAppService>();
+		var identity = GetRequiredService<ISchoolIdentityAppService>();
+		var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=");
+		var logo = await identity.UploadAsync(SchoolIdentityAssetKind.Logo, null, null, "issued-logo.png", png);
+		var savedIdentity = await identity.UpdateAsync(new() { Choices = new() { Logo = new() { Mode = SchoolIdentityAssetMode.Custom, AssetId = logo.Id } } });
 		var bulkPdf = await service.ExportPdfAsync(new StudentIdCardsPdfRequestDto { StudentIds = [student.Id], CardsPerPage = 8 });
 		bulkPdf.Content.Take(4).ToArray().ShouldBe("%PDF"u8.ToArray());
 		var input = new IssueStudentIdCardsDto { StudentIds = [student.Id], IdempotencyKey = "id-stable-request" };
 		var issued = (await service.IssueAsync(input)).Single();
+		issued.TemplateSnapshot.SchoolIdentity!.LogoAssetId.ShouldBe(logo.Id);
+		await identity.UpdateAsync(new() { ConcurrencyStamp = savedIdentity.ConcurrencyStamp,
+			Choices = new() { Logo = new() { Mode = SchoolIdentityAssetMode.Hidden } } });
 		(await service.IssueAsync(input)).Single().Id.ShouldBe(issued.Id);
 		await WithUnitOfWorkAsync(async () => { var current = await _studentRepository.GetAsync(student.Id); current.UpdateGeneralInformation("Changed", null, "Identity"); await _studentRepository.UpdateAsync(current, true); });
 		(await service.GetHistoryAsync(student.Id)).Single().StudentSnapshot["StudentName"].ShouldBe("IDOriginal Student");
+		(await service.GetHistoryAsync(student.Id)).Single().TemplateSnapshot.SchoolIdentity!.LogoAssetId.ShouldBe(logo.Id);
 		(await service.ReprintAsync(issued.Id!.Value, new() { Reason = "Damaged original card" })).Content.Take(4).ToArray().ShouldBe("%PDF"u8.ToArray());
 		(await service.GetHistoryAsync(student.Id)).Single().CardNumber.ShouldBe(issued.CardNumber);
 		(await service.VoidAsync(issued.Id.Value, new() { Reason = "Incorrect original issue" })).Status.ShouldBe("Voided");
@@ -96,11 +109,24 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[Fact]
 	public Task Record_certificate_snapshots_idempotency_and_leaving_exit_are_enforced() => RunCertificationScenarioAsync(async () =>
 	{
+		using var identityActor = _principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity(
+			BuildAdminPrincipal().Claims.Append(new Claim(AbpClaimTypes.TenantId, TestTenantId.ToString())), "Test")));
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var student = await CreateExistingStudentAsync(offering, "CertificateOriginal", "Student"); await GrantCompletedRecordAsync(student);
 		var service = GetRequiredService<IStudentCertificateAppService>();
+		var identity = GetRequiredService<ISchoolIdentityAppService>();
+		var signature = await identity.UploadAsync(SchoolIdentityAssetKind.Signature, null, null, "issued-signature.png",
+			Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII="));
+		var identitySaved = await identity.UpdateAsync(new() { Choices = new() { Signature = new()
+			{ Mode = SchoolIdentityAssetMode.Custom, AssetId = signature.Id, PrincipalName = "Original Principal", Designation = "Principal" } } });
 		var input = new CreateStudentCertificateDto { StudentId = student.Id, CertificateType = StudentCertificateType.Bonafide, IdempotencyKey = "certificate-stable-request" };
 		var generated = await service.GenerateAsync(input); generated.CertificateId.ShouldNotBeNull();
+		generated.Template.SchoolIdentity!.SignatureAssetId.ShouldBe(signature.Id);
+		await identity.UpdateAsync(new() { ConcurrencyStamp = identitySaved.ConcurrencyStamp,
+			Choices = new() { Signature = new() { Mode = SchoolIdentityAssetMode.Hidden } } });
+		var frozen = await service.GetAsync(generated.CertificateId!.Value);
+		frozen.Template.SchoolIdentity!.SignatureAssetId.ShouldBe(signature.Id);
+		frozen.Template.SchoolIdentity.PrincipalName.ShouldBe("Original Principal");
 		(await service.GenerateAsync(input)).CertificateId.ShouldBe(generated.CertificateId);
 		await WithUnitOfWorkAsync(async () => { var current = await _studentRepository.GetAsync(student.Id); current.UpdateGeneralInformation("Changed", null, "Identity"); await _studentRepository.UpdateAsync(current, true); });
 		(await service.GetAsync(generated.CertificateId!.Value)).Student.StudentName.ShouldBe("CertificateOriginal Student");

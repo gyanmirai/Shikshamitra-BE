@@ -38,6 +38,18 @@ public class ShiftManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	}
 
 	[Fact]
+	public async Task Employee_creation_should_reject_another_tenants_shift()
+	{
+		ShiftManagementDto foreign;
+		using (_currentTenant.Change(Guid.NewGuid()))
+		{
+			foreign = await CreateShiftAsync("Foreign employee reference");
+		}
+		(await Should.ThrowAsync<BusinessException>(() => CreateEmployeeAsync(foreign.Id)))
+			.Code.ShouldBe(HRErrorCodes.AttendancePolicyEvaluationShiftRequired);
+	}
+
+	[Fact]
 	public async Task Create_Should_Allow_Normal_Same_Day_Shift()
 	{
 		var shift = await _shiftManagementAppService.CreateAsync(new CreateUpdateShiftManagementDto
@@ -107,7 +119,11 @@ public class ShiftManagementAppService_Tests : ShikshaMitraApplicationTestBase<S
 	[Fact]
 	public async Task Delete_Should_Reject_Shift_Assigned_To_Standard()
 	{
-		var shift = await CreateShiftAsync("Standard Ref");
+		ShiftManagementDto shift;
+		using (_currentTenant.Change(TestTenantId))
+		{
+			shift = await CreateShiftAsync("Standard Ref");
+		}
 		await CreateStandardAsync(shift.Id);
 
 		BusinessException exception;

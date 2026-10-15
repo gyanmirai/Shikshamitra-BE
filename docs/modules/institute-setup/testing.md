@@ -3,7 +3,7 @@ module: institute-setup
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-10-09
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -71,3 +71,41 @@ Add or update tests when a change affects these areas.
 | Room payload or validation | HTTP API test |
 | Delete behavior | Integration test with downstream references |
 | Timetable or exam room impact | Academic HTTP API test |
+
+## Academic Setup validation checks
+
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter AcademicSetupValidationApi_Tests --artifacts-path .artifacts/academic-setup-validation`. The disposable SQLite HTTP tests cover exact/case/padded duplicates, rejected rename persistence, self-edits, different stages, literal SQL wildcard characters, and preserved room allocations after an update omits the field.
+
+Run `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~StandardAppService_Tests|FullyQualifiedName~DivisionOnboardingIntegration_Tests" --artifacts-path .artifacts/academic-setup-validation` for existing shift-reference and room-free onboarding regressions.
+
+The browser bridge starts with `dotnet run --project test/browser/academic-setup/AcademicSetupBrowser.csproj --artifacts-path .artifacts/academic-setup-validation`. It binds only `127.0.0.1:4392` and uses production ABP endpoints with test authentication, synthetic tenant-wide scope and disposable SQLite. Start it from this repository root, then follow the [frontend checks](../../../../Shikshamitra-FE/docs/institute-setup/testing.md). Stop the owned servers after testing. These checks do not validate the deployed QA/Staging build.
+
+## Shift isolation checks
+
+| Scope | Command |
+| --- | --- |
+| Repository/service tenant boundary, assignment validation, times and deletion dependencies | `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~ShiftTenant\|FullyQualifiedName~ShiftManagementAppService_Tests\|FullyQualifiedName~StandardAppService_Tests" --artifacts-path .artifacts/shift-isolation` |
+| HTTP creation, forged tenant payload/header, foreign CRUD, standard assignment and anonymous denial | `dotnet test test/ShikshaMitra.HttpApi.Tests --filter ShiftTenantApi_Tests --artifacts-path .artifacts/shift-http` |
+| PostgreSQL migration preservation and rollback | Set `SHIFT_TEST_POSTGRES` to a new loopback `shift_isolation_tests_*` database connection, then run the HTTP test project with filter `ShiftTenantPostgresMigration_Tests` |
+| Disposable real-backend browser bridge | `dotnet run --project test/browser/shift-isolation/ShiftIsolation.csproj --artifacts-path .artifacts/shift-browser-build` |
+
+The bridge listens only on `127.0.0.1:4391`, uses the production HTTP pipeline with test authentication and an isolated SQLite database, and seeds synthetic schools. It disables live background workers and seeding. Stop it after testing. The [frontend testing guide](../../../../Shikshamitra-FE/docs/institute-setup/testing.md) owns grid, dropdown and session-switch evidence. These local checks do not prove a deployment or actual QA data repair.
+
+## School Identity checks
+
+| Scope | Command |
+| --- | --- |
+| Domain inheritance and image validation | `dotnet test test/ShikshaMitra.Domain.Tests/ShikshaMitra.Domain.Tests.csproj --filter SchoolIdentity --artifacts-path .artifacts/school-identity-build` |
+| Configuration, scope, copy, retention and document layouts | `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~SchoolIdentity\|FullyQualifiedName~StudentIdCardPdfLayout\|FullyQualifiedName~StudentCertificatePdfRenderer\|FullyQualifiedName~StudentRecordActionAuthorization" --artifacts-path .artifacts/school-identity-build` |
+| Host build without disturbing a debugger | `dotnet build src/ShikshaMitra.HttpApi.Host/ShikshaMitra.HttpApi.Host.csproj --artifacts-path .artifacts/school-identity-build` |
+| Real PostgreSQL HTTP and migration acceptance | Set `SCHOOL_IDENTITY_TEST_POSTGRES` to a fresh loopback `school_identity_tests_*` connection, then run `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter SchoolIdentityPostgresApi_Tests --artifacts-path .artifacts/school-identity-build` |
+
+Tests must distinguish exact-action denial from tenant and UserScope denial. Include mismatched medium parents, stale saves, signature redaction, independent overrides, omission/reset, cross-year copies without file duplication, preserved legacy custom values and immutable reprints.
+
+Cleanup coverage checks the age cutoff, conditional single-claim behavior, retained-file exclusion and contention between cleanup and retention. Real PostgreSQL HTTP/migration acceptance must use a disposable database and preserve all pre-existing tables. Never apply a rollback to a live school database.
+
+The PostgreSQL factory refuses existing databases and non-loopback hosts. It verifies both migration directions, preserves sentinel rows in the three unrelated legacy tables, checks simultaneous first saves and updates, and drops only the database it created. The HTTP fixture's permission checker supports allowed/denied request headers; real permission-provider regressions remain a separate security gate.
+
+`Record_ID_issuance_is_idempotent_snapshot_is_frozen_and_reprint_and_void_are_audited` and `Record_certificate_snapshots_idempotency_and_leaving_exit_are_enforced` exercise real issuance and reprints after school defaults change. Legacy-import tests check idempotency, original-byte preservation and configured-default protection. Staff preview tests check current shared assets and omission.
+
+The [frontend testing guide](../../../../Shikshamitra-FE/docs/institute-setup/testing.md) owns browser evidence. Stored test output is evidence of only the cases it actually exercises, not a claim that every suite or deployment has passed.

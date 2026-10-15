@@ -148,6 +148,7 @@ public class AcademicReportExportLifecycle_Tests : ShikshaMitraApplicationTestBa
         GetRequiredService<AcademicDynamicReportQueryService>(), GetRequiredService<AcademicDynamicReportPdfService>(),
         GetRequiredService<TimetableReportsPdfService>(), GetRequiredService<AcademicExcelService>(),
         GetRequiredService<AcademicCsvService>(), GetRequiredService<AcademicReportExportStateService>(),
+        GetRequiredService<AcademicReportIdentityService>(),
         blobs, GetRequiredService<ICurrentTenant>(), GetRequiredService<IUnitOfWorkManager>(),
         GetRequiredService<ICancellationTokenProvider>(), NullLogger<AcademicReportExportBackgroundJob>.Instance);
 

@@ -3,7 +3,7 @@ module: institute-setup
 domain: workflows
 content_type: How-to
 status: canonical
-updated_on: 2026-10-09
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -67,3 +67,17 @@ Inspect these paths before deleting fields or changing identifiers.
 | Timetable room assignment | `src/ShikshaMitra.Application.Contracts/Academic/Timetable/Timetables/AssignRoomsDto.cs` |
 | Lecture slot room APIs | `test/ShikshaMitra.HttpApi.Tests/Academic/Timetable/LectureSlotRoomApi_Tests.cs` |
 | Exam room DTOs | `src/ShikshaMitra.Application.Contracts/Academic/Examination/Exams/Dtos/ExamRoomDtos.cs` |
+
+## School Identity lifecycle
+
+1. The controller delegates configuration requests to the explicitly authorized application service.
+2. Scope checks validate tenant-owned board/medium ancestry and the caller's data scope.
+3. Uploads validate raster contents before creating immutable blob/metadata entries; no saved choice changes yet.
+4. Submit validates selected asset kinds, ownership, signature permission and the profile stamp, retains referenced files, updates the profile and records a revision transactionally.
+5. Resolution selects each asset independently from medium, board and defaults. Hidden stops fallback.
+6. Draft previews use the same resolver without saving. Signature content is omitted for callers without access.
+7. Certificate and student-card issuance freezes references; later reprints load retained files from that snapshot.
+8. Cross-year copying requires an explicit source/target mapping and target stamp. It copies choices while reusing files.
+9. Cleanup selects bounded batches of unretained old drafts, reserves them conditionally, removes their blobs and completes metadata deletion. Failed transactions can retry; retained document files are excluded.
+
+The [frontend workflow](../../../../Shikshamitra-FE/docs/institute-setup/workflows.md) owns editor state, source labels, confirmations and previews.

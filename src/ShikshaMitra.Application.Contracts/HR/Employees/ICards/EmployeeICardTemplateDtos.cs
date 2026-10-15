@@ -5,6 +5,7 @@ namespace ShikshaMitra.HR.Employees.ICards;
 
 public class EmployeeICardTemplateDto
 {
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityAssetMode? LogoMode { get; set; }
 	public Guid Id { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid? MediumStageId { get; set; }
@@ -41,6 +42,7 @@ public class EmployeeICardTemplateListResponse
 
 public class EmployeeICardTemplateRequest
 {
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityAssetMode? LogoMode { get; set; }
 	public Guid AcademicYearId { get; set; }
 
 	public Guid? MediumStageId { get; set; }

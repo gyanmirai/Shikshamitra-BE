@@ -46,6 +46,9 @@ public class AcademicReportFilterDto
 
 public class AcademicReportPreviewDto
 {
+    [System.Text.Json.Serialization.JsonIgnore] public byte[]? IdentityLogo { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public byte[]? IdentityBanner { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore] public string? IdentitySchoolName { get; set; }
     public string ReportType { get; set; } = string.Empty;
     public DateTime GeneratedAtUtc { get; set; }
     public string FilterSummary { get; set; } = string.Empty;

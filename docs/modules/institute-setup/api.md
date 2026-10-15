@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-09
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,44 @@ audience: humans-and-agents
 
 TL;DR: Institute Setup APIs cover initial progress, completion, buildings, room types, and rooms.
 Use controllers for route truth and contracts for request and response shapes.
+
+## Academic Setup validation
+
+Standards use the ABP routes `POST /api/app/standard` and `PUT /api/app/standard/{id}`. Duplicate names within the same medium stage return HTTP 409 with the existing ProblemDetails format: `errorCode: ShikshaMitra.TenantSettings:DuplicateStandardName`, `detail: A standard named 'Class 3' already exists in this academic stage.`, and `data.name`. Names are compared literally after trimming and case normalization; editing excludes the current standard. Repository tenant filters remain enabled. The same name is allowed in another stage.
+
+Division create/update routes remain `/api/app/division` and `/api/app/division/{id}`. Omitting or passing null for `roomNumber` leaves existing allocations unchanged on update and creates an unassigned division on create. An explicitly supplied empty string clears the room. Academic hierarchy forms no longer expose room allocation; no schema change is required.
+
+## Shift Management API
+
+ABP conventionally exposes `ShiftManagementAppService` at `/api/app/shift-management`: GET/POST collection and GET/PUT/DELETE `/{id}`. Its DTOs contain name and start/end times; tenant ownership comes from the authenticated server context, never a client payload. Authentication is required. The existing action-permission model is unchanged.
+
+Lists and their total counts use the current tenant. Foreign and host-only IDs return 404 to school callers for reads, updates and deletes. Standard and employee writes reject foreign shift references with `HR:Attendance:020310`. Equal or overnight time ranges and deletion of assigned shifts remain rejected.
+
+## School Identity API
+
+The base route is `api/institute-setup/school-identity`. Configuration operations explicitly check actions in the application service. Host identities are rejected; board/medium references must belong to the current tenant and match their parent hierarchy.
+
+| Method and suffix | Permission and contract |
+| --- | --- |
+| GET collection | `InstituteSetup.SchoolIdentity.View`; optional boardId/mediumId, choices, stamp, effective assets, sources and canManage capability |
+| PUT collection | View plus ManageDefaults or ManageOverrides; choices and concurrencyStamp |
+| POST assets | Corresponding management grant; multipart file/kind/context; immutable asset ID and image metadata |
+| GET assets/{id} | View, authorized origin/effective context or the caller's draft; signatures additionally require AccessSignature |
+| POST preview | View; draft previews additionally require management; returns PDF without saving |
+| GET history | View; latest 100 revisions with tenant-owned creator usernames; signature selections redacted without AccessSignature |
+| POST copy | View, ManageOverrides and AccessSignature; explicit source/target, differing years, matching levels and target stamp |
+| GET branding | Authenticated current-school defaults; no signature fields |
+| GET branding/{kind} | Authenticated school-default logo (0) or banner (1); signature kind is rejected |
+
+Action prefixes are `InstituteSetup.SchoolIdentity`; navigation visibility is separately `ShikshaMitra.Module.InstituteSetup.SchoolIdentity`. ManageDefaults additionally requires tenant-wide data scope. Resetting choices records a revision; there is no Delete permission.
+
+Override writes require full scope over the selected board or medium. Descendant-only scope permits inheritance reads, not changes to a whole parent profile. The read response's canManage combines exact action permission and full-context scope; it is a UI capability, not a replacement for write authorization. Reusing retained immutable assets checks readable origin scope; attaching an unsaved draft additionally requires management scope at its origin.
+
+Modes are Inherit=0, Custom=1 and Hidden=2. Custom signatures include principalName and designation. An omitted signature choice preserves it for callers without signature access. Missing configuration is optional. Invalid content, sizes, dimensions, asset kinds/references and copy contexts use `SchoolIdentity:*` errors; stale stamps use ABP concurrency errors.
+
+Public admission image routes are `api/public/admission-inquiries/{token}/branding/{kind}` with optional offeringId. They validate the existing link, cycle and permitted offering before resolving its tenant context, allow only logo/banner, and never return signature data.
+
+Staff ID previews read `GET api/employees/i-card/templates/school-logo` with optional mediumStageId. It requires `HR.Employee.ICard.View`, validates tenant and board/medium scope for the stage, and resolves the same shared logo as the exported card. It returns image bytes with the stored content type, or 204 when the effective logo is absent. School Identity configuration grants are not required to view an authorised card preview.
 
 ## Initial setup API
 

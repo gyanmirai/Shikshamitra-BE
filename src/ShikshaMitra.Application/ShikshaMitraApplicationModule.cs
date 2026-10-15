@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShikshaMitra.Security.Permissions;
+using ShikshaMitra.Security.Roles;
 using Volo.Abp.Account;
 using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.AutoMapper;
@@ -32,6 +33,8 @@ public class ShikshaMitraApplicationModule : AbpModule
 		context.Services.AddDataProtection();
 		context.Services.Replace(ServiceDescriptor.Transient<IPermissionAppService, ShikshaMitraPermissionAppService>());
 		context.Services.Replace(ServiceDescriptor.Transient<PermissionAppService, SecureAbpPermissionAppService>());
+		context.Services.Replace(ServiceDescriptor.Transient<IIdentityRoleAppService, SchoolIdentityRoleAppService>());
+		context.Services.Replace(ServiceDescriptor.Transient<IdentityRoleAppService, SchoolIdentityRoleAppService>());
 
 		Configure<AbpAutoMapperOptions>(options =>
 		{

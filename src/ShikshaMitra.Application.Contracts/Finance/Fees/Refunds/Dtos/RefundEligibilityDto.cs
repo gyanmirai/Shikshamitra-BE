@@ -10,7 +10,8 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 /// </summary>
 public class RefundEligibilityDto
 {
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
 
     public Guid AcademicYearId { get; set; }
 

@@ -16,13 +16,15 @@ public class FeeCollectionBatchAndMonthwiseBuilder(
     IRepository<FeeRecordMetadata, Guid> feeRecordRepository,
     IRepository<PaymentMethodRecord, Guid> paymentMethodRepository,
     IRepository<AcademicYear, Guid> academicYearRepository,
-    IAsyncQueryableExecuter asyncExecuter)
+    IAsyncQueryableExecuter asyncExecuter,
+    FinanceReportPayerQueryService payerService)
     : IFinanceReportBuilder, ITransientDependency
 {
     public string ReportType => FinanceReportTypes.FeeCollectionBatchAndMonthwise;
 
     public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
+        var payers = await payerService.GetPayersAsync(request.Filters, executionScope);
         var academicYearIds = request.Filters.AcademicYearIds ?? new List<Guid>();
         var targetMonths = request.Filters.Months != null && request.Filters.Months.Any()
             ? request.Filters.Months
@@ -45,7 +47,7 @@ public class FeeCollectionBatchAndMonthwiseBuilder(
 
         var targetYearIds = targetAcademicYears.Select(x => x.Id).ToList();
 
-        var metadataQuery = (await feeRecordRepository.GetQueryableAsync())
+        var metadataQuery = FinanceReportPayerQueryService.FilterCollections(await feeRecordRepository.GetQueryableAsync(), payers)
             .Where(m => targetYearIds.Contains(m.AcademicYearId));
 
         var metadataList = await asyncExecuter.ToListAsync(metadataQuery);

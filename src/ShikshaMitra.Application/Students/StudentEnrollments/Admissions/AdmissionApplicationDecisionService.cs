@@ -145,6 +145,8 @@ public class AdmissionApplicationDecisionService(
 		{
 			await documentHandoff.LinkAsync(context.Application,
 				await studentRepository.GetAsync(context.Application.StudentId.Value));
+			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.IAdmissionFinanceIntegration>()
+				.LinkFinalizedStudentAsync(context.Application.Id, context.Application.StudentId.Value);
 			await CurrentUnitOfWork!.SaveChangesAsync();
 			return BuildResult(context.Application, context.Application.StudentId.Value,
 				context.Application.OnboardingCaseId.Value, false);
@@ -169,6 +171,9 @@ public class AdmissionApplicationDecisionService(
 			await documentHandoff.LinkAsync(context.Application, await studentRepository.GetAsync(existingCase.StudentId));
 			await applicantRepository.UpdateAsync(context.Applicant, false);
 			await applicationRepository.UpdateAsync(context.Application, false);
+			await CurrentUnitOfWork!.SaveChangesAsync();
+			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.IAdmissionFinanceIntegration>()
+				.LinkFinalizedStudentAsync(context.Application.Id, existingCase.StudentId);
 			await CurrentUnitOfWork!.SaveChangesAsync();
 			return BuildResult(context.Application, existingCase.StudentId, existingCase.Id, false);
 		}
@@ -283,6 +288,9 @@ public class AdmissionApplicationDecisionService(
 			context.Applicant.Id, context.Application.Id), false);
 		await eventRepository.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id,
 			onboardingCase.Id, "CaseCreated", "Admission finalized; onboarding responsibility started."), false);
+		await CurrentUnitOfWork!.SaveChangesAsync();
+		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.IAdmissionFinanceIntegration>()
+			.LinkFinalizedStudentAsync(context.Application.Id, student.Id);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 
 		return BuildResult(context.Application, student.Id, onboardingCase.Id, reusedExistingStudent);

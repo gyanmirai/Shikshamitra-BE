@@ -31,6 +31,7 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 	public Guid? StandardId { get; set; }
+	public string? StandardName { get; set; }
 	public string? GuardianFirstName { get; set; }
 	public string? GuardianLastName { get; set; }
 	public string? ApplicantFirstName { get; set; }
@@ -88,6 +89,8 @@ public class CreateAdmissionInquiryDto
 
 public class AdmissionInquiryListInput : PagedAndSortedResultRequestDto
 {
+	public bool DashboardFollowUpsDue { get; set; }
+	public Guid? DivisionId { get; set; }
 	public Guid? AcademicYearId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }

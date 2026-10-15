@@ -4,6 +4,7 @@ using System.Linq;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
@@ -11,7 +12,9 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund;
 public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
-    public Guid StudentId { get; private set; }
+    public Guid? StudentId { get; private set; }
+    public Guid? FinanceFeeAccountId { get; private set; }
+    public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
     public Guid AcademicYearId { get; private set; }
     public Guid? StudentFeeStructureId { get; private set; }
     public Guid? RefundPolicyId { get; private set; }
@@ -68,12 +71,14 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     private FeeRefundRequest() { }
 
-    internal FeeRefundRequest(Guid id, Guid? tenantId, Guid studentId, Guid academicYearId,
+    internal FeeRefundRequest(Guid id, Guid? tenantId, Guid? studentId, Guid academicYearId,
         string voucherNumber, string? refundMethod, RefundPaymentDetails? refundPaymentDetails,
-        string? reason, bool createAsDraft = true) : base(id)
+        string? reason, bool createAsDraft = true, Guid? financeFeeAccountId = null) : base(id)
     {
         TenantId = tenantId;
+        FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
         StudentId = studentId;
+        FinanceFeeAccountId = financeFeeAccountId;
         AcademicYearId = academicYearId;
         VoucherNumber = Check.NotNullOrWhiteSpace(voucherNumber, nameof(voucherNumber), 50);
         RefundMethod = Normalize(refundMethod);
@@ -83,11 +88,11 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         if (!createAsDraft) SubmittedAt = DateTimeOffset.UtcNow;
     }
 
-    internal FeeRefundRequest(Guid id, Guid? tenantId, Guid studentId, Guid academicYearId,
+    internal FeeRefundRequest(Guid id, Guid? tenantId, Guid? studentId, Guid academicYearId,
         string voucherNumber, IReadOnlyCollection<FeeRefundLine> lines, string? refundMethod,
-        RefundPaymentDetails? refundPaymentDetails, string? reason)
+        RefundPaymentDetails? refundPaymentDetails, string? reason, Guid? financeFeeAccountId = null)
         : this(id, tenantId, studentId, academicYearId, voucherNumber, refundMethod,
-            refundPaymentDetails, reason, createAsDraft: false)
+            refundPaymentDetails, reason, createAsDraft: false, financeFeeAccountId: financeFeeAccountId)
     {
         if (lines.Count == 0 || lines.Any(line => line.FeeRefundRequestId != id))
             throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
@@ -95,10 +100,11 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Recalculate();
     }
 
-    internal void PinPolicy(Guid assignmentId, Guid policyId, Guid policyVersionId, Guid receiptId,
+    internal void PinPolicy(Guid? assignmentId, Guid policyId, Guid policyVersionId, Guid receiptId,
         string receiptNumber, string policySnapshotJson, string calculationSnapshotJson, string calculationHash)
     {
-        if (StudentFeeStructureId.HasValue) throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
+        if (RefundPolicyVersionId.HasValue || (!assignmentId.HasValue && !FinanceFeeAccountId.HasValue))
+            throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
         StudentFeeStructureId = assignmentId;
         RefundPolicyId = policyId;
         RefundPolicyVersionId = policyVersionId;

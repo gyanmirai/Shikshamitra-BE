@@ -10,6 +10,12 @@ public class DueFeeConfiguration : IEntityTypeConfiguration<DueFee>
 	{
 		builder.ToTable("Finance_DueFees", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.ToTable(t => t.HasCheckConstraint("CK_DueFees_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL"));
+		builder.HasOne<FinanceFeeAccount>().WithMany().HasForeignKey(x => x.FinanceFeeAccountId)
+			.OnDelete(DeleteBehavior.Restrict);
+		builder.HasIndex(x => new { x.TenantId, x.FinanceFeeAccountId, x.ScheduleInstanceKey })
+			.IsUnique().HasFilter("\"IsDeleted\" = false AND \"FinanceFeeAccountId\" IS NOT NULL")
+			.HasDatabaseName("UX_DueFees_Tenant_Account_Schedule");
 		builder.Property(x => x.AllocationPercentage).HasPrecision(18, 6);
 		builder.HasIndex(x => x.StudentFeeStructureId);
 		builder.HasOne<ShikshaMitra.Finance.Fees.StudentFeeAssignment.StudentFeeStructure>()

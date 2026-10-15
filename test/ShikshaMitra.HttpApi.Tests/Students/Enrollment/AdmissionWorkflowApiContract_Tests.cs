@@ -62,6 +62,7 @@ public class AdmissionWorkflowApiContract_Tests
 		properties.ShouldContain(nameof(AdvanceAdmissionWorkflowDto.ExpectedCurrentStageInstanceId));
 		properties.ShouldContain(nameof(AdvanceAdmissionWorkflowDto.IdempotencyKey));
 		properties.ShouldContain(nameof(AdvanceAdmissionWorkflowDto.ConcurrencyStamp));
+		properties.ShouldContain(nameof(AdvanceAdmissionWorkflowDto.DeferFeeCollection));
 	}
 
 	[Fact]

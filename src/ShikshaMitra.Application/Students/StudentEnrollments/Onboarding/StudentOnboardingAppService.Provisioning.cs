@@ -48,7 +48,7 @@ public partial class StudentOnboardingAppService
 		if (yearId.HasValue && scope.WildcardBoardAcademicYearIds.Contains(yearId.Value)) return;
 		throw new AbpAuthorizationException("Editing shared onboarding settings requires access to the whole selected academic year, or school-wide access for school settings.");
 	}
-	private async Task<IQueryable<StudentOnboardingCase>> GetScopedCasesAsync()
+	internal async Task<IQueryable<StudentOnboardingCase>> GetScopedCasesAsync()
 	{
 		if (!CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
 		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);

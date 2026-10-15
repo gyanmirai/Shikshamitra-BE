@@ -143,10 +143,11 @@ public class AdmissionAssessmentRosterPostgres_Tests(ITestOutputHelper output)
 			var attempts = Repository<AdmissionAssessmentAttempt>();
 			var sessions = Repository<AdmissionAssessmentSession>();
 			var transitions = Repository<AdmissionWorkflowTransitionDefinition>();
+			var cycles = Repository<AdmissionCycle>();
 			var scope = Substitute.For<IUserScopeAccessService>();
 			scope.GetCurrentUserScopeAsync().Returns(new UserScopeContext { IsAdmin = true, TenantId = db.TenantId, UserId = userId });
 			var access = new AdmissionAssessmentAccessService(applications, stages, instances, Repository<AdmissionWorkflowStageDefinition>(),
-				Repository<AdmissionWorkflowDefinition>(), Repository<AdmissionOffering>(), Substitute.For<IRepository<AdmissionCycle, Guid>>(),
+				Repository<AdmissionWorkflowDefinition>(), Repository<AdmissionOffering>(), cycles,
 				Substitute.For<IRepository<Division, Guid>>(), scope);
 			var runtime = new AdmissionWorkflowRuntimeValueService(Repository<AdmissionFormInstance>(), Repository<AdmissionFormFieldValue>(),
 				Substitute.For<IRepository<AdmissionInquiry, Guid>>(), new AdmissionAssessmentRuntimeService(attempts, access));
@@ -165,10 +166,16 @@ public class AdmissionAssessmentRosterPostgres_Tests(ITestOutputHelper output)
 			var placement = new AdmissionApplicationPlacementScopeService(scope, null!, null!, null!, null!, null!, null!);
 			var applicationScope = new AdmissionApplicationScopeAccessService(Repository<AdmissionOffering>(), cycleRepository,
 				divisionRepository, scope, applications, placement);
+			var reservationRepository = Substitute.For<IRepository<ShikshaMitra.Academic.Timetable.RoomAvailability.RoomReservation, Guid>>();
+			reservationRepository.GetListAsync(Arg.Any<Expression<Func<ShikshaMitra.Academic.Timetable.RoomAvailability.RoomReservation, bool>>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(new List<ShikshaMitra.Academic.Timetable.RoomAvailability.RoomReservation>()));
+			var employeeRepository = Substitute.For<IRepository<ShikshaMitra.HR.Employees.Employee, Guid>>();
+			employeeRepository.GetListAsync(Arg.Any<Expression<Func<ShikshaMitra.HR.Employees.Employee, bool>>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult(new List<ShikshaMitra.HR.Employees.Employee>()));
+			var scheduling = new AdmissionAssessmentSchedulingService(null!, reservationRepository, employeeRepository, sessions, attempts, applications, null!, null!);
+			var sessionService = new AdmissionAssessmentSessionService(sessions, applications, Repository<AdmissionWorkflowStageDefinition>(), Repository<AdmissionWorkflowDefinition>(), cycles, access);
 			var provider = new ServiceCollection().AddSingleton<IAsyncQueryableExecuter>(new AsyncQueryableExecuter([new EfCoreAsyncQueryableProvider()]))
-				.AddSingleton(currentUser).AddSingleton(tenant).AddSingleton(applicationScope).BuildServiceProvider();
-			Service = new(Repository<AdmissionApplicant>(), instances, stages, attempts, sessions, transitions, runtime, access, reader);
-			foreach (var service in new ApplicationService[] { Service, access, reader, applicationScope, placement })
+				.AddSingleton(Repository<ShikshaMitra.TenantSettings.Standards.Standard>()).AddSingleton(currentUser).AddSingleton(tenant).AddSingleton(applicationScope).AddSingleton(scheduling).AddSingleton(sessionService).AddSingleton(employeeRepository).BuildServiceProvider();
+			Service = new(Repository<AdmissionApplicant>(), instances, stages, attempts, sessions, transitions, Repository<AdmissionWorkflowStageDefinition>(), Repository<AdmissionWorkflowDefinition>(), cycles, runtime, access, reader);
+			foreach (var service in new ApplicationService[] { Service, access, reader, applicationScope, placement, scheduling, sessionService })
 				service.LazyServiceProvider = new AbpLazyServiceProvider(provider);
 		}
 
@@ -177,6 +184,7 @@ public class AdmissionAssessmentRosterPostgres_Tests(ITestOutputHelper output)
 			var repository = Substitute.For<IRepository<T, Guid>>();
 			repository.AsyncExecuter.Returns(new AsyncQueryableExecuter([new EfCoreAsyncQueryableProvider()]));
 			repository.GetQueryableAsync().Returns(_ => Task.FromResult(db.Set<T>().AsNoTracking().AsQueryable()));
+			repository.WithDetailsAsync(Arg.Any<Expression<Func<T, object>>[]>()).Returns(_ => Task.FromResult(db.Set<T>().AsNoTracking().AsQueryable()));
 			repository.FindAsync(Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(call =>
 				db.Set<T>().AsNoTracking().FirstOrDefaultAsync(row => row.Id == call.Arg<Guid>()));
 			repository.GetListAsync(Arg.Any<Expression<Func<T, bool>>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(async call =>
@@ -204,14 +212,15 @@ public class AdmissionAssessmentRosterPostgres_Tests(ITestOutputHelper output)
 				{"field":"application.eligibility","operator":"Equals","value":"eligible"},
 				{"field":"application.status","operator":"Equals","value":"Draft"}]}
 				""");
-			var offering = new AdmissionOffering(Guid.NewGuid(), db.TenantId, Guid.NewGuid(), null, Guid.NewGuid(), Guid.NewGuid(),
+			var cycle = new AdmissionCycle(Guid.NewGuid(), db.TenantId, "Synthetic scale cycle", "SCALE", Guid.NewGuid(), DateTime.UtcNow.Date.AddDays(-30), DateTime.UtcNow.Date.AddDays(30));
+			var offering = new AdmissionOffering(Guid.NewGuid(), db.TenantId, cycle.Id, null, Guid.NewGuid(), Guid.NewGuid(),
 				Guid.NewGuid(), Guid.NewGuid(), "SCALE", true, null, null);
 			offering.ConfigureReferences(workflow.Id, null, null);
 			var session = new AdmissionAssessmentSession(Guid.NewGuid(), db.TenantId, offering.Id, definition.Id, "Synthetic session",
 				DateTime.UtcNow.AddHours(-2), DateTime.UtcNow.AddHours(-1), "Synthetic room", 10000);
 			var laterSession = new AdmissionAssessmentSession(Guid.NewGuid(), db.TenantId, offering.Id, definition.Id, "Later synthetic session",
 				DateTime.UtcNow.AddMinutes(-30), DateTime.UtcNow.AddMinutes(-10), "Synthetic room B", 10000);
-			db.AddRange(workflow, definition, next, route, offering, session, laterSession);
+			db.AddRange(workflow, definition, next, route, cycle, offering, session, laterSession);
 			for (var i = 0; i < count; i++)
 			{
 				var applicant = new AdmissionApplicant(Guid.NewGuid(), db.TenantId, Guid.NewGuid(), $"Synthetic {i:D5}", null,
@@ -260,8 +269,8 @@ public class AdmissionAssessmentRosterPostgres_Tests(ITestOutputHelper output)
 		{
 			foreach (var type in new[] { typeof(AdmissionApplication), typeof(AdmissionApplicant), typeof(AdmissionApplicationWorkflowInstance),
 				typeof(AdmissionApplicationStageInstance), typeof(AdmissionAssessmentAttempt), typeof(AdmissionAssessmentSession),
-				typeof(AdmissionWorkflowStageDefinition), typeof(AdmissionWorkflowDefinition), typeof(AdmissionOffering),
-				typeof(AdmissionWorkflowTransitionDefinition), typeof(AdmissionFormInstance), typeof(AdmissionFormFieldValue) })
+				typeof(AdmissionWorkflowStageDefinition), typeof(AdmissionWorkflowDefinition), typeof(AdmissionOffering), typeof(AdmissionCycle),
+				typeof(ShikshaMitra.TenantSettings.Standards.Standard), typeof(AdmissionWorkflowTransitionDefinition), typeof(AdmissionFormInstance), typeof(AdmissionFormFieldValue) })
 			{
 				var entity = model.Entity(type);
 				entity.HasKey("Id");
@@ -278,6 +287,12 @@ public class AdmissionAssessmentRosterPostgres_Tests(ITestOutputHelper output)
 			model.Entity<AdmissionApplicationStageInstance>().HasQueryFilter(row => row.TenantId == TenantId);
 			model.Entity<AdmissionAssessmentAttempt>().HasQueryFilter(row => row.TenantId == TenantId && !row.IsDeleted);
 			model.Entity<AdmissionAssessmentSession>().HasQueryFilter(row => row.TenantId == TenantId && !row.IsDeleted);
+			model.Entity<AdmissionAssessmentSession>().Ignore(row => row.Scopes).Ignore(row => row.RoomReservationStatus).Ignore(row => row.RoomReady);
+			model.Entity<ShikshaMitra.TenantSettings.Standards.Standard>().Ignore(row => row.EducationMediumStage).Ignore(row => row.Shift).Ignore(row => row.Divisions)
+				.HasQueryFilter(row => row.TenantId == TenantId && !row.IsDeleted);
+			// Match the production mapping for Standard's get-only tenant property.
+			model.Entity<ShikshaMitra.TenantSettings.Standards.Standard>().Property(row => row.TenantId);
+			model.Entity<AdmissionCycle>().HasQueryFilter(row => row.TenantId == TenantId && !row.IsDeleted);
 			model.Entity<AdmissionOffering>().HasQueryFilter(row => row.TenantId == TenantId && !row.IsDeleted);
 			model.Entity<AdmissionFormInstance>().HasQueryFilter(row => row.TenantId == TenantId && !row.IsDeleted);
 			model.Entity<AdmissionFormFieldValue>().HasQueryFilter(row => row.TenantId == TenantId);

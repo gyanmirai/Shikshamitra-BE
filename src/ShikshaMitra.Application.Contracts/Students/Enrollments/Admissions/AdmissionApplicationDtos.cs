@@ -8,6 +8,9 @@ public class AdmissionApplicationListInput : PagedAndSortedResultRequestDto
 {
 	/// <summary>Restricts the decision/finalization menu without limiting applicant history queries.</summary>
 	public bool DecisionWorkspaceOnly { get; set; }
+	public bool ActiveOnly { get; set; }
+	public bool PendingDecisionOnly { get; set; }
+	public Guid? DivisionId { get; set; }
 	public string? Search { get; set; }
 	public AdmissionApplicationStatus? Status { get; set; }
 	public Guid? AcademicYearId { get; set; }
@@ -26,7 +29,7 @@ public partial class AdmissionApplicationStageDto { public Guid Id { get; set; }
 public class AdmissionWorkflowTransitionHistoryDto { public Guid Id { get; set; } public Guid FromStageInstanceId { get; set; } public Guid? ToStageInstanceId { get; set; } public Guid? TransitionDefinitionId { get; set; } public AdmissionWorkflowTransitionAction Action { get; set; } public string? Reason { get; set; } public string? ConditionEvaluationSnapshotJson { get; set; } public DateTime OccurredAt { get; set; } }
 public class AdmissionWorkflowRuntimeTransitionDto { public Guid Id { get; set; } public Guid ToStageDefinitionId { get; set; } public Guid ToStageInstanceId { get; set; } public string ToStageName { get; set; } = string.Empty; public int Priority { get; set; } public bool IsDefault { get; set; } public string? ConditionRuleJson { get; set; } }
 public class AdmissionApplicationWorkflowDto { public Guid WorkflowDefinitionId { get; set; } public AdmissionWorkflowInstanceStatus Status { get; set; } public DateTime StartedAt { get; set; } public DateTime? CompletedAt { get; set; } public Guid? CurrentStageInstanceId { get; set; } public string? NextRequiredAction { get; set; } public List<AdmissionApplicationStageDto> Stages { get; set; } = []; public List<AdmissionWorkflowRuntimeTransitionDto> AvailableTransitions { get; set; } = []; public List<AdmissionWorkflowTransitionHistoryDto> History { get; set; } = []; }
-public class AdvanceAdmissionWorkflowDto { public Guid ExpectedCurrentStageInstanceId { get; set; } public Guid? TransitionDefinitionId { get; set; } public string IdempotencyKey { get; set; } = string.Empty; public string? ConcurrencyStamp { get; set; } public string? Reason { get; set; } public bool SkipCurrentStage { get; set; } public bool AdminOverride { get; set; } }
+public class AdvanceAdmissionWorkflowDto { public Guid ExpectedCurrentStageInstanceId { get; set; } public Guid? TransitionDefinitionId { get; set; } public string IdempotencyKey { get; set; } = string.Empty; public string? ConcurrencyStamp { get; set; } public string? Reason { get; set; } public bool SkipCurrentStage { get; set; } public bool AdminOverride { get; set; } public bool DeferFeeCollection { get; set; } }
 public class AdmissionFormValueDto { public string FieldCode { get; set; } = string.Empty; public string? ValueJson { get; set; } }
 public class AdmissionApplicationFormDto { public Guid FormInstanceId { get; set; } public Guid FormDefinitionId { get; set; } public Guid AcademicYearId { get; set; } public int FormVersion { get; set; } public AdmissionFormInstanceStatus Status { get; set; } public DateTime? SubmittedAt { get; set; } public AdmissionFormDto Definition { get; set; } = new(); public List<AdmissionFormValueDto> Values { get; set; } = []; }
 public class UpdateAdmissionApplicationFormValuesDto { public string? ConcurrencyStamp { get; set; } public List<AdmissionFormValueDto> Values { get; set; } = []; }

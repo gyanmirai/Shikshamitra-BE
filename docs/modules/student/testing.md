@@ -3,12 +3,16 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-13
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Optional Payment collection and audited deferral
+
+Run the Domain `AdmissionFeeCollectionDeferral_Tests` and Application `Payment_deferral_advances_with_or_without_structure_and_retry_and_finalization_preserve_reason_without_finance_rows` cases. They cover required/trimmed/bounded reasons, active-stage validation, stale concurrency, repeated workflow keys, truthful transition facts, normal approval/finalization, Onboarding reason projection and unchanged Finance accounts, assignments, dues and collection rows. These source-level checks do not establish deployed browser acceptance or migration application.
 
 ## Finance scope cleanup (2026-10-13)
 
@@ -739,6 +743,25 @@ git diff --check
 
 Tests use real application services, scope resolution, active database identities and SQLite persistence; the permission test header only controls exact grants. Coverage includes anonymous/denied callers, action-without-visibility, unknown identity/tenant/year/section, translated aggregates, direct service authorization, forged administrator claims, no academic scope, sibling-division exclusion and verified Parent-only associations despite staff grants. The workload scenario grows owned inquiries from 10 to 510, retains 10 other-owner inquiries and one owned/one other-owner setup case, checks constant query count and payload under 16 KiB, and records cold latency plus 20 samples after three warmups. Fixture latency is local SQLite API evidence, not a production PostgreSQL SLA or query-plan benchmark.
 
+Admin regression cases add scoped filter authority without Directory permission, a bounded four-case setup preview, recorded task counts, primary-blocker precedence, and Records dashboard/list reconciliation excluding the requester, wrong stage roles and a prior approver.
+Attendance parity compares the batched owning projection with individual rosters for missing calendar, working/holiday dates, draft, clean submission and approved-leave/revision changes.
+The scale fixture seeds 50 divisions and checks a constant SQL read count for 1, 10 and 50 requested registers.
+Run the owning Attendance API regressions alongside dashboard tests after changing these shared evaluators:
+
+```powershell
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter "FullyQualifiedName~StudentModuleDashboardApi_Tests|FullyQualifiedName~StudentAttendanceApi_Tests" --artifacts-path .artifacts/student-dashboard-v3 -m:1 -p:UseSharedCompilation=false -p:RunAnalyzers=false
+```
+
+This local command skips analyzer execution and does not substitute for the repository's normal analyzer/release gates.
+Keep fixture Student reads on `GetQueryableWithoutAutoIncludesAsync`; full Student graph reads can produce an unnecessary SQLite temporary sort and exhaust disk space in a large synthetic cohort.
+Record local test results separately from an authenticated PostgreSQL browser retry and deployment verification.
+
+Local validation on 2026-10-14: dashboard API tests passed 18/18 and owning Attendance API regressions passed 31/31 on the current production source.
+The batched daily projection used 45 SQL reads for each of 1, 10 and 50 requested divisions in the SQLite fixture, preserving exact count equality and a local ceiling of 50 reads.
+This is a bounded-query regression result, not a PostgreSQL latency or throughput guarantee.
+The isolated local build retained nullable checking and skipped analyzer execution with the command above.
+Student-only documentation validation passed; the all-module validator remains blocked by existing mojibake in `docs/modules/finance/references/charge-management-e2e-test-plan.md`, which this Student change does not modify.
+
 For release, verify selected-year and scoped counts against the owning worklists using a signed-in school environment and measure PostgreSQL execution plans/p95 with representative tenant sizes. Local browser sample-response evidence remains owned by [frontend tests](../../../../Shikshamitra-FE/docs/student/testing.md#student-dashboard-validation).
 
 ## Offering-linked Onboarding verification (2026-10-09)
@@ -782,8 +805,35 @@ The focused decision contract and history actor-projection run passed 17 tests. 
 
 The focused `Intake_Setup` application filter passed four tests, including restore/rearchive, current-stamp idempotency, stale-stamp rejection, cross-tenant rejection, preserved profile references and inactive historical Offering/link state. `AdmissionIntakeSetupApiContract_Tests` passed five tests and retains Admission Offerings Add authority on the Restore controller and application service. The isolated HttpApi Host build succeeded without a schema change. These tests establish source/integration behavior; the existing localhost host needs a rebuild/restart before browser restore persistence can be accepted.
 
+## Shared school Assessment sessions (2026-10-14)
+
+Local verification passed 61 Domain tests, six shared-session Application scenarios across the initial run and focused repairs, 17 HTTP permission contract tests and one EF mapping test. Shared-session coverage includes a combined two-Offering roster, proposals extending beyond the visible page, stable preview fingerprints across pages and unselected application edits, atomic confirmation and idempotent retries, retained stage/policy identity, cancellation plus room release, metadata-only approval preservation, legacy session room adoption and school-local time conversion. Individual interview coverage proves eight sequential slots in a two-seat room, explicit-slot reservation before automatic allocation, appointment persistence and invalid-capacity rejection. These overlapping runs are not summed into a full-suite claim.
+
+Actual PostgreSQL validation passed the combined roster case at 100, 1,000 and 5,000 candidates with 14 SQL commands at each size, plus two resource-lock/reservation cases. Local warm roster durations were approximately 49, 256 and 408 ms. Locks require a transaction, serialize the same tenant until commit and isolate other tenants. Interview reservation checks preserve teacher/day/live-status filtering, adjacent-window acceptance and ignore-self behavior. SQLite cannot translate its TimeSpan overlap predicate; the portable guard server-filters the employee/date/live reservations, projects their windows and evaluates only that bounded set. The equivalent Npgsql predicate and production portable guard were both verified.
+
+The existing Assessment Application regression filter passed 17 active scenarios; two unrelated Eligibility/Review fixtures still fail on retired workflow definitions before Assessment execution. Those fixture failures remain unchanged. Current EF, Application, HttpApi and Host builds passed with zero errors; existing compiler warnings remain. Earlier memory-exhausted attempts are superseded by serialized successful builds. Evidence is under `D:/CodexArtifacts/`: `assessment-v2-domain-tests.log`, `assessment-v2-planning-tests.log`, `assessment-v2-planning-repaired-success.log`, `assessment-v2-interview-verified.log`, `assessment-v2-postgres-roster.log`, `assessment-v2-postgres-lock-and-room.log`, `assessment-v2-http-contract-tests.log` and `assessment-v2-model-tests.log`; TRX reports are in `assessment-v2-test-results/`.
+
+Migration `20261014150323_AddSharedAdmissionAssessmentSessions` is additive to the existing Finance baseline. The final source retains the unfiltered legacy SessionId index alongside the filtered unique live interview-slot index. EF reports no pending model changes. A separate disposable PostgreSQL migration database reconstructed the pre-Assessment baseline with generated Down, then applied the current generated Up: two legacy sessions and two attempts retained their identities, scope, booking counts and policy checksums; Finance schema and migration history remained unchanged. The existing Finance migration files were preserved. The original database already had an externally applied Assessment marker with an older index shape, so that marker alone is not proof of the corrected migration. Evidence: `assessment-v2-pending-model.log`, `assessment-v2-up.sql`, `assessment-v2-down.sql`, `assessment-v2-migration-qa.log` and `assessment-v2-snapshot-final-delta.diff`.
+
+Bounds are explicit: at most 20 Offering/stage links, 200 items per page/confirmation batch and 200 automatic proposals. New arrivals require a new explicit preview/confirmation. Applicants are projected together before global queue classification/counting/paging; policy and route evaluation materializes candidate summaries, so PostgreSQL scale/latency measurements remain a release check rather than an asserted production SLA.
+
+Assessment writes check current timetable occupancy and share transaction resource locks with generic Room Reservation writers. Later Timetable save/publication has no common reservation guard and can introduce a reverse conflict. This integration boundary needs a separate common-resource decision; current source does not prove universal reverse Timetable conflict prevention.
+
+Runtime QA uses a logical PostgreSQL snapshot restored into a random disposable `assessment_qa_*` database. It never downgrades or migrates the original database, retains original identities/scopes and disables seeders, startup migrations, background jobs/workers and test-login seeding. Tenant connection strings must be absent or rewritten in the clone before starting a host. No shared Redis integration was found; the host uses its process-local cache. Outbound worker delivery and SMTP acceptance are excluded from this QA scope.
+
+The fresh isolated QA API at `http://localhost:5001` binds loopback only; health returned 200 Healthy, the anonymous protected resources route challenged sign-in, and CORS returned 204 with the exact `http://localhost:3001` origin and credentials enabled. The QA process supplies the frontend origin because Development configuration overrides the base CORS list. This changes neither source authentication/cookie policy nor the original user Host/database. The clone initially contained compatible Offerings, rooms and active linked staff but no current active Assessment applications. Authenticated normal UI intake subsequently created two synthetic Class 1/Class 2 applications; a shared School exam preview/confirmation, reload, explicit partial attendance, bulk results and explicit bulk Continue persisted successfully. The downstream application showed Admission form and read-only completed Assessment evidence. No grants, original records, staging/production deployment or outbound delivery were changed or established. The first cold intake handoff took 45.7 seconds and the second returned 200 in 1.87 seconds; the cause of the cold delay is unconfirmed and these timings are not a production SLA. Runtime evidence: `assessment-v2-qa-host.log` and `assessment-v2-clone-runtime-observation.log`; detailed frontend acceptance belongs to [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md).
+
+The temporary QA Host was stopped through its owned foreground session after browser acceptance; port 5001 was confirmed closed. The original user Host (PID 19344, port 44332), cloned evidence databases and all artifacts were preserved.
+
 ## Portal owner-email guidance (2026-10-12)
 
 The two Student/Guardian portal workflow scenarios passed after asserting case-detail saved-owner values, missing Mother email, mismatch rejection, Father-versus-Other-guardian separation, successful correct-owner provisioning, idempotency, tenant/user scope and unchanged owner password setup. The expanded guardian scenario verifies the case-only email correction, required reason, stale stamp and cross-tenant rejection, preservation of all other snapshot values and school settings, one audit event on idempotent retry, and no email request/account creation during correction. Pending credential delivery keeps an enabled case incomplete after account provisioning.
 
 Contracts, Application, HttpApi and Host compiled with zero errors using incremental serialized builds; existing warnings remain. Local Host was rebuilt/restarted against the verified localhost Development database without seed-grant changes. The affected case's parent rule correction persisted, while Father email is submitted to Records and awaits its existing one-reviewer approval. No real portal account or credential email was created/sent. Sender acceptance, inbox receipt, staging and deployment remain unverified. No schema migration or dispatcher/password logic changes belong to this fix. Evidence: `.artifacts/guardian-email-correction-be-tests.log`, the `.artifacts/guardian-email-correction-*-build.log` files and frontend screenshots under `.artifacts/guardian-email-ui/`.
+
+
+## Assessment display progress (2026-10-15)
+
+`AdmissionAssessmentProgress_Tests` and the focused roster lifecycle/scoping integration methods passed (7 tests). Coverage includes start/end boundaries, ended sessions awaiting results, zero marks, qualitative outcomes, waiver, absence/retake, individual-slot precedence, status filtering/counts before pagination and explicit workflow continuation. The bounded test build used freshly compiled Application/Contracts outputs and existing unchanged dependency artifacts; it is not a full solution rebuild. No migration is introduced by the display contract. Student docs validation passes; the broad validator reports unrelated missing mobile-project links.
+
+The additional PostgreSQL scale run initially failed because the isolated fixture did not explicitly map Standard's get-only `TenantId`. The fixture now includes that production-equivalent property mapping. Its rebuild/rerun was stopped under workstation memory pressure, so the corrected scale test remains an open verification gate; earlier scale results are not evidence for this revision.

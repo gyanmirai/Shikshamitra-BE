@@ -97,6 +97,7 @@ public partial class StudentOnboardingAppService(
 				select onboarding;
 		}
 
+		query = await FilterDashboardQueueAsync(query, input.DashboardQueue);
 		query = await FilterPendingTaskAsync(query, input.PendingTask);
 		var worklist = await GetWorklistQueryAsync(query, input);
 		var totalCount = await AsyncExecuter.CountAsync(worklist);
@@ -675,6 +676,9 @@ public partial class StudentOnboardingAppService(
 		var onboardingCase = await GetCaseAsync(id);
 		if (onboardingCase.StudentEnrollmentId.HasValue)
 		{
+			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.IAdmissionFinanceIntegration>()
+				.BindActivatedStudentAsync(onboardingCase.ApplicationId, onboardingCase.StudentId, onboardingCase.StudentEnrollmentId.Value);
+			await CurrentUnitOfWork!.SaveChangesAsync();
 			return await MapCaseAsync(onboardingCase, true);
 		}
 		var reviewedReturn = ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(onboardingCase).HasValue;
@@ -740,6 +744,9 @@ public partial class StudentOnboardingAppService(
 		await caseRepository.UpdateAsync(onboardingCase, false);
 		await EnsureServiceHandoffsAsync(onboardingCase);
 		await AddEventAsync(id, "Activated", "Enrollment activated. Complete the requested app access setup.");
+		await CurrentUnitOfWork!.SaveChangesAsync();
+		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.IAdmissionFinanceIntegration>()
+			.BindActivatedStudentAsync(onboardingCase.ApplicationId, onboardingCase.StudentId, enrollment.Id);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await MapCaseAsync(onboardingCase, true);
 	}
@@ -1324,21 +1331,7 @@ public partial class StudentOnboardingAppService(
 		var accountPolicy = !onboardingCase.StudentEnrollmentId.HasValue ? await ResolvePolicyAsync(onboardingCase) : null;
 		var accountRules = await ReadSavedRulesAsync(onboardingCase);
 		var satisfied = steps.Count(step => IsSatisfied(step.Status));
-		var primaryBlocker = steps.OrderBy(step => step.DisplayOrder)
-			.FirstOrDefault(step => step.Key != StudentOnboardingStepKeys.FinalReadiness &&
-				step.Required && step.Status == StudentOnboardingStepStatus.Blocked)?.Label ??
-			steps.OrderBy(step => step.DisplayOrder)
-				.FirstOrDefault(step => step.Key != StudentOnboardingStepKeys.FinalReadiness &&
-					step.Required && !IsSatisfied(step.Status))?.Label;
-		var pendingHandoff = requiredHandoffs.FirstOrDefault(h => h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged);
-		primaryBlocker ??= pendingHandoff?.ServiceKey switch
-		{
-			"finance-first-payment" => "Fee assignment and first payment",
-			"student-account" => "Student portal account",
-			"guardian-account" => "Guardian portal account",
-			null => null,
-			_ => "Required service setup"
-		};
+		var primaryBlocker = StudentOnboardingWorkSummary.PrimaryBlocker(steps, requiredHandoffs);
 		var progressTotal = steps.Count + requiredHandoffs.Count;
 		satisfied += requiredHandoffs.Count(h => h.Status == StudentOnboardingServiceHandoffStatus.Acknowledged);
 		return new StudentOnboardingCaseDto

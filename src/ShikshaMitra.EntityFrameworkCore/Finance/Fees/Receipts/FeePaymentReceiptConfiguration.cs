@@ -11,6 +11,9 @@ public class FeePaymentReceiptConfiguration : IEntityTypeConfiguration<FeePaymen
     {
         builder.ToTable("Finance_FeePaymentReceipts", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
+        builder.ToTable(t => t.HasCheckConstraint("CK_FeePaymentReceipts_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL"));
+        builder.HasOne<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount>().WithMany()
+            .HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.ReceiptNumber)
             .HasMaxLength(30)

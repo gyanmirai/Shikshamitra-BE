@@ -100,7 +100,7 @@ public class FeeAssignmentRepairSeederContributor : BaseSeederContributor
 			if (studentIds.Count == 0)
 				continue;
 
-			var dueFees = await _dueFeeRepository.GetListAsync(d => studentIds.Contains(d.StudentId));
+			var dueFees = await _dueFeeRepository.GetListAsync(d => d.StudentId.HasValue && studentIds.Contains(d.StudentId.Value));
 			if (dueFees.Count == 0)
 				continue;
 

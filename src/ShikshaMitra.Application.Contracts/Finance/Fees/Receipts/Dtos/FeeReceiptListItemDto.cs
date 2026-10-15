@@ -37,7 +37,8 @@ public class FeeReceiptListItemDto
 
     // ── Student ───────────────────────────────────────────────────────────────
 
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public int? GrNo { get; set; }
     public string? RollNo { get; set; }

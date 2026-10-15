@@ -2,11 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public interface IAdmissionAssessmentAppService : IApplicationService
 {
+	Task<AdmissionAssessmentSessionResourcesDto> GetSessionResourcesAsync();
+	Task<List<AdmissionAssessmentStaffDto>> GetInterviewersAsync(string? search);
+	Task<PagedResultDto<AdmissionAssessmentSessionDto>> GetSessionWorkbenchAsync(AdmissionAssessmentSessionListInput input);
+	Task<AdmissionAssessmentSessionDto> GetSessionAsync(Guid id);
+	Task<List<AdmissionAssessmentInterviewSlotDto>> GetSessionSlotsAsync(Guid id);
+	Task<AdmissionAssessmentSessionPreviewDto> PreviewSessionAsync(AdmissionAssessmentSessionPreviewInput input);
+	Task<AdmissionAssessmentSessionConfirmationDto> ConfirmSessionAsync(AdmissionAssessmentSessionConfirmInput input);
 	Task<List<AdmissionAssessmentScopeDto>> GetScopesAsync();
 	Task<AdmissionAssessmentRosterDto> GetApplicantsAsync(AdmissionAssessmentRosterInput input);
 	Task<List<AdmissionAssessmentSessionDto>> GetSessionsAsync(Guid admissionOfferingId, Guid workflowStageDefinitionId);

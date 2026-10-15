@@ -15,6 +15,8 @@ Controller source paths are canonical when a route detail changes.
 
 Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
 
+Contextual Admissions/Onboarding collections, nullable applicant payers and Finance receipt/refund continuity: [admission fee collection](./references/admission-fee-collection.md).
+
 ## Shared request rules
 
 Finance APIs require authenticated access and tenant context through the platform pipeline.

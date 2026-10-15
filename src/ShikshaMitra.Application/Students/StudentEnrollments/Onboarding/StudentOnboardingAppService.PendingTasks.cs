@@ -9,7 +9,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 public partial class StudentOnboardingAppService
 {
-	private async Task<IQueryable<StudentOnboardingCase>> FilterPendingTaskAsync(IQueryable<StudentOnboardingCase> query, string? task)
+	internal async Task<IQueryable<StudentOnboardingCase>> FilterPendingTaskAsync(IQueryable<StudentOnboardingCase> query, string? task)
 	{
 		if (string.IsNullOrWhiteSpace(task)) return query;
 		query = query.Where(c => c.Status != StudentOnboardingStatus.Cancelled);
@@ -56,6 +56,22 @@ public partial class StudentOnboardingAppService
 			}
 		}
 		var ids = pending.ToArray(); return query.Where(c => Enumerable.Contains(ids, c.Id));
+	}
+
+	internal async Task<IQueryable<StudentOnboardingCase>> FilterDashboardQueueAsync(IQueryable<StudentOnboardingCase> query, string? queue)
+	{
+		if (string.IsNullOrWhiteSpace(queue)) return query;
+		query = query.Where(c => c.Status != StudentOnboardingStatus.Completed && c.Status != StudentOnboardingStatus.Cancelled);
+		if (queue == "unfinished") return query;
+		if (queue == "attention") { var now = Clock.Now; return query.Where(c => c.Status == StudentOnboardingStatus.NeedsAttention || c.DueAt < now); }
+		if (queue == "ready") return query.Where(c => c.Status == StudentOnboardingStatus.ReadyForActivation && !c.StudentEnrollmentId.HasValue);
+		if (queue == "documents")
+		{
+			var steps = await stepRepository.GetQueryableAsync();
+			return query.Where(c => steps.Any(s => s.OnboardingCaseId == c.Id && s.Required && s.Key == StudentOnboardingStepKeys.Documents &&
+				(s.Status == StudentOnboardingStepStatus.Pending || s.Status == StudentOnboardingStepStatus.Blocked || s.Status == StudentOnboardingStepStatus.InProgress)));
+		}
+		return await FilterPendingTaskAsync(query, queue);
 	}
 
 	private async Task<JsonElement?> ReadSavedRulesAsync(StudentOnboardingCase item)

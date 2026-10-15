@@ -63,11 +63,11 @@ public partial class StudentFeeDetailsQueryService
 	private static string BuildFullName(string? first, string? middle, string? last) =>
 		string.Join(" ", new[] { first, middle, last }.Where(p => !string.IsNullOrWhiteSpace(p)));
 
-	private async Task<Dictionary<Guid, double>> GetInReconciliationByDueFeeAsync(Guid studentId)
+	private async Task<Dictionary<Guid, double>> GetInReconciliationByDueFeeAsync(Guid studentId, Guid academicYearId)
 	{
 		var metaQ = await feeRecordMetadataRepository.GetQueryableAsync();
 		var allocQ = await dueFeeAllocationRepository.GetQueryableAsync();
-		var reconMetaIds = metaQ.Where(m => m.StudentId == studentId && m.Status == FeeCollectionStatus.InReconciliation).Select(m => m.Id);
+		var reconMetaIds = metaQ.Where(m => m.StudentId == studentId && m.AcademicYearId == academicYearId && m.Status == FeeCollectionStatus.InReconciliation).Select(m => m.Id);
 		return allocQ.Where(a => reconMetaIds.Contains(a.FeeRecordMetadataId))
 			.GroupBy(a => a.DueFeeId)
 			.Select(g => new { DueFeeId = g.Key, Amount = g.Sum(a => a.Amount) })

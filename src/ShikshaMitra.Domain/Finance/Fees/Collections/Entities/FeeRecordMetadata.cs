@@ -21,17 +21,20 @@ public class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public FeeRecordMetadata(
 		Guid id,
 		Guid? tenantId,
-		Guid studentId,
+		Guid? studentId,
 		Guid academicYearId,
 		double totalPaidFee,
 		string receiptNumber,
 		FeeCollectionStatus status,
 		string? remarks = null,
 		string? idempotencyKey = null,
-		string? commandFingerprint = null) : base(id)
+		string? commandFingerprint = null,
+		Guid? financeFeeAccountId = null) : base(id)
 	{
 		TenantId = tenantId;
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
 		StudentId = studentId;
+		FinanceFeeAccountId = financeFeeAccountId;
 		AcademicYearId = academicYearId;
 		TotalPaidFee = totalPaidFee;
 		ReceiptNumber = receiptNumber;
@@ -42,7 +45,9 @@ public class FeeRecordMetadata : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public Guid? TenantId { get; private set; }
-	public Guid StudentId { get; private set; }
+	public Guid? StudentId { get; private set; }
+	public Guid? FinanceFeeAccountId { get; private set; }
+	public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
 	public Guid AcademicYearId { get; private set; }
 	public double TotalPaidFee { get; private set; }
 

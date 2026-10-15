@@ -103,6 +103,49 @@ public class ApiProblemDetailsPipeline_Tests
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
+	public async Task Assessment_scheduling_rejection_should_preserve_reason_after_error_normalization(bool useResultFilter)
+	{
+		const string reason = "Room is reserved for 'Entrance exam' (Exam) from 14:15 to 15:05.";
+		var exception = AdmissionAssessmentSchedulingService.Invalid(reason);
+		exception.Code.ShouldBe(AdmissionAssessmentErrorCodes.InvalidState);
+		exception.Data["Reason"].ShouldBe(reason);
+		var resolver = CreateResolver(new Dictionary<string, string>
+		{
+			[exception.Code!] = "This assessment action is not available in the current state. Refresh the record and check its requirements."
+		});
+		var httpContext = new DefaultHttpContext();
+		httpContext.Request.Path = "/api/student/enrollment/admissions/assessments/sessions/preview";
+		if (useResultFilter)
+		{
+			// ABP localizes the message by code; the scheduling reason must survive in data.
+			var source = new { Error = new { Code = exception.Code, Message = "One or more business rules were violated.", Data = exception.Data } };
+			var context = new ResultExecutingContext(
+				new ActionContext(httpContext, new RouteData(), new ActionDescriptor()),
+				new List<IFilterMetadata>(), new ObjectResult(source) { StatusCode = 400 }, new object());
+			await new ApiProblemDetailsResultFilter(resolver).OnResultExecutionAsync(context,
+				() => Task.FromResult(new ResultExecutedContext(context, new List<IFilterMetadata>(), context.Result, new object())));
+			var output = ((ObjectResult)context.Result).Value.ShouldBeOfType<ProblemDetails>();
+			output.Status.ShouldBe(400);
+			output.Extensions["errorCode"].ShouldBe(exception.Code);
+			var data = output.Extensions["data"].ShouldBeOfType<Dictionary<string, object?>>();
+			data["Reason"].ShouldBe(reason);
+		}
+		else
+		{
+			httpContext.Response.Body = new MemoryStream();
+			await new ApiProblemDetailsMiddleware(_ => throw exception,
+				NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver).InvokeAsync(httpContext);
+			httpContext.Response.StatusCode.ShouldBe(400);
+			httpContext.Response.Body.Position = 0;
+			using var output = await JsonDocument.ParseAsync(httpContext.Response.Body);
+			output.RootElement.GetProperty("errorCode").GetString().ShouldBe(exception.Code);
+			output.RootElement.GetProperty("data").GetProperty("Reason").GetString().ShouldBe(reason);
+		}
+	}
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
 	public async Task Roll_preview_duplicate_should_include_localized_reason_and_recovery(bool useResultFilter)
 	{
 		var code = StudentOnboardingErrorCodes.RollNumberDuplicate;

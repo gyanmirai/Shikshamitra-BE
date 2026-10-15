@@ -34,10 +34,12 @@ public partial class StudentRecordChangeAppService(
 	public async Task<PagedResultDto<StudentRecordChangeDto>> GetListAsync(StudentRecordChangeQueryDto input)
 	{
 		var studentQuery = await recordScope.ApplyStudentScopeAsync(await students.GetQueryableWithoutAutoIncludesAsync());
+		studentQuery = studentQuery.Where(s => (!input.BoardId.HasValue || s.AcademicBoardId == input.BoardId) && (!input.MediumId.HasValue || s.AcademicMediumId == input.MediumId) && (!input.StandardId.HasValue || s.StandardId == input.StandardId) && (!input.DivisionId.HasValue || s.DivisionId == input.DivisionId));
 		var query = (await changes.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id && studentQuery.Any(s => s.Id == x.StudentId));
 		if (input.StudentId.HasValue) query = query.Where(x => x.StudentId == input.StudentId);
 		if (input.AcademicYearId.HasValue) query = query.Where(x => x.AcademicYearId == input.AcademicYearId);
 		if (!string.IsNullOrEmpty(input.Status)) query = query.Where(x => x.Status == input.Status);
+		if (input.ApprovableOnly) query = await FilterApprovableAsync(query);
 		var count = await AsyncExecuter.CountAsync(query);
 		var items = await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id)
 			.Skip(input.SkipCount).Take(Math.Clamp(input.MaxResultCount, 1, 100)));

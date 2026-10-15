@@ -9,11 +9,16 @@ using ShikshaMitra.Finance.Accounts.Incomes;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Finance.Fees.FeeRefund;
+using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Students;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Identity;
 using Volo.Abp.Uow;
 using Xunit;
 
@@ -177,6 +182,151 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         returned.TotalCount.ShouldBe(2); returned.Items.Sum(x => x.Amount).ShouldBe(0m);
         returned.Items.Count(x => x.SourceStatus == "Awaiting payout").ShouldBe(0);
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Applicant_collection_remains_visible_before_and_after_student_link(bool linked)
+    {
+        var at = await SeedScopeAsync();
+        var accountId = Guid.NewGuid(); var collectionId = Guid.NewGuid(); var receiptId = Guid.NewGuid();
+        var reference = $"M-{Guid.NewGuid():N}"[..20]; var applicant = $"Applicant {Guid.NewGuid():N}";
+        await WithTenantAsync(async services =>
+        {
+            Guid? studentId = linked ? await services.GetRequiredService<IRepository<Student, Guid>>().AsyncExecuter.FirstAsync(
+                (await services.GetRequiredService<IRepository<Student, Guid>>().GetQueryableAsync())
+                    .Where(x => x.AcademicYearId == Factory.SeededAcademicYearId).Select(x => x.Id)) : null;
+            await services.GetRequiredService<IRepository<FinanceFeeAccount, Guid>>().InsertAsync(new FinanceFeeAccount(
+                accountId, Guid.Parse(TestAuthHandler.TestTenantId), Guid.NewGuid(), Guid.NewGuid(), Factory.SeededAcademicYearId,
+                Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededMediumStageId, Factory.SeededStandardId, applicant,
+                studentId: studentId), autoSave: true);
+            await services.GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(new FeeRecordMetadata(
+                collectionId, Guid.Parse(TestAuthHandler.TestTenantId), studentId, Factory.SeededAcademicYearId, 42,
+                reference, FeeCollectionStatus.Paid, financeFeeAccountId: accountId), autoSave: true);
+            var receipt = new FeePaymentReceipt(receiptId)
+            {
+                TenantId = Guid.Parse(TestAuthHandler.TestTenantId), FeeCollectionTransactionId = collectionId,
+                StudentId = studentId, AcademicYearId = Factory.SeededAcademicYearId, ReceiptNumber = reference,
+                ReceiptKind = FeeReceiptKind.FinalFee, TotalPaidAmount = 42, CreationTime = at
+            };
+            receipt.SetFinanceFeeAccount(accountId);
+            await services.GetRequiredService<IRepository<FeePaymentReceipt, Guid>>().InsertAsync(receipt, autoSave: true);
+        });
+        var url = $"/api/accounts/register?academicYearId={Factory.SeededAcademicYearId}&direction=income&source=collection&search={reference}";
+        var page = await ReadPageAsync(url);
+        page.TotalCount.ShouldBe(1); page.Items.Single().FinanceFeeAccountId.ShouldBe(accountId);
+        page.Items.Single().StudentName.ShouldBe(applicant); page.Items.Single().Amount.ShouldBe(42m);
+        (await ReadPageAsync(url + ColumnFilters(new { column = "studentIdentity", type = "contains", value = applicant })))
+            .TotalCount.ShouldBe(1);
+        var legacy = await ReadPageAsync($"/api/accounts/activity?academicYearId={Factory.SeededAcademicYearId}&source=collection&search={reference}");
+        legacy.Items.Single().FinanceFeeAccountId.ShouldBe(accountId);
+        var detailResponse = await Client.GetAsync($"/api/accounts/register/collection/{receiptId}?academicYearId={Factory.SeededAcademicYearId}");
+        detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await detailResponse.Content.ReadAsStringAsync());
+        var detail = await detailResponse.Content.ReadFromJsonAsync<AccountsActivityDetailDto>(JsonOptions);
+        detail!.FinanceFeeAccountId.ShouldBe(accountId); detail.StudentName.ShouldBe(applicant);
+        var categoryResponse = await Client.PostAsJsonAsync($"/api/income-categories?academicYearId={Factory.SeededAcademicYearId}",
+            new { name = $"Merge {Guid.NewGuid():N}" });
+        categoryResponse.EnsureSuccessStatusCode();
+        var categoryId = (await categoryResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        var automaticId = Guid.NewGuid();
+        await WithTenantAsync(async services =>
+        {
+            await services.GetRequiredService<IRepository<Transaction, Guid>>().InsertAsync(Transaction.Automatic(
+                automaticId, Guid.Parse(TestAuthHandler.TestTenantId), Factory.SeededAcademicYearId, categoryId, "Merge collection",
+                null, null, reference, 42m, 0, at, TransactionType.Income, $"collection:{collectionId}", collectionId,
+                page.Items.Single().StudentId, financeFeeAccountId: accountId), autoSave: true);
+        });
+        var confirmed = await ReadPageAsync(url);
+        confirmed.TotalCount.ShouldBe(1); confirmed.Items.Single().Id.ShouldBe(automaticId);
+        confirmed.Items.Single().StudentName.ShouldBe(applicant);
+        (await ReadPageAsync($"/api/accounts/activity?academicYearId={Factory.SeededAcademicYearId}&source=collection&search={reference}"))
+            .TotalCount.ShouldBe(1);
+        var automaticDetail = await Client.GetAsync($"/api/accounts/register/collection/{automaticId}?academicYearId={Factory.SeededAcademicYearId}");
+        automaticDetail.StatusCode.ShouldBe(HttpStatusCode.OK, await automaticDetail.Content.ReadAsStringAsync());
+        (await automaticDetail.Content.ReadFromJsonAsync<AccountsActivityDetailDto>(JsonOptions))!.FinanceFeeAccountId.ShouldBe(accountId);
+        using var restricted = await DivisionScopedClientAsync();
+        var deniedPage = await restricted.GetFromJsonAsync<AccountsActivityPageDto>(url, JsonOptions);
+        deniedPage!.TotalCount.ShouldBe(0);
+        (await restricted.GetAsync($"/api/accounts/register/collection/{receiptId}?academicYearId={Factory.SeededAcademicYearId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await restricted.GetAsync($"/api/accounts/register/collection/{automaticId}?academicYearId={Factory.SeededAcademicYearId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Applicant_refund_pending_and_historical_payout_keep_payer_identity(bool linked)
+    {
+        var at = await SeedScopeAsync(); var refundId = Guid.NewGuid(); var accountId = Guid.NewGuid();
+        var voucher = $"M-{Guid.NewGuid():N}"; var applicant = $"Refund applicant {Guid.NewGuid():N}";
+        await WithTenantAsync(async services =>
+        {
+            var students = services.GetRequiredService<IRepository<Student, Guid>>();
+            Guid? studentId = linked ? await students.AsyncExecuter.FirstAsync((await students.GetQueryableAsync())
+                .Where(x => x.AcademicYearId == Factory.SeededAcademicYearId).Select(x => x.Id)) : null;
+            await services.GetRequiredService<IRepository<FinanceFeeAccount, Guid>>().InsertAsync(new FinanceFeeAccount(
+                accountId, Guid.Parse(TestAuthHandler.TestTenantId), Guid.NewGuid(), Guid.NewGuid(), Factory.SeededAcademicYearId,
+                Factory.SeededBoardId, Factory.SeededMediumId, Factory.SeededMediumStageId, Factory.SeededStandardId, applicant,
+                studentId: studentId), autoSave: true);
+            // Canonical read-model fixtures; no payout commands are executed here.
+            var refund = (FeeRefundRequest)Activator.CreateInstance(typeof(FeeRefundRequest), nonPublic: true)!;
+            foreach (var field in new (string Name, object? Value)[] {
+                ("Id", refundId), ("TenantId", Guid.Parse(TestAuthHandler.TestTenantId)), ("AcademicYearId", Factory.SeededAcademicYearId),
+                ("StudentId", studentId), ("FinanceFeeAccountId", accountId), ("VoucherNumber", voucher),
+                ("Status", FeeRefundStatus.Approved), ("ApprovedAmount", 25m), ("TotalAmount", 25m),
+                ("RefundMethod", "Cash"), ("CreationTime", at) })
+                typeof(FeeRefundRequest).GetProperty(field.Name)!.SetValue(refund, field.Value);
+            await services.GetRequiredService<IRepository<FeeRefundRequest, Guid>>().InsertAsync(refund, autoSave: true);
+        });
+        var url = $"/api/accounts/register?academicYearId={Factory.SeededAcademicYearId}&direction=expense&source=refund&search={voucher}";
+        var pending = await ReadPageAsync(url);
+        pending.Items.Single().FinanceFeeAccountId.ShouldBe(accountId);
+        pending.Items.Single().StudentName.ShouldBe(applicant);
+        pending.Items.Single().SourceStatus.ShouldBe("Awaiting payout");
+        var detailResponse = await Client.GetAsync($"/api/accounts/register/refund/{refundId}?academicYearId={Factory.SeededAcademicYearId}");
+        detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await detailResponse.Content.ReadAsStringAsync());
+        (await detailResponse.Content.ReadFromJsonAsync<AccountsActivityDetailDto>(JsonOptions))!.FinanceFeeAccountId.ShouldBe(accountId);
+        using var restricted = await DivisionScopedClientAsync();
+        (await restricted.GetFromJsonAsync<AccountsActivityPageDto>(url, JsonOptions))!.TotalCount.ShouldBe(0);
+        (await restricted.GetAsync($"/api/accounts/register/refund/{refundId}?academicYearId={Factory.SeededAcademicYearId}"))
+            .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        await WithTenantAsync(async services =>
+        {
+            var refunds = services.GetRequiredService<IRepository<FeeRefundRequest, Guid>>();
+            var refund = await refunds.GetAsync(refundId);
+            typeof(FeeRefundRequest).GetProperty("Status")!.SetValue(refund, FeeRefundStatus.Processed);
+            await refunds.UpdateAsync(refund, autoSave: true);
+            var entry = new FeeRefundAccountingEntry(
+                Guid.NewGuid(), Guid.Parse(TestAuthHandler.TestTenantId), refundId, Guid.NewGuid(), null, null, "Cash", null,
+                25m, false, null, "[]", "Synthetic merge regression", Guid.Parse(TestAuthHandler.TestUserId));
+            typeof(FeeRefundAccountingEntry).GetProperty("PostedAt")!.SetValue(entry, new DateTimeOffset(at));
+            await services.GetRequiredService<IRepository<FeeRefundAccountingEntry, Guid>>().InsertAsync(entry, autoSave: true);
+        });
+        var paid = await ReadPageAsync(url);
+        paid.TotalCount.ShouldBe(1); paid.Items.Single().Amount.ShouldBe(25m);
+        paid.Items.Single().StudentName.ShouldBe(applicant); paid.Items.Single().FinanceFeeAccountId.ShouldBe(accountId);
+        (await restricted.GetFromJsonAsync<AccountsActivityPageDto>(url, JsonOptions))!.TotalCount.ShouldBe(0);
+    }
+
+    private async Task<System.Net.Http.HttpClient> DivisionScopedClientAsync()
+    {
+        var id = Guid.NewGuid();
+        await WithTenantAsync(async services =>
+        {
+            var tenant = Guid.Parse(TestAuthHandler.TestTenantId);
+            (await services.GetRequiredService<IdentityUserManager>().CreateAsync(
+                new IdentityUser(id, $"merge-{id:N}", $"merge-{id:N}@example.test", tenant))).Succeeded.ShouldBeTrue();
+            await services.GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(new UserScopeAssignment(
+                Guid.NewGuid(), tenant, userId: id, academicYearId: Factory.SeededAcademicYearId, educationBoardId: Factory.SeededBoardId,
+                educationMediumId: Factory.SeededMediumId, educationMediumStageId: Factory.SeededMediumStageId,
+                standardId: Factory.SeededStandardId, divisionId: Factory.SeededDivisionId), autoSave: true);
+        });
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, id.ToString());
+        client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "Teacher");
+        return client;
+    }
+
     private static string ColumnFilters(params object[] filters) => "&filters=" +
         Uri.EscapeDataString(System.Text.Json.JsonSerializer.Serialize(filters));
 

@@ -31,7 +31,8 @@ public class FeeReceiptDetailDto
 
     // ── Student ───────────────────────────────────────────────────────────────
 
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public int? GrNo { get; set; }
     public string? RollNo { get; set; }
@@ -44,6 +45,8 @@ public class FeeReceiptDetailDto
     public Guid BoardId { get; set; }
     public Guid EducationMediumId { get; set; }
     public string? AcademicYearName { get; set; }
+    public DateTime? AcademicYearStartDate { get; set; }
+    public DateTime? AcademicYearEndDate { get; set; }
     public string? BoardName { get; set; }
     public string? MediumName { get; set; }
 

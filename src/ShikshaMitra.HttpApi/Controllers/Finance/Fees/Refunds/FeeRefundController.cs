@@ -34,9 +34,11 @@ public class FeeRefundController(
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]
     [ProducesResponseType(typeof(RefundEligibilityDto), StatusCodes.Status200OK)]
     public Task<RefundEligibilityDto> GetEligibilityAsync(
-        [FromQuery] Guid studentId,
-        [FromQuery] Guid academicYearId)
-        => feeRefundAppService.GetEligibilityAsync(studentId, academicYearId);
+        [FromQuery] Guid? studentId,
+        [FromQuery] Guid academicYearId,
+        [FromQuery] Guid? financeFeeAccountId = null,
+        [FromQuery] Guid? originalReceiptId = null)
+        => feeRefundAppService.GetEligibilityAsync(studentId, academicYearId, financeFeeAccountId, originalReceiptId);
 
     [HttpPost("preview")]
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View)]

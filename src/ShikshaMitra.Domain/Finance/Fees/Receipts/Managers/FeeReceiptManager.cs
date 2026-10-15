@@ -44,7 +44,7 @@ public class FeeReceiptManager(
 
 	public FeePaymentReceipt CreateReceipt(
 		Guid feeCollectionTransactionId,
-		Guid studentId,
+		Guid? studentId,
 		Guid academicYearId,
 		Guid boardId,
 		Guid educationMediumId,
@@ -53,13 +53,15 @@ public class FeeReceiptManager(
 		double totalPaidAmount,
 		string receiptNumber,
 		string? remarks = null,
-		Guid? receiptBookId = null)
+		Guid? receiptBookId = null,
+		Guid? financeFeeAccountId = null)
 	{
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
 		var verificationStatus = kind is FeeReceiptKind.ProvisionalFee or FeeReceiptKind.ProvisionalCharge
 			? FeeReceiptVerificationStatus.PendingVerification
 			: FeeReceiptVerificationStatus.NotApplicable;
 
-		return new FeePaymentReceipt(GuidGenerator.Create())
+		var receipt = new FeePaymentReceipt(GuidGenerator.Create())
 		{
 			TenantId                   = currentTenant.Id,
 			FeeCollectionTransactionId = feeCollectionTransactionId,
@@ -76,6 +78,8 @@ public class FeeReceiptManager(
 			Remarks                    = remarks,
 			ReceiptBookId              = receiptBookId,
 		};
+		if (financeFeeAccountId.HasValue) receipt.SetFinanceFeeAccount(financeFeeAccountId.Value);
+		return receipt;
 	}
 
 	/// <summary>
@@ -85,7 +89,7 @@ public class FeeReceiptManager(
 	/// </summary>
 	public async Task<List<FeePaymentReceipt>> CreateReceiptsForTransactionAsync(
 		Guid feeCollectionTransactionId,
-		Guid studentId,
+		Guid? studentId,
 		Guid academicYearId,
 		Guid boardId,
 		Guid educationMediumId,
@@ -93,7 +97,8 @@ public class FeeReceiptManager(
 		double chargeLinesTotal,
 		IEnumerable<PaymentMethodEnum> paymentMethods,
 		bool? bankReceiptConfirmed = null,
-		string? remarks = null)
+		string? remarks = null,
+		Guid? financeFeeAccountId = null)
 	{
 		var receipts = new List<FeePaymentReceipt>();
 		var methods = paymentMethods.ToList();
@@ -104,7 +109,7 @@ public class FeeReceiptManager(
 			var number = await GenerateReceiptNumberAsync(kind);
 			receipts.Add(CreateReceipt(
 				feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,
-				FeeReceiptScope.Fee, kind, feeLinesTotal, number, remarks));
+				FeeReceiptScope.Fee, kind, feeLinesTotal, number, remarks, financeFeeAccountId: financeFeeAccountId));
 		}
 
 		if (chargeLinesTotal > 0)
@@ -115,7 +120,7 @@ public class FeeReceiptManager(
 			var number = await GenerateReceiptNumberAsync(chargeKind);
 			receipts.Add(CreateReceipt(
 				feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,
-				FeeReceiptScope.Charge, chargeKind, chargeLinesTotal, number, remarks));
+				FeeReceiptScope.Charge, chargeKind, chargeLinesTotal, number, remarks, financeFeeAccountId: financeFeeAccountId));
 		}
 
 		return receipts;

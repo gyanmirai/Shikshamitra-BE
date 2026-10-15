@@ -80,7 +80,7 @@ public class LateFeeWaiverAppService(
 		var dueFee = await dueFeeRepository.FindAsync(dueFeeId);
 		if (dueFee is null)
 			throw new BusinessException(LateFeeWaiverErrorCodes.DueFeeNotFound).WithData("dueFeeId", dueFeeId);
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(dueFee.StudentId);
+		await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(dueFee.StudentId, dueFee.FinanceFeeAccountId);
 		var query = await waiverRepository.GetQueryableAsync();
 		var rows = query.Where(w => w.DueFeeId == dueFeeId).OrderByDescending(w => w.CreationTime).ToList();
 		return await ToDtosAsync(rows);
@@ -99,10 +99,13 @@ public class LateFeeWaiverAppService(
 		{
 			throw new BusinessException(LateFeeWaiverErrorCodes.DueFeeNotFound).WithData("dueFeeId", input.DueFeeId);
 		}
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(dueFee.StudentId);
+		await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(dueFee.StudentId, dueFee.FinanceFeeAccountId);
+		if (!dueFee.StudentId.HasValue)
+			throw new BusinessException(LateFeeWaiverErrorCodes.NoCollectionPolicyResolved)
+				.WithData("reason", "Waivers require a Student fee assignment.");
 
-		var feeStructureId = await ResolveFeeStructureIdAsync(dueFee.StudentId);
-		var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId, feeStructureId);
+		var feeStructureId = await ResolveFeeStructureIdAsync(dueFee.StudentId.Value);
+		var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId.Value, feeStructureId);
 		if (effective.Policy is null)
 		{
 			throw new BusinessException(LateFeeWaiverErrorCodes.NoCollectionPolicyResolved).WithData("studentId", dueFee.StudentId);
@@ -127,7 +130,7 @@ public class LateFeeWaiverAppService(
 		var entity = new LateFeeWaiverApplication(
 			GuidGenerator.Create(),
 			CurrentTenant.Id,
-			dueFee.StudentId,
+			dueFee.StudentId.Value,
 			dueFee.Id,
 			policy.Id,
 			policy.AcademicYearId,

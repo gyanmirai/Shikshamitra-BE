@@ -8,6 +8,7 @@ using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Incomes;
 using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Transactions.Dtos;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -29,8 +30,10 @@ public partial class TransactionAppService(
 		await CheckPermissionAsync(transactionType, "View");
 		if (input.Page < 1 || input.PageSize is < 1 or > 100)
 			throw new BusinessException(TransactionErrorCodes.InvalidPaging);
-		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(
-				academicYearId, null, null, null, null))
+		var scopedAccountIds = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+		var accounts = await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().GetQueryableAsync();
+		if (!await financeScopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null) &&
+			!await AsyncExecuter.AnyAsync(accounts.Where(a => a.AcademicYearId == academicYearId && scopedAccountIds.Contains(a.Id))))
 		{
 			return new TransactionListResponse
 			{
@@ -46,7 +49,8 @@ public partial class TransactionAppService(
 		var joinedQuery =
 			from t in transactionQuery
 			join c in categoryQuery on t.CategoryId equals c.Id
-			where t.AcademicYearId == academicYearId && t.TransactionType == transactionType && t.IsConfirmed && (t.StudentId == null || scopedStudentIds.Contains(t.StudentId.Value))
+			where t.AcademicYearId == academicYearId && t.TransactionType == transactionType && t.IsConfirmed &&
+				(t.FinanceFeeAccountId.HasValue ? scopedAccountIds.Contains(t.FinanceFeeAccountId.Value) : t.StudentId == null || scopedStudentIds.Contains(t.StudentId.Value))
 			select new { Transaction = t, Category = c };
 
 		if (!input.Search.IsNullOrWhiteSpace())
@@ -128,17 +132,18 @@ public partial class TransactionAppService(
 	{
 		await CheckPermissionAsync(transactionType, "View");
 		var transaction = await transactionRepository.GetAsync(transactionId);
-        if (transaction.StudentId is { } studentId) await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
-		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-			transaction.AcademicYearId, null, null, null, null);
+        if (transaction.FinanceFeeAccountId.HasValue || transaction.StudentId.HasValue)
+			await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(transaction.StudentId, transaction.FinanceFeeAccountId);
+		await EnsureTransactionYearAsync(transaction);
 		EnsureTransactionType(transaction, transactionType);
 
 		var category = await transactionCategoryRepository.GetAsync(transaction.CategoryId);
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		var scopedAccountIds = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
         var transactionQuery  = await transactionRepository.GetQueryableAsync();
 		var relatedTransactions = await AsyncExecuter.ToListAsync(
 			transactionQuery.Where(x =>
-				x.IsConfirmed && (x.StudentId == null || scopedStudentIds.Contains(x.StudentId.Value)) && x.CategoryId == transaction.CategoryId &&
+				x.IsConfirmed && (x.FinanceFeeAccountId.HasValue ? scopedAccountIds.Contains(x.FinanceFeeAccountId.Value) : x.StudentId == null || scopedStudentIds.Contains(x.StudentId.Value)) && x.CategoryId == transaction.CategoryId &&
 				x.AcademicYearId == transaction.AcademicYearId &&
 				x.TransactionType == transactionType));
 
@@ -160,9 +165,9 @@ public partial class TransactionAppService(
 		await CheckPermissionAsync(transactionType, "Add");
 		Transaction.EnsureValidMoneyAndMethod(input.Amount, input.PaymentMethod);
 		var transaction = await transactionRepository.GetAsync(transactionId);
-        if (transaction.StudentId is { } studentId) await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
-		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-			transaction.AcademicYearId, null, null, null, null);
+        if (transaction.FinanceFeeAccountId.HasValue || transaction.StudentId.HasValue)
+			await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(transaction.StudentId, transaction.FinanceFeeAccountId);
+		await EnsureTransactionYearAsync(transaction);
 		EnsureTransactionType(transaction, transactionType);
 
 		var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
@@ -183,9 +188,9 @@ public partial class TransactionAppService(
 	{
 		await CheckPermissionAsync(transactionType, "Delete");
 		var transaction = await transactionRepository.GetAsync(transactionId);
-        if (transaction.StudentId is { } studentId) await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
-		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-			transaction.AcademicYearId, null, null, null, null);
+        if (transaction.FinanceFeeAccountId.HasValue || transaction.StudentId.HasValue)
+			await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(transaction.StudentId, transaction.FinanceFeeAccountId);
+		await EnsureTransactionYearAsync(transaction);
 		EnsureTransactionType(transaction, transactionType);
 		if (transaction.IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");
         await transactionRepository.DeleteAsync(transaction, autoSave: true);
@@ -204,6 +209,10 @@ public partial class TransactionAppService(
 				.WithData("CategoryId", category.Id);
 		}
 	}
+
+	private Task EnsureTransactionYearAsync(Transaction transaction) => transaction.FinanceFeeAccountId.HasValue
+		? financeScopeAccessService.EnsureCollectionYearAccessibleAsync(transaction.AcademicYearId)
+		: financeScopeAccessService.EnsureAcademicContextAccessibleAsync(transaction.AcademicYearId, null, null, null, null);
 
 	private Task CheckPermissionAsync(TransactionType type, string action)
 	{

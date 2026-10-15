@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -32,7 +32,9 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
         string? sorting = null,
         IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<FeeRefundColumnFilter>? columnFilters = null);
+        IReadOnlyCollection<FeeRefundColumnFilter>? columnFilters = null,
+        IQueryable<Guid>? scopedAccountIdsQuery = null,
+        Guid? financeFeeAccountId = null);
 
     /// <summary>Loads a single request with its <see cref="FeeRefundRequest.Lines"/> collection.</summary>
     Task<FeeRefundRequest?> FindWithLinesAsync(Guid id, CancellationToken cancellationToken = default);
@@ -57,6 +59,8 @@ public interface IFeeRefundRepository : IRepository<FeeRefundRequest, Guid>
         CancellationToken cancellationToken = default);
 
     Task<decimal> GetStudentYearCommittedAmountAsync(Guid studentId, Guid academicYearId,
+        Guid? excludingRequestId = null, CancellationToken cancellationToken = default);
+    Task<decimal> GetAccountYearCommittedAmountAsync(Guid financeFeeAccountId, Guid academicYearId,
         Guid? excludingRequestId = null, CancellationToken cancellationToken = default);
 
     /// <summary>Total count of all refund requests (used for voucher number generation).</summary>

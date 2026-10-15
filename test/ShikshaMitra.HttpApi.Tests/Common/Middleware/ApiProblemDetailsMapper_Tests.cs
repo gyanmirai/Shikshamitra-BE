@@ -1,6 +1,9 @@
 using Microsoft.AspNetCore.Http;
 using ShikshaMitra.Common.Middleware;
 using ShikshaMitra.HR;
+using ShikshaMitra.Finance.Fees.Collections;
+using ShikshaMitra.Security.Roles;
+using ShikshaMitra.TenantSettings.AcademicSetups;
 using Shouldly;
 using Xunit;
 
@@ -8,6 +11,20 @@ namespace ShikshaMitra.Common.Tests.Middleware;
 
 public class ApiProblemDetailsMapper_Tests
 {
+	[Theory]
+	[InlineData(RoleErrorCodes.AssignedToUsers)]
+	[InlineData(RoleErrorCodes.ReferencedByEmployees)]
+	[InlineData(TenantSettingsDomainErrorCodes.DuplicateStandardName)]
+	[InlineData(TenantSettingsDomainErrorCodes.DuplicateDivisionName)]
+	[InlineData(FeeCollectionErrorCodes.IdempotencyConflict)]
+	public void Conflict_errors_should_resolve_and_normalize_to_409(string errorCode)
+	{
+		ApiProblemDetailsMapper.ResolveBusinessStatusCode(errorCode)
+			.ShouldBe(StatusCodes.Status409Conflict);
+		ApiProblemDetailsMapper.NormalizeStatusCode(StatusCodes.Status400BadRequest, errorCode)
+			.ShouldBe(StatusCodes.Status409Conflict);
+	}
+
 	[Fact]
 	public void ResolveBusinessStatusCode_Should_Return_403_For_Known_Authz_Business_Codes()
 	{

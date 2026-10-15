@@ -66,7 +66,19 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     // ── Student / context ─────────────────────────────────────────────────────
 
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; private set; }
+
+    public void SetFinanceFeeAccount(Guid accountId)
+    {
+        ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.Validate(StudentId, accountId);
+        if (FinanceFeeAccountId.HasValue && FinanceFeeAccountId != accountId)
+            throw new BusinessException(ShikshaMitra.Finance.Fees.Collections.FinanceFeeAccountErrorCodes.AssignmentConflict);
+        FinanceFeeAccountId = accountId;
+    }
+
+    public void LinkStudent(Guid studentId) => StudentId =
+        ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
     public Guid AcademicYearId { get; set; }
 
     /// <summary>Denormalized from student at creation for fast list filtering.</summary>

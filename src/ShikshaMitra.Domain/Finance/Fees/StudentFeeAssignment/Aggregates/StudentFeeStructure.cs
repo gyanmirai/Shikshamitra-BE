@@ -13,6 +13,10 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 
 	public Guid StudentId { get; private set; }
+	/// <summary>Original applicant collection account; student assignments still require a real student.</summary>
+	public Guid? FinanceFeeAccountId { get; private set; }
+	public void BindFinanceFeeAccount(Guid accountId) => FinanceFeeAccountId =
+		ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.BindAccount(FinanceFeeAccountId, accountId);
 
 	public Guid FeeStructureStandardId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
@@ -50,10 +54,12 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Guid? tenantId,
 		Guid studentId,
 		Guid feeStructureStandardId,
-		Guid academicYearId = default) : base(id)
+		Guid academicYearId = default,
+		Guid? financeFeeAccountId = null) : base(id)
 	{
 		TenantId = tenantId;
 		StudentId = studentId;
+		FinanceFeeAccountId = financeFeeAccountId;
 		FeeStructureStandardId = feeStructureStandardId;
 		AcademicYearId = academicYearId;
 		ConcessionFeeHeadScope = ConcessionFeeHeadScope.EntireFeeStructure;
@@ -80,10 +86,12 @@ public class StudentFeeStructure : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		ChargePeriodSource chargePeriodSource = ChargePeriodSource.AcademicYear,
 		Guid? chargePeriodSourceReferenceId = null,
 		string? chargePeriodOverrideReason = null,
-		string? assignmentRequestFingerprint = null) : base(id)
+		string? assignmentRequestFingerprint = null,
+		Guid? financeFeeAccountId = null) : base(id)
 	{
 		TenantId = tenantId;
 		StudentId = studentId;
+		FinanceFeeAccountId = financeFeeAccountId;
 		FeeStructureStandardId = feeStructureStandardId;
 		AcademicYearId = academicYearId;
 		ConcessionPolicyId = concessionPolicyId;

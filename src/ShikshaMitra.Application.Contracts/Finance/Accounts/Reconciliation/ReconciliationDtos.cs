@@ -20,7 +20,8 @@ public class ReconciliationListItemDto
 	public string ReceiptNumber { get; set; } = string.Empty;
 
     // ── Student ──────────────────────────────────────────────────────────
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public int? GrNumber { get; set; }
     public int? RollNumber { get; set; }

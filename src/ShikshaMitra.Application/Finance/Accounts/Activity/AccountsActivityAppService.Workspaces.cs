@@ -20,6 +20,7 @@ public partial class AccountsActivityAppService
         public Guid Id { get; set; }
         public Guid SourceId { get; set; }
         public Guid? StudentId { get; set; }
+        public Guid? FinanceFeeAccountId { get; set; }
         public Guid? CategoryId { get; set; }
         public Guid? BankAccountId { get; set; }
         public string StudentName { get; set; } = "";
@@ -55,7 +56,10 @@ public partial class AccountsActivityAppService
             throw new BusinessException(AccountsRegisterErrorCodes.InvalidFilter);
         var rowFilters = WorkspaceFilters(tableQuery.Filters.Where(f => f.Column != "counterparty"));
         var result = new AccountsActivityPageDto { Page = input.Page, PageSize = input.PageSize };
-        if (!await scopeAccessService.IsAcademicContextAccessibleAsync(input.AcademicYearId, null, null, null, null)) return result;
+        var scopedAccounts = await scopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+        var accounts = await accountRepository.GetQueryableAsync();
+        if (!await scopeAccessService.IsAcademicContextAccessibleAsync(input.AcademicYearId, null, null, null, null) &&
+            !await AsyncExecuter.AnyAsync(accounts.Where(a => a.AcademicYearId == input.AcademicYearId && scopedAccounts.Contains(a.Id)))) return result;
         var year = await academicYears.GetAsync(input.AcademicYearId);
         var period = AccountsRegisterPeriod.Resolve(year.StartDate, year.EndDate, input.Month, input.Year);
         var profiles = await WorkspaceStudentsAsync(input.AcademicYearId);
@@ -74,7 +78,8 @@ public partial class AccountsActivityAppService
             var manualParties = await AsyncExecuter.ToListAsync(transactions.Where(t =>
                 t.AcademicYearId == input.AcademicYearId && t.TransactionType == type && t.IsConfirmed &&
                 t.SourceKey == null && t.PaymentDate >= period.StartUtc && t.PaymentDate < period.EndUtc &&
-                (t.StudentId == null || scopedStudents.Contains(t.StudentId.Value)))
+                ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId.Value)) ||
+                 (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId.Value)))))
                 .Select(t => new { t.Id, t.ExtraProperties }));
             var partyRows = manualParties.Select(t => new WorkspaceRecord
             {
@@ -95,12 +100,15 @@ public partial class AccountsActivityAppService
                     from c in categoryGroup.DefaultIfEmpty()
                     join s in students on t.StudentId equals (Guid?)s.Id into studentGroup
                     from s in studentGroup.DefaultIfEmpty()
+                    join a in accounts on t.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
+                    from a in accountGroup.DefaultIfEmpty()
                     where t.AcademicYearId == input.AcademicYearId && t.TransactionType == type && t.IsConfirmed &&
-                        (t.StudentId == null || scopedStudents.Contains(t.StudentId.Value))
+                        ((t.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(t.FinanceFeeAccountId.Value)) ||
+                         (!t.FinanceFeeAccountId.HasValue && (t.StudentId == null || scopedStudents.Contains(t.StudentId.Value))))
                     select new WorkspaceRecord
                     {
-                        Id = t.Id, SourceId = t.SourceId ?? t.Id, StudentId = t.StudentId,
-                        StudentName = s == null ? t.Name : ((s.FirstName ?? "") + " " + (s.MiddleName == null || s.MiddleName == "" ? "" : s.MiddleName + " ") + (s.LastName ?? "")).Trim(),
+                        Id = t.Id, SourceId = t.SourceId ?? t.Id, StudentId = t.StudentId, FinanceFeeAccountId = t.FinanceFeeAccountId,
+                        StudentName = a != null ? a.ApplicantName : s == null ? t.Name : ((s.FirstName ?? "") + " " + (s.MiddleName == null || s.MiddleName == "" ? "" : s.MiddleName + " ") + (s.LastName ?? "")).Trim(),
                         CategoryId = t.CategoryId, CategoryName = t.CategoryNameSnapshot ?? (c == null ? "Unavailable category" : c.Name),
                         BankAccountId = t.BankAccountId, BankLabel = t.BankLabelSnapshot ?? "",
                         Reference = t.Name, Amount = t.Amount, Date = t.PaymentDate,
@@ -113,15 +121,20 @@ public partial class AccountsActivityAppService
             var collections = await collectionRepository.GetQueryableAsync();
             queries.Add(from r in receipts
                         join c in collections on r.FeeCollectionTransactionId equals c.Id
-                        join s in students on r.StudentId equals s.Id
-                        where r.AcademicYearId == input.AcademicYearId && scopedStudents.Contains(r.StudentId) &&
+                        join s in students on r.StudentId equals (Guid?)s.Id into studentGroup
+                        from s in studentGroup.DefaultIfEmpty()
+                        join a in accounts on r.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
+                        from a in accountGroup.DefaultIfEmpty()
+                        where r.AcademicYearId == input.AcademicYearId &&
+                            ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId.Value)) ||
+                             (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId.Value))) &&
                             !automatic.Any(t => t.SourceId == c.Id) &&
                             (c.Status == FeeCollectionStatus.Paid || c.Status == FeeCollectionStatus.Partial) &&
                             (r.ReceiptKind == FeeReceiptKind.FinalFee || r.ReceiptKind == FeeReceiptKind.FinalCharge)
                         select new WorkspaceRecord
                         {
-                            Id = r.Id, SourceId = c.Id, StudentId = r.StudentId,
-                            StudentName = ((s.FirstName ?? "") + " " + (s.MiddleName == null || s.MiddleName == "" ? "" : s.MiddleName + " ") + (s.LastName ?? "")).Trim(),
+                            Id = r.Id, SourceId = c.Id, StudentId = r.StudentId, FinanceFeeAccountId = r.FinanceFeeAccountId,
+                            StudentName = a != null ? a.ApplicantName : s == null ? "" : ((s.FirstName ?? "") + " " + (s.MiddleName == null || s.MiddleName == "" ? "" : s.MiddleName + " ") + (s.LastName ?? "")).Trim(),
                             CategoryId = null, CategoryName = "", BankAccountId = null, BankLabel = "",
                             Reference = r.ReceiptNumber, Amount = (decimal)r.TotalPaidAmount,
                             Date = r.CreationTime, Source = "Collection", Status = "Received"
@@ -132,14 +145,19 @@ public partial class AccountsActivityAppService
             var refunds = await refundRepository.GetQueryableAsync();
             var entries = await refundEntryRepository.GetQueryableAsync();
             queries.Add(from r in refunds
-                        join s in students on r.StudentId equals s.Id
-                        where r.AcademicYearId == input.AcademicYearId && scopedStudents.Contains(r.StudentId) &&
+                        join s in students on r.StudentId equals (Guid?)s.Id into studentGroup
+                        from s in studentGroup.DefaultIfEmpty()
+                        join a in accounts on r.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
+                        from a in accountGroup.DefaultIfEmpty()
+                        where r.AcademicYearId == input.AcademicYearId &&
+                            ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId.Value)) ||
+                             (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId.Value))) &&
                             (r.Status == FeeRefundStatus.Approved || r.Status == FeeRefundStatus.Processing) &&
                             !entries.Any(e => e.RefundRequestId == r.Id) && !automatic.Any(t => t.SourceId == r.Id)
                         select new WorkspaceRecord
                         {
-                            Id = r.Id, SourceId = r.Id, StudentId = r.StudentId,
-                            StudentName = ((s.FirstName ?? "") + " " + (s.MiddleName == null || s.MiddleName == "" ? "" : s.MiddleName + " ") + (s.LastName ?? "")).Trim(),
+                            Id = r.Id, SourceId = r.Id, StudentId = r.StudentId, FinanceFeeAccountId = r.FinanceFeeAccountId,
+                            StudentName = a != null ? a.ApplicantName : s == null ? "" : ((s.FirstName ?? "") + " " + (s.MiddleName == null || s.MiddleName == "" ? "" : s.MiddleName + " ") + (s.LastName ?? "")).Trim(),
                             CategoryId = r.ExpenseCategoryId, CategoryName = r.ExpenseCategoryName ?? "",
                             BankAccountId = r.PayingBankAccountId, BankLabel = r.PayingBankLabel ?? "",
                             Reference = r.VoucherNumber, Amount = r.ApprovedAmount,
@@ -149,16 +167,21 @@ public partial class AccountsActivityAppService
             // already tenant/year/student-scoped fallback slice for SQLite/PostgreSQL parity.
             var legacy = await AsyncExecuter.ToListAsync(from e in entries
                 join r in refunds on e.RefundRequestId equals r.Id
-                join s in students on r.StudentId equals s.Id
-                where r.AcademicYearId == input.AcademicYearId && scopedStudents.Contains(r.StudentId) &&
+                join s in students on r.StudentId equals (Guid?)s.Id into studentGroup
+                from s in studentGroup.DefaultIfEmpty()
+                join a in accounts on r.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
+                from a in accountGroup.DefaultIfEmpty()
+                where r.AcademicYearId == input.AcademicYearId &&
+                    ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId.Value)) ||
+                     (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId.Value))) &&
                     !automatic.Any(t => t.SourceId == r.Id)
                 select new { e.Id, e.RefundRequestId, e.Amount, e.IsCorrection, e.PostedAt, e.BankAccountId,
-                    r.StudentId, r.VoucherNumber, r.ExpenseCategoryId, r.ExpenseCategoryName, r.PayingBankLabel,
-                    s.FirstName, s.MiddleName, s.LastName });
+                    r.StudentId, r.FinanceFeeAccountId, r.VoucherNumber, r.ExpenseCategoryId, r.ExpenseCategoryName, r.PayingBankLabel,
+                    StudentName = a != null ? a.ApplicantName : s == null ? "" : ((s.FirstName ?? "") + " " + (s.MiddleName == null || s.MiddleName == "" ? "" : s.MiddleName + " ") + (s.LastName ?? "")).Trim() });
             historicalRows.AddRange(legacy.Select(x => new WorkspaceRecord
             {
-                Id = x.Id, SourceId = x.RefundRequestId, StudentId = x.StudentId,
-                StudentName = string.Join(" ", new[] { x.FirstName, x.MiddleName, x.LastName }.Where(n => !string.IsNullOrWhiteSpace(n))),
+                Id = x.Id, SourceId = x.RefundRequestId, StudentId = x.StudentId, FinanceFeeAccountId = x.FinanceFeeAccountId,
+                StudentName = x.StudentName,
                 CategoryId = x.ExpenseCategoryId, CategoryName = x.ExpenseCategoryName ?? "",
                 BankAccountId = x.BankAccountId, BankLabel = x.PayingBankLabel ?? "",
                 Reference = x.VoucherNumber, Amount = x.IsCorrection ? -x.Amount : x.Amount,
@@ -213,7 +236,7 @@ public partial class AccountsActivityAppService
         result.Items = OrderWorkspace(rows.AsQueryable(), sortBy, input.SortDescending)
             .Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).Select(x => new AccountsActivityRowDto
             {
-                Id = x.Id, SourceId = x.SourceId, StudentId = x.StudentId, StudentName = x.StudentName.Trim(),
+                Id = x.Id, SourceId = x.SourceId, StudentId = x.StudentId, FinanceFeeAccountId = x.FinanceFeeAccountId, StudentName = x.StudentName.Trim(),
                 GrNumber = string.IsNullOrEmpty(x.GrNumber) ? null : x.GrNumber, ClassDivision = x.ClassDivision,
                 CategoryId = x.CategoryId, CategoryName = x.CategoryName, BankAccountId = x.BankAccountId,
                 BankLabel = x.BankLabel, Reference = x.Reference, Source = x.Source, SourceStatus = x.Status,
@@ -241,8 +264,8 @@ public partial class AccountsActivityAppService
         IOrderedQueryable<WorkspaceRecord> ordered = column switch
         {
             "reference" => descending ? query.OrderByDescending(x => x.Reference) : query.OrderBy(x => x.Reference),
-            "studentIdentity" => descending ? query.OrderByDescending(x => x.StudentId == null ? "" : x.StudentName + (x.GrNumber == "" ? "" : " (" + x.GrNumber + ")")) :
-                query.OrderBy(x => x.StudentId == null ? "" : x.StudentName + (x.GrNumber == "" ? "" : " (" + x.GrNumber + ")")),
+            "studentIdentity" => descending ? query.OrderByDescending(x => x.StudentId == null && x.FinanceFeeAccountId == null ? "" : x.StudentName + (x.GrNumber == "" ? "" : " (" + x.GrNumber + ")")) :
+                query.OrderBy(x => x.StudentId == null && x.FinanceFeeAccountId == null ? "" : x.StudentName + (x.GrNumber == "" ? "" : " (" + x.GrNumber + ")")),
             "classDivision" => descending ? query.OrderByDescending(x => x.ClassDivision) : query.OrderBy(x => x.ClassDivision),
             "categoryName" => descending ? query.OrderByDescending(x => x.CategoryName) : query.OrderBy(x => x.CategoryName),
             "bankLabel" => descending ? query.OrderByDescending(x => x.BankLabel) : query.OrderBy(x => x.BankLabel),

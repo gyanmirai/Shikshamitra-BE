@@ -8,16 +8,24 @@ using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
-public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
+public partial class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	private const string FeeSelectionProperty = "AdmissionFeeSelection";
+	public void RecordFinanceFeePayment(Guid accountId)
+	{
+		if (accountId == Guid.Empty || GetFeeSelection() == null) throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState);
+		this.SetProperty("FinanceFeeAccountId", accountId.ToString());
+		this.SetProperty("HasFinanceFeePayment", true);
+	}
+
+	public bool HasFinanceFeePayment => this.GetProperty<bool>("HasFinanceFeePayment");
 	public AdmissionFeeSelectionSnapshot? GetFeeSelection() =>
 		this.GetProperty<string>(FeeSelectionProperty) is string json
 			? JsonSerializer.Deserialize<AdmissionFeeSelectionSnapshot>(json) : null;
 
 	public void SaveFeeSelection(AdmissionFeeSelectionSnapshot selection, bool hasPaymentEvidence)
 	{
-		if (hasPaymentEvidence) throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked,
+		if (hasPaymentEvidence || HasFinanceFeePayment) throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked,
 			"Payment evidence already exists. Ask Finance to review a correction or refund.");
 		if (Status is AdmissionApplicationStatus.Withdrawn or AdmissionApplicationStatus.Rejected or AdmissionApplicationStatus.OfferDeclined or
 			AdmissionApplicationStatus.AdmissionFinalized or AdmissionApplicationStatus.Enrolled)
@@ -42,6 +50,15 @@ public class AdmissionApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void SaveOnboardingFeeSelection(AdmissionFeeSelectionSnapshot selection)
 	{
+		if (HasFinanceFeePayment)
+		{
+			var saved = GetFeeSelection();
+			if (saved == null || saved.StructureId != selection.StructureId || saved.RevisionNumber != selection.RevisionNumber ||
+				!saved.Heads.OrderBy(h => h.FeeHeadId).SequenceEqual(selection.Heads.OrderBy(h => h.FeeHeadId)))
+				throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked, "Payment evidence already exists. Ask Finance to review a correction or refund.");
+			ConfirmOnboardingFeeSelection(selection.SavedBy, selection.SavedAt);
+			return;
+		}
 		if (Status != AdmissionApplicationStatus.AdmissionFinalized || !OnboardingCaseId.HasValue || !StudentId.HasValue ||
 			selection.StructureId == Guid.Empty || selection.SavedBy == Guid.Empty || selection.Heads.Count == 0)
 			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState);

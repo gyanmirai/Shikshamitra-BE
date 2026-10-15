@@ -138,9 +138,9 @@ public partial class StudentFeeStructureAppService(
 			Assignment = snapshot };
 	}
 
-	private static void ValidateInput(AssignStudentFeeStructureDto input)
+	private static void ValidateInput(AssignStudentFeeStructureDto input, bool admissionContext = false)
 	{
-		if (input.StudentId == Guid.Empty || input.AcademicYearId == Guid.Empty || input.StandardFeeStructureId == Guid.Empty ||
+		if ((!admissionContext && input.StudentId == Guid.Empty) || input.AcademicYearId == Guid.Empty || input.StandardFeeStructureId == Guid.Empty ||
 			input.SelectedOptionalFeeHeadIds == null || input.FeeHeadDetails == null || input.ServicePeriods == null || input.VariableFeeHeads == null ||
 			input.FeeHeadDetails.Any(x => x == null) || input.ServicePeriods.Any(x => x == null) || input.VariableFeeHeads.Any(x => x == null) ||
 			input.VariableFeeHeads.Count > 200 || input.SelectedOptionalFeeHeadIds.Count > 200 || input.FeeHeadDetails.Count > 200 || input.ServicePeriods.Count > 200 ||

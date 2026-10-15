@@ -18,7 +18,8 @@ public class FeeCollectionDetailsDto
 /// <summary>Student identity and enrolment context for a fee collection record.</summary>
 public class StudentInfoDto
 {
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+	public Guid? FinanceFeeAccountId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public string GrNo { get; set; } = string.Empty;
     public string RollNo { get; set; } = string.Empty;

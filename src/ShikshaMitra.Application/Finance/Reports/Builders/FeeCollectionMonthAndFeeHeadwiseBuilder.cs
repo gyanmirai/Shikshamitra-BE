@@ -18,13 +18,15 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
     IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
     IRepository<DueFee, Guid> dueFeeRepository,
     IRepository<FeeHead, Guid> feeHeadRepository,
-    IAsyncQueryableExecuter asyncExecuter)
+    IAsyncQueryableExecuter asyncExecuter,
+    FinanceReportPayerQueryService payerService)
     : IFinanceReportBuilder, ITransientDependency
 {
     public string ReportType => FinanceReportTypes.FeeCollectionMonthAndFeeHeadwise;
 
     public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
+        var payers = await payerService.GetPayersAsync(request.Filters, executionScope);
         var targetMonths = request.Filters.Months != null && request.Filters.Months.Any()
             ? request.Filters.Months
             : Enumerable.Range(1, 12).ToList();
@@ -48,7 +50,7 @@ public class FeeCollectionMonthAndFeeHeadwiseBuilder(
 
         var academicYearIds = request.Filters.AcademicYearIds ?? [];
         var scopedMetadataIds = await asyncExecuter.ToListAsync(
-            (await feeRecordRepository.GetQueryableAsync())
+            FinanceReportPayerQueryService.FilterCollections(await feeRecordRepository.GetQueryableAsync(), payers)
                 .Where(metadata => academicYearIds.Contains(metadata.AcademicYearId))
                 .Select(metadata => metadata.Id));
 

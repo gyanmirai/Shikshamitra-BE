@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Communication;
 using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -22,6 +23,7 @@ public class AdmissionInquiryAppService(
 	IRepository<AdmissionApplication, Guid> applicationRepository,
 	IRepository<AdmissionCycle, Guid> cycleRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
+	IRepository<Standard, Guid> standardRepository,
 	IRepository<AdmissionFamily, Guid> familyRepository,
 	IRepository<AdmissionGuardian, Guid> guardianRepository,
 	IRepository<AdmissionApplicant, Guid> applicantRepository,
@@ -67,8 +69,11 @@ public class AdmissionInquiryAppService(
 			.Select(row => row.AdmissionOfferingId!.Value).Distinct().ToList();
 		var cycleNames = (await cycleRepository.GetListAsync(cycle => cycleIds.Contains(cycle.Id)))
 			.ToDictionary(cycle => cycle.Id, cycle => cycle.Name);
-		var offeringCodes = (await offeringRepository.GetListAsync(offering => offeringIds.Contains(offering.Id)))
-			.ToDictionary(offering => offering.Id, offering => offering.Code);
+		var offerings = (await offeringRepository.GetListAsync(offering => offeringIds.Contains(offering.Id)))
+			.ToDictionary(offering => offering.Id);
+		var standardIds = offerings.Values.Select(offering => offering.StandardId).Distinct().ToArray();
+		var standardNames = (await standardRepository.GetListAsync(standard => Enumerable.Contains(standardIds, standard.Id)))
+			.ToDictionary(standard => standard.Id, standard => standard.Name);
 		var counsellorNames = await peopleService.GetNamesAsync(rows.Where(row => row.AssignedCounsellorId.HasValue)
 			.Select(row => row.AssignedCounsellorId!.Value));
 		var managementByInquiry = managementRows.ToDictionary(state => state.InquiryId);
@@ -77,12 +82,15 @@ public class AdmissionInquiryAppService(
 
 		return new PagedResultDto<AdmissionInquiryDto>(count, rows.Select(row =>
 		{
+			var offering = row.AdmissionOfferingId.HasValue ? offerings.GetValueOrDefault(row.AdmissionOfferingId.Value) : null;
 			var dto = Map(row,
 			managementByInquiry.GetValueOrDefault(row.Id), followUpsByInquiry.GetValueOrDefault(row.Id) ?? [],
 			cycleNames.GetValueOrDefault(row.AdmissionCycleId),
-			row.AdmissionOfferingId.HasValue ? offeringCodes.GetValueOrDefault(row.AdmissionOfferingId.Value) : null,
+			offering?.Code,
 			row.AssignedCounsellorId.HasValue ? counsellorNames.GetValueOrDefault(row.AssignedCounsellorId.Value) : null,
 				now);
+			dto.StandardId = offering?.StandardId;
+			dto.StandardName = offering != null ? standardNames.GetValueOrDefault(offering.StandardId) : null;
 			dto.ApplicationId = linkedApplications.GetValueOrDefault(row.Id) is var applicationId && applicationId != Guid.Empty ? applicationId : null;
 			dto.IsTransferred |= dto.ApplicationId.HasValue;
 			return dto;
@@ -99,6 +107,7 @@ public class AdmissionInquiryAppService(
 		if (inquiry.AdmissionOfferingId.HasValue && await offeringRepository.FindAsync(inquiry.AdmissionOfferingId.Value) is { } offering)
 		{
 			result.BoardId = offering.BoardId; result.MediumId = offering.MediumId; result.StandardId = offering.StandardId;
+			result.StandardName = (await standardRepository.FindAsync(offering.StandardId))?.Name;
 		}
 		var applicant = inquiry.ApplicantId.HasValue ? await applicantRepository.FindAsync(inquiry.ApplicantId.Value) : null;
 		var family = inquiry.FamilyId.HasValue ? await familyRepository.FindAsync(inquiry.FamilyId.Value) : null;
@@ -955,6 +964,12 @@ public class AdmissionInquiryAppService(
 				"endsWith" => query.Where(x => x.Email != null && x.Email.EndsWith(email)),
 				_ => query.Where(x => x.Email != null && x.Email.Contains(email))
 			};
+		}
+		if (input.DashboardFollowUpsDue) query = query.Where(inquiry => followUpQuery.Any(f => f.InquiryId == inquiry.Id && f.Status == AdmissionInquiryFollowUpStatus.Scheduled && f.ScheduledAt <= now));
+		if (input.DivisionId.HasValue)
+		{
+			var cases = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingCase, Guid>>().GetQueryableAsync();
+			query = query.Where(inquiry => applications.Any(a => a.InquiryId == inquiry.Id && cases.Any(c => c.ApplicationId == a.Id && c.DivisionId == input.DivisionId)));
 		}
 		if (input.WorkQueue.HasValue && !Enum.IsDefined(input.WorkQueue.Value))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,

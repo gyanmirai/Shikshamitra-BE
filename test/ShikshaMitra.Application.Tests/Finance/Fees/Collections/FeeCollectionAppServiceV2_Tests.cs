@@ -13,12 +13,15 @@ using ShikshaMitra.Finance.Fees.Charges;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Settings;
 using ShikshaMitra.Students;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Identity;
+using Volo.Abp.Users;
 using Xunit;
 
 namespace ShikshaMitra.Finance.Fees;
@@ -44,6 +47,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     private readonly IRepository<EducationMedium, Guid> _mediumRepo;
     private readonly IRepository<EducationMediumStage, Guid> _stageRepo;
     private readonly ICurrentTenant _currentTenant;
+    private readonly Dictionary<Guid, Guid> _bankByYear = new();
 
     public FeeCollectionAppServiceV2_Tests()
     {
@@ -317,7 +321,8 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     /// → FeeCategory → FeeHead → Student → DueFee.
     /// Returns (academicYearId, feeHeadId, studentId, dueFeeId).
     /// </summary>
-    private async Task<(Guid AcademicYearId, Guid FeeHeadId, Guid StudentId, Guid DueFeeId)> SeedCoreDataAsync()
+    private Task<(Guid AcademicYearId, Guid FeeHeadId, Guid StudentId, Guid DueFeeId)> SeedCoreDataAsync() =>
+        WithUnitOfWorkAsync(async () =>
     {
         var yearId    = Guid.NewGuid();
         var boardId   = Guid.NewGuid();
@@ -332,6 +337,22 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             yearId, TestTenantId, "2025-26",
             new DateTime(2025, 4, 1), new DateTime(2026, 3, 31));
         await _academicYearRepo.InsertAsync(year, autoSave: true);
+
+        // Nominal collection scenarios need an actual tenant member and explicit
+        // scope; the default test principal alone is not authorization evidence.
+        var actorId = GetRequiredService<ICurrentUser>().Id!.Value;
+        var actors = GetRequiredService<IRepository<IdentityUser, Guid>>();
+        if (!await actors.AnyAsync(user => user.Id == actorId))
+            await actors.InsertAsync(new IdentityUser(actorId, "collection-reviewer",
+                "collection-reviewer@example.test", TestTenantId), autoSave: true);
+        await GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(
+            new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: actorId,
+                academicYearId: yearId, description: "Collection receipt test year"), autoSave: true);
+        var bank = new BankAccount(Guid.NewGuid(), yearId, "QA Bank", "QA branch", null,
+            "QA School", BankAccountType.Current, "1234567890", "Collection test bank",
+            "TEST0000001", null, tenantId: TestTenantId);
+        await GetRequiredService<IRepository<BankAccount, Guid>>().InsertAsync(bank, autoSave: true);
+        _bankByYear[yearId] = bank.Id;
 
         // 2. EducationBoard → AcademicYear
         var board = new EducationBoard(boardId, TestTenantId, EducationBoardType.CBSE, yearId);
@@ -382,9 +403,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
         await dueFeeRepo.InsertAsync(dueFee, autoSave: true);
 
         return (yearId, feeHeadId, studentId, dueFeeId);
-    }
+    });
 
-    private static CollectFeeInput MakeInput(
+    private CollectFeeInput MakeInput(
         Guid studentId,
         Guid academicYearId,
         Guid feeHeadId,
@@ -404,6 +425,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             [
                 new FeePaymentDto
                 {
+                    BankAccountId = method == PaymentMethodEnum.Cash ? null : _bankByYear[academicYearId],
                     PaymentMethod = method,
                     Amount        = 1000d,
                     Details       = details,

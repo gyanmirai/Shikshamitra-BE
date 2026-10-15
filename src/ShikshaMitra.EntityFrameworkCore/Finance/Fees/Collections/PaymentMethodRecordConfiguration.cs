@@ -21,6 +21,9 @@ public class PaymentMethodRecordConfiguration : IEntityTypeConfiguration<Payment
         builder.Property(x=>x.BankLabelSnapshot).HasMaxLength(500);
         builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
         builder.ConfigureByConvention();
+        builder.ToTable(t => t.HasCheckConstraint("CK_PaymentMethodRecords_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL"));
+        builder.HasOne<FinanceFeeAccount>().WithMany().HasForeignKey(x => x.FinanceFeeAccountId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.Amount)
             .HasColumnType("numeric(18,2)")

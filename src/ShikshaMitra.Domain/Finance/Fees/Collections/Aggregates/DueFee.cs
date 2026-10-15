@@ -18,7 +18,11 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public Guid StudentId { get; private set; }
+	public Guid? StudentId { get; private set; }
+	public Guid? FinanceFeeAccountId { get; private set; }
+	public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
+	public void BindFinanceFeeAccount(Guid accountId) => FinanceFeeAccountId =
+		FinanceFeePayerIdentity.BindAccount(FinanceFeeAccountId, accountId);
     public decimal? AllocationPercentage { get; private set; }
 	public void PreserveAllocation(decimal percentage)
 	{
@@ -28,6 +32,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? StudentFeeStructureId { get; private set; }
     public void BindAssignment(Guid assignmentId)
     {
+        if (StudentFeeStructureId == assignmentId && assignmentId != Guid.Empty) return;
         if (assignmentId == Guid.Empty || StudentFeeStructureId.HasValue)
             throw new ArgumentException("A due can be bound to an assignment only once.");
         StudentFeeStructureId = assignmentId;
@@ -118,7 +123,7 @@ public class DueFee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 public DueFee(
 		Guid id,
 		Guid? tenantId,
-		Guid studentId,
+		Guid? studentId,
 		Guid feeHeadId,
 		MonthEnum month,
 		int year,
@@ -149,11 +154,14 @@ public DueFee(
 		decimal? prorationFactor = null,
 		ProrationRuleType? prorationRuleType = null,
 		ProrationRoundingMode? prorationRoundingMode = null,
-		string? prorationExplanation = null)
+		string? prorationExplanation = null,
+		Guid? financeFeeAccountId = null)
 		: base(id)
 	{
 		TenantId = tenantId;
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
 		StudentId = studentId;
+		FinanceFeeAccountId = financeFeeAccountId;
 		FeeHeadId = feeHeadId;
 		Month = month;
 		Year = year;

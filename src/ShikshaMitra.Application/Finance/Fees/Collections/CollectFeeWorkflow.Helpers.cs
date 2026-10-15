@@ -23,15 +23,15 @@ public partial class CollectFeeWorkflow
 			Dictionary<Guid, double> dueFeeBeforeSnapshots,
 			List<PaymentMethodEnum> paymentMethods,
 			FeeCollectionManager.CollectFeeTransactionResult transaction,
-			Student student)
+			Student? student, FinanceFeeAccount? account = null)
 	{
 		var correlationId = $"fc-{transaction.Metadata.Id:N}";
 		var studentContext = new FinanceAuditStudentContext
 		{
 			StudentId = input.StudentId,
-			StudentName = BuildFullName(student.FirstName, student.MiddleName, student.LastName),
-			GrNo = student.GrNo?.ToString(),
-			RollNo = student.RollNo?.ToString()
+			StudentName = account?.ApplicantName ?? BuildFullName(student!.FirstName, student.MiddleName, student.LastName),
+			GrNo = student?.GrNo?.ToString(),
+			RollNo = student?.RollNo?.ToString()
 		};
 
 		var allocationLines = new List<FinanceAuditAllocationLineDto>();
@@ -112,7 +112,7 @@ public partial class CollectFeeWorkflow
 
 	private async Task GenerateAndStoreReceiptPdfsAsync(
 		IReadOnlyList<FeePaymentReceipt> receipts,
-		Student student,
+		Student? student,
 		AcademicYear academicYear,
 		CancellationToken cancellationToken = default)
 	{

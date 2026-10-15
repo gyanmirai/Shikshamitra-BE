@@ -8,7 +8,8 @@ public class FeeReconciliationApprovedEto
     public Guid ProvisionalReceiptId { get; set; }
     public Guid FinalReceiptId { get; set; }
     public string FinalReceiptNumber { get; set; } = default!;
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
     public Guid AcademicYearId { get; set; }
     public FeeReceiptKind ReceiptKind { get; set; }
     public double TotalPaidAmount { get; set; }

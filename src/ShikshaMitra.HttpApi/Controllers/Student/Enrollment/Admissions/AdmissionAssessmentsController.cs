@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Common.Responses;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Application.Dtos;
 using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.AdmissionAssessments;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -14,6 +15,20 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [Route("api/student/enrollment/admissions/assessments")]
 public class AdmissionAssessmentsController(IAdmissionAssessmentAppService service) : AbpController
 {
+	[HttpGet("session-resources"), Authorize(Permissions.ManageSessions)]
+	public async Task<Result<AdmissionAssessmentSessionResourcesDto>> GetSessionResourcesAsync() => Result.Success(await service.GetSessionResourcesAsync());
+	[HttpGet("interviewers"), Authorize(Permissions.ManageSessions)]
+	public async Task<Result<List<AdmissionAssessmentStaffDto>>> GetInterviewersAsync([FromQuery] string? search) => Result.Success(await service.GetInterviewersAsync(search));
+	[HttpGet("sessions/workbench"), Authorize(Permissions.View)]
+	public async Task<Result<PagedResultDto<AdmissionAssessmentSessionDto>>> GetSessionWorkbenchAsync([FromQuery] AdmissionAssessmentSessionListInput input) => Result.Success(await service.GetSessionWorkbenchAsync(input));
+	[HttpGet("sessions/{id:guid}"), Authorize(Permissions.View)]
+	public async Task<Result<AdmissionAssessmentSessionDto>> GetSessionAsync(Guid id) => Result.Success(await service.GetSessionAsync(id));
+	[HttpGet("sessions/{id:guid}/slots"), Authorize(Permissions.Book)]
+	public async Task<Result<List<AdmissionAssessmentInterviewSlotDto>>> GetSessionSlotsAsync(Guid id) => Result.Success(await service.GetSessionSlotsAsync(id));
+	[HttpPost("sessions/preview"), Authorize(Permissions.ManageSessions)]
+	public async Task<Result<AdmissionAssessmentSessionPreviewDto>> PreviewSessionAsync(AdmissionAssessmentSessionPreviewInput input) => Result.Success(await service.PreviewSessionAsync(input));
+	[HttpPost("sessions/confirm"), Authorize(Permissions.ManageSessions)]
+	public async Task<Result<AdmissionAssessmentSessionConfirmationDto>> ConfirmSessionAsync(AdmissionAssessmentSessionConfirmInput input) => Result.Success(await service.ConfirmSessionAsync(input));
 	[HttpGet("scopes"), Authorize(Permissions.View)]
 	public async Task<Result<List<AdmissionAssessmentScopeDto>>> GetScopesAsync() => Result.Success(await service.GetScopesAsync());
 	[HttpGet("applicants"), Authorize(Permissions.View)]

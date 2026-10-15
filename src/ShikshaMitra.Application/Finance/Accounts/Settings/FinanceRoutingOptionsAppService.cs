@@ -31,7 +31,8 @@ public class FinanceRoutingOptionsAppService(IRepository<TransactionCategory, Gu
    var granted = false;
    foreach (var permission in required) if (await AuthorizationService.IsGrantedAsync(permission)) granted = true;
    if (!granted) throw new AbpAuthorizationException();
-   await scope.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
+   if (operation is "collection" or "refund") await scope.EnsureCollectionYearAccessibleAsync(academicYearId);
+   else await scope.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
    var instant = new DateTimeOffset(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc));
    var categoryRows = await categories.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
      x.AcademicYearId == academicYearId && x.IsActive);

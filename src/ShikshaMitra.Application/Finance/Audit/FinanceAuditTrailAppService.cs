@@ -34,11 +34,8 @@ public partial class FinanceAuditTrailAppService(
 	{
 		await EnsureCanViewFinanceAuditAsync();
 
-		var query = await ApplyPaymentTermScopeAsync(await repository.GetQueryableAsync());
+		var query = await ApplyPayerScopeAsync(await ApplyPaymentTermScopeAsync(await repository.GetQueryableAsync()));
 		query = ApplyFilters(query, input);
-
-		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
-		query = query.Where(x => x.StudentId == null || scopedStudentIds.Contains(x.StudentId.Value));
 
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(ApplySorting(query, input.Sorting)
@@ -68,19 +65,13 @@ public partial class FinanceAuditTrailAppService(
 		if (string.IsNullOrWhiteSpace(correlationId))
 			throw new BusinessException("FinanceAudit:CorrelationIdRequired");
 
-		var query = await repository.GetQueryableAsync();
+		var query = await ApplyPayerScopeAsync(await ApplyPaymentTermScopeAsync(await repository.GetQueryableAsync()));
 		var normalized = correlationId.Trim();
 		query = query.Where(x => x.CorrelationId == normalized);
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(
 			query.OrderBy(x => x.OccurredAt).ThenBy(x => x.Id)
 				.Skip(input.SkipCount).Take(NormalizeMaxResultCount(input.MaxResultCount)));
-
-		var sampleEvent = rows.FirstOrDefault();
-		if (sampleEvent?.StudentId.HasValue == true)
-			await financeScopeAccessService.EnsureStudentAccessibleAsync(sampleEvent.StudentId.Value);
-		else if (sampleEvent != null)
-			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(sampleEvent.AcademicYearId, null, null, null, null);
 
 		return new FinanceAuditCorrelationDto
 		{
@@ -97,13 +88,8 @@ public partial class FinanceAuditTrailAppService(
 	public async Task<FinanceAuditEventDto> GetAsync(Guid id)
 	{
 		await EnsureCanViewFinanceAuditAsync();
-		var entity = await AsyncExecuter.SingleOrDefaultAsync((await ApplyPaymentTermScopeAsync(await repository.GetQueryableAsync())).Where(x => x.Id == id))
+		var entity = await AsyncExecuter.SingleOrDefaultAsync((await ApplyPayerScopeAsync(await ApplyPaymentTermScopeAsync(await repository.GetQueryableAsync()))).Where(x => x.Id == id))
 			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(FinanceAuditEvent), id);
-
-		if (entity.StudentId.HasValue)
-			await financeScopeAccessService.EnsureStudentAccessibleAsync(entity.StudentId.Value);
-		else
-			await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(entity.AcademicYearId, null, null, null, null);
 
 		return FinanceAuditTrailProjection.ToDto(entity);
 	}

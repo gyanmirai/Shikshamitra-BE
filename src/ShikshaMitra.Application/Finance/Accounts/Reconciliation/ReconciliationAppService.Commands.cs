@@ -23,7 +23,7 @@ public partial class ReconciliationAppService
             throw new Volo.Abp.UserFriendlyException(validation.Errors[0].ErrorMessage);
 
         var provisionalForScope = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(provisionalForScope.StudentId, cancellationToken);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(provisionalForScope.StudentId, provisionalForScope.FinanceFeeAccountId, cancellationToken);
 
         var finalReceipt = await reconciliationManager.ApproveAsync(
             provisionalReceiptId, input.Remarks, cancellationToken);
@@ -38,6 +38,7 @@ public partial class ReconciliationAppService
             FinalReceiptId       = finalReceipt.Id,
             FinalReceiptNumber   = finalReceipt.ReceiptNumber,
             StudentId            = finalReceipt.StudentId,
+            FinanceFeeAccountId  = finalReceipt.FinanceFeeAccountId,
             AcademicYearId       = finalReceipt.AcademicYearId,
             ReceiptKind          = finalReceipt.ReceiptKind,
             TotalPaidAmount      = finalReceipt.TotalPaidAmount,
@@ -61,7 +62,7 @@ public partial class ReconciliationAppService
             throw new Volo.Abp.UserFriendlyException(validation.Errors[0].ErrorMessage);
 
         var provisionalForScope = await receiptRepository.GetAsync(provisionalReceiptId, cancellationToken: cancellationToken);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(provisionalForScope.StudentId, cancellationToken);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(provisionalForScope.StudentId, provisionalForScope.FinanceFeeAccountId, cancellationToken);
 
         var rejected = await reconciliationManager.RejectAsync(
             provisionalReceiptId, input.Remarks, cancellationToken);
@@ -75,6 +76,7 @@ public partial class ReconciliationAppService
             ProvisionalReceiptId     = rejected.Id,
             ProvisionalReceiptNumber = rejected.ReceiptNumber,
             StudentId                = rejected.StudentId,
+            FinanceFeeAccountId      = rejected.FinanceFeeAccountId,
             AcademicYearId           = rejected.AcademicYearId,
             ReceiptKind              = rejected.ReceiptKind,
             Remarks                  = input.Remarks,

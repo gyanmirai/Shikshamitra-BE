@@ -60,15 +60,48 @@ public partial class CollectFeeWorkflow(
 	{
 		using var serializableUow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
 			{ IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
-		var idempotencyKey = input.IdempotencyKey.Trim();
+		var admissionEntry = input.FinanceFeeAccountId.HasValue;
 		var commandFingerprint = ComputeCommandFingerprint(input);
+		if (!admissionEntry && input.StudentId.HasValue)
+		{
+			// Finance's existing Student collection entry joins the same ledger after
+			// activation. Preserve its original retry fingerprint for legacy clients.
+			var assignment = await studentFeeStructureRepository.FindAsync(a => a.StudentId == input.StudentId.Value && a.AcademicYearId == input.AcademicYearId);
+			var resolvedAccountId = assignment?.FinanceFeeAccountId ??
+				(await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().FindAsync(a =>
+					a.StudentId == input.StudentId.Value && a.AcademicYearId == input.AcademicYearId && a.AssignmentSnapshotJson != null))?.Id;
+			if (resolvedAccountId.HasValue)
+			{
+				// Keep the caller's command unchanged, so an in-process retry uses the
+				// same legacy fingerprint as a fresh HTTP request.
+				input = new CollectFeeInput
+				{
+					IdempotencyKey = input.IdempotencyKey, StudentId = input.StudentId,
+					FinanceFeeAccountId = resolvedAccountId, AcademicYearId = input.AcademicYearId,
+					Notes = input.Notes, PaymentConfirmed = input.PaymentConfirmed,
+					DueFeePayments = input.DueFeePayments, ChargePayments = input.ChargePayments,
+					LateFeePayments = input.LateFeePayments, Payments = input.Payments
+				};
+			}
+		}
+		var account = input.FinanceFeeAccountId.HasValue
+			? await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().GetAsync(input.FinanceFeeAccountId.Value) : null;
+		if (account != null)
+		{
+			await financeScopeAccessService.EnsureFeeAccountAccessibleAsync(account);
+		}
+		var idempotencyKey = input.IdempotencyKey.Trim();
 		var replay = await feeRecordMetadataRepository.FirstOrDefaultAsync(x =>
 			x.TenantId == CurrentTenant.Id && x.IdempotencyKey == idempotencyKey);
 		if (replay != null)
 		{
-			await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId);
+			if ((admissionEntry || replay.FinanceFeeAccountId.HasValue) && replay.FinanceFeeAccountId != input.FinanceFeeAccountId)
+				throw new BusinessException(AdmissionFeeCollectionErrorCodes.RetryConflict);
+			if (replay.FinanceFeeAccountId.HasValue) await financeScopeAccessService.EnsureFeeAccountAccessibleAsync(account!);
+			else await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId!.Value);
 			if (!string.Equals(replay.CommandFingerprint, commandFingerprint, StringComparison.Ordinal))
-				throw new UserFriendlyException("This retry key was already used for a different fee collection request.");
+				throw new UserFriendlyException("This retry key was already used for a different fee collection request.",
+					code: FeeCollectionErrorCodes.IdempotencyConflict);
 
 			if (string.IsNullOrWhiteSpace(replay.CommandResultJson))
 				throw new UserFriendlyException("This fee collection request is still being processed. Please retry shortly.");
@@ -79,7 +112,19 @@ public partial class CollectFeeWorkflow(
 			return replayOutput;
 		}
 
-		var (student, academicYear) = await ValidateAndLoadStudentForCollectionAsync(input);
+		if (account != null && (admissionEntry || !account.StudentFeeStructureId.HasValue))
+		{
+			var source = await LazyServiceProvider.LazyGetRequiredService<IAdmissionFinanceContextReader>().GetAsync(account.ApplicationId);
+			if (!source.CanCollect || source.StudentId != account.StudentId || source.AcademicYearId != account.AcademicYearId)
+				throw new BusinessException(AdmissionFeeCollectionErrorCodes.InvalidState);
+			var saved = account.AssignmentSnapshotJson == null ? null :
+				JsonSerializer.Deserialize<ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos.StudentFeeAssignmentPreviewDto>(account.AssignmentSnapshotJson);
+			if (saved == null || !AdmissionFeeCollectionAppService.SelectionMatches(source, saved))
+				throw new BusinessException(AdmissionFeeCollectionErrorCodes.SelectionChanged);
+		}
+		var student = account == null ? (await ValidateAndLoadStudentForCollectionAsync(input)).Student :
+			account.StudentId.HasValue ? await studentRepository.FindAsync(account.StudentId.Value) : null;
+		var academicYear = await academicYearRepository.GetAsync(input.AcademicYearId);
 		await ValidatePaymentChannelPolicyAsync(input);
 		var dueFeeContext = await LoadAndValidateDueFeesContextAsync(input);
 		var chargeContext = await LoadAndValidateChargesContextAsync(input);
@@ -110,13 +155,19 @@ public partial class CollectFeeWorkflow(
 		var transaction = await feeCollectionManager.ExecuteCollectionTransactionAsync(
 			new FeeCollectionManager.CollectFeeTransactionCommand(
 				StudentId: input.StudentId, AcademicYearId: input.AcademicYearId,
-				BoardId: student.AcademicBoardId ?? Guid.Empty, EducationMediumId: student.AcademicMediumId,
+				BoardId: account?.BoardId ?? student!.AcademicBoardId ?? Guid.Empty, EducationMediumId: account?.EducationMediumId ?? student!.AcademicMediumId,
 				Status: status, ReceivedAmount: received, Notes: input.Notes,
 				BankReceiptConfirmed: input.PaymentConfirmed, FeeHeadGroups: feeHeadGroups,
 				ChargePayments: input.ChargePayments.Select(cp => (cp.ChargeId, cp.Amount)).ToList(),
 				DueFeeAllocations: allAllocations, Payments: paymentRows,
 				LateFeeAllocations: input.LateFeePayments.Select(lfp => (lfp.DueFeeId, lfp.Amount)).ToList(),
-				IdempotencyKey: idempotencyKey, CommandFingerprint: commandFingerprint));
+				IdempotencyKey: idempotencyKey, CommandFingerprint: commandFingerprint, FinanceFeeAccountId: account?.Id));
+		if (account != null)
+		{
+			account.RecordPaymentEvidence();
+			await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().UpdateAsync(account, false);
+			await LazyServiceProvider.LazyGetRequiredService<IAdmissionFinanceContextReader>().RecordPaymentEvidenceAsync(account.ApplicationId, account.Id);
+		}
 
 		await SaveIncomeRoutingAsync(input, transaction, routing, status != FeeCollectionStatus.InReconciliation);
         // Flush the unique retry key before creating external blob side effects. A racing
@@ -127,7 +178,7 @@ public partial class CollectFeeWorkflow(
 
 		var (auditEventIds, paymentChangedFields, allocationLines) =
 			await WriteAuditTrailAsync(input, received, status, dueFeeContext, dueFeeBeforeSnapshots,
-				paymentMethods, transaction, student);
+				paymentMethods, transaction, student, account);
 
 		var feeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Fee);
 		var chargeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Charge);
@@ -138,7 +189,7 @@ public partial class CollectFeeWorkflow(
 			Id = transaction.Metadata.Id, ReceiptNumber = transaction.ReceiptNumber,
 			FeeReceiptNumber = feeReceipt?.ReceiptNumber, FeeReceiptId = feeReceipt?.Id,
 			ChargeReceiptId = chargeReceipt?.Id, ChargeReceiptNumber = chargeReceipt?.ReceiptNumber,
-			StudentId = input.StudentId, AcademicYearId = input.AcademicYearId,
+			StudentId = input.StudentId, FinanceFeeAccountId = account?.Id, AcademicYearId = input.AcademicYearId,
 			TotalAmount = received, ReceivedAmount = received, Status = status,
 			CollectedBy = CurrentUser.Id ?? Guid.Empty, CollectedAt = collectedAt, CreatedAt = collectedAt,
 			ReceiptUrl = null,
@@ -183,6 +234,7 @@ public partial class CollectFeeWorkflow(
 		{
 			FeeCollectionTransactionId = transaction.Metadata.Id,
 			StudentId      = input.StudentId,
+			FinanceFeeAccountId = account?.Id,
 			AcademicYearId = input.AcademicYearId,
 			TotalPaidFee   = received,
 			Status         = status,
@@ -201,7 +253,11 @@ public partial class CollectFeeWorkflow(
 
 	private static string ComputeCommandFingerprint(CollectFeeInput input)
 	{
-		var json = JsonSerializer.Serialize(input);
+		// Student identity can be linked later. The application's retry fingerprint
+		// contains payment facts and its stable Finance account, never the derived link.
+		var json = input.FinanceFeeAccountId.HasValue ? JsonSerializer.Serialize(new {
+			input.FinanceFeeAccountId, input.AcademicYearId, input.IdempotencyKey, input.Notes, input.PaymentConfirmed,
+			input.DueFeePayments, input.ChargePayments, input.LateFeePayments, input.Payments }) : JsonSerializer.Serialize(input);
 		return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
 	}
 

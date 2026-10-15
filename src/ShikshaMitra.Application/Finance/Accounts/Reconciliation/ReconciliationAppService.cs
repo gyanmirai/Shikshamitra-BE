@@ -46,6 +46,7 @@ public partial class ReconciliationAppService(
             Page                  = Math.Max(1, input.Page),
             PageSize              = Math.Clamp(input.PageSize, 1, 100),
             ScopedStudentIdsQuery = scopedStudentIds,
+            ScopedAccountIdsQuery = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync(),
         };
 
         var (totalCount, ids) = await receiptRepository

@@ -20,6 +20,7 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 public class LateFeeBalanceService(
 	IDueFeeRepository dueFeeRepository,
 	IRepository<StudentFeeStructure, Guid> assignmentRepository,
+	IRepository<FinanceFeeAccount, Guid> accountRepository,
 	IRepository<StudentFeePolicyOverride, Guid> overrideRepository,
 	IRepository<CollectionPolicyExceptionWindow, Guid> windowRepository,
 	IDataFilter<ISoftDelete> softDeleteFilter,
@@ -42,10 +43,15 @@ public class LateFeeBalanceService(
 		var result = new Dictionary<Guid, Balance>();
 		if (dues.Count == 0) return result;
 		var dueIds = dues.Select(x => x.Id).ToList();
-		var studentIds = dues.Select(x => x.StudentId).Distinct().ToList();
+		var studentIds = dues.Where(x => x.StudentId.HasValue).Select(x => x.StudentId!.Value).Distinct().ToList();
 		var assignments = await assignmentRepository.GetListAsync(x =>
 			studentIds.Contains(x.StudentId) && x.AcademicYearId == academicYearId);
-		var structureIds = assignments.Select(x => x.FeeStructureStandardId).Distinct().ToList();
+		var accountIds = dues.Where(x => x.FinanceFeeAccountId.HasValue).Select(x => x.FinanceFeeAccountId!.Value).Distinct().ToList();
+		var accounts = await accountRepository.GetListAsync(x => accountIds.Contains(x.Id));
+		if (accounts.Count != accountIds.Count || accounts.Any(x => x.AcademicYearId != academicYearId || !x.StructureId.HasValue))
+			throw new BusinessException(FinanceFeeAccountErrorCodes.InvalidAccount);
+		var structureIds = assignments.Select(x => x.FeeStructureStandardId)
+			.Concat(accounts.Select(x => x.StructureId!.Value)).Distinct().ToList();
 		List<StudentFeePolicyOverride> overrideEvidence;
 		List<CollectionPolicyExceptionWindow> windowEvidence;
 		// A removed exemption/grace override is still evidence that today's rules may
@@ -76,8 +82,10 @@ public class LateFeeBalanceService(
 		var historical = principalPayments.Where(x => IsActive(x.FeeRecordMetadataId))
 			.GroupBy(x => x.DueFeeId).ToDictionary(x => x.Key, x => x.ToList());
 		var changed = new List<DueFee>();
-		var duesByStudent = dues.GroupBy(x => x.StudentId).ToDictionary(x => x.Key, x => x.ToList());
+		var duesByStudent = dues.Where(x => x.StudentId.HasValue).GroupBy(x => x.StudentId!.Value).ToDictionary(x => x.Key, x => x.ToList());
 		var windows = new Dictionary<(Guid StructureId, DateTime Date), ActiveExceptionWindow?>();
+		var contexts = new List<(Guid StructureId, Guid VersionId, EffectiveCollectionRules Rules,
+			List<DueFee> Dues, Func<DateTime, bool> CanRecover)>();
 
 		foreach (var assignment in assignments)
 		{
@@ -88,14 +96,31 @@ public class LateFeeBalanceService(
 				assignment.StudentId, assignment.FeeStructureStandardId);
 			var studentOverrides = overridesByAssignment.GetValueOrDefault(
 				(assignment.StudentId, assignment.FeeStructureStandardId), []);
-			foreach (var due in duesByStudent[assignment.StudentId])
+			contexts.Add((assignment.FeeStructureStandardId, assignment.CollectionPolicyVersionId.Value, rules,
+				duesByStudent[assignment.StudentId].Where(d => d.StudentFeeStructureId == assignment.Id ||
+					(d.FinanceFeeAccountId == null && d.StudentFeeStructureId == null)).ToList(),
+				date => CanRecoverWithAssignedVersion(assignment, date) &&
+					!studentOverrides.Any(x => x.CreationTime > date || x.LastModificationTime > date || x.DeletionTime > date)));
+		}
+		foreach (var account in accounts.Where(x => !x.StudentFeeStructureId.HasValue))
+		{
+			var rules = await policyResolver.ResolveEffectiveRulesForAccountAsync(account.Id);
+			var version = account.GetPolicyReference("collection")
+				?? throw new BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
+			contexts.Add((account.StructureId!.Value, version.VersionId, rules,
+				dues.Where(d => d.FinanceFeeAccountId == account.Id).ToList(), date => account.CreationTime <= date));
+		}
+		foreach (var context in contexts)
+		{
+			var rules = context.Rules;
+			foreach (var due in context.Dues)
 			{
 				var total = Math.Max(due.GetAssessedLateFeeAmount(), paid.GetValueOrDefault(due.Id) + waived.GetValueOrDefault(due.Id));
 				var explanation = due.GetLateFeeAssessmentExplanation();
 				async Task AccrueAsync(decimal outstanding, DateTime date)
 				{
 					if (outstanding <= 0m || rules.Policy is null || !due.IsBillGeneratedOn(date)) return;
-					var key = (assignment.FeeStructureStandardId, date.Date);
+					var key = (context.StructureId, date.Date);
 					if (!windows.TryGetValue(key, out var window))
 					{
 						window = await windowResolver.ResolveActiveWindowAsync(academicYearId, key.Item1, key.Item2);
@@ -112,10 +137,9 @@ public class LateFeeBalanceService(
 				if (historical.TryGetValue(due.Id, out var payments))
 					foreach (var payment in payments)
 						if (TryReadPrincipalBefore(transactions[payment.FeeRecordMetadataId].CommandResultJson, due.Id, out var before, out var date)
-							&& CanRecoverWithAssignedVersion(assignment, date)
-							&& !studentOverrides.Any(x => x.CreationTime > date || x.LastModificationTime > date || x.DeletionTime > date)
+							&& context.CanRecover(date)
 							&& !windowEvidence.Any(x => x.CoversDate(date)
-								&& (x.Scope != ExceptionWindowScope.FeeStructure || x.ScopeId == assignment.FeeStructureStandardId)
+								&& (x.Scope != ExceptionWindowScope.FeeStructure || x.ScopeId == context.StructureId)
 								&& (x.CreationTime > date || x.LastModificationTime > date || x.DeletionTime > date)))
 							await AccrueAsync(before, date);
 				await AccrueAsync(due.OutstandingAmount, asOfDate);
@@ -123,7 +147,7 @@ public class LateFeeBalanceService(
 				if (preserveAssessment && total > due.GetAssessedLateFeeAmount())
 				{
 					due.PreserveLateFeeAssessment(total, new DateTimeOffset(DateTime.SpecifyKind(asOfDate, DateTimeKind.Utc)),
-						assignment.CollectionPolicyVersionId.Value, explanation);
+						context.VersionId, explanation);
 					changed.Add(due);
 				}
 			}

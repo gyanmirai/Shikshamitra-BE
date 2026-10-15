@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.Attendance;
 /// </summary>
 public class GetStudentLeaveListInput : PagedAndSortedResultRequestDto
 {
+	public Guid? BoardId { get; set; }
 	public string? FilterText { get; set; }
 	public string? TableFilters { get; set; }
 	public Guid? AcademicYearId { get; set; }

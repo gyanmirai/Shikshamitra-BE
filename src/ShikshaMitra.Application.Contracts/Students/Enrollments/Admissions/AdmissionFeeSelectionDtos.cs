@@ -48,11 +48,21 @@ public class AdmissionFeeSelectionDto
 	public bool Available { get; set; }
 	public bool IsRequired { get; set; }
 	public bool IsLocked { get; set; }
+	public bool HasRecordedFeePayment { get; set; }
+	public AdmissionFeeCollectionDeferralDto? FeeCollectionDeferral { get; set; }
 	public bool CanEdit { get; set; }
 	public bool CanConfirmOnboarding { get; set; }
 	public bool OnboardingConfirmed { get; set; }
 	public string? OnboardingBlocker { get; set; }
 	public AdmissionFeeSelectionSnapshotDto? Selection { get; set; }
+}
+
+public class AdmissionFeeCollectionDeferralDto
+{
+	public Guid StageId { get; set; }
+	public string Reason { get; set; } = string.Empty;
+	public Guid DeferredBy { get; set; }
+	public DateTimeOffset DeferredAt { get; set; }
 }
 
 public class SaveAdmissionFeeSelectionDto

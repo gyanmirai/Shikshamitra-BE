@@ -55,6 +55,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			missing.AdmissionOfferingId = null;
 			(await Should.ThrowAsync<BusinessException>(() => inquiries.CreateAsync(missing))).Code.ShouldBe(AdmissionErrorCodes.InquiryOfferingRequired);
 			var inquiry = await inquiries.CreateAsync(ManagedInquiryInput(offering));
+			var expectedClassName = (await _standardRepository.GetAsync(offering.StandardId)).Name;
+			var listedInquiry = (await inquiries.GetListAsync(new() { AdmissionOfferingId = offering.Id })).Items.Single(item => item.Id == inquiry.Id);
+			listedInquiry.StandardId.ShouldBe(offering.StandardId);
+			listedInquiry.StandardName.ShouldBe(expectedClassName);
+			(await inquiries.GetAsync(inquiry.Id)).StandardName.ShouldBe(expectedClassName);
 			(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.StartAsync(inquiry.ApplicantId!.Value, offering.Id, inquiry.Id)))
 				.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.QualificationRequired);
 			inquiry = await inquiries.UpdateAsync(inquiry.Id, InquiryStatusUpdate(inquiry, AdmissionInquiryStatus.Interested));

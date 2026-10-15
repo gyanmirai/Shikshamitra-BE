@@ -21,7 +21,10 @@ public partial class AccountsActivityAppService
             throw new BusinessException(AccountsRegisterErrorCodes.InvalidFilter);
         var income = source is "income" or "collection";
         await CheckWorkspacePermissionAsync(income);
-        await scopeAccessService.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
+        var scopedAccounts = await scopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+        if (!await scopeAccessService.IsAcademicContextAccessibleAsync(academicYearId, null, null, null, null) &&
+            !await AsyncExecuter.AnyAsync((await accountRepository.GetQueryableAsync())
+                .Where(a => a.AcademicYearId == academicYearId && scopedAccounts.Contains(a.Id)))) throw new AbpAuthorizationException();
         var year = await academicYears.GetAsync(academicYearId);
         var detail = new AccountsActivityDetailDto { Id = id, AcademicYearId = academicYearId, AcademicYearName = year.Name, CanOpenSource = true };
         var transaction = await transactionRepository.FindAsync(id);
@@ -31,10 +34,12 @@ public partial class AccountsActivityAppService
             if (transaction.TenantId != CurrentTenant.Id || transaction.AcademicYearId != academicYearId || !transaction.IsConfirmed ||
                 transaction.TransactionType != (income ? TransactionType.Income : TransactionType.Expense) || source != expectedSource)
                 throw new AbpAuthorizationException();
-            if (transaction.StudentId.HasValue) await scopeAccessService.EnsureStudentAccessibleAsync(transaction.StudentId.Value);
+            if (transaction.StudentId.HasValue || transaction.FinanceFeeAccountId.HasValue)
+                await scopeAccessService.EnsureCollectionPayerAccessibleAsync(transaction.StudentId, transaction.FinanceFeeAccountId);
             var category = await categoryRepository.FindAsync(transaction.CategoryId);
             detail.SourceId = transaction.SourceId ?? transaction.Id;
             detail.StudentId = transaction.StudentId;
+            detail.FinanceFeeAccountId = transaction.FinanceFeeAccountId;
             detail.Reference = transaction.Name;
             detail.Source = source == "income" ? "Income" : source == "expense" ? "Expense" : income ? "Collection" : "Refund";
             detail.CategoryId = transaction.CategoryId;
@@ -56,7 +61,8 @@ public partial class AccountsActivityAppService
             else
             {
                 var all = await transactionRepository.GetListAsync(t => t.SourceId == transaction.SourceId && t.IsConfirmed &&
-                    t.AcademicYearId == academicYearId && t.StudentId == transaction.StudentId && t.TransactionType == transaction.TransactionType);
+                    t.AcademicYearId == academicYearId && t.StudentId == transaction.StudentId &&
+                    t.FinanceFeeAccountId == transaction.FinanceFeeAccountId && t.TransactionType == transaction.TransactionType);
                 detail.CategoryAmounts = all.Select(t => new AccountsCategoryAmountDto(t.CategoryNameSnapshot ?? "Unavailable",
                     t.Amount, t.BankLabelSnapshot)).ToList();
             }
@@ -66,9 +72,10 @@ public partial class AccountsActivityAppService
             var receipt = await receiptRepository.GetAsync(id);
             if (receipt.TenantId != CurrentTenant.Id || receipt.AcademicYearId != academicYearId ||
                 receipt.ReceiptKind is not (FeeReceiptKind.FinalFee or FeeReceiptKind.FinalCharge)) throw new AbpAuthorizationException();
-            await scopeAccessService.EnsureStudentAccessibleAsync(receipt.StudentId);
+            await scopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId);
             detail.SourceId = receipt.FeeCollectionTransactionId;
             detail.StudentId = receipt.StudentId;
+            detail.FinanceFeeAccountId = receipt.FinanceFeeAccountId;
             detail.Reference = receipt.ReceiptNumber;
             detail.Amount = (decimal)receipt.TotalPaidAmount;
             detail.OccurredAt = Utc(receipt.CreationTime);
@@ -84,9 +91,10 @@ public partial class AccountsActivityAppService
             if (refund.TenantId != CurrentTenant.Id || refund.AcademicYearId != academicYearId ||
                 (entry == null && refund.Status is not (FeeRefundStatus.Approved or FeeRefundStatus.Processing)))
                 throw new AbpAuthorizationException();
-            await scopeAccessService.EnsureStudentAccessibleAsync(refund.StudentId);
+            await scopeAccessService.EnsureCollectionPayerAccessibleAsync(refund.StudentId, refund.FinanceFeeAccountId);
             detail.SourceId = refund.Id;
             detail.StudentId = refund.StudentId;
+            detail.FinanceFeeAccountId = refund.FinanceFeeAccountId;
             detail.Source = "Refund";
             detail.Reference = refund.VoucherNumber;
             detail.CategoryId = refund.ExpenseCategoryId;
@@ -123,6 +131,12 @@ public partial class AccountsActivityAppService
             detail.ClassDivision = detail.ClassName == null && detail.DivisionName == null ? "" :
                 $"{detail.ClassName ?? "—"} - {detail.DivisionName ?? "—"}";
         }
+        if (detail.FinanceFeeAccountId.HasValue)
+        {
+            var account = await accountRepository.GetAsync(detail.FinanceFeeAccountId.Value);
+            if (account.AcademicYearId != academicYearId) throw new AbpAuthorizationException();
+            detail.StudentName = account.ApplicantName;
+        }
         return detail;
     }
 
@@ -130,6 +144,7 @@ public partial class AccountsActivityAppService
     {
         var collection = await collectionRepository.GetAsync(detail.SourceId);
         if (collection.AcademicYearId != detail.AcademicYearId || collection.StudentId != detail.StudentId ||
+            collection.FinanceFeeAccountId != detail.FinanceFeeAccountId ||
             collection.Status is not (FeeCollectionStatus.Paid or FeeCollectionStatus.Partial or FeeCollectionStatus.Reversed)) throw new AbpAuthorizationException();
         detail.Notes = collection.Remarks;
         var lines = await allocations.GetListAsync(x => x.FeeRecordMetadataId == collection.Id);
@@ -165,7 +180,8 @@ public partial class AccountsActivityAppService
     private async Task AddRefundDetailsAsync(AccountsActivityDetailDto detail)
     {
         var refund = await refundRepository.FindWithLinesAsync(detail.SourceId) ?? throw new AbpAuthorizationException();
-        if (refund.AcademicYearId != detail.AcademicYearId || refund.StudentId != detail.StudentId) throw new AbpAuthorizationException();
+        if (refund.AcademicYearId != detail.AcademicYearId || refund.StudentId != detail.StudentId ||
+            refund.FinanceFeeAccountId != detail.FinanceFeeAccountId) throw new AbpAuthorizationException();
         detail.OriginalReceiptNumber = refund.OriginalReceiptNumber;
         detail.RefundReason = refund.Reason;
         detail.ApprovalNotes = refund.ApproverNotes;

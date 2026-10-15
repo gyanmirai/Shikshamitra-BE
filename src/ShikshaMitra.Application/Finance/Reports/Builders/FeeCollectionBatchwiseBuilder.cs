@@ -19,13 +19,15 @@ public class FeeCollectionBatchwiseBuilder(
     IRepository<FeePaymentReceipt, Guid> feePaymentReceiptRepository,
     IRepository<AcademicYear, Guid> academicYearRepository,
     IRepository<ReceiptBook, Guid> receiptBookRepository,
-    IAsyncQueryableExecuter asyncExecuter)
+    IAsyncQueryableExecuter asyncExecuter,
+    FinanceReportPayerQueryService payerService)
     : IFinanceReportBuilder, ITransientDependency
 {
     public string ReportType => FinanceReportTypes.FeeCollectionBatchwise;
 
     public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
+        var payers = await payerService.GetPayersAsync(request.Filters, executionScope);
         var academicYearIds = request.Filters.AcademicYearIds ?? new List<Guid>();
         var targetAcademicYears = await asyncExecuter.ToListAsync(
             (await academicYearRepository.GetQueryableAsync())
@@ -47,7 +49,7 @@ public class FeeCollectionBatchwiseBuilder(
         var receiptBooks = await asyncExecuter.ToListAsync(await receiptBookRepository.GetQueryableAsync());
         var rbMap = receiptBooks.ToDictionary(r => r.Id, r => r.Name);
 
-        var receiptsQuery = (await feePaymentReceiptRepository.GetQueryableAsync())
+        var receiptsQuery = FinanceReportPayerQueryService.FilterReceipts(await feePaymentReceiptRepository.GetQueryableAsync(), payers)
             .Where(r => targetYearIds.Contains(r.AcademicYearId));
 
         var receiptsList = await asyncExecuter.ToListAsync(receiptsQuery);

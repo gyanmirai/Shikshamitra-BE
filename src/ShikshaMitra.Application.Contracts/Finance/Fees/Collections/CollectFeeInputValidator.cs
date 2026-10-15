@@ -24,7 +24,12 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
             .MaximumLength(100);
 
         RuleFor(x => x.StudentId)
-            .NotEmpty();
+            .Must((input, studentId) => studentId != Guid.Empty &&
+                (studentId.HasValue || input.FinanceFeeAccountId.HasValue))
+            .WithMessage("A valid Student ID or verified Finance account is required.");
+
+        RuleFor(x => x.FinanceFeeAccountId)
+            .NotEqual((Guid?)Guid.Empty);
 
         RuleFor(x => x.AcademicYearId)
             .NotEmpty();

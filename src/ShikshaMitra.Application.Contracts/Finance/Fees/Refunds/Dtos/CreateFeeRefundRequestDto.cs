@@ -10,8 +10,8 @@ public class CreateFeeRefundRequestDto
 {
     [Required, MaxLength(100)] public string IdempotencyKey { get; set; } = string.Empty;
     public Guid? ReplacesRefundRequestId { get; set; }
-    [Required]
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
 
     [Required]
     public Guid AcademicYearId { get; set; }
@@ -73,7 +73,10 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
     public CreateFeeRefundRequestDtoValidator()
     {
         RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(100);
-        RuleFor(x => x.StudentId).NotEmpty();
+        RuleFor(x => x).Must(x => x.StudentId.HasValue || x.FinanceFeeAccountId.HasValue)
+            .WithMessage("A Student or Finance fee account is required.");
+        RuleFor(x => x.StudentId).NotEqual(Guid.Empty).When(x => x.StudentId.HasValue);
+        RuleFor(x => x.FinanceFeeAccountId).NotEqual(Guid.Empty).When(x => x.FinanceFeeAccountId.HasValue);
         RuleFor(x => x.AcademicYearId).NotEmpty();
         RuleFor(x => x.OriginalReceiptId).NotEmpty();
 

@@ -11,6 +11,7 @@ using ShikshaMitra.Finance.Fees.Settings.FeeStructures;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Students;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using System;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -34,6 +35,8 @@ public partial class FeeRefundAppService(
 	IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
 	IRepository<FeeRecordMetadata, Guid> collectionRepository,
 	IRepository<StudentFeeStructure, Guid> assignmentRepository,
+    IRepository<FinanceFeeAccount, Guid> accountRepository,
+	IRepository<AcademicYear, Guid> academicYearRepository,
 	IRepository<FinancePolicyVersion, Guid> policyVersionRepository,
 	ShikshaMitra.Domain.Finance.Accounts.Settings.FinanceRoutingManager routingManager,
     ShikshaMitra.Finance.Accounts.AutomaticTransactionManager automaticTransactions,

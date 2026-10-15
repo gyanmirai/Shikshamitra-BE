@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionAssessmentScopeDto
 {
+	public string ClassName { get; set; } = string.Empty;
 	public Guid AdmissionOfferingId { get; set; }
 	public Guid BoardId { get; set; }
 	public Guid MediumId { get; set; }
@@ -22,18 +24,29 @@ public class AdmissionAssessmentScopeDto
 
 public class AdmissionAssessmentSessionInput
 {
+	[Required, MaxLength(20)] public List<AdmissionAssessmentSessionScopeInput> Scopes { get; set; } = [];
+	[Required, RegularExpression("^(exam|individualInterview|groupInterview)$")] public string SessionType { get; set; } = "exam";
+	public Guid? RoomId { get; set; }
+	public Guid? InterviewerId { get; set; }
+	public int? SlotDurationMinutes { get; set; }
+	public int? BreakMinutes { get; set; }
 	public Guid AdmissionOfferingId { get; set; }
 	public Guid WorkflowStageDefinitionId { get; set; }
-	public string Name { get; set; } = string.Empty;
+	[Required, MaxLength(128)] public string Name { get; set; } = string.Empty;
 	public DateTimeOffset StartsAt { get; set; }
 	public DateTimeOffset EndsAt { get; set; }
-	public string Location { get; set; } = string.Empty;
-	public int Capacity { get; set; }
+	[MaxLength(256)] public string Location { get; set; } = string.Empty;
+	[Range(1, 10000)] public int Capacity { get; set; }
 	public string? ConcurrencyStamp { get; set; }
 }
 
 public class AdmissionAssessmentSessionDto : AdmissionAssessmentSessionInput
 {
+	public bool CanManage { get; set; } = true;
+	public List<AdmissionAssessmentScopeDto> ScopeDetails { get; set; } = [];
+	public Guid? RoomReservationId { get; set; }
+	public int? RoomReservationStatus { get; set; }
+	public string? InterviewerName { get; set; }
 	public Guid Id { get; set; }
 	public int BookedCount { get; set; }
 	public bool IsCancelled { get; set; }
@@ -41,6 +54,8 @@ public class AdmissionAssessmentSessionDto : AdmissionAssessmentSessionInput
 
 public class AdmissionAssessmentAttemptDto
 {
+	public DateTimeOffset? SlotStartsAt { get; set; }
+	public DateTimeOffset? SlotEndsAt { get; set; }
 	public Guid Id { get; set; }
 	public int AttemptNumber { get; set; }
 	public Guid? SessionId { get; set; }
@@ -83,10 +98,11 @@ public class AdmissionAssessmentDto
 
 public class AdmissionAssessmentActionInput
 {
+	public bool CancelPendingBookings { get; set; }
 	public string? ConcurrencyStamp { get; set; }
 	public string? Notes { get; set; }
 }
-public class AdmissionAssessmentBookingInput : AdmissionAssessmentActionInput { public Guid? SessionId { get; set; } }
+public class AdmissionAssessmentBookingInput : AdmissionAssessmentActionInput { public Guid? SessionId { get; set; } public DateTimeOffset? SlotStartsAt { get; set; } }
 public class AdmissionAssessmentAttendanceInput : AdmissionAssessmentActionInput { public string Attendance { get; set; } = string.Empty; }
 public class AdmissionAssessmentResultInput : AdmissionAssessmentActionInput { public decimal? Marks { get; set; } public string? Outcome { get; set; } }
 public class AdmissionAssessmentReviewInput : AdmissionAssessmentActionInput { public bool Approved { get; set; } }

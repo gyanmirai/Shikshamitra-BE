@@ -32,13 +32,8 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 			throw new BusinessException(AttendanceOperationErrorCodes.DateOutsideAcademicYear);
 		var day = await days.FindByDateAndDivisionAsync(yearId, standardId, divisionId, date, includeEntries: true);
 		var members = await LoadMembersAsync(yearId, divisionId);
-		var candidates = members.Where(e =>
-		{
-			var placement = e.AttendancePlacementOn(date);
-			if (day?.IsSubmitted == true && day.Entries.Any(entry => entry.EnrollmentId == e.Id && entry.ExpectedAtSubmission == true)) return true;
-			return placement != null ? placement.StandardId == standardId && placement.DivisionId == divisionId && placement.IsActive :
-				!e.AttendanceStartDate.HasValue && e.StandardId == standardId && e.DivisionId == divisionId && e.IsActive;
-		}).ToList();
+		var candidates = members.Where(e => IsRosterCandidate(e, standardId, divisionId, date,
+			day?.IsSubmitted == true && day.Entries.Any(entry => entry.EnrollmentId == e.Id && entry.ExpectedAtSubmission == true))).ToList();
 		var context = await applicability.LoadAsync(yearId, standardId, divisionId, date, date, candidates.Select(e => e.Id).ToArray());
 		var policy = await policies.ResolveAsync(yearId, date, context.Scope);
 		var options = day?.PolicySnapshotJson != null ? JsonSerializer.Deserialize<AttendancePolicyOptions>(day.PolicySnapshotJson)! : policy.Options;
@@ -81,13 +76,12 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 			var snapshotExpected = day?.IsSubmitted == true && entry?.ExpectedAtSubmission == true;
 			var alreadyRecorded = otherRecorded.Any(e => e.EnrollmentId == enrollment.Id);
 			rows.Add(new(enrollment, identity, snapshotExpected ? entry!.HistoricalRollNo : placement?.RollNumber ?? enrollment.RollNumber,
-				!alreadyRecorded && (snapshotExpected || (startConfirmed || currentEnrollment) && expected.IsExpected),
+				IsExpected(enrollment, standardId, divisionId, date, currentSchoolDate, snapshotExpected, alreadyRecorded, expected.IsExpected),
 				alreadyRecorded ? "Already recorded in another division for this date" : !startConfirmed && !currentEnrollment ? "Attendance start date not confirmed for this date" : expected.Reason,
 				expected.ScheduleLabel, matches.SingleOrDefault(), entry));
 		}
-		var revision = Hash(JsonSerializer.Serialize(new { yearId, standardId, divisionId, date, options,
-			rows = rows.OrderBy(r => r.Enrollment.Id).Select(r => new { r.Enrollment.Id, r.Enrollment.AttendanceStartDate,
-				r.Enrollment.AttendancePlacementHistoryJson, r.Expected, r.ScheduleLabel, leave = r.Leave?.Id, leaveRevision = r.Leave?.ConcurrencyStamp }) }));
+		var revision = RevisionFor(yearId, standardId, divisionId, date, options, rows.Select(r =>
+			new AttendanceRosterRevisionRow(r.Enrollment, r.Expected, r.ScheduleLabel, r.Leave)));
 		return new(yearId, standardId, divisionId, date, day, rows.OrderBy(r => r.RollNumber).ThenBy(r => r.Student.FirstName).ToList(),
 			options, revision, day?.IsSubmitted == true ? new AttendanceApplicabilityResult(true, "Submitted school day") : context.For(Guid.Empty, date, currentSchoolDate));
 	}
@@ -102,6 +96,24 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 			(e.DivisionId == divisionId || e.AttendancePlacementHistoryJson.Contains(divisionId.ToString()) || recordedIds.Any(id => id == e.Id))));
 	}
 
+	internal static bool IsRosterCandidate(StudentEnrollment enrollment, Guid standardId, Guid divisionId, DateTime date, bool submittedMember)
+	{
+		if (submittedMember) return true;
+		var placement = enrollment.AttendancePlacementOn(date);
+		return placement != null ? placement.StandardId == standardId && placement.DivisionId == divisionId && placement.IsActive :
+			!enrollment.AttendanceStartDate.HasValue && enrollment.StandardId == standardId && enrollment.DivisionId == divisionId && enrollment.IsActive;
+	}
+
+	internal static bool IsExpected(StudentEnrollment enrollment, Guid standardId, Guid divisionId, DateTime date, DateTime schoolToday,
+		bool submittedMember, bool alreadyRecorded, bool calendarExpected) => !alreadyRecorded && (submittedMember ||
+		(enrollment.AttendanceStartDate.HasValue && enrollment.AttendanceStartDate.Value.Date <= date ||
+			date == schoolToday && !enrollment.AttendanceStartDate.HasValue && enrollment.IsActive && enrollment.StandardId == standardId && enrollment.DivisionId == divisionId) && calendarExpected);
+
+	internal static string RevisionFor(Guid yearId, Guid standardId, Guid divisionId, DateTime date, AttendancePolicyOptions options,
+		IEnumerable<AttendanceRosterRevisionRow> rows) => Hash(JsonSerializer.Serialize(new { yearId, standardId, divisionId, date, options,
+			rows = rows.OrderBy(r => r.Enrollment.Id).Select(r => new { r.Enrollment.Id, r.Enrollment.AttendanceStartDate,
+				r.Enrollment.AttendancePlacementHistoryJson, r.Expected, r.ScheduleLabel, leave = r.Leave?.Id, leaveRevision = r.Leave?.ConcurrencyStamp }) }));
+
 	public static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
 
@@ -109,3 +121,5 @@ public sealed record AttendanceRoster(Guid AcademicYearId, Guid StandardId, Guid
 	List<AttendanceRosterMember> Members, AttendancePolicyOptions Options, string Revision, AttendanceApplicabilityResult SchoolDay);
 public sealed record AttendanceRosterMember(StudentEnrollment Enrollment, Student Student, int? RollNumber, bool Expected,
 	string? Reason, string? ScheduleLabel, AttendanceApprovedLeave? Leave, AttendanceEntry? Entry);
+
+internal sealed record AttendanceRosterRevisionRow(StudentEnrollment Enrollment, bool Expected, string? ScheduleLabel, AttendanceApprovedLeave? Leave);

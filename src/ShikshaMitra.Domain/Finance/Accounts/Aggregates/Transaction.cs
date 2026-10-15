@@ -21,6 +21,8 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
  public string? SourceKey { get; private set; }
  public Guid? SourceId { get; private set; }
  public Guid? StudentId { get; private set; }
+ public Guid? FinanceFeeAccountId { get; private set; }
+ public void LinkStudent(Guid studentId) => StudentId = ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
  public Guid? BankAccountId { get; private set; }
  public string? CategoryNameSnapshot { get; private set; }
  public string? BankLabelSnapshot { get; private set; }
@@ -38,12 +40,13 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
  public static Transaction Automatic(Guid id, Guid? tenantId, Guid yearId, Guid categoryId,
    string categoryName, Guid? bankId, string? bankLabel, string name, decimal amount,
-   int method, DateTime at, TransactionType type, string key, Guid sourceId, Guid studentId,
-   bool confirmed = true, bool correction = false)
+   int method, DateTime at, TransactionType type, string key, Guid sourceId, Guid? studentId,
+   bool confirmed = true, bool correction = false, Guid? financeFeeAccountId = null)
  {
    var entry = new Transaction(id, tenantId, yearId, categoryId, name, null, amount, method, at, null, type);
    entry.SourceKey = Check.NotNullOrWhiteSpace(key, nameof(key));
    entry.SourceId = sourceId; entry.StudentId = studentId; entry.BankAccountId = bankId;
+   entry.FinanceFeeAccountId = financeFeeAccountId;
    entry.CategoryNameSnapshot = categoryName; entry.BankLabelSnapshot = bankLabel;
    entry.IsConfirmed = confirmed; if (correction) entry.Amount = -amount;
    return entry;

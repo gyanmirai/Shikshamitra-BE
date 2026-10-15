@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Students;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.Constants.Permissions;
 using System;
 using System.Collections.Generic;
@@ -32,9 +34,9 @@ public partial class FeeRefundAppService
 		public string? AcademicMediumName { get; init; }
 	}
 
-	private async Task<Dictionary<Guid, RefundStudentSummary>> BuildStudentMapAsync(IEnumerable<Guid> studentIds)
+	private async Task<Dictionary<Guid, RefundStudentSummary>> BuildStudentMapAsync(IEnumerable<Guid?> studentIds)
 	{
-		var ids = studentIds.ToList();
+		var ids = studentIds.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
 		if (ids.Count == 0) return [];
 		var students = await AsyncExecuter.ToListAsync((await studentRepository.GetQueryableAsync())
 			.Where(s => ids.Contains(s.Id))
@@ -54,20 +56,40 @@ public partial class FeeRefundAppService
 		return students.ToDictionary(s => s.Id);
 	}
 
-	private static FeeRefundRequestDto MapToDto(FeeRefundRequest r, Dictionary<Guid, RefundStudentSummary> studentMap)
+	private async Task<Dictionary<Guid, FinanceFeeAccount>> BuildAccountMapAsync(IEnumerable<Guid?> accountIds)
 	{
-		studentMap.TryGetValue(r.StudentId, out var student);
+		var ids = accountIds.Where(x => x.HasValue).Select(x => x!.Value).Distinct().ToList();
+		if (ids.Count == 0) return [];
+		return (await accountRepository.GetListAsync(x => ids.Contains(x.Id))).ToDictionary(x => x.Id);
+	}
+
+	private async Task<Dictionary<Guid, AcademicYear>> BuildYearMapAsync(IEnumerable<Guid> yearIds)
+	{
+		var ids = yearIds.Distinct().ToList();
+		if (ids.Count == 0) return [];
+		return (await academicYearRepository.GetListAsync(x => ids.Contains(x.Id))).ToDictionary(x => x.Id);
+	}
+
+	private static FeeRefundRequestDto MapToDto(FeeRefundRequest r, Dictionary<Guid, RefundStudentSummary> studentMap,
+		Dictionary<Guid, FinanceFeeAccount> accountMap, Dictionary<Guid, AcademicYear> yearMap)
+	{
+		var student = r.StudentId.HasValue ? studentMap.GetValueOrDefault(r.StudentId.Value) : null;
+		var account = r.FinanceFeeAccountId.HasValue ? accountMap.GetValueOrDefault(r.FinanceFeeAccountId.Value) : null;
+		var year = yearMap.GetValueOrDefault(r.AcademicYearId);
 		var isLegacy = !r.RefundPolicyVersionId.HasValue && !r.ConcessionRequestId.HasValue;
 		var policy = string.IsNullOrWhiteSpace(r.PolicySnapshotJson)
 			? null : JsonSerializer.Deserialize<RefundPolicySnapshot>(r.PolicySnapshotJson);
 		var legacyFinancialAmount = isLegacy && r.Status == FeeRefundStatus.Approved ? r.TotalAmount : 0m;
-		var fullName = student is null ? string.Empty
+		var fullName = student is null ? account?.ApplicantName ?? string.Empty
 			: string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }
 				.Where(p => !string.IsNullOrWhiteSpace(p)));
 
 		return new FeeRefundRequestDto
 		{
-			Id = r.Id, StudentId = r.StudentId, AcademicYearId = r.AcademicYearId,
+			Id = r.Id, StudentId = r.StudentId, FinanceFeeAccountId = r.FinanceFeeAccountId, AcademicYearId = r.AcademicYearId,
+			AcademicYearName = year?.Name,
+			AcademicYearStartDate = year == null ? null : DateTime.SpecifyKind(year.StartDate, DateTimeKind.Utc),
+			AcademicYearEndDate = year == null ? null : DateTime.SpecifyKind(year.EndDate, DateTimeKind.Utc),
 			Status = r.Status, WorkflowVersion = r.WorkflowVersion,
 			ReplacesRefundRequestId = r.ReplacesRefundRequestId,
 			VoucherNumber = r.VoucherNumber, TotalAmount = r.TotalAmount,
@@ -108,11 +130,11 @@ public partial class FeeRefundAppService
 				EvidenceReference = x.EvidenceReference, VerifiedByUserId = x.VerifiedByUserId,
 				VerifiedAt = x.VerifiedAt }).ToList(),
 			StudentName = fullName, StudentGrNo = student?.GrNo, StudentRollNo = student?.RollNo,
-			StandardId = student?.StandardId, DivisionId = student?.DivisionId,
+			StandardId = student?.StandardId ?? account?.StandardId, DivisionId = student?.DivisionId ?? account?.DivisionId,
 			StandardName = student?.StandardName, DivisionName = student?.DivisionName,
 			StudentContactNo = student?.PrimaryContactNo,
-			BoardId = student?.AcademicBoardId, BoardName = student?.BoardName,
-			EducationMediumId = student?.AcademicMediumId, EducationMediumName = student?.AcademicMediumName,
+			BoardId = student?.AcademicBoardId ?? account?.BoardId, BoardName = student?.BoardName,
+			EducationMediumId = student?.AcademicMediumId ?? account?.EducationMediumId, EducationMediumName = student?.AcademicMediumName,
 		};
 	}
 
@@ -222,8 +244,11 @@ public partial class FeeRefundAppService
 		dto.RefundRequestId = request.Id;
 
 		var lineDueFeeIds = request.Lines.Select(l => l.DueFeeId).ToList();
-		var dueFees = await dueFeeRepository.GetListAsync(
-			df => df.StudentId == request.StudentId && (df.PaidAmount > 0 || lineDueFeeIds.Contains(df.Id)));
+		var dueFees = await dueFeeRepository.GetListAsync(df =>
+			(request.FinanceFeeAccountId.HasValue ? df.FinanceFeeAccountId == request.FinanceFeeAccountId
+				: df.StudentId == request.StudentId &&
+					(!request.StudentFeeStructureId.HasValue || df.StudentFeeStructureId == request.StudentFeeStructureId)) &&
+			(df.PaidAmount > 0 || lineDueFeeIds.Contains(df.Id)));
 
 		if (dueFees.Count == 0)
 		{

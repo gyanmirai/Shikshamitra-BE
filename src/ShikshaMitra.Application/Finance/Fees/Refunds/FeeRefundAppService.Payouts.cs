@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Audit;
+using ShikshaMitra.Finance.Events;
 using ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 using System;
 using System.Data;
@@ -24,7 +25,7 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
         EnsureSettlementMethodAllowed(request, input.Method);
         var reference = input.Method == "Cash" && string.IsNullOrWhiteSpace(input.ExternalReference)
             ? $"CASH-{request.VoucherNumber}"
@@ -78,7 +79,7 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
         var payout = request.Settlements.SingleOrDefault(x => x.Id == payoutId)
             ?? throw new BusinessException(FeeRefundErrorCodes.SettlementNotFound);
         if (payout.VerificationKey == input.IdempotencyKey && request.Status == FeeRefundStatus.Processed)
@@ -105,9 +106,16 @@ public partial class FeeRefundAppService
                 request.ExpenseCategoryName!, payout.BankAccountId, request.PayingBankLabel,
                 request.VoucherNumber, amount, PayoutMethodValue(payout.Method),
                 ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense,
-                $"refund:{payout.Id:N}", request.Id, request.StudentId, paymentDate: payout.SettlementDate.UtcDateTime);
+                $"refund:{payout.Id:N}", request.Id, request.StudentId, paymentDate: payout.SettlementDate.UtcDateTime,
+                financeFeeAccountId: request.FinanceFeeAccountId);
         await WriteAuditAsync(request, FinanceAuditActions.Refund,
             $"Refund {request.VoucherNumber} confirmed paid.", context: new { PayoutId = payoutId });
+        await eventBus.PublishAsync(new FeeRefundApprovedEto
+        {
+            RefundRequestId = request.Id, StudentId = request.StudentId, FinanceFeeAccountId = request.FinanceFeeAccountId,
+            AcademicYearId = request.AcademicYearId, TotalRefundAmount = Convert.ToDouble(request.ProcessedAmount),
+            TenantId = CurrentTenant.Id, ApprovedAt = Clock.Now
+        });
         await uow.CompleteAsync();
         return await MapAsync(request);
     }
@@ -122,7 +130,7 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
         var payout = request.Settlements.SingleOrDefault(x => x.Id == payoutId)
             ?? throw new BusinessException(FeeRefundErrorCodes.SettlementNotFound);
         if (payout.VerificationKey == input.IdempotencyKey && request.Status == FeeRefundStatus.Failed)
@@ -155,7 +163,7 @@ public partial class FeeRefundAppService
         using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions
             { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
         var request = await RequireAsync(id);
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
         var original = (await refundAccountingRepository.GetListAsync(x =>
             x.RefundRequestId == id && !x.IsCorrection)).SingleOrDefault();
         if (original == null || original.SettlementId != input.SettlementId ||

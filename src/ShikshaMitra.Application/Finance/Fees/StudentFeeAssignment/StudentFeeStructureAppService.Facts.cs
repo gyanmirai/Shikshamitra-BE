@@ -20,6 +20,7 @@ public partial class StudentFeeStructureAppService
 		public Guid StudentId { get; set; }
 		public Guid? StandardId { get; set; }
 		public Guid? DivisionId { get; set; }
+		public int? RollNumber { get; set; }
 		public bool IsActive { get; set; }
 		public string ConcurrencyStamp { get; set; } = "";
 	}
@@ -33,12 +34,12 @@ public partial class StudentFeeStructureAppService
 		var structures = await feeStructureRepository.GetQueryableAsync();
 		// StudentEnrollment is an unmapped draft aggregate. The live student academic context is authoritative.
 		var current = students.Where(s => s.AcademicYearId == year).Select(s => new EnrollmentFact {
-			Id = s.Id, StudentId = s.Id, StandardId = s.StandardId, DivisionId = s.DivisionId,
+			Id = s.Id, StudentId = s.Id, StandardId = s.StandardId, DivisionId = s.DivisionId, RollNumber = s.RollNo,
 			IsActive = s.Status == ShikshaMitra.Students.StudentLifeCycleStatusEnum.Enrolled, ConcurrencyStamp = s.ConcurrencyStamp });
 		var historical = from a in assignments join s in students on a.StudentId equals s.Id
 			join f in structures on a.FeeStructureStandardId equals f.Id
 			where a.AcademicYearId == year && s.AcademicYearId != year
-			select new EnrollmentFact { Id = a.Id, StudentId = s.Id, StandardId = f.StandardId, DivisionId = null,
+			select new EnrollmentFact { Id = a.Id, StudentId = s.Id, StandardId = f.StandardId, DivisionId = null, RollNumber = null,
 				IsActive = false, ConcurrencyStamp = a.ConcurrencyStamp };
 		var enrollments = current.Concat(historical);
 		if (scope.IsAdmin || scope.HasWildcardAcademicYear) return enrollments;

@@ -42,6 +42,7 @@ public partial class StudentFeeStructureAppService(
 	IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.PaymentTerm, Guid> paymentTermRepository,
 	IRepository<ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms.PaymentTermVersion, Guid> paymentTermVersionRepository,
 	IRepository<Standard, Guid> standardRepository,
+	IRepository<ShikshaMitra.TenantSettings.Divisions.Division, Guid> divisionRepository,
 	IRepository<TransportMember, Guid> transportMemberRepository,
 	IRepository<TransportMemberRouteAssignment, Guid> transportRouteRepository,
 	IUserScopeService userScopeService,

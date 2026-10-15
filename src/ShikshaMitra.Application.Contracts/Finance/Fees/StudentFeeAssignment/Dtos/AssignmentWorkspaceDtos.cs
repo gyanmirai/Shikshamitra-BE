@@ -12,6 +12,9 @@ public class AssignmentStudentListInput : PagedResultRequestDto
 	public Guid? StandardId { get; set; }
 	public Guid? DivisionId { get; set; }
 	public string? Search { get; set; }
+	public string? Filters { get; set; }
+	public string? SortBy { get; set; }
+	public string? SortOrder { get; set; }
 }
 
 public class AssignmentTransportSourceDto
@@ -31,6 +34,14 @@ public class AssignmentStudentDto
 	public Guid? StandardId { get; set; }
 	public Guid? DivisionId { get; set; }
 	public string StudentName { get; set; } = "";
+	public string GrNumber { get; set; } = "";
+	public int? RollNumber { get; set; }
+	public string StandardDivision { get; set; } = "";
+	public string BoardName { get; set; } = "";
+	public string MediumName { get; set; } = "";
+	public string StageName { get; set; } = "";
+	public string ClassName { get; set; } = "";
+	public string DivisionName { get; set; } = "";
 	public bool IsActive { get; set; }
 	public bool IsFeeStructureAssigned { get; set; }
 }

@@ -18,6 +18,10 @@ The persisted `Student` academic placement and `Enrolled` lifecycle status are t
 
 Historical reads use `StudentFeeStructure.StudentId + AcademicYearId`, including after the student's current year changes. The structure supplies the historical class; no old division is inferred. A division-only user without adequate historical class scope is therefore denied. ABP tenant filters stay enabled. The server additionally checks the user scope hierarchy against the requested academic year.
 
+The student list returns full name (including middle name), canonical string GR number with legacy numeric fallback, nullable roll number, class/division, separate class/division names, board, medium and stage, plus enrollment/assignment status. Academic labels come from the scoped placement's class. Historical records omit roll number and division because those values are not preserved by the assignment. No current-year roll number is projected into a historical year.
+
+`Filters` accepts the shared Finance table JSON contract; `SortBy` and `SortOrder` (`asc`/`desc`) use an allowlist of `studentName`, `grNumber`, `rollNumber`, `standardDivision`, `className`, `divisionName`, `boardName`, `mediumName`, `stageName`, `isActive` and `isFeeStructureAssigned`. Status enum values follow label order: enrollment `0 = Active`, `1 = Inactive`; assignment `0 = Assigned`, `1 = Unassigned`. Search is case-insensitive across full name, GR number and roll number. Filters apply after tenant/year/user/academic scope and before counting, sorting and paging. Sorts use the displayed field plus a stable enrollment identity tie-breaker. Numeric roll filters exclude missing values. Unsupported columns/operators/values are rejected. The query is read-only and does not change assignment eligibility, dues, receipts or stored student details; no migration is required.
+
 ## Endpoints and permissions
 
 All routes below are under `/api/student-fee-structure`; the client base URL already contains `/api`.

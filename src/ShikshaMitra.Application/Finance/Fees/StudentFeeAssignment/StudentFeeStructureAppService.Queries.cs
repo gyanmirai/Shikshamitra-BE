@@ -38,14 +38,37 @@ public partial class StudentFeeStructureAppService
 		if (input.BoardId.HasValue) enrollments = enrollments.Where(e => standards.Any(s => s.Id == e.StandardId && s.EducationMediumStage.EducationMedium.EducationBoardId == input.BoardId));
 		if (input.EducationMediumId.HasValue) enrollments = enrollments.Where(e => standards.Any(s => s.Id == e.StandardId && s.EducationMediumStage.EducationMediumId == input.EducationMediumId));
 		var students = await studentRepository.GetQueryableAsync();
+		var divisions = await divisionRepository.GetQueryableAsync();
 		var assignments = await studentFeeStructureRepository.GetQueryableAsync();
 		var rows = from e in enrollments join s in students on e.StudentId equals s.Id
+			join standard in standards on e.StandardId equals standard.Id into standardGroup
+			from standard in standardGroup.DefaultIfEmpty()
+			join division in divisions on e.DivisionId equals division.Id into divisionGroup
+			from division in divisionGroup.DefaultIfEmpty()
 			select new AssignmentStudentDto { EnrollmentId = e.Id, StudentId = s.Id, StandardId = e.StandardId, DivisionId = e.DivisionId,
-				StudentName = (s.FirstName ?? "") + " " + (s.LastName ?? ""), IsActive = e.IsActive,
+				StudentName = ((s.FirstName ?? "") + (s.MiddleName == null || s.MiddleName == "" ? "" : " " + s.MiddleName) + " " + (s.LastName ?? "")).Trim(),
+				GrNumber = s.GrNumber ?? (s.GrNo.HasValue ? s.GrNo.Value.ToString() : ""),
+				RollNumber = e.RollNumber,
+				ClassName = standard == null ? "" : standard.Name,
+				DivisionName = division == null ? "" : division.Name,
+				StandardDivision = (standard == null ? "" : standard.Name) + (division == null ? "" : " - " + division.Name),
+				BoardName = standard == null ? "" : standard.EducationMediumStage.EducationMedium.EducationBoard.Type ==
+					ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards.EducationBoardType.CBSE ? "CBSE" : "GSEB",
+				MediumName = standard == null ? "" : standard.EducationMediumStage.EducationMedium.Name,
+				StageName = standard == null ? "" : standard.EducationMediumStage.Name,
+				IsActive = e.IsActive,
 				IsFeeStructureAssigned = assignments.Any(a => a.StudentId == s.Id && a.AcademicYearId == input.AcademicYearId) };
-		if (!string.IsNullOrWhiteSpace(input.Search)) rows = rows.Where(x => x.StudentName.Contains(input.Search.Trim()));
+		var tableQuery = ShikshaMitra.Finance.Common.FinanceTableQuery.Parse(input.Filters, input.Search, input.SortBy, input.SortOrder, AssignmentColumns);
+		if (!string.IsNullOrWhiteSpace(tableQuery.Search))
+		{
+			var search = tableQuery.Search.ToLowerInvariant();
+			rows = rows.Where(x => x.StudentName.ToLower().Contains(search) || x.GrNumber.ToLower().Contains(search) ||
+				(x.RollNumber.HasValue && x.RollNumber.Value.ToString().Contains(search)));
+		}
+		rows = tableQuery.Apply(rows, AssignmentFields);
 		return new PagedResultDto<AssignmentStudentDto>(await AsyncExecuter.CountAsync(rows),
-			await AsyncExecuter.ToListAsync(rows.OrderBy(x => x.StudentName).ThenBy(x => x.EnrollmentId).Skip(input.SkipCount).Take(input.MaxResultCount)));
+			await AsyncExecuter.ToListAsync(tableQuery.Order(rows, AssignmentFields, "studentName", false, x => x.EnrollmentId)
+				.Skip(input.SkipCount).Take(input.MaxResultCount)));
 	}
 
 	[Authorize(AssignPermission)]

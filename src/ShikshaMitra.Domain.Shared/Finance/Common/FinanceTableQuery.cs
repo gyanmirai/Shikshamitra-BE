@@ -100,6 +100,9 @@ public sealed class FinanceTableQuery
 
     private static Expression Build(FinanceTableFilter filter, Expression field)
     {
+        if (Nullable.GetUnderlyingType(field.Type) is not null)
+            return Expression.AndAlso(Expression.Property(field, "HasValue"),
+                Build(filter, Expression.Property(field, "Value")));
         if (field.Type == typeof(string))
         {
             var text = Expression.Call(Expression.Coalesce(field, Expression.Constant("")), nameof(string.ToLower), System.Type.EmptyTypes);
@@ -123,11 +126,16 @@ public sealed class FinanceTableQuery
                 _ => Expression.AndAlso(Expression.GreaterThanOrEqual(field, start), Expression.LessThan(field, end))
             };
         }
-        var numeric = field.Type == typeof(decimal) ? field : Expression.Convert(field, typeof(decimal));
+        // Int32 counts/statuses are exactly representable as doubles. Avoid converting them
+        // to decimal TEXT on SQLite, where CAST(0 AS TEXT) does not equal a decimal '0.0'.
+        var integer = field.Type == typeof(int);
+        var numeric = integer ? Expression.Convert(field, typeof(double)) :
+            field.Type == typeof(decimal) ? field : Expression.Convert(field, typeof(decimal));
+        Expression Bound(JsonElement value) => integer ? Expression.Constant((double)Number(value)) : Expression.Constant(Number(value));
         if (filter.Type == "between") return Expression.AndAlso(
-            Expression.GreaterThanOrEqual(numeric, Expression.Constant(Number(filter.Value.GetProperty("min")))),
-            Expression.LessThanOrEqual(numeric, Expression.Constant(Number(filter.Value.GetProperty("max")))));
-        var number = Expression.Constant(Number(filter.Value));
+            Expression.GreaterThanOrEqual(numeric, Bound(filter.Value.GetProperty("min"))),
+            Expression.LessThanOrEqual(numeric, Bound(filter.Value.GetProperty("max"))));
+        var number = Bound(filter.Value);
         return filter.Type switch
         {
             "greaterThan" => Expression.GreaterThan(numeric, number),

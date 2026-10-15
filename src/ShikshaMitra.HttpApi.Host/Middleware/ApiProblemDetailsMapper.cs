@@ -30,7 +30,7 @@ public static class ApiProblemDetailsMapper
 			HRErrorCodes.LeaveConflictTerminalState => StatusCodes.Status409Conflict,
 			HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed => StatusCodes.Status409Conflict,
 			HRErrorCodes.StatutoryPreviewStale => StatusCodes.Status409Conflict,
-			"HR:Payroll:PfCoverageSaveConflict" or "HR:Payroll:CompensationSaveConflict" => StatusCodes.Status409Conflict,
+			"HR:Payroll:StatutoryProfileConflict" or "HR:Payroll:PfCoverageSaveConflict" or "HR:Payroll:CompensationSaveConflict" => StatusCodes.Status409Conflict,
 			HRErrorCodes.EsiConfigurationLocked or HRErrorCodes.EsiConfigurationCancellationInvalid => StatusCodes.Status409Conflict,
 			HRErrorCodes.LeaveAttachmentNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveFileTooLarge => StatusCodes.Status413PayloadTooLarge,

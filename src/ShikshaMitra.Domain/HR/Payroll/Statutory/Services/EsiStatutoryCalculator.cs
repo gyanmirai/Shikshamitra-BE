@@ -28,6 +28,8 @@ public sealed record EsiStatutoryCalculationResult(
 	DateTime ContributionPeriodEnd,
 	IReadOnlyList<string> IssueCodes)
 {
+	public decimal? ReferenceStatutoryWages { get; init; }
+	public PayrollSchemeApplication? Application { get; init; }
 	public decimal EligibilityWages { get; init; }
 	public decimal EmployeePercentage { get; init; }
 	public decimal EmployerPercentage { get; init; }
@@ -36,7 +38,7 @@ public sealed record EsiStatutoryCalculationResult(
 
 public static class EsiStatutoryCalculator
 {
-	public const string BasicComponentIssue = "ESI_BASIC_COMPONENT_REQUIRED";
+	public const string BasicComponentIssue = "ESI_COMPONENT_REQUIRED";
 	public const string RateOverrideIssue = "ESI_RATE_OVERRIDE";
 	public const string EstablishmentInactiveIssue = "ESI_ESTABLISHMENT_INACTIVE";
 	public const string WageClassificationIssue = "ESI_WAGE_CLASSIFICATION_REQUIRED";
@@ -45,6 +47,26 @@ public static class EsiStatutoryCalculator
 	public const string DisabilityReliefEvidenceIssue = "ESI_PWD_RELIEF_EVIDENCE_REQUIRED";
 
 	public static EsiStatutoryCalculationResult Calculate(
+		DateTime payrollMonth, StatutoryRuleVersion rule, StatutoryEstablishment? establishment,
+		EmployeeStatutoryEnrollment? enrollment, IReadOnlyList<StatutoryWageLine> wageLines,
+		IReadOnlyList<StatutoryOverride>? overrides = null, bool assumeEstablishmentActive = false,
+		IReadOnlyList<StatutoryWageLine>? coverageWageLines = null, EsiCalculationSettings? calculationSettings = null,
+		PayrollStatutoryProfile? payrollProfile = null)
+	{
+		var result = CalculateAssessment(payrollMonth, rule, establishment, enrollment, wageLines, overrides,
+			assumeEstablishmentActive, coverageWageLines, calculationSettings);
+		if (payrollProfile == null) return result;
+		var application = PayrollSchemeApplication.Decide("ESI", payrollProfile.ApplyEsic, payrollProfile.EsicInsuranceNumber,
+			result.IsCovered, result.EmployeeContribution, result.EmployerContribution, payrollProfile.EsicDisabledReason) with { ContributionWages = result.StatutoryWages };
+		var issues = result.IssueCodes.Where(x => x != InsuranceNumberIssue).ToList();
+		if (application.WarningCode != null) issues.Add(application.WarningCode);
+		return result with { Application = application, EmployeeContribution = application.AppliedEmployeeAmount,
+			EmployerContribution = application.AppliedEmployerAmount,
+			GovernmentContribution = application.Apply && application.NumberPresent ? result.GovernmentContribution : 0m,
+			IssueCodes = issues };
+	}
+
+	private static EsiStatutoryCalculationResult CalculateAssessment(
 		DateTime payrollMonth,
 		StatutoryRuleVersion rule,
 		StatutoryEstablishment? establishment,
@@ -74,13 +96,14 @@ public static class EsiStatutoryCalculator
 		calculationSettings ??= new EsiCalculationSettings();
 		calculationSettings.Validate();
 		var fullMonthWageLines = coverageWageLines ?? wageLines;
-		var basicComponentUnavailable = !calculationSettings.BasicComponentIsActive ||
-			fullMonthWageLines.Count(x => x.ComponentId == calculationSettings.BasicComponentId && x.IsBasic && x.Amount > 0m) != 1;
-		if (calculationSettings.EligibilityBasis == "BASIC_COMPONENT" && basicComponentUnavailable)
-			return Empty("BASIC_COMPONENT_REQUIRED", wageCeiling, periodStart, periodEnd, [BasicComponentIssue])
-				with
-			{ CalculationSettings = calculationSettings };
-		var eligibilityWageLines = ResolveWages(fullMonthWageLines, calculationSettings.EligibilityBasis, calculationSettings.BasicComponentId);
+		var assessmentLines = wageLines;
+		var eligibilityComponentUnavailable = !calculationSettings.EligibilityComponentIsActive ||
+			fullMonthWageLines.Count(x => !x.IsAdditional && x.ComponentId == calculationSettings.EligibilityComponentId) != 1;
+		var calculationComponentUnavailable = !calculationSettings.CalculationComponentIsActive ||
+			fullMonthWageLines.Count(x => !x.IsAdditional && x.ComponentId == calculationSettings.CalculationComponentId) != 1;
+		if (calculationSettings.EligibilityBasis == "COMPONENT" && eligibilityComponentUnavailable)
+			return Empty("COMPONENT_REQUIRED", wageCeiling, periodStart, periodEnd, [BasicComponentIssue]) with { CalculationSettings = calculationSettings };
+		var eligibilityWageLines = ResolveWages(fullMonthWageLines, calculationSettings.EligibilityBasis, calculationSettings.EligibilityComponentId);
 		if (calculationSettings.HasRateOverride) issueCodes.Add(RateOverrideIssue);
 		var employeePercentage = calculationSettings.EmployeePercentage ?? rule.EmployeePercentage;
 		var employerPercentage = calculationSettings.EmployerPercentage ?? rule.EmployerPercentage;
@@ -122,9 +145,9 @@ public static class EsiStatutoryCalculator
 					? "WITHIN_WAGE_CEILING"
 					: "ABOVE_WAGE_CEILING";
 
-		var fullMonthCalculationWageLines = ResolveWages(fullMonthWageLines, calculationSettings.CalculationBasis, calculationSettings.BasicComponentId);
-		wageLines = ResolveWages(wageLines, calculationSettings.CalculationBasis, calculationSettings.BasicComponentId);
-		var calculationIssue = calculationSettings.CalculationBasis == "BASIC_COMPONENT" && basicComponentUnavailable
+		var fullMonthCalculationWageLines = ResolveWages(fullMonthWageLines, calculationSettings.CalculationBasis, calculationSettings.CalculationComponentId);
+		wageLines = ResolveWages(wageLines, calculationSettings.CalculationBasis, calculationSettings.CalculationComponentId);
+		var calculationIssue = calculationSettings.CalculationBasis == "COMPONENT" && calculationComponentUnavailable
 			? BasicComponentIssue
 			: wageLines.Concat(fullMonthCalculationWageLines).Any(x => x.Treatment == StatutoryWageTreatment.Unclassified)
 				? WageClassificationIssue : null;
@@ -140,7 +163,7 @@ public static class EsiStatutoryCalculator
 					CalculationSettings = calculationSettings
 				};
 			issueCodes.Add(calculationIssue);
-			return Empty(calculationIssue == BasicComponentIssue ? "BASIC_COMPONENT_REQUIRED" : "WAGE_CLASSIFICATION_REQUIRED",
+			return Empty(calculationIssue == BasicComponentIssue ? "COMPONENT_REQUIRED" : "WAGE_CLASSIFICATION_REQUIRED",
 				wageCeiling, periodStart, periodEnd, issueCodes) with
 			{
 				IsCovered = true,
@@ -151,6 +174,10 @@ public static class EsiStatutoryCalculator
 		var (totalRemuneration, includedWages, specifiedExclusions, exclusionAddBack, inKindWages, statutoryWages)
 			= CalculateWages(rule, wageLines);
 		var fullMonthCalculationWages = CalculateWages(rule, fullMonthCalculationWageLines).StatutoryWages;
+		decimal? referenceWages = assessmentLines.Any(x => x.Treatment == StatutoryWageTreatment.Unclassified)
+			? null : CalculateWages(rule, assessmentLines).StatutoryWages;
+		if (referenceWages == null) issueCodes.Add("ESI_STATUTORY_ASSESSMENT_UNAVAILABLE");
+		else if (referenceWages != statutoryWages) issueCodes.Add("ESI_BASIS_RECONCILIATION_DIFFERENCE");
 
 		if (!isCovered)
 		{
@@ -209,7 +236,8 @@ public static class EsiStatutoryCalculator
 			EligibilityWages = coverageWages,
 			EmployeePercentage = employeePercentage,
 			EmployerPercentage = employerPercentage,
-			CalculationSettings = calculationSettings
+			CalculationSettings = calculationSettings,
+			ReferenceStatutoryWages = referenceWages
 		};
 	}
 
@@ -244,14 +272,13 @@ public static class EsiStatutoryCalculator
 				? (new DateTime(date.Year, 10, 1), new DateTime(date.Year + 1, 3, 31))
 				: (new DateTime(date.Year - 1, 10, 1), new DateTime(date.Year, 3, 31));
 
-	private static IReadOnlyList<StatutoryWageLine> ResolveWages(IReadOnlyList<StatutoryWageLine> lines, string basis, Guid? basicComponentId) =>
-		lines.Select(line => line with
+	private static IReadOnlyList<StatutoryWageLine> ResolveWages(IReadOnlyList<StatutoryWageLine> lines, string basis, Guid? componentId) =>
+		basis switch
 		{
-			Treatment = basis == "GROSS" && !line.IsAdditional && line.Treatment != StatutoryWageTreatment.InKind
-				? StatutoryWageTreatment.Included
-				: basis == "BASIC_COMPONENT" && line.ComponentId == basicComponentId
-					? StatutoryWageTreatment.Included : line.Treatment
-		}).ToList();
+			"COMPONENT" => lines.Where(x => !x.IsAdditional && x.ComponentId == componentId).Select(x => x with { Treatment = StatutoryWageTreatment.Included }).ToList(),
+			"GROSS" => lines.Where(x => !x.IsAdditional).Select(x => x with { Treatment = StatutoryWageTreatment.Included }).ToList(),
+			_ => lines
+		};
 
 	private static decimal ApplyRounding(decimal value, StatutoryRoundingPolicy policy) => policy switch
 	{

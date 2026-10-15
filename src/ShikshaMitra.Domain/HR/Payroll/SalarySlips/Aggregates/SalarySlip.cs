@@ -50,6 +50,12 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public int? ProfessionalTaxRuleVersion { get; private set; }
 	public Guid? EmployeeStateInsuranceRuleId { get; private set; }
 	public Guid? EsiConfigurationId { get; private set; }
+	public string? StatutoryApplicationJson { get; private set; }
+	internal void SetStatutoryApplication(string? evidence)
+	{
+		if (IsImmutable()) throw new InvalidOperationException("Issued payroll evidence cannot change.");
+		StatutoryApplicationJson = evidence;
+	}
 	public int? EmployeeStateInsuranceRuleVersion { get; private set; }
 	public decimal EmployeeStateInsuranceWages { get; private set; }
 	public decimal EmployeeStateInsuranceGovernmentContribution { get; private set; }
@@ -145,7 +151,7 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (IsImmutable())
 			throw new InvalidOperationException("Salary slip is already finalized");
 		ShikshaMitra.HR.Payroll.Statutory.EsiPayrollReadiness.EnsureInsuranceNumber(
-			EmployeeStateInsuranceRuleId, EmployeeStateInsuranceCoverageDecision, EmployeeStateInsuranceNumber);
+			EmployeeStateInsuranceRuleId, EmployeeStateInsuranceCoverageDecision, EmployeeStateInsuranceNumber, StatutoryApplicationJson);
 
 		Status = SalarySlipStatus.Finalized;
 	}

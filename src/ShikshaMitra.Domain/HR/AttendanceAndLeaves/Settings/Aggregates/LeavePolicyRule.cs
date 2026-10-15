@@ -24,6 +24,7 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 	public int? AttachmentRequiredAfterDays { get; protected set; }
 	public bool AllowNegativeBalance { get; protected set; }
 	public bool IsActive { get; protected set; }
+	public string PayrollCategory { get; private set; } = "PAID";
 
 	public virtual LeavePolicy? LeavePolicy { get; protected set; }
 
@@ -51,11 +52,12 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 		bool allowHalfDay,
 		int? attachmentRequiredAfterDays,
 		bool allowNegativeBalance,
-		bool isActive = true) : base(id)
+		bool isActive = true, string payrollCategory = "PAID") : base(id)
 	{
 		TenantId = tenantId;
 		LeavePolicyId = leavePolicyId;
 		PaidType = paidType;
+		SetPayrollCategory(payrollCategory);
 		AccrualPolicyType = accrualPolicyType;
 		SetEntitlement(entitlementMode, leaveCount, allowNegativeBalance);
 		SetCarryForward(carryForward, carryForwardLimit);
@@ -81,9 +83,10 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 		bool allowHalfDay,
 		int? attachmentRequiredAfterDays,
 		bool allowNegativeBalance,
-		bool isActive)
+		bool isActive, string payrollCategory = "PAID")
 	{
 		PaidType = paidType;
+		SetPayrollCategory(payrollCategory);
 		AccrualPolicyType = accrualPolicyType;
 		SetEntitlement(entitlementMode, leaveCount, allowNegativeBalance);
 		SetCarryForward(carryForward, carryForwardLimit);
@@ -110,10 +113,10 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 			source.AllowHalfDay,
 			source.AttachmentRequiredAfterDays,
 			source.AllowNegativeBalance,
-			source.IsActive);
+			source.IsActive, source.PayrollCategory);
 
 	public bool HasSameConfigurationAs(LeavePolicyRule other) =>
-		PaidType == other.PaidType &&
+		PaidType == other.PaidType && PayrollCategory == other.PayrollCategory &&
 		EntitlementMode == other.EntitlementMode &&
 		AccrualPolicyType == other.AccrualPolicyType &&
 		LeaveCount == other.LeaveCount &&
@@ -130,6 +133,12 @@ public class LeavePolicyRule : FullAuditedEntity<Guid>, IMultiTenant
 		IsActive == other.IsActive;
 
 	public void Deactivate() => IsActive = false;
+
+	private void SetPayrollCategory(string category)
+	{
+		if (category is not ("PAID" or "CL" or "UNPAID")) throw new BusinessException("HR:Leave:PayrollCategoryInvalid");
+		PayrollCategory = PaidType == LeavePaidType.Unpaid ? "UNPAID" : category == "CL" ? "CL" : "PAID";
+	}
 
 	private void SetEntitlement(
 		LeaveEntitlementMode entitlementMode,

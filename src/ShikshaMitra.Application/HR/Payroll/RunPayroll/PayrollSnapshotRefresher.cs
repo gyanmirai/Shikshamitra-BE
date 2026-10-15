@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
@@ -42,7 +42,7 @@ public class PayrollSnapshotRefresher(
 	EsiPayrollConfigurationResolver esiConfigurationResolver,
 	IProfessionalTaxRepository professionalTaxRepository,
 	IRepository<PayslipCorrection, Guid> payslipCorrections,
-	ILogger<PayrollSnapshotRefresher> logger, PfEligibilityResolver pfEligibilityResolver)
+	ILogger<PayrollSnapshotRefresher> logger, PfEligibilityResolver pfEligibilityResolver, EmployeeStatutoryProfileResolver statutoryProfiles)
 	: ITransientDependency
 {
 	public async Task RefreshForEmployeeIdsAsync(
@@ -156,6 +156,7 @@ public class PayrollSnapshotRefresher(
 		if (scopedEmployees.Count == 0) return [];
 		var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId);
 		var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
+		var applicationProfiles = await statutoryProfiles.ResolveAsync(new DateTime(year, month, 1), employeeIds);
 		var previousMonthNetPayByEmployee = (await salarySlipRepository.GetByMonthAsync(PayrollRunRules.GetPreviousMonth(internalMonthYear)))
 			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.GroupBy(x => x.EmployeeId)
@@ -282,7 +283,7 @@ public class PayrollSnapshotRefresher(
 						pfRule,
 						professionalTaxSlabs,
 						IsEmploymentCessationMonth(employee, year, month),
-						esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id),
+						esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id) { StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
 					revision));
 			}
 		}
@@ -377,7 +378,7 @@ public class PayrollSnapshotRefresher(
 					pfRule,
 					professionalTaxSlabs,
 					IsEmploymentCessationMonth(employee, year, month),
-					esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id),
+					esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id) { StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
 				revision
 			));
 			if (reportProgress != null && (computedItems.Count % 25 == 0 || computedItems.Count == scopedEmployees.Count))
@@ -393,10 +394,24 @@ public class PayrollSnapshotRefresher(
 			var wages = resolution?.Components.Where(x => x.IsEarning && !x.IsTemp &&
 				x.SemanticType is Templates.PayrollComponentSemanticType.Basic or Templates.PayrollComponentSemanticType.DearnessAllowance).Sum(x => x.Amount) ?? 0m;
 			var declaration = PfEligibilityResolver.Declaration(resolution?.Revision);
-			var decision = PfEligibilityCalculator.Calculate(pfMonth, wages, pfCoverage, declaration,
+			var decision = PfEligibilityCalculator.Calculate(resolution?.Revision.GrossSalary ?? (decimal) item.FullGrossSalary, wages, pfCoverage, declaration,
 				pfMemberHistory.GetValueOrDefault(item.EmployeeId), item.ProvidentFundRuleId.HasValue);
 			item.PfEligibilityDetailsJson = System.Text.Json.JsonSerializer.Serialize(decision);
-			if (decision.IssueCode != null) item.IssueCodes.Add(decision.IssueCode);
+			if (item.StatutoryApplicationJson != null)
+			{
+				var application = System.Text.Json.JsonSerializer.Deserialize<PayrollStatutoryApplication>(item.StatutoryApplicationJson)!;
+				application = application with { ProvidentFund = application.ProvidentFund with
+					{ Eligible = decision.Status is "MANDATORY" or "CONTINUING_MEMBER" || application.ProvidentFund.Eligible } };
+				item.StatutoryApplicationJson = System.Text.Json.JsonSerializer.Serialize(application);
+			}
+			if (decision.IssueCode != null)
+			{
+				var profile = applicationProfiles.GetValueOrDefault(item.EmployeeId);
+				var suppressed = profile != null && (!profile.ApplyPf || !PayrollSchemeApplication.HasNumber(profile.PfNumber));
+				var issue = suppressed && decision.IssueCode is "PF_ENROLLMENT_REQUIRED" or "PF_MEMBERSHIP_REVIEW_REQUIRED"
+					? profile!.ApplyPf ? "PF_NUMBER_MISSING" : "PF_APPLY_DISABLED" : decision.IssueCode;
+				if (!item.IssueCodes.Contains(issue)) item.IssueCodes.Add(issue);
+			}
 		}
 		var settlementEmployees = computedItems.Select(x => x.EmployeeId).ToList();
 		var settlements = await payslipCorrections.GetListAsync(x => x.Status == "APPLIED" &&

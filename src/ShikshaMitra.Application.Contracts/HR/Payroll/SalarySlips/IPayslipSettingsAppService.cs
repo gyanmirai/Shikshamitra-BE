@@ -5,6 +5,7 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 public interface IPayslipSettingsAppService : IApplicationService
 {
+	Task<string> UploadLogoAsync(string contentType, byte[] bytes);
 	Task<PayslipSettingsDto> GetAsync();
 	Task<PayslipSettingsDto> SaveAsync(PayslipSettingsDto input);
 }

@@ -16,5 +16,7 @@ public class FinalizeEmployeeApplicationDto
 	public EmployeeApplicationAdditionalInfoDto? AdditionalInfo { get; set; }
 	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];
 	public bool UseSubmittedPhoto { get; set; } = true;
+	[Volo.Abp.Auditing.DisableAuditing]
+	public ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryProfile? StatutoryProfile { get; set; }
 	public bool AttachResumeAsDocument { get; set; } = true;
 }

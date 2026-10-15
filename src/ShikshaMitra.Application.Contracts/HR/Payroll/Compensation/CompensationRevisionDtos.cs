@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -12,6 +12,11 @@ namespace ShikshaMitra.HR.Payroll.Compensation;
 
 public class SaveEmployeeCompensationDto
 {
+	[Volo.Abp.Auditing.DisableAuditing]
+	public PayrollStatutoryProfile? StatutoryProfileOverride { get; set; }
+	public string? StatutoryProfileConcurrencyStamp { get; set; }
+	public bool StatutoryProfileUpdatePf { get; set; } = true;
+	public bool StatutoryProfileUpdateEsic { get; set; } = true;
 	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public Guid TemplateVersionId { get; set; }
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
@@ -19,6 +24,7 @@ public class SaveEmployeeCompensationDto
 	public string ProtectionPolicy { get => SalaryBasis == "EMPLOYER_COST" ? "PROTECT_EMPLOYER_COST" : "PROTECT_GROSS"; set { } }
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; }
+	[System.Text.Json.Serialization.JsonRequired]
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
@@ -42,6 +48,7 @@ public class CompensationRevisionLineDto : EntityDto<Guid>
 
 public class CompensationRevisionDto : EntityDto<Guid>
 {
+	public EmployeeStatutoryProfileDto? SavedStatutoryProfile { get; set; }
 	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public PfEligibilityDecision? PfEligibility { get; set; }
 	public Guid EmployeeId { get; set; }

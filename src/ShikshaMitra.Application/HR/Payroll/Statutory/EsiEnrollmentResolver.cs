@@ -13,7 +13,7 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 
 public class EsiEnrollmentResolver(IRepository<EmployeeStatutoryEnrollment, Guid> enrollments,
 	IRepository<PayrollRunItemSnapshot, Guid> snapshots,
-	IRepository<SalarySlip, Guid> slips, IRepository<PayslipCorrection, Guid> corrections) : ITransientDependency
+	IRepository<SalarySlip, Guid> slips, IRepository<PayslipCorrection, Guid> corrections, EmployeeStatutoryProfileResolver profileResolver, Volo.Abp.MultiTenancy.ICurrentTenant tenant) : ITransientDependency
 {
 	public async Task<Dictionary<Guid, EmployeeStatutoryEnrollment>> ResolveAsync(DateTime month, IReadOnlyCollection<Guid> employeeIds)
 	{
@@ -66,6 +66,21 @@ public class EsiEnrollmentResolver(IRepository<EmployeeStatutoryEnrollment, Guid
 				source.CoveredFrom ?? start, source.CoveredTo, end, source.StatusReason,
 				source.EmployerShareReliefEligible, source.EmployerShareReliefFrom, source.EmployerShareReliefTo,
 				source.DisabilityEvidenceReference);
+			projected.ConcurrencyStamp = source.ConcurrencyStamp;
+			result[employeeId] = projected;
+		}
+		var profiles = await profileResolver.ResolveAsync(month, employeeIds);
+		foreach (var employeeId in ids)
+		{
+			var profile = profiles[employeeId];
+			var existingSource = result.GetValueOrDefault(employeeId);
+			if (existingSource == null && profile.VersionId == null && !PayrollSchemeApplication.HasNumber(profile.EsicInsuranceNumber)) continue;
+			var source = existingSource ?? new EmployeeStatutoryEnrollment(Guid.Empty, tenant.Id, employeeId, "ESI");
+			var insuranceNumber = profile.VersionId == null ? profile.EsicInsuranceNumber ?? source.InsuranceNumber : profile.EsicInsuranceNumber;
+			var projected = new EmployeeStatutoryEnrollment(source.Id, source.TenantId, source.EmployeeId, source.SchemeCode);
+			projected.Update(PayrollSchemeApplication.HasNumber(insuranceNumber) ? source.Status : EmployeeStatutoryEnrollmentStatus.RegistrationPending,
+				source.WageCeilingCategory, insuranceNumber, source.CoveredFrom, source.CoveredTo, source.ContributionPeriodEnd,
+				source.StatusReason, source.EmployerShareReliefEligible, source.EmployerShareReliefFrom, source.EmployerShareReliefTo, source.DisabilityEvidenceReference);
 			projected.ConcurrencyStamp = source.ConcurrencyStamp;
 			result[employeeId] = projected;
 		}

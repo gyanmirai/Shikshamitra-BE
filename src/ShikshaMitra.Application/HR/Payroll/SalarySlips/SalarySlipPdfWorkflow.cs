@@ -71,9 +71,8 @@ public class SalarySlipPdfWorkflow(
 		var employee = await employeeRepository.GetAsync(salarySlip.EmployeeId, includeDetails: false);
 		var dto = await salarySlipDtoMapper.ToDtoAsync(salarySlip, employee);
 		var school = await issuance.EnsureSchoolConfiguredAsync();
-		var pdfModel = SalarySlipProjection.ToPdfModel(dto, school.SchoolName, isPreview)
-			with
-		{ InstituteAddress = school.SchoolAddress };
+		var pdfModel = await issuance.PrepareModelAsync(dto, school);
+		pdfModel = pdfModel with { IsPreview = true, DocumentLabel = "Preview - " + dto.Status };
 
 		return payslipPdfService.Generate(pdfModel);
 	}

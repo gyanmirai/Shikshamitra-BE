@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,7 +17,7 @@ public class SalaryTemplateCalculationService(
 	IProvidentFundRepository providentFundRepository,
 	IProfessionalTaxRepository professionalTaxRepository,
 	SalaryTemplateEsiContextResolver esiContextResolver,
-	IAsyncQueryableExecuter asyncExecuter, IClock clock, PfEligibilityResolver pfEligibilityResolver) : ITransientDependency
+	IAsyncQueryableExecuter asyncExecuter, IClock clock, PfEligibilityResolver pfEligibilityResolver, EmployeeStatutoryProfileResolver profileResolver, EmployeeStatutoryProfileAppService profileService, Volo.Abp.Domain.Repositories.IRepository<ShikshaMitra.HR.Payroll.Compensation.EmployeeCompensationRevision, Guid> revisions) : ITransientDependency
 {
 	internal async Task<SalaryTemplateCalculationDto> CalculateAsync(
 		IReadOnlyList<SalaryTemplateRule> rules, CalculateSalaryTemplateRequestDto input,
@@ -31,8 +31,14 @@ public class SalaryTemplateCalculationService(
 		var components = await LoadComponentsAsync(rules);
 		var effectiveMonth = new DateTime(input.EffectiveMonth.Year, input.EffectiveMonth.Month, 1);
 		var effectiveMonthEnd = effectiveMonth.AddMonths(1).AddDays(-1);
-		var pfRule = input.PfApplicable && input.PfRuleId.HasValue
-			? await providentFundRepository.FindAsync(input.PfRuleId.Value)
+		var savedRevision = input.EmployeeId.HasValue ? (await revisions.GetListAsync(x => x.EmployeeId == input.EmployeeId && x.EffectiveMonth <= effectiveMonth && x.Status == ShikshaMitra.HR.Payroll.Compensation.CompensationRevisionStatus.Approved))
+			.OrderByDescending(x => x.EffectiveMonth).ThenByDescending(x => x.RevisionNumber).FirstOrDefault() : null;
+		var preserveGross = savedRevision != null && savedRevision.SalaryBasis == ParseSalaryBasis(input.SalaryBasis) &&
+			savedRevision.QuotedMonthlyAmount == input.MonthlyAmount && savedRevision.SourceSalaryTemplateVersionId == versionId &&
+			System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(savedRevision.OverridesJson), System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(input.Overrides)));
+		var effectivePfRuleId = input.PfRuleId ?? (preserveGross ? savedRevision?.PfRuleId : null);
+		var pfRule = (input.PfApplicable || preserveGross) && effectivePfRuleId.HasValue
+			? await providentFundRepository.FindAsync(effectivePfRuleId.Value)
 			: null;
 		if (input.PfApplicable && pfRule == null)
 		{
@@ -57,11 +63,34 @@ public class SalaryTemplateCalculationService(
 		var basis = ParseSalaryBasis(input.SalaryBasis);
 		var protectionPolicy = ParseProtectionPolicy(input.ProtectionPolicy);
 		var esiResolution = await esiContextResolver.ResolveAsync(effectiveMonth, input.StatutoryProfile, input.EmployeeId);
-		var evaluation = SalaryTemplateCalculator.Calculate(
-			basis, input.MonthlyAmount, rules, components, pfRule, professionalTaxSlabs, esiResolution.Context);
+		PayrollStatutoryProfile? applicationProfile = input.EmployeeId.HasValue ? await profileResolver.ResolveAsync(input.EmployeeId.Value, effectiveMonth) : null;
+		if (input.StatutoryProfileOverride != null)
+		{
+			if (!input.EmployeeId.HasValue) throw new BusinessException("HR:Payroll:StatutoryProfileEmployeeRequired");
+			applicationProfile = await profileService.ValidateDraftAsync(input.EmployeeId.Value, effectiveMonth, input.StatutoryProfileOverride,
+				input.StatutoryProfileConcurrencyStamp, input.StatutoryProfileUpdatePf, input.StatutoryProfileUpdateEsic);
+		}
+		var resolvedGross = preserveGross ? savedRevision!.GrossSalary : basis == SalaryInputBasis.Gross ? input.MonthlyAmount :
+			SalaryTemplateCalculator.Calculate(basis, input.MonthlyAmount, rules, components,
+				applicationProfile == null || applicationProfile.ApplyPf && PayrollSchemeApplication.HasNumber(applicationProfile.PfNumber) ? pfRule : null,
+				professionalTaxSlabs,
+				applicationProfile == null || applicationProfile.ApplyEsic && PayrollSchemeApplication.HasNumber(applicationProfile.EsicInsuranceNumber) ? esiResolution.Context : null).Gross;
+		var evaluation = SalaryTemplateCalculator.Calculate(SalaryInputBasis.Gross, resolvedGross, rules, components, pfRule, professionalTaxSlabs, esiResolution.Context);
+		if (applicationProfile != null) evaluation = SalaryTemplateStatutoryApplication.Apply(evaluation, applicationProfile, pfRule != null);
 		var pfWages = evaluation.Earnings.Where(x => x.SemanticType is "BASIC" or "DEARNESS_ALLOWANCE").Sum(x => x.Amount);
-		var pfEligibility = await pfEligibilityResolver.ResolveAsync(input.EmployeeId, effectiveMonthEnd, pfWages,
+		var pfEligibility = await pfEligibilityResolver.ResolveAsync(input.EmployeeId, effectiveMonthEnd, evaluation.Gross, pfWages,
 			input.PfEnrollment, input.PfApplicable);
+		if ((applicationProfile is { ApplyPf: false } || applicationProfile != null && !PayrollSchemeApplication.HasNumber(applicationProfile.PfNumber)) && pfEligibility.IssueCode is "PF_ENROLLMENT_REQUIRED" or "PF_MEMBERSHIP_REVIEW_REQUIRED")
+			pfEligibility = pfEligibility with { CanSave = true };
+		if (evaluation.StatutoryApplication is { } application)
+			evaluation = evaluation with { StatutoryApplication = application with { ProvidentFund = application.ProvidentFund with
+				{ Eligible = pfEligibility.Status is "MANDATORY" or "CONTINUING_MEMBER" || application.ProvidentFund.Eligible } } };
+		if (applicationProfile is { ApplyPf: true } && pfEligibility.Status != "NOT_APPLICABLE")
+		{
+			if (pfRule == null) throw new BusinessException("HR:Payroll:PfRuleNotFound");
+			if (!rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund))
+				throw new BusinessException("HR:Payroll:SalaryTemplatePfFormulaRequired");
+		}
 		MarkCustomizedLines(evaluation.Earnings, input.Overrides);
 		MarkCustomizedLines(evaluation.Deductions, input.Overrides);
 		var protectedAmount = protectionPolicy switch
@@ -76,12 +105,22 @@ public class SalaryTemplateCalculationService(
 			SalaryInputBasis.EmployerCost => evaluation.EmployerCost,
 			_ => evaluation.Gross
 		};
+		var applicationVariance = false;
+		if (preserveGross && basis == SalaryInputBasis.EmployerCost && evaluation.StatutoryApplication != null)
+		{
+			var previous = System.Text.Json.JsonSerializer.Deserialize<SalaryTemplateCalculationDto>(savedRevision!.CalculationSnapshotJson)!;
+			applicationVariance = CompensationStatutoryVariance.IsExplained(previous, evaluation.StatutoryApplication,
+				CompensationProtectionPolicy.ProtectEmployerCost, evaluation.EmployerCost - input.MonthlyAmount);
+			if (applicationVariance) protectedAmount = input.MonthlyAmount;
+		}
 		var esiResult = evaluation.EmployeeStateInsurance;
 		var issueCodes = esiResult?.IssueCodes.ToList() ?? [];
 
 		return new SalaryTemplateCalculationDto
 		{
-			PfEnrollment = input.PfEnrollment, PfEligibility = pfEligibility,
+			StatutoryApplication = evaluation.StatutoryApplication,
+			PfEnrollment = input.PfEnrollment,
+			PfEligibility = pfEligibility,
 			TemplateId = templateId,
 			TemplateVersionId = versionId,
 			TemplateVersion = versionNumber,
@@ -101,6 +140,7 @@ public class SalaryTemplateCalculationService(
 				Requested = input.MonthlyAmount,
 				Achieved = achievedTarget,
 				Difference = achievedTarget - input.MonthlyAmount,
+				IsExplainedByEnrollment = applicationVariance,
 				IsExact = Math.Abs(achievedTarget - input.MonthlyAmount) <= 0.01m
 			},
 			EmployeeStateInsurance = new SalaryTemplateEsiPreviewDto
@@ -128,7 +168,7 @@ public class SalaryTemplateCalculationService(
 			Deductions = evaluation.Deductions,
 			EmployerContributions = evaluation.EmployerContributions,
 			FormulaTrace = evaluation.Trace,
-			Warnings = esiResolution.Warnings.Concat(issueCodes).Distinct().ToList(),
+			Warnings = esiResolution.Warnings.Concat(applicationVariance ? new[] { "STATUTORY_APPLICATION_COST_VARIANCE" } : []).Concat(issueCodes).Concat(evaluation.StatutoryApplication?.Warnings ?? []).Distinct().ToList(),
 			PfRuleId = pfRule?.Id,
 			PfRuleVersion = pfRule?.Version,
 			ProfessionalTaxProfile = input.StatutoryProfile,
@@ -162,7 +202,8 @@ public class SalaryTemplateCalculationService(
 		}
 	}
 
-	private static SalaryInputBasis ParseSalaryBasis(string value) => value switch {
+	private static SalaryInputBasis ParseSalaryBasis(string value) => value switch
+	{
 		"GROSS" => SalaryInputBasis.Gross,
 		"EMPLOYER_COST" => SalaryInputBasis.EmployerCost,
 		_ => throw new BusinessException("HR:Payroll:SalaryTemplateRuleInvalidEnum").WithData("field", "salaryBasis")

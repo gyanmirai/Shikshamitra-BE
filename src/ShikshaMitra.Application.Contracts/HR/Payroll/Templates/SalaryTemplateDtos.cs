@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -107,6 +107,11 @@ public class SalaryRuleOverrideDto
 
 public class CalculateSalaryTemplateRequestDto
 {
+	[Volo.Abp.Auditing.DisableAuditing]
+	public PayrollStatutoryProfile? StatutoryProfileOverride { get; set; }
+	public string? StatutoryProfileConcurrencyStamp { get; set; }
+	public bool StatutoryProfileUpdatePf { get; set; } = true;
+	public bool StatutoryProfileUpdateEsic { get; set; } = true;
 	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public string SalaryBasis { get; set; } = "EMPLOYER_COST";
 	[System.Text.Json.Serialization.JsonIgnore]
@@ -114,6 +119,7 @@ public class CalculateSalaryTemplateRequestDto
 	public decimal MonthlyAmount { get; set; }
 	public DateTime EffectiveMonth { get; set; } = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 	public Guid? EmployeeId { get; set; }
+	[System.Text.Json.Serialization.JsonRequired]
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
@@ -177,6 +183,7 @@ public class SalaryTemplateTargetResultDto
 	public decimal Requested { get; set; }
 	public decimal Achieved { get; set; }
 	public decimal Difference { get; set; }
+	public bool IsExplainedByEnrollment { get; set; }
 	public bool IsExact { get; set; }
 }
 
@@ -204,6 +211,7 @@ public class SalaryTemplateEsiPreviewDto
 
 public class SalaryTemplateCalculationDto
 {
+	public PayrollStatutoryApplication? StatutoryApplication { get; set; }
 	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public PfEligibilityDecision? PfEligibility { get; set; }
 	public Guid TemplateId { get; set; }

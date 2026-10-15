@@ -4,12 +4,13 @@ using Volo.Abp;
 
 namespace ShikshaMitra.HR.Payroll.Statutory;
 
-[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+[JsonConverter(typeof(EsiCalculationSettingsJsonConverter))]
 public sealed record EsiCalculationSettings
 {
 	public string EligibilityBasis { get; init; } = "CLASSIFIED_EARNINGS";
 	public string CalculationBasis { get; init; } = "CLASSIFIED_EARNINGS";
-	public Guid? BasicComponentId { get; init; }
+	public Guid? EligibilityComponentId { get; init; }
+	public Guid? CalculationComponentId { get; init; }
 	public decimal? EmployeePercentage { get; init; }
 	public decimal? EmployerPercentage { get; init; }
 	public string? OverrideReason { get; init; }
@@ -18,8 +19,10 @@ public sealed record EsiCalculationSettings
 	public void Validate()
 	{
 		if (!IsValidBasis(EligibilityBasis) || !IsValidBasis(CalculationBasis) ||
-			(UsesBasicComponent && (BasicComponentId == null || BasicComponentId == Guid.Empty)) ||
-			(!UsesBasicComponent && BasicComponentId.HasValue) ||
+			(EligibilityBasis == "COMPONENT" && (EligibilityComponentId == null || EligibilityComponentId == Guid.Empty)) ||
+			(CalculationBasis == "COMPONENT" && (CalculationComponentId == null || CalculationComponentId == Guid.Empty)) ||
+			(EligibilityBasis != "COMPONENT" && EligibilityComponentId.HasValue) ||
+			(CalculationBasis != "COMPONENT" && CalculationComponentId.HasValue) ||
 			EmployeePercentage is < 0m or > 100m || EmployerPercentage is < 0m or > 100m ||
 			OverrideReason?.Length > 500 || EvidenceReference?.Length > 1000)
 			throw new BusinessException("HR:Payroll:EsiCalculationSettingsInvalid");
@@ -29,12 +32,16 @@ public sealed record EsiCalculationSettings
 	}
 
 	[JsonIgnore]
-	public bool BasicComponentIsActive { get; init; } = true;
+	public bool EligibilityComponentIsActive { get; init; } = true;
+	[JsonIgnore]
+	public bool CalculationComponentIsActive { get; init; } = true;
+	[JsonIgnore]
+	public bool IsLegacyRead { get; init; }
 
 	[JsonIgnore]
-	public bool UsesBasicComponent => EligibilityBasis == "BASIC_COMPONENT" || CalculationBasis == "BASIC_COMPONENT";
+	public bool UsesComponent => EligibilityBasis == "COMPONENT" || CalculationBasis == "COMPONENT";
 
 	public bool HasRateOverride => EmployeePercentage.HasValue || EmployerPercentage.HasValue;
 
-	private static bool IsValidBasis(string basis) => basis is "CLASSIFIED_EARNINGS" or "GROSS" or "BASIC_COMPONENT";
+	private static bool IsValidBasis(string basis) => basis is "CLASSIFIED_EARNINGS" or "GROSS" or "COMPONENT";
 }

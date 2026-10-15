@@ -45,8 +45,8 @@ Treat these rules as critical because HR feeds payroll and staff records:
 | Effective compensation revisions are the recurring salary source of truth | Superseded and legacy non-effective records cannot silently drive payroll |
 | One-time salary components remain separate | Temporary earnings and deductions cannot change the effective recurring compensation revision |
 | Saving recurring compensation is direct and immutable | Every save is recalculated on the server and creates a new effective revision without an approval queue |
-| Employee activation requires payroll readiness | New employees remain Inactive until an effective salary covers the later of joining month or current payroll month and ESIC-covered employees have an insurance number; registration pending is not an activation bypass |
-| Protected compensation drift is visible but non-mutating | Payroll warns without rewriting saved salary or blocking lock |
+| Employee activation requires payroll readiness | New employees remain Inactive until an effective salary covers the later of joining month or current payroll month and valid calculation rules exist; pending PF/ESIC registration is a warning that suppresses deductions |
+| Protected compensation drift is visible but non-mutating | An explained scheme-application CTC variance warns without rewriting saved gross; unrelated target differences remain blockers |
 | Earning component dependencies are tenant-scoped and acyclic | A percentage component cannot reference itself, another tenant, an inactive target, or a dependency chain that returns to itself |
 | Payroll preview and lock use the same policy basis | Salary slips must match the locked payroll snapshot |
 | Policy assignments resolve by specificity and date | Employee overrides beat group assignments, and defaults are fallback only |

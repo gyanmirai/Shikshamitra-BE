@@ -34,6 +34,12 @@ internal static class HrReportCatalog
 			? input.Groups.Concat(input.Summaries?.Select(x => $"{x.Function}_{x.Field}") ?? []).Prepend("rowCount").Distinct().ToList()
 			: input.Columns is { Count: > 0 } ? input.Columns : metadata.DefaultColumns;
 
+		if (source is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister)
+		{
+			requested = requested.Concat(new[] { "month", "employeeCode", "employeeName", "totalEarnings", "totalDeduction", "netPay" }).Distinct().ToList();
+			foreach (var deduction in new[] { "pf", "pt", "tds", "esic", "otherDeductions" })
+					if (rows.Any(x => decimal.TryParse(x.GetValueOrDefault(deduction), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var value) && value != 0m) && !requested.Contains(deduction)) requested.Add(deduction);
+		}
 		var fields = metadata.Fields.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
 		return requested
 			.Where(id => rows.Count == 0 || rows[0].ContainsKey(id) || fields.ContainsKey(id) || id == "rowCount" || id.Contains('_'))

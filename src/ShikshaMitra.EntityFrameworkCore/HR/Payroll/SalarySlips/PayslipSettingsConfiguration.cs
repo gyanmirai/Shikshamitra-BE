@@ -15,6 +15,7 @@ public class PayslipSettingsConfiguration : IEntityTypeConfiguration<PayslipSett
 		builder.Property(x => x.DeletionTime).HasColumnType("timestamp with time zone");
 		builder.Property(x => x.SchoolName).IsRequired().HasMaxLength(250);
 		builder.Property(x => x.SchoolAddress).IsRequired().HasMaxLength(1000);
+		builder.Property(x => x.PresentationJson).IsRequired();
 		builder.HasIndex(x => x.TenantId).IsUnique();
 	}
 }

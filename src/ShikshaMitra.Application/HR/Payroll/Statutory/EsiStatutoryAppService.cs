@@ -34,7 +34,7 @@ public class EsiStatutoryAppService(
 	IUserScopeService userScopeService,
 	IEarningComponentRepository earningComponentRepository,
 	EsiStatutoryPreviewReader previewReader,
-	EsiPayrollConfigurationResolver configurationResolver)
+	EsiPayrollConfigurationResolver configurationResolver, EmployeeStatutoryProfileResolver profileResolver)
 	: ApplicationService, IEsiStatutoryAppService
 {
 	private const string JurisdictionCode = "IN-GJ";
@@ -101,9 +101,10 @@ public class EsiStatutoryAppService(
 		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId, EsiPermissions.View);
 		await employeeRepository.GetAsync(employeeId);
 		var enrollment = await FindEnrollmentAsync(employeeId);
-		return enrollment is null
-			? new EmployeeStatutoryEnrollmentDto { EmployeeId = employeeId }
-			: MapEnrollment(enrollment);
+		var dto = enrollment is null ? new EmployeeStatutoryEnrollmentDto { EmployeeId = employeeId } : MapEnrollment(enrollment);
+		var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc), TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
+		dto.InsuranceNumber = (await profileResolver.ResolveAsync(employeeId, new DateTime(local.Year, local.Month, 1))).EsicInsuranceNumber;
+		return dto;
 	}
 
 	[Authorize(EsiPermissions.ManageEnrollment)]
@@ -130,12 +131,12 @@ public class EsiStatutoryAppService(
 		}
 		// Coverage and contribution-period facts are resolved from payroll history, never manual form dates.
 		enrollment.Update(status == EmployeeStatutoryEnrollmentStatus.RegistrationPending
-			? status : EmployeeStatutoryEnrollmentStatus.PendingReview, ceilingCategory, input.InsuranceNumber, enrollment.CoveredFrom,
+			? status : EmployeeStatutoryEnrollmentStatus.PendingReview, ceilingCategory, enrollment.InsuranceNumber, enrollment.CoveredFrom,
 			enrollment.CoveredTo, enrollment.ContributionPeriodEnd, input.StatusReason,
 			input.EmployerShareReliefEligible, input.EmployerShareReliefFrom,
 			input.EmployerShareReliefTo, input.DisabilityEvidenceReference);
 		await enrollmentRepository.UpdateAsync(enrollment, autoSave: true);
-		return MapEnrollment(enrollment);
+		return await GetEnrollmentAsync(employeeId);
 	}
 
 	[Authorize(EsiPermissions.ApproveOverride)]

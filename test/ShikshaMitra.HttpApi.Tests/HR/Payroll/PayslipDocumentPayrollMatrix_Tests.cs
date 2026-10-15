@@ -77,7 +77,6 @@ public class PayslipDocumentPayrollMatrix_Tests
 					$"/api/payroll/statutory-schemes/esi/employees/{employee.Id}/enrollment", new UpdateEmployeeStatutoryEnrollmentDto
 					{
 						Status = "PendingReview",
-						InsuranceNumber = "1234567890",
 						WageCeilingCategory = "PersonWithDisability",
 						EmployerShareReliefEligible = true,
 						EmployerShareReliefFrom = month,
@@ -157,10 +156,11 @@ public class PayslipDocumentPayrollMatrix_Tests
 			var run = await workflow.CalculateAsync(month);
 			var item = await workflow.EmployeeAsync(run.Id, employee.Id);
 			// New employees have no historical comparison, and low paid attendance is a review warning.
-			// Neither warning may hide an actual setup/statutory locking restriction.
+			// Registration warnings must not hide a genuine calculation blocker.
 			item.IssueCodes.ShouldContain(IssueCodes.NoPreviousMonthComparison);
 			item.IssueCodes.Where(PayrollLockPreconditionGuard.IsBlockingLockIssue).ShouldBeEmpty(scenario);
-			item.IssueCodes.Where(code => code is not (IssueCodes.NoPreviousMonthComparison or IssueCodes.LowAttendance))
+			item.IssueCodes.Count(code => code == "PF_APPLY_DISABLED").ShouldBe(1, scenario);
+			item.IssueCodes.Where(code => code is not (IssueCodes.NoPreviousMonthComparison or IssueCodes.LowAttendance or "PF_APPLY_DISABLED"))
 				.ShouldBeEmpty(scenario);
 			if (scenario == "ctc")
 			{

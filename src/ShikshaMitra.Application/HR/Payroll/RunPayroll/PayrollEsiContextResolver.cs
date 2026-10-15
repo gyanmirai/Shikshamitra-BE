@@ -80,8 +80,10 @@ public class PayrollEsiContextResolver(
 		var calculationSettings = configuration.GetCalculationSettings();
 		calculationSettings = calculationSettings with
 		{
-			BasicComponentIsActive = calculationSettings.BasicComponentId == null ||
-			activeEarnings.Any(x => x.Id == calculationSettings.BasicComponentId)
+			EligibilityComponentIsActive = calculationSettings.EligibilityComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.EligibilityComponentId),
+			CalculationComponentIsActive = calculationSettings.CalculationComponentId == null ||
+			activeEarnings.Any(x => x.Id == calculationSettings.CalculationComponentId)
 		};
 
 		var result = new Dictionary<Guid, PayrollEsiStatutoryContext>();

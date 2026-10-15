@@ -39,6 +39,7 @@ public class HrReportFilterDto
 	public List<int>? Statuses { get; set; }
 	public int? GenderType { get; set; }
 	public string? Month { get; set; }
+	public bool IncludeDrafts { get; set; }
 	public List<string>? ComponentNames { get; set; }
 	public string? DateField { get; set; }
 	public DateOnly? FromDate { get; set; }

@@ -33,6 +33,7 @@ public class PayrollLockBatchProcessor(
 			"Generating salary slips from reviewed payroll snapshots for {ProcessCount} staff",
 			employees.Count);
 
+		using var employeeReadBatch = await issuance.BeginEmployeeReadBatchAsync(employees.Select(x => x.Id).ToList());
 		var result = new PayrollLockBatchResult();
 		var batchSize = Math.Min(DefaultBatchSize, MaxBatchSize);
 
@@ -94,7 +95,7 @@ public class PayrollLockBatchProcessor(
 				return;
 			}
 
-			await issuance.IssueAsync(salarySlip, fromPayrollLock: true);
+			await issuance.IssueAsync(salarySlip, fromPayrollLock: true, snapshotEvidence: snapshot);
 			salarySlip.FinalizeSlip();
 			await salarySlipRepository.UpdateAsync(salarySlip, autoSave: false);
 			result.RecordGenerated();

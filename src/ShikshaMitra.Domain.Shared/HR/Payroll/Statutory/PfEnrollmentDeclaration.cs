@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace ShikshaMitra.HR.Payroll.Statutory;
 
@@ -9,4 +9,7 @@ public sealed record PfEnrollmentDeclaration
 }
 
 public sealed record PfEligibilityDecision(string Status, decimal Wages, decimal CoverageCeiling,
-	bool EnrollmentRequired, bool CanSave, string? IssueCode);
+	bool EnrollmentRequired, bool CanSave, string? IssueCode)
+{
+	public decimal? GrossSalary { get; init; }
+}

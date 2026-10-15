@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-13
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -208,7 +208,8 @@ The wage-mapping catalog includes active master earnings and employee-specific e
 ESIC exceptions require EffectiveFrom on the first day and EffectiveTo on the last day of their selected months, inclusive.
 Partial-month and reversed ranges fail validation.
 When exceptions overlap, the newest applicable coverage or amount exception is authoritative.
-Unclassified wages and missing required insurance numbers block payroll lock.
+Unclassified wages block statutory-mode payroll lock.
+Missing registration numbers and disabled Apply flags suppress the corresponding employee and employer contributions with reviewable warnings.
 HR supplies registration facts and supported exceptions; eligibility and contribution-period continuation are derived automatically.
 Locked salary slips retain the ESI rule version, statutory wages, coverage decision, insurance number, contribution period, employee deduction, and employer contribution.
 PwD employer-share relief requires the PwD wage-ceiling category, an effective start date, and a disability evidence reference.
@@ -473,10 +474,16 @@ These PF, professional-tax, and ESI estimates do not include employer contributi
 
 Gross and CTC retain their existing single monthly amount input and calculation contracts.
 Salary calculation and compensation save accept `pfEnrollment` with `membership` (`UNKNOWN`, `EXISTING_MEMBER`, or `NOT_MEMBER`) and an optional `consentReference`.
-Responses expose `pfEligibility` with status, full-month PF wages, effective coverage ceiling, enrollment requirement, save readiness, and issue code.
+Both requests require an explicit Boolean `pfApplicable`; omitting it returns a validation error rather than silently opting the staff out.
+Responses expose `pfEligibility` with status, full-month `grossSalary`, Basic plus Dearness Allowance `wages` for contributions, the enrollment ceiling, enrollment requirement, save readiness, and issue code.
 HR records the declaration through the existing scoped compensation permissions; there is no employee self-service or new approval workflow.
 Existing membership continues above the ceiling; unknown membership or school coverage requires review, and voluntary enrollment above the ceiling requires consent evidence.
-The coverage ceiling is INR 15,000 before 2026-09-17 and INR 25,000 from that date, using Basic plus Dearness Allowance wages rather than Gross.
+The salary-setup policy defaults Apply PF on up to and including INR 25,000 full-month Gross and requires an explicit choice above that amount.
+An authorized administrator can disable PF below the threshold or for an existing member with a recorded reason; underlying eligibility and membership evidence remain intact.
+CTC inputs use the calculated Gross rather than the quoted employer cost, and attendance reductions do not change the enrollment decision.
+This school enrollment policy does not change the statutory contribution wage basis, percentages, caps, or existing-member continuity.
+Salary calculation and payroll readiness use the same gross-based decision.
+Previously saved compensation decisions and locked payroll snapshots retain their original values; older decisions without `grossSalary` remain readable without backfilling history.
 An assigned PF rule requires a positive full-month PF wage base; there is no fallback to Gross.
 Employee and employer PF amounts round independently to the nearest whole rupee, with midpoint rounding away from zero.
 
@@ -486,16 +493,15 @@ Its payload contains `effectiveMonth` (first day of the current or a future mont
 Identical retries reuse the saved outcome; stale version IDs and changed retry payloads return 409.
 
 ESIC configuration save accepts `effectiveMonth` (`yyyy-MM`) and `calculationSettings` in addition to the existing configuration fields.
-`eligibilityBasis` and `calculationBasis` are independent choices of `CLASSIFIED_EARNINGS`, `GROSS`, or `BASIC_COMPONENT`.
-If either basis is Basic, `basicComponentId` must identify an active tenant earning component marked Basic in each affected employee's salary template.
-The selected Basic component is shared wherever either basis uses Basic.
-Basic can use the existing percentage-of-Gross template formula, including 60 percent.
-Selecting Basic does not suppress other statutory included wages, exclusion add-back, in-kind caps, contribution-period continuity, or daily-wage exemptions.
-Eligibility uses full-month statutory wages resolved under `eligibilityBasis`, while contributions use actual payable statutory wages resolved under `calculationBasis` after attendance adjustments.
-The employee daily-wage exemption uses full-month wages under the calculation basis, so unpaid days cannot create an exemption.
-Employees outside eligibility do not require a calculation-only Basic component; continuing or forced coverage still requires a valid contribution basis.
-The draft API no longer accepts `wageBasis`.
-Older stored configuration JSON is read as its original coupled policy without rewriting that JSON; locked payroll snapshots remain unchanged.
+`eligibilityBasis` and `calculationBasis` independently select `CLASSIFIED_EARNINGS`, `GROSS`, or `COMPONENT`.
+`eligibilityComponentId` and `calculationComponentId` identify their respective active tenant recurring earning components.
+The component must be present in the employee salary structure; selecting it uses that component alone, without other earnings or a Gross fallback.
+Eligibility uses full-month values; contribution calculation uses the finalized payable component once, without further proration.
+A Basic component can use the existing 60 percent of Gross formula.
+The statutory wage reference remains separately visible through reconciliation warnings and audit evidence.
+Rates, contribution-period continuity, exemptions, and upward rounding continue to apply.
+New writes reject the retired `wageBasis` and shared `basicComponentId` contract.
+Stored legacy settings and historical snapshots remain readable without rewriting issued evidence.
 Optional `employeePercentage` and `employerPercentage` overrides require `overrideReason` and `evidenceReference`; omitted rates resolve from the statutory rule.
 Saving configuration requires the exact Edit, Activate, and `HR.PayrollManagement.Settings.StatutorySchemes.ConfigureCalculation` capabilities plus school-wide UserScope.
 New built-in administrator roles receive ConfigureCalculation during creation; existing roles are never granted it by reseeding.
@@ -503,4 +509,38 @@ Impact preview accepts an optional `configurationDraft`, requires ConfigureCalcu
 Past-month configuration writes are rejected; saving versions invalidates unlocked affected payroll only.
 Payroll items expose `esiCalculationDetailsJson` and `pfEligibilityDetailsJson` containing the resolved calculation evidence.
 Locked and finalized snapshots retain their recorded settings and amounts.
-`ESI_RATE_OVERRIDE` is a visible warning; missing Basic, PF enrollment, consent, coverage, or wage evidence blocks readiness as applicable.
+`ESI_RATE_OVERRIDE`, registration suppression, reconciliation differences, and explained enrollment-related CTC variance are visible warnings.
+Missing required salary rules, invalid selected components, unknown coverage, stale previews, unauthorized actions, and unexplained target variance remain blockers.
+
+## Canonical employee statutory profile and salary documents
+
+| Endpoint | Permission and behavior |
+| --- | --- |
+| GET /api/employees/{employeeId}/payroll/statutory-profile | Employee UserScope and the applicable CompensationRevisions.View or StatutorySchemes.View; identifiers are projected only for authorized schemes. |
+| PUT /api/employees/{employeeId}/payroll/statutory-profile | CompensationRevisions.Manage for PF and StatutorySchemes.ManageEnrollment for ESIC, with employee scope, concurrency stamp and a GUID idempotency key. |
+| GET /api/payroll/statutory-profile/readiness | RunPayroll.View and scoped employees; bounded page size of 100, flags and number-presence only. |
+| POST /api/payroll/payslip-settings/logo | GenerateSalarySlip.Add and HR-wide UserScope; tenant-owned PNG/JPEG, 2 MiB maximum, validated dimensions and decoded pixels. |
+| POST /api/hr/reports/preview | Existing HR Reports View; payroll_statement requires one employee and an inclusive month range, payroll_register requires one month. |
+| POST /api/hr/reports/exports | Existing HR Reports Export; queued PDF/Excel exports with existing ownership, limits and expiry. |
+
+The profile payload contains Apply PF, PF number, optional 12-digit UAN, PF disabled reason, Apply ESIC, insurance number and ESIC disabled reason.
+The two schemes are independent; blank, whitespace and the exact placeholder 0 count as a missing number.
+School PF references such as 7 and 244 are accepted.
+An intentional disabled scheme requires a reason; incomplete registration can be saved.
+Existing onboarding finalization persists supplied statutory details within its transaction.
+Legacy bank/profile and enrollment APIs delegate or project these identifiers instead of maintaining another writable owner.
+The effective month defaults to the current Indian month and moves past locked or issued months.
+Past-month writes are rejected; stale or conflicting retry writes return 409.
+Changed profiles invalidate affected unlocked previews and reviews, preserve issued and paid history, and never generate catch-up deductions or re-solve saved Gross.
+Payroll snapshots retain reference and applied amounts, number presence, flags, rule versions and warning reasons.
+Review records the current warning codes and profile version before locking.
+
+Payslip settings add Compact/Detailed layouts, a logo reference, optional staff/bank/attendance/earnings/zero-deduction fields and statement/register column presets.
+Identity, period and totals always remain; every nonzero deduction always appears.
+Issuance freezes the presentation version, school branding and logo checksum with the stored PDF.
+Statements and registers read saved evidence, use issued payroll for official output and label draft-inclusive output Preview.
+Missing months and unreconstructable historical leave fields are unavailable rather than fabricated zero values.
+New evidence captures CL, other paid leave and unpaid leave separately from employment-boundary non-payable days.
+
+The ESIC coverage endpoint treats insurance numbers as read-only profile projections.
+Identifier writes use the statutory-profile endpoint with caller-supplied concurrency and idempotency keys.

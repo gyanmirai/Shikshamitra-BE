@@ -79,3 +79,15 @@ Read [references/permissions.md](./references/permissions.md) before changing fr
 
 Do not restore generated contract exports or old planning docs under `docs/`.
 Use current source paths and the six canonical module pages instead.
+
+## Enrollment and salary document evidence
+
+`EmployeeStatutoryProfileVersion` is the audited, tenant-owned effective enrollment aggregate.
+`EmployeeStatutoryProfileResolver` batches profile reads and retains legacy read projections.
+`PayrollSchemeApplication.Decide` is shared by quotes and payroll to distinguish reference amounts from applied amounts.
+`EmployeeStatutoryProfileAppService` serializes changes through the existing payroll fence and invalidates only unlocked affected evidence.
+`PayrollSalaryDocumentRowReader` joins scoped issued facts and optional draft snapshots without loading PDF bytes or recalculating history.
+`PayslipLogoService` validates tenant blob references and decoded PNG/JPEG images.
+`PayslipIssuanceService` freezes presentation evidence and batches employee/bank reads during locking.
+The PayrollEnrollmentAndSalaryDocuments migration backfills only known identifiers and flags, preserves legacy payloads and adds leave/presentation evidence.
+Its operations exclude unrelated retired tables and the student custom-profile table already owned by its earlier migration.

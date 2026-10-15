@@ -29,6 +29,8 @@ public class HRPdfService : ITransientDependency
 			<= 20 => 6f,
 			_ => 5f
 		};
+		if (report.DataSource is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister)
+			fontSize = columnCount <= 20 ? 8.5f : 8f;
 		var pageSize = columnCount > 12
 			? PageSizes.A3.Landscape()
 			: PageSizes.A4.Landscape();
@@ -43,6 +45,16 @@ public class HRPdfService : ITransientDependency
 				page.DefaultTextStyle(style => style.FontSize(fontSize).FontColor(Colors.Grey.Darken4).WithPortableFonts());
 				page.Header().PaddingBottom(8).Column(column =>
 				{
+					if (report.Branding != null)
+					{
+						column.Item().Row(row =>
+						{
+							if (report.LogoBytes != null) row.ConstantItem(44).Height(36).PaddingRight(6).Image(report.LogoBytes).FitArea();
+							row.RelativeItem().Text(report.Branding.SchoolName).FontSize(14).SemiBold();
+						});
+						column.Item().Text(report.Branding.SchoolAddress).FontSize(8);
+					}
+					foreach (var warning in report.QueryWarnings) column.Item().Text(warning).FontSize(8);
 					column.Item()
 						.Text(report.ReportType)
 						.FontSize(16)
@@ -102,9 +114,9 @@ public class HRPdfService : ITransientDependency
 		{
 			table.ColumnsDefinition(columns =>
 			{
-				foreach (var _ in report.Columns)
+				foreach (var column in report.Columns)
 				{
-					columns.RelativeColumn();
+					columns.RelativeColumn(column.Id == "employeeName" ? 2.4f : 1f);
 				}
 			});
 
@@ -136,11 +148,18 @@ public class HRPdfService : ITransientDependency
 						.BorderColor("#CBD5E1")
 						.PaddingHorizontal(2)
 						.PaddingVertical(2)
-						.Text(Sanitize(value ?? string.Empty))
+						.Text(Sanitize(value ?? (report.DataSource is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister ? "Unavailable" : string.Empty)))
 						.FontSize(fontSize);
 				}
 
 				rowIndex++;
+			}
+			if (report.Totals.Count > 0)
+			{
+				var totals = PayrollSalaryDocumentTotals.Sum(report.Rows.Take(MaxPdfRows));
+				foreach (var (column, index) in report.Columns.Select((column, index) => (column, index)))
+					table.Cell().Background("#E8EEF4").Padding(3).Text(totals.TryGetValue(column.Id, out var total)
+						? total.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : index == 0 ? "Shown totals" : "").FontSize(fontSize).SemiBold();
 			}
 		});
 	}

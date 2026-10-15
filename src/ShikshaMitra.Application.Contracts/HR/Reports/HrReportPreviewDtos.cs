@@ -4,6 +4,10 @@ namespace ShikshaMitra.HR.Reports;
 
 public class HrReportPreviewDto
 {
+	public Dictionary<string, decimal> Totals { get; set; } = new();
+	public string TotalsLabel { get; set; } = "Totals for displayed rows";
+	public ShikshaMitra.HR.Payroll.SalarySlips.FrozenSalaryDocumentPresentation? Branding { get; set; }
+	[System.Text.Json.Serialization.JsonIgnore] public byte[]? LogoBytes { get; set; }
 	public string DataSource { get; set; } = string.Empty;
 	public string ReportType { get; set; } = string.Empty;
 	public int TotalCount { get; set; }

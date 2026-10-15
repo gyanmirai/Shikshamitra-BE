@@ -58,37 +58,26 @@ internal class EsiPayrollWorkflowScenario(ShikshaMitraApiTestFactory factory) : 
 			// Resolve changed employer cost through compensation without shrinking agreed wages.
 			compensation = await SaveCompensationAsync(id, month, basis, basis == "EMPLOYER_COST" ? 10325m : 10000m, compensation.RevisionNumber);
 		}
-		else
-		{
-			var blocked = await ActivateAsync(id);
-			blocked.IsSuccessStatusCode.ShouldBeFalse();
-			(await blocked.Content.ReadAsStringAsync()).ShouldContain("ESI_INSURANCE_NUMBER_REQUIRED");
-		}
+		else await RequireSuccess(await ActivateAsync(id));
 		await SeedAttendanceAsync(id, month);
-		if (activeBeforeEsi)
-		{
-			var pending = await CalculateAsync(month);
-			var row = await EmployeeAsync(pending.Id, id);
-			row.IssueCodes.ShouldContain("ESI_INSURANCE_NUMBER_REQUIRED");
-			row.IssueCodes.Where(code => PayrollLockPreconditionGuard.HasBlockingLockIssue(
-				System.Text.Json.JsonSerializer.Serialize(new[] { code }))).ShouldBe(new[] { "ESI_INSURANCE_NUMBER_REQUIRED" });
-			await ReviewAsync(pending.Id, id, month);
-			var readiness = (await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{pending.Id}/employees?pageSize=100")).Readiness;
-			readiness!.BlockingIssues.ShouldContain("ESI_INSURANCE_NUMBER_REQUIRED");
-			readiness.CanLock.ShouldBeFalse();
-			var blocked = await Client.PostAsJsonAsync("/api/payroll/run", new
-			{ month = month.ToString("yyyy-MM"), previewRunId = pending.Id, employeeIds = new[] { id } });
-			blocked.IsSuccessStatusCode.ShouldBeFalse();
-			(await blocked.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.PayrollBlockingIssuesBeforeLock);
-		}
+		var pending = await CalculateAsync(month);
+		var pendingRow = await EmployeeAsync(pending.Id, id);
+		pendingRow.IssueCodes.ShouldContain("ESI_NUMBER_MISSING");
+		pendingRow.TotalDeduction.ShouldBe(0);
+		pendingRow.EmployerContributionTotal.ShouldBe(0);
+		PayrollLockPreconditionGuard.HasBlockingLockIssue(System.Text.Json.JsonSerializer.Serialize(new[] { "ESI_NUMBER_MISSING" })).ShouldBeFalse();
+		await ReviewAsync(pending.Id, id, month);
+		var readiness = (await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{pending.Id}/employees?pageSize=100")).Readiness;
+		readiness!.BlockingIssues.ShouldNotContain("ESI_NUMBER_MISSING");
 		await EnrollAsync(id, "1234567890");
 		var stored = await GetAndReadAsync<EmployeeStatutoryEnrollmentDto>($"/api/payroll/statutory-schemes/esi/employees/{id}/enrollment");
 		stored.InsuranceNumber.ShouldBe("1234567890");
-		if (!activeBeforeEsi) await RequireSuccess(await ActivateAsync(id));
+
 		if (activeBeforeEsi && basis == "GROSS") await ClassifyCustomEarningAsync(id, month);
 		var ready = await CalculateAsync(month);
 		var calculated = await EmployeeAsync(ready.Id, id);
-		calculated.IssueCodes.ShouldNotContain("ESI_INSURANCE_NUMBER_REQUIRED");
+		calculated.IssueCodes.ShouldNotContain("ESI_NUMBER_MISSING");
+		calculated.GrossSalary.ShouldBe(pendingRow.GrossSalary);
 		calculated.IssueCodes.ShouldNotContain("ESI_WAGE_CLASSIFICATION_REQUIRED");
 		calculated.EmployeeStateInsuranceCoverageDecision.ShouldBe("WITHIN_WAGE_CEILING");
 		calculated.EmployeeStateInsuranceNumber.ShouldBe("1234567890");
@@ -101,6 +90,8 @@ internal class EsiPayrollWorkflowScenario(ShikshaMitraApiTestFactory factory) : 
 
 	private async Task ClassifyCustomEarningAsync(Guid id, DateTime month)
 	{
+		var current = await CalculateAsync(month);
+		await ReviewAsync(current.Id, id, month);
 		var adjustment = await PostAndReadAsync<PayrollAdjustmentDto>("/api/payroll/run/adjustments", new
 		{
 			month = month.ToString("yyyy-MM"),
@@ -147,12 +138,39 @@ internal class EsiPayrollWorkflowScenario(ShikshaMitraApiTestFactory factory) : 
 	internal Task<HttpResponseMessage> ActivateAsync(Guid id) => Client.PutAsJsonAsync($"/api/employees/{id}/status",
 		new { employeeStatusType = 0, remarks = "Synthetic ESIC workflow verification" }, JsonOptions);
 
-	internal async Task EnrollAsync(Guid id, string? number) => await RequireSuccess(await Client.PutAsJsonAsync(
-		$"/api/payroll/statutory-schemes/esi/employees/{id}/enrollment", new UpdateEmployeeStatutoryEnrollmentDto
-		{ Status = number == null ? "RegistrationPending" : "PendingReview", InsuranceNumber = number, StatusReason = "Synthetic test registration" }, JsonOptions));
+	internal async Task EnrollAsync(Guid id, string? number)
+	{
+		var profileUrl = $"/api/employees/{id}/payroll/statutory-profile";
+		var profile = (await Client.GetFromJsonAsync<EmployeeStatutoryProfileDto>(profileUrl, JsonOptions))!;
+		await RequireSuccess(await Client.PutAsJsonAsync(profileUrl, new SaveEmployeeStatutoryProfileDto
+		{
+			Profile = profile.Profile with { EsicInsuranceNumber = number }, UpdatePf = false,
+			ConcurrencyStamp = profile.ConcurrencyStamp, IdempotencyKey = Guid.NewGuid()
+		}, JsonOptions));
+		await RequireSuccess(await Client.PutAsJsonAsync(
+			$"/api/payroll/statutory-schemes/esi/employees/{id}/enrollment", new UpdateEmployeeStatutoryEnrollmentDto
+			{ Status = number == null ? "RegistrationPending" : "PendingReview", StatusReason = "Synthetic test registration" }, JsonOptions));
+	}
 
 	internal async Task<CompensationRevisionDto> SaveCompensationAsync(Guid id, DateTime month, string basis, decimal amount, int? expected = null)
 	{
+		// This fixture isolates ESIC and intentionally disables PF with an audited reason.
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Tenant))
+		using (var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true))
+		{
+			var resolver = scope.ServiceProvider.GetRequiredService<EmployeeStatutoryProfileResolver>();
+			var profile = await resolver.ResolveAsync(id, month);
+			if (profile.ApplyPf)
+			{
+				var repository = scope.ServiceProvider.GetRequiredService<IRepository<EmployeeStatutoryProfileVersion, Guid>>();
+				if (profile.VersionId.HasValue && profile.EffectiveMonth == DateTime.SpecifyKind(month, DateTimeKind.Utc))
+				{ var existing = await repository.GetAsync(profile.VersionId.Value); existing.Supersede(); await repository.UpdateAsync(existing, autoSave: true); }
+				await repository.InsertAsync(new EmployeeStatutoryProfileVersion(Guid.NewGuid(), Tenant, id, month,
+					profile with { ApplyPf = false, PfDisabledReason = "ESIC-only workflow fixture" }, Guid.NewGuid(), "FIXTURE"), autoSave: true);
+			}
+			await unit.CompleteAsync();
+		}
 		var templates = await GetAndReadAsync<SalaryTemplateListDto>("/api/payroll/salary-templates/active");
 		var template = templates.Items.First(x => x.IsDefault);
 		var response = await Client.PutAsJsonAsync($"/api/payroll/employees/{id}/compensation", new SaveEmployeeCompensationDto

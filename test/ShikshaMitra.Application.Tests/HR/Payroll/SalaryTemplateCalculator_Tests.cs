@@ -20,10 +20,10 @@ public class SalaryTemplateCalculator_Tests
 	[Theory]
 	[InlineData(false, "CLASSIFIED_EARNINGS", "CLASSIFIED_EARNINGS")]
 	[InlineData(true, "CLASSIFIED_EARNINGS", "CLASSIFIED_EARNINGS")]
-	[InlineData(false, "GROSS", "BASIC_COMPONENT")]
-	[InlineData(true, "GROSS", "BASIC_COMPONENT")]
-	[InlineData(false, "BASIC_COMPONENT", "GROSS")]
-	[InlineData(true, "BASIC_COMPONENT", "GROSS")]
+	[InlineData(false, "GROSS", "COMPONENT")]
+	[InlineData(true, "GROSS", "COMPONENT")]
+	[InlineData(false, "COMPONENT", "GROSS")]
+	[InlineData(true, "COMPONENT", "GROSS")]
 	public void Ctc_boundaries_reconcile_with_payroll_and_never_exceed_monthly_budget(
 		bool includePf, string eligibilityBasis, string calculationBasis)
 	{
@@ -37,7 +37,7 @@ public class SalaryTemplateCalculator_Tests
 			{
 				ComponentTreatments = fixture.Components.Keys.ToDictionary(x => x,
 					x => x == basic ? StatutoryWageTreatment.Included : StatutoryWageTreatment.SpecifiedExclusion),
-				CalculationSettings = new() { EligibilityBasis = eligibilityBasis, CalculationBasis = calculationBasis, BasicComponentId = basic }
+				CalculationSettings = new() { EligibilityBasis = eligibilityBasis, CalculationBasis = calculationBasis, EligibilityComponentId = eligibilityBasis == "COMPONENT" ? basic : null, CalculationComponentId = calculationBasis == "COMPONENT" ? basic : null }
 			};
 		foreach (var budget in new[] { 1.01m, 4576m, 4725m, 10000m, 10000.01m, 10325.01m, 20999.99m, 21000m, 21000.01m, 21683m, 25000m, 100000m })
 		{

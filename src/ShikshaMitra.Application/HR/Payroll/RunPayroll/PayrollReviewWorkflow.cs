@@ -51,23 +51,20 @@ public class PayrollReviewWorkflow(
 
 		foreach (var employee in targetEmployees)
 		{
+			var evidence = snapshotByEmployee[employee.Id];
+			var profile = evidence.StatutoryApplicationJson == null ? null : System.Text.Json.JsonSerializer.Deserialize<ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication>(evidence.StatutoryApplicationJson)?.Profile;
+			var warnings = System.Text.Json.JsonSerializer.Deserialize<List<string>>(evidence.IssueCodesJson) ?? [];
 			if (existingByEmployee.TryGetValue(employee.Id, out var existingReview))
 			{
 				existingReview.Refresh(actorUserId, reviewedAt, request.PreviewRunId);
+				existingReview.AcknowledgeWarnings(warnings, profile?.VersionId);
 				await payrollRunReviewRepository.UpdateAsync(existingReview, autoSave: false);
 			}
 			else
 			{
-				await payrollRunReviewRepository.InsertAsync(
-					new PayrollRunReview(
-						GuidGenerator.Create(),
-						CurrentTenant.Id,
-						internalMonthYear,
-						employee.Id,
-						actorUserId,
-						reviewedAt,
-						request.PreviewRunId),
-					autoSave: false);
+				var review = new PayrollRunReview(GuidGenerator.Create(), CurrentTenant.Id, internalMonthYear, employee.Id, actorUserId, reviewedAt, request.PreviewRunId);
+				review.AcknowledgeWarnings(warnings, profile?.VersionId);
+				await payrollRunReviewRepository.InsertAsync(review, autoSave: false);
 			}
 
 			if (snapshotByEmployee.TryGetValue(employee.Id, out var snapshot) && !snapshot.IsLocked)

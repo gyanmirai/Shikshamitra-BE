@@ -24,18 +24,16 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 public class EmployeeStatutoryProfileAppService(IRepository<EmployeeStatutoryProfileVersion, Guid> versions,
 	EmployeeStatutoryProfileResolver resolver, IEmployeeAuthorizationService access,
 	IRepository<PayrollRunItemSnapshot, Guid> snapshots, IRepository<PayrollRunReview, Guid> reviews,
-	IRepository<SalarySlip, Guid> slips, IPayrollInputRevisionStore fence, IClock clock, ShikshaMitra.Security.UserScope.IUserScopeService scopes, ShikshaMitra.HR.Reports.HrReportEmployeeQueryService employeeQueries)
+	IRepository<SalarySlip, Guid> slips, IPayrollInputRevisionStore fence, IClock clock, PayrollScopedEmployeeResolver employeeScope)
 	: ApplicationService, IEmployeeStatutoryProfileAppService
 {
 	public async Task<PayrollRegistrationReadinessDto> GetReadinessAsync(string? month = null, int page = 1, int pageSize = 25, string? search = null)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_RunPayroll.View);
 		if (!CurrentUser.Id.HasValue) throw new BusinessException("HR:Payroll:StatutoryProfileInvalid");
-		var scope = await scopes.GetUserScopeAsync(CurrentUser.Id.Value);
-		if (scope.TenantId != CurrentTenant.Id) throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		var effective = ParseMonth(month); var monthKey = effective.ToString("yyyy-MM");
 		var locked = await snapshots.GetQueryableAsync(); var issued = await slips.GetQueryableAsync();
-		var query = (await employeeQueries.BuildScopedEmployeeQueryAsync(scope)).Where(employee =>
+		var query = (await employeeScope.GetScopedEmployeeQueryAsync(includeUnknownStageEmployees: true)).Where(employee =>
 			!locked.Any(snapshot => snapshot.EmployeeId == employee.Id && snapshot.MonthYear == monthKey && snapshot.IsLocked) &&
 			!issued.Any(slip => slip.EmployeeId == employee.Id && slip.MonthYear == monthKey && (slip.Status == SalarySlipStatus.Finalized || slip.Status == SalarySlipStatus.Paid)));
 		if (!string.IsNullOrWhiteSpace(search))

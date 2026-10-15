@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Payroll.RunPayroll;
-using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -13,7 +12,7 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 [RemoteService(false)]
 public class PayslipSettingsAppService(IRepository<PayslipSettings, Guid> settings, IPayrollInputRevisionStore fence,
-	IUserScopeService scopes, PayslipLogoService logos)
+	SalarySlipAccessService access, PayslipLogoService logos)
 	: ApplicationService, IPayslipSettingsAppService
 {
 	public Task<string> UploadLogoAsync(string contentType, byte[] bytes) => logos.UploadAsync(contentType, bytes);
@@ -32,8 +31,7 @@ public class PayslipSettingsAppService(IRepository<PayslipSettings, Guid> settin
 		if (string.IsNullOrWhiteSpace(input.SchoolName) || string.IsNullOrWhiteSpace(input.SchoolAddress) ||
 			input.SchoolName.Trim().Length > 250 || input.SchoolAddress.Trim().Length > 1000 || input.IdempotencyKey == Guid.Empty)
 			throw new BusinessException(HRErrorCodes.PayslipSchoolDetailsRequired);
-		if (!CurrentUser.Id.HasValue || !HrUserScopeAccess.HasHrWideAccess(await scopes.GetUserScopeAsync(CurrentUser.Id.Value)))
-			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		await access.EnsureHrWideAccessAsync();
 		var tenant = CurrentTenant.Id ?? throw new BusinessException(HRErrorCodes.PayslipSchoolDetailsRequired);
 		input.Presentation.Validate(tenant);
 		if (input.Presentation.LogoBlobName != null) await logos.GetAsync(input.Presentation.LogoBlobName);

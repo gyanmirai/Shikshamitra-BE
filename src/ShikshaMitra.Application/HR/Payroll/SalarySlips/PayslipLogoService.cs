@@ -4,7 +4,6 @@ using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
-using ShikshaMitra.Security.UserScope;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
@@ -12,14 +11,15 @@ using Volo.Abp.BlobStoring;
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 [RemoteService(false)]
-public class PayslipLogoService(IBlobContainer blobs, IUserScopeService scopes) : ApplicationService
+public class PayslipLogoService(IBlobContainer blobs, SalarySlipAccessService access) : ApplicationService
 {
 	public const int MaxBytes = 2 * 1024 * 1024;
 	public async Task<string> UploadAsync(string contentType, byte[] bytes)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.Add);
-		if (!CurrentTenant.Id.HasValue || !CurrentUser.Id.HasValue || !HrUserScopeAccess.HasHrWideAccess(await scopes.GetUserScopeAsync(CurrentUser.Id.Value)))
+		if (!CurrentTenant.Id.HasValue)
 			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
+		await access.EnsureHrWideAccessAsync();
 		ValidateImage(contentType, bytes);
 		var name = $"payroll-logos/{CurrentTenant.Id}/{GuidGenerator.Create():N}";
 		await blobs.SaveAsync(name, bytes, overrideExisting: false);

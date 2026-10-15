@@ -93,13 +93,38 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 			salary.LazyServiceProvider = lazy;
 			var enrollment = ActivatorUtilities.CreateInstance<CompensationRevisionAppService>(services);
 			enrollment.LazyServiceProvider = lazy;
+			var logos = ActivatorUtilities.CreateInstance<ShikshaMitra.HR.Payroll.SalarySlips.PayslipLogoService>(services);
+			logos.LazyServiceProvider = lazy;
 			await Should.ThrowAsync<AbpAuthorizationException>(() => pf.GetAsync());
 			await Should.ThrowAsync<AbpAuthorizationException>(() => pf.SaveAsync(new()));
 			await Should.ThrowAsync<AbpAuthorizationException>(() => esi.SaveAsync(new()));
 			await Should.ThrowAsync<AbpAuthorizationException>(() => salary.CalculateAsync(Guid.NewGuid(), new()));
 			await Should.ThrowAsync<AbpAuthorizationException>(() => enrollment.SaveAsync(Guid.NewGuid(), new()));
+			await Should.ThrowAsync<AbpAuthorizationException>(() => logos.UploadAsync("image/png", []));
 		}
 		finally { http.HttpContext = prior; }
+	}
+	[Fact]
+	public async Task Registration_readiness_and_logo_upload_use_payroll_scope_gateways()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var staff = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "RegistrationScopeReview");
+		const string readiness = "/api/payroll/statutory-profile/readiness?search=RegistrationScopeReview&pageSize=1";
+		var page = await GetAndReadAsync<PayrollRegistrationReadinessDto>(readiness);
+		page.Items.ShouldContain(x => x.EmployeeId == staff);
+		page.Items.Count.ShouldBe(1);
+		using var noScope = Factory.CreateClient();
+		noScope.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		(await noScope.GetAsync(readiness)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		using var denied = Factory.CreateClient();
+		denied.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "__none__");
+		(await denied.GetAsync(readiness)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		using var upload = new System.Net.Http.MultipartFormDataContent();
+		using var image = new System.Net.Http.ByteArrayContent(Convert.FromBase64String(
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9xkAAAAASUVORK5CYII="));
+		image.Headers.ContentType = new("image/png");
+		upload.Add(image, "file", "synthetic-logo.png");
+		(await noScope.PostAsync("/api/payroll/payslip-settings/logo", upload)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 	[Fact]
 	public async Task Compensation_allows_audited_PF_override_but_requires_real_salary_rules()

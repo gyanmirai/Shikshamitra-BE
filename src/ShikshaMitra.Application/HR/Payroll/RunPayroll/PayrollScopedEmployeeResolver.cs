@@ -87,7 +87,7 @@ public class PayrollScopedEmployeeResolver(
 		return requestedSet.Select(id => scopedById[id]).ToList();
 	}
 
-	private async Task<IQueryable<Employee>> GetScopedEmployeeQueryAsync(bool includeUnknownStageEmployees)
+	internal async Task<IQueryable<Employee>> GetScopedEmployeeQueryAsync(bool includeUnknownStageEmployees)
 	{
 		var scope = await EnsureCanOperatePayrollAsync();
 		var employeeQuery = await hrEmployeeScopeQueryService.BuildScopedEmployeeQueryAsync(scope);
@@ -114,6 +114,8 @@ public class PayrollScopedEmployeeResolver(
 		}
 
 		var scope = await userScopeService.GetUserScopeAsync(uid.Value);
+		if (scope.TenantId != CurrentTenant.Id)
+			throw new BusinessException(HRErrorCodes.TakeAttendanceMediumStageOutOfScope);
 		if (HrUserScopeAccess.HasHrWideAccess(scope))
 		{
 			return scope;

@@ -112,16 +112,25 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 		{ ["totalEarnings"] = financialTotals.Earnings, ["totalDeduction"] = financialTotals.Deductions, ["netPay"] = financialTotals.Net } };
 	}
 	private static DateOnly? ParseMonth(string? month) => DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed) ? parsed : null;
-	private static Dictionary<string, string?> ToRow(DocumentRow row)
+	internal static Dictionary<string, string?> ToRow(DocumentRow row)
 	{
 		var facts = row.FactsJson == null ? null : JsonSerializer.Deserialize<SalarySlipDto>(row.FactsJson);
 		var deductions = facts?.Deductions.Select(x => (x.Name, x.Amount)).ToList() ?? ReadLines(row.DeductionsJson);
 		decimal Sum(params string[] names) => deductions.Where(x => names.Any(name => string.Equals(x.Name.Replace(" ", ""), name, StringComparison.OrdinalIgnoreCase))).Sum(x => x.Amount);
+		bool Named(string name, params string[] aliases) => aliases.Any(alias => string.Equals(name.Replace(" ", ""), alias, StringComparison.OrdinalIgnoreCase));
+		decimal? LegacyAmount(Guid? ruleId, Func<(string Name, decimal Amount), bool> matches)
+		{
+			var identified = deductions.Where(matches).ToList();
+			return identified.Count > 0 ? identified.Sum(x => x.Amount) : ruleId.HasValue ? null : 0m;
+		}
 		var application = facts?.StatutoryApplication ?? (row.SnapshotJson == null ? null : JsonSerializer.Deserialize<ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication>(row.SnapshotJson));
-		var pf = application?.ProvidentFund.AppliedEmployeeAmount ?? deductions.Where(x => x.Name.Contains("Provident", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Amount) + Sum("PF", "EPF");
-		var esi = application?.EmployeeStateInsurance.AppliedEmployeeAmount ?? deductions.Where(x => x.Name.Contains("Insurance", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Amount) + Sum("ESIC", "ESI");
+		var pf = application?.ProvidentFund.AppliedEmployeeAmount ?? LegacyAmount(facts?.ProvidentFundRuleId,
+			x => x.Name.Contains("Provident", StringComparison.OrdinalIgnoreCase) || Named(x.Name, "PF", "EPF"));
+		var esi = application?.EmployeeStateInsurance.AppliedEmployeeAmount ?? LegacyAmount(facts?.EmployeeStateInsuranceRuleId,
+			x => x.Name.Contains("Insurance", StringComparison.OrdinalIgnoreCase) || Named(x.Name, "ESIC", "ESI"));
 		var typedDeductions = facts?.StatutoryDeductionAmounts ?? (row.SnapshotJson == null || row.DeductionsJson == null ? null : ShikshaMitra.HR.Payroll.SalarySlips.SalarySlipProjection.ReadStatutoryDeductions(row.DeductionsJson));
-		var pt = typedDeductions?.GetValueOrDefault("pt") ?? deductions.Where(x => x.Name.Contains("Professional", StringComparison.OrdinalIgnoreCase)).Sum(x => x.Amount) + Sum("PT", "P.T.");
+		var pt = typedDeductions?.GetValueOrDefault("pt") ?? LegacyAmount(facts?.ProfessionalTaxRuleId,
+			x => x.Name.Contains("Professional", StringComparison.OrdinalIgnoreCase) || Named(x.Name, "PT", "P.T."));
 		var tds = typedDeductions?.GetValueOrDefault("tds") ?? Sum("TDS", "T.D.S.", "TaxDeductedAtSource");
 		var leave = facts?.LeaveUnitsByType ?? (row.LeaveJson == null ? null : JsonSerializer.Deserialize<Dictionary<string, decimal>>(row.LeaveJson));
 		string? Money(decimal? value) => value?.ToString("0.00", CultureInfo.InvariantCulture);
@@ -150,7 +159,7 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 			return (properties["name"].GetString() ?? "", properties["amount"].GetDecimal());
 		}).ToList();
 	}
-	private class DocumentRow
+	internal class DocumentRow
 	{
 		public Guid EmployeeId { get; set; }
 		public string EmployeeCode { get; set; } = "";

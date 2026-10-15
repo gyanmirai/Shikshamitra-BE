@@ -3,6 +3,7 @@ using System.Text.Json;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Reports;
 using Shouldly;
 using Volo.Abp;
 using Xunit;
@@ -36,6 +37,38 @@ public class SalaryDocumentAndVariance_Tests
 			 {"Name":"PT","Amount":500,"SemanticType":"Ordinary"}, {"Name":"T.D.S.","Amount":100}]
 			""");
 		amounts["pt"].ShouldBe(200); amounts["tds"].ShouldBe(100);
+	}
+
+	[Theory]
+	[InlineData("pf")]
+	[InlineData("pt")]
+	[InlineData("esic")]
+	public void Legacy_custom_statutory_labels_are_unavailable_instead_of_fabricated_zero(string scheme)
+	{
+		var facts = new SalarySlipDto
+		{
+			ProvidentFundRuleId = scheme == "pf" ? Guid.NewGuid() : null,
+			ProfessionalTaxRuleId = scheme == "pt" ? Guid.NewGuid() : null,
+			EmployeeStateInsuranceRuleId = scheme == "esic" ? Guid.NewGuid() : null,
+			Deductions = [new() { Name = "School levy", Amount = 200m }]
+		};
+		var row = PayrollSalaryDocumentRowReader.ToRow(new()
+		{
+			FactsJson = JsonSerializer.Serialize(facts), TotalEarnings = 15000m,
+			TotalDeduction = 200m, NetPay = 14800m
+		});
+		row[scheme].ShouldBeNull();
+		row["otherDeductions"].ShouldBeNull();
+		row["totalDeduction"].ShouldBe("200.00");
+		row["netPay"].ShouldBe("14800.00");
+		facts.Deductions[0].Name = scheme switch { "pf" => "PF", "pt" => "Professional Tax", _ => "ESIC" };
+		var identified = PayrollSalaryDocumentRowReader.ToRow(new()
+		{
+			FactsJson = JsonSerializer.Serialize(facts), TotalEarnings = 15000m,
+			TotalDeduction = 200m, NetPay = 14800m
+		});
+		identified[scheme].ShouldBe("200.00");
+		identified["otherDeductions"].ShouldBe("0.00");
 	}
 
 	[Theory]

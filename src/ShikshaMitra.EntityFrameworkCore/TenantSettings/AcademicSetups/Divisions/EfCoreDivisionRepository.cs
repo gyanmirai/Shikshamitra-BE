@@ -11,11 +11,13 @@ namespace ShikshaMitra.EntityFrameworkCore.Configurations.Divisions;
 public class EfCoreDivisionRepository(IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
 	: EfCoreRepository<ShikshaMitraDbContext, Division, Guid>(dbContextProvider), IDivisionRepository
 {
-	public async Task<Division?> FindByNameAndStandardIdAsync(string name, Guid standardId)
+	public async Task<Division?> FindByNameAndStandardIdAsync(string name, Guid standardId, Guid? excludedId = null)
 	{
 		DbSet<Division> dbSet = await GetDbSetAsync();
+		var normalizedName = name.Trim().ToLower();
 		return await dbSet.FirstOrDefaultAsync(division =>
-			EF.Functions.Like(division.Name.ToLower(), name.ToLower()) && division.StandardId == standardId
+			division.Id != excludedId && division.StandardId == standardId &&
+			division.Name.Trim().ToLower() == normalizedName
 		);
 	}
 }

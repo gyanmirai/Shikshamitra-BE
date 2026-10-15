@@ -47,7 +47,8 @@ public class SubjectAssignmentAppService(
 	IRepository<TeacherSubjectAllocation, Guid> teacherSubjectAllocationRepository,
 	IReportingManagerAccessService reportingManagerAccessService,
 	SubjectTeacherReassignmentManager teacherReassignmentManager,
-	SubjectScheduleBreakdownQueryService scheduleBreakdownQueryService
+	SubjectScheduleBreakdownQueryService scheduleBreakdownQueryService,
+	SubjectAssignmentTeacherEligibilityManager teacherEligibilityManager
 ) : ApplicationService, ISubjectAssignmentAppService
 {
 	public async Task CreateAsync(
@@ -117,6 +118,7 @@ public class SubjectAssignmentAppService(
 				assignedSubjects.Add(assignedSubject);
 			}
 
+			await EnsureTeachersBelongToClassAsync(createSubjectAssignmentDto.ClassId, createSubjectAssignmentDto.Subjects);
 			await assignmentRepository.InsertManyAsync(assignedSubjects, autoSave: true);
 
 			// Auto-add new subjects to the weekly lecture slot for this class (with 0 weekly lectures).
@@ -766,6 +768,7 @@ public class SubjectAssignmentAppService(
 		NormalizeUnifiedTeacherAssignments(input.Subjects, existingGroup);
 		EnsureSubjectAssignmentInputIsConsistent(input);
 		await EnsureNewTeacherAssignmentsAreActiveAsync(input.Subjects, existingGroup);
+		await EnsureTeachersBelongToClassAsync(existingEntity.StandardId, input.Subjects);
 
 		// 2. Process updates
 		// We match existing subjects with input subjects by SubjectId
@@ -1728,6 +1731,12 @@ public class SubjectAssignmentAppService(
 				.ToList();
 		}
 	}
+
+	private Task EnsureTeachersBelongToClassAsync(Guid standardId, IEnumerable<SubjectAssignmentDetailDto> subjects) =>
+		teacherEligibilityManager.EnsureEligibleAsync(standardId, subjects.ToDictionary(
+			subject => subject.SubjectId,
+			subject => (subject.PrimaryTeacherId.HasValue ? new[] { subject.PrimaryTeacherId.Value } : Array.Empty<Guid>())
+				.Concat(subject.SecondaryTeacherIds ?? []).Where(id => id != Guid.Empty).Distinct().ToList()));
 
 	private async Task EnsureNewTeacherAssignmentsAreActiveAsync(
 		IEnumerable<SubjectAssignmentDetailDto> subjects,

@@ -24,6 +24,80 @@ namespace ShikshaMitra.Common.Tests.Middleware;
 
 public class ApiProblemDetailsPipeline_Tests
 {
+	[Theory]
+	[InlineData("UserScope:UsersNotFound", "linked account")]
+	[InlineData("UserScope:InvalidReferences", "Reload the academic hierarchy")]
+	[InlineData("UserScope:BulkAssignFailed", "reference-123")]
+	[InlineData("UserScope:InvalidInput", "Select an academic year")]
+	public async Task UserScope_errors_should_include_the_rule_or_recovery(string code, string expectedDetail)
+	{
+		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
+		using var resource = assembly.GetManifestResourceStream(assembly.GetManifestResourceNames()
+			.Single(name => name.EndsWith("Localization.ShikshaMitra.en.json")))!;
+		using var messages = await JsonDocument.ParseAsync(resource);
+		var template = messages.RootElement.GetProperty("Texts").GetProperty(code).GetString()!;
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = template });
+		var detail = resolver.ResolveDetail(null, code, ApiProblemDetailsMapper.GetDefaultDetail(400),
+			new Dictionary<string, object?>
+			{
+				["Reason"] = "Select an academic year before saving academic permissions.",
+				["CorrelationId"] = "reference-123"
+			});
+		detail.ShouldContain(expectedDetail);
+		detail.ShouldNotContain("One or more business rules were violated");
+		detail.ShouldNotContain("{Reason}");
+	}
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Curriculum_teacher_rule_should_preserve_named_detail_and_field(bool useResultFilter)
+	{
+		const string code = "Academic:Curriculum:020005";
+		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
+		using var resource = assembly.GetManifestResourceStream(assembly.GetManifestResourceNames()
+			.Single(name => name.EndsWith("Localization.ShikshaMitra.en.json")))!;
+		using var messages = await JsonDocument.ParseAsync(resource);
+		var template = messages.RootElement.GetProperty("Texts").GetProperty(code).GetString()!;
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = template });
+		var data = new Dictionary<string, object?>
+		{
+			["TeacherName"] = "Dharmik Jinjala", ["ClassName"] = "Nursery",
+			["SubjectId"] = "subject-id", ["Field"] = "teacherIds"
+		};
+		var httpContext = new DefaultHttpContext();
+		httpContext.Request.Path = "/api/academics/curriculum/subject-assignments";
+		if (useResultFilter)
+		{
+			var source = new ProblemDetails { Status = 400, Detail = ApiProblemDetailsMapper.GetDefaultDetail(400) };
+			source.Extensions["errorCode"] = code;
+			source.Extensions["data"] = data;
+			var context = new ResultExecutingContext(
+				new ActionContext(httpContext, new RouteData(), new ActionDescriptor()),
+				new List<IFilterMetadata>(), new ObjectResult(source) { StatusCode = 400 }, new object());
+			await new ApiProblemDetailsResultFilter(resolver).OnResultExecutionAsync(context,
+				() => Task.FromResult(new ResultExecutedContext(context, new List<IFilterMetadata>(), context.Result, new object())));
+			var output = ((ObjectResult)context.Result).Value.ShouldBeOfType<ProblemDetails>();
+			output.Detail.ShouldStartWith("Dharmik Jinjala is not assigned to Nursery in Academic Permission.");
+			output.Extensions["errorCode"].ShouldBe(code);
+			output.Extensions["data"].ShouldBe(data);
+		}
+		else
+		{
+			httpContext.Response.Body = new MemoryStream();
+			var exception = new BusinessException(code);
+			foreach (var pair in data) exception.WithData(pair.Key, pair.Value);
+			await new ApiProblemDetailsMiddleware(_ => throw exception,
+				NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver).InvokeAsync(httpContext);
+			httpContext.Response.StatusCode.ShouldBe(400);
+			httpContext.Response.Body.Position = 0;
+			using var output = await JsonDocument.ParseAsync(httpContext.Response.Body);
+			output.RootElement.GetProperty("errorCode").GetString().ShouldBe(code);
+			output.RootElement.GetProperty("detail").GetString().ShouldStartWith("Dharmik Jinjala is not assigned to Nursery in Academic Permission.");
+			output.RootElement.GetProperty("data").GetProperty("Field").GetString().ShouldBe("teacherIds");
+		}
+	}
+
 	private const string GenericInternalDetail = "An internal error occurred during your request!";
 
 	[Theory]

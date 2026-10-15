@@ -28,6 +28,31 @@ public class UserScopeBulkAssignApi_Tests : ShikshaMitraApiTestBase
     {
     }
 
+    [Theory]
+    [InlineData(true, UserScopeErrorCodes.UsersNotFound, "linked account")]
+    [InlineData(false, UserScopeErrorCodes.InvalidReferences, "Reload the academic hierarchy")]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task BulkAssign_Should_Explain_Invalid_User_And_Academic_References(
+        bool missingUser, string expectedCode, string expectedRecovery)
+    {
+        var response = await Client.PostAsJsonAsync(BaseUrl, new
+        {
+            academicYearId = Factory.SeededAcademicYearId,
+            userIds = new[] { missingUser ? Guid.NewGuid() : Guid.Parse(TestAuthHandler.TestUserId) },
+            scopes = new[] { new { educationBoardId = missingUser ? Factory.SeededBoardId : Guid.NewGuid() } },
+            clearExisting = false
+        }, JsonOptions);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, body);
+        using var document = JsonDocument.Parse(body);
+        document.RootElement.GetProperty("errorCode").GetString().ShouldBe(expectedCode);
+        var detail = document.RootElement.GetProperty("detail").GetString();
+        detail.ShouldNotBeNullOrWhiteSpace();
+        detail.ShouldContain(expectedRecovery);
+        detail.ShouldNotContain("One or more business rules were violated");
+    }
+
     [Fact]
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task UserScopeBulkAssign_Should_Return_Meaningful_InvalidHierarchy_Detail()

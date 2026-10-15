@@ -22,6 +22,7 @@ public static class CurriculumErrorCodes
     public const string LessonPlanReassignmentConflict = "Academic:Curriculum:020002";
     public const string TimetableTeacherChanged = "Academic:Curriculum:020003";
     public const string SubjectAssignmentTeacherMustBeActive = "Academic:Curriculum:020004";
+    public const string SubjectAssignmentTeacherNotInClass = "Academic:Curriculum:020005";
 
     // ── Elective Group: 03xxxx ───────────────────────────────────
 

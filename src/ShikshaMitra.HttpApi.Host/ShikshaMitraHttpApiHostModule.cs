@@ -608,5 +608,6 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		await context.AddBackgroundWorkerAsync<LibraryNotificationReminderWorker>();
 		await context.AddBackgroundWorkerAsync<LeaveYearEndSettlementPreviewWorker>();
 		await context.AddBackgroundWorkerAsync<ConcessionDocumentUploadCleanupWorker>();
+		await context.AddBackgroundWorkerAsync<SchoolIdentityDraftCleanupWorker>();
 	}
 }

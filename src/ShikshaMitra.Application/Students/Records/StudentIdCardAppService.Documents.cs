@@ -23,13 +23,15 @@ public partial class StudentIdCardAppService
 		EnsureTenant(); ValidateStudents(input);
 		if (input.CardsPerPage is < 1 or > 10) throw new BusinessException("Students:Records:InvalidIdTemplate");
 		var template = await LoadTemplateAsync();
-		var cards = new List<(StudentIdCardDto Card, byte[]? Photo)>();
+		var cards = new List<(StudentIdCardDto Card, byte[]? Photo, byte[]? Logo)>();
 		foreach (var studentId in input.StudentIds)
 		{
 			var snapshot = await snapshots.CaptureAsync(studentId);
 			var photo = await LoadPhotoAsync(template, snapshot.Fields);
+			var frozen = await CaptureIdentityTemplateAsync(template, snapshot);
+			var logo = (await schoolIdentity.LoadAsync(frozen.SchoolIdentity)).Logo;
 			cards.Add((new StudentIdCardDto { StudentId = studentId, HasPhoto = photo != null,
-				StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = template }, photo));
+				StudentSnapshot = PublicFields(snapshot.Fields), TemplateSnapshot = frozen }, photo, logo));
 		}
 		QuestPDF.Settings.License = LicenseType.Community;
 		var vertical = template.Orientation == "Vertical";
@@ -50,7 +52,7 @@ public partial class StudentIdCardAppService
 							{
 								row.Spacing(2, Unit.Millimetre);
 								foreach (var item in rowCards)
-									row.ConstantItem(vertical ? 54 : 85.6f, Unit.Millimetre).Element(c => ComposeCard(c, item.Card, item.Photo));
+									row.ConstantItem(vertical ? 54 : 85.6f, Unit.Millimetre).Element(c => ComposeCard(c, item.Card, item.Photo, item.Logo));
 							});
 						}
 					});
@@ -90,12 +92,13 @@ public partial class StudentIdCardAppService
 		var dto = Map(card); var template = dto.TemplateSnapshot;
 		var snapshot = JsonSerializer.Deserialize<Dictionary<string, string?>>(card.StudentSnapshotJson, JsonOptions)!;
 		var photo = await LoadPhotoAsync(template, snapshot);
+		var logo = (await schoolIdentity.LoadAsync(template.SchoolIdentity)).Logo;
 		QuestPDF.Settings.License = LicenseType.Community;
 		var vertical = template.Orientation == "Vertical";
 		var content = Document.Create(container => container.Page(page =>
 		{
 			page.Size(vertical ? 54 : 85.6f, vertical ? 85.6f : 54, Unit.Millimetre);
-			page.Margin(0); page.Content().Element(c => ComposeCard(c, dto, photo));
+			page.Margin(0); page.Content().Element(c => ComposeCard(c, dto, photo, logo));
 		})).GeneratePdf();
 		return new() { FileName = $"{card.CardNumber}.pdf", Content = content };
 	}
@@ -108,7 +111,7 @@ public partial class StudentIdCardAppService
 		return photo;
 	}
 
-	internal static void ComposeCard(IContainer container, StudentIdCardDto card, byte[]? photo)
+	internal static void ComposeCard(IContainer container, StudentIdCardDto card, byte[]? photo, byte[]? logo = null)
 	{
 		var template = card.TemplateSnapshot;
 		var vertical = template.Orientation == "Vertical";
@@ -117,7 +120,11 @@ public partial class StudentIdCardAppService
 		var background = template.BackgroundColor;
 		container.Background(background).Border(0.5f).BorderColor(template.PrimaryColor).Padding(3, Unit.Millimetre).Column(column =>
 		{
-			column.Item().Text(template.SchoolName).FontSize(vertical ? 9 : 11).Bold().FontColor(template.PrimaryColor).ClampLines(1);
+			column.Item().Row(header =>
+			{
+				if (logo != null) header.ConstantItem(8, Unit.Millimetre).Height(8, Unit.Millimetre).PaddingRight(1, Unit.Millimetre).Image(logo).FitArea();
+				header.RelativeItem().AlignMiddle().Text(template.SchoolName).FontSize(vertical ? 9 : 11).Bold().FontColor(template.PrimaryColor).ClampLines(1);
+			});
 			if (!string.IsNullOrWhiteSpace(template.SchoolAddress)) column.Item().Text(template.SchoolAddress).FontSize(5).ClampLines(1);
 			if (!minimal) column.Item().LineHorizontal(1).LineColor(template.PrimaryColor);
 			column.Item().PaddingTop(2, Unit.Millimetre).Text(template.HeaderText).FontSize(7).SemiBold().ClampLines(1);

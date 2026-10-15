@@ -8,6 +8,13 @@ namespace ShikshaMitra.Students.Records;
 
 public class StudentCertificatePdfRenderer_Tests
 {
+	[Fact]
+	public void Configured_Gujarati_principal_signature_renders_with_portable_fonts()
+	{
+		var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=");
+		var assets = new ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityDocumentAssets(null, null, png, "પરીક્ષણ આચાર્ય", "આચાર્ય");
+		StudentCertificatePdfRenderer.Render(Create(StudentCertificateType.Bonafide), assets).AsSpan(0, 4).SequenceEqual("%PDF"u8).ShouldBeTrue();
+	}
 	[Theory]
 	[InlineData(StudentCertificateType.Bonafide, "Bonafide Certificate")]
 	[InlineData(StudentCertificateType.Character, "Character Certificate")]

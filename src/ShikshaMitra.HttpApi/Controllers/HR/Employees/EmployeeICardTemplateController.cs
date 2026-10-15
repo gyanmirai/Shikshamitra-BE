@@ -87,6 +87,13 @@ public class EmployeeICardTemplateController : AbpControllerBase
 		return File(asset.Content, asset.ContentType, asset.FileName);
 	}
 
+	[HttpGet("school-logo")]
+	public async Task<IActionResult> SchoolLogoAsync([FromQuery] Guid? mediumStageId)
+	{
+		var asset = await _appService.GetSchoolLogoAsync(mediumStageId);
+		return asset == null ? NoContent() : File(asset.Content, asset.ContentType, asset.FileName);
+	}
+
 	[HttpPost("{id}/pdf")]
 	public async Task<IActionResult> GeneratePdfAsync(Guid id, [FromBody] EmployeeICardPdfRequest input)
 	{

@@ -12,5 +12,7 @@ public interface IAdmissionPublicInquiryAppService
 	Task<AdmissionPublicInquiryLinkDto> SetLinkFormAsync(Guid id, SetAdmissionPublicInquiryLinkFormDto input);
 	Task RevokeLinkAsync(Guid id, string concurrencyStamp);
 	Task<PublicAdmissionInquiryContextDto> GetPublicAsync(string token, Guid? offeringId = null);
+	Task<ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityAssetDownloadDto> GetPublicBrandingAssetAsync(string token,
+		ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityAssetKind kind, Guid? offeringId = null);
 	Task SubmitPublicAsync(string token, SubmitPublicAdmissionInquiryDto input);
 }

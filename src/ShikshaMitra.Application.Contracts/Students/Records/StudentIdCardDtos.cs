@@ -8,6 +8,8 @@ namespace ShikshaMitra.Students.Records;
 
 public class StudentIdCardTemplateDto
 {
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentitySelectionDto Logo { get; set; } = new();
+	public ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityDocumentSnapshotDto? SchoolIdentity { get; set; }
 	[StringLength(150)] public string Name { get; set; } = "Student I-Card";
 	[StringLength(40)] public string PresetKey { get; set; } = "formal-student";
 	[StringLength(10)] public string Orientation { get; set; } = "Horizontal";

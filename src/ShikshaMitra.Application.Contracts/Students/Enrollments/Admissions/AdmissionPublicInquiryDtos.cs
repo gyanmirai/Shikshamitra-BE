@@ -53,6 +53,8 @@ public class SetAdmissionPublicInquiryLinkFormDto
 
 public class PublicAdmissionInquiryContextDto
 {
+	public string? LogoUrl { get; set; }
+	public string? BannerUrl { get; set; }
 	public string AdmissionCycleName { get; set; } = string.Empty;
 	public AdmissionInquirySource Source { get; set; }
 	public PublicAdmissionInquiryFormDto? Form { get; set; }

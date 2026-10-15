@@ -29,13 +29,13 @@ public class InitialSetupDraftDto
 	public DateTime? StartDate { get; set; }
 	public DateTime? EndDate { get; set; }
 	public EducationBoardType? BoardType { get; set; }
+	[StringLength(EducationBoardNames.MaxCustomNameLength)] public string CustomBoardName { get; set; } = "";
 	[StringLength(128)] public string Medium { get; set; } = "";
 	[StringLength(128)] public string Stage { get; set; } = "";
 	[StringLength(128)] public string ClassName { get; set; } = "";
 	public int? AgeLowerLimit { get; set; }
 	[StringLength(64)] public string DivisionName { get; set; } = "";
 	public int? Strength { get; set; }
-	[StringLength(64)] public string RoomNumber { get; set; } = "";
 }
 public class InitialSetupDto
 {

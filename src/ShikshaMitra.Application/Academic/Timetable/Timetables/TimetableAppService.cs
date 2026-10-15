@@ -14,6 +14,7 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Data;
@@ -40,7 +41,8 @@ public class TimetableAppService(
     TimetableReportPdfService timetableReportPdfService,
     ITenantRepository tenantRepository,
     IRepository<Employee, Guid> employeeRepository,
-    IUserScopeAccessService userScopeAccessService
+    IUserScopeAccessService userScopeAccessService,
+    SchoolIdentityDocumentService schoolIdentity
 ) : ApplicationService, ITimetableAppService
 {
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_TimetableManagement.View)]
@@ -1289,7 +1291,9 @@ public class TimetableAppService(
         }.Where(p => !string.IsNullOrWhiteSpace(p));
         var address = string.Join(", ", addressParts);
         var contactNumber = tenant?.GetProperty<string>("ContactNumber");
-        var logoBytes = tenant?.GetProperty<byte[]>("Logo");
+        var identitySnapshot = await schoolIdentity.CaptureForStageAsync(standard.EducationMediumStageId);
+        var identityAssets = await schoolIdentity.LoadAsync(identitySnapshot);
+        var logoBytes = identityAssets.Logo;
 
         // Fetch timetable data
         var timetableDto = await GetByStandardAndDivisionAsync(standardId, divisionId);
@@ -1331,6 +1335,7 @@ public class TimetableAppService(
             Address = string.IsNullOrWhiteSpace(address) ? null : address,
             ContactNumber = contactNumber,
             LogoBytes = logoBytes,
+            BannerBytes = identityAssets.Banner,
             StandardName = standard.Name,
             DivisionName = division.Name,
             GeneratedAt = DateTime.Now,

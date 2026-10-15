@@ -76,7 +76,7 @@ public class StudentRecordActionAuthorization_Tests
 	[InlineData("download", "Students.Records.StudentICard.View")]
 	public async Task Record_action_ID_direct_service_rejects_denied_exact_permission(string action, string deniedPermission)
 	{
-		var service = new StudentIdCardAppService(null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(deniedPermission) };
+		var service = new StudentIdCardAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(deniedPermission) };
 		Func<Task> call = action switch
 		{
 			"issue" => () => service.IssueAsync(new()), "template" => () => service.SaveTemplateAsync(new()),
@@ -96,7 +96,7 @@ public class StudentRecordActionAuthorization_Tests
 	[InlineData("batch-view", "Students.Records.Certificates.View")]
 	public async Task Record_action_certificate_direct_service_rejects_denied_exact_permission(string action, string deniedPermission)
 	{
-		var service = new StudentCertificateAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(deniedPermission) };
+		var service = new StudentCertificateAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = Denying(deniedPermission) };
 		Func<Task> call = action switch
 		{
 			"issue" => () => service.GenerateAsync(new()), "duplicate" => () => service.DuplicateAsync(Guid.NewGuid(), new() { Reason = "Additional numbered copy" }),

@@ -69,6 +69,7 @@ public partial class HRSeederContributor
 			var id = GuidGenerator.Create();
 			var shiftEntity = new ShiftManagement
 			{
+				TenantId = CurrentTenant.Id,
 				ShiftName = shift.Name,
 				StartTime = shift.StartTime,
 				EndTime = shift.EndTime

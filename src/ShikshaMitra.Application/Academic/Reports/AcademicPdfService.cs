@@ -59,7 +59,7 @@ public class AcademicPdfService : ITransientDependency
 				page.Margin(20);
 				page.DefaultTextStyle(x => x.FontSize(8.5f).FontColor(Colors.Grey.Darken4).WithPortableFonts());
 
-				page.Header().Element(c => ComposeHeader(c, report));
+				page.Header().Element(c => AcademicReportIdentityHeader.Compose(c, report, header => ComposeHeader(header, report)));
 				page.Content().Element(c => ComposeTable(c, report, rows ?? report.Rows, rowCount ?? report.Rows.Count));
 				page.Footer().Element(ComposeFooter);
 			});

@@ -1,12 +1,14 @@
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.TenantSettings.SchoolIdentity;
+using ShikshaMitra.Common.PDF;
 
 namespace ShikshaMitra.Students.Records;
 
 public static class StudentCertificatePdfRenderer
 {
-	public static byte[] Render(StudentCertificateResponseDto certificate)
+	public static byte[] Render(StudentCertificateResponseDto certificate, SchoolIdentityDocumentAssets? identity = null)
 	{
 		QuestPDF.Settings.License = LicenseType.Community;
 		var content = certificate.Template.Document ?? StudentCertificateDocumentFactory.Create(certificate);
@@ -14,13 +16,19 @@ public static class StudentCertificatePdfRenderer
 		{
 			page.Size(PageSizes.A4);
 			page.Margin(36);
-			page.DefaultTextStyle(style => style.FontFamily("Lato").FontSize(10).FontColor(Colors.Grey.Darken4));
+			page.DefaultTextStyle(style => style.WithPortableFonts().FontSize(10).FontColor(Colors.Grey.Darken4));
 			page.Content().Border(1).BorderColor(Colors.Grey.Lighten1).Padding(24).Column(column =>
 			{
 				column.Spacing(16);
-				column.Item().AlignCenter().Text(certificate.Organization.OrganizationName).FontSize(19).Bold();
-				if (!string.IsNullOrWhiteSpace(certificate.Organization.Address))
-					column.Item().AlignCenter().Text(certificate.Organization.Address).FontSize(9);
+				if (identity?.Banner != null)
+					column.Item().MaxHeight(100).Image(identity.Banner).FitArea();
+				else
+				{
+					if (identity?.Logo != null) column.Item().AlignCenter().Width(55).Height(55).Image(identity.Logo).FitArea();
+					column.Item().AlignCenter().Text(certificate.Organization.OrganizationName).FontSize(19).Bold();
+					if (!string.IsNullOrWhiteSpace(certificate.Organization.Address))
+						column.Item().AlignCenter().Text(certificate.Organization.Address).FontSize(9);
+				}
 				column.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
 				column.Item().AlignCenter().Text(content.Title.ToUpperInvariant()).FontSize(16).Bold();
 				column.Item().Row(row =>
@@ -48,8 +56,10 @@ public static class StudentCertificatePdfRenderer
 					row.RelativeItem().AlignCenter().Text("School seal").FontSize(10);
 					row.RelativeItem().AlignCenter().Column(signature =>
 					{
+						if (identity?.Signature != null) signature.Item().AlignCenter().Width(100).Height(35).Image(identity.Signature).FitArea();
 						signature.Item().LineHorizontal(0.5f);
-						signature.Item().PaddingTop(6).AlignCenter().Text("Principal / authorised signatory").FontSize(10);
+						if (!string.IsNullOrWhiteSpace(identity?.PrincipalName)) signature.Item().AlignCenter().Text(identity.PrincipalName).FontSize(10);
+						signature.Item().PaddingTop(6).AlignCenter().Text(identity?.Designation ?? "Principal / authorised signatory").FontSize(10);
 					});
 				});
 			});

@@ -35,40 +35,51 @@ public class AttendanceApplicabilityResolver(IRepository<AcademicCalendar, Guid>
 	IRepository<EducationMedium, Guid> mediums, IRepository<EducationBoard, Guid> boards) : DomainService
 {
 	public async Task<AttendanceApplicabilityContext> LoadAsync(Guid academicYearId, Guid standardId, Guid divisionId,
-		DateTime startDate, DateTime endDate, IReadOnlyCollection<Guid> enrollmentIds)
+		DateTime startDate, DateTime endDate, IReadOnlyCollection<Guid> enrollmentIds) =>
+		(await LoadManyAsync(academicYearId, [(standardId, divisionId)], startDate, endDate))[divisionId];
+
+	public async Task<IReadOnlyDictionary<Guid, AttendanceApplicabilityContext>> LoadManyAsync(Guid academicYearId,
+		IReadOnlyCollection<(Guid StandardId, Guid DivisionId)> paths, DateTime startDate, DateTime endDate)
 	{
 		if (!CurrentTenant.Id.HasValue) throw new BusinessException(AttendancePolicyErrorCodes.TenantRequired);
 		if (endDate < startDate || (endDate.Date - startDate.Date).TotalDays > 1096) throw new BusinessException(AttendancePolicyErrorCodes.InvalidPolicy);
+		var divisionIds = paths.Select(p => p.DivisionId).Distinct().ToArray();
 		var hierarchy = from division in await divisions.GetQueryableAsync()
 			join standard in await standards.GetQueryableAsync() on division.StandardId equals standard.Id
 			join stage in await stages.GetQueryableAsync() on standard.EducationMediumStageId equals stage.Id
 			join medium in await mediums.GetQueryableAsync() on stage.EducationMediumId equals medium.Id
 			join board in await boards.GetQueryableAsync() on medium.EducationBoardId equals board.Id
-			where division.Id == divisionId && standard.Id == standardId && board.AcademicYearId == academicYearId &&
+			where Enumerable.Contains(divisionIds, division.Id) && board.AcademicYearId == academicYearId &&
 				division.TenantId == CurrentTenant.Id && standard.TenantId == CurrentTenant.Id && stage.TenantId == CurrentTenant.Id &&
 				medium.TenantId == CurrentTenant.Id && board.TenantId == CurrentTenant.Id
 			select new AttendancePolicyScope(board.Id, medium.Id, stage.Id, standard.Id, division.Id);
-		var scope = await AsyncExecuter.SingleOrDefaultAsync(hierarchy) ?? throw new BusinessException(AttendancePolicyErrorCodes.InvalidPolicy);
-		var calendarQuery = await calendars.GetQueryableAsync();
-		var calendarList = await AsyncExecuter.ToListAsync(calendarQuery.Where(x => x.TenantId == CurrentTenant.Id &&
+		var scopes = await AsyncExecuter.ToListAsync(hierarchy);
+		if (paths.Any(path => !scopes.Any(scope => scope.StandardId == path.StandardId && scope.DivisionId == path.DivisionId)))
+			throw new BusinessException(AttendancePolicyErrorCodes.InvalidPolicy);
+		var mediumIds = scopes.Select(s => s.MediumId).ToArray();
+		var calendarList = await AsyncExecuter.ToListAsync((await calendars.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id &&
 			x.Status == CalendarStatus.Published && (x.AcademicYearId == academicYearId || x.AcademicYearId == null) &&
-			(x.AcademicMediumId == scope.MediumId || x.AcademicMediumId == null) && x.StartDate <= endDate.Date && x.EndDate >= startDate.Date));
+			(Enumerable.Contains(mediumIds, x.AcademicMediumId) || x.AcademicMediumId == null) && x.StartDate <= endDate.Date && x.EndDate >= startDate.Date));
 		var calendarIds = calendarList.Select(x => x.Id).ToArray();
-		var dayQuery = await days.GetQueryableAsync();
-		var dayList = await AsyncExecuter.ToListAsync(dayQuery.Where(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(calendarIds, x.AcademicCalendarId) &&
-			x.Date >= startDate.Date && x.Date <= endDate.Date && x.Status != CalendarDayStatus.Cancelled &&
-			(x.AppliesToAll || ((!x.StandardId.HasValue || x.StandardId == standardId) && (!x.DivisionId.HasValue || x.DivisionId == divisionId)))));
-		var settingQuery = await settings.GetQueryableAsync();
-		var settingList = await AsyncExecuter.ToListAsync(settingQuery.Where(x => x.TenantId == CurrentTenant.Id &&
-			(x.AcademicYearId == academicYearId || x.AcademicYearId == null) && (x.AcademicMediumId == scope.MediumId || x.AcademicMediumId == null)));
-		var calendarSetting = settingList.OrderByDescending(x => x.AcademicYearId.HasValue).ThenByDescending(x => x.AcademicMediumId.HasValue).FirstOrDefault();
-		var resolved = new Dictionary<DateTime, AttendanceApplicabilityResult>();
-		for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
+		var dayList = await AsyncExecuter.ToListAsync((await days.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(calendarIds, x.AcademicCalendarId) &&
+			x.Date >= startDate.Date && x.Date <= endDate.Date && x.Status != CalendarDayStatus.Cancelled));
+		var settingList = await AsyncExecuter.ToListAsync((await settings.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id &&
+			(x.AcademicYearId == academicYearId || x.AcademicYearId == null) && (Enumerable.Contains(mediumIds, x.AcademicMediumId) || x.AcademicMediumId == null)));
+		var result = new Dictionary<Guid, AttendanceApplicabilityContext>();
+		foreach (var scope in scopes)
 		{
-			resolved[date] = AttendanceCalendarDayEvaluator.Resolve(date, calendarList, dayList, calendarSetting);
+			var calendarSetting = settingList.Where(x => x.AcademicMediumId == scope.MediumId || x.AcademicMediumId == null)
+				.OrderByDescending(x => x.AcademicYearId.HasValue).ThenByDescending(x => x.AcademicMediumId.HasValue).FirstOrDefault();
+			var applicableCalendars = calendarList.Where(x => x.AcademicMediumId == scope.MediumId || x.AcademicMediumId == null).ToList();
+			var applicableDays = dayList.Where(x => x.AppliesToAll || (!x.StandardId.HasValue || x.StandardId == scope.StandardId) && (!x.DivisionId.HasValue || x.DivisionId == scope.DivisionId)).ToList();
+			var resolved = new Dictionary<DateTime, AttendanceApplicabilityResult>();
+			for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
+				resolved[date] = AttendanceCalendarDayEvaluator.Resolve(date, applicableCalendars, applicableDays, calendarSetting);
+			result[scope.DivisionId!.Value] = new(scope, resolved);
 		}
-		return new(scope, resolved);
+		return result;
 	}
+
 }
 
 /// <summary>Resolves the existing Academic Calendar's published days; attendance owns no holiday definitions.</summary>

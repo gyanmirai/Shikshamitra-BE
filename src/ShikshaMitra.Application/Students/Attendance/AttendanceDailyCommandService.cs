@@ -125,10 +125,17 @@ internal static class AttendanceEntryRules
 	{
 		var entry = member.Entry;
 		if (roster.Day?.IsSubmitted != true || entry == null || entry.Status == AttendanceStatus.Pending) return false;
-		var derived = ToDomain(new AttendanceEntryDto { StudentId = member.Student.Id, Status = entry.Status,
-			Late = entry.Late, HalfDay = entry.HalfDay, Remarks = entry.Remarks }, member, roster.Date, roster.Options);
-		return entry.ApprovedLeaveId != derived.ApprovedLeaveId || entry.PresentCredit != derived.PresentCredit ||
-			entry.DenominatorCredit != derived.DenominatorCredit || entry.ExcludedFromPercentage != derived.ExcludedFromPercentage;
+		return NeedsCreditCorrection(entry, member.Leave, roster.Options);
+	}
+
+	internal static bool NeedsCreditCorrection(AttendanceEntry entry, AttendanceApprovedLeave? leave, AttendancePolicyOptions options)
+	{
+		if (entry.Status == AttendanceStatus.Pending) return false;
+		var item = new AttendanceEntryDto { StudentId = entry.StudentId, Status = entry.Status, Late = entry.Late, HalfDay = entry.HalfDay, Remarks = entry.Remarks };
+		Validate(item, options);
+		var credits = CalculateCredits(item, leave, options);
+		return entry.ApprovedLeaveId != leave?.Id || entry.PresentCredit != credits.Present ||
+			entry.DenominatorCredit != credits.Denominator || entry.ExcludedFromPercentage != credits.Excluded;
 	}
 
 	// Keep the recorded credits and request-time leave facts together. Approval must not silently

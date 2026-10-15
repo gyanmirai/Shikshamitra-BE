@@ -18,12 +18,20 @@ public partial class CollectFeeWorkflow
 {
 	private async Task ValidatePaymentChannelPolicyAsync(CollectFeeInput input)
 	{
+		if (input.FinanceFeeAccountId.HasValue)
+		{
+			var rules = await policyResolver.ResolveEffectiveRulesForAccountAsync(input.FinanceFeeAccountId.Value);
+			if (rules.Policy?.AllowOnlineCollection == false && input.Payments.Any(p => p.PaymentMethod is
+				PaymentMethodEnum.BankTransfer or PaymentMethodEnum.CreditCard or PaymentMethodEnum.DebitCard or PaymentMethodEnum.UPI))
+				throw new BusinessException(FinanceChargeErrorCodes.OnlineCollectionNotAllowed);
+			return;
+		}
 		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
 			x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
 		if (assignment is null) return;
 
 		var effectiveRules = await policyResolver.ResolveEffectiveRulesForStudentAsync(
-			input.StudentId, assignment.FeeStructureStandardId);
+			input.StudentId!.Value, assignment.FeeStructureStandardId);
 		if (effectiveRules.Policy?.AllowOnlineCollection != false) return;
 
 		var containsOnlineMethod = input.Payments.Any(payment => payment.PaymentMethod is
@@ -37,12 +45,12 @@ public partial class CollectFeeWorkflow
 		CollectFeeInput input)
 	{
 		var academicYear = await academicYearRepository.GetAsync(input.AcademicYearId);
-		var student = await studentRepository.GetAsync(input.StudentId);
+		var student = await studentRepository.GetAsync(input.StudentId!.Value);
 
 		if (student.AcademicYearId != input.AcademicYearId)
 			throw new BusinessException(FeeCollectionErrorCodes.StudentAcademicYearMismatch);
 
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId);
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(input.StudentId!.Value);
 		return (student, academicYear);
 	}
 
@@ -69,7 +77,8 @@ public partial class CollectFeeWorkflow
 		foreach (var dfp in input.DueFeePayments)
 		{
 			var df = dueFeeMap[dfp.DueFeeId];
-			if (df.StudentId != input.StudentId) throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
+			if (input.FinanceFeeAccountId.HasValue ? df.FinanceFeeAccountId != input.FinanceFeeAccountId : df.StudentId != input.StudentId)
+				throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
 			if (df.FeeHeadId != dfp.FeeHeadId) throw new BusinessException(FeeCollectionErrorCodes.InvalidFeeHead);
 			var maxCollectible = Math.Ceiling(df.OutstandingAmount);
 			if ((decimal)dfp.Amount > maxCollectible)
@@ -103,7 +112,7 @@ public partial class CollectFeeWorkflow
 		}
 
 		var dueFeeMap = dueFees.ToDictionary(df => df.Id);
-		if (dueFeeMap.Values.Any(df => df.StudentId != input.StudentId))
+		if (dueFeeMap.Values.Any(df => input.FinanceFeeAccountId.HasValue ? df.FinanceFeeAccountId != input.FinanceFeeAccountId : df.StudentId != input.StudentId))
 		{
 			throw new BusinessException(FeeCollectionErrorCodes.InvalidDueFee);
 		}

@@ -59,15 +59,19 @@ public partial class FeeReceiptAppService(
             SkipCount             = input.SkipCount,
             MaxResultCount        = input.MaxResultCount,
             ScopedStudentIdsQuery = scopedStudentIds,
+            ScopedAccountIdsQuery = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync(),
         };
 
         var (totalCount, receipts) = await receiptRepository.GetPagedListAsync(filter, cancellationToken);
         if (totalCount == 0)
             return new PagedResultDto<FeeReceiptListItemDto>(0, []);
 
-        var studentIds = receipts.Select(r => r.StudentId).Distinct().ToList();
+        var studentIds = receipts.Where(r => r.StudentId.HasValue).Select(r => r.StudentId!.Value).Distinct().ToList();
         var students   = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));
         var studentMap = students.ToDictionary(s => s.Id);
+        var accountIds = receipts.Where(r => r.FinanceFeeAccountId.HasValue).Select(r => r.FinanceFeeAccountId!.Value).Distinct().ToList();
+        var accountRepository = LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FinanceFeeAccount, Guid>>();
+        var accountMap = (await accountRepository.GetListAsync(a => accountIds.Contains(a.Id), cancellationToken: cancellationToken)).ToDictionary(a => a.Id);
 
         var linkedFinalIds = receipts
             .Where(r => r.LinkedFinalReceiptId.HasValue)
@@ -79,7 +83,8 @@ public partial class FeeReceiptAppService(
 
         var items = receipts.Select(r =>
         {
-            studentMap.TryGetValue(r.StudentId, out var student);
+            var student = r.StudentId.HasValue ? studentMap.GetValueOrDefault(r.StudentId.Value) : null;
+            var account = r.FinanceFeeAccountId.HasValue ? accountMap.GetValueOrDefault(r.FinanceFeeAccountId.Value) : null;
             return new FeeReceiptListItemDto
             {
                 Id                         = r.Id,
@@ -93,9 +98,10 @@ public partial class FeeReceiptAppService(
                     : null,
                 TotalPaidAmount            = r.TotalPaidAmount,
                 StudentId                  = r.StudentId,
+                FinanceFeeAccountId        = r.FinanceFeeAccountId,
                 StudentName                = student != null
                     ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")
-                    : string.Empty,
+                    : account?.ApplicantName ?? string.Empty,
                 GrNo                       = student?.GrNo,
                 RollNo                     = student?.RollNo?.ToString(),
                 ReceiptDate                = r.ReceiptDate,
@@ -113,9 +119,12 @@ public partial class FeeReceiptAppService(
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(receipt.StudentId, cancellationToken);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
 
-        var student      = await studentRepository.FindAsync(receipt.StudentId, cancellationToken: cancellationToken);
+        var student      = receipt.StudentId.HasValue ? await studentRepository.FindAsync(receipt.StudentId.Value, cancellationToken: cancellationToken) : null;
+        var account = receipt.FinanceFeeAccountId.HasValue
+            ? await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FinanceFeeAccount, Guid>>().GetAsync(receipt.FinanceFeeAccountId.Value, cancellationToken: cancellationToken)
+            : null;
         var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, cancellationToken: cancellationToken);
         var board        = await boardRepository.FindAsync(receipt.BoardId, cancellationToken: cancellationToken);
         var medium       = await mediumRepository.FindAsync(receipt.EducationMediumId, cancellationToken: cancellationToken);
@@ -135,14 +144,16 @@ public partial class FeeReceiptAppService(
 
         string? className = null;
         string? division  = null;
-        if (student?.StandardId.HasValue == true)
+        var standardId = account?.StandardId ?? student?.StandardId;
+        var divisionId = account?.DivisionId ?? student?.DivisionId;
+        if (standardId.HasValue)
         {
-            var std = await standardRepository.FindAsync(student.StandardId!.Value, cancellationToken: cancellationToken);
+            var std = await standardRepository.FindAsync(standardId.Value, cancellationToken: cancellationToken);
             className = std?.Name;
         }
-        if (student?.DivisionId.HasValue == true)
+        if (divisionId.HasValue)
         {
-            var div = await divisionRepository.FindAsync(student.DivisionId!.Value, cancellationToken: cancellationToken);
+            var div = await divisionRepository.FindAsync(divisionId.Value, cancellationToken: cancellationToken);
             division = div?.Name;
         }
 
@@ -208,9 +219,10 @@ public partial class FeeReceiptAppService(
             LinkedFinalReceiptNumber       = linkedFinal?.ReceiptNumber,
             TotalPaidAmount                = receipt.TotalPaidAmount,
             StudentId                      = receipt.StudentId,
+            FinanceFeeAccountId            = receipt.FinanceFeeAccountId,
             StudentName                    = student != null
                 ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")
-                : string.Empty,
+                : account?.ApplicantName ?? string.Empty,
             GrNo                           = student?.GrNo,
             RollNo                         = student?.RollNo?.ToString(),
             ClassName                      = className,
@@ -219,6 +231,8 @@ public partial class FeeReceiptAppService(
             BoardId                        = receipt.BoardId,
             EducationMediumId              = receipt.EducationMediumId,
             AcademicYearName               = academicYear?.Name,
+            AcademicYearStartDate          = academicYear?.StartDate,
+            AcademicYearEndDate            = academicYear?.EndDate,
             BoardName                      = board?.Type.ToString(),
             MediumName                     = medium?.Name,
             ReceiptDate                    = receipt.ReceiptDate,

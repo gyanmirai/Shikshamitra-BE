@@ -14,7 +14,9 @@ namespace ShikshaMitra.Finance.Fees.FeeCollection;
 public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
 	public Guid? TenantId { get; private set; }
-	public Guid StudentId { get; private set; }
+	public Guid? StudentId { get; private set; }
+	public Guid? FinanceFeeAccountId { get; private set; }
+	public void LinkStudent(Guid studentId) => StudentId = FinanceFeePayerIdentity.LinkStudent(StudentId, studentId);
  public Guid? BankAccountId { get; private set; }
  public string? BankLabelSnapshot { get; private set; }
  public void SetReceivingBank(Guid? id, string? label) { BankAccountId = id; BankLabelSnapshot = label; }
@@ -43,17 +45,19 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	/// The concrete type must match the <paramref name="paymentMethod"/>.
 	/// </param>
 	public static PaymentMethodRecord Create(
-		Guid studentId,
+		Guid? studentId,
 		Guid feeRecordMetadataId,
 		decimal amount,
 		DateTimeOffset paymentDate,
 		PaymentMethodEnum paymentMethod,
 		PaymentDetails? paymentDetails = null,
 		Guid? tenantId = null,
-		string? notes = null)
+		string? notes = null,
+		Guid? financeFeeAccountId = null)
 	{
 		if (amount <= 0)
 			throw new BusinessException(FeeCollectionErrorCodes.PaymentAmountMustBePositive);
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
 
 		// Only Cheque, DemandDraft, BankTransfer, and UPI have dedicated detail types
 		// and therefore require details. CreditCard, OnlinePaymentGateway, and
@@ -74,6 +78,7 @@ public class PaymentMethodRecord : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		{
 			Id = Guid.NewGuid(),
 			StudentId = studentId,
+			FinanceFeeAccountId = financeFeeAccountId,
 			FeeRecordMetadataId = feeRecordMetadataId,
 			Amount = amount,
 			PaymentDate = paymentDate,

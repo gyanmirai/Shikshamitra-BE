@@ -7,6 +7,7 @@ using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
@@ -15,17 +16,25 @@ public sealed record RefundLineSpec(Guid DueFeeId, Guid? SourceAllocationId, Gui
     decimal Amount, decimal CalculatedAmount);
 
 public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository dueFeeRepository,
+    IRepository<FinanceFeeAccount, Guid> accountRepository,
     ICurrentTenant currentTenant) : DomainService
 {
-    public async Task<FeeRefundRequest> CreatePendingAsync(Guid studentId, Guid academicYearId,
-        Guid assignmentId, Guid policyId, Guid policyVersionId, Guid receiptId, string receiptNumber,
+    public async Task<FeeRefundRequest> CreatePendingAsync(Guid? studentId, Guid academicYearId,
+        Guid? assignmentId, Guid policyId, Guid policyVersionId, Guid receiptId, string receiptNumber,
         IReadOnlyCollection<RefundLineSpec> lines, string? method, RefundPaymentDetails? details,
         string? reason, string policySnapshot, string calculationSnapshot, string calculationHash,
-        Guid submittedBy, string idempotencyKey, Guid? replacesRequestId)
+        Guid submittedBy, string idempotencyKey, Guid? replacesRequestId, Guid? financeFeeAccountId = null)
     {
-        await ValidateLinesAsync(studentId, assignmentId, lines, null);
+        await ValidateLinesAsync(studentId, assignmentId, lines, null, financeFeeAccountId, academicYearId);
+        if (financeFeeAccountId.HasValue && !assignmentId.HasValue)
+        {
+            var account = await accountRepository.GetAsync(financeFeeAccountId.Value);
+            var reference = account.GetPolicyReference("refund");
+            if (reference == null || reference.Value.PolicyId != policyId || reference.Value.VersionId != policyVersionId)
+                throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
+        }
         var request = new FeeRefundRequest(GuidGenerator.Create(), currentTenant.Id, studentId,
-            academicYearId, GenerateVoucherNumber(), method, details, reason);
+            academicYearId, GenerateVoucherNumber(), method, details, reason, financeFeeAccountId: financeFeeAccountId);
         request.PinPolicy(assignmentId, policyId, policyVersionId, receiptId, receiptNumber,
             policySnapshot, calculationSnapshot, calculationHash);
         foreach (var line in lines)
@@ -34,16 +43,18 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         return await repository.InsertAsync(request, autoSave: false);
     }
 
-    public async Task<FeeRefundRequest> CreateFromConcessionAsync(Guid studentId, Guid academicYearId,
+    public async Task<FeeRefundRequest> CreateFromConcessionAsync(Guid? studentId, Guid academicYearId,
         Guid assignmentId, Guid concessionRequestId, Guid receiptId, string receiptNumber,
         IReadOnlyCollection<RefundLineSpec> lines, string calculationSnapshot, string calculationHash,
         Guid submittedBy, string? method = null, RefundPaymentDetails? details = null,
-        string? reason = null, string? idempotencyKey = null, Guid? replacesRequestId = null)
+        string? reason = null, string? idempotencyKey = null, Guid? replacesRequestId = null,
+        Guid? financeFeeAccountId = null)
     {
-        await ValidateLinesAsync(studentId, assignmentId, lines, null);
+        if (!studentId.HasValue) throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
+        await ValidateLinesAsync(studentId, assignmentId, lines, null, financeFeeAccountId, academicYearId);
         var request = new FeeRefundRequest(GuidGenerator.Create(), currentTenant.Id, studentId,
             academicYearId, GenerateVoucherNumber(), method, details,
-            reason ?? $"Approved concession {concessionRequestId}");
+            reason ?? $"Approved concession {concessionRequestId}", financeFeeAccountId: financeFeeAccountId);
         request.PinConcession(assignmentId, concessionRequestId, receiptId, receiptNumber,
             calculationSnapshot, calculationHash);
         foreach (var line in lines)
@@ -58,9 +69,10 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
     {
         if (request.Status != FeeRefundStatus.Draft)
             throw new BusinessException(FeeRefundErrorCodes.CannotModifyNonPendingRefund);
-        if (!request.StudentFeeStructureId.HasValue)
+        if (!request.StudentFeeStructureId.HasValue && !request.FinanceFeeAccountId.HasValue)
             throw new BusinessException(FeeRefundErrorCodes.PolicyVersionInvalid);
-        await ValidateLinesAsync(request.StudentId, request.StudentFeeStructureId.Value, lines, request.Id);
+        await ValidateLinesAsync(request.StudentId, request.StudentFeeStructureId, lines, request.Id,
+            request.FinanceFeeAccountId, request.AcademicYearId);
         request.ReplaceLines(lines.Select(x => ToEntity(request.Id, x)).ToList());
         request.UpdatePaymentDetails(method, details);
         request.UpdateReason(reason);
@@ -166,9 +178,20 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         request.Reverse(settlementId, userId, reason);
     }
 
-    private async Task ValidateLinesAsync(Guid studentId, Guid assignmentId,
-        IReadOnlyCollection<RefundLineSpec> lines, Guid? requestId)
+    private async Task ValidateLinesAsync(Guid? studentId, Guid? assignmentId,
+        IReadOnlyCollection<RefundLineSpec> lines, Guid? requestId, Guid? financeFeeAccountId = null,
+        Guid? academicYearId = null)
     {
+        FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
+        if (!assignmentId.HasValue && !financeFeeAccountId.HasValue)
+            throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
+        if (financeFeeAccountId.HasValue)
+        {
+            var account = await accountRepository.GetAsync(financeFeeAccountId.Value);
+            if (account.AcademicYearId != academicYearId ||
+                (studentId.HasValue && account.StudentId != studentId))
+                throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
+        }
         if (lines.Count == 0 || lines.Any(x => x.Amount <= 0 || x.CalculatedAmount <= 0 || x.CalculatedAmount > x.Amount) ||
             lines.Any(x => !x.SourceAllocationId.HasValue) ||
             lines.GroupBy(x => x.SourceAllocationId).Any(g => g.Count() > 1))
@@ -182,7 +205,9 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         foreach (var line in lines)
         {
             var due = dues.Single(x => x.Id == line.DueFeeId);
-            if (due.StudentId != studentId || due.StudentFeeStructureId != assignmentId)
+            if (financeFeeAccountId.HasValue
+                ? due.FinanceFeeAccountId != financeFeeAccountId
+                : due.StudentId != studentId || due.StudentFeeStructureId != assignmentId)
                 throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
             var available = Math.Min(dueRemaining[due.Id], line.SettledPaidAmount);
             if (line.Amount > available)

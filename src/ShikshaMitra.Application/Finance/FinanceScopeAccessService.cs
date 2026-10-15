@@ -14,7 +14,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance;
 
 [RemoteService(false)]
-public class FinanceScopeAccessService(
+public partial class FinanceScopeAccessService(
 	IUserScopeService userScopeService,
 	IAcademicYearRepository academicYearRepository,
 	IReadOnlyRepository<Student, Guid> studentRepository)

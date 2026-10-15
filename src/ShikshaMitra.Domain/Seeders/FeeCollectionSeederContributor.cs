@@ -215,7 +215,7 @@ public class FeeCollectionSeederContributor : BaseSeederContributor
             .Select(x => x.StudentId)
             .ToHashSet();
         var studentsWithExistingDueFees = (await _dueFeeRepository.GetListAsync(
-                dueFee => enrolledStudentIds.Contains(dueFee.StudentId)))
+                dueFee => dueFee.StudentId.HasValue && enrolledStudentIds.Contains(dueFee.StudentId.Value)))
             .Select(x => x.StudentId)
             .ToHashSet();
         var studentFeeStructuresToInsert = new List<StudentFeeStructure>();

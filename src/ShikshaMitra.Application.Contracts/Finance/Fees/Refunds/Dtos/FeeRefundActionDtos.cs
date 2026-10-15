@@ -61,7 +61,7 @@ public class ReverseFeeRefundDto
 
 public class FeeRefundPreviewDto
 {
-    public Guid StudentFeeStructureId { get; set; }
+    public Guid? StudentFeeStructureId { get; set; }
     public Guid RefundPolicyId { get; set; }
     public Guid RefundPolicyVersionId { get; set; }
     public string RefundPolicyName { get; set; } = string.Empty;

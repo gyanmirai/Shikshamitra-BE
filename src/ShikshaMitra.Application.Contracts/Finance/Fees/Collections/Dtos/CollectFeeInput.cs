@@ -72,8 +72,11 @@ public class CollectFeeInput
     public string IdempotencyKey { get; set; } = string.Empty;
 
     /// <summary>Unique identifier of the student paying fees.</summary>
-    [Required]
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+
+	/// <summary>Resolved by the admission collection service, never accepted from JSON callers.</summary>
+	[JsonIgnore]
+	public Guid? FinanceFeeAccountId { get; set; }
 
     /// <summary>Academic year for which payment is being made.</summary>
     [Required]

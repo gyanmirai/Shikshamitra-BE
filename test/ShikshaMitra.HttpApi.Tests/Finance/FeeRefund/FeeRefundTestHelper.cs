@@ -194,6 +194,58 @@ public static class FeeRefundTestHelper
         return studentId;
     }
 
+    public static async Task<(Guid AccountId, Guid DueFeeId, Guid ReceiptId, Guid SourceAllocationId)> SeedApplicantWithPaidDueFeeAsync(
+        IServiceProvider services, decimal amount = 1000m, bool settled = true)
+    {
+        var headId = await SeedFeeHeadAsync(services);
+        var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        using var scope = services.CreateScope();
+        var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+        var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        using var tenant = currentTenant.Change(tenantId);
+        using var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+        var policyId = Guid.NewGuid();
+        var versionId = Guid.NewGuid();
+        var policy = new RefundPolicy(policyId, tenantId, DefaultAcademicYearId,
+            new RefundPolicyUpdateModel($"Applicant refund {policyId:N}", ($"AR-{policyId:N}")[..20],
+                "Applicant refund test", RefundPolicyStatus.Active, false, RefundFeeHeadScope.AllFeeHeads,
+                [], false, false, true, RefundAmountMode.ManualUpToEligible, null, null, null, null,
+                RoundingMethodType.None, RefundDeductionType.None, null, null, null, [RefundPayoutMethod.Cash], 2));
+        await scope.ServiceProvider.GetRequiredService<IRepository<RefundPolicy, Guid>>().InsertAsync(policy);
+        await scope.ServiceProvider.GetRequiredService<IRepository<FinancePolicyVersion, Guid>>().InsertAsync(
+            new FinancePolicyVersion(versionId, tenantId, "refund", policyId, DefaultAcademicYearId,
+                policy.Version, policy.PolicyName, policy.Status.ToString(), JsonSerializer.Serialize(policy.ToSnapshot()),
+                "created", "Applicant refund fixture"));
+        var account = new FinanceFeeAccount(Guid.NewGuid(), tenantId, Guid.NewGuid(), Guid.NewGuid(),
+            DefaultAcademicYearId, DefaultBoardId, DefaultMediumId, DefaultMediumStageId, DefaultStandardId, "QA Applicant Refund");
+        account.CaptureAssignment(Guid.NewGuid(), 1, JsonSerializer.Serialize(new
+        { Policies = new[] { new { Family = "refund", PolicyId = policyId, VersionId = versionId } } }), "refund-fixture");
+        await scope.ServiceProvider.GetRequiredService<IRepository<FinanceFeeAccount, Guid>>().InsertAsync(account);
+        var due = new DueFee(Guid.NewGuid(), tenantId, null, headId, (MonthEnum)DateTime.UtcNow.Month,
+            DateTime.UtcNow.Year, true, amount, DateTime.UtcNow.Date, financeFeeAccountId: account.Id);
+        due.ApplyPayment(amount);
+        await scope.ServiceProvider.GetRequiredService<IDueFeeRepository>().InsertAsync(due);
+        var collection = new FeeRecordMetadata(Guid.NewGuid(), tenantId, null, DefaultAcademicYearId,
+            Convert.ToDouble(amount), $"AR-{Guid.NewGuid():N}"[..20], settled ? FeeCollectionStatus.Paid : FeeCollectionStatus.InReconciliation,
+            financeFeeAccountId: account.Id);
+        await scope.ServiceProvider.GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(collection);
+        var allocation = new FeeCollectionDueFeeAllocation(Guid.NewGuid(), tenantId, collection.Id, due.Id, Convert.ToDouble(amount));
+        await scope.ServiceProvider.GetRequiredService<IRepository<FeeCollectionDueFeeAllocation, Guid>>().InsertAsync(allocation);
+        var receipt = new FeePaymentReceipt(Guid.NewGuid())
+        {
+            TenantId = tenantId, FeeCollectionTransactionId = collection.Id, ReceiptNumber = collection.ReceiptNumber,
+            ReceiptKind = settled ? FeeReceiptKind.FinalFee : FeeReceiptKind.ProvisionalFee,
+            ReceiptScope = FeeReceiptScope.Fee,
+            VerificationStatus = settled ? FeeReceiptVerificationStatus.Verified : FeeReceiptVerificationStatus.PendingVerification,
+            TotalPaidAmount = Convert.ToDouble(amount), AcademicYearId = DefaultAcademicYearId,
+            BoardId = DefaultBoardId, EducationMediumId = DefaultMediumId, ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        receipt.SetFinanceFeeAccount(account.Id);
+        await scope.ServiceProvider.GetRequiredService<IRepository<FeePaymentReceipt, Guid>>().InsertAsync(receipt);
+        await uow.CompleteAsync();
+        return (account.Id, due.Id, receipt.Id, allocation.Id);
+    }
+
     private static async Task SeedSettledCollectionAsync(IServiceProvider services, Guid studentId,
         Guid dueFeeId, double feeAmount)
     {
@@ -235,6 +287,32 @@ public static class FeeRefundTestHelper
         await allocations.InsertAsync(allocation, autoSave: false);
         await receipts.InsertAsync(receipt, autoSave: false);
         await uow.CompleteAsync();
+    }
+
+    public static async Task<Guid> AdoptLegacyAssignmentAsync(IServiceProvider services, Guid studentId, Guid dueFeeId)
+    {
+        var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        using var scope = services.CreateScope();
+        using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId);
+        using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+            .Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+        var dues = scope.ServiceProvider.GetRequiredService<IDueFeeRepository>();
+        var due = await dues.GetAsync(dueFeeId);
+        var assignments = scope.ServiceProvider.GetRequiredService<IRepository<StudentFeeStructure, Guid>>();
+        var assignment = await assignments.GetAsync(due.StudentFeeStructureId!.Value);
+        var account = new FinanceFeeAccount(Guid.NewGuid(), tenantId, Guid.NewGuid(), Guid.NewGuid(),
+            DefaultAcademicYearId, DefaultBoardId, DefaultMediumId, DefaultMediumStageId, DefaultStandardId,
+            "Adopted refund Student", studentId: studentId);
+        account.CaptureAssignment(Guid.NewGuid(), 1, JsonSerializer.Serialize(new
+        { Policies = new[] { new { Family = "refund", PolicyId = assignment.RefundPolicyId, VersionId = assignment.RefundPolicyVersionId } } }), "adopted-refund-fixture");
+        account.BindStudentAssignment(assignment.Id);
+        await scope.ServiceProvider.GetRequiredService<IRepository<FinanceFeeAccount, Guid>>().InsertAsync(account);
+        assignment.BindFinanceFeeAccount(account.Id);
+        await assignments.UpdateAsync(assignment);
+        due.BindFinanceFeeAccount(account.Id);
+        await dues.UpdateAsync(due);
+        await uow.CompleteAsync();
+        return account.Id;
     }
 
     private static async Task AttachRefundPolicyAsync(IServiceProvider services, Guid studentId, Guid dueFeeId,

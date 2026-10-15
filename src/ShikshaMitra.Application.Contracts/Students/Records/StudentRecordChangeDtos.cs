@@ -21,6 +21,11 @@ public class CreateStudentRecordChangeDto
 }
 public class StudentRecordChangeQueryDto : PagedAndSortedResultRequestDto
 {
+	public bool ApprovableOnly { get; set; }
+	public Guid? BoardId { get; set; }
+	public Guid? MediumId { get; set; }
+	public Guid? StandardId { get; set; }
+	public Guid? DivisionId { get; set; }
 	public Guid? StudentId { get; set; }
 	public Guid? AcademicYearId { get; set; }
 	public string? Status { get; set; }

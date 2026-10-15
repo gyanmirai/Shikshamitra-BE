@@ -15,6 +15,8 @@ namespace ShikshaMitra.EntityFrameworkCore;
 public partial class ShikshaMitraDbContext
 {
 	public DbSet<AdmissionAssessmentSession> AdmissionAssessmentSessions { get; set; }
+	public DbSet<AdmissionAssessmentSessionScope> AdmissionAssessmentSessionScopes { get; set; }
+	public DbSet<AdmissionAssessmentBookingBatch> AdmissionAssessmentBookingBatches { get; set; }
 	public DbSet<AdmissionAssessmentAttempt> AdmissionAssessmentAttempts { get; set; }
     // ───────────────────────────────────────────────
     // Students — Core

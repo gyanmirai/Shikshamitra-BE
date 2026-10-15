@@ -124,6 +124,7 @@ public class StudentLeaveAppService(
 	{
 		var scopedStudents = await studentScopeAccessService.ApplyCurrentUserScopeAsync(
 			await studentRepository.GetQueryableWithoutAutoIncludesAsync());
+		if (input.BoardId.HasValue) scopedStudents = scopedStudents.Where(s => s.AcademicBoardId == input.BoardId.Value);
 		if (input.OrganizationId.HasValue)
 		{
 			scopedStudents = scopedStudents.Where(s => s.AcademicMediumStageId == input.OrganizationId.Value);

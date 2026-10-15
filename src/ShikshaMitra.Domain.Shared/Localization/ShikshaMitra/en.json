@@ -131,6 +131,7 @@
         "Finance:FeeRefund:010023": "The requested amount exceeds the refund policy limit. Review the eligible amount.",
         "Finance:FeeRefund:010024": "The selected fee line does not belong to the student's assigned fee structure.",
         "Finance:FeeRefund:010025": "The original payment is not settled and cannot be refunded yet.",
+        "ShikshaMitra:FeeCollection:IdempotencyConflict": "This retry key was already used for a different fee collection request.",
         "Finance:LateFeeWaiver:010006": "Enter a reason for rejecting the waiver request.",
         "Finance:LateFeeWaiver:010007": "The user who submitted this waiver request cannot approve or reject it.",
         "Admissions.FormDraftRequired": "Only a draft admission form can be deleted.",

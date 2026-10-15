@@ -11,6 +11,11 @@ public class StudentFeeStructureConfiguration : IEntityTypeConfiguration<Student
 	{
 		builder.ToTable("Finance_StudentFeeStructures", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.HasOne<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount>().WithMany()
+			.HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasIndex(x => x.FinanceFeeAccountId).IsUnique()
+			.HasFilter("\"IsDeleted\" = false AND \"FinanceFeeAccountId\" IS NOT NULL")
+			.HasDatabaseName("UX_StudentFeeStructures_FinanceFeeAccountId");
 
 		builder.HasIndex(x => x.StudentId)
 			.HasDatabaseName("IX_StudentFeeStructures_StudentId");

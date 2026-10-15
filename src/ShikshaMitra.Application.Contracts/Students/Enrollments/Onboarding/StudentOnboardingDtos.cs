@@ -29,6 +29,7 @@ public class StudentOnboardingListInput : PagedAndSortedResultRequestDto
 	public bool? UnassignedOnly { get; set; }
 	public bool? EnteredToday { get; set; }
 	public string? PendingTask { get; set; }
+	public string? DashboardQueue { get; set; }
 }
 
 public class StudentOnboardingFilterOptionDto : EntityDto<Guid>

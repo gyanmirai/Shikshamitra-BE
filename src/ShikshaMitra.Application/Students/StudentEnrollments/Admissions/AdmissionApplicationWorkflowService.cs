@@ -96,8 +96,12 @@ public class AdmissionApplicationWorkflowService(
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), current.DefinitionStageId);
 		if (current.StageType is AdmissionWorkflowStageType.Eligibility or AdmissionWorkflowStageType.Review or AdmissionWorkflowStageType.Offer)
 			throw new BusinessException(AdmissionApplicationErrorCodes.StageCannotAdvance, "This stage type is retired. Configure a journey using the five supported stage types.");
-		if (current.StageType is AdmissionWorkflowStageType.Offer or AdmissionWorkflowStageType.Payment && !await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingRequirementSnapshotService>().CanDeferAsync(application))
-			await feeSelection.EnsureSelectionAsync(application);
+		if (input.DeferFeeCollection && (current.StageType != AdmissionWorkflowStageType.Payment || input.SkipCurrentStage || input.AdminOverride))
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState,
+				"Collect later is available only in the Payment stage and cannot override workflow routing.");
+		if (input.DeferFeeCollection && (string.IsNullOrWhiteSpace(input.Reason) || input.Reason.Trim().Length > 512))
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.DeferralReasonRequired,
+				"Enter a reason of up to 512 characters for collecting fees later in Onboarding.");
 		if (input.SkipCurrentStage && definition.IsRequired && !input.AdminOverride)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed)
 				.WithData("Reason", "Required stages can only be bypassed through the emergency override.");
@@ -119,6 +123,14 @@ public class AdmissionApplicationWorkflowService(
 		var review = managedReview ? await reviewRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
 		var managedPayment = current.StageType == AdmissionWorkflowStageType.Payment;
 		if (managedPayment && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
+		if (managedPayment && !input.DeferFeeCollection)
+		{
+			var feeContext = await feeSelection.GetContextAsync(application);
+			if (!feeContext.HasPaymentEvidence)
+				throw new BusinessException(AdmissionFeeSelectionErrorCodes.CollectionOrDeferralRequired,
+					"Collect fees or choose Collect later in Onboarding and enter a reason.");
+			await feeSelection.EnsureSelectionAsync(application);
+		}
 		AdmissionPaymentStageDto? payment = null;
 		var managedOffer = current.StageType == AdmissionWorkflowStageType.Offer && AdmissionOfferAccessService.ReadPolicy(definition) != null;
 		if (managedOffer && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
@@ -149,7 +161,7 @@ public class AdmissionApplicationWorkflowService(
 		runtimeValues = AdmissionPaymentRuntimeService.AddFacts(runtimeValues, payment);
 		if (managedPayment)
 			runtimeValues = new Dictionary<string, string>(runtimeValues, StringComparer.OrdinalIgnoreCase)
-			{ ["payment.status"] = "feeStructureConfirmed" };
+			{ ["payment.status"] = input.DeferFeeCollection ? "collectionDeferred" : "collectionRecorded" };
 		runtimeValues = AdmissionOfferRuntimeService.AddFacts(runtimeValues, offer);
 		runtimeValues = AdmissionSeatRuntimeService.AddFacts(runtimeValues, seat);
 		var selected = definition.IsTerminalStage ? null : transitionSelector.Select(
@@ -162,10 +174,16 @@ public class AdmissionApplicationWorkflowService(
 		var next = selected == null ? null : stages.SingleOrDefault(stage =>
 			stage.DefinitionStageId == selected.ToStageId && stage.Status == AdmissionRuntimeStageStatus.Pending) ??
 			throw new BusinessException(AdmissionApplicationErrorCodes.NoEligibleTransition);
+		if (input.DeferFeeCollection)
+		{
+			application.DeferFeeCollection(current.Id, input.Reason!, CurrentUser.Id ?? throw new Volo.Abp.Authorization.AbpAuthorizationException(),
+				new DateTimeOffset(Clock.Now.ToUniversalTime()));
+			input.Reason = application.GetFeeCollectionDeferral()!.Reason;
+		}
 		await CompleteCurrentAsync(application, workflow, current, input, context);
 		await EnterNextAsync(application, workflow, current, next, selected);
 		await RecordHistoryAsync(application, workflow, current, next, selected, input,
-			inquiry == null && assessment == null && documents == null && eligibility == null && review == null && payment == null && offer == null && seat == null ? null : runtimeValues);
+			!managedPayment && inquiry == null && assessment == null && documents == null && eligibility == null && review == null && payment == null && offer == null && seat == null ? null : runtimeValues);
 	}
 
 	private async Task CompleteCurrentAsync(
@@ -243,6 +261,10 @@ public class AdmissionApplicationWorkflowService(
 			input.SkipCurrentStage ? $"Stage skipped: {current.Name}" : $"Stage completed: {current.Name}",
 			application.ApplicantId, application.Id,
 			metadataJson: JsonSerializer.Serialize(new { current.Id, NextStageInstanceId = next?.Id, input.Reason })), false);
+		if (input.DeferFeeCollection)
+			await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
+				"FeeCollectionDeferred", "Fee collection deferred to Onboarding.", application.ApplicantId, application.Id,
+				metadataJson: JsonSerializer.Serialize(application.GetFeeCollectionDeferral())), false);
 		var eventType = next == null ? "WorkflowCompleted" : "WorkflowTransitioned";
 		var description = next == null ? $"Workflow completed at {current.Name}" : $"Workflow moved from {current.Name} to {next.Name}";
 		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,

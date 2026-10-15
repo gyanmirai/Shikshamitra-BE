@@ -118,5 +118,8 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             .HasDatabaseName("UX_FeeRefundRequests_Concession_Receipt");
 
         builder.ConfigureByConvention();
+        builder.ToTable(t => t.HasCheckConstraint("CK_FeeRefundRequests_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL"));
+        builder.HasOne<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount>().WithMany()
+            .HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
     }
 }

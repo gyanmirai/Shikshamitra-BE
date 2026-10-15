@@ -125,7 +125,7 @@ public class BulkWaiverRequestAppService(
 		var created = new List<LateFeeWaiverApplication>();
 		foreach (var dueFee in dueFees)
 		{
-			if (dueFee.OutstandingAmount <= 0)
+			if (!dueFee.StudentId.HasValue || dueFee.OutstandingAmount <= 0)
 			{
 				continue;
 			}
@@ -136,7 +136,7 @@ public class BulkWaiverRequestAppService(
 				continue;
 			}
 
-			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId, assignment.FeeStructureStandardId);
+			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId.Value, assignment.FeeStructureStandardId);
 			if (effective.Policy is null || !effective.Policy.EnableWaiver || effective.IsLateFeeExempt)
 			{
 				continue;
@@ -171,7 +171,7 @@ public class BulkWaiverRequestAppService(
 			var waiver = new LateFeeWaiverApplication(
 				GuidGenerator.Create(),
 				CurrentTenant.Id,
-				dueFee.StudentId,
+				dueFee.StudentId.Value,
 				dueFee.Id,
 				effective.Policy.Id,
 				effective.Policy.AcademicYearId,
@@ -186,7 +186,7 @@ public class BulkWaiverRequestAppService(
 			await waiverRepository.InsertAsync(waiver, autoSave: false);
 			created.Add(waiver);
 
-			var student = await studentRepository.FindAsync(dueFee.StudentId);
+			var student = await studentRepository.FindAsync(dueFee.StudentId.Value);
 			var studentContext = student is null ? null : new FinanceAuditStudentContext
 			{
 				StudentId = dueFee.StudentId,
@@ -263,7 +263,7 @@ public class BulkWaiverRequestAppService(
 
 		var dueFeeQuery = await dueFeeRepository.GetQueryableAsync();
 		var dueFees = dueFeeQuery
-			.Where(d => assignmentMap.Keys.Contains(d.StudentId) && d.OutstandingAmount > 0)
+			.Where(d => d.StudentId.HasValue && assignmentMap.Keys.Contains(d.StudentId.Value) && d.OutstandingAmount > 0)
 			.ToList();
 
 		var waivedByDueFee = await waiverLookupService.GetAppliedWaivedAmountsAsync(dueFees.Select(d => d.Id).ToList());
@@ -272,8 +272,8 @@ public class BulkWaiverRequestAppService(
 
 		foreach (var dueFee in dueFees)
 		{
-			var structureId = assignmentMap[dueFee.StudentId];
-			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId, structureId);
+			var structureId = assignmentMap[dueFee.StudentId!.Value];
+			var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(dueFee.StudentId.Value, structureId);
 			if (effective.Policy is null || !effective.Policy.EnableWaiver || effective.IsLateFeeExempt)
 			{
 				continue;
@@ -296,7 +296,7 @@ public class BulkWaiverRequestAppService(
 			var net = Math.Max(0, lateFeeResult.LateFee - waivedByDueFee.GetValueOrDefault(dueFee.Id, 0m));
 			if (net > 0)
 			{
-				result.Add((dueFee, dueFee.StudentId, net));
+				result.Add((dueFee, dueFee.StudentId.Value, net));
 			}
 		}
 

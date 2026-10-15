@@ -7,6 +7,7 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Timing;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 
 namespace ShikshaMitra.Domain.Finance.Policies;
 
@@ -27,6 +28,7 @@ public class CollectionPolicyResolver(
 	IRepository<StudentFeePolicyOverride, Guid> overrideRepository,
 	IRepository<StudentFeeStructure, Guid> studentFeeStructureRepository,
 	IRepository<FinancePolicyVersion, Guid> versionRepository,
+	IRepository<FinanceFeeAccount, Guid> accountRepository,
 	IClock clock)
 	: DomainService
 {
@@ -116,6 +118,32 @@ public class CollectionPolicyResolver(
 	private static bool IsEffective(CollectionPolicy policy, DateTime date) =>
 		(!policy.EffectiveFrom.HasValue || policy.EffectiveFrom.Value.Date <= date.Date) &&
 		(!policy.EffectiveTo.HasValue || policy.EffectiveTo.Value.Date >= date.Date);
+
+	/// <summary>Resolves the payer's pinned Finance policy before a student assignment exists.</summary>
+	public async Task<EffectiveCollectionRules> ResolveEffectiveRulesForAccountAsync(Guid accountId)
+	{
+		var account = await accountRepository.GetAsync(accountId);
+		if (account.StudentId.HasValue && account.StudentFeeStructureId.HasValue && account.StructureId.HasValue)
+			return await ResolveEffectiveRulesForStudentAsync(account.StudentId.Value, account.StructureId.Value,
+				account.StudentFeeStructureId.Value);
+		var reference = account.GetPolicyReference("collection")
+			?? throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
+		var version = await versionRepository.FindAsync(reference.VersionId);
+		if (version == null || version.PolicyType != "collection" || version.PolicyId != reference.PolicyId ||
+			version.AcademicYearId != account.AcademicYearId || version.TenantId != account.TenantId)
+			throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
+		try
+		{
+			var snapshot = CollectionPolicySnapshot.Deserialize(version.SnapshotJson);
+			var policy = CollectionPolicy.FromSnapshot(version.PolicyId, version.TenantId, version.AcademicYearId,
+				version.VersionNumber, snapshot);
+			return new EffectiveCollectionRules(policy, false, null, false);
+		}
+		catch (System.Text.Json.JsonException)
+		{
+			throw new Volo.Abp.BusinessException(CollectionPolicyErrorCodes.PolicyVersionNotFound);
+		}
+	}
 }
 
 public sealed record EffectiveCollectionRules(

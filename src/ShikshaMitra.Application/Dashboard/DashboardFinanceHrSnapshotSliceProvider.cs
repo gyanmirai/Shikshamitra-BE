@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.Common;
+using ShikshaMitra.Finance;
+using ShikshaMitra.Finance.Reports;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Concessions;
 using ShikshaMitra.Finance.Fees.ConcessionRequests;
@@ -30,6 +32,7 @@ namespace ShikshaMitra.Dashboard;
 public class DashboardFinanceHrSnapshotSliceProvider(
 	IRepository<Student, Guid> studentRepository,
 	StudentScopeAccessService studentScopeAccessService,
+	FinanceScopeAccessService financeScopeAccessService,
 	IEmployeeAttendanceRepository employeeAttendanceRepository,
 	HRDashboardEmployeeScopeReader hrEmployeeScopeReader,
 	HRDashboardPayrollReader hrDashboardPayrollReader,
@@ -73,6 +76,7 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 		try
 		{
 			var scopedStudentIdsQuery = await GetScopedStudentIdsQueryAsync();
+			var scopedAccountIdsQuery = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
 			var fromDate = DateOnly.FromDateTime(ParseNormalizedDate(range.From));
 			var toDate = DateOnly.FromDateTime(ParseNormalizedDate(range.To));
 			var academicYearId = Guid.TryParse(summary.AcademicYearId, out var parsedAcademicYearId)
@@ -91,11 +95,12 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 					r.ReceiptScope == FeeReceiptScope.Fee &&
 					r.VerificationStatus != FeeReceiptVerificationStatus.Rejected &&
 					r.LinkedFinalReceiptId == null &&
-					scopedStudentIdsQuery.Contains(r.StudentId));
+					((!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value)) ||
+					 (r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value))));
 
 				var periodRows = await asyncExecuter.ToListAsync(scopedFeeReceipts
 					.Where(r => r.ReceiptDate >= fromDate && r.ReceiptDate <= toDate)
-					.Select(r => new FinanceAmountRow(r.TotalPaidAmount, r.StudentId)));
+					.Select(r => new FinanceAmountRow(r.TotalPaidAmount, r.StudentId, r.FinanceFeeAccountId)));
 				var periodTotal = periodRows.Sum(x => x.Amount);
 				var subtitle = periodRows.Count == 0
 					? "No scoped fee receipts in selected range"
@@ -117,11 +122,12 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 					r.ReceiptScope == FeeReceiptScope.Fee &&
 					r.VerificationStatus != FeeReceiptVerificationStatus.Rejected &&
 					r.LinkedFinalReceiptId == null &&
-					scopedStudentIdsQuery.Contains(r.StudentId));
+					((!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value)) ||
+					 (r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value))));
 
 				todayRows = await asyncExecuter.ToListAsync(scopedFeeReceipts
 					.Where(r => r.ReceiptDate == toDate)
-					.Select(r => new FinanceAmountRow(r.TotalPaidAmount, r.StudentId)));
+					.Select(r => new FinanceAmountRow(r.TotalPaidAmount, r.StudentId, r.FinanceFeeAccountId)));
 
 				if (needsCollection)
 				{
@@ -148,14 +154,15 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 					.Where(d =>
 						academicYearFeeHeadIds.Contains(d.FeeHeadId) &&
 						d.OutstandingAmount > 0 &&
-						scopedStudentIdsQuery.Contains(d.StudentId))
-					.Select(d => new FinanceAmountRow((double)d.OutstandingAmount, d.StudentId)));
+						((!d.FinanceFeeAccountId.HasValue && d.StudentId.HasValue && scopedStudentIdsQuery.Contains(d.StudentId.Value)) ||
+						 (d.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(d.FinanceFeeAccountId.Value))))
+					.Select(d => new FinanceAmountRow((double)d.OutstandingAmount, d.StudentId, d.FinanceFeeAccountId)));
 
 				if (needsDues)
 				{
 					var outstanding = dueRows.Sum(x => x.Amount);
-					var studentCount = dueRows.Select(x => x.StudentId).Distinct().Count();
-					var subtitle = BuildCountSubtitle(studentCount, "student pending dues", "students pending dues");
+					var studentCount = dueRows.Select(x => FinanceReportPayerKey.From(x.StudentId, x.FinanceFeeAccountId)).Distinct().Count();
+					var subtitle = BuildCountSubtitle(studentCount, "payer pending dues", "payers pending dues");
 					UpdateWidget(
 						summary.KpiCards,
 						"finance-dues",
@@ -190,10 +197,10 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 			if (needsFinanceModule)
 			{
 				var todayTotal = todayRows?.Sum(x => x.Amount) ?? 0d;
-				var dueStudentCount = dueRows?.Select(x => x.StudentId).Distinct().Count() ?? 0;
+				var dueStudentCount = dueRows?.Select(x => FinanceReportPayerKey.From(x.StudentId, x.FinanceFeeAccountId)).Distinct().Count() ?? 0;
 				var concessionCount = pendingConcessions ?? 0;
 				var followUpCount = dueStudentCount + concessionCount;
-				var subtitle = $"{dueStudentCount} due students, {concessionCount} concession reviews";
+				var subtitle = $"{dueStudentCount} due payers, {concessionCount} concession reviews";
 				UpdateWidget(
 					summary.ModuleSnapshots,
 					"finance-dashboard",
@@ -384,7 +391,7 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 		return false;
 	}
 
-	private sealed record FinanceAmountRow(double Amount, Guid StudentId);
+	private sealed record FinanceAmountRow(double Amount, Guid? StudentId, Guid? FinanceFeeAccountId);
 
 	private sealed record AttendanceStatusCountRow(EmployeeAttendanceStatusType StatusType, int Count);
 

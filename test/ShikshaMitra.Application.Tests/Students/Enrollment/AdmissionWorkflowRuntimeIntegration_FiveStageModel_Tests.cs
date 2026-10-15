@@ -3,10 +3,14 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Admissions;
+using ShikshaMitra.Finance.Fees.FeeCollection;
+using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Students.StudentEnrollments.Onboarding;
 using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Validation;
 using Xunit;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
@@ -54,8 +58,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			ConcurrencyStamp = verified.ConcurrencyStamp, IdempotencyKey = "complete-verified-form" })).Status.ShouldBe(AdmissionWorkflowInstanceStatus.Completed);
 	}
 
-	[Fact]
-	public async Task Fee_structure_confirmation_advances_without_any_payment_and_retry_is_idempotent()
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Payment_deferral_advances_with_or_without_structure_and_retry_and_finalization_preserve_reason_without_finance_rows(bool selectStructure)
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
@@ -83,6 +89,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var fees = GetRequiredService<IAdmissionFeeSelectionAppService>();
 		var state = await fees.GetAsync(application.Id); state.IsRequired.ShouldBeTrue(); state.CanEdit.ShouldBeTrue();
 		var stage = state.CurrentStageId!.Value;
+		var dueCount = await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<DueFee, Guid>>().CountAsync());
+		var assignmentCount = await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentFeeStructure, Guid>>().CountAsync());
+		var accountCount = await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<FinanceFeeAccount, Guid>>().CountAsync());
+		var collectionCount = await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<FeeCollectionRecord, Guid>>().CountAsync());
 		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.MarkInReviewAsync(application.Id,
 			new() { ConcurrencyStamp = application.ConcurrencyStamp }))).Code.ShouldBe(AdmissionReviewErrorCodes.InvalidState);
 		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.IssueOfferAsync(application.Id,
@@ -93,21 +103,46 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			new() { ConcurrencyStamp = application.ConcurrencyStamp }))).Code.ShouldBe(AdmissionErrorCodes.ApplicationDecisionInvalidState);
 		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.AdvanceWorkflowAsync(application.Id,
 			new() { ExpectedCurrentStageInstanceId = stage, ConcurrencyStamp = state.ConcurrencyStamp, IdempotencyKey = "missing-fees" })))
-			.Code.ShouldBe(AdmissionFeeSelectionErrorCodes.Required);
-		var cycle = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
-		var structure = await CreateFeeSelectionReferenceAsync(offering, cycle.AcademicYearId);
-		state = await fees.SaveAsync(application.Id, new() { StructureId = structure.Id, ConcurrencyStamp = state.ConcurrencyStamp });
-		(await fees.GetAsync(application.Id)).Selection!.StructureId.ShouldBe(structure.Id);
+			.Code.ShouldBe(AdmissionFeeSelectionErrorCodes.CollectionOrDeferralRequired);
+		if (selectStructure)
+		{
+			var cycle = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
+			var structure = await CreateFeeSelectionReferenceAsync(offering, cycle.AcademicYearId);
+			state = await fees.SaveAsync(application.Id, new() { StructureId = structure.Id, ConcurrencyStamp = state.ConcurrencyStamp });
+			(await fees.GetAsync(application.Id)).Selection!.StructureId.ShouldBe(structure.Id);
+		}
 		var reader = GetRequiredService<IAdmissionPaymentAppService>();
 		var confirmed = await reader.GetAsync(application.Id, stage);
-		confirmed.Status.ShouldBe("feeStructureConfirmed"); confirmed.CanRecord.ShouldBeFalse(); confirmed.CanComplete.ShouldBeTrue();
+		confirmed.Status.ShouldBe(selectStructure ? "collectionPending" : "feeStructureRequired"); confirmed.CanRecord.ShouldBeFalse(); confirmed.CanComplete.ShouldBeFalse();
 		(await Should.ThrowAsync<BusinessException>(() => reader.RecordAsync(application.Id, stage, new()
 			{ Amount = 200m, Method = "cash", IdempotencyKey = "no-collection", ConcurrencyStamp = state.ConcurrencyStamp })))
 			.Code.ShouldBe(AdmissionPaymentStageErrorCodes.InvalidState);
 		var command = new AdvanceAdmissionWorkflowDto { ExpectedCurrentStageInstanceId = stage,
-			ConcurrencyStamp = state.ConcurrencyStamp, IdempotencyKey = "confirm-fees" };
+			ConcurrencyStamp = state.ConcurrencyStamp, IdempotencyKey = "defer-fees", DeferFeeCollection = true,
+			Reason = "  Parent will pay during Onboarding.  " };
+		await Should.ThrowAsync<AbpValidationException>(() => _applicationAppService.AdvanceWorkflowAsync(application.Id,
+			new() { ExpectedCurrentStageInstanceId = stage, ConcurrencyStamp = state.ConcurrencyStamp,
+				IdempotencyKey = "blank-deferral", DeferFeeCollection = true, Reason = "   " }));
+		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.AdvanceWorkflowAsync(application.Id,
+			new() { ExpectedCurrentStageInstanceId = stage, ConcurrencyStamp = "stale",
+				IdempotencyKey = "stale-deferral", DeferFeeCollection = true, Reason = "Collect later" })))
+			.Code.ShouldBe(AdmissionApplicationErrorCodes.ConcurrencyConflict);
 		var next = await _applicationAppService.AdvanceWorkflowAsync(application.Id, command);
 		(await _applicationAppService.AdvanceWorkflowAsync(application.Id, command)).CurrentStageInstanceId.ShouldBe(next.CurrentStageInstanceId);
+		next.Stages.Single(s => s.Id == stage).Status.ShouldBe(AdmissionRuntimeStageStatus.Completed);
+		next.History.Single(h => h.FromStageInstanceId == stage).ConditionEvaluationSnapshotJson.ShouldContain("collectionDeferred");
+		next.History.Single(h => h.FromStageInstanceId == stage).ConditionEvaluationSnapshotJson.ShouldNotContain("feeStructureConfirmed");
+		var deferred = (await fees.GetAsync(application.Id)).FeeCollectionDeferral!;
+		var nextConcurrencyStamp = (await fees.GetAsync(application.Id)).ConcurrencyStamp;
+		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.AdvanceWorkflowAsync(application.Id,
+			new() { ExpectedCurrentStageInstanceId = next.CurrentStageInstanceId!.Value,
+				ConcurrencyStamp = nextConcurrencyStamp,
+				IdempotencyKey = "deferral-wrong-stage", DeferFeeCollection = true, Reason = "Collect later" })))
+			.Code.ShouldBe(AdmissionFeeSelectionErrorCodes.InvalidState);
+		deferred.Reason.ShouldBe("Parent will pay during Onboarding."); deferred.DeferredBy.ShouldBe(TestUserId);
+		deferred.StageId.ShouldBe(stage); deferred.DeferredAt.Offset.ShouldBe(TimeSpan.Zero);
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<AdmissionActivity, Guid>>().CountAsync(a =>
+			a.ApplicationId == application.Id && a.ActivityType == "FeeCollectionDeferred"))).ShouldBe(1);
 		(await GetRequiredService<IRepository<AdmissionPaymentTransaction, Guid>>().GetListAsync(item => item.ApplicationId == application.Id)).ShouldBeEmpty();
 		await WithUnitOfWorkAsync(async () => { var stored = await _applicationRepository.GetAsync(application.Id); stored.Submit(); await _applicationRepository.UpdateAsync(stored, true); });
 		var current = await _applicationAppService.GetAsync(application.Id);
@@ -127,5 +162,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var finalized = await _applicationAppService.FinalizeAsync(application.Id, finalInput);
 		(await _applicationAppService.FinalizeAsync(application.Id, finalInput)).StudentId.ShouldBe(finalized.StudentId);
 		(await _applicationRepository.GetAsync(application.Id)).OfferAcceptedAt.ShouldBeNull();
+		var onboardingFees = await GetRequiredService<IStudentOnboardingAppService>().GetFeeStructureAsync(finalized.OnboardingCaseId);
+		onboardingFees.FeeCollectionDeferral!.Reason.ShouldBe(deferred.Reason);
+		onboardingFees.HasRecordedFeePayment.ShouldBeFalse(); onboardingFees.OnboardingConfirmed.ShouldBeFalse();
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<DueFee, Guid>>().CountAsync())).ShouldBe(dueCount);
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentFeeStructure, Guid>>().CountAsync())).ShouldBe(assignmentCount);
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<FinanceFeeAccount, Guid>>().CountAsync())).ShouldBe(accountCount);
+		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<FeeCollectionRecord, Guid>>().CountAsync())).ShouldBe(collectionCount);
 	}
 }

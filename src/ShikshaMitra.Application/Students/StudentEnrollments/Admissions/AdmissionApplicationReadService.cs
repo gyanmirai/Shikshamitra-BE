@@ -41,8 +41,9 @@ public class AdmissionApplicationReadService(
 			(!input.CurrentStageInstanceId.HasValue || application.CurrentStageInstanceId == input.CurrentStageInstanceId) &&
 			(string.IsNullOrWhiteSpace(input.CurrentStageSearch) ||
 				stageQuery.Any(stage => stage.Id == application.CurrentStageInstanceId && stage.Name.Contains(input.CurrentStageSearch!))));
+		query = await LazyServiceProvider.LazyGetRequiredService<AdmissionDashboardQueryService>().ApplyAsync(query, input.ActiveOnly, input.PendingDecisionOnly, input.DivisionId);
 		var workspaces = await workspace.ProjectAsync(query);
-		if (input.DecisionWorkspaceOnly) workspaces = workspaces.Where(row => row.HasReachedDecision ||
+		if (input.DecisionWorkspaceOnly && !input.PendingDecisionOnly) workspaces = workspaces.Where(row => row.HasReachedDecision ||
 			row.Application.Status == AdmissionApplicationStatus.Withdrawn);
 		var projection = await listQuery.ProjectAsync(workspaces);
 		if (!string.IsNullOrWhiteSpace(input.Search))

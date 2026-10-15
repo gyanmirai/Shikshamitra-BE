@@ -13,6 +13,8 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
 		builder.ToTable("Finance_Transactions", ShikshaMitraConsts.DbSchema);
         builder.HasOne<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount>().WithMany().HasForeignKey(x=>x.BankAccountId).OnDelete(DeleteBehavior.Restrict);
 		builder.ConfigureByConvention();
+		builder.HasOne<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount>().WithMany()
+			.HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
 
 		builder.Ignore(x => x.IsAutomatic);
         builder.HasIndex(x=>x.SourceId);

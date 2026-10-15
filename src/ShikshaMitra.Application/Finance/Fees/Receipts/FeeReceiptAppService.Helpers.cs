@@ -13,7 +13,7 @@ public partial class FeeReceiptAppService
     {
         var receipt = await receiptRepository.GetAsync(id, cancellationToken: cancellationToken)
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
-        await financeScopeAccessService.EnsureStudentAccessibleAsync(receipt.StudentId, cancellationToken);
+        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
 
         if (receipt.PdfBlobName != null)
         {
@@ -21,7 +21,7 @@ public partial class FeeReceiptAppService
             if (cached != null) return cached;
         }
 
-        var student      = await studentRepository.FindAsync(receipt.StudentId, cancellationToken: cancellationToken);
+        var student      = receipt.StudentId.HasValue ? await studentRepository.FindAsync(receipt.StudentId.Value, cancellationToken: cancellationToken) : null;
         var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, cancellationToken: cancellationToken);
 
         var pdfBytes = await pdfGenerator.GenerateAsync(receipt, student, academicYear, cancellationToken);

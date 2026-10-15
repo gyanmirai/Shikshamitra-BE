@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-13
+updated_on: 2026-10-15
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -25,6 +25,8 @@ Canonical Father/Mother/Guardian contact corrections continue through the existi
 The existing application decision-history read also returns nullable `actorName`, resolved in one batch from recorded `actorId` values using the tenant-filtered Admissions people service. Missing/deleted actors retain their history with a null name. The existing Applications View grant and application academic/counsellor scope check run before history or people are read. This is an additive display field; no endpoint, workflow command, entity or migration changes are required.
 
 ## Academic list filters
+
+Inquiry list/detail responses expose nullable `standardId` and `standardName` from the inquiry's linked admission offering and tenant-filtered class. List reads resolve class names in one batch for the current page. Missing offerings leave both fields null; a missing class leaves its name null. This additive read projection does not change capture, application handoff, permissions or persistence and needs no migration.
 
 Admissions Application, Inquiry (including CSV export), Offering, Pipeline/options, and Review queue list inputs accept `StandardIds` in addition to the existing optional `StandardId`. Student Onboarding list accepts `StandardIds` and `DivisionIds` alongside the scalar filters. Collections bind from repeated query keys, for example `standardIds={guid1}&standardIds={guid2}`. Nonempty collections match any member; scalar, Board, Medium, academic year and other supplied criteria intersect with that match. Empty collections do not restrict classes or divisions. Existing tenant and authorized academic scope applies before counting and paging; these filters do not broaden permissions. No persistence change is required.
 
@@ -340,7 +342,8 @@ Rollback still creates a separate Draft and never rewrites an Offering or Applic
 ## Runtime workflow endpoint
 
 `POST /api/student/enrollment/admissions/applications/{id}/workflow/advance` requires `Students.Admissions.Applications.Add`.
-The body includes `expectedCurrentStageInstanceId`, a unique `idempotencyKey`, optional `concurrencyStamp`, and optional transition, skip, override, and reason fields.
+The body includes `expectedCurrentStageInstanceId`, a unique `idempotencyKey`, required `concurrencyStamp`, and optional transition, skip, override, reason and `deferFeeCollection` fields.
+`deferFeeCollection: true` is accepted only in the active Payment stage with a nonblank reason of at most 512 characters. It cannot be combined with skip or override. Deferral uses configured routing, records actor/time/reason, and creates no Finance account, assignment, dues or receipt. A regular Payment continuation requires recorded collection evidence and a matching saved fee selection; no full-payment threshold is introduced.
 Admin overrides additionally require `Students.Admissions.Applications.Add`.
 The response returns current workflow status, stage timestamps, immutable transition history, and `nextRequiredAction`. The next action is derived from the server stage-type registry and is `null` after the workflow completes.
 
@@ -398,9 +401,29 @@ Other attempt mutations require that attempt's concurrency stamp.
 Review uses `approved: false` plus notes to request correction, and waiver uses `reason`.
 Attempt mutations return the refreshed assessment summary.
 
-The applicant workbench requires `admissionOfferingId` and `workflowStageDefinitionId`; optional filters are `sessionId`, `search` (name/application number), and `queue` (`toBook`, `attendance`, `result`, `ready`, `attention`, `completed`). It accepts `skipCount`, `maxResultCount` (1-1000), and allow-listed `sorting` (`applicantName`, `applicationNumber`, `sessionStartsAt`, `enteredAt`, with optional `asc`/`desc`). The result contains `totalCount`, paged `items`, and `counts`; counts honor offering, workflow version, session, academic authorization and search before the queue/page filter. Each row contains application/stage identity and the same assessment summary as the individual read. Active stages without attempts are included; completed stage history remains readable. For active stages, a selected session roster requires the latest non-cancelled attempt to belong to that session, so a retake booked elsewhere is excluded from the old session's actionable roster. Inactive/completed stages retain historical non-cancelled bookings to the selected session; their actions are disabled.
+The applicant workbench accepts optional `admissionOfferingId` and `workflowStageDefinitionId`; other filters are `sessionId`, `search` (name/application number), and `queue` (`toBook`, `attendance`, `result`, `ready`, `attention`, `completed`). It accepts `skipCount`, `maxResultCount` (1-1000), and allow-listed `sorting` (`applicantName`, `applicationNumber`, `sessionStartsAt`, `enteredAt`, with optional `asc`/`desc`). The result contains `totalCount`, paged `items`, and `counts`; counts honor offering, workflow version, session, academic authorization and search before the queue/page filter. Each row contains application/stage identity and the same assessment summary as the individual read. Active stages without attempts are included; completed stage history remains readable. For active stages, a selected session roster requires the latest non-cancelled attempt to belong to that session, so a retake booked elsewhere is excluded from the old session's actionable roster. Inactive/completed stages retain historical non-cancelled bookings to the selected session; their actions are disabled.
 
-`ready` means completed evidence has an eligible route under the existing workflow rules, independently of the caller's advance permission. Failed/absent results without an explicit matching route remain `attention`. Independent result review is disabled in new saved Assessment policies; the frontend does not expose a Review queue or result-review action. Result-only attempts use `toBook` for the initial start action. Classification batches scoped candidates, latest non-cancelled attempts, grouped attempt counts, sessions and route facts without per-application queries. Complete history and action DTOs are expanded only for the requested page. Configured JSON routes still require candidate classification before queue pagination, so memory/CPU scale with the selected offering/stage/search population. This is a workbench query, not a tenant-wide reporting export; concurrent production load and very large scopes require separate staging acceptance.
+The additive `status` filter accepts `pending`, `ongoing` or `complete`. Responses include `statusCounts` (all three statuses plus `all`), each item's `status` and actual `className`; scopes also expose `className`. Counts use the authorized academic/session/search context before status filtering and pagination. Unbooked/retake or future appointments are Pending; started and ended-but-unrecorded assessments are Ongoing. Complete requires the appointment end and a saved result (including zero marks); scored passed/failed results require numeric marks. Qualitative results and absence need no fabricated marks, and waiver completes immediately. Individual interview slot times override the session window. Status is independent of legacy `queue` routing readiness and does not advance a stage; existing Continue permissions, evidence and route gates still apply. No schema migration is required.
+
+
+`ready` means completed evidence has an eligible route under the existing workflow rules, independently of the caller's advance permission. Failed/absent results without an explicit matching route remain `attention`. Independent result review is disabled in new saved Assessment policies; the frontend does not expose a Review queue or result-review action. Result-only attempts use `toBook` for the initial start action. Classification batches scoped candidates, latest non-cancelled attempts, grouped attempt counts, sessions and route facts without per-application queries. Complete history and action DTOs are expanded only for the requested page. Configured JSON routes still require candidate classification before queue pagination, so memory/CPU scale with the authorized Offering/stage/search population. This is a workbench query, not a tenant-wide reporting export; concurrent production load and very large scopes require separate staging acceptance.
+
+### Shared school sessions and confirmed booking
+
+The combined applicant query now permits omitted Offering/stage filters. It also accepts `academicYearId`, `boardId`, `mediumId`, `standardId`, and `standardIds` (CSV GUIDs, maximum 20, intersected with the other academic filters). Rows include Offering/stage identity, Offering name, workflow version and individual appointment times while preserving pinned policies and scoped history.
+
+New session input adds `scopes: [{ admissionOfferingId, workflowStageDefinitionId }]` (1-20 distinct pairs), `sessionType` (`exam`, `individualInterview`, `groupInterview`), Institute `roomId`, Employee `interviewerId` for interviews, and individual `slotDurationMinutes` (5-180) / `breakMinutes` (0-60). Online assessments remain outside the contract. Exam/group capacity cannot exceed usable room seats; individual capacity counts sequential derived appointments. Legacy single-scope sessions remain readable/bookable through the existing API; editing one with an Institute room adopts its original scope and preserves booked attempts/history.
+
+| Endpoint suffix under the Assessments API | Permission and contract |
+| --- | --- |
+| `GET session-resources` | ManageSessions; tenant room/building/floor/capacity plus initial 50 active scoped Employee choices |
+| `GET interviewers?search=...` | ManageSessions; employee-first searchable staff choices, maximum 50 |
+| `GET sessions/workbench` / `GET sessions/{id}` | View; combined server-paged/sorted sessions (page maximum 200), or direct scoped lookup |
+| `GET sessions/{id}/slots` | Book; free individual appointment times without applicant-private data |
+| `POST sessions/preview` | ManageSessions; `{ session, sessionId?, sessionConcurrencyStamp?, skipCount, maxResultCount, search? }`; paged candidates plus independent proposed bookings (up to 200), availability and fingerprint |
+| `POST sessions/confirm` | ManageSessions plus Book when candidates are selected; `{ session, sessionId?, sessionConcurrencyStamp?, idempotencyKey, previewFingerprint, bookings }`; atomic creation/reservation/booking or additional booking of an existing session |
+
+Confirmation rechecks eligibility, application versions, room/calendar/interviewer conflicts, shared seats and exact free interview slots. Durable receipts bind retries to actor and payload; later arrivals are never implicitly booked. Preview excludes conflicting appointments and proposes one application per pupil. Reservation dates/times use the existing India school-day timezone; cross-school-day sessions are rejected. Pending room approval holds bookings but blocks attendance/results. Direct generic room edits/cancellation of a live assessment reservation are rejected with guidance to Assessments; rescheduling replaces the reservation through the existing approval path. Session cancellation with `cancelPendingBookings: true` requires ManageSessions and Book and atomically cancels only unstarted pending attempts before releasing the room. Booked individual interviews cannot silently change slot layout. Partial-scope readers receive only authorized links and `canManage: false`; whole-session management requires every linked Offering. Missing attendance remains pending.
 
 Available condition facts are `assessment.outcome`, `assessment.marks`, `assessment.attemptNumber`, `assessment.attendance`, and `assessment.reviewed`.
 Current configured results become authoritative without a separate result-review step.
@@ -595,7 +618,7 @@ Commands carry the application `concurrencyStamp`; route identifiers are exclude
 ### Application fee selection
 
 Base: `/api/student/enrollment/admissions/fee-selections/applications/{applicationId}`.
-The service returns server-controlled ownership, requiredness, locking and confirmation capabilities alongside an optional saved Finance-reference snapshot.
+The service returns server-controlled ownership, requiredness, locking and confirmation capabilities alongside an optional saved Finance-reference snapshot. `hasRecordedFeePayment` reports recorded evidence (not a settled/paid status); `feeCollectionDeferral` exposes stage ID, reason, actor and UTC timestamp for Admissions and linked Onboarding.
 
 | Method and relative route | Contract |
 |---|---|
@@ -609,9 +632,9 @@ Saving requires `Students.Admissions.Applications.Add`; confirmation requires th
 These endpoints preserve the standard `Result<T>` envelope.
 They do not create Finance assignments, dues, allocations or receipts.
 
-Payment summary reads remain at `/api/student/enrollment/admissions/payments/applications/{applicationId}/stages/{stageId}` and expose feeStructureRequired/feeStructureConfirmed, blockers and completion readiness. Record/review/waive/reverse capabilities are false; the supported Payment stage has no admission monetary collection policy and rejects those commands. Existing payment permission identifiers remain intact.
+Payment summary reads remain at `/api/student/enrollment/admissions/payments/applications/{applicationId}/stages/{stageId}` and expose `feeStructureRequired`, `collectionPending`, `collectionRecorded` or `collectionDeferred`, blockers and ordinary completion readiness. A confirmed structure alone never means Paid. Legacy admission record/review/waive/reverse capabilities remain false; use the Finance collection adapter for actual collection. Existing payment permission identifiers remain intact.
 
-Confirmation saves through the existing fee-selection PUT with structureId, optionalHeadIds and current application concurrencyStamp. Workflow advancement remains a separate permissioned/idempotent command. Finance assignment and payment APIs are unchanged.
+Confirmation saves through the existing fee-selection PUT with structureId, optionalHeadIds and current application concurrencyStamp. Workflow advancement remains a separate permissioned/idempotent command. Actual collection uses the Finance-owned application adapter at `/api/fee-collections/admission-applications/{applicationId}`: read `summary`, explicitly `prepare` canonical dues, read `collect-form`, then POST a payment with its stable retry key. Collection View/Add and academic scope remain mandatory even when the Finance menu is hidden. Deferring collection invokes none of those monetary commands. See [Finance collection ownership and handoff](../finance/references/admission-fee-collection.md).
 
 ## Managed Offer stage APIs
 
@@ -641,6 +664,34 @@ Base route: `/api/students/dashboard`. DTOs and interface: `src/ShikshaMitra.App
 | Method and path | Contract and authority |
 |---|---|
 | GET `/context` | Dashboard.View; active tenant database identity. Returns `{mode,displayName,scopeLabel,sections,links,myStudents}`. Links include their exact action/visibility grants. Sections appear only with destination access and academic scope. Portal-only context returns verified linked student names. |
-| GET `/sections/{section}?academicYearId={guid}` | Dashboard.View plus context section eligibility, destination action/visibility, tenant-owned year and current academic scope. `section` is records/admissions/attendance. Returns `{key,academicYearId,generatedAt,description,metrics,classStrength}`. Metric rows carry id/label/value/tone/href/permission; strength is bounded to 12. |
+| GET `/sections/{section}?academicYearId={guid}` | Dashboard.View plus context section eligibility, destination action/visibility, tenant-owned year and current academic scope. `section` is records/admissions/attendance. Optional `boardId`, `mediumId`, `standardId`, `divisionId` constrain the Admin projection. Existing metrics/classStrength remain compatible. |
+| GET `/filters?academicYearId={guid}` | Dashboard.View, database-resolved Admin mode, a permitted section and authorized tenant year. Returns scoped `{boards,mediums,standards,divisions}` option arrays with `{id,name,parentId}` from the existing academic hierarchy; Directory View is not required. Portal-only identities cannot read these staff options. |
+| GET `/attendance-registers?academicYearId={guid}` | Dashboard.View, Admin mode and permitted Attendance View/visibility. Accepts the same academic filters plus `skipCount` and `maxResultCount` (1–100). Returns `{totalCount,items}` for the distinct missing/draft/submitted-needing-review registers. Items carry `{standardId,divisionId,className,divisionName,date,status,href}`; `status` is `missing`, `draft` or `review`. |
 
-These live GET reads and frontend refresh require View authority and repeat reads without writes or jobs. Legacy Reporting-backed preview refresh retains its separate Dashboard.Add command authority. Unknown section raises `Students:Dashboard:InvalidSection` (400); denied identity/section/year raises authorization failure (403). Anonymous callers receive 401. ABP rejects an unknown tenant before this controller, normally with 404. No student contacts, compliance identifiers, credentials or raw student records are returned in staff aggregates.
+Admin section additions are `workGroups`, `onboardingTasks`, `attentionItems`, `attentionTotalCount`, `classStrengthTotalCount` and nullable `attendanceToday`.
+Work/task rows reuse the metric contract `{id,label,value,tone,href,permission}`.
+The setup preview is bounded to four cases and exposes only case/student identifiers, student/class/division names, the owning primary blocker, owner name, due time and owning-workspace link.
+Class strength is bounded to 12 classes with complete division children; the total class count makes truncation explicit.
+Unfilterable unassigned hierarchy rows have an empty link.
+Attendance returns school date/time zone, `availability` (`available`, `outsideYear`, `noExpected`), `provisional`, expected/missing/draft/submitted/review register counts and a pending-register destination.
+Review is a subset of submitted; outside-year counts are null, and zero eligible students or holidays do not create pending registers.
+Other role modes retain their existing section projections.
+
+Owning list additions keep dashboard counts and filtered worklists aligned before pagination:
+
+| Owning list | Additive read input |
+|---|---|
+| Applications | `activeOnly`, `pendingDecisionOnly`, `divisionId`; pending decisions require an active workflow/current Approval stage and an undecided supported application state. |
+| Onboarding | `dashboardQueue`: `unfinished`, `attention`, `ready`, `division`, `gr-number`, `roll-number`, `documents`, `credentials`; task queues reuse recorded requirements and the existing pending-task predicates. |
+| Records changes | `approvableOnly` plus Board/Medium/Class/Division scalars; the shared predicate retains maker-checker, approval-stage role, prior-actor and current/snapshot masking checks. |
+| Inquiries | `dashboardFollowUpsDue` and `divisionId`; due means at least one scheduled reminder at or before the current UTC time, with existing year/offering scope. |
+| Student leave | `boardId`, intersecting the existing year, Medium, Class, Division and leave-period filters. |
+
+Records approval groups require Records Approve, and Admission decision groups require Applications Decide in addition to the destination read/visibility grants.
+Frontend route presets and cache invalidation are owned by the [Student frontend](../../../../Shikshamitra-FE/docs/student/clients.md).
+
+These live GET reads and frontend refresh repeat reads without readiness adoption, writes or jobs.
+Legacy Reporting-backed preview refresh retains its separate Dashboard.Add command authority.
+Unknown section raises `Students:Dashboard:InvalidSection` (400); denied identity/section/year raises authorization failure (403).
+Anonymous callers receive 401; ABP rejects an unknown tenant before this controller, normally with 404.
+The bounded authorized setup preview contains names; staff aggregates do not return contacts, compliance identifiers, credential content or full student records.

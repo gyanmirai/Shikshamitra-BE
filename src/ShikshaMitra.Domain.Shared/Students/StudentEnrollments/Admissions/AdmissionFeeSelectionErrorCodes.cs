@@ -9,4 +9,6 @@ public static class AdmissionFeeSelectionErrorCodes
 	public const string ConcurrencyConflict = "Admissions:FeeSelection:ConcurrencyConflict";
 	public const string ConfirmationRequired = "Admissions:FeeSelection:ConfirmationRequired";
 	public const string AssignmentMismatch = "Admissions:FeeSelection:AssignmentMismatch";
+	public const string DeferralReasonRequired = "Admissions:FeeSelection:DeferralReasonRequired";
+	public const string CollectionOrDeferralRequired = "Admissions:FeeSelection:CollectionOrDeferralRequired";
 }

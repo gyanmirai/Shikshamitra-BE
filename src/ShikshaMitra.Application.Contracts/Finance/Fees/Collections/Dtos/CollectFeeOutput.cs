@@ -13,7 +13,8 @@ public class CollectFeeOutput
     /// <summary>Unique receipt number formatted as REC-{YYYY}-{NNNNNN}.</summary>
     public string ReceiptNumber { get; set; } = string.Empty;
 
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+	public Guid? FinanceFeeAccountId { get; set; }
     public Guid AcademicYearId { get; set; }
 
     /// <summary>Total amount collected.</summary>

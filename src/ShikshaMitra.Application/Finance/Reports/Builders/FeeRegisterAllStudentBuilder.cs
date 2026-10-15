@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
-using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp.DependencyInjection;
@@ -16,7 +15,7 @@ namespace ShikshaMitra.Finance.Reports.Builders;
 
 [Volo.Abp.DependencyInjection.ExposeServices(typeof(IFinanceReportBuilder))]
 public class FeeRegisterAllStudentBuilder(
-    IRepository<Student, Guid> studentRepository,
+    FinanceReportPayerQueryService payerService,
     IRepository<FeeRecordMetadata, Guid> feeRecordRepository,
     IRepository<PaymentMethodRecord, Guid> paymentMethodRepository,
     IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
@@ -31,37 +30,13 @@ public class FeeRegisterAllStudentBuilder(
 
     public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
-        var boardId = request.Filters.BoardId;
-        var mediumId = request.Filters.MediumId;
-        var organizationIds = request.Filters.OrganizationIds ?? new List<Guid>();
-        var classIds = request.Filters.ClassIds ?? new List<Guid>();
-        var divisionIds = request.Filters.DivisionIds ?? new List<Guid>();
 
+        // Use canonical payer identities; applicant account evidence keeps its original scope.
+        var payers = await payerService.GetPayersAsync(request.Filters, executionScope);
 
-
-        // 1. Fetch Students
-        var studentQuery = Students.StudentScopeAccessService.ApplyScope(
-                await studentRepository.GetQueryableAsync(), executionScope.UserScope)
-            .WhereIf(request.Filters.AcademicYearIds?.Any() == true,
-                s => s.AcademicYearId.HasValue && request.Filters.AcademicYearIds!.Contains(s.AcademicYearId.Value))
-            .WhereIf(request.Filters.BatchId.HasValue, s => s.AcademicYearId == request.Filters.BatchId)
-            .WhereIf(boardId.HasValue, s => s.AcademicBoardId == boardId)
-            .WhereIf(mediumId.HasValue, s => s.AcademicMediumId == mediumId)
-            .WhereIf(organizationIds.Any(), s => s.AcademicMediumStageId.HasValue && organizationIds.Contains(s.AcademicMediumStageId.Value))
-            .WhereIf(classIds.Any(), s => s.StandardId.HasValue && classIds.Contains(s.StandardId.Value))
-            .WhereIf(divisionIds.Any(), s => s.DivisionId.HasValue && divisionIds.Contains(s.DivisionId.Value));
-
-        var students = await asyncExecuter.ToListAsync(studentQuery);
-        var studentIds = students.Select(s => s.Id).ToList();
-
-        if (!studentIds.Any())
-        {
-            return payload; // Return empty if no students matched
-        }
-
-        // 2. Fetch Payments for these students (no date filter)
-        var metadataQuery = (await feeRecordRepository.GetQueryableAsync())
-            .Where(m => studentIds.Contains(m.StudentId));
+        if (payers.Count == 0) return payload;
+        // 2. Fetch Payments for these payers (no date filter)
+        var metadataQuery = FinanceReportPayerQueryService.FilterCollections(await feeRecordRepository.GetQueryableAsync(), payers);
 
         var metadataList = await asyncExecuter.ToListAsync(metadataQuery);
         var metadataIds = metadataList.Select(m => m.Id).ToList();
@@ -102,8 +77,8 @@ public class FeeRegisterAllStudentBuilder(
         payload.Columns.Add(new() { Id = "Total", Label = "Total" });
 
         // 5. Fetch Standard and Division names
-        var stdIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
-        var divIds = students.Where(s => s.DivisionId.HasValue).Select(s => s.DivisionId!.Value).Distinct().ToList();
+        var stdIds = payers.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
+        var divIds = payers.Where(s => s.DivisionId.HasValue).Select(s => s.DivisionId!.Value).Distinct().ToList();
 
         var standards = await asyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync()).Where(s => stdIds.Contains(s.Id)));
         var divisions = await asyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync()).Where(d => divIds.Contains(d.Id)));
@@ -111,40 +86,40 @@ public class FeeRegisterAllStudentBuilder(
         var stdMap = standards.ToDictionary(s => s.Id, s => s.Name);
         var divMap = divisions.ToDictionary(d => d.Id, d => d.Name);
 
-        // 6. Group Data: StudentId -> FeeHeadId -> Amount
-        var groupedData = new Dictionary<Guid, Dictionary<Guid, double>>();
-        var metadataMap = metadataList.ToDictionary(m => m.Id, m => m.StudentId);
+        // Group allocations by canonical payer and fee head.
+        var groupedData = new Dictionary<FinanceReportPayerKey, Dictionary<Guid, double>>();
+        var metadataMap = metadataList.ToDictionary(m => m.Id, m => FinanceReportPayerKey.From(m.StudentId, m.FinanceFeeAccountId));
 
         foreach (var allocation in allocationsList)
         {
-            if (!metadataMap.TryGetValue(allocation.FeeRecordMetadataId, out var studentId)) continue;
+            if (!metadataMap.TryGetValue(allocation.FeeRecordMetadataId, out var payerKey)) continue;
             if (!dueFeeMap.TryGetValue(allocation.DueFeeId, out var feeHeadId)) continue;
 
-            if (!groupedData.ContainsKey(studentId)) groupedData[studentId] = new();
-            if (!groupedData[studentId].ContainsKey(feeHeadId)) groupedData[studentId][feeHeadId] = 0;
+            if (!groupedData.ContainsKey(payerKey)) groupedData[payerKey] = new();
+            if (!groupedData[payerKey].ContainsKey(feeHeadId)) groupedData[payerKey][feeHeadId] = 0;
 
-            groupedData[studentId][feeHeadId] += allocation.Amount;
+            groupedData[payerKey][feeHeadId] += allocation.Amount;
         }
 
         // 7. Build Rows
         var rows = new List<Dictionary<string, string?>>();
-        foreach (var student in students)
+        foreach (var payer in payers)
         {
-            // Only include students that have payments in this range
-            if (!groupedData.TryGetValue(student.Id, out var feeHeadData))
+            // Only include payers that have payments in this range
+            if (!groupedData.TryGetValue(payer.Key, out var feeHeadData))
             {
                 continue;
             }
 
-            var studentName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Replace("  ", " ").Trim();
-            var stdName = student.StandardId.HasValue && stdMap.TryGetValue(student.StandardId.Value, out var sn) ? sn : "N/A";
-            var divName = student.DivisionId.HasValue && divMap.TryGetValue(student.DivisionId.Value, out var dn) ? dn : "N/A";
+            var payerName = payer.DisplayName;
+            var stdName = payer.StandardId.HasValue && stdMap.TryGetValue(payer.StandardId.Value, out var sn) ? sn : "N/A";
+            var divName = payer.DivisionId.HasValue && divMap.TryGetValue(payer.DivisionId.Value, out var dn) ? dn : "N/A";
 
             var row = new Dictionary<string, string?>
             {
-                { "RollNo", student.RollNo?.ToString() ?? "N/A" },
-                { "GRNo", student.GrNo?.ToString() ?? "N/A" },
-                { "StudentName", studentName },
+                { "RollNo", payer.RollNo?.ToString() ?? "N/A" },
+                { "GRNo", payer.GrNo?.ToString() ?? "N/A" },
+                { "StudentName", payerName },
                 { "Class", stdName },
                 { "Division", divName }
             };

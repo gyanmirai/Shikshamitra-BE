@@ -10,6 +10,9 @@ public class FeeRecordMetadataConfiguration : IEntityTypeConfiguration<FeeRecord
     {
         builder.ToTable("Finance_FeeRecordMetadatas", ShikshaMitraConsts.DbSchema);
         builder.ConfigureByConvention();
+        builder.ToTable(t => t.HasCheckConstraint("CK_FeeRecordMetadatas_Payer", "\"StudentId\" IS NOT NULL OR \"FinanceFeeAccountId\" IS NOT NULL"));
+        builder.HasOne<FinanceFeeAccount>().WithMany().HasForeignKey(x => x.FinanceFeeAccountId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.ReceiptNumber)
             .HasMaxLength(20)

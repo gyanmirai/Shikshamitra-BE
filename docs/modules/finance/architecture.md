@@ -15,6 +15,8 @@ Start in contracts for DTO shape, then trace to application services and domain 
 
 Fee Structure configuration, publication and revision contracts: [workspace implementation](./references/fee-structure-workspace.md).
 
+Admissions collections use one Finance account and canonical due schedule through real Student linking and enrollment assignment: [admission fee collection](./references/admission-fee-collection.md).
+
 ## Layer map
 
 | Layer | Path |

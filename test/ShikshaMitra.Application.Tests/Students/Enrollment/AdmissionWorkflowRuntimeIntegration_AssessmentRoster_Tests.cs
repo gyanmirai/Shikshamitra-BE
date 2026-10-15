@@ -29,6 +29,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var roster = await service.GetApplicantsAsync(input);
 		roster.TotalCount.ShouldBe(1);
 		roster.Counts.ToBook.ShouldBe(1);
+		roster.StatusCounts.Pending.ShouldBe(1);
+		roster.Items.Single().Status.ShouldBe("pending");
 		roster.Items.Single().Assessment.CanBook.ShouldBeTrue();
 		var state = await service.BookAsync(application.Id, stageId, new() { ConcurrencyStamp = roster.Items.Single().Assessment.ConcurrencyStamp });
 		(await service.GetApplicantsAsync(input)).Items.Single().Queue.ShouldBe("attendance");
@@ -44,6 +46,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		state = await service.RecordResultAsync(state.Attempts.Last().Id, new() { ConcurrencyStamp = state.Attempts.Last().ConcurrencyStamp, Marks = 80 });
 		roster = await service.GetApplicantsAsync(input);
 		roster.Items.Single().Queue.ShouldBe("ready");
+		roster.Items.Single().Status.ShouldBe("complete");
+		input.Status = "pending";
+		var pending = await service.GetApplicantsAsync(input);
+		pending.TotalCount.ShouldBe(0);
+		pending.StatusCounts.Complete.ShouldBe(1);
+		input.Status = "complete";
+		(await service.GetApplicantsAsync(input)).TotalCount.ShouldBe(1);
+		input.Status = null;
 		roster.Items.Single().Assessment.CanComplete.ShouldBeTrue();
 		await AdvanceAssessmentAsync(application.Id, stageId);
 		roster = await service.GetApplicantsAsync(input);

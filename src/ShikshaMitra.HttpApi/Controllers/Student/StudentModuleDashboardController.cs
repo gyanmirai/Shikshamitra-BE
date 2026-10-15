@@ -19,6 +19,16 @@ public class StudentModuleDashboardController(IStudentModuleDashboardAppService 
 	public Task<StudentModuleDashboardContextDto> GetContextAsync() => service.GetContextAsync();
 
 	[HttpGet("sections/{section}")]
-	public Task<StudentModuleDashboardSectionDto> GetSectionAsync(string section, [FromQuery] Guid academicYearId) =>
-		service.GetSectionAsync(section, academicYearId);
+	public Task<StudentModuleDashboardSectionDto> GetSectionAsync(string section, [FromQuery] Guid academicYearId,
+		[FromQuery] Guid? boardId = null, [FromQuery] Guid? mediumId = null, [FromQuery] Guid? standardId = null, [FromQuery] Guid? divisionId = null) =>
+		service.GetSectionAsync(section, academicYearId, boardId, mediumId, standardId, divisionId);
+
+	[HttpGet("filters")]
+	public Task<StudentModuleDashboardFiltersDto> GetFiltersAsync([FromQuery] Guid academicYearId) => service.GetFiltersAsync(academicYearId);
+
+	[HttpGet("attendance-registers")]
+	public Task<Volo.Abp.Application.Dtos.PagedResultDto<StudentModuleDashboardRegisterDto>> GetAttendanceRegistersAsync(
+		[FromQuery] Guid academicYearId, [FromQuery] Guid? boardId = null, [FromQuery] Guid? mediumId = null,
+		[FromQuery] Guid? standardId = null, [FromQuery] Guid? divisionId = null, [FromQuery] int skipCount = 0, [FromQuery] int maxResultCount = 20) =>
+		service.GetAttendanceRegistersAsync(academicYearId, boardId, mediumId, standardId, divisionId, skipCount, maxResultCount);
 }

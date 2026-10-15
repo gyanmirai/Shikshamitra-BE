@@ -14,10 +14,14 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 
 public partial class StudentFeeStructureAppService
 {
-	private async Task<PreparedAssignment> PrepareAsync(AssignStudentFeeStructureDto input)
+	private Task<PreparedAssignment> PrepareAsync(AssignStudentFeeStructureDto input) => PrepareForContextAsync(input, null);
+
+	private async Task<PreparedAssignment> PrepareForContextAsync(AssignStudentFeeStructureDto input, AdmissionAssignmentContext? admission)
 	{
-		ValidateInput(input);
-		var enrollment = await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, true);
+		ValidateInput(input, admission != null);
+		var enrollment = admission == null ? await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, true) : null;
+		var studentId = admission?.StudentId ?? enrollment?.StudentId;
+		var standardId = admission?.StandardId ?? enrollment?.StandardId;
 		// These are calculation inputs, not assignment writes. Tracking their graphs lets
 		// ABP propagate student/due changes to shared principals and rotate the revisions
 		// used by every other student's preview in the same bulk operation.
@@ -27,7 +31,8 @@ public partial class StudentFeeStructureAppService
 		using var yearTracking = academicYearRepository.DisableTracking();
 		var structure = await feeStructureRepository.GetAsync(input.StandardFeeStructureId);
 		var metadata = await feeStructureMetadataRepository.GetAsync(structure.FeeStructureMetadataId);
-		if (!structure.IsLocked || structure.StandardId != enrollment.StandardId || metadata.AcademicYearId != input.AcademicYearId)
+		if (!structure.IsLocked || structure.StandardId != standardId || metadata.AcademicYearId != input.AcademicYearId ||
+			(admission != null && (metadata.AcademicBoardId != admission.BoardId || metadata.AcademicMediumId != admission.MediumId || structure.RevisionNumber != admission.StructureRevision)))
 			throw new BusinessException(AssignmentErrorCodes.StructureMismatch);
 		var year = await academicYearRepository.GetAsync(input.AcademicYearId);
 		var details = (await feeStructureDetailRepository.GetListAsync(x => x.FeeStructureId == structure.Id)).OrderBy(x => x.Id).ToList();
@@ -65,7 +70,7 @@ public partial class StudentFeeStructureAppService
 		var headRecords = (await feeHeadRepository.GetListAsync(h => headIds.Contains(h.Id))).ToDictionary(h => h.Id);
 		var names = headRecords.ToDictionary(h => h.Key, h => h.Value.Name);
 		var preview = new StudentFeeAssignmentPreviewDto {
-			StudentId = input.StudentId, AcademicYearId = year.Id, EnrollmentId = enrollment.Id,
+			StudentId = studentId, AcademicYearId = year.Id, EnrollmentId = enrollment?.Id,
 			StructureId = structure.Id, StructureName = structure.Name, RevisionNumber = structure.RevisionNumber,
 			ChargeStartDate = DateTime.SpecifyKind(year.StartDate.Date, DateTimeKind.Utc), ChargeEndDate = DateTime.SpecifyKind(year.EndDate.Date, DateTimeKind.Utc),
 			OverrideReason = input.OverrideReason?.Trim(),
@@ -114,6 +119,7 @@ public partial class StudentFeeStructureAppService
 					StartDate = input.ChargeStartDate, EndDate = input.ChargeEndDate, SourceReferenceId = input.ChargePeriodSourceReferenceId, Reason = input.ChargePeriodOverrideReason };
 			if (requested.Source == "TransportService" && (detail.IsVariable || headRecords[detail.FeeHeadId].Module != ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Transport))
 				throw new BusinessException(AssignmentErrorCodes.InvalidInput);
+			if (admission != null && requested.Source != "AcademicYear") throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
 			var fact = await ResolveServiceAsync(input.StudentId, requested, year);
 			head.ServicePeriod = fact.Period;
 			head.Verification = detail.IsVariable ? "Student amount entered during assignment; " + fact.Verification : fact.Verification;
@@ -121,8 +127,9 @@ public partial class StudentFeeStructureAppService
 			optionalDetails.Add(new CustomOptionalFeeHeadDetail { FeeHeadId = detail.FeeHeadId, Amount = head.EffectiveAmount ?? throw new BusinessException(AssignmentErrorCodes.VariableAmountRequired),
 				ChargeStartDate = fact.Period.StartDate, ChargeEndDate = fact.Period.EndDate });
 		}
-		var dues = (await dueFeeManager.GenerateForStudentAsync(input.StudentId, structure, year,
-			input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate)).OrderBy(x => x.FeeHeadId).ThenBy(x => x.InstallmentSequence).ToList();
+		var dues = (await dueFeeManager.GenerateForStudentAsync(studentId, structure, year,
+			input.SelectedOptionalFeeHeadIds, optionalDetails, prorationRules, proration?.Id, year.StartDate, year.EndDate,
+			financeFeeAccountId: admission?.AccountId)).OrderBy(x => x.FeeHeadId).ThenBy(x => x.InstallmentSequence).ToList();
 		foreach (var due in dues)
 		{
 			var head = preview.Heads.Single(x => x.FeeHeadId == due.FeeHeadId);
@@ -157,7 +164,7 @@ public partial class StudentFeeStructureAppService
 		preview.ProratedTotal = preview.Lines.Sum(x => x.ProratedAmount);
 		preview.ReductionTotal = preview.ScheduledTotal - preview.ProratedTotal;
 		if (preview.Lines.Any(x => x.DueDate.Date < Clock.Now.Date)) preview.Warnings.Add("Some configured due dates are in the past. Assignment preserves those dates; it does not assess a late fee.");
-		var fingerprint = Hash(new { Preview = preview, structure.ConcurrencyStamp, Enrollment = enrollment.ConcurrencyStamp,
+		var fingerprint = Hash(new { Preview = preview, structure.ConcurrencyStamp, Enrollment = enrollment?.ConcurrencyStamp ?? admission?.SourceRevision,
 			Snapshots = new[] { collection?.SnapshotJson, proration?.SnapshotJson, refund?.SnapshotJson, concession?.SnapshotJson } });
 		return new PreparedAssignment(structure, preview, dues, fingerprint);
 	}

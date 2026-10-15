@@ -45,8 +45,11 @@ public class AdvanceAdmissionWorkflowDtoValidator : AbstractValidator<AdvanceAdm
 		RuleFor(input => input.Reason).MaximumLength(512);
 		RuleFor(input => input.Reason)
 			.NotEmpty()
+			.When(input => input.SkipCurrentStage || input.AdminOverride || input.DeferFeeCollection)
+			.WithMessage("A reason is required when deferring collection, skipping or overriding workflow routing.");
+		RuleFor(input => input.DeferFeeCollection).Equal(false)
 			.When(input => input.SkipCurrentStage || input.AdminOverride)
-			.WithMessage("A reason is required when skipping or overriding workflow routing.");
+			.WithMessage("Collection deferral cannot be combined with skipping or overriding workflow routing.");
 	}
 }
 

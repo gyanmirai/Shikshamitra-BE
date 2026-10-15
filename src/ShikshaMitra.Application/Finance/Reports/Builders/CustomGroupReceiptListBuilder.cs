@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Finance.Fees.Receipts;
-using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -16,7 +15,7 @@ namespace ShikshaMitra.Finance.Reports.Builders;
 [Volo.Abp.DependencyInjection.ExposeServices(typeof(IFinanceReportBuilder))]
 public class CustomGroupReceiptListBuilder(
     IRepository<FeePaymentReceipt, Guid> receiptRepository,
-    IRepository<Student, Guid> studentRepository,
+    FinanceReportPayerQueryService payerService,
     IRepository<PaymentMethodRecord, Guid> paymentMethodRepository,
     IRepository<Standard, Guid> standardRepository,
     IAsyncQueryableExecuter asyncExecuter)
@@ -26,35 +25,17 @@ public class CustomGroupReceiptListBuilder(
 
     public async Task<FinanceReportPreviewDto> BuildAsync(FinanceReportRequestDto request, FinanceReportPreviewDto payload, FinanceReportExecutionScope executionScope, bool exportAllRows)
     {
-        var boardId = request.Filters.BoardId;
-        var mediumId = request.Filters.MediumId;
-        var organizationIds = request.Filters.OrganizationIds ?? new List<Guid>();
         var receiptBookIds = request.Filters.ReceiptBookIds ?? new List<Guid>();
 
         var fromDate = request.Filters.FromDate;
         var toDate = request.Filters.ToDate;
 
-        // 1. Fetch Students
-        var studentQuery = Students.StudentScopeAccessService.ApplyScope(
-                await studentRepository.GetQueryableAsync(), executionScope.UserScope)
-            .WhereIf(request.Filters.AcademicYearIds?.Any() == true,
-                s => s.AcademicYearId.HasValue && request.Filters.AcademicYearIds!.Contains(s.AcademicYearId.Value))
-            .WhereIf(request.Filters.BatchId.HasValue, s => s.AcademicYearId == request.Filters.BatchId)
-            .WhereIf(boardId.HasValue, s => s.AcademicBoardId == boardId)
-            .WhereIf(mediumId.HasValue, s => s.AcademicMediumId == mediumId)
-            .WhereIf(organizationIds.Any(), s => s.AcademicMediumStageId.HasValue && organizationIds.Contains(s.AcademicMediumStageId.Value));
+        // Use canonical payer identities; applicant account evidence keeps its original scope.
+        var payers = await payerService.GetPayersAsync(request.Filters, executionScope);
 
-        var students = await asyncExecuter.ToListAsync(studentQuery);
-        var studentIds = students.Select(s => s.Id).ToList();
-
-        if (!studentIds.Any())
-        {
-            return payload;
-        }
-
+        if (payers.Count == 0) return payload;
         // 2. Fetch Receipts
-        var receiptQuery = (await receiptRepository.GetQueryableAsync())
-            .Where(r => studentIds.Contains(r.StudentId))
+        var receiptQuery = FinanceReportPayerQueryService.FilterReceipts(await receiptRepository.GetQueryableAsync(), payers)
             .WhereIf(receiptBookIds.Any(), r => r.ReceiptBookId.HasValue && receiptBookIds.Contains(r.ReceiptBookId.Value))
             .WhereIf(fromDate.HasValue, r => r.ReceiptDate >= DateOnly.FromDateTime(fromDate.Value))
             .WhereIf(toDate.HasValue, r => r.ReceiptDate <= DateOnly.FromDateTime(toDate.Value));
@@ -74,10 +55,10 @@ public class CustomGroupReceiptListBuilder(
         var paymentsByTx = payments.GroupBy(p => p.FeeRecordMetadataId).ToDictionary(g => g.Key, g => g.ToList());
 
         // 4. Resolve Standard Names
-        var stdIds = students.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
+        var stdIds = payers.Where(s => s.StandardId.HasValue).Select(s => s.StandardId!.Value).Distinct().ToList();
         var standards = await asyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync()).Where(s => stdIds.Contains(s.Id)));
         var stdMap = standards.ToDictionary(s => s.Id, s => s.Name);
-        var studentMap = students.ToDictionary(s => s.Id, s => s);
+        var payerMap = payers.ToDictionary(s => s.Key, s => s);
 
         // 5. Define Columns
         payload.Columns.AddRange(new List<FinanceReportColumnDto>
@@ -98,7 +79,7 @@ public class CustomGroupReceiptListBuilder(
 
         foreach (var receipt in receipts)
         {
-            if (!studentMap.TryGetValue(receipt.StudentId, out var student)) continue;
+            if (!payerMap.TryGetValue(FinanceReportPayerKey.From(receipt.StudentId, receipt.FinanceFeeAccountId), out var payer)) continue;
 
             string payType = "N/A";
             string chequeRefNo = "-";
@@ -138,16 +119,16 @@ public class CustomGroupReceiptListBuilder(
                 }
             }
 
-            var stdName = student.StandardId.HasValue && stdMap.TryGetValue(student.StandardId.Value, out var sn) ? sn : "N/A";
-            var studentName = $"{student.FirstName} {student.MiddleName} {student.LastName}".Replace("  ", " ").Trim();
+            var stdName = payer.StandardId.HasValue && stdMap.TryGetValue(payer.StandardId.Value, out var sn) ? sn : "N/A";
+            var payerName = payer.DisplayName;
 
             rows.Add(new Dictionary<string, string?>
             {
                 { "ReceiptNo", receipt.ReceiptNumber },
                 { "Class", stdName },
-                { "RollNo", student.RollNo?.ToString() ?? "N/A" },
-                { "GRNo", student.GrNo?.ToString() ?? "N/A" },
-                { "StudentName", studentName },
+                { "RollNo", payer.RollNo?.ToString() ?? "N/A" },
+                { "GRNo", payer.GrNo?.ToString() ?? "N/A" },
+                { "StudentName", payerName },
                 { "PayType", payType },
                 { "ChequeRefNo", chequeRefNo },
                 { "BankName", bankName },

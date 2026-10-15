@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Http;
 using ShikshaMitra.HR;
 using ShikshaMitra.Security.Roles;
 using ShikshaMitra.TenantSettings.AcademicSetups;
+using ShikshaMitra.Finance.Fees.Collections;
 
 namespace ShikshaMitra.Common.Middleware;
 
@@ -21,6 +22,7 @@ public static class ApiProblemDetailsMapper
 			RoleErrorCodes.AssignedToUsers or RoleErrorCodes.ReferencedByEmployees => StatusCodes.Status409Conflict,
 			TenantSettingsDomainErrorCodes.DuplicateStandardName or
 			TenantSettingsDomainErrorCodes.DuplicateDivisionName => StatusCodes.Status409Conflict,
+			FeeCollectionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewStale or HRErrorCodes.PayrollPreviewNotReady => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveEmployeeNotFound => StatusCodes.Status403Forbidden,

@@ -11,6 +11,8 @@ public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMulti
 	public Guid ApplicationId { get; private set; }
 	public Guid StageInstanceId { get; private set; }
 	public Guid? SessionId { get; private set; }
+	public DateTime? SlotStartsAt { get; private set; }
+	public DateTime? SlotEndsAt { get; private set; }
 	public int AttemptNumber { get; private set; }
 	public string Attendance { get; private set; } = "pending";
 	public string Status { get; private set; } = "pending";
@@ -43,6 +45,11 @@ public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMulti
 		Attendance = attendance;
 		Notes = normalizedNotes;
 		if (attendance == "absent") RecordOutcome("absent", userId, policy);
+	}
+	public void AssignInterviewSlot(DateTime startsAt, DateTime endsAt)
+	{
+		if (!SessionId.HasValue || endsAt <= startsAt || Status != "pending") throw Invalid("Choose a valid interview slot.");
+		SlotStartsAt = startsAt.ToUniversalTime(); SlotEndsAt = endsAt.ToUniversalTime();
 	}
 
 	public void RecordResult(decimal? marks, string? outcome, string? notes, Guid userId, AdmissionAssessmentPolicy policy)

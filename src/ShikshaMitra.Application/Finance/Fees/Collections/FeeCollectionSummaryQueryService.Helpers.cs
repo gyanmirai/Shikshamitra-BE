@@ -39,6 +39,7 @@ public partial class FeeCollectionSummaryQueryService
 			return new FeeCollectionSummaryItemDto
 			{
 				StudentId        = r.StudentId,
+				FinanceFeeAccountId = r.FinanceFeeAccountId,
 				StudentName      = BuildFullName(r.FirstName, r.MiddleName, r.LastName),
 				GrNumber         = r.GrNo,
 				RollNumber       = r.RollNo,
@@ -179,6 +180,32 @@ public partial class FeeCollectionSummaryQueryService
 	private bool IsPrivilegedUser() =>
 		CurrentUser.IsInRole("admin") || CurrentUser.IsInRole("Finance Officer");
 
+	private async Task<IQueryable<FinanceFeeAccount>> BuildFilteredFeeAccountQueryAsync(
+		GetFeeCollectionSummaryInput input, IQueryable<Guid> matchingStudentIds)
+	{
+		var accountIds = await financeScopeAccessService.GetScopedFeeAccountIdsQueryAsync();
+		var query = (await accountRepository.GetQueryableAsync()).Where(a =>
+			accountIds.Contains(a.Id) && a.AcademicYearId == input.AcademicYearId &&
+			a.BoardId == input.BoardId && a.EducationMediumId == input.EducationMediumId &&
+			a.StructureId.HasValue);
+		if (input.StandardId.HasValue) query = query.Where(a => a.StandardId == input.StandardId.Value);
+		if (input.DivisionId.HasValue) query = query.Where(a => a.DivisionId == input.DivisionId.Value);
+		if (!string.IsNullOrWhiteSpace(input.Search))
+		{
+			var terms = input.Search.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+			if (terms.Length > 1 || terms.Length == 1 && terms[0].Length >= 2)
+			{
+				foreach (var word in terms)
+				{
+					var term = word.ToLower();
+					query = query.Where(a => a.ApplicantName.ToLower().Contains(term) ||
+						a.StudentId.HasValue && matchingStudentIds.Contains(a.StudentId.Value));
+				}
+			}
+		}
+		return query;
+	}
+
 	private readonly record struct StudentChargeAggregate(double TotalCharges, double PendingCharges)
 	{
 		public static StudentChargeAggregate Empty => new(0d, 0d);
@@ -186,7 +213,8 @@ public partial class FeeCollectionSummaryQueryService
 
 	private sealed class FeeCollectionRawRow
 	{
-		public Guid    StudentId       { get; init; }
+		public Guid?   StudentId       { get; init; }
+		public Guid?   FinanceFeeAccountId { get; init; }
 		public string? FirstName       { get; init; }
 		public string? MiddleName      { get; init; }
 		public string? LastName        { get; init; }
@@ -196,12 +224,12 @@ public partial class FeeCollectionSummaryQueryService
 		public string  StandardName    { get; init; } = string.Empty;
 		public Guid    DivisionId      { get; set; }
 		public string  DivisionName    { get; init; } = string.Empty;
-		public double? TotalFees       { get; init; }
-		public double? PaidFees        { get; init; }
-		public double? OutstandingFees { get; init; }
-		public double? OverdueFees     { get; init; }
-		public double? TotalCharges    { get; init; }
-		public double? PendingCharges  { get; init; }
+		public double? TotalFees       { get; set; }
+		public double? PaidFees        { get; set; }
+		public double? OutstandingFees { get; set; }
+		public double? OverdueFees     { get; set; }
+		public double? TotalCharges    { get; set; }
+		public double? PendingCharges  { get; set; }
 		public double? TotalConcessionAmount   { get; set; }
 		public bool    IsFeeStructureAssigned  { get; set; }
 	}

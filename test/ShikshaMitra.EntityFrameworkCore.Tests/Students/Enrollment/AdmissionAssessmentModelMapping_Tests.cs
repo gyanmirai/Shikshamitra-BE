@@ -25,5 +25,13 @@ public class AdmissionAssessmentModelMapping_Tests : ShikshaMitraEntityFramework
 			index.Properties.Select(property => property.Name).SequenceEqual(new[] { "StageInstanceId", "AttemptNumber" }));
 		attempt.GetForeignKeys().ShouldAllBe(key => key.DeleteBehavior == DeleteBehavior.Restrict);
 		session.GetForeignKeys().ShouldAllBe(key => key.DeleteBehavior == DeleteBehavior.Restrict);
+		var scope = model.FindEntityType(typeof(AdmissionAssessmentSessionScope)).ShouldNotBeNull();
+		scope.FindProperty("TenantId").ShouldNotBeNull();
+		scope.GetIndexes().ShouldContain(index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(new[] { "SessionId", "AdmissionOfferingId", "WorkflowStageDefinitionId" }));
+		attempt.GetIndexes().ShouldContain(index => index.IsUnique && index.Properties.Select(property => property.Name).SequenceEqual(new[] { "SessionId", "SlotStartsAt" }));
+		attempt.GetIndexes().ShouldContain(index => !index.IsUnique && index.GetFilter() == null &&
+			index.Properties.Select(property => property.Name).SequenceEqual(new[] { "SessionId" }));
+		model.FindEntityType(typeof(AdmissionAssessmentBookingBatch)).ShouldNotBeNull().FindProperty("Fingerprint").ShouldNotBeNull();
+		session.FindProperty("RoomReservationStatus").ShouldBeNull();
 	}
 }

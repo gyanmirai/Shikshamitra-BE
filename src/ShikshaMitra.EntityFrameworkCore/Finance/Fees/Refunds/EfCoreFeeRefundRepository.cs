@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Finance.Fees.FeeRefund.Repositories;
 using ShikshaMitra.Students;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
 
@@ -32,7 +33,9 @@ public class EfCoreFeeRefundRepository(
         string? sorting = null,
         IQueryable<Guid>? scopedStudentIdsQuery = null,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<FeeRefundColumnFilter>? columnFilters = null)
+        IReadOnlyCollection<FeeRefundColumnFilter>? columnFilters = null,
+        IQueryable<Guid>? scopedAccountIdsQuery = null,
+        Guid? financeFeeAccountId = null)
     {
         var dbContext = await GetDbContextAsync();
         var dbSet = dbContext.Set<FeeRefundRequest>();
@@ -42,33 +45,46 @@ public class EfCoreFeeRefundRepository(
             query = query.Where(r => r.StudentId == studentId.Value);
         if (academicYearId.HasValue)
             query = query.Where(r => r.AcademicYearId == academicYearId.Value);
+        if (financeFeeAccountId.HasValue)
+            query = query.Where(r => r.FinanceFeeAccountId == financeFeeAccountId.Value);
 
         if (academicMediumId.HasValue || standardId.HasValue || divisionId.HasValue)
         {
             var studentQuery = dbContext.Set<Student>().AsQueryable();
+            var accountQuery = dbContext.Set<FinanceFeeAccount>().AsQueryable();
 
             if (academicMediumId.HasValue)
             {
                 studentQuery = studentQuery.Where(s => s.AcademicMediumId == academicMediumId.Value);
+                accountQuery = accountQuery.Where(a => a.EducationMediumId == academicMediumId.Value);
             }
 
             if (standardId.HasValue)
             {
                 studentQuery = studentQuery.Where(s => s.StandardId == standardId.Value);
+                accountQuery = accountQuery.Where(a => a.StandardId == standardId.Value);
             }
 
             if (divisionId.HasValue)
             {
                 studentQuery = studentQuery.Where(s => s.DivisionId == divisionId.Value);
+                accountQuery = accountQuery.Where(a => a.DivisionId == divisionId.Value);
             }
 
             var filteredStudentIds = studentQuery.Select(s => s.Id);
-            query = query.Where(r => filteredStudentIds.Contains(r.StudentId));
+            var filteredAccountIds = accountQuery.Select(a => a.Id);
+            query = query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && filteredStudentIds.Contains(r.StudentId.Value)) ||
+                (r.FinanceFeeAccountId.HasValue && filteredAccountIds.Contains(r.FinanceFeeAccountId.Value)));
         }
 
-        // User scope — restrict to students within the caller's access scope
-        if (scopedStudentIdsQuery != null)
-            query = query.Where(r => scopedStudentIdsQuery.Contains(r.StudentId));
+        // Account-backed evidence keeps the original account scope after Student linking.
+        if (scopedStudentIdsQuery != null && scopedAccountIdsQuery != null)
+            query = query.Where(r => (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value)) ||
+                (r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value)));
+        else if (scopedStudentIdsQuery != null)
+            query = query.Where(r => !r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value));
+        else if (scopedAccountIdsQuery != null)
+            query = query.Where(r => r.FinanceFeeAccountId.HasValue && scopedAccountIdsQuery.Contains(r.FinanceFeeAccountId.Value));
 
         if (status.HasValue)
             query = query.Where(r => r.Status == status.Value);
@@ -81,13 +97,18 @@ public class EfCoreFeeRefundRepository(
         {
             var term = search.Trim().ToLower();
             var matchingStudents = dbContext.Set<Student>()
-                .Where(s => s.FirstName.ToLower().Contains(term) ||
-                    s.LastName.ToLower().Contains(term) ||
-                    (s.GrNo != null && s.GrNo.ToString().Contains(term)))
+                .Where(s => (s.FirstName != null && s.FirstName.ToLower().Contains(term)) ||
+                    (s.LastName != null && s.LastName.ToLower().Contains(term)) ||
+                    (s.GrNo.HasValue && s.GrNo.Value.ToString().Contains(term)))
                 .Select(s => s.Id);
+            var matchingAccounts = dbContext.Set<FinanceFeeAccount>()
+                .Where(a => a.ApplicantName.ToLower().Contains(term) ||
+                    (a.StudentId.HasValue && matchingStudents.Contains(a.StudentId.Value)))
+                .Select(a => a.Id);
             query = query.Where(r => r.VoucherNumber.ToLower().Contains(term) ||
                 (r.OriginalReceiptNumber != null && r.OriginalReceiptNumber.ToLower().Contains(term)) ||
-                matchingStudents.Contains(r.StudentId));
+                (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && matchingStudents.Contains(r.StudentId.Value)) ||
+                (r.FinanceFeeAccountId.HasValue && matchingAccounts.Contains(r.FinanceFeeAccountId.Value)));
         }
 
         query = FeeRefundColumnFilterQuery.Apply(query, dbContext.Set<Student>(), columnFilters ?? []);
@@ -181,9 +202,27 @@ public class EfCoreFeeRefundRepository(
     public async Task<decimal> GetStudentYearCommittedAmountAsync(Guid studentId, Guid academicYearId,
         Guid? excludingRequestId = null, CancellationToken cancellationToken = default)
     {
-        var dbSet = await GetDbSetAsync();
-        var requests = dbSet.Where(r => r.StudentId == studentId && r.AcademicYearId == academicYearId &&
+        var dbContext = await GetDbContextAsync();
+        var linkedAccounts = dbContext.Set<FinanceFeeAccount>()
+            .Where(a => a.StudentId == studentId && a.AcademicYearId == academicYearId).Select(a => a.Id);
+        var requests = dbContext.Set<FeeRefundRequest>().Where(r =>
+            (r.StudentId == studentId || (r.FinanceFeeAccountId.HasValue && linkedAccounts.Contains(r.FinanceFeeAccountId.Value))) &&
+            r.AcademicYearId == academicYearId &&
             (!excludingRequestId.HasValue || r.Id != excludingRequestId.Value));
+        return await GetCommittedAmountAsync(requests, cancellationToken);
+    }
+
+    public async Task<decimal> GetAccountYearCommittedAmountAsync(Guid financeFeeAccountId, Guid academicYearId,
+        Guid? excludingRequestId = null, CancellationToken cancellationToken = default)
+    {
+        var dbSet = await GetDbSetAsync();
+        var requests = dbSet.Where(r => r.FinanceFeeAccountId == financeFeeAccountId && r.AcademicYearId == academicYearId &&
+            (!excludingRequestId.HasValue || r.Id != excludingRequestId.Value));
+        return await GetCommittedAmountAsync(requests, cancellationToken);
+    }
+
+    private static async Task<decimal> GetCommittedAmountAsync(IQueryable<FeeRefundRequest> requests, CancellationToken cancellationToken)
+    {
         var processed = await requests.SumAsync(r => r.ProcessedAmount - r.ReversedAmount, cancellationToken);
         var activeReserved = await requests.SelectMany(r => r.Reservations)
             .Where(x => x.Status == FeeRefundReservationStatus.Active)

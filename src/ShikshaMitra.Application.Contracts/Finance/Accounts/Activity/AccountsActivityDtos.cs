@@ -24,6 +24,7 @@ public class AccountsActivityRowDto
     public Guid Id { get; set; }
     public Guid SourceId { get; set; }
     public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public string? GrNumber { get; set; }
     public string ClassDivision { get; set; } = string.Empty;

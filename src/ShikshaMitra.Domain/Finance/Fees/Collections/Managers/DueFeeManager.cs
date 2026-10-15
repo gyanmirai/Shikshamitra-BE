@@ -12,6 +12,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Fees.FeeCollection;
 
@@ -27,7 +28,7 @@ public class DueFeeManager(
 		new DateTime(year, (int)month + 1, 1).AddDays(DefaultDueDayOfMonth - 1);
 
 	public async Task<IReadOnlyList<DueFee>> GenerateForStudentAsync(
-		Guid studentId,
+		Guid? studentId,
 		FeeStructure feeStructure,
 		AcademicYear academicYear,
 		IReadOnlyList<Guid> selectedOptionalFeeHeadIds,
@@ -35,10 +36,14 @@ public class DueFeeManager(
 		ProrationPolicySnapshot? prorationPolicy = null,
 		Guid? prorationPolicyVersionId = null,
 		DateTime? chargeStartDate = null,
-		DateTime? chargeEndDate = null)
+		DateTime? chargeEndDate = null,
+		Guid? financeFeeAccountId = null)
 	{
-		var alreadyExists = await dueFeeRepository.ExistsForStudentInPeriodAsync(
-			studentId, academicYear.StartDate.Date, academicYear.EndDate.Date);
+		FinanceFeePayerIdentity.Validate(studentId, financeFeeAccountId);
+		var alreadyExists = financeFeeAccountId.HasValue
+			? await dueFeeRepository.AnyAsync(d => d.FinanceFeeAccountId == financeFeeAccountId.Value)
+			: await dueFeeRepository.ExistsForStudentInPeriodAsync(
+				studentId!.Value, academicYear.StartDate.Date, academicYear.EndDate.Date);
 		if (alreadyExists)
 			throw new BusinessException(DueFeeErrorCodes.DueFeesAlreadyGenerated)
 				.WithData("StudentId", studentId);
@@ -67,26 +72,26 @@ public class DueFeeManager(
 			{
 				dueFees.AddRange(await GenerateFromPaymentTermAsync(
 					studentId, detail, customDetail, prorationPolicy, prorationPolicyVersionId,
-					detailChargeStart, detailChargeEnd, academicYear));
+					detailChargeStart, detailChargeEnd, academicYear, financeFeeAccountId));
 				continue;
 			}
 
 			dueFees.AddRange(GenerateLegacy(
 				studentId, detail, monthRange, customDetail, prorationPolicy,
-				prorationPolicyVersionId, detailChargeStart, detailChargeEnd));
+				prorationPolicyVersionId, detailChargeStart, detailChargeEnd, financeFeeAccountId));
 		}
 
 		return dueFees;
 	}
 
 	private async Task<List<DueFee>> GenerateFromPaymentTermAsync(
-		Guid studentId,
+		Guid? studentId,
 		FeeStructureDetail detail,
 		CustomOptionalFeeHeadDetail? customDetail,
 		ProrationPolicySnapshot? prorationPolicy,
 		Guid? prorationPolicyVersionId,
 		DateTime chargeStartDate,
-		DateTime chargeEndDate, AcademicYear academicYear)
+		DateTime chargeEndDate, AcademicYear academicYear, Guid? financeFeeAccountId)
 	{
 		var schedule = await scheduleResolver.ResolveAsync(detail);
 		if (!schedule.IsValid || schedule.Installments.Count == 0)
@@ -130,7 +135,7 @@ public class DueFeeManager(
 				prorationFactor: calculation.Factor,
 				prorationRuleType: calculation.RuleType,
 				prorationRoundingMode: calculation.RoundingMode,
-				prorationExplanation: calculation.Explanation));
+				prorationExplanation: calculation.Explanation, financeFeeAccountId: financeFeeAccountId));
 			rows[^1].PreserveAllocation(installment.AllocationPercentage);
 		}
 
@@ -138,14 +143,15 @@ public class DueFeeManager(
 	}
 
 	private List<DueFee> GenerateLegacy(
-		Guid studentId,
+		Guid? studentId,
 		FeeStructureDetail detail,
 		List<(MonthEnum Month, int Year)> monthRange,
 		CustomOptionalFeeHeadDetail? customDetail,
 		ProrationPolicySnapshot? prorationPolicy,
 		Guid? prorationPolicyVersionId,
 		DateTime chargeStartDate,
-		DateTime chargeEndDate)
+		DateTime chargeEndDate,
+		Guid? financeFeeAccountId)
 	{
 		var dueFees = new List<DueFee>();
 		if (detail.IsOneTime)
@@ -158,7 +164,7 @@ public class DueFeeManager(
 					.WithData("Month", month.ToString()).WithData("Year", year);
 			dueFees.Add(CreateLegacyDueFee(
 				studentId, detail, month, year, amount,
-				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate));
+				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate, financeFeeAccountId));
 			return dueFees;
 		}
 
@@ -191,14 +197,14 @@ public class DueFeeManager(
 			allocated += scheduledAmount;
 			dueFees.Add(CreateLegacyDueFee(
 				studentId, detail, selectedMonths[i].Month, selectedMonths[i].Year, scheduledAmount,
-				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate));
+				prorationPolicy, prorationPolicyVersionId, chargeStartDate, chargeEndDate, financeFeeAccountId));
 		}
 
 		return dueFees;
 	}
 
 	private DueFee CreateLegacyDueFee(
-		Guid studentId,
+		Guid? studentId,
 		FeeStructureDetail detail,
 		MonthEnum month,
 		int year,
@@ -206,7 +212,8 @@ public class DueFeeManager(
 		ProrationPolicySnapshot? prorationPolicy = null,
 		Guid? prorationPolicyVersionId = null,
 		DateTime? chargeStartDate = null,
-		DateTime? chargeEndDate = null)
+		DateTime? chargeEndDate = null,
+		Guid? financeFeeAccountId = null)
 	{
 		var coverageStart = new DateTime(year, (int)month + 1, 1);
 		var coverageEnd = coverageStart.AddMonths(1).AddDays(-1);
@@ -230,7 +237,7 @@ public class DueFeeManager(
 			prorationFactor: calculation.Factor,
 			prorationRuleType: calculation.RuleType,
 			prorationRoundingMode: calculation.RoundingMode,
-			prorationExplanation: calculation.Explanation);
+			prorationExplanation: calculation.Explanation, financeFeeAccountId: financeFeeAccountId);
 	}
 
 	private ProrationCalculationResult CalculateProration(

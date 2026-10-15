@@ -19,7 +19,7 @@ namespace ShikshaMitra.Students.Dashboard;
 public class StudentModuleDashboardAppService(StudentRecordsActorService actors, StudentRecordsAccessService access,
 	IUserScopeAccessService scopes, IRepository<AcademicYear, Guid> years, StudentPortalAccessService portal,
 	StudentModuleDashboardRecordsReader records, StudentModuleDashboardAdmissionsReader admissions,
-	StudentModuleDashboardAttendanceReader attendance) : ApplicationService, IStudentModuleDashboardAppService
+	StudentModuleDashboardAttendanceReader attendance, StudentModuleDashboardAdminReader admin, StudentDirectoryOptionsService options) : ApplicationService, IStudentModuleDashboardAppService
 {
 	public async Task<StudentModuleDashboardContextDto> GetContextAsync()
 	{
@@ -43,13 +43,13 @@ public class StudentModuleDashboardAppService(StudentRecordsActorService actors,
 			if (await AuthorizationService.IsGrantedAsync(link.Permission) && await AuthorizationService.IsGrantedAsync(link.VisibilityPermission))
 				context.Links.Add(link);
 		if (!scope.HasAnyAccess) return context;
-		if (context.Links.Any(link => link.Id == "directory")) context.Sections.Add("records");
+		if (context.Links.Any(link => link.Id == "directory" || context.Mode == "admin" && link.Id == "changes")) context.Sections.Add("records");
 		if (context.Links.Any(link => link.Id is "inquiries" or "applications" or "onboarding")) context.Sections.Add("admissions");
 		if (context.Links.Any(link => link.Id is "attendance" or "leave")) context.Sections.Add("attendance");
 		return context;
 	}
 
-	public async Task<StudentModuleDashboardSectionDto> GetSectionAsync(string section, Guid academicYearId)
+	public async Task<StudentModuleDashboardSectionDto> GetSectionAsync(string section, Guid academicYearId, Guid? boardId = null, Guid? mediumId = null, Guid? standardId = null, Guid? divisionId = null)
 	{
 		var context = await GetContextAsync();
 		if (section is not ("records" or "admissions" or "attendance"))
@@ -61,6 +61,11 @@ public class StudentModuleDashboardAppService(StudentRecordsActorService actors,
 		if (!scope.HasAnyAccess || (!scope.HasTenantWideScope() && !scope.AcademicYearIds.Contains(academicYearId)))
 			throw new AbpAuthorizationException();
 		var result = new StudentModuleDashboardSectionDto { Key = section, AcademicYearId = academicYearId, GeneratedAt = Clock.Now };
+		if (context.Mode == "admin")
+		{
+			await admin.FillAsync(result, context, new(academicYearId, boardId, mediumId, standardId, divisionId));
+			return result;
+		}
 		// One DbContext is used: aggregate queries run sequentially and project only bounded results.
 		switch (section)
 		{
@@ -69,5 +74,31 @@ public class StudentModuleDashboardAppService(StudentRecordsActorService actors,
 			case "attendance": await attendance.FillAsync(result, context); break;
 		}
 		return result;
+	}
+
+	public async Task<StudentModuleDashboardFiltersDto> GetFiltersAsync(Guid academicYearId)
+	{
+		await EnsureYearAsync(academicYearId);
+		var context = await GetContextAsync();
+		if (context.Mode != "admin" || context.Sections.Count == 0) throw new AbpAuthorizationException();
+		var available = await options.GetAsync(academicYearId);
+		return new() { Boards = available.Boards, Mediums = available.Mediums, Standards = available.Standards, Divisions = available.Divisions };
+	}
+
+	public async Task<Volo.Abp.Application.Dtos.PagedResultDto<StudentModuleDashboardRegisterDto>> GetAttendanceRegistersAsync(
+		Guid academicYearId, Guid? boardId = null, Guid? mediumId = null, Guid? standardId = null, Guid? divisionId = null, int skipCount = 0, int maxResultCount = 20)
+	{
+		await EnsureYearAsync(academicYearId);
+		var context = await GetContextAsync();
+		if (context.Mode != "admin" || !context.Links.Any(l => l.Id == "attendance")) throw new AbpAuthorizationException();
+		return await admin.RegistersAsync(new(academicYearId, boardId, mediumId, standardId, divisionId), skipCount, maxResultCount);
+	}
+
+	private async Task EnsureYearAsync(Guid academicYearId)
+	{
+		await actors.EnsureActiveAsync();
+		var scope = await scopes.GetCurrentUserScopeAsync();
+		if (!scope.HasAnyAccess || !scope.HasTenantWideScope() && !scope.AcademicYearIds.Contains(academicYearId) ||
+			!await years.AnyAsync(y => y.Id == academicYearId && y.TenantId == CurrentTenant.Id)) throw new AbpAuthorizationException();
 	}
 }

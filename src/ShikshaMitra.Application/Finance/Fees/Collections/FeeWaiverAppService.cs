@@ -73,7 +73,9 @@ public class FeeWaiverAppService(
 	{
 		var dueFee = await dueFeeRepository.FindAsync(dueFeeId)
 			?? throw new BusinessException(FeeWaiverErrorCodes.SourceNotFound).WithData("sourceId", dueFeeId);
-		await financeScopeAccessService.EnsureStudentAccessibleAsync(dueFee.StudentId);
+		await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(dueFee.StudentId, dueFee.FinanceFeeAccountId);
+		if (!dueFee.StudentId.HasValue)
+			throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible).WithData("reason", "Waivers require a Student fee assignment.");
 
 		var feeHead = await feeHeadRepository.FindAsync(dueFee.FeeHeadId)
 			?? throw new BusinessException(FeeWaiverErrorCodes.SourceNotFound).WithData("feeHeadId", dueFee.FeeHeadId);
@@ -83,7 +85,7 @@ public class FeeWaiverAppService(
 			throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible).WithData("reason", "No fee structure is assigned.");
 
 		var effective = await policyResolver.ResolveEffectiveRulesForStudentAsync(
-			dueFee.StudentId, assignment.FeeStructureStandardId);
+			dueFee.StudentId.Value, assignment.FeeStructureStandardId);
 		if (effective.Policy is null)
 			throw new BusinessException(FeeWaiverErrorCodes.SourceNotEligible).WithData("reason", "No late fee applies.");
 
@@ -94,7 +96,7 @@ public class FeeWaiverAppService(
 		if (remaining <= 0) throw new BusinessException(FeeWaiverErrorCodes.NoRemainingBalance);
 
 		var entity = new LateFeeWaiverApplication(
-			GuidGenerator.Create(), CurrentTenant.Id, dueFee.StudentId, dueFee.Id, policy.Id,
+			GuidGenerator.Create(), CurrentTenant.Id, dueFee.StudentId.Value, dueFee.Id, policy.Id,
 			policy.AcademicYearId, remaining, remaining, remaining, reason,
 			requiresApproval: false, actorId, idempotencyKey: idempotencyKey);
 		await lateFeeWaiverRepository.InsertAsync(entity, autoSave: false);

@@ -29,6 +29,7 @@ public class AdmissionAssessmentReadService(
 		var latest = rows.LastOrDefault(item => item.Status != "cancelled");
 		var sessionIds = rows.Where(item => item.SessionId.HasValue).Select(item => item.SessionId!.Value).ToList();
 		var sessionRows = (await sessions.GetListAsync(item => sessionIds.Contains(item.Id))).ToDictionary(item => item.Id);
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentSchedulingService>().EnrichReservationsAsync(sessionRows.Values);
 		var routes = latest?.Status == "completed" && context.IsActive ? await transitions.GetListAsync(item => item.FromStageId == context.Definition.Id) : [];
 		var facts = latest?.Status == "completed" && context.IsActive ? await runtimeValues.ReadAsync(context.Application, stageId) : new Dictionary<string, string>();
 		return Build(context, rows, sessionRows, routes, facts, await GetGrantsAsync(), CurrentUser.Id, DateTime.UtcNow);
@@ -54,7 +55,8 @@ public class AdmissionAssessmentReadService(
 		var editable = context.CanPrepare && context.Policy != null;
 		var pending = editable && latest?.Status == "pending";
 		var currentSession = latest?.SessionId is Guid sessionId ? sessionRows.GetValueOrDefault(sessionId) : null;
-		var sessionStarted = currentSession == null || !currentSession.IsCancelled && currentSession.StartsAt <= now;
+		var sessionStarted = currentSession == null || !currentSession.IsCancelled && currentSession.RoomReady && (latest!.SlotStartsAt ?? currentSession.StartsAt) <= now;
+		if (currentSession != null && !currentSession.RoomReady) blockers.Add("The room reservation must be approved before conducting this assessment.");
 		if (pending && !sessionStarted) blockers.Add("Attendance and results become available when the session starts.");
 		if (latest?.Status == "pendingReview" && latest.RecordedBy == userId)
 			blockers.Add("A different authorized staff member must review your recorded result.");
@@ -98,6 +100,8 @@ public class AdmissionAssessmentReadService(
 	private static AdmissionAssessmentAttemptDto MapAttempt(AdmissionAssessmentAttempt item, AdmissionAssessmentSession? session) => new()
 	{
 		Id = item.Id, AttemptNumber = item.AttemptNumber, SessionId = item.SessionId, SessionName = session?.Name,
+		SlotStartsAt = item.SlotStartsAt.HasValue ? AdmissionAssessmentSessionService.ToUtcOffset(item.SlotStartsAt.Value) : null,
+		SlotEndsAt = item.SlotEndsAt.HasValue ? AdmissionAssessmentSessionService.ToUtcOffset(item.SlotEndsAt.Value) : null,
 		SessionStartsAt = session == null ? null : AdmissionAssessmentSessionService.ToUtcOffset(session.StartsAt),
 		SessionEndsAt = session == null ? null : AdmissionAssessmentSessionService.ToUtcOffset(session.EndsAt), SessionLocation = session?.Location,
 		Attendance = item.Attendance, Status = item.Status, Outcome = item.Outcome, Marks = item.Marks, Notes = item.Notes,

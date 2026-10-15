@@ -18,7 +18,10 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 public class UpdateFeeRefundRequestDto
 {
     /// <summary>Accepted for payload symmetry with create; the route id is authoritative.</summary>
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+
+    /// <summary>Accepted for payload symmetry; ownership is derived from the stored request.</summary>
+    public Guid? FinanceFeeAccountId { get; set; }
 
     /// <summary>Accepted for payload symmetry with create; the route id is authoritative.</summary>
     public Guid AcademicYearId { get; set; }

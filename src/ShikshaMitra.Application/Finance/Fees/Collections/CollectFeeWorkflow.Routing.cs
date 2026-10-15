@@ -37,8 +37,11 @@ public partial class CollectFeeWorkflow
      var assignment = due.StudentFeeStructureId.HasValue
        ? await studentFeeStructureRepository.GetAsync(due.StudentFeeStructureId.Value)
        : null;
-     if (assignment == null) throw new BusinessException(FinanceRoutingErrorCodes.CategoryRequired);
-     var rules = await policyResolver.ResolveEffectiveRulesForStudentAsync(input.StudentId, assignment.FeeStructureStandardId, assignment.Id);
+     if (assignment == null && !input.FinanceFeeAccountId.HasValue)
+       throw new BusinessException(FinanceRoutingErrorCodes.CategoryRequired);
+     var rules = input.FinanceFeeAccountId.HasValue
+       ? await policyResolver.ResolveEffectiveRulesForAccountAsync(input.FinanceFeeAccountId.Value)
+       : await policyResolver.ResolveEffectiveRulesForStudentAsync(input.StudentId!.Value, assignment!.FeeStructureStandardId, assignment.Id);
      var category = await routingManager.RequireCategoryAsync(input.AcademicYearId,
        rules.Policy?.LateFeeIncomeCategoryId, TransactionType.Income);
      lines.Add(new(category.Id, category.Name, Money(payment.Amount)));
@@ -70,7 +73,7 @@ public partial class CollectFeeWorkflow
        await automaticTransactions.RecordAsync(input.AcademicYearId, line.CategoryId, line.CategoryName,
          bank.Id, bank.Label, transaction.ReceiptNumber, allocation.Amount, (int)payment.PaymentMethod,
          TransactionType.Income, $"collection:{transaction.Metadata.Id:N}:{index}:{allocation.CategoryIndex}",
-         transaction.Metadata.Id, input.StudentId, confirmed, record.PaymentDate.UtcDateTime);
+         transaction.Metadata.Id, input.StudentId, confirmed, record.PaymentDate.UtcDateTime, input.FinanceFeeAccountId);
      }
    }
  }

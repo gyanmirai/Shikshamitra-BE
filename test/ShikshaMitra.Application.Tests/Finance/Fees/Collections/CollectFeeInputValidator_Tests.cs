@@ -52,6 +52,34 @@ public class CollectFeeInputValidator_Tests
     }
 
     [Fact]
+    public void Should_Reject_Missing_Student_Without_Verified_Account()
+    {
+        var input = ValidInput();
+        input.StudentId = null;
+        _validator.Validate(input).Errors.ShouldContain(e => e.PropertyName == "StudentId");
+    }
+
+    [Fact]
+    public void Should_Allow_Unlinked_Verified_Account_Without_Fabricated_Student()
+    {
+        var input = ValidInput();
+        input.StudentId = null;
+        input.FinanceFeeAccountId = Guid.NewGuid();
+        _validator.Validate(input).IsValid.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Should_Reject_Empty_Account_Identity_Even_With_Real_Student(bool hasStudent)
+    {
+        var input = ValidInput();
+        if (!hasStudent) input.StudentId = null;
+        input.FinanceFeeAccountId = Guid.Empty;
+        _validator.Validate(input).Errors.ShouldContain(e => e.PropertyName == "FinanceFeeAccountId");
+    }
+
+    [Fact]
     public void Should_Reject_Zero_Amount_In_DueFeePayments()
     {
         var input = ValidInput();

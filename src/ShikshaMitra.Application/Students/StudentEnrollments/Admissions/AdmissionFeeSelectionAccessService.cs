@@ -84,7 +84,9 @@ public class AdmissionFeeSelectionAccessService(
 		var paymentDefinitions = await definitions.GetListAsync(d => d.WorkflowDefinitionId == application.WorkflowDefinitionId &&
 			d.StageType == AdmissionWorkflowStageType.Payment);
 		return new(application, owner, workflow, paymentDefinitions.Count > 0,
-			await payments.AnyAsync(p => p.ApplicationId == application.Id && p.Amount > 0m),
+			application.HasFinanceFeePayment || await payments.AnyAsync(p => p.ApplicationId == application.Id && p.Amount > 0m) ||
+			await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Finance.Fees.FeeCollection.FinanceFeeAccount, Guid>>()
+				.AnyAsync(a => a.ApplicationId == application.Id && a.HasPaymentEvidence),
 			snapshot?.Currency ?? AdmissionFeeStructureReader.ReferenceCurrency);
 	}
 

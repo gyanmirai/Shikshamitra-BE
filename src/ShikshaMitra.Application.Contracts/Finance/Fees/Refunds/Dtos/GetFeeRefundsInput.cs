@@ -8,6 +8,7 @@ public class GetFeeRefundsInput : PagedAndSortedResultRequestDto, IFinanceClassD
 {
     public Guid? AcademicYearId { get; set; }
     public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
 
     public Guid? AcademicMediumId { get; set; }
 

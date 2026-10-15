@@ -14,7 +14,7 @@ public partial class AccountsActivityAppService
         new Dictionary<string, LambdaExpression>
         {
             ["reference"] = (Expression<Func<WorkspaceRecord, string>>)(x => x.Reference),
-            ["studentIdentity"] = (Expression<Func<WorkspaceRecord, string>>)(x => x.StudentId == null ? "" :
+            ["studentIdentity"] = (Expression<Func<WorkspaceRecord, string>>)(x => x.StudentId == null && x.FinanceFeeAccountId == null ? "" :
                 x.StudentName + (x.GrNumber == "" ? "" : " (" + x.GrNumber + ")")),
             ["classDivision"] = (Expression<Func<WorkspaceRecord, string>>)(x => x.ClassDivision),
             ["counterparty"] = (Expression<Func<WorkspaceRecord, string>>)(x => x.Counterparty),
@@ -71,7 +71,7 @@ public partial class AccountsActivityAppService
         from profile in profileGroup.DefaultIfEmpty()
         select new WorkspaceRecord
         {
-            Id = row.Id, SourceId = row.SourceId, StudentId = row.StudentId,
+            Id = row.Id, SourceId = row.SourceId, StudentId = row.StudentId, FinanceFeeAccountId = row.FinanceFeeAccountId,
             StudentName = row.StudentName, CategoryId = row.CategoryId, CategoryName = row.CategoryName,
             BankAccountId = row.BankAccountId, BankLabel = row.BankLabel, Reference = row.Reference,
             Source = row.Source, Status = row.Status, Amount = row.Amount, Date = row.Date,

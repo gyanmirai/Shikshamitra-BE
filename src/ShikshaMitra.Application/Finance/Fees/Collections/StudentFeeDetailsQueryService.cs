@@ -68,6 +68,18 @@ public partial class StudentFeeDetailsQueryService(
 		var student = await GetStudentSnapshotAsync(studentId, cancellationToken);
 		var feeStructureAssignment = await studentFeeStructureRepository.FirstOrDefaultAsync(
 			x => x.StudentId == studentId && x.AcademicYearId == academicYearId);
+		if (feeStructureAssignment == null)
+		{
+			var account = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FinanceFeeAccount, Guid>>().FirstOrDefaultAsync(a =>
+				a.StudentId == studentId && a.AcademicYearId == academicYearId && a.AssignmentSnapshotJson != null,
+				cancellationToken: cancellationToken);
+			if (account != null)
+			{
+				if (account.StudentFeeStructureId.HasValue)
+					throw new BusinessException(AdmissionFeeCollectionErrorCodes.AssignmentConflict);
+				return await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeCollectionAppService>().GetCollectFormAsync(account.ApplicationId);
+			}
+		}
 
 		var ledger = new List<FeeLedgerMonthDto>();
 		var systemLateFeeCharges = new List<ChargeDetailDto>();
@@ -95,7 +107,7 @@ public partial class StudentFeeDetailsQueryService(
 			var prorationVersions = (await financePolicyVersionRepository.GetListAsync(v =>
 				prorationVersionIds.Contains(v.Id) && v.PolicyType == "proration"))
 				.ToDictionary(v => v.Id);
-			var reconByDueFee = await GetInReconciliationByDueFeeAsync(studentId);
+			var reconByDueFee = await GetInReconciliationByDueFeeAsync(studentId, academicYearId);
 
 			var grouped = dueFees.GroupBy(d => (d.Year, d.Month))
 				.OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month);

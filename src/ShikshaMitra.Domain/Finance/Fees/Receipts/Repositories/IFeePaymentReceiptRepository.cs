@@ -41,7 +41,8 @@ public interface IFeePaymentReceiptRepository : IRepository<FeePaymentReceipt, G
         int? month,
         int? year,
         IQueryable<Guid>? scopedStudentIdsQuery = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        IQueryable<Guid>? scopedAccountIdsQuery = null);
     /// <summary>
     /// Returns the total count and a paged, sorted slice of receipts matching
     /// the supplied filter. Results are ordered by <c>CreationTime</c> descending
@@ -75,6 +76,7 @@ public sealed class FeeReceiptListFilter
 
     /// <summary>When set, restricts results to students accessible by the current user scope.</summary>
     public IQueryable<Guid>? ScopedStudentIdsQuery { get; init; }
+    public IQueryable<Guid>? ScopedAccountIdsQuery { get; init; }
 
     /// <summary>Month (1–12) derived from <see cref="FeePaymentReceipt.ReceiptDate"/>. Null = all months.</summary>
     public int? Month { get; init; }
@@ -114,6 +116,7 @@ public sealed class ReconciliationListFilter
 
     /// <summary>When set, restricts results to students accessible by the current user scope.</summary>
     public IQueryable<Guid>? ScopedStudentIdsQuery { get; init; }
+    public IQueryable<Guid>? ScopedAccountIdsQuery { get; init; }
 }
 
 /// <summary>
@@ -137,7 +140,8 @@ public sealed class ReconciliationRow
     public string? PaymentDetailsJson { get; init; }
 
     // Student
-    public Guid StudentId { get; init; }
+    public Guid? StudentId { get; init; }
+    public Guid? FinanceFeeAccountId { get; init; }
     public string StudentName { get; init; } = string.Empty;
     public int? GrNumber { get; init; }
     public int? RollNumber { get; init; }

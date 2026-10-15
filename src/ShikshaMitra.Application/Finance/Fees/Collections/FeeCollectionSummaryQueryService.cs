@@ -22,6 +22,7 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 [RemoteService(false)]
 public partial class FeeCollectionSummaryQueryService(
 	IReadOnlyRepository<Student, Guid> studentRepository,
+	IReadOnlyRepository<FinanceFeeAccount, Guid> accountRepository,
 	IReadOnlyRepository<Standard, Guid> standardRepository,
 	IReadOnlyRepository<Division, Guid> divisionRepository,
 	IReadOnlyRepository<FeeHead, Guid> feeHeadRepository,
@@ -52,7 +53,7 @@ public partial class FeeCollectionSummaryQueryService(
 		if (totalCount == 0)
 			return new PagedResultDto<FeeCollectionSummaryItemDto>(0, []);
 
-        var ordered = tableQuery.SortBy is null ? filtered : tableQuery.Order(filtered, TableFields, "name", false, r => r.StudentId);
+        var ordered = tableQuery.SortBy is null ? filtered : tableQuery.Order(filtered, TableFields, "name", false, r => r.FinanceFeeAccountId ?? r.StudentId ?? Guid.Empty);
 		var page = ordered
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount)

@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-13
+updated_on: 2026-10-14
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -301,7 +301,13 @@ An **Admission decision** stage retains enum value Approval (7). Approve, Waitli
 4. Retakes respect Maximum attempts and retain earlier evidence. Failed, absent and retake outcomes require valid explicit routes when leaving the stage.
 5. Advance explicitly after the evidence and route gates pass. Recording a result does not itself advance the journey.
 
-The workbench exposes To book, Attendance, Result, Ready, Attention and Completed queues; no separate result-review queue is part of the supported flow. Completed-stage attempts remain readable within tenant and academic scope.
+The user workbench exposes All, Pending, Complete and Ongoing progress filters. Progress follows appointment timing and saved result evidence, independently of internal action queues and stage completion; see the [assessment API contract](./api.md#assessment-endpoints). Complete does not automatically advance the workflow. Completed-stage attempts remain readable within tenant and academic scope.
+
+The combined workbench no longer requires selecting an Offering/stage before reading applicants. Create one shared exam, individual interview or group interview with explicit Offering/stage links and an Institute room. Preview eligibility and shared seats/slots, adjust the selected candidates and confirm once; new arrivals remain unbooked. Individual appointments retain per-applicant times and workflow rules. Existing sessions support the same preview/confirmation for additional bookings. Room approvals remain owned by Room Management and held bookings cannot be conducted before approval. Rescheduling replaces the reservation under its normal approval rules; bulk cancellation explicitly releases unstarted attempts and the resource atomically. Online assessment remains backlog scope. See [the shared-session API contract](./api.md#shared-school-sessions-and-confirmed-booking).
+
+Metadata-only name/capacity edits preserve an existing room reservation and its approval. Changing room, time or interviewer creates a replacement under normal approval rules. A legacy session can adopt an Institute room while retaining its original Offering/stage, booked attempts and history. Individual interview capacity counts sequential appointments; it is not limited by the room's simultaneous seat count.
+
+Resource coordination has a precise boundary: Assessment writes check the current published timetable and share a transaction lock with generic Room Reservation writes. Later Timetable save/publication currently checks competing timetables only and can introduce a reverse conflict with an existing Assessment reservation. A common resource guard for Timetable writers is a separate integration decision; this implementation does not certify universal room/interviewer conflict prevention across those later writes.
 
 ## Verify applicant documents
 
@@ -331,13 +337,13 @@ Eligibility, Review, and Offer are retired Admission Stage types. New drafts can
 
 ## Run a managed Payment stage
 
-1. Add Payment as Finance fee-structure confirmation; no independent admission collection policy is authored.
-2. Read only published structures matching the Offering tenant, academic year, Board, Medium and Class. Missing candidates block fee confirmation with a clear error.
+1. Add Payment as an optional collection checkpoint; no independent admission collection policy is authored.
+2. Read only published structures matching the Offering tenant, academic year, Board, Medium and Class. Missing candidates prevent collection but do not prevent audited deferral.
 3. Save the structure and optional heads using application concurrency. Mandatory heads and an immutable structure-version snapshot are included by the server.
-4. Advance with the valid saved snapshot, or defer selection to Onboarding when the effective Offering-linked readiness rule supports that handoff. Onboarding still requires structure confirmation before activation. The runtime reports feeStructureRequired or feeStructureConfirmed; it never equates confirmation with Paid.
-5. Finalization hands the saved intent to Onboarding. Finance alone assigns fees, creates dues and records/allocates actual payments.
+4. Collect through the Finance adapter with the valid saved snapshot, or choose Collect later in Onboarding with a mandatory reason. No structure or payment is needed for deferral. Both commands retain configured transition routing; deferral is a completed checkpoint, not a Paid/Waived outcome or an administrative skip.
+5. Approve and finalize through the normal Admission decision flow. Finalization hands the saved intent and deferral reason to Onboarding. Deferral itself creates no account, dues, assignment or receipt. Onboarding still requires structure confirmation before activation; it does not require payment. Finance alone owns actual obligations and collections.
 
-Admission record, verification, waiver and reversal commands are unavailable in this flow. No database migration or Finance ledger mutation is required by confirmation.
+Legacy Admission record, verification, waiver and reversal commands are unavailable in this flow. Repeated workflow keys replay the existing transition and do not duplicate deferral audit or Finance rows. Confirmation/deferral alone perform no Finance ledger mutation; actual collection uses the Finance integration and its persistence requirements.
 
 ## Run a managed Offer stage
 
@@ -355,5 +361,9 @@ Room-derived class capacity is configured by assigning Institute Setup rooms to 
 1. Authenticate with Dashboard.View; resolve an active user and role membership from the tenant database.
 2. For Student/Parent-only identities, resolve verified personal associations and return only those names/relationships.
 3. For staff, resolve current academic scope and exact destination grants; return section eligibility and permitted links.
-4. On each section GET, repeat the authority/context check, validate the selected tenant year and scope, and run only permitted aggregate reads. There is no write side effect.
-5. Follow the owning route to perform work under that module's existing action authorization. Client refresh repeats live reads; the Reporting snapshot refresh command remains a separate workflow.
+4. On each section GET, repeat authority/context checks and validate the selected tenant year and scope. Admin Board / Medium / Class / Division selections intersect that scope; other role projections keep their existing behavior.
+5. Read active permanent Directory membership, active applications and unfinished Onboarding as separate populations. Attention is an overlapping subset, not an extra population to add to those totals.
+6. Project at most four setup attention cases, using the same blocked-first primary blocker as the owning Onboarding mapper. Required incomplete task counts use shared read predicates; the dashboard does not call readiness adoption or case mapping that can persist snapshots.
+7. Resolve permitted Records approvals through the owning maker-checker/stage/masking predicate and Admission decisions through the active supported decision stage. Inquiry reminders and pending leave retain their owning scope and date rules.
+8. Evaluate today's registers from one batched Attendance-owned calendar, enrollment, observation and approved-leave snapshot. It shares candidature, expected-membership, credits and roster revision evaluators with individual registers. Missing, draft and submitted-needing-review rows feed both the summary and the paginated pending-register worklist; outside-year and provisional calendar states remain explicit.
+9. Follow the filtered owning workspace to review evidence or perform work under its existing action authorization. Dashboard counts do not activate, approve, send credentials or record attendance. Client refresh repeats live reads; Reporting snapshot refresh remains a separate command workflow.

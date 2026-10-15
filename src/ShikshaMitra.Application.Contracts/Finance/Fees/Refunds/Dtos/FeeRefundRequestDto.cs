@@ -8,9 +8,13 @@ public class FeeRefundRequestDto
 {
     public Guid Id { get; set; }
 
-    public Guid StudentId { get; set; }
+    public Guid? StudentId { get; set; }
+    public Guid? FinanceFeeAccountId { get; set; }
 
     public Guid AcademicYearId { get; set; }
+    public string? AcademicYearName { get; set; }
+    public DateTime? AcademicYearStartDate { get; set; }
+    public DateTime? AcademicYearEndDate { get; set; }
 	public Guid? StandardId { get; set; }
 	public Guid? DivisionId { get; set; }
 

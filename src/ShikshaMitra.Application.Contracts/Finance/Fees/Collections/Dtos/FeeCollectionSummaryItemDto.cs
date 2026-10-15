@@ -9,7 +9,10 @@ namespace ShikshaMitra.Finance.Fees.Collections.Dtos;
 public class FeeCollectionSummaryItemDto
 {
 	/// <summary>Unique identifier of the student.</summary>
-	public Guid StudentId { get; set; }
+	public Guid? StudentId { get; set; }
+
+	/// <summary>Canonical Finance payer account for an admission collection, when applicable.</summary>
+	public Guid? FinanceFeeAccountId { get; set; }
 
 	/// <summary>Full name of the student (First [Middle] Last).</summary>
 	public string StudentName { get; set; } = string.Empty;

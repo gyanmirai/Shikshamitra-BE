@@ -78,6 +78,7 @@ public class AdmissionFeeSelectionAppService(
 	{
 		var context = await access.GetContextAsync(application);
 		var snapshot = application.GetFeeSelection();
+		var deferral = application.GetFeeCollectionDeferral();
 		var caseEditable = false;
 		if (application.OnboardingCaseId.HasValue && await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit))
 		{
@@ -91,7 +92,12 @@ public class AdmissionFeeSelectionAppService(
 			OwnerStageId = context.Owner?.Id, OwnerStageName = context.Owner?.Name, OwnerStageType = context.Owner?.StageType,
 			CurrentStageId = application.CurrentStageInstanceId, Currency = context.Currency,
 			Available = context.Owner != null || snapshot != null, IsRequired = context.IsRequired,
-			IsLocked = context.HasPaymentEvidence, CanEdit = context.IsEditable &&
+			IsLocked = context.HasPaymentEvidence, HasRecordedFeePayment = context.HasPaymentEvidence,
+			FeeCollectionDeferral = deferral == null ? null : new AdmissionFeeCollectionDeferralDto
+			{
+				StageId = deferral.StageId, Reason = deferral.Reason, DeferredBy = deferral.DeferredBy, DeferredAt = deferral.DeferredAt
+			},
+			CanEdit = context.IsEditable &&
 				await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit),
 			OnboardingConfirmed = snapshot?.OnboardingConfirmedAt != null, OnboardingBlocker = blocker,
 			CanConfirmOnboarding = snapshot != null && snapshot.OnboardingConfirmedAt == null && caseEditable &&

@@ -19,10 +19,11 @@ public interface IFeeRefundAppService : IApplicationService
     Task<FeeRefundRequestDto> GetAsync(Guid id);
 
     /// <summary>
-    /// Returns the refund eligibility summary for a student + academic year.
-    /// Used by the frontend to populate the fee-head refund table with real data.
+    /// Returns pinned refund eligibility for a Student or admission Finance account.
+    /// An original receipt limits the result to its settled source allocations.
     /// </summary>
-    Task<RefundEligibilityDto> GetEligibilityAsync(Guid studentId, Guid academicYearId);
+    Task<RefundEligibilityDto> GetEligibilityAsync(Guid? studentId, Guid academicYearId,
+        Guid? financeFeeAccountId = null, Guid? originalReceiptId = null);
 
     Task<FeeRefundPreviewDto> PreviewAsync(CreateFeeRefundRequestDto input);
 

@@ -71,13 +71,14 @@ public class ReconciliationManager(
 			scope: provisional.ReceiptScope, kind: finalKind,
 			totalPaidAmount: provisional.TotalPaidAmount,
 			receiptNumber: finalReceiptNumber, remarks: remarks,
-			receiptBookId: provisional.ReceiptBookId);
+			receiptBookId: provisional.ReceiptBookId, financeFeeAccountId: provisional.FinanceFeeAccountId);
 
 		finalReceipt.SetLinkedProvisionalReceiptId(provisional.Id);
 		await receiptRepository.InsertAsync(finalReceipt, autoSave: false);
 
-		var student = await studentRepository.GetAsync(provisional.StudentId, cancellationToken: cancellationToken)
-			?? throw new BusinessException("Student not found").WithData("StudentId", provisional.StudentId);
+		var student = provisional.StudentId.HasValue
+			? await studentRepository.GetAsync(provisional.StudentId.Value, cancellationToken: cancellationToken)
+			: null;
 		AcademicYear? academicYear = provisional.AcademicYearId != Guid.Empty
 			? await academicYearRepository.FindAsync(provisional.AcademicYearId, cancellationToken: cancellationToken)
 			: null;
@@ -220,7 +221,7 @@ public class ReconciliationManager(
 
 	private async Task GenerateAndStoreReceiptPdfsAsync(
 		IReadOnlyList<FeePaymentReceipt> receipts,
-		Student student,
+		Student? student,
 		AcademicYear? academicYear,
 		CancellationToken cancellationToken = default)
 	{

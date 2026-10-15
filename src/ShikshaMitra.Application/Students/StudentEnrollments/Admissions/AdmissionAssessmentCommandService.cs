@@ -21,6 +21,7 @@ public class AdmissionAssessmentCommandService(
 {
 	public async Task<AdmissionAssessmentDto> BookAsync(Guid applicationId, Guid stageId, AdmissionAssessmentBookingInput input)
 	{
+		await LazyServiceProvider.LazyGetRequiredService<IAdmissionAssessmentResourceLock>().AcquireAsync(CurrentTenant.Id, [applicationId, input.SessionId.GetValueOrDefault()]);
 		var context = await access.GetContextAsync(applicationId, stageId, requireActive: false, requirePreparation: true);
 		AdmissionAssessmentAccessService.EnsureConcurrency(context.Application, input.ConcurrencyStamp);
 		var rows = await attempts.GetListAsync(item => item.StageInstanceId == stageId);
@@ -31,13 +32,30 @@ public class AdmissionAssessmentCommandService(
 			throw Invalid(context.Policy.SchedulingEnabled ? "Choose an assessment session." : "This assessment records results without a session.");
 		if (input.SessionId.HasValue)
 		{
-			var session = await sessions.FindAsync(input.SessionId.Value) ?? throw new EntityNotFoundException(typeof(AdmissionAssessmentSession), input.SessionId.Value);
-			if (session.AdmissionOfferingId != context.Application.AdmissionOfferingId || session.WorkflowStageDefinitionId != context.Definition.Id)
+			var session = await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentSessionService>().GetAsync(input.SessionId.Value, false);
+			if (!session.Supports(context.Application.AdmissionOfferingId, context.Definition.Id))
 				throw Invalid("This session belongs to a different offering or assessment stage.");
-			session.Reserve(DateTime.UtcNow);
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentSchedulingService>().EnsureSessionReservationAsync(session);
+			DateTime? slotStart = null;
+			if (session.SessionType == "individualInterview")
+			{
+				var reserved = await attempts.GetListAsync(item => item.SessionId == session.Id && item.Status != "cancelled" && item.Outcome != "waived");
+				var slots = session.GetInterviewSlots().Where(slot => slot.StartsAt > DateTime.UtcNow && reserved.All(item => item.SlotStartsAt != slot.StartsAt)).ToList();
+				slotStart = input.SlotStartsAt?.UtcDateTime;
+				if (!slotStart.HasValue || slots.All(slot => slot.StartsAt != slotStart)) throw Invalid("Choose an available interview slot.");
+			}
+			else if (input.SlotStartsAt.HasValue) throw Invalid("Only individual interviews accept a time slot.");
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentSchedulingService>().EnsureApplicantAvailableAsync(context, session, slotStart);
+			session.Reserve(DateTime.UtcNow, slotStart);
 			await sessions.UpdateAsync(session, false);
+			input.SlotStartsAt = slotStart.HasValue ? AdmissionAssessmentSessionService.ToUtcOffset(slotStart.Value) : null;
 		}
 		var attempt = NewAttempt(context, input.SessionId, rows.Count == 0 ? 1 : rows.Max(item => item.AttemptNumber) + 1);
+		if (input.SlotStartsAt.HasValue)
+		{
+			var session = await sessions.GetAsync(input.SessionId!.Value);
+			attempt.AssignInterviewSlot(input.SlotStartsAt.Value.UtcDateTime, input.SlotStartsAt.Value.UtcDateTime.AddMinutes(session.SlotDurationMinutes!.Value));
+		}
 		await attempts.InsertAsync(attempt, false);
 		return await SaveAsync(context, attempt, "AssessmentAttemptCreated");
 	}
@@ -134,7 +152,8 @@ public class AdmissionAssessmentCommandService(
 	{
 		if (!attempt.SessionId.HasValue) return;
 		var session = await sessions.GetAsync(attempt.SessionId.Value);
-		if (session.IsCancelled || session.StartsAt > DateTime.UtcNow) throw Invalid("The assessment session has not started.");
+		if (session.IsCancelled || (attempt.SlotStartsAt ?? session.StartsAt) > DateTime.UtcNow || !await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentSchedulingService>().IsReservationApprovedAsync(session))
+			throw Invalid("The assessment appointment has not started or its room reservation is not approved.");
 	}
 	private async Task ReleaseSessionAsync(AdmissionAssessmentAttempt attempt)
 	{

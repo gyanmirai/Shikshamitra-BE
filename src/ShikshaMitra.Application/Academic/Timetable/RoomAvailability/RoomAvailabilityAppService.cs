@@ -11,6 +11,8 @@ using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Users;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
@@ -245,8 +247,11 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         return suggestions;
     }
 
+    [UnitOfWork(true)]
     public async Task<RoomReservationDto> CreateReservationAsync(CreateRoomReservationDto input)
     {
+        await LazyServiceProvider.LazyGetRequiredService<IAdmissionAssessmentResourceLock>().AcquireAsync(CurrentTenant.Id,
+            new[] { input.RoomId, input.TeacherId.GetValueOrDefault() });
         var conflicts = await _conflictService.CheckConflictsAsync(
             input.RoomId, input.Date, input.StartTime, input.EndTime, null,
             input.TeacherId, input.StandardId, input.DivisionId
@@ -468,10 +473,14 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         return dtos;
     }
 
+    [UnitOfWork(true)]
     public async Task<RoomReservationDto> UpdateReservationAsync(Guid id, CreateRoomReservationDto input)
     {
+        await LazyServiceProvider.LazyGetRequiredService<IAdmissionAssessmentResourceLock>().AcquireAsync(CurrentTenant.Id,
+            new[] { input.RoomId, input.TeacherId.GetValueOrDefault() });
         var reservation = await _reservationRepository.GetAsync(id);
 		await EnsureCanAccessReservationAsync(reservation, "room-reservation-update");
+		await EnsureAssessmentOwnerAsync(id);
 
         var conflicts = await _conflictService.CheckConflictsAsync(
             input.RoomId, input.Date, input.StartTime, input.EndTime, id,
@@ -523,7 +532,45 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         return ObjectMapper.Map<RoomReservation, RoomReservationDto>(reservation);
     }
 
+    [UnitOfWork(true)]
     public async Task CancelReservationAsync(Guid id, string reason)
+    {
+        await LazyServiceProvider.LazyGetRequiredService<IAdmissionAssessmentResourceLock>().AcquireAsync(CurrentTenant.Id, new[] { id });
+        await EnsureAssessmentOwnerAsync(id);
+        await CancelReservationCoreAsync(id, reason);
+    }
+
+    internal async Task CancelAssessmentReservationAsync(Guid id, Guid assessmentSessionId, string reason)
+    {
+        var session = await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentSessionService>().GetAsync(assessmentSessionId);
+        if (session.RoomReservationId != id) throw new Volo.Abp.BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "The reservation does not belong to this assessment session.");
+        await LazyServiceProvider.LazyGetRequiredService<IAdmissionAssessmentResourceLock>().AcquireAsync(CurrentTenant.Id, new[] { id, assessmentSessionId });
+        await CancelReservationCoreAsync(id, reason);
+    }
+
+    internal async Task RenameAssessmentReservationAsync(Guid id, Guid assessmentSessionId, string name)
+    {
+        var session = await LazyServiceProvider.LazyGetRequiredService<AdmissionAssessmentSessionService>().GetAsync(assessmentSessionId);
+        if (session.RoomReservationId != id) throw new Volo.Abp.BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "The reservation does not belong to this assessment session.");
+        var reservation = await _reservationRepository.GetAsync(id);
+        await EnsureCanAccessReservationAsync(reservation, "assessment-room-metadata-update");
+        var previous = JsonSerializer.Serialize(reservation);
+        reservation.Update(reservation.RoomId, reservation.Date, reservation.StartTime, reservation.EndTime, name,
+            reservation.ReservationType, reservation.TeacherId, reservation.StandardId, reservation.DivisionId, reservation.SubjectId, reservation.ReservedFor, reservation.Remarks);
+        await _reservationRepository.UpdateAsync(reservation);
+        await _auditLogRepository.InsertAsync(new RoomAuditLog(GuidGenerator.Create(), CurrentTenant.Id, reservation.RoomId,
+            id, "Assessment metadata updated", CurrentUser.Id ?? Guid.Empty, CurrentUser.UserName ?? "System",
+            previous, JsonSerializer.Serialize(reservation), "Assessment name changed; room approval remains valid."));
+    }
+
+    private async Task EnsureAssessmentOwnerAsync(Guid reservationId)
+    {
+        if (await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionAssessmentSession, Guid>>()
+            .AnyAsync(session => session.RoomReservationId == reservationId && !session.IsCancelled))
+            throw new Volo.Abp.BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Manage this room reservation from Admissions Assessments so applicant bookings stay consistent.");
+    }
+
+    private async Task CancelReservationCoreAsync(Guid id, string reason)
     {
         var reservation = await _reservationRepository.GetAsync(id);
 		await EnsureCanAccessReservationAsync(reservation, "room-reservation-cancel");
@@ -665,8 +712,10 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
         return visibleUserIds;
     }
 
+    [UnitOfWork(true)]
     public async Task ApproveReservationAsync(Guid id)
     {
+        await LazyServiceProvider.LazyGetRequiredService<IAdmissionAssessmentResourceLock>().AcquireAsync(CurrentTenant.Id, new[] { id });
         var reservation = await _reservationRepository.GetAsync(id);
         await EnsureUserIsAuthorizedApproverAsync(reservation);
 		await EnsureCanAccessReservationAsync(reservation, "room-reservation-approve");

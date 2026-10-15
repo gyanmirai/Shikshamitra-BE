@@ -31,6 +31,7 @@ public partial class AccountsActivityAppService(
     IRepository<Transaction, Guid> transactionRepository,
     IRepository<TransactionCategory, Guid> categoryRepository,
     IReadOnlyRepository<Student, Guid> studentRepository,
+    IReadOnlyRepository<FinanceFeeAccount, Guid> accountRepository,
     FinanceScopeAccessService scopeAccessService,
     IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid> academicYears,
     IRepository<FeeCollectionDueFeeAllocation, Guid> allocations,
@@ -78,11 +79,14 @@ public partial class AccountsActivityAppService(
         if (source == "expense" && !canViewExpense)
             await AuthorizationService.CheckAsync(
                 ShikshaMitraSubmodulePermissions.Finance.Accounts_ExpenseTracking.View);
+        var scopedStudentIds = await scopeAccessService.GetScopedStudentIdsQueryAsync();
+        var scopedAccountIds = await scopeAccessService.GetScopedFeeAccountIdsQueryAsync();
         if (!await scopeAccessService.IsAcademicContextAccessibleAsync(
-                input.AcademicYearId, null, null, null, null))
+                input.AcademicYearId, null, null, null, null) &&
+            !await AsyncExecuter.AnyAsync((await accountRepository.GetQueryableAsync())
+                .Where(a => a.AcademicYearId == input.AcademicYearId && scopedAccountIds.Contains(a.Id))))
             return new AccountsActivityPageDto
                 { Page = page, PageSize = pageSize, TotalCount = 0, Items = [] };
-        var scopedStudentIds = await scopeAccessService.GetScopedStudentIdsQueryAsync();
         var automaticEntries = (await transactionRepository.GetQueryableAsync()).Where(x=>x.SourceKey != null);
         var rows = new List<AccountsActivityRowDto>();
         var total = 0;
@@ -94,7 +98,8 @@ public partial class AccountsActivityAppService(
             var query = from receipt in receipts
                         join collection in collections on receipt.FeeCollectionTransactionId equals collection.Id
                         where !automaticEntries.Any(x=>x.SourceId == collection.Id) && receipt.AcademicYearId == input.AcademicYearId
-                            && scopedStudentIds.Contains(receipt.StudentId)
+                            && ((!receipt.FinanceFeeAccountId.HasValue && receipt.StudentId.HasValue && scopedStudentIds.Contains(receipt.StudentId.Value)) ||
+                                (receipt.FinanceFeeAccountId.HasValue && scopedAccountIds.Contains(receipt.FinanceFeeAccountId.Value)))
                             && (collection.Status == FeeCollectionStatus.Paid ||
                                 collection.Status == FeeCollectionStatus.Partial)
                             && (receipt.ReceiptKind == FeeReceiptKind.FinalFee ||
@@ -108,7 +113,7 @@ public partial class AccountsActivityAppService(
                 .OrderByDescending(x => x.receipt.CreationTime).ThenByDescending(x => x.receipt.Id)
                 .Take(window).Select(x => new
                 {
-                    x.receipt.Id, x.receipt.StudentId, x.receipt.ReceiptNumber,
+                    x.receipt.Id, x.receipt.StudentId, x.receipt.FinanceFeeAccountId, x.receipt.ReceiptNumber,
                     x.receipt.TotalPaidAmount, x.receipt.CreationTime,
                     x.receipt.FeeCollectionTransactionId, x.collection.Status
                 }));
@@ -119,6 +124,7 @@ public partial class AccountsActivityAppService(
                 Id = x.Id,
                 SourceId = x.FeeCollectionTransactionId,
                 StudentId = x.StudentId,
+                FinanceFeeAccountId = x.FinanceFeeAccountId,
                 Source = "Collection",
                 Reference = x.ReceiptNumber,
                 SourceStatus = "Accepted",
@@ -135,7 +141,8 @@ public partial class AccountsActivityAppService(
             var query = from entry in entries
                         join refund in refunds on entry.RefundRequestId equals refund.Id
                         where !automaticEntries.Any(x=>x.SourceId == refund.Id) && refund.AcademicYearId == input.AcademicYearId
-                            && scopedStudentIds.Contains(refund.StudentId)
+                            && ((!refund.FinanceFeeAccountId.HasValue && refund.StudentId.HasValue && scopedStudentIds.Contains(refund.StudentId.Value)) ||
+                                (refund.FinanceFeeAccountId.HasValue && scopedAccountIds.Contains(refund.FinanceFeeAccountId.Value)))
                         select new { entry, refund };
             if (!string.IsNullOrEmpty(search))
                 query = query.Where(x => x.refund.VoucherNumber.Contains(search) ||
@@ -148,7 +155,7 @@ public partial class AccountsActivityAppService(
                 {
                     x.entry.Id, x.entry.RefundRequestId, x.entry.Amount,
                     x.entry.IsCorrection, x.entry.PostedAt,
-                    x.refund.StudentId, x.refund.VoucherNumber
+                    x.refund.StudentId, x.refund.FinanceFeeAccountId, x.refund.VoucherNumber
                 }));
             var canOpen = await AuthorizationService.IsGrantedAsync(
                 ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.View);
@@ -157,6 +164,7 @@ public partial class AccountsActivityAppService(
                 Id = x.Id,
                 SourceId = x.RefundRequestId,
                 StudentId = x.StudentId,
+                FinanceFeeAccountId = x.FinanceFeeAccountId,
                 Source = "Refund",
                 Reference = x.VoucherNumber,
                 SourceStatus = x.IsCorrection ? "Returned" : "Paid",
@@ -174,7 +182,8 @@ public partial class AccountsActivityAppService(
             var query = from transaction in transactions
                         join category in categories on transaction.CategoryId equals category.Id
                         where transaction.AcademicYearId == input.AcademicYearId && transaction.IsConfirmed
-                            && (transaction.StudentId == null || scopedStudentIds.Contains(transaction.StudentId.Value))
+                            && ((transaction.FinanceFeeAccountId.HasValue && scopedAccountIds.Contains(transaction.FinanceFeeAccountId.Value)) ||
+                                (!transaction.FinanceFeeAccountId.HasValue && (transaction.StudentId == null || scopedStudentIds.Contains(transaction.StudentId.Value))))
                             && (((transaction.TransactionType == TransactionType.Income && canViewIncome &&
                                     (source == null || source == "income")) ||
                                 (transaction.TransactionType == TransactionType.Expense && canViewExpense &&
@@ -195,13 +204,13 @@ public partial class AccountsActivityAppService(
                 .Take(window).Select(x => new
                 {
                     x.transaction.Id, x.transaction.Name, x.transaction.Amount,
-                    x.transaction.PaymentDate, x.transaction.TransactionType, x.transaction.SourceKey, x.transaction.SourceId, x.transaction.StudentId,
+                    x.transaction.PaymentDate, x.transaction.TransactionType, x.transaction.SourceKey, x.transaction.SourceId, x.transaction.StudentId, x.transaction.FinanceFeeAccountId,
                     x.transaction.BankAccountId, x.transaction.BankLabelSnapshot, x.transaction.CategoryNameSnapshot,
                     CategoryName = x.category.Name
                 }));
             rows.AddRange(selected.Select(x => new AccountsActivityRowDto
             {
-                Id = x.Id, SourceId = x.SourceId ?? x.Id, StudentId = x.StudentId,
+                Id = x.Id, SourceId = x.SourceId ?? x.Id, StudentId = x.StudentId, FinanceFeeAccountId = x.FinanceFeeAccountId,
                 BankAccountId = x.BankAccountId, BankLabel = x.BankLabelSnapshot ?? "",
                 Source = x.SourceKey == null ? (x.TransactionType == TransactionType.Income ? "Income" : "Expense") : (x.TransactionType == TransactionType.Income ? "Collection" : "Refund"),
                 Reference = x.Name, CategoryName = x.CategoryNameSnapshot ?? x.CategoryName,
@@ -216,7 +225,7 @@ public partial class AccountsActivityAppService(
 
         var pageRows = rows.OrderByDescending(x => x.OccurredAt).ThenByDescending(x => x.Id)
             .Skip((page - 1) * pageSize).Take(pageSize).ToList();
-        var studentIds = pageRows.Where(x => x.StudentId.HasValue)
+        var studentIds = pageRows.Where(x => x.StudentId.HasValue && !x.FinanceFeeAccountId.HasValue)
             .Select(x => x.StudentId!.Value).Distinct().ToList();
         if (studentIds.Count > 0)
         {
@@ -227,8 +236,19 @@ public partial class AccountsActivityAppService(
                 new[] { x.FirstName, x.MiddleName, x.LastName }
                     .Where(value => !string.IsNullOrWhiteSpace(value))));
             foreach (var row in pageRows)
-                if (row.StudentId.HasValue)
+                if (row.StudentId.HasValue && !row.FinanceFeeAccountId.HasValue)
                     row.StudentName = byId.GetValueOrDefault(row.StudentId.Value) ?? string.Empty;
+        }
+
+        var accountIds = pageRows.Where(x => x.FinanceFeeAccountId.HasValue)
+            .Select(x => x.FinanceFeeAccountId!.Value).Distinct().ToList();
+        if (accountIds.Count > 0)
+        {
+            var accounts = await AsyncExecuter.ToListAsync((await accountRepository.GetQueryableAsync())
+                .Where(a => accountIds.Contains(a.Id)).Select(a => new { a.Id, a.ApplicantName }));
+            var accountNames = accounts.ToDictionary(a => a.Id, a => a.ApplicantName);
+            foreach (var row in pageRows.Where(r => r.FinanceFeeAccountId.HasValue))
+                row.StudentName = accountNames.GetValueOrDefault(row.FinanceFeeAccountId!.Value) ?? string.Empty;
         }
 
         return new AccountsActivityPageDto

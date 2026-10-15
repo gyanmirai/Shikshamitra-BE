@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
@@ -18,7 +19,7 @@ public partial class StudentOnboardingAppService
 		var item = await GetCaseAsync(id);
 		var result = await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeSelectionAppService>().GetAsync(item.ApplicationId);
 		result.Available = true;
-		result.CanEdit = !item.StudentEnrollmentId.HasValue && item.Status != StudentOnboardingStatus.Cancelled &&
+		result.CanEdit = !result.IsLocked && !item.StudentEnrollmentId.HasValue && item.Status != StudentOnboardingStatus.Cancelled &&
 			await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
 		result.OnboardingBlocker = result.OnboardingConfirmed ? null : "Select and confirm a published fee structure.";
 		return result;
@@ -41,10 +42,22 @@ public partial class StudentOnboardingAppService
 			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
 		var actor = CurrentUser.Id ?? throw new AbpAuthorizationException();
 		var application = await applicationRepository.GetAsync(item.ApplicationId);
-		var snapshot = await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeStructureReader>().CreateSnapshotAsync(application,
-			application.GetFeeSelection()?.OwnerStageId ?? item.Id, AdmissionFeeStructureReader.ReferenceCurrency,
-			new SaveAdmissionFeeSelectionDto { StructureId = input.StructureId, OptionalHeadIds = input.OptionalHeadIds }, actor);
-		application.SaveOnboardingFeeSelection(snapshot);
+		AdmissionFeeSelectionSnapshot snapshot;
+		if (application.HasFinanceFeePayment)
+		{
+			snapshot = application.GetFeeSelection() ?? throw new BusinessException(AdmissionFeeSelectionErrorCodes.Required);
+			if (input.StructureId != snapshot.StructureId || input.OptionalHeadIds == null ||
+				!input.OptionalHeadIds.Order().SequenceEqual(snapshot.Heads.Where(h => h.IsOptional).Select(h => h.FeeHeadId).Order()))
+				throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked, "Payment evidence already exists. Ask Finance to review a correction or refund.");
+			application.ConfirmOnboardingFeeSelection(actor, new DateTimeOffset(Clock.Now.ToUniversalTime()));
+		}
+		else
+		{
+			snapshot = await LazyServiceProvider.LazyGetRequiredService<AdmissionFeeStructureReader>().CreateSnapshotAsync(application,
+				application.GetFeeSelection()?.OwnerStageId ?? item.Id, AdmissionFeeStructureReader.ReferenceCurrency,
+				new SaveAdmissionFeeSelectionDto { StructureId = input.StructureId, OptionalHeadIds = input.OptionalHeadIds }, actor);
+			application.SaveOnboardingFeeSelection(snapshot);
+		}
 		await applicationRepository.UpdateAsync(application, false);
 		item.RecordProgress(Clock.Now); await caseRepository.UpdateAsync(item, false);
 		await InvalidateApprovalAsync(id, "Fee structure confirmation changed; review readiness again.");

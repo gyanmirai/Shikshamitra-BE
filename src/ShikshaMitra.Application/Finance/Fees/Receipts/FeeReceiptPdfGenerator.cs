@@ -5,10 +5,12 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using ShikshaMitra.Finance.Fees.Receipts;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.Common.PDF;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Application.Finance.Fees.Receipts;
 
@@ -18,7 +20,14 @@ namespace ShikshaMitra.Application.Finance.Fees.Receipts;
 /// </summary>
 public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDependency
 {
-    public Task<byte[]> GenerateAsync(
+    private readonly IReadOnlyRepository<FinanceFeeAccount, Guid>? accounts;
+
+    public FeeReceiptPdfGenerator(IReadOnlyRepository<FinanceFeeAccount, Guid>? accounts = null)
+    {
+        this.accounts = accounts;
+    }
+
+    public async Task<byte[]> GenerateAsync(
         FeePaymentReceipt receipt,
         Student? student,
         AcademicYear? academicYear,
@@ -26,16 +35,19 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
     {
         QuestPDF.Settings.License = LicenseType.Community;
         PortablePdfFonts.EnsureRegistered();
+        var applicantName = receipt.FinanceFeeAccountId.HasValue && accounts != null
+            ? (await accounts.GetAsync(receipt.FinanceFeeAccountId.Value, cancellationToken: cancellationToken)).ApplicantName
+            : null;
 
         var bytes = receipt.ReceiptKind switch
         {
-            FeeReceiptKind.FinalFee          => GenerateFinalFeeReceipt(receipt, student, academicYear),
-            FeeReceiptKind.ProvisionalFee    => GenerateProvisionalFeeReceipt(receipt, student, academicYear),
-            FeeReceiptKind.ProvisionalCharge => GenerateProvisionalChargeReceipt(receipt, student, academicYear),
-            _                               => GenerateFinalFeeReceipt(receipt, student, academicYear),
+            FeeReceiptKind.FinalFee          => GenerateFinalFeeReceipt(receipt, student, academicYear, applicantName),
+            FeeReceiptKind.ProvisionalFee    => GenerateProvisionalFeeReceipt(receipt, student, academicYear, applicantName),
+            FeeReceiptKind.ProvisionalCharge => GenerateProvisionalChargeReceipt(receipt, student, academicYear, applicantName),
+            _                               => GenerateFinalFeeReceipt(receipt, student, academicYear, applicantName),
         };
 
-        return Task.FromResult(bytes);
+        return bytes;
     }
 
     // ── FinalFee template ─────────────────────────────────────────────────────
@@ -43,7 +55,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
     private static byte[] GenerateFinalFeeReceipt(
         FeePaymentReceipt receipt,
         Student? student,
-        AcademicYear? academicYear)
+        AcademicYear? academicYear, string? applicantName)
     {
         return Document.Create(container =>
         {
@@ -55,7 +67,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                 page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
 
                 page.Header().Element(c => BuildHeader(c, "PAYMENT RECEIPT", receipt, Colors.Green.Medium));
-                page.Content().Element(c => BuildContent(c, receipt, student, academicYear, isFinal: true));
+                page.Content().Element(c => BuildContent(c, receipt, student, academicYear, applicantName, isFinal: true));
                 page.Footer().Element(BuildFooter);
             });
         }).GeneratePdf();
@@ -66,7 +78,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
     private static byte[] GenerateProvisionalFeeReceipt(
         FeePaymentReceipt receipt,
         Student? student,
-        AcademicYear? academicYear)
+        AcademicYear? academicYear, string? applicantName)
     {
         return Document.Create(container =>
         {
@@ -80,7 +92,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                 page.Header().Element(c => BuildHeader(c, "PROVISIONAL RECEIPT (KACHI)", receipt, Colors.Orange.Medium));
                 page.Content().Column(col =>
                 {
-                    col.Item().Element(c => BuildContent(c, receipt, student, academicYear, isFinal: false));
+                    col.Item().Element(c => BuildContent(c, receipt, student, academicYear, applicantName, isFinal: false));
                     col.Item().PaddingTop(5).Text(
                         "* This is a provisional receipt subject to realisation of the instrument. " +
                         "A final receipt will be issued upon bank clearance.")
@@ -96,7 +108,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
     private static byte[] GenerateProvisionalChargeReceipt(
         FeePaymentReceipt receipt,
         Student? student,
-        AcademicYear? academicYear)
+        AcademicYear? academicYear, string? applicantName)
     {
         return Document.Create(container =>
         {
@@ -108,7 +120,7 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                 page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
 
                 page.Header().Element(c => BuildHeader(c, "CHARGE RECEIPT (KACHI)", receipt, Colors.Blue.Medium));
-                page.Content().Element(c => BuildContent(c, receipt, student, academicYear, isFinal: false, isCharge: true));
+                page.Content().Element(c => BuildContent(c, receipt, student, academicYear, applicantName, isFinal: false, isCharge: true));
                 page.Footer().Element(BuildFooter);
             });
         }).GeneratePdf();
@@ -139,12 +151,13 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
         FeePaymentReceipt receipt,
         Student? student,
         AcademicYear? academicYear,
+        string? applicantName,
         bool isFinal,
         bool isCharge = false)
     {
         var studentName = student != null
             ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")
-            : "—";
+            : applicantName ?? "—";
 
         container.PaddingTop(10).Column(col =>
         {
@@ -166,16 +179,16 @@ public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDepende
                     table.Cell().PaddingBottom(4).Text(val2);
                 }
 
-                AddRow("Student Name", studentName,
+                AddRow(student == null && applicantName != null ? "Applicant Name" : "Student Name", studentName,
                     "GR Number", student?.GrNo?.ToString() ?? "—");
                 AddRow("Academic Year", academicYear?.Name ?? "—",
                     "Receipt Type", isCharge ? "Charge Receipt" : (isFinal ? "Final Fee Receipt" : "Provisional Fee Receipt"));
-                AddRow("Amount Paid", $"\u20B9 {Math.Ceiling(receipt.TotalPaidAmount):N0}",
+                AddRow("Amount Paid", $"\u20B9 {receipt.TotalPaidAmount:N2}",
                     "Payment reference", receipt.ReceiptNumber);
             });
 
             col.Item().PaddingTop(12).Background(Colors.Grey.Lighten3).Padding(8).Text(
-                $"Total Amount: \u20B9 {Math.Ceiling(receipt.TotalPaidAmount):N0}")
+                $"Total Amount: \u20B9 {receipt.TotalPaidAmount:N2}")
                 .FontSize(13).Bold();
 
             if (!isFinal && !isCharge)

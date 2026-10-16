@@ -100,11 +100,7 @@ public class EsiStatutoryAppService(
 		await AuthorizationService.CheckAsync(EsiPermissions.View);
 		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId, EsiPermissions.View);
 		await employeeRepository.GetAsync(employeeId);
-		var enrollment = await FindEnrollmentAsync(employeeId);
-		var dto = enrollment is null ? new EmployeeStatutoryEnrollmentDto { EmployeeId = employeeId } : MapEnrollment(enrollment);
-		var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc), TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
-		dto.InsuranceNumber = (await profileResolver.ResolveAsync(employeeId, new DateTime(local.Year, local.Month, 1))).EsicInsuranceNumber;
-		return dto;
+		return await ReadEnrollmentAsync(employeeId);
 	}
 
 	[Authorize(EsiPermissions.ManageEnrollment)]
@@ -136,7 +132,16 @@ public class EsiStatutoryAppService(
 			input.EmployerShareReliefEligible, input.EmployerShareReliefFrom,
 			input.EmployerShareReliefTo, input.DisabilityEvidenceReference);
 		await enrollmentRepository.UpdateAsync(enrollment, autoSave: true);
-		return await GetEnrollmentAsync(employeeId);
+		return await ReadEnrollmentAsync(employeeId);
+	}
+
+	private async Task<EmployeeStatutoryEnrollmentDto> ReadEnrollmentAsync(Guid employeeId)
+	{
+		var enrollment = await FindEnrollmentAsync(employeeId);
+		var dto = enrollment is null ? new EmployeeStatutoryEnrollmentDto { EmployeeId = employeeId } : MapEnrollment(enrollment);
+		var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(Clock.Now, DateTimeKind.Utc), TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata"));
+		dto.InsuranceNumber = (await profileResolver.ResolveAsync(employeeId, new DateTime(local.Year, local.Month, 1))).EsicInsuranceNumber;
+		return dto;
 	}
 
 	[Authorize(EsiPermissions.ApproveOverride)]

@@ -34,7 +34,9 @@ public class ApiProblemDetailsErrorDetailResolver : IApiProblemDetailsErrorDetai
 	{
 		var trimmedDetail = detail?.Trim();
 		var isStatusDefaultDetail = !string.IsNullOrWhiteSpace(trimmedDetail) &&
-		                            string.Equals(trimmedDetail, defaultDetail.Trim(), StringComparison.OrdinalIgnoreCase);
+		                            (string.Equals(trimmedDetail, defaultDetail.Trim(), StringComparison.OrdinalIgnoreCase) ||
+		                             (defaultDetail == ApiPermissionDeniedDetails.DefaultDetail &&
+		                              ApiPermissionDeniedDetails.IsGeneric(trimmedDetail)));
 
 		if (!ApiProblemDetailsErrorMessages.ShouldPreferCodeMessage(detail) && !isStatusDefaultDetail)
 		{

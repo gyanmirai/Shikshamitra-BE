@@ -29,6 +29,7 @@ public static class ApiProblemDetailsMapper
 			HRErrorCodes.PayrollPreviewStale or HRErrorCodes.PayrollPreviewNotReady => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveEmployeeNotFound => StatusCodes.Status403Forbidden,
+			HRErrorCodes.EmployeePolicyAccessRequired => StatusCodes.Status403Forbidden,
 			HRErrorCodes.TakeAttendanceMediumStageOutOfScope => StatusCodes.Status403Forbidden,
 			HRErrorCodes.LeaveInsufficientBalance => StatusCodes.Status400BadRequest,
 			HRErrorCodes.LeaveAlreadyCancelled => StatusCodes.Status409Conflict,
@@ -46,7 +47,9 @@ public static class ApiProblemDetailsMapper
 
 	public static int NormalizeStatusCode(int currentStatus, string? errorCode)
 	{
-		if (string.IsNullOrWhiteSpace(errorCode))
+		if (string.IsNullOrWhiteSpace(errorCode) ||
+			(currentStatus is StatusCodes.Status401Unauthorized or StatusCodes.Status403Forbidden &&
+			 ApiPermissionDeniedDetails.IsFrameworkAuthorizationCode(errorCode)))
 		{
 			return currentStatus;
 		}
@@ -88,7 +91,7 @@ public static class ApiProblemDetailsMapper
 		{
 			StatusCodes.Status400BadRequest => "One or more business rules were violated.",
 			StatusCodes.Status401Unauthorized => "Authentication is required to access this resource.",
-			StatusCodes.Status403Forbidden => "You don't have permission to access this resource.",
+			StatusCodes.Status403Forbidden => ApiPermissionDeniedDetails.DefaultDetail,
 			StatusCodes.Status404NotFound => "The requested resource was not found.",
 			StatusCodes.Status409Conflict => "The request could not be completed because of a conflict.",
 			StatusCodes.Status413PayloadTooLarge => "The request payload is too large.",

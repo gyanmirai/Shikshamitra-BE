@@ -802,7 +802,8 @@ public class ExamSeatAllocationAppService(
         Guid? seatingPlanId = null)
     {
         var exam = await GetScopedExamAsync(examId);
-        var isExaminationPublished = await FindSeatingPublicationAsync(examId) != null;
+        var publication = await FindSeatingPublicationAsync(examId);
+        var isExaminationPublished = publication != null;
         var standard = await standardRepository.FindAsync(exam.StandardId);
         var subjectDtos = await GetExamSubjectDtosAsync(exam);
         var subjectDtoById = subjectDtos.ToDictionary(subject => subject.ExamSubjectId);
@@ -830,6 +831,13 @@ public class ExamSeatAllocationAppService(
         var allocationsByPlan = allocations
             .GroupBy(allocation => allocation.SeatingPlanId)
             .ToDictionary(group => group.Key, group => group.ToList());
+        var planCounts = new Dictionary<Guid, (int total, int allocated)>();
+        foreach (var plan in plans)
+        {
+            planCounts[plan.Id] = (
+                (await GetEligibleStudentsForPlanAsync(exam, plan)).Count,
+                allocationsByPlan.GetValueOrDefault(plan.Id)?.Count ?? 0);
+        }
 
         var allDivisionIds = exam.ExamDivisions.Select(division => division.DivisionId)
             .Concat(exam.ExamSubjects.SelectMany(subject => subject.RoomAssignments).Select(row => row.DivisionId))
@@ -898,7 +906,7 @@ public class ExamSeatAllocationAppService(
                 ? []
                 : allocationsByPlan.GetValueOrDefault(sessionPlan.Id) ?? [];
             if (sessionPlan != null)
-                totalStudents = (await GetEligibleStudentsForPlanAsync(exam, sessionPlan)).Count;
+                totalStudents = planCounts[sessionPlan.Id].total;
 
             var selectedRoomIds = sessionPlan == null
                 ? []
@@ -1058,7 +1066,7 @@ public class ExamSeatAllocationAppService(
                 planDivisionIds = exam.ExamDivisions.Select(division => division.DivisionId).Distinct().ToList();
 
             var planAllocations = allocationsByPlan.GetValueOrDefault(plan.Id) ?? [];
-            var totalStudents = (await GetEligibleStudentsForPlanAsync(exam, plan)).Count;
+            var totalStudents = planCounts[plan.Id].total;
             var allocatedStudents = planAllocations.Select(allocation => allocation.StudentId).Distinct().Count();
             var selectedRoomIds = ParseGuidCsv(plan.RoomIdsCsv).Distinct().ToList();
             var configuredRoomIds = planExamSubjects
@@ -1202,7 +1210,8 @@ public class ExamSeatAllocationAppService(
             AvailableSubjects = subjectDtos,
             Plans = planGroups,
             Sessions = sessions,
-            Readiness = await BuildExaminationSeatingReadinessAsync(exam)
+            Readiness = await BuildExaminationSeatingReadinessAsync(
+                exam, publication, plans, planSubjects, subjectDtos, planCounts)
         };
     }
 
@@ -1330,6 +1339,18 @@ public class ExamSeatAllocationAppService(
             : await seatingPlanSubjectRepository.GetListAsync(subject =>
                 subject.ExamId == exam.Id && planIds.Contains(subject.SeatingPlanId));
         var subjectDtos = await GetExamSubjectDtosAsync(exam);
+        return await BuildExaminationSeatingReadinessAsync(
+            exam, publication, plans, planSubjects, subjectDtos);
+    }
+
+    private async Task<ExaminationSeatingReadinessDto> BuildExaminationSeatingReadinessAsync(
+        Exam exam,
+        ExamSeatingPublication? publication,
+        IReadOnlyList<ExamSeatingPlan> plans,
+        IReadOnlyList<ExamSeatingPlanSubject> planSubjects,
+        IReadOnlyList<SeatingPlanSubjectDto> subjectDtos,
+        IReadOnlyDictionary<Guid, (int total, int allocated)>? planCounts = null)
+    {
         var subjectNamesById = subjectDtos.ToDictionary(subject => subject.ExamSubjectId, subject => subject.SubjectName);
         var readiness = new ExaminationSeatingReadinessDto
         {
@@ -1346,7 +1367,9 @@ public class ExamSeatAllocationAppService(
 
         foreach (var plan in plans)
         {
-            var (total, allocated) = await ComputeCountsAsync(exam, plan.Id);
+            var (total, allocated) = planCounts != null
+                ? planCounts[plan.Id]
+                : await ComputeCountsAsync(exam, plan.Id);
             readiness.TotalStudentSeats += total;
             readiness.AllocatedStudentSeats += allocated;
         }

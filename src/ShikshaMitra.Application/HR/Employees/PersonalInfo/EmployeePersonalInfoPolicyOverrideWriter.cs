@@ -1,16 +1,45 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Policies;
+using Volo.Abp;
+using Volo.Abp.Authorization.Permissions;
 using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.Employees.PersonalInfo;
 
 public class EmployeePersonalInfoPolicyOverrideWriter(
-	IHrPolicyAssignmentAppService policyAssignmentAppService)
+	IHrPolicyAssignmentAppService policyAssignmentAppService,
+	IPermissionChecker permissionChecker)
 	: ITransientDependency
 {
 	private const string OnboardingDefaultPolicyConfirmationTokenMarker =
 		"__employee_onboarding_default_policy_assignment__";
+
+	public async Task CheckAccessAsync(CreateEmployeePolicyOverrideDto? input)
+	{
+		if (input == null)
+		{
+			return;
+		}
+
+		var missingPermissions = new List<string>();
+		if (!await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.Policies.Assign))
+		{
+			missingPermissions.Add(ShikshaMitraSubmodulePermissions.HR.Policies.Assign);
+		}
+		if (RequiresDefaultPolicyConfirmation(input.ConfirmationToken) &&
+			!await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.Policies.PreviewImpact))
+		{
+			missingPermissions.Add(ShikshaMitraSubmodulePermissions.HR.Policies.PreviewImpact);
+		}
+		if (missingPermissions.Count > 0)
+		{
+			throw new BusinessException(HRErrorCodes.EmployeePolicyAccessRequired)
+				.WithData("missingPermissions", missingPermissions.ToArray());
+		}
+	}
 
 	public async Task ApplyAsync(
 		Employee employee,
@@ -37,10 +66,7 @@ public class EmployeePersonalInfoPolicyOverrideWriter(
 		Employee employee,
 		UpsertEmployeePolicyOverrideDto input)
 	{
-		if (!string.Equals(
-			    input.ConfirmationToken,
-			    OnboardingDefaultPolicyConfirmationTokenMarker,
-			    StringComparison.Ordinal))
+		if (!RequiresDefaultPolicyConfirmation(input.ConfirmationToken))
 		{
 			return;
 		}
@@ -74,4 +100,7 @@ public class EmployeePersonalInfoPolicyOverrideWriter(
 			? preview.ConfirmationToken
 			: null;
 	}
+
+	private static bool RequiresDefaultPolicyConfirmation(string? confirmationToken) =>
+		string.Equals(confirmationToken, OnboardingDefaultPolicyConfirmationTokenMarker, StringComparison.Ordinal);
 }

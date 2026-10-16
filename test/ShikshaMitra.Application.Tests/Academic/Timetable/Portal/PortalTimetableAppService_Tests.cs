@@ -39,18 +39,26 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
     private IPortalTimetableAppService Service => GetRequiredService<IPortalTimetableAppService>();
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public Task My_profile_includes_the_authorized_full_student_context(bool parent, bool legacySelf) => WithUnitOfWorkAsync(async () =>
+    [InlineData(false, false, GenderEnum.Female)]
+    [InlineData(true, false, GenderEnum.Female)]
+    [InlineData(false, true, GenderEnum.Female)]
+    [InlineData(false, false, GenderEnum.Male)]
+    [InlineData(true, false, GenderEnum.Male)]
+    [InlineData(false, true, GenderEnum.Male)]
+    public Task My_profile_includes_the_authorized_full_student_context(bool parent, bool legacySelf, GenderEnum gender) => WithUnitOfWorkAsync(async () =>
     {
         var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
-        var f = await Seed(id, parent: parent, legacySelf: legacySelf); using var identity = SignIn(f.User.Id);
+        var f = await Seed(id, parent: parent, legacySelf: legacySelf, gender: gender); using var identity = SignIn(f.User.Id);
         var service = GetRequiredService<IProfileAppService>();
         var profile = await service.GetAsync();
         profile.UserName.ShouldBe(f.User.UserName);
         var contexts = ((List<PortalTimetableContextDto>)profile.ExtraProperties["studentContexts"]!).Single();
         contexts.Student.Id.ShouldBe(f.Student.Id);
+        contexts.Student.Gender.ShouldBe(gender);
+        contexts.Student.MediumId.ShouldBe(f.Medium.Id);
+        contexts.Student.MediumName.ShouldBe("English");
+        contexts.Student.StageId.ShouldBe(f.Student.AcademicMediumStageId);
+        contexts.Student.StageName.ShouldBe("Primary");
         contexts.Student.StandardId.ShouldBe(f.Student.StandardId);
         contexts.Student.StandardName.ShouldBe("Class 8");
         contexts.Student.DivisionName.ShouldBe("A");
@@ -61,7 +69,13 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         contexts.Timezone.ShouldBe("Asia/Kolkata");
         contexts.Availability.ShouldBe("available");
         var json = JsonSerializer.SerializeToElement(profile, new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        json.GetProperty("extraProperties").GetProperty("studentContexts")[0].GetProperty("student").GetProperty("id").GetGuid().ShouldBe(f.Student.Id);
+        var studentJson = json.GetProperty("extraProperties").GetProperty("studentContexts")[0].GetProperty("student");
+        studentJson.GetProperty("id").GetGuid().ShouldBe(f.Student.Id);
+        studentJson.GetProperty("gender").GetInt32().ShouldBe((int)gender);
+        studentJson.GetProperty("mediumId").GetGuid().ShouldBe(f.Medium.Id);
+        studentJson.GetProperty("mediumName").GetString().ShouldBe("English");
+        studentJson.GetProperty("stageId").GetGuid().ShouldBe(f.Student.AcademicMediumStageId!.Value);
+        studentJson.GetProperty("stageName").GetString().ShouldBe("Primary");
     });
 
     [Fact]
@@ -92,6 +106,11 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         f.Enrollment.Deactivate(); await GetRequiredService<IRepository<StudentEnrollment, Guid>>().UpdateAsync(f.Enrollment, true);
         var context = ((List<PortalTimetableContextDto>)(await GetRequiredService<IProfileAppService>().GetAsync()).ExtraProperties["studentContexts"]!).Single();
         context.Student.Id.ShouldBe(f.Student.Id);
+        context.Student.Gender.ShouldBeNull();
+        context.Student.MediumId.ShouldBeNull();
+        context.Student.MediumName.ShouldBeNull();
+        context.Student.StageId.ShouldBeNull();
+        context.Student.StageName.ShouldBeNull();
         context.Availability.ShouldBe("noEnrollment");
         context.CurrentAcademicYear.ShouldBeNull();
     });
@@ -101,7 +120,7 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
     private IDisposable SignIn(Guid userId) => GetRequiredService<ICurrentPrincipalAccessor>().Change(
         new ClaimsPrincipal(new ClaimsIdentity([new Claim(AbpClaimTypes.UserId, userId.ToString())], "test")));
 
-    private async Task<Fixture> Seed(Guid tenant, bool parent = false, bool publish = true, bool legacySelf = false, bool legacyPlacement = false)
+    private async Task<Fixture> Seed(Guid tenant, bool parent = false, bool publish = true, bool legacySelf = false, bool legacyPlacement = false, GenderEnum? gender = null)
     {
         var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Asia/Kolkata")).Date;
         var year = await Insert(await GetRequiredService<AcademicYearManager>().CreateAsync("Current", today.AddDays(-30), today.AddDays(300)));
@@ -112,6 +131,8 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         var division = await Insert(await GetRequiredService<DivisionManager>().CreateAsync(standard.Id, "A", 30));
         var student = await Insert(new Student(Guid.NewGuid(), tenant, "Real", "", "Student", year.Id, board.Id, medium.Id, stage.Id, standard.Id, division.Id,
             rollNo: 12, status: legacyPlacement ? StudentLifeCycleStatusEnum.Enrolled : StudentLifeCycleStatusEnum.New));
+        if (gender.HasValue)
+            await Insert(new StudentAdditionalDetail(student.Id, tenant, null, gender, null, string.Empty, null, null));
         var enrollment = StudentEnrollment.Create(Guid.NewGuid(), tenant, student.Id, year.Id, standard.Id, division.Id, 12);
         if (!legacyPlacement) await Insert(enrollment);
         var user = new IdentityUser(Guid.NewGuid(), "portal", "portal@example.test", tenant);
@@ -152,6 +173,7 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         using var identity = SignIn(f.User.Id);
         var context = await Service.GetContextAsync(f.Student.Id);
         context.Student.Name.ShouldBe("Real Student");
+        context.Student.Gender.ShouldBeNull();
         context.Student.StandardName.ShouldBe("Class 8");
         context.Student.DivisionName.ShouldBe("A");
         context.Student.RollNumber.ShouldBe(12);
@@ -174,6 +196,9 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         var context = await Service.GetContextAsync();
         context.Availability.ShouldBe("available");
         context.Student.StandardId.ShouldBe(f.Student.StandardId);
+        context.Student.MediumName.ShouldBe("English");
+        context.Student.StageId.ShouldBe(f.Student.AcademicMediumStageId);
+        context.Student.StageName.ShouldBe("Primary");
         context.Student.DivisionId.ShouldBe(f.Student.DivisionId);
         context.Student.RollNumber.ShouldBe(12);
         context.CurrentAcademicYear!.Id.ShouldBe(f.Year.Id);
@@ -248,7 +273,10 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
     {
         var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
         var f = await Seed(id, publish: false); using var identity = SignIn(f.User.Id);
-        (await Service.GetContextAsync()).Availability.ShouldBe("noPublishedTimetable");
+        var context = await Service.GetContextAsync();
+        context.Availability.ShouldBe("noPublishedTimetable");
+        context.Student.MediumName.ShouldBe("English");
+        context.Student.StageName.ShouldBe("Primary");
         (await Service.GetScheduleAsync(f.Request)).Days.Single().Periods.ShouldBeEmpty();
         f.Enrollment.Deactivate(); await GetRequiredService<IRepository<StudentEnrollment, Guid>>().UpdateAsync(f.Enrollment, true);
         (await Service.GetContextAsync()).Availability.ShouldBe("noEnrollment");

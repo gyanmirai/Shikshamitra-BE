@@ -3,7 +3,7 @@ module: mobile-academics
 domain: behavior
 content_type: Reference
 status: canonical
-updated_on: 2026-10-12
+updated_on: 2026-10-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -27,5 +27,7 @@ Students can submit their own work. Leave changes and absence reasons require a 
 Absent records remain empty or unavailable. A zero attendance denominator produces a null percentage. Unpublished or withheld results expose no marks or report card. Class comparisons include only published marks belonging to released class results.
 
 ## Availability boundaries
+
+Syllabus chapters require `PublishStatus = Published` and a student-facing audience (`Students` or `All`); guardians can also read `Parents` chapters. `Teacher` visibility excludes both mobile audiences. Draft, in-review, and archived chapters do not contribute to mobile dashboard counts or chapter lists, and their detail endpoints return not found. A chapter appearing in the staff syllabus table does not establish mobile publication. Teaching progress of zero does not hide a published chapter; it appears as `notStarted`.
 
 Exam resources reuse published LearningResource records classified as `SyllabusPortion`, `PaperPattern`, or `QuestionBank`; those records are subject-wide, not an inferred exam-specific curriculum. Chapter resources also include legacy AssignedSubjectDocument attachments, which inherit the chapter's publication and audience. Legacy filenames come from their stored blob references; unknown file sizes are omitted in mobile. Parent-only chapters and parent summaries require a guardian link. No persisted question-section or topic-level result model exists here, so those breakdowns remain unavailable. Report cards show real published totals and marks; they do not reproduce a school-specific branded template. Published attachment blobs must exist under the current tenant's file prefix.

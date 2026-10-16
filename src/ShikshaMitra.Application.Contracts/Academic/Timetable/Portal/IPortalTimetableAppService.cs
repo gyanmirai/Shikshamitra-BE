@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
+using ShikshaMitra.Students;
 
 namespace ShikshaMitra.Academic.Timetable.Portal;
 
@@ -33,6 +34,11 @@ public class PortalTimetableStudentDto
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public GenderEnum? Gender { get; set; }
+    public Guid? MediumId { get; set; }
+    public string? MediumName { get; set; }
+    public Guid? StageId { get; set; }
+    public string? StageName { get; set; }
     public Guid? StandardId { get; set; }
     public string? StandardName { get; set; }
     public Guid? DivisionId { get; set; }

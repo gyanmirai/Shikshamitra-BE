@@ -14,6 +14,12 @@ TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings`
 
 ## Portal account owner profiles and case correction
 
+`GET /api/account/my-profile` returns the identity profile with authorized linked student contexts under `extraProperties.studentContexts`.
+Each context's `student` includes nullable `gender` (`0` Male, `1` Female; null when unrecorded), `mediumId`, `mediumName`, `stageId`, and `stageName`, alongside its existing identity, standard, division, and roll number fields.
+Medium and stage come from the validated current class placement and remain null when no current academic year, active enrollment, or complete class assignment is available.
+The same student fields are returned by `GET /api/mobile/v1/academics/timetable/context`.
+Existing confirmed student/guardian association and tenant checks apply; revoked or unauthorized links are excluded from the profile.
+
 The scoped Onboarding case-detail GET includes optional `portalAccountOwners` with account type, relationship, display name and saved email from the current Student contact/family profile. Student/self, guardian/father, guardian/mother and guardian/guardian are distinct recipients. List responses do not load these profile details. The existing case View grant, tenant isolation and case scope apply; provisioning still validates the current saved email and explicit ownership confirmation, and preserves identity/sibling checks. This additive response field has no new endpoint, write or migration.
 
 `POST /api/student/onboarding/{id}/guardian-credential-email/enable` accepts `{reason,concurrencyStamp}` and returns the updated case detail. Controller and application service require Onboarding Configure (currently `Students.Onboarding.Add`), a current tenant/user, scoped case access, current stamp, an activated open case, a reviewed `ReadinessRulesSnapshot` and `guardianAccount=true`. The reason is required (3–400 characters). The command enables only `sendGuardianCredentialEmail` in this case's pinned snapshot, retains every other rule and school/Offering settings, and adds a creation-audited `GuardianCredentialEmailEnabled` event with previous/new values. An already-enabled current-stamp retry is a no-op. The command never provisions accounts, refreshes provisioning or enqueues emails. No schema migration is needed.

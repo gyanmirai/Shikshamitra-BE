@@ -3,14 +3,14 @@ module: mobile-academics
 domain: validation
 content_type: Reference
 status: canonical
-updated_on: 2026-10-12
+updated_on: 2026-10-16
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate mobile Academics
 
-`test/ShikshaMitra.Application.Tests/Academic/Mobile/MobileAcademicAppService_Tests.cs` covers student/guardian reads without staff grants, saved subject colours in the Syllabus dashboard, revoked/unlinked denial, draft/final persistence and locks, unpublished/withheld marks, generated PDF bytes, legacy attendance dates, guardian-only reasons, leave school-day duration and half-day times, school decision locks, and foreign attachment references.
+`test/ShikshaMitra.Application.Tests/Academic/Mobile/MobileAcademicAppService_Tests.cs` covers student/guardian reads without staff grants, saved subject colours in the Syllabus dashboard, chapter publication and audience across dashboard/list/details, revoked/unlinked denial, draft/final persistence and locks, unpublished/withheld marks, generated PDF bytes, legacy attendance dates, guardian-only reasons, leave school-day duration and half-day times, school decision locks, and foreign attachment references.
 
 ```powershell
 dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter FullyQualifiedName~MobileAcademicAppService_Tests
@@ -19,7 +19,7 @@ powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module 
 git diff --check
 ```
 
-The nine focused tests pass with the normal test project, without exclusions. The full application suite was not run. Repository-wide build warnings remain. SQLite application tests validate behavior; the additional HTTP test below uses real PostgreSQL.
+All 20 focused cases passed on 2026-10-16 using the normal test project with `--artifacts-path .artifacts/syllabus-publication -m:1 -p:UseSharedCompilation=false`. The publication cases cover Draft, In Review, Archived, Published, Teacher/Students/Parents/All audiences, hidden chapter details, and visible zero-progress chapters. The full application suite was not run. Repository-wide build warnings remain. SQLite application tests validate behavior; the additional HTTP test below uses real PostgreSQL.
 
 `test/ShikshaMitra.HttpApi.Tests/Academic/Mobile/MobileAcademicPostgresApi_Tests.cs` passes on PostgreSQL 18.6. It creates a fresh loopback `mobile_academic_tests_*` database and refuses existing databases. It recreates the predecessor columns and executes the actual `MobileAcademicResponses` migration operations. It then verifies `RepairMobileLeaveHalfDayTimes` against both complete and missing half-day columns, repeated application, and recorded migration history. It tests all seven root routes plus the attendance calendar, persisted-link denial, two simultaneous leave requests reaching transaction locks on different connections, one surviving record, half-day times, cancellation, multipart upload, exact downloaded bytes, deletion, and a generated PDF report. Authentication headers come from the HTTP test harness; this is local application integration evidence rather than deployed OIDC evidence.
 

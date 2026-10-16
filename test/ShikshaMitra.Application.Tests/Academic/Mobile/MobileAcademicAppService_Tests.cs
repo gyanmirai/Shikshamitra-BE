@@ -102,6 +102,48 @@ public class MobileAcademicAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		else await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(() => GetRequiredService<IMobileSyllabusAppService>().GetChapterAsync(f.ChapterId, input));
 	});
 
+	[Theory]
+	[InlineData(false, "Draft", "Teacher", false)]
+	[InlineData(true, "Draft", "All", false)]
+	[InlineData(false, "In Review", "All", false)]
+	[InlineData(true, "Archived", "All", false)]
+	[InlineData(false, "Published", "Teacher", false)]
+	[InlineData(true, "Published", "Teacher", false)]
+	[InlineData(false, "Published", "All", true)]
+	[InlineData(true, "Published", "All", true)]
+	[InlineData(false, "Published", "Students", true)]
+	[InlineData(true, "Published", "Parents", true)]
+	[InlineData(false, "Published", "Parents", false)]
+	public Task Syllabus_publication_and_audience_apply_to_dashboard_list_and_details(
+		bool parent, string publishStatus, string visibility, bool visible) => WithUnitOfWorkAsync(async () =>
+	{
+		var tenantId = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f = await Seed(tenantId, parent); using var identity = SignIn(f.User.Id);
+		var repository = GetRequiredService<IRepository<AssignedSubjectChapter, Guid>>();
+		var chapter = await repository.GetAsync(f.ChapterId);
+		chapter.PublishStatus = publishStatus;
+		chapter.Visibility = visibility;
+		await repository.UpdateAsync(chapter, true);
+		var service = GetRequiredService<IMobileSyllabusAppService>();
+		var input = new MobileAcademicInput { StudentId = f.Student.Id, AcademicYearId = f.Year.Id };
+		var dashboard = await service.GetDashboardAsync(input);
+		dashboard.TotalChapters.ShouldBe(visible ? 1 : 0);
+		dashboard.Subjects.Single().TotalChapters.ShouldBe(visible ? 1 : 0);
+		var list = await service.GetChaptersAsync(f.SubjectId, new() { StudentId = f.Student.Id, AcademicYearId = f.Year.Id });
+		list.TotalCount.ShouldBe(visible ? 1 : 0);
+		if (visible)
+		{
+			list.Items.Single().Id.ShouldBe(f.ChapterId);
+			list.Items.Single().CoverageStatus.ShouldBe("notStarted");
+			(await service.GetChapterAsync(f.ChapterId, input)).Id.ShouldBe(f.ChapterId);
+		}
+		else
+		{
+			list.Items.ShouldBeEmpty();
+			await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(() => service.GetChapterAsync(f.ChapterId, input));
+		}
+	});
+
 	[Fact]
 	public Task Every_module_denies_unlinked_student_and_revoked_link() => WithUnitOfWorkAsync(async () =>
 	{

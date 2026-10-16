@@ -53,7 +53,7 @@ public class PortalTimetableAppService(
         var student = await ResolveStudentAsync(studentId);
         var context = new PortalTimetableContextDto
         {
-            Student = new() { Id = student.Id, Name = string.Join(" ", new[]
+            Student = new() { Id = student.Id, Gender = student.AdditionalDetail?.Gender, Name = string.Join(" ", new[]
                 { student.FirstName, student.MiddleName, student.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))) }
         };
         var today = SchoolNow().Date;
@@ -95,6 +95,8 @@ public class PortalTimetableAppService(
         var standard = await AsyncExecuter.FirstOrDefaultAsync((await standards.GetQueryableAsync())
             .Where(x => x.TenantId == CurrentTenant.Id && x.Id == standardId)
             .Select(x => new { x.Id, x.Name, MediumId = x.EducationMediumStage.EducationMediumId,
+                MediumName = x.EducationMediumStage.EducationMedium.Name,
+                StageId = x.EducationMediumStageId, StageName = x.EducationMediumStage.Name,
                 YearId = x.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId }));
         var division = await divisions.FindAsync(x => x.TenantId == CurrentTenant.Id &&
             x.Id == divisionId && x.StandardId == standardId);
@@ -102,6 +104,10 @@ public class PortalTimetableAppService(
             throw Invalid("The student's class assignment does not match the enrolled academic year.");
         context.Student.StandardId = standard.Id;
         context.Student.StandardName = standard.Name;
+        context.Student.MediumId = standard.MediumId;
+        context.Student.MediumName = standard.MediumName;
+        context.Student.StageId = standard.StageId;
+        context.Student.StageName = standard.StageName;
         context.Student.DivisionId = division.Id;
         context.Student.DivisionName = division.Name;
         var config = await configs.FindByStandardIdAsync(standard.Id);

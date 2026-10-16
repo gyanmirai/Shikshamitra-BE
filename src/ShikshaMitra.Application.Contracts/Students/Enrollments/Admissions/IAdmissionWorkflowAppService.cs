@@ -23,6 +23,7 @@ public interface IAdmissionWorkflowAppService : IApplicationService
 	Task<AdmissionWorkflowDto> RejectAsync(Guid id, DecideAdmissionWorkflowDto input);
 	Task<AdmissionWorkflowDto> CreateRollbackDraftAsync(Guid id, RollbackAdmissionWorkflowDto input);
 	Task<AdmissionWorkflowDto> ArchiveAsync(Guid id, string? concurrencyStamp = null);
+	Task<AdmissionWorkflowDto> ReopenAsync(Guid id, string? concurrencyStamp = null);
 	Task<List<AdmissionWorkflowDto>> GetVersionHistoryAsync(Guid id);
 	Task<AdmissionWorkflowUsageDto> GetUsageAsync(Guid id);
 	Task<IReadOnlyList<AdmissionWorkflowStageTypeMetadataDto>> GetStageTypesAsync();

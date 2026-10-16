@@ -103,4 +103,12 @@ public partial class StudentEnrollment : FullAuditedAggregateRoot<Guid>, IMultiT
 		}
 		OnboardingCaseId = Check.NotDefaultOrNull<Guid>(onboardingCaseId, nameof(onboardingCaseId));
 	}
+
+	/// <summary>Transaction-local staging for a validated cohort swap; never commit this intermediate value.</summary>
+	public void StageRollReassignment(int? expectedNumber)
+	{
+		if (!IsActive || RollNumber != expectedNumber) throw new BusinessException(StudentRollNumberErrorCodes.StalePreview);
+		CaptureAttendancePlacement(null);
+		RollNumber = null;
+	}
 }

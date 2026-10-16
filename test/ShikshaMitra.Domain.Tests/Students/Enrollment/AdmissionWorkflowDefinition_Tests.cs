@@ -53,6 +53,38 @@ public class AdmissionWorkflowDefinition_Tests
 		workflow.Status.ShouldBe(AdmissionWorkflowStatus.Archived);
 	}
 
+	[Theory]
+	[InlineData(AdmissionWorkflowStatus.Published, false, AdmissionWorkflowStatus.Published)]
+	[InlineData(AdmissionWorkflowStatus.Published, true, AdmissionWorkflowStatus.Superseded)]
+	[InlineData(AdmissionWorkflowStatus.Superseded, false, AdmissionWorkflowStatus.Superseded)]
+	public void Reopen_preserves_identity_publication_and_immutability(AdmissionWorkflowStatus previous, bool anotherPublished, AdmissionWorkflowStatus expected)
+	{
+		var workflow = new AdmissionWorkflowDefinition(Guid.NewGuid(), null, "Standard admission", "STANDARD_V1");
+		var publishedAt = DateTime.UtcNow.AddDays(-2);
+		var publisher = Guid.NewGuid();
+		workflow.Publish(publisher, publishedAt);
+		if (previous == AdmissionWorkflowStatus.Superseded) workflow.Supersede();
+		workflow.Archive();
+		workflow.Reopen(previous, anotherPublished);
+		workflow.Status.ShouldBe(expected);
+		workflow.Version.ShouldBe(1);
+		workflow.PublishedAt.ShouldBe(publishedAt);
+		workflow.PublishedBy.ShouldBe(publisher);
+		Should.Throw<BusinessException>(() => workflow.UpdateDetails("Changed", "CHANGED"));
+		Should.Throw<BusinessException>(() => workflow.Reopen(previous, anotherPublished));
+	}
+
+	[Fact]
+	public void Reopen_rejects_drafts_and_editable_target_statuses()
+	{
+		var workflow = new AdmissionWorkflowDefinition(Guid.NewGuid(), null, "Standard admission", "STANDARD_V1");
+		Should.Throw<BusinessException>(() => workflow.Reopen(AdmissionWorkflowStatus.Published, false));
+		workflow.Publish(null);
+		workflow.Archive();
+		Should.Throw<BusinessException>(() => workflow.Reopen(AdmissionWorkflowStatus.Draft, false));
+		workflow.Status.ShouldBe(AdmissionWorkflowStatus.Archived);
+	}
+
 	[Fact]
 	public void Maker_checker_lifecycle_requires_an_independent_assigned_approver()
 	{

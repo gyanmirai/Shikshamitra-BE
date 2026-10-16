@@ -305,6 +305,20 @@ Section verification is reconstructed from immutable form change history. A corr
 | Tenant tables, unique ownership and operational indexes | EF `AdmissionSeatConfiguration.cs` |
 
 The pool concurrency stamp serializes changes to shared offering capacity, while the application and reservation stamps protect applicant state. Filtered unique indexes prevent duplicate live pools and duplicate application-stage allocations. The additive `20260911084131_AddManagedAdmissionSeats` migration creates only the pool and reservation tables, indexes, and restrictive ownership links.
+## Roll-number batch ownership
+
+| Layer | Source |
+|---|---|
+| Shared ordering and immutable batch | `src/ShikshaMitra.Domain/Students/StudentEnrollments/Onboarding/Services/StudentRollOrdering.cs`, `src/ShikshaMitra.Domain/Students/StudentEnrollments/Onboarding/Aggregates/StudentRollNumberBatch.cs` |
+| Cohort, authorization and commands | `src/ShikshaMitra.Application/Students/StudentEnrollments/Onboarding/StudentRollRosterReader.cs`, `StudentRollNumberBatchAppService.cs`, `StudentRollNumberBatchAppService.Commands.cs`, `StudentRollBatchAccessService.cs`, `StudentRollBatchApplication.cs` in that directory |
+| Contract and explicit HTTP boundary | `src/ShikshaMitra.Application.Contracts/Students/Enrollments/Onboarding/StudentRollNumberBatchDtos.cs`, `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/Onboarding/StudentRollNumberBatchesController.cs` |
+| Persistence | `src/ShikshaMitra.EntityFrameworkCore/Students/StudentEnrollments/Onboarding/StudentRollNumberBatchConfiguration.cs`, the Student-only batch table migration and existing Division ExtraProperties cursor |
+
+Batch commands use a new Serializable unit of work, frozen stamps/fingerprints, optimistic division-cursor concurrency and unique submission keys.
+Renumber stages only changed active slots to null inside that transaction, then installs the full mapping under the immediate unique active-division index.
+Dated placement history is captured before staging; enrollments, Student mirrors, unfinished linked cases, audit and cursor commit together.
+Finance mappings and commands are not modified.
+
 ## Student dashboard ownership
 
 | Layer | Source |

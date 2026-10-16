@@ -52,6 +52,7 @@ public class StudentRecordTransitionReadinessService(StudentRecordsAccessService
 	public async Task<List<StudentRecordTransitionInput>> OrderCohortAsync(List<StudentRecordTransitionInput> inputs)
 	{
 		var ordered = new List<StudentRecordTransitionInput>();
+		var sources = (await LazyServiceProvider.LazyGetRequiredService<StudentRollSourceReader>().ReadAsync(inputs.Select(x => x.StudentId).Distinct().ToArray())).ToDictionary(x => x.StudentId);
 		var captured = new Dictionary<Guid, string>(); var scopeDivisions = new Dictionary<Guid, Guid?>();
 		foreach (var input in inputs)
 		{
@@ -66,39 +67,21 @@ public class StudentRecordTransitionReadinessService(StudentRecordsAccessService
 			var ruleJson = captured[first.StudentId];
 			if (!group.Any(x => StudentOnboardingRollNumberAllocator.ResolveMode(ruleJson, x.RollAssignmentMode) == "automatic")) { ordered.AddRange(group); continue; }
 			var rule = StudentOnboardingRollRuleReader.Parse(ruleJson);
-			var fields = new List<(string Field, bool Descending)>();
-			if (rule.HasValue && rule.Value.TryGetProperty("orderingRules", out var configured) && configured.ValueKind == JsonValueKind.Array)
-				foreach (var item in configured.EnumerateArray()) fields.Add((OnboardingRuleConfiguration.Text(item, "field"), OnboardingRuleConfiguration.Text(item, "direction", "ascending") == "descending"));
-			if (fields.Count == 0) fields.Add((rule.HasValue ? OnboardingRuleConfiguration.Text(rule.Value, "arrangeBy", "studentName") : "studentName", rule.HasValue && OnboardingRuleConfiguration.Text(rule.Value, "arrangeType", "ascending") == "descending"));
-			var candidates = new List<(StudentRecordTransitionInput Input, List<string> Keys)>();
+			var ordering = new StudentRollOrdering(rule);
 			foreach (var input in group)
 			{
 				if (OrderingSignature(StudentOnboardingRollRuleReader.Parse(captured[input.StudentId])) != OrderingSignature(rule)) throw OnboardingRuleConfiguration.Invalid("This cohort shares a numbering scope but has conflicting ordering rules. Align those school rules before assigning automatic numbers together.");
-				var student = await access.GetScopedStudentAsync(input.StudentId); var keys = new List<string>();
-				foreach (var field in fields)
-				{
-					string? key;
-					if (field.Field == "studentName") key = string.Join(" ", new[] { student.FirstName, student.MiddleName, student.LastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
-					else if (field.Field == "grNumber") key = student.GrNumber ?? student.GrNo?.ToString("D10");
-					else if (field.Field == "admissionNumber") key = (await identifiers.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && x.IdentifierType == StudentIdentifierType.AdmissionNumber && x.Status != StudentIdentifierAllocationStatus.Released)).OrderBy(x => x.AllocatedAt).FirstOrDefault()?.Value;
-					else if (field.Field == "admissionDate") key = (await admissionApplications.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == student.Id && x.FinalizedAt.HasValue)).OrderBy(x => x.FinalizedAt).FirstOrDefault()?.FinalizedAt?.ToString("O");
-					else throw OnboardingRuleConfiguration.Invalid("The configured automatic roll ordering field is unsupported.");
-					if (string.IsNullOrWhiteSpace(key) && group.Count() > 1) throw OnboardingRuleConfiguration.Invalid("Complete the source value required by the school's roll ordering rule before processing this cohort.");
-					keys.Add(key ?? "");
-				}
-				candidates.Add((input, keys));
+				await access.GetScopedStudentAsync(input.StudentId);
+				if (!sources.ContainsKey(input.StudentId)) throw new BusinessException(StudentRollNumberErrorCodes.BatchBlocked);
 			}
-			candidates.Sort((left, right) => { for (var i = 0; i < fields.Count; i++) { var comparison = StringComparer.OrdinalIgnoreCase.Compare(left.Keys[i], right.Keys[i]); if (comparison != 0) return fields[i].Descending ? -comparison : comparison; } return left.Input.StudentId.CompareTo(right.Input.StudentId); });
-			ordered.AddRange(candidates.Select(x => x.Input));
+			var commands = group.ToDictionary(x => x.StudentId);
+			ordered.AddRange(ordering.Order(group.Select(x => sources[x.StudentId])).Select(x => commands[x.StudentId]));
 		}
 		return ordered;
 	}
 	private static string OrderingSignature(JsonElement? rule)
 	{
-		if (!rule.HasValue) return "studentName:ascending";
-		if (rule.Value.TryGetProperty("orderingRules", out var configured) && configured.ValueKind == JsonValueKind.Array && configured.GetArrayLength() > 0)
-			return string.Join("|", configured.EnumerateArray().Select(x => OnboardingRuleConfiguration.Text(x, "field") + ":" + OnboardingRuleConfiguration.Text(x, "direction", "ascending")));
-		return OnboardingRuleConfiguration.Text(rule.Value, "arrangeBy", "studentName") + ":" + OnboardingRuleConfiguration.Text(rule.Value, "arrangeType", "ascending");
+		return new StudentRollOrdering(rule).Signature;
 	}
 	public async Task<(Student Student, StudentEnrollment Enrollment)> GetSourceAsync(Guid studentId, Guid yearId, bool writable = true)
 	{
@@ -196,6 +179,9 @@ public class StudentRecordTransitionReadinessService(StudentRecordsAccessService
 		var existing = await enrollments.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.AcademicYearId == yearId);
 		if (existing == null) return await enrollments.InsertAsync(StudentEnrollment.Create(GuidGenerator.Create(), CurrentTenant.Id, studentId, yearId, standardId, divisionId, roll));
 		if (!(reviewedSameYearReturn && !existing.IsActive && (await access.GetScopedStudentAsync(studentId)).Status == StudentLifeCycleStatusEnum.Left) && !await CanReuseCorrectedTargetAsync(existing)) throw new BusinessException("Students:Records:TargetEnrollmentExists");
+		if (existing.StandardId.HasValue && existing.DivisionId.HasValue && existing.RollNumber.HasValue)
+			await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().RecordIssuedAsync(
+				existing.AcademicYearId, existing.StandardId.Value, existing.DivisionId.Value, existing.RollNumber.Value);
 		existing.ChangePlacement(standardId, divisionId, roll, effectiveDate); existing.Activate(effectiveDate); return await enrollments.UpdateAsync(existing);
 	}
 	public async Task ValidateCapacityAsync(Guid studentId, Guid yearId, Guid divisionId, int? roll, int strength, Guid? excludeOnboardingCaseId = null)

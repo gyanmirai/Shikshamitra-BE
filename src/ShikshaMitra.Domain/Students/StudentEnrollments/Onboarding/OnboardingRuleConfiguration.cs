@@ -57,6 +57,7 @@ public sealed class OnboardingRuleConfiguration
 					}
 					if (section == "rollNumber")
 					{
+						_ = new StudentRollOrdering(rule);
 						ValidateBoolean(rule, "requireChangeReason");
 						ValidateBoolean(rule, "requireApproval");
 						ValidateChoice(rule, "numberingScope", "class-division", "class");

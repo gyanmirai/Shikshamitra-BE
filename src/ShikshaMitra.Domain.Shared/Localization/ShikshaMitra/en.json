@@ -764,6 +764,13 @@
         "Students:Attendance:020004": "Save an attendance policy draft before publishing.",
         "Students:Attendance:020005": "Review the student's schedule dates, weekdays, and timings.",
         "Students:Attendance:020006": "This schedule overlaps another schedule of the same kind. Adjust the dates before saving.",
-        "Students:Attendance:020007": "Select a school before configuring attendance."
+        "Students:Attendance:020007": "Select a school before configuring attendance.",
+        "Students:RollNumbers:InvalidRule": "Review the roll-number grouping, name format and sort settings.",
+        "Students:RollNumbers:InvalidBatch": "Review the division, reason and roll-number request before saving.",
+        "Students:RollNumbers:StalePreview": "The division roster or its settings changed. Generate a new preview before saving. No partial roll assignment was saved.",
+        "Students:RollNumbers:BatchBlocked": "Resolve the flagged students before assigning the division's roll numbers.",
+        "Students:RollNumbers:InvalidState": "This roll-number batch is no longer available for that action. Refresh its status.",
+        "Students:RollNumbers:AdminRequired": "Only a school administrator can renumber a division.",
+        "Students:RollNumbers:ApproverRequired": "An eligible independent school approver must review this roll-number batch."
     }
 }

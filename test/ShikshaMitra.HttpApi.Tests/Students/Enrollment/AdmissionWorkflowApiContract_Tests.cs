@@ -44,6 +44,15 @@ public class AdmissionWorkflowApiContract_Tests
 	}
 
 	[Fact]
+	public void Reopen_requires_publish_authority_and_binds_concurrency()
+	{
+		Post(typeof(AdmissionWorkflowsController), nameof(AdmissionWorkflowsController.Reopen)).ShouldBe("{id:guid}/reopen");
+		Permission(typeof(AdmissionWorkflowsController), nameof(AdmissionWorkflowsController.Reopen)).ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Publish);
+		Permission(typeof(AdmissionWorkflowAppService), nameof(AdmissionWorkflowAppService.ReopenAsync)).ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Publish);
+		typeof(AdmissionWorkflowsController).GetMethod(nameof(AdmissionWorkflowsController.Reopen))!.GetParameters()[1].GetCustomAttribute<FromQueryAttribute>().ShouldNotBeNull();
+	}
+
+	[Fact]
 	public void Workflow_delete_binds_the_concurrency_stamp_from_the_query_string()
 	{
 		var method = typeof(AdmissionWorkflowsController).GetMethods()

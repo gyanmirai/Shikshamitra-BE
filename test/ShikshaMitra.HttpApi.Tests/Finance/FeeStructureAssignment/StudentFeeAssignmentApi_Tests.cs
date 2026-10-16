@@ -106,7 +106,7 @@ public class StudentFeeAssignmentApi_Tests(ShikshaMitraApiTestFactory factory) :
 		var mediumId = Factory.SeededMediumId;
 		var stageId = Factory.SeededMediumStageId;
 		var standardId = Factory.SeededStandardId;
-		var candidate = new StandardFeeStructureRequest { Name = $"Synthetic assignment {Guid.NewGuid():N}" };
+		var candidate = new StandardFeeStructureRequest { Name = $"Assign-{Guid.NewGuid():N}" };
 		using (var services = Factory.Services.CreateScope())
 		using (services.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId))
 		using (services.ServiceProvider.GetRequiredService<ICurrentPrincipalAccessor>().Change(

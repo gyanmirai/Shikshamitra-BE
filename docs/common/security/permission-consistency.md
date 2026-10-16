@@ -118,6 +118,12 @@ Missing scope yields no access.
 Cancellation, missing identity, query failures, and timeouts must not become unrestricted access.
 Keep tenant filters explicit and preserve year filtering, wildcard boundaries, ordering, reporting inheritance, and full-access flags.
 
+Generic API 403 responses identify the requested controller and action from static MVC metadata and ask the caller to contact an administrator to review permissions and assigned data access.
+This describes the blocked request, not a guessed missing grant; the shared error pipeline does not recheck or change authorization.
+When static metadata is unavailable, the response retains the same recovery guidance without deriving labels from request paths, IDs, query strings, or payloads.
+Specific business-coded, tenant, and record-scope messages remain unchanged.
+Known ABP authorization codes retain their original 401/403 status and code; their generic 403 text receives the same request context without exposing technical permission or resource identifiers.
+
 ## Approved access repair
 
 A suspected broad grant is not proof of incorrect access.

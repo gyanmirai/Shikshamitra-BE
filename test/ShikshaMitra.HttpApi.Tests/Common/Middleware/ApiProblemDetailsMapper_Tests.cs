@@ -5,12 +5,25 @@ using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Security.Roles;
 using ShikshaMitra.TenantSettings.AcademicSetups;
 using Shouldly;
+using Volo.Abp.Authorization;
 using Xunit;
 
 namespace ShikshaMitra.Common.Tests.Middleware;
 
 public class ApiProblemDetailsMapper_Tests
 {
+	[Theory]
+	[InlineData(AbpAuthorizationErrorCodes.GivenPolicyHasNotGranted)]
+	[InlineData(AbpAuthorizationErrorCodes.GivenPolicyHasNotGrantedWithPolicyName)]
+	[InlineData(AbpAuthorizationErrorCodes.GivenPolicyHasNotGrantedForGivenResource)]
+	[InlineData(AbpAuthorizationErrorCodes.GivenRequirementHasNotGrantedForGivenResource)]
+	[InlineData(AbpAuthorizationErrorCodes.GivenRequirementsHasNotGrantedForGivenResource)]
+	public void Framework_authorization_codes_should_preserve_actual_authentication_and_authorization_status(string errorCode)
+	{
+		ApiProblemDetailsMapper.NormalizeStatusCode(401, errorCode).ShouldBe(401);
+		ApiProblemDetailsMapper.NormalizeStatusCode(403, errorCode).ShouldBe(403);
+	}
+
 	[Theory]
 	[InlineData(RoleErrorCodes.AssignedToUsers)]
 	[InlineData(RoleErrorCodes.ReferencedByEmployees)]

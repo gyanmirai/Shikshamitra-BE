@@ -44,6 +44,7 @@ public class ApiProblemDetailsResultFilter : IAsyncAlwaysRunResultFilter, ITrans
 
 		var payload = ExtractPayload(context.Result);
 		var problem = BuildProblemDetails(context.HttpContext.Request.Path, status, payload);
+		ApiPermissionDeniedDetails.Apply(context.HttpContext, problem, context.ActionDescriptor);
 		problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
 		if (problem.Status >= StatusCodes.Status500InternalServerError)
 		{

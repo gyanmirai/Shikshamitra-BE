@@ -66,6 +66,7 @@ public class EmployeePersonalInfoCreationWorkflow(
 		byte[]? profilePictureContent,
 		bool useCurrentUnitOfWork)
 	{
+		await policyOverrideWriter.CheckAccessAsync(input.PolicyOverride);
 		// Every creation path enters the same activation gate. Imports and onboarding cannot bypass payroll readiness.
 		input.EmployeeStatusType = EmployeeStatusType.Inactive;
 		var contact = contactGuard.RequireContactDetails(input.Email, input.MobileNo);

@@ -16,9 +16,10 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.NotNull(directory);
 		var workflow = File.ReadAllText(Path.Combine(directory.FullName, ".github", "workflows", "deploy.yml"));
 		var security = File.ReadAllText(Path.Combine(directory.FullName, ".github", "workflows", "security-regression.yml"));
-		Assert.Matches(@"security:\s*uses: \./\.github/workflows/security-regression\.yml", workflow);
-		Assert.Matches(@"build-and-deploy:\s*needs: security", workflow);
+		Assert.Matches(@"security:\s*if: github\.ref == 'refs/heads/main'\s*uses: \./\.github/workflows/security-regression\.yml", workflow);
+		Assert.Matches(@"build-and-deploy:\s*if: github\.ref == 'refs/heads/main'\s*needs: security", workflow);
 		Assert.Contains("workflow_call:", security);
+		Assert.Matches(@"security-backend:\s*if: github\.ref == 'refs/heads/main'", security);
 		using var globalJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory.FullName, "global.json")));
 		var sdk = globalJson.RootElement.GetProperty("sdk");
 		Assert.Equal("9.0.100", sdk.GetProperty("version").GetString());
@@ -29,6 +30,9 @@ public class SecurityReleaseWorkflow_Tests
 		Assert.Contains("--filter \"FullyQualifiedName~CanonicalStudentFeeAssignmentPostgres_Tests|FullyQualifiedName~LegacyMigrationBaselineBridge_Tests\"", security);
 		Assert.Contains("--filter \"FullyQualifiedName~EsiFullDemoConfigurationSeederContributor_Integration_Tests\"", security);
 		Assert.Contains("ShikshaMitra__Seeders__Profile: FullDemo", workflow);
+		Assert.Contains("ShikshaMitra__Seeders__Enabled: 'false'", workflow);
+		Assert.Contains("SeedTestLogins: 'false'", workflow);
+		Assert.Contains("cancel-in-progress: false", workflow);
 		Assert.Contains("- name: Run deployment startup regression gates", workflow);
 		Assert.Contains("- name: Validate Azure publish profile", workflow);
 		Assert.Contains("- name: Run DbMigrator", workflow);

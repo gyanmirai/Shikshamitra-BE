@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -45,6 +45,7 @@ Employee APIs manage staff identity, profile data, documents, status, reporting,
 |---|---|---|
 | Employee list and profile | `/api/employees`, `/api/employees/{id}` | `HR.Employee.EmployeeList.*` |
 | Employee picker options | `GET /api/employees/options` | `HR.Employee.EmployeeList.View`, same employee visibility and tenant filters as the directory |
+| Staff role options | `GET /api/employees/assignable-roles` | `HR.Employee.EmployeeList.Add` OR `HR.Employee.EmployeeList.Edit` |
 | Employee profile dashboard | `/api/employees/{id}/dashboard` | Own employee or `HR.Employee.EmployeeList.View` with HR user-scope enforcement |
 | Personal info | `/api/employees/{id}/personal-info` | `HR.Employee.EmployeeList.*` |
 | Controlled account email | GET/PUT `/api/employees/{id}/account-email` | `HR.Employee.EmployeeList.Edit` AND `AbpIdentity.Users.Update`, employee scope |
@@ -60,6 +61,12 @@ Employee APIs manage staff identity, profile data, documents, status, reporting,
 | Public employee application | `/api/public/employee-applications/{token}`, `/api/public/employee-applications/{token}/submit` | Anonymous token |
 
 Employee create and update flows must protect email, mobile, date of birth, date of joining, role, and academic scope consistency.
+The staff role lookup returns `items` containing only `id`, `name`, `roleAudience`, `employeeGroupAudience`, and `employeeOnboardingAssignable` for explicitly approved Employee-audience roles in the current tenant.
+Reserved Admin, Super Admin, Student, and Parent names are excluded; Identity role-management APIs retain their own permissions.
+Creating personal information with `policyOverride` requires `HR.Policies.Assign`; the onboarding default-policy confirmation marker also requires `HR.Policies.PreviewImpact`.
+The common creation workflow checks these existing policy actions before creating an identity or staff record, and returns HTTP 403 with `errorCode: HR:Employee:010043` and `data.missingPermissions` when access is missing.
+Creating personal information without an override keeps its existing Staff Add permission contract.
+Policy list reads retain `HR.Policies.View` for attendance/payroll and `HR.AttendanceAndLeave.Setting.LeavePolicy.View` for leave; Staff Add/Edit does not silently grant policy administration access.
 Generic personal-information updates still reject email changes with HR:Employee:010034.
 The controlled account-email GET returns userId, employeeEmail, accountEmail, userName and a concurrencyToken covering both records.
 PUT requires email, a 5-512 character reason, confirmEmployeeVerified=true, that concurrencyToken and a non-empty idempotencyKey.

@@ -227,8 +227,10 @@ public class ApiProblemDetailsPipeline_Tests
 		output.Detail.ShouldNotContain("{SetupName}");
 	}
 
-	[Fact]
-	public async Task Middleware_Should_Resolve_Localized_Detail_From_ErrorCode_When_Detail_Is_Generic()
+	[Theory]
+	[InlineData(GenericInternalDetail)]
+	[InlineData("You don't have permission to access this resource.")]
+	public async Task Middleware_Should_Resolve_Localized_Detail_From_ErrorCode_When_Detail_Is_Generic(string detail)
 	{
 		var resolver = CreateResolver(new Dictionary<string, string>
 		{
@@ -237,7 +239,7 @@ public class ApiProblemDetailsPipeline_Tests
 		var middleware = new ApiProblemDetailsMiddleware(
 			_ => throw new BusinessException(
 				HRErrorCodes.LeaveEmployeeNotFound,
-				GenericInternalDetail),
+				detail),
 			NullLogger<ApiProblemDetailsMiddleware>.Instance,
 			resolver);
 
@@ -441,7 +443,7 @@ public class ApiProblemDetailsPipeline_Tests
 
 		context.Response.Body.Position = 0;
 		using var document = await JsonDocument.ParseAsync(context.Response.Body);
-		document.RootElement.GetProperty("detail").GetString().ShouldBe("Invalid passing marks.");
+		document.RootElement.GetProperty("detail").GetString().ShouldBe("Invalid Passing Marks.");
 	}
 
 	[Fact]

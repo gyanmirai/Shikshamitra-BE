@@ -19,6 +19,7 @@ public class FinanceTableQuery_Tests
         public string Name { get; set; } = "";
         public string ClassDivision { get; set; } = "";
         public decimal Amount { get; set; }
+        public int? RollNumber { get; set; }
         public int Status { get; set; }
         public DateTime CreatedAt { get; set; }
     }
@@ -26,13 +27,15 @@ public class FinanceTableQuery_Tests
     {
         ["name"] = new(FinanceTableValueType.Text), ["classDivision"] = new(FinanceTableValueType.Text),
         ["amount"] = new(FinanceTableValueType.Number), ["status"] = new(FinanceTableValueType.Enum, false, [0, 1, 2, 7]),
-        ["createdAt"] = new(FinanceTableValueType.Date)
+        ["createdAt"] = new(FinanceTableValueType.Date),
+        ["rollNumber"] = new(FinanceTableValueType.Number)
     };
     private static readonly Dictionary<string, LambdaExpression> Fields = new()
     {
         ["name"] = (Expression<Func<Row, string>>)(r => r.Name), ["classDivision"] = (Expression<Func<Row, string>>)(r => r.ClassDivision),
         ["amount"] = (Expression<Func<Row, decimal>>)(r => r.Amount), ["status"] = (Expression<Func<Row, int>>)(r => r.Status),
-        ["createdAt"] = (Expression<Func<Row, DateTime>>)(r => r.CreatedAt)
+        ["createdAt"] = (Expression<Func<Row, DateTime>>)(r => r.CreatedAt),
+        ["rollNumber"] = (Expression<Func<Row, int?>>)(r => r.RollNumber)
     };
     private static FinanceTableQuery Query(string filters, string? sort = null, string? order = null) =>
         FinanceTableQuery.Parse(filters, null, sort, order, Columns);
@@ -107,6 +110,20 @@ public class FinanceTableQuery_Tests
     {
         public DbSet<Row> Rows => Set<Row>();
     }
+    [Theory]
+    [InlineData("equals", "2", 1)]
+    [InlineData("lessThan", "10", 1)]
+    [InlineData("between", "{\"min\":2,\"max\":12}", 2)]
+    public void Missing_Roll_Numbers_Do_Not_Match_Numeric_Filters(string operation, string value, int count)
+    {
+        var query = Query($$"""[{"column":"rollNumber","type":"{{operation}}","value":{{value}}}]""", "rollNumber", "asc");
+        var rows = new[] { new Row { RollNumber = null }, new Row { RollNumber = 12 }, new Row { RollNumber = 2 } }.AsQueryable();
+        var filtered = query.Apply(rows, Fields);
+        filtered.Count().ShouldBe(count);
+        query.Order(filtered, Fields, "name", false, r => r.Id).First().RollNumber.ShouldBe(2);
+        using var db = new ProbeDb(new DbContextOptionsBuilder<ProbeDb>().UseNpgsql("Host=localhost;Database=unused;Username=unused").Options);
+        query.Apply(db.Rows, Fields).ToQueryString().ShouldContain("IS NOT NULL");
+    }
     [Fact]
     public void PostgreSql_Translates_Filters_Sorting_And_Date_Bounds()
     {
@@ -115,5 +132,21 @@ public class FinanceTableQuery_Tests
         var sql = query.Order(query.Apply(db.Rows, Fields), Fields, "name", false, r => r.Id).Skip(10).Take(10).ToQueryString();
         sql.ShouldContain("ORDER BY"); sql.ShouldContain("DESC"); sql.ShouldContain("OFFSET");
         sql.ShouldContain("2026-10-13T18:30:00"); sql.ShouldContain("lower");
+    }
+
+    [Fact]
+    public void Sqlite_Executes_Zero_Status_And_Nullable_Roll_Number_Filters()
+    {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var db = new ProbeDb(new DbContextOptionsBuilder<ProbeDb>().UseSqlite(connection).Options);
+        db.Database.EnsureCreated();
+        db.Rows.AddRange(new Row { Id = Guid.NewGuid(), Status = 0, RollNumber = 2 },
+            new Row { Id = Guid.NewGuid(), Status = 1, RollNumber = 12 },
+            new Row { Id = Guid.NewGuid(), Status = 0, RollNumber = null });
+        db.SaveChanges();
+        Query("""[{"column":"status","type":"equals","value":0},{"column":"rollNumber","type":"between","value":{"min":1.5,"max":12}}]""")
+            .Apply(db.Rows, Fields).Single().RollNumber.ShouldBe(2);
+        Query("""[{"column":"rollNumber","type":"equals","value":2.5}]""").Apply(db.Rows, Fields).Count().ShouldBe(0);
     }
 }

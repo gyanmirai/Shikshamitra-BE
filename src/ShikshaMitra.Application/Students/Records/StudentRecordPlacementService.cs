@@ -87,9 +87,15 @@ public class StudentRecordPlacementService(
 			await renewals.UpdateAsync(renewal);
 		}
 		var attendanceDate = AttendanceSchoolDate.Today((await attendancePolicies.ResolveAsync(enrollment.AcademicYearId, Clock.Now.Date)).Options, Clock.Now);
+		if (enrollment.StandardId.HasValue && enrollment.DivisionId.HasValue && enrollment.RollNumber.HasValue &&
+			(enrollment.DivisionId != input.DivisionId || enrollment.RollNumber != input.RollNumber))
+			await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().RecordIssuedAsync(
+				enrollment.AcademicYearId, enrollment.StandardId.Value, enrollment.DivisionId.Value, enrollment.RollNumber.Value);
 		enrollment.ChangePlacement(standard.Id, division.Id, input.RollNumber, attendanceDate);
 		student.UpdateAcademicPlacement(input.AcademicYearId, medium.EducationBoardId, medium.Id, stage.Id, standard.Id, division.Id);
 		student.AssignRollNo(input.RollNumber);
+		if (input.RollNumber.HasValue) await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>()
+			.RecordIssuedAsync(input.AcademicYearId, input.StandardId, input.DivisionId, input.RollNumber.Value);
 		await enrollments.UpdateAsync(enrollment);
 		await students.UpdateAsync(student);
 	}

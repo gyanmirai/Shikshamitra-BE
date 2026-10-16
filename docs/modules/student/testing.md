@@ -3,12 +3,28 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-16
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Roll-number flow validation (2026-10-16)
+
+| Focused gate | Coverage |
+|---|---|
+| `StudentRollOrdering_Tests`, `StudentRollNumberBatch_Tests` | 23 passing Domain tests: grouping, direction, name format, natural numeric ordering, missing inputs, deterministic ties, expiry and approval lifecycle. |
+| Application methods `Roll_batch_` | 6 passing integration scenarios: complete server cohort and immutable paging, append-after-exit cursor, nullable historical placements, committed replay, stale roster rejection, swaps/datetime history, independent batch approval, persisted-admin authority and tenant bounds. |
+| `StudentRollNumberBatchContract_Tests` | 11 passing route/input/error-mapping checks; complete server cohorts cannot be supplied by the client. |
+| `Roll_batch_Postgres_` | Explicitly skipped without `STUDENT_RECORDS_APPLICATION_POSTGRES`; the existing factory only accepts a fresh disposable loopback `records_tests_*` database. The gate checks JSONB preview round-trip, stale competing proposals, replay and persisted final rolls. |
+
+Run Application and HttpApi tests serially with isolated artifacts, `UseSharedCompilation=false` and bounded build memory.
+Local focused compilation excludes generated migration Designer history through the existing ignored validation target; it compiles the current model, snapshot and migration bodies, not every historical Designer.
+The Student-only migration adds the batch table and indexes; the existing model snapshot has only that entity addition.
+No live school database migration, production PostgreSQL concurrency run, real-student mutation, staging deployment or Finance change is established by these local checks.
+Final Application compilation has zero errors; existing warnings remain.
+The protected Finance baseline matches all 755 backend files; the matching frontend check covers 824 files.
 
 ## Optional Payment collection and audited deferral
 
@@ -837,3 +853,21 @@ Contracts, Application, HttpApi and Host compiled with zero errors using increme
 `AdmissionAssessmentProgress_Tests` and the focused roster lifecycle/scoping integration methods passed (7 tests). Coverage includes start/end boundaries, ended sessions awaiting results, zero marks, qualitative outcomes, waiver, absence/retake, individual-slot precedence, status filtering/counts before pagination and explicit workflow continuation. The bounded test build used freshly compiled Application/Contracts outputs and existing unchanged dependency artifacts; it is not a full solution rebuild. No migration is introduced by the display contract. Student docs validation passes; the broad validator reports unrelated missing mobile-project links.
 
 The additional PostgreSQL scale run initially failed because the isolated fixture did not explicitly map Standard's get-only `TenantId`. The fixture now includes that production-equivalent property mapping. Its rebuild/rerun was stopped under workstation memory pressure, so the corrected scale test remains an open verification gate; earlier scale results are not evidence for this revision.
+
+## Archived workflow re-open checks (2026-10-16)
+
+`AdmissionWorkflowDefinition_Tests` checks immutable same-version restoration, invalid transitions and prior/sibling publication status.
+`Reopen_` Application scenarios check current-stamp restoration, stale rejection, tenant isolation, a single audit entry and preservation of a newer Published version.
+`AdmissionWorkflowApiContract_Tests` checks the Re-open route, Publish permission and query stamp binding.
+
+`AdmissionWorkflowPublicationLockPostgres_Tests` uses the existing `ASSESSMENT_ROSTER_TEST_POSTGRES` disposable loopback test connection convention.
+It verifies same-family blocking, different tenant/code independence, transaction requirement and release at commit; without that environment variable it is explicitly skipped.
+SQLite Application tests do not establish production-provider concurrency.
+
+`dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~Reopen_|FullyQualifiedName~AdmissionWorkflowPublicationLockPostgres_Tests"`
+
+Local verification passed 12 Domain tests, all three Reopen Application scenarios and the PostgreSQL publication-lock test (4/4, no skips). The provider test created and removed its own guarded `admissions_assessment_tests_*` database on loopback; it did not run against the application database. This proves the locking mechanism, not an end-to-end simultaneous Publish/Reopen application-command test on PostgreSQL.
+
+The six workflow HTTP contract tests passed with no skips using isolated test output. The ordinary HTTP test build was blocked by five unrelated `CS0121` errors in the concurrently edited `StudentRollNumberBatchContract_Tests.cs`; an ignored validation-only target excluded that one test source without changing tracked project files or normal test outputs. These checks verify controller/service metadata and direct controller behavior, not deployed authentication.
+
+HttpApi and Host leaf builds passed. Because concurrent builds exhausted workstation memory, the successful builds disabled analyzers/shared compilation and skipped dependency compilation only after checking that every workflow dependency DLL was newer than its feature source and contained the required methods/types. SHA256 comparison confirmed Host copied those exact normal dependency outputs. This is focused feature validation, not a full solution/analyzer gate. Student documentation validation passed; no schema migration was added.

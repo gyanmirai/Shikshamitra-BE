@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using ShikshaMitra.Students.Records;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.Divisions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -18,8 +19,57 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 public class StudentOnboardingRollRuleReader(OnboardingConfigurationManager configuration, IRepository<Standard, Guid> standards,
 	IRepository<StudentOnboardingCase, Guid> cases, IRepository<StudentEnrollment, Guid> enrollments,
 	IRepository<StudentRecordRenewalCase, Guid> renewals,
-	IRepository<StudentRecordTransition, Guid> transitions) : ApplicationService, ITransientDependency
+	IRepository<StudentRecordTransition, Guid> transitions,
+	IRepository<Division, Guid> divisions, IRepository<StudentRecordChange, Guid> recordChanges) : ApplicationService, ITransientDependency
 {
+	private static string SequenceKey(Guid yearId) => $"RollHighWater:{yearId:N}";
+	/// <summary>The cursor survives exits, cancelled reservations and manual corrections.</summary>
+	public async Task<int> LastIssuedAsync(Guid yearId, Guid standardId, Guid divisionId)
+	{
+		var division = await divisions.GetAsync(x => x.Id == divisionId && x.TenantId == CurrentTenant.Id);
+		if (division.StandardId != standardId) throw new BusinessException(StudentOnboardingErrorCodes.PlacementInvalid);
+		var current = await GetReservedNumbersAsync(Guid.Empty, yearId, standardId, divisionId, "null");
+		if (division.ExtraProperties.TryGetValue(SequenceKey(yearId), out var saved) && int.TryParse(saved?.ToString(), out var cursor))
+			return Math.Max(cursor, current.DefaultIfEmpty(0).Max());
+		// Bootstrap from retained records, including inactive/cancelled history, not just today's roster.
+		var historical = (await enrollments.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId && x.DivisionId == divisionId)).Select(x => x.RollNumber).ToList();
+		historical.AddRange((await cases.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId && x.DivisionId == divisionId)).Select(x => x.RollNumber));
+		historical.AddRange((await renewals.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId && x.DivisionId == divisionId)).Select(x => x.RollNumber));
+		// A moved student or a same-day correction can no longer carry the old number
+		// in its current projection. Retained dated placements and change before-images
+		// are part of the upgrade baseline, without changing any historical records.
+		var divisionText = divisionId.ToString("D");
+		var placements = await AsyncExecuter.ToListAsync((await enrollments.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId && x.AttendancePlacementHistoryJson.Contains(divisionText)).Select(x => x.AttendancePlacementHistoryJson));
+		foreach (var json in placements)
+		{
+			using var document = JsonDocument.Parse(json);
+			foreach (var row in document.RootElement.EnumerateArray()) AddHistory(row, "DivisionId", "RollNumber");
+		}
+		var corrections = await AsyncExecuter.ToListAsync((await recordChanges.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId && x.Section == "placement" && x.Status == "Applied" && x.BeforeJson.Contains(divisionText)).Select(x => x.BeforeJson));
+		foreach (var json in corrections) { using var document = JsonDocument.Parse(json); AddHistory(document.RootElement, "divisionId", "rollNumber"); }
+		void AddHistory(JsonElement row, string divisionKey, string numberKey)
+		{
+			if (row.TryGetProperty(divisionKey, out var divisionValue) && divisionValue.ValueKind == JsonValueKind.String && divisionValue.TryGetGuid(out var recordedDivision) && recordedDivision == divisionId &&
+				row.TryGetProperty(numberKey, out var numberValue) && numberValue.ValueKind == JsonValueKind.Number && numberValue.TryGetInt32(out var recordedNumber)) historical.Add(recordedNumber);
+		}
+		foreach (var transition in await transitions.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.TargetAcademicYearId == yearId && x.TargetDivisionId == divisionId))
+		{
+			using var document = JsonDocument.Parse(transition.InputJson);
+			if (document.RootElement.TryGetProperty("RollNumber", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)) historical.Add(number);
+		}
+		return Math.Max(historical.Where(x => x.HasValue).Select(x => x!.Value).DefaultIfEmpty(0).Max(), current.DefaultIfEmpty(0).Max());
+	}
+	public async Task RecordIssuedAsync(Guid yearId, Guid standardId, Guid divisionId, int number, bool reset = false)
+	{
+		if (number < 0) throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
+		var previous = reset ? 0 : await LastIssuedAsync(yearId, standardId, divisionId);
+		var division = await divisions.GetAsync(x => x.Id == divisionId && x.TenantId == CurrentTenant.Id);
+		if (division.StandardId != standardId) throw new BusinessException(StudentOnboardingErrorCodes.PlacementInvalid);
+		division.ExtraProperties[SequenceKey(yearId)] = Math.Max(previous, number);
+		// Every reservation write participates in optimistic scope concurrency, even below the high-water mark.
+		division.ExtraProperties[SequenceKey(yearId) + ":revision"] = Guid.NewGuid().ToString("N");
+		await divisions.UpdateAsync(division, false);
+	}
 	public async Task<string> GetAssignmentModeAsync(Guid yearId)
 	{
 		var settings = await configuration.GetAsync(yearId);

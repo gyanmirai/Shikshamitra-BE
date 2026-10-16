@@ -111,6 +111,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
         Configure<AbpBackgroundWorkerOptions>(options => options.IsEnabled = configuration.GetValue<bool>("BackgroundWorkers:IsEnabled", true));
         Configure<Volo.Abp.BackgroundJobs.AbpBackgroundJobOptions>(options => options.IsJobExecutionEnabled = configuration.GetValue<bool>("BackgroundJobs:IsJobExecutionEnabled", true));
 		services.AddHttpClient();
+		services.AddHostedService<ShikshaMitra.Diagnostics.ApiDatabaseTimingObserver>();
 		services.AddRateLimiter(options =>
 		{
 			options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -524,6 +525,7 @@ public class ShikshaMitraHttpApiHostModule : AbpModule
 		}
 
 		// Enforce RFC 7807 ProblemDetails for all /api endpoints.
+		app.UseMiddleware<ApiRequestTimingMiddleware>();
 		app.UseApiProblemDetails();
 
 		app.UseCorrelationId();

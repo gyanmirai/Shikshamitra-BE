@@ -87,6 +87,9 @@ public partial class StudentRecordTransitionAppService
 				CurrentUser.Id ?? throw new BusinessException("Students:Records:UserRequired"), stages);
 			if (command.TargetAcademicYearId.HasValue) item.CaptureOnboardingRollRule(await readiness.CaptureRollRuleAsync(command));
 			await transitions.InsertAsync(item);
+			if (command.TargetAcademicYearId.HasValue && command.TargetStandardId.HasValue && command.TargetDivisionId.HasValue && command.RollNumber.HasValue)
+				await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingRollRuleReader>()
+					.RecordIssuedAsync(command.TargetAcademicYearId.Value, command.TargetStandardId.Value, command.TargetDivisionId.Value, command.RollNumber.Value);
 			await events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id.Value, item.Id, CurrentUser.Id.Value, "Submitted", 0, command.Reason));
 		}
 		await work.CompleteAsync();

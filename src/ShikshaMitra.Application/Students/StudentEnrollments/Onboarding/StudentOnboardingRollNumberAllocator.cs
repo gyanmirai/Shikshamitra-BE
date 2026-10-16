@@ -40,6 +40,7 @@ public class StudentOnboardingRollNumberAllocator(StudentOnboardingRollRuleReade
 			throw OnboardingRuleConfiguration.Invalid("This command reserves the roll before enrollment activation. Choose after-division or during-activation timing; first-day and manual-bulk numbering require their owning workflow.");
 		var used = await rules.GetReservedNumbersAsync(studentId, yearId, standardId, divisionId, ruleJson);
 		used.AddRange(cohortReservations ?? []);
+		used.Add(await rules.LastIssuedAsync(yearId, standardId, divisionId));
 		var start = rule.HasValue ? OnboardingRuleConfiguration.Number(rule.Value, "startingNumber", 1) : 1;
 		if (used.Any(x => x == int.MaxValue)) throw OnboardingRuleConfiguration.Invalid("The available roll number range is exhausted.");
 		var proposedValue = Math.Max(start, used.Count == 0 ? start : (long)used.Max() + 1);

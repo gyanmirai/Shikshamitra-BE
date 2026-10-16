@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-15
+updated_on: 2026-10-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -695,3 +695,33 @@ Legacy Reporting-backed preview refresh retains its separate Dashboard.Add comma
 Unknown section raises `Students:Dashboard:InvalidSection` (400); denied identity/section/year raises authorization failure (403).
 Anonymous callers receive 401; ABP rejects an unknown tenant before this controller, normally with 404.
 The bounded authorized setup preview contains names; staff aggregates do not return contacts, compliance identifiers, credential content or full student records.
+
+## Division roll-number batches
+
+The authenticated controller root is `/api/students/roll-number-batches`.
+
+| Method and suffix | Contract |
+|---|---|
+| GET `context` | Academic year, Class and Division IDs; returns capabilities, unassigned count and latest 20 non-preview batch summaries. |
+| POST `preview` | Scope plus operation `assign-missing` or `renumber`; freezes the complete server cohort and returns its first 25 rows. No client student IDs or proposed numbers are accepted. |
+| GET `{id}` | Scoped immutable proposal; `skipCount` and `maxResultCount` page display only, maximum 100 rows. |
+| POST `{id}/submit` | Current stamp, stable idempotency key and reason; previews expire after 15 minutes. Direct-policy batches apply atomically; governed batches await approval. |
+| POST `{id}/decision` | Current stamp, approve/reject and review note; requires independent Records Changes Approve authority and the current configured stage role. |
+| POST `{id}/apply` | Approved batch, current stamp and original submission key; revalidates roster, rules, policy, locks and approvers before atomic application. |
+
+Reads require an active database identity, tenant and academic scope, plus Onboarding View or Records Student List View as applicable to every included row.
+Writes additionally require Onboarding Allocate Identifier for pending cases and Records Changes Create for active enrollments; renumbering also requires persisted school-admin scope.
+Active-enrollment batch history also requires Records Changes View.
+Records eligibility, provisioning policy, required placement reasons and Identity masking remain enforced.
+Conflicting or expired proposals use `Students:RollNumbers:StalePreview`; blocked rows, invalid states/rules and missing admin/approver authority have localized errors in `StudentRollNumberErrorCodes`.
+Committed replay returns the saved batch without a second assignment.
+
+## Archived workflow restoration
+
+| Endpoint | Contract |
+|---|---|
+| POST `/api/student/enrollment/admissions/workflows/{id}/reopen?concurrencyStamp=...` | Workflow Publish (existing `Students.Admissions.Workflows.Add` alias), authenticated and tenant-filtered; a current nonempty stamp is required. Restores the same archived ID/version as Published or Superseded and returns the refreshed workflow DTO. |
+
+Re-open records governance action `Reopened = 10` without changing stages, routes, publication metadata or Offering activation.
+A stale/missing stamp uses `Admissions.WorkflowConcurrencyConflict`; invalid lifecycle transitions use the existing governance-transition error.
+See [product.md](./product.md#workflow-builder-publication) for historical-status restoration and family serialization.

@@ -12,6 +12,7 @@ public class AdmissionWorkflowCommandService(
 	IRepository<AdmissionWorkflowDefinition, Guid> workflowRepository,
 	IRepository<AdmissionOffering, Guid> offeringRepository,
 	IRepository<AdmissionFormDefinition, Guid> formRepository,
+	IRepository<AdmissionWorkflowGovernanceHistory, Guid> historyRepository,
 	AdmissionWorkflowDefinitionStore definitionStore,
 	AdmissionWorkflowReadService readService,
 	AdmissionWorkflowValidationService validationService,
@@ -133,6 +134,7 @@ public class AdmissionWorkflowCommandService(
 
 	public async Task<AdmissionWorkflowDto> PublishAsync(Guid id, string? concurrencyStamp)
 	{
+		await AcquirePublicationLockAsync(id);
 		var workflow = await definitionStore.GetAsync(id);
 		if (workflow.Status == AdmissionWorkflowStatus.Published)
 			return await definitionStore.GetDtoAsync(workflow);
@@ -255,6 +257,39 @@ public class AdmissionWorkflowCommandService(
 			fromStatus, CurrentUser.Id);
 		await workflowRepository.UpdateAsync(workflow, autoSave: true);
 		return await definitionStore.GetDtoAsync(workflow);
+	}
+
+	public async Task<AdmissionWorkflowDto> ReopenAsync(Guid id, string? concurrencyStamp = null)
+	{
+		await AcquirePublicationLockAsync(id);
+		var workflow = await definitionStore.GetAsync(id);
+		EnsureConcurrency(workflow, concurrencyStamp);
+		var history = (await historyRepository.GetListAsync(item => item.WorkflowDefinitionId == id))
+			.OrderByDescending(item => item.OccurredAt).ThenByDescending(item => item.CreationTime).ToList();
+		if ((workflow.Status is AdmissionWorkflowStatus.Published or AdmissionWorkflowStatus.Superseded) &&
+			history.FirstOrDefault()?.Action == AdmissionWorkflowGovernanceAction.Reopened)
+			return await definitionStore.GetDtoAsync(workflow);
+
+		var archivedFrom = history.FirstOrDefault(item => item.Action == AdmissionWorkflowGovernanceAction.Archived)
+			?.FromStatus ?? AdmissionWorkflowStatus.Published;
+		var query = await workflowRepository.GetQueryableAsync();
+		var anotherVersionPublished = await AsyncExecuter.AnyAsync(query.Where(item =>
+			item.Id != id && item.Code == workflow.Code && item.Status == AdmissionWorkflowStatus.Published));
+		workflow.Reopen(archivedFrom, anotherVersionPublished);
+		await governanceService.RecordAsync(workflow, AdmissionWorkflowGovernanceAction.Reopened,
+			AdmissionWorkflowStatus.Archived, CurrentUser.Id);
+		await workflowRepository.UpdateAsync(workflow, autoSave: true);
+		return await definitionStore.GetDtoAsync(workflow);
+	}
+
+	private async Task AcquirePublicationLockAsync(Guid id)
+	{
+		var query = await workflowRepository.GetQueryableAsync();
+		// Project only the stable family key so the workflow is loaded after a waiting lock is granted.
+		var code = await AsyncExecuter.SingleOrDefaultAsync(query.Where(item => item.Id == id).Select(item => item.Code));
+		if (code != null)
+			await LazyServiceProvider.LazyGetRequiredService<IAdmissionWorkflowPublicationLock>()
+				.AcquireAsync(CurrentTenant.Id, code);
 	}
 
 	private async Task PublishNowAsync(AdmissionWorkflowDefinition workflow, Guid? actorId, string reason)

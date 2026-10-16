@@ -72,6 +72,9 @@ public class AdmissionWorkflowAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Archive)]
 	public Task<AdmissionWorkflowDto> ArchiveAsync(Guid id, string? concurrencyStamp = null) => commandService.ArchiveAsync(id, concurrencyStamp);
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.Publish)]
+	public Task<AdmissionWorkflowDto> ReopenAsync(Guid id, string? concurrencyStamp = null) => commandService.ReopenAsync(id, concurrencyStamp);
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public Task<List<AdmissionWorkflowDto>> GetVersionHistoryAsync(Guid id) =>
 		readService.GetVersionHistoryAsync(id);

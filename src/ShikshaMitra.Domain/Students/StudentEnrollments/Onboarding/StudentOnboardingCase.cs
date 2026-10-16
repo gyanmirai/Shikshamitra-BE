@@ -247,6 +247,15 @@ public partial class StudentOnboardingCase : FullAuditedAggregateRoot<Guid>, IMu
 		RollNumber = rollNumber;
 	}
 
+	public void SynchronizeProvisioningRoll(Guid enrollmentId, int number)
+	{
+		if (StudentEnrollmentId != enrollmentId || Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
+			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
+		if (number <= 0 || RollNumber.HasValue && RollNumber != number && IsIdentifierLocked("roll"))
+			throw new BusinessException(StudentOnboardingErrorCodes.RollNumberInvalid);
+		RollNumber = number;
+	}
+
 	public void CompleteProvisioning(DateTime at)
 	{
 		if (Status == StudentOnboardingStatus.Completed) return;

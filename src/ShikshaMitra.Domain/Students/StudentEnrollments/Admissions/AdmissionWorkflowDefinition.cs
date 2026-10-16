@@ -179,6 +179,16 @@ public class AdmissionWorkflowDefinition : FullAuditedAggregateRoot<Guid>, IMult
 		}
 	}
 
+	public void Reopen(AdmissionWorkflowStatus archivedFromStatus, bool anotherVersionPublished)
+	{
+		if (Status != AdmissionWorkflowStatus.Archived ||
+			archivedFromStatus is not (AdmissionWorkflowStatus.Published or AdmissionWorkflowStatus.Superseded))
+			throw InvalidTransition();
+
+		// Restoring never changes published content or replaces the current published version.
+		Status = anotherVersionPublished ? AdmissionWorkflowStatus.Superseded : archivedFromStatus;
+	}
+
 	private void SetDetails(string name, string code, string? description)
 	{
 		Name = Check.NotNullOrWhiteSpace(name, nameof(name), AdmissionWorkflowConsts.MaxNameLength).Trim();

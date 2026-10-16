@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-13
+updated_on: 2026-10-16
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -170,6 +170,13 @@ clears old validation evidence. Published and historical versions remain immutab
 approval/recovery endpoints retain their existing authorization; they are absent from the current
 builder UI and do not gate immediate publication.
 
+Archived workflows support explicit Re-open of the same ID and version; published content stays immutable.
+The latest archive history restores its prior Published or Superseded status; a different currently Published version forces Superseded, preserving that current version.
+Legacy archives without prior history restore to Published only when no other Published version exists.
+Re-open does not activate Offerings, migrate Applications, create a draft or update original publication metadata.
+Publish and Re-open serialize by tenant and workflow code through a PostgreSQL transaction-scoped advisory lock held through commit.
+The existing per-record concurrency stamp is checked after acquiring that lock; repeated successful restores with the current stamp do not duplicate audit history.
+
 ## Offering identity
 
 The active identity is Admission Cycle, optional Campus, Board, Medium, Stage, Standard, and
@@ -300,6 +307,22 @@ One tenant-scoped pool owns reserved and confirmed counts for each Admission Off
 Managed Seat cannot be skipped. Confirmation is always an allowed completion outcome; waitlisted, released, or expired completion requires both policy permission and an explicit matching `seat.status` transition. Every mutation checks application, pool, and reservation concurrency, and repeats with the same idempotency key return the recorded result.
 
 The Form-stage definition must equal the Offering application form. Applications still pin the published definition and record immutable submission snapshots. Managed submit enforces visible required fields, deadline, and attempt limits. Automatic advancement occurs only when configured and no section verification remains. Staff verification and reasoned revocation are audited. A correction request reopens the same form and invalidates all earlier section verification; the applicant must resubmit within the remaining attempt limit. Normal completion cannot bypass unresolved Form blockers.
+## Division roll-number batches
+
+Published Onboarding roll rules support Mixed, Boys First and Girls First grouping, first-name-first or surname-first names, and ascending/descending name, GR, admission-date or admission-number ordering.
+Mixed ignores gender; grouped ordering blocks missing or unsupported genders rather than guessing.
+Missing selected source values block the full proposal with actionable row feedback.
+The same ordering evaluator serves initial Onboarding, active Records and annual transition cohorts.
+
+Each academic-year Class-Division starts independently at 1.
+Assign Missing reads the complete division on the server, preserves assigned numbers and appends after the persisted last-issued cursor; exits and cancelled reservations do not free that cursor.
+The upgrade cursor baseline uses retained enrollment, onboarding, renewal, transition and placement audit history; records deleted before this release cannot be reconstructed.
+Only an explicit administrator Renumber Division resets the current sequence, requires a reason, and respects individual/group identifier locks.
+Existing Records placement approval applies once to a mixed or active-enrollment batch, with independent current-role approvers and atomic application after approval.
+Renumbering uses the application day's school-local date and does not rewrite submitted attendance, issued documents or historical enrollment facts.
+Pending return/promotion reservations and unresolved provisioning block unsafe renumbering.
+Finance ownership and monetary behavior are unchanged.
+
 ## Student dashboard
 
 One dashboard serves all authorized identities. Persisted roles select admin, leadership, teacher or common priorities; a role label never grants data access. Existing Dashboard View, exact destination action grants, submodule visibility, active database identity, tenant and current UserScope constrain every section read.

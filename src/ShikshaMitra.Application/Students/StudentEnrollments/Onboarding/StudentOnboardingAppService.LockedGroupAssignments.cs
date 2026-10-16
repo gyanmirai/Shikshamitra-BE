@@ -38,6 +38,7 @@ public partial class StudentOnboardingAppService
 			var proposal = await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollNumberAllocator>().ProposeAsync(
 				item.StudentId, item.AcademicYearId, item.IntendedStandardId, item.DivisionId!.Value, null, "automatic", rule.ToJsonString(), "");
 			item.RecordIdentifier(item.IdentifierAllocationId, proposal.RollNumber, Clock.Now);
+			await reader.RecordIssuedAsync(item.AcademicYearId, item.IntendedStandardId, item.DivisionId.Value, proposal.RollNumber);
 			item.SetIdentifierLocked("roll", true); student.SetIdentifierLocked("roll", true);
 			await AddEventAsync(item.Id, "RollNumberPrepared", $"New student received next division roll {proposal.RollNumber} in the locked identifier group.");
 		}

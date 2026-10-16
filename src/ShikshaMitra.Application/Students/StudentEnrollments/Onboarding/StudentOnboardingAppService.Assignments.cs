@@ -104,6 +104,7 @@ public partial class StudentOnboardingAppService
 		var proposal = await ProposeCaseRollAsync(item, input.RollNumber, input.RollAssignmentMode, input.Reason, frozen);
 		if (proposal.RollNumber != input.RollNumber) throw new BusinessException("Students:Records:RollProposalChanged").WithData("ProposedRollNumber", proposal.RollNumber);
 		item.RecordIdentifier(item.IdentifierAllocationId, proposal.RollNumber, Clock.Now);
+		await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().RecordIssuedAsync(item.AcademicYearId, item.IntendedStandardId, item.DivisionId.Value, proposal.RollNumber);
 		await InvalidateApprovalAsync(id, "Roll number prepared; review readiness again.");
 		await RefreshIdentifierStepAsync(item);
 		await caseRepository.UpdateAsync(item, false);

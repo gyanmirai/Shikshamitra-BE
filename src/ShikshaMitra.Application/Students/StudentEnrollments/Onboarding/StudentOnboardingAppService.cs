@@ -419,6 +419,9 @@ public partial class StudentOnboardingAppService(
 			onboardingCase.AcademicYearId, onboardingCase.IntendedStandardId, division.Id, seatNumber, now,
 			now.AddMinutes(policy?.SeatReservationMinutes ?? 1440));
 		await reservationRepository.InsertAsync(reservation, false);
+		if (placementChanged && onboardingCase.RollNumber.HasValue)
+			await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().RecordIssuedAsync(
+				onboardingCase.AcademicYearId, onboardingCase.IntendedStandardId, onboardingCase.DivisionId!.Value, onboardingCase.RollNumber.Value);
 		onboardingCase.RecordPlacement(division.Id, reservation.Id, now);
         if (placementChanged && onboardingCase.RollNumber.HasValue && onboardingCase.IsIdentifierLocked("roll"))
         {
@@ -551,6 +554,7 @@ public partial class StudentOnboardingAppService(
 		}
 
 		onboardingCase.RecordIdentifier(allocationId, input.RollNumber, now);
+		await LazyServiceProvider.LazyGetRequiredService<StudentOnboardingRollRuleReader>().RecordIssuedAsync(onboardingCase.AcademicYearId, onboardingCase.IntendedStandardId, onboardingCase.DivisionId!.Value, input.RollNumber);
 		await InvalidateApprovalAsync(id, "Identifiers changed; review onboarding again.");
 		await CompleteSystemStepAsync(id, StudentOnboardingStepKeys.IdentifiersAndRoll,
 			$"Identifiers prepared; roll number {input.RollNumber} reserved for activation.", now);

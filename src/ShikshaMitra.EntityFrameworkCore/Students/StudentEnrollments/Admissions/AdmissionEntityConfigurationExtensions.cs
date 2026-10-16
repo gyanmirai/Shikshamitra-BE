@@ -16,10 +16,11 @@ internal static class AdmissionEntityConfigurationExtensions
 		params string[] properties) where TEntity : class
 	{
 		if (!new ModelBuilder(builder.Metadata.Model).IsUsingPostgreSql())
+		{
+			AdmissionEventTimeConfiguration.Configure(builder, properties);
 			return;
-
-		// Legacy Npgsql DateTime parameters are wall clocks. Explicit offsets preserve UTC
-		// instants even when the database session uses a school-local time zone.
+		}
+		// Preserve the existing PostgreSQL storage and parameter mapping.
 		foreach (var property in properties)
 			builder.Property(property).HasColumnType("timestamp with time zone").HasConversion(UtcInstant);
 	}

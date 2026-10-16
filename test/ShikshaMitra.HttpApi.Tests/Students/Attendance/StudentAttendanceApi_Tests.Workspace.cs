@@ -186,18 +186,34 @@ public partial class StudentAttendanceApi_Tests
 		var contextResponse = await teacherClient.GetAsync($"{AttendanceBaseUrl}/context?academicYearId={context.AcademicYearId}");
 		contextResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await contextResponse.Content.ReadAsStringAsync());
 		var options = (await contextResponse.Content.ReadFromJsonAsync<AttendanceWorkspaceContextDto>(JsonOptions))!;
-		options.IsAdmin.ShouldBeFalse(); options.CanManageLock.ShouldBeFalse(); options.AssignedClasses.Count.ShouldBe(1);
+		options.IsAdmin.ShouldBeFalse(); options.CanManageLock.ShouldBeTrue(); options.AssignedClasses.Count.ShouldBe(1);
 		options.AssignedClasses.Single().DivisionId.ShouldBe(assigned);
 		options.Options.Divisions.ShouldContain(d => d.Id == assigned); options.Options.Divisions.ShouldNotContain(d => d.Id == other);
+		var assignedUrl = $"{AttendanceBaseUrl}/students?academicYearId={context.AcademicYearId}&standardId={context.StandardId}&divisionId={assigned}&date={context.ReferenceDate:yyyy-MM-dd}";
+		var otherUrl = $"{AttendanceBaseUrl}/students?academicYearId={context.AcademicYearId}&standardId={context.StandardId}&divisionId={other}&date={context.ReferenceDate:yyyy-MM-dd}";
+		var assignedRead = await teacherClient.GetAsync(assignedUrl);
+		assignedRead.StatusCode.ShouldBe(HttpStatusCode.OK, await assignedRead.Content.ReadAsStringAsync());
+		(await assignedRead.Content.ReadFromJsonAsync<StudentAttendanceListDto>(JsonOptions))!.Students.ShouldContain(s => s.StudentId == first.StudentId);
+		var unassignedRead = await teacherClient.GetAsync(otherUrl);
+		unassignedRead.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		(await unassignedRead.Content.ReadAsStringAsync()).ShouldNotContain(second.StudentId.ToString());
 		var before = await ReadRosterAsync(context, assigned, context.ReferenceDate);
-		var allowed = await teacherClient.PostAsJsonAsync($"{AttendanceBaseUrl}/mark", Input(context, assigned, context.ReferenceDate, before, first.StudentId, AttendanceStatus.Present), JsonOptions);
+		var submission = Input(context, assigned, context.ReferenceDate, before, first.StudentId, AttendanceStatus.Present);
+		submission.Submit = true;
+		var allowed = await teacherClient.PostAsJsonAsync($"{AttendanceBaseUrl}/mark", submission, JsonOptions);
 		allowed.StatusCode.ShouldBe(HttpStatusCode.OK, await allowed.Content.ReadAsStringAsync());
+		var assignedHistory = await teacherClient.GetAsync($"{AttendanceBaseUrl}/history?studentId={first.StudentId}&startDate={context.ReferenceDate:yyyy-MM-dd}&endDate={context.ReferenceDate:yyyy-MM-dd}");
+		assignedHistory.StatusCode.ShouldBe(HttpStatusCode.OK, await assignedHistory.Content.ReadAsStringAsync());
+		(await assignedHistory.Content.ReadFromJsonAsync<PagedResultDto<StudentAttendanceHistoryDto>>(JsonOptions))!.TotalCount.ShouldBeGreaterThan(0);
 		var forbiddenRoster = await ReadRosterAsync(context, other, context.ReferenceDate);
 		var denied = await teacherClient.PostAsJsonAsync($"{AttendanceBaseUrl}/mark", Input(context, other, context.ReferenceDate, forbiddenRoster, second.StudentId, AttendanceStatus.Present), JsonOptions);
 		denied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-		var lockDenied = await teacherClient.PostAsJsonAsync($"{AttendanceBaseUrl}/lock", new LockAttendanceDayInput {
+		var lockAllowed = await teacherClient.PostAsJsonAsync($"{AttendanceBaseUrl}/lock", new LockAttendanceDayInput {
 			AcademicYearId = context.AcademicYearId, StandardId = context.StandardId, DivisionId = assigned, Date = context.ReferenceDate }, JsonOptions);
-		lockDenied.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		lockAllowed.StatusCode.ShouldBe(HttpStatusCode.OK, await lockAllowed.Content.ReadAsStringAsync());
+		var unlockAllowed = await teacherClient.PostAsJsonAsync($"{AttendanceBaseUrl}/unlock", new LockAttendanceDayInput {
+			AcademicYearId = context.AcademicYearId, StandardId = context.StandardId, DivisionId = assigned, Date = context.ReferenceDate }, JsonOptions);
+		unlockAllowed.StatusCode.ShouldBe(HttpStatusCode.OK, await unlockAllowed.Content.ReadAsStringAsync());
 		var broad = await teacherClient.GetAsync($"{AttendanceBaseUrl}/workspace?academicYearId={context.AcademicYearId}&date={context.ReferenceDate:yyyy-MM-dd}&maxResultCount=100");
 		var broadRows = (await broad.Content.ReadFromJsonAsync<PagedResultDto<StudentAttendanceDto>>(JsonOptions))!;
 		broadRows.Items.ShouldContain(r => r.StudentId == first.StudentId); broadRows.Items.ShouldNotContain(r => r.StudentId == second.StudentId);
@@ -212,6 +228,10 @@ public partial class StudentAttendanceApi_Tests
 		var latest = await ReadRosterAsync(context, assigned, context.ReferenceDate);
 		var revoked = await teacherClient.PostAsJsonAsync($"{AttendanceBaseUrl}/mark", Input(context, assigned, context.ReferenceDate, latest, first.StudentId, AttendanceStatus.Absent), JsonOptions);
 		revoked.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		(await teacherClient.GetAsync(assignedUrl)).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		var revokedHistory = await teacherClient.GetAsync($"{AttendanceBaseUrl}/history?studentId={first.StudentId}&startDate={context.ReferenceDate:yyyy-MM-dd}&endDate={context.ReferenceDate:yyyy-MM-dd}");
+		revokedHistory.StatusCode.ShouldBe(HttpStatusCode.OK);
+		(await revokedHistory.Content.ReadFromJsonAsync<PagedResultDto<StudentAttendanceHistoryDto>>(JsonOptions))!.TotalCount.ShouldBe(0);
 	}
 
 	[Fact, TestTier(TestTraits.Tiers.Critical)]
@@ -257,9 +277,13 @@ public partial class StudentAttendanceApi_Tests
 			role.SetProperty(EmployeeRoleAudience.ExtraPropertyName, EmployeeRoleAudience.Employee);
 			role.SetProperty(EmployeeOnboardingRoleAssignment.ExtraPropertyName, true);
 			await services.GetRequiredService<IRepository<IdentityRole, Guid>>().InsertAsync(role, autoSave: true);
+			var identity = userId.ToByteArray();
+			var pan = new string(identity.Take(5).Select(value => (char)('A' + value % 26)).ToArray()) +
+				(BitConverter.ToUInt32(identity, 8) % 10000).ToString("D4") + "A";
+			var aadhaar = "9" + (BitConverter.ToUInt64(identity, 0) % 100000000000).ToString("D11");
 			var employee = await services.GetRequiredService<EmployeeManager>().CreateEmployeeAsync(userId, role.Id,
 				"Attendance", "Teacher", null, "Attendance", EmployeeStatusType.Active, null,
-				panNo: "ABCDE1234F", adharNo: "123412341234", employeeGroup: EmployeeGroupType.Teaching);
+				panNo: pan, adharNo: aadhaar, employeeGroup: EmployeeGroupType.Teaching);
 			await services.GetRequiredService<IRepository<Employee, Guid>>().InsertAsync(employee, autoSave: true);
 			var assignment = new ClassTeacher(Guid.NewGuid(), tenantId, context.StandardId, divisionId, employee.Id,
 				context.AcademicMediumId, context.AcademicYearId, context.AcademicBoardId, context.AcademicMediumId, context.AcademicMediumStageId);

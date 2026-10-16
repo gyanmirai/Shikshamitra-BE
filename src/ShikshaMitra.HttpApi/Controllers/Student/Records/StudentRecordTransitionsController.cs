@@ -29,7 +29,7 @@ public class StudentRecordTransitionsController(IStudentRecordTransitionAppServi
 	public async Task<Result<StudentRecordTransitionDto>> ApproveAsync(Guid id, StudentRecordTransitionDecisionDto input) => Result.Success(await service.ApproveAsync(id, input));
 	[HttpPost("{id:guid}/reject"), Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Approve)]
 	public async Task<Result<StudentRecordTransitionDto>> RejectAsync(Guid id, StudentRecordTransitionDecisionDto input) => Result.Success(await service.RejectAsync(id, input));
-	[HttpPost("{id:guid}/cancel"), Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create)]
+	[HttpPost("{id:guid}/cancel"), Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Add)]
 	public async Task<Result<StudentRecordTransitionDto>> CancelAsync(Guid id, StudentRecordTransitionDecisionDto input) => Result.Success(await service.CancelAsync(id, input));
 	[HttpPost("{id:guid}/apply"), Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Apply)]
 	public async Task<Result<StudentRecordTransitionDto>> ApplyAsync(Guid id, StudentRecordTransitionDecisionDto input) => Result.Success(await service.ApplyAsync(id, input));

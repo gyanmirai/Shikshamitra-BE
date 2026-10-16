@@ -17,13 +17,13 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string RecordAttendance = Add;
 			public const string RecordResults = Add;
 			public const string Review = Add;
-			public const string Waive = Delete;
+			public const string Waive = Add;
 			public static readonly string[] All = [View, Add, Delete];
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				[View] = "View admission assessments",
 				[Add] = "Add or update admission assessments",
-				[Delete] = "Delete or waive admission assessments"
+				[Delete] = "Delete admission assessments"
 			};
 		}
 	}

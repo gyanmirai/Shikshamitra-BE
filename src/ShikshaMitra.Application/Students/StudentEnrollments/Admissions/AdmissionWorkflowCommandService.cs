@@ -21,6 +21,7 @@ public class AdmissionWorkflowCommandService(
 {
 	public async Task<AdmissionWorkflowDto> CreateAsync(CreateUpdateAdmissionWorkflowDto input)
 	{
+		AdmissionWorkflowDefinitionStore.EnsureSupportedStages(input);
 		var id = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "WF", id);
 		await EnsureCodeVersionAvailableAsync(code, 1);
@@ -43,6 +44,7 @@ public class AdmissionWorkflowCommandService(
 	public async Task<AdmissionWorkflowDto> UpdateAsync(Guid id, CreateUpdateAdmissionWorkflowDto input)
 	{
 		var workflow = await definitionStore.GetAsync(id);
+		AdmissionWorkflowDefinitionStore.EnsureSupportedStages(input);
 		workflow.PrepareForEdit();
 		EnsureConcurrency(workflow, input.ConcurrencyStamp);
 		var code = AdmissionSettingsCode.ForUpdate(input.Code, workflow.Code);
@@ -78,6 +80,7 @@ public class AdmissionWorkflowCommandService(
 	public async Task<AdmissionWorkflowDto> CloneAsync(Guid id, CloneAdmissionWorkflowDto input)
 	{
 		var source = await definitionStore.GetAsync(id);
+		await definitionStore.EnsureSupportedStagesAsync(source.Id);
 		var cloneId = GuidGenerator.Create();
 		var code = AdmissionSettingsCode.ForCreate(input.Code, "WF", cloneId);
 		await EnsureCodeVersionAvailableAsync(code, 1);
@@ -105,6 +108,7 @@ public class AdmissionWorkflowCommandService(
 		if (versions.Any(workflow => IsPending(workflow.Status)))
 			throw new BusinessException(AdmissionWorkflowErrorCodes.DraftRequired,
 				"This workflow already has a draft version.");
+		await definitionStore.EnsureSupportedStagesAsync(source.Id);
 		var version = new AdmissionWorkflowDefinition(
 			GuidGenerator.Create(), CurrentTenant.Id, source.Name, source.Code,
 			versions.Max(workflow => workflow.Version) + 1, source.Id, source.Description,

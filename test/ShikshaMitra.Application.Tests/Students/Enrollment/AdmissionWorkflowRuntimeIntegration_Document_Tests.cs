@@ -39,50 +39,45 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 	}
 	[Fact]
-	public async Task Managed_documents_gate_skip_and_override_and_require_replacement_review()
+	public async Task Managed_documents_preserve_required_skip_denial_and_replacement_review_history()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
-		var fixture = await CreateDocumentHandoffFixtureAsync(HandoffPolicy(new AdmissionDocumentRequirement() { Code = "BIRTH", Name = "Birth certificate", CollectionMode = "both" }));
+		var fixture = await CreateDocumentHandoffFixtureAsync(HandoffPolicy(new AdmissionDocumentRequirement() { Code = "BIRTH", Name = "Birth certificate" }));
 		var service = GetRequiredService<IAdmissionDocumentVerificationAppService>();
 		var state = await service.GetAsync(fixture.Application.Id, fixture.StageId);
 		state.DocumentVerificationEnabled.ShouldBeTrue();
-		state.CanComplete.ShouldBeFalse();
-		foreach (var mode in new[] { "normal", "skip", "override" })
+		// Outstanding evidence can continue to Onboarding, but a required stage cannot be skipped.
+		state.CanComplete.ShouldBeTrue();
+		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.AdvanceWorkflowAsync(fixture.Application.Id, new()
 		{
-			var exception = await Should.ThrowAsync<BusinessException>(() => _applicationAppService.AdvanceWorkflowAsync(fixture.Application.Id, new()
-			{
-				ExpectedCurrentStageInstanceId = fixture.StageId, IdempotencyKey = Guid.NewGuid().ToString(), ConcurrencyStamp = state.ConcurrencyStamp,
-				SkipCurrentStage = mode == "skip", AdminOverride = mode == "override", Reason = "Must not bypass evidence"
-			}));
-			exception.Code.ShouldBe(mode == "skip"
-				? AdmissionApplicationErrorCodes.ManualSkipNotAllowed
-				: AdmissionDocumentErrorCodes.EvidenceRequired);
-		}
+			ExpectedCurrentStageInstanceId = fixture.StageId, IdempotencyKey = Guid.NewGuid().ToString(), ConcurrencyStamp = state.ConcurrencyStamp,
+			SkipCurrentStage = true, Reason = "Required stage cannot be skipped"
+		}))).Code.ShouldBe(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
 		var originalStamp = state.ConcurrencyStamp;
 		state = await UploadDocumentAsync(service, fixture.Application.Id, fixture.StageId, state);
 		state.Requirements.Single().Status.ShouldBe("pendingReview");
 		state.Requirements.Single().Evidence.Last().SubmittedAt.Kind.ShouldBe(DateTimeKind.Utc);
 		(Math.Abs((DateTime.UtcNow - state.Requirements.Single().Evidence.Last().SubmittedAt).TotalMinutes) < 1).ShouldBeTrue();
 		state.Requirements.Single().CanReview.ShouldBeTrue();
-		state.Requirements.Single().CanAccept.ShouldBeFalse();
+		state.Requirements.Single().CanAccept.ShouldBeTrue();
 		state = await service.ReviewAsync(state.Requirements.Single().Evidence.Last().Id, new() { ConcurrencyStamp = state.ConcurrencyStamp, Decision = "rejected", Reason = "Uploaded copy is unreadable" });
 		state.Requirements.Single().Status.ShouldBe("rejected");
 		state = await UploadDocumentAsync(service, fixture.Application.Id, fixture.StageId, state);
-		var stale = await Should.ThrowAsync<BusinessException>(() => service.RecordOriginalAsync(fixture.Application.Id, fixture.StageId, "BIRTH",
-			new() { ConcurrencyStamp = originalStamp, Notes = "Saw original" }));
+		var stale = await Should.ThrowAsync<BusinessException>(() => service.ReviewAsync(state.Requirements.Single().Evidence.Last().Id,
+			new() { ConcurrencyStamp = originalStamp, Decision = "accepted" }));
 		stale.Code.ShouldBe(AdmissionDocumentErrorCodes.ConcurrencyConflict);
-		state = await service.RecordOriginalAsync(fixture.Application.Id, fixture.StageId, "BIRTH", new() { ConcurrencyStamp = state.ConcurrencyStamp, Notes = "Compared original birth certificate with uploaded copy" });
-		state.Requirements.Single().Evidence.Count.ShouldBe(3);
+		state.Requirements.Single().Evidence.Count.ShouldBe(2);
 		state = await service.ReviewAsync(state.Requirements.Single().Evidence.Last().Id, new() { ConcurrencyStamp = state.ConcurrencyStamp, Decision = "accepted" });
 		state.CanComplete.ShouldBeTrue();
 		var acceptedId = state.Requirements.Single().Evidence.Last().Id;
 		state = await UploadDocumentAsync(service, fixture.Application.Id, fixture.StageId, state);
-		state.CanComplete.ShouldBeFalse();
+		state.CanComplete.ShouldBeTrue();
 		state.Requirements.Single().Evidence.Last().OriginalSeen.ShouldBeFalse();
 		state.Requirements.Single().Evidence.Single(item => item.Id == acceptedId).Status.ShouldBe("accepted");
 		await Should.ThrowAsync<BusinessException>(() => service.ReviewAsync(acceptedId, new() { ConcurrencyStamp = state.ConcurrencyStamp, Decision = "accepted" }));
-		state = await service.WaiveAsync(fixture.Application.Id, fixture.StageId, "BIRTH", new() { ConcurrencyStamp = state.ConcurrencyStamp, Reason = "Original unavailable after documented exceptional review" });
+		await Should.ThrowAsync<BusinessException>(() => service.WaiveAsync(fixture.Application.Id, fixture.StageId, "BIRTH", new() { ConcurrencyStamp = state.ConcurrencyStamp, Reason = "A waiver cannot replace current verified evidence" }));
+		state = await service.ReviewAsync(state.Requirements.Single().Evidence.Last().Id, new() { ConcurrencyStamp = state.ConcurrencyStamp, Decision = "accepted" });
 		state.CanComplete.ShouldBeTrue();
 		await AdvanceAssessmentAsync(fixture.Application.Id, fixture.StageId);
 		(await service.GetAsync(fixture.Application.Id, fixture.StageId)).IsActive.ShouldBeFalse();
@@ -118,10 +113,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			Code = "BIRTH", Name = "Birth certificate", Requirement = "conditional",
 			ConditionJson = "{\"operator\":\"Equals\",\"field\":\"application.missing\",\"value\":\"yes\"}"
 		}));
-		var state = await GetRequiredService<IAdmissionDocumentVerificationAppService>().GetAsync(fixture.Application.Id, fixture.StageId);
-		state.Requirements.Single().ConditionStatus.ShouldBe("undetermined");
-		state.CanComplete.ShouldBeFalse();
-		state.Requirements.Single().CanWaive.ShouldBeFalse();
+		var evaluation = await WithUnitOfWorkAsync(async () => await GetRequiredService<AdmissionDocumentEvaluationService>()
+			.EvaluateAsync(await _applicationRepository.GetAsync(fixture.Application.Id), fixture.StageId, fixture.Policy));
+		evaluation.Requirements.Single().ConditionStatus.ShouldBe("undetermined");
+		evaluation.Blockers.ShouldNotBeEmpty();
+		await RestoreHistoricalDocumentPolicyAsync(fixture);
+		(await Should.ThrowAsync<BusinessException>(() => WithUnitOfWorkAsync(async () =>
+			await GetRequiredService<ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingRequirementSnapshotService>()
+				.PrepareDocumentPoliciesAsync(await _applicationRepository.GetAsync(fixture.Application.Id)))))
+			.Code.ShouldBe(AdmissionDocumentErrorCodes.EvidenceRequired);
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var application = await _applicationRepository.GetAsync(fixture.Application.Id);

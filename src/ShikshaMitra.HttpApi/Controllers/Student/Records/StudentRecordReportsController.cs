@@ -18,7 +18,7 @@ public class StudentRecordReportsController(IStudentRecordReportAppService repor
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Reports.Add)]
 	public Task<StudentRecordReportJobDto> Create(StudentRecordReportInput input) => reports.CreateAsync(input);
 	[HttpPost("{id}/cancel")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Reports.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Reports.Add)]
 	public Task<StudentRecordReportJobDto> Cancel(Guid id) => reports.CancelAsync(id);
 	[HttpGet("{id}/download")]
 	public async Task<IActionResult> Download(Guid id)

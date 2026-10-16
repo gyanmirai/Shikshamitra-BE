@@ -46,9 +46,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		state.CanCollectDuringForm.ShouldBeFalse();
 		state.Requirements.Single().Evidence.Single().Id.ShouldBe(evidenceId);
 		state.Requirements.Single().CanReview.ShouldBeFalse();
-		state.CanComplete.ShouldBeTrue();
+		state.CanComplete.ShouldBeTrue(string.Join("; ", state.Blockers));
 		state = await UploadDocumentAsync(service, application.Id, documentId, state);
-		state.CanComplete.ShouldBeFalse();
+		// Current policy permits collecting outstanding evidence during Onboarding.
+		state.CanComplete.ShouldBeTrue();
 		state.Requirements.Single().Evidence.Count.ShouldBe(2);
 		state.Requirements.Single().Status.ShouldBe("pendingReview");
 	}

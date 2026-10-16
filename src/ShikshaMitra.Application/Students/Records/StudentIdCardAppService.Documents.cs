@@ -81,7 +81,7 @@ public partial class StudentIdCardAppService
 	[UnitOfWork(true)]
 	public async Task<StudentIdCardDto> VoidAsync(Guid id, StudentDocumentActionDto input)
 	{
-		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Delete); ValidateReason(input);
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add); ValidateReason(input);
 		var card = await LoadCardAsync(id);
 		if (card.Status != "Voided") { card.Void(); await cards.UpdateAsync(card, autoSave: true); await AddEventAsync(card, "Void", input.Reason); }
 		return Map(card);

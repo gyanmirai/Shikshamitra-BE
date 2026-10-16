@@ -296,15 +296,19 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 	private async Task<OneClickCredentialsFixture> CreateOneClickCredentialsCaseAsync(string timing, bool captureStudentEmail = true,
-		bool emailEnabled = true, bool accountsEnabled = true)
+		bool emailEnabled = true, bool accountsEnabled = true, string? studentAccess = null, string? guardianAccess = null,
+		string provisioningMode = "manual")
 	{
 		var fixture = await CreateAutomaticRegressionFixtureAsync("OneClickCredentials");
 		var cycle = await WithUnitOfWorkAsync(() => _cycleRepository.GetAsync(fixture.Offering.AdmissionCycleId));
 		var service = GetRequiredService<IStudentOnboardingAppService>(); var settings = (await service.GetSettingsAsync(cycle.AcademicYearId)).Single(value => value.AcademicYearId == cycle.AcademicYearId);
 		var config = JsonNode.Parse(settings.ConfigurationJson)!.AsObject(); var access = config["readinessAccess"]!.AsObject();
-		access["studentAccount"] = accountsEnabled; access["guardianAccount"] = accountsEnabled;
+		access["studentAccount"] = studentAccess == null ? accountsEnabled : studentAccess == "required";
+		access["guardianAccount"] = guardianAccess == null ? accountsEnabled : guardianAccess == "required";
+		if (studentAccess != null) access["studentAccountAccess"] = studentAccess;
+		if (guardianAccess != null) access["guardianAccountAccess"] = guardianAccess;
 		access["sendStudentCredentialEmail"] = emailEnabled; access["sendGuardianCredentialEmail"] = emailEnabled;
-		access["credentialSendingTime"] = timing; access["credentialProvisioningMode"] = "manual";
+		access["credentialSendingTime"] = timing; access["credentialProvisioningMode"] = provisioningMode;
 		await service.SaveSettingsAsync(new() { AcademicYearId = cycle.AcademicYearId, ConfigurationJson = config.ToJsonString(), ConcurrencyStamp = settings.ConcurrencyStamp });
 		var studentEmail = $"student-{Guid.NewGuid():N}@example.test"; var fatherEmail = $"father-{Guid.NewGuid():N}@example.test"; var motherEmail = $"mother-{Guid.NewGuid():N}@example.test";
 		if (captureStudentEmail) await WithUnitOfWorkAsync(async () =>

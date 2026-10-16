@@ -10,12 +10,18 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 public partial class StudentOnboardingAppService
 {
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
     public async Task<IReadOnlyList<OnboardingAvailableOfferingDto>> GetAvailableOfferingsAsync(Guid? academicYearId)
     {
-        await EnsureSettingsScopeAsync(academicYearId);
+        var scope = LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>();
+        if (academicYearId.HasValue)
+            await scope.EnsureCanAccessAcademicYearAsync(academicYearId.Value, nameof(GetAvailableOfferingsAsync));
+        var yearScope = await scope.GetCurrentUserAcademicYearScopeAsync();
+        var yearIds = yearScope.AcademicYearIds.ToArray();
         var reader = LazyServiceProvider.LazyGetRequiredService<AdmissionOfferingReadService>();
-        var cycles = await cycleRepository.GetListAsync(c => !academicYearId.HasValue || c.AcademicYearId == academicYearId.Value);
+        var cycles = await cycleRepository.GetListAsync(c =>
+            (!academicYearId.HasValue || c.AcademicYearId == academicYearId.Value) &&
+            (yearScope.HasAllAcademicYears || Enumerable.Contains(yearIds, c.AcademicYearId)));
         var result = new List<OnboardingAvailableOfferingDto>();
         foreach (var cycle in cycles)
         {
@@ -25,7 +31,7 @@ public partial class StudentOnboardingAppService
                 // Reuse the tenant and academic-scope reader without requiring the separate Admissions menu permission.
                 var page = await reader.GetListAsync(new AdmissionOfferingListInput { AdmissionCycleId = cycle.Id, SkipCount = skip, MaxResultCount = 1000 });
                 var ids = page.Items.Select(o => o.Id).ToArray();
-                var offeringById = (await offeringRepository.GetListAsync(o => ids.Contains(o.Id))).ToDictionary(o => o.Id);
+                var offeringById = (await offeringRepository.GetListAsync(o => Enumerable.Contains(ids, o.Id))).ToDictionary(o => o.Id);
                 foreach (var row in page.Items)
                     result.Add(new OnboardingAvailableOfferingDto
                     {

@@ -17,6 +17,13 @@ The existing configured administrator data-scope exception remains server-contro
 
 ## Catalogue and editor
 
+Student uses the user-approved three-action contract: View, Add (displayed as Add/Update), and supported Delete.
+All Student sensitive commands use the owning Add permission; action permission is always independent of teacher-assignment scope.
+Student has no Development authorization bypass or Academic assignment-to-action fallback.
+The canonical Student catalogue has 36 features and 106 action leaves; Overrides and Guardian Access have no Delete leaf.
+Retired specialized positive grants are inert until an administrator explicitly assigns canonical access, while retired explicit user denials conservatively map to canonical actions.
+See [Student API permissions](../../modules/student/api.md#student-action-permissions) for the coordinated rollout and denial compatibility rules.
+
 The current security release retains the old frontend UI at the user's request.
 The replacement-editor redesign remains withdrawn.
 The user's September 17 correction makes the deployed staging UI and grouped behavior the frontend reference.
@@ -62,7 +69,7 @@ The flat, nested, and user-override permission-service entry points share provid
 | `PUT /api/shikshamitra-permissions/users/{userId}/permissions` | `{ "permissions": [{ "name": "<exact catalogue name>", "state": "inherit|allow|deny" }] }`; changed entries only; 204 on success. |
 
 The legacy binary U update remains compatible: true means direct Allow, false removes that direct grant, and either clears any prior explicit Deny for that entry. New user editors must use the override API to express Deny.
-Existing direct U grants migrate logically to Allow without copying role permissions or reseeding users.
+Existing direct U grants for active canonical permissions migrate logically to Allow without copying role permissions or reseeding users. Retired Student positive grants follow the explicit reassignment rule above.
 Apply the `AddUserPermissionDenies` migration before starting a backend with override support; it adds storage only and does not alter existing role/user grants.
 The deny value provider and the replacement permission checker enforce denial precedence, including legacy catalogue reads. Denial lookup reuse is limited to a unit of work and invalidated by persisted denial changes.
 Role management requires the configured R provider policy, normally `AbpIdentity.Roles.ManagePermissions`.

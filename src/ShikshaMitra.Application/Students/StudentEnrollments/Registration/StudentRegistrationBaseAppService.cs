@@ -83,6 +83,10 @@ public abstract class StudentRegistrationBaseAppService(
 		var student = await studentRepository.GetRegistrationAggregateAsync(studentId)
 			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
 		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, operation);
+		if (Array.Exists(RegistrationStatuses, status => status == student.Status))
+			await AuthorizationService.CheckAsync(forProfileWrite
+				? ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add
+				: ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
 
 		validationService.ValidateStudentStatus(
 			student,

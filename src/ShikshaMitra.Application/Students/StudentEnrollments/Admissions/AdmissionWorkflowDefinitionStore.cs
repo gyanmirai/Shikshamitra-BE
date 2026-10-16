@@ -45,7 +45,7 @@ public class AdmissionWorkflowDefinitionStore(
 
 	public async Task ReplaceChildrenAsync(Guid workflowId, CreateUpdateAdmissionWorkflowDto input)
 	{
-		foreach (var stage in input.Stages) EnsureSupported(stage.StageType);
+		EnsureSupportedStages(input);
 		var existingStages = await GetStagesAsync(workflowId);
 		var existingStagesById = existingStages.ToDictionary(stage => stage.Id);
 		var stageIdMap = new Dictionary<Guid, Guid>();
@@ -95,11 +95,11 @@ public class AdmissionWorkflowDefinitionStore(
 	public async Task CopyChildrenAsync(Guid sourceWorkflowId, Guid targetWorkflowId)
 	{
 		var sourceStages = await GetStagesAsync(sourceWorkflowId);
+		foreach (var stage in sourceStages) EnsureSupported(stage.StageType);
 		var sourceTransitions = await GetTransitionsAsync(sourceWorkflowId);
 		var stageIdMap = new Dictionary<Guid, Guid>();
 		foreach (var sourceStage in sourceStages)
 		{
-			EnsureSupported(sourceStage.StageType);
 			var stageId = GuidGenerator.Create();
 			stageIdMap[sourceStage.Id] = stageId;
 			await stageRepository.InsertAsync(new AdmissionWorkflowStageDefinition(
@@ -117,6 +117,11 @@ public class AdmissionWorkflowDefinitionStore(
 				sourceTransition.ConditionRuleJson, sourceTransition.IsDefault), autoSave: false);
 		}
 		await CurrentUnitOfWork!.SaveChangesAsync();
+	}
+
+	public async Task EnsureSupportedStagesAsync(Guid workflowId)
+	{
+		foreach (var stage in await GetStagesAsync(workflowId)) EnsureSupported(stage.StageType);
 	}
 
 	public async Task DeleteChildrenAsync(Guid workflowId)
@@ -166,6 +171,11 @@ public class AdmissionWorkflowDefinitionStore(
 			id, workflowId, input.Code, input.Name, input.StageType, input.DisplayOrder,
 			input.IsRequired, input.AllowManualSkip, input.Description, input.ConfigurationJson,
 			input.IsEntryStage, input.IsTerminalStage);
+
+	public static void EnsureSupportedStages(CreateUpdateAdmissionWorkflowDto input)
+	{
+		foreach (var stage in input.Stages) EnsureSupported(stage.StageType);
+	}
 
 	private static void EnsureSupported(AdmissionWorkflowStageType type)
 	{

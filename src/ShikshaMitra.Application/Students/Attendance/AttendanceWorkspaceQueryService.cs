@@ -29,7 +29,7 @@ public class AttendanceWorkspaceQueryService(StudentDirectoryQueryService direct
 		var result = new AttendanceWorkspaceContextDto {
 			IsAdmin = isAdmin, Options = await options.GetAsync(yearId),
 			SchoolToday = AttendanceSchoolDate.Today((await policies.ResolveAsync(yearId, Clock.Now.Date)).Options, Clock.Now),
-			CanManageLock = isAdmin && await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete),
+			CanManageLock = await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add),
 			AssignedClasses = await access.AssignedClassesAsync(yearId) };
 		if (!result.Options.AcademicYears.Any(y => y.Id == yearId)) throw new BusinessException(UserScopeErrorCodes.AccessDenied);
 		if (!isAdmin)

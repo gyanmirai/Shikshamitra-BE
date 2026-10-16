@@ -15,7 +15,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
-	private Task SetRecordsRollOwnerAsync(Guid year, string mode) => GetRequiredService<IStudentOnboardingAppService>().SaveSettingsAsync(new()
+	private Task SetRecordsRollOwnerAsync(Guid year, string mode) => SavePublishedRecordsRollSettingsAsync(new()
 	{
 		AcademicYearId = year, ConfigurationJson = JsonSerializer.Serialize(new
 		{
@@ -23,6 +23,22 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			rollNumber = new { assignmentMode = mode, configurations = new[] { new { id = "records-roll", boardMode = "all", mediumMode = "all", stageMode = "all", classMode = "all", divisionMode = "all", startingNumber = 40, numberingScope = "class-division", arrangeBy = "studentName", arrangeType = "ascending", preserveExisting = true, midYearHandling = "next-available", requireApproval = true } } }
 		})
 	});
+	private async Task SavePublishedRecordsRollSettingsAsync(SaveStudentOnboardingSettingsDto input)
+	{
+		var configuration = System.Text.Json.Nodes.JsonNode.Parse(input.ConfigurationJson)!;
+		var rows = configuration["rollNumber"]!["configurations"]!.AsArray();
+		foreach (var row in rows)
+		{
+			row!["status"] = "draft"; row["version"] = 1; row["isActive"] = false;
+		}
+		var service = GetRequiredService<IStudentOnboardingAppService>();
+		input.ConfigurationJson = configuration.ToJsonString();
+		var saved = await service.SaveSettingsAsync(input);
+		foreach (var row in rows) { row!["status"] = "published"; row["isActive"] = true; }
+		input.ConcurrencyStamp = saved.ConcurrencyStamp;
+		input.ConfigurationJson = configuration.ToJsonString();
+		await service.SaveSettingsAsync(input);
+	}
 	private static StudentRecordTransitionInput RollCommand(Guid student, Guid year, Guid standard, Guid division, string? mode, int? roll) => new()
 	{
 		StudentId = student, Outcome = "Promote", TargetAcademicYearId = year, TargetStandardId = standard, TargetDivisionId = division,
@@ -47,8 +63,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		second.AcademicYearId.ShouldBe(fixture.Input.AcademicYearId);
 		fixture.Input.Items = [RollCommand(fixture.Student.Id, target.Year, target.Standard, target.Division, "automatic", null), RollCommand(second.Id, target.Year, target.Standard, target.Division, "automatic", null)];
 		var preview = await fixture.Service.PreviewAsync(fixture.Input); preview.ReadyCount.ShouldBe(2);
-		preview.Items.Single(x => x.StudentId == second.Id).ProposedRollNumber.ShouldBe(40);
-		preview.Items.Single(x => x.StudentId == fixture.Student.Id).ProposedRollNumber.ShouldBe(41);
+		preview.Items.Single(x => x.StudentId == second.Id).ProposedRollNumber.ShouldBe(1);
+		preview.Items.Single(x => x.StudentId == fixture.Student.Id).ProposedRollNumber.ShouldBe(2);
 		preview.Items.ShouldAllBe(x => x.RollAssignmentMode == "automatic" && !x.OnboardingRollApprovalRequired);
 		AcceptRollPreview(fixture.Input, preview);
 		var result = await fixture.Service.SubmitBatchAsync(fixture.Input); result.Items.ShouldAllBe(x => x.Status == "Applied");
@@ -60,13 +76,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var policy = StudentRecordsPolicy.Starter(); policy.Changes["Placement"].Mode = "Direct"; policy.Transitions.AnnualRenewalMode = "DirectEnrollment";
 		var fixture = await TransitionFixtureAsync(policy); var target = await NextRecordYearAsync(fixture.Input.AcademicYearId); await SetRecordsRollOwnerAsync(target.Year, "both");
 		fixture.Input.Items = [RollCommand(fixture.Student.Id, target.Year, target.Standard, target.Division, "automatic", null)];
-		AcceptRollPreview(fixture.Input, await fixture.Service.PreviewAsync(fixture.Input)); fixture.Input.Items.Single().RollNumber.ShouldBe(40);
+		AcceptRollPreview(fixture.Input, await fixture.Service.PreviewAsync(fixture.Input)); fixture.Input.Items.Single().RollNumber.ShouldBe(1);
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var other = await CreateExistingStudentAsync(offering, "Other", "Student"); await GrantCompletedRecordAsync(other);
-		var competing = new StudentRecordTransitionBatchInput { AcademicYearId = fixture.Input.AcademicYearId, IdempotencyKey = "other-roll", Items = [RollCommand(other.Id, target.Year, target.Standard, target.Division, "manual", 40)] };
+		var competing = new StudentRecordTransitionBatchInput { AcademicYearId = fixture.Input.AcademicYearId, IdempotencyKey = "other-roll", Items = [RollCommand(other.Id, target.Year, target.Standard, target.Division, "manual", 1)] };
 		AcceptRollPreview(competing, await fixture.Service.PreviewAsync(competing)); (await fixture.Service.SubmitBatchAsync(competing)).Items.Single().Status.ShouldBe("Applied");
 		(await Should.ThrowAsync<BusinessException>(() => fixture.Service.SubmitBatchAsync(fixture.Input))).Code.ShouldBe("Students:Records:RollProposalChanged");
-		AcceptRollPreview(fixture.Input, await fixture.Service.PreviewAsync(fixture.Input)); fixture.Input.Items.Single().RollNumber.ShouldBe(41);
+		AcceptRollPreview(fixture.Input, await fixture.Service.PreviewAsync(fixture.Input)); fixture.Input.Items.Single().RollNumber.ShouldBe(2);
 		var result = await fixture.Service.SubmitBatchAsync(fixture.Input); result.Items.Single().Status.ShouldBe("Applied");
 		(await fixture.Service.SubmitBatchAsync(fixture.Input)).Items.Single().Id.ShouldBe(result.Items.Single().Id);
 	});
@@ -86,7 +102,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await fixture.Service.GetRenewalsAsync(new() { StudentId = fixture.Student.Id })).TotalCount.ShouldBe(0);
 	});
 	[Theory][InlineData("class-division")][InlineData("class")]
-	public Task Record_roll_cohort_orders_by_its_captured_scope_and_rejects_conflicting_class_rules(string numberingScope) => RunCertificationScenarioAsync(async () =>
+	public Task Record_roll_cohort_uses_independent_division_sequences_despite_legacy_scope_and_start_metadata(string numberingScope) => RunCertificationScenarioAsync(async () =>
 	{
 		var policy = StudentRecordsPolicy.Starter(); policy.Changes["Placement"].Mode = "Direct"; policy.Transitions.AnnualRenewalMode = "DirectEnrollment";
 		var fixture = await TransitionFixtureAsync(policy); var target = await NextRecordYearAsync(fixture.Input.AcademicYearId);
@@ -95,7 +111,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var amy = await CreateExistingStudentAsync(offering, "Amy", "Record"); await GrantCompletedRecordAsync(amy);
 		var ben = await CreateExistingStudentAsync(offering, "Ben", "Record"); await GrantCompletedRecordAsync(ben);
 		var zoe = await CreateExistingStudentAsync(offering, "Zoe", "Record"); await GrantCompletedRecordAsync(zoe);
-		await GetRequiredService<IStudentOnboardingAppService>().SaveSettingsAsync(new()
+		await SavePublishedRecordsRollSettingsAsync(new()
 		{
 			AcademicYearId = target.Year, ConfigurationJson = JsonSerializer.Serialize(new
 			{
@@ -107,15 +123,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			})
 		});
 		fixture.Input.Items = [RollCommand(fixture.Student.Id, target.Year, target.Standard, target.Division, "automatic", null), RollCommand(ben.Id, target.Year, target.Standard, otherDivision.Id, "automatic", null), RollCommand(amy.Id, target.Year, target.Standard, target.Division, "automatic", null), RollCommand(zoe.Id, target.Year, target.Standard, otherDivision.Id, "automatic", null)];
-		if (numberingScope == "class")
-		{
-			await Should.ThrowAsync<BusinessException>(() => fixture.Service.PreviewAsync(fixture.Input));
-			return;
-		}
 		var preview = await fixture.Service.PreviewAsync(fixture.Input); preview.ReadyCount.ShouldBe(4);
-		preview.Items.Single(x => x.StudentId == amy.Id).ProposedRollNumber.ShouldBe(10);
-		preview.Items.Single(x => x.StudentId == fixture.Student.Id).ProposedRollNumber.ShouldBe(11);
-		preview.Items.Single(x => x.StudentId == zoe.Id).ProposedRollNumber.ShouldBe(100);
-		preview.Items.Single(x => x.StudentId == ben.Id).ProposedRollNumber.ShouldBe(101);
+		preview.Items.Single(x => x.StudentId == amy.Id).ProposedRollNumber.ShouldBe(1);
+		preview.Items.Single(x => x.StudentId == fixture.Student.Id).ProposedRollNumber.ShouldBe(2);
+		preview.Items.Single(x => x.StudentId == zoe.Id).ProposedRollNumber.ShouldBe(1);
+		preview.Items.Single(x => x.StudentId == ben.Id).ProposedRollNumber.ShouldBe(2);
 	});
 }

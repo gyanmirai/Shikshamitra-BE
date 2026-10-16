@@ -52,10 +52,21 @@ public partial class StudentOnboardingAppService
 			return (await MapPortalLinksAsync([existingLink]))[0];
 		}
 		EnsureConcurrency(item, input.ConcurrencyStamp);
-		if (!item.StudentEnrollmentId.HasValue || item.Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
+		var rules = await ReadSavedRulesAsync(item);
+		var optional = rules.HasValue && StudentPortalAccountRules.Access(rules.Value, input.AccountType) == StudentPortalAccountRules.Optional;
+		if (!item.StudentEnrollmentId.HasValue || item.Status == StudentOnboardingStatus.Cancelled ||
+			item.Status == StudentOnboardingStatus.Completed && !optional)
 			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
-		var handoff = await handoffRepository.FindAsync(x => x.OnboardingCaseId == id && x.ServiceKey == input.AccountType + "-account")
-			?? throw PortalInvalid("This account is not required by the saved onboarding settings.");
+		if (rules.HasValue && !StudentPortalAccountRules.IsEnabled(rules.Value, input.AccountType))
+			throw PortalInvalid("This app login is not enabled by the saved onboarding settings.");
+		var handoff = await handoffRepository.FindAsync(x => x.OnboardingCaseId == id && x.ServiceKey == input.AccountType + "-account");
+		if (handoff == null)
+		{
+			if (!optional) throw PortalInvalid("This account is not required by the saved onboarding settings.");
+			handoff = new StudentOnboardingServiceHandoff(GuidGenerator.Create(), CurrentTenant.Id, id,
+				input.AccountType + "-account", false, $"{id:N}:{input.AccountType}-account");
+			await handoffRepository.InsertAsync(handoff, false);
+		}
 		var student = await studentRepository.GetWithDetailsAsync(item.StudentId)
 			?? throw PortalInvalid("Student record is unavailable.");
 		if (input.AccountType == "guardian" && !StudentPortalOwnerSelection.Relationships(student.FamilyDetail).Contains(input.Relationship))

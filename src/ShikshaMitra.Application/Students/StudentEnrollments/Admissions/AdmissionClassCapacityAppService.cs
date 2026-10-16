@@ -24,7 +24,7 @@ public class AdmissionClassCapacityAppService(
 	public Task<AdmissionClassCapacityDto> GetForOfferingAsync(Guid offeringId) => ReadForOfferingAsync(offeringId);
 
 	[RemoteService(false)]
-	public async Task<AdmissionClassCapacityDto> ReadForOfferingAsync(Guid offeringId)
+	internal async Task<AdmissionClassCapacityDto> ReadForOfferingAsync(Guid offeringId)
 	{
 		var (offering, cycle) = await GetScopedOfferingAsync(offeringId);
 		return await BuildSummaryAsync(offering, cycle);

@@ -182,6 +182,7 @@ public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase, IAsyn
 
         var currentDivisionUserId = Guid.NewGuid();
         await SeedDivisionScopeAsync(currentDivisionUserId, currentDivisionId);
+        await AddTeacherAssignmentAsync(context, currentDivisionUserId, currentDivisionId);
         using var currentDivisionClient = CreateClientAs(currentDivisionUserId);
 
         var response = await currentDivisionClient.GetAsync(
@@ -213,6 +214,7 @@ public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase, IAsyn
         var originalDivisionUserId = Guid.NewGuid();
         await SeedDivisionScopeAsync(originalDivisionUserId, context.DivisionId);
         await SeedDivisionScopeAsync(originalDivisionUserId, currentDivisionId);
+        await AddTeacherAssignmentAsync(context, originalDivisionUserId, context.DivisionId);
         using var originalDivisionClient = CreateClientAs(originalDivisionUserId);
 
         var response = await originalDivisionClient.GetAsync(
@@ -229,7 +231,7 @@ public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase, IAsyn
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
-    public async Task Should_Require_Delete_Permission_To_Lock_Attendance()
+    public async Task Should_Require_Add_Permission_To_Lock_Attendance()
     {
         var context = await ResolveSeededDivisionContextAsync();
         var student = await CreateEnrolledStudentAsync(context, "AttendanceLockPermission");
@@ -258,7 +260,7 @@ public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase, IAsyn
             $"{AttendanceBaseUrl}/lock",
             input,
             JsonOptions);
-        addOnlyResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        addOnlyResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await addOnlyResponse.Content.ReadAsStringAsync());
 
         using var deleteClient = CreatePermissionClient(
             ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete);
@@ -266,7 +268,7 @@ public partial class StudentAttendanceApi_Tests : ShikshaMitraApiTestBase, IAsyn
             $"{AttendanceBaseUrl}/lock",
             input,
             JsonOptions);
-        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await deleteResponse.Content.ReadAsStringAsync());
+        deleteResponse.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
     private async Task<StudentGeneralDetailsDto> CreateEnrolledStudentAsync(

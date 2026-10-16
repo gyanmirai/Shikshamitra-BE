@@ -61,10 +61,11 @@ public class StudentOnboardingApiContract_Tests
 	[Theory]
 	[InlineData(nameof(StudentOnboardingAppService.GetAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.GetFilterOptionsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
-	[InlineData(nameof(StudentOnboardingAppService.GetAvailableCampusesAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[InlineData(nameof(StudentOnboardingAppService.GetAvailableCampusesAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	[InlineData(nameof(StudentOnboardingAppService.GetAvailableOfferingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.GetAnalyticsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
-	[InlineData(nameof(StudentOnboardingAppService.GetPlacementOptionsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat)]
-	[InlineData(nameof(StudentOnboardingAppService.GetAvailableIdentifierSeriesAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
+	[InlineData(nameof(StudentOnboardingAppService.GetPlacementOptionsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	[InlineData(nameof(StudentOnboardingAppService.GetAvailableIdentifierSeriesAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.RefreshReadinessAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	[InlineData(nameof(StudentOnboardingAppService.UpdateStepAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	[InlineData(nameof(StudentOnboardingAppService.SetPlacementAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat)]
@@ -73,15 +74,18 @@ public class StudentOnboardingApiContract_Tests
 	[InlineData(nameof(StudentOnboardingAppService.CancelAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Cancel)]
 	[InlineData(nameof(StudentOnboardingAppService.ConfirmServiceConsentAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	[InlineData(nameof(StudentOnboardingAppService.CreatePolicyAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[InlineData(nameof(StudentOnboardingAppService.GetPoliciesAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	[InlineData(nameof(StudentOnboardingAppService.GetIdentifierSeriesAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.GetSettingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.SaveSettingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
-	[InlineData(nameof(StudentOnboardingAppService.DeleteSettingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
-	[InlineData(nameof(StudentOnboardingAppService.GetHistoricalReconciliationAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair)]
+	[InlineData(nameof(StudentOnboardingAppService.DeleteSettingsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Delete)]
+	[InlineData(nameof(StudentOnboardingAppService.GetHistoricalReconciliationAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.BackfillHistoricalAdmissionsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair)]
 	public void Operations_require_granular_permissions(string methodName, string permission)
 	{
 		var method = typeof(StudentOnboardingAppService).GetMethods().Single(value => value.Name == methodName);
 		method.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(permission);
+		typeof(StudentOnboardingController).GetMethod(methodName)!.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(permission);
 	}
 
 	[Fact]

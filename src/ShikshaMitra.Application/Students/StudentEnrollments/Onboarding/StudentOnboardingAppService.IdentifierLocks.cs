@@ -24,14 +24,13 @@ public partial class StudentOnboardingAppService
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
 	public async Task SetIdentifierLockAsync(SetStudentIdentifierLockDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add);
 		if (input.IdentifierType is not ("gr" or "roll") || input.DivisionId == Guid.Empty || input.AcademicYearId == Guid.Empty)
 			throw OnboardingRuleConfiguration.Invalid("Select a division and identifier type.");
 		if (!CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
-		var scope = await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value);
 		if (!input.IsLocked)
 		{
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair);
-			if (!scope.IsAdmin) throw new AbpAuthorizationException();
 			if (string.IsNullOrWhiteSpace(input.Reason)) throw new BusinessException(StudentOnboardingErrorCodes.WaiverReasonRequired);
 		}
 		using var work = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);

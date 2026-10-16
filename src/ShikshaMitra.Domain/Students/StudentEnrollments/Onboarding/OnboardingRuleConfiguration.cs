@@ -87,8 +87,16 @@ public sealed class OnboardingRuleConfiguration
 		ValidateChoice(rules, "credentialSendingTime", "activation", "completion");
 		ValidateChoice(rules, "credentialProvisioningMode", "manual", "automatic");
 		ValidateChoice(rules, "guardianAccountRelationship", "father", "mother", "guardian");
+		foreach (var type in new[] { "student", "guardian" })
+		{
+			var key = type + "Account";
+			ValidateChoice(rules, key + "Access", StudentPortalAccountRules.NotNeeded, StudentPortalAccountRules.Optional, StudentPortalAccountRules.Required);
+			if (rules.TryGetProperty(key + "Access", out _) && rules.TryGetProperty(key, out _) &&
+				Boolean(rules, key) != StudentPortalAccountRules.IsRequired(rules, type))
+				throw Invalid($"{key} must match whether its app login is required.");
+		}
 		// Keep saved delivery preferences when account preparation is switched off. Runtime
-		// resolution only enables delivery for accounts required by the current flow.
+		// resolution only enables delivery for accounts enabled by the current flow.
 		ValidateChoice(rules, "approvalMode", "none", "always", "conditional");
 		if (rules.TryGetProperty("approvalTriggers", out var triggers))
 		{

@@ -9,7 +9,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	private Task<AdmissionWorkflowDto> SeedPublishedHistoricalWorkflowAsync(CreateUpdateAdmissionWorkflowDto input) =>
 		WithUnitOfWorkAsync(async () =>
 		{
-			// Retired stages remain executable on saved workflows, but cannot be authored by the current editor.
+			// Persist historical graphs for snapshot/read tests. Retired operations remain denied.
 			var workflow = new AdmissionWorkflowDefinition(Guid.NewGuid(), TestTenantId,
 				input.Name, input.Code, description: input.Description);
 			workflow.Publish(TestUserId);

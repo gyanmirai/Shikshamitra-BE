@@ -1,8 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using ShikshaMitra.Constants.Permissions;
 using Shouldly;
 using Volo.Abp.Authorization.Permissions;
@@ -18,7 +16,7 @@ public class PermissionBatchRead_Tests : ShikshaMitraApplicationTestBase<Shiksha
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var checker = ActivatorUtilities.CreateInstance<ShikshaMitraPermissionChecker>(
-				GetRequiredService<IServiceProvider>(), new TestHostEnvironment());
+				GetRequiredService<IServiceProvider>());
 			string[] names =
 			[
 				ShikshaMitraModulePermissions.Academics,
@@ -36,11 +34,4 @@ public class PermissionBatchRead_Tests : ShikshaMitraApplicationTestBase<Shiksha
 		});
 	}
 
-	private sealed class TestHostEnvironment : IHostEnvironment
-	{
-		public string EnvironmentName { get; set; } = Environments.Production;
-		public string ApplicationName { get; set; } = nameof(PermissionBatchRead_Tests);
-		public string ContentRootPath { get; set; } = string.Empty;
-		public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-	}
 }

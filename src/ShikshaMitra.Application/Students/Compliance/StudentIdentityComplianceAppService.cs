@@ -38,7 +38,7 @@ public class StudentIdentityComplianceAppService(
 		return await UpsertFromRegistrationAsync(studentId, input);
 	}
 
-	public async Task<StudentIdentityComplianceDto> UpsertFromRegistrationAsync(Guid studentId, UpdateStudentIdentityComplianceDto input)
+	internal async Task<StudentIdentityComplianceDto> UpsertFromRegistrationAsync(Guid studentId, UpdateStudentIdentityComplianceDto input)
 	{
 		var compliance = await GetOrCreateAsync(studentId);
 

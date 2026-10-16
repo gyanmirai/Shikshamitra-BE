@@ -17,8 +17,7 @@ public partial class StudentDirectoryAppService
 	public async Task<PagedResultDto<StudentLegacyOverrideDto>> GetLegacyOverridesAsync(PagedResultRequestDto input)
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
-		if (!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Request))
-			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.Approve);
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.View);
 		EnsureTenant();
 		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 100) throw new BusinessException("Students:Records:InvalidDirectoryQuery");
 		var studentQuery = await enrollmentScope.ApplyStudentScopeAsync(await students.GetQueryableWithoutAutoIncludesAsync());

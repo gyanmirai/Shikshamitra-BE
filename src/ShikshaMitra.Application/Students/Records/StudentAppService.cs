@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp;
@@ -28,6 +30,7 @@ public class StudentAppService(
 		string? searchTerm = null
 	)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		try
 		{
 			// Validate input parameters

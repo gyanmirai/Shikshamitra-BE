@@ -48,14 +48,14 @@ public class StudentAttendanceController(IStudentAttendanceAppService attendance
     }
 
     [HttpPost("lock")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add)]
 	public Task<LockAttendanceDayOutput> LockAttendanceDayAsync([FromBody] LockAttendanceDayInput input)
 	{
 		return attendanceAppService.LockAttendanceDayAsync(input);
 	}
 
     [HttpPost("unlock")]
-    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete)]
+    [Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add)]
 	public Task<LockAttendanceDayOutput> UnlockAttendanceDayAsync([FromBody] LockAttendanceDayInput input)
 	{
 		return attendanceAppService.UnlockAttendanceDayAsync(input);

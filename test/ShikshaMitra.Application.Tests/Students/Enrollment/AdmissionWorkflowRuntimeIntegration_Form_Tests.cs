@@ -209,7 +209,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				new CreateUpdateAdmissionWorkflowStageDto
 				{
 					Id = doneStageId, Code = "DONE", Name = "Ready for review",
-					StageType = AdmissionWorkflowStageType.Custom, DisplayOrder = 1,
+					StageType = AdmissionWorkflowStageType.Approval, DisplayOrder = 1,
 					IsTerminalStage = true, IsRequired = true
 				}
 			],

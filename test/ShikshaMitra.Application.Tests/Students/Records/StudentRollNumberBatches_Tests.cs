@@ -113,11 +113,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(fixture.Student.Id))).RollNo.ShouldBe(1);
 	});
 	[Fact]
-	public Task Roll_batch_renumber_requires_database_admin_not_just_a_scoped_session() => RunCertificationScenarioAsync(async () => {
+	public Task Roll_batch_renumber_allows_an_authorized_scoped_operator_without_admin_membership() => RunCertificationScenarioAsync(async () => {
 		var fixture = await RollBatchFixtureAsync(); var operatorId = Guid.NewGuid(); await EnsureTestIdentityUserAsync(operatorId, "roll-operator");
 		await WithUnitOfWorkAsync(() => _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: operatorId, description: "Full scoped operator"), true));
 		using (_principalAccessor.Change(ProfilePrincipal(operatorId)))
-			(await Should.ThrowAsync<BusinessException>(() => RollBatchPreviewAsync(fixture.Scope, "renumber"))).Code.ShouldBe(StudentRollNumberErrorCodes.AdminRequired);
+			(await RollBatchPreviewAsync(fixture.Scope, "renumber")).Operation.ShouldBe("renumber");
 	});
 	[Fact]
 	public Task Roll_batch_read_is_tenant_scoped_and_page_size_is_bounded() => RunCertificationScenarioAsync(async () => {

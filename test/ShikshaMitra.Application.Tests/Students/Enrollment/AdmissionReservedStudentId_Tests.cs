@@ -21,18 +21,16 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
-	public Task Reserved_student_identity_is_not_created_by_offer_issue_or_acceptance() =>
+	public Task Reserved_student_identity_is_created_only_at_finalization_after_the_admission_decision() =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var studentCountBeforeAdmission = await WithUnitOfWorkAsync(() => _studentRepository.CountAsync());
 			var fixture = await CreateCertificationFixtureAsync("ReservedOffer", acceptOffer: false);
-			fixture.Application.Status.ShouldBe(AdmissionApplicationStatus.Offered);
+			fixture.Application.Status.ShouldBe(AdmissionApplicationStatus.Approved);
 			await AssertReservationUnusedAsync(fixture);
 			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentCountBeforeAdmission);
 
-			var accepted = await _applicationAppService.AcceptOfferAsync(fixture.Application.Id,
-				Decision(fixture.Application, "Guardian accepts the offer"));
-			accepted.Status.ShouldBe(AdmissionApplicationStatus.OfferAccepted);
+			var accepted = fixture.Application;
 			await AssertReservationUnusedAsync(fixture with { Application = accepted });
 			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentCountBeforeAdmission);
 
@@ -42,76 +40,35 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 	[Fact]
-	public Task Reserved_student_identity_remains_unused_after_offer_is_declined() =>
+	public Task Retired_offer_decline_cannot_change_an_approved_reserved_identity() =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var fixture = await CreateCertificationFixtureAsync("ReservedDecline", acceptOffer: false);
-			var declined = await _applicationAppService.DeclineOfferAsync(fixture.Application.Id,
-				Decision(fixture.Application, "Guardian chose another school"));
-			declined.Status.ShouldBe(AdmissionApplicationStatus.OfferDeclined);
-			var error = await Should.ThrowAsync<BusinessException>(() =>
-				FinalizeAsync(declined, true, "reserved-declined"));
-			error.Code.ShouldBe(StudentOnboardingErrorCodes.FinalizationNotReady);
-			await AssertReservationUnusedAsync(fixture with { Application = declined });
+			var error = await Should.ThrowAsync<BusinessException>(() => _applicationAppService.DeclineOfferAsync(fixture.Application.Id,
+				Decision(fixture.Application, "Guardian chose another school")));
+			error.Code.ShouldBe(AdmissionOfferStageErrorCodes.InvalidState);
+			(await _applicationAppService.GetAsync(fixture.Application.Id)).Status.ShouldBe(AdmissionApplicationStatus.Approved);
+			await AssertReservationUnusedAsync(fixture);
 		});
 
 	[Fact]
 	public Task Rejected_application_keeps_its_unused_reserved_student_identity() =>
 		RunCertificationScenarioAsync(async () =>
 		{
-			var workflow = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
-			var applicant = await CreateCertificationApplicantAsync("ReservedRejected", true, true, null);
-			var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
-			await AssertReservationUnusedAsync(new(applicant, offering, application, null));
-			var submitted = await _applicationAppService.SubmitAsync(application.Id);
-			submitted.ValidationErrors.ShouldBeEmpty();
-			var rejected = await _applicationAppService.RejectAsync(application.Id,
-				Decision(submitted.Application, "Applicant does not meet admission criteria"));
+			var fixture = await CreateCertificationFixtureAsync("ReservedRejected", completeWorkflow: false);
+			await AssertReservationUnusedAsync(fixture);
+			await CompleteCertificationWorkflowAsync(fixture.Application.Id, stopBeforeApproval: true);
+			var current = await _applicationAppService.GetAsync(fixture.Application.Id);
+			var rejected = await _applicationAppService.RejectAsync(current.Id,
+				Decision(current, "Applicant does not meet admission criteria"));
 			rejected.Status.ShouldBe(AdmissionApplicationStatus.Rejected);
 			var error = await Should.ThrowAsync<BusinessException>(() =>
 				FinalizeAsync(rejected, true, "reserved-rejected"));
 			error.Code.ShouldBe(StudentOnboardingErrorCodes.FinalizationNotReady);
-			await AssertReservationUnusedAsync(new(applicant, offering, rejected, null));
+			await AssertReservationUnusedAsync(fixture with { Application = rejected });
 		});
 
-	[Fact]
-	public Task Withdrawn_offer_keeps_its_unused_reserved_student_identity() =>
-		RunCertificationScenarioAsync(async () =>
-		{
-			var workflow = await CreateManagedOfferWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflow.Id);
-			var application = await StartApprovedOfferApplicationAsync(offering.Id, "ReservedWithdrawn");
-			var applicant = await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(application.ApplicantId));
-			var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
-			runtime = await _applicationAppService.AdvanceWorkflowAsync(application.Id, new AdvanceAdmissionWorkflowDto
-			{
-				ExpectedCurrentStageInstanceId = runtime.CurrentStageInstanceId.ShouldNotBeNull(),
-				ConcurrencyStamp = application.ConcurrencyStamp,
-				IdempotencyKey = "reserved-withdrawn-prepared"
-			});
-			var stage = runtime.Stages.Single(item => item.StageType == AdmissionWorkflowStageType.Offer);
-			runtime.CurrentStageInstanceId.ShouldBe(stage.Id);
-			var offers = GetRequiredService<IAdmissionOfferAppService>();
-			var initial = await offers.GetAsync(application.Id, stage.Id);
-			var issued = await offers.IssueAsync(application.Id, stage.Id, new IssueAdmissionOfferDto
-			{
-				ConcurrencyStamp = initial.ConcurrencyStamp,
-				IdempotencyKey = "reserved-withdrawn-issue"
-			});
-			var withdrawn = await offers.WithdrawAsync(application.Id, stage.Id, new AdmissionOfferReasonDto
-			{
-				ConcurrencyStamp = issued.ConcurrencyStamp,
-				IdempotencyKey = "reserved-withdrawn-offer",
-				Reason = "School withdrew the offer before family acceptance"
-			});
-			withdrawn.Status.ShouldBe("withdrawn");
-			application = await _applicationAppService.GetAsync(application.Id);
-			var error = await Should.ThrowAsync<BusinessException>(() =>
-				FinalizeAsync(application, true, "reserved-withdrawn-finalize"));
-			error.Code.ShouldBe(StudentOnboardingErrorCodes.FinalizationNotReady);
-			await AssertReservationUnusedAsync(new(applicant, offering, application, null));
-		});
+
 
 	[Fact]
 	public Task Explicit_existing_match_takes_precedence_and_does_not_consume_reserved_identity() =>
@@ -208,7 +165,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				item => item.ApplicantId == first.Applicant.Id))).ShouldBe(1);
 			var unchanged = await _applicationAppService.GetAsync(second.Application.Id);
 			unchanged.StudentId.ShouldBeNull();
-			unchanged.Status.ShouldBe(AdmissionApplicationStatus.OfferAccepted);
+			unchanged.Status.ShouldBe(AdmissionApplicationStatus.Approved);
 		});
 
 	[Theory]
@@ -228,7 +185,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			error.Code.ShouldBe(AdmissionApplicantErrorCodes.ReservedStudentIdConflict);
 			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentsBefore);
 			var storedApplication = await _applicationAppService.GetAsync(fixture.Application.Id);
-			storedApplication.Status.ShouldBe(AdmissionApplicationStatus.OfferAccepted);
+			storedApplication.Status.ShouldBe(AdmissionApplicationStatus.Approved);
 			storedApplication.StudentId.ShouldBeNull();
 			storedApplication.OnboardingCaseId.ShouldBeNull();
 			var applicant = await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(fixture.Applicant.Id));

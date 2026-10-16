@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
@@ -88,6 +90,14 @@ public class StudentNotesAppService(
 		              ?? throw new EntityNotFoundException(typeof(Student), studentId);
 
 		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, operation);
+		var operational = student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left;
+		var permission = operation switch
+		{
+			nameof(GetAllAsync) => operational ? ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View : ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View,
+			nameof(DeleteAsync) => operational ? ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Delete : ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Delete,
+			_ => operational ? ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add : ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add
+		};
+		await AuthorizationService.CheckAsync(permission);
 		return student;
 	}
 }

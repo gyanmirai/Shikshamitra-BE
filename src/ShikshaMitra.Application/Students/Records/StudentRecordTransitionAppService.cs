@@ -94,7 +94,7 @@ public partial class StudentRecordTransitionAppService(IRepository<StudentRecord
 			CurrentApprovalStage = item.CurrentApprovalStage, ApprovalStageCount = item.ApprovalStageCount, ConcurrencyStamp = item.ConcurrencyStamp,
 			RenewalCaseId = item.RenewalCaseId, CorrectionOfId = item.CorrectionOfId, LastError = item.LastError,
 			CanApprove = canStage,
-			CanCancel = ((item.Status is "Submitted" or "Approved" or "Scheduled" or "Exception") || await renewals.CanCancelAsync(item)) && CurrentUser.Id == item.RequestedBy && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create),
+			CanCancel = ((item.Status is "Submitted" or "Approved" or "Scheduled" or "Exception") || await renewals.CanCancelAsync(item)) && CurrentUser.Id == item.RequestedBy && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Add),
 			CanApply = (item.Status is "Approved" or "Scheduled" or "Exception") && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Apply),
 			CanCorrect = item.Status == "Applied" && !item.ReturnHandoffId.HasValue && !item.CorrectionOfId.HasValue && record.Access == "Full" && record.PlacementEditable && await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create) && (await corrections.PreviewAsync(item)).Ready,
 			History = history.OrderBy(x => x.CreationTime).Select(x => new StudentRecordTransitionEventDto { Action = x.Action, ActorId = x.ActorId, Stage = x.Stage, Remarks = privateText ? "" : x.Remarks, OccurredAt = x.CreationTime }).ToList()

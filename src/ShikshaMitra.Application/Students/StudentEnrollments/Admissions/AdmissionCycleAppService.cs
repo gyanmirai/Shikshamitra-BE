@@ -114,7 +114,7 @@ public class AdmissionCycleAppService(
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	public async Task<AdmissionCycleDto> CloseAsync(Guid id, AdmissionCycleActionDto input)
 	{
 		var cycle = await GetCycleAsync(id);
@@ -163,7 +163,7 @@ public class AdmissionCycleAppService(
 		return Map(cycle, await LoadMapContextAsync([cycle]));
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	public async Task<AdmissionCycleDto> ArchiveAsync(Guid id, AdmissionCycleActionDto input)
 	{
 		var cycle = await GetCycleAsync(id);

@@ -92,7 +92,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             item.Status.ShouldBe(prepareAccess ? StudentOnboardingStatus.NeedsAttention : StudentOnboardingStatus.Completed, item.LastError);
             item.CredentialsPending.ShouldBe(prepareAccess);
             (await service.GetServiceHandoffsAsync(item.Id)).ShouldNotContain(h => h.ServiceKey == "service-consent");
-            item.Steps.Where(s => s.Key is StudentOnboardingStepKeys.Identity or StudentOnboardingStepKeys.Family or StudentOnboardingStepKeys.Communication or StudentOnboardingStepKeys.MedicalAndPreviousSchool)
+            item.Steps.Single(s => s.Key == StudentOnboardingStepKeys.Identity).Required.ShouldBeTrue();
+            item.Steps.Where(s => s.Key is StudentOnboardingStepKeys.Family or StudentOnboardingStepKeys.Communication or StudentOnboardingStepKeys.MedicalAndPreviousSchool)
                 .ShouldAllBe(s => !s.Required);
             // Reload through canonical Records query and profile access after persisted activation.
             var directory = await GetRequiredService<ShikshaMitra.Students.Records.IStudentDirectoryAppService>().GetListAsync(new()

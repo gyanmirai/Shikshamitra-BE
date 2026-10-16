@@ -108,16 +108,15 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string View = $"{SubmoduleName}.View";
 			public const string Add = $"{SubmoduleName}.Add";
 			public const string Delete = $"{SubmoduleName}.Delete";
-			public const string Publish = $"{SubmoduleName}.Publish";
+			public const string Publish = Add;
 
-			public static readonly string[] All = { View, Add, Delete, Publish };
+			public static readonly string[] All = { View, Add, Delete };
 
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{
 				{ View, $"{SubmoduleDisplayName}.View" },
 				{ Add, $"{SubmoduleDisplayName}.Add" },
-				{ Delete, $"{SubmoduleDisplayName}.Delete" },
-				{ Publish, $"{SubmoduleDisplayName}.Publish" }
+				{ Delete, $"{SubmoduleDisplayName}.Delete" }
 			};
 		}
 	}

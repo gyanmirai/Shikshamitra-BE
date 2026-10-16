@@ -41,9 +41,9 @@ public class StudentRecordsAuthorizationApi_Tests(ShikshaMitraApiTestFactory fac
 	private const string DirectoryView = ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View;
 
 	[Theory, TestTier(TestTraits.Tiers.Critical)]
-	[InlineData("settings/publish", "Students.Records.Settings.View,Students.Records.Settings.Add")]
-	[InlineData("changes/{id}/approve", "Students.Records.Changes.View,Students.Records.Changes.Create")]
-	[InlineData("transitions/{id}/apply", "Students.Records.Transitions.View,Students.Records.Transitions.Create")]
+	[InlineData("settings/publish", "Students.Records.Settings.View")]
+	[InlineData("changes/{id}/approve", "Students.Records.Changes.View")]
+	[InlineData("transitions/{id}/apply", "Students.Records.Transitions.View")]
 	[InlineData("guardian-access/reviews/{id}/resolve", "Students.Records.GuardianAccess.View")]
 	[InlineData("ids/issue", "Students.Records.StudentICard.View")]
 	[InlineData("ids/export", "Students.Records.StudentICard.View")]
@@ -124,7 +124,7 @@ public class StudentRecordsAuthorizationApi_Tests(ShikshaMitraApiTestFactory fac
 			assignments[0].EducationBoardId.ShouldBe(Factory.SeededBoardId); assignments[0].EducationMediumStageId.ShouldBe(Factory.SeededMediumStageId);
 			var users = services.GetRequiredService<IdentityUserManager>(); (await users.GetRolesAsync((await users.FindByIdAsync(actor.ToString()))!)).ShouldBeEmpty(); return true;
 		});
-		using var client = AsActor(actor, DirectoryView + ",Students.Records.Changes.View,Students.Records.Changes.Create");
+		using var client = AsActor(actor, DirectoryView + ",Students.Records.Changes.View,Students.Records.Changes.Add");
 		using var profile = await client.GetAsync($"/api/students/records/{record.StudentId}/profile");
 		profile.StatusCode.ShouldBe(HttpStatusCode.OK, await profile.Content.ReadAsStringAsync());
 		var snapshot = await client.GetFromJsonAsync<StudentRecordSectionSnapshotDto>($"/api/students/records/changes/students/{record.StudentId}/snapshot/placement", JsonOptions);
@@ -168,7 +168,7 @@ public class StudentRecordsAuthorizationApi_Tests(ShikshaMitraApiTestFactory fac
 				academicYearId: year.Id, educationBoardId: board.Id, educationMediumId: medium.Id, educationMediumStageId: stage.Id, standardId: allowed.Id), true);
 			return new(year.Id, forbidden.Id, division.Id);
 		});
-		using var client = AsActor(actor, DirectoryView + ",Students.Records.Transitions.View,Students.Records.Transitions.Create");
+		using var client = AsActor(actor, DirectoryView + ",Students.Records.Transitions.View,Students.Records.Transitions.Add");
 		var input = new StudentRecordTransitionBatchInput
 		{
 			AcademicYearId = record.YearId, IdempotencyKey = Guid.NewGuid().ToString("N"),

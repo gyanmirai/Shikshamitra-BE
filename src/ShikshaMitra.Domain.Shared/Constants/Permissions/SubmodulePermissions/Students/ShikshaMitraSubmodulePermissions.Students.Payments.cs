@@ -15,7 +15,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			public const string Record = Add;
 			public const string Verify = Add;
 			public const string Waive = Add;
-			public const string Reverse = Delete;
+			public const string Reverse = Add;
 			public static readonly string[] All = [View, Add, Delete];
 			public static readonly Dictionary<string, string> DisplayNames = new()
 			{

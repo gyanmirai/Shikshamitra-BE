@@ -98,32 +98,29 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await _scopeRepository.InsertAsync(new UserScopeAssignment(
 				Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Workflow integration test"),
 				autoSave: true);
-			var workflowV1 = await CreateAndPublishWorkflowAsync();
-			var offering = await CreateAvailableOfferingAsync(workflowV1.Id);
+			var workflowV1 = await CreateAndPublishCurrentWorkflowAsync();
+			var offering = await CreateAvailableOfferingAsync(workflowV1.Id, registrationFormId:
+				AdmissionFormStageAccessService.ReadFormDefinitionId(workflowV1.Stages.Single(stage => stage.IsEntryStage).ConfigurationJson));
 			var aarav = await CreateApplicantAsync("Aarav");
 
 			var aaravApplication = await StartFixtureApplicationAsync(aarav.Id, offering.Id);
 			var aaravRuntime = await _applicationAppService.GetWorkflowAsync(aaravApplication.Id);
 			aaravRuntime.WorkflowDefinitionId.ShouldBe(workflowV1.Id);
-			aaravRuntime.NextRequiredAction.ShouldBe("Review and qualify the inquiry");
-			aaravRuntime.Stages.Single(stage => stage.Code == "INQUIRY").Status
+			aaravRuntime.Stages.Single(stage => stage.Code == "REGISTRATION").StageType.ShouldBe(AdmissionWorkflowStageType.Form);
+			aaravRuntime.Stages.Single(stage => stage.Code == "REGISTRATION").Status
 				.ShouldBe(AdmissionRuntimeStageStatus.Active);
 
-			var firstStageId = aaravRuntime.CurrentStageInstanceId.ShouldNotBeNull();
-			aaravRuntime = await _applicationAppService.AdvanceWorkflowAsync(
-				aaravApplication.Id,
-				new AdvanceAdmissionWorkflowDto
-				{
-					ExpectedCurrentStageInstanceId = firstStageId,
-					IdempotencyKey = "aarav-inquiry-complete",
-					ConcurrencyStamp = aaravApplication.ConcurrencyStamp
-				});
-			aaravRuntime.Stages.Single(stage => stage.Code == "INQUIRY").Status
+			var submittedForm = await _applicationAppService.SubmitAsync(aaravApplication.Id);
+			submittedForm.ValidationErrors.ShouldBeEmpty();
+			aaravRuntime = await _applicationAppService.GetWorkflowAsync(aaravApplication.Id);
+			aaravRuntime.Stages.Single(stage => stage.Code == "REGISTRATION").Status
 				.ShouldBe(AdmissionRuntimeStageStatus.Completed);
 			aaravRuntime.Stages.Single(stage => stage.Code == "ADMISSION").Status
 				.ShouldBe(AdmissionRuntimeStageStatus.Active);
 
 			var terminalStageId = aaravRuntime.CurrentStageInstanceId.ShouldNotBeNull();
+			var currentDecision = await _applicationAppService.GetAsync(aaravApplication.Id);
+			await _applicationAppService.ApproveAsync(aaravApplication.Id, Decision(currentDecision, "Version snapshot test approved"));
 			aaravRuntime = await _applicationAppService.AdvanceWorkflowAsync(
 				aaravApplication.Id,
 				new AdvanceAdmissionWorkflowDto
@@ -198,7 +195,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			v2Usage.CampusCount.ShouldBe(0);
 			v2Usage.RuntimeAnalytics.StartedCount.ShouldBe(1);
 			v2Usage.RuntimeAnalytics.ActiveCount.ShouldBe(1);
-			v2Usage.RuntimeAnalytics.Stages.Single().Code.ShouldBe("INQUIRY");
+			v2Usage.RuntimeAnalytics.Stages.Single().Code.ShouldBe("REGISTRATION");
 		}
 	}
 
@@ -345,6 +342,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
 		{
+			await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: TestUserId), true);
+			var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 			var applicant = await WithUnitOfWorkAsync(async () =>
 			{
 				var family = new AdmissionFamily(Guid.NewGuid(), TestTenantId, $"REPAIR-{Guid.NewGuid():N}"[..20]);
@@ -355,6 +354,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				return incomplete;
 			});
 
+			await StartFixtureApplicationAsync(applicant.Id, offering.Id);
 			var applicantService = GetRequiredService<IAdmissionApplicantAppService>();
 			var updated = await applicantService.UpdateProfileAsync(applicant.Id,
 				new UpdateAdmissionApplicantProfileDto
@@ -609,7 +609,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
-	public async Task Legacy_rte_applications_keep_frozen_form_family_and_finalization_after_direct_entry_removal(bool withOptionalOffer)
+	public async Task Rte_registration_keeps_frozen_form_family_and_finalization_with_retired_offer_denied(bool withOptionalOffer)
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -670,9 +670,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				GuardianFirstName = "Ravi", GuardianLastName = "Patel",
 				GuardianMobile = "9876543210", GuardianRelationship = AdmissionGuardianRelationship.Parent
 			};
-			(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.StartDirectRegistrationAsync(input)))
-				.Code.ShouldBe(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed);
-			var first = await SeedLegacyDirectApplicationAsync(input);
+			var first = await _applicationAppService.StartDirectRegistrationAsync(input);
 			first.AssignedCounsellorId.ShouldBe(TestUserId);
 			(await _applicationRepository.GetAsync(first.Id)).InquiryId.ShouldBeNull();
 			var reservedStudentId = (await _applicantRepository.GetAsync(first.ApplicantId)).ReservedStudentId;
@@ -682,23 +680,19 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				.Status.ShouldBe(AdmissionRuntimeStageStatus.Active);
 			(await _applicationAppService.StartAsync(first.ApplicantId, offering.Id)).Id.ShouldBe(first.Id);
 			(await _applicantRepository.GetAsync(first.ApplicantId)).ReservedStudentId.ShouldBe(reservedStudentId);
-			(await Should.ThrowAsync<BusinessException>(() =>
-				_applicationAppService.StartDirectRegistrationAsync(new StartAdmissionDirectRegistrationDto
+			(await _applicationAppService.StartDirectRegistrationAsync(new StartAdmissionDirectRegistrationDto
 				{
-					RequestId = input.RequestId, AdmissionOfferingId = offering.Id,
+					RequestId = input.RequestId, AdmissionOfferingId = offering.Id, CounsellorId = input.CounsellorId,
 					ApplicantFirstName = input.ApplicantFirstName, ApplicantLastName = input.ApplicantLastName,
 					ApplicantDateOfBirth = input.ApplicantDateOfBirth, ApplicantGender = input.ApplicantGender,
 					GuardianFirstName = input.GuardianFirstName, GuardianLastName = input.GuardianLastName,
 					GuardianMobile = input.GuardianMobile, GuardianRelationship = input.GuardianRelationship
-				}))).Code.ShouldBe(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed);
+				})).Id.ShouldBe(first.Id);
 
-			(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.FindDirectRegistrationFamiliesAsync(
-				offering.Id, input.GuardianMobile))).Code.ShouldBe(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed);
-			var matches = await WithUnitOfWorkAsync(() => GetRequiredService<AdmissionDirectFamilyMatchService>().FindAsync(
-				offering.Id, input.GuardianMobile));
+			var matches = await _applicationAppService.FindDirectRegistrationFamiliesAsync(offering.Id, input.GuardianMobile);
 			matches.Count.ShouldBe(1);
 			matches[0].Applicants.ShouldContain("Asha Patel");
-			var second = await SeedLegacyDirectApplicationAsync(new StartAdmissionDirectRegistrationDto
+			var second = await _applicationAppService.StartDirectRegistrationAsync(new StartAdmissionDirectRegistrationDto
 			{
 				RequestId = Guid.NewGuid(), AdmissionOfferingId = offering.Id,
 				ExistingFamilyId = matches[0].FamilyId,
@@ -711,10 +705,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			(await _applicantRepository.GetAsync(second.ApplicantId)).FamilyId.ShouldBe(matches[0].FamilyId);
 
 			var beforeApproval = await _applicationAppService.GetFinalizationPreviewAsync(first.Id);
-			beforeApproval.Items.Single(item => item.Key == "offer").Passed.ShouldBeFalse();
-			beforeApproval.Items.Single(item => item.Key == "offer").Label.ShouldBe("Direct admission approved");
+			beforeApproval.Items.Single(item => item.Key == "decision").Passed.ShouldBeFalse();
+			beforeApproval.Items.Single(item => item.Key == "decision").Label.ShouldBe("Admission approved");
 			var submitted = await _applicationAppService.SubmitAsync(first.Id);
 			submitted.ValidationErrors.ShouldBeEmpty();
+			await CompleteCertificationWorkflowAsync(first.Id, stopBeforeApproval: true);
 			var current = await _applicationAppService.GetAsync(first.Id);
 			current = await _applicationAppService.ApproveAsync(first.Id, new AdmissionApplicationDecisionDto
 			{
@@ -722,7 +717,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Reason = "RTE eligibility verified"
 			});
 			var approvedPreview = await _applicationAppService.GetFinalizationPreviewAsync(first.Id);
-			approvedPreview.Items.Single(item => item.Key == "offer").Passed.ShouldBeTrue();
+			approvedPreview.Items.Single(item => item.Key == "decision").Passed.ShouldBeTrue();
 			current.Status.ShouldBe(AdmissionApplicationStatus.Approved);
 			var workflowRuntime = await _applicationAppService.GetWorkflowAsync(first.Id);
 			while (workflowRuntime.CurrentStageInstanceId.HasValue)
@@ -739,18 +734,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			if (withOptionalOffer)
 			{
 				current = await _applicationAppService.GetAsync(first.Id);
-				current = await _applicationAppService.IssueOfferAsync(first.Id, new AdmissionApplicationDecisionDto
-				{
-					ConcurrencyStamp = current.ConcurrencyStamp,
-					OfferExpiresAt = DateTime.UtcNow.AddDays(7)
-				});
-				var pendingOffer = await _applicationAppService.GetFinalizationPreviewAsync(first.Id);
-				pendingOffer.Items.Single(item => item.Key == "offer").Passed.ShouldBeFalse();
-				current = await _applicationAppService.AcceptOfferAsync(first.Id, new AdmissionApplicationDecisionDto
-				{
-					ConcurrencyStamp = current.ConcurrencyStamp
-				});
-				current.Status.ShouldBe(AdmissionApplicationStatus.OfferAccepted);
+				(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.IssueOfferAsync(first.Id,
+					Decision(current, "Retired optional offer")))).Code.ShouldBe(AdmissionOfferStageErrorCodes.InvalidState);
 			}
 			var ready = await _applicationAppService.GetFinalizationPreviewAsync(first.Id);
 			ready.IsReady.ShouldBeTrue(string.Join(" | ", ready.Items.Where(item => !item.Passed)
@@ -978,7 +963,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				new CreateUpdateAdmissionWorkflowStageDto
 				{
 					Id = terminalId, Code = "ADMISSION", Name = "Admission",
-					StageType = AdmissionWorkflowStageType.Custom, DisplayOrder = 1,
+					StageType = AdmissionWorkflowStageType.Approval, DisplayOrder = 1,
 					IsTerminalStage = true, IsRequired = true
 				}
 			],
@@ -991,6 +976,22 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			]
 		});
 		return workflow;
+	}
+
+	private async Task<AdmissionWorkflowDto> CreateAndPublishCurrentWorkflowAsync()
+	{
+		var draft = await CreateDirectWorkflowDraftAsync();
+		var form = await WithUnitOfWorkAsync(async () =>
+		{
+			var definition = new AdmissionFormDefinition(Guid.NewGuid(), TestTenantId, "Current registration form",
+				$"CURRENT_FORM_{Guid.NewGuid():N}"[..24], AdmissionFormLayoutType.SinglePage);
+			definition.Publish(TestUserId);
+			return await _formRepository.InsertAsync(definition, true);
+		});
+		var input = ToUpdateInput(draft);
+		input.Stages.Single(stage => stage.IsEntryStage).ConfigurationJson = JsonSerializer.Serialize(new { formDefinitionId = form.Id });
+		draft = await _workflowAppService.UpdateAsync(draft.Id, input);
+		return await _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
 	}
 
 	private async Task<AdmissionWorkflowDto> CreateAndPublishWorkflowAsync()
@@ -1062,7 +1063,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			DisplayOrder = index,
 			IsRequired = true,
 			IsEntryStage = index == 0,
-			IsTerminalStage = index == stageBlueprints.Length - 1
+			IsTerminalStage = index == stageBlueprints.Length - 1,
+			ConfigurationJson = stage.Item3 == AdmissionWorkflowStageType.DocumentVerification
+				? JsonSerializer.Serialize(new { documentVerification = HandoffPolicy(new AdmissionDocumentRequirement { Code = "BIRTH", Name = "Birth certificate" }) }) : null
 		}).ToList();
 		var transitions = stages.Zip(stages.Skip(1), (from, to) =>
 			new CreateUpdateAdmissionWorkflowTransitionDto
@@ -1311,7 +1314,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			Code = stage.Code,
 			Name = stage.Name,
 			Description = stage.Description,
-			StageType = stage.StageType,
+			// A new editable version must migrate nonselectable legacy stage types.
+			StageType = stage.StageType is AdmissionWorkflowStageType.Inquiry or AdmissionWorkflowStageType.Custom or AdmissionWorkflowStageType.Enrollment
+				? stage.IsTerminalStage ? AdmissionWorkflowStageType.Approval : AdmissionWorkflowStageType.Form
+				: stage.StageType,
 			DisplayOrder = stage.DisplayOrder,
 			IsRequired = stage.IsRequired,
 			AllowManualSkip = stage.AllowManualSkip,

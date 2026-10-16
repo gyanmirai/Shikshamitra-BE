@@ -44,7 +44,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			storedEvidence.StudentId.ShouldBeNull();
 			storedEvidence.StudentLinkedAt.ShouldBeNull();
 			var storedApplication = await _applicationAppService.GetAsync(ready.Id);
-			storedApplication.Status.ShouldBe(AdmissionApplicationStatus.OfferAccepted);
+			storedApplication.Status.ShouldBe(ready.Status);
 			storedApplication.StudentId.ShouldBeNull();
 			var applicantAfter = await WithUnitOfWorkAsync(() => _applicantRepository.GetAsync(ready.ApplicantId));
 			applicantAfter.ReservedStudentId.ShouldBe(applicantBefore.ReservedStudentId);

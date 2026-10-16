@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
 
@@ -24,6 +26,7 @@ public class StudentRegistrationQueryAppService(
         int maxResultCount = 10,
         string? searchTerm = null)
     {
+        await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
         await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
 
         var queryable = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
@@ -61,6 +64,7 @@ public class StudentRegistrationQueryAppService(
         int maxResultCount = 10,
         string? searchTerm = null)
     {
+        await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
         await validationService.ValidateAcademicMediumExistsAsync(academicMediumId);
 
         var queryable = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
@@ -94,6 +98,10 @@ public class StudentRegistrationQueryAppService(
 
     public async Task<List<StudentSearchResultDto>> SearchStudentsByNameAsync(string searchTerm, int maxResultCount = 20)
     {
+        var canReadApplications = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
+        var canReadRecords = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
+        if (!canReadApplications && !canReadRecords)
+            await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View);
         var normalizedSearchTerm = (searchTerm ?? string.Empty).Trim().ToLower();
         if (normalizedSearchTerm.Length < 2)
         {
@@ -114,6 +122,7 @@ public class StudentRegistrationQueryAppService(
         var query = queryable
             .Where(s => s.TenantId == CurrentTenant.Id
                 && eligibleStatuses.Contains(s.Status)
+                && (s.Status == StudentLifeCycleStatusEnum.Enrolled ? canReadRecords : canReadApplications)
                 && (
                     (s.FirstName != null && s.FirstName.ToLower().Contains(normalizedSearchTerm)) ||
                     (s.MiddleName != null && s.MiddleName.ToLower().Contains(normalizedSearchTerm)) ||

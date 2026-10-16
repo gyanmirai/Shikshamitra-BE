@@ -35,8 +35,9 @@ public class StudentRollBatchAccessService(StudentScopeAccessService scope, Stud
 	public async Task<bool> IsAdminAsync() => (await scopes.GetCurrentUserScopeAsync()).IsAdmin;
 	public async Task EnsureRowsAsync(StudentRollNumberBatch item, bool write)
 	{
+		if (write && !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add))
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Changes.Add);
 		await EnsureScopeAsync(new() { AcademicYearId = item.AcademicYearId, StandardId = item.StandardId, DivisionId = item.DivisionId });
-		if (write && item.Operation == "renumber" && !await IsAdminAsync()) throw new BusinessException(StudentRollNumberErrorCodes.AdminRequired);
 		var rows = item.Rows();
 		if (rows.Any(x => x.EnrollmentId.HasValue))
 		{

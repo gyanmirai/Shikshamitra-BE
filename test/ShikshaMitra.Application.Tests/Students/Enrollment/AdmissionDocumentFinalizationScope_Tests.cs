@@ -51,8 +51,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Decision(denied, "Unauthorized decision")));
 			await Should.ThrowAsync<EntityNotFoundException>(() => FinalizeAsync(denied, true, "denied-standard-finalization"));
 			(await _applicationAppService.FindAsync(allowed.Application.Id)).ShouldNotBeNull();
-			var accepted = await _applicationAppService.AcceptOfferAsync(allowed.Application.Id,
-				Decision(allowed.Application, "Authorized guardian acceptance"));
+			var accepted = await _applicationAppService.GetAsync(allowed.Application.Id);
 			(await _applicationAppService.GetFinalizationPreviewAsync(accepted.Id)).IsReady.ShouldBeTrue();
 			var finalized = await FinalizeAsync(accepted, true, "allowed-standard-finalization");
 			finalized.Application.Status.ShouldBe(AdmissionApplicationStatus.AdmissionFinalized);

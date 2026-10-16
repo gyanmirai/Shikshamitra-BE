@@ -316,7 +316,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			ConcurrencyStamp = application.ConcurrencyStamp, IdempotencyKey = "return-masked-profile", ConfirmGuardianContactVerified = true, ApplyStudentProfileFields = true
 		})))).Code.ShouldBe("Students:Records:RestrictedFields");
-		(await _applicationAppService.GetAsync(application.Id)).Status.ShouldBe(AdmissionApplicationStatus.OfferAccepted);
+		(await _applicationAppService.GetAsync(application.Id)).Status.ShouldBe(application.Status);
 		(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentRecordChange, Guid>>().CountAsync(change => change.ClientKey.StartsWith($"admission-{application.Id:N}")))).ShouldBe(0);
 	});
 

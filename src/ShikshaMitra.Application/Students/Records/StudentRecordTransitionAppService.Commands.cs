@@ -135,9 +135,10 @@ public partial class StudentRecordTransitionAppService
 		item.Reject(); await transitions.UpdateAsync(item, true);
 		await events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id!.Value, id, CurrentUser.Id!.Value, "Rejected", item.CurrentApprovalStage, input.Remarks)); return await GetAsync(id);
 	}
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Add)]
 	public async Task<StudentRecordTransitionDto> CancelAsync(Guid id, StudentRecordTransitionDecisionDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Add);
 		using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);
 		var item = await GetScopedAsync(id); Match(item, input.ConcurrencyStamp);
 		if (item.RequestedBy != CurrentUser.Id) throw new AbpAuthorizationException();

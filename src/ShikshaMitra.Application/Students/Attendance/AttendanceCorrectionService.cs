@@ -74,7 +74,7 @@ public class AttendanceCorrectionService(IRepository<StudentAttendanceCorrection
 			input.Date.Date < AttendanceSchoolDate.Today(roster.Options, Clock.Now) && roster.Options.PriorDayCorrectionRequiresApproval;
 		if (!requiresApproval)
 		{
-			if (day.IsLocked) await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete);
+			if (day.IsLocked) await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add);
 			await ApplyAsync(item, input, roster, member); item.Apply(actor, input.Reason, reviewed: false);
 		}
 		await corrections.InsertAsync(item, autoSave: true);
@@ -98,7 +98,7 @@ public class AttendanceCorrectionService(IRepository<StudentAttendanceCorrection
 			var member = roster.Members.SingleOrDefault(r => r.Student.Id == item.StudentId && r.Expected)
 				?? throw new BusinessException(AttendanceOperationErrorCodes.StaleRoster);
 			if (AttendanceEntryRules.CorrectionSnapshot(member) != item.BeforeJson) throw new BusinessException(AttendanceOperationErrorCodes.StaleCorrection);
-			if (day.IsLocked) await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete);
+			if (day.IsLocked) await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add);
 			item.Apply(CurrentUser.GetId(), input.Reason, reviewed: true); await ApplyAsync(item, request, roster, member);
 		}
 		else item.Reject(CurrentUser.GetId(), input.Reason);

@@ -50,7 +50,7 @@ public class StudentRecordReportAppService(IRepository<StudentRecordReportJob, G
 		foreach (var row in rows) result.Add(await MapAsync(row, authorityHashes));
 		return new(count, result);
 	}
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Reports.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Reports.Add)]
 	public async Task<StudentRecordReportJobDto> CancelAsync(Guid id)
 	{
 		var job = await GetOwnedAsync(id); job.Cancel(); await jobs.UpdateAsync(job, autoSave: true); return await MapAsync(job);

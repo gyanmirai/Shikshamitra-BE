@@ -7,8 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using ShikshaMitra.Common.Excel;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.EntityFrameworkCore;
@@ -177,7 +175,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 		foreach (var permission in new[] { ReportProofView, ReportProofAdd, ReportProofSource }) await SetReportProofGrantAsync(actor, permission, true);
 		// Bypass the common AlwaysAllow checker only for this real report graph; actual ABP providers/store remain registered.
-		var checker = ActivatorUtilities.CreateInstance<ShikshaMitraPermissionChecker>(ServiceProvider, new ReportProofProductionEnvironment());
+		var checker = ActivatorUtilities.CreateInstance<ShikshaMitraPermissionChecker>(ServiceProvider);
 		var lazy = new AbpLazyServiceProvider(ServiceProvider);
 		var authority = new StudentRecordReportAuthority(GetRequiredService<IUserScopeAccessService>(), GetRequiredService<StudentRecordsAccessService>(), checker,
 			GetRequiredService<IRepository<StudentRecordsConfiguration, Guid>>()) { LazyServiceProvider = lazy };
@@ -238,12 +236,5 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var bytes = excel.GenerateExcelAsBytes(request, cancellationToken); GeneratedBytes = bytes.Length;
 			Task.Run(after, cancellationToken).GetAwaiter().GetResult(); Invoked = true; return bytes;
 		}
-	}
-	private sealed class ReportProofProductionEnvironment : IHostEnvironment
-	{
-		public string EnvironmentName { get; set; } = Environments.Production;
-		public string ApplicationName { get; set; } = nameof(ReportProofProductionEnvironment);
-		public string ContentRootPath { get; set; } = string.Empty;
-		public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
 	}
 }

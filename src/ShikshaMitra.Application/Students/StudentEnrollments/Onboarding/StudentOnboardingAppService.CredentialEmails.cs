@@ -24,11 +24,15 @@ public partial class StudentOnboardingAppService
 		var resolver = LazyServiceProvider.LazyGetRequiredService<StudentOnboardingCredentialEligibilityResolver>();
 		foreach (var type in new[] { "student", "guardian" })
 		{
-			if (!OnboardingRuleConfiguration.Boolean(rules, type == "student" ? "studentAccount" : "guardianAccount")) continue;
+			if (!StudentPortalAccountRules.IsEnabled(rules, type)) continue;
 			if (await portalLinkRepository.AnyAsync(link => link.StudentId == student.Id && link.AccountType == type)) continue;
 			// The resolver checks committed placement and current documents before it reports a missing account.
 			var eligibility = await resolver.ResolveAccountPreparationAsync(item.Id, type);
 			if (eligibility.BlockedReason != StudentOnboardingCredentialEligibilityResolver.AccountRequired) continue;
+			// New App Login rules never guess between multiple saved parents. Staff can
+			// still select the recipient through Send Credentials in automatic mode.
+			if (type == "guardian" && rules.TryGetProperty("guardianAccountAccess", out _) &&
+				StudentPortalOwnerSelection.Relationships(student.FamilyDetail).Count > 1) continue;
 			var relationship = type == "student" ? "self" : StudentPortalOwnerSelection.AutomaticRelationship(
 				student.FamilyDetail, OnboardingRuleConfiguration.Text(rules, "guardianAccountRelationship", "guardian"));
 			if (relationship == null) continue;
@@ -62,5 +66,8 @@ public partial class StudentOnboardingAppService
 		var emails = LazyServiceProvider.LazyGetRequiredService<StudentCredentialEmailAppService>();
 		await emails.QueueAsync(item.Id, "student");
 		await emails.QueueAsync(item.Id, "guardian");
+		// Repeated provisioning/manual-send calls in this transaction must see the
+		// same queued intent. A flush keeps the enclosing unit of work atomic.
+		await CurrentUnitOfWork!.SaveChangesAsync();
 	}
 }

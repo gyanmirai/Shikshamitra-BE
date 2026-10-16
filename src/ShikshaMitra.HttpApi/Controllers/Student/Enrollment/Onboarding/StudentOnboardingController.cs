@@ -86,11 +86,11 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 		Result.Success(await service.GetFilterOptionsAsync(academicYearId));
 
 	[HttpGet("settings/offerings")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<IReadOnlyList<OnboardingAvailableOfferingDto>>> GetAvailableOfferingsAsync([FromQuery] Guid? academicYearId = null) => Result.Success(await service.GetAvailableOfferingsAsync(academicYearId));
 
 	[HttpGet("settings/campuses")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<IReadOnlyList<StudentOnboardingCampusDto>>> GetAvailableCampusesAsync() =>
 		Result.Success(await service.GetAvailableCampusesAsync());
 
@@ -104,12 +104,12 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 	public async Task<Result<StudentOnboardingCaseDto>> GetAsync(Guid id) => Result.Success(await service.GetAsync(id));
 
 	[HttpGet("{id:guid}/placement-options")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<IReadOnlyList<StudentOnboardingPlacementOptionDto>>> GetPlacementOptionsAsync(Guid id) =>
 		Result.Success(await service.GetPlacementOptionsAsync(id));
 
 	[HttpGet("{id:guid}/identifier-series")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<IReadOnlyList<StudentIdentifierSeriesDto>>> GetAvailableIdentifierSeriesAsync(Guid id) =>
 		Result.Success(await service.GetAvailableIdentifierSeriesAsync(id));
 
@@ -182,7 +182,7 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 		Result.Success(await service.ConfirmServiceConsentAsync(id, input));
 
 	[HttpGet("settings/policies")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<IReadOnlyList<StudentOnboardingPolicyDto>>> GetPoliciesAsync([FromQuery] Guid academicYearId) =>
 		Result.Success(await service.GetPoliciesAsync(academicYearId));
 
@@ -207,7 +207,7 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 		SaveStudentOnboardingSettingsDto input) => Result.Success(await service.SaveSettingsAsync(input));
 
 	[HttpDelete("settings/configurations/{id:guid}")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Delete)]
 	public async Task<Result> DeleteSettingsAsync(Guid id, [FromQuery] string? concurrencyStamp)
 	{
 		await service.DeleteSettingsAsync(id, concurrencyStamp);
@@ -215,7 +215,7 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 	}
 
 	[HttpGet("settings/identifier-series")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<IReadOnlyList<StudentIdentifierSeriesDto>>> GetIdentifierSeriesAsync(
 		[FromQuery] Guid academicYearId) => Result.Success(await service.GetIdentifierSeriesAsync(academicYearId));
 
@@ -231,7 +231,7 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 		Result.Success(await service.DeactivateIdentifierSeriesAsync(id, concurrencyStamp));
 
 	[HttpGet("settings/historical-reconciliation")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<Result<HistoricalAdmissionReconciliationDto>> GetHistoricalReconciliationAsync() =>
 		Result.Success(await service.GetHistoricalReconciliationAsync());
 

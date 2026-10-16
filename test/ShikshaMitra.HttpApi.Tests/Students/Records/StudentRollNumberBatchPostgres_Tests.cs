@@ -32,7 +32,7 @@ public sealed partial class StudentRecordsApplicationPostgres_Tests
 		string Configuration(string status, bool active) => JsonSerializer.Serialize(new {
 			readinessAccess = new { }, onboardingProfiles = Array.Empty<object>(), grNumber = new { configurations = Array.Empty<object>() }, divisionChange = new { configurations = Array.Empty<object>() },
 			rollNumber = new { assignmentMode = "both", configurations = new[] { new { id = "roll-pg-rule", status, isActive = active, version = 1,
-				boardMode = "all", mediumMode = "all", stageMode = "all", classMode = "all", divisionMode = "all", grouping = "mixed", nameFormat = "first-name-first", arrangeBy = "studentName", arrangeType = "ascending" } } } });
+				boardMode = "all", mediumMode = "all", stageMode = "all", classMode = "all", divisionMode = "all", startingNumber = 1, grouping = "mixed", nameFormat = "first-name-first", arrangeBy = "studentName", arrangeType = "ascending" } } } });
 		using var draftResponse = await client.PutAsJsonAsync("/api/student/onboarding/settings/configurations", new SaveStudentOnboardingSettingsDto { AcademicYearId = factory.SeededAcademicYearId, ConfigurationJson = Configuration("draft", false) }, JsonOptions);
 		draftResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await draftResponse.Content.ReadAsStringAsync());
 		var draft = (await draftResponse.Content.ReadFromJsonAsync<Result<StudentOnboardingSettingsDto>>(JsonOptions))!.Data!;

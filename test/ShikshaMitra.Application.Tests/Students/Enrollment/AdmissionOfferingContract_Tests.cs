@@ -191,7 +191,7 @@ public class AdmissionOfferingContract_Tests
 		ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Clone
 			.ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
 		ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Deactivate
-			.ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Delete);
+			.ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add);
 	}
 
 	[Theory]

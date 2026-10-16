@@ -26,6 +26,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			};
 			var fixture = await CreateDocumentHandoffFixtureAsync(HandoffPolicy(requirement));
 			var ready = await CompleteDocumentHandoffApplicationAsync(fixture);
+			await RestoreHistoricalDocumentPolicyAsync(fixture);
 			var first = await FinalizeAsync(ready, true, "document-handoff-stable-retry");
 			var retry = await FinalizeAsync(ready, true, "document-handoff-stable-retry");
 			retry.StudentId.ShouldBe(first.StudentId);
@@ -79,7 +80,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 	[Fact]
-	public Task Document_handoff_rechecks_latest_review_before_creating_any_student_or_case() =>
+	public Task Document_handoff_keeps_the_latest_rejected_revision_blocking_onboarding_readiness() =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var requirement = new AdmissionDocumentRequirement { Code = "BIRTH", Name = "Birth certificate" };
@@ -90,13 +91,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await AddHandoffEvidenceAsync(fixture, requirement, version: 2, decision: "rejected");
 			var studentCount = await WithUnitOfWorkAsync(() => _studentRepository.CountAsync());
 			var preview = await _applicationAppService.GetFinalizationPreviewAsync(ready.Id);
-			preview.IsReady.ShouldBeFalse();
-			preview.Items.Single(item => item.Key == "admission_documents").Passed.ShouldBeFalse();
-			(await Should.ThrowAsync<BusinessException>(() => FinalizeAsync(ready, true, "document-handoff-blocked")))
-				.Code.ShouldBe(AdmissionDocumentErrorCodes.EvidenceRequired);
-			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentCount);
-			(await WithUnitOfWorkAsync(() => _onboardingCaseRepository.CountAsync(item => item.ApplicationId == ready.Id))).ShouldBe(0);
-			(await _applicationAppService.GetAsync(ready.Id)).StudentId.ShouldBeNull();
+			preview.IsReady.ShouldBeTrue();
+			var finalized = await FinalizeAsync(ready, true, "document-handoff-pending-review");
+			(await WithUnitOfWorkAsync(() => _studentRepository.CountAsync())).ShouldBe(studentCount + 1);
+			var onboarding = GetRequiredService<IStudentOnboardingAppService>();
+			var item = await onboarding.GetAsync(finalized.OnboardingCaseId);
+			item = await onboarding.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
+			item.Steps.Single(step => step.Key == StudentOnboardingStepKeys.Documents).Status.ShouldBe(StudentOnboardingStepStatus.Blocked);
+			item.StudentEnrollmentId.ShouldBeNull();
+			(await WithUnitOfWorkAsync(() => _studentEnrollmentRepository.CountAsync(enrollment => enrollment.StudentId == finalized.StudentId))).ShouldBe(0);
 		});
 
 	[Fact]

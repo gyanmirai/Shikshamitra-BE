@@ -3,10 +3,16 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-16
 owner: backend-team
 audience: humans-and-agents
 ---
+
+## ESI enrollment response authorization (2026-10-16)
+
+The focused HTTP permission/ESI selection passes 48/48 cases with zero skips, including `Esi_employee_actions_do_not_require_employee_profile_editing`. An authorized ManageEnrollment update now uses an internal enrollment reader for its response after retaining the action and employee-scope checks. Public GET still requires View; a View-only caller cannot update, and override approval remains separate. No permission grants or payroll calculation rules change. Evidence: `.artifacts/student-pending-repair/results/student-lifecycle-security-http-current-domain.trx`.
+
+The deployment caller retains main-only execution, depends on the security regression workflow, verifies .NET 9, and validates startup/publish-profile gates before DbMigrator. Its explicit FullDemo profile preserves the existing default and grant seeding guards. `SecurityReleaseWorkflow_Tests` passes 1/1 locally; this does not certify an executed deployment.
 
 ## Staff terminology and attendance header regression coverage
 

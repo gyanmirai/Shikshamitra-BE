@@ -10,12 +10,108 @@ audience: humans-and-agents
 
 # Validate Student Enrollment Admissions changes
 
+## App Login settings (2026-10-16)
+
+The focused Application run passes 18 cases with zero failures/skips: six new App Login scenarios plus the 12 retained one-click cases. It covers settings persistence, Optional completion and post-completion preparation, Not needed denial, both automatic timing stages, explicit parent selection, pending delivery worklists, unchanged school flags, owner drift, permissions/scope and idempotency. A new automatic-parent scenario reproduced a duplicate unflushed queue intent; flushing the queue inside the existing transaction resolves it. Domain readiness/request tests pass 28 cases, covering enum validation, boolean compatibility, three-state snapshots and retained request transitions.
+
+The additional credential delivery/eligibility/input regression cohort passes 36/36 cases with zero failures/skips, including transport retry, password preservation, duplicate worker runs, revoked links/grants/scope, cross-tenant denial, saved-recipient provenance, published documents and completion timing.
+
+These tests use isolated current-source assemblies, synthetic SQLite fixtures and mocked transport; they do not certify real mailbox delivery or deployment. No schema migration is added.
+
+The local follow-up rebuilt and restarted the Host on 44332/5000 using the existing Development launch profile and current isolated outputs. Authenticated settings PUT/GET verified manual delivery, account access values, invalid-enum rejection and `Students.Onboarding.ConcurrencyConflict` rejection (the existing HTTP mapping is 400). The exact original configuration was restored and re-read after testing, including all numbering/history fields.
+
+Live verification exposed a filter-options read materializing recursively auto-included academic entities. Scalar projections now retain only the scoped IDs, labels and parent links. `Onboarding_filter_options_uses_scoped_scalar_academic_lookups` passes, checking labels/parents, an empty unrelated year and no tracked Board/Standard graphs. For the one-case local fixture, the earlier request took 131.626 seconds; the first post-restart read took 8.685 seconds and three subsequent samples took 363, 148 and 100 ms. These are local observations, not a controlled benchmark or p95; query counts were not measured.
+
+Real credential delivery remains unverified: the current case has no saved recipient email, its seat reservation is expired and the eligible published fee-structure list is empty. An attempted explicit send correctly returns `Students.Onboarding.PortalAccountInvalid` without creating an account/link or email intent. No activation, fee setup, payment or real credential email was performed; Finance source and configuration were left untouched.
+
+## Student permission regression
+
+Run `StudentModuleVisibilityPermissionContract_Tests` for the complete canonical catalogue and `PermissionConsistencyApi_Tests` (including its `StudentPermissionConsistencyApi_Tests.cs` partial) for role/user grants, revocation, Development behavior and legacy denial compatibility.
+Run `StudentActionPermission_Tests` for direct-call denial before protected reads/writes, and the Records authorization suites for canonical action mappings.
+Attendance API tests must cover missing Add with a valid assignment, Add with an invalid assignment, assigned-teacher marking and lock/unlock, and assignment revocation.
+Roll batch tests must permit an authorized scoped operator without an administrator role while preserving approval and concurrency rules.
+Run application/API suites serially on memory-constrained workstations; local fixtures do not certify staging or production grants.
+
+The historical permission baseline, before the repair below, passed 52 Domain tests and 108 of 109 HTTP tests (zero skips). All 84 selected Student checks passed: 31 Attendance, 25 Onboarding contracts, 14 Records authorization, one Attendance Settings check and 13 Student grant/deny compatibility cases within Permission Consistency. The sole failing HTTP case is the unchanged HR `Esi_employee_actions_do_not_require_employee_profile_editing`: its ManageEnrollment-only caller updates enrollment but the existing response read requires StatutorySchemes.View (expected 200, actual 403). No HR source changed. Evidence: `.artifacts/student-permission-http-final/student-permission-http-final.trx`.
+
+The final focused Application run passed 67/67 tests, zero skips: direct action denials, registration lifecycle action separation, Records authorization, roll batches, Onboarding settings/class/year scope and batch grant reads. The first run's 13 fixture-startup failures came from accidental conventional registration of a private test harness; excluding that manually constructed harness from registration fixed the test setup, and the complete selected suite passed on rerun. Evidence: `.artifacts/student-permission-application-r2/student-permission-application-r2.trx`.
+
+The isolated HTTP/Application builds compiled the complete current production source, including migration history, without source exclusions; shared compilation and build analyzers were disabled to fit workstation memory. This is not a full analyzer or staging/production gate. Existing developer servers and live permission assignments were not changed. The latest backend source must be loaded by restarting the developer Host before browser acceptance of the final scope changes. Retired specialized positive grants require explicit canonical reassignment during the coordinated frontend/backend rollout; no live grants or seed data were widened.
+
+## Student security follow-up (2026-10-16)
+
+The baseline notes below describe the earlier diagnosis. The pending-check repair section records the final local status.
+
+Teacher attendance reads now intersect active employee-linked ClassTeacher assignments with the existing tenant, academic-year and UserScope constraints. The roster checks assignment before loading student identities/statistics; history applies assignment filtering before count/paging. Database-configured administrators retain their existing scope exception and still require the action permission. An assignment removed after login takes effect on the next request.
+
+The fresh HTTP selection initially passed 116 of 117 cases. The remaining positive-history fixture lacked the now-required teacher assignment; both historical fixtures were made explicit and the shared synthetic employee identifiers made unique. The final three-case scope rerun passes **3/3**, including assigned history, rejection/filtering of unassigned history and immediate roster/history revocation. This is overlapping evidence across runs, not a claim that the complete suite passed in one run. Evidence: `.artifacts/student-security-followup/results/student-followup-final.trx` and `student-scope-r2.trx`. The independently known HR ESI failure from the earlier permission run is excluded from that 117-case selection and remains open.
+
+Normal OAuth against the isolated PostgreSQL clone confirms an assigned teacher receives 200 with three students for Class 3A and 403 for unassigned Class 3B despite broad generic UserScope. User override checks verify Deny over role Add, Allow over a View-only role, persistence through role edits, Follow role removal, View denial and denied self-management. All 34 request/state checks pass and temporary overrides/role changes are restored in cleanup. Evidence: `.artifacts/student-role-browser/followup/Overrides.json` and `ReadScope.json`. No original database grants are changed.
+
+Locked correction application/review now checks MarkAttendance.Add instead of Delete, in addition to LeaveAndAbsent.Add and existing scope/revision/separate-reviewer rules. This keeps sensitive updates under Add/Update as approved. The Application and complete HTTP test project leaf builds pass with no source exclusions; shared compilation/analyzers and dependency recompilation are disabled for workstation memory. The HTTP output's Application DLL hash matches the rebuilt leaf output. This is a focused build, not a full solution/analyzer gate.
+
+The final correction selection passes **3/3**, zero skips: Add-versus-Delete authorization on a locked register, retroactive leave/credit review and requester self-review rejection. Evidence: `.artifacts/student-security-followup/results/student-correction-final.trx`.
+
+The final override/stale-correction selection passes **4/4**, zero skips. All three canonical Student actions (View, Add and Delete) independently verify exact role grants, sibling-action denial, user Deny, Follow role, role revocation, direct Allow and removal of that Allow. The fourth case rejects correction approval after leave-source drift without mutating the submitted record/pending request. Evidence: `.artifacts/student-security-followup/results/student-overrides-final.trx`.
+
+Report-release verification exposed an obsolete extra environment argument in the test harness's manually constructed permission checker. Removing that obsolete argument (and the unused fake environment) makes the full **8/8 report-release cases pass**, zero skips, using the real checker/providers. Coverage includes persisted read/generation grants, stale role claims after database membership removal, stricter masking, expiry, queued jobs and revocation after actual workbook generation before blob publication. Production report/authentication logic is unchanged. The repaired test project compiles separately and runs with copied dependency outputs; its Application DLL hash matches the fresh leaf build. Evidence: `.artifacts/student-security-followup/results/student-report-release-final.trx`.
+
+The [frontend follow-up](../../../../Shikshamitra-FE/docs/student/testing.md#student-security-follow-up-2026-10-16) records the landing/Validated Edit fixes, actual normal-login override browser checks and responsive proof.
+
+Remaining workflow triage must distinguish fixtures from product behavior. Retired stage/Review-command failures stop before their intended operation. Roll school-mode fixtures fail while saving numbering settings because they create a rule without the required saved Draft/publication history. The three Directory provisioning assertions conflict with the current activated-enrollment eligibility query, which includes an onboarding case linked to a real enrollment before overall case completion; that visibility contract needs reconciliation rather than a blind assertion change. Document readiness assertions also require investigation. A broad failing run is not proof that every named production workflow is broken, and focused green permission checks are not proof that the entire Student module is accepted.
+
+The historical broad serial Application snapshot, before repair (`FullyQualifiedName~ShikshaMitra.Students`) completed in 58 minutes 47 seconds: **856 total, 679 passed, 173 failed, four skipped**. All eight report-harness failures are cleared by the separate repaired 8/8 run above, putting **165 snapshot failures in the then-pending backlog**. These overlapping cohorts are not a single clean full-suite result. The later repair build also discovers one concurrently added filter-options test; that additional case passes **1/1**, zero skips, checking scoped scalar academic lookups, hierarchy labels/parents, an unrelated year and no tracked Board/Standard graphs. Evidence: `.artifacts/student-security-followup/results/student-workflows-final.trx`, `student-filter-options-final.trx`, `verification-summary.json` and the exact remaining names/messages/stacks in `workflow-failures.json` under `.artifacts/student-security-followup/`.
+
+| Historical repair group | Cases | Repair at that checkpoint |
+| --- | ---: | --- |
+| Retired Admissions stages/handlers | 138 | Modernize Eligibility/Review/Offer journey fixtures and expected errors to supported stages, then rerun. |
+| Onboarding collection prerequisites | 8 | Supply approved collection/defer prerequisites and reasons in fixtures; preserve the existing fee guard. |
+| Numbering Draft/publication fixtures | 7 | Save Draft and publish versioned rules before the target Roll operations. |
+| Directory activation visibility | 3 | Reconcile activated-enrollment visibility with the older provisioning-only expectations. |
+| Admission decision prerequisites | 2 | Complete preceding stages and activate the decision stage before recording a decision. |
+| UTC instant persistence | 1 | Investigate `SubmittedAt.Kind` after database reload. |
+| Other workflow assertions/setup | 6 | Investigate academic collection filtering, cycle reference configuration, applicant lookup, document requirement/readiness and onboarding account-required assertions. |
+
+The four skipped cases require the disposable PostgreSQL connection for workflow publication locks, Assessment roster scale and two resource/interviewer lock checks. Their provider run was pending at that checkpoint; current repair results are recorded below. Those historical failures and skips were release verification work, not 169 confirmed production security defects.
+
+The historical gates below are superseded individually by the pending-check repair. Local clone and SQLite results do not establish staging/production acceptance. A work-remaining percentage cannot be derived reliably from overlapping test pass rates.
+
+### Pending-check repair (2026-10-16)
+
+The earlier 856-case snapshot and 165-case triage backlog are historical. Retired Eligibility/Review/Offer success fixtures now use supported journeys or explicit rejection/no-mutation contracts. Removed obsolete cases are not counted as passes. Fixtures retain Finance ownership, collection deferral reasons, confirmed published fees, real enrollment visibility, published numbering rules and concurrency/scope checks.
+
+| Local verification gate | Current result |
+| --- | --- |
+| Student Domain, role seeds and deployment contract | **634/634 passed**, zero skipped (`student-domain-source-final-r2.trx`). |
+| Full Student Application regression with PostgreSQL | **806/806 passed**, zero failed/skipped, including all four PostgreSQL cases; 50.20 minutes (`student-full-final-r2-postgres.trx`). |
+| HTTP permissions/ESI | **48/48 passed**, zero skipped on the current Domain DLL (`student-lifecycle-security-http-current-domain.trx`). |
+| Updated contracts and modern PostgreSQL | **75/75 passed**, zero skipped (`student-postgres-fixture-modern-r3.trx`). |
+| Legacy-mode PostgreSQL | **4/4 passed**, zero skipped (`student-postgres-fixture-legacy-r3.trx`). |
+| Configured frontend security regression | **138/138 passed**, 17 suites. |
+| Additional lifecycle/report UI regression | **100/100 passed**, ten suites; focused TypeScript reports zero diagnostics across 21 files and typed ESLint passes 17 files. |
+
+PostgreSQL checks cover publication serialization, Assessment scale and both room/interviewer locks on fresh loopback databases. The roster fixture now uses production UTC conversion in modern and legacy Npgsql modes. At 100/1,000/5,000 candidates, the 25-row page used 14 SQL commands and 121 expanded history rows; warm reads were 87.8/152.7/573.4 ms in that local observation. This is bounded query evidence, not a production load benchmark.
+
+Unsupported workflow create/update/clone/version input is rejected before definition mutation. SQLite timestamps preserve UTC kind while PostgreSQL storage remains unchanged. ESI updates use a private response reader after ManageEnrollment and scope checks; public GET retains View.
+
+Close/archive/deactivate, cancellation, withdrawal/release/reversal and document void use the owning Add/Update action in UI, controllers, services and aliases. Actual removal retains Delete. Legacy cancellation denials also constrain Add without losing their former Delete denial. Attendance AI report entry requires Reports.Add and closes after revocation. No live grants were widened or seeders executed.
+
+Normal OAuth against the disposable clone passes the 34-check restored user override matrix, 15 lifecycle checks, three additional Onboarding cancellation checks and three assignment-read checks: assigned Class 3-A returns 200 with three rows, while unassigned Class 3-B returns 403 despite wider generic UserScope. Browser checks verify saved form create/update/delete, direct denial without View, 21 loaded read/control screens or tabs, and dark/responsive layouts. Add/Update exposes Offering Deactivate without Delete; Delete-only excludes lifecycle updates. See [frontend browser evidence](../../../../Shikshamitra-FE/docs/student/testing.md#student-security-follow-up-2026-10-16).
+
+
+
+The final case-drawer browser recheck confirms Add/Update exposes enabled Onboarding cancellation; Delete-only hides Case Settings/cancellation and disables readiness refresh. No case was cancelled. Identity directory lookup returns 403 for the Student-only Add fixture: the current owner remains visible, while selecting another staff member requires existing Identity directory read authority. This related permission was not auto-granted. Existing roles also need canonical-grant review during coordinated rollout.
+
+CI callers now gate deployment on their reusable security workflows while retaining main-only execution. Backend startup/profile validation runs before DbMigrator; explicit FullDemo preserves the existing default. No migration, real email, payment or deployment was performed. Dedicated QA servers/tabs were closed; regular developer servers were preserved. Target-host refresh, staging/deployment, actual delivery and production performance remain separate gates. Legacy report preview/export lacks a matching backend, and Notifications retain existing placeholders.
+
+Evidence: `.artifacts/student-pending-repair/results/`, production PDB/source checks and Application test source checksums, plus frontend `.artifacts/student-security-followup/`. Cancelled diagnostic runs and no-test discovery attempts are excluded from pass counts. Overlapping cohorts are not summed into a module-completion percentage.
+
 ## Roll-number flow validation (2026-10-16)
 
 | Focused gate | Coverage |
 |---|---|
 | `StudentRollOrdering_Tests`, `StudentRollNumberBatch_Tests` | 23 passing Domain tests: grouping, direction, name format, natural numeric ordering, missing inputs, deterministic ties, expiry and approval lifecycle. |
-| Application methods `Roll_batch_` | 6 passing integration scenarios: complete server cohort and immutable paging, append-after-exit cursor, nullable historical placements, committed replay, stale roster rejection, swaps/datetime history, independent batch approval, persisted-admin authority and tenant bounds. |
+| Application methods `Roll_batch_` | 6 integration scenarios: complete server cohort and immutable paging, append-after-exit cursor, nullable historical placements, committed replay, stale roster rejection, swaps/datetime history, independent batch approval, canonical Add authority with assignment scope and tenant bounds. The current permission revision replaces the earlier administrator-only expectation. |
 | `StudentRollNumberBatchContract_Tests` | 11 passing route/input/error-mapping checks; complete server cohorts cannot be supplied by the client. |
 | `Roll_batch_Postgres_` | Explicitly skipped without `STUDENT_RECORDS_APPLICATION_POSTGRES`; the existing factory only accepts a fresh disposable loopback `records_tests_*` database. The gate checks JSONB preview round-trip, stale competing proposals, replay and persisted final rolls. |
 
@@ -112,7 +208,7 @@ The task-owned final Host on `localhost:5001` disabled startup migrations, seedi
 
 ## Attendance workspace alignment (2026-10-12)
 
-`StudentAttendanceApi_Tests.Workspace.cs` covers Directory population parity, server paging/search (including numeric roll), attendance-only read permission, disabled dated eligibility, exact active teacher assignment despite broader scope/forged administrator claims, assignment revocation, admin-only Lock, year/tenant denial and full-roster review before Lock. The attendance test fixture creates real configured database administrator membership for administrator scenarios and restores it after each test; claims and generic staff scope are not administrator authority.
+`StudentAttendanceApi_Tests.Workspace.cs` covers Directory population parity, server paging/search (including numeric roll), attendance-only read permission, disabled dated eligibility, exact active teacher assignment despite broader scope/forged administrator claims, assignment revocation, Add-authorized assigned-teacher Lock/Unlock, year/tenant denial and full-roster review before Lock. The attendance test fixture creates real configured database administrator membership for administrator scope scenarios and restores it after each test; claims and generic staff scope are not administrator authority.
 
 Run the API project with `FullyQualifiedName~StudentAttendanceApi_Tests|FullyQualifiedName~StudentDirectoryApiContract_Tests` and the Application project with `FullyQualifiedName~.Directory_|FullyQualifiedName~.Legacy_override_` using isolated artifacts. Directory scenarios are methods on the partial `AdmissionWorkflowRuntimeIntegration_Tests` class; the source filename is not a test-class filter. The Application regression gate protects the extracted shared Directory inclusion, hierarchy and identity-masking rules. Source tests and a test host do not prove staging or production acceptance; record actual local test and browser results separately.
 

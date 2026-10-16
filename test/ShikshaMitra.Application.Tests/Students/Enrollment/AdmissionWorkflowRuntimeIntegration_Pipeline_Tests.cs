@@ -92,7 +92,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			workflow.Stages.Single(item => item.Id == page.Items.Single().CurrentStageInstanceId).EnteredAt.ShouldBe(page.Items.Single().EnteredAt);
 			workflow.Stages.Single(item => item.Id == page.Items.Single().CurrentStageInstanceId).EnteredAt!.Value.Kind.ShouldBe(DateTimeKind.Utc);
 			var storedStage = await WithUnitOfWorkAsync(() => GetRequiredService<Volo.Abp.Domain.Repositories.IRepository<AdmissionApplicationStageInstance, Guid>>().GetAsync(page.Items.Single().CurrentStageInstanceId!.Value));
-			storedStage.EnteredAt!.Value.Kind.ShouldBe(DateTimeKind.Unspecified); // The unchanged SQLite stage mapping drops the UTC kind.
+			storedStage.EnteredAt!.Value.Kind.ShouldBe(DateTimeKind.Utc);
 			storedStage.EnteredAt.Value.Ticks.ShouldBe(page.Items.Single().EnteredAt!.Value.Ticks);
 			page.Items.Single().NextRequiredAction.ShouldBe("Review and qualify the inquiry");
 			page.Items.Single().DueAt.ShouldBeNull();

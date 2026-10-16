@@ -45,11 +45,13 @@ public class StudentOnboardingRollRuleReader(OnboardingConfigurationManager conf
 			using var document = JsonDocument.Parse(json);
 			foreach (var row in document.RootElement.EnumerateArray()) AddHistory(row, "DivisionId", "RollNumber");
 		}
-		var corrections = await AsyncExecuter.ToListAsync((await recordChanges.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId && x.Section == "placement" && x.Status == "Applied" && x.BeforeJson.Contains(divisionText)).Select(x => x.BeforeJson));
+		// BeforeJson is jsonb: filter relational scope here, then match the exact division below.
+		// String.Contains translates to LIKE, which PostgreSQL cannot apply to jsonb.
+		var corrections = await AsyncExecuter.ToListAsync((await recordChanges.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == yearId && x.Section == "placement" && x.Status == "Applied").Select(x => x.BeforeJson));
 		foreach (var json in corrections) { using var document = JsonDocument.Parse(json); AddHistory(document.RootElement, "divisionId", "rollNumber"); }
 		void AddHistory(JsonElement row, string divisionKey, string numberKey)
 		{
-			if (row.TryGetProperty(divisionKey, out var divisionValue) && divisionValue.ValueKind == JsonValueKind.String && divisionValue.TryGetGuid(out var recordedDivision) && recordedDivision == divisionId &&
+			if (row.ValueKind == JsonValueKind.Object && row.TryGetProperty(divisionKey, out var divisionValue) && divisionValue.ValueKind == JsonValueKind.String && divisionValue.TryGetGuid(out var recordedDivision) && recordedDivision == divisionId &&
 				row.TryGetProperty(numberKey, out var numberValue) && numberValue.ValueKind == JsonValueKind.Number && numberValue.TryGetInt32(out var recordedNumber)) historical.Add(recordedNumber);
 		}
 		foreach (var transition in await transitions.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.TargetAcademicYearId == yearId && x.TargetDivisionId == divisionId))

@@ -31,6 +31,6 @@ public class StudentIdCardController(IStudentIdCardAppService service) : AbpCont
 	public async Task<IActionResult> PdfAsync(Guid id) { var pdf = await service.GetPdfAsync(id); return File(pdf.Content, pdf.ContentType, pdf.FileName); }
 	[HttpPost("{id:guid}/reprint")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]
 	public async Task<IActionResult> ReprintAsync(Guid id, [FromBody] StudentDocumentActionDto input) { var pdf = await service.ReprintAsync(id, input); return File(pdf.Content, pdf.ContentType, pdf.FileName); }
-	[HttpPost("{id:guid}/void")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Delete)]
+	[HttpPost("{id:guid}/void")][Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentICard.Add)]
 	public async Task<Result<StudentIdCardDto>> VoidAsync(Guid id, [FromBody] StudentDocumentActionDto input) => Result.Success(await service.VoidAsync(id, input));
 }

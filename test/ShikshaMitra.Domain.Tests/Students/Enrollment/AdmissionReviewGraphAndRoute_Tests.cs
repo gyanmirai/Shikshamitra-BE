@@ -10,31 +10,32 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionReviewGraphAndRoute_Tests
 {
 	[Theory]
-	[InlineData("review.decision", true)]
-	[InlineData("review.status", true)]
-	[InlineData("review.invented", false)]
-	public void Review_publication_accepts_only_emitted_review_condition_fields(string field, bool supported)
+	[InlineData("review.decision")]
+	[InlineData("review.status")]
+	[InlineData("review.invented")]
+	public void Publication_rejects_retired_review_condition_fields(string field)
 	{
-		AdmissionWorkflowConditionFieldRegistry.IsSupported(field).ShouldBe(supported);
-		var workflow = Guid.NewGuid(); var entry = Stage(workflow, "ENTRY", AdmissionWorkflowStageType.Custom, null, true);
+		AdmissionWorkflowConditionFieldRegistry.IsSupported(field).ShouldBeFalse();
+		var workflow = Guid.NewGuid(); var entry = Stage(workflow, "ENTRY", AdmissionWorkflowStageType.Assessment, null, true);
 		var review = Stage(workflow, "REVIEW", AdmissionWorkflowStageType.Review, "{\"review\":{\"version\":1,\"enabled\":true}}");
-		var end = Stage(workflow, "END", AdmissionWorkflowStageType.Custom, null, terminal: true);
+		var end = Stage(workflow, "END", AdmissionWorkflowStageType.Approval, null, terminal: true);
 		var condition = "{\"field\":\"" + field + "\",\"operator\":\"Equals\",\"value\":\"reject\"}";
 		var links = new[] { Route(workflow, entry.Id, review.Id), new AdmissionWorkflowTransitionDefinition(Guid.NewGuid(), workflow, review.Id, end.Id, 0, condition) };
 		new AdmissionWorkflowGraphValidator().Validate([entry, review, end], links)
-			.Any(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error).ShouldBe(!supported);
+			.ShouldContain(issue => issue.Code == AdmissionWorkflowErrorCodes.InvalidCondition);
 	}
 	[Theory]
-	[InlineData(null, false)]
-	[InlineData("{\"review\":{\"enabled\":false}}", false)]
-	[InlineData("{\"review\":{\"enabled\":true,\"version\":1}}", false)]
-	[InlineData("{\"review\":{\"enabled\":true,\"version\":2}}", true)]
-	public void Review_graph_preserves_basic_stages_and_validates_managed_version(string? policy, bool invalid)
+	[InlineData(null)]
+	[InlineData("{\"review\":{\"enabled\":false}}")]
+	[InlineData("{\"review\":{\"enabled\":true,\"version\":1}}")]
+	[InlineData("{\"review\":{\"enabled\":true,\"version\":2}}")]
+	public void Publication_rejects_retired_review_stages_regardless_of_legacy_policy(string? policy)
 	{
-		var workflow = Guid.NewGuid(); var entry = Stage(workflow, "ENTRY", AdmissionWorkflowStageType.Custom, null, true);
+		var workflow = Guid.NewGuid(); var entry = Stage(workflow, "ENTRY", AdmissionWorkflowStageType.Assessment, null, true);
 		var review = Stage(workflow, "REVIEW", AdmissionWorkflowStageType.Review, policy, terminal: true);
 		new AdmissionWorkflowGraphValidator().Validate([entry, review], [Route(workflow, entry.Id, review.Id)])
-			.Any(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error).ShouldBe(invalid);
+			.ShouldContain(issue => issue.Code == AdmissionWorkflowErrorCodes.InvalidTransition &&
+				issue.StageId == review.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error);
 	}
 	[Fact]
 	public void Review_requires_earlier_managed_prerequisite_on_every_path()

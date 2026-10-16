@@ -125,21 +125,29 @@ public partial class StudentOnboardingAppService(
 		var mediumIds = await AsyncExecuter.ToListAsync(query.Select(item => item.IntendedMediumId).Distinct());
 		var divisionIds = await AsyncExecuter.ToListAsync(query.Where(item => item.DivisionId.HasValue)
 			.Select(item => item.DivisionId!.Value).Distinct());
-		var boards = await boardRepository.GetListAsync(item => boardIds.Contains(item.Id));
-		var mediums = await mediumRepository.GetListAsync(item => mediumIds.Contains(item.Id));
-		var divisions = await divisionRepository.GetListAsync(item => divisionIds.Contains(item.Id));
+		// Dropdown labels must not materialize the recursively auto-included academic graph.
+		// Keep every lookup bounded by IDs from the already tenant/user-scoped cases.
+		var boards = await AsyncExecuter.ToListAsync((await boardRepository.GetQueryableAsync())
+			.Where(item => boardIds.Contains(item.Id)).Select(item => new { item.Id, item.Type }));
+		var mediums = await AsyncExecuter.ToListAsync((await mediumRepository.GetQueryableAsync())
+			.Where(item => mediumIds.Contains(item.Id)).Select(item => new { item.Id, item.Name, item.EducationBoardId }));
+		var divisions = await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+			.Where(item => divisionIds.Contains(item.Id)).Select(item => new { item.Id, item.Name, item.StandardId }));
 		var standards = standardIds.Count == 0
 			? []
-			: await standardRepository.GetListAsync(item => standardIds.Contains(item.Id));
+			: await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+				.Where(item => standardIds.Contains(item.Id)).Select(item => new { item.Id, item.Name, item.EducationMediumStageId }));
 		var stageIds = standards.Select(item => item.EducationMediumStageId).Distinct().ToList();
-		var mediumByStage = (await mediumStageRepository.GetListAsync(item => stageIds.Contains(item.Id)))
+		var mediumByStage = (await AsyncExecuter.ToListAsync((await mediumStageRepository.GetQueryableAsync())
+			.Where(item => stageIds.Contains(item.Id)).Select(item => new { item.Id, item.EducationMediumId })))
 			.ToDictionary(item => item.Id, item => item.EducationMediumId);
 		var academicYears = academicYearIds.Count == 0
 			? []
-			: await academicYearRepository.GetListAsync(item => academicYearIds.Contains(item.Id));
+			: await AsyncExecuter.ToListAsync((await academicYearRepository.GetQueryableAsync())
+				.Where(item => academicYearIds.Contains(item.Id)).Select(item => new { item.Id, item.Name }));
 		return new StudentOnboardingFilterOptionsDto
 		{
-            CanUnlockIdentifiers = (await userScopeService.GetUserScopeAsync(CurrentUser.Id!.Value)).IsAdmin && await LazyServiceProvider.LazyGetRequiredService<Volo.Abp.Authorization.Permissions.IPermissionChecker>().IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair),
+            CanUnlockIdentifiers = await LazyServiceProvider.LazyGetRequiredService<Volo.Abp.Authorization.Permissions.IPermissionChecker>().IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair),
 			AcademicYears = academicYears.OrderByDescending(item => item.Name)
 				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name }).ToList(),
 			Boards = boards.OrderBy(item => item.Type)
@@ -193,12 +201,13 @@ public partial class StudentOnboardingAppService(
 		}
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<IReadOnlyList<StudentOnboardingPlacementOptionDto>> GetPlacementOptionsAsync(Guid id)
 	{
 		var onboardingCase = await GetCaseAsync(id);
-		var divisions = await divisionRepository.GetListAsync(item =>
-			item.StandardId == onboardingCase.IntendedStandardId);
+		var divisionQuery = await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>()
+			.ApplyCurrentUserDivisionScopeAsync(await divisionRepository.GetQueryableAsync(), onboardingCase.AcademicYearId);
+		var divisions = await AsyncExecuter.ToListAsync(divisionQuery.Where(item => item.StandardId == onboardingCase.IntendedStandardId));
 		var now = DateTime.UtcNow;
 		var options = new List<StudentOnboardingPlacementOptionDto>(divisions.Count);
 		foreach (var division in divisions.OrderBy(item => item.Name))
@@ -222,7 +231,7 @@ public partial class StudentOnboardingAppService(
 		return options;
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<IReadOnlyList<StudentIdentifierSeriesDto>> GetAvailableIdentifierSeriesAsync(Guid id)
 	{
 		var onboardingCase = await GetCaseAsync(id);
@@ -843,11 +852,17 @@ public partial class StudentOnboardingAppService(
 		return MapHandoff(handoff);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
-	public async Task<IReadOnlyList<StudentOnboardingPolicyDto>> GetPoliciesAsync(Guid academicYearId) =>
-		(await policyRepository.GetListAsync(item => item.AcademicYearId == academicYearId))
-		.OrderByDescending(item => item.OfferingId.HasValue).ThenByDescending(item => item.StandardId.HasValue)
-		.Select(MapPolicy).ToList();
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task<IReadOnlyList<StudentOnboardingPolicyDto>> GetPoliciesAsync(Guid academicYearId)
+	{
+		var standardIds = await GetReadableSettingsStandardIdsAsync(academicYearId, nameof(GetPoliciesAsync));
+		var query = (await policyRepository.GetQueryableAsync()).Where(item => item.AcademicYearId == academicYearId);
+		if (standardIds != null)
+			query = query.Where(item => !item.StandardId.HasValue || Enumerable.Contains(standardIds, item.StandardId.Value));
+		var policies = await AsyncExecuter.ToListAsync(query);
+		return policies.OrderByDescending(item => item.OfferingId.HasValue).ThenByDescending(item => item.StandardId.HasValue)
+			.Select(MapPolicy).ToList();
+	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	public async Task<StudentOnboardingPolicyDto> CreatePolicyAsync(UpsertStudentOnboardingPolicyDto input)
@@ -870,6 +885,7 @@ public partial class StudentOnboardingAppService(
 	{
 		var policy = await policyRepository.FindAsync(id) ??
 			throw new EntityNotFoundException(typeof(StudentOnboardingPolicy), id);
+		await EnsureSettingsTargetScopeAsync(policy.AcademicYearId, policy.StandardId, nameof(UpdatePolicyAsync));
 		EnsureConcurrency(policy, input.ConcurrencyStamp);
 		await ValidatePolicyScopeAsync(input);
 		if (policy.AcademicYearId != input.AcademicYearId || policy.OfferingId != input.OfferingId ||
@@ -887,6 +903,10 @@ public partial class StudentOnboardingAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<IReadOnlyList<StudentOnboardingSettingsDto>> GetSettingsAsync(Guid? academicYearId)
 	{
+		// School defaults are inherited by every scoped workspace; a selected year's override is scoped data.
+		if (academicYearId.HasValue)
+			await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>()
+				.EnsureCanAccessAcademicYearAsync(academicYearId.Value, nameof(GetSettingsAsync));
 		var settings = await settingsRepository.GetListAsync(item =>
 			!item.AcademicYearId.HasValue || academicYearId.HasValue && item.AcademicYearId == academicYearId);
 		return settings.OrderBy(item => item.AcademicYearId.HasValue).Select(MapSettings).ToList();
@@ -935,9 +955,10 @@ public partial class StudentOnboardingAppService(
 		return MapSettings(settings);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Delete)]
 	public async Task DeleteSettingsAsync(Guid id, string? concurrencyStamp)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Delete);
 		var settings = await settingsRepository.FindAsync(id) ??
 			throw new EntityNotFoundException(typeof(StudentOnboardingSettings), id);
 		await EnsureSettingsScopeAsync(settings.AcademicYearId);
@@ -945,10 +966,16 @@ public partial class StudentOnboardingAppService(
 		await settingsRepository.DeleteAsync(settings, true);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
-	public async Task<IReadOnlyList<StudentIdentifierSeriesDto>> GetIdentifierSeriesAsync(Guid academicYearId) =>
-		(await seriesRepository.GetListAsync(item => item.AcademicYearId == academicYearId))
-		.OrderBy(item => item.Code).Select(MapSeries).ToList();
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
+	public async Task<IReadOnlyList<StudentIdentifierSeriesDto>> GetIdentifierSeriesAsync(Guid academicYearId)
+	{
+		var standardIds = await GetReadableSettingsStandardIdsAsync(academicYearId, nameof(GetIdentifierSeriesAsync));
+		var query = (await seriesRepository.GetQueryableAsync()).Where(item => item.AcademicYearId == academicYearId);
+		if (standardIds != null)
+			query = query.Where(item => !item.StandardId.HasValue || Enumerable.Contains(standardIds, item.StandardId.Value));
+		var series = await AsyncExecuter.ToListAsync(query);
+		return series.OrderBy(item => item.Code).Select(MapSeries).ToList();
+	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	public async Task<StudentIdentifierSeriesDto> CreateIdentifierSeriesAsync(CreateStudentIdentifierSeriesDto input)
@@ -956,6 +983,7 @@ public partial class StudentOnboardingAppService(
 		if (!await academicYearRepository.AnyAsync(item => item.Id == input.AcademicYearId) ||
 		    input.StandardId.HasValue && !await standardRepository.AnyAsync(item => item.Id == input.StandardId.Value))
 			throw new BusinessException(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+		await EnsureSettingsTargetScopeAsync(input.AcademicYearId, input.StandardId, nameof(CreateIdentifierSeriesAsync));
 		var normalizedCode = input.Code.Trim().ToUpperInvariant();
 		if (await seriesRepository.AnyAsync(item => item.Code == normalizedCode))
 			throw new BusinessException(StudentOnboardingErrorCodes.IdentifierSeriesAlreadyExists);
@@ -971,6 +999,7 @@ public partial class StudentOnboardingAppService(
 	{
 		var series = await seriesRepository.FindAsync(id) ??
 			throw new EntityNotFoundException(typeof(StudentIdentifierSeries), id);
+		await EnsureSettingsTargetScopeAsync(series.AcademicYearId, series.StandardId, nameof(DeactivateIdentifierSeriesAsync));
 		if (string.IsNullOrWhiteSpace(concurrencyStamp) ||
 		    !string.Equals(concurrencyStamp, series.ConcurrencyStamp, StringComparison.Ordinal))
 			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
@@ -979,7 +1008,7 @@ public partial class StudentOnboardingAppService(
 		return MapSeries(series);
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public Task<HistoricalAdmissionReconciliationDto> GetHistoricalReconciliationAsync() =>
 		ReconcileHistoricalAdmissionsAsync(apply: false);
 
@@ -989,8 +1018,9 @@ public partial class StudentOnboardingAppService(
 
 	private async Task<HistoricalAdmissionReconciliationDto> ReconcileHistoricalAdmissionsAsync(bool apply)
 	{
-		var applications = await applicationRepository.GetListAsync(item =>
-			item.Status == AdmissionApplicationStatus.Enrolled);
+		var applicationQuery = await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>()
+			.GetScopedApplicationsAsync();
+		var applications = await AsyncExecuter.ToListAsync(applicationQuery.Where(item => item.Status == AdmissionApplicationStatus.Enrolled));
 		var result = new HistoricalAdmissionReconciliationDto
 		{
 			TotalHistoricalApplications = applications.Count
@@ -1083,13 +1113,18 @@ public partial class StudentOnboardingAppService(
 		if (input.OfferingId.HasValue != input.StandardId.HasValue)
 			throw new BusinessException(StudentOnboardingErrorCodes.PolicyScopeInvalid)
 				.WithData("Reason", "An override must identify both an offering and its standard.");
-		if (!input.OfferingId.HasValue) return;
+		if (!input.OfferingId.HasValue)
+		{
+			await EnsureSettingsTargetScopeAsync(input.AcademicYearId, null, nameof(ValidatePolicyScopeAsync));
+			return;
+		}
 		var offering = await offeringRepository.FindAsync(input.OfferingId.Value);
 		if (offering == null || offering.StandardId != input.StandardId)
 			throw new BusinessException(StudentOnboardingErrorCodes.PolicyScopeInvalid);
 		var cycle = await cycleRepository.FindAsync(offering.AdmissionCycleId);
 		if (cycle == null || cycle.AcademicYearId != input.AcademicYearId)
 			throw new BusinessException(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+		await EnsureSettingsTargetScopeAsync(input.AcademicYearId, input.StandardId, nameof(ValidatePolicyScopeAsync));
 	}
 
 	private async Task<List<string>> GetActivationBlockersAsync(
@@ -1487,7 +1522,7 @@ public partial class StudentOnboardingAppService(
 		return item;
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<IReadOnlyList<StudentOnboardingCampusDto>> GetAvailableCampusesAsync() =>
 		(await campusRepository.GetListAsync(c => c.IsActive))
 			.OrderBy(c => c.Name).ThenBy(c => c.Code)

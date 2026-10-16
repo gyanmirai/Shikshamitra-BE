@@ -12,6 +12,28 @@ audience: humans-and-agents
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
 
+## Student action permissions
+
+The Student catalogue exposes only `View`, `Add` and supported `Delete` leaves across 36 features (106 action leaves).
+The permission editor labels `Add` as **Add/Update**.
+Approve, reject, publish, rollback, waive, finalize, activate, identifier unlock and attendance lock/unlock use the owning feature's `Add` permission.
+Lifecycle commands including close, archive, deactivate, cancellation, withdrawal, seat release, payment reversal and document void use the owning feature's `Add` permission. Actual record removal retains `Delete`.
+Overrides and Guardian Access have no Delete operation and expose only View and Add.
+Permissions come from effective role/user grants; teacher assignments restrict student/class scope and never supply a Student action grant.
+Tenant isolation, active identity, configured approval stages, separate approvers, reasons, concurrency and owning Finance/Identity permissions still apply.
+Attendance lock/unlock requires MarkAttendance.Add and the same assigned-class scope as marking, with the existing database-administrator scope exception.
+Onboarding settings, policy, identifier-series, offering and historical-preview reads use View.
+Selected-year reads require academic scope; class-specific configuration is limited to readable classes, while inherited school/year defaults remain visible.
+Configuration writes require the whole affected year or class; division-only scope cannot change shared class settings. School-default writes require tenant-wide scope.
+Historical reconciliation and placement options use scoped application/division queries; applying a backfill still requires Add.
+
+Existing canonical grants retain their identifiers.
+Retired specialized positive grants do not automatically grant broader Add/Update access; administrators must review and explicitly assign canonical actions.
+Retired explicit user denials conservatively deny their canonical replacement, including both Add and Delete for the old Transitions.Create denial.
+Changing an override replaces that legacy denial while retaining any other affected canonical denial.
+Deploy the matching frontend and backend together, review roles/users holding retired grants, and verify effective access before use.
+No schema migration or grant reseed is required for this permission change.
+
 ## Portal account owner profiles and case correction
 
 `GET /api/account/my-profile` returns the identity profile with authorized linked student contexts under `extraProperties.studentContexts`.
@@ -99,6 +121,20 @@ Public-link creation options are exposed through `GET /api/student/enrollment/ad
 
 Student captured summaries exclude Aadhaar, APAAR, PEN, UDISE, PAN and raw photo payloads. Their existing canonical storage and read permissions remain authoritative. The original admission evidence stays on the applicant.
 
+## App Login settings
+
+The existing Onboarding settings configuration remains schema version 1, with additive fields inside `readinessAccess`; no new endpoint, table or migration is required.
+
+| Field | Contract |
+|---|---|
+| `studentAccountAccess`, `guardianAccountAccess` | Optional enum: `not-needed`, `optional`, `required`. When absent, the corresponding legacy account boolean resolves false/true to Not needed/Required. |
+| `studentAccount`, `guardianAccount` | Retained required-account booleans. When an access enum is supplied alongside its boolean, it must equal whether that enum is `required`; contradictory payloads are rejected. |
+| `credentialProvisioningMode` | Retained `manual`/`automatic`, default manual. The UI preserves existing automatic configuration until explicitly changed. |
+| `sendStudentCredentialEmail`, `sendGuardianCredentialEmail` | Retained automatic-email flags; new UI writes enable them only in automatic mode for enabled account types. Manual Send Credentials retains its explicit saved-owner authority without changing school flags. |
+| `credentialSendingTime` | Retained `activation`/`completion`; new manual UI saves use activation so staff controls the send moment. Existing case snapshots retain pinned timing. |
+
+Pending cases adopt current school choices through the existing admission-derived snapshot logic. Activated/completed/cancelled snapshots are not rewritten. Optional preparation is allowed on completed active enrollments, but never on cancelled cases; optional email work does not block completion. Existing permission, tenant/scope, identity collision, saved-owner provenance, enrollment, identifiers and document checks remain authoritative. Automatic queue intents are flushed inside the same enclosing transaction so a following manual request reuses the queued intent rather than inserting a duplicate.
+
 ## Onboarding credential delivery
 
 | Endpoint | Authority and contract |
@@ -127,6 +163,8 @@ An ambiguous mobile match fails closed; the owner verifies the mailbox and chang
 
 All routes below are under `/api/student/onboarding`, enforce tenant/academic scope, and retain existing Onboarding permission aliases.
 
+`GET /filter-options` returns scalar academic IDs, names and parent links derived only from the scoped cases, with the optional year filter applied first. It does not materialize the recursively auto-included academic entity graph. The response and existing View/identifier-unlock permissions are unchanged.
+
 The worklist GET applies all filters and counts in the scoped database query before paging.
 `placementDivisionId` narrows current placement alongside the existing Board/Medium/Class/Division selectors.
 `studentNameFilter` and `ownerNameFilter` accept `contains`, `equals`, `startsWith` or `endsWith` through their respective operator fields, case-insensitively.
@@ -139,11 +177,11 @@ This is a read-contract correction, not a new bulk assignment endpoint, permissi
 
 | Route | Contract |
 |---|---|
-| GET `/settings/offerings?academicYearId=...` | Configure permission; compatibility lookup for older clients. The current settings screen does not require an Offering selection. |
+| GET `/settings/offerings?academicYearId=...` | View permission and academic scope; compatibility lookup for older clients. The current settings screen does not require an Offering selection. |
 | POST `/{id}/requirements/review?concurrencyStamp=...` | Edit permission; compatibility refresh for eligible pending cases. Normal case reads and preparation adopt admission requirements automatically. |
 | POST `/{id}/gr-number` | AllocateIdentifier; `{numberSeriesId, manualValue?, manualSequence?, reason?, concurrencyStamp?}`. First manual assignment needs no correction reason. |
 | POST `/{id}/roll-number` | AllocateIdentifier; `{rollNumber, rollAssignmentMode?, reason?, concurrencyStamp?}`. Independent from GR assignment. |
-| POST `/identifier-locks` | AllocateIdentifier; `{academicYearId, divisionId, identifierType: gr|roll, isLocked, reason?}`. Unlock also requires Repair, trusted administrator scope and a reason. No Division placement lock. |
+| POST `/identifier-locks` | Add/Update (AllocateIdentifier and Repair aliases); `{academicYearId, divisionId, identifierType: gr|roll, isLocked, reason?}`. Both actions enforce the selected division scope; Unlock requires a reason. No Division placement lock. |
 | GET `/{id}/fee-structure` and `/fee-structure/candidates` | View; existing Admissions selection/candidate DTOs backed by published Finance structure reads. |
 | PUT `/{id}/fee-structure` | Edit; `{structureId, optionalHeadIds, concurrencyStamp?}` confirms admission intent only. No Finance mutation. |
 | GET `/{id}/workflow-documents` | View; frozen applicable workflow requirements and canonical evidence. |
@@ -156,17 +194,18 @@ Case DTOs retain `requirementsNeedReview=false` for compatible clients, frozen d
 
 | API family | Contract and authority |
 |---|---|
-| Existing `/api/students/attendance` | GET `/students` and `/history` under Attendance_MarkAttendance.View; POST `/mark` under Add; POST `/lock` or `/unlock` under Delete. |
+| Existing `/api/students/attendance` | GET `/students` and `/history` under Attendance_MarkAttendance.View; POST `/mark`, `/lock` and `/unlock` under Add. |
 | Attendance workspace | GET `/api/students/attendance/context?academicYearId=...` returns scoped Directory hierarchy options, server `schoolToday`, current database `isAdmin`, exact active employee-linked `assignedClasses`, and `canManageLock`. GET `/workspace` accepts academicYearId, date, optional Board/Medium/Class/Division, search, whitelisted sorting and bounded paging; returns active Directory students with daily status and applicability reasons. Both require Attendance_MarkAttendance.View; Records permission is not required. |
 | `/api/students/attendance/settings/leave-types` | GET paged list and active list under Attendance_SettingLeaveType.View; POST and PUT under Add; DELETE under Delete. These are the only attendance-settings commands. |
 | `/api/students/attendance/leaves` | GET list and status counts under Attendance_LeaveAndAbsent.View. Optional `tableFilters` is a JSON array of column, operator, value, and optional min/max bounds for Student, Medium, Class, Division, Leave type, start/end date, total days, and status. Filters apply before count, sort, and paging; date bounds are UTC instants for the user's selected local calendar day. |
 | `/api/students/attendance/register` and `/summary` | Register GET uses Attendance_Reports.View; summary GET uses Attendance_MarkAttendance.View. Both require academicYearId and bounded dates. Register permits optional Standard/Division and server paging; summary identifies one student. DTOs return nullable percentage, expected/recorded/missing counts, provisional and school-target metadata. |
-| `/api/students/attendance/corrections` | GET under Attendance_LeaveAndAbsent.View; POST request, `/{id}/approve` or `/reject` under Attendance_LeaveAndAbsent.Add. Locked review additionally checks Attendance_MarkAttendance.Delete. Commands require reasons and revisions and prohibit self-review. |
+| `/api/students/attendance/corrections` | GET under Attendance_LeaveAndAbsent.View; POST request, `/{id}/approve` or `/reject` under Attendance_LeaveAndAbsent.Add. Applying a locked correction additionally checks Attendance_MarkAttendance.Add. Commands require reasons and revisions and prohibit self-review. |
 
 Daily saves require current `revision` when a day exists and `rosterRevision` from the roster response.
+Daily roster reads check the exact active employee-linked ClassTeacher assignment before loading student identities, directory enrichment or statistics; tenant-wide UserScope alone does not authorize an unassigned class. History rows intersect the existing tenant/year/academic scope with active teacher assignments to the recorded day, so an assignment revocation also removes that history on the next request. Configured database administrators retain their existing data-scope exception and still require View. The workspace uses the same assignment authority.
 `submit=false` saves partial drafts; `submit=true` checks the entire eligible roster.
 The current school-date register uses the shared active Directory population. Visible students without applicable dated enrollment/placement remain disabled; historical membership and submitted snapshots remain preserved. Workspace count/search/paging precedes class enrichment; name/GR search and exact numeric roll/GR search respect identity masking.
-Mark/Submit requires Add, current database identity, academic scope and an exact active ClassTeacher assignment through an active employee's UserId; configured database administrators retain the existing scope exception but still require the action permission. Claims alone and tenant-wide staff scope do not confer administrator or class-teacher authority. The roster exposes `canMark`, `canSubmit` and `canLock`. Lock/Unlock additionally requires configured administrator status; Lock rejects incomplete, stale or credit-correction-required submitted rosters.
+Mark/Submit requires Add, current database identity, academic scope and an exact active ClassTeacher assignment through an active employee's UserId; configured database administrators retain the existing scope exception but still require the action permission. Claims alone and tenant-wide staff scope do not confer administrator or class-teacher authority. The roster exposes `canMark`, `canSubmit` and `canLock`. Lock/Unlock requires Add and the same assigned-class scope; Lock rejects incomplete, stale or credit-correction-required submitted rosters.
 `operationId` identifies an actor/payload-specific durable retry, and `correctionReason` supplies observation conflict or correction evidence.
 `isPastMarkingCutoff` informs the UI; `canMark` remains the server capability.
 `needsCreditCorrection` identifies a submitted row whose approved-leave link or credit now differs from its recorded snapshot. Ordinary saves cannot refresh that row, and Submit checks omitted rows too. A correction request may retain the same Present/Absent mark when this flag is true; it still requires a reason and follows the school's approval rules. Approval rejects stale recorded credits or changed request-time leave facts.
@@ -181,19 +220,19 @@ Records preserve each controller's response contract: Directory/Profile, Setting
 
 | API family | Commands and permissions |
 |---|---|
-| `/api/students/records/settings` | GET effective/draft context and `/roles` under Settings.View; PUT `/draft` and POST `/preview` under Settings.Add; POST `/publish` under Settings.Publish. Nullable `academicYearId` selects school defaults. |
+| `/api/students/records/settings` | GET effective/draft context and `/roles` under Settings.View; PUT `/draft` and POST `/preview` under Settings.Add; POST `/publish` under Settings.Add. Nullable `academicYearId` selects school defaults. |
 | `/api/students/records/{studentId}/profile` and `/details` | Records.StudentList.View plus tenant/student and historical enrollment scope. Optional `academicYearId` contextualizes placement and visible journey evidence. Profile adds admission/onboarding milestones and actual credential readiness; Details returns structured availability/current section data and frozen submitted Registration sources, original/current typed values, captured/editable field codes and returning differences. Reads never create custom storage. |
-| GET `/api/students/records/{studentId}/details/options` | Record-bound dynamic options query: `submissionId`, `fieldCode`, optional `parentId`, `searchTerm`, `skipCount`, `maxResultCount` (1–21), `selectedIds` (up to 20) and `selectedOnly`. The frozen source determines source kind and academic year. Available choices require Changes.View/Create and an editable field; selected-only labels require Records read and reject search/pagination. All reads enforce source masks, school hierarchy and target sibling Records eligibility/scope/Identity visibility. No Admission.Forms.View grant is required. |
-| `/api/students/records/changes/students/{studentId}/snapshot/custom-details` | Existing Changes.View snapshot contract. A `custom-details` request submits `{sources:[{applicationId,formInstanceId,submissionId,values:{FIELD_CODE:typedValue}}]}` with the existing reason, client key and expected snapshot; Changes.Create and the school's Correction approval policy govern application. Unknown/mismatched sources, fields, types, changed hidden fields, stale snapshots and conflicting compatible values fail closed. |
-| GET `/api/students/records/{studentId}/details/form-snapshot` | Records.StudentList.View, Changes.View and Changes.Create; full writable scoped profile required. Returns the existing unwrapped snapshot DTO with `section: registration-form`, hash and safe typed `{sources:[{applicationId,formInstanceId,submissionId,values}...]}` for the retained full Registration forms. |
+| GET `/api/students/records/{studentId}/details/options` | Record-bound dynamic options query: `submissionId`, `fieldCode`, optional `parentId`, `searchTerm`, `skipCount`, `maxResultCount` (1–21), `selectedIds` (up to 20) and `selectedOnly`. The frozen source determines source kind and academic year. Available choices require Changes.View/Add and an editable field; selected-only labels require Records read and reject search/pagination. All reads enforce source masks, school hierarchy and target sibling Records eligibility/scope/Identity visibility. No Admission.Forms.View grant is required. |
+| `/api/students/records/changes/students/{studentId}/snapshot/custom-details` | Existing Changes.View snapshot contract. A `custom-details` request submits `{sources:[{applicationId,formInstanceId,submissionId,values:{FIELD_CODE:typedValue}}]}` with the existing reason, client key and expected snapshot; Changes.Add and the school's Correction approval policy govern application. Unknown/mismatched sources, fields, types, changed hidden fields, stale snapshots and conflicting compatible values fail closed. |
+| GET `/api/students/records/{studentId}/details/form-snapshot` | Records.StudentList.View, Changes.View and Changes.Add; full writable scoped profile required. Returns the existing unwrapped snapshot DTO with `section: registration-form`, hash and safe typed `{sources:[{applicationId,formInstanceId,submissionId,values}...]}` for the retained full Registration forms. |
 | PUT `/api/students/records/{studentId}/details/form` | Same existing read/create permissions; body `{clientKey,reason,expectedSnapshot,payload}` using the full form snapshot. Immediately applies one atomic `registration-form` Correction audit, returning the unwrapped `StudentRecordChangeDto` with Applied status. This explicit inline profile command does not run school approval stages; generic section/custom correction requests retain their published approval policy. Immutable submitted answers are never rewritten. |
 | Canonical Student document actions | The conventional `StudentDocumentAppService` list, required-status and download actions require Records.StudentList.View; upload requires StudentList.Add and delete requires StudentList.Delete, before scoped storage access. Ordinary uploads keep the existing RegistrationFormIssued/Registration lifecycle restriction. Admissions evidence and Onboarding workflow-document commands retain their separate source owners and action grants. |
 | `/api/students/records/transitions` | GET paged cases, `/{id}`, `/options`, `/renewals`, `/renewals/{id}` under Transitions.View. Options accept `academicYearId`, optional `studentId` and `admissionOfferingId`; expose permitted placement, return policy, active Offerings with EntryMode, and resumable real applications. Selected Inquiry-capable Offering metadata additionally requires Inquiries.Create and source scope. |
-| Transition requests | POST `/preview`, `/batches`, `/{id}/cancel`, `/{id}/correct`, `/returns`, `/returns/preview`, `/renewals/{id}/confirm` under Transitions.Create. POST `/{id}/approve` and `/reject` under Transitions.Approve. POST `/{id}/apply` and `/renewals/{id}/activate` under Transitions.Apply. |
-| Renewal portal handoff | GET `/renewals/{id}/portal-options` exposes required accounts, recorded email/guardian choices, existing links and `canProvision`. POST `/renewals/{id}/portal-accounts` uses the existing Onboarding account DTO; requires Transitions.Create, Onboarding.Edit and Identity.Users.Create, plus Identity.Users.Update for verified existing guardian linkage. |
+| Transition requests | POST `/preview`, `/batches`, `/{id}/correct`, `/returns`, `/returns/preview`, `/renewals/{id}/confirm`, `/{id}/approve`, `/reject`, `/{id}/apply` and `/renewals/{id}/activate` require Transitions.Add. POST `/{id}/cancel` requires Transitions.Add. |
+| Renewal portal handoff | GET `/renewals/{id}/portal-options` exposes required accounts, recorded email/guardian choices, existing links and `canProvision`. POST `/renewals/{id}/portal-accounts` uses the existing Onboarding account DTO; requires Transitions.Add, Onboarding.Add and Identity.Users.Create, plus Identity.Users.Update for verified existing guardian linkage. |
 | Other Records surfaces | Directory, profile, changes, historical overrides, duplicate review, documents/IDs, guardian reviews, and reports use their source-owned controllers in `HttpApi/Controllers/Student/Records/`. Existing certificate/ID permission compatibility is preserved. |
 | Certificates | Directory requests with `includeActiveStudentList=true` require Certificates.View and include enrolled Student List students without records onboarding; former students retain records eligibility. `academicMediumStageId` filters the academic stage. Directory options expose `stages` under Medium and `stageId` on Classes. Certificate preview, generation, history and downloads accept active scoped students while retaining identity masking and Leaving exit rules. GET `/api/students/records/certificates/batches` accepts `certificateType`, `generatedFrom`, `generatedTo` (offset-bearing timestamps spanning at most 32 days), `skipCount` and `maxResultCount` (1–100). It returns paged generation groups. GET `/batches/{batchId}?certificateType=...` returns the saved certificate snapshots for visible students. Both require Certificates.View. A multi-student generation uses one stable UUID followed by each student UUID as its idempotency key; older independent requests appear as individual groups. |
-| Student I-Card | GET `/api/students/records/ids/templates/list` lists saved designs; POST `/templates` creates one, and GET/PUT/DELETE `/templates/{id}` views, edits, or deletes it. The existing GET/PUT `/templates` remains for older clients and addresses the oldest design. List and read require StudentICard.View, create and update require StudentICard.Add, and delete requires StudentICard.Delete. A student can belong to only one saved template in an academic year; creating or updating a template moves selected students from any other template in that year to the saved template. The same student may use a different template in another year. POST `/preview`, `/issue`, and `/export` accept an optional `templateId` to select a saved design; omitted ID uses the oldest design for compatibility. Preview validates up to 100 student IDs; issue creates numbered snapshot cards with an idempotency key; export returns an A4 bulk PDF for up to 100 IDs and requires StudentICard.Add. Deleting a design leaves issued card snapshots intact. Individual PDF, reprint and void keep their existing permissions. Directory accepts repeated `boardIds`, `mediumIds`, `standardIds` and `divisionIds` query parameters for the multi-select student step; scope and identity masking still apply. |
+| Student I-Card | GET `/api/students/records/ids/templates/list` lists saved designs; POST `/templates` creates one, and GET/PUT/DELETE `/templates/{id}` views, edits, or deletes it. The existing GET/PUT `/templates` remains for older clients and addresses the oldest design. List and read require StudentICard.View, create and update require StudentICard.Add, and delete requires StudentICard.Delete. A student can belong to only one saved template in an academic year; creating or updating a template moves selected students from any other template in that year to the saved template. The same student may use a different template in another year. POST `/preview`, `/issue`, and `/export` accept an optional `templateId` to select a saved design; omitted ID uses the oldest design for compatibility. Preview validates up to 100 student IDs; issue creates numbered snapshot cards with an idempotency key; export returns an A4 bulk PDF for up to 100 IDs and requires StudentICard.Add. Deleting a design leaves issued card snapshots intact. Individual PDF requires View; reprint and void require Add. Directory accepts repeated `boardIds`, `mediumIds`, `standardIds` and `divisionIds` query parameters for the multi-select student step; scope and identity masking still apply. |
 
 Batch requests contain one to 100 distinct students, source academic year, stable idempotency key, per-row outcome/reason/effective date, and preview student/enrollment concurrency stamps. Promote/Repeat/Return additionally require target year/class/division and roll number. Submission validates stamps and school batch behavior again. Reusing a key for a different request is rejected.
 
@@ -552,7 +591,7 @@ Base: `/api/student/enrollment/admissions/document-verification`. Responses use 
 | GET `applications/{applicationId}/stages/{stageInstanceId}` | `Students.Admissions.Documents.View` | Pinned requirements, applicability, chronological evidence/reviews, blockers, effective file limits, action flags, application concurrency stamp |
 | POST `applications/{applicationId}/stages/{stageInstanceId}/requirements/{code}/upload` | `Students.Admissions.Documents.Add` | Multipart `file`, `concurrencyStamp`, optional `notes`; appends a fresh revision |
 | POST same requirement route `/original` | `Students.Admissions.Documents.Add` | Retained endpoint; unavailable for current upload-only stage policies |
-| POST same requirement route `/waive` | `Students.Admissions.Documents.Delete` | Retained endpoint; unavailable because current stage policies disable waivers |
+| POST same requirement route `/waive` | `Students.Admissions.Documents.Add` | Retained endpoint; unavailable because current stage policies disable waivers |
 | POST `evidence/{evidenceId}/review` | `Students.Admissions.Documents.Add` | JSON `concurrencyStamp`, `decision: accepted/rejected`, optional `reason` (required for rejection) |
 | GET `evidence/{evidenceId}/download` | `Students.Admissions.Documents.View` | Scoped private attachment, no-store response, audit activity; storage keys never exposed |
 | GET `document-types` | `Students.Admissions.Workflows.View` | Tenant catalog mappings, allowed extensions and maximum file size |
@@ -693,7 +732,7 @@ Owning list additions keep dashboard counts and filtered worklists aligned befor
 | Inquiries | `dashboardFollowUpsDue` and `divisionId`; due means at least one scheduled reminder at or before the current UTC time, with existing year/offering scope. |
 | Student leave | `boardId`, intersecting the existing year, Medium, Class, Division and leave-period filters. |
 
-Records approval groups require Records Approve, and Admission decision groups require Applications Decide in addition to the destination read/visibility grants.
+Records approval groups require Records Add, and Admission decision groups require Applications Add in addition to the destination read/visibility grants.
 Frontend route presets and cache invalidation are owned by the [Student frontend](../../../../Shikshamitra-FE/docs/student/clients.md).
 
 These live GET reads and frontend refresh repeat reads without readiness adoption, writes or jobs.
@@ -712,14 +751,14 @@ The authenticated controller root is `/api/students/roll-number-batches`.
 | POST `preview` | Scope plus operation `assign-missing` or `renumber`; freezes the complete server cohort and returns its first 25 rows. No client student IDs or proposed numbers are accepted. |
 | GET `{id}` | Scoped immutable proposal; `skipCount` and `maxResultCount` page display only, maximum 100 rows. |
 | POST `{id}/submit` | Current stamp, stable idempotency key and reason; previews expire after 15 minutes. Direct-policy batches apply atomically; governed batches await approval. |
-| POST `{id}/decision` | Current stamp, approve/reject and review note; requires independent Records Changes Approve authority and the current configured stage role. |
+| POST `{id}/decision` | Current stamp, approve/reject and review note; requires Records Changes Add authority and the current configured stage role. |
 | POST `{id}/apply` | Approved batch, current stamp and original submission key; revalidates roster, rules, policy, locks and approvers before atomic application. |
 
 Reads require an active database identity, tenant and academic scope, plus Onboarding View or Records Student List View as applicable to every included row.
-Writes additionally require Onboarding Allocate Identifier for pending cases and Records Changes Create for active enrollments; renumbering also requires persisted school-admin scope.
+Writes additionally require Onboarding Add for pending cases and Records Changes Add for active enrollments; renumbering uses the same authorized student/division scope.
 Active-enrollment batch history also requires Records Changes View.
 Records eligibility, provisioning policy, required placement reasons and Identity masking remain enforced.
-Conflicting or expired proposals use `Students:RollNumbers:StalePreview`; blocked rows, invalid states/rules and missing admin/approver authority have localized errors in `StudentRollNumberErrorCodes`.
+Conflicting or expired proposals use `Students:RollNumbers:StalePreview`; blocked rows, invalid states/rules and missing action/approver authority have localized errors in `StudentRollNumberErrorCodes`.
 Committed replay returns the saved batch without a second assignment.
 
 ## Archived workflow restoration

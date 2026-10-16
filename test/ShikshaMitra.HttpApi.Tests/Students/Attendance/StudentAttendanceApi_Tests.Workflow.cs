@@ -5,6 +5,7 @@ using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Academic.Calendar;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using ShikshaMitra.Students.Attendance.Settings;
@@ -21,6 +22,43 @@ namespace ShikshaMitra.Students.Attendance;
 
 public partial class StudentAttendanceApi_Tests
 {
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Locked_correction_review_requires_Add_and_cannot_use_Delete_as_write_authority()
+	{
+		var context = await ResolveSeededDivisionContextAsync(currentYear: true);
+		var division = await CreateDivisionAsync(context.StandardId, "LockedReviewAdd");
+		var date = context.ReferenceDate.AddDays(-2);
+		var student = await CreateEnrolledStudentAsync(context, "LockedReviewAdd", division, attendanceStartDate: date);
+		await SubmitAbsentAsync(context, division, date, student.StudentId);
+		var locked = await Client.PostAsJsonAsync($"{AttendanceBaseUrl}/lock", new LockAttendanceDayInput {
+			AcademicYearId = context.AcademicYearId, StandardId = context.StandardId, DivisionId = division, Date = date }, JsonOptions);
+		locked.StatusCode.ShouldBe(HttpStatusCode.OK, await locked.Content.ReadAsStringAsync());
+		var before = await ReadRosterAsync(context, division, date);
+		var correction = await RequestRetroactiveCorrectionAsync(context, division, date, student.StudentId, before, AttendanceStatus.Present);
+		correction.Status.ShouldBe("Pending");
+		var reviewerId = Guid.NewGuid();
+		await SeedDivisionScopeAsync(reviewerId, division, context.AcademicYearId);
+		var decision = new AttendanceCorrectionDecisionInput { Revision = correction.Revision, Reason = "Reviewed locked test register" };
+		foreach (var extra in new[] { "", ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete })
+		{
+			using var denied = CreateClientAs(reviewerId);
+			denied.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+				ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add + (extra.Length == 0 ? "" : "," + extra));
+			(await denied.PostAsJsonAsync($"{AttendanceBaseUrl}/corrections/{correction.Id}/approve", decision, JsonOptions))
+				.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+		}
+		using var reviewer = CreateClientAs(reviewerId);
+		reviewer.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			ShikshaMitraSubmodulePermissions.Students.Attendance_LeaveAndAbsent.Add + "," +
+			ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add);
+		var approved = await reviewer.PostAsJsonAsync($"{AttendanceBaseUrl}/corrections/{correction.Id}/approve", decision, JsonOptions);
+		approved.StatusCode.ShouldBe(HttpStatusCode.OK, await approved.Content.ReadAsStringAsync());
+		(await approved.Content.ReadFromJsonAsync<AttendanceCorrectionDto>(JsonOptions))!.Status.ShouldBe("Applied");
+		var after = await ReadRosterAsync(context, division, date);
+		after.IsLocked.ShouldBeTrue();
+		after.Students.Single(s => s.StudentId == student.StudentId).Status.ShouldBe(AttendanceStatus.Present);
+	}
+
 	[Fact, TestTier(TestTraits.Tiers.Critical)]
 	public async Task Retroactive_approved_leave_changes_submitted_credits_only_after_separate_audited_correction_approval()
 	{

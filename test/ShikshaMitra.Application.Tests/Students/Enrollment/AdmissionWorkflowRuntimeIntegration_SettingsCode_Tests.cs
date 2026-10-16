@@ -70,7 +70,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
-		var published = await CreateAndPublishWorkflowAsync();
+		var published = await CreateAndPublishCurrentWorkflowAsync();
 		var draft = await _workflowAppService.CreateNewVersionAsync(published.Id);
 		var input = ToUpdateInput(draft);
 		input.Code = string.Empty;
@@ -135,6 +135,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var medium = await _mediumRepository.GetAsync(stage.EducationMediumId);
 		var board = await _boardRepository.GetAsync(medium.EducationBoardId);
 		var service = GetRequiredService<IAdmissionCycleAppService>();
+		await EnsureTestIdentityUserAsync(TestUserId, "cycle-fixture-admin");
+		await _scopeRepository.InsertAsync(new ShikshaMitra.Security.UserScope.UserScopeAssignment(
+			Guid.NewGuid(), TestTenantId, userId: TestUserId, academicYearId: board.AcademicYearId), true);
+		await GetRequiredService<ShikshaMitra.Security.UserScope.IUserScopeService>().InvalidateUserScopeCacheAsync(TestUserId);
 		var input = new CreateUpdateAdmissionCycleDto
 		{
 			Name = "Admission 2026-27", AcademicYearId = board.AcademicYearId,

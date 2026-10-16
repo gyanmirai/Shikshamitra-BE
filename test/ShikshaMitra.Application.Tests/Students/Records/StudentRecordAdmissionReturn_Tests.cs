@@ -38,6 +38,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			validation.IsValid.ShouldBeTrue(string.Join(", ", validation.Errors.Select(x => x.Code)));
 			return item;
 		});
+		await ConfigureOfferingReadinessAsync(offering, fixture.Student.AcademicYearId!.Value);
 		return (fixture.Service, fixture.Student, offering);
 	}
 	private async Task<AdmissionWorkflowDto> CreateAdmissionReturnRegistrationWorkflowAsync(Guid formId)
@@ -53,7 +54,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					ConfigurationJson = JsonSerializer.Serialize(new { formDefinitionId = formId, form = new AdmissionFormStagePolicy
 					{ Version = 1, Enabled = true, Responsibility = "shared", AllowSaveAndResume = true, AllowLateSubmission = true,
 						AutoAdvanceOnSubmit = true, RequireSectionVerification = false } }) },
-				new() { Id = terminalStage, Code = "DONE", Name = "Ready for review", StageType = AdmissionWorkflowStageType.Custom,
+				new() { Id = terminalStage, Code = "DONE", Name = "Admission decision", StageType = AdmissionWorkflowStageType.Approval,
 					DisplayOrder = 1, IsTerminalStage = true, IsRequired = true }
 			],
 			Transitions = [new() { FromStageId = formStage, ToStageId = terminalStage, Priority = 1, IsDefault = true }]
@@ -85,12 +86,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await _applicationAppService.SubmitAsync(applicationId)).ValidationErrors.ShouldBeEmpty();
 		await CompleteCertificationWorkflowAsync(applicationId, stopBeforeApproval: true);
 		var application = await _applicationAppService.GetAsync(applicationId);
-		application = await _applicationAppService.MarkInReviewAsync(application.Id, Decision(application, "Returning application reviewed"));
 		application = await _applicationAppService.ApproveAsync(application.Id, Decision(application, "Returning admission approved"));
 		await CompleteCertificationWorkflowAsync(applicationId);
 		application = await _applicationAppService.GetAsync(applicationId);
-		application = await _applicationAppService.IssueOfferAsync(application.Id, Decision(application, "Returning offer issued", DateTime.UtcNow.AddDays(30)));
-		return await _applicationAppService.AcceptOfferAsync(application.Id, Decision(application, "Returning family accepted"));
+		return application;
 	}
 	[Fact] public Task Record_admission_return_inquiry_is_new_and_idempotent_and_retains_completed_history() => RunCertificationScenarioAsync(async () =>
 	{
@@ -249,16 +248,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var division = await WithUnitOfWorkAsync(async () => await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(
 			await GetRequiredService<DivisionManager>().CreateAsync(fixture.Offering.StandardId, "ReturnPublic", 40), true));
 		item = await onboarding.SetPlacementAsync(item.Id, new() { DivisionId = division.Id, ConcurrencyStamp = item.ConcurrencyStamp });
-		item = await onboarding.AllocateIdentifierAsync(item.Id, new() { NumberSeriesId = Guid.NewGuid(), RollNumber = 17, ConcurrencyStamp = item.ConcurrencyStamp });
+		item = await onboarding.AllocateIdentifierAsync(item.Id, new() { NumberSeriesId = Guid.NewGuid(), RollNumber = 1, RollAssignmentMode = "automatic", ConcurrencyStamp = item.ConcurrencyStamp });
 		item = await onboarding.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
+		item = await ConfirmFixtureFeeStructureAsync(fixture.Offering, item);
 		var activation = new ActivateStudentOnboardingDto { IdempotencyKey = "reviewed-return-activate", ConcurrencyStamp = item.ConcurrencyStamp };
-		item = await onboarding.ActivateAsync(item.Id, activation); item.Status.ShouldBe(StudentOnboardingStatus.Provisioning);
+		item = await onboarding.ActivateAsync(item.Id, activation); item.Status.ShouldBe(StudentOnboardingStatus.Completed, item.LastError);
 		item = await onboarding.ActivateAsync(item.Id, activation); item.StudentEnrollmentId.ShouldBe(original.Enrollment.Id);
 		(await Should.ThrowAsync<BusinessException>(() => onboarding.CancelAsync(item.Id,
 			new() { ConcurrencyStamp = item.ConcurrencyStamp, Reason = "Cancellation after activation must be rejected" }))).Code.ShouldBe(StudentOnboardingErrorCodes.CaseNotEditable);
-		(await fixture.Service.GetAsync(returned.TransitionId!.Value)).Status.ShouldBe("AwaitingAdmission");
-		var finance = await SeedRecordRenewalFinanceAsync(fixture.Student.Id, fixture.Student.AcademicYearId.Value);
-		await CollectRecordRenewalCashAsync(fixture.Student.Id, fixture.Student.AcademicYearId.Value, finance.FeeHeadId, finance.DueId, 6000);
+		(await fixture.Service.GetAsync(returned.TransitionId!.Value)).Status.ShouldBe("Applied");
 		item = await onboarding.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp); item.Status.ShouldBe(StudentOnboardingStatus.Completed, item.LastError);
 		(await onboarding.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp)).Status.ShouldBe(StudentOnboardingStatus.Completed);
 		await WithUnitOfWorkAsync(async () =>
@@ -304,10 +302,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var division = await WithUnitOfWorkAsync(async () => await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(
 			await GetRequiredService<DivisionManager>().CreateAsync(fixture.Offering.StandardId, "HistoricalReturn", 40), true));
 		item = await onboarding.SetPlacementAsync(item.Id, new() { DivisionId = division.Id, ConcurrencyStamp = item.ConcurrencyStamp });
-		item = await onboarding.AllocateIdentifierAsync(item.Id, new() { NumberSeriesId = Guid.NewGuid(), RollNumber = 23, ConcurrencyStamp = item.ConcurrencyStamp });
+		item = await onboarding.AllocateIdentifierAsync(item.Id, new() { NumberSeriesId = Guid.NewGuid(), RollNumber = 1, RollAssignmentMode = "automatic", ConcurrencyStamp = item.ConcurrencyStamp });
 		item = await onboarding.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
+		item = await ConfirmFixtureFeeStructureAsync(fixture.Offering, item);
 		item = await onboarding.ActivateAsync(item.Id, new() { IdempotencyKey = "historical-reviewed-activate", ConcurrencyStamp = item.ConcurrencyStamp });
-		item.Status.ShouldBe(StudentOnboardingStatus.Provisioning);
+		item.Status.ShouldBe(StudentOnboardingStatus.Completed, item.LastError);
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var enrollment = await _studentEnrollmentRepository.GetAsync(x => x.StudentId == historical.Id);

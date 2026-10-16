@@ -21,7 +21,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var fixture = await AdmissionReturnFixtureAsync(mode);
 		if (mode == AdmissionEntryMode.Inquiry)
 		{
-			var workflow = await CreateAndPublishManagedInquiryWorkflowAsync();
+			var workflow = await CreateAndPublishManagedInquiryWorkflowAsync(withAdmissionDecision: true);
 			await WithUnitOfWorkAsync(async () =>
 			{
 				var offering = await _offeringRepository.GetAsync(fixture.Offering.Id);
@@ -47,8 +47,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var preserved = await AdmissionReturnHistoryAsync(fixture.Student.Id);
 		var submitted = await _applicationAppService.SubmitAsync(applicationId);
 		submitted.ValidationErrors.ShouldBeEmpty();
+		await CompleteCertificationWorkflowAsync(applicationId, stopBeforeApproval: true);
+		var currentDecision = await _applicationAppService.GetAsync(applicationId);
 		const string reason = "School rejected this reviewed return application";
-		var rejected = await _applicationAppService.RejectAsync(applicationId, Decision(submitted.Application, reason));
+		var rejected = await _applicationAppService.RejectAsync(applicationId, Decision(currentDecision, reason));
 		rejected.Status.ShouldBe(AdmissionApplicationStatus.Rejected);
 		(await fixture.Service.GetAsync(returned.TransitionId!.Value)).Status.ShouldBe("Cancelled");
 		(await fixture.Service.ReturnAsync(input)).Status.ShouldBe("Cancelled");

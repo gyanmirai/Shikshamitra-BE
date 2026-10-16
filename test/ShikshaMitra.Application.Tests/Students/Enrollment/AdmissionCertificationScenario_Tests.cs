@@ -70,7 +70,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				},
 				grNumber = new { configurations = Array.Empty<object>() },
 				rollNumber = new { configurations = Array.Empty<object>() },
-				divisionChange = new { configurations = Array.Empty<object>() }
+				divisionChange = new { configurations = new[] { new {
+					id = "active-gseb-coverage", status = "draft", version = 1, isActive = false,
+					boardMode = "selected", boardIds = new[] { path.BoardId },
+					mediumMode = "selected", academicMediumIds = new[] { path.MediumId },
+					stageMode = "selected", academicMediumStageIds = new[] { path.LevelId },
+					classMode = "selected", standardIds = new[] { path.StandardId }, divisionMode = "all"
+				} } }
 			});
 			var onboarding = GetRequiredService<IStudentOnboardingAppService>();
 			var saved = await onboarding.SaveSettingsAsync(new()
@@ -136,7 +142,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			};
 			var settingsJson = System.Text.Json.JsonSerializer.Serialize(new
 			{
-				readinessAccess = new { studentAccount = false },
+				readinessAccess = new { studentAccount = false, guardianAccount = false },
 				onboardingProfiles = new object[]
 				{
 					new { id = "all-campus", admissionRoutes = new[] { "Fresh admission" },
@@ -193,7 +199,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			onboardingCase.IntendedStandardId.ShouldBe(fixture.Offering.StandardId);
 			var onboardingView = await onboarding.GetAsync(onboardingCase.Id);
 			onboardingView.CampusId.ShouldBe(campusId);
-			onboardingView.StudentAccountRequired.ShouldBeTrue();
+			// Historical named profiles cannot override the current global readiness rules.
+			onboardingView.StudentAccountRequired.ShouldBeFalse();
 			await WithUnitOfWorkAsync(async () =>
 			{
 				var legacyCase = await _onboardingCaseRepository.GetAsync(onboardingCase.Id);
@@ -202,14 +209,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			var legacyView = await onboarding.GetAsync(onboardingCase.Id);
 			legacyView.CampusId.ShouldBe(campusId);
-			legacyView.StudentAccountRequired.ShouldBeTrue();
+			legacyView.StudentAccountRequired.ShouldBeFalse();
 			var scholarshipView = await onboarding.SetAdmissionRouteAsync(onboardingCase.Id, new()
 			{
 				AdmissionRoute = "SCHOLARSHIP INTAKE",
 				ConcurrencyStamp = legacyView.ConcurrencyStamp
 			});
 			scholarshipView.AdmissionRoute.ShouldBe("Scholarship intake");
-			scholarshipView.GuardianAccountRequired.ShouldBeTrue();
+			scholarshipView.GuardianAccountRequired.ShouldBeFalse();
 			scholarshipView.StudentAccountRequired.ShouldBeFalse();
 			(await Should.ThrowAsync<BusinessException>(() => onboarding.SetAdmissionRouteAsync(onboardingCase.Id, new()
 			{
@@ -224,9 +231,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				ConfigurationJson = withoutCustomRoute.ToJsonString(),
 				ConcurrencyStamp = savedSettings.ConcurrencyStamp
 			});
-			(await Should.ThrowAsync<BusinessException>(() => onboarding.RefreshReadinessAsync(
-				onboardingCase.Id, scholarshipView.ConcurrencyStamp)))
-				.Code.ShouldBe(StudentOnboardingErrorCodes.PolicyScopeInvalid);
+			var refreshed = await onboarding.RefreshReadinessAsync(onboardingCase.Id, scholarshipView.ConcurrencyStamp);
+			refreshed.AdmissionRoute.ShouldBe(scholarshipView.AdmissionRoute);
+			refreshed.StudentAccountRequired.ShouldBeFalse();
+			refreshed.GuardianAccountRequired.ShouldBeFalse();
 			(await WithUnitOfWorkAsync(() =>
 				_onboardingStepRepository.CountAsync(step => step.OnboardingCaseId == onboardingCase.Id)))
 				.ShouldBe(StudentOnboardingStepKeys.Defaults.Length);
@@ -368,33 +376,20 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 	[Fact]
-	public Task Certification_08_unaccepted_and_expired_offers_both_block_finalization() =>
-		RunCertificationScenarioAsync(async () =>
+	public Task Certification_current_approval_finalizes_without_a_retired_offer() => RunCertificationScenarioAsync(async () =>
+	{
+		var fixture = await CreateCertificationFixtureAsync("NoOffer");
+		await WithUnitOfWorkAsync(async () =>
 		{
-			var unaccepted = await CreateCertificationFixtureAsync("Zara", acceptOffer: false);
-			var unacceptedPreview = await _applicationAppService.GetFinalizationPreviewAsync(unaccepted.Application.Id);
-			unacceptedPreview.Items.Single(item => item.Key == "offer").Passed.ShouldBeFalse();
-			var unacceptedError = await Should.ThrowAsync<BusinessException>(() =>
-				FinalizeAsync(unaccepted.Application, true, "cert-unaccepted-offer"));
-			unacceptedError.Code.ShouldBe(StudentOnboardingErrorCodes.FinalizationNotReady);
-			await AssertReservationUnusedAsync(unaccepted);
-
-			var expired = await CreateCertificationFixtureAsync("Arjun");
-			await WithUnitOfWorkAsync(async () =>
-			{
-				var application = await _applicationRepository.GetAsync(expired.Application.Id);
-				typeof(AdmissionApplication).GetProperty(nameof(AdmissionApplication.OfferExpiresAt))!
-					.SetValue(application, DateTime.UtcNow.AddMinutes(-1));
-				await _applicationRepository.UpdateAsync(application, autoSave: true);
-			});
-			expired = expired with { Application = await _applicationAppService.GetAsync(expired.Application.Id) };
-			var expiredPreview = await _applicationAppService.GetFinalizationPreviewAsync(expired.Application.Id);
-			expiredPreview.Items.Single(item => item.Key == "offer").Passed.ShouldBeFalse();
-			var expiredError = await Should.ThrowAsync<BusinessException>(() =>
-				FinalizeAsync(expired.Application, true, "cert-expired-offer"));
-			expiredError.Code.ShouldBe(StudentOnboardingErrorCodes.FinalizationNotReady);
-			await AssertReservationUnusedAsync(expired);
+			var application = await _applicationRepository.GetAsync(fixture.Application.Id);
+			typeof(AdmissionApplication).GetProperty(nameof(AdmissionApplication.OfferExpiresAt))!.SetValue(application, DateTime.UtcNow.AddDays(-1));
+			await _applicationRepository.UpdateAsync(application, true);
 		});
+		var application = await _applicationAppService.GetAsync(fixture.Application.Id);
+		application.Status.ShouldBe(AdmissionApplicationStatus.Approved);
+		(await _applicationAppService.GetFinalizationPreviewAsync(application.Id)).IsReady.ShouldBeTrue();
+		(await FinalizeAsync(application, true, "current-no-retired-offer")).Application.Status.ShouldBe(AdmissionApplicationStatus.AdmissionFinalized);
+	});
 
 	[Fact]
 	public Task Certification_09_incomplete_workflow_blocks_finalization_even_after_offer_acceptance() =>
@@ -467,7 +462,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		bool campusScoped = false,
 		Guid? existingStudentId = null,
 		AdmissionApplicant? existingApplicant = null,
-		bool currentWorkflow = false)
+		bool currentWorkflow = true)
 	{
 		var workflow = currentWorkflow
 			? await CreateCurrentCertificationWorkflowAsync()
@@ -506,6 +501,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		application = await _applicationAppService.GetAsync(application.Id);
 		if (currentWorkflow)
 		{
+			if (!completeWorkflow)
+				return new AdmissionCertificationFixture(applicant, offering, application, existingStudentId);
 			application = await _applicationAppService.ApproveAsync(application.Id,
 				Decision(application, "Eligibility and submitted application approved"));
 			if (completeWorkflow)
@@ -609,6 +606,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await _applicationAppService.AdvanceWorkflowAsync(applicationId, new AdvanceAdmissionWorkflowDto
 			{
 				ExpectedCurrentStageInstanceId = stageId,
+				DeferFeeCollection = runtime.Stages.Single(stage => stage.Id == stageId).StageType == AdmissionWorkflowStageType.Payment,
+				Reason = "Fixture family requested collection later in Onboarding",
 				IdempotencyKey = $"cert-stage-{stageId:N}",
 				ConcurrencyStamp = application.ConcurrencyStamp
 			});

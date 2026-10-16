@@ -69,39 +69,39 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[InlineData("OnboardingOnly")]
 	[InlineData("Summary")]
 	[InlineData("Full")]
-	public Task Directory_excludes_provisioning_while_direct_profile_obeys_published_school_mode(string mode) => RunCertificationScenarioAsync(async () =>
+	public Task Directory_hides_unactivated_students_and_includes_the_real_activated_enrollment(string mode) => RunCertificationScenarioAsync(async () =>
 	{
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
 		var student = await CreateExistingStudentAsync(offering, "ProvisioningDirectory", "Student");
 		var applicant = await CreateCertificationApplicantAsync("Provisioning", true, true, student.Id);
 		var application = await StartFixtureApplicationAsync(applicant.Id, offering.Id);
+		var enrollmentId = Guid.NewGuid();
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var current = await _studentRepository.GetAsync(student.Id); current.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
 			await _studentRepository.UpdateAsync(current, autoSave: true);
-			var enrollmentId = Guid.NewGuid();
 			var onboarding = new StudentOnboardingCase(Guid.NewGuid(), TestTenantId, application.Id, applicant.Id, student.Id, offering.Id,
 				student.AcademicYearId!.Value, offering.BoardId, offering.MediumId, offering.StageId, offering.StandardId,
 				$"provisioning-record-{student.Id:N}", null, DateTime.UtcNow.AddDays(1));
 			onboarding.RecordPlacement(Guid.NewGuid(), Guid.NewGuid(), DateTime.UtcNow);
 			onboarding.RecordIdentifier(null, 1, DateTime.UtcNow); onboarding.MarkReady(DateTime.UtcNow); onboarding.BeginProvisioning(enrollmentId);
 			await GetRequiredService<IRepository<StudentOnboardingCase, Guid>>().InsertAsync(onboarding, autoSave: true);
-			await GetRequiredService<IRepository<StudentEnrollment, Guid>>().InsertAsync(StudentEnrollment.Create(enrollmentId, TestTenantId,
-				student.Id, student.AcademicYearId.Value, student.StandardId, null, null, onboarding.Id), autoSave: true);
 		});
 		var policy = StudentRecordsPolicy.Starter(); policy.Provisioning.Mode = mode;
 		await PublishDirectoryPolicyAsync(policy);
 		(await GetRequiredService<IStudentDirectoryAppService>().GetListAsync(new() { Search = "ProvisioningDirectory" })).TotalCount.ShouldBe(0);
 		(await GetRequiredService<IStudentDirectoryAppService>().GetLegacyCandidatesAsync(new() { Search = "ProvisioningDirectory" })).TotalCount.ShouldBe(0);
 		var profileService = GetRequiredService<IStudentRecordProfileAppService>();
-		if (mode == "OnboardingOnly")
-			(await Should.ThrowAsync<BusinessException>(() => profileService.GetAsync(student.Id))).Code.ShouldBe("Students:Records:OnboardingIncomplete");
-		else
+		(await Should.ThrowAsync<BusinessException>(() => profileService.GetAsync(student.Id))).Code.ShouldBe("Students:Records:OnboardingIncomplete");
+		await WithUnitOfWorkAsync(async () =>
 		{
-			var profile = await profileService.GetAsync(student.Id); profile.RecordsAccess.ShouldBe(mode); profile.PlacementEditable.ShouldBeFalse();
-			if (mode == "Summary") { profile.EnrollmentHistory.ShouldBeEmpty(); profile.DateOfBirth.ShouldBeNull(); }
-			else profile.EnrollmentHistory.Count.ShouldBe(1);
-		}
+			var onboarding = await GetRequiredService<IRepository<StudentOnboardingCase, Guid>>().GetAsync(c => c.ApplicationId == application.Id);
+			await GetRequiredService<IRepository<StudentEnrollment, Guid>>().InsertAsync(StudentEnrollment.Create(enrollmentId, TestTenantId,
+				student.Id, student.AcademicYearId!.Value, student.StandardId, null, null, onboarding.Id), autoSave: true);
+		});
+		(await GetRequiredService<IStudentDirectoryAppService>().GetListAsync(new() { Search = "ProvisioningDirectory" })).TotalCount.ShouldBe(1);
+		var profile = await profileService.GetAsync(student.Id);
+		profile.RecordsAccess.ShouldBe("Full"); profile.EnrollmentHistory.Count.ShouldBe(1);
 	});
 
 	[Fact]

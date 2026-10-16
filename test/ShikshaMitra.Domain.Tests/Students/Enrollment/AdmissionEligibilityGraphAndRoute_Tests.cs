@@ -10,17 +10,19 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionEligibilityGraphAndRoute_Tests
 {
 	[Theory]
-	[InlineData(null, false)]
-	[InlineData("{\"eligibility\":{\"enabled\":false}}", false)]
-	[InlineData("{\"eligibility\":{\"version\":2,\"enabled\":true,\"criteria\":[]}}", true)]
-	[InlineData("{\"eligibility\":{\"version\":1,\"enabled\":true,\"criteria\":[]}}", true)]
-	public void Eligibility_graph_accepts_legacy_and_rejects_invalid_managed_policy(string? json, bool invalid)
+	[InlineData(null)]
+	[InlineData("{\"eligibility\":{\"enabled\":false}}")]
+	[InlineData("{\"eligibility\":{\"version\":2,\"enabled\":true,\"criteria\":[]}}")]
+	[InlineData("{\"eligibility\":{\"version\":1,\"enabled\":true,\"criteria\":[]}}")]
+	public void Publication_rejects_retired_eligibility_stages_regardless_of_legacy_policy(string? json)
 	{
 		var workflow = Guid.NewGuid();
-		var entry = new AdmissionWorkflowStageDefinition(Guid.NewGuid(), workflow, "ENTRY", "Entry", AdmissionWorkflowStageType.Custom, 0, true, false, null, null, true);
+		var entry = new AdmissionWorkflowStageDefinition(Guid.NewGuid(), workflow, "ENTRY", "Entry", AdmissionWorkflowStageType.Assessment, 0, true, false, null, null, true);
 		var eligibility = new AdmissionWorkflowStageDefinition(Guid.NewGuid(), workflow, "ELIG", "Eligibility", AdmissionWorkflowStageType.Eligibility, 1, true, false, null, json, false, true);
 		var transition = new AdmissionWorkflowTransitionDefinition(Guid.NewGuid(), workflow, entry.Id, eligibility.Id, 0, isDefault: true);
-		new AdmissionWorkflowGraphValidator().Validate([entry, eligibility], [transition]).Any(issue => issue.Severity == AdmissionWorkflowValidationSeverity.Error).ShouldBe(invalid);
+		new AdmissionWorkflowGraphValidator().Validate([entry, eligibility], [transition]).ShouldContain(issue =>
+			issue.Code == AdmissionWorkflowErrorCodes.InvalidTransition && issue.StageId == eligibility.Id &&
+			issue.Severity == AdmissionWorkflowValidationSeverity.Error);
 	}
 	[Theory]
 	[InlineData("ineligible")]

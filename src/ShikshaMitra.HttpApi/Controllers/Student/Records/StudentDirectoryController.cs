@@ -25,6 +25,7 @@ public class StudentDirectoryController(IStudentDirectoryAppService service) : A
 	public async Task<Result<PagedResultDto<StudentDirectoryItemDto>>> GetLegacyCandidatesAsync([FromQuery] StudentDirectoryRequest input) => Result.Success(await service.GetLegacyCandidatesAsync(input));
 	[HttpGet("legacy-overrides")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Overrides.View)]
 	public async Task<Result<PagedResultDto<StudentLegacyOverrideDto>>> GetOverridesAsync([FromQuery] PagedResultRequestDto input) => Result.Success(await service.GetLegacyOverridesAsync(input));
 	[HttpPost("{studentId:guid}/legacy-overrides")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]

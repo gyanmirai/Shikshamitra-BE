@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.Compliance;
 using ShikshaMitra.Students.Enrollments.Registrations;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -112,6 +114,7 @@ public class StudentGeneralInfoAppService(
 
 	public async Task<StudentGeneralDetailsDto> CreateDirectRegistrationAsync(CreateDirectRegistrationDto createRegistrationDto)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Add);
 		var academicMediumId = createRegistrationDto.AcademicMediumId;
 		if (academicMediumId == Guid.Empty)
 		{

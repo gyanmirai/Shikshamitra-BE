@@ -40,7 +40,7 @@ public class AdmissionCyclesController(IAdmissionCycleAppService appService) : A
 		Result.Success(await appService.PublishAsync(id, concurrencyStamp));
 
 	[HttpPost("{id:guid}/close")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	public async Task<Result<AdmissionCycleDto>> Close(Guid id, [FromBody] AdmissionCycleActionDto input) =>
 		Result.Success(await appService.CloseAsync(id, input));
 
@@ -50,7 +50,7 @@ public class AdmissionCyclesController(IAdmissionCycleAppService appService) : A
 		Result.Success(await appService.ReopenAsync(id, input));
 
 	[HttpPost("{id:guid}/archive")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	public async Task<Result<AdmissionCycleDto>> Archive(Guid id, [FromBody] AdmissionCycleActionDto input) =>
 		Result.Success(await appService.ArchiveAsync(id, input));
 

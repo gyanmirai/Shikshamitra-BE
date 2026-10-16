@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using NSubstitute;
@@ -258,12 +259,17 @@ public class AdmissionAssessmentRosterPostgres_Tests(ITestOutputHelper output)
 				if (entry.Metadata.FindProperty("CreationTime") != null) entry.Property("CreationTime").CurrentValue = DateTime.UtcNow;
 			await db.SaveChangesAsync();
 			db.ChangeTracker.Clear();
+			var persistedSession = await db.Set<AdmissionAssessmentSession>().SingleAsync(row => row.Id == session.Id);
+			persistedSession.StartsAt.Kind.ShouldBe(DateTimeKind.Utc);
+			persistedSession.StartsAt.ShouldBe(session.StartsAt, TimeSpan.FromTicks(10));
 			return (offering.Id, definition.Id, session.Id, laterSession.Id);
 		}
 	}
 
 	private sealed class RosterQueryDb(DbContextOptions<RosterQueryDb> options) : DbContext(options)
 	{
+		private static readonly ValueConverter<DateTime, DateTimeOffset> UtcInstant = new(
+			value => new DateTimeOffset(AdmissionEventUtcTime.Normalize(value)), value => value.UtcDateTime);
 		public Guid TenantId { get; } = Guid.NewGuid();
 		protected override void OnModelCreating(ModelBuilder model)
 		{
@@ -288,6 +294,12 @@ public class AdmissionAssessmentRosterPostgres_Tests(ITestOutputHelper output)
 			model.Entity<AdmissionAssessmentAttempt>().HasQueryFilter(row => row.TenantId == TenantId && !row.IsDeleted);
 			model.Entity<AdmissionAssessmentSession>().HasQueryFilter(row => row.TenantId == TenantId && !row.IsDeleted);
 			model.Entity<AdmissionAssessmentSession>().Ignore(row => row.Scopes).Ignore(row => row.RoomReservationStatus).Ignore(row => row.RoomReady);
+			// Match the production instant mapping even after an ABP fixture enables legacy Npgsql timestamps.
+			// Otherwise timestamptz reads become local DateTime values and past appointments look future in UTC comparisons.
+			foreach (var property in new[] { nameof(AdmissionAssessmentSession.StartsAt), nameof(AdmissionAssessmentSession.EndsAt) })
+				model.Entity<AdmissionAssessmentSession>().Property(property).HasConversion(UtcInstant).HasColumnType("timestamp with time zone");
+			foreach (var property in new[] { nameof(AdmissionAssessmentAttempt.SlotStartsAt), nameof(AdmissionAssessmentAttempt.SlotEndsAt), nameof(AdmissionAssessmentAttempt.ReviewedAt) })
+				model.Entity<AdmissionAssessmentAttempt>().Property(property).HasConversion(UtcInstant).HasColumnType("timestamp with time zone");
 			model.Entity<ShikshaMitra.TenantSettings.Standards.Standard>().Ignore(row => row.EducationMediumStage).Ignore(row => row.Shift).Ignore(row => row.Divisions)
 				.HasQueryFilter(row => row.TenantId == TenantId && !row.IsDeleted);
 			// Match the production mapping for Standard's get-only tenant property.

@@ -25,8 +25,8 @@ public class AdmissionCycleContract_Tests
 	[InlineData(nameof(AdmissionCycleAppService.ScheduleAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCycleAppService.ValidateAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCycleAppService.UpdateOfferingCapacityAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
-	[InlineData(nameof(AdmissionCycleAppService.CloseAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
-	[InlineData(nameof(AdmissionCycleAppService.ArchiveAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
+	[InlineData(nameof(AdmissionCycleAppService.CloseAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
+	[InlineData(nameof(AdmissionCycleAppService.ArchiveAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Add)]
 	[InlineData(nameof(AdmissionCycleAppService.DeleteAsync), ShikshaMitraSubmodulePermissions.Students.Admissions.Delete)]
 	public void Every_operation_uses_only_view_add_or_delete(string methodName, string permission)
 	{

@@ -22,11 +22,13 @@ public static class AutomaticOnboardingReadinessRules
 		var rules = saved.HasValue ? JsonNode.Parse(saved.Value.GetRawText())!.AsObject() : new JsonObject();
 		// Account preparation and credential delivery are independent choices. Existing delivery
 		// settings are preserved; requiring an account never enables an outbound email implicitly.
-		rules["studentAccount"] = saved.HasValue && OnboardingRuleConfiguration.Boolean(saved.Value, "studentAccount");
-		rules["guardianAccount"] = !saved.HasValue || OnboardingRuleConfiguration.Boolean(saved.Value, "guardianAccount", true);
-		rules["sendStudentCredentialEmail"] = saved.HasValue && OnboardingRuleConfiguration.Boolean(saved.Value, "studentAccount") &&
+		rules["studentAccount"] = saved.HasValue && StudentPortalAccountRules.IsRequired(saved.Value, "student");
+		rules["guardianAccount"] = !saved.HasValue || (saved.Value.TryGetProperty("guardianAccountAccess", out _)
+			? StudentPortalAccountRules.IsRequired(saved.Value, "guardian") : OnboardingRuleConfiguration.Boolean(saved.Value, "guardianAccount", true));
+		var accountRules = JsonSerializer.SerializeToElement(rules);
+		rules["sendStudentCredentialEmail"] = saved.HasValue && StudentPortalAccountRules.IsEnabled(accountRules, "student") &&
 			OnboardingRuleConfiguration.Boolean(saved.Value, "sendStudentCredentialEmail");
-		rules["sendGuardianCredentialEmail"] = saved.HasValue && OnboardingRuleConfiguration.Boolean(saved.Value, "guardianAccount", true) &&
+		rules["sendGuardianCredentialEmail"] = saved.HasValue && StudentPortalAccountRules.IsEnabled(accountRules, "guardian") &&
 			OnboardingRuleConfiguration.Boolean(saved.Value, "sendGuardianCredentialEmail");
 		rules["requireDocuments"] = true;
 		rules["approvalMode"] = "none";

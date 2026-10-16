@@ -81,6 +81,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 						item.RecordPlacement(division.Id, Guid.NewGuid(), DateTime.UtcNow);
 					}
 					await _onboardingCaseRepository.InsertAsync(item, true);
+					for (var stepIndex = 0; stepIndex < StudentOnboardingStepKeys.Defaults.Length; stepIndex++)
+					{
+						var definition = StudentOnboardingStepKeys.Defaults[stepIndex];
+						await _onboardingStepRepository.InsertAsync(new StudentOnboardingStep(Guid.NewGuid(), TestTenantId,
+							item.Id, definition.Key, definition.Label, stepIndex + 1, true), true);
+					}
 					return item;
 				});
 			}

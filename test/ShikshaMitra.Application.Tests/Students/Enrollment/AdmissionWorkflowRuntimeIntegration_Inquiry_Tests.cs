@@ -212,7 +212,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		}
 	}
 
-	private async Task<AdmissionWorkflowDto> CreateAndPublishManagedInquiryWorkflowAsync()
+	private async Task<AdmissionWorkflowDto> CreateAndPublishManagedInquiryWorkflowAsync(bool withAdmissionDecision = false)
 	{
 		var entryId = Guid.NewGuid();
 		var terminalId = Guid.NewGuid();
@@ -226,7 +226,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			[
 				new() { Id = entryId, Code = "INQUIRY", Name = "Inquiry", StageType = AdmissionWorkflowStageType.Inquiry,
 					DisplayOrder = 0, IsEntryStage = true, IsRequired = true, ConfigurationJson = configuration },
-				new() { Id = terminalId, Code = "ADMISSION", Name = "Admission", StageType = AdmissionWorkflowStageType.Custom,
+				new() { Id = terminalId, Code = "ADMISSION", Name = "Admission", StageType = withAdmissionDecision ? AdmissionWorkflowStageType.Approval : AdmissionWorkflowStageType.Custom,
 					DisplayOrder = 1, IsTerminalStage = true, IsRequired = true }
 			],
 			Transitions = [new() { FromStageId = entryId, ToStageId = terminalId, Priority = 1, IsDefault = true }]

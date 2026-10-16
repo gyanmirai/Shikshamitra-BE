@@ -89,7 +89,7 @@ public class StudentCertificateController(
 		return File(pdf.Content, pdf.ContentType, pdf.FileName);
 	}
 	[HttpPost("{certificateId:guid}/void")]
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Add)]
 	public async Task<Result<StudentCertificateResponseDto>> Void(Guid certificateId, [FromBody] StudentDocumentActionDto input) => Result.Success(await certificateAppService.VoidAsync(certificateId, input));
 
 	[HttpGet("{certificateId}/pdf")]

@@ -72,6 +72,7 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 	[UnitOfWork(true)]
 	public virtual async Task QueueAsync(Guid caseId, string accountType)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add);
 		ValidateType(accountType);
 		var state = await eligibility.ResolveAsync(caseId, accountType);
 		if (!state.EmailEnabled || !state.IsReady || !state.LinkId.HasValue || !state.UserId.HasValue) return;

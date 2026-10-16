@@ -24,56 +24,17 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
-	[Fact]
-	public async Task Fee_selection_in_Offer_should_gate_issue_and_remain_the_same_readonly_choice_in_later_Payment()
-	{
-		using var tenant = _currentTenant.Change(TestTenantId);
-		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
-		await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Offer fee selection test"), true);
-		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
-		var workflow = await CreateOfferThenPaymentFeeWorkflowAsync();
-		await WithUnitOfWorkAsync(async () => { var stored = await _offeringRepository.GetAsync(offering.Id);
-			stored.ConfigureReferences(workflow.Id, stored.InquiryFormDefinitionId, stored.ApplicationFormDefinitionId);
-			await _offeringRepository.UpdateAsync(stored, true); });
-		var application = await StartFixtureApplicationAsync((await CreateApplicantAsync("Offer Fee QA")).Id, offering.Id);
-		var submitted = await _applicationAppService.SubmitAsync(application.Id);
-		var approved = await _applicationAppService.ApproveAsync(application.Id, new() { ConcurrencyStamp = submitted.Application.ConcurrencyStamp });
-		var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
-		runtime = await _applicationAppService.AdvanceWorkflowAsync(application.Id, new() {
-			ExpectedCurrentStageInstanceId = runtime.CurrentStageInstanceId!.Value, ConcurrencyStamp = approved.ConcurrencyStamp,
-			IdempotencyKey = "fee-offer-entry" });
-		var offerStage = runtime.CurrentStageInstanceId!.Value;
-		var fees = GetRequiredService<IAdmissionFeeSelectionAppService>();
-		var state = await fees.GetAsync(application.Id); state.OwnerStageType.ShouldBe(AdmissionWorkflowStageType.Offer);
-		var offerService = GetRequiredService<IAdmissionOfferAppService>();
-		(await offerService.GetAsync(application.Id, offerStage)).CanIssue.ShouldBeFalse();
-		(await Should.ThrowAsync<BusinessException>(() => offerService.IssueAsync(application.Id, offerStage,
-			new() { IdempotencyKey = "fee-offer-without-selection", ConcurrencyStamp = state.ConcurrencyStamp })))
-			.Code.ShouldBe(AdmissionFeeSelectionErrorCodes.Required);
-		var cycle = await _cycleRepository.GetAsync(offering.AdmissionCycleId);
-		var structure = await CreateFeeSelectionReferenceAsync(offering, cycle.AcademicYearId);
-		state = await fees.SaveAsync(application.Id, new() { StructureId = structure.Id, ConcurrencyStamp = state.ConcurrencyStamp });
-		var issued = await offerService.IssueAsync(application.Id, offerStage, new() { IdempotencyKey = "fee-offer-issue", ConcurrencyStamp = state.ConcurrencyStamp });
-		var accepted = await offerService.RespondAsync(application.Id, offerStage, new() { Accepted = true, ConfirmTermsAccepted = true,
-			IdempotencyKey = "fee-offer-accept", ConcurrencyStamp = issued.ConcurrencyStamp });
-		runtime = await _applicationAppService.AdvanceWorkflowAsync(application.Id, new() { ExpectedCurrentStageInstanceId = offerStage,
-			IdempotencyKey = "fee-enter-later-payment", ConcurrencyStamp = accepted.ConcurrencyStamp });
-		var later = await fees.GetAsync(application.Id); later.OwnerStageId.ShouldBe(offerStage); later.CanEdit.ShouldBeFalse();
-		later.Selection!.StructureId.ShouldBe(structure.Id); later.IsLocked.ShouldBeFalse();
-		(await Should.ThrowAsync<BusinessException>(() => fees.SaveAsync(application.Id,
-			new() { StructureId = structure.Id, ConcurrencyStamp = later.ConcurrencyStamp }))).Code.ShouldBe(AdmissionFeeSelectionErrorCodes.InvalidState);
-		(await GetRequiredService<IAdmissionPaymentAppService>().GetAsync(application.Id, runtime.CurrentStageInstanceId!.Value))
-			.CanRecord.ShouldBeTrue();
-	}
+
+
 
 	[Fact]
-	public async Task Fee_selection_should_persist_validate_concurrency_and_lock_before_payment_verification()
+	public async Task Fee_selection_persists_with_concurrency_and_keeps_collection_owned_by_Finance()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
 		await _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: TestUserId, description: "Fee selection test"), true);
 		var offering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
-		var workflow = await CreateManagedPaymentWorkflowAsync(requiresFeeStructureSelection: true);
+		var workflow = await CreateFeeSelectionWorkflowAsync(offering.ApplicationFormDefinitionId!.Value);
 		await WithUnitOfWorkAsync(async () => {
 			var stored = await _offeringRepository.GetAsync(offering.Id);
 			stored.ConfigureReferences(workflow.Id, stored.InquiryFormDefinitionId, stored.ApplicationFormDefinitionId);
@@ -89,11 +50,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View).Returns(true);
 		await Should.ThrowAsync<EntityNotFoundException>(() => permissionService.GetAsync(application.Id));
 		var fees = GetRequiredService<IAdmissionFeeSelectionAppService>();
-		(await fees.GetAsync(application.Id)).Available.ShouldBeFalse();
+		(await fees.GetAsync(application.Id)).Available.ShouldBeTrue();
+		var submitted = await _applicationAppService.SubmitAsync(application.Id);
+		submitted.ValidationErrors.ShouldBeEmpty();
 		var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
-		runtime = await _applicationAppService.AdvanceWorkflowAsync(application.Id, new() {
-			ExpectedCurrentStageInstanceId = runtime.CurrentStageInstanceId!.Value,
-			ConcurrencyStamp = application.ConcurrencyStamp, IdempotencyKey = "fee-enter-payment" });
+		runtime.Stages.Single(item => item.Id == runtime.CurrentStageInstanceId).StageType.ShouldBe(AdmissionWorkflowStageType.Payment);
 		var stage = runtime.CurrentStageInstanceId!.Value;
 		var state = await fees.GetAsync(application.Id);
 		state.CanEdit.ShouldBeTrue(); state.IsRequired.ShouldBeTrue(); state.OwnerStageId.ShouldBe(stage);
@@ -101,7 +62,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await paymentService.GetAsync(application.Id, stage)).CanRecord.ShouldBeFalse();
 		(await Should.ThrowAsync<BusinessException>(() => paymentService.RecordAsync(application.Id, stage,
 			new() { Amount = 500m, Method = "cash", IdempotencyKey = "fee-missing-record", ConcurrencyStamp = state.ConcurrencyStamp })))
-			.Code.ShouldBe(AdmissionFeeSelectionErrorCodes.Required);
+			.Code.ShouldBe(AdmissionPaymentStageErrorCodes.InvalidState);
+		(await Should.ThrowAsync<BusinessException>(() => _applicationAppService.AdvanceWorkflowAsync(application.Id,
+			new() { ExpectedCurrentStageInstanceId = stage, ConcurrencyStamp = state.ConcurrencyStamp, IdempotencyKey = "missing-fee-prerequisite" })))
+			.Code.ShouldBe(AdmissionFeeSelectionErrorCodes.CollectionOrDeferralRequired);
 		(await GetRequiredService<IRepository<AdmissionPaymentTransaction, Guid>>().GetListAsync(p => p.ApplicationId == application.Id)).ShouldBeEmpty();
 		(await Should.ThrowAsync<BusinessException>(() => fees.SaveAsync(application.Id,
 			new() { StructureId = Guid.NewGuid(), ConcurrencyStamp = state.ConcurrencyStamp }))).Code.ShouldBe(AdmissionFeeSelectionErrorCodes.InvalidSelection);
@@ -119,15 +83,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await WithUnitOfWorkAsync(async () => (await _applicationRepository.GetAsync(application.Id)).GetFeeSelection()))!.StructureId.ShouldBe(structure.Id);
 		(await Should.ThrowAsync<BusinessException>(() => fees.SaveAsync(application.Id,
 			new() { StructureId = structure.Id, ConcurrencyStamp = "stale" }))).Code.ShouldBe(AdmissionFeeSelectionErrorCodes.ConcurrencyConflict);
-		var pending = await paymentService.RecordAsync(application.Id, stage,
-			new() { Amount = 500m, Method = "cash", IdempotencyKey = "fee-paid", ConcurrencyStamp = state.ConcurrencyStamp });
-		pending.Status.ShouldBe("pendingVerification");
-		var locked = await fees.GetAsync(application.Id); locked.IsLocked.ShouldBeTrue(); locked.CanEdit.ShouldBeFalse();
-		(await Should.ThrowAsync<BusinessException>(() => fees.SaveAsync(application.Id,
-			new() { StructureId = structure.Id, ConcurrencyStamp = locked.ConcurrencyStamp }))).Code.ShouldBe(AdmissionFeeSelectionErrorCodes.Locked);
+		(await Should.ThrowAsync<BusinessException>(() => paymentService.RecordAsync(application.Id, stage,
+			new() { Amount = 500m, Method = "cash", IdempotencyKey = "fee-paid", ConcurrencyStamp = state.ConcurrencyStamp })))
+			.Code.ShouldBe(AdmissionPaymentStageErrorCodes.InvalidState);
+		(await GetRequiredService<IRepository<AdmissionPaymentTransaction, Guid>>().GetListAsync(p => p.ApplicationId == application.Id)).ShouldBeEmpty();
+		var unchanged = await fees.GetAsync(application.Id);
+		unchanged.Selection!.StructureId.ShouldBe(structure.Id);
+		unchanged.Selection.RevisionNumber.ShouldBe(state.Selection.RevisionNumber);
 		using (_currentTenant.Change(Guid.NewGuid()))
 			await Should.ThrowAsync<EntityNotFoundException>(() => fees.GetAsync(application.Id));
 		var limitedId = Guid.NewGuid();
+		await EnsureTestIdentityUserAsync(limitedId, "fee-no-scope");
 		using (_principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity([
 			new Claim(AbpClaimTypes.UserId, limitedId.ToString()), new Claim(AbpClaimTypes.UserName, "fee-no-scope") ], "Test"))))
 			await Should.ThrowAsync<EntityNotFoundException>(() => fees.GetAsync(application.Id));

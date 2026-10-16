@@ -28,6 +28,7 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 	public async Task<StudentAttendanceListDto> GetStudentsForDateAsync(GetStudentsForAttendanceInput input)
 	{
 		await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.View);
+		await workspaceAccess.EnsureCanReadClassAsync(input.AcademicYearId, input.StandardId, input.DivisionId);
 		var roster = await rosters.LoadAsync(input.AcademicYearId, input.StandardId, input.DivisionId, input.Date);
 		var range = await reports.RangeAsync(input.AcademicYearId, default, input.Date);
 		var cumulative = (await register.BuildRowsAsync(input.AcademicYearId, range.Start, range.End,
@@ -59,8 +60,8 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 			NotExpectedReason = roster.SchoolDay.IsExpected ? null : roster.SchoolDay.Reason,
 			CanMark = canMark, CanSubmit = canMark && students.Any(s => s.IsExpected),
 			CanLock = roster.Day?.IsSubmitted == true && !roster.Day.IsLocked && !needsReview &&
-				!students.Any(s => s.IsExpected && s.Status == AttendanceStatus.Pending) && await workspaceAccess.IsAdminAsync() &&
-				await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete),
+				!students.Any(s => s.IsExpected && s.Status == AttendanceStatus.Pending) && await workspaceAccess.CanMarkClassAsync(input.AcademicYearId, input.StandardId, input.DivisionId) &&
+				await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add),
 			TotalStudents = students.Count(s => s.IsExpected), PresentCount = students.Count(s => s.IsExpected && s.Status == AttendanceStatus.Present),
 			AbsentCount = students.Count(s => s.IsExpected && s.Status == AttendanceStatus.Absent), PendingCount = students.Count(s => s.IsExpected && s.Status == AttendanceStatus.Pending), Students = students };
 	}
@@ -68,11 +69,11 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add)]
 	public Task<MarkAttendanceOutput> MarkAttendanceAsync(MarkAttendanceInput input) => commands.SaveAsync(input);
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add)]
 	public async Task<LockAttendanceDayOutput> LockAttendanceDayAsync(LockAttendanceDayInput input)
 	{
-		await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete);
-		await workspaceAccess.EnsureAdminAsync();
+		await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add);
+		await workspaceAccess.EnsureCanMarkClassAsync(input.AcademicYearId, input.StandardId, input.DivisionId);
 		var roster = await rosters.LoadAsync(input.AcademicYearId, input.StandardId, input.DivisionId, input.Date);
 		var day = roster.Day ?? throw new BusinessException("SM:AttendanceDayNotFound");
 		ValidateLockRoster(roster);
@@ -80,11 +81,11 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 		return new() { AttendanceDayId = day.Id, IsLocked = true, Message = "Attendance day locked" };
 	}
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete)]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add)]
 	public async Task<LockAttendanceDayOutput> UnlockAttendanceDayAsync(LockAttendanceDayInput input)
 	{
-		await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Delete);
-		await workspaceAccess.EnsureAdminAsync();
+		await AttendanceActionAuthorization.EnsureAsync(permissions, ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add);
+		await workspaceAccess.EnsureCanMarkClassAsync(input.AcademicYearId, input.StandardId, input.DivisionId);
 		var roster = await rosters.LoadAsync(input.AcademicYearId, input.StandardId, input.DivisionId, input.Date);
 		var day = roster.Day ?? throw new BusinessException("SM:AttendanceDayNotFound");
 		await manager.UnlockAttendanceDayAsync(day.Id);
@@ -109,7 +110,8 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 		var start = (input.StartDate ?? new DateTime(today.Year, today.Month, 1)).Date;
 		var end = (input.EndDate ?? new DateTime(today.Year, today.Month, 1).AddMonths(1).AddDays(-1)).Date;
 		if (start > end) throw new BusinessException(AttendanceOperationErrorCodes.InvalidDateRange);
-		var scopedDays = await scope.ApplyCurrentUserAttendanceDayScopeAsync(await days.GetQueryableAsync());
+		var scopedDays = await workspaceAccess.ApplyReadScopeAsync(
+			await scope.ApplyCurrentUserAttendanceDayScopeAsync(await days.GetQueryableAsync()));
 		var query = from entry in await entries.GetQueryableAsync()
 			join day in scopedDays on entry.AttendanceDayId equals day.Id
 			where entry.StudentId == input.StudentId && day.Date >= start && day.Date <= end

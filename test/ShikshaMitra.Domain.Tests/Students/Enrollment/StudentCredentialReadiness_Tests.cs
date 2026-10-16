@@ -15,6 +15,8 @@ public class StudentCredentialReadiness_Tests
 	[InlineData("credentialProvisioningMode", "sometimes")]
 	[InlineData("guardianAccountRelationship", "everyone")]
 	[InlineData("sendStudentCredentialEmail", "yes")]
+	[InlineData("studentAccountAccess", "sometimes")]
+	[InlineData("guardianAccountAccess", "off")]
 	public void Invalid_credential_policy_is_rejected(string key, string value)
 	{
 		var rules = new System.Collections.Generic.Dictionary<string, object> { [key] = value };
@@ -110,6 +112,42 @@ public class StudentCredentialReadiness_Tests
 	{
 		var item = Case(); item.Cancel("Withdrawn", DateTime.UtcNow);
 		Should.Throw<BusinessException>(() => item.OverrideRequiredDocuments([Guid.NewGuid()], "Reviewed", Guid.NewGuid(), DateTime.UtcNow));
+	}
+
+	[Theory]
+	[InlineData("not-needed", false, false)]
+	[InlineData("optional", true, false)]
+	[InlineData("required", true, true)]
+	public void App_login_access_separates_availability_from_completion(string access, bool enabled, bool required)
+	{
+		var settings = new OnboardingRuleConfiguration(Configuration(new { studentAccountAccess = access,
+			studentAccount = required, guardianAccountAccess = access, guardianAccount = required,
+			sendStudentCredentialEmail = true, sendGuardianCredentialEmail = true }));
+		var rules = AutomaticOnboardingReadinessRules.Resolve(settings);
+		foreach (var type in new[] { "student", "guardian" })
+		{
+			StudentPortalAccountRules.IsEnabled(rules, type).ShouldBe(enabled);
+			StudentPortalAccountRules.IsRequired(rules, type).ShouldBe(required);
+			OnboardingRuleConfiguration.Boolean(rules, type + "Account").ShouldBe(required);
+			OnboardingRuleConfiguration.Boolean(rules, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail").ShouldBe(enabled);
+		}
+	}
+
+	[Theory]
+	[InlineData(false, "not-needed")]
+	[InlineData(true, "required")]
+	public void Legacy_login_boolean_keeps_its_policy(bool required, string access)
+	{
+		var rules = JsonSerializer.SerializeToElement(new { studentAccount = required, guardianAccount = required });
+		StudentPortalAccountRules.Access(rules, "student").ShouldBe(access);
+		StudentPortalAccountRules.Access(rules, "guardian").ShouldBe(access);
+	}
+
+	[Fact]
+	public void Contradictory_login_requirement_flags_are_rejected()
+	{
+		Should.Throw<BusinessException>(() => new OnboardingRuleConfiguration(Configuration(new { studentAccountAccess = "optional", studentAccount = true })));
+		Should.Throw<BusinessException>(() => new OnboardingRuleConfiguration(Configuration(new { guardianAccountAccess = "required", guardianAccount = false })));
 	}
 
 	private static StudentOnboardingCase Case() => new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),

@@ -60,9 +60,9 @@ public class StudentOnboardingCredentialEligibilityResolver(
         {
             using var saved = System.Text.Json.JsonDocument.Parse(text); rules = saved.RootElement.Clone();
         }
-		var requiredAccount = rules.HasValue && OnboardingRuleConfiguration.Boolean(rules.Value,
-			accountType == "student" ? "studentAccount" : "guardianAccount");
-		var enabled = requiredAccount && (prepareAccount || allowManualEmail || OnboardingRuleConfiguration.Boolean(rules!.Value,
+		var requiredAccount = rules.HasValue && StudentPortalAccountRules.IsRequired(rules.Value, accountType);
+		var enabled = rules.HasValue && StudentPortalAccountRules.IsEnabled(rules.Value, accountType) &&
+			(prepareAccount || allowManualEmail || OnboardingRuleConfiguration.Boolean(rules.Value,
 			accountType == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail"));
 		var link = await links.FindAsync(x => x.StudentId == item.StudentId && x.AccountType == accountType);
 		var user = link == null ? null : await users.FindByIdAsync(link.UserId.ToString());
@@ -103,7 +103,8 @@ public class StudentOnboardingCredentialEligibilityResolver(
 			if (required.Where(value => value.documentType.IsRequired).Any(value => value.uploadedDocument?.ValidatedAt.HasValue != true && !accepted.Contains(value.documentType.Id)))
 				return Result("Validate every required document before sending credentials.");
 		}
-		if (link == null && allowMissingAccount && item.Status is not (StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled))
+		if (link == null && allowMissingAccount && item.Status != StudentOnboardingStatus.Cancelled &&
+			(item.Status != StudentOnboardingStatus.Completed || !requiredAccount))
 			return Result(null);
 		if (link == null || user == null || user.TenantId != tenant.Id || !user.IsActive || link.VerifiedByUserId == Guid.Empty)
 			return Result(AccountRequired);

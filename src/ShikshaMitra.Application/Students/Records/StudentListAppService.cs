@@ -51,6 +51,7 @@ public class StudentListAppService(
 		int maxResultCount = 10,
 		string? searchTerm = null)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		await studentScopeAccessService.EnsureCanAccessDivisionAsync(divisionId, nameof(GetStudentsByDivisionAsync));
 
 		var studentsQuery = (await studentRepository.GetQueryableWithoutAutoIncludesAsync())
@@ -150,6 +151,7 @@ public class StudentListAppService(
 
 	public async Task<StudentPhotoUploadResultDto> UploadPhotoAsync(Guid studentId, UploadStudentPhotoDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add);
 		var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(UploadPhotoAsync));
 		if (student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
 			await LazyServiceProvider.LazyGetRequiredService<StudentRecordWriteGuard>().EnsureAsync(studentId, nameof(UploadPhotoAsync));
@@ -176,6 +178,7 @@ public class StudentListAppService(
 
 	public async Task<StudentPhotoDownloadDto?> GetPhotoAsync(Guid studentId)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		var student = await studentScopeAccessService.GetStudentAsync(studentId, nameof(GetPhotoAsync));
 		if (student.Status is StudentLifeCycleStatusEnum.Enrolled or StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left)
 			await LazyServiceProvider.LazyGetRequiredService<StudentRecordReadGuard>().EnsureAsync(studentId, "photo");
@@ -199,6 +202,7 @@ public class StudentListAppService(
 
 	public async Task<StudentDashboardSummaryDto> GetDashboardSummaryAsync()
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		var query = await GetScopedEnrolledStudentsQueryAsync();
 		var total = await AsyncExecuter.CountAsync(query);
 		var male = await AsyncExecuter.CountAsync(query.Where(s =>
@@ -264,6 +268,7 @@ public class StudentListAppService(
 
 	public async Task<StudentAttendanceDashboardSummaryDto> GetAttendanceDashboardSummaryAsync(GetStudentAttendanceDashboardSummaryInput input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		if (!CurrentTenant.Id.HasValue) return new();
 		var (startDate, endDate) = ResolveAttendanceDateRange(input.StartDate, input.EndDate);
 		if ((endDate - startDate).TotalDays > 1096) throw new BusinessException(AttendanceOperationErrorCodes.InvalidDateRange);
@@ -371,6 +376,7 @@ public class StudentListAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add)]
 	public async Task ChangeStudentStatusAsync(Guid studentId, ChangeStudentStatusDto input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.Add);
 		var studentQuery = await studentRepository.GetQueryableWithoutAutoIncludesAsync();
 		var student = await AsyncExecuter.FirstOrDefaultAsync(studentQuery.Where(s => s.Id == studentId));
 		if (student == null)
@@ -397,6 +403,7 @@ public class StudentListAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View)]
 	public async Task<List<StudentStatusHistoryDto>> GetStatusHistoryAsync(Guid studentId)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		var student = await studentRepository.GetAsync(studentId, includeDetails: true);
 		await studentScopeAccessService.EnsureCanAccessStudentAsync(student, nameof(GetStatusHistoryAsync));
 
@@ -408,6 +415,7 @@ public class StudentListAppService(
 
 	public async Task<List<StudentLookupDto>> GetStudentsByScopeAsync(GetStudentsByScopeRequest input)
 	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_StudentList.View);
 		if ((input.ChargeCategoryId.HasValue || input.AlreadyCharged.HasValue)
 			&& !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.View)
 			&& !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Add)

@@ -47,10 +47,12 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var division = await WithUnitOfWorkAsync(async () => await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(
 			await GetRequiredService<DivisionManager>().CreateAsync(fixture.Offering.StandardId, "ResumedReturn", 40), true));
 		item = await onboarding.SetPlacementAsync(item.Id, new() { DivisionId = division.Id, ConcurrencyStamp = item.ConcurrencyStamp });
-		item = await onboarding.AllocateIdentifierAsync(item.Id, new() { NumberSeriesId = Guid.NewGuid(), RollNumber = 19, ConcurrencyStamp = item.ConcurrencyStamp });
+		item = await onboarding.AllocateIdentifierAsync(item.Id, new() { NumberSeriesId = Guid.NewGuid(), RollNumber = 1, RollAssignmentMode = "automatic", ConcurrencyStamp = item.ConcurrencyStamp });
 		item = await onboarding.RefreshReadinessAsync(item.Id, item.ConcurrencyStamp);
 		var activation = new ActivateStudentOnboardingDto { IdempotencyKey = "resume-reviewed-activate", ConcurrencyStamp = item.ConcurrencyStamp };
-		item = await onboarding.ActivateAsync(item.Id, activation); item.Status.ShouldBe(StudentOnboardingStatus.Provisioning);
+		item = await ConfirmFixtureFeeStructureAsync(fixture.Offering, item);
+		activation.ConcurrencyStamp = item.ConcurrencyStamp;
+		item = await onboarding.ActivateAsync(item.Id, activation); item.Status.ShouldBe(StudentOnboardingStatus.Completed, item.LastError);
 		(await onboarding.ActivateAsync(item.Id, activation)).StudentEnrollmentId.ShouldBe(original.Enrollment.Id);
 		await WithUnitOfWorkAsync(async () =>
 		{
@@ -65,7 +67,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	public Task Record_inquiry_return_preserves_contact_qualification_and_links_real_application_to_finalization() => RunCertificationScenarioAsync(async () =>
 	{
 		var fixture = await AdmissionReturnFixtureAsync(AdmissionEntryMode.Inquiry);
-		var managedWorkflow = await CreateAndPublishManagedInquiryWorkflowAsync();
+		var managedWorkflow = await CreateAndPublishManagedInquiryWorkflowAsync(withAdmissionDecision: true);
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var offering = await _offeringRepository.GetAsync(fixture.Offering.Id);

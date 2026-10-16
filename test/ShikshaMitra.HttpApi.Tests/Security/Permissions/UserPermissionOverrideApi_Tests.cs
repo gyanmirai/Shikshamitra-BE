@@ -6,8 +6,6 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Hosting;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Security.UserScope;
 using Shouldly;
@@ -59,6 +57,8 @@ public partial class PermissionConsistencyApi_Tests
     [InlineData("Unknown.Future.Permission", "deny")]
     [InlineData("HR.Employee.EmployeeList.View", "invalid")]
     [InlineData("HR.Employee.EmployeeList.Edit", "deny")]
+    [InlineData("Students.Records.Changes.Create", "allow")]
+    [InlineData("Students.Admissions.Workflows.Approve", "deny")]
     public async Task Override_batches_validate_before_any_mutation(string name, string state)
     {
         var (_, user) = await CreateTargetAsync();
@@ -105,7 +105,7 @@ public partial class PermissionConsistencyApi_Tests
         using var uow = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
         var principal = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(AbpClaimTypes.UserId, user.ToString()), new Claim(AbpClaimTypes.Role, role) }, "test"));
         using var current = services.GetRequiredService<ICurrentPrincipalAccessor>().Change(principal);
-        IPermissionChecker checker = ActivatorUtilities.CreateInstance<ShikshaMitraPermissionChecker>(services, new OverrideTestEnvironment(), new AssignedTeacher());
+        IPermissionChecker checker = ActivatorUtilities.CreateInstance<ShikshaMitraPermissionChecker>(services, new AssignedTeacher());
         (await checker.IsGrantedAsync(name)).ShouldBe(granted);
         (await checker.IsGrantedAsync(principal, name)).ShouldBe(granted);
         ((await checker.IsGrantedAsync(new[] { name })).Result[name] == PermissionGrantResult.Granted).ShouldBe(granted);
@@ -118,11 +118,4 @@ public partial class PermissionConsistencyApi_Tests
         public Task InvalidateAsync(IEnumerable<Guid> userIds) => Task.CompletedTask;
     }
 
-    private sealed class OverrideTestEnvironment : IHostEnvironment
-    {
-        public string EnvironmentName { get; set; } = Environments.Production;
-        public string ApplicationName { get; set; } = nameof(PermissionConsistencyApi_Tests);
-        public string ContentRootPath { get; set; } = string.Empty;
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    }
 }

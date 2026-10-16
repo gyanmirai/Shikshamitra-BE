@@ -89,7 +89,7 @@ public partial class StudentOnboardingAppService
 			item.RequireAttention(string.Join("; ", pending.Select(h => h.LastError ?? $"Complete required {h.ServiceKey} provisioning.")));
 			await AddEventAsync(item.Id, "ProvisioningChecked", "Required provisioning is still incomplete.");
 		}
-        else if (await CredentialsPendingAsync(item) && OnboardingRuleConfiguration.Text((await ReadSavedRulesAsync(item))!.Value, "credentialSendingTime", "activation") == "activation")
+        else if (await CredentialsPendingAsync(item, requiredOnly: true) && OnboardingRuleConfiguration.Text((await ReadSavedRulesAsync(item))!.Value, "credentialSendingTime", "activation") == "activation")
         {
             item.RequireAttention("Student is active. Complete or retry the requested credential emails in the Credentials tab.");
             await AddEventAsync(item.Id, "AccessPending", "Requested credential delivery is still pending after activation.");

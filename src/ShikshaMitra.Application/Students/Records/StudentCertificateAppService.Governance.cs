@@ -72,7 +72,7 @@ public partial class StudentCertificateAppService
 	[UnitOfWork(true)]
 	public async Task<StudentCertificateResponseDto> VoidAsync(Guid certificateId, StudentDocumentActionDto input)
 	{
-		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Delete);
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.Records_Certificates.Add);
 		ValidateDocumentReason(input);
 		var certificate = await LoadScopedCertificateAsync(certificateId, "void certificate");
 		if (certificate.Status != StudentCertificateStatus.Cancelled)

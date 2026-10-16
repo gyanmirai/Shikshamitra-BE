@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Hosting;
 using System.Linq;
 using ShikshaMitra.Security.UserScope;
 using Volo.Abp.DependencyInjection;
@@ -42,7 +41,6 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 	private readonly IUserPermissionDenyStore _denies;
 	private readonly IClassTeacherAccessService _classTeacherAccessService;
 	private readonly IReportingManagerAccessService _reportingManagerAccessService;
-	private readonly IHostEnvironment _hostEnvironment;
 
 	public ShikshaMitraPermissionChecker(
 		ICurrentPrincipalAccessor currentPrincipalAccessor,
@@ -53,7 +51,6 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		ICurrentUser currentUser,
 		IClassTeacherAccessService classTeacherAccessService,
 		IReportingManagerAccessService reportingManagerAccessService,
-		IHostEnvironment hostEnvironment,
 		IUserPermissionDenyStore denies)
 		: base(currentPrincipalAccessor, permissionDefinitionManager, currentTenant, permissionValueProviderManager, stateCheckerManager)
 	{
@@ -61,17 +58,13 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		_denies = denies;
 		_classTeacherAccessService = classTeacherAccessService;
 		_reportingManagerAccessService = reportingManagerAccessService;
-		_hostEnvironment = hostEnvironment;
 	}
 
 	public override async Task<bool> IsGrantedAsync(string name)
 	{
 		if (_currentUser.Id.HasValue && (await _denies.GetDeniedAsync(_currentUser.Id.Value)).Contains(name)) return false;
-		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
-		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
-		{
-			return true;
-		}
+		// Student actions require their exact role/user grant. Teacher assignments only scope data.
+		if (IsStudentPermission(name)) return await base.IsGrantedAsync(name);
 
 		if (await base.IsGrantedAsync(name))
 		{
@@ -136,11 +129,7 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 	public override async Task<bool> IsGrantedAsync(ClaimsPrincipal? claimsPrincipal, string name)
 	{
 		if (TryGetUserId(claimsPrincipal, out var deniedUser) && (await _denies.GetDeniedAsync(deniedUser)).Contains(name)) return false;
-		// TODO: Remove this development-only bypass after Admissions permissions are seeded for dev roles.
-		if (_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name))
-		{
-			return true;
-		}
+		if (IsStudentPermission(name)) return await base.IsGrantedAsync(claimsPrincipal, name);
 
 		if (await base.IsGrantedAsync(claimsPrincipal, name))
 		{
@@ -224,6 +213,11 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		foreach (var name in distinctNames)
 		{
 			var candidates = new List<string>();
+			if (IsStudentPermission(name))
+			{
+				aliases[name] = candidates;
+				continue;
+			}
 			if (name.EndsWith(".Create", StringComparison.Ordinal)) candidates.Add(name[..^7] + ".Add");
 			if (name.EndsWith(".Add", StringComparison.Ordinal)) candidates.Add(name[..^4] + ".Create");
 			if (TryGetAcademicOperationAddPermission(name, out var academicAdd)) candidates.Add(academicAdd);
@@ -255,7 +249,6 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 				continue;
 			}
 			var granted = baseGrants[name] == PermissionGrantResult.Granted ||
-				(_hostEnvironment.IsDevelopment() && IsAdmissionsPermission(name)) ||
 				aliases[name].Any(alias => baseGrants[alias] == PermissionGrantResult.Granted);
 			result.Result[name] = granted ? PermissionGrantResult.Granted : PermissionGrantResult.Prohibited;
 			if (!granted && userId.HasValue && IsClassTeacherOperationalAcademicPermission(name))
@@ -348,6 +341,6 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 		return Guid.TryParse(value, out userId);
 	}
 
-	private static bool IsAdmissionsPermission(string name) =>
-		name.StartsWith("Students.Admission", StringComparison.Ordinal);
+	private static bool IsStudentPermission(string name) =>
+		name == "Students" || name.StartsWith("Students.", StringComparison.Ordinal);
 }

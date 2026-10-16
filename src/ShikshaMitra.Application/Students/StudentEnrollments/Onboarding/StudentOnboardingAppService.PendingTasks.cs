@@ -49,9 +49,11 @@ public partial class StudentOnboardingAppService
 				var accountPending = handoffs.Any(h => h.OnboardingCaseId == item.Id) || !item.StudentEnrollmentId.HasValue && rules.HasValue &&
 					(OnboardingRuleConfiguration.Boolean(rules.Value, "studentAccount") || OnboardingRuleConfiguration.Boolean(rules.Value, "guardianAccount"));
 				var emailPending = rules.HasValue && new[] { "student", "guardian" }.Any(type =>
+					StudentPortalAccountRules.IsRequired(rules.Value, type) &&
 					OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail") &&
 					!emails.Any(e => e.CaseId == item.Id && e.AccountType == type && e.Status == "Sent"));
-				emailPending |= emails.Any(email => email.CaseId == item.Id && email.RequiresSavedOwnerValidation() && email.Status != "Sent");
+				emailPending |= emails.Any(email => email.CaseId == item.Id && email.Status != "Sent" &&
+					(email.RequiresSavedOwnerValidation() || rules.HasValue && StudentPortalAccountRules.Access(rules.Value, email.AccountType) == StudentPortalAccountRules.Optional));
 				if (accountPending || emailPending) pending.Add(item.Id);
 			}
 		}
@@ -86,16 +88,17 @@ public partial class StudentOnboardingAppService
 			: configuration?.Root.GetProperty("readinessAccess");
 	}
 
-	private async Task<bool> CredentialsPendingAsync(StudentOnboardingCase item)
+	private async Task<bool> CredentialsPendingAsync(StudentOnboardingCase item, bool requiredOnly = false)
 	{
 		if (item.Status == StudentOnboardingStatus.Cancelled) return false;
 		var rules = await ReadSavedRulesAsync(item);
 		if (!rules.HasValue) return false;
-		var types = new[] { "student", "guardian" };
+		var types = new[] { "student", "guardian" }.Where(type => !requiredOnly || StudentPortalAccountRules.IsRequired(rules.Value, type)).ToArray();
 		if (!item.StudentEnrollmentId.HasValue && types.Any(type => OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "studentAccount" : "guardianAccount"))) return true;
 		if (await handoffRepository.AnyAsync(h => h.OnboardingCaseId == item.Id && h.Required && (h.ServiceKey == "student-account" || h.ServiceKey == "guardian-account") && h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged)) return true;
 		var requests = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.Portal.StudentCredentialEmailRequest, Guid>>().GetListAsync(e => e.CaseId == item.Id);
-		if (requests.Any(request => request.RequiresSavedOwnerValidation() && request.Status != "Sent")) return true;
-		return types.Any(type => OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail") && !requests.Any(e => e.AccountType == type && e.Status == "Sent"));
+		if (requests.Any(request => Enumerable.Contains(types, request.AccountType) && request.Status != "Sent" &&
+			(request.RequiresSavedOwnerValidation() || StudentPortalAccountRules.Access(rules.Value, request.AccountType) == StudentPortalAccountRules.Optional))) return true;
+		return types.Any(type => StudentPortalAccountRules.IsRequired(rules.Value, type) && OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail") && !requests.Any(e => e.AccountType == type && e.Status == "Sent"));
 	}
 }

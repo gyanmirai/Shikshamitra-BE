@@ -49,6 +49,8 @@ public partial class StudentOnboardingAppService
 			if (input.StructureId != snapshot.StructureId || input.OptionalHeadIds == null ||
 				!input.OptionalHeadIds.Order().SequenceEqual(snapshot.Heads.Where(h => h.IsOptional).Select(h => h.FeeHeadId).Order()))
 				throw new BusinessException(AdmissionFeeSelectionErrorCodes.Locked, "Payment evidence already exists. Ask Finance to review a correction or refund.");
+			if (snapshot.OnboardingConfirmedAt == null && await admissionFeeSelectionReader.IsConfirmedAsync(application))
+                return await GetFeeStructureAsync(id);
 			application.ConfirmOnboardingFeeSelection(actor, new DateTimeOffset(Clock.Now.ToUniversalTime()));
 		}
 		else

@@ -29,13 +29,19 @@ public partial class AdmissionFeeCollectionAppService
         var preview = ReadAssignment(account);
         if (!SelectionMatches(source, preview))
             throw new BusinessException(AdmissionFeeCollectionErrorCodes.SelectionChanged);
+        return await BuildCollectFormAsync(source, account, preview);
+    }
+
+    private async Task<FeeCollectFormDto> BuildCollectFormAsync(AdmissionFinanceContext source, FinanceFeeAccount account,
+        StudentFeeAssignmentPreviewDto preview, List<DueFee>? preparedRows = null)
+    {
         if (account.StudentFeeStructureId.HasValue && account.StudentId.HasValue)
         {
             var actual = await studentDetails.GetCollectFormAsync(account.StudentId.Value, account.AcademicYearId);
             actual.Student.FinanceFeeAccountId = account.Id;
             return actual;
         }
-        var rows = await dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
+        var rows = preparedRows ?? await dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
         var metadata = await transactions.GetListAsync(t => t.FinanceFeeAccountId == account.Id && t.Status == FeeCollectionStatus.InReconciliation);
         var transactionIds = metadata.Select(t => t.Id).ToList();
         var pending = await allocations.GetListAsync(a => transactionIds.Contains(a.FeeRecordMetadataId));

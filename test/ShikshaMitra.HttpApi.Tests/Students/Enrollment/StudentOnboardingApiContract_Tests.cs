@@ -41,6 +41,7 @@ public class StudentOnboardingApiContract_Tests
 		Post(nameof(StudentOnboardingController.SetPlacementAsync)).ShouldBe("{id:guid}/placement");
 		Post(nameof(StudentOnboardingController.AllocateIdentifierAsync)).ShouldBe("{id:guid}/identifiers");
 		Post(nameof(StudentOnboardingController.ActivateAsync)).ShouldBe("{id:guid}/activate");
+		Get(nameof(StudentOnboardingController.PreviewActivationAsync)).ShouldBe("{id:guid}/activation-preview");
 		Post(nameof(StudentOnboardingController.CancelAsync)).ShouldBe("{id:guid}/cancel");
 		Post(nameof(StudentOnboardingController.ConfirmServiceConsentAsync))
 			.ShouldBe("{id:guid}/service-consent/confirm");
@@ -71,6 +72,7 @@ public class StudentOnboardingApiContract_Tests
 	[InlineData(nameof(StudentOnboardingAppService.SetPlacementAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat)]
 	[InlineData(nameof(StudentOnboardingAppService.AllocateIdentifierAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
 	[InlineData(nameof(StudentOnboardingAppService.ActivateAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Activate)]
+	[InlineData(nameof(StudentOnboardingAppService.PreviewActivationAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.CancelAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Cancel)]
 	[InlineData(nameof(StudentOnboardingAppService.ConfirmServiceConsentAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	[InlineData(nameof(StudentOnboardingAppService.CreatePolicyAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]

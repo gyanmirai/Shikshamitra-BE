@@ -47,7 +47,8 @@ public class ParentGuardianDetails : ValueObject
 		AddressDetails? officeAddress,
 		AddressDetails? localAddress)
 	{
-		FullName = fullName;
+		// Keep an email/phone-only owned profile materializable when no name was bound.
+		FullName = fullName ?? string.Empty;
 		DateOfBirth = dateOfBirth;
 		Occupation = occupation;
 		Email = email;

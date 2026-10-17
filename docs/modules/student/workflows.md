@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-18
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -39,6 +39,8 @@ The applicant retains original captured evidence. Finalization retries preserve 
 6. The owner uses the secure setup link to confirm email and choose their password. An existing verified Parent links another child without password changes.
 7. Failed/interrupted delivery remains visible for controlled retry; Sent records sender acceptance. Repeated access emails do not reveal an existing password.
 8. Records terminal application unlinks the child immediately; eligible siblings remain available to the Parent. A reviewed correction checks exact recorded links before restoration.
+
+Admission-bound Father/Mother/Guardian emails remain current saved-profile recipient choices even when a structured name was not captured. Contact-only parent profiles store an empty name presence marker so EF can reload the existing optional owned profile; this does not invent a person's name or use an unbound form label to infer an owner. `PreserveContactOnlyParentProfiles` repairs legacy null markers only where a saved email/phone is present, preserving all contact values and existing names. An entirely absent parent remains absent. Activation, exact saved-recipient, scope and delivery guards remain mandatory.
 
 ## Configure and operate daily attendance
 
@@ -100,7 +102,7 @@ The schedulers poll every minute. Transition dates use the Admissions institutio
 
 Admission finalization links a Student and an onboarding case without creating operational enrollment. One effective readiness rule must cover the Admission Offering; a rule may cover multiple Offerings. Academic context comes from those Offerings. New cases freeze the readiness, applicable published workflow document policies, approval and access requirements. An older unactivated case without that snapshot requires an explicit requirements review; reading it does not silently adopt current settings. Completed and activated historical cases retain their history.
 
-Applicable required documents and fee-structure selection may be deferred from Admissions into Onboarding. Activation requires confirmed admission, verified required workflow documents, Class/Division placement, assigned GR and Roll numbers, confirmation of an existing matching Finance fee structure, and configured approval. Waivers and manual document-complete overrides cannot satisfy required evidence. Existing Admissions validation owns required profile data; legacy blanket family, medical, contact and service-consent settings do not add requirements to an Offering snapshot.
+Applicable required documents and fee-structure selection may be deferred from Admissions into Onboarding. Activation requires confirmed admission, verified required workflow documents, Class/Division placement, assigned GR and Roll numbers, confirmation of an existing matching Finance fee structure, and configured approval. A fee choice saved in Admissions with payment evidence and no collection deferral satisfies fee confirmation automatically when Finance verifies the matching obligations are fully settled; Onboarding Fees is then read-only and complete without another confirmation. Pending queues, displayed progress and activation share that decision. Partial, pending-verification and deferred cases retain the explicit confirmation flow, and payment is not made mandatory for other cases. Waivers and manual document-complete overrides cannot satisfy required evidence. Existing Admissions validation owns required profile data; legacy blanket family, medical, contact and service-consent settings do not add requirements to an Offering snapshot.
 
 Fee selection and confirmation save admission intent only. Onboarding does not assign Finance obligations, create dues, collect payments or wait for first payment before activation, completion or credentials. Finance source and APIs remain unchanged.
 
@@ -109,6 +111,8 @@ GR and Roll assignment are separate commands. GR assignment does not require Rol
 GR and Roll settings are saved as Draft and then Published. Published edits create a new Draft version; published and superseded history remains immutable. Unassigned numbers use the currently published applicable numbering rule; requirements snapshots do not freeze an unselected number format. Existing assigned numbers are not renumbered by publication.
 
 GR and Roll locks are independent policies for a selected division group. They lock identifiers rather than Division placement. Operators with Onboarding Add/Update and access to the selected division may unlock with an audited reason and correct identifiers. A new entrant into a locked group receives the next automatic GR and division Roll even if the school's ordinary mode is manual. Placement remains editable; a preserved locked Roll cannot move into a conflicting occupied number.
+
+Activation preview evaluates the Finance step against the same current confirmation evidence used by the checklist, even if its stored step is stale. It preserves existing verification history and the case concurrency stamp. A preview with blockers never reports Ready for activation; `LastError` contains the current reasons. The activation command still refreshes persisted readiness and rechecks every existing gate before committing enrollment.
 
 Activation commits an enrollment before preparing app access. The active student is visible in Student Records even if account preparation or credential delivery fails. Automatic or staff-operated credentials run after activation; failures retain the enrollment and expose access pending for retry in Credentials. No credential email is sent before activation. A completed case is not reopened by a settings edit.
 

@@ -3,12 +3,18 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-16
+updated_on: 2026-10-18
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Activation readiness synchronization (2026-10-18)
+
+`test/ShikshaMitra.Application.Tests/Students/Enrollment/StudentOnboardingActivationPreview_Tests.cs` covers stale stored Finance steps with both current Onboarding confirmation and fully paid Admissions evidence, activation and idempotent retry, unchanged preview history/stamps, and rejection of unconfirmed fees or an expired seat. The focused activation/regression filter passes 9 cases; the existing Admission fee-confirmation reader suite passes 17 cases. `StudentOnboardingApiContract_Tests` passes 26 route/permission contracts, retaining View for preview and Activate for the command.
+
+The rebuilt local Host also passed an authenticated in-app activation: one active enrollment, committed seat, retained GR/Roll/Division and refreshed persisted Finance readiness. Required guardian App Login remained pending under the existing manual policy; no credentials were sent or permissions changed. These results establish local behavior, not staging or production acceptance. See [frontend checks](../../../../Shikshamitra-FE/docs/student/testing.md#activation-dialog-readiness-2026-10-18).
 
 ## App Login settings (2026-10-16)
 
@@ -179,7 +185,7 @@ Run the Application methods with `FullyQualifiedName~Onboarding_worklist`; the H
 The HTTP scenario requires `STUDENT_RECORDS_APPLICATION_POSTGRES` with a fresh loopback `records_tests_*` database name and refuses existing or nonlocal databases.
 Use isolated artifact outputs while the normal development Host is running, and keep these read-query gates separate from activation, identifier-write, Finance and browser evidence.
 
-The 2026-10-13 Student Setup worklist gate passed **5/5 Application tests** and **1/1 PostgreSQL HTTP test**, with zero failures or skips. Reports are `test/ShikshaMitra.Application.Tests/TestResults/rajba_RAJ-LAPTOP_2026-10-13_13_36_48.trx` and `test/ShikshaMitra.HttpApi.Tests/TestResults/rajba_RAJ-LAPTOP_2026-10-13_13_41_01.trx`.
+The 2026-10-13 Student Setup worklist gate recorded **5/5 Application tests** and **1/1 PostgreSQL HTTP test**, with zero failures or skips. Those historical local TRX files are no longer retained; rerun the focused filters above for current evidence.
 The PostgreSQL factory created a fresh loopback database, seeded mandatory steps through the current requirements owner and persisted real seat reservations; no normal school database, activation, Finance payment, account or email was changed.
 The identifier/case/capacity Domain regression also passed **76/76 tests**, zero failures/skips. Its filter is `FullyQualifiedName~StudentOnboardingIdentifierRules_Tests|FullyQualifiedName~StudentOnboarding_Tests|FullyQualifiedName~AdmissionSeatAllocation_Tests`; the report is `D:/CodexOnboardingValidation-20261013/results/setup-identifier-capacity-regression.trx`.
 

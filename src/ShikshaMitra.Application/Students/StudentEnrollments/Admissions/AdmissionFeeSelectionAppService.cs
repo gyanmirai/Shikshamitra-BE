@@ -65,7 +65,7 @@ public class AdmissionFeeSelectionAppService(
 		var item = await access.GetOnboardingCaseAsync(application);
 		if (item.Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
 			throw new BusinessException(AdmissionFeeSelectionErrorCodes.InvalidState, "This onboarding case is no longer editable.");
-		if (application.GetFeeSelection()?.OnboardingConfirmedAt != null) return await ReadAsync(application);
+		if (await onboarding.IsConfirmedAsync(application)) return await ReadAsync(application);
 		EnsureConcurrency(application, input.ConcurrencyStamp);
 		var blocker = await onboarding.GetBlockerAsync(application, requireConfirmation: false);
 		if (blocker != null) throw new BusinessException(AdmissionFeeSelectionErrorCodes.AssignmentMismatch, blocker);
@@ -86,6 +86,7 @@ public class AdmissionFeeSelectionAppService(
 			caseEditable = item != null && item.Status is not (StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled);
 		}
 		var blocker = await onboarding.GetBlockerAsync(application);
+		var confirmed = snapshot != null && blocker == null;
 		return new AdmissionFeeSelectionDto
 		{
 			ApplicationId = application.Id, ConcurrencyStamp = application.ConcurrencyStamp,
@@ -99,8 +100,9 @@ public class AdmissionFeeSelectionAppService(
 			},
 			CanEdit = context.IsEditable &&
 				await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Edit),
-			OnboardingConfirmed = snapshot?.OnboardingConfirmedAt != null, OnboardingBlocker = blocker,
-			CanConfirmOnboarding = snapshot != null && snapshot.OnboardingConfirmedAt == null && caseEditable &&
+			OnboardingConfirmed = confirmed, AutomaticallyConfirmedFromAdmissions = confirmed && snapshot?.OnboardingConfirmedAt == null,
+			OnboardingBlocker = blocker,
+			CanConfirmOnboarding = snapshot != null && !confirmed && caseEditable &&
 				await onboarding.GetBlockerAsync(application, requireConfirmation: false) == null,
 			Selection = snapshot == null ? null : new AdmissionFeeSelectionSnapshotDto
 			{

@@ -22,6 +22,8 @@ public class AdmissionFeeCollectionDto
 	public decimal PendingVerificationAmount { get; set; }
 	public decimal? OutstandingAmount { get; set; }
 	public bool CanCollect { get; set; }
+	/// <summary>Prepared Finance ledger, charges and late fees are clear, with no payment awaiting verification.</summary>
+	public bool IsSettled { get; set; }
 	public string? Blocker { get; set; }
 	public bool HasPaymentEvidence { get; set; }
 	public List<AdmissionCollectionFeeHeadDto> FeeHeads { get; set; } = [];

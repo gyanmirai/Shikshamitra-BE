@@ -3,7 +3,7 @@ module: finance
 domain: admission-fee-collection
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-18
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -37,9 +37,11 @@ Finalization links the actual Student to existing financial rows. Activation cre
 
 After linking, Finance's ordinary Student collection entry resolves the same account. The Student form can read account dues before an enrollment assignment exists. Account-backed receipts, refunds, reconciliation, income, audit and monetary reports retain account-first scope and original academic facts rather than treating a null Student ID as an unscoped record.
 
-Any payment evidence freezes the chosen fee structure and included heads, including pending or reversed transactions. Onboarding can confirm the identical saved snapshot without repricing it or requiring an archived pinned configuration to be republished. Payment does not replace that explicit confirmation.
+Any payment evidence freezes the chosen fee structure and included heads, including pending or reversed transactions. Onboarding can confirm the identical saved snapshot without repricing it or requiring an archived pinned configuration to be republished. A choice saved before Admission finalization automatically satisfies Onboarding confirmation when there is payment evidence, no collection deferral, a matching assignment and current Finance-owned full settlement. Unsettled or deferred cases retain explicit Onboarding confirmation.
 
 ## Finance follow-up
+
+The collection summary exposes `isSettled` only for a prepared, matching assignment whose Finance checkout ledger, approved charges and late fees are clear with no money awaiting verification. It also returns `canCollect=false` for that state. Admissions and Onboarding display the same settled balance and receipts read-only; a zero principal balance alone does not establish settlement. Unprepared or unknown balances remain distinct, and partial payments, outstanding charges, reconciliation, refund/reversal and retry contracts remain unchanged. The internal scoped `IAdmissionFinanceIntegration.IsSettledForOnboardingAsync` exposes only this Finance decision to Student readiness, without requiring a Finance mutation or preparing dues. Automatically satisfied Admission choices use a read-only Fees task and the same decision in pending queues, case progress and activation validation; no manual confirmation actor/time or payment is fabricated on a read. Existing manual confirmation history remains intact, and other activation requirements are unchanged.
 
 Invoice Receipt detail/list contracts expose nullable `studentId` and optional `financeFeeAccountId`. Applicant receipt PDFs use the account's name snapshot. Settled fee receipts can open the existing refund request form with locked account, source receipt and actual academic-year context. Eligibility, reservations, caps, approval, payout verification and maker-checker rules remain in the existing Refund services. Cancellation does not automatically refund or waive a payment.
 

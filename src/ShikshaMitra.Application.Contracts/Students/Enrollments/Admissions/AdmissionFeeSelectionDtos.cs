@@ -53,6 +53,7 @@ public class AdmissionFeeSelectionDto
 	public bool CanEdit { get; set; }
 	public bool CanConfirmOnboarding { get; set; }
 	public bool OnboardingConfirmed { get; set; }
+	public bool AutomaticallyConfirmedFromAdmissions { get; set; }
 	public string? OnboardingBlocker { get; set; }
 	public AdmissionFeeSelectionSnapshotDto? Selection { get; set; }
 }

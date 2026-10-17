@@ -20,6 +20,22 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 [ExposeServices(typeof(AdmissionFeeCollectionAppService), typeof(IAdmissionFeeCollectionAppService), typeof(IAdmissionFinanceIntegration))]
 public partial class AdmissionFeeCollectionAppService : IAdmissionFinanceIntegration
 {
+    public async Task<bool> IsSettledForOnboardingAsync(Guid applicationId)
+    {
+        // Context resolution enforces the caller's Student/Finance read permission,
+        // tenant and application scope. Only the decision crosses this internal contract.
+        var source = await contextReader.GetAsync(applicationId);
+        var account = await accounts.FindAsync(a => a.ApplicationId == applicationId && a.AcademicYearId == source.AcademicYearId);
+        if (account?.AssignmentSnapshotJson == null || !SelectionMatches(source, ReadAssignment(account))) return false;
+        await scope.EnsureFeeAccountAccessibleAsync(account);
+        var rows = await dues.GetListAsync(d => d.FinanceFeeAccountId == account.Id);
+        if (rows.Count == 0 || rows.Any(d => d.OutstandingAmount != 0m)) return false;
+        if (await transactions.AnyAsync(t => (t.FinanceFeeAccountId == account.Id ||
+            t.FinanceFeeAccountId == null && account.StudentId.HasValue && t.StudentId == account.StudentId && t.AcademicYearId == account.AcademicYearId) &&
+            t.Status == FeeCollectionStatus.InReconciliation)) return false;
+        return IsCollectionSettled(await BuildCollectFormAsync(source, account, ReadAssignment(account), rows));
+    }
+
     public async Task LinkFinalizedStudentAsync(Guid applicationId, Guid studentId)
     {
         await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Finalize);

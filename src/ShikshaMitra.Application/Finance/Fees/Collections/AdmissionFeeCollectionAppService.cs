@@ -98,6 +98,14 @@ public partial class AdmissionFeeCollectionAppService(
 					PaymentMethods = methods.Where(m => m.FeeRecordMetadataId == r.FeeCollectionTransactionId).Select(m => m.PaymentMethod.ToString()).Distinct().ToList()
 				}).ToList();
 			}
+			if (rows.Count > 0 && result.OutstandingAmount == 0m && result.PendingVerificationAmount == 0m &&
+				!tx.Any(t => t.Status == FeeCollectionStatus.InReconciliation))
+			{
+				// Use the same Finance projection as checkout so cleared tuition never hides
+				// an outstanding charge/late fee or money still awaiting verification.
+                result.IsSettled = IsCollectionSettled(await BuildCollectFormAsync(source, account!, current, rows));
+				if (result.IsSettled) result.CanCollect = false;
+			}
 		}
 		else
 		{
@@ -115,6 +123,12 @@ public partial class AdmissionFeeCollectionAppService(
 		}
 		return result;
 	}
+
+	internal static bool IsCollectionSettled(FeeCollectFormDto form) =>
+		form.Summary != null && form.Summary.PendingFee == 0d && form.Summary.ReconciliationAmount == 0d &&
+		form.Ledger.Any(month => month.Items.Count > 0) &&
+		form.Ledger.SelectMany(month => month.Items).All(line => line.Due == 0d && line.ReconciliationAmount == 0d) &&
+		form.Charges.All(charge => charge.PendingAmount == 0d && charge.ReconciliationAmount == 0m);
 
 	private static StudentFeeAssignmentPreviewDto ReadAssignment(FinanceFeeAccount account) =>
 		JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(account.AssignmentSnapshotJson!) ?? throw new BusinessException(AdmissionFeeCollectionErrorCodes.NotPrepared);

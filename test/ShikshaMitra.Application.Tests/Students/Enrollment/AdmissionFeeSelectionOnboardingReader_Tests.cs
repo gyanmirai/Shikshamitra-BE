@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
+using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 using Shouldly;
@@ -42,7 +43,7 @@ public class AdmissionFeeSelectionOnboardingReader_Tests
 		if (scenario != "missing") assignment.CaptureAssignment("test", scenario == "malformed" ? "{" : JsonSerializer.Serialize(snapshot));
 		var repository = Substitute.For<IRepository<StudentFeeStructure, Guid>>();
 		repository.FindAsync(Arg.Any<Expression<Func<StudentFeeStructure, bool>>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(assignment);
-		var reader = new AdmissionFeeSelectionOnboardingReader(repository);
+		var reader = new AdmissionFeeSelectionOnboardingReader(repository, Substitute.For<IAdmissionFinanceIntegration>());
 		(await reader.GetBlockerAsync(application)).ShouldContain(matches ? "Confirm" : "Finance");
 		(await reader.GetBlockerAsync(application, false) == null).ShouldBe(matches);
 		application.ConfirmOnboardingFeeSelection(Guid.NewGuid(), DateTimeOffset.UtcNow);
@@ -54,8 +55,88 @@ public class AdmissionFeeSelectionOnboardingReader_Tests
 	public async Task No_saved_admissions_choice_preserves_existing_onboarding()
 	{
 		var repository = Substitute.For<IRepository<StudentFeeStructure, Guid>>();
-		(await new AdmissionFeeSelectionOnboardingReader(repository).GetBlockerAsync(Application())).ShouldBeNull();
+		(await new AdmissionFeeSelectionOnboardingReader(repository, Substitute.For<IAdmissionFinanceIntegration>()).GetBlockerAsync(Application())).ShouldBeNull();
 		repository.ReceivedCalls().ShouldBeEmpty();
+	}
+
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public async Task Admission_confirmation_is_derived_from_current_finance_settlement_without_a_manual_stamp(bool settled)
+	{
+		var application = PaidAdmission();
+		var finance = Substitute.For<IAdmissionFinanceIntegration>();
+		finance.IsSettledForOnboardingAsync(application.Id).Returns(settled);
+		var reader = new AdmissionFeeSelectionOnboardingReader(Substitute.For<IRepository<StudentFeeStructure, Guid>>(), finance);
+		(await reader.IsConfirmedAsync(application)).ShouldBe(settled);
+		(await reader.GetBlockerAsync(application) == null).ShouldBe(settled);
+		application.GetFeeSelection()!.OnboardingConfirmedAt.ShouldBeNull();
+		// No persistent cache: a reversal/reopened balance must be reflected on the next read.
+		finance.IsSettledForOnboardingAsync(application.Id).Returns(!settled);
+		(await reader.IsConfirmedAsync(application)).ShouldBe(!settled);
+	}
+
+	[Theory]
+	[InlineData("unpaid")]
+	[InlineData("not-finalized")]
+	[InlineData("onboarding-choice")]
+	[InlineData("deferred")]
+	public async Task Other_fee_flows_keep_explicit_onboarding_confirmation(string scenario)
+	{
+		var application = PaidAdmission(scenario);
+		var finance = Substitute.For<IAdmissionFinanceIntegration>();
+		finance.IsSettledForOnboardingAsync(application.Id).Returns(true);
+		var reader = new AdmissionFeeSelectionOnboardingReader(Substitute.For<IRepository<StudentFeeStructure, Guid>>(), finance);
+		(await reader.IsConfirmedAsync(application)).ShouldBeFalse();
+		(await reader.GetBlockerAsync(application)).ShouldContain("Confirm");
+		finance.ReceivedCalls().ShouldBeEmpty();
+	}
+
+	[Fact]
+	public async Task A_conflicting_finance_assignment_cannot_be_automatically_confirmed()
+	{
+		var application = PaidAdmission();
+		var repository = Substitute.For<IRepository<StudentFeeStructure, Guid>>();
+		repository.FindAsync(Arg.Any<Expression<Func<StudentFeeStructure, bool>>>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+			.Returns(new StudentFeeStructure(Guid.NewGuid(), null, application.StudentId!.Value, Guid.NewGuid(), application.GetFeeSelection()!.AcademicYearId));
+		var finance = Substitute.For<IAdmissionFinanceIntegration>();
+		finance.IsSettledForOnboardingAsync(application.Id).Returns(true);
+		var reader = new AdmissionFeeSelectionOnboardingReader(repository, finance);
+		(await reader.IsConfirmedAsync(application)).ShouldBeFalse();
+		(await reader.GetBlockerAsync(application)).ShouldContain("Finance assignment differs");
+		finance.ReceivedCalls().ShouldBeEmpty();
+	}
+
+	[Fact]
+	public async Task Explicit_existing_confirmation_preserves_its_audit_evidence()
+	{
+		var application = PaidAdmission();
+		var at = DateTimeOffset.UtcNow;
+		application.ConfirmOnboardingFeeSelection(Guid.NewGuid(), at);
+		var finance = Substitute.For<IAdmissionFinanceIntegration>();
+		var reader = new AdmissionFeeSelectionOnboardingReader(Substitute.For<IRepository<StudentFeeStructure, Guid>>(), finance);
+		(await reader.IsConfirmedAsync(application)).ShouldBeTrue();
+		application.GetFeeSelection()!.OnboardingConfirmedAt.ShouldBe(at);
+		finance.ReceivedCalls().ShouldBeEmpty();
+	}
+
+	private static AdmissionApplication PaidAdmission(string scenario = "paid")
+	{
+		var application = Application();
+		var at = DateTimeOffset.UtcNow;
+		var stage = Guid.NewGuid();
+		application.SaveFeeSelection(new(Guid.NewGuid(), "QA", 2, Guid.NewGuid(), Guid.NewGuid(), stage, "INR",
+			[new(Guid.NewGuid(), "Tuition", 200m, false, true, null, null)], Guid.NewGuid(),
+			scenario == "onboarding-choice" ? at.AddDays(1) : at.AddMinutes(-1)), false);
+		if (scenario == "deferred")
+		{
+			application.SetCurrentStage(stage);
+			application.DeferFeeCollection(stage, "Pay during Onboarding", Guid.NewGuid(), at);
+		}
+		if (scenario != "unpaid") application.RecordFinanceFeePayment(Guid.NewGuid());
+		application.Submit(); application.Approve(Guid.NewGuid(), null);
+		if (scenario != "not-finalized") application.FinalizeApprovedDirectAdmission(Guid.NewGuid(), Guid.NewGuid(), at.UtcDateTime);
+		return application;
 	}
 
 	private static AdmissionApplication Application() => new(Guid.NewGuid(), null, "QA", Guid.NewGuid(), null,

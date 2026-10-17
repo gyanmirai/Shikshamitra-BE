@@ -34,6 +34,66 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
     [Fact]
+    public Task Full_admission_payment_should_remain_settled_after_onboarding_handoff() =>
+        RunCertificationScenarioAsync(async () =>
+        {
+            var fixture = await CreateCollectibleAdmissionAsync("FullyPaidHandoff");
+            var service = GetRequiredService<IAdmissionFeeCollectionAppService>();
+            var prepared = await service.PrepareAsync(fixture.Application.Id, new());
+            prepared.IsSettled.ShouldBeFalse();
+            prepared.CanCollect.ShouldBeTrue();
+            var due = (await AccountDuesAsync(prepared.AccountId!.Value)).Single();
+            var command = AdmissionCashPayment(due, 1000m, "fully-paid-handoff");
+            var payment = await service.CollectAsync(fixture.Application.Id, command);
+            var settled = await service.GetSummaryAsync(fixture.Application.Id);
+            settled.IsSettled.ShouldBeTrue();
+            settled.CanCollect.ShouldBeFalse();
+            settled.OutstandingAmount.ShouldBe(0m);
+            settled.ConfirmedPaidAmount.ShouldBe(1000m);
+
+            await CompleteCollectibleDecisionAsync(fixture.Application.Id);
+            var finalized = await FinalizeAsync(await _applicationAppService.GetAsync(fixture.Application.Id), true, "fully-paid-finalize");
+            var sourceApplication = await ReadAsync<AdmissionApplication>(fixture.Application.Id);
+            sourceApplication.HasFinanceFeePayment.ShouldBeTrue();
+            (sourceApplication.GetFeeCollectionDeferral() == null).ShouldBeTrue();
+            sourceApplication.GetFeeSelection()!.SavedAt.UtcDateTime.ShouldBeLessThanOrEqualTo(sourceApplication.FinalizedAt!.Value);
+            (await GetRequiredService<IAdmissionFinanceIntegration>().IsSettledForOnboardingAsync(fixture.Application.Id)).ShouldBeTrue();
+            var onboarding = await GetRequiredService<IStudentOnboardingAppService>().GetAsync(finalized.OnboardingCaseId);
+            onboarding.ApplicationId.ShouldBe(fixture.Application.Id);
+            onboarding.FeeStructureConfirmed.ShouldBeTrue();
+            onboarding.FeeAssignmentConfirmed.ShouldBe(true);
+            onboarding.Steps.Single(s => s.Key == StudentOnboardingStepKeys.FinanceAccountsServices)
+                .Status.ShouldBe(StudentOnboardingStepStatus.Completed);
+            onboarding.StudentEnrollmentId.ShouldBeNull();
+            var onboardingService = GetRequiredService<IStudentOnboardingAppService>();
+            var selection = await onboardingService.GetFeeStructureAsync(onboarding.Id);
+            selection.OnboardingConfirmed.ShouldBeTrue();
+            selection.AutomaticallyConfirmedFromAdmissions.ShouldBeTrue();
+            selection.CanConfirmOnboarding.ShouldBeFalse();
+            selection.Selection!.OnboardingConfirmedAt.ShouldBeNull();
+            var pending = await onboardingService.GetListAsync(new StudentOnboardingListInput
+                { AcademicYearId = fixture.YearId, PendingTask = "fees", MaxResultCount = 100 });
+            pending.Items.ShouldNotContain(c => c.Id == onboarding.Id);
+            // A stale client posting the same selection is a no-op; it cannot create another confirmation.
+            await onboardingService.SaveFeeStructureAsync(onboarding.Id, new SaveStudentOnboardingFeeStructureDto
+            {
+                ConcurrencyStamp = onboarding.ConcurrencyStamp,
+                StructureId = selection.Selection.StructureId,
+                OptionalHeadIds = selection.Selection.Heads.Where(h => h.IsOptional).Select(h => h.FeeHeadId).ToList()
+            });
+            var reread = await onboardingService.GetAsync(onboarding.Id);
+            reread.Events.ShouldNotContain(e => e.EventType == "FeeStructureConfirmed");
+            (await ReadAsync<AdmissionApplication>(fixture.Application.Id)).GetFeeSelection()!.OnboardingConfirmedAt.ShouldBeNull();
+            var inherited = await service.GetSummaryAsync(onboarding.ApplicationId);
+            inherited.IsSettled.ShouldBeTrue();
+            inherited.CanCollect.ShouldBeFalse();
+            inherited.Receipts.Single().Id.ShouldBe(payment.FeeReceiptId!.Value);
+            (await AccountDuesAsync(prepared.AccountId.Value)).Single().Id.ShouldBe(due.Id);
+            // Existing idempotent retries remain valid even after checkout becomes read-only.
+            (await service.CollectAsync(fixture.Application.Id, command)).Id.ShouldBe(payment.Id);
+        });
+
+    [Fact]
     public Task Admission_collection_read_should_not_prepare_and_repeated_prepare_should_reuse_obligations() =>
         RunCertificationScenarioAsync(async () =>
         {
@@ -224,17 +284,20 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
         {
             var fixture = await CreateCollectibleAdmissionAsync("Scope");
             var service = GetRequiredService<IAdmissionFeeCollectionAppService>();
+            var readiness = GetRequiredService<IAdmissionFinanceIntegration>();
             var prepared = await service.PrepareAsync(fixture.Application.Id, new());
             var due = (await AccountDuesAsync(prepared.AccountId!.Value)).Single();
             using (_currentTenant.Change(Guid.NewGuid()))
             {
                 await Should.ThrowAsync<EntityNotFoundException>(() => service.GetSummaryAsync(fixture.Application.Id));
+                await Should.ThrowAsync<EntityNotFoundException>(() => readiness.IsSettledForOnboardingAsync(fixture.Application.Id));
                 await Should.ThrowAsync<EntityNotFoundException>(() => service.CollectAsync(fixture.Application.Id, AdmissionCashPayment(due, 100m, "wrong-tenant")));
             }
             using (_principalAccessor.Change(new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(AbpClaimTypes.UserId, Guid.NewGuid().ToString()), new Claim(AbpClaimTypes.UserName, "no-finance-scope")], "Test"))))
             {
                 await Should.ThrowAsync<EntityNotFoundException>(() => service.GetSummaryAsync(fixture.Application.Id));
+                await Should.ThrowAsync<EntityNotFoundException>(() => readiness.IsSettledForOnboardingAsync(fixture.Application.Id));
                 await Should.ThrowAsync<EntityNotFoundException>(() => service.CollectAsync(fixture.Application.Id, AdmissionCashPayment(due, 100m, "wrong-scope")));
             }
             (await AccountDuesAsync(prepared.AccountId.Value)).Single().PaidAmount.ShouldBe(0m);
@@ -684,15 +747,15 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
     {
         var runtime = await _applicationAppService.GetWorkflowAsync(applicationId);
         var stage = runtime.Stages.SingleOrDefault(s => s.Id == runtime.CurrentStageInstanceId);
-        if (stage?.StageType == AdmissionWorkflowStageType.Payment &&
-            !(await GetRequiredService<IAdmissionFeeSelectionAppService>().GetAsync(applicationId)).HasRecordedFeePayment)
+        if (stage?.StageType == AdmissionWorkflowStageType.Payment)
         {
+            var defer = !(await GetRequiredService<IAdmissionFeeSelectionAppService>().GetAsync(applicationId)).HasRecordedFeePayment;
             var application = await _applicationAppService.GetAsync(applicationId);
             await _applicationAppService.AdvanceWorkflowAsync(applicationId, new()
             {
                 ExpectedCurrentStageInstanceId = stage.Id, ConcurrencyStamp = application.ConcurrencyStamp,
-                IdempotencyKey = $"finance-test-deferral-{stage.Id:N}", DeferFeeCollection = true,
-                Reason = "Parent will complete collection in Onboarding."
+                IdempotencyKey = $"finance-test-payment-stage-{stage.Id:N}", DeferFeeCollection = defer,
+                Reason = defer ? "Parent will complete collection in Onboarding." : null
             });
         }
         await CompleteOnboardingDecisionAsync(applicationId);

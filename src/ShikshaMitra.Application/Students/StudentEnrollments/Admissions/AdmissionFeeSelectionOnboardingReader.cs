@@ -4,19 +4,35 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment;
 using ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
+using ShikshaMitra.Finance.Fees.Collections;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 /// <summary>Validates saved Admissions intent against existing Finance assignment evidence without modifying it.</summary>
-public class AdmissionFeeSelectionOnboardingReader(IRepository<StudentFeeStructure, Guid> assignments) : ITransientDependency
+public class AdmissionFeeSelectionOnboardingReader(IRepository<StudentFeeStructure, Guid> assignments,
+    IAdmissionFinanceIntegration finance) : ITransientDependency
 {
+    public async Task<bool> IsConfirmedAsync(AdmissionApplication application)
+    {
+        var selection = application.GetFeeSelection();
+        if (selection?.OnboardingConfirmedAt != null) return true;
+        if (selection == null || !application.HasFinanceFeePayment || !application.OnboardingCaseId.HasValue ||
+            !application.StudentId.HasValue || !application.FinalizedAt.HasValue ||
+            selection.SavedAt.UtcDateTime > application.FinalizedAt.Value || application.GetFeeCollectionDeferral() != null)
+            return false;
+        // The saved Admission choice and its Finance evidence satisfy this requirement.
+        // Do not manufacture a manual Onboarding confirmation, actor or timestamp on GET.
+        return await GetBlockerAsync(application, requireConfirmation: false) == null &&
+            await finance.IsSettledForOnboardingAsync(application.Id);
+    }
+
 	public async Task<string?> GetBlockerAsync(AdmissionApplication application, bool requireConfirmation = true)
 	{
 		var selection = application.GetFeeSelection();
 		if (selection == null) return null;
-		var confirmationBlocker = requireConfirmation && selection.OnboardingConfirmedAt == null
+		var confirmationBlocker = requireConfirmation && !await IsConfirmedAsync(application)
 			? "Confirm the fee structure saved during Admissions in the Onboarding Fees tab." : null;
 		if (!application.StudentId.HasValue) return confirmationBlocker;
 		var assignment = await assignments.FindAsync(a => a.StudentId == application.StudentId && a.AcademicYearId == selection.AcademicYearId);

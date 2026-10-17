@@ -9,6 +9,8 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 /// </summary>
 public interface IAdmissionFinanceIntegration
 {
+    /// <summary>Scoped, Finance-owned settlement decision for automatic Onboarding readiness; no monetary writes.</summary>
+    Task<bool> IsSettledForOnboardingAsync(Guid applicationId);
     Task LinkFinalizedStudentAsync(Guid applicationId, Guid studentId);
     Task BindActivatedStudentAsync(Guid applicationId, Guid studentId, Guid enrollmentId);
 }

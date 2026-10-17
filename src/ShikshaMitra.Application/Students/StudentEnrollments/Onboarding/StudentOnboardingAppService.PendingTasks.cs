@@ -30,7 +30,8 @@ public partial class StudentOnboardingAppService
 			var applicationIds = scoped.Select(c => c.ApplicationId).ToArray();
 			var applications = (await applicationRepository.GetListAsync(a => Enumerable.Contains(applicationIds, a.Id))).ToDictionary(a => a.Id);
 			foreach (var item in scoped)
-				if (applications.GetValueOrDefault(item.ApplicationId)?.GetFeeSelection()?.OnboardingConfirmedAt == null) pending.Add(item.Id);
+				if (!applications.TryGetValue(item.ApplicationId, out var application) ||
+                    !await admissionFeeSelectionReader.IsConfirmedAsync(application)) pending.Add(item.Id);
 		}
 		else
 		{

@@ -612,8 +612,12 @@ public partial class StudentOnboardingAppService(
 		}
 		var blockers = await GetActivationBlockersAsync(onboardingCase, steps, DateTime.UtcNow);
 		var dto = await MapCaseAsync(onboardingCase, true, steps);
-		if (blockers.Count == 0 && onboardingCase.Status is not StudentOnboardingStatus.Completed and not StudentOnboardingStatus.Cancelled)
-			dto.Status = StudentOnboardingStatus.ReadyForActivation;
+		if (!onboardingCase.StudentEnrollmentId.HasValue &&
+		    onboardingCase.Status is not StudentOnboardingStatus.Completed and not StudentOnboardingStatus.Cancelled)
+		{
+			if (blockers.Count == 0) dto.Status = StudentOnboardingStatus.ReadyForActivation;
+			else if (dto.Status == StudentOnboardingStatus.ReadyForActivation) dto.Status = StudentOnboardingStatus.InProgress;
+		}
 		dto.LastError = blockers.Count == 0 ? null : string.Join("; ", blockers);
 		return dto;
 	}
@@ -1130,6 +1134,10 @@ public partial class StudentOnboardingAppService(
 	private async Task<List<string>> GetActivationBlockersAsync(
 		StudentOnboardingCase onboardingCase, IReadOnlyCollection<StudentOnboardingStep> steps, DateTime now)
 	{
+		var feeConfirmed = await admissionFeeSelectionReader.IsConfirmedAsync(await applicationRepository.GetAsync(onboardingCase.ApplicationId));
+		// Use the same current Finance evidence as the displayed checklist. Preview must
+		// not rewrite saved verification evidence; activation refreshes the stored steps.
+		steps = ProjectFeeReadiness(steps, feeConfirmed);
 		var blockers = steps.Where(step => step.Key != StudentOnboardingStepKeys.FinalReadiness &&
 			step.Required && step.Status != StudentOnboardingStepStatus.Completed).Select(step => step.Label).ToList();
 		if (!onboardingCase.DivisionId.HasValue || !onboardingCase.SeatReservationId.HasValue)
@@ -1140,7 +1148,7 @@ public partial class StudentOnboardingAppService(
 			if (reservation == null || !reservation.IsLive(now)) blockers.Add("The seat reservation has expired.");
 		}
 		if (!onboardingCase.RollNumber.HasValue) blockers.Add("A roll number is required.");
-		if ((await applicationRepository.GetAsync(onboardingCase.ApplicationId)).GetFeeSelection()?.OnboardingConfirmedAt == null) blockers.Add("A confirmed fee structure is required.");
+		if (!feeConfirmed) blockers.Add("A confirmed fee structure is required.");
 		var student = await studentRepository.FindAsync(onboardingCase.StudentId);
 		if (student != null && string.IsNullOrWhiteSpace(student.GrNumber) && !student.GrNo.HasValue &&
 		    !onboardingCase.IdentifierAllocationId.HasValue)
@@ -1237,8 +1245,9 @@ public partial class StudentOnboardingAppService(
 		}
 		var serviceStep = steps.Single(s => s.Key == StudentOnboardingStepKeys.FinanceAccountsServices);
 		serviceStep.SetRequired(true);
-		var feeSelection = (await applicationRepository.GetAsync(onboardingCase.ApplicationId)).GetFeeSelection();
-		if (feeSelection?.OnboardingConfirmedAt.HasValue == true) serviceStep.Complete(null, at, "Fee structure confirmed. Payment is handled separately by Finance.");
+		var feeApplication = await applicationRepository.GetAsync(onboardingCase.ApplicationId);
+		if (await admissionFeeSelectionReader.IsConfirmedAsync(feeApplication)) serviceStep.Complete(null, at,
+            feeApplication.GetFeeSelection()?.OnboardingConfirmedAt == null ? "Confirmed and fully paid during Admissions." : "Fee structure confirmed. Payment is handled separately by Finance.");
 		else serviceStep.Block("Select and confirm a published fee structure in the Fees tab.");
 		await stepRepository.UpdateAsync(serviceStep, false);
 		SetComputedStep(steps, StudentOnboardingStepKeys.Identity,
@@ -1357,6 +1366,10 @@ public partial class StudentOnboardingAppService(
 			? await eventRepository.GetListAsync(item => item.OnboardingCaseId == onboardingCase.Id)
 			: [];
 		var feeSelection = application?.GetFeeSelection();
+		var feeConfirmed = application != null && await admissionFeeSelectionReader.IsConfirmedAsync(application);
+		// Readiness is derived from current evidence even for existing cases, without
+		// mutating tracked steps or creating a duplicate confirmation merely on view.
+		steps = ProjectFeeReadiness(steps, feeConfirmed);
 		var reservedIdentifier = string.IsNullOrWhiteSpace(student?.GrNumber) && student?.GrNo == null
 			? await allocationRepository.FindAsync(a => a.OnboardingCaseId == onboardingCase.Id &&
 				a.Status == StudentIdentifierAllocationStatus.Reserved)
@@ -1386,11 +1399,11 @@ public partial class StudentOnboardingAppService(
 			CredentialsPending = await CredentialsPendingAsync(onboardingCase),
 			PortalAccountOwners = includeEvents && student != null ? MapPortalAccountOwners(student) : null,
 			AdmissionRoute = onboardingCase.GetAdmissionRoute(),
-			FeeAssignmentConfirmed = feeSelection?.OnboardingConfirmedAt.HasValue == true,
+			FeeAssignmentConfirmed = feeConfirmed,
 			FirstPaymentConfirmed = null,
-			FinanceReadinessDetail = feeSelection?.OnboardingConfirmedAt.HasValue == true ? "Fee structure confirmed." : "Confirm a published fee structure.",
+			FinanceReadinessDetail = feeConfirmed ? "Fee structure confirmed." : "Confirm a published fee structure.",
 			SelectedFeeStructureId = feeSelection?.StructureId,
-			FeeStructureConfirmed = feeSelection?.OnboardingConfirmedAt.HasValue == true,
+			FeeStructureConfirmed = feeConfirmed,
 			GrNumberLocked = onboardingCase.IsIdentifierLocked("gr") || student?.IsIdentifierLocked("gr") == true || await IsDivisionIdentifierGroupLockedAsync(onboardingCase.DivisionId, onboardingCase.AcademicYearId, "gr"),
 			RollNumberLocked = onboardingCase.IsIdentifierLocked("roll") || student?.IsIdentifierLocked("roll") == true || await IsDivisionIdentifierGroupLockedAsync(onboardingCase.DivisionId, onboardingCase.AcademicYearId, "roll"),
 			RollChangeReasonRequired = accountConfiguration?.ResolveRule("rollNumber", onboardingCase, Clock.Now) is { } rollSettings && OnboardingRuleConfiguration.Boolean(rollSettings, "requireChangeReason"),
@@ -1457,6 +1470,12 @@ public partial class StudentOnboardingAppService(
 		};
 	}
 
+	private static IReadOnlyCollection<StudentOnboardingStep> ProjectFeeReadiness(IReadOnlyCollection<StudentOnboardingStep> steps, bool confirmed) =>
+        steps.Select(step => step.Key == StudentOnboardingStepKeys.FinanceAccountsServices &&
+            (step.Status == StudentOnboardingStepStatus.Completed) != confirmed
+            ? new StudentOnboardingStep(step.Id, step.TenantId, step.OnboardingCaseId, step.Key, step.Label, step.DisplayOrder,
+                step.Required, confirmed ? StudentOnboardingStepStatus.Completed : StudentOnboardingStepStatus.Blocked)
+            : step).ToList();
 	private static StudentOnboardingStepDto MapStep(StudentOnboardingStep step) => new()
 	{
 		Id = step.Id, Key = step.Key, Label = step.Label, DisplayOrder = step.DisplayOrder,

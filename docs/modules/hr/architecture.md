@@ -3,7 +3,7 @@ module: hr
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -55,8 +55,7 @@ Follow these rules when changing HR:
 | Use transactions for coupled writes | Employee, attendance, leave, and payroll updates must not partially apply |
 | Serialize earning-component dependency mutations | A tenant-level PostgreSQL transaction advisory lock protects the active acyclic graph across application instances |
 | Keep payroll snapshots auditable | Salary slips must explain the policy basis used at lock time |
-| Isolate scheduled report runs | Each due schedule commits or fails independently so one invalid schedule cannot roll back or starve another |
-| Defer scheduled report delivery | Email delivery runs after the export and schedule transaction commits so a failed commit cannot send a dead link or trigger duplicate retry mail |
+| Capture immutable report results | Background generation materializes tenant-owned row chunks inside a repeatable-read transaction; pagination and exports use only those chunks |
 | Update docs with behavior changes | HR docs are part of the handoff contract |
 
 ## Payroll dependency graph

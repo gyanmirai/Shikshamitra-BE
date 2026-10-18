@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using FluentValidation;
 
@@ -34,6 +34,7 @@ public class HrReportRequestDtoValidator : AbstractValidator<HrReportRequestDto>
 
 public class HrReportFilterDto
 {
+	public string TimeZone { get; set; } = "Asia/Kolkata";
 	public List<Guid>? EmployeeIds { get; set; }
 	public List<string>? Departments { get; set; }
 	public List<int>? Statuses { get; set; }
@@ -49,6 +50,7 @@ public class HrReportFilterDto
 
 public class HrReportFilterConditionDto
 {
+	public bool AskWhenGenerating { get; set; }
 	public string Field { get; set; } = string.Empty;
 	public string Operator { get; set; } = HrReportFilterOperator.Equals;
 	public string? Value { get; set; }

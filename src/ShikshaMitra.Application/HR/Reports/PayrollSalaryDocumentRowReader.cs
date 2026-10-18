@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -36,37 +36,57 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 			!documentQuery.Any(later => later.SalarySlipId == x.SalarySlipId && later.Revision > x.Revision));
 		var slipQuery = await slips.GetQueryableAsync();
 		var official = from slip in slipQuery
-			join document in currentDocuments on slip.Id equals document.SalarySlipId
-			join employee in staff on slip.EmployeeId equals employee.Id
-			where slip.TenantId == scope.TenantId && (slip.Status == SalarySlipStatus.Finalized || slip.Status == SalarySlipStatus.Paid) &&
-				string.Compare(slip.MonthYear, firstMonth) >= 0 && string.Compare(slip.MonthYear, lastMonth) <= 0
-			select new DocumentRow
-			{
-				EmployeeId = slip.EmployeeId, EmployeeCode = employee.EmployeeCode ?? "", Month = slip.MonthYear,
-				FactsJson = document.FactsJson, SnapshotJson = null,
-				TotalEarnings = slip.TotalEarning, TotalDeduction = slip.TotalDeduction, NetPay = slip.NetSalary,
-				EarningsJson = null, DeductionsJson = null, LeaveJson = null,
-				EmployeeName = null, GrossSalary = null, BasicSalary = null, Salary = null, PayableDays = null
-			};
+					   join document in currentDocuments on slip.Id equals document.SalarySlipId
+					   join employee in staff on slip.EmployeeId equals employee.Id
+					   where slip.TenantId == scope.TenantId && (slip.Status == SalarySlipStatus.Finalized || slip.Status == SalarySlipStatus.Paid) &&
+						   string.Compare(slip.MonthYear, firstMonth) >= 0 && string.Compare(slip.MonthYear, lastMonth) <= 0
+					   select new DocumentRow
+					   {
+						   EmployeeId = slip.EmployeeId,
+						   EmployeeCode = employee.EmployeeCode ?? "",
+						   Month = slip.MonthYear,
+						   FactsJson = document.FactsJson,
+						   SnapshotJson = null,
+						   TotalEarnings = slip.TotalEarning,
+						   TotalDeduction = slip.TotalDeduction,
+						   NetPay = slip.NetSalary,
+						   EarningsJson = null,
+						   DeductionsJson = null,
+						   LeaveJson = null,
+						   EmployeeName = null,
+						   GrossSalary = null,
+						   BasicSalary = null,
+						   Salary = null,
+						   PayableDays = null
+					   };
 		IQueryable<DocumentRow> query = official;
 		if (input.Filters.IncludeDrafts)
 		{
 			var snapshotQuery = await snapshots.GetQueryableAsync();
 			var drafts = from snapshot in snapshotQuery
-				join employee in staff on snapshot.EmployeeId equals employee.Id
-				where snapshot.TenantId == scope.TenantId && string.Compare(snapshot.MonthYear, firstMonth) >= 0 && string.Compare(snapshot.MonthYear, lastMonth) <= 0 &&
-					!slipQuery.Any(slip => slip.EmployeeId == snapshot.EmployeeId && slip.MonthYear == snapshot.MonthYear &&
-						(slip.Status == SalarySlipStatus.Finalized || slip.Status == SalarySlipStatus.Paid))
-				select new DocumentRow
-				{
-					EmployeeId = snapshot.EmployeeId, EmployeeCode = snapshot.EmployeeIdentifier, Month = snapshot.MonthYear,
-					FactsJson = null, SnapshotJson = snapshot.StatutoryApplicationJson,
-					TotalEarnings = snapshot.NetPay + snapshot.TotalDeduction,
-					TotalDeduction = snapshot.TotalDeduction, NetPay = snapshot.NetPay,
-					EarningsJson = snapshot.EarningComponentsJson, DeductionsJson = snapshot.DeductionComponentsJson,
-					EmployeeName = snapshot.EmployeeName, GrossSalary = snapshot.GrossSalary, BasicSalary = snapshot.BasicSalary,
-					Salary = snapshot.FullGrossSalary, PayableDays = snapshot.PayableDays, LeaveJson = snapshot.LeaveUnitsByTypeJson
-				};
+						 join employee in staff on snapshot.EmployeeId equals employee.Id
+						 where snapshot.TenantId == scope.TenantId && string.Compare(snapshot.MonthYear, firstMonth) >= 0 && string.Compare(snapshot.MonthYear, lastMonth) <= 0 &&
+							 !slipQuery.Any(slip => slip.EmployeeId == snapshot.EmployeeId && slip.MonthYear == snapshot.MonthYear &&
+								 (slip.Status == SalarySlipStatus.Finalized || slip.Status == SalarySlipStatus.Paid))
+						 select new DocumentRow
+						 {
+							 EmployeeId = snapshot.EmployeeId,
+							 EmployeeCode = snapshot.EmployeeIdentifier,
+							 Month = snapshot.MonthYear,
+							 FactsJson = null,
+							 SnapshotJson = snapshot.StatutoryApplicationJson,
+							 TotalEarnings = snapshot.NetPay + snapshot.TotalDeduction,
+							 TotalDeduction = snapshot.TotalDeduction,
+							 NetPay = snapshot.NetPay,
+							 EarningsJson = snapshot.EarningComponentsJson,
+							 DeductionsJson = snapshot.DeductionComponentsJson,
+							 EmployeeName = snapshot.EmployeeName,
+							 GrossSalary = snapshot.GrossSalary,
+							 BasicSalary = snapshot.BasicSalary,
+							 Salary = snapshot.FullGrossSalary,
+							 PayableDays = snapshot.PayableDays,
+							 LeaveJson = snapshot.LeaveUnitsByTypeJson
+						 };
 			query = official.Concat(drafts);
 		}
 		var total = await executer.CountAsync(query);
@@ -101,15 +121,24 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 			{
 				var month = first.AddMonths(index);
 				if (!months.Contains(month.ToString("yyyy-MM"))) rows.Add(new()
-				{ ["month"] = month.ToString("yyyy-MM"), ["employeeCode"] = employee.EmployeeCode,
-					["employeeName"] = $"{employee.FirstName} {employee.LastName}".Trim(), ["status"] = "Unavailable" });
+				{
+					["__employeeId"] = employee.Id.ToString(),
+					["month"] = month.ToString("yyyy-MM"),
+					["employeeCode"] = employee.EmployeeCode,
+					["employeeName"] = $"{employee.FirstName} {employee.LastName}".Trim(),
+					["status"] = "Unavailable"
+				});
 			}
 			rows = rows.OrderBy(x => x["month"]).ToList();
 			total = rows.Count;
 			if (!exportAllRows) rows = rows.Skip(skip).Take(take).ToList();
 		}
-		return new(rows, total, true) { Warnings = warnings, Totals = financialTotals == null ? new() : new()
-		{ ["totalEarnings"] = financialTotals.Earnings, ["totalDeduction"] = financialTotals.Deductions, ["netPay"] = financialTotals.Net } };
+		return new(rows, total, true)
+		{
+			Warnings = warnings,
+			Totals = financialTotals == null ? new() : new()
+			{ ["totalEarnings"] = financialTotals.Earnings, ["totalDeduction"] = financialTotals.Deductions, ["netPay"] = financialTotals.Net }
+		};
 	}
 	private static DateOnly? ParseMonth(string? month) => DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed) ? parsed : null;
 	internal static Dictionary<string, string?> ToRow(DocumentRow row)
@@ -136,16 +165,33 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 		string? Money(decimal? value) => value?.ToString("0.00", CultureInfo.InvariantCulture);
 		return new()
 		{
-			["month"] = row.Month, ["employeeCode"] = facts?.EmployeeCode ?? row.EmployeeCode, ["employeeName"] = facts?.EmployeeName ?? row.EmployeeName,
-			["designation"] = facts?.Designation, ["dateOfJoining"] = facts?.DateOfJoining?.ToString("yyyy-MM-dd"), ["bankAccount"] = facts?.MaskedAccountNumber,
-			["salary"] = Money(facts?.FullGrossSalary ?? row.Salary), ["grossSalary"] = Money(facts?.GrossSalary ?? row.GrossSalary),
-			["basicSalary"] = Money(facts?.BasicSalary ?? row.BasicSalary), ["totalEarnings"] = Money(row.TotalEarnings),
+			["__components"] = HrReportingSavedComponents.Serialize(facts, row.EarningsJson, row.DeductionsJson),
+			["__employeeId"] = row.EmployeeId.ToString(),
+			["payrollDepartment"] = facts?.Department,
+			["month"] = row.Month,
+			["employeeCode"] = facts?.EmployeeCode ?? row.EmployeeCode,
+			["employeeName"] = facts?.EmployeeName ?? row.EmployeeName,
+			["designation"] = facts?.Designation,
+			["dateOfJoining"] = facts?.DateOfJoining?.ToString("yyyy-MM-dd"),
+			["bankAccount"] = facts?.MaskedAccountNumber,
+			["salary"] = Money(facts?.FullGrossSalary ?? row.Salary),
+			["grossSalary"] = Money(facts?.GrossSalary ?? row.GrossSalary),
+			["basicSalary"] = Money(facts?.BasicSalary ?? row.BasicSalary),
+			["totalEarnings"] = Money(row.TotalEarnings),
 			["pfSalary"] = Money(application?.ProvidentFund is { Apply: true, NumberPresent: true, Eligible: true } ? application.ProvidentFund.ContributionWages : application == null ? null : 0m),
-			["pfNumber"] = facts?.EpfNumber ?? application?.Profile.PfNumber, ["esicNumber"] = facts?.EmployeeStateInsuranceNumber ?? application?.Profile.EsicInsuranceNumber,
-			["pf"] = Money(pf), ["pt"] = Money(pt), ["tds"] = Money(tds), ["esic"] = Money(esi),
-			["otherDeductions"] = Money(row.TotalDeduction - pf - pt - tds - esi), ["totalDeduction"] = Money(row.TotalDeduction), ["netPay"] = Money(row.NetPay),
-			["casualLeaveDays"] = Money(leave?.GetValueOrDefault("CL")), ["paidLeaveDays"] = Money(leave == null ? null : leave.GetValueOrDefault("CL") + leave.GetValueOrDefault("PAID")),
-			["unpaidLeaveDays"] = Money(leave?.GetValueOrDefault("UNPAID")), ["payableDays"] = Money(facts?.PayableDays ?? row.PayableDays),
+			["pfNumber"] = facts?.EpfNumber ?? application?.Profile.PfNumber,
+			["esicNumber"] = facts?.EmployeeStateInsuranceNumber ?? application?.Profile.EsicInsuranceNumber,
+			["pf"] = Money(pf),
+			["pt"] = Money(pt),
+			["tds"] = Money(tds),
+			["esic"] = Money(esi),
+			["otherDeductions"] = Money(row.TotalDeduction - pf - pt - tds - esi),
+			["totalDeduction"] = Money(row.TotalDeduction),
+			["netPay"] = Money(row.NetPay),
+			["casualLeaveDays"] = Money(leave?.GetValueOrDefault("CL")),
+			["paidLeaveDays"] = Money(leave == null ? null : leave.GetValueOrDefault("CL") + leave.GetValueOrDefault("PAID")),
+			["unpaidLeaveDays"] = Money(leave?.GetValueOrDefault("UNPAID")),
+			["payableDays"] = Money(facts?.PayableDays ?? row.PayableDays),
 			["status"] = facts == null ? "Preview" : "Issued"
 		};
 	}

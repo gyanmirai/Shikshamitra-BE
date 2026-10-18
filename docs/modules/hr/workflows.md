@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -124,21 +124,13 @@ Reports and notifications expose HR data outside operational screens:
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
-| HR report preview | Select source, options, template, and filters | Filter correctness and tenant isolation |
-| HR report export | Generate PDF or Excel export, filter history by requested date, and remove an owned failed job | Export parity with preview, wide-PDF layout, owner and tenant scope, soft deletion, and audit metadata |
+| Report templates | Create a private definition or publish a school revision | Build/ManageTemplates permissions, fixed rules, optimistic concurrency, and source access |
+| Generate report | Choose declared dates/staff and queue a captured run | Canonical domain calculations, complete-population filtering, snapshot consistency, cancellation, and tenant isolation |
+| View/download result | Read captured rows or prepare Excel/PDF | Private ownership, current source/record access, seven-day expiry, and unchanged historical bytes |
 | HR notifications | Configure employee, attendance, leave, and event notification rules | Channel settings, permission checks, and history visibility |
 
-When an export is queued, retried, regenerated, or run from a schedule, the Reports Center clears the history date filter before highlighting the new job.
-An inverted custom history range does not issue an unfiltered export-history request.
-PDF history metadata reports the capped row count and the document tells the user to choose Excel for the complete result.
-Direct sharing and schedules reject a recipient unless the recipient has report-view permission and a current tenant UserScope that covers the export owner's complete generation scope.
-Schedule execution rechecks the owner's report-view permission and every recipient's permission and scope before generating or distributing an export.
-The schedule worker processes each due schedule in an independent transaction, pauses permanent authorization or validation failures, defers transient failures with bounded retry delay, and continues with later schedules.
-Email delivery begins only after the export and schedule transaction commits, then uses a fresh tenant-scoped read unit of work and contains delivery failures as best-effort notifications.
-Every owner or shared-recipient export read, share, or download repeats the scope check so later permission or scope changes cannot expose a previously generated artifact.
-Export workers load the current persisted request and generation-scope snapshot instead of trusting queued argument copies, so a stale cancelled invocation cannot bypass a narrower retry scope.
-Each retry receives a new generation identity and generation-specific blob name, and only the still-active generation may publish bytes or change the job outcome.
-The worker persists a current owner-scope snapshot before generating any legacy queued job that predates snapshot storage.
+See [HR reporting workspace](./references/reporting-workspace.md) for actors, states, exceptions, interfaces, and the controlled cleanup procedure.
+Generation never changes a template and downloads never reread HR source records.
 
 ## Partial workflow rule
 

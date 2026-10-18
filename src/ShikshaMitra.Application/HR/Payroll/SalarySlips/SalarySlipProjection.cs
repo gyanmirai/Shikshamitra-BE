@@ -135,7 +135,8 @@ internal static class SalarySlipProjection
 			Remarks: dto.Remarks)
 		{
 			Presentation = dto.Presentation?.Options ?? new(),
-			CasualLeaveDays = dto.LeaveUnitsByType?.GetValueOrDefault("CL"), UnpaidLeaveDays = dto.LeaveUnitsByType?.GetValueOrDefault("UNPAID"),
+			CasualLeaveDays = dto.LeaveUnitsByType?.GetValueOrDefault("CL"),
+			UnpaidLeaveDays = dto.LeaveUnitsByType?.GetValueOrDefault("UNPAID"),
 			FullGrossSalary = dto.FullGrossSalary,
 			GrossSalary = dto.GrossSalary,
 			AdditionalEarnings = dto.AdditionalEarnings,
@@ -146,8 +147,11 @@ internal static class SalarySlipProjection
 	internal static Dictionary<string, decimal> ReadStatutoryDeductions(string json)
 	{
 		var lines = System.Text.Json.JsonSerializer.Deserialize<List<RunPayrollComponentItem>>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
-		return new() { ["pt"] = lines.Where(x => string.Equals(x.SemanticType?.Replace("_", ""), "ProfessionalTax", StringComparison.OrdinalIgnoreCase)).Sum(x => (decimal)x.Amount),
-			["tds"] = lines.Where(x => new[] { "TDS", "T.D.S.", "TAXDEDUCTEDATSOURCE" }.Contains(x.Name.Replace(" ", "").ToUpperInvariant())).Sum(x => (decimal)x.Amount) };
+		return new()
+		{
+			["pt"] = lines.Where(x => string.Equals(x.SemanticType?.Replace("_", ""), "ProfessionalTax", StringComparison.OrdinalIgnoreCase)).Sum(x => (decimal) x.Amount),
+			["tds"] = lines.Where(x => new[] { "TDS", "T.D.S.", "TAXDEDUCTEDATSOURCE" }.Contains(x.Name.Replace(" ", "").ToUpperInvariant())).Sum(x => (decimal) x.Amount)
+		};
 	}
 	private static ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication? ReadApplication(string? json) =>
 		json == null ? null : System.Text.Json.JsonSerializer.Deserialize<ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryApplication>(json);
@@ -157,6 +161,9 @@ internal static class SalarySlipProjection
 		return new SalarySlipLineItemDto
 		{
 			Name = lineItem.Name,
+			ComponentId = lineItem.ComponentId,
+			SourceLineId = lineItem.SourceLineId,
+			SemanticType = lineItem.SemanticType,
 			FullMonthAmount = lineItem.FullMonthAmount,
 			Amount = lineItem.Amount,
 			Description = lineItem.Description,

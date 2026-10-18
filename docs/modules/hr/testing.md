@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-16
+updated_on: 2026-10-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -1063,3 +1063,30 @@ Run EsiPayrollWorkflowApi_Tests with a separate fresh PAYROLL_REGISTRATION_TEST_
 Use synthetic identities and adjusted test dates.
 Render Compact/Detailed payslips and both reports through the application PDF services, then inspect the rendered pages.
 Apply the migration SQL to a disposable copy of the previous schema and verify known identifier normalization without changing historical money or documents.
+
+## Reporting workspace replacement
+
+Run the current reporting suites and cutover checks documented in [HR reporting workspace](./references/reporting-workspace.md#validation).
+The removed Reports Center and schedule tests describe retired behavior and are replaced by template, run, immutable-output, and source-authorization coverage.
+
+Validated locally on 19 October 2026 against backend main `25f619f0`.
+
+| Check | Result |
+| --- | --- |
+| Reporting workspace API and disposable PostgreSQL tests | 16 passed |
+| Reporting engine, salary documents, scope, calendar, and worker application checks | 39 passed |
+| PostgreSQL population | Filtering and distinct counts verified over 25,001 synthetic staff records |
+| Payroll reconciliation | Issued evidence, saved drafts, component identities, and unchanged official PDF verified |
+| Captured output | Source changes and duplicate concurrent export delivery preserve stored rows and download bytes |
+| Expiration | Expired result rows and both files removed while private history remains identifiable |
+| Restored-database cutover | Legacy template, export, and old job removed; new template and unrelated job retained |
+| Protected cutover evidence | Unchanged hashes for 36 employees, 62 attendance rows, 33 payroll snapshots, one salary slip, one official PDF, and two audit events |
+
+The cutover fixture contained no leave requests, and the cleanup does not target leave tables.
+No live database cleanup or release was performed.
+
+Broader checks retain confirmed main-branch failures.
+The same 19 attendance-register API failures reproduce on unchanged main, with three remaining cases passing in both checkouts.
+Seven finance late-fee application failures also reproduce on unchanged main.
+The security domain suite passes 54 of 55 cases; its deployment-workflow assertion also fails on unchanged main.
+Deployment workflows remain unchanged under the task's explicit scope restriction.

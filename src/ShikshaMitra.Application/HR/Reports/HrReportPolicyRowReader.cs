@@ -1,4 +1,4 @@
-using ShikshaMitra.HR.Audit;
+﻿using ShikshaMitra.HR.Audit;
 using ShikshaMitra.HR.Policies;
 using ShikshaMitra.Security.UserScope;
 using System;
@@ -69,7 +69,8 @@ public class HrReportPolicyRowReader(
 		UserScopeContext scope)
 	{
 		var policyQuery = await BuildScopedPolicyAssignmentQueryAsync(input, scope);
-		var visibleAssignmentIds = await policyScopeService.ResolveVisibleAssignmentIdsForAuditAsync(policyQuery, scope);
+		var visibleAssignments = await policyScopeService.ApplyScopeAsync(await policyAssignmentRepository.GetQueryableAsync(), scope);
+		var visibleAssignmentIds = await policyScopeService.ResolveVisibleAssignmentIdsForAuditAsync(visibleAssignments, scope);
 		var auditQuery = BuildScopedAuditQuery(
 			ApplyAuditDateFilters(await auditRepository.GetQueryableAsync(), input),
 			visibleAssignmentIds);
@@ -118,13 +119,13 @@ public class HrReportPolicyRowReader(
 	{
 		if (input.Filters.FromDate.HasValue)
 		{
-			var from = input.Filters.FromDate.Value.ToDateTime(TimeOnly.MinValue);
+			var from = DateTime.SpecifyKind(input.Filters.FromDate.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
 			query = query.Where(x => x.EffectiveFrom >= from);
 		}
 
 		if (input.Filters.ToDate.HasValue)
 		{
-			var to = input.Filters.ToDate.Value.ToDateTime(TimeOnly.MaxValue);
+			var to = DateTime.SpecifyKind(input.Filters.ToDate.Value.ToDateTime(TimeOnly.MaxValue), DateTimeKind.Utc);
 			query = query.Where(x => x.EffectiveFrom <= to);
 		}
 
@@ -137,14 +138,14 @@ public class HrReportPolicyRowReader(
 	{
 		if (input.Filters.FromDate.HasValue)
 		{
-			var from = input.Filters.FromDate.Value.ToDateTime(TimeOnly.MinValue);
+			var from = TimeZoneInfo.ConvertTimeToUtc(input.Filters.FromDate.Value.ToDateTime(TimeOnly.MinValue), TimeZoneInfo.FindSystemTimeZoneById(input.Filters.TimeZone));
 			query = query.Where(x => x.OccurredAt >= from);
 		}
 
 		if (input.Filters.ToDate.HasValue)
 		{
-			var to = input.Filters.ToDate.Value.ToDateTime(TimeOnly.MaxValue);
-			query = query.Where(x => x.OccurredAt <= to);
+			var to = TimeZoneInfo.ConvertTimeToUtc(input.Filters.ToDate.Value.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeZoneInfo.FindSystemTimeZoneById(input.Filters.TimeZone));
+			query = query.Where(x => x.OccurredAt < to);
 		}
 
 		return query;

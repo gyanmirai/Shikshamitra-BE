@@ -103,8 +103,9 @@ public partial class ShikshaMitraDbContext
     public DbSet<DevelopmentPlan> DevelopmentPlans { get; set; }
     public DbSet<PerformanceAuditEvent> PerformanceAuditEvents { get; set; }
     public DbSet<HrReportExportJob> HrReportExportJobs { get; set; }
-    public DbSet<HrReportSchedule> HrReportSchedules { get; set; }
     public DbSet<HrReportTemplate> HrReportTemplates { get; set; }
+    public DbSet<HrReportRun> HrReportRuns { get; set; }
+    public DbSet<HrReportRunPage> HrReportRunPages { get; set; }
 
     public DbSet<HolidayType> HolidayTypes { get; set; }
     public DbSet<EventType> EventTypes { get; set; }

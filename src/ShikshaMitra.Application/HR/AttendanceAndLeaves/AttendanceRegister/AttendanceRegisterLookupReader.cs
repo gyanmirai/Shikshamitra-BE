@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,6 +7,7 @@ using ShikshaMitra.HR.Calendar.Holidays;
 using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Employees;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
@@ -23,6 +24,7 @@ public class AttendanceRegisterLookupReader(
 	IRepository<Holiday, Guid> holidayRepository,
 	IRepository<WorkCalendarHoliday, Guid> workCalendarHolidayRepository,
 	HrAttendanceWorkCalendarResolver attendanceWorkCalendarResolver,
+	IRepository<Employee, Guid> employeeRepository,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -72,7 +74,8 @@ public class AttendanceRegisterLookupReader(
 
 	internal async Task<Dictionary<(Guid EmployeeId, DateOnly Date), HolidayInfo>> BuildEmployeeHolidayLookupAsync(
 		IEnumerable<Guid> employeeIds,
-		IEnumerable<DateOnly> dates)
+		IEnumerable<DateOnly> dates,
+		bool includeWeeklyOffs = false)
 	{
 		var distinctEmployeeIds = employeeIds.Distinct().ToList();
 		var dateList = dates.Distinct().OrderBy(x => x).ToList();
@@ -87,10 +90,12 @@ public class AttendanceRegisterLookupReader(
 		var requestedDates = dateList.ToHashSet();
 		var centralHolidayLookup = await BuildHolidayLookupAsync(dateList);
 		var query = await workCalendarHolidayRepository.GetQueryableAsync();
+		var staff = await asyncExecuter.ToListAsync((await employeeRepository.GetQueryableAsync()).Where(x => distinctEmployeeIds.Contains(x.Id)));
+		using var batch = attendanceWorkCalendarResolver.BeginReadBatch(staff);
+		var holidaysByCalendar = new Dictionary<Guid, List<WorkCalendarHoliday>>();
 
 		foreach (var employeeId in distinctEmployeeIds)
 		{
-			var holidaysByCalendar = new Dictionary<Guid, List<WorkCalendarHoliday>>();
 			foreach (var date in dateList)
 			{
 				WorkCalendarPolicy workCalendar;
@@ -100,6 +105,7 @@ public class AttendanceRegisterLookupReader(
 				}
 				catch (Exception exception) when (exception is BusinessException or Volo.Abp.Domain.Entities.EntityNotFoundException)
 				{
+					if (includeWeeklyOffs) throw;
 					if (centralHolidayLookup.TryGetValue(date, out var fallbackHoliday))
 					{
 						result.TryAdd((employeeId, date), fallbackHoliday);
@@ -108,6 +114,10 @@ public class AttendanceRegisterLookupReader(
 				}
 
 				var calendarId = workCalendar.Id;
+				if (includeWeeklyOffs && ShikshaMitra.HR.Payroll.Services.PayrollMonthCalendar.IsWeeklyOff(date.DayOfWeek, workCalendar.WeeklyOffPattern, workCalendar.GetCustomWeeklyOffs()))
+				{
+					result.TryAdd((employeeId, date), new HolidayInfo("Weekly off"));
+				}
 				if (!holidaysByCalendar.TryGetValue(calendarId, out var holidays))
 				{
 					holidays = await asyncExecuter.ToListAsync(query.Where(x =>

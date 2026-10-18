@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -18,6 +18,7 @@ public class HrReportExportBackgroundJob(
 	IBlobContainer blobContainer,
 	ICurrentTenant currentTenant,
 	IUnitOfWorkManager unitOfWorkManager,
+	HrReportingAccess access,
 	ILogger<HrReportExportBackgroundJob> logger)
 	: AsyncBackgroundJob<HrReportExportJobArgs>, ITransientDependency
 {
@@ -103,6 +104,8 @@ public class HrReportExportBackgroundJob(
 	private async Task<HrReportPreviewDto> GenerateReportAsync(HrReportGenerationContext context)
 	{
 		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
+		if (context.Request.DataSource is not ("payroll_register" or "payroll_statement")) throw new Volo.Abp.Authorization.AbpAuthorizationException();
+		await access.EnsureAsync(context.Request.DataSource, context.UserId);
 		var report = await reportGenerator.GenerateExportAsync(
 			context.Request,
 			context.UserId,

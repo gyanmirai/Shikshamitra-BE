@@ -3,7 +3,7 @@ module: hr
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -26,7 +26,7 @@ HR behavior is split by operational area:
 | Payroll | Implemented | Component settings, versioned compensation revisions, Monthly salary and Monthly cost to school (CTC) quotes, ESI statutory setup and calculation, readiness, preview, reviews, adjustments, lock, salary slips, and PDF output |
 | HR policies | Implemented | Work calendar policies, attendance policies, payroll policies, assignments, effective preview, versions, audit, and holiday impact |
 | Professional management | Implemented | Templates, cycles, reviews, observations, evidence, feedback, outcomes, reports, audit, and PDFs |
-| Reports | Implemented | HR report catalog, options, templates, preview, export, and export history |
+| Reports | Implemented | Reusable private/school templates, guided generation, captured results, and Excel/PDF downloads |
 | Notifications | Implemented | HR notification settings and notification history surfaces |
 | Events and holidays | Partial | Calendar contracts exist, but frontend HR navigation must be verified before treating HR menu access as shipped |
 | TDS | Partial | Payroll settings and statutory behavior require separate verification before use. |
@@ -50,7 +50,7 @@ Treat these rules as critical because HR feeds payroll and staff records:
 | Earning component dependencies are tenant-scoped and acyclic | A percentage component cannot reference itself, another tenant, an inactive target, or a dependency chain that returns to itself |
 | Payroll preview and lock use the same policy basis | Salary slips must match the locked payroll snapshot |
 | Policy assignments resolve by specificity and date | Employee overrides beat group assignments, and defaults are fallback only |
-| Reports must be reproducible and scope-safe | Exports must use the same filters and source data as previews, and recipients must cover the complete tenant UserScope captured at generation |
+| Reports must be reproducible and scope-safe | Captured rows and downloads stay fixed, remain private, and require current source permissions and record scope |
 
 ## Product behavior by area
 

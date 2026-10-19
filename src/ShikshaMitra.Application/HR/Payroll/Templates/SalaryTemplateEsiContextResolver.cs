@@ -13,7 +13,7 @@ internal sealed record SalaryTemplateEsiResolution(
 	SalaryTemplateEsiEvaluationContext? Context,
 	IReadOnlyList<string> Warnings,
 	bool RegistrationPending,
-	Guid? ConfigurationId);
+	Guid? ConfigurationId, bool IsEnabled = false);
 
 public class SalaryTemplateEsiContextResolver(
 	IRepository<StatutoryRuleVersion, Guid> ruleRepository,
@@ -53,7 +53,7 @@ public class SalaryTemplateEsiContextResolver(
 			.FirstOrDefault();
 		if (rule == null)
 		{
-			return new SalaryTemplateEsiResolution(null, ["ESI_RULE_NOT_FOUND"], false, configuration?.Id);
+			return new SalaryTemplateEsiResolution(null, ["ESI_RULE_NOT_FOUND"], false, configuration?.Id, true);
 		}
 
 		var treatments = (await treatmentRepository.GetListAsync(x =>
@@ -104,6 +104,6 @@ public class SalaryTemplateEsiContextResolver(
 			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending
 				? ["ESI_REGISTRATION_PENDING"]
 				: [],
-			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending, configuration?.Id);
+			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending, configuration?.Id, true);
 	}
 }

@@ -67,7 +67,7 @@ No independent payslip-only salary adjustment is allowed.
 
 | ID | Requirement | Acceptance evidence |
 | --- | --- | --- |
-| LIFE-01 | Payroll lock, direct finalization and correction issuance enforce the same freshness, review, insurance, permission and tenant requirements. | Authenticated tests for each entry point, including stale and missing-number rejection. |
+| LIFE-01 | Payroll lock, direct finalization and correction issuance enforce the same freshness, review, statutory configuration, permission and tenant requirements. | Authenticated tests for each entry point, including stale rejection and successful issuance with pending identifiers. |
 | LIFE-02 | Record payment status independently from document issuance, with payment date/reference and actor. | Marking paid does not change the issued PDF; duplicated requests are idempotent. |
 | LIFE-03 | Unpaid correction starts an explicit reasoned workflow, preserves the original and prepares a recalculation through the existing payroll pipeline. | Original remains readable while the correction is a draft. |
 | LIFE-04 | Correction review and finalization atomically replace the current payroll evidence and issue the next document revision. | Concurrent correction, payment and locking cannot produce two current revisions or mixed amounts. |

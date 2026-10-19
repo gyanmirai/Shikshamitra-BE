@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves;
 using ShikshaMitra.HR.Employees;
@@ -282,7 +282,7 @@ public class PayrollSnapshotRefresher(
 					new PayrollStatutoryRuleSet(
 						pfRule,
 						professionalTaxSlabs,
-						IsEmploymentCessationMonth(employee, year, month),
+						EmployeeLifecycleEligibility.IsEmploymentCessationMonth(employee, year, month),
 						esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id) { StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
 					revision));
 			}
@@ -377,7 +377,7 @@ public class PayrollSnapshotRefresher(
 				new PayrollStatutoryRuleSet(
 					pfRule,
 					professionalTaxSlabs,
-					IsEmploymentCessationMonth(employee, year, month),
+					EmployeeLifecycleEligibility.IsEmploymentCessationMonth(employee, year, month),
 					esiContexts.GetValueOrDefault(employee.Id), esiConfiguration?.Id) { StatutoryProfile = applicationProfiles.GetValueOrDefault(employee.Id) },
 				revision
 			));
@@ -407,9 +407,9 @@ public class PayrollSnapshotRefresher(
 			if (decision.IssueCode != null)
 			{
 				var profile = applicationProfiles.GetValueOrDefault(item.EmployeeId);
-				var suppressed = profile != null && (!profile.ApplyPf || !PayrollSchemeApplication.HasNumber(profile.PfNumber));
+				var suppressed = profile != null && !profile.ApplyPf;
 				var issue = suppressed && decision.IssueCode is "PF_ENROLLMENT_REQUIRED" or "PF_MEMBERSHIP_REVIEW_REQUIRED"
-					? profile!.ApplyPf ? "PF_NUMBER_MISSING" : "PF_APPLY_DISABLED" : decision.IssueCode;
+					? "PF_APPLY_DISABLED" : decision.IssueCode;
 				if (!item.IssueCodes.Contains(issue)) item.IssueCodes.Add(issue);
 			}
 		}
@@ -423,18 +423,6 @@ public class PayrollSnapshotRefresher(
 		if (!correctionEmployeeId.HasValue)
 			await snapshotStore.UpsertAsync(internalMonthYear, computedItems, preserveReviewedSnapshots);
 		return computedItems;
-	}
-
-	private static bool IsEmploymentCessationMonth(Employee employee, int year, int month)
-	{
-		if (employee.EmployeeStatusType is null or EmployeeStatusType.Active || !employee.StatusEffectiveDate.HasValue)
-		{
-			return false;
-		}
-
-		var monthStart = new DateOnly(year, month, 1);
-		var monthEnd = monthStart.AddMonths(1).AddDays(-1);
-		return employee.StatusEffectiveDate.Value >= monthStart && employee.StatusEffectiveDate.Value <= monthEnd;
 	}
 
 	private static List<EmployeePayrollComponent> GetResolvedComponents(

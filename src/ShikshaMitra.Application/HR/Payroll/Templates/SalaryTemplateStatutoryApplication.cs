@@ -22,7 +22,7 @@ internal static class SalaryTemplateStatutoryApplication
 		if (calculation != null)
 			calculation = calculation with { Application = esi, EmployeeContribution = esi.AppliedEmployeeAmount,
 				EmployerContribution = esi.AppliedEmployerAmount,
-				GovernmentContribution = esi.Apply && esi.NumberPresent ? calculation.GovernmentContribution : 0m,
+				GovernmentContribution = esi.Apply && esi.Eligible ? calculation.GovernmentContribution : 0m,
 				IssueCodes = calculation.IssueCodes.Where(x => x != EsiStatutoryCalculator.InsuranceNumberIssue)
 					.Concat(esi.WarningCode == null ? [] : new[] { esi.WarningCode }).ToList() };
 		var total = deductions.Sum(x => x.Amount);

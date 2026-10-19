@@ -16,8 +16,8 @@ internal static class CompensationStatutoryVariance
 		var oldEsiEmployer = saved?.EmployeeStateInsurance.AppliedEmployerAmount ?? previous.EmployeeStateInsurance.EmployerContribution;
 		var pf = current.ProvidentFund; var esi = current.EmployeeStateInsurance;
 		var changed = saved == null ? current.Profile.VersionId.HasValue :
-			saved.ProvidentFund.Apply != pf.Apply || saved.ProvidentFund.NumberPresent != pf.NumberPresent ||
-			saved.EmployeeStateInsurance.Apply != esi.Apply || saved.EmployeeStateInsurance.NumberPresent != esi.NumberPresent;
+			saved.ProvidentFund.Apply != pf.Apply || saved.ProvidentFund.AppliedEmployerAmount != pf.AppliedEmployerAmount || saved.ProvidentFund.AppliedEmployeeAmount != pf.AppliedEmployeeAmount ||
+			saved.EmployeeStateInsurance.Apply != esi.Apply || saved.EmployeeStateInsurance.AppliedEmployerAmount != esi.AppliedEmployerAmount || saved.EmployeeStateInsurance.AppliedEmployeeAmount != esi.AppliedEmployeeAmount;
 		var referenceUnchanged = pf.CalculatedEmployeeAmount == (saved?.ProvidentFund.CalculatedEmployeeAmount ?? oldPfEmployee) &&
 			pf.CalculatedEmployerAmount == (saved?.ProvidentFund.CalculatedEmployerAmount ?? oldPfEmployer) &&
 			esi.CalculatedEmployeeAmount == (saved?.EmployeeStateInsurance.CalculatedEmployeeAmount ?? oldEsiEmployee) &&

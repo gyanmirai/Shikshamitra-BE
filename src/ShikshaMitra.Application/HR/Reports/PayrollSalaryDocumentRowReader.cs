@@ -178,7 +178,7 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 			["grossSalary"] = Money(facts?.GrossSalary ?? row.GrossSalary),
 			["basicSalary"] = Money(facts?.BasicSalary ?? row.BasicSalary),
 			["totalEarnings"] = Money(row.TotalEarnings),
-			["pfSalary"] = Money(application?.ProvidentFund is { Apply: true, NumberPresent: true, Eligible: true } ? application.ProvidentFund.ContributionWages : application == null ? null : 0m),
+			["pfSalary"] = Money(application?.ProvidentFund is { Apply: true, Eligible: true } ? application.ProvidentFund.ContributionWages : application == null ? null : 0m),
 			["pfNumber"] = facts?.EpfNumber ?? application?.Profile.PfNumber,
 			["esicNumber"] = facts?.EmployeeStateInsuranceNumber ?? application?.Profile.EsicInsuranceNumber,
 			["pf"] = Money(pf),

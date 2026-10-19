@@ -126,7 +126,7 @@ public class IndependentEsiBasisPayroll_Tests
 		(await api.GetFromJsonAsync<EmployeeStatutoryProfileDto>(profileUrl, json))!.Profile.EsicInsuranceNumber.ShouldBeNull();
 		var pendingRun = await workflow.CalculateAsync(month);
 		var pending = await workflow.EmployeeAsync(pendingRun.Id, openEmployee);
-		pending.IssueCodes.ShouldContain("ESI_NUMBER_MISSING"); pending.TotalDeduction.ShouldBe(0);
+		pending.IssueCodes.ShouldContain("ESI_NUMBER_MISSING"); pending.TotalDeduction.ShouldBe(120); pending.EmployerContributionTotal.ShouldBe(520);
 		var previewRequest = new HrReportRequestDto { ReportType = "School payroll register", DataSource = HrReportDataSources.PayrollRegister,
 			Filters = new() { Month = month.ToString("yyyy-MM"), IncludeDrafts = true }, PageSize = 100 };
 		var registerResponse = await api.PostAsJsonAsync("/api/hr/reports/preview", previewRequest, json);

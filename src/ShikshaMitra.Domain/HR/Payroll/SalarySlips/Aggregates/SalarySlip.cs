@@ -150,9 +150,6 @@ public class SalarySlip : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	{
 		if (IsImmutable())
 			throw new InvalidOperationException("Salary slip is already finalized");
-		ShikshaMitra.HR.Payroll.Statutory.EsiPayrollReadiness.EnsureInsuranceNumber(
-			EmployeeStateInsuranceRuleId, EmployeeStateInsuranceCoverageDecision, EmployeeStateInsuranceNumber, StatutoryApplicationJson);
-
 		Status = SalarySlipStatus.Finalized;
 	}
 

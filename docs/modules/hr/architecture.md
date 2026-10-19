@@ -13,6 +13,10 @@ audience: humans-and-agents
 TL;DR: HR follows the backend layered architecture.
 Contracts define data transfer objects, application services orchestrate workflows, domain objects enforce business rules, and EF Core owns persistence.
 
+Employee directory reads apply visibility and filters, count and page in the database, then project display scalars through `EmployeeSearchProjection.Summary` before materialization.
+This avoids loading employee documents, work experience, bank details, and complete role or shift entities for directory rows.
+Organization names are enriched in a batch for the returned page, with the existing tenant and UserScope filters preserved.
+
 ## Layer map
 
 Use this table to find the right source path:

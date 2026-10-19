@@ -168,7 +168,8 @@ The service removes affected unlocked snapshots and review markers and supersede
 Immutable payslips protect their employee-month even when the snapshot remains unlocked.
 Payroll preview publication rechecks persisted run state under the tenant fence before writing snapshots.
 Regeneration is required before reviewing or locking superseded results.
-Registration pending permits salary preparation but never bypasses the insurance-number requirement for covered payroll finalization.
+Registration pending permits salary preparation, payroll locking and payslip finalization.
+Eligible employee and employer contributions apply before identifiers are available; adding identifiers later does not change amounts.
 
 ## Issued payslip documents and delivery
 
@@ -240,3 +241,12 @@ The current recovery classifier supports canonical Basic, DA, retaining, special
 Unknown custom recovery classifications return an actionable error rather than an invented statutory treatment.
 Executed statutory, security and concurrency cases do not establish browser or jurisdiction-specific legal acceptance.
 The document-detail replacement operation is not a monetary correction mechanism.
+
+## Review a full-month salary estimate
+
+HR selects a staff member and preview month to see saved gross, effective salary date and current statutory decisions.
+The summary uses the saved earnings distribution without silently upgrading the salary template or rebalancing agreed gross.
+Missing rules or wage classifications remain actionable blockers; missing registration numbers remain follow-up warnings.
+Actual attendance, loss of pay and one-time adjustments belong to Run Payroll.
+Existing unlocked payroll receives corrected contributions on refresh and changed rows require renewed review.
+Locked payroll and finalized or paid payslips remain immutable.

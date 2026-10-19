@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Statutory;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
@@ -72,19 +73,19 @@ public class SalaryTemplateCalculationService(
 		}
 		var resolvedGross = preserveGross ? savedRevision!.GrossSalary : basis == SalaryInputBasis.Gross ? input.MonthlyAmount :
 			SalaryTemplateCalculator.Calculate(basis, input.MonthlyAmount, rules, components,
-				applicationProfile == null || applicationProfile.ApplyPf && PayrollSchemeApplication.HasNumber(applicationProfile.PfNumber) ? pfRule : null,
+				applicationProfile == null || applicationProfile.ApplyPf ? pfRule : null,
 				professionalTaxSlabs,
-				applicationProfile == null || applicationProfile.ApplyEsic && PayrollSchemeApplication.HasNumber(applicationProfile.EsicInsuranceNumber) ? esiResolution.Context : null).Gross;
+				applicationProfile == null || applicationProfile.ApplyEsic ? esiResolution.Context : null).Gross;
 		var evaluation = SalaryTemplateCalculator.Calculate(SalaryInputBasis.Gross, resolvedGross, rules, components, pfRule, professionalTaxSlabs, esiResolution.Context);
 		if (applicationProfile != null) evaluation = SalaryTemplateStatutoryApplication.Apply(evaluation, applicationProfile, pfRule != null);
 		var pfWages = evaluation.Earnings.Where(x => x.SemanticType is "BASIC" or "DEARNESS_ALLOWANCE").Sum(x => x.Amount);
 		var pfEligibility = await pfEligibilityResolver.ResolveAsync(input.EmployeeId, effectiveMonthEnd, evaluation.Gross, pfWages,
 			input.PfEnrollment, input.PfApplicable);
-		if ((applicationProfile is { ApplyPf: false } || applicationProfile != null && !PayrollSchemeApplication.HasNumber(applicationProfile.PfNumber)) && pfEligibility.IssueCode is "PF_ENROLLMENT_REQUIRED" or "PF_MEMBERSHIP_REVIEW_REQUIRED")
+		if (applicationProfile is { ApplyPf: false } && pfEligibility.IssueCode is "PF_ENROLLMENT_REQUIRED" or "PF_MEMBERSHIP_REVIEW_REQUIRED")
 			pfEligibility = pfEligibility with { CanSave = true };
 		if (evaluation.StatutoryApplication is { } application)
 			evaluation = evaluation with { StatutoryApplication = application with { ProvidentFund = application.ProvidentFund with
-				{ Eligible = pfEligibility.Status is "MANDATORY" or "CONTINUING_MEMBER" || application.ProvidentFund.Eligible } } };
+				{ Eligible = pfEligibility.Status is "MANDATORY" or "CONTINUING_MEMBER" || application.ProvidentFund.Eligible, ContributionWages = pfRule == null ? 0m : Math.Min(pfRule.ContributionBasis == PfContributionBasis.BasicAndDearnessAllowance ? pfWages : evaluation.Basic, pfRule.WageCeiling ?? decimal.MaxValue) } } };
 		if (applicationProfile is { ApplyPf: true } && pfEligibility.Status != "NOT_APPLICABLE")
 		{
 			if (pfRule == null) throw new BusinessException("HR:Payroll:PfRuleNotFound");
@@ -116,7 +117,7 @@ public class SalaryTemplateCalculationService(
 		var esiResult = evaluation.EmployeeStateInsurance;
 		var issueCodes = esiResult?.IssueCodes.ToList() ?? [];
 
-		return new SalaryTemplateCalculationDto
+		var response = new SalaryTemplateCalculationDto
 		{
 			StatutoryApplication = evaluation.StatutoryApplication,
 			PfEnrollment = input.PfEnrollment,
@@ -162,7 +163,7 @@ public class SalaryTemplateCalculationService(
 				GovernmentContribution = esiResult?.GovernmentContribution ?? 0m,
 				RuleId = esiResolution.Context?.Rule.Id,
 				RuleVersion = esiResolution.Context?.Rule.Version,
-				IssueCodes = issueCodes
+				IssueCodes = issueCodes.Concat(esiResolution.Warnings).Distinct().ToList()
 			},
 			Earnings = evaluation.Earnings,
 			Deductions = evaluation.Deductions,
@@ -174,6 +175,14 @@ public class SalaryTemplateCalculationService(
 			ProfessionalTaxProfile = input.StatutoryProfile,
 			GeneratedAt = clock.Now
 		};
+		var ptIncluded = rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.ProfessionalTax);
+		var ptSlab = professionalTaxSlabs.Where(x => evaluation.Gross >= x.FromSalary && (!x.ToSalary.HasValue || evaluation.Gross <= x.ToSalary)).OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Version).FirstOrDefault();
+		response.StatutorySummary = [SalaryStatutorySummary.Pf(evaluation.StatutoryApplication?.ProvidentFund, pfEligibility, pfRule),
+			SalaryStatutorySummary.Esi(esiResult, evaluation.StatutoryApplication?.EmployeeStateInsurance, esiResolution.IsEnabled),
+			SalaryStatutorySummary.ProfessionalTax(ptIncluded, ptSlab)];
+		response.StatutorySummary[1].RuleId = response.EmployeeStateInsurance.RuleId;
+		response.StatutorySummary[1].RuleVersion = response.EmployeeStateInsurance.RuleVersion;
+		return response;
 	}
 
 	private async Task<Dictionary<Guid, SalaryTemplateComponent>> LoadComponentsAsync(IReadOnlyList<SalaryTemplateRule> rules)

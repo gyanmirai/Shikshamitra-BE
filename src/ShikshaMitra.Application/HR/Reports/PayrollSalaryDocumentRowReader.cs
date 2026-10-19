@@ -140,7 +140,7 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 			["designation"] = facts?.Designation, ["dateOfJoining"] = facts?.DateOfJoining?.ToString("yyyy-MM-dd"), ["bankAccount"] = facts?.MaskedAccountNumber,
 			["salary"] = Money(facts?.FullGrossSalary ?? row.Salary), ["grossSalary"] = Money(facts?.GrossSalary ?? row.GrossSalary),
 			["basicSalary"] = Money(facts?.BasicSalary ?? row.BasicSalary), ["totalEarnings"] = Money(row.TotalEarnings),
-			["pfSalary"] = Money(application?.ProvidentFund is { Apply: true, NumberPresent: true, Eligible: true } ? application.ProvidentFund.ContributionWages : application == null ? null : 0m),
+			["pfSalary"] = Money(application?.ProvidentFund is { Apply: true, Eligible: true } ? application.ProvidentFund.ContributionWages : application == null ? null : 0m),
 			["pfNumber"] = facts?.EpfNumber ?? application?.Profile.PfNumber, ["esicNumber"] = facts?.EmployeeStateInsuranceNumber ?? application?.Profile.EsicInsuranceNumber,
 			["pf"] = Money(pf), ["pt"] = Money(pt), ["tds"] = Money(tds), ["esic"] = Money(esi),
 			["otherDeductions"] = Money(row.TotalDeduction - pf - pt - tds - esi), ["totalDeduction"] = Money(row.TotalDeduction), ["netPay"] = Money(row.NetPay),

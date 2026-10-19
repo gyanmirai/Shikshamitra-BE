@@ -75,9 +75,6 @@ internal static class PayrollReadinessProjector
 			.SelectMany(x => x.IssueCodes)
 			.Where(PayrollLockPreconditionGuard.IsBlockingLockIssue)
 			.Except(blockingIssues).ToList();
-		if (items.Any(x => !x.IsLocked && EsiPayrollReadiness.MissingInsuranceNumber(
-			x.EmployeeStateInsuranceRuleId, x.EmployeeStateInsuranceCoverageDecision, x.EmployeeStateInsuranceNumber, x.StatutoryApplicationJson)))
-			remainingBlockers.Add(IssueCodes.EsiInsuranceNumberRequired);
 		if (remainingBlockers.Count > 0)
 		{
 			blockingIssues.AddRange(remainingBlockers);

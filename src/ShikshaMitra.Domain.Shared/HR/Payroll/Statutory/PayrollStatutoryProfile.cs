@@ -31,7 +31,8 @@ public sealed record PayrollSchemeApplication(
 	{
 		var present = HasNumber(number);
 		var warning = !apply ? scheme + "_APPLY_DISABLED" : eligible && !present ? scheme + "_NUMBER_MISSING" : null;
-		var applied = apply && present && eligible;
+		// Registration identifiers are follow-up facts, not contribution eligibility.
+		var applied = apply && eligible;
 		return new(scheme, apply, present, eligible, employeeAmount, employerAmount,
 			applied ? employeeAmount : 0m, applied ? employerAmount : 0m, warning, reason);
 	}

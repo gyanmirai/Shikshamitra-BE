@@ -40,12 +40,12 @@ public class PfEligibilityResolver(IRepository<PfCoverageConfiguration, Guid> co
 	public async Task<bool?> GetCoverageAsync(DateTime month) => (await coverage.GetListAsync(x => !x.IsCancelled && x.EffectiveMonth <= month))
 		.OrderByDescending(x => x.EffectiveMonth).FirstOrDefault()?.IsCovered;
 	private static bool AppliedMembership(string? json) => json == null ||
-		JsonSerializer.Deserialize<PayrollStatutoryApplication>(json)?.ProvidentFund is { Apply: true, NumberPresent: true, Eligible: true };
+		JsonSerializer.Deserialize<PayrollStatutoryApplication>(json)?.ProvidentFund is { Apply: true, Eligible: true };
 	private static bool IsEstablishedMember(EmployeeCompensationRevision revision)
 	{
 		var calculation = JsonSerializer.Deserialize<SalaryTemplateCalculationDto>(revision.CalculationSnapshotJson);
 		return calculation?.PfEnrollment.Membership == "EXISTING_MEMBER" || calculation?.StatutoryApplication == null ||
-			calculation.StatutoryApplication.ProvidentFund is { Apply: true, NumberPresent: true, Eligible: true };
+			calculation.StatutoryApplication.ProvidentFund is { Apply: true, Eligible: true };
 	}
 	public static PfEnrollmentDeclaration Declaration(EmployeeCompensationRevision? revision)
 	{

@@ -55,9 +55,7 @@ public static class PayrollLockPreconditionGuard
 	{
 		var blockedBySetupIds = employeeIds
 			.Where(employeeId => snapshotByEmployee.TryGetValue(employeeId, out var snapshot) &&
-				(HasBlockingLockIssue(snapshot.IssueCodesJson) || EsiPayrollReadiness.MissingInsuranceNumber(
-					snapshot.EmployeeStateInsuranceRuleId, snapshot.EmployeeStateInsuranceCoverageDecision,
-					snapshot.EmployeeStateInsuranceNumber, snapshot.StatutoryApplicationJson)))
+				HasBlockingLockIssue(snapshot.IssueCodesJson))
 			.ToList();
 		if (blockedBySetupIds.Count > 0)
 		{
@@ -77,6 +75,6 @@ public static class PayrollLockPreconditionGuard
 		IssueCodes.NoAttendance or IssueCodes.MissingSalaryStructure or IssueCodes.NegativeNetPay or
 		IssueCodes.AttendanceSalaryDeductionConfiguration or IssueCodes.PayrollPolicyConfiguration or
 		"PF_WAGE_BASIS_REQUIRED" or "PF_MEMBERSHIP_REVIEW_REQUIRED" or "PF_ENROLLMENT_REQUIRED" or "PF_CONSENT_REQUIRED" or "PF_ESTABLISHMENT_NOT_COVERED" or "ESI_BASIC_COMPONENT_REQUIRED" or "ESI_COMPONENT_REQUIRED" or IssueCodes.NoWorkingDays or IssueCodes.EsiEstablishmentInactive or IssueCodes.EsiWageClassificationRequired or
-		IssueCodes.EsiEnrollmentReviewRequired or IssueCodes.EsiInsuranceNumberRequired or
+		IssueCodes.EsiEnrollmentReviewRequired or
 		IssueCodes.CompensationRevisionRequired or IssueCodes.CompensationTargetVariance;
 }

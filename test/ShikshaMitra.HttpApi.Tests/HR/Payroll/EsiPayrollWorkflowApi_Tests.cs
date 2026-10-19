@@ -63,8 +63,8 @@ internal class EsiPayrollWorkflowScenario(ShikshaMitraApiTestFactory factory) : 
 		var pending = await CalculateAsync(month);
 		var pendingRow = await EmployeeAsync(pending.Id, id);
 		pendingRow.IssueCodes.ShouldContain("ESI_NUMBER_MISSING");
-		pendingRow.TotalDeduction.ShouldBe(0);
-		pendingRow.EmployerContributionTotal.ShouldBe(0);
+		pendingRow.TotalDeduction.ShouldBeGreaterThan(0);
+		pendingRow.EmployerContributionTotal.ShouldBeGreaterThan(0);
 		PayrollLockPreconditionGuard.HasBlockingLockIssue(System.Text.Json.JsonSerializer.Serialize(new[] { "ESI_NUMBER_MISSING" })).ShouldBeFalse();
 		await ReviewAsync(pending.Id, id, month);
 		var readiness = (await GetAndReadAsync<RunPayrollResponse>($"{Previews}/{pending.Id}/employees?pageSize=100")).Readiness;
@@ -78,6 +78,10 @@ internal class EsiPayrollWorkflowScenario(ShikshaMitraApiTestFactory factory) : 
 		var calculated = await EmployeeAsync(ready.Id, id);
 		calculated.IssueCodes.ShouldNotContain("ESI_NUMBER_MISSING");
 		calculated.GrossSalary.ShouldBe(pendingRow.GrossSalary);
+		if (!(activeBeforeEsi && basis == "GROSS")) {
+			calculated.TotalDeduction.ShouldBe(pendingRow.TotalDeduction);
+			calculated.EmployerContributionTotal.ShouldBe(pendingRow.EmployerContributionTotal);
+		}
 		calculated.IssueCodes.ShouldNotContain("ESI_WAGE_CLASSIFICATION_REQUIRED");
 		calculated.EmployeeStateInsuranceCoverageDecision.ShouldBe("WITHIN_WAGE_CEILING");
 		calculated.EmployeeStateInsuranceNumber.ShouldBe("1234567890");

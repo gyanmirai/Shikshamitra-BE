@@ -92,8 +92,8 @@ public class EsiFullDemoSeedCatalog_Tests
 		result.StatutoryWages.ShouldBe(statutoryWages);
 		result.Application!.CalculatedEmployeeAmount.ShouldBe(employeeContribution);
 		result.Application.CalculatedEmployerAmount.ShouldBe(employerContribution);
-		result.EmployeeContribution.ShouldBe(result.Application.NumberPresent ? employeeContribution : 0);
-		result.EmployerContribution.ShouldBe(result.Application.NumberPresent ? employerContribution : 0);
+		result.EmployeeContribution.ShouldBe(employeeContribution);
+		result.EmployerContribution.ShouldBe(employerContribution);
 		if (result.IsCovered && !result.Application.NumberPresent) result.IssueCodes.ShouldBe(["ESI_NUMBER_MISSING"]);
 		else result.IssueCodes.ShouldBeEmpty();
 	}

@@ -15,25 +15,6 @@ public static class HrReportChartType
 	public const string Donut = "donut";
 }
 
-public static class HrReportDeliveryMode
-{
-	public const string InApp = "inApp";
-	public const string InAppAndEmail = "inAppAndEmail";
-}
-
-public static class HrReportScheduleFrequency
-{
-	public const string Daily = "daily";
-	public const string Weekly = "weekly";
-	public const string Monthly = "monthly";
-}
-
-public static class HrReportScheduleStatus
-{
-	public const string Active = "Active";
-	public const string Paused = "Paused";
-}
-
 public static class HrReportFilterOperator
 {
 	public new const string Equals = "equals";
@@ -48,19 +29,6 @@ public static class HrReportSummaryFunction
 	public const string Count = "count";
 	public const string Sum = "sum";
 	public const string Average = "avg";
-}
-
-public static class HrReportTemplateVisibility
-{
-	public const string Private = "private";
-	public const string Organization = "organization";
-}
-
-public static class HrReportTemplateStatus
-{
-	public const string Draft = "Draft";
-	public const string Published = "Published";
-	public const string Archived = "Archived";
 }
 
 public static class HrReportDataSources

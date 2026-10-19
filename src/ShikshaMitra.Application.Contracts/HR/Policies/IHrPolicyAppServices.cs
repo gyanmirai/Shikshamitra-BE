@@ -65,7 +65,7 @@ public interface IHrPolicySafetyAppService : IApplicationService
 
 public interface IHrPolicyVersionAppService : IApplicationService
 {
-	Task<PagedResultDto<HrPolicyVersionDto>> GetListAsync(string policyType, Guid policyId, PagedAndSortedResultRequestDto input);
+	Task<PagedResultDto<HrPolicyVersionDto>> GetListAsync(string policyType, Guid policyId, PagedAndSortedResultRequestDto input, string? search = null, string? action = null);
 	Task<HrPolicyVersionDto> GetAsync(string policyType, Guid policyId, Guid versionId);
 	Task<HrPolicyVersionCompareDto> CompareAsync(string policyType, Guid policyId, Guid fromVersionId, Guid toVersionId);
 	Task<HrPolicyImpactPreviewDto> GetRestorePreviewAsync(string policyType, Guid policyId, Guid versionId);

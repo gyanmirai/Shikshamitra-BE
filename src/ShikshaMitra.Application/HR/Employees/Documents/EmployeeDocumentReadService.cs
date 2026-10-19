@@ -19,6 +19,26 @@ public class EmployeeDocumentReadService(
 	IBlobContainer blobContainer)
 	: ApplicationService, ITransientDependency
 {
+	public async Task<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>> GetChecklistAsync(Guid employeeId, int page, int pageSize, string? search)
+	{
+		page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 100);
+		var query = await documentSettingRepository.GetQueryableAsync();
+		if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim().ToLowerInvariant(); query = query.Where(x => x.DocumentName.ToLower().Contains(term)); }
+		var count = await AsyncExecuter.CountAsync(query);
+		var definitions = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.DocumentName).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize));
+		var documents = await employeeDocumentManager.GetDocumentsAsync(employeeId);
+		if (documents.Count > 500000) throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+		var names = definitions.ToDictionary(x => x.Id, x => x.DocumentName);
+		var latest = documents.Where(x => x.DocumentNameId.HasValue).GroupBy(x => x.DocumentNameId!.Value).ToDictionary(x => x.Key, x => x.OrderByDescending(item => item.CreationTime).First());
+		return new(count, definitions.Select(definition => {
+			var uploaded = latest.GetValueOrDefault(definition.Id);
+			return new EmployeeDocumentChecklistItemDto {
+				Id = definition.Id, EmployeeId = employeeId, Title = definition.DocumentName, DocumentSize = definition.DocumentSize,
+				DocumentTypes = definition.DocumentTypes.Select(x => (int)x).ToList(), DocType = string.Join(", ", definition.DocumentTypes),
+				StatusVal = uploaded == null ? "Not Uploaded" : "Uploaded", UploadedDoc = uploaded == null ? null : EmployeeDocumentProjection.ToListItem(uploaded, names)
+			};
+		}).ToList());
+	}
 	public async Task<EmployeeDocumentListResponse> GetDocumentListAsync(Guid employeeId, int page, int pageSize, string? search)
 	{
 		const int defaultPageSize = 10;

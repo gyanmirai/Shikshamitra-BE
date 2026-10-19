@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,7 +9,7 @@ namespace ShikshaMitra.HR.Reports;
 
 public class HrReportExportJobAccessService(
 	IHrReportExportJobRepository exportJobRepository,
-	HrReportExportScopeAuthorizationService scopeAuthorizationService)
+	HrReportExportScopeAuthorizationService scopeAuthorizationService, HrReportingAccess access)
 	: ITransientDependency
 {
 	public async Task<List<HrReportExportJobDto>> GetRecentJobsAsync(
@@ -26,6 +26,8 @@ public class HrReportExportJobAccessService(
 		var authorizedJobs = new List<HrReportExportJobDto>();
 		foreach (var job in jobs)
 		{
+			var source = HrReportStoredExportRequestSerializer.DeserializeRequest(job.RequestJson)?.DataSource;
+			if (source is not ("payroll_register" or "payroll_statement") || !await access.CanReadAsync(source, userId)) continue;
 			if (resolvedUserScope != null &&
 				scopeAuthorizationService.CanResolvedScopeAccessExport(job, resolvedUserScope))
 			{
@@ -46,6 +48,9 @@ public class HrReportExportJobAccessService(
 		}
 
 		await scopeAuthorizationService.EnsureRecipientCanAccessExportAsync(job, userId);
+		var source = HrReportStoredExportRequestSerializer.DeserializeRequest(job.RequestJson)?.DataSource;
+		if (source is not ("payroll_register" or "payroll_statement")) throw new AbpAuthorizationException();
+		await access.EnsureAsync(source, userId);
 		return job;
 	}
 
@@ -56,6 +61,9 @@ public class HrReportExportJobAccessService(
 		{
 			throw new AbpAuthorizationException("Access denied: only the export owner can perform this action.");
 		}
+		var source = HrReportStoredExportRequestSerializer.DeserializeRequest(job.RequestJson)?.DataSource;
+		if (source is not ("payroll_register" or "payroll_statement")) throw new AbpAuthorizationException();
+		await access.EnsureAsync(source, userId);
 
 		return job;
 	}

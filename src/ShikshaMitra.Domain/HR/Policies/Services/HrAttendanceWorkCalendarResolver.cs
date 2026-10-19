@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
@@ -21,6 +22,19 @@ public class HrAttendanceWorkCalendarResolver(
 	HrPolicyAssignmentResolver assignmentResolver)
 	: DomainService
 {
+	private Dictionary<string, object>? readBatch;
+	public IDisposable BeginReadBatch(IEnumerable<Employee> employees)
+	{
+		var previous = readBatch;
+		readBatch = employees.ToDictionary(x => "employee:" + x.Id, x => (object) x);
+		var assignments = assignmentResolver.BeginReadBatch();
+		return new Volo.Abp.DisposeAction(() => { readBatch = previous; assignments.Dispose(); });
+	}
+	private async Task<T> ReadAsync<T>(string key, Func<Task<T>> load) where T : notnull
+	{
+		if (readBatch != null && readBatch.TryGetValue(key, out var value)) return (T) value;
+		var result = await load(); if (readBatch != null) readBatch[key] = result; return result;
+	}
 	public async Task<WorkCalendarPolicy> ResolveAsync(
 		Guid employeeId,
 		DateTime date,
@@ -28,25 +42,19 @@ public class HrAttendanceWorkCalendarResolver(
 		CancellationToken cancellationToken = default)
 	{
 		var resolvedAcademicYearId = academicYearId ??
-			await ResolveAcademicYearIdAsync(date, cancellationToken);
-		var employee = await employeeRepository.GetAsync(
-			employeeId,
-			cancellationToken: cancellationToken);
+			await ReadAsync("year:" + date.Date.ToString("yyyy-MM-dd"), () => ResolveAcademicYearIdAsync(date, cancellationToken));
+		var employee = await ReadAsync("employee:" + employeeId, () => employeeRepository.GetAsync(employeeId, cancellationToken: cancellationToken));
 		var resolution = await assignmentResolver.ResolveForEmployeeAsync(
 			employee,
 			resolvedAcademicYearId,
 			date.Date,
 			cancellationToken);
 		var attendancePolicy = resolution.Assignment is null
-			? await ResolveDefaultAttendancePolicyAsync(resolvedAcademicYearId, cancellationToken)
-			: await attendancePolicyRepository.GetAsync(
-				resolution.Assignment.AttendancePolicyId,
-				cancellationToken: cancellationToken);
+			? await ReadAsync("default:" + resolvedAcademicYearId, () => ResolveDefaultAttendancePolicyAsync(resolvedAcademicYearId, cancellationToken))
+			: await ReadAsync("policy:" + resolution.Assignment.AttendancePolicyId, () => attendancePolicyRepository.GetAsync(resolution.Assignment.AttendancePolicyId, cancellationToken: cancellationToken));
 
 		EnsureAttendancePolicyUsable(attendancePolicy, resolvedAcademicYearId);
-		var workCalendar = await workCalendarPolicyRepository.GetAsync(
-			attendancePolicy.WorkCalendarPolicyId,
-			cancellationToken: cancellationToken);
+		var workCalendar = await ReadAsync("calendar:" + attendancePolicy.WorkCalendarPolicyId, () => workCalendarPolicyRepository.GetAsync(attendancePolicy.WorkCalendarPolicyId, cancellationToken: cancellationToken));
 		EnsureWorkCalendarUsable(workCalendar, resolvedAcademicYearId);
 		return workCalendar;
 	}

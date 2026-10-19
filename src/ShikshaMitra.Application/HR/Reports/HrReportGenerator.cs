@@ -162,9 +162,10 @@ public class HrReportGenerator(
 			: HrReportRequestProcessor.ShapeRows(rowResult.Rows, input);
 
 		var totalCount = rowResult.IsDatabaseBacked ? rowResult.TotalCount : rows.Count;
+		if (exportAllRows && totalCount > HrReportRequestProcessor.MaxExportRows) throw HrReportingEngine.Invalid("This legacy export exceeds its row limit. Use the complete table export or narrow its filters.");
 		var columns = HrReportCatalog.ResolveColumns(source, input, rows);
 		var pageRows = exportAllRows
-			? rows.Take(HrReportRequestProcessor.MaxExportRows).ToList()
+			? rows
 			: rowResult.IsDatabaseBacked
 				? rows
 				: rows.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToList();

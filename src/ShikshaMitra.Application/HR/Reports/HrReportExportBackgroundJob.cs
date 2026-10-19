@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -18,6 +18,7 @@ public class HrReportExportBackgroundJob(
 	IBlobContainer blobContainer,
 	ICurrentTenant currentTenant,
 	IUnitOfWorkManager unitOfWorkManager,
+	HrReportingAccess access,
 	ILogger<HrReportExportBackgroundJob> logger)
 	: AsyncBackgroundJob<HrReportExportJobArgs>, ITransientDependency
 {
@@ -43,6 +44,8 @@ public class HrReportExportBackgroundJob(
 				var format = string.Equals(generationContext.Format, HrReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
 					? HrReportFormat.Pdf
 					: HrReportFormat.Excel;
+				if (format == HrReportFormat.Pdf && HRPdfService.GetIncludedRowCount(report) < report.Rows.Count)
+					throw HrReportingEngine.Invalid("This legacy PDF export exceeds its row limit. Use the complete table export or narrow its filters.");
 				var bytes = format == HrReportFormat.Pdf
 					? await pdfService.GenerateReportPdf(report)
 					: excelService.GenerateReportExcel(report);
@@ -103,6 +106,8 @@ public class HrReportExportBackgroundJob(
 	private async Task<HrReportPreviewDto> GenerateReportAsync(HrReportGenerationContext context)
 	{
 		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
+		if (context.Request.DataSource is not ("payroll_register" or "payroll_statement")) throw new Volo.Abp.Authorization.AbpAuthorizationException();
+		await access.EnsureAsync(context.Request.DataSource, context.UserId);
 		var report = await reportGenerator.GenerateExportAsync(
 			context.Request,
 			context.UserId,

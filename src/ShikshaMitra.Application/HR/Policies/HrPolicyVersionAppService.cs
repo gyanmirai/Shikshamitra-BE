@@ -21,8 +21,8 @@ public class HrPolicyVersionAppService(
 	public Task<PagedResultDto<HrPolicyVersionDto>> GetListAsync(
 		string policyType,
 		Guid policyId,
-		PagedAndSortedResultRequestDto input) =>
-		readService.GetListAsync(policyType, policyId, input);
+		PagedAndSortedResultRequestDto input, string? search = null, string? action = null) =>
+		readService.GetListAsync(policyType, policyId, input, search, action);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.View)]
 	public Task<HrPolicyVersionDto> GetAsync(string policyType, Guid policyId, Guid versionId) =>

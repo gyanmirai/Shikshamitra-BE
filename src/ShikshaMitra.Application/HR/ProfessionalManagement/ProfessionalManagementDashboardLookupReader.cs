@@ -14,7 +14,8 @@ public class ProfessionalManagementDashboardLookupReader(
 	IRepository<Employee, Guid> employeeRepository,
 	IRepository<PerformanceTemplate, Guid> templateRepository,
 	IRepository<PerformanceReviewAssignment, Guid> assignmentRepository,
-	IAsyncQueryableExecuter asyncExecuter)
+	IAsyncQueryableExecuter asyncExecuter,
+    ProfessionalManagementReadScopeService readScope)
 	: ITransientDependency
 {
 	public async Task<List<ProfessionalReviewDto>> GetReviewsAsync(
@@ -23,7 +24,7 @@ public class ProfessionalManagementDashboardLookupReader(
 		ProfessionalReviewStatus? status,
 		string? search)
 	{
-		var query = await assignmentRepository.GetQueryableAsync();
+		var query = await readScope.ApplyAsync(await assignmentRepository.GetQueryableAsync());
 		if (cycleId.HasValue)
 		{
 			query = query.Where(x => x.CycleId == cycleId);
@@ -39,6 +40,7 @@ public class ProfessionalManagementDashboardLookupReader(
 			query = query.Where(x => x.Status == status);
 		}
 
+		if (await asyncExecuter.CountAsync(query) > 50000) throw new Volo.Abp.UserFriendlyException("More than 50,000 reviews match. Choose a review cycle before loading this table.");
 		var assignments = await asyncExecuter.ToListAsync(query.OrderByDescending(x => x.CreationTime));
 		var cycles = await GetCyclesByIdsAsync(assignments.Select(x => x.CycleId).Distinct().ToList());
 		var employees = await GetEmployeesByIdsAsync(assignments.Select(x => x.EmployeeId).Distinct().ToList());

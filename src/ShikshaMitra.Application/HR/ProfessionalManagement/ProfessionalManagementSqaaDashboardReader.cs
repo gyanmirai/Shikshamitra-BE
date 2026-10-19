@@ -15,6 +15,7 @@ public class ProfessionalManagementSqaaDashboardReader(
 	IRepository<PerformanceReviewAssignment, Guid> assignmentRepository,
 	IRepository<PerformanceEvidence, Guid> evidenceRepository,
 	IAsyncQueryableExecuter asyncExecuter,
+    ProfessionalManagementReadScopeService readScope,
 	ProfessionalManagementSqaaAuditPackBuilder auditPackBuilder) : ITransientDependency
 {
 	public async Task<List<PerformanceSqaaEvidenceDto>> GetSqaaEvidenceAsync(
@@ -36,7 +37,7 @@ public class ProfessionalManagementSqaaDashboardReader(
 			.WhereIf(sqaaDomain.HasValue, x => x.SqaaDomain == sqaaDomain));
 		var criterionIds = criteria.Select(x => x.Id).ToHashSet();
 
-		var assignmentQuery = await assignmentRepository.GetQueryableAsync();
+		var assignmentQuery = await readScope.ApplyAsync(await assignmentRepository.GetQueryableAsync());
 		var assignments = await asyncExecuter.ToListAsync(assignmentQuery
 			.Where(x => templateIds.Contains(x.TemplateId))
 			.WhereIf(cycleId.HasValue, x => x.CycleId == cycleId));

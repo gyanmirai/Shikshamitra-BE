@@ -1,10 +1,13 @@
-namespace ShikshaMitra.HR.Payroll.SalarySlips;
+﻿namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 /// <summary>
 /// DTO for salary slip line item (earning or deduction).
 /// </summary>
 public class SalarySlipLineItemDto
 {
+	public System.Guid? ComponentId { get; set; }
+	public System.Guid? SourceLineId { get; set; }
+	public string? SemanticType { get; set; }
 	public decimal? FullMonthAmount { get; set; }
 	public string Name { get; set; } = string.Empty;
 	public decimal Amount { get; set; }

@@ -24,11 +24,22 @@ public class HrPolicyVersionReadService(
 	public async Task<PagedResultDto<HrPolicyVersionDto>> GetListAsync(
 		string policyType,
 		Guid policyId,
-		PagedAndSortedResultRequestDto input)
+		PagedAndSortedResultRequestDto input, string? search = null, string? action = null)
 	{
 		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var query = (await versionRepository.GetQueryableAsync())
 			.Where(x => x.PolicyType == normalized && x.PolicyId == policyId);
+		if (!string.IsNullOrWhiteSpace(action) && action != "all") query = query.Where(x => x.ChangeAction == action);
+		if (!string.IsNullOrWhiteSpace(search))
+		{
+			var term = search.Trim().ToLowerInvariant().Replace('_', ' ').Replace('-', ' ');
+			var userIds = (await userRepository.GetQueryableAsync()).Where(x =>
+				(x.Name ?? "").ToLower().Contains(term) || (x.Surname ?? "").ToLower().Contains(term) || x.UserName.ToLower().Contains(term)).Select(x => x.Id);
+			var versionNumber = int.TryParse(term.TrimStart('v'), out var number) ? number : -1;
+			query = query.Where(x => x.Name.ToLower().Contains(term) || (x.ChangeReason ?? "").ToLower().Contains(term)
+				|| x.ChangeAction.ToLower().Replace("_", " ").Replace("-", " ").Contains(term) || x.VersionNumber == versionNumber
+				|| (x.CreatorId.HasValue && userIds.Contains(x.CreatorId.Value)));
+		}
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query
 			.OrderByDescending(x => x.VersionNumber)

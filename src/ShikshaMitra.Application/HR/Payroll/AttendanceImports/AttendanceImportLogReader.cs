@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR;
+using ShikshaMitra.HR.Employees;
+using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.HR.Payroll.SalarySlips;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -18,7 +20,8 @@ public class AttendanceImportLogReader(
 	IRepository<AttendanceImportBatch, Guid> attendanceImportBatchRepository,
 	IRepository<AttendanceImportRow, Guid> attendanceImportRowRepository,
 	ISalarySlipRepository salarySlipRepository,
-	AttendanceImportEmployeeResolver employeeResolver)
+	AttendanceImportEmployeeResolver employeeResolver,
+	IUserScopeService scopes, HrEmployeeScopeQueryService staffScopes)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<PagedResultDto<AttendanceImportLogListItemDto>> GetListAsync(GetAttendanceImportLogListInput input)
@@ -80,6 +83,13 @@ public class AttendanceImportLogReader(
 
 		var query = await attendanceImportRowRepository.GetQueryableAsync();
 		query = query.Where(x => x.BatchId == importId);
+		var scope = await scopes.GetUserScopeAsync(CurrentUser.Id ?? throw new Volo.Abp.Authorization.AbpAuthorizationException());
+		if (!HrUserScopeAccess.HasHrWideAccess(scope))
+		{
+			staffScopes.EnsureHasConcreteHrAccess(scope, nameof(GetRowsAsync));
+			var authorized = await staffScopes.BuildScopedEmployeeQueryAsync(scope);
+			query = query.Where(row => authorized.Any(employee => employee.EmployeeCode != null && employee.EmployeeCode.ToUpper() == row.EmployeeCode.ToUpper()));
+		}
 
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var skipCount = Math.Max(0, input.SkipCount);

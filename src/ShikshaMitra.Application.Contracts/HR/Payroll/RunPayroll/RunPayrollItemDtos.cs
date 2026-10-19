@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
@@ -191,6 +191,8 @@ public class RunPayrollItem
 /// </summary>
 public class RunPayrollComponentItem
 {
+	public Guid? ComponentId { get; set; }
+	public Guid? SourceLineId { get; set; }
 	public string? SemanticType { get; set; }
 	public decimal? FullMonthAmount { get; set; }
 	public string? FormulaType { get; set; }

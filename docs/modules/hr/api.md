@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-16
+updated_on: 2026-10-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -295,19 +295,10 @@ Calendar and reports APIs support HR operations and exports:
 | Holidays | HR calendar holiday routes | Verify active frontend navigation before treating HR menu access as shipped |
 | Reports | `/api/hr/reports/*` | Exports must match preview filters |
 
-`GET /api/hr/reports/exports` accepts optional `requestedFrom` and exclusive `requestedTo` timestamps and applies them before the recent-results limit.
-PostgreSQL export-history bounds are normalized to UTC before they are sent as `timestamptz` parameters, including unbounded sentinel values.
-`DELETE /api/hr/reports/exports/{jobId}` soft-deletes only a failed export owned by the current tenant user and requires `HR.Reports.Delete`.
-Every new HR export stores a trusted tenant and UserScope snapshot consisting of tenant-wide access or the resolved medium-stage IDs used by report generation.
-Sharing requires `HR.Reports.View` for each recipient and rejects the action when the owner's or any recipient's current tenant UserScope does not cover the complete stored export scope.
-Schedule creation and update validate recipient permission and scope, and schedule execution rechecks the owner's report-view permission plus every recipient's permission and scope before queuing the shared export.
-Automatic schedule execution uses one transaction per due schedule, pauses permanent authorization or validation failures, and defers transient failures for retry without starving later schedules.
-Scheduled email delivery is registered after export and schedule writes, runs only after the owning transaction commits, and remains a best-effort post-commit side effect.
-Owner and shared-recipient export list, detail, regenerate, share, and download access recheck the current UserScope against the stored snapshot.
-The worker captures and persists the owner's current scope before generating a legacy queued export that has no trusted snapshot.
-Previously completed legacy exports without a trusted snapshot may be opened only by a current tenant-wide HR user.
-PDF export uses a repeating table header, switches wide reports to landscape A3, limits output to 500 rows, displays a truncation notice, and records the number of rows actually written.
-PDF failures store a stable user-facing message while retaining technical exceptions in server logs.
+The report workspace uses the capability catalogue, versioned library, designer preview, private runs, captured rows, and captured-result exports under this route family.
+See [HR reporting workspace](./references/reporting-workspace.md#interfaces) for the current endpoint contract and source authorization rules.
+The narrow salary-document adapter retains preview/export routes for existing payroll screens and requires the salary-slip source permission.
+Schedules, delivery, AI planning, and result sharing are removed.
 
 ## Operational HR dashboard
 
@@ -529,7 +520,7 @@ Missing required salary rules, invalid selected components, unknown coverage, st
 | GET /api/payroll/statutory-profile/readiness | RunPayroll.View and scoped employees; bounded page size of 100, flags and number-presence only. |
 | POST /api/payroll/payslip-settings/logo | GenerateSalarySlip.Add and HR-wide UserScope; tenant-owned PNG/JPEG, 2 MiB maximum, validated dimensions and decoded pixels. |
 | POST /api/hr/reports/preview | Existing HR Reports View; payroll_statement requires one employee and an inclusive month range, payroll_register requires one month. |
-| POST /api/hr/reports/exports | Existing HR Reports Export; queued PDF/Excel exports with existing ownership, limits and expiry. |
+| POST /api/hr/reports/exports | Existing salary-source View access; queued PDF/Excel exports with ownership, current scope, limits and expiry. |
 
 The profile payload contains Apply PF, PF number, 12-digit UAN, PF disabled reason, Apply ESIC, insurance number and ESIC disabled reason.
 The two schemes are independent; blank, whitespace and the exact placeholder 0 count as a missing number.
@@ -564,3 +555,7 @@ Incomplete statutory setup returns IsComplete=false and unavailable deduction, t
 Registration identifiers are not returned by this endpoint.
 Salary-template calculation responses include the same StatutorySummary presentation contract.
 Refreshing current unlocked payroll applies eligible contributions before registration is complete; saved gross and locked or issued history remain unchanged.
+
+## HR table export interface
+
+See [complete HR table exports](./references/hr-table-exports.md) for the allowlisted background capture API, private authenticated downloads, source permissions and explicit limits.

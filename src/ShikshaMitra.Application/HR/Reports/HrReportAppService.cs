@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using System;
 using System.Collections.Generic;
@@ -10,124 +10,30 @@ namespace ShikshaMitra.HR.Reports;
 
 [RemoteService(false)]
 [Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.View)]
-public class HrReportAppService(
-	HrReportGenerator reportGenerator,
-	HrReportTemplateService templateService,
-	HrReportExportService exportService,
-	HrReportScheduleService scheduleService,
-	HrReportRecipientLookupService recipientLookupService,
-	IHrAiReportPlanner aiReportPlanner) : ApplicationService, IHrReportAppService
+[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View)]
+public class HrReportAppService(HrReportGenerator generator, HrReportExportService exports, HrReportingAccess access) : ApplicationService, IHrReportAppService
 {
-	public Task<HrReportSourcesDto> GetSourcesAsync() =>
-		reportGenerator.GetSourcesAsync();
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Build)]
-	public async Task<HrAiReportPlanResponseDto> CreateAiPlanAsync(HrAiReportPlanRequestDto input)
+	private async Task EnsureSalarySourceAsync(HrReportRequestDto input)
 	{
-		var userId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.ReportUserRequired);
-		return await aiReportPlanner.CreatePlanAsync(
-			input.Prompt,
-			userId,
-			CurrentTenant.Id,
-			input.ClarificationAnswers);
+		if (input.DataSource is not ("payroll_statement" or "payroll_register")) throw new BusinessException(HRErrorCodes.ReportRequestInvalid);
+  if (input.Groups?.Count > 0 || input.Summaries?.Count > 0 || input.Filters.Conditions?.Count > 0 || input.Chart is { Type: not "none" } || input.Sorts?.Count > 1)
+   throw HrReportingEngine.Invalid("Use a report template for advanced filters, summaries, charts, or multiple sorting fields.");
+		await access.EnsureAsync(input.DataSource, CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.ReportUserRequired));
 	}
-
-	public async Task<HrReportOptionsDto> GetOptionsAsync()
-	{
-		var userId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.ReportUserRequired);
-		return await reportGenerator.GetOptionsAsync(userId, CurrentTenant.Id);
-	}
-
-	public Task<List<HrReportRecipientDto>> GetRecipientsAsync(string? filter = null, int maxResultCount = 20, string? ids = null) =>
-		recipientLookupService.GetRecipientsAsync(filter, maxResultCount, ids);
-
-	public Task<HrReportTemplateListDto> GetTemplatesAsync() =>
-		templateService.GetTemplatesAsync();
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.ManageTemplates)]
-	public Task<HrReportTemplateDto> CreateTemplateAsync(HrReportTemplateRequestDto input) =>
-		templateService.CreateTemplateAsync(input);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.ManageTemplates)]
-	public Task<HrReportTemplateDto> UpdateTemplateAsync(Guid id, HrReportTemplateRequestDto input) =>
-		templateService.UpdateTemplateAsync(id, input);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.ManageTemplates)]
-	public Task<HrReportTemplateDto> DuplicateTemplateAsync(Guid id) =>
-		templateService.DuplicateTemplateAsync(id);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Delete)]
-	public Task DeleteTemplateAsync(Guid id) =>
-		templateService.DeleteTemplateAsync(id);
-
-	public Task<HrReportPreviewDto> GetPreviewAsync(HrReportRequestDto input) =>
-		PreviewAsync(input);
-
 	public async Task<HrReportPreviewDto> PreviewAsync(HrReportRequestDto input)
 	{
-		var userId = CurrentUser.Id ?? throw new BusinessException(HRErrorCodes.ReportUserRequired);
-		return await reportGenerator.GenerateAsync(input, userId, CurrentTenant.Id, exportAllRows: false);
+		await EnsureSalarySourceAsync(input);
+		return await generator.GenerateAsync(input, CurrentUser.Id!.Value, CurrentTenant.Id, false);
 	}
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
-	public Task<HrReportExportCreateResponseDto> CreateExportAsync(HrReportRequestDto input) =>
-		exportService.CreateExportAsync(input);
-
-	public Task<List<HrReportExportJobDto>> GetExportsAsync(HrReportExportListRequestDto input) =>
-		exportService.GetExportsAsync(input);
-
-	public Task<HrReportExportJobDto> GetExportAsync(Guid jobId) =>
-		exportService.GetExportAsync(jobId);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
-	public Task<HrReportExportJobDto> CancelExportAsync(Guid jobId) =>
-		exportService.CancelExportAsync(jobId);
-
+	public async Task<HrReportExportCreateResponseDto> CreateExportAsync(HrReportRequestDto input) { await EnsureSalarySourceAsync(input); return await exports.CreateExportAsync(input); }
+	public Task<List<HrReportExportJobDto>> GetExportsAsync(HrReportExportListRequestDto input) => exports.GetExportsAsync(input);
+	public Task<HrReportExportJobDto> GetExportAsync(Guid jobId) => exports.GetExportAsync(jobId);
+	public Task<HrReportExportJobDto> CancelExportAsync(Guid jobId) => exports.CancelExportAsync(jobId);
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Delete)]
-	public Task DeleteFailedExportAsync(Guid jobId) =>
-		exportService.DeleteFailedExportAsync(jobId);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
-	public Task<HrReportExportCreateResponseDto> RetryExportAsync(Guid jobId) =>
-		exportService.RetryExportAsync(jobId);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
-	public Task<HrReportExportCreateResponseDto> RegenerateExportAsync(Guid jobId) =>
-		exportService.RegenerateExportAsync(jobId);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Share)]
-	public Task<HrReportExportJobDto> ShareExportAsync(Guid jobId, HrReportShareExportRequestDto input) =>
-		exportService.ShareExportAsync(jobId, input);
-
-	public Task<HrReportDownloadDto> DownloadExportAsync(Guid jobId) =>
-		exportService.DownloadExportAsync(jobId);
-
-	public Task<HrReportScheduleListDto> GetSchedulesAsync() =>
-		scheduleService.GetSchedulesAsync();
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Schedule)]
-	public Task<HrReportScheduleDto> CreateScheduleAsync(HrReportScheduleRequestDto input) =>
-		scheduleService.CreateScheduleAsync(input);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Schedule)]
-	public Task<HrReportScheduleDto> UpdateScheduleAsync(Guid id, HrReportScheduleRequestDto input) =>
-		scheduleService.UpdateScheduleAsync(id, input);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Schedule)]
-	public Task<HrReportScheduleDto> PauseScheduleAsync(Guid id) =>
-		scheduleService.PauseScheduleAsync(id);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Schedule)]
-	public Task<HrReportScheduleDto> ResumeScheduleAsync(Guid id) =>
-		scheduleService.ResumeScheduleAsync(id);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Schedule)]
-	public Task<HrReportScheduleRunResponseDto> RunScheduleNowAsync(Guid id) =>
-		scheduleService.RunScheduleNowAsync(id);
-
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Schedule)]
-	public Task DeleteScheduleAsync(Guid id) =>
-		scheduleService.DeleteScheduleAsync(id);
+	public Task DeleteFailedExportAsync(Guid jobId) => exports.DeleteFailedExportAsync(jobId);
+	public Task<HrReportExportCreateResponseDto> RetryExportAsync(Guid jobId) => exports.RetryExportAsync(jobId);
+	public Task<HrReportExportCreateResponseDto> RegenerateExportAsync(Guid jobId) => exports.RegenerateExportAsync(jobId);
+	public Task<HrReportDownloadDto> DownloadExportAsync(Guid jobId) => exports.DownloadExportAsync(jobId);
 }
 
 public class HrReportExportJobArgs

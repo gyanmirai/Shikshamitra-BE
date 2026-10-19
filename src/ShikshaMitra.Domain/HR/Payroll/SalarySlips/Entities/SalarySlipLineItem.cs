@@ -1,4 +1,4 @@
-using ShikshaMitra.HR.Employees.Payroll;
+﻿using ShikshaMitra.HR.Employees.Payroll;
 
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
@@ -7,6 +7,9 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 /// </summary>
 public class SalarySlipLineItem
 {
+	public System.Guid? ComponentId { get; set; }
+	public System.Guid? SourceLineId { get; set; }
+	public string? SemanticType { get; set; }
 	public decimal? FullMonthAmount { get; set; }
 	public string? FormulaType { get; set; }
 	public decimal? FormulaValue { get; set; }

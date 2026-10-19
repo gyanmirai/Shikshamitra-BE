@@ -179,6 +179,24 @@ public class ProfessionalManagementApi_Tests : ShikshaMitraApiTestBase
 		(await client.GetAsync($"{BaseUrl}/reviews/{assignmentId}/evidence")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 	}
 
+	[Theory]
+	[InlineData("reports/pending-actions")]
+	[InlineData("reports/training-needs")]
+	[InlineData("reports/rating-distribution")]
+	[InlineData("reports/sqaaf-evidence")]
+	[InlineData("reports/sqaaf-audit-pack")]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Report_Table_Readers_Should_Require_Employee_Scope(string path)
+	{
+		using var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "custom-review-reader");
+		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			"HR.PerformanceManagement.View,HR.PerformanceManagement.ExportReports,HR.ProfessionalManagement.View");
+		var response = await client.GetAsync($"{BaseUrl}/{path}");
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+	}
+
 	private async Task<PerformanceTemplateDto> PublishTemplateAsync(Guid id)
 	{
 		var response = await Client.PostAsync($"{BaseUrl}/templates/{id}/publish", null);

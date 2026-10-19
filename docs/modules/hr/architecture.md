@@ -90,3 +90,8 @@ Use current source paths and the six canonical module pages instead.
 `PayslipIssuanceService` freezes presentation evidence and batches employee/bank reads during locking.
 The PayrollEnrollmentAndSalaryDocuments migration backfills only known identifiers and flags, preserves legacy payloads and adds leave/presentation evidence.
 Its operations exclude unrelated retired tables and the student custom-profile table already owned by its earlier migration.
+
+## Shared table capture
+
+HR table exports remain inside the modular monolith and reuse domain readers, current database principals, report run pages, document rendering and retention.
+See [the export reference](./references/hr-table-exports.md).

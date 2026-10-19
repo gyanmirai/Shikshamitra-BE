@@ -8,6 +8,7 @@ using ClosedXML.Excel;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using ShikshaMitra.Common.PDF;
 
 namespace ShikshaMitra.HR.Reports;
 
@@ -35,7 +36,8 @@ public static class HrReportingDocumentWriter
 				{ cell.Value = date.ToDateTime(TimeOnly.MinValue); cell.Style.DateFormat.Format = "dd-mmm-yyyy"; }
 				else if (field.Type == "datetime" && DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var instant))
 				{ cell.Value = TimeZoneInfo.ConvertTime(instant, TimeZoneInfo.FindSystemTimeZoneById(parameters.TimeZone)).DateTime; cell.Style.DateFormat.Format = "dd-mmm-yyyy hh:mm"; }
-				else cell.Value = value;
+					else if (field.Type == "boolean" && bool.TryParse(value, out var flag)) cell.Value = flag;
+					else cell.Value = value;
 			}
 			index++;
 		}
@@ -44,6 +46,8 @@ public static class HrReportingDocumentWriter
 			var range = sheet.Range(header, 1, Math.Max(header, index - 1), result.Columns.Count);
 			range.SetAutoFilter(); sheet.Row(header).Style.Font.Bold = true; sheet.Row(header).Style.Fill.BackgroundColor = XLColor.LightGray;
 			for (var col = 0; col < result.Columns.Count; col++) if (result.Totals.TryGetValue(result.Columns[col].Id, out var total) && total.HasValue) sheet.Cell(index + 1, col + 1).Value = total.Value;
+			var textColumn = result.Columns.FindIndex(x => x.Type is "string" or "text");
+			if (result.Totals.Count > 0 && textColumn >= 0 && !result.Totals.ContainsKey(result.Columns[textColumn].Id)) sheet.Cell(index + 1, textColumn + 1).Value = "Totals (available values)";
 			var sampleLastRow = Math.Min(index, 200);
 			sheet.Columns(1, result.Columns.Count).AdjustToContents(header, sampleLastRow);
 			foreach (var column in sheet.ColumnsUsed()) column.Width = Math.Clamp(column.Width, 12, 40);
@@ -63,8 +67,8 @@ public static class HrReportingDocumentWriter
 		var design = JsonSerializer.Deserialize<HrReportDesignDto>(run.DefinitionJson, HrReportingEngine.Json)!;
 		var parameters = JsonSerializer.Deserialize<HrReportParametersDto>(run.ParametersJson, HrReportingEngine.Json)!;
 		var firstColumns = result.Columns.Take(2).ToList();
-		var sections = result.Columns.Count <= 10 ? new List<List<HrReportFieldDto>> { result.Columns }
-			: result.Columns.Skip(2).Chunk(8).Select(chunk => firstColumns.Concat(chunk).ToList()).ToList();
+		var sections = result.Columns.Count <= 8 ? new List<List<HrReportFieldDto>> { result.Columns }
+			: result.Columns.Skip(2).Chunk(6).Select(chunk => firstColumns.Concat(chunk).ToList()).ToList();
 		return Document.Create(document =>
 		{
 			foreach (var fields in sections)
@@ -73,7 +77,7 @@ public static class HrReportingDocumentWriter
 				{
 					var size = design.PaperSize == "A3" ? PageSizes.A3 : PageSizes.A4;
 					page.Size(design.Orientation == "portrait" ? size.Portrait() : size.Landscape()); page.Margin(24);
-					page.DefaultTextStyle(s => s.FontSize(8));
+					page.DefaultTextStyle(s => s.WithPortableFonts().FontSize(8));
 					page.Header().PaddingBottom(12).Column(column =>
 					{
 						column.Item().Text(result.SchoolName).FontSize(14).SemiBold();
@@ -91,7 +95,10 @@ public static class HrReportingDocumentWriter
 						foreach (var row in result.Rows)
 							foreach (var f in fields) table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(4).Text(Display(row.GetValueOrDefault(f.Id), f.Type, parameters.TimeZone));
 						if (result.Rows.Count == 0) foreach (var _ in fields) table.Cell().Padding(6).Text("No matching records");
-						foreach (var f in fields) table.Cell().Padding(5).Text(result.Totals.TryGetValue(f.Id, out var n) && n.HasValue ? n.Value.ToString("N2", CultureInfo.InvariantCulture) : "").SemiBold();
+						if (fields.Any(f => result.Totals.TryGetValue(f.Id, out var total) && total.HasValue))
+							foreach (var f in fields) table.Cell().Padding(5).Text(result.Totals.TryGetValue(f.Id, out var n) && n.HasValue
+								? n.Value.ToString(f.Type == "money" ? "N2" : "0.##", CultureInfo.InvariantCulture)
+								: f == fields[0] ? "Totals" : "").SemiBold();
 					});
 					page.Footer().AlignRight().Text(text => { text.Span("Page "); text.CurrentPageNumber(); text.Span(" of "); text.TotalPages(); });
 				});
@@ -106,6 +113,7 @@ public static class HrReportingDocumentWriter
 	}
 	private static string Rules(HrReportRun run)
 	{
+		if (run.DataSource.StartsWith("table:", StringComparison.Ordinal)) return run.ExtraProperties.GetValueOrDefault("tableExportContext")?.ToString() ?? "Complete table matching the captured screen filters and authorized staff scope";
 		var design = JsonSerializer.Deserialize<HrReportDesignDto>(run.DefinitionJson, HrReportingEngine.Json)!;
 		var p = JsonSerializer.Deserialize<HrReportParametersDto>(run.ParametersJson, HrReportingEngine.Json)!;
 		var fields = HrReportingCatalogue.Datasets().Single(x => x.Id == design.DataSource).Fields.ToDictionary(x => x.Id, x => x.Label);
@@ -127,6 +135,7 @@ public static class HrReportingDocumentWriter
 	{
 		var text = Scalar(value); if (text == null) return "Unavailable";
 		if (type == "money" && decimal.TryParse(text, CultureInfo.InvariantCulture, out var money)) return money.ToString("N2", CultureInfo.InvariantCulture);
+		if (type == "date" && DateOnly.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)) return date.ToString("dd MMM yyyy", CultureInfo.InvariantCulture);
 		if (type == "datetime" && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var timestamp)) return TimeZoneInfo.ConvertTime(timestamp, TimeZoneInfo.FindSystemTimeZoneById(timezone)).ToString("dd MMM yyyy HH:mm", CultureInfo.InvariantCulture);
 		return text;
 	}

@@ -18,6 +18,7 @@ public class ProfessionalManagementSqaaAuditPackBuilder(
 	IRepository<PerformanceReviewAssignment, Guid> assignmentRepository,
 	IRepository<PerformanceEvidence, Guid> evidenceRepository,
 	IAsyncQueryableExecuter asyncExecuter,
+    ProfessionalManagementReadScopeService readScope,
 	IClock clock) : ITransientDependency
 {
 	public async Task<PerformanceSqaaAuditPackDto> BuildAsync(
@@ -42,7 +43,7 @@ public class ProfessionalManagementSqaaAuditPackBuilder(
 			.GroupBy(x => x.TemplateId)
 			.ToDictionary(x => x.Key, x => x.ToList());
 
-		var assignmentQuery = await assignmentRepository.GetQueryableAsync();
+		var assignmentQuery = await readScope.ApplyAsync(await assignmentRepository.GetQueryableAsync());
 		var assignments = await asyncExecuter.ToListAsync(assignmentQuery
 			.Where(x => templateIds.Contains(x.TemplateId))
 			.WhereIf(cycleId.HasValue, x => x.CycleId == cycleId));
@@ -70,6 +71,7 @@ public class ProfessionalManagementSqaaAuditPackBuilder(
 			templatesById,
 			sqaaDomain);
 
+		if (missingEvidenceItems.Count > 50000) throw new Volo.Abp.UserFriendlyException("More than 50,000 missing evidence items match. Choose a review cycle or domain before loading this table.");
 		var totalRequiredEvidence = domains.Sum(x => x.EvidenceRequiredCriteria);
 		var totalEvidenceSubmitted = domains.Sum(x => x.EvidenceSubmitted);
 		return new PerformanceSqaaAuditPackDto

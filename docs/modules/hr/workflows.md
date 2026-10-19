@@ -243,3 +243,9 @@ Missing rules or wage classifications remain actionable blockers; missing regist
 Actual attendance, loss of pay and one-time adjustments belong to Run Payroll.
 Existing unlocked payroll receives corrected contributions on refresh and changed rows require renewed review.
 Locked payroll and finalized or paid payslips remain immutable.
+
+## Read-only table export
+
+View an authorized table, apply filters and choose Excel or PDF from its shared Export menu.
+The server captures the complete matching population and publishes a private download after successful materialization.
+See [states, access and exceptions](./references/hr-table-exports.md).

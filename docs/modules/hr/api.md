@@ -520,7 +520,7 @@ Missing required salary rules, invalid selected components, unknown coverage, st
 | GET /api/payroll/statutory-profile/readiness | RunPayroll.View and scoped employees; bounded page size of 100, flags and number-presence only. |
 | POST /api/payroll/payslip-settings/logo | GenerateSalarySlip.Add and HR-wide UserScope; tenant-owned PNG/JPEG, 2 MiB maximum, validated dimensions and decoded pixels. |
 | POST /api/hr/reports/preview | Existing HR Reports View; payroll_statement requires one employee and an inclusive month range, payroll_register requires one month. |
-| POST /api/hr/reports/exports | Existing HR Reports Export; queued PDF/Excel exports with existing ownership, limits and expiry. |
+| POST /api/hr/reports/exports | Existing salary-source View access; queued PDF/Excel exports with ownership, current scope, limits and expiry. |
 
 The profile payload contains Apply PF, PF number, 12-digit UAN, PF disabled reason, Apply ESIC, insurance number and ESIC disabled reason.
 The two schemes are independent; blank, whitespace and the exact placeholder 0 count as a missing number.
@@ -555,3 +555,7 @@ Incomplete statutory setup returns IsComplete=false and unavailable deduction, t
 Registration identifiers are not returned by this endpoint.
 Salary-template calculation responses include the same StatutorySummary presentation contract.
 Refreshing current unlocked payroll applies eligible contributions before registration is complete; saved gross and locked or issued history remain unchanged.
+
+## HR table export interface
+
+See [complete HR table exports](./references/hr-table-exports.md) for the allowlisted background capture API, private authenticated downloads, source permissions and explicit limits.

@@ -133,8 +133,7 @@ public class ProfessionalManagementReviewReader(
 		var query = await readScope.ApplyAuditAsync(await auditRepository.GetQueryableAsync(), await assignmentRepository.GetQueryableAsync());
 		var rows = await asyncExecuter.ToListAsync(query
 			.WhereIf(reviewId.HasValue, x => x.ReviewAssignmentId == reviewId)
-			.OrderByDescending(x => x.CreationTime)
-			.Take(200));
+			.OrderByDescending(x => x.CreationTime));
 		return rows.Select(ProfessionalManagementProjection.ToAuditEventDto).ToList();
 	}
 

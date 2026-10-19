@@ -32,6 +32,27 @@ public class EmployeeDocumentApi_Tests : ShikshaMitraApiTestBase
 	];
 
 	private static string Url(Guid empId) => $"/api/employees/{empId}/documents";
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Checklist_Should_Page_All_Definitions_And_Include_Missing_Uploads()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var employee = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "ChecklistStaff");
+		var prefix = "Export checklist " + new string(Guid.NewGuid().ToByteArray().Select(x => (char)('A' + x % 26)).ToArray());
+		for (var index = 0; index < 23; index++)
+		{
+			var created = await Client.PostAsJsonAsync("/api/employees/documents", new DocumentRequest {
+				Title = prefix + (char)('A' + index), DocumentSize = 5, DocumentTypes = [4]
+			}, JsonOptions);
+			created.EnsureSuccessStatusCode();
+		}
+		var first = await Client.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>>(
+			Url(employee) + "/checklist?page=1&pageSize=10&search=" + Uri.EscapeDataString(prefix), JsonOptions);
+		var last = await Client.GetFromJsonAsync<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>>(
+			Url(employee) + "/checklist?page=3&pageSize=10&search=" + Uri.EscapeDataString(prefix), JsonOptions);
+		first!.TotalCount.ShouldBe(23); first.Items.Count.ShouldBe(10); last!.Items.Count.ShouldBe(3);
+		first.Items.ShouldAllBe(x => x.EmployeeId == employee && x.StatusVal == "Not Uploaded" && x.UploadedDoc == null);
+		first.Items.Select(x => x.Id).Intersect(last.Items.Select(x => x.Id)).ShouldBeEmpty();
+	}
 
 	#region Tier 0 — Critical
 

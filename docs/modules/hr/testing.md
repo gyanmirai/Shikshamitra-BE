@@ -1098,3 +1098,9 @@ Deployment workflows remain unchanged under the task's explicit scope restrictio
 SalarySummaryApi_Tests covers Gross and Employer Cost previews, summary parity, pending PF/ESIC identifiers, identifier-only updates, immutable compensation history, malformed months, denied permissions, employee scope and tenant isolation.
 StatutoryEnrollment_Tests covers independent application flags and contribution parity with absent identifiers under payable-day proration.
 EsiPayrollWorkflowApi_Tests and IndependentEsiBasisPayroll_Tests require distinct fresh disposable PostgreSQL databases and exercise preview, review, lock, contribution continuity and frozen history.
+
+## Complete table export tests
+
+Run HrTableExport_Tests, HrTableExportApi_Tests and the PostgreSQL reporting suite.
+Cover source-view access without Export grants, current revocation, owner and tenant isolation, complete populations beyond 20,000 rows and immutable typed downloads.
+Cover document checklist pagination, policy filters and performance report scope.

@@ -4,6 +4,8 @@ using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.IO;
+using ClosedXML.Excel;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -120,6 +122,28 @@ public class HrReportingPostgres_Tests(HrReportingPostgresFactory factory) : Shi
 			definition.Summaries = [new() { Field = "employeeCode", Function = "distinct" }];
 			var summary = await PostAndReadAsync<HrReportingPreviewDto>("/api/hr/reports/designer-preview", input);
 			summary.Totals["rowCount"].ShouldBe(25001m); summary.Totals["distinct_employeeCode"].ShouldBe(25001m);
+			var expected = await GetAndReadAsync<EmployeeListResponse>("/api/employees?page=1&pageSize=1");
+			var export = await PostAndReadAsync<HrTableExportStatus>("/api/hr/table-exports", new HrTableExportRequest {
+				Table = "employee-table", Query = JsonSerializer.SerializeToElement(new { }),
+				Columns = [new() { Id = "fullName", Label = "Staff" }, new() { Id = "doi", Label = "Joining date" }]
+			});
+			var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+			await services.ServiceProvider.GetRequiredService<HrTableExportJob>().ExecuteAsync(new() { RunId = export.Id, TenantId = tenantId, AttemptId = await AttemptAsync(export.Id) });
+			var completed = await GetAndReadAsync<HrTableExportStatus>("/api/hr/table-exports/" + export.Id);
+			completed.Status.ShouldBe("Completed", completed.Error); completed.RowCount.ShouldBe(expected.TotalCount); completed.RowCount.ShouldBeGreaterThan(25000);
+			var bytes = await Client.GetByteArrayAsync("/api/hr/table-exports/" + export.Id + "/download");
+			using (var workbook = new XLWorkbook(new MemoryStream(bytes)))
+			{
+				workbook.Worksheet("Report").LastRowUsed()!.RowNumber().ShouldBe(expected.TotalCount + 5);
+				workbook.Worksheet("Report").Column(2).CellsUsed().ShouldContain(x => x.DataType == XLDataType.DateTime);
+			}
+			using (var change = uows.Begin(requiresNew: true, isTransactional: true))
+			{
+				var db = await services.ServiceProvider.GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
+				await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE \"AppEmployees\" SET \"FirstName\" = 'Changed after export' WHERE \"TenantId\" = {tenantId} AND \"Department\" = 'Reporting bulk acceptance'");
+				await change.CompleteAsync();
+			}
+			(await Client.GetByteArrayAsync("/api/hr/table-exports/" + export.Id + "/download")).ShouldBe(bytes);
 		}
 		finally
 		{

@@ -14,6 +14,9 @@ public class HrPolicyAssignmentDto : EntityDto<Guid>
 	public Guid AttendancePolicyId { get; set; }
 	public Guid PayrollPolicyId { get; set; }
 	public Guid? LeavePolicyId { get; set; }
+	public string? PayrollPolicyName { get; set; }
+	public string? AttendancePolicyName { get; set; }
+	public string? LeavePolicyName { get; set; }
 	public DateTime EffectiveFrom { get; set; }
 	public DateTime? EffectiveTo { get; set; }
 	public bool IsActive { get; set; }

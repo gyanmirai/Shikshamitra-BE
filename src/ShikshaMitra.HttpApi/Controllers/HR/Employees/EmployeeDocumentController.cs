@@ -69,6 +69,11 @@ public class EmployeeDocumentController(
 		return await documentAppService.GetDocumentListAsync(employeeId, page, pageSize, search);
 	}
 
+	[HttpGet("checklist")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
+	public Task<Volo.Abp.Application.Dtos.PagedResultDto<EmployeeDocumentChecklistItemDto>> GetChecklistAsync(Guid employeeId, [FromQuery, Range(1, int.MaxValue)] int page = 1, [FromQuery, Range(1, 100)] int pageSize = 20, [FromQuery] string? search = null) =>
+		documentAppService.GetChecklistAsync(employeeId, page, pageSize, search);
+
 	[HttpGet("{documentId:guid}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View)]
 	[ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]

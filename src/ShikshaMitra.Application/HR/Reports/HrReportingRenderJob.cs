@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using ShikshaMitra.Constants.Permissions;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.DependencyInjection;
@@ -14,7 +13,6 @@ using Volo.Abp.MultiTenancy;
 using Volo.Abp.Security.Claims;
 using Volo.Abp.Timing;
 using Volo.Abp.Uow;
-using Volo.Abp.Authorization.Permissions;
 
 namespace ShikshaMitra.HR.Reports;
 
@@ -27,7 +25,7 @@ public class HrReportingRenderJobArgs
 
 public class HrReportingRenderJob(IRepository<HrReportRun, Guid> runs, IRepository<HrReportRunPage, Guid> pages,
 	HrReportingAccess access, HrReportingCapturedAccess capturedAccess, IHrReportingRunLock runLock,
-	IBlobContainer blobs, ICurrentTenant tenant, ICurrentPrincipalAccessor principal, IPermissionChecker permissions,
+	IBlobContainer blobs, ICurrentTenant tenant, ICurrentPrincipalAccessor principal,
 	IUnitOfWorkManager uows, IAsyncQueryableExecuter executor, IClock clock, ILogger<HrReportingRenderJob> logger)
 	: AsyncBackgroundJob<HrReportingRenderJobArgs>, ITransientDependency
 {
@@ -45,7 +43,6 @@ public class HrReportingRenderJob(IRepository<HrReportRun, Guid> runs, IReposito
 			var actorPrincipal = await access.PrincipalAsync(run.OwnerUserId);
 			using var actor = principal.Change(actorPrincipal);
 			await access.EnsureDesignAsync(JsonSerializer.Deserialize<HrReportDesignDto>(run.DefinitionJson, HrReportingEngine.Json)!, run.OwnerUserId);
-			if (!await permissions.IsGrantedAsync(actorPrincipal, ShikshaMitraSubmodulePermissions.HR.Reports.Export)) throw new Volo.Abp.Authorization.AbpAuthorizationException();
 			await capturedAccess.EnsureAsync(run);
 			var result = JsonSerializer.Deserialize<HrReportingResult>(run.ResultJson, HrReportingEngine.Json)!;
 			var stored = await executor.ToListAsync((await pages.GetQueryableAsync()).Where(x => x.RunId == run.Id).OrderBy(x => x.PageNumber));

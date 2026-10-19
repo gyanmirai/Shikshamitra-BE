@@ -44,6 +44,8 @@ public class HrReportExportBackgroundJob(
 				var format = string.Equals(generationContext.Format, HrReportFormat.Pdf, StringComparison.OrdinalIgnoreCase)
 					? HrReportFormat.Pdf
 					: HrReportFormat.Excel;
+				if (format == HrReportFormat.Pdf && HRPdfService.GetIncludedRowCount(report) < report.Rows.Count)
+					throw HrReportingEngine.Invalid("This legacy PDF export exceeds its row limit. Use the complete table export or narrow its filters.");
 				var bytes = format == HrReportFormat.Pdf
 					? await pdfService.GenerateReportPdf(report)
 					: excelService.GenerateReportExcel(report);

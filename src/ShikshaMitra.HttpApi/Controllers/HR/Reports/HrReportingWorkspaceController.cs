@@ -22,6 +22,7 @@ public class HrReportingWorkspaceController(IHrReportingWorkspaceAppService work
 	[HttpPut("library/{id:guid}")] public Task<HrReportLibraryTemplateDto> UpdateTemplateAsync(Guid id, HrReportSaveDesignDto input) => templates.SaveAsync(id, input);
 	[HttpPost("library/{id:guid}/archive")] public Task ArchiveAsync(Guid id, [FromQuery] string concurrencyStamp) => templates.ArchiveAsync(id, concurrencyStamp);
 	[HttpPost("designer-preview")] public Task<HrReportingPreviewDto> PreviewAsync(HrReportDesignerPreviewDto input) => workspace.PreviewAsync(input);
+	[HttpPost("designer-export")] public Task<HrReportRunDto> CapturePreviewAsync(HrReportDesignerPreviewDto input) => workspace.CapturePreviewAsync(input);
 	[HttpPost("runs")] public Task<HrReportRunDto> CreateAsync(HrReportCreateRunDto input) => workspace.CreateAsync(input);
 	[HttpGet("runs")] public Task<HrReportRunHistoryDto> ListAsync(int skip = 0, int take = 50) => workspace.GetRunsAsync(skip, take);
 	[HttpGet("runs/{id:guid}")] public Task<HrReportRunDto> GetAsync(Guid id) => workspace.GetAsync(id);

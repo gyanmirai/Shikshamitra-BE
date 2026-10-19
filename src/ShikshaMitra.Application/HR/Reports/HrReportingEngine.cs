@@ -12,6 +12,7 @@ public class HrReportingResult
 	public string SchoolName { get; set; } = "";
 	public string SchoolAddress { get; set; } = "";
 	public List<Guid> EmployeeIds { get; set; } = [];
+	public List<string> EmployeeCodes { get; set; } = [];
 	public List<Guid> AssignmentIds { get; set; } = [];
 	public List<HrReportFieldDto> Columns { get; set; } = [];
 	public List<Dictionary<string, object?>> Rows { get; set; } = [];

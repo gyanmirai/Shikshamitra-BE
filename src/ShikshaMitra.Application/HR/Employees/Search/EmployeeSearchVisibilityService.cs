@@ -1,77 +1,26 @@
-using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Security.UserScope;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
-using Volo.Abp;
 
 namespace ShikshaMitra.HR.Employees.Search;
 
 [RemoteService(false)]
-public class EmployeeSearchVisibilityService(IEmployeeRepository employeeRepository)
-	: ApplicationService, ITransientDependency
+public class EmployeeSearchVisibilityService(IUserScopeService scopes, HrEmployeeScopeQueryService employees)
+    : ApplicationService, ITransientDependency
 {
-	public async Task<IQueryable<Employee>> ApplyVisibilityScopeAsync(IQueryable<Employee> queryable)
-	{
-		if (IsPrivilegedUser())
-		{
-			return queryable;
-		}
-
-		var currentUserId = CurrentUser.Id;
-		if (!currentUserId.HasValue)
-		{
-			return queryable.Where(_ => false);
-		}
-
-		var actorEmployee = await employeeRepository.GetEmployeeByUserIdAsync(currentUserId.Value);
-		if (actorEmployee == null)
-		{
-			return queryable.Where(_ => false);
-		}
-
-		var reporteeIds = await GetDescendantReporteeIdsAsync(actorEmployee.Id);
-		if (reporteeIds.Count == 0)
-		{
-			return queryable.Where(e => e.Id == actorEmployee.Id);
-		}
-
-		return queryable.Where(e => reporteeIds.Contains(e.Id));
-	}
-
-	private async Task<List<Guid>> GetDescendantReporteeIdsAsync(Guid managerId)
-	{
-		var result = new List<Guid>();
-		var visited = new HashSet<Guid> { managerId };
-		var managerQueue = new Queue<Guid>();
-		managerQueue.Enqueue(managerId);
-
-		while (managerQueue.Count > 0)
-		{
-			var currentManagerId = managerQueue.Dequeue();
-			var reportees = await employeeRepository.GetEmployeesByManagerAsync(currentManagerId);
-
-			foreach (var reportee in reportees)
-			{
-				if (!visited.Add(reportee.Id))
-				{
-					continue;
-				}
-
-				result.Add(reportee.Id);
-				managerQueue.Enqueue(reportee.Id);
-			}
-		}
-
-		return result;
-	}
-
-	private bool IsPrivilegedUser()
-	{
-		return CurrentUser.IsInRole("admin")
-			|| CurrentUser.IsInRole("Administrator")
-			|| CurrentUser.IsInRole("HR Admin")
-			|| CurrentUser.IsInRole("HR Manager");
-	}
+    public async Task<IQueryable<Employee>> ApplyVisibilityScopeAsync(IQueryable<Employee> query)
+    {
+        if (!CurrentUser.Id.HasValue) return query.Where(_ => false);
+        var userId = CurrentUser.Id.Value;
+        var scope = await scopes.GetUserScopeAsync(userId);
+        // Personal records retain the existing ownership exception; other records use
+        // the same current database scope as employee details and report datasets.
+        if (!HrUserScopeAccess.HasAnyConcreteHrStageAccess(scope))
+            return query.Where(employee => employee.UserId == userId);
+        var authorized = await employees.BuildScopedEmployeeQueryAsync(scope);
+        return query.Where(employee => authorized.Select(item => item.Id).Contains(employee.Id));
+    }
 }

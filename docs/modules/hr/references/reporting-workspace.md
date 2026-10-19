@@ -171,3 +171,9 @@ Run `HrReportingWorkspaceApi_Tests` for stored definitions, source permissions, 
 Run `HrReportingPostgres_Tests` with `HR_REPORTING_TEST_POSTGRES` pointing to an empty loopback `reporting_tests_*` database.
 The PostgreSQL fixture refuses an existing schema and never resets a database.
 Complete authenticated Playwright checks, final Codex in-app browser smoke testing, and representative Excel/PDF inspection before release.
+
+## Shared table downloads
+
+Captured results and designer previews use the same [complete table export infrastructure](./hr-table-exports.md).
+The shared table menu owns Excel and PDF actions.
+The legacy separate Export grant is not required; owning data permissions, creator ownership and current scope remain mandatory.

@@ -3,7 +3,7 @@ module: hr
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-09-30
+updated_on: 2026-10-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -84,3 +84,7 @@ Run the frontend HR docs check from `../../../../Shikshamitra-FE`:
 ```bash
 npm run docs:hr:check
 ```
+
+## Shared table export reference
+
+Use [complete HR table exports](./references/hr-table-exports.md) for the current capture and authorization contract.

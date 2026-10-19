@@ -16,6 +16,7 @@ internal static class LeaveManagementProjection
 		{
 			Id = leave.Id,
 			PublicId = leave.PublicId,
+			AppliedDate = leave.CreationTime,
 			EmployeeId = leave.EmployeeId,
 			Name = leave.Employee?.EmployeeNameWithFather ?? "Unknown",
 			EmployeeIdentifier = leave.Employee?.EmployeeCode ?? "Unknown",

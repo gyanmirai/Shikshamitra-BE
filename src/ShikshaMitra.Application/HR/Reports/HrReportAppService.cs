@@ -25,19 +25,14 @@ public class HrReportAppService(HrReportGenerator generator, HrReportExportServi
 		await EnsureSalarySourceAsync(input);
 		return await generator.GenerateAsync(input, CurrentUser.Id!.Value, CurrentTenant.Id, false);
 	}
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
 	public async Task<HrReportExportCreateResponseDto> CreateExportAsync(HrReportRequestDto input) { await EnsureSalarySourceAsync(input); return await exports.CreateExportAsync(input); }
 	public Task<List<HrReportExportJobDto>> GetExportsAsync(HrReportExportListRequestDto input) => exports.GetExportsAsync(input);
 	public Task<HrReportExportJobDto> GetExportAsync(Guid jobId) => exports.GetExportAsync(jobId);
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
 	public Task<HrReportExportJobDto> CancelExportAsync(Guid jobId) => exports.CancelExportAsync(jobId);
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Delete)]
 	public Task DeleteFailedExportAsync(Guid jobId) => exports.DeleteFailedExportAsync(jobId);
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
 	public Task<HrReportExportCreateResponseDto> RetryExportAsync(Guid jobId) => exports.RetryExportAsync(jobId);
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
 	public Task<HrReportExportCreateResponseDto> RegenerateExportAsync(Guid jobId) => exports.RegenerateExportAsync(jobId);
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
 	public Task<HrReportDownloadDto> DownloadExportAsync(Guid jobId) => exports.DownloadExportAsync(jobId);
 }
 

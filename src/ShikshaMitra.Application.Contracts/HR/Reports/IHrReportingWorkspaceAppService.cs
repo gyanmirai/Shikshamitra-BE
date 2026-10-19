@@ -17,6 +17,7 @@ public interface IHrReportingWorkspaceAppService : IApplicationService
 	Task<List<HrReportDatasetDto>> GetCatalogueAsync();
 	Task<HrReportWorkspaceOptionsDto> GetOptionsAsync(string dataset, string search = "");
 	Task<HrReportingPreviewDto> PreviewAsync(HrReportDesignerPreviewDto input);
+	Task<HrReportRunDto> CapturePreviewAsync(HrReportDesignerPreviewDto input);
 	Task<HrReportRunDto> CreateAsync(HrReportCreateRunDto input);
 	Task<HrReportRunHistoryDto> GetRunsAsync(int skip = 0, int take = 50);
 	Task<HrReportRunDto> GetAsync(Guid id);

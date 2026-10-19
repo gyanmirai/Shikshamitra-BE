@@ -8,6 +8,7 @@ using ShikshaMitra.HR.Employees;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Linq;
+using Volo.Abp;
 using static ShikshaMitra.HR.Policies.HrPolicyAssignmentProjection;
 
 namespace ShikshaMitra.HR.Policies;
@@ -23,6 +24,7 @@ public class HrPolicyAssignmentEmployeePreviewResolver(
 		string targetKey)
 	{
 		var employeeQuery = ActiveEmployeeQuery(await employeeRepository.GetQueryableAsync());
+		if (await asyncExecuter.CountAsync(employeeQuery) > 500000) throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
 		if (targetType == HrPolicyAssignmentTargetType.Group)
 		{
 			return await ResolveGroupEmployeesAsync(employeeQuery, targetKey);
@@ -91,7 +93,7 @@ public class HrPolicyAssignmentEmployeePreviewResolver(
 			.Where(x => employeeIds.Contains(x.Id))
 			.ToList();
 
-		return new AffectedEmployeePreview(affected.Count, affected.Take(25).ToList(), affected.Select(x => x.Id).ToList());
+		return new AffectedEmployeePreview(affected.Count, affected, affected.Select(x => x.Id).ToList());
 	}
 
 	private async Task<AffectedEmployeePreview> BuildEmployeePreviewFromQueryAsync(IQueryable<Employee> query)
@@ -102,7 +104,7 @@ public class HrPolicyAssignmentEmployeePreviewResolver(
 			return AffectedEmployeePreview.Empty;
 		}
 
-		var sample = await asyncExecuter.ToListAsync(query.Take(25));
+		var sample = await asyncExecuter.ToListAsync(query.OrderBy(x => x.Id));
 		return new AffectedEmployeePreview(employeeIds.Count, sample, employeeIds);
 	}
 

@@ -90,6 +90,9 @@ public class HrReportingWorkspaceAppService(
 		var template = await templates.ResolveAsync(input.TemplateId, input.Revision);
 		return await QueueAsync(template.Name, template.Id, template.Revision, template.Definition, input.Parameters);
 	}
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Build)]
+	public Task<HrReportRunDto> CapturePreviewAsync(HrReportDesignerPreviewDto input) =>
+		QueueAsync("Report preview", "preview-export", 0, input.Definition, input.Parameters);
 	private async Task<HrReportRunDto> QueueAsync(string name, string templateId, int revision, HrReportDesignDto definition, HrReportParametersDto parameters)
 	{
 		await access.EnsureDesignAsync(definition, UserId());
@@ -117,7 +120,7 @@ public class HrReportingWorkspaceAppService(
 	{
 		var user = UserId();
 		take = Math.Clamp(take, 1, 100);
-		var query = (await runs.GetQueryableAsync()).Where(x => x.OwnerUserId == user).OrderByDescending(x => x.CreationTime).ThenByDescending(x => x.Id).Skip(Math.Max(0, skip)).Take(take + 1);
+		var query = (await runs.GetQueryableAsync()).Where(x => x.OwnerUserId == user && !x.DataSource.StartsWith("table:") && x.TemplateId != "preview-export").OrderByDescending(x => x.CreationTime).ThenByDescending(x => x.Id).Skip(Math.Max(0, skip)).Take(take + 1);
 		var candidates = await AsyncExecuter.ToListAsync(query);
 		var result = new List<HrReportRunDto>();
 		foreach (var run in candidates.Take(take))
@@ -154,7 +157,6 @@ public class HrReportingWorkspaceAppService(
 		if (p.FromDate.HasValue) p.Period = "custom";
 		return await QueueAsync(template.Name, template.Id, template.Revision, template.Definition, p);
 	}
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
 	public async Task CreateExportAsync(Guid id, string format)
 	{
 		var run = await AuthorizedAsync(id); EnsureReady(run); EnsureFormat(format);
@@ -163,7 +165,6 @@ public class HrReportingWorkspaceAppService(
 		await runs.UpdateAsync(run, true);
 		await jobs.EnqueueAsync(new HrReportingRenderJobArgs { RunId = run.Id, TenantId = run.TenantId, Format = format });
 	}
-	[Authorize(ShikshaMitraSubmodulePermissions.HR.Reports.Export)]
 	public async Task<HrReportDownloadDto> DownloadAsync(Guid id, string format)
 	{
 		var run = await AuthorizedAsync(id); EnsureReady(run); EnsureFormat(format);

@@ -211,6 +211,7 @@ public class SalaryTemplateEsiPreviewDto
 
 public class SalaryTemplateCalculationDto
 {
+	public List<ShikshaMitra.HR.Payroll.Compensation.SalaryStatutorySummaryDto> StatutorySummary { get; set; } = [];
 	public PayrollStatutoryApplication? StatutoryApplication { get; set; }
 	public PfEnrollmentDeclaration PfEnrollment { get; set; } = new();
 	public PfEligibilityDecision? PfEligibility { get; set; }

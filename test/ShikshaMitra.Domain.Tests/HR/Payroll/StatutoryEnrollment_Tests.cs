@@ -27,8 +27,8 @@ public class StatutoryEnrollment_Tests
 		{
 			var result = PayrollSchemeApplication.Decide(scheme, apply, number ? "7" : "0", eligible, 1145m, 312m, "Recorded reason");
 			result.CalculatedEmployeeAmount.ShouldBe(1145m); result.CalculatedEmployerAmount.ShouldBe(312m);
-			result.AppliedEmployeeAmount.ShouldBe(apply && number && eligible ? 1145m : 0m);
-			result.AppliedEmployerAmount.ShouldBe(apply && number && eligible ? 312m : 0m);
+			result.AppliedEmployeeAmount.ShouldBe(apply && eligible ? 1145m : 0m);
+			result.AppliedEmployerAmount.ShouldBe(apply && eligible ? 312m : 0m);
 			result.WarningCode.ShouldBe(!apply ? scheme + "_APPLY_DISABLED" : eligible && !number ? scheme + "_NUMBER_MISSING" : null);
 			if (result.WarningCode != null) PayrollLockPreconditionGuard.IsBlockingLockIssue(result.WarningCode).ShouldBeFalse();
 		}
@@ -85,15 +85,17 @@ public class StatutoryEnrollment_Tests
 	}
 	[Theory]
 	[InlineData(8500, 27, 7650)] [InlineData(10000, 26, 8666.67)] [InlineData(8500, 13.5, 3825)] [InlineData(8500, 31, 8500)]
-	public void Regular_gross_proration_is_capped_and_missing_numbers_skip_contributions(decimal gross, decimal days, decimal earned)
+	public void Regular_gross_proration_is_capped_and_missing_numbers_preserve_contributions(decimal gross, decimal days, decimal earned)
 	{
 		var fixture = Build(gross, 12m);
 		var result = PayrollComputation.Calculate(0, 0, days, 30m, fixture.Components, fixture.Rules with
 		{ StatutoryProfile = fixture.Rules.StatutoryProfile! with { PfNumber = "0", EsicInsuranceNumber = " " } });
 		result.GrossSalary.ShouldBe(earned);
-		result.StatutoryApplication!.ProvidentFund.AppliedEmployeeAmount.ShouldBe(0);
-		result.StatutoryApplication.EmployeeStateInsurance.AppliedEmployeeAmount.ShouldBe(0);
-		result.EmployerContributionTotal.ShouldBe(0);
+		var registered = PayrollComputation.Calculate(0, 0, days, 30m, fixture.Components, fixture.Rules);
+		result.StatutoryApplication!.ProvidentFund.AppliedEmployeeAmount.ShouldBe(registered.StatutoryApplication!.ProvidentFund.AppliedEmployeeAmount);
+		result.StatutoryApplication.EmployeeStateInsurance.AppliedEmployeeAmount.ShouldBe(registered.StatutoryApplication.EmployeeStateInsurance.AppliedEmployeeAmount);
+		result.NetPay.ShouldBe(registered.NetPay);
+		result.EmployerContributionTotal.ShouldBe(registered.EmployerContributionTotal);
 	}
 	private static (List<EmployeePayrollComponent> Components, PayrollStatutoryRuleSet Rules) Build(decimal gross, decimal pfRate)
 	{

@@ -62,7 +62,7 @@ public static class EsiStatutoryCalculator
 		if (application.WarningCode != null) issues.Add(application.WarningCode);
 		return result with { Application = application, EmployeeContribution = application.AppliedEmployeeAmount,
 			EmployerContribution = application.AppliedEmployerAmount,
-			GovernmentContribution = application.Apply && application.NumberPresent ? result.GovernmentContribution : 0m,
+			GovernmentContribution = application.Apply && application.Eligible ? result.GovernmentContribution : 0m,
 			IssueCodes = issues };
 	}
 

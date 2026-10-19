@@ -168,7 +168,11 @@ public class EmployeeStatutoryProfileAppService(IRepository<EmployeeStatutoryPro
 	{
 		var locked = (await snapshots.GetListAsync(x => x.EmployeeId == employeeId && x.IsLocked)).Select(x => x.MonthYear)
 			.Concat((await slips.GetListAsync(x => x.EmployeeId == employeeId && (x.Status == SalarySlipStatus.Finalized || x.Status == SalarySlipStatus.Paid))).Select(x => x.MonthYear)).ToHashSet();
-		while (locked.Contains(requested.ToString("yyyy-MM"))) requested = requested.AddMonths(1);
+		foreach (var month in locked)
+		{
+			var boundary = ParseMonth(month);
+			if (boundary >= requested) requested = boundary.AddMonths(1);
+		}
 		return requested;
 	}
 	private DateTime CurrentMonth()

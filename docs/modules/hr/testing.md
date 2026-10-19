@@ -43,6 +43,7 @@ Use broader API tests when a change touches contracts, permissions, payroll, att
 Salary-template coverage must include complete active creation, Needs setup recovery, arbitrary active tenant components, exactly one Basic, zero or one balancing earning, exact rounded gross reconciliation, dependency cycles, cross-tenant component rejection, permission boundaries, concurrency conflicts, idempotent retries, PF defaults, percentage validation, largest fractional remainder allocation and existing statutory rounding, PF ceilings, Gujarat professional-tax boundaries, and Monthly salary and Monthly cost to school (CTC) solving across discontinuities.
 Compensation coverage must prove direct effective saves, effective-month resolution, immutable history, same-month supersession, scheduled future revisions, idempotent retries, controlled overrides, activation readiness, locked-payroll protection, separate one-time lines, and blocking protected-target drift.
 Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, ESI uses effective coverage and wages, eligible PwD relief is government funded, employer contributions remain outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
+Salary-summary API regressions compare preview and saved totals with overlapping professional-tax rules and with a cessation-month exemption.
 
 ## Required docs checks
 
@@ -258,7 +259,7 @@ Run both workflow suites with `dotnet test test/ShikshaMitra.HttpApi.Tests --fil
 | Generated overtime with ESIC on/off, above-ceiling employees and exclusion add-back | SalarySlipAppService_Tests and EsiStatutoryCalculator_Tests |
 | Custom earning names cannot impersonate generated overtime | EsiStatutoryCalculator_Tests |
 | Manual earning adjustments can be classified; other tenants, months and deductions stay outside the catalog | EsiPayrollWorkflowApi_Tests |
-| Readiness summaries report the same blockers as locking, including missing-number coverage with zero contributions | PayrollReadinessProjector_Tests and EsiPayrollWorkflowApi_Tests |
+| Readiness summaries report the same genuine blockers as locking; missing identifiers remain non-blocking with calculated contributions | PayrollReadinessProjector_Tests and EsiPayrollWorkflowApi_Tests |
 | Whole-month exceptions, leap years, invalid ranges and continuity period boundaries | EsiCorrectness_Tests and EsiStatutoryCalculator_Tests |
 | Current/future recalculation, retries, stale edits and immutable earlier/locked payroll | EsiConfigurationResolution_Tests and EsiConfigurationPostgres_Tests |
 | Earlier finalization, later calculation and locking overlap in both transaction orderings | EsiPayrollWorkflowPostgres_Tests |
@@ -588,8 +589,9 @@ After the fix, the combined calculation-equality, correction-state and settlemen
 Changed amounts below one paisa, component amounts, coverage, insurance identity, configuration version, issue codes, component order, attendance source and null-versus-empty values remain conflicts.
 
 The final authenticated insurance workflow passed one test with five scenarios in 1m31s on its own fresh `PAYROLL_PAYSLIP_CORRECTION_INSURANCE_TEST_POSTGRES` database.
-Full pay, zero-pay CTC and employee-share exemptions retain the missing-number issue and calculated contributions where applicable; review is blocked until the number is supplied.
-Pending registration still allows compensation preparation, and adding the number permits recalculation, review and reissue without changing any original PDF bytes.
+Full pay, zero-pay CTC and employee-share exemptions retain the missing-number issue and calculated contributions where applicable; review and reissue remain available while registration is pending.
+Pending registration allows compensation preparation, review and reissue without changing any original PDF bytes.
+Adding a registration number changes follow-up status, not calculated amounts.
 Above-ceiling and ESIC-off corrections require no insurance number and omit employee ESIC deductions and employer amounts as applicable.
 The first fixture attempt used an obsolete revision token for a new compensation month; the test was corrected to follow the existing month-specific concurrency contract.
 The subsequent API failure was the reproduced negative-zero product bug and remains separate from that fixture error.
@@ -1063,3 +1065,9 @@ Run EsiPayrollWorkflowApi_Tests with a separate fresh PAYROLL_REGISTRATION_TEST_
 Use synthetic identities and adjusted test dates.
 Render Compact/Detailed payslips and both reports through the application PDF services, then inspect the rendered pages.
 Apply the migration SQL to a disposable copy of the previous schema and verify known identifier normalization without changing historical money or documents.
+
+## Salary summary and pending registration regression
+
+SalarySummaryApi_Tests covers Gross and Employer Cost previews, summary parity, pending PF/ESIC identifiers, identifier-only updates, immutable compensation history, malformed months, denied permissions, employee scope and tenant isolation.
+StatutoryEnrollment_Tests covers independent application flags and contribution parity with absent identifiers under payable-day proration.
+EsiPayrollWorkflowApi_Tests and IndependentEsiBasisPayroll_Tests require distinct fresh disposable PostgreSQL databases and exercise preview, review, lock, contribution continuity and frozen history.

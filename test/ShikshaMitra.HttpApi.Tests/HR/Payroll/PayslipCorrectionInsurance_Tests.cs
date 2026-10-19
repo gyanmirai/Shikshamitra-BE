@@ -32,7 +32,7 @@ public sealed class PayslipCorrectionInsuranceTestFactory : PayslipPostgresTestF
 public class PayslipCorrectionInsurance_Tests
 {
 	[PayslipCorrectionInsuranceFact]
-	public async Task Covered_corrections_require_insurance_even_for_zero_or_exempt_shares_and_preserve_originals()
+	public async Task Covered_corrections_allow_pending_registration_and_preserve_originals()
 	{
 		using var factory = new PayslipCorrectionInsuranceTestFactory();
 		var workflow = new EsiPayrollWorkflowScenario(factory);
@@ -47,7 +47,7 @@ public class PayslipCorrectionInsurance_Tests
 		{
 			if (scenario == "off") await workflow.ConfigureAsync(false);
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(api, "CorrectionInsurance_" + scenario, dateOfJoining: month);
-			await workflow.EnrollAsync(employee.Id, "1234567890");
+			await workflow.EnrollAsync(employee.Id, null);
 			var basis = scenario == "zero" ? "EMPLOYER_COST" : "GROSS";
 			var amount = scenario switch { "exempt" => 4000m, "noncovered" => 23000m, _ => 10000m };
 			await workflow.SaveCompensationAsync(employee.Id, month, basis, amount);
@@ -69,8 +69,7 @@ public class PayslipCorrectionInsurance_Tests
 			}, json);
 			await EsiPayrollWorkflowScenario.RequireSuccess(started);
 			var draft = (await started.Content.ReadFromJsonAsync<PayslipCorrectionDto>(json))!;
-			// Use the supported enrollment workflow, never mutate a stored calculation or an issued PDF.
-			await workflow.EnrollAsync(employee.Id, null);
+			// The original was issued with registration pending. Keep its effective profile unchanged.
 			// Pending registration still permits ordinary salary preparation in an unlocked future month.
 			await workflow.SaveCompensationAsync(employee.Id, month.AddMonths(1), basis, amount);
 			var attendance = scenario == "zero"
@@ -91,7 +90,7 @@ public class PayslipCorrectionInsurance_Tests
 			if (covered)
 			{
 				candidate.EmployeeStateInsuranceCoverageDecision.ShouldBe("WITHIN_WAGE_CEILING");
-				candidate.IssueCodes.ShouldContain(IssueCodes.EsiInsuranceNumberRequired);
+				candidate.IssueCodes.ShouldContain("ESI_NUMBER_MISSING");
 				if (scenario == "zero")
 				{
 					candidate.TotalEarnings.ShouldBe(0);
@@ -105,19 +104,10 @@ public class PayslipCorrectionInsurance_Tests
 					if (scenario == "exempt") employeeShare.ShouldBe(0);
 					else employeeShare.ShouldBeGreaterThan(0);
 				}
-				var rejectedReview = await api.PostAsJsonAsync($"/api/payroll/payslip-corrections/{draft.Id}/review",
-					new PayslipCorrectionActionDto { ConcurrencyStamp = calculated.ConcurrencyStamp }, json);
-				rejectedReview.IsSuccessStatusCode.ShouldBeFalse();
-				(await rejectedReview.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.PayrollBlockingIssuesBeforeLock);
-				var rejectedApply = await api.PostAsJsonAsync($"/api/payroll/payslip-corrections/{draft.Id}/apply",
-					new PayslipCorrectionActionDto { ConcurrencyStamp = calculated.ConcurrencyStamp }, json);
-				rejectedApply.IsSuccessStatusCode.ShouldBeFalse();
+				// Registration is follow-up data. The normal review/reissue below must succeed without it.
 				(await api.GetFromJsonAsync<List<PayslipDocumentDto>>(documentsUrl, json))!.Count.ShouldBe(1);
 				(await api.GetFromJsonAsync<SalarySlipResponse>(slipUrl, json))!.NetSalary.ShouldBe(originalSlip.NetSalary);
 				Convert.ToHexString(SHA256.HashData(await api.GetByteArrayAsync($"/api/payroll/payslip-documents/{original.Id}/pdf"))).ShouldBe(original.Sha256);
-				await workflow.EnrollAsync(employee.Id, "1234567890");
-				calculated = await CalculateAsync(calculated.ConcurrencyStamp);
-				calculated.Candidate!.IssueCodes.ShouldNotContain(IssueCodes.EsiInsuranceNumberRequired);
 			}
 			else
 			{

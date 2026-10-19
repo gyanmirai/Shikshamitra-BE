@@ -37,8 +37,6 @@ public class PayslipIssuanceService(
 	{
 		var existing = await documents.FindAsync(x => x.SalarySlipId == slip.Id && x.Revision == 1);
 		if (existing != null) return existing;
-		ShikshaMitra.HR.Payroll.Statutory.EsiPayrollReadiness.EnsureInsuranceNumber(
-			slip.EmployeeStateInsuranceRuleId, slip.EmployeeStateInsuranceCoverageDecision, slip.EmployeeStateInsuranceNumber, slip.StatutoryApplicationJson);
 		var employee = employeeBatch?.GetValueOrDefault(slip.EmployeeId) ?? await employees.GetAsync(slip.EmployeeId, includeDetails: false);
 		var details = bankBatch == null ? await payrollDetails.GetByEmployeeIdAsync(slip.EmployeeId) : bankBatch.GetValueOrDefault(slip.EmployeeId);
 		if (snapshotEvidence != null && (snapshotEvidence.EmployeeId != slip.EmployeeId || snapshotEvidence.MonthYear != slip.MonthYear || snapshotEvidence.TenantId != slip.TenantId))

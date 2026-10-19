@@ -23,7 +23,6 @@ public class SalarySlipWorkflow(
 	SalarySlipAccessService accessService,
 	IPayrollInputRevisionStore revisions,
 	EsiContinuityInvalidator continuityInvalidator,
-	EsiEnrollmentResolver enrollmentResolver,
 	PayslipIssuanceService issuance,
 	PayslipFinalizationGuard finalizationGuard,
 	ILogger<SalarySlipAppService> logger)
@@ -169,11 +168,6 @@ public class SalarySlipWorkflow(
 			throw new BusinessException(HRErrorCodes.SalarySlipAlreadyFinalized);
 
 		salarySlip = await draftFreshnessService.EnsureFreshAsync(salarySlip);
-		var enrollments = await enrollmentResolver.ResolveAsync(
-			new DateTime(salarySlip.Year, salarySlip.Month, 1), [salarySlip.EmployeeId]);
-		enrollments.TryGetValue(salarySlip.EmployeeId, out var enrollment);
-		EsiPayrollReadiness.EnsureInsuranceNumber(salarySlip.EmployeeStateInsuranceRuleId,
-			salarySlip.EmployeeStateInsuranceCoverageDecision, enrollment?.InsuranceNumber, salarySlip.StatutoryApplicationJson);
 		await finalizationGuard.EnsureReviewedAsync(salarySlip);
 		await issuance.IssueAsync(salarySlip);
 		salarySlip.FinalizeSlip();

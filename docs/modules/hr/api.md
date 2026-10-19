@@ -216,7 +216,8 @@ ESIC exceptions require EffectiveFrom on the first day and EffectiveTo on the la
 Partial-month and reversed ranges fail validation.
 When exceptions overlap, the newest applicable coverage or amount exception is authoritative.
 Unclassified wages block statutory-mode payroll lock.
-Missing registration numbers and disabled Apply flags suppress the corresponding employee and employer contributions with reviewable warnings.
+Missing registration numbers produce follow-up warnings without suppressing eligible employee or employer contributions.
+Disabled Apply flags suppress the corresponding contributions.
 HR supplies registration facts and supported exceptions; eligibility and contribution-period continuation are derived automatically.
 Locked salary slips retain the ESI rule version, statutory wages, coverage decision, insurance number, contribution period, employee deduction, and employer contribution.
 PwD employer-share relief requires the PwD wage-ceiling category, an effective start date, and a disability evidence reference.
@@ -530,8 +531,9 @@ Missing required salary rules, invalid selected components, unknown coverage, st
 | POST /api/hr/reports/preview | Existing HR Reports View; payroll_statement requires one employee and an inclusive month range, payroll_register requires one month. |
 | POST /api/hr/reports/exports | Existing HR Reports Export; queued PDF/Excel exports with existing ownership, limits and expiry. |
 
-The profile payload contains Apply PF, PF number, optional 12-digit UAN, PF disabled reason, Apply ESIC, insurance number and ESIC disabled reason.
+The profile payload contains Apply PF, PF number, 12-digit UAN, PF disabled reason, Apply ESIC, insurance number and ESIC disabled reason.
 The two schemes are independent; blank, whitespace and the exact placeholder 0 count as a missing number.
+PF, UAN and ESIC identifiers may be supplied later and do not block salary calculation, saving, activation, payroll locking or payslip issuance.
 School PF references such as 7 and 244 are accepted.
 An intentional disabled scheme requires a reason; incomplete registration can be saved.
 Existing onboarding finalization persists supplied statutory details within its transaction.
@@ -551,3 +553,14 @@ New evidence captures CL, other paid leave and unpaid leave separately from empl
 
 The ESIC coverage endpoint treats insurance numbers as read-only profile projections.
 Identifier writes use the statutory-profile endpoint with caller-supplied concurrency and idempotency keys.
+
+## Full-month salary summary
+
+GET /api/payroll/employees/{employeeId}/salary-summary?month=YYYY-MM requires CompensationRevisions.View or Manage and employee UserScope in the current tenant.
+The read model uses saved recurring compensation with full-month payable units and effective statutory rules through the existing payroll calculation services.
+It excludes attendance and one-time adjustments, and does not create payroll snapshots or reviews.
+The response includes revision identity, salary effective month, earnings, employee deductions, school contributions, and PF/ESIC/PT decisions with reasons and registration completeness.
+Incomplete statutory setup returns IsComplete=false and unavailable deduction, take-home and school-cost totals rather than valid-looking zeros.
+Registration identifiers are not returned by this endpoint.
+Salary-template calculation responses include the same StatutorySummary presentation contract.
+Refreshing current unlocked payroll applies eligible contributions before registration is complete; saved gross and locked or issued history remain unchanged.

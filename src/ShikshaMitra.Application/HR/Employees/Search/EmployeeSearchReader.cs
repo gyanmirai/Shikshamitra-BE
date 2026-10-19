@@ -61,11 +61,16 @@ public class EmployeeSearchReader(
 			.ThenBy(e => e.LastName)
 			.ThenBy(e => e.Id)
 			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount));
+			.Take(input.MaxResultCount)
+			.Select(EmployeeSearchProjection.Summary));
 
 		var organizationsByUserId = await organizationScopeResolver.GetOrganizationsByUserIdsAsync(
 			employees.Select(x => x.UserId));
 		var pageSize = input.MaxResultCount > 0 ? input.MaxResultCount : 10;
+		foreach (var employee in employees)
+		{
+			EmployeeSearchProjection.ApplyOrganizations(employee, organizationsByUserId);
+		}
 
 		return new EmployeeListResponse
 		{
@@ -74,8 +79,6 @@ public class EmployeeSearchReader(
 			PageSize = pageSize,
 			TotalPages = (int)Math.Ceiling((double)totalCount / pageSize),
 			Items = employees
-				.Select(employee => EmployeeSearchProjection.ToSummary(employee, organizationsByUserId))
-				.ToList()
 		};
 	}
 

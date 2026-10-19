@@ -246,6 +246,7 @@ The document-detail replacement operation is not a monetary correction mechanism
 
 HR selects a staff member and preview month to see saved gross, effective salary date and current statutory decisions.
 The summary uses the saved earnings distribution without silently upgrading the salary template or rebalancing agreed gross.
+Salary-template previews and saved summaries use the same professional-tax rule ordering and configured cessation-month exemption as monthly payroll.
 Missing rules or wage classifications remain actionable blockers; missing registration numbers remain follow-up warnings.
 Actual attendance, loss of pay and one-time adjustments belong to Run Payroll.
 Existing unlocked payroll receives corrected contributions on refresh and changed rows require renewed review.

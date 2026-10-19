@@ -66,13 +66,7 @@ public class SalarySummaryAppService(
 		var cessationExemption = includesPt && cessationMonth && pt == null && slabs.Any(x =>
 			!x.DeductInCessationMonth && result.TotalEarnings >= x.FromSalary &&
 			(!x.ToSalary.HasValue || result.TotalEarnings <= x.ToSalary));
-		var ptSummary = SalaryStatutorySummary.ProfessionalTax(includesPt, pt);
-		if (cessationExemption)
-		{
-			ptSummary.Status = "NOT_APPLICABLE";
-			ptSummary.Reason = "Professional tax is exempt in the employment cessation month under the effective slab.";
-			ptSummary.EmployeeAmount = 0m;
-		}
+		var ptSummary = SalaryStatutorySummary.ProfessionalTax(includesPt, pt, cessationExemption);
 		summary.StatutorySummary = [SalaryStatutorySummary.Pf(result.StatutoryApplication?.ProvidentFund, decision, pfRule),
 			SalaryStatutorySummary.Esi(result.EsiCalculation, result.StatutoryApplication?.EmployeeStateInsurance, configuration?.Enabled == true),
 			ptSummary];

@@ -33,12 +33,12 @@ internal static class SalaryStatutorySummary
 		EmployerPercentage = calculation?.EmployerPercentage
 	};
 
-	public static SalaryStatutorySummaryDto ProfessionalTax(bool included, ProfessionalTax? slab) => new()
+	public static SalaryStatutorySummaryDto ProfessionalTax(bool included, ProfessionalTax? slab, bool cessationExemption = false) => new()
 	{
 		Scheme = "PT",
-		Status = !included ? "NOT_APPLICABLE" : slab == null ? "NEEDS_SETUP" : slab.TaxAmount > 0m ? "APPLIED" : "NOT_APPLICABLE",
-		Reason = !included ? "Professional tax is not included in this salary structure." : slab == null ? "No matching professional-tax slab is available for this month." : slab.TaxAmount > 0m ? "Applied using the effective Gujarat professional-tax slab." : "No professional tax is payable in this salary slab.",
-		EmployeeAmount = !included ? 0m : slab?.TaxAmount,
+		Status = !included || cessationExemption ? "NOT_APPLICABLE" : slab == null ? "NEEDS_SETUP" : slab.TaxAmount > 0m ? "APPLIED" : "NOT_APPLICABLE",
+		Reason = !included ? "Professional tax is not included in this salary structure." : cessationExemption ? "Professional tax is exempt in the employment cessation month under the effective slab." : slab == null ? "No matching professional-tax slab is available for this month." : slab.TaxAmount > 0m ? "Applied using the effective Gujarat professional-tax slab." : "No professional tax is payable in this salary slab.",
+		EmployeeAmount = !included || cessationExemption ? 0m : slab?.TaxAmount,
 		EmployerAmount = 0m,
 		RuleId = slab?.Id,
 		RuleVersion = slab?.Version

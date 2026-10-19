@@ -43,6 +43,7 @@ Use broader API tests when a change touches contracts, permissions, payroll, att
 Salary-template coverage must include complete active creation, Needs setup recovery, arbitrary active tenant components, exactly one Basic, zero or one balancing earning, exact rounded gross reconciliation, dependency cycles, cross-tenant component rejection, permission boundaries, concurrency conflicts, idempotent retries, PF defaults, percentage validation, largest fractional remainder allocation and existing statutory rounding, PF ceilings, Gujarat professional-tax boundaries, and Monthly salary and Monthly cost to school (CTC) solving across discontinuities.
 Compensation coverage must prove direct effective saves, effective-month resolution, immutable history, same-month supersession, scheduled future revisions, idempotent retries, controlled overrides, activation readiness, locked-payroll protection, separate one-time lines, and blocking protected-target drift.
 Monthly payroll coverage must prove that PF uses prorated eligible wages, professional tax uses actual monthly Gross without attendance-prorating the slab amount, cessation-month treatment follows the effective professional-tax profile, ESI uses effective coverage and wages, eligible PwD relief is government funded, employer contributions remain outside net pay, unlocked previews refresh, and locked snapshots remain immutable.
+Salary-summary API regressions compare preview and saved totals with overlapping professional-tax rules and with a cessation-month exemption.
 
 ## Required docs checks
 

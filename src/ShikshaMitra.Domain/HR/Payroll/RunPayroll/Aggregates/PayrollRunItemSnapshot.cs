@@ -114,7 +114,8 @@ public class PayrollRunItemSnapshot : FullAuditedAggregateRoot<Guid>, IMultiTena
 	}
 
 	public void MarkLocked()
-	{		IsLocked = true;
+	{
+		IsLocked = true;
 		ReviewStatus = "LOCKED";
 	}
 }

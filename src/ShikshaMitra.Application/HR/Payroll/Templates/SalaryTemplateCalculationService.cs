@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.HR.Payroll.Compensation;
 using ShikshaMitra.HR.Payroll.Statutory;
+using ShikshaMitra.HR.Employees;
 using Volo.Abp;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Linq;
@@ -17,6 +18,7 @@ public class SalaryTemplateCalculationService(
 	IDeductionComponentRepository deductionComponentRepository,
 	IProvidentFundRepository providentFundRepository,
 	IProfessionalTaxRepository professionalTaxRepository,
+	IEmployeeRepository employees,
 	SalaryTemplateEsiContextResolver esiContextResolver,
 	IAsyncQueryableExecuter asyncExecuter, IClock clock, PfEligibilityResolver pfEligibilityResolver, EmployeeStatutoryProfileResolver profileResolver, EmployeeStatutoryProfileAppService profileService, Volo.Abp.Domain.Repositories.IRepository<ShikshaMitra.HR.Payroll.Compensation.EmployeeCompensationRevision, Guid> revisions) : ITransientDependency
 {
@@ -60,6 +62,9 @@ public class SalaryTemplateCalculationService(
 			throw new BusinessException("HR:Payroll:ProfessionalTaxRuleNotEffective")
 				.WithData("effectiveMonth", effectiveMonth.ToString("yyyy-MM"));
 		}
+		var cessationMonth = input.EmployeeId.HasValue && EmployeeLifecycleEligibility.IsEmploymentCessationMonth(
+			await employees.GetAsync(input.EmployeeId.Value), effectiveMonth.Year, effectiveMonth.Month);
+		var applicableTaxSlabs = professionalTaxSlabs.Where(x => !cessationMonth || x.DeductInCessationMonth).ToList();
 
 		var basis = ParseSalaryBasis(input.SalaryBasis);
 		var protectionPolicy = ParseProtectionPolicy(input.ProtectionPolicy);
@@ -74,9 +79,9 @@ public class SalaryTemplateCalculationService(
 		var resolvedGross = preserveGross ? savedRevision!.GrossSalary : basis == SalaryInputBasis.Gross ? input.MonthlyAmount :
 			SalaryTemplateCalculator.Calculate(basis, input.MonthlyAmount, rules, components,
 				applicationProfile == null || applicationProfile.ApplyPf ? pfRule : null,
-				professionalTaxSlabs,
+				applicableTaxSlabs,
 				applicationProfile == null || applicationProfile.ApplyEsic ? esiResolution.Context : null).Gross;
-		var evaluation = SalaryTemplateCalculator.Calculate(SalaryInputBasis.Gross, resolvedGross, rules, components, pfRule, professionalTaxSlabs, esiResolution.Context);
+		var evaluation = SalaryTemplateCalculator.Calculate(SalaryInputBasis.Gross, resolvedGross, rules, components, pfRule, applicableTaxSlabs, esiResolution.Context);
 		if (applicationProfile != null) evaluation = SalaryTemplateStatutoryApplication.Apply(evaluation, applicationProfile, pfRule != null);
 		var pfWages = evaluation.Earnings.Where(x => x.SemanticType is "BASIC" or "DEARNESS_ALLOWANCE").Sum(x => x.Amount);
 		var pfEligibility = await pfEligibilityResolver.ResolveAsync(input.EmployeeId, effectiveMonthEnd, evaluation.Gross, pfWages,
@@ -176,10 +181,12 @@ public class SalaryTemplateCalculationService(
 			GeneratedAt = clock.Now
 		};
 		var ptIncluded = rules.Any(x => x.FormulaType == SalaryTemplateFormulaType.ProfessionalTax);
-		var ptSlab = professionalTaxSlabs.Where(x => evaluation.Gross >= x.FromSalary && (!x.ToSalary.HasValue || evaluation.Gross <= x.ToSalary)).OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Version).FirstOrDefault();
+		var ptSlab = applicableTaxSlabs.Where(x => evaluation.Gross >= x.FromSalary && (!x.ToSalary.HasValue || evaluation.Gross <= x.ToSalary)).OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Version).FirstOrDefault();
+		var cessationExemption = cessationMonth && ptSlab == null && professionalTaxSlabs.Any(x =>
+			!x.DeductInCessationMonth && evaluation.Gross >= x.FromSalary && (!x.ToSalary.HasValue || evaluation.Gross <= x.ToSalary));
 		response.StatutorySummary = [SalaryStatutorySummary.Pf(evaluation.StatutoryApplication?.ProvidentFund, pfEligibility, pfRule),
 			SalaryStatutorySummary.Esi(esiResult, evaluation.StatutoryApplication?.EmployeeStateInsurance, esiResolution.IsEnabled),
-			SalaryStatutorySummary.ProfessionalTax(ptIncluded, ptSlab)];
+			SalaryStatutorySummary.ProfessionalTax(ptIncluded, ptSlab, cessationExemption)];
 		response.StatutorySummary[1].RuleId = response.EmployeeStateInsurance.RuleId;
 		response.StatutorySummary[1].RuleVersion = response.EmployeeStateInsurance.RuleVersion;
 		return response;

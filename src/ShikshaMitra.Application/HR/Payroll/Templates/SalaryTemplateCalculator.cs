@@ -612,7 +612,8 @@ internal static class SalaryTemplateCalculator
 	private static decimal ResolveProfessionalTax(decimal gross, IReadOnlyList<ProfessionalTax> slabs) =>
 		slabs
 			.Where(x => gross >= x.FromSalary && (!x.ToSalary.HasValue || gross <= x.ToSalary.Value))
-			.OrderByDescending(x => x.FromSalary)
+			.OrderByDescending(x => x.EffectiveFrom)
+			.ThenByDescending(x => x.Version)
 			.Select(x => x.TaxAmount)
 			.FirstOrDefault();
 

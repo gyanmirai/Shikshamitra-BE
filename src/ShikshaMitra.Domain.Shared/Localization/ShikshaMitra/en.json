@@ -1,6 +1,13 @@
 {
     "Culture": "en",
     "Texts": {
+        "HR:Payroll:EsiPolicyInvalid": "Review the ESIC policy values, effective month, and source.",
+        "HR:Payroll:EsiPolicySelectionInvalid": "Choose an ESIC policy, or select external management and enter its reason.",
+        "HR:Payroll:EsiDefaultPolicyRequired": "The default ESIC policy must remain available.",
+        "HR:Payroll:EsiPolicyNotEffective": "The selected ESIC policy has no effective version for this payroll month. Choose a policy or create its effective version.",
+        "HR:Payroll:EsiPolicyArchived": "This ESIC policy is archived. Choose an active policy for new assignments.",
+        "HR:Payroll:EsiPolicyVersionOverlap": "Choose an effective month after the latest policy version. Effective periods cannot overlap.",
+        "HR:Payroll:EsiPolicyCodeExists": "An ESIC policy already uses this code. Choose a different code.",
         "ShikshaMitra:RoleAssignedToUsers": "This role is assigned to {UserCount} user(s) and cannot be deleted. Reassign or remove those users first.",
         "ShikshaMitra:RoleReferencedByEmployees": "This role is referenced by {EmployeeCount} employee record(s) and cannot be deleted. Reassign those employees first, including archived records.",
         "SchoolIdentity:InvalidContext": "Select a board and medium belonging to this school and academic year.",

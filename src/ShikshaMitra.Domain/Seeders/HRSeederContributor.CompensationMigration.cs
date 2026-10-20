@@ -112,6 +112,7 @@ public partial class HRSeederContributor
 				Guid.TryParse(details?.PfRule, out var pfRuleId) ? pfRuleId : null,
 				"IN-GJ",
 				snapshot);
+			revision.SetEsiAssignment("IN_PLATFORM", (await _esiPolicyRepository.GetAsync(x => x.IsDefault)).Id, null);
 			revision.MakeEffectiveFromLegacy(migratedAt);
 			await _compensationRevisionRepository.InsertAsync(revision, autoSave: false);
 

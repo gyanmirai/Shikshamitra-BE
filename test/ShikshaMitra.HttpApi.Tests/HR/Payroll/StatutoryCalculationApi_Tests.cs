@@ -142,6 +142,8 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 		var profileUrl = $"/api/employees/{employeeId}/payroll/statutory-profile";
 		var profile = await GetAndReadAsync<EmployeeStatutoryProfileDto>(profileUrl);
 		var input = new SaveEmployeeCompensationDto { TemplateVersionId = template.EditableVersion.Id,
+			EsiManagementMode = template.EditableVersion.DefaultEsiManagementMode, EsiPolicyId = template.EditableVersion.DefaultEsiPolicyId,
+			EsiExternalReason = template.EditableVersion.DefaultEsiExternalReason,
 			SalaryBasis = "GROSS", ProtectionPolicy = "PROTECT_GROSS", MonthlyAmount = 25000m, EffectiveMonth = month,
 			PfApplicable = false, PfEnrollment = new() { Membership = "NOT_MEMBER" }, IdempotencyKey = Guid.NewGuid().ToString("N") };
 		var url = $"/api/payroll/employees/{employeeId}/compensation";

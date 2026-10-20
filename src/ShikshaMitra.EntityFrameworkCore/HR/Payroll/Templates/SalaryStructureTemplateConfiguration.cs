@@ -23,6 +23,9 @@ public class SalaryStructureTemplateVersionConfiguration : IEntityTypeConfigurat
 	{
 		builder.ToTable("HR_SalaryStructureTemplateVersions");
 		builder.ConfigureByConvention();
+		builder.Property(x => x.DefaultEsiManagementMode).IsRequired().HasMaxLength(20).HasDefaultValue("IN_PLATFORM");
+		builder.Property(x => x.DefaultEsiExternalReason).HasMaxLength(500);
+		builder.HasOne<ShikshaMitra.HR.Payroll.Statutory.EsiPolicy>().WithMany().HasForeignKey(x => x.DefaultEsiPolicyId).OnDelete(DeleteBehavior.Restrict);
 		builder.Property(x => x.RulesJson).IsRequired().HasColumnType("jsonb");
 		builder.Property(x => x.DefaultSalaryBasis).IsRequired();
 		builder.Property(x => x.DefaultProtectionPolicy).IsRequired();

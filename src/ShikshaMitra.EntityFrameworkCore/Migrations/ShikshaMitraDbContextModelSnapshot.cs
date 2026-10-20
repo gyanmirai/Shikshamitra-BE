@@ -16587,6 +16587,20 @@ namespace ShikshaMitra.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<string>("EsiExternalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("EsiManagementMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("IN_PLATFORM");
+
+                    b.Property<Guid?>("EsiPolicyId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("ExtraProperties")
                         .IsRequired()
                         .HasColumnType("text")
@@ -16683,6 +16697,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnName("TenantId");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EsiPolicyId");
 
                     b.HasIndex("TenantId", "EmployeeId", "IdempotencyKey")
                         .IsUnique()
@@ -18958,6 +18974,86 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppEsiPayrollConfigurations", (string)null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Statutory.EsiPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<Guid?>("DeleterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("DeleterId");
+
+                    b.Property<DateTime?>("DeletionTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("DeletionTime");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("IsDeleted");
+
+                    b.Property<DateTime?>("LastModificationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("LastModificationTime");
+
+                    b.Property<Guid?>("LastModifierId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("LastModifierId");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique()
+                        .HasFilter("\"IsDefault\" = true AND \"IsDeleted\" = false");
+
+                    b.HasIndex("TenantId", "Code")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
+
+                    b.ToTable("AppEsiPolicies", (string)null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Statutory.PayrollComponentStatutoryTreatment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -19266,6 +19362,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CalculationSettingsJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -19313,6 +19412,9 @@ namespace ShikshaMitra.Migrations
                         .HasPrecision(7, 4)
                         .HasColumnType("numeric(7,4)");
 
+                    b.Property<Guid?>("EsiPolicyId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("EstablishmentThreshold")
                         .HasColumnType("integer");
 
@@ -19351,6 +19453,9 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<string>("RequestFingerprint")
+                        .HasColumnType("text");
+
                     b.Property<int>("RoundingPolicy")
                         .HasColumnType("integer");
 
@@ -19380,10 +19485,21 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("EsiPolicyId");
+
+                    b.HasIndex("TenantId", "EsiPolicyId", "EffectiveFrom")
+                        .IsUnique()
+                        .HasFilter("\"EsiPolicyId\" IS NOT NULL AND \"IsDeleted\" = false");
+
+                    b.HasIndex("TenantId", "EsiPolicyId", "Version")
+                        .IsUnique()
+                        .HasFilter("\"EsiPolicyId\" IS NOT NULL");
+
                     b.HasIndex("TenantId", "SchemeCode", "EffectiveFrom", "IsActive");
 
                     b.HasIndex("TenantId", "SchemeCode", "JurisdictionCode", "Version")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"EsiPolicyId\" IS NULL");
 
                     b.ToTable("AppStatutoryRuleVersions", (string)null);
                 });
@@ -19493,6 +19609,20 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("CreatorId");
 
+                    b.Property<string>("DefaultEsiExternalReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("DefaultEsiManagementMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("IN_PLATFORM");
+
+                    b.Property<Guid?>("DefaultEsiPolicyId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("DefaultPfApplicable")
                         .HasColumnType("boolean");
 
@@ -19558,6 +19688,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DefaultEsiPolicyId");
 
                     b.HasIndex("TemplateId");
 
@@ -39990,6 +40122,14 @@ namespace ShikshaMitra.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Compensation.EmployeeCompensationRevision", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.Payroll.Statutory.EsiPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("EsiPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Compensation.EmployeeCompensationRevisionLine", b =>
                 {
                     b.HasOne("ShikshaMitra.HR.Payroll.Compensation.EmployeeCompensationRevision", null)
@@ -40046,8 +40186,21 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Dependent");
                 });
 
+            modelBuilder.Entity("ShikshaMitra.HR.Payroll.Statutory.StatutoryRuleVersion", b =>
+                {
+                    b.HasOne("ShikshaMitra.HR.Payroll.Statutory.EsiPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("EsiPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("ShikshaMitra.HR.Payroll.Templates.SalaryStructureTemplateVersion", b =>
                 {
+                    b.HasOne("ShikshaMitra.HR.Payroll.Statutory.EsiPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("DefaultEsiPolicyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.HR.Payroll.Templates.SalaryStructureTemplate", null)
                         .WithMany()
                         .HasForeignKey("TemplateId")

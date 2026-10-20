@@ -28,7 +28,7 @@ public class SalarySummaryAppService(
 	EsiPayrollConfigurationResolver esiConfiguration,
 	EmployeeStatutoryProfileResolver profiles,
 	PfEligibilityResolver pfEligibility,
-	IProfessionalTaxRepository professionalTax) : ApplicationService, ISalarySummaryAppService
+	IProfessionalTaxRepository professionalTax, PayrollEsiPolicyCompensationRecalculator esiCompensation) : ApplicationService, ISalarySummaryAppService
 {
 	public async Task<SalarySummaryDto> GetAsync(Guid employeeId, string month)
 	{
@@ -48,17 +48,23 @@ public class SalarySummaryAppService(
 		summary.GrossSalary = salary.Revision.GrossSalary;
 		summary.QuotedEmployerCost = salary.Revision.SalaryBasis == SalaryInputBasis.EmployerCost ? salary.Revision.QuotedMonthlyAmount : null;
 		var profile = await profiles.ResolveAsync(employeeId, date);
+		if (salary.Revision.EsiManagementMode == EsiManagement.External)
+			profile = profile with { ApplyEsic = false, EsicDisabledReason = salary.Revision.EsiExternalReason };
 		var components = await providentFund.AddProvidentFundDeductionAsync(employeeId, salary.Revision.PfRuleId, salary.Components, date.Year, date.Month);
 		var pfRule = await providentFund.ResolveRuleAsync(salary.Revision.PfRuleId, employeeId, date.Year, date.Month);
 		var slabs = await professionalTax.GetListAsync(x => x.IsActive && x.JurisdictionCode == salary.Revision.StatutoryProfile && x.EffectiveFrom <= date && (!x.EffectiveTo.HasValue || x.EffectiveTo >= date));
 		var configuration = await esiConfiguration.ResolveAsync(date);
 		PayrollEsiStatutoryContext? esiContext = null;
-		try { esiContext = (await esi.ResolveAsync(date.Year, date.Month, [employeeId], components.ToLookup(x => x.EmployeeId))).GetValueOrDefault(employeeId); }
-		catch (BusinessException error) when (error.Code == HRErrorCodes.StatutoryRuleNotFound) { summary.BlockingIssues.Add("ESI_RULE_NOT_FOUND"); }
+		try { esiContext = (await esi.ResolveAsync(date.Year, date.Month, [employeeId], components.ToLookup(x => x.EmployeeId), resolved)).GetValueOrDefault(employeeId); }
+		catch (BusinessException error) when (error.Code is HRErrorCodes.StatutoryRuleNotFound or HRErrorCodes.EsiPolicyNotEffective) { summary.BlockingIssues.Add("ESI_POLICY_REQUIRED"); }
+		if (esiContext != null)
+			await esiCompensation.RecalculateAsync(resolved, new Dictionary<Guid, PayrollEsiStatutoryContext> { [employeeId] = esiContext },
+				new Dictionary<Guid, PayrollStatutoryProfile> { [employeeId] = profile }, date);
 		// Full-month estimate: no attendance, adjustments, snapshots, reviews, or payroll-run writes.
 		var cessationMonth = EmployeeLifecycleEligibility.IsEmploymentCessationMonth(await employees.GetAsync(employeeId), date.Year, date.Month);
 		var result = PayrollComputation.Calculate(0, 0, 1m, 1m, components,
 			new PayrollStatutoryRuleSet(pfRule, slabs, cessationMonth, EmployeeStateInsurance: esiContext, EsiConfigurationId: configuration?.Id) { StatutoryProfile = profile });
+		summary.GrossSalary = result.FullGrossSalary;
 		var pfWages = components.Where(x => x.IsEarning && x.SemanticType is PayrollComponentSemanticType.Basic or PayrollComponentSemanticType.DearnessAllowance).Sum(x => x.Amount);
 		var decision = await pfEligibility.ResolveAsync(employeeId, date.AddMonths(1).AddDays(-1), result.GrossSalary, pfWages, PfEligibilityResolver.Declaration(salary.Revision), salary.Revision.PfRuleId.HasValue);
 		var includesPt = components.Any(x => x.SemanticType == PayrollComponentSemanticType.ProfessionalTax);
@@ -71,6 +77,8 @@ public class SalarySummaryAppService(
 			SalaryStatutorySummary.Esi(result.EsiCalculation, result.StatutoryApplication?.EmployeeStateInsurance, configuration?.Enabled == true),
 			ptSummary];
 		var esiSummary = summary.StatutorySummary[1];
+		if (salary.Revision.EsiManagementMode == EsiManagement.External)
+			summary.StatutorySummary[1] = SalaryStatutorySummary.ExternalEsi(salary.Revision.EsiExternalReason);
 		esiSummary.RuleId = result.EmployeeStateInsuranceRuleId;
 		esiSummary.RuleVersion = result.EmployeeStateInsuranceRuleVersion;
 		summary.BlockingIssues.AddRange(result.StatutoryIssueCodes.Where(PayrollLockPreconditionGuard.IsBlockingLockIssue));

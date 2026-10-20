@@ -68,7 +68,7 @@ public class CompensationRevisionAppService(
 		if (replay != null)
 		{
 			var original = TryDeserializeCalculation(replay.CalculationSnapshotJson);
-			if (original != null && (original.PfEnrollment != input.PfEnrollment || input.PfApplicable && replay.PfRuleId != input.PfRuleId || input.StatutoryProfileOverride != null && NormalizeProfile(original.StatutoryApplication?.Profile) != NormalizeProfile(input.StatutoryProfileOverride)))
+			if (original != null && (original.PfEnrollment != input.PfEnrollment || replay.EsiManagementMode != input.EsiManagementMode || replay.EsiPolicyId != input.EsiPolicyId || replay.EsiExternalReason != input.EsiExternalReason?.Trim() || input.PfApplicable && replay.PfRuleId != input.PfRuleId || input.StatutoryProfileOverride != null && NormalizeProfile(original.StatutoryApplication?.Profile) != NormalizeProfile(input.StatutoryProfileOverride)))
 				throw new BusinessException("HR:Payroll:CompensationSaveConflict");
 			var replayResult = await MapAsync(replay, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
 			replayResult.SavedStatutoryProfile = await profileService.GetAsync(employeeId, replay.EffectiveMonth.ToString("yyyy-MM"));
@@ -112,6 +112,7 @@ public class CompensationRevisionAppService(
 				EmployeeId = employeeId,
 				PfEnrollment = input.PfEnrollment, PfApplicable = input.PfApplicable,
 				PfRuleId = input.PfRuleId,
+				EsiManagementMode = input.EsiManagementMode, EsiPolicyId = input.EsiPolicyId, EsiExternalReason = input.EsiExternalReason,
 				StatutoryProfile = input.StatutoryProfile,
 				Overrides = input.Overrides,
 				CustomizationReason = input.CustomizationReason
@@ -145,6 +146,7 @@ public class CompensationRevisionAppService(
 			JsonSerializer.Serialize(calculation),
 			JsonSerializer.Serialize(input.Overrides),
 			input.CustomizationReason);
+		revision.SetEsiAssignment(input.EsiManagementMode, input.EsiPolicyId, input.EsiExternalReason);
 		revision.MakeEffective(CurrentUser.GetId(), clock.Now);
 		await revisionRepository.InsertAsync(revision, autoSave: false);
 		await InsertLinesAsync(revision, calculation);
@@ -286,6 +288,7 @@ public class CompensationRevisionAppService(
 			SourceSalaryTemplateVersionId = revision.SourceSalaryTemplateVersionId,
 			SourceSalaryTemplateVersion = revision.SourceSalaryTemplateVersion,
 			PfRuleId = revision.PfRuleId,
+			EsiManagementMode = revision.EsiManagementMode, EsiPolicyId = revision.EsiPolicyId, EsiExternalReason = revision.EsiExternalReason,
 			StatutoryProfile = revision.StatutoryProfile,
 			IsCustomized = overrides.Count > 0,
 			Overrides = overrides,

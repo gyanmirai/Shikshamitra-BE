@@ -206,6 +206,8 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 		Description = "Complete active salary template",
 		DefaultSalaryBasis = "EMPLOYER_COST",
 		DefaultProtectionPolicy = "PROTECT_EMPLOYER_COST",
+		DefaultEsiManagementMode = "EXTERNAL",
+		DefaultEsiExternalReason = "External ESIC for component-only fixture",
 		IdempotencyKey = Guid.NewGuid().ToString("N"),
 		Rules =
 		[
@@ -223,7 +225,8 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 	private static PreviewSalaryTemplateRequestDto Preview(SaveSalaryTemplateDto input) => new()
 	{
 		Rules = input.Rules, SalaryBasis = input.DefaultSalaryBasis, ProtectionPolicy = input.DefaultProtectionPolicy,
-		MonthlyAmount = input.SampleMonthlyAmount, EffectiveMonth = input.SampleEffectiveMonth
+		MonthlyAmount = input.SampleMonthlyAmount, EffectiveMonth = input.SampleEffectiveMonth,
+		EsiManagementMode = input.DefaultEsiManagementMode, EsiPolicyId = input.DefaultEsiPolicyId, EsiExternalReason = input.DefaultEsiExternalReason
 	};
 
 	private HttpClient CreateClientWithPermissions(params string[] permissions)

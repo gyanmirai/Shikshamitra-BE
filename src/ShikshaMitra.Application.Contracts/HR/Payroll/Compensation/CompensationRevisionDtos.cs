@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -27,6 +27,9 @@ public class SaveEmployeeCompensationDto
 	[System.Text.Json.Serialization.JsonRequired]
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public string? EsiExternalReason { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
 	public List<SalaryRuleOverrideDto> Overrides { get; set; } = [];
 	public string? CustomizationReason { get; set; }
@@ -68,6 +71,9 @@ public class CompensationRevisionDto : EntityDto<Guid>
 	public Guid? SourceSalaryTemplateVersionId { get; set; }
 	public int? SourceSalaryTemplateVersion { get; set; }
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public string? EsiExternalReason { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
 	public bool IsCustomized { get; set; }
 	public List<SalaryRuleOverrideDto> Overrides { get; set; } = [];

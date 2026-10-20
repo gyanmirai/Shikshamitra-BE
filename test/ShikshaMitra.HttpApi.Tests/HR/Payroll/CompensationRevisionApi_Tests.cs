@@ -256,6 +256,9 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 			EffectiveMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc),
 			PfApplicable = template.EditableVersion.DefaultPfApplicable,
 			PfRuleId = template.EditableVersion.DefaultPfRuleId,
+			EsiManagementMode = template.EditableVersion.DefaultEsiManagementMode,
+			EsiPolicyId = template.EditableVersion.DefaultEsiPolicyId,
+			EsiExternalReason = template.EditableVersion.DefaultEsiExternalReason,
 			PfEnrollment = new() { Membership = template.EditableVersion.DefaultPfApplicable ? "EXISTING_MEMBER" : "NOT_MEMBER" },
 			IdempotencyKey = idempotencyKey
 		};

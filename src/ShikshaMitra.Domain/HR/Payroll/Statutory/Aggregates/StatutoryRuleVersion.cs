@@ -25,7 +25,13 @@ public class StatutoryRuleVersion : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string SourceUrl { get; private set; } = string.Empty;
 	public DateTime SourceVerifiedOn { get; private set; }
 	public bool IsActive { get; private set; }
+	public Guid? EsiPolicyId { get; private set; }
+	public string? RequestFingerprint { get; private set; }
+	public void SetRequestFingerprint(string fingerprint) { RequestFingerprint = fingerprint; }
+	public string? CalculationSettingsJson { get; private set; }
 
+	public EsiCalculationSettings? GetPolicySettings() => CalculationSettingsJson == null ? null : System.Text.Json.JsonSerializer.Deserialize<EsiCalculationSettings>(CalculationSettingsJson);
+	public void AssignLegacyPolicy(Guid id) { if (EsiPolicyId == null) EsiPolicyId = id; }
 	protected StatutoryRuleVersion() { }
 
 	public StatutoryRuleVersion(
@@ -46,7 +52,7 @@ public class StatutoryRuleVersion : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		StatutoryRoundingPolicy roundingPolicy,
 		string sourceUrl,
 		DateTime sourceVerifiedOn,
-		bool isActive = true) : base(id)
+		bool isActive = true, Guid? esiPolicyId = null, EsiCalculationSettings? calculationSettings = null, decimal employeeShareDailyWageExemption = 176m) : base(id)
 	{
 		TenantId = tenantId;
 		SchemeCode = schemeCode.Trim().ToUpperInvariant();
@@ -65,5 +71,8 @@ public class StatutoryRuleVersion : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		SourceUrl = sourceUrl.Trim();
 		SourceVerifiedOn = sourceVerifiedOn.Date;
 		IsActive = isActive;
+		EsiPolicyId = esiPolicyId;
+		EmployeeShareDailyWageExemption = employeeShareDailyWageExemption;
+		if (calculationSettings != null) { calculationSettings.Validate(); CalculationSettingsJson = System.Text.Json.JsonSerializer.Serialize(calculationSettings); }
 	}
 }

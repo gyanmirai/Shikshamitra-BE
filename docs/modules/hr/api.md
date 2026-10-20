@@ -583,3 +583,4 @@ Policy selection does not confer eligibility; the existing wage classifications,
 Missing effective versions return `HR:Payroll:EsiPolicyNotEffective`; missing/invalid assignment returns `HR:Payroll:EsiPolicySelectionInvalid`.
 New assignments reject archived policies; existing employee assignments and historical references continue resolving them.
 Preview proof and compensation idempotency include assignment values and resolved calculation evidence.
+Reusing a template save key with a changed ESIC assignment or submitting a stale template write returns HTTP 409.

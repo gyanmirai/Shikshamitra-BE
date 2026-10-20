@@ -1108,6 +1108,7 @@ Cover document checklist pagination, policy filters and performance report scope
 ## Named ESIC policy regression checks
 
 Run `EsiPolicy_Tests`, `EsiPolicyCalculation_Tests`, `EsiPolicyRepricing_Tests`, `EsiPolicyApi_Tests` and `SalaryTemplateComposerAppService_Tests`.
+Run `EsiPolicyPostgres_Tests` with `PAYROLL_TEST_POSTGRES` pointing to a separate empty loopback `payroll_tests_*` database; the factory refuses to reset existing tables.
 Cover tenant policy isolation, selection-only permissions, denied writes, stale concurrency, retries, duplicate dates, archive, missing effective versions and external management.
 Verify two employees using different policies, month-boundary version resolution, contribution rounding and protected CTC without mutation of saved evidence.
 Apply the EF migration to a disposable PostgreSQL database and verify legacy assignments, ambiguous setup and historical JSON preservation.

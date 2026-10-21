@@ -1113,3 +1113,9 @@ Cover tenant policy isolation, selection-only permissions, denied writes, stale 
 Verify two employees using different policies, month-boundary version resolution, contribution rounding and protected CTC without mutation of saved evidence.
 Apply the EF migration to a disposable PostgreSQL database and verify legacy assignments, ambiguous setup and historical JSON preservation.
 Run the existing ESIC domain, enrollment, contribution-period and rounding regression suites alongside these checks.
+
+### Reporting table query coverage
+
+Run `HrReportingTableQuery_Tests`, `HrReportingEngine_Tests`, `HrTableExport_Tests`, `HrReportingWorkspaceApi_Tests` and `HrTableExportApi_Tests`.
+Run `HrReportingPostgres_Tests` with a fresh loopback `reporting_tests_*` database.
+The chunk-boundary scenario verifies global filtering, stable ordering, filtered paging, complete Excel export and another-user denial for the query endpoint.

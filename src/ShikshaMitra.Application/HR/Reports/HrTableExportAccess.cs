@@ -19,7 +19,7 @@ public class HrTableExportAccess(HrTableExportSources sources, HrReportExportSco
 	public async Task EnsureAsync(HrReportRun run)
 	{
 		var request = HrTableExportAppService.Request(run);
-		await sources.ReadAsync(request, 0, 1);
+		await sources.EnsureAccessAsync(request);
 		await scope.EnsureRecipientCoversSnapshotAsync(JsonSerializer.Deserialize<HrReportExportScopeSnapshot>(run.ScopeJson)!, run.OwnerUserId);
 		if (run.Status != "Completed") return;
 		var captured = JsonSerializer.Deserialize<HrReportingResult>(run.ResultJson, HrReportingEngine.Json)!;

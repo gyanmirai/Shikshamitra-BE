@@ -588,3 +588,19 @@ Missing effective versions return `HR:Payroll:EsiPolicyNotEffective`; missing/in
 New assignments reject archived policies; existing employee assignments and historical references continue resolving them.
 Preview proof and compensation idempotency include assignment values and resolved calculation evidence.
 Reusing a template save key with a changed ESIC assignment or submitting a stale template write returns HTTP 409.
+
+### Reporting table queries
+
+`POST /api/hr/reports/runs/query` accepts `skip`, `take` and `criteria` for private generated-report history.
+`POST /api/hr/reports/runs/{id}/rows/query` accepts `page`, `pageSize` and `criteria` for an immutable captured result.
+Criteria contain `search`, `filters` (`column`, `type`, `value`) and `sorts` (`column`, `direction`).
+Only columns from server-owned history or captured-result metadata are accepted.
+Search is limited to 256 characters, criteria to 32 KB, filters to 30 and distinct sorts to 60.
+Filter alternatives within one column use OR, and different columns use AND.
+Numbers and money support equals, greaterThan, lessThan and inclusive between; dates support equals and inclusive after/before; booleans support equals.
+Date-time comparisons use school time and minute precision, while ordering preserves full timestamp precision and stable capture-order ties.
+History status filtering includes computed Expired, and access checks run before visible pagination.
+Existing GET history/row reads remain available without table criteria.
+Reporting table exports accept the same criteria object in their query and preserve visible ordered columns.
+Filtered captured exports omit original report totals rather than attach totals from the unfiltered population.
+No grants, ownership checks, tenant filters, captured data or retention rules change.

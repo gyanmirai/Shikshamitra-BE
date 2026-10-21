@@ -116,32 +116,87 @@ public class HrReportingWorkspaceAppService(
 		var year = await years.GetAsync(p.AcademicYearId.Value);
 		p.FromDate = DateOnly.FromDateTime(year.StartDate); p.ToDate = DateOnly.FromDateTime(year.EndDate);
 	}
-	public async Task<HrReportRunHistoryDto> GetRunsAsync(int skip = 0, int take = 50)
+	public async Task<HrReportRunHistoryDto> GetRunsAsync(int skip = 0, int take = 50, HrReportTableQueryDto? criteria = null)
 	{
 		var user = UserId();
-		take = Math.Clamp(take, 1, 100);
-		var query = (await runs.GetQueryableAsync()).Where(x => x.OwnerUserId == user && !x.DataSource.StartsWith("table:") && x.TemplateId != "preview-export").OrderByDescending(x => x.CreationTime).ThenByDescending(x => x.Id).Skip(Math.Max(0, skip)).Take(take + 1);
-		var candidates = await AsyncExecuter.ToListAsync(query);
-		var result = new List<HrReportRunDto>();
-		foreach (var run in candidates.Take(take))
-			if (await access.CanReadAsync(run.DataSource, user))
+		take = Math.Clamp(take, 1, 100); skip = Math.Max(0, skip);
+		var table = new HrReportingTableQuery(criteria, HrReportingHistoryTable.Columns, await reportingTimeZone.GetAsync());
+		var query = (await runs.GetQueryableAsync()).Where(x => x.OwnerUserId == user && !x.DataSource.StartsWith("table:") && x.TemplateId != "preview-export").OrderByDescending(x => x.CreationTime).ThenByDescending(x => x.Id);
+		if (criteria?.HasCriteria != true)
+		{
+			var visible = new List<HrReportRunDto>(); var seen = 0;
+			for (var offset = 0; ; offset += 100)
 			{
-				try { await AuthorizedAsync(run.Id); result.Add(Map(run)); }
-				catch (BusinessException) { }
-				catch (AbpAuthorizationException) { }
+				var batch = await AsyncExecuter.ToListAsync(query.Skip(offset).Take(100));
+				foreach (var run in batch)
+					if (await CanReadRunAsync(run)) {
+						if (seen++ < skip) continue;
+						visible.Add(Map(run));
+						if (visible.Count > take) return new() { Items = visible.Take(take).ToList(), HasMore = true };
+					}
+				if (batch.Count < 100) return new() { Items = visible, HasMore = false };
 			}
-		return new() { Items = result, HasMore = candidates.Count > take };
+		}
+		var candidates = await AsyncExecuter.ToListAsync(query.Take(HrReportingEngine.MaximumPopulation + 1));
+		if (candidates.Count > HrReportingEngine.MaximumPopulation) throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+		var mapped = candidates.Select(run => (Run: run, Dto: Map(run))).ToList();
+		var result = new List<HrReportRunDto>();
+		var accessible = 0;
+		foreach (var item in table.Apply(mapped, item => HrReportingHistoryTable.Values(item.Dto)))
+			if (await CanReadRunAsync(item.Run))
+			{
+				if (accessible++ < skip) continue;
+				result.Add(item.Dto);
+				if (result.Count > take) break;
+			}
+		return new() { Items = result.Take(take).ToList(), HasMore = result.Count > take };
+	}
+	private async Task<bool> CanReadRunAsync(HrReportRun run)
+	{
+		if (!await access.CanReadAsync(run.DataSource, UserId())) return false;
+		try { await AuthorizedAsync(run.Id); return true; }
+		catch (BusinessException) { return false; }
+		catch (AbpAuthorizationException) { return false; }
 	}
 	public async Task<HrReportRunDto> GetAsync(Guid id) => Map(await AuthorizedAsync(id));
-	public async Task<HrReportResultPageDto> GetRowsAsync(Guid id, int page = 1, int pageSize = 50)
+	public async Task<HrReportResultPageDto> GetRowsAsync(Guid id, int page = 1, int pageSize = 50, HrReportTableQueryDto? criteria = null)
 	{
 		var run = await AuthorizedAsync(id); EnsureReady(run);
+		var metadata = Map(run);
+		var table = new HrReportingTableQuery(criteria, metadata.Columns, metadata.Parameters.TimeZone);
 		page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 200);
-		var start = (long) (page - 1) * pageSize;
-		if (start > int.MaxValue) throw HrReportingEngine.Invalid("Page is outside this result.");
-		var firstPage = (int) start / 200; var lastPage = ((int) start + pageSize - 1) / 200;
+		var start = (long)(page - 1) * pageSize;
+		if (start > int.MaxValue - pageSize) throw HrReportingEngine.Invalid("Page is outside this result.");
+		if (criteria?.HasCriteria == true)
+		{
+			var matching = table.Apply(await ReadCapturedRowsAsync(id), row => row).ToList();
+			return new() { TotalCount = matching.Count, Page = page, PageSize = pageSize, Rows = matching.Skip((int)start).Take(pageSize).ToList() };
+		}
+		var firstPage = (int)start / 200; var lastPage = ((int)start + pageSize - 1) / 200;
 		var stored = await AsyncExecuter.ToListAsync((await pages.GetQueryableAsync()).Where(x => x.RunId == id && x.PageNumber >= firstPage && x.PageNumber <= lastPage).OrderBy(x => x.PageNumber));
-		return new() { TotalCount = run.RowCount, Page = page, PageSize = pageSize, Rows = stored.SelectMany(x => JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(x.RowsJson, HrReportingEngine.Json)!).Skip((int) start % 200).Take(pageSize).ToList() };
+		return new() { TotalCount = run.RowCount, Page = page, PageSize = pageSize, Rows = stored.SelectMany(x => JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(x.RowsJson, HrReportingEngine.Json)!).Skip((int)start % 200).Take(pageSize).ToList() };
+	}
+	// Internal application-service contract only. The HTTP controller never exposes this bulk reader.
+	public async Task<List<Dictionary<string, object?>>> GetExportRowsAsync(Guid id, HrReportTableQueryDto criteria)
+	{
+		var run = await AuthorizedAsync(id); EnsureReady(run);
+		var metadata = Map(run);
+		var table = new HrReportingTableQuery(criteria, metadata.Columns, metadata.Parameters.TimeZone);
+		return table.Apply(await ReadCapturedRowsAsync(id), row => row).ToList();
+	}
+	private async Task<List<Dictionary<string, object?>>> ReadCapturedRowsAsync(Guid id)
+	{
+		var result = new List<Dictionary<string, object?>>();
+		var query = (await pages.GetQueryableAsync()).Where(x => x.RunId == id);
+		// Bound stored JSON residency while assembling the same maximum population as generation.
+		for (var offset = 0; ; offset += 25)
+		{
+			var chunk = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.PageNumber).Skip(offset).Take(25));
+			foreach (var stored in chunk) result.AddRange(JsonSerializer.Deserialize<List<Dictionary<string, object?>>>(stored.RowsJson, HrReportingEngine.Json)!);
+			if (result.Count > HrReportingEngine.MaximumPopulation) throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+			if (chunk.Count < 25) break;
+		}
+		return result;
 	}
 	public async Task CancelAsync(Guid id)
 	{

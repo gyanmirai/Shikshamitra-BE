@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -264,6 +264,31 @@ public class HrReportingPostgres_Tests(HrReportingPostgresFactory factory) : Shi
 		var crossing = (await Client.GetFromJsonAsync<HrReportResultPageDto>(Root + "/" + chunkedRunId + "/rows?page=2&pageSize=125", JsonOptions))!;
 		crossing.Rows.Count.ShouldBe(125); crossing.TotalCount.ShouldBe(250);
 		crossing.Rows.First()["employeeCode"]!.ToString().ShouldBe("125"); crossing.Rows.Last()["employeeCode"]!.ToString().ShouldBe("249");
+		var criteria = new HrReportTableQueryDto {
+			Filters = [new() { Column = "employeeCode", Type = "startsWith", Value = JsonSerializer.SerializeToElement("2") }],
+			Sorts = [new() { Column = "employeeCode", Direction = "desc" }] };
+
+		var expected = Enumerable.Range(0, 250).Select(i => i.ToString()).Where(code => code.StartsWith("2", StringComparison.Ordinal)).OrderByDescending(code => code, StringComparer.OrdinalIgnoreCase).ToList();
+		var filtered = await PostAndReadAsync<HrReportResultPageDto>(Root + "/" + chunkedRunId + "/rows/query", new HrReportTablePageQueryDto { Page = 2, PageSize = 25, Criteria = criteria });
+		filtered.TotalCount.ShouldBe(expected.Count);
+		filtered.Rows.Select(row => row["employeeCode"]!.ToString()).ShouldBe(expected.Skip(25).Take(25));
+		var exportRequest = new HrTableExportRequest { Table = "hr-generated-report", Query = JsonSerializer.SerializeToElement(new { runId = chunkedRunId, criteria }, JsonOptions), Columns = [new() { Id = "employeeCode", Label = "Code" }] };
+		var export = await PostAndReadAsync<HrTableExportStatus>("/api/hr/table-exports", exportRequest);
+		using (var services = Factory.Services.CreateScope())
+			await services.ServiceProvider.GetRequiredService<HrTableExportJob>().ExecuteAsync(new() { RunId = export.Id, TenantId = tenantId, AttemptId = await AttemptAsync(export.Id) });
+		var filteredBytes = await Client.GetByteArrayAsync("/api/hr/table-exports/" + export.Id + "/download");
+		using (var workbook = new XLWorkbook(new MemoryStream(filteredBytes)))
+		{
+			var sheet = workbook.Worksheets.First();
+			var header = sheet.RowsUsed().Single(row => row.Cell(1).GetString() == "Code");
+			var exported = sheet.RowsUsed().Where(row => row.RowNumber() > header.RowNumber()).Select(row => row.Cell(1).GetString()).Where(expected.Contains).ToList();
+			exported.ShouldBe(expected);
+		}
+		using (var denied = Factory.CreateClient())
+		{
+			denied.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+			(await denied.PostAsJsonAsync(Root + "/" + chunkedRunId + "/rows/query", new HrReportTablePageQueryDto { Criteria = criteria }, JsonOptions)).IsSuccessStatusCode.ShouldBeFalse();
+		}
 		// A different tenant must not retrieve a captured run, even with the same action permissions.
 		using var other = Factory.CreateClient(); other.DefaultRequestHeaders.Add("X-Test-TenantId", Guid.NewGuid().ToString());
 		(await other.GetAsync(Root + "/" + run.Id)).IsSuccessStatusCode.ShouldBeFalse();

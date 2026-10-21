@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-17
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -152,6 +152,16 @@ Do not create a parallel curated contract tree for Finance.
 Add endpoint details here when Finance API docs need more route detail.
 Do not restore generated exports under `docs/`.
 
+
+## Receipt Book and audit authorization
+
+Receipt Book list/detail reads require `Finance.Settings.ReceiptBook.View`.
+Creation, editing and status changes require `.Add`; deletion requires `.Delete`.
+These checks apply in the application service, including direct service calls.
+
+Finance audit list, detail, correlation, entity, student history and student lookup
+require `Finance.Auditing.View`. Module visibility, `Finance.AuditTrail.View` and
+Collection View do not substitute for this action. Tenant and payer scope still apply.
 
 ## Fee configuration permissions
 

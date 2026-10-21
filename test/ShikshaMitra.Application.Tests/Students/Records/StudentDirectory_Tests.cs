@@ -32,7 +32,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		return await CreateAvailableOfferingAsync(workflow.Id);
 	}
 
-	private async Task GrantCompletedRecordAsync(Student student)
+	private async Task GrantCompletedRecordAsync(Student student, int? rollNumber = null)
 	{
 		var offering = await WithUnitOfWorkAsync(async () => (await _offeringRepository.GetListAsync(o => o.StandardId == student.StandardId)).First());
 		var applicant = await CreateCertificationApplicantAsync($"Record-{Guid.NewGuid():N}", true, true, student.Id);
@@ -42,7 +42,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var current = await _studentRepository.GetAsync(student.Id);
 			current.ChangeStatus(StudentLifeCycleStatusEnum.Enrolled);
 			await _studentRepository.UpdateAsync(current, autoSave: true);
-			var enrollment = StudentEnrollment.Create(Guid.NewGuid(), TestTenantId, student.Id, student.AcademicYearId!.Value, student.StandardId, student.DivisionId);
+			var enrollment = StudentEnrollment.Create(Guid.NewGuid(), TestTenantId, student.Id, student.AcademicYearId!.Value, student.StandardId, student.DivisionId, rollNumber);
 			await GetRequiredService<IRepository<StudentEnrollment, Guid>>().InsertAsync(enrollment, autoSave: true);
 			var completed = new StudentOnboardingCase(Guid.NewGuid(), TestTenantId, application.Id, applicant.Id, student.Id, offering.Id,
 				student.AcademicYearId.Value, student.AcademicBoardId!.Value, student.AcademicMediumId, student.AcademicMediumStageId!.Value,
@@ -141,6 +141,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		profile.FirstName.ShouldBeNull(); profile.DateOfBirth.ShouldBeNull(); profile.MaskedFields.ShouldContain("Identity");
 		var directory = GetRequiredService<IStudentDirectoryAppService>();
 		(await directory.GetListAsync(new() { Search = "MaskedDirectory" })).TotalCount.ShouldBe(0);
+		(await directory.GetListAsync(new() { ColumnFilters = [new() { Column = "name", Operator = "contains", Value = "MaskedDirectory" }] })).TotalCount.ShouldBe(0);
+		(await directory.GetListAsync(new() { ColumnFilters = [new() { Column = "grNumber", Operator = "contains", Value = "GR" }] })).TotalCount.ShouldBe(0);
 		var row = (await directory.GetListAsync(new())).Items.Single(r => r.Id == student.Id);
 		row.FirstName.ShouldBeNull(); row.GrNumber.ShouldBeNull(); row.MaskedFields.ShouldContain("Identity");
 	});
@@ -152,7 +154,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var first = await CreateExistingStudentAsync(offering, "DirectoryA", "Student");
 		var second = await CreateExistingStudentAsync(offering, "DirectoryB", "Student");
 		var pending = await CreateExistingStudentAsync(offering, "DirectoryC", "Pending");
-		await GrantCompletedRecordAsync(first); await GrantCompletedRecordAsync(second);
+		await GrantCompletedRecordAsync(first, 4); await GrantCompletedRecordAsync(second);
 		await WithUnitOfWorkAsync(async () =>
 		{
 			var student = await _studentRepository.GetAsync(second.Id);
@@ -164,6 +166,17 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		page.TotalCount.ShouldBe(2); page.Items.Count.ShouldBe(1); page.Items[0].Id.ShouldBe(first.Id);
 		var next = await service.GetListAsync(new() { Search = "Directory", SkipCount = 1, MaxResultCount = 1 });
 		next.Items.Single().Id.ShouldBe(second.Id);
+		var filtered = await service.GetListAsync(new() { Search = "Directory", MaxResultCount = 1,
+			ColumnFilters = [new() { Column = "name", Operator = "startsWith", Value = "DirectoryB" }, new() { Column = "status", Operator = "equals", Value = "8" }] });
+		filtered.TotalCount.ShouldBe(1); filtered.Items.Single().Id.ShouldBe(second.Id);
+		var placementRow = (await service.GetListAsync(new() { StudentId = first.Id, AcademicYearId = first.AcademicYearId })).Items.Single();
+		placementRow.RollNo.ShouldBe(4);
+		var placementFiltered = await service.GetListAsync(new() { AcademicYearId = first.AcademicYearId,
+			ColumnFilters = [new() { Column = "classDivision", Operator = "startsWith", Value = placementRow.StandardName! }] });
+		placementFiltered.Items.ShouldContain(row => row.Id == first.Id);
+		var rollFiltered = await service.GetListAsync(new() { AcademicYearId = first.AcademicYearId,
+			ColumnFilters = [new() { Column = "rollNo", Operator = "between", Min = 4, Max = 4 }] });
+		rollFiltered.TotalCount.ShouldBe(1); rollFiltered.Items.Single().Id.ShouldBe(first.Id);
 		(await service.GetListAsync(new() { Search = "Directory", Population = "Former" })).Items.Single().Id.ShouldBe(second.Id);
 		(await service.GetListAsync(new() { Search = "Directory", Population = "Active" })).Items.Single().Id.ShouldBe(first.Id);
 		(await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IStudentRecordProfileAppService>().GetAsync(pending.Id))).Code.ShouldBe("Students:Records:OnboardingIncomplete");

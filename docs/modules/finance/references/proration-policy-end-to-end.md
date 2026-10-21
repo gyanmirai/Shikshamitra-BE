@@ -97,6 +97,7 @@ Posted demands and receipts are never recalculated by editing a policy.
 
 Daily uses inclusive calendar days, including leap days.
 FullMonthCharge includes each touched service month in full, separately from FullCharge which leaves that event boundary unchanged.
+Policy validation requires at least one recurring fee head with an enabled Daily, MonthlyCutoff, or FullMonthCharge event. Disabled events and FullCharge do not satisfy this requirement.
 Monthly rules use equal calendar-month shares of the coverage amount before payment-term allocation.
 When mixed with daily, only the daily boundary month is reduced by its eligible-day fraction.
 When admission and withdrawal affect the same month, apply the smallest applicable fraction once rather than multiplying reductions.

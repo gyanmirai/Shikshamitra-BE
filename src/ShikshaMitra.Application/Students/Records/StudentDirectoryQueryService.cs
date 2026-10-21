@@ -13,7 +13,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Students.Records;
 
 [RemoteService(false)]
-public class StudentDirectoryQueryService(
+public partial class StudentDirectoryQueryService(
 	IStudentRepository students,
 	StudentRecordsAccessService access,
 	IRepository<StudentOnboardingCase, Guid> cases,
@@ -94,6 +94,7 @@ public class StudentDirectoryQueryService(
 	public async Task<PagedResultDto<StudentDirectoryItemDto>> GetAsync(StudentDirectoryRequest input, bool legacyCandidates = false, Guid[]? permittedDivisionIds = null,
 		bool includeAttendanceIdentifiers = false)
 	{
+		StudentDirectoryColumnFilters.Validate(input.ColumnFilters);
 		var query = await GetPopulationAsync(input, legacyCandidates, permittedDivisionIds);
 		var caseQuery = await cases.GetQueryableAsync();
 		var onboardingEligibleIds = await access.GetOnboardingEligibleStudentIdsAsync();
@@ -122,6 +123,14 @@ public class StudentDirectoryQueryService(
 				 (s.GrNo.HasValue && s.GrNo.Value.ToString().Contains(term)) ||
 				 numericTerm.HasValue && (s.GrNo == numericTerm || identifierEnrollments.Any(e => e.StudentId == s.Id &&
 					e.AcademicYearId == input.AcademicYearId && e.RollNumber == numericTerm))));
+		}
+		if (input.ColumnFilters.Count > 0)
+		{
+			if (input.ColumnFilters.Any(filter => filter.Column is "name" or "grNumber"))
+				query = query.Where(s => input.AcademicYearId.HasValue ? selectedYearVisible :
+					(s.AcademicYearId.HasValue && Enumerable.Contains(visibleIdentityYears, s.AcademicYearId.Value)) || (!s.AcademicYearId.HasValue && showNullYear));
+			var matchingIds = StudentDirectoryColumnFilters.Apply(await GetColumnFilterRowsAsync(query, input), input.ColumnFilters).Select(row => row.StudentId);
+			query = query.Where(student => matchingIds.Contains(student.Id));
 		}
 		var total = await AsyncExecuter.CountAsync(query);
 		var sorting = input.Sorting?.Trim().ToLowerInvariant();

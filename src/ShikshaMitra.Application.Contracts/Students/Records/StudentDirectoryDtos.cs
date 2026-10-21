@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
-using ShikshaMitra.Students.StudentEnrollments;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 
@@ -10,6 +9,7 @@ namespace ShikshaMitra.Students.Records;
 
 public class StudentDirectoryRequest : PagedAndSortedResultRequestDto
 {
+	public List<StudentDirectoryColumnFilterDto> ColumnFilters { get; set; } = [];
 	[StringLength(150)] public string? Search { get; set; }
 	public string Population { get; set; } = "All";
 	public Guid? AcademicYearId { get; set; }
@@ -25,6 +25,15 @@ public class StudentDirectoryRequest : PagedAndSortedResultRequestDto
 	public List<Guid> MediumIds { get; set; } = [];
 	public List<Guid> StandardIds { get; set; } = [];
 	public List<Guid> DivisionIds { get; set; } = [];
+}
+
+public class StudentDirectoryColumnFilterDto
+{
+	[Required, StringLength(30)] public string Column { get; set; } = "";
+	[Required, StringLength(30)] public string Operator { get; set; } = "";
+	[StringLength(150)] public string? Value { get; set; }
+	public decimal? Min { get; set; }
+	public decimal? Max { get; set; }
 }
 
 public class StudentDirectoryItemDto : EntityDto<Guid>

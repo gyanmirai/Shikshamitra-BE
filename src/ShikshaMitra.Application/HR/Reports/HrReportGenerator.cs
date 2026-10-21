@@ -19,7 +19,7 @@ public class HrReportGenerator(
 	HrReportRequestValidationService requestValidationService,
 	ICurrentTenant currentTenant,
 	IAsyncQueryableExecuter asyncExecuter,
-	IClock clock, Volo.Abp.Domain.Repositories.IRepository<ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings, Guid> payslipSettings, ShikshaMitra.HR.Payroll.SalarySlips.PayslipLogoService logos) : ITransientDependency
+	IClock clock, Volo.Abp.Domain.Repositories.IRepository<ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings, Guid> payslipSettings, ShikshaMitra.HR.Payroll.SalarySlips.PayrollDocumentSchoolService school) : ITransientDependency
 {
 	public async Task<HrReportExportScopeSnapshot?> ResolveExportScopeAsync(
 		Guid userId,
@@ -179,11 +179,13 @@ public class HrReportGenerator(
 		warnings.AddRange(rowResult.Warnings);
 		var salaryDocument = source is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister;
 		var settings = salaryDocument ? await payslipSettings.FindAsync(x => x.TenantId == currentTenant.Id) : null;
-		var options = settings?.GetPresentation();
-		var logo = options?.LogoBlobName == null ? null : await logos.GetAsync(options.LogoBlobName);
+		var options = settings?.GetPresentation() ?? new ShikshaMitra.HR.Payroll.SalarySlips.SalaryDocumentPresentation();
+		options = options with { LogoBlobName = null };
+		var identity = salaryDocument ? await school.ReadAsync() : null;
+		var logo = salaryDocument ? await school.LogoAsync() : null;
 		return new HrReportPreviewDto
 		{
-			Branding = settings == null ? null : new(settings.PresentationVersionId, settings.SchoolName, settings.SchoolAddress, options!,
+			Branding = identity == null ? null : new(settings?.PresentationVersionId ?? Guid.Empty, identity.Name, identity.Address, options,
 				logo == null ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(logo))),
 			LogoBytes = logo,
 			TotalsLabel = exportAllRows ? "Totals for exported rows" : "Totals for all available payroll in the selected period",

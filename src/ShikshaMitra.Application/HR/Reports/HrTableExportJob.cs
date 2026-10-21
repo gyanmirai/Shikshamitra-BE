@@ -31,7 +31,7 @@ public class HrTableExportJob(IRepository<HrReportRun, Guid> runs, IRepository<H
 	HrTableExportSources sources, HrTableExportAccess access, HrReportingAccess principals, ICurrentPrincipalAccessor principal,
 	IHrReportingRunLock runLock, HrReportingRunCancellation cancellation, IBlobContainer blobs, ICurrentTenant tenant,
 	IUnitOfWorkManager uows, IClock clock, ITenantRepository tenants, IRepository<PayslipSettings, Guid> settings,
-	IAsyncQueryableExecuter executor, ILogger<HrTableExportJob> logger)
+	IAsyncQueryableExecuter executor, ILogger<HrTableExportJob> logger, PayrollDocumentSchoolService school)
 	: AsyncBackgroundJob<HrTableExportJobArgs>, ITransientDependency
 {
 	public override async Task ExecuteAsync(HrTableExportJobArgs args)
@@ -82,6 +82,12 @@ public class HrTableExportJob(IRepository<HrReportRun, Guid> runs, IRepository<H
 			var identity = await executor.FirstOrDefaultAsync(await settings.GetQueryableAsync());
 			result.SchoolName = identity?.SchoolName ?? (await tenants.GetAsync(args.TenantId!.Value)).Name;
 			result.SchoolAddress = identity?.SchoolAddress ?? "";
+			if (request.Table == "hr-salary-documents")
+			{
+				var details = await school.ReadAsync();
+				result.SchoolName = details.Name;
+				result.SchoolAddress = details.Address;
+			}
 			await cancellation.EnsureActiveAsync(current);
 			current.Complete(args.AttemptId, result.Rows.Count, JsonSerializer.Serialize(new HrReportingResult {
 				Columns = result.Columns, Totals = result.Totals, EmployeeIds = result.EmployeeIds, EmployeeCodes = result.EmployeeCodes, SchoolName = result.SchoolName, SchoolAddress = result.SchoolAddress

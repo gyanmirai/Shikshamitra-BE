@@ -116,7 +116,7 @@ public class PayslipSchoolSettings_Tests
 			{
 				var defaults = (await api.GetFromJsonAsync<PayslipSettingsDto>(SettingsUrl, Json))!;
 				defaults.SchoolName.ShouldBe(schoolName);
-				defaults.SchoolAddress.ShouldBeEmpty();
+				defaults.SchoolAddress.ShouldBe("Synthetic Test Road, Fixture Area, Test Building, Ahmedabad, Gujarat, 380001, India");
 				defaults.AutomaticEmail.ShouldBeFalse();
 				defaults.ConcurrencyStamp.ShouldBeNull();
 				defaults.IdempotencyKey.ShouldBe(Guid.Empty);
@@ -150,8 +150,8 @@ public class PayslipSchoolSettings_Tests
 			await EsiPayrollWorkflowScenario.RequireSuccess(assignment);
 			var input = new PayslipSettingsDto
 			{
-				SchoolName = schoolName,
-				SchoolAddress = "Synthetic Test Road, Ahmedabad, Gujarat",
+				SchoolName = "Ignored client school",
+				SchoolAddress = "Ignored client address",
 				AutomaticEmail = true,
 				IdempotencyKey = Guid.NewGuid()
 			};
@@ -162,8 +162,8 @@ public class PayslipSchoolSettings_Tests
 			// Read the actual committed state after the response was consumed and lost at transport.
 			saved = (await api.GetFromJsonAsync<PayslipSettingsDto>(SettingsUrl, Json))!;
 			saved.ConcurrencyStamp.ShouldNotBeNullOrWhiteSpace();
-			saved.SchoolName.ShouldBe(input.SchoolName);
-			saved.SchoolAddress.ShouldBe(input.SchoolAddress);
+			saved.SchoolName.ShouldBe(schoolName);
+			saved.SchoolAddress.ShouldBe("Synthetic Test Road, Fixture Area, Test Building, Ahmedabad, Gujarat, 380001, India");
 			saved.AutomaticEmail.ShouldBe(input.AutomaticEmail);
 			saved.IdempotencyKey.ShouldBe(input.IdempotencyKey);
 			var repeat = await api.PutAsJsonAsync(SettingsUrl, input, Json);

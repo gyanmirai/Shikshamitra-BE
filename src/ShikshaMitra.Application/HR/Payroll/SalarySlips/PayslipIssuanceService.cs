@@ -20,12 +20,14 @@ public class PayslipIssuanceService(
 	IEmployeePayrollDetailsRepository payrollDetails,
 	SalarySlipSnapshotReader snapshots,
 	PayslipDeliveryQueue deliveryQueue,
-	PayslipPdfService pdfService, PayslipLogoService logos) : ApplicationService
+	PayslipPdfService pdfService, PayrollDocumentSchoolService identity) : ApplicationService
 {
 	private IReadOnlyDictionary<Guid, Employee>? employeeBatch;
 	private IReadOnlyDictionary<Guid, EmployeePayrollDetails>? bankBatch;
 	private PayslipSettings? cachedSchool;
-	private readonly Dictionary<string, byte[]> cachedLogos = new();
+	private PayrollDocumentSchool? cachedIdentity;
+	private byte[]? cachedLogo;
+	private bool logoLoaded;
 	internal async Task<IDisposable> BeginEmployeeReadBatchAsync(IReadOnlyCollection<Guid> ids)
 	{
 		var previousEmployees = employeeBatch; var previousBank = bankBatch;
@@ -134,18 +136,26 @@ public class PayslipIssuanceService(
 
 	internal async Task<PayslipPdfModel> PrepareModelAsync(SalarySlipDto dto, PayslipSettings school)
 	{
+		if (!CurrentTenant.Id.HasValue || school.TenantId != CurrentTenant.Id)
+			throw new BusinessException(HRErrorCodes.PayslipConflict);
 		var options = school.GetPresentation();
-		byte[]? logo = null;
-		if (options.LogoBlobName != null && !cachedLogos.TryGetValue(options.LogoBlobName, out logo))
-			cachedLogos[options.LogoBlobName] = logo = await logos.GetAsync(options.LogoBlobName);
-		dto.Presentation = new(school.PresentationVersionId, school.SchoolName, school.SchoolAddress, options,
+		options = options with { LogoBlobName = null };
+		var details = cachedIdentity ??= await identity.ReadAsync();
+		if (string.IsNullOrWhiteSpace(details.Name) || string.IsNullOrWhiteSpace(details.Address))
+			throw new BusinessException(HRErrorCodes.PayslipSchoolDetailsRequired);
+		if (!logoLoaded) { cachedLogo = await identity.LogoAsync(); logoLoaded = true; }
+		var logo = cachedLogo;
+		dto.Presentation = new(school.PresentationVersionId, details.Name, details.Address, options,
 			logo == null ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(logo)));
-		return SalarySlipProjection.ToPdfModel(dto, school.SchoolName) with { InstituteAddress = school.SchoolAddress, LogoBytes = logo };
+		return SalarySlipProjection.ToPdfModel(dto, details.Name) with { InstituteAddress = details.Address, LogoBytes = logo };
 	}
 
 	public async Task<PayslipSettings> EnsureSchoolConfiguredAsync()
 	{
 		if (cachedSchool?.TenantId == CurrentTenant.Id && cachedSchool != null) return cachedSchool;
+		cachedIdentity = null;
+		cachedLogo = null;
+		logoLoaded = false;
 		return cachedSchool = await settings.FindAsync(x => x.TenantId == CurrentTenant.Id)
 			?? throw new BusinessException(HRErrorCodes.PayslipSchoolDetailsRequired);
 	}

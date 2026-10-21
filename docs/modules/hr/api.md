@@ -411,7 +411,7 @@ There is no public document URL or arbitrary email-recipient override.
 | GET /api/payroll/payslip-deliveries?salarySlipId= | GenerateSalarySlip.View | Delivery history across all issued revisions, with recipient, actor, times, status and safe error category. |
 | POST /api/payroll/payslip-deliveries | GenerateSalarySlip.Add | DocumentId and IdempotencyKey; queues the current official document for its employee. |
 | GET /api/payroll/payslip-settings | GenerateSalarySlip.View | SchoolName, SchoolAddress, AutomaticEmail, ConcurrencyStamp and last IdempotencyKey. |
-| PUT /api/payroll/payslip-settings | GenerateSalarySlip.Add | Same settings fields; optimistic concurrency and idempotent retries under the payroll fence. |
+| PUT /api/payroll/payslip-settings | GenerateSalarySlip.Add | Presentation, AutomaticEmail, ConcurrencyStamp and IdempotencyKey; optimistic concurrency and idempotent retries under the payroll fence. Incoming school details are ignored. |
 
 These short permission suffixes refer to the existing HR payroll payslip permission catalogue, not new grants.
 Background delivery from payroll locking rechecks the recorded RunPayroll.Lock action, so an approver does not need RunPayroll.Add to distribute an already reviewed payroll.
@@ -538,7 +538,11 @@ Changed profiles invalidate affected unlocked previews and reviews, preserve iss
 Payroll snapshots retain reference and applied amounts, number presence, flags, rule versions and warning reasons.
 Review records the current warning codes and profile version before locking.
 
-Payslip settings add Compact/Detailed layouts, a logo reference, optional staff/bank/attendance/earnings/zero-deduction fields and statement/register column presets.
+Payroll document settings own Compact/Detailed layouts, optional staff/bank/attendance/earnings/zero-deduction fields and statement/register column presets.
+SchoolName and SchoolAddress are read-only projections of the Institute Setup tenant profile.
+New payslips, previews, payroll statement/register branding and salary-document table exports resolve the current institute name and postal address on the server.
+The school-level School Identity logo replaces the former payroll-specific logo override.
+Settings edits retain existing preferences and issued documents; no data migration or historical PDF rewrite occurs.
 Identity, period and totals always remain; every nonzero deduction always appears.
 Issuance freezes the presentation version, school branding and logo checksum with the stored PDF.
 Statements and registers read saved evidence, use issued payroll for official output and label draft-inclusive output Preview.

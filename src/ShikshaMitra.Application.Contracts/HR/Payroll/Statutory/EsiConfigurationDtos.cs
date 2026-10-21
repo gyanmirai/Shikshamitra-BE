@@ -68,7 +68,9 @@ public class EsiConfigurationDraftDtoValidator : AbstractValidator<EsiConfigurat
 {
 	public EsiConfigurationDraftDtoValidator()
 	{
-		RuleFor(x => x.CalculationSettings).NotNull();
+		RuleFor(x => x.CalculationSettings).NotNull()
+			.Must(x => x == null || !x.HasRateOverride)
+			.WithMessage("ESIC contribution rates are managed by the statutory rules.");
 		RuleFor(x => x.EffectiveMonth).Must(x => DateTime.TryParseExact(x, "yyyy-MM", CultureInfo.InvariantCulture,
 			DateTimeStyles.None, out var month) && month.Year >= 2000 && month.Year < 9999);
 		RuleFor(x => x.RegistrationNumber).MaximumLength(100);
@@ -87,7 +89,9 @@ public class SaveEsiConfigurationDtoValidator : AbstractValidator<SaveEsiConfigu
 	public SaveEsiConfigurationDtoValidator()
 	{
 		RuleFor(x => x.EffectiveMonth).Must(x => x == null || DateTime.TryParseExact(x, "yyyy-MM", CultureInfo.InvariantCulture, DateTimeStyles.None, out _));
-		RuleFor(x => x.CalculationSettings).NotNull();
+		RuleFor(x => x.CalculationSettings).NotNull()
+			.Must(x => x == null || !x.HasRateOverride)
+			.WithMessage("ESIC contribution rates are managed by the statutory rules.");
 		RuleFor(x => x.ConcurrencyStamp).NotEmpty().MaximumLength(100);
 		RuleFor(x => x.IdempotencyKey).NotEmpty();
 		RuleFor(x => x.RegistrationNumber).MaximumLength(100);

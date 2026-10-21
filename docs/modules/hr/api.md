@@ -242,6 +242,8 @@ Coverage decisions contain both the stable decision code and a server-authored d
 Preview responses include `generatedAtUtc` and a deterministic SHA-256 `previewFingerprint` over activation-relevant rule, establishment, classification, employee, enrollment, override, and calculated result inputs.
 `PUT /api/payroll/statutory-schemes/esi/configuration` saves directly with a concurrency stamp and idempotency key; it does not require a client impact-preview fingerprint.
 The former establishment activation and standalone classification mutation routes have been removed.
+Configuration save and draft-preview validation reject school employee/employer rate overrides, including documented overrides.
+Contribution rates come from the effective statutory policy; component classification continues through the existing effective-dated configuration command.
 Compensation audit identities, timestamps, legacy workflow details, and calculation snapshots require `HR.PayrollManagement.CompensationRevisions.ViewAudit`.
 Payroll resolves the latest effective revision for the month and keeps one-time salary components separate.
 Locked payroll at or after the effective month prevents compensation revision changes.

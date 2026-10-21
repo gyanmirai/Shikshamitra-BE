@@ -3,7 +3,7 @@ module: institute-setup
 domain: workflows
 content_type: How-to
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,17 @@ audience: humans-and-agents
 
 TL;DR: trace initial setup and Rooms Management through controller, contracts, application orchestration, domain rules and persistence.
 Use this page for building, room type, and room changes.
+
+## School Documents lifecycle
+
+1. Authenticate, require tenant context and the exact action grants in the application service.
+2. Validate all metadata, retained attachment ownership, count and incoming file contents before writing.
+3. Create or compare/update the parent aggregate; attachment-only saves also change its concurrency stamp.
+4. Store immutable blob keys and new attachment metadata in the same transactional unit of work; soft-delete removed attachments only with Delete permission. Any failure rolls the operation back.
+5. List and detail operations filter to the current tenant and nondeleted records. File access rechecks the parent, file ownership and current permission on every request.
+6. Record deletion soft-deletes the parent and attachment metadata together. Retained blob bytes remain private and inaccessible through normal endpoints.
+
+The [frontend workflow](../../../../Shikshamitra-FE/docs/institute-setup/workflows.md#school-documents) owns local selection, dialogs, dirty guards and preview behavior.
 
 ## Initial setup lifecycle
 

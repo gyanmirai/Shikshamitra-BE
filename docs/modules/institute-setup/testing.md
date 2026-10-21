@@ -3,7 +3,7 @@ module: institute-setup
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,22 @@ audience: humans-and-agents
 
 TL;DR: run the docs validator for documentation changes and targeted Tenant Settings or Academic tests for behavior changes.
 Rooms Management has focused domain layout and direct-call authorization coverage.
+
+## School Documents
+
+| Scope | Command |
+| --- | --- |
+| File signatures, size/count limits, details and concurrency | `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~SchoolDocuments_Tests --artifacts-path .artifacts/school-documents-build` |
+| Direct application-call authorization | `dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~SchoolDocumentAuthorization_Tests --artifacts-path .artifacts/school-documents-build` |
+| Real HTTP CRUD/files, permissions, tenant isolation, retention and rollback | `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~SchoolDocumentsApi_Tests --artifacts-path .artifacts/school-documents-build` |
+| PostgreSQL migration, real blob rollback, concurrent saves and retained bytes | `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~SchoolDocumentsPostgresApi_Tests --artifacts-path .artifacts/school-documents-build` |
+| Browser bridge | `dotnet run --project scripts/testing/school-documents-bridge/SchoolDocumentsBridge.csproj --artifacts-path .artifacts/school-documents-build --no-launch-profile` |
+
+The PostgreSQL case requires `SCHOOL_DOCUMENTS_TEST_POSTGRES` pointing to a **new** loopback `school_documents_tests_*` database. The fixture refuses existing databases and non-loopback hosts, creates the test database itself, validates additive Up and destructive Down against unrelated sentinel data, then removes only its owned disposable database. It never migrates a school database. Without the variable, the PostgreSQL case is explicitly skipped.
+
+The bridge listens only at `http://127.0.0.1:4394`, uses synthetic test authentication/permissions and the real HTTP pipeline with fresh in-memory SQLite. Pair it with the [frontend fixture](../../../../Shikshamitra-FE/docs/institute-setup/testing.md#school-documents). Its labelled failure switches simulate transport failure for UI retry tests; API tests separately verify real transactional rollback. Stop both bridge and frontend fixture when finished. Test logs, SQL and browser screenshots belong in ignored artifacts directories.
+
+Release requires applying `20261021052944_AddSchoolDocuments` before exposing the new route, explicitly assigning View/Add/Delete and independent navigation visibility, and validating file access with the intended school roles. Do not reseed existing grants to enable this feature.
 
 ## Room layout and features
 

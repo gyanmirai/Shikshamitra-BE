@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,23 @@ audience: humans-and-agents
 
 TL;DR: Institute Setup APIs cover initial progress, completion, buildings, room types, and rooms.
 Use controllers for route truth and contracts for request and response shapes.
+
+## School Documents
+
+Base: `/api/institute-setup/school-documents`. Tenant context comes from the authenticated server context; payloads do not select a tenant. DTOs live under `Application.Contracts/TenantSettings/SchoolDocuments`, and multipart binding is in `HttpApi/Models/SchoolDocumentWriteRequest.cs`.
+
+| Method / suffix | Contract and permissions |
+| --- | --- |
+| `GET /` | View; `search` (name, up to 200 characters), optional numeric `category`, `skipCount`, `maxResultCount` (capped at 100), `sorting` (`name asc/desc` or `creationTime asc/desc`). Newest first by default; returns `items`/`totalCount`. |
+| `GET /{id}` | View; metadata, creator username snapshot, creation time, current `concurrencyStamp`, and attachment metadata. No blob keys or public URLs. |
+| `POST /` | View + Add; multipart `name`, `category`, optional `notes`, and repeated `files`. At least one file required. Returns saved record. |
+| `PUT /{id}` | View + Add; same fields, required current `concurrencyStamp`, repeated `retainedFileIds`, and optional new `files`. Omitting a saved ID removes that attachment and additionally requires Delete. Total retained/new count must remain 1-5. |
+| `DELETE /{id}` | View + Delete; soft deletes record and attachments; 204. |
+| `GET /{id}/files/{fileId}` | View; authenticated PDF/image bytes for that record only. `download=true` returns attachment disposition with the original safe filename. Private/no-store and nosniff headers. |
+
+Action names are `InstituteSetup.SchoolDocuments.View`, `.Add` and `.Delete`; visibility is `ShikshaMitra.Module.InstituteSetup.SchoolDocuments`. Categories are stable numeric values: 0 Government Approval, 1 Permission / NOC, 2 Board Affiliation, 3 Registration, 4 Other.
+
+Validation errors return 400, missing actions or host context 403, missing/cross-tenant/deleted records or mismatched file parents 404, and stale stamps 409. Upload endpoints accept at most 30 MiB including multipart overhead; each file remains limited to 5 MiB. Align reverse-proxy request limits with this endpoint. `ShikshaMitra:SchoolDocuments:InvalidDetails`, `InvalidFiles` and `InvalidFile` are localized business codes.
 
 ## Academic Setup validation
 

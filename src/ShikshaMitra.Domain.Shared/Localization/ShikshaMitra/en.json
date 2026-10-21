@@ -779,6 +779,9 @@
         "Students:RollNumbers:BatchBlocked": "Resolve the flagged students before assigning the division's roll numbers.",
         "Students:RollNumbers:InvalidState": "This roll-number batch is no longer available for that action. Refresh its status.",
         "Students:RollNumbers:AdminRequired": "Only a school administrator can renumber a division.",
-        "Students:RollNumbers:ApproverRequired": "An eligible independent school approver must review this roll-number batch."
+        "Students:RollNumbers:ApproverRequired": "An eligible independent school approver must review this roll-number batch.",
+        "ShikshaMitra:SchoolDocuments:InvalidDetails": "Enter a document name of up to 200 characters, select a category, and keep notes within 2000 characters.",
+        "ShikshaMitra:SchoolDocuments:InvalidFiles": "Attach between 1 and 5 files belonging to this document.",
+        "ShikshaMitra:SchoolDocuments:InvalidFile": "Select a non-empty PDF, JPG or PNG file up to 5 MB. The file contents must match its extension and type."
     }
 }

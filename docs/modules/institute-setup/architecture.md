@@ -3,7 +3,7 @@ module: institute-setup
 domain: architecture
 content_type: Conceptual
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -14,6 +14,14 @@ TL;DR: initial setup progress and Rooms Management live under Tenant Settings.
 Controllers expose Institute Setup routes, while application services and domain entities remain in `TenantSettings/RoomsManagement`.
 Shared academic setup and room-management tables use the `academic_` prefix.
 See [academic performance and table naming](../examination/references/academic-performance-and-table-prefix.md) for the complete ownership boundary and migration deployment/rollback procedure.
+
+## School Documents ownership
+
+The feature mirrors `TenantSettings/SchoolDocuments` across Domain.Shared, Domain, Application.Contracts, Application and EntityFrameworkCore. `SchoolDocument` is a full-audited, multi-tenant aggregate; `SchoolDocumentFile` stores separately audited attachment metadata. `SchoolDocumentFileRules` validates count, safe names, sizes and signatures. Thin `SchoolDocumentsController` binds multipart requests and emits file responses; `SchoolDocumentAppService` performs authorization, transactional orchestration and bounded list projections.
+
+`AppSchoolDocuments` and `AppSchoolDocumentFiles` are linked with a restrictive parent foreign key and tenant/deletion indexes. Files use generated `school-documents/{tenant}/{record}/{file}` keys through the existing database-backed ABP blob container. Entity history is enabled for both entity types; binary upload properties are excluded from auditing.
+
+Migration `20261021052944_AddSchoolDocuments` adds only these tables and indexes. Apply it before exposing the feature, deploy the backend, explicitly assign permissions, then expose the frontend. Downgrading the application can leave the additive schema in place; running the migration Down deletes this feature's records and must not be used as a routine rollback for a populated library.
 
 ## Layer map
 

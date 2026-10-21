@@ -57,12 +57,13 @@ public class SchoolIdentityController(ISchoolIdentityAppService service) : AbpCo
 		await using var stream = input.File.OpenReadStream();
 		await using var memory = new MemoryStream();
 		await stream.CopyToAsync(memory);
-		return await service.UploadAsync(input.Kind, input.BoardId, input.MediumId, input.File.FileName, memory.ToArray());
+		return await service.UploadAsync(input.Kind, input.BoardId, input.MediumId, input.File.FileName, memory.ToArray(), input.OrganizationId);
 	}
 }
 
 public sealed class SchoolIdentityUploadRequest
 {
+	public Guid? OrganizationId { get; set; }
 	public IFormFile? File { get; set; }
 	public SchoolIdentityAssetKind Kind { get; set; }
 	public Guid? BoardId { get; set; }

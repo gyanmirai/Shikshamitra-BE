@@ -22,7 +22,7 @@ public class SchoolIdentityTemplateAssetService(IRepository<SchoolIdentityAsset,
 		var asset = await assets.GetAsync(value.AssetId!.Value);
 		if (asset.TenantId != CurrentTenant.Id || asset.Kind != kind) throw new BusinessException(SchoolIdentityErrorCodes.AssetInvalid);
 		if (!asset.IsRetained && asset.CreatorId != CurrentUser.Id) throw new AbpAuthorizationException();
-		await access.EnsureAsync(asset.EducationBoardId, asset.EducationMediumId);
+		await access.EnsureAsync(asset.EducationBoardId, asset.EducationMediumId, organizationId: asset.OrganizationId);
 		asset.Retain(); await assets.UpdateAsync(asset, autoSave: true);
 	}
 

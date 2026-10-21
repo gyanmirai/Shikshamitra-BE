@@ -20,12 +20,14 @@ public sealed record SchoolIdentityChoicesDto
 
 public sealed class SchoolIdentityContextDto
 {
+	public Guid? OrganizationId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 }
 
 public sealed class SchoolIdentityUpdateDto
 {
+	public Guid? OrganizationId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 	public string ConcurrencyStamp { get; set; } = "";
@@ -34,6 +36,7 @@ public sealed class SchoolIdentityUpdateDto
 
 public sealed class SchoolIdentityProfileDto
 {
+	public Guid? OrganizationId { get; set; }
 	public Guid? Id { get; set; }
 	public Guid? AcademicYearId { get; set; }
 	public Guid? BoardId { get; set; }
@@ -82,6 +85,8 @@ public sealed class SchoolIdentityRevisionDto
 
 public sealed class SchoolIdentityCopyDto
 {
+	public Guid? SourceOrganizationId { get; set; }
+	public Guid? TargetOrganizationId { get; set; }
 	public Guid SourceBoardId { get; set; }
 	public Guid? SourceMediumId { get; set; }
 	public Guid TargetBoardId { get; set; }

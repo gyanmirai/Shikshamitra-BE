@@ -1,14 +1,20 @@
 {
     "Culture": "en",
     "Texts": {
-        "HR:Payroll:CompensationPreviewStale": "ESIC policy changed. Refresh preview and review the updated salary before saving.",
-        "HR:Payroll:EsiPolicyInvalid": "Review the ESIC policy values, effective month, and source.",
-        "HR:Payroll:EsiPolicySelectionInvalid": "Choose an ESIC policy, or select external management and enter its reason.",
-        "HR:Payroll:EsiDefaultPolicyRequired": "The default ESIC policy must remain available.",
-        "HR:Payroll:EsiPolicyNotEffective": "The selected ESIC policy has no effective version for this payroll month. Choose a policy or create its effective version.",
-        "HR:Payroll:EsiPolicyArchived": "This ESIC policy is archived. Choose an active policy for new assignments.",
-        "HR:Payroll:EsiPolicyVersionOverlap": "Choose an effective month after the latest policy version. Effective periods cannot overlap.",
-        "HR:Payroll:EsiPolicyCodeExists": "An ESIC policy already uses this code. Choose a different code.",
+        "InstituteReports:InvalidReport": "Choose an available Institute Setup report.",
+        "InstituteReports:YearRequired": "Select an academic year for this report.",
+        "InstituteReports:InvalidRequest": "The report contains unsupported fields or filters.",
+        "InstituteReports:ApprovalInvalid": "The report plan changed or approval expired. Review the plan again.",
+        "InstituteReports:PromptInvalid": "Describe the report using 10 to 2,000 characters.",
+        "InstituteReports:AiProviderUnsupported": "The configured AI provider is not supported. Choose a predefined report or contact your administrator.",
+        "InstituteReports:AiNotConfigured": "AI reporting is not configured. You can still generate a predefined report.",
+        "InstituteReports:AiUnavailable": "AI could not prepare this report. Try again or choose a predefined report.",
+        "InstituteReports:AiInvalidResponse": "ShikshaMitra AI did not return a usable Institute Setup report plan. Retry or choose a predefined report.",
+        "InstituteReports:AiResponseIncomplete": "ShikshaMitra AI stopped before completing the Institute Setup report plan. Please retry.",
+        "InstituteReports:FileUnavailable": "The report is not ready or has expired. Generate it again if needed.",
+        "InstituteReports:JobAlreadyStarted": "This report is already being generated.",
+        "InstituteReports:JobNotRunning": "The report is not being generated. Generate it again.",
+        "InstituteReports:TenantRequired": "Select a school workspace to generate reports.",
         "ShikshaMitra:RoleAssignedToUsers": "This role is assigned to {UserCount} user(s) and cannot be deleted. Reassign or remove those users first.",
         "ShikshaMitra:RoleReferencedByEmployees": "This role is referenced by {EmployeeCount} employee record(s) and cannot be deleted. Reassign those employees first, including archived records.",
         "SchoolIdentity:InvalidContext": "Select a board and medium belonging to this school and academic year.",
@@ -22,6 +28,7 @@
         "SchoolIdentity:ImageInvalid": "Upload a valid PNG or JPEG image.",
         "SchoolIdentity:ImageSizeInvalid": "Choose an image within the stated file-size limit.",
         "SchoolIdentity:ImageDimensionsInvalid": "The image dimensions exceed the supported limits. Resize the image and upload it again.",
+        "SchoolIdentity:ImageTooSmall": "The image must be at least {MinimumWidth} × {MinimumHeight} px. This image is {Width} × {Height} px.",
         "SchoolIdentity:DraftExpired": "This draft image expired. Upload the image again before submitting.",
         "ShikshaMitra.TenantSettings:EducationBoard:InvalidType": "Select a valid education board.",
         "ShikshaMitra.TenantSettings:EducationBoard:InvalidCustomName": "Custom board name is required and must not exceed 128 characters.",
@@ -787,6 +794,9 @@
         "Students:RollNumbers:BatchBlocked": "Resolve the flagged students before assigning the division's roll numbers.",
         "Students:RollNumbers:InvalidState": "This roll-number batch is no longer available for that action. Refresh its status.",
         "Students:RollNumbers:AdminRequired": "Only a school administrator can renumber a division.",
-        "Students:RollNumbers:ApproverRequired": "An eligible independent school approver must review this roll-number batch."
+        "Students:RollNumbers:ApproverRequired": "An eligible independent school approver must review this roll-number batch.",
+        "ShikshaMitra:SchoolDocuments:InvalidDetails": "Enter a document name of up to 200 characters, select a category, and keep notes within 2000 characters.",
+        "ShikshaMitra:SchoolDocuments:InvalidFiles": "Attach between 1 and 5 files belonging to this document.",
+        "ShikshaMitra:SchoolDocuments:InvalidFile": "Select a non-empty PDF, JPG or PNG file up to 5 MB. The file contents must match its extension and type."
     }
 }

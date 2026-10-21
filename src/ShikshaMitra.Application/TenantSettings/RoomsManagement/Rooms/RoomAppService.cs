@@ -64,8 +64,18 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 
 		if (!string.IsNullOrWhiteSpace(input.Filter))
 		{
-			var filter = input.Filter.Trim();
-			query = query.Where(r => r.RoomName.Contains(filter));
+			var filter = input.Filter.Trim().ToLowerInvariant();
+			var buildings = await _buildingRepository.GetQueryableAsync();
+			var floors = await _floorRepository.GetQueryableAsync();
+			var matchingBuildingIds = buildings
+				.Where(building => building.BuildingName.ToLower().Contains(filter))
+				.Select(building => building.Id);
+			var matchingFloorIds = floors
+				.Where(floor => floor.FloorName.ToLower().Contains(filter))
+				.Select(floor => floor.Id);
+			query = query.Where(room => room.RoomName.ToLower().Contains(filter)
+				|| matchingBuildingIds.Contains(room.BuildingId)
+				|| matchingFloorIds.Contains(room.FloorId));
 		}
 
 		if (input.BuildingId.HasValue)

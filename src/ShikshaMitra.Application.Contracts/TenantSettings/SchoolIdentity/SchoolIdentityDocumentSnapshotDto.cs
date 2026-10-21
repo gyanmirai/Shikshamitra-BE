@@ -4,6 +4,7 @@ namespace ShikshaMitra.TenantSettings.SchoolIdentity;
 
 public sealed class SchoolIdentityDocumentSnapshotDto
 {
+	public Guid? OrganizationId { get; set; }
 	public Guid TenantId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
@@ -16,6 +17,7 @@ public sealed class SchoolIdentityDocumentSnapshotDto
 
 public sealed class SchoolIdentityPreviewDto
 {
+	public Guid? OrganizationId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? MediumId { get; set; }
 	public SchoolIdentityChoicesDto? Choices { get; set; }

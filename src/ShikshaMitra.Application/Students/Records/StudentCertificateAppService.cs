@@ -262,7 +262,8 @@ public partial class StudentCertificateAppService(
 		if (templateSnapshot == null)
 		{
 			template.SchoolIdentity = await schoolIdentity.CaptureAsync(student.AcademicBoardId,
-				student.AcademicMediumId == Guid.Empty ? null : student.AcademicMediumId, student.AcademicYearId, signature: true);
+				student.AcademicMediumId == Guid.Empty ? null : student.AcademicMediumId, student.AcademicYearId, signature: true,
+				organizationId: student.AcademicMediumStageId);
 			// Existing custom template assets retain precedence over the shared defaults.
 			if (template.IdentityChoices != null)
 			{

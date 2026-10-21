@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,56 @@ audience: humans-and-agents
 
 TL;DR: Institute Setup APIs cover initial progress, completion, buildings, room types, and rooms.
 Use controllers for route truth and contracts for request and response shapes.
+
+## Reports
+
+Base route: `/api/app/institute-setup-report`. `InstituteReportController` delegates to `IInstituteReportAppService`; application methods enforce access for direct calls too.
+
+| Method / suffix | Purpose | Report permission |
+| --- | --- | --- |
+| GET `options` | Permitted catalogue and scoped filter choices | View |
+| POST `preview` | Current data, 1-based page and pageSize 1-100 | View |
+| POST `exports` | Queue normalized request | View + Add |
+| GET `exports` | Current user's history | View |
+| GET `exports/{jobId}` | Job metadata and saved request | View |
+| GET `exports/{jobId}/download` | Authenticated file bytes | View |
+| POST `ai/plan` | Clarification or validated plan and approval token | View + Add |
+| POST `ai/preview`, `ai/exports` | Preview/queue exact approved plan | View + Add |
+
+All operations also enforce applicable source View permissions. `InstituteReportRequest` contains reportType, format (`pdf`, `excel`, `csv`), filters, columns, conditions, sortField, descending and preview pagination. Report IDs are `academic-hierarchy`, `class-division-summary`, `division-capacity`, `rooms-inventory`, `shift-register`. Academic filters follow year/board/medium/stage/standard/division; class summaries omit the division filter and expose numeric `divisionCount` plus `divisions`. For classes with exactly one permitted division, use a `divisionCount` condition with operator `eq` and value `"1"`. Physical filters are building/floor/roomType; shift and roomAssignment apply only to their supported reports. Conditions are ANDed and allow eq/contains plus numeric gt/lt. Unsupported source, fields, operators and unrelated filters are rejected.
+
+AI requests contain a 10-2000 character prompt, optional current academic year and up to six clarification answers. Approved calls contain `{ plan, approvalToken }`. Error families use `InstituteReports:*`; `AiInvalidResponse` identifies unusable provider output and `AiResponseIncomplete` identifies truncated output. Institute Setup owns response parsing and never emits Curriculum planner errors. Unavailable files and expired approval produce actionable messages. Downloads do not expose blob keys. The new additive `AppInstituteReportJobs` migration must precede deployment.
+
+`shift-register` supports columns `shift`, `start`, `end` and calculated `totalHours`. Include `totalHours` in `columns` to request it, or leave `columns` empty for all four. `totalHours` supports numeric `eq`, `gt`, `lt` conditions and sorting. It contains decimal hours rounded to two places; next-day end times wrap across midnight and equal times produce zero, without break deductions. Unknown computed fields and formula expressions are rejected. Existing saved requests with explicit three-column selections retain that selection; generate a new plan to add hours.
+
+Additional report datasets:
+
+| Report ID | Source grants in addition to Reports View/Add as applicable | Data |
+| --- | --- | --- |
+| `school-document-register` | `InstituteSetup.SchoolDocuments.View` | Active entry and attachment metadata |
+| `school-document-counts` | School Documents View | Category counts, attachment counts and bytes, plus All categories total |
+| `school-identity-register` | `InstituteSetup.SchoolIdentity.View` | Scoped saved logo/letterhead configuration |
+| `school-identity-counts` | School Identity View | Saved profile/custom-selection counts, plus All scopes total |
+| `school-identity-signatures` | School Identity View and `InstituteSetup.SchoolIdentity.AccessSignature` | Scoped saved signature selection, principal name and designation |
+
+Options include `requiredPermissions` on each definition and string filter `values`. `filters.documentCategory` accepts `GovernmentApproval`, `PermissionNoc`, `BoardAffiliation`, `Registration`, `Other` only for document reports. `filters.identityScope` accepts `school`, `board`, `medium`, `organization` only for identity reports. Identity reports optionally accept academicYearId/boardId/mediumId/stageId, where stageId selects the identity organization; standard/division filters are rejected. File contents, blob keys, image data and signature fields outside the signature report cannot be selected. Counts and byte totals support numeric filtering/sorting.
+
+## School Documents
+
+Base: `/api/institute-setup/school-documents`. Tenant context comes from the authenticated server context; payloads do not select a tenant. DTOs live under `Application.Contracts/TenantSettings/SchoolDocuments`, and multipart binding is in `HttpApi/Models/SchoolDocumentWriteRequest.cs`.
+
+| Method / suffix | Contract and permissions |
+| --- | --- |
+| `GET /` | View; `search` (name, up to 200 characters), optional numeric `category`, `skipCount`, `maxResultCount` (capped at 100), `sorting` (`name asc/desc` or `creationTime asc/desc`). Newest first by default; returns `items`/`totalCount`. |
+| `GET /{id}` | View; metadata, creator username snapshot, creation time, current `concurrencyStamp`, and attachment metadata. No blob keys or public URLs. |
+| `POST /` | View + Add; multipart `name`, `category`, optional `notes`, and repeated `files`. At least one file required. Returns saved record. |
+| `PUT /{id}` | View + Add; same fields, required current `concurrencyStamp`, repeated `retainedFileIds`, and optional new `files`. Omitting a saved ID removes that attachment and additionally requires Delete. Total retained/new count must remain 1-5. |
+| `DELETE /{id}` | View + Delete; soft deletes record and attachments; 204. |
+| `GET /{id}/files/{fileId}` | View; authenticated PDF/image bytes for that record only. `download=true` returns attachment disposition with the original safe filename. Private/no-store and nosniff headers. |
+
+Action names are `InstituteSetup.SchoolDocuments.View`, `.Add` and `.Delete`; visibility is `ShikshaMitra.Module.InstituteSetup.SchoolDocuments`. Categories are stable numeric values: 0 Government Approval, 1 Permission / NOC, 2 Board Affiliation, 3 Registration, 4 Other.
+
+Validation errors return 400, missing actions or host context 403, missing/cross-tenant/deleted records or mismatched file parents 404, and stale stamps 409. Upload endpoints accept at most 30 MiB including multipart overhead; each file remains limited to 5 MiB. Align reverse-proxy request limits with this endpoint. `ShikshaMitra:SchoolDocuments:InvalidDetails`, `InvalidFiles` and `InvalidFile` are localized business codes.
 
 ## Academic Setup validation
 
@@ -29,11 +79,11 @@ Lists and their total counts use the current tenant. Foreign and host-only IDs r
 
 ## School Identity API
 
-The base route is `api/institute-setup/school-identity`. Configuration operations explicitly check actions in the application service. Host identities are rejected; board/medium references must belong to the current tenant and match their parent hierarchy.
+The base route is `api/institute-setup/school-identity`. Configuration operations explicitly check actions in the application service. Host identities are rejected; board/medium/organization references must belong to the current tenant and match their parent hierarchy. `organizationId` identifies an education medium stage and requires both `boardId` and `mediumId`.
 
 | Method and suffix | Permission and contract |
 | --- | --- |
-| GET collection | `InstituteSetup.SchoolIdentity.View`; optional boardId/mediumId, choices, stamp, effective assets, sources and canManage capability |
+| GET collection | `InstituteSetup.SchoolIdentity.View`; optional boardId/mediumId/organizationId, choices, stamp, effective assets, sources and canManage capability |
 | PUT collection | View plus ManageDefaults or ManageOverrides; choices and concurrencyStamp |
 | POST assets | Corresponding management grant; multipart file/kind/context; immutable asset ID and image metadata |
 | GET assets/{id} | View, authorized origin/effective context or the caller's draft; signatures additionally require AccessSignature |
@@ -45,7 +95,7 @@ The base route is `api/institute-setup/school-identity`. Configuration operation
 
 Action prefixes are `InstituteSetup.SchoolIdentity`; navigation visibility is separately `ShikshaMitra.Module.InstituteSetup.SchoolIdentity`. ManageDefaults additionally requires tenant-wide data scope. Resetting choices records a revision; there is no Delete permission.
 
-Override writes require full scope over the selected board or medium. Descendant-only scope permits inheritance reads, not changes to a whole parent profile. The read response's canManage combines exact action permission and full-context scope; it is a UI capability, not a replacement for write authorization. Reusing retained immutable assets checks readable origin scope; attaching an unsaved draft additionally requires management scope at its origin.
+Override writes require full scope over the selected board, medium or organization. Descendant-only scope permits inheritance reads, not changes to a whole parent profile. Organization context also applies to multipart uploads, history, downloads and previews. Copy accepts optional sourceOrganizationId/targetOrganizationId; both contexts must have the same override level. The read response's canManage combines exact action permission and full-context scope; it is a UI capability, not a replacement for write authorization. Reusing retained immutable assets checks readable origin scope; attaching an unsaved draft additionally requires management scope at its origin.
 
 Modes are Inherit=0, Custom=1 and Hidden=2. Custom signatures include principalName and designation. An omitted signature choice preserves it for callers without signature access. Missing configuration is optional. Invalid content, sizes, dimensions, asset kinds/references and copy contexts use `SchoolIdentity:*` errors; stale stamps use ABP concurrency errors.
 

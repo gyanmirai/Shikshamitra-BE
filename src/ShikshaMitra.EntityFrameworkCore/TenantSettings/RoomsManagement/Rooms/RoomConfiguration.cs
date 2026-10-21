@@ -25,6 +25,7 @@ public class RoomConfiguration : IEntityTypeConfiguration<Room>
 
 		builder.Property(x => x.Capacity)
 			.IsRequired();
+		builder.Property(x => x.ColumnRows).HasColumnType("integer[]");
 
 		builder.Property(x => x.BuildingId)
 			.IsRequired();

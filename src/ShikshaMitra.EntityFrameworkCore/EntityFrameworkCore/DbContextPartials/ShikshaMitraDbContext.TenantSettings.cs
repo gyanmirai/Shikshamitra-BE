@@ -48,4 +48,5 @@ public partial class ShikshaMitraDbContext
     public DbSet<Floor> Floors { get; set; }
     public DbSet<RoomType> RoomTypes { get; set; }
     public DbSet<Room> Rooms { get; set; }
+    public DbSet<RoomFeature> RoomFeatures { get; set; }
 }

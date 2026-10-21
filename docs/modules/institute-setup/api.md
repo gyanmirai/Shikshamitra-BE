@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-15
+updated_on: 2026-10-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -87,6 +87,17 @@ Contracts live in `src/ShikshaMitra.Application.Contracts/TenantSettings/Initial
 Localized error codes live in `src/ShikshaMitra.Domain.Shared/TenantSettings/InitialSetup/InitialSetupErrorCodes.cs`.
 
 ## Rooms Management endpoint families
+
+Room create/update DTOs accept optional `columnRows`, an ordered array of bench-row counts per column. When supplied, the domain requires 1 to 50 columns, 1 to 100 rows in each column, and 1 to 20 students per bench. It derives `benchesPerColumn` from the array length, `benchesPerRow` from its maximum, `totalBenches` from its sum, and `capacity` from total benches times bench capacity. Older requests may omit the array and keep their rectangular layout contract. Responses return the saved array.
+
+| Feature catalogue operation | Contract | Permission |
+| --- | --- | --- |
+| `GET /api/institute-setup/rooms/features` | `{ items: [{ id, name }] }` for the current tenant | Room Management View |
+| `POST /api/institute-setup/rooms/features` | `{ name }`, trimmed, 1 to 100 characters; returns `{ id, name }` | Room Management Add |
+
+Feature names are unique per tenant after case normalization. Adding an existing name returns the existing entry. Room selections remain string arrays in `features`; saving resolves them to catalogue names and rejects unknown names with `Rooms:UnknownFeature`. Invalid column layouts raise `Rooms:InvalidColumnLayout`. Read and write policies also run on direct room app-service calls.
+
+Apply migration `20261019063242_AddRoomColumnLayoutAndFeatures` before starting the updated API. It adds the layout array, a tenant-owned audited feature catalogue, the ten existing default feature names for existing tenants/host, and valid legacy room feature names. `RoomFeatureDataSeedContributor` seeds missing defaults for newly seeded tenants. Defaults are available choices; rooms do not automatically select every feature.
 
 This table maps the active routes to controllers and contracts.
 

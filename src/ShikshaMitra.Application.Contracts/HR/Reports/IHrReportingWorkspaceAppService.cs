@@ -19,9 +19,10 @@ public interface IHrReportingWorkspaceAppService : IApplicationService
 	Task<HrReportingPreviewDto> PreviewAsync(HrReportDesignerPreviewDto input);
 	Task<HrReportRunDto> CapturePreviewAsync(HrReportDesignerPreviewDto input);
 	Task<HrReportRunDto> CreateAsync(HrReportCreateRunDto input);
-	Task<HrReportRunHistoryDto> GetRunsAsync(int skip = 0, int take = 50);
+	Task<HrReportRunHistoryDto> GetRunsAsync(int skip = 0, int take = 50, HrReportTableQueryDto? criteria = null);
 	Task<HrReportRunDto> GetAsync(Guid id);
-	Task<HrReportResultPageDto> GetRowsAsync(Guid id, int page = 1, int pageSize = 50);
+	Task<HrReportResultPageDto> GetRowsAsync(Guid id, int page = 1, int pageSize = 50, HrReportTableQueryDto? criteria = null);
+	Task<List<Dictionary<string, object?>>> GetExportRowsAsync(Guid id, HrReportTableQueryDto criteria);
 	Task CancelAsync(Guid id);
 	Task<HrReportRunDto> RetryAsync(Guid id);
 	Task CreateExportAsync(Guid id, string format);

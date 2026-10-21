@@ -25,6 +25,8 @@ public class HrReportingWorkspaceController(IHrReportingWorkspaceAppService work
 	[HttpPost("designer-export")] public Task<HrReportRunDto> CapturePreviewAsync(HrReportDesignerPreviewDto input) => workspace.CapturePreviewAsync(input);
 	[HttpPost("runs")] public Task<HrReportRunDto> CreateAsync(HrReportCreateRunDto input) => workspace.CreateAsync(input);
 	[HttpGet("runs")] public Task<HrReportRunHistoryDto> ListAsync(int skip = 0, int take = 50) => workspace.GetRunsAsync(skip, take);
+	[HttpPost("runs/query")] public Task<HrReportRunHistoryDto> QueryRunsAsync(HrReportTablePageQueryDto input) => workspace.GetRunsAsync(input.Skip, input.Take, input.Criteria);
+	[HttpPost("runs/{id:guid}/rows/query")] public Task<HrReportResultPageDto> QueryRowsAsync(Guid id, HrReportTablePageQueryDto input) => workspace.GetRowsAsync(id, input.Page, input.PageSize, input.Criteria);
 	[HttpGet("runs/{id:guid}")] public Task<HrReportRunDto> GetAsync(Guid id) => workspace.GetAsync(id);
 	[HttpGet("runs/{id:guid}/rows")] public Task<HrReportResultPageDto> RowsAsync(Guid id, int page = 1, int pageSize = 50) => workspace.GetRowsAsync(id, page, pageSize);
 	[HttpPost("runs/{id:guid}/cancel")] public Task CancelAsync(Guid id) => workspace.CancelAsync(id);

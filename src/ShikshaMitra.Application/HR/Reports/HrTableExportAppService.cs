@@ -21,7 +21,7 @@ public class HrTableExportAppService(IRepository<HrReportRun, Guid> runs, HrTabl
 	{
 		if (!CurrentUser.Id.HasValue || !CurrentTenant.Id.HasValue) throw new AbpAuthorizationException();
 		HrTableExportSources.Validate(request);
-		await sources.ReadAsync(request, 0, 1);
+		await sources.EnsureAccessAsync(request);
 		var snapshot = await scope.ResolveCurrentScopeAsync(CurrentUser.Id.Value) ?? throw new AbpAuthorizationException();
 		var definition = new HrReportDesignDto { DataSource = "employee", Columns = request.Columns.Select(x => new HrReportDisplayColumnDto { Field = x.Id, Label = x.Label }).ToList() };
 		var presentation = await sources.PresentationAsync(request, await timezone.GetAsync());

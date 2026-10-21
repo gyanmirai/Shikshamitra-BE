@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -40,8 +40,15 @@ The base route is `api/institute-setup/school-identity`. Configuration operation
 | POST preview | View; draft previews additionally require management; returns PDF without saving |
 | GET history | View; latest 100 revisions with tenant-owned creator usernames; signature selections redacted without AccessSignature |
 | POST copy | View, ManageOverrides and AccessSignature; explicit source/target, differing years, matching levels and target stamp |
-| GET branding | Authenticated current-school defaults; no signature fields |
-| GET branding/{kind} | Authenticated school-default logo (0) or banner (1); signature kind is rejected |
+| GET branding | Authenticated current-school defaults; only nullable logo/banner metadata containing id, contentType, width and height |
+| GET branding/logo | Authenticated school-default logo bytes, or 204 when absent/hidden |
+| GET branding/banner | Authenticated school-default banner bytes, or 204 when absent/hidden |
+
+Branding images use `Cache-Control: private, no-cache`, tenant-and-asset-specific ETags, and `Vary: Authorization, Cookie, __tenant`.
+Every conditional request authenticates and resolves the current tenant before returning 304 for an unchanged image.
+Replacing an image changes its immutable asset ID and ETag.
+Metadata and empty image responses use `private, no-store`.
+Numeric branding routes and signature branding routes do not exist.
 
 Action prefixes are `InstituteSetup.SchoolIdentity`; navigation visibility is separately `ShikshaMitra.Module.InstituteSetup.SchoolIdentity`. ManageDefaults additionally requires tenant-wide data scope. Resetting choices records a revision; there is no Delete permission.
 

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -42,9 +43,9 @@ public class SchoolIdentityPostgresApi_Tests
 		saved.Effective["logo"].Asset!.Id.ShouldBe(logo.Id);
 		(await first.GetByteArrayAsync(Url + $"/assets/{logo.Id}")).ShouldBe(Png);
 		(await second.GetAsync(Url + $"/assets/{logo.Id}")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
-		(await first.GetAsync(Url + "/branding/2")).StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-		var branding = (await first.GetFromJsonAsync<SchoolIdentityProfileDto>(Url + "/branding"))!;
-		branding.Choices.Signature.ShouldBeNull(); branding.Effective.ContainsKey("signature").ShouldBeFalse();
+		(await first.GetAsync(Url + "/branding/signature")).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+		var branding = (await first.GetFromJsonAsync<SchoolBrandingDto>(Url + "/branding"))!;
+		branding.Logo!.Id.ShouldBe(logo.Id); branding.Banner.ShouldBeNull();
 		first.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, SchoolIdentityPermissions.View);
 		var restricted = (await first.GetFromJsonAsync<SchoolIdentityProfileDto>(Url))!;
 		restricted.CanManage.ShouldBeFalse();
@@ -93,6 +94,94 @@ public class SchoolIdentityPostgresApi_Tests
 		((long)(await history.ExecuteScalarAsync())!).ShouldBe(1);
 		await sql.CloseAsync();
 		await factory.VerifyMigrationDownAsync();
+	}
+
+	[SchoolIdentityPostgresFact]
+	public async Task Branding_named_routes_revalidate_private_images_after_authentication_and_tenant_resolution()
+	{
+		await using var factory = new SchoolIdentityPostgresFactory();
+		using var first = await NewSchoolAsync(factory);
+		using var second = await NewSchoolAsync(factory);
+		(await first.GetAsync(Url + "/branding/logo")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		(await first.GetAsync(Url + "/branding/banner")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		foreach (var suffix in new[] { "0", "1", "2", "signature", "invalid" })
+			(await first.GetAsync(Url + "/branding/" + suffix)).StatusCode.ShouldBe(HttpStatusCode.NotFound);
+
+		var logo = await UploadAsync(first, SchoolIdentityAssetKind.Logo, "logo.png", Png);
+		var banner = await UploadAsync(first, SchoolIdentityAssetKind.Banner, "banner.png", Png);
+		var savedResponse = await first.PutAsJsonAsync(Url, new SchoolIdentityUpdateDto
+		{
+			Choices = new() { Logo = Custom(logo.Id), Banner = Custom(banner.Id) }
+		});
+		savedResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await savedResponse.Content.ReadAsStringAsync());
+		var saved = (await savedResponse.Content.ReadFromJsonAsync<SchoolIdentityProfileDto>())!;
+
+		// Branding remains available to school users without configuration grants.
+		first.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "Unrelated.Permission");
+		var metadataResponse = await first.GetAsync(Url + "/branding");
+		metadataResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
+		metadataResponse.Headers.CacheControl!.NoStore.ShouldBeTrue();
+		var metadata = JsonDocument.Parse(await metadataResponse.Content.ReadAsStringAsync()).RootElement;
+		metadata.EnumerateObject().Select(x => x.Name).OrderBy(x => x).ShouldBe(new[] { "banner", "logo" });
+		metadata.GetProperty("logo").EnumerateObject().Select(x => x.Name).OrderBy(x => x)
+			.ShouldBe(new[] { "contentType", "height", "id", "width" });
+		var image = await first.GetAsync(Url + "/branding/logo");
+		image.StatusCode.ShouldBe(HttpStatusCode.OK);
+		(await image.Content.ReadAsByteArrayAsync()).ShouldBe(Png);
+		image.Content.Headers.ContentType!.MediaType.ShouldBe("image/png");
+		image.Headers.CacheControl!.Private.ShouldBeTrue();
+		image.Headers.CacheControl.NoCache.ShouldBeTrue();
+		image.Headers.CacheControl.NoStore.ShouldBeFalse();
+		image.Headers.GetValues("X-Content-Type-Options").Single().ShouldBe("nosniff");
+		image.Headers.Vary.ShouldContain("Authorization");
+		image.Headers.Vary.ShouldContain("__tenant");
+		var tag = image.Headers.ETag!.ToString();
+		var bannerImage = await first.GetAsync(Url + "/branding/banner");
+		(await bannerImage.Content.ReadAsByteArrayAsync()).ShouldBe(Png);
+		bannerImage.Headers.ETag!.ToString().ShouldNotBe(tag);
+		foreach (var condition in new[] { tag, "W/" + tag, "\"unrelated\", " + tag, "*" })
+		{
+			using var request = new HttpRequestMessage(HttpMethod.Get, Url + "/branding/logo");
+			request.Headers.TryAddWithoutValidation("If-None-Match", condition);
+			var unchanged = await first.SendAsync(request);
+			unchanged.StatusCode.ShouldBe(HttpStatusCode.NotModified);
+			(await unchanged.Content.ReadAsByteArrayAsync()).ShouldBeEmpty();
+			unchanged.Headers.ETag!.ToString().ShouldBe(tag);
+		}
+
+		using var anonymous = factory.CreateClient();
+		anonymous.DefaultRequestHeaders.Add("X-Skip-Auth", "true");
+		anonymous.DefaultRequestHeaders.Add("If-None-Match", tag);
+		(await anonymous.GetAsync(Url + "/branding/logo")).StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
+		second.DefaultRequestHeaders.Add("If-None-Match", tag);
+		(await second.GetAsync(Url + "/branding/logo")).StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		var otherLogo = await UploadAsync(second, SchoolIdentityAssetKind.Logo, "other.png", Png);
+		(await second.PutAsJsonAsync(Url, new SchoolIdentityUpdateDto { Choices = new() { Logo = Custom(otherLogo.Id) } }))
+			.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var other = await second.GetAsync(Url + "/branding/logo");
+		other.StatusCode.ShouldBe(HttpStatusCode.OK);
+		other.Headers.ETag!.ToString().ShouldNotBe(tag);
+
+		first.DefaultRequestHeaders.Remove(AlwaysGrantPermissionChecker.TestPermissionsHeader);
+		var replacement = await UploadAsync(first, SchoolIdentityAssetKind.Logo, "replacement.png", Png);
+		var replaced = await first.PutAsJsonAsync(Url, new SchoolIdentityUpdateDto
+		{
+			ConcurrencyStamp = saved.ConcurrencyStamp, Choices = new() { Logo = Custom(replacement.Id) }
+		});
+		replaced.StatusCode.ShouldBe(HttpStatusCode.OK);
+		first.DefaultRequestHeaders.Add("If-None-Match", tag);
+		var changed = await first.GetAsync(Url + "/branding/logo");
+		changed.StatusCode.ShouldBe(HttpStatusCode.OK);
+		changed.Headers.ETag!.ToString().ShouldNotBe(tag);
+		var replacedProfile = (await replaced.Content.ReadFromJsonAsync<SchoolIdentityProfileDto>())!;
+		(await first.PutAsJsonAsync(Url, new SchoolIdentityUpdateDto
+		{
+			ConcurrencyStamp = replacedProfile.ConcurrencyStamp,
+			Choices = new() { Logo = new() { Mode = SchoolIdentityAssetMode.Hidden } }
+		})).StatusCode.ShouldBe(HttpStatusCode.OK);
+		var hidden = await first.GetAsync(Url + "/branding/logo");
+		hidden.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+		hidden.Headers.CacheControl!.NoStore.ShouldBeTrue();
 	}
 
 	private static SchoolIdentitySelectionDto Custom(Guid id) => new() { Mode = SchoolIdentityAssetMode.Custom, AssetId = id };

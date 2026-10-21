@@ -154,22 +154,31 @@ public partial class SchoolIdentityAppService(
 		return new() { Content = await blobs.GetAllBytesAsync(asset.BlobName), ContentType = asset.ContentType, FileName = asset.FileName };
 	}
 
-	public async Task<SchoolIdentityProfileDto> GetBrandingAsync()
+	public async Task<SchoolBrandingDto> GetBrandingAsync()
 	{
 		if (!CurrentUser.IsAuthenticated) throw new AbpAuthorizationException();
 		await access.EnsureAsync(null, null);
-		return await reader.ReadAsync(null, null, null, signature: false);
+		var profile = await reader.ReadAsync(null, null, null, signature: false);
+		return new() { Logo = BrandingAsset(profile.Effective["logo"]), Banner = BrandingAsset(profile.Effective["banner"]) };
 	}
 
-	public async Task<SchoolIdentityAssetDownloadDto> GetBrandingAssetAsync(SchoolIdentityAssetKind kind)
+	private static SchoolBrandingAssetDto? BrandingAsset(SchoolIdentityEffectiveAssetDto effective)
+	{
+		var asset = effective.Selection.Mode == SchoolIdentityAssetMode.Custom ? effective.Asset : null;
+		return asset == null ? null : new() { Id = asset.Id, ContentType = asset.ContentType, Width = asset.Width, Height = asset.Height };
+	}
+
+	public async Task<SchoolBrandingImageDto?> GetBrandingAssetAsync(SchoolIdentityAssetKind kind)
 	{
 		if (kind is not (SchoolIdentityAssetKind.Logo or SchoolIdentityAssetKind.Banner)) throw new AbpAuthorizationException();
-		var profile = await GetBrandingAsync();
-		var id = profile.Effective[kind.ToString().ToLowerInvariant()].Selection.AssetId;
-		if (!id.HasValue) throw new BusinessException(SchoolIdentityErrorCodes.AssetMissing);
-		var asset = await assets.GetAsync(id.Value);
+		var branding = await GetBrandingAsync();
+		var selected = kind == SchoolIdentityAssetKind.Logo ? branding.Logo : branding.Banner;
+		if (selected == null) return null;
+		var asset = await assets.GetAsync(selected.Id);
 		if (asset.TenantId != CurrentTenant.Id || asset.Kind != kind) throw new AbpAuthorizationException();
-		return new() { Content = await blobs.GetAllBytesAsync(asset.BlobName), ContentType = asset.ContentType, FileName = asset.FileName };
+		// Uploaded assets are immutable; replacing an image creates a new asset ID.
+		return new() { Content = await blobs.GetAllBytesAsync(asset.BlobName), ContentType = asset.ContentType,
+			EntityTag = $"\"{CurrentTenant.Id:N}-{asset.Id:N}\"" };
 	}
 
 	public async Task<SchoolIdentityAssetDownloadDto> PreviewAsync(SchoolIdentityPreviewDto input)

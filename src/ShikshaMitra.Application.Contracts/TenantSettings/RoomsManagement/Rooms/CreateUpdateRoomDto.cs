@@ -38,8 +38,11 @@ public class CreateUpdateRoomDto
 	[Required]
 	[Range(0, int.MaxValue)]
 	public int BenchesPerColumn { get; set; }
+	public int[]? ColumnRows { get; set; }
 
 	public List<string>? Features { get; set; }
+	public RoomImageInput? Image { get; set; }
+	public bool RemoveImage { get; set; }
 
 	public string? BoardPosition { get; set; }
 	public string? EntrancePosition { get; set; }

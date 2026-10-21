@@ -3,7 +3,7 @@ module: institute-setup
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-10-15
+updated_on: 2026-10-19
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,7 +11,16 @@ audience: humans-and-agents
 # Validate Institute Setup backend changes
 
 TL;DR: run the docs validator for documentation changes and targeted Tenant Settings or Academic tests for behavior changes.
-Rooms Management does not currently have a dedicated test inventory in this compact doc set.
+Rooms Management has focused domain layout and direct-call authorization coverage.
+
+## Room layout and features
+
+| Check | Command |
+| --- | --- |
+| Unequal columns, derived capacity, invalid layouts and feature normalization | `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~RoomLayout_Tests` |
+| Read/write room and catalogue policy enforcement | `dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~RoomAuthorization_Tests` |
+
+The room migration script and EF model consistency were checked locally. Applying its seed SQL and verifying tenant isolation against a disposable PostgreSQL database remain release checks; no disposable PostgreSQL connection was verified. These focused tests do not establish deployed persistence.
 
 ## Initial setup checks
 

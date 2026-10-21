@@ -19,7 +19,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance.Audit;
 
 [RemoteService(false)]
-[Authorize]
+[Authorize(ShikshaMitraSubmodulePermissions.Finance.Auditing.View)]
 public partial class FinanceAuditTrailAppService(
 	IRepository<FinanceAuditEvent, Guid> repository,
 	IRepository<Student, Guid> studentRepository,

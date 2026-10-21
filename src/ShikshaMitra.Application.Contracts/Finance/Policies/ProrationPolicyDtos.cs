@@ -75,9 +75,9 @@ public class CreateUpdateProrationPolicyDtoValidator : AbstractValidator<CreateU
 		RuleFor(x => x.FeeHeadRules).NotEmpty();
 		RuleFor(x => x.FeeHeadRules)
 			.Must(rules => rules.Any(rule =>
-				(rule.ApplyOnAdmission && (EnumValue(rule.RuleType, "Daily", "MonthlyCutoff"))) ||
-				(rule.ApplyOnEarlyWithdrawal && EnumValue(rule.EarlyWithdrawalRuleType ?? rule.RuleType, "Daily", "MonthlyCutoff"))))
-			.WithMessage("At least one Fee Head must use Daily or MonthlyCutoff proration.");
+				(rule.ApplyOnAdmission && EnumValue(rule.RuleType, "Daily", "MonthlyCutoff", "FullMonthCharge")) ||
+				(rule.ApplyOnEarlyWithdrawal && EnumValue(rule.EarlyWithdrawalRuleType ?? rule.RuleType, "Daily", "MonthlyCutoff", "FullMonthCharge"))))
+			.WithMessage("At least one Fee Head must use Daily, MonthlyCutoff or FullMonthCharge proration.");
 		RuleFor(x => x.FeeHeadRules).Must(x => x.Select(r => r.FeeHeadId).Distinct().Count() == x.Count)
 			.WithMessage("A Fee Head can have only one proration rule.");
 		RuleForEach(x => x.FeeHeadRules).SetValidator(new ProrationPolicyRuleDtoValidator());

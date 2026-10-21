@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
@@ -23,6 +24,7 @@ public partial class ReceiptBookAppService(
 	IEducationMediumStageRepository educationMediumStageRepository
 ) : ApplicationService, IReceiptBookAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.Add)]
 	public async Task<ReceiptBookResponse> CreateAsync(Guid academicYearId, ReceiptBookCreateRequest input)
 	{
 		await academicYearRepository.GetAsync(academicYearId);
@@ -53,6 +55,7 @@ public partial class ReceiptBookAppService(
 		}
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.View)]
 	public async Task<ReceiptBookResponse> GetAsync(Guid receiptBookId)
 	{
 		var queryable = await receiptBookRepository.WithDetailsAsync(
@@ -65,6 +68,7 @@ public partial class ReceiptBookAppService(
 		return MapToResponse(receiptBook);
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.Add)]
 	public async Task<MessageResponse> UpdateAsync(Guid receiptBookId, ReceiptBookUpdateRequest input)
 	{
 		await educationBoardRepository.GetAsync(input.BoardId);
@@ -81,12 +85,14 @@ public partial class ReceiptBookAppService(
 		return new MessageResponse { Message = "Receipt book updated successfully" };
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.Delete)]
 	public async Task<MessageResponse> DeleteAsync(Guid receiptBookId)
 	{
 		await receiptBookRepository.DeleteAsync(receiptBookId);
 		return new MessageResponse { Message = "Receipt book deleted successfully" };
 	}
 
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.Add)]
 	public async Task<ReceiptBookStatusUpdateResponse> UpdateStatusAsync(Guid receiptBookId, ReceiptBookStatusUpdateRequest input)
 	{
 		var receiptBook    = await receiptBookRepository.GetAsync(receiptBookId);

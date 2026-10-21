@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 
@@ -9,6 +11,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 public partial class ReceiptBookAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_ReceiptBook.View)]
 	public async Task<ReceiptBookListResponse> GetListAsync(
 		Guid academicYearId, int page = 1, int pageSize = 10, string? search = null)
 	{

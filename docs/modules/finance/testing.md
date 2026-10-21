@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-17
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -24,6 +24,18 @@ git diff --check
 ```
 
 ## Focused test map
+
+### Receipt Book and audit permission boundaries
+
+`FinancePermissionBoundaryApi_Tests` checks exact Receipt Book View versus writes,
+module/action independence, and rejection of legacy audit or Collection View grants.
+`FeeConfigurationPermissionAuthorization_Tests` also checks Receipt Book service
+method attributes. Both suites are included in the reusable Security Regression gate.
+
+```powershell
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~FinancePermissionBoundaryApi_Tests|FullyQualifiedName~AccountSettingsPermissionApi_Tests" --artifacts-path .artifacts/finance-permissions-qa
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~FeeConfigurationPermissionAuthorization_Tests|FullyQualifiedName~FinanceAuditTrailAppService_Tests" --artifacts-path .artifacts/finance-permissions-qa
+```
 
 ### Concessions and Collections list queries
 

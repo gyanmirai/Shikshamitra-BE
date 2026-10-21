@@ -12,14 +12,8 @@ namespace ShikshaMitra.Finance.Audit;
 
 public partial class FinanceAuditTrailAppService
 {
-	private async Task EnsureCanViewFinanceAuditAsync()
-	{
-		if (await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Auditing.View)
-			|| await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.AuditTrail.View)
-			|| await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_FeeCollections.View))
-			return;
-		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Auditing.View);
-	}
+	private Task EnsureCanViewFinanceAuditAsync() =>
+		AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Auditing.View);
 
 	private static IQueryable<FinanceAuditEvent> ApplyFilters(
 		IQueryable<FinanceAuditEvent> query, FinanceAuditEventListRequestDto input)

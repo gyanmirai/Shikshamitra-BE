@@ -1,6 +1,7 @@
 {
     "Culture": "en",
     "Texts": {
+        "HR:Payroll:CompensationPreviewStale": "ESIC policy changed. Refresh preview and review the updated salary before saving.",
         "HR:Payroll:EsiPolicyInvalid": "Review the ESIC policy values, effective month, and source.",
         "HR:Payroll:EsiPolicySelectionInvalid": "Choose an ESIC policy, or select external management and enter its reason.",
         "HR:Payroll:EsiDefaultPolicyRequired": "The default ESIC policy must remain available.",

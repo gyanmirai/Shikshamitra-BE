@@ -29,6 +29,7 @@ public class SaveEmployeeCompensationDto
 	public Guid? PfRuleId { get; set; }
 	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
 	public Guid? EsiPolicyId { get; set; }
+	public Guid? ExpectedEsiPolicyVersionId { get; set; }
 	public string? EsiExternalReason { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
 	public List<SalaryRuleOverrideDto> Overrides { get; set; } = [];
@@ -110,6 +111,8 @@ public class SaveEmployeeCompensationDtoValidator : AbstractValidator<SaveEmploy
 		RuleFor(x => x.MonthlyAmount).GreaterThan(0m).LessThanOrEqualTo(100_000_000m);
 		RuleFor(x => x.EffectiveMonth).Must(x => x.Day == 1);
 		RuleFor(x => x.PfRuleId).NotEmpty().When(x => x.PfApplicable);
+		RuleFor(x => x.ExpectedEsiPolicyVersionId).NotEmpty().When(x => x.EsiManagementMode == EsiManagement.InPlatform)
+			.WithMessage("Preview salary before saving to confirm the effective ESIC policy version.");
 		RuleFor(x => x.StatutoryProfile).Equal("IN-GJ");
 		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(100);
 		RuleFor(x => x.CustomizationReason).NotEmpty().MaximumLength(500).When(x => x.Overrides.Count > 0);

@@ -2,6 +2,7 @@ namespace ShikshaMitra.HR;
 
 public static partial class HRErrorCodes
 {
+	public const string CompensationPreviewStale = "HR:Payroll:CompensationPreviewStale";
 	public const string EsiPolicyInvalid = "HR:Payroll:EsiPolicyInvalid";
 	public const string EsiPolicySelectionInvalid = "HR:Payroll:EsiPolicySelectionInvalid";
 	public const string EsiDefaultPolicyRequired = "HR:Payroll:EsiDefaultPolicyRequired";

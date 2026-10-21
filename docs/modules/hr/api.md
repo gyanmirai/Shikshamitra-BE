@@ -577,6 +577,10 @@ Reject duplicate/backdated version starts, stale writes and changed-body retries
 The response includes `appliesUntil`; expired versions and gaps never fall back to an older version.
 Template read/save contracts carry `defaultEsiManagementMode`, `defaultEsiPolicyId` and `defaultEsiExternalReason`.
 Preview/calculate and employee compensation contracts carry `esiManagementMode`, `esiPolicyId` and `esiExternalReason`.
+Employee compensation saves require `expectedEsiPolicyVersionId` from the preview's `employeeStateInsurance.ruleId` when ESIC is calculated in the platform.
+The effective version is checked under the payroll input transaction lock before any salary or statutory-profile changes.
+A changed version returns HTTP 409 with `HR:Payroll:CompensationPreviewStale`; refresh the preview before retrying.
+Idempotent retries compare the original saved version rather than recalculating the saved result.
 `IN_PLATFORM` requires a tenant policy; `EXTERNAL` requires a reason and no policy ID.
 External management suppresses both ESIC shares and payslip presentation, while retaining enrollment facts.
 Policy selection does not confer eligibility; the existing wage classifications, enrollment, contribution continuity and rounding engine still apply.

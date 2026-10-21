@@ -20,6 +20,19 @@ namespace ShikshaMitra.HR.Payroll;
 /// </summary>
 public static class PayrollTestHelper
 {
+	public static async Task<Compensation.SaveEmployeeCompensationDto> BindEsiPolicyVersionAsync(
+		HttpClient client, Compensation.SaveEmployeeCompensationDto input)
+	{
+		if (input.EsiManagementMode == EsiManagement.External) return input;
+		var policies = await client.GetFromJsonAsync<EsiPolicyDto[]>("/api/payroll/statutory-schemes/esi/policies/options", JsonOptions);
+		var policy = policies!.Single(x => input.EsiPolicyId.HasValue ? x.Id == input.EsiPolicyId : x.IsDefault);
+		input.EsiPolicyId = policy.Id;
+		input.ExpectedEsiPolicyVersionId = policy.Versions.Where(x => x.EffectiveFrom <= input.EffectiveMonth &&
+			(!x.EffectiveTo.HasValue || x.EffectiveTo >= input.EffectiveMonth))
+			.OrderByDescending(x => x.EffectiveFrom).First().Id;
+		return input;
+	}
+
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
 	public sealed record PayrollComponentSeed(Guid Id, string Name);

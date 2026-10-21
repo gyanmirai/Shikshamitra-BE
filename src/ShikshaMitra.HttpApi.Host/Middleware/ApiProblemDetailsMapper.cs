@@ -36,6 +36,7 @@ public static class ApiProblemDetailsMapper
 			HRErrorCodes.LeaveConflictTerminalState => StatusCodes.Status409Conflict,
 			HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed => StatusCodes.Status409Conflict,
 			HRErrorCodes.StatutoryPreviewStale => StatusCodes.Status409Conflict,
+			HRErrorCodes.CompensationPreviewStale => StatusCodes.Status409Conflict,
 			"HR:Payroll:StatutoryProfileConflict" or "HR:Payroll:PfCoverageSaveConflict" or "HR:Payroll:CompensationSaveConflict" or
 			"HR:Payroll:SalaryTemplateSaveConflict" => StatusCodes.Status409Conflict,
 			HRErrorCodes.EsiConfigurationLocked or HRErrorCodes.EsiConfigurationCancellationInvalid => StatusCodes.Status409Conflict,

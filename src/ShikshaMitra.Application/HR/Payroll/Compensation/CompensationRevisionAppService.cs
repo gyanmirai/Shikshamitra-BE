@@ -27,6 +27,8 @@ public class CompensationRevisionAppService(
 	ISalaryTemplateAppService salaryTemplateAppService,
 	EmployeeActivationReadinessService activationReadinessService,
 	PayrollSnapshotReviewInvalidator payrollSnapshotReviewInvalidator,
+	IPayrollInputRevisionStore inputRevisionStore,
+	EsiPolicyResolver esiPolicies,
 	IAsyncQueryableExecuter asyncExecuter,
 	IClock clock, IEmployeeAuthorizationService employeeAuthorizationService, EmployeeStatutoryProfileAppService profileService, EmployeeStatutoryProfileResolver profileResolver) : ApplicationService, ICompensationRevisionAppService
 {
@@ -62,12 +64,15 @@ public class CompensationRevisionAppService(
 	{
 		await employeeAuthorizationService.CheckEmployeeScopedPermissionAsync(employeeId,
 			ShikshaMitraSubmodulePermissions.HR.PayrollManagement_CompensationRevisions.Manage);
+		await inputRevisionStore.LockAsync();
 		var replay = await asyncExecuter.FirstOrDefaultAsync(
 			(await revisionRepository.GetQueryableAsync()).Where(x =>
 				x.EmployeeId == employeeId && x.IdempotencyKey == input.IdempotencyKey));
 		if (replay != null)
 		{
 			var original = TryDeserializeCalculation(replay.CalculationSnapshotJson);
+			if (original != null && input.ExpectedEsiPolicyVersionId != original.EmployeeStateInsurance.RuleId)
+				throw new BusinessException(HRErrorCodes.CompensationPreviewStale);
 			if (original != null && (original.PfEnrollment != input.PfEnrollment || replay.EsiManagementMode != input.EsiManagementMode || replay.EsiPolicyId != input.EsiPolicyId || replay.EsiExternalReason != input.EsiExternalReason?.Trim() || input.PfApplicable && replay.PfRuleId != input.PfRuleId || input.StatutoryProfileOverride != null && NormalizeProfile(original.StatutoryApplication?.Profile) != NormalizeProfile(input.StatutoryProfileOverride)))
 				throw new BusinessException("HR:Payroll:CompensationSaveConflict");
 			var replayResult = await MapAsync(replay, await CanViewAuditAsync(), await activationReadinessService.GetAsync(employeeId));
@@ -76,6 +81,12 @@ public class CompensationRevisionAppService(
 		}
 
 		var effectiveMonth = NormalizeMonth(input.EffectiveMonth);
+		if (input.EsiManagementMode == EsiManagement.InPlatform)
+		{
+			var policy = await esiPolicies.ResolveAsync(input.EsiPolicyId, effectiveMonth);
+			if (input.ExpectedEsiPolicyVersionId != policy.Rule.Id)
+				throw new BusinessException(HRErrorCodes.CompensationPreviewStale);
+		}
 		await EnsureNoLockedPayrollAsync(employeeId, effectiveMonth);
 		var revisions = await revisionRepository.GetListAsync(x => x.EmployeeId == employeeId);
 		var effectiveForMonth = revisions

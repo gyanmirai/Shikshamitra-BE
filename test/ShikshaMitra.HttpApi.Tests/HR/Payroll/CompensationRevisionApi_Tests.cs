@@ -39,7 +39,7 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 		var employeeId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "CompDirectSave");
 		var template = await GetDefaultTemplateAsync(Client);
 		var idempotencyKey = Guid.NewGuid().ToString("N");
-		var firstRequest = Request(template, 50000m, idempotencyKey);
+		var firstRequest = await Request(template, 50000m, idempotencyKey);
 
 		var firstResponse = await Client.PutAsJsonAsync(
 			$"/api/payroll/employees/{employeeId}/compensation", firstRequest, JsonOptions);
@@ -61,7 +61,7 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 		replay.ShouldNotBeNull();
 		replay.Id.ShouldBe(first.Id);
 
-		var secondRequest = Request(template, 55000m, Guid.NewGuid().ToString("N"));
+		var secondRequest = await Request(template, 55000m, Guid.NewGuid().ToString("N"));
 		secondRequest.ExpectedRevision = first.RevisionNumber;
 		var secondResponse = await Client.PutAsJsonAsync(
 			$"/api/payroll/employees/{employeeId}/compensation", secondRequest, JsonOptions);
@@ -95,7 +95,7 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 
 		var saveResponse = await manageClient.PutAsJsonAsync(
 			$"/api/payroll/employees/{employeeId}/compensation",
-			Request(template, 50000m, Guid.NewGuid().ToString("N")), JsonOptions);
+			await Request(template, 50000m, Guid.NewGuid().ToString("N")), JsonOptions);
 		var savePayload = await saveResponse.Content.ReadAsStringAsync();
 		saveResponse.StatusCode.ShouldBe(HttpStatusCode.OK, savePayload);
 		(await manageClient.GetAsync($"/api/payroll/employees/{employeeId}/compensation"))
@@ -104,7 +104,7 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 			.StatusCode.ShouldBe(HttpStatusCode.OK);
 		(await viewClient.PutAsJsonAsync(
 			$"/api/payroll/employees/{employeeId}/compensation",
-			Request(template, 51000m, Guid.NewGuid().ToString("N")), JsonOptions))
+			await Request(template, 51000m, Guid.NewGuid().ToString("N")), JsonOptions))
 			.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
 		(await deniedClient.GetAsync($"/api/payroll/employees/{employeeId}/compensation"))
 			.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -124,7 +124,7 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 			Status = "RegistrationPending", WageCeilingCategory = "Standard"
 		}, JsonOptions);
 		pending.StatusCode.ShouldBe(HttpStatusCode.OK, await pending.Content.ReadAsStringAsync());
-		var request = Request(await GetDefaultTemplateAsync(Client), 10000m, Guid.NewGuid().ToString("N"));
+		var request = await Request(await GetDefaultTemplateAsync(Client), 10000m, Guid.NewGuid().ToString("N"));
 		request.PfApplicable = false;
 		request.PfRuleId = null;
 		request.PfEnrollment = new() { Membership = "NOT_MEMBER" };
@@ -152,7 +152,7 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 		await PayrollTestHelper.EnsureActiveEsiTestSetupAsync(Factory);
 		await EnsureEsiOnlySchoolAsync();
 		var employeeId = await EmployeeTestHelper.CreateEmployeeAndGetIdAsync(Client, "CompBankUpdate");
-		var request = Request(await GetDefaultTemplateAsync(Client), 50000m, Guid.NewGuid().ToString("N"));
+		var request = await Request(await GetDefaultTemplateAsync(Client), 50000m, Guid.NewGuid().ToString("N"));
 		request.SalaryBasis = basis;
 		var compensationUrl = $"/api/payroll/employees/{employeeId}/compensation";
 		var save = await Client.PutAsJsonAsync(compensationUrl, request, JsonOptions);
@@ -241,13 +241,13 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 		}
 	}
 
-	private static SaveEmployeeCompensationDto Request(
+	private async Task<SaveEmployeeCompensationDto> Request(
 		SalaryTemplateDto template,
 		decimal amount,
 		string idempotencyKey)
 	{
 		var now = DateTime.UtcNow;
-		return new SaveEmployeeCompensationDto
+		return await PayrollTestHelper.BindEsiPolicyVersionAsync(Client, new SaveEmployeeCompensationDto
 		{
 			TemplateVersionId = template.EditableVersion.Id,
 			SalaryBasis = template.EditableVersion.DefaultSalaryBasis,
@@ -261,7 +261,7 @@ public class CompensationRevisionApi_Tests : ShikshaMitraApiTestBase
 			EsiExternalReason = template.EditableVersion.DefaultEsiExternalReason,
 			PfEnrollment = new() { Membership = template.EditableVersion.DefaultPfApplicable ? "EXISTING_MEMBER" : "NOT_MEMBER" },
 			IdempotencyKey = idempotencyKey
-		};
+		});
 	}
 
 	private HttpClient CreateClientWithPermissions(params string[] permissions)

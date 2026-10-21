@@ -42,6 +42,7 @@ public class SalarySummaryApi_Tests(ShikshaMitraApiTestFactory factory) : Shiksh
 		}, JsonOptions));
 		var previewInput = new CalculateSalaryTemplateRequestDto
 		{
+			EsiPolicyId = template.EditableVersion.DefaultEsiPolicyId,
 			EmployeeId = employee, EffectiveMonth = month, SalaryBasis = basis, MonthlyAmount = 18000m,
 			PfApplicable = true, PfRuleId = pf.Id, PfEnrollment = new() { Membership = "NOT_MEMBER" }
 		};
@@ -54,11 +55,11 @@ public class SalarySummaryApi_Tests(ShikshaMitraApiTestFactory factory) : Shiksh
 		preview.EmployeeStateInsurance.EmployeeContribution.ShouldBeGreaterThan(0);
 		preview.TargetResult.IsExact.ShouldBeTrue();
 		preview.StatutorySummary.Count.ShouldBe(3);
-		var saveResponse = await Client.PutAsJsonAsync($"/api/payroll/employees/{employee}/compensation", new SaveEmployeeCompensationDto
+		var saveResponse = await Client.PutAsJsonAsync($"/api/payroll/employees/{employee}/compensation", await PayrollTestHelper.BindEsiPolicyVersionAsync(Client, new SaveEmployeeCompensationDto
 		{
 			TemplateVersionId = template.EditableVersion.Id, EffectiveMonth = month, SalaryBasis = basis, MonthlyAmount = 18000m,
 			PfApplicable = true, PfRuleId = pf.Id, PfEnrollment = previewInput.PfEnrollment, IdempotencyKey = Guid.NewGuid().ToString("N")
-		}, JsonOptions);
+		}), JsonOptions);
 		await EsiPayrollWorkflowScenario.RequireSuccess(saveResponse);
 		var url = $"/api/payroll/employees/{employee}/salary-summary?month={month:yyyy-MM}";
 		var summary = await GetAndReadAsync<SalarySummaryDto>(url);
@@ -129,11 +130,12 @@ public class SalarySummaryApi_Tests(ShikshaMitraApiTestFactory factory) : Shiksh
 		{
 			var template = (await GetAndReadAsync<SalaryTemplateListDto>("/api/payroll/salary-templates/active")).Items.First(x => x.IsDefault);
 			var pf = await PayrollTestHelper.CreatePfRuleAsync(Client);
-			var input = new SaveEmployeeCompensationDto { TemplateVersionId = template.EditableVersion.Id,
+			var input = await PayrollTestHelper.BindEsiPolicyVersionAsync(Client, new SaveEmployeeCompensationDto { TemplateVersionId = template.EditableVersion.Id,
 				EffectiveMonth = month, SalaryBasis = "GROSS", MonthlyAmount = 18000m, PfApplicable = true, PfRuleId = pf.Id,
-				PfEnrollment = new() { Membership = "EXISTING_MEMBER" }, IdempotencyKey = Guid.NewGuid().ToString("N") };
+				PfEnrollment = new() { Membership = "EXISTING_MEMBER" }, IdempotencyKey = Guid.NewGuid().ToString("N") });
 			var response = await Client.PostAsJsonAsync($"/api/payroll/salary-templates/versions/{template.EditableVersion.Id}/calculate", new CalculateSalaryTemplateRequestDto
 			{
+				EsiPolicyId = input.EsiPolicyId,
 				EmployeeId = employee, EffectiveMonth = month, SalaryBasis = input.SalaryBasis, MonthlyAmount = input.MonthlyAmount,
 				PfApplicable = input.PfApplicable, PfRuleId = pf.Id, PfEnrollment = input.PfEnrollment
 			}, JsonOptions);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,7 +19,7 @@ public class SalaryTemplateCalculationService(
 	IProvidentFundRepository providentFundRepository,
 	IProfessionalTaxRepository professionalTaxRepository,
 	IEmployeeRepository employees,
-	SalaryTemplateEsiContextResolver esiContextResolver,
+	SalaryTemplateEsiContextResolver esiContextResolver, EsiPolicyResolver esiPolicies,
 	IAsyncQueryableExecuter asyncExecuter, IClock clock, PfEligibilityResolver pfEligibilityResolver, EmployeeStatutoryProfileResolver profileResolver, EmployeeStatutoryProfileAppService profileService, Volo.Abp.Domain.Repositories.IRepository<ShikshaMitra.HR.Payroll.Compensation.EmployeeCompensationRevision, Guid> revisions) : ITransientDependency
 {
 	internal async Task<SalaryTemplateCalculationDto> CalculateAsync(
@@ -37,7 +37,7 @@ public class SalaryTemplateCalculationService(
 		var savedRevision = input.EmployeeId.HasValue ? (await revisions.GetListAsync(x => x.EmployeeId == input.EmployeeId && x.EffectiveMonth <= effectiveMonth && x.Status == ShikshaMitra.HR.Payroll.Compensation.CompensationRevisionStatus.Approved))
 			.OrderByDescending(x => x.EffectiveMonth).ThenByDescending(x => x.RevisionNumber).FirstOrDefault() : null;
 		var preserveGross = savedRevision != null && savedRevision.SalaryBasis == ParseSalaryBasis(input.SalaryBasis) &&
-			savedRevision.QuotedMonthlyAmount == input.MonthlyAmount && savedRevision.SourceSalaryTemplateVersionId == versionId &&
+			savedRevision.QuotedMonthlyAmount == input.MonthlyAmount && savedRevision.EsiManagementMode == input.EsiManagementMode && savedRevision.EsiPolicyId == input.EsiPolicyId && savedRevision.SourceSalaryTemplateVersionId == versionId &&
 			System.Text.Json.Nodes.JsonNode.DeepEquals(System.Text.Json.Nodes.JsonNode.Parse(savedRevision.OverridesJson), System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(input.Overrides)));
 		var effectivePfRuleId = input.PfRuleId ?? (preserveGross ? savedRevision?.PfRuleId : null);
 		var pfRule = (input.PfApplicable || preserveGross) && effectivePfRuleId.HasValue
@@ -68,7 +68,14 @@ public class SalaryTemplateCalculationService(
 
 		var basis = ParseSalaryBasis(input.SalaryBasis);
 		var protectionPolicy = ParseProtectionPolicy(input.ProtectionPolicy);
-		var esiResolution = await esiContextResolver.ResolveAsync(effectiveMonth, input.StatutoryProfile, input.EmployeeId);
+		EsiManagement.Validate(input.EsiManagementMode, input.EsiPolicyId, input.EsiExternalReason);
+		var esiPolicy = input.EsiManagementMode == EsiManagement.InPlatform
+			? await esiPolicies.ResolveAsync(input.EsiPolicyId, effectiveMonth, savedRevision?.EsiPolicyId == input.EsiPolicyId) : null;
+		if (preserveGross && esiPolicy != null && RunPayroll.PayrollEsiPolicyCompensationRecalculator.HasPolicyVersionChange(savedRevision!, esiPolicy.Rule.Id))
+			preserveGross = false;
+		var esiResolution = input.EsiManagementMode == EsiManagement.External
+			? new SalaryTemplateEsiResolution(null, [], false, null)
+			: await esiContextResolver.ResolveAsync(effectiveMonth, input.StatutoryProfile, input.EmployeeId, input.EsiPolicyId, savedRevision?.EsiPolicyId == input.EsiPolicyId);
 		PayrollStatutoryProfile? applicationProfile = input.EmployeeId.HasValue ? await profileResolver.ResolveAsync(input.EmployeeId.Value, effectiveMonth) : null;
 		if (input.StatutoryProfileOverride != null)
 		{
@@ -76,6 +83,8 @@ public class SalaryTemplateCalculationService(
 			applicationProfile = await profileService.ValidateDraftAsync(input.EmployeeId.Value, effectiveMonth, input.StatutoryProfileOverride,
 				input.StatutoryProfileConcurrencyStamp, input.StatutoryProfileUpdatePf, input.StatutoryProfileUpdateEsic);
 		}
+		if (input.EsiManagementMode == EsiManagement.External && applicationProfile != null)
+			applicationProfile = applicationProfile with { ApplyEsic = false, EsicDisabledReason = input.EsiExternalReason?.Trim() };
 		var resolvedGross = preserveGross ? savedRevision!.GrossSalary : basis == SalaryInputBasis.Gross ? input.MonthlyAmount :
 			SalaryTemplateCalculator.Calculate(basis, input.MonthlyAmount, rules, components,
 				applicationProfile == null || applicationProfile.ApplyPf ? pfRule : null,
@@ -126,6 +135,7 @@ public class SalaryTemplateCalculationService(
 		{
 			StatutoryApplication = evaluation.StatutoryApplication,
 			PfEnrollment = input.PfEnrollment,
+			EsiManagementMode = input.EsiManagementMode, EsiPolicyId = input.EsiPolicyId, EsiExternalReason = input.EsiExternalReason,
 			PfEligibility = pfEligibility,
 			TemplateId = templateId,
 			TemplateVersionId = versionId,
@@ -151,7 +161,7 @@ public class SalaryTemplateCalculationService(
 			},
 			EmployeeStateInsurance = new SalaryTemplateEsiPreviewDto
 			{
-				ConfigurationId = esiResolution.ConfigurationId,
+				ConfigurationId = esiResolution.ConfigurationId, PolicyId = esiPolicy?.Policy.Id, PolicyName = esiPolicy?.Policy.Name, ManagementMode = input.EsiManagementMode,
 				EligibilityWages = esiResult?.EligibilityWages ?? 0m,
 				EmployeePercentage = esiResult?.EmployeePercentage ?? 0m,
 				EmployerPercentage = esiResult?.EmployerPercentage ?? 0m,
@@ -160,14 +170,14 @@ public class SalaryTemplateCalculationService(
 				IsCovered = esiResult?.IsCovered ?? false,
 				CanCalculate = esiResult?.CanCalculate ?? esiResolution.Warnings.Count == 0,
 				RegistrationPending = esiResolution.RegistrationPending,
-				CoverageDecision = esiResult?.CoverageDecision,
+				CoverageDecision = input.EsiManagementMode == EsiManagement.External ? "EXTERNALLY_MANAGED" : esiResult?.CoverageDecision,
 				StatutoryWages = esiResult?.StatutoryWages ?? 0m,
 				WageCeiling = esiResult?.WageCeiling ?? 0m,
 				EmployeeContribution = esiResult?.EmployeeContribution ?? 0m,
 				EmployerContribution = esiResult?.EmployerContribution ?? 0m,
 				GovernmentContribution = esiResult?.GovernmentContribution ?? 0m,
-				RuleId = esiResolution.Context?.Rule.Id,
-				RuleVersion = esiResolution.Context?.Rule.Version,
+				RuleId = esiPolicy?.Rule.Id,
+				RuleVersion = esiPolicy?.Rule.Version,
 				IssueCodes = issueCodes.Concat(esiResolution.Warnings).Distinct().ToList()
 			},
 			Earnings = evaluation.Earnings,
@@ -188,6 +198,8 @@ public class SalaryTemplateCalculationService(
 			SalaryStatutorySummary.Esi(esiResult, evaluation.StatutoryApplication?.EmployeeStateInsurance, esiResolution.IsEnabled),
 			SalaryStatutorySummary.ProfessionalTax(ptIncluded, ptSlab, cessationExemption)];
 		response.StatutorySummary[1].RuleId = response.EmployeeStateInsurance.RuleId;
+		if (input.EsiManagementMode == EsiManagement.External)
+			response.StatutorySummary[1] = SalaryStatutorySummary.ExternalEsi(input.EsiExternalReason);
 		response.StatutorySummary[1].RuleVersion = response.EmployeeStateInsurance.RuleVersion;
 		return response;
 	}

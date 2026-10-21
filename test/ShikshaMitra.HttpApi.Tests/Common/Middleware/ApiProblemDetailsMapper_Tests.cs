@@ -30,6 +30,8 @@ public class ApiProblemDetailsMapper_Tests
 	[InlineData(TenantSettingsDomainErrorCodes.DuplicateStandardName)]
 	[InlineData(TenantSettingsDomainErrorCodes.DuplicateDivisionName)]
 	[InlineData(FeeCollectionErrorCodes.IdempotencyConflict)]
+	[InlineData("HR:Payroll:SalaryTemplateSaveConflict")]
+	[InlineData(HRErrorCodes.CompensationPreviewStale)]
 	public void Conflict_errors_should_resolve_and_normalize_to_409(string errorCode)
 	{
 		ApiProblemDetailsMapper.ResolveBusinessStatusCode(errorCode)

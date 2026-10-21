@@ -392,7 +392,7 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 		var now = DateTime.UtcNow;
 		var response = await Client.PutAsJsonAsync(
 			$"/api/payroll/employees/{employeeId}/compensation",
-			new SaveEmployeeCompensationDto
+			await PayrollTestHelper.BindEsiPolicyVersionAsync(Client, new SaveEmployeeCompensationDto
 			{
 				TemplateVersionId = version.Id,
 				SalaryBasis = version.DefaultSalaryBasis,
@@ -401,8 +401,9 @@ public class EmployeeStatusApi_Tests : ShikshaMitraApiTestBase
 				EffectiveMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc),
 				PfApplicable = version.DefaultPfApplicable,
 				PfRuleId = version.DefaultPfRuleId,
+				PfEnrollment = new() { Membership = version.DefaultPfApplicable ? "EXISTING_MEMBER" : "NOT_MEMBER" },
 				IdempotencyKey = Guid.NewGuid().ToString("N")
-			},
+			}),
 			JsonOptions);
 		var payload = await response.Content.ReadAsStringAsync();
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, payload);

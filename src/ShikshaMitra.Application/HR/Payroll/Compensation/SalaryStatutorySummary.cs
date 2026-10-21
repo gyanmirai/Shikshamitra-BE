@@ -5,6 +5,11 @@ namespace ShikshaMitra.HR.Payroll.Compensation;
 
 internal static class SalaryStatutorySummary
 {
+	public static SalaryStatutorySummaryDto ExternalEsi(string? reason) => new()
+	{
+		Scheme = "ESIC", Status = "TURNED_OFF", Reason = "Handled outside ShikshaMitra. " + reason,
+		EmployeeAmount = 0m, EmployerAmount = 0m
+	};
 	public static SalaryStatutorySummaryDto Pf(PayrollSchemeApplication? application, PfEligibilityDecision? eligibility, ProvidentFund? rule) => new()
 	{
 		Scheme = "PF",

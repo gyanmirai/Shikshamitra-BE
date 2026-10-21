@@ -260,7 +260,8 @@ public class SalaryTemplateComposerAppService_Tests
 			TemplateId = id, ExpectedActiveVersionId = input.ExpectedActiveVersionId, ConcurrencyStamp = input.ConcurrencyStamp,
 			Rules = input.Rules, SalaryBasis = input.DefaultSalaryBasis, ProtectionPolicy = input.DefaultProtectionPolicy,
 			MonthlyAmount = input.SampleMonthlyAmount, EffectiveMonth = input.SampleEffectiveMonth,
-			PfApplicable = input.DefaultPfApplicable, PfRuleId = input.DefaultPfRuleId
+			PfApplicable = input.DefaultPfApplicable, PfRuleId = input.DefaultPfRuleId,
+			EsiManagementMode = input.DefaultEsiManagementMode, EsiPolicyId = input.DefaultEsiPolicyId, EsiExternalReason = input.DefaultEsiExternalReason
 		});
 		input.PreviewToken = preview.PreviewToken;
 	}
@@ -269,6 +270,8 @@ public class SalaryTemplateComposerAppService_Tests
 	{
 		Name = name,
 		Description = "Reusable salary setup",
+		DefaultEsiManagementMode = "EXTERNAL",
+		DefaultEsiExternalReason = "ESIC is outside this component-only fixture.",
 		DefaultSalaryBasis = "EMPLOYER_COST",
 		DefaultProtectionPolicy = "PROTECT_EMPLOYER_COST",
 		Rules = rules.ToList(),

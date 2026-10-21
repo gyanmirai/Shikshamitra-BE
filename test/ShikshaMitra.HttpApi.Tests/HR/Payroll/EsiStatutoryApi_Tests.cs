@@ -167,6 +167,75 @@ public class EsiStatutoryApi_Tests(ShikshaMitraApiTestFactory factory) : Shiksha
         await EnsureDefaultTestUserHasTenantWideScopeAsync();
         (await Client.PutAsJsonAsync(Url, new SaveEsiConfigurationDto())).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
     }
+    [Fact]
+    public async Task Component_classification_is_effective_dated_and_preserves_school_settings()
+    {
+        await EnsureDefaultTestUserHasTenantWideScopeAsync();
+        var creation = await Client.PostAsJsonAsync("/api/payroll/earning-components",
+            new ShikshaMitra.HR.Payroll.Settings.EarningComponentCreateRequestDto {
+                EarningComponentName = "Custom ESI earning " + Guid.NewGuid().ToString("N"),
+                EarningType = "FIXED", CalculationType = "AMOUNT", Amount = 1000m, VisibleInPayslip = true
+            }, JsonOptions);
+        creation.StatusCode.ShouldBe(HttpStatusCode.Created, await creation.Content.ReadAsStringAsync());
+        var component = (await creation.Content.ReadFromJsonAsync<ShikshaMitra.HR.Payroll.Settings.ComponentCreateResponseDto>(JsonOptions))!;
+        var settings = await GetAndReadAsync<EsiConfigurationSettingsDto>(Url);
+        var month = settings.SuggestedEffectiveMonth;
+        var school = await DraftAsync(false);
+        school.EffectiveMonth = month;
+        school.RegistrationNumber = "SCHOOL-REG";
+        school.CoveredSince = new DateTime(2025, 4, 1);
+        var first = await Client.PutAsJsonAsync(Url, school);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK, await first.Content.ReadAsStringAsync());
+        settings = (await first.Content.ReadFromJsonAsync<EsiConfigurationSettingsDto>(JsonOptions))!;
+        var scheduled = settings.History.First(x => !x.IsCancelled && x.EffectiveMonth == month);
+        var classification = new SaveEsiConfigurationDto {
+            EffectiveMonth = month, Enabled = scheduled.Enabled, RegistrationNumber = scheduled.RegistrationNumber,
+            CoveredSince = scheduled.CoveredSince, ConcurrencyStamp = scheduled.ConcurrencyStamp,
+            IdempotencyKey = Guid.NewGuid(),
+            Treatments = [new EsiTreatmentDraftDto { ComponentId = component.Id, Treatment = "Included" }]
+        };
+        var response = await Client.PutAsJsonAsync(Url, classification);
+        response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        var saved = (await response.Content.ReadFromJsonAsync<EsiConfigurationSettingsDto>(JsonOptions))!;
+        var version = saved.History.First(x => !x.IsCancelled && x.EffectiveMonth == month);
+        version.Enabled.ShouldBeFalse();
+        version.RegistrationNumber.ShouldBe("SCHOOL-REG");
+        version.CoveredSince.ShouldBe(new DateTime(2025, 4, 1));
+        var treatments = await GetAndReadAsync<System.Collections.Generic.List<PayrollComponentStatutoryTreatmentDto>>(
+            $"/api/payroll/statutory-schemes/esi/component-treatments?effectiveOn={month}-01");
+        treatments.Single(x => x.ComponentId == component.Id).Treatment.ShouldBe("Included");
+        var earlier = DateTime.ParseExact(month, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture).AddMonths(-1).ToString("yyyy-MM");
+        var original = await GetAndReadAsync<System.Collections.Generic.List<PayrollComponentStatutoryTreatmentDto>>(
+            $"/api/payroll/statutory-schemes/esi/component-treatments?effectiveOn={earlier}-01");
+        original.Single(x => x.ComponentId == component.Id).Treatment.ShouldBe("Unclassified");
+        (await Client.PutAsJsonAsync(Url, classification)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task School_rate_overrides_are_rejected_even_with_evidence(bool employeeRate)
+    {
+        await EnsureDefaultTestUserHasTenantWideScopeAsync();
+        var draft = await DraftAsync();
+        draft.CalculationSettings = new EsiCalculationSettings {
+            EmployeePercentage = employeeRate ? 0.5m : null,
+            EmployerPercentage = employeeRate ? null : 2m,
+            OverrideReason = "School preference",
+            EvidenceReference = "Internal memo"
+        };
+        (await Client.PutAsJsonAsync(Url, draft)).StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        var month = (await GetAndReadAsync<EsiConfigurationSettingsDto>(Url)).SuggestedEffectiveMonth;
+        var preview = new StatutoryImpactPreviewRequestDto {
+            MonthYear = DateTime.ParseExact(month, "yyyy-MM", System.Globalization.CultureInfo.InvariantCulture).ToString("MM-yyyy"),
+            ConfigurationDraft = new EsiConfigurationDraftDto {
+                Enabled = true, EffectiveMonth = month, CalculationSettings = draft.CalculationSettings
+            }
+        };
+        (await Client.PostAsJsonAsync("/api/payroll/statutory-schemes/esi/impact-preview", preview))
+            .StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    }
+
 	[Fact]
 	public async Task Rules_remain_read_only_and_versioned()
 	{

@@ -64,6 +64,9 @@ public class ShikshaMitraDomainModule : AbpModule
 
 		Configure<AbpAuditingOptions>(options =>
 		{
+			options.EntityHistorySelectors.Add(new NamedTypeSelector("SchoolDocuments", type =>
+				type == typeof(TenantSettings.SchoolDocuments.SchoolDocument) ||
+				type == typeof(TenantSettings.SchoolDocuments.SchoolDocumentFile)));
 			options.EntityHistorySelectors.Add(new NamedTypeSelector(
 				"ConcessionType",
 				type => type == typeof(ConcessionType)));

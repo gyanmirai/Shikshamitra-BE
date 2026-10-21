@@ -9,7 +9,7 @@ public partial class StudentIdCardAppService
 	private async Task<StudentIdCardTemplateDto> CaptureIdentityTemplateAsync(StudentIdCardTemplateDto template, StudentDocumentSnapshot student)
 	{
 		var frozen = JsonSerializer.Deserialize<StudentIdCardTemplateDto>(JsonSerializer.Serialize(template, JsonOptions), JsonOptions)!;
-		frozen.SchoolIdentity = await schoolIdentity.CaptureAsync(student.BoardId, student.MediumId, student.AcademicYearId, signature: false);
+		frozen.SchoolIdentity = await schoolIdentity.CaptureAsync(student.BoardId, student.MediumId, student.AcademicYearId, signature: false, organizationId: student.OrganizationId);
 		SchoolIdentityTemplateAssetService.Apply(frozen.SchoolIdentity, frozen.Logo, SchoolIdentityAssetKind.Logo);
 		frozen.SchoolIdentity.BannerAssetId = null;
 		return frozen;

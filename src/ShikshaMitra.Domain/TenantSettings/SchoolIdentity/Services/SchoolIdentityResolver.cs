@@ -7,11 +7,11 @@ public sealed record ResolvedSchoolIdentityAsset(SchoolIdentitySelection Selecti
 public static class SchoolIdentityResolver
 {
 	public static ResolvedSchoolIdentityAsset Resolve(SchoolIdentityAssetKind kind,
-		SchoolIdentityChoices? defaults, SchoolIdentityChoices? board, SchoolIdentityChoices? medium)
+		SchoolIdentityChoices? defaults, SchoolIdentityChoices? board, SchoolIdentityChoices? medium, SchoolIdentityChoices? organization = null)
 	{
 		foreach (var (choices, source) in new List<(SchoolIdentityChoices?, string)>
 		{
-			(medium, "Medium override"), (board, "Board override"), (defaults, "School default")
+			(organization, "Organization override"), (medium, "Medium override"), (board, "Board override"), (defaults, "School default")
 		})
 		{
 			var selection = choices?.Get(kind);

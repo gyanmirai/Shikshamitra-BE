@@ -19,6 +19,8 @@ public class SchoolIdentityAuthorization_Tests
 	[InlineData("save-defaults", SchoolIdentityPermissions.View)]
 	[InlineData("save-defaults", SchoolIdentityPermissions.ManageDefaults)]
 	[InlineData("save-override", SchoolIdentityPermissions.ManageOverrides)]
+	[InlineData("save-organization", SchoolIdentityPermissions.ManageOverrides)]
+	[InlineData("upload-organization", SchoolIdentityPermissions.ManageOverrides)]
 	[InlineData("copy", SchoolIdentityPermissions.ManageOverrides)]
 	[InlineData("copy", SchoolIdentityPermissions.AccessSignature)]
 	[InlineData("history", SchoolIdentityPermissions.View)]
@@ -35,6 +37,8 @@ public class SchoolIdentityAuthorization_Tests
 			"read" => () => service.GetAsync(new()),
 			"save-defaults" => () => service.UpdateAsync(new()),
 			"save-override" => () => service.UpdateAsync(new() { BoardId = Guid.NewGuid() }),
+			"save-organization" => () => service.UpdateAsync(new() { BoardId = Guid.NewGuid(), MediumId = Guid.NewGuid(), OrganizationId = Guid.NewGuid() }),
+			"upload-organization" => () => service.UploadAsync(SchoolIdentityAssetKind.Banner, Guid.NewGuid(), Guid.NewGuid(), "banner.png", [], Guid.NewGuid()),
 			"copy" => () => service.CopyAsync(new()),
 			"history" => () => service.GetHistoryAsync(new()),
 			"download" => () => service.DownloadAsync(Guid.NewGuid(), new()),

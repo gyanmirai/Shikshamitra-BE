@@ -13,5 +13,6 @@ public static class SchoolIdentityErrorCodes
 	public const string ImageInvalid = "SchoolIdentity:ImageInvalid";
 	public const string ImageSizeInvalid = "SchoolIdentity:ImageSizeInvalid";
 	public const string ImageDimensionsInvalid = "SchoolIdentity:ImageDimensionsInvalid";
+	public const string ImageTooSmall = "SchoolIdentity:ImageTooSmall";
 	public const string DraftExpired = "SchoolIdentity:DraftExpired";
 }

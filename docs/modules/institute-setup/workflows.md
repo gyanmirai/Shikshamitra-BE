@@ -3,7 +3,7 @@ module: institute-setup
 domain: workflows
 content_type: How-to
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,14 @@ audience: humans-and-agents
 
 TL;DR: trace initial setup and Rooms Management through controller, contracts, application orchestration, domain rules and persistence.
 Use this page for building, room type, and room changes.
+
+## Reports lifecycle
+
+1. Validate school context, requester, report grant and source-area read grants. Build permitted catalogue/choices.
+2. Validate the selected request. Intersect academic rows with UserScope before pagination; read room/shift catalogues from the active tenant.
+3. For AI, request a catalogue plan using configured provider settings, validate it and issue an approval token. Revalidate exact approval for AI preview/export.
+4. Persist a tenant-owned job and enqueue its ID. The worker claims Queued once, rebuilds the requester's current principal, checks current grants/scope, reads all matching rows and writes a unique private blob.
+5. Download rechecks ownership, source grants, completion, expiry and academic scope stamp. Retention removes expired blobs; failed/expired jobs can be regenerated as a fresh request.
 
 ## Initial setup lifecycle
 
@@ -68,13 +76,24 @@ Inspect these paths before deleting fields or changing identifiers.
 | Lecture slot room APIs | `test/ShikshaMitra.HttpApi.Tests/Academic/Timetable/LectureSlotRoomApi_Tests.cs` |
 | Exam room DTOs | `src/ShikshaMitra.Application.Contracts/Academic/Examination/Exams/Dtos/ExamRoomDtos.cs` |
 
+## School Documents lifecycle
+
+1. Authenticate, require tenant context and the exact action grants in the application service.
+2. Validate all metadata, retained attachment ownership, count and incoming file contents before writing.
+3. Create or compare/update the parent aggregate; attachment-only saves also change its concurrency stamp.
+4. Store immutable blob keys and new attachment metadata in the same transactional unit of work; soft-delete removed attachments only with Delete permission. Any failure rolls the operation back.
+5. List and detail operations filter to the current tenant and nondeleted records. File access rechecks the parent, file ownership and current permission on every request.
+6. Record deletion soft-deletes the parent and attachment metadata together. Retained blob bytes remain private and inaccessible through normal endpoints.
+
+The [frontend workflow](../../../../Shikshamitra-FE/docs/institute-setup/workflows.md#school-documents) owns local selection, dialogs, dirty guards and preview behavior.
+
 ## School Identity lifecycle
 
 1. The controller delegates configuration requests to the explicitly authorized application service.
-2. Scope checks validate tenant-owned board/medium ancestry and the caller's data scope.
+2. Scope checks validate tenant-owned board/medium/organization ancestry and the caller's data scope.
 3. Uploads validate raster contents before creating immutable blob/metadata entries; no saved choice changes yet.
 4. Submit validates selected asset kinds, ownership, signature permission and the profile stamp, retains referenced files, updates the profile and records a revision transactionally.
-5. Resolution selects each asset independently from medium, board and defaults. Hidden stops fallback.
+5. Resolution selects each asset independently from organization, medium, board and defaults. Hidden stops fallback.
 6. Draft previews use the same resolver without saving. Signature content is omitted for callers without access.
 7. Certificate and student-card issuance freezes references; later reprints load retained files from that snapshot.
 8. Cross-year copying requires an explicit source/target mapping and target stamp. It copies choices while reusing files.

@@ -3,7 +3,7 @@ module: institute-setup
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,32 @@ audience: humans-and-agents
 
 TL;DR: run the docs validator for documentation changes and targeted Tenant Settings or Academic tests for behavior changes.
 Rooms Management has focused domain layout and direct-call authorization coverage.
+
+## Reports
+
+`InstituteReportApi_Tests.ModuleReports.cs` covers tenant/deletion-safe document/file counts, category filtering, real CSV generation, exact source grants, signature denial, scoped identity listing/counts and source/scope revocation on downloads. `InstituteReportModuleRules_Tests` covers new catalogue validation and shared identity read/management scope behavior. Also run `SchoolIdentityAuthorization_Tests` after changing the shared scope policy.
+
+`InstituteReportCalculation_Tests` covers same-day, fractional, overnight, equal-time and rounded duration values, numeric filter/sort behavior and rejection of unsupported calculations. `InstituteReportApi_Tests.CalculatedColumns.cs` covers AI plan/approval, same-day and overnight preview values, actual PDF/Excel/CSV generation, Excel/CSV column contents and numeric filtering.
+
+Run focused tests with `dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~InstituteReportRules`, `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~InstituteReportJob`, and `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~InstituteReportApi`. Use a separate `--artifacts-path` when a running host locks outputs.
+
+Rules tests cover catalogue/field validation, academic prerequisites, numeric filtering/sorting, scope projection and approval tampering. Run `dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~InstituteReportResponse` for independent provider parsing and class-count grouping. Domain tests cover export lifecycle. HTTP tests use disposable SQLite with synthetic authentication/permissions and a deterministic scope service; they cover real tenant-owned queries, scoped previews, requester ownership, background execution and PDF/Excel/CSV contents. The exact single-division prompt is tested through planning, preview and CSV generation; ZAI empty, truncated and malformed responses must use Institute Setup errors, and its request must disable thinking. PostgreSQL migration checks and live provider/staging acceptance remain separate deployment evidence. The [frontend testing guide](../../../../Shikshamitra-FE/docs/institute-setup/testing.md#reports) owns browser evidence.
+
+## School Documents
+
+| Scope | Command |
+| --- | --- |
+| File signatures, size/count limits, details and concurrency | `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~SchoolDocuments_Tests --artifacts-path .artifacts/school-documents-build` |
+| Direct application-call authorization | `dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~SchoolDocumentAuthorization_Tests --artifacts-path .artifacts/school-documents-build` |
+| Real HTTP CRUD/files, permissions, tenant isolation, retention and rollback | `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~SchoolDocumentsApi_Tests --artifacts-path .artifacts/school-documents-build` |
+| PostgreSQL migration, real blob rollback, concurrent saves and retained bytes | `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~SchoolDocumentsPostgresApi_Tests --artifacts-path .artifacts/school-documents-build` |
+| Browser bridge | `dotnet run --project scripts/testing/school-documents-bridge/SchoolDocumentsBridge.csproj --artifacts-path .artifacts/school-documents-build --no-launch-profile` |
+
+The PostgreSQL case requires `SCHOOL_DOCUMENTS_TEST_POSTGRES` pointing to a **new** loopback `school_documents_tests_*` database. The fixture refuses existing databases and non-loopback hosts, creates the test database itself, validates additive Up and destructive Down against unrelated sentinel data, then removes only its owned disposable database. It never migrates a school database. Without the variable, the PostgreSQL case is explicitly skipped.
+
+The bridge listens only at `http://127.0.0.1:4394`, uses synthetic test authentication/permissions and the real HTTP pipeline with fresh in-memory SQLite. Pair it with the [frontend fixture](../../../../Shikshamitra-FE/docs/institute-setup/testing.md#school-documents). Its labelled failure switches simulate transport failure for UI retry tests; API tests separately verify real transactional rollback. Stop both bridge and frontend fixture when finished. Test logs, SQL and browser screenshots belong in ignored artifacts directories.
+
+Release requires applying `20261021052944_AddSchoolDocuments` before exposing the new route, explicitly assigning View/Add/Delete and independent navigation visibility, and validating file access with the intended school roles. Do not reseed existing grants to enable this feature.
 
 ## Room layout and features
 
@@ -103,6 +129,8 @@ The browser bridge starts with `dotnet run --project test/browser/academic-setup
 The bridge listens only on `127.0.0.1:4391`, uses the production HTTP pipeline with test authentication and an isolated SQLite database, and seeds synthetic schools. It disables live background workers and seeding. Stop it after testing. The [frontend testing guide](../../../../Shikshamitra-FE/docs/institute-setup/testing.md) owns grid, dropdown and session-switch evidence. These local checks do not prove a deployment or actual QA data repair.
 
 ## School Identity checks
+
+Organization coverage in `SchoolIdentityIntegration_Tests.Organization.cs` verifies image persistence, inheritance/reset, independent siblings, preview/history, document retention, parent validation, scope denial and idempotent legacy banner import. Run `dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~SchoolIdentity`.
 
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter "FullyQualifiedName~School_identity|FullyQualifiedName~Invented_school_identity" --artifacts-path .artifacts/school-identity-permissions/build` for the four-action role/user catalogue, inherited grants and overrides, atomic rejection of invented Delete grants, and HTTP 405 for profile deletion. These checks use the disposable HTTP test factory; they do not change school permissions.
 

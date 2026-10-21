@@ -30,6 +30,7 @@ public class SchoolIdentityPostgresFactory : ShikshaMitraApiTestFactory
 {
 	public const string ConnectionVariable = "SCHOOL_IDENTITY_TEST_POSTGRES";
 	private const string MigrationId = "20261014053153_AddSchoolIdentity";
+	private const string OrganizationMigrationId = "20261021055405_AddOrganizationSchoolIdentity";
 	private bool _created;
 	public string ConnectionString { get; private set; } = "";
 	public string? PredecessorId { get; private set; }
@@ -73,6 +74,8 @@ public class SchoolIdentityPostgresFactory : ShikshaMitraApiTestFactory
 		if (Regex.IsMatch(script, "\\b(DROP|ALTER)\\s+(TABLE|COLUMN)\\b", RegexOptions.IgnoreCase))
 			throw new InvalidOperationException("School Identity migration must be additive.");
 		db.Database.ExecuteSqlRaw(script);
+		var organizationPredecessor = migrations.Last(id => string.CompareOrdinal(id, OrganizationMigrationId) < 0);
+		db.Database.ExecuteSqlRaw(db.GetService<IMigrator>().GenerateScript(organizationPredecessor, OrganizationMigrationId));
 	}
 
 	public override async ValueTask DisposeAsync()
@@ -93,6 +96,9 @@ public class SchoolIdentityPostgresFactory : ShikshaMitraApiTestFactory
 	public async Task VerifyMigrationDownAsync()
 	{
 		await using var db = new ShikshaMitraDbContext(new DbContextOptionsBuilder<ShikshaMitraDbContext>().UseNpgsql(ConnectionString).Options);
+		var organizationPredecessor = db.GetService<IMigrationsAssembly>().Migrations.Keys
+			.Where(id => string.CompareOrdinal(id, OrganizationMigrationId) < 0).OrderBy(id => id).Last();
+		await db.Database.ExecuteSqlRawAsync(db.GetService<IMigrator>().GenerateScript(OrganizationMigrationId, organizationPredecessor));
 		var script = db.GetService<IMigrator>().GenerateScript(MigrationId, PredecessorId);
 		await db.Database.ExecuteSqlRawAsync(script);
 		await using var sql = new NpgsqlConnection(ConnectionString);

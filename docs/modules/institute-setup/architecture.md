@@ -3,7 +3,7 @@ module: institute-setup
 domain: architecture
 content_type: Conceptual
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -14,6 +14,24 @@ TL;DR: initial setup progress and Rooms Management live under Tenant Settings.
 Controllers expose Institute Setup routes, while application services and domain entities remain in `TenantSettings/RoomsManagement`.
 Shared academic setup and room-management tables use the `academic_` prefix.
 See [academic performance and table naming](../examination/references/academic-performance-and-table-prefix.md) for the complete ownership boundary and migration deployment/rollback procedure.
+
+## Reports ownership
+
+`TenantSettings/Reports` owns contracts, permission constants, the export aggregate, catalogue, row readers, projection validation, scoped access, AI planner/approval, files and background generation. EF maps `InstituteReportJob` to `AppInstituteReportJobs` independently from legacy Academic/HR jobs. The HTTP host registers the hourly `InstituteReportRetentionWorker`.
+
+Row readers use tenant-constrained repositories and the shared `ApplyUserScope` projection for the academic hierarchy. `InstituteClassDivisionSummary` aggregates that scoped hierarchy by class ID before count conditions and pagination. File rendering reuses existing Academic PDF/Excel/CSV services and School Identity letterhead resolution, excluding signatures. AI uses the configured OpenAI/ZAI connection with a catalogue-only prompt and its own `InstituteReportAiResponse` reader/error codes. ZAI requests disable optional thinking to reserve the response budget for the JSON plan. User identity/role resolution reuses the existing reporting principal builder; permission checks remain specific to Institute Setup.
+
+`InstituteReportCalculations` owns approved row calculations, initially shift elapsed `totalHours`. The data reader computes this from tenant-owned start/end values before shared numeric projection and pagination, so every export uses the same result. The catalogue validates calculated-column selection; it does not accept executable formula syntax.
+
+`InstituteDocumentReportData` reads tenant-filtered active document/file metadata and aggregates categories without blob access. `InstituteIdentityReportData` applies `SchoolIdentityScopeAccess.Allows`, the same read policy as the owning module, before listing/counting saved profiles. Signature metadata uses its own catalogue entry with AccessSignature. `InstituteReportDefinition.RequiredPermissions` travels with the permitted server catalogue for exact frontend gating. All data readers recheck source grants, and identity exports use scope-stamp revocation just like academic exports.
+
+## School Documents ownership
+
+The feature mirrors `TenantSettings/SchoolDocuments` across Domain.Shared, Domain, Application.Contracts, Application and EntityFrameworkCore. `SchoolDocument` is a full-audited, multi-tenant aggregate; `SchoolDocumentFile` stores separately audited attachment metadata. `SchoolDocumentFileRules` validates count, safe names, sizes and signatures. Thin `SchoolDocumentsController` binds multipart requests and emits file responses; `SchoolDocumentAppService` performs authorization, transactional orchestration and bounded list projections.
+
+`AppSchoolDocuments` and `AppSchoolDocumentFiles` are linked with a restrictive parent foreign key and tenant/deletion indexes. Files use generated `school-documents/{tenant}/{record}/{file}` keys through the existing database-backed ABP blob container. Entity history is enabled for both entity types; binary upload properties are excluded from auditing.
+
+Migration `20261021052944_AddSchoolDocuments` adds only these tables and indexes. Apply it before exposing the feature, deploy the backend, explicitly assign permissions, then expose the frontend. Downgrading the application can leave the additive schema in place; running the migration Down deletes this feature's records and must not be used as a routine rollback for a populated library.
 
 ## Layer map
 
@@ -98,5 +116,7 @@ Profiles are unique by tenant and scope key. Choices are bounded JSON; ABP owns 
 The profile repository maps a concurrent first-insert violation of the tenant/scope unique index to a concurrency conflict. Unrelated database failures retain their original classification. History resolves creator usernames in one bounded tenant-filtered projection.
 
 Migration `20261014053153_AddSchoolIdentity` adds only assets, profiles and revisions. It preserves unrelated snapshot entries for legacy student tables missing from the current source model; those tables are not dropped. Apply the additive migration before running the legacy import contributor or the updated host.
+
+Migration `20261021055405_AddOrganizationSchoolIdentity` adds nullable `OrganizationId` columns to identity profiles and assets. Apply it before deploying organization image management or running its legacy banner importer. Existing school, board and medium scope keys remain unchanged; organization keys are unique within each tenant. Document snapshots additionally capture the organization when available.
 
 Document consumers enforce their own document action and record scope before using `SchoolIdentityDocumentService`. Configuration read permissions do not replace document authorization. The common template-asset service validates tenant/kind/origin scope and retains custom files.

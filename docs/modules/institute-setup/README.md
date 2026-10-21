@@ -3,7 +3,7 @@ module: institute-setup
 domain: overview
 content_type: Landing
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -14,7 +14,11 @@ TL;DR: use this page as the entrypoint for Institute Setup behavior, API familie
 The curated surface includes durable institute initial setup, Rooms Management and Shift Management tenant isolation under Tenant Settings.
 School Identity adds shared/scoped assets, immutable uploads, template integration and historical document references. See [product rules](./product.md), [API contracts](./api.md) and the [frontend guide](../../../../Shikshamitra-FE/docs/institute-setup/README.md).
 
+School Documents adds a tenant-wide approval and permission library with grouped private attachments, audited mutations and authenticated file access. Start with its [product rules](./product.md#school-documents) and [API](./api.md#school-documents).
+
 ## Read order
+
+Reports adds permission-checked previews, manual/AI generation, private history and expiring downloads for core setup datasets. Start with [product rules](./product.md#reports) and [API contracts](./api.md#reports).
 
 | Step | File | Use it to |
 |---|---|---|

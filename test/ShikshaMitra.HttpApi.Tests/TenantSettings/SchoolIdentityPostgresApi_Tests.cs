@@ -21,7 +21,7 @@ namespace ShikshaMitra.TenantSettings;
 public class SchoolIdentityPostgresApi_Tests
 {
 	private const string Url = "/api/institute-setup/school-identity";
-	private static readonly byte[] Png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=");
+	private static readonly byte[] Png = SchoolIdentityTestImage.Png();
 
 	[SchoolIdentityPostgresFact]
 	public async Task Migration_and_real_http_identity_preserve_tenant_data_and_validate_assets_permissions_and_stale_writes()

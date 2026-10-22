@@ -78,6 +78,7 @@ public class AdmissionWorkflowStageDefinition : Entity<Guid>
 			: Check.Length(description.Trim(), nameof(description), AdmissionWorkflowConsts.MaxStageDescriptionLength);
 		ConfigurationJson = string.IsNullOrWhiteSpace(configurationJson)
 			? null
-			: Check.Length(configurationJson.Trim(), nameof(configurationJson), AdmissionWorkflowConsts.MaxConfigurationLength);
+			: Check.Length(configurationJson.Trim(), nameof(configurationJson), stageType == AdmissionWorkflowStageType.Assessment
+				? AdmissionWorkflowConsts.MaxAssessmentConfigurationLength : AdmissionWorkflowConsts.MaxConfigurationLength);
 	}
 }

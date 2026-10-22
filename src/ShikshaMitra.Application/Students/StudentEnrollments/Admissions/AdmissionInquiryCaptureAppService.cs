@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Security.UserScope;
+using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -21,14 +22,25 @@ public class AdmissionInquiryCaptureAppService(
 	IRepository<AdmissionCycle, Guid> cycles, IRepository<EducationBoard, Guid> boards,
 	IRepository<EducationMedium, Guid> mediums, IRepository<EducationMediumStage, Guid> stages,
 	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions,
+	IRepository<AcademicYear, Guid> academicYears,
 	IUserScopeAccessService scopes) : ApplicationService, IAdmissionInquiryCaptureAppService
 {
 	public async Task<AdmissionInquiryCaptureContextDto> GetContextAsync(Guid offeringId)
 	{
 		var available = await offeringReader.GetAvailabilityAsync(offeringId);
 		var offering = await offeringReader.GetAsync(offeringId);
+		// Resolve Institute Setup settings only after the offering's scope has been checked.
+		var standardQuery = await standards.GetQueryableAsync();
+		var ageSettings = await AsyncExecuter.FirstOrDefaultAsync(
+			from cycle in await cycles.GetQueryableAsync()
+			join year in await academicYears.GetQueryableAsync() on cycle.AcademicYearId equals year.Id
+			from standard in standardQuery
+			where cycle.Id == offering.AdmissionCycleId && standard.Id == offering.StandardId
+			select new { year.StartDate, standard.AgeLowerLimit });
 		return new AdmissionInquiryCaptureContextDto
 		{
+			AcademicYearStartDate = ageSettings == null ? null : DateOnly.FromDateTime(ageSettings.StartDate),
+			MinimumAgeYears = ageSettings?.AgeLowerLimit > 0 ? ageSettings.AgeLowerLimit : null,
 			Offering = offering, Availability = available,
 			Form = available.CanCreateInquiry && offering.InquiryFormDefinitionId.HasValue
 				? await formReader.GetPublishedIntakeAsync(offering.InquiryFormDefinitionId.Value) : null,

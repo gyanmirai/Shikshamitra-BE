@@ -15,7 +15,8 @@ public class AdmissionWorkflowValidationService(
 	AdmissionWorkflowDefinitionStore definitionStore,
 		AdmissionDocumentAccessService documentAccess,
 		AdmissionEligibilityConfigurationService eligibilityConfiguration,
-		AdmissionReviewPeopleService reviewPeople)
+		AdmissionReviewPeopleService reviewPeople,
+		AdmissionAssessmentConfigurationService assessmentConfiguration)
 	: ApplicationService, ITransientDependency
 {
 	public async Task<AdmissionWorkflowValidationResultDto> ValidateAsync(Guid workflowId)
@@ -150,6 +151,9 @@ public class AdmissionWorkflowValidationService(
 		foreach (var stage in stages.Where(stage => stage.StageType == AdmissionWorkflowStageType.Eligibility &&
 			!issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)))
 			issues.AddRange(await eligibilityConfiguration.ValidateAsync(stage));
+		foreach (var stage in stages.Where(stage => stage.StageType == AdmissionWorkflowStageType.Assessment &&
+			!issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)))
+			issues.AddRange(await assessmentConfiguration.ValidateAsync(stage));
 		foreach (var stage in stages.Where(stage => stage.StageType == AdmissionWorkflowStageType.Review &&
 			!issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)))
 			issues.AddRange(await reviewPeople.ValidatePolicyAsync(stage));

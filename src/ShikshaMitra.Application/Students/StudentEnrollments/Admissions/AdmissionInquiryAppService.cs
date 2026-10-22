@@ -253,6 +253,13 @@ public class AdmissionInquiryAppService(
 			var form = await formRepository.FindAsync(inquiryFormId.Value);
 			var fields = await formFieldRepository.GetListAsync(x => x.FormDefinitionId == inquiryFormId.Value);
 			inquiryFields = fields;
+			foreach (var answer in input.FormValues)
+			{
+				var field = fields.FirstOrDefault(field => string.Equals(field.Code, answer.FieldCode, StringComparison.OrdinalIgnoreCase));
+				if (field == null) continue;
+				answer.ValueJson = AdmissionFormEmailValueNormalizer.Normalize(field, answer.ValueJson);
+				values[answer.FieldCode] = UnwrapValue(answer.ValueJson);
+			}
 			if (form == null || form.Status != AdmissionFormStatus.Published ||
 				(isPublic && form.Purpose != AdmissionFormPurpose.Inquiry))
 				throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);

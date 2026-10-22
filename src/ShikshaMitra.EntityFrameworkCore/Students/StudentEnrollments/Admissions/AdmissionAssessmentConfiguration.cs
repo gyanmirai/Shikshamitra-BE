@@ -57,6 +57,7 @@ public class AdmissionAssessmentConfiguration : IEntityTypeConfiguration<Admissi
 		builder.Property(item => item.Notes).HasMaxLength(1024);
 		builder.Property(item => item.ReviewNotes).HasMaxLength(1024);
 		builder.Property(item => item.PolicySnapshotJson).HasColumnType("text").IsRequired();
+		builder.Property(item => item.SubjectScoresJson).HasColumnType("text");
 		builder.Property(item => item.Marks).HasColumnType("numeric");
 		builder.HasIndex(item => new { item.StageInstanceId, item.AttemptNumber }).IsUnique().HasDatabaseName("UX_AssessmentAttempts_Stage_Number");
 		builder.HasIndex(item => new { item.SessionId, item.SlotStartsAt }).IsUnique().HasFilter("\"SlotStartsAt\" IS NOT NULL AND \"Status\" <> 'cancelled' AND \"Outcome\" <> 'waived' AND \"IsDeleted\" = false").HasDatabaseName("UX_AssessmentInterviewSlot");

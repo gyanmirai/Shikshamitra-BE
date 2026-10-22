@@ -26,6 +26,7 @@ public class AdmissionAssessmentApiContract_Tests
 	[InlineData(nameof(AdmissionAssessmentAppService.BookAsync), Permissions.Book)]
 	[InlineData(nameof(AdmissionAssessmentAppService.RecordAttendanceAsync), Permissions.RecordAttendance)]
 	[InlineData(nameof(AdmissionAssessmentAppService.RecordResultAsync), Permissions.RecordResults)]
+	[InlineData(nameof(AdmissionAssessmentAppService.SaveResultDraftAsync), Permissions.RecordResults)]
 	[InlineData(nameof(AdmissionAssessmentAppService.ReviewAsync), Permissions.Review)]
 	[InlineData(nameof(AdmissionAssessmentAppService.WaiveAsync), Permissions.Waive)]
 	public void Assessment_operations_enforce_distinct_permissions_at_both_boundaries(string method, string permission)

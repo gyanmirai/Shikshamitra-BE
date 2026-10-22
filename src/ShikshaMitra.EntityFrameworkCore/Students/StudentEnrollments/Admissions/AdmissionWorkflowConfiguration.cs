@@ -38,7 +38,7 @@ public class AdmissionWorkflowConfiguration : IEntityTypeConfiguration<Admission
 		builder.Property(x => x.Code).IsRequired().HasMaxLength(AdmissionWorkflowConsts.MaxCodeLength);
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(AdmissionWorkflowConsts.MaxNameLength);
 		builder.Property(x => x.Description).HasMaxLength(AdmissionWorkflowConsts.MaxStageDescriptionLength);
-		builder.Property(x => x.ConfigurationJson).HasMaxLength(AdmissionWorkflowConsts.MaxConfigurationLength);
+		builder.Property(x => x.ConfigurationJson).HasMaxLength(AdmissionWorkflowConsts.MaxAssessmentConfigurationLength);
 		builder.HasIndex(x => new { x.WorkflowDefinitionId, x.Code }).IsUnique();
 		builder.HasIndex(x => new { x.WorkflowDefinitionId, x.IsEntryStage });
 		builder.HasIndex(x => new { x.WorkflowDefinitionId, x.IsTerminalStage });

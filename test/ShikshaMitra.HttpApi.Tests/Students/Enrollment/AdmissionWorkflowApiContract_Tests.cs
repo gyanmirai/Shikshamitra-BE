@@ -14,6 +14,21 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 public class AdmissionWorkflowApiContract_Tests
 {
 	[Fact]
+	public async Task Assessment_catalog_uses_workflow_view_and_preserves_lookup_response()
+	{
+		var method = typeof(AdmissionWorkflowsController).GetMethod(nameof(AdmissionWorkflowsController.GetAssessmentCatalog))!;
+		method.GetCustomAttribute<HttpGetAttribute>()!.Template.ShouldBe("assessment-catalog");
+		Permission(typeof(AdmissionWorkflowsController), method.Name).ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View);
+		Permission(typeof(AdmissionWorkflowAppService), nameof(AdmissionWorkflowAppService.GetAssessmentCatalogAsync)).ShouldBe(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View);
+		var service = Substitute.For<IAdmissionWorkflowAppService>();
+		var catalog = new AdmissionAssessmentCatalogDto();
+		service.GetAssessmentCatalogAsync().Returns(catalog);
+		var response = await new AdmissionWorkflowsController(service).GetAssessmentCatalog();
+		response.ShouldNotBeNull();
+		await service.Received(1).GetAssessmentCatalogAsync();
+	}
+
+	[Fact]
 	public async Task Missing_application_detail_returns_not_found_without_throwing()
 	{
 		var id = System.Guid.NewGuid();

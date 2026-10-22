@@ -38,6 +38,11 @@ public class AdmissionInquiryFormEditService(
 			var codes = definitions.Select(field => field.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
 			if (input.FormValues.Any(value => !codes.Contains(value.FieldCode)))
 				throw new BusinessException(AdmissionApplicationErrorCodes.UnknownFormField);
+			foreach (var answer in input.FormValues)
+			{
+				var field = definitions.First(field => string.Equals(field.Code, answer.FieldCode, StringComparison.OrdinalIgnoreCase));
+				answer.ValueJson = AdmissionFormEmailValueNormalizer.Normalize(field, answer.ValueJson);
+			}
 			var values = input.FormValues.ToDictionary(value => value.FieldCode,
 				value => AdmissionApplicationValueConverter.Unwrap(value.ValueJson), StringComparer.OrdinalIgnoreCase);
 			var original = string.IsNullOrWhiteSpace(inquiry.FormResponseSnapshotJson) ? new Dictionary<string, string>() :

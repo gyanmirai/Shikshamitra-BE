@@ -54,6 +54,8 @@ public class AdmissionAssessmentSessionDto : AdmissionAssessmentSessionInput
 
 public class AdmissionAssessmentAttemptDto
 {
+	public AdmissionAssessmentClassProfile? EffectiveProfile { get; set; }
+	public List<AdmissionAssessmentSubjectScore> SubjectScores { get; set; } = [];
 	public DateTimeOffset? SlotStartsAt { get; set; }
 	public DateTimeOffset? SlotEndsAt { get; set; }
 	public Guid Id { get; set; }
@@ -82,6 +84,7 @@ public class AdmissionAssessmentDto
 	public Guid StageInstanceId { get; set; }
 	public bool AssessmentEnabled { get; set; }
 	public AdmissionAssessmentPolicy? Policy { get; set; }
+	public AdmissionAssessmentClassProfile? EffectiveProfile { get; set; }
 	public List<AdmissionAssessmentAttemptDto> Attempts { get; set; } = [];
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public string? Outcome { get; set; }
@@ -90,6 +93,8 @@ public class AdmissionAssessmentDto
 	public bool CanBook { get; set; }
 	public bool CanRecordAttendance { get; set; }
 	public bool CanRecordResult { get; set; }
+	public bool CanSaveResultDraft { get; set; }
+	public bool CanSubmitResult { get; set; }
 	public bool CanReview { get; set; }
 	public bool CanRetake { get; set; }
 	public bool CanWaive { get; set; }
@@ -104,6 +109,11 @@ public class AdmissionAssessmentActionInput
 }
 public class AdmissionAssessmentBookingInput : AdmissionAssessmentActionInput { public Guid? SessionId { get; set; } public DateTimeOffset? SlotStartsAt { get; set; } }
 public class AdmissionAssessmentAttendanceInput : AdmissionAssessmentActionInput { public string Attendance { get; set; } = string.Empty; }
-public class AdmissionAssessmentResultInput : AdmissionAssessmentActionInput { public decimal? Marks { get; set; } public string? Outcome { get; set; } }
+public class AdmissionAssessmentResultInput : AdmissionAssessmentActionInput
+{
+	public decimal? Marks { get; set; }
+	public string? Outcome { get; set; }
+	public List<AdmissionAssessmentSubjectScore> SubjectScores { get; set; } = [];
+}
 public class AdmissionAssessmentReviewInput : AdmissionAssessmentActionInput { public bool Approved { get; set; } }
 public class AdmissionAssessmentWaiverInput : AdmissionAssessmentActionInput { public string Reason { get; set; } = string.Empty; }

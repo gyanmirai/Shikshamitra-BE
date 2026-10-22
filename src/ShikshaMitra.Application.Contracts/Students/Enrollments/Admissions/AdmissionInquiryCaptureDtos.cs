@@ -5,6 +5,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionInquiryCaptureContextDto
 {
+	public DateOnly? AcademicYearStartDate { get; set; }
+	public int? MinimumAgeYears { get; set; }
 	public AdmissionOfferingDto Offering { get; set; } = new();
 	public AdmissionFormDto? Form { get; set; }
 	public AdmissionInquiryPolicy? Policy { get; set; }

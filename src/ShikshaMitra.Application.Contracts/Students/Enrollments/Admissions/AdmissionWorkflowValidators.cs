@@ -40,7 +40,9 @@ public class CreateUpdateAdmissionWorkflowStageDtoValidator : AbstractValidator<
 		RuleFor(stage => stage.DisplayOrder)
 			.GreaterThanOrEqualTo(0);
 		RuleFor(stage => stage.ConfigurationJson)
-			.MaximumLength(AdmissionWorkflowConsts.MaxConfigurationLength);
+			.Must((stage, json) => json == null || json.Length <= (stage.StageType == AdmissionWorkflowStageType.Assessment
+				? AdmissionWorkflowConsts.MaxAssessmentConfigurationLength : AdmissionWorkflowConsts.MaxConfigurationLength))
+			.WithMessage("Stage configuration exceeds the supported length.");
 		RuleFor(stage => stage.StageType)
 			.IsInEnum();
 	}

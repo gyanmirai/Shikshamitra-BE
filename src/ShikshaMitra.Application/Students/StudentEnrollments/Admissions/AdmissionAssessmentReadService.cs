@@ -50,6 +50,7 @@ public class AdmissionAssessmentReadService(
 		IReadOnlyDictionary<string, string> facts, IReadOnlySet<string> grants, Guid? userId, DateTime now)
 	{
 		var latest = rows.Where(item => item.Status != "cancelled").OrderBy(item => item.AttemptNumber).LastOrDefault();
+		context = context with { Policy = AdmissionAssessmentAccessService.ReadAttemptPolicy(latest, context.Policy) };
 		var blockers = GetBlockers(context, latest, routes, facts);
 		var active = context.IsActive && context.Policy != null;
 		var editable = context.CanPrepare && context.Policy != null;
@@ -63,17 +64,20 @@ public class AdmissionAssessmentReadService(
 		var remaining = context.Policy != null && rows.Count(item => item.Status != "cancelled") < context.Policy.MaxAttempts;
 		return new AdmissionAssessmentDto
 		{
-			ApplicationId = context.Application.Id, StageInstanceId = context.Stage.Id, AssessmentEnabled = context.Policy != null, Policy = context.Policy,
+			ApplicationId = context.Application.Id, StageInstanceId = context.Stage.Id, AssessmentEnabled = context.Policy != null, Policy = context.Policy, EffectiveProfile = context.Policy?.EffectiveProfile,
 			ConcurrencyStamp = context.Application.ConcurrencyStamp, Outcome = latest?.Outcome, Blockers = blockers,
 			CanComplete = active && blockers.Count == 0 && grants.Contains(
 				ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Advance),
 			CanBook = editable && remaining && (latest == null || latest.Outcome == "retake") && grants.Contains(Permissions.Book),
 			CanRecordAttendance = pending && sessionStarted && grants.Contains(Permissions.RecordAttendance),
 			CanRecordResult = pending && sessionStarted && (!context.Policy!.AttendanceRequired || latest!.Attendance == "present") && grants.Contains(Permissions.RecordResults),
+			CanSaveResultDraft = pending && sessionStarted && context.Policy!.ScoringMode == "subjects" && (!context.Policy.AttendanceRequired || latest!.Attendance == "present") && grants.Contains(Permissions.RecordResults),
+			CanSubmitResult = pending && sessionStarted && (!context.Policy!.AttendanceRequired || latest!.Attendance == "present") && grants.Contains(Permissions.RecordResults) &&
+				(context.Policy.ScoringMode != "subjects" || latest!.HasCompleteSubjectScores(context.Policy)),
 			CanReview = editable && latest?.Status == "pendingReview" && latest.RecordedBy != userId && grants.Contains(Permissions.Review),
 			CanRetake = editable && remaining && latest?.Status == "completed" && latest.Outcome is "failed" or "absent" && grants.Contains(Permissions.Book),
 			CanWaive = editable && latest?.Outcome != "waived" && grants.Contains(Permissions.Waive),
-			CanCancel = pending && latest!.Attendance == "pending" && grants.Contains(Permissions.Book),
+			CanCancel = pending && latest!.Attendance == "pending" && !latest.HasEnteredSubjectMarks() && grants.Contains(Permissions.Book),
 			Attempts = rows.OrderBy(item => item.AttemptNumber).Select(item => MapAttempt(item, item.SessionId.HasValue ? sessionRows.GetValueOrDefault(item.SessionId.Value) : null)).ToList()
 		};
 	}
@@ -100,6 +104,7 @@ public class AdmissionAssessmentReadService(
 	private static AdmissionAssessmentAttemptDto MapAttempt(AdmissionAssessmentAttempt item, AdmissionAssessmentSession? session) => new()
 	{
 		Id = item.Id, AttemptNumber = item.AttemptNumber, SessionId = item.SessionId, SessionName = session?.Name,
+		EffectiveProfile = AdmissionAssessmentAccessService.ReadAttemptPolicy(item, null)?.EffectiveProfile, SubjectScores = item.GetSubjectScores().ToList(),
 		SlotStartsAt = item.SlotStartsAt.HasValue ? AdmissionAssessmentSessionService.ToUtcOffset(item.SlotStartsAt.Value) : null,
 		SlotEndsAt = item.SlotEndsAt.HasValue ? AdmissionAssessmentSessionService.ToUtcOffset(item.SlotEndsAt.Value) : null,
 		SessionStartsAt = session == null ? null : AdmissionAssessmentSessionService.ToUtcOffset(session.StartsAt),

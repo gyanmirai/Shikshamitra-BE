@@ -170,6 +170,12 @@ Draft graph updates synchronize existing child rows by identifier, insert new ro
 | Additive migration | `src/ShikshaMitra.EntityFrameworkCore/Migrations/20260910070250_AddAdmissionAssessments.cs` |
 
 Assessment sessions and attempts are tenant-owned audited aggregates with optimistic concurrency stamps.
+
+Subject-wise attempts retain a resolved class profile in `PolicySnapshotJson` and partial/final scores in nullable `SubjectScoresJson`.
+`AdmissionAssessmentConfigurationService` validates school/class/subject references before publication; `AdmissionAssessmentCatalogService` supplies Admissions-owned scoped choices.
+`AdmissionAssessmentSubjectUsageService` batches live workflow references so Academic Subject deletion and usage reporting include Admissions without changing historical snapshots.
+Migration `20261021100000_AddAdmissionAssessmentSubjectScores` adds the nullable scores column and expands workflow stage configuration storage to 64,000 characters; domain/DTO validation keeps other stage types at 8,000.
+No backfill or rewrite of existing attempts is required.
 Attempt numbers are unique within a stage instance and preserve cancelled attempts as history.
 Foreign keys to offerings, workflow stages, runtime stages, applications, and sessions use restrictive deletion.
 The managed runtime checks application-stage ownership and academic scope, including authorized skip/override paths.

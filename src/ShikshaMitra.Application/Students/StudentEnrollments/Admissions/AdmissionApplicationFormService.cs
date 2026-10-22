@@ -94,6 +94,7 @@ public class AdmissionApplicationFormService(
 		{
 			var definition = item.Definition!;
 			var code = item.Input.FieldCode.ToUpperInvariant();
+			var valueJson = AdmissionFormEmailValueNormalizer.Normalize(definition, item.Input.ValueJson);
 			if (definition.BindingType == AdmissionFormBindingType.System && definition.BindingKey == "Family.SiblingStudentIds")
 			{
 				var siblings = AdmissionStudentProfileMapping.ReadSiblings(AdmissionApplicationValueConverter.Unwrap(item.Input.ValueJson)) ?? [];
@@ -105,16 +106,16 @@ public class AdmissionApplicationFormService(
 			var existing = existingValues.FirstOrDefault(value => value.FieldCode == code);
 			if (existing == null)
 				await valueRepository.InsertAsync(new AdmissionFormFieldValue(
-					GuidGenerator.Create(), CurrentTenant.Id, instance.Id, code, item.Input.ValueJson), false);
+					GuidGenerator.Create(), CurrentTenant.Id, instance.Id, code, valueJson), false);
 			else
 			{
-				existing.SetValue(item.Input.ValueJson);
+				existing.SetValue(valueJson);
 				await valueRepository.UpdateAsync(existing, false);
 			}
 			if (definition.BindingType == AdmissionFormBindingType.System && applicant is not null &&
 				!(applicant.ExistingStudentId.HasValue && definition.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email"))
 			{
-				var value = AdmissionApplicationValueConverter.Unwrap(item.Input.ValueJson);
+				var value = AdmissionApplicationValueConverter.Unwrap(valueJson);
 				if (!string.IsNullOrWhiteSpace(value) ||
 					AdmissionAdditionalStudentFieldCatalog.Metadata.ContainsKey(definition.BindingKey!))
 					AdmissionFormBindingRegistry.ApplyValue(definition.BindingKey!, value, applicant, guardian);

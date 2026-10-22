@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -1082,6 +1082,8 @@ public class SalarySlipAppService_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			.Where(x => x.EffectiveMonth == month && x.Status == "EFFECTIVE").OrderByDescending(x => x.RevisionNumber).FirstOrDefault();
 		var saved = await compensation.SaveAsync(employeeId, new SaveEmployeeCompensationDto
 		{
+			EsiPolicyId = template.EditableVersion.DefaultEsiPolicyId,
+			ExpectedEsiPolicyVersionId = (await GetRequiredService<EsiPolicyResolver>().ResolveAsync(template.EditableVersion.DefaultEsiPolicyId, month)).Rule.Id,
 			TemplateVersionId = template.EditableVersion.Id,
 			SalaryBasis = "GROSS",
 			MonthlyAmount = gross,

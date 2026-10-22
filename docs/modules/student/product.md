@@ -261,6 +261,17 @@ Existing inquiries and workflows remain compatible; management is created only f
 
 New saved Assessment settings enable managed results by default, with optional scheduling, attendance, aggregate marks/pass thresholds, Maximum attempts, bounded retakes and existing authorized waivers. Independent result review is disabled. The frozen policy and attempt history remain authoritative.
 
+Subject-wise marks are an opt-in version 2 mode inside the existing Assessment stage.
+Each Board/Medium/class has exactly one profile, containing mandatory school or custom entrance subjects and their maximum marks.
+Published Academic subject assignments are suggestions only; any active subject in the profile's Medium may be selected.
+The school selects overall marks, every subject, or both passing rules.
+One combined exam retains one booking, attendance and attempt, including when a shared session serves different class profiles.
+The Offering determines the applicant's profile; booked attempts freeze names, subjects, marks and pass rules.
+Partial draft scores do not complete the assessment and blanks are never zero.
+Final submission requires every configured subject and calculates the outcome on the server.
+Retakes create a fresh whole-exam attempt without carrying forward subject scores.
+Existing version 1 single-score and qualitative outcomes retain their behavior.
+
 Sessions belong to the Offering and workflow stage; booking enforces capacity and application/session concurrency. Scheduled sessions must have started before attendance/results. Scored results are derived by the backend; unscored results need an explicit outcome. Failed, absent and retake outcomes require matching routes to leave the stage. Recording a result does not advance automatically.
 
 Assessment does not approve admission or create a Student. Approve, Waitlist and Reject belong to the active Admission decision stage. Approved plus a completed journey can finalize without Offer acceptance, preserving guardian/identity, duplicate, capacity, tenant, academic scope and concurrency checks. Finalization links the Student and Onboarding case; activation owns operational enrollment. Current Offering-linked Onboarding confirms a fee structure without payment or service-consent gates. Historical route-based and Records renewal completion retain their separately documented owner rules.

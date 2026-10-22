@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Net.Http;
@@ -177,7 +177,7 @@ internal class EsiPayrollWorkflowScenario(ShikshaMitraApiTestFactory factory) : 
 		}
 		var templates = await GetAndReadAsync<SalaryTemplateListDto>("/api/payroll/salary-templates/active");
 		var template = templates.Items.First(x => x.IsDefault);
-		var response = await Client.PutAsJsonAsync($"/api/payroll/employees/{id}/compensation", new SaveEmployeeCompensationDto
+		var response = await Client.PutAsJsonAsync($"/api/payroll/employees/{id}/compensation", await PayrollTestHelper.BindEsiPolicyVersionAsync(Client, new SaveEmployeeCompensationDto
 		{
 			TemplateVersionId = template.EditableVersion.Id,
 			SalaryBasis = basis,
@@ -186,7 +186,7 @@ internal class EsiPayrollWorkflowScenario(ShikshaMitraApiTestFactory factory) : 
 			PfApplicable = false,
 			IdempotencyKey = Guid.NewGuid().ToString("N"),
 			ExpectedRevision = expected
-		}, JsonOptions);
+		}), JsonOptions);
 		await RequireSuccess(response);
 		return (await response.Content.ReadFromJsonAsync<CompensationRevisionDto>(JsonOptions))!;
 	}

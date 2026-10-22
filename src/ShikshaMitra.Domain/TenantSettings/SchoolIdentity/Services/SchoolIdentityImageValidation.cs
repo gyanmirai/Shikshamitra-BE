@@ -8,6 +8,12 @@ namespace ShikshaMitra.TenantSettings.SchoolIdentity;
 public static class SchoolIdentityImageValidation
 {
 	public static (string ContentType, int Width, int Height) Validate(SchoolIdentityAssetKind kind, byte[] bytes)
+		=> ValidateCore(kind, bytes, enforceMinimumDimensions: true);
+
+	public static (string ContentType, int Width, int Height) ValidateLegacy(SchoolIdentityAssetKind kind, byte[] bytes)
+		=> ValidateCore(kind, bytes, enforceMinimumDimensions: false);
+
+	private static (string ContentType, int Width, int Height) ValidateCore(SchoolIdentityAssetKind kind, byte[] bytes, bool enforceMinimumDimensions)
 	{
 		var limit = kind switch
 		{
@@ -21,6 +27,11 @@ public static class SchoolIdentityImageValidation
 		var (type, width, height) = Dimensions(bytes);
 		if (width < 1 || height < 1 || width > 10000 || height > 10000 || (long)width * height > 25000000)
 			throw new BusinessException(SchoolIdentityErrorCodes.ImageDimensionsInvalid);
+		var (minimumWidth, minimumHeight) = kind == SchoolIdentityAssetKind.Banner ? (1400, 300) : (32, 32);
+		if (enforceMinimumDimensions && (width < minimumWidth || height < minimumHeight))
+			throw new BusinessException(SchoolIdentityErrorCodes.ImageTooSmall)
+				.WithData("MinimumWidth", minimumWidth).WithData("MinimumHeight", minimumHeight)
+				.WithData("Width", width).WithData("Height", height);
 		try
 		{
 			using var image = Image.FromBinaryData(bytes);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
@@ -141,9 +141,11 @@ public class StatutoryCalculationApi_Tests(ShikshaMitraApiTestFactory factory) :
 			.First(x => x.EditableVersion.Rules.Any(rule => rule.FormulaType == "EMPLOYEE_PROVIDENT_FUND"));
 		var profileUrl = $"/api/employees/{employeeId}/payroll/statutory-profile";
 		var profile = await GetAndReadAsync<EmployeeStatutoryProfileDto>(profileUrl);
-		var input = new SaveEmployeeCompensationDto { TemplateVersionId = template.EditableVersion.Id,
+		var input = await PayrollTestHelper.BindEsiPolicyVersionAsync(Client, new SaveEmployeeCompensationDto { TemplateVersionId = template.EditableVersion.Id,
+			EsiManagementMode = template.EditableVersion.DefaultEsiManagementMode, EsiPolicyId = template.EditableVersion.DefaultEsiPolicyId,
+			EsiExternalReason = template.EditableVersion.DefaultEsiExternalReason,
 			SalaryBasis = "GROSS", ProtectionPolicy = "PROTECT_GROSS", MonthlyAmount = 25000m, EffectiveMonth = month,
-			PfApplicable = false, PfEnrollment = new() { Membership = "NOT_MEMBER" }, IdempotencyKey = Guid.NewGuid().ToString("N") };
+			PfApplicable = false, PfEnrollment = new() { Membership = "NOT_MEMBER" }, IdempotencyKey = Guid.NewGuid().ToString("N") });
 		var url = $"/api/payroll/employees/{employeeId}/compensation";
 		var missingRule = await Client.PutAsJsonAsync(url, input);
 		missingRule.StatusCode.ShouldBe(HttpStatusCode.BadRequest);

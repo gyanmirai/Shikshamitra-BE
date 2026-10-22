@@ -22,7 +22,7 @@ namespace ShikshaMitra.TenantSettings;
 public partial class SchoolIdentityIntegration_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private static readonly Guid TenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-	private static readonly byte[] Png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aRZkAAAAASUVORK5CYII=");
+	private static readonly byte[] Png = SchoolIdentityTestImage.Png();
 	private ISchoolIdentityAppService Service => GetRequiredService<ISchoolIdentityAppService>();
 
 	[Fact]

@@ -121,11 +121,44 @@ public sealed class MobileAcademicPostgresFactory : ShikshaMitraApiTestFactory
 		db.Database.ExecuteSqlRaw(history.GetInsertScript(new HistoryRow("20261012113000_RepairMobileLeaveHalfDayTimes", "9.0.0")));
 		db.Database.GetMigrations().ShouldContain("20261012113000_RepairMobileLeaveHalfDayTimes");
 		db.Database.GetAppliedMigrations().ShouldContain("20261012113000_RepairMobileLeaveHalfDayTimes");
+		var submissionMigration = new MobileHomeworkSubmissionReliability { ActiveProvider = "Npgsql.EntityFrameworkCore.PostgreSQL" };
+		var acknowledgmentMigration = new MobileHomeworkCompletionAcknowledgment { ActiveProvider = "Npgsql.EntityFrameworkCore.PostgreSQL" };
+		foreach (var command in db.GetService<IMigrationsSqlGenerator>().Generate(acknowledgmentMigration.DownOperations, db.Model))
+			db.Database.ExecuteSqlRaw(command.CommandText);
+		foreach (var command in db.GetService<IMigrationsSqlGenerator>().Generate(submissionMigration.DownOperations, db.Model))
+			db.Database.ExecuteSqlRaw(command.CommandText);
+		foreach (var command in db.GetService<IMigrationsSqlGenerator>().Generate(submissionMigration.UpOperations, db.Model))
+			db.Database.ExecuteSqlRaw(command.CommandText);
+		db.Database.ExecuteSqlRaw(history.GetInsertScript(new HistoryRow("20261021110849_MobileHomeworkSubmissionReliability", "9.0.0")));
+		foreach (var command in db.GetService<IMigrationsSqlGenerator>().Generate(acknowledgmentMigration.UpOperations, db.Model))
+			db.Database.ExecuteSqlRaw(command.CommandText);
+		db.Database.ExecuteSqlRaw(history.GetInsertScript(new HistoryRow("20261022072327_MobileHomeworkCompletionAcknowledgment", "9.0.0")));
 	}
 }
 
 public sealed class MobileLeaveLockBarrier : DbCommandInterceptor
 {
+	private string? reviewCandidate;
+	public TaskCompletionSource ReviewReached { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+	public TaskCompletionSource ReviewCommitted { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+	public void ArmReview(string candidate)
+	{
+		reviewCandidate = candidate;
+		ReviewReached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+		ReviewCommitted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+	}
+	public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+		InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+	{
+		if (reviewCandidate != null && command.CommandText.Contains("UPDATE \"academic_StudentHomeworkAssignmentSubmissions\"", StringComparison.Ordinal) &&
+			command.Parameters.Cast<DbParameter>().Any(p => p.Value is string value && value == reviewCandidate))
+		{
+			reviewCandidate = null;
+			ReviewReached.TrySetResult();
+			await ReviewCommitted.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+		}
+		return result;
+	}
 	private int armed;
 	private int arrived;
 	private TaskCompletionSource signal = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -144,7 +177,7 @@ public sealed class MobileLeaveLockBarrier : DbCommandInterceptor
 	}
 }
 
-public sealed class MobileAcademicPostgresApi_Tests
+public sealed partial class MobileAcademicPostgresApi_Tests
 {
 	private IServiceProvider Services = null!;
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -288,6 +321,8 @@ public sealed class MobileAcademicPostgresApi_Tests
 		using var report = await client.GetAsync($"/api/mobile/v1/results/{resultId}/report-card/download" + query);
 		report.StatusCode.ShouldBe(HttpStatusCode.OK, await report.Content.ReadAsStringAsync());
 		Encoding.ASCII.GetString((await report.Content.ReadAsByteArrayAsync()).Take(5).ToArray()).ShouldBe("%PDF-");
+		await CheckHomeworkSubmissionsAsync(client, f, factory, tenantId);
+		await CheckCompletionAcknowledgmentAsync(client, f, factory, tenantId);
 	}
 }
 

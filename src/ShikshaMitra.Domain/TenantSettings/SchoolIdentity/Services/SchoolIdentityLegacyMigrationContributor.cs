@@ -58,7 +58,7 @@ public class SchoolIdentityLegacyMigrationContributor(
 		{
 			bytes = LegacyBytes(tenant.GetProperty(property));
 			if (bytes == null || bytes.Length == 0) return null;
-			image = SchoolIdentityImageValidation.Validate(kind, bytes);
+			image = SchoolIdentityImageValidation.ValidateLegacy(kind, bytes);
 		}
 		catch (Exception failure) when (failure is BusinessException or FormatException or OverflowException or InvalidCastException or InvalidOperationException)
 		{

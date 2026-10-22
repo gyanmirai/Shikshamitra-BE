@@ -15,6 +15,7 @@ using ShikshaMitra.Students;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings.Divisions;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
+using ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Services;
 using ShikshaMitra.TenantSettings.Standards;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -742,9 +743,10 @@ public class ExamSeatAllocationAppService(
 
     private static int UsableCapacity(Room room)
     {
-        var total = room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity;
-        var disabled = ParseIntCsv(room.DisabledSeatNumbersCsv).Count;
-        return Math.Max(0, total - disabled);
+        var capacity = RoomSeatingLayout.GetCapacity(room);
+        var unavailable = ParseIntCsv(room.DisabledSeatNumbersCsv);
+        unavailable.UnionWith(ParseIntCsv(room.ReservedSeatNumbersCsv));
+        return capacity - unavailable.Count(seat => seat >= 1 && seat <= capacity);
     }
 
     private static bool SubjectSchedulesOverlap(ExamSubject left, ExamSubject right)
@@ -1005,7 +1007,7 @@ public class ExamSeatAllocationAppService(
                     {
                         RoomId = room.Id,
                         RoomName = room.RoomName,
-                        Capacity = room.Capacity,
+                        Capacity = RoomSeatingLayout.GetCapacity(room),
                         UsableCapacity = UsableCapacity(room),
                         DisabledSeats = ParseIntCsv(room.DisabledSeatNumbersCsv).Count
                     })
@@ -1176,7 +1178,7 @@ public class ExamSeatAllocationAppService(
                     {
                         RoomId = room.Id,
                         RoomName = room.RoomName,
-                        Capacity = room.Capacity,
+                        Capacity = RoomSeatingLayout.GetCapacity(room),
                         UsableCapacity = UsableCapacity(room),
                         DisabledSeats = ParseIntCsv(room.DisabledSeatNumbersCsv).Count
                     })
@@ -1681,7 +1683,7 @@ public class ExamSeatAllocationAppService(
         foreach (var alloc in allocations.Where(a => roomsById.ContainsKey(a.RoomId)))
         {
             var room = roomsById[alloc.RoomId];
-            var totalSeats = room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity;
+            var totalSeats = RoomSeatingLayout.GetCapacity(room);
             if (alloc.SeatNumber <= 0 || alloc.SeatNumber > totalSeats ||
                 ParseIntCsv(room.DisabledSeatNumbersCsv).Contains(alloc.SeatNumber) ||
                 ParseIntCsv(room.ReservedSeatNumbersCsv).Contains(alloc.SeatNumber))
@@ -1992,20 +1994,11 @@ public class ExamSeatAllocationAppService(
 
     private static List<AllocSeat> BuildRoomSeats(Room room)
     {
-        var capacity = room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity;
-        var columns = Math.Max(1, room.BenchesPerColumn);
-        var benchCapacity = Math.Max(1, room.BenchCapacity);
         var disabled = ParseIntCsv(room.DisabledSeatNumbersCsv);
-
-        var seats = new List<AllocSeat>();
-        for (var i = 0; i < capacity; i++)
-        {
-            var seatNumber = i + 1;
-            var row = i / (columns * benchCapacity);
-            var column = i / benchCapacity % columns;
-            seats.Add(new AllocSeat(seatNumber, row, column, disabled.Contains(seatNumber)));
-        }
-        return seats;
+        disabled.UnionWith(ParseIntCsv(room.ReservedSeatNumbersCsv));
+        return RoomSeatingLayout.GetSeats(room)
+            .Select(seat => new AllocSeat(seat.SeatNumber, seat.Row, seat.Column, disabled.Contains(seat.SeatNumber)))
+            .ToList();
     }
 
     private static List<AllocSeat> OrderSeats(List<AllocSeat> seats, string fillDirection) => fillDirection switch
@@ -2121,7 +2114,8 @@ public class ExamSeatAllocationAppService(
             if (studentQueue.Count == 0) break;
         }
 
-        var totalUsable = rooms.Sum(r => BuildRoomSeats(r).Count(s => !s.IsDisabled) - (occupiedSeatNumbersByRoom.GetValueOrDefault(r.Id)?.Count ?? 0));
+        var totalUsable = rooms.Sum(room => BuildRoomSeats(room).Count(seat =>
+            !seat.IsDisabled && !(occupiedSeatNumbersByRoom.GetValueOrDefault(room.Id)?.Contains(seat.SeatNumber) ?? false)));
         var roomsUsed = proposed.Select(p => p.RoomId).Distinct().Count();
 
         return new AutoAllocateResponseDto
@@ -2281,7 +2275,7 @@ public class ExamSeatAllocationAppService(
         var room = await roomRepository.FindAsync(input.RoomId)
             ?? throw new UserFriendlyException("Room not found.");
 
-        var totalSeats = room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity;
+        var totalSeats = RoomSeatingLayout.GetCapacity(room);
 
         // Allocations owned by the plan being viewed.
         var internalAllocations = await seatAllocationRepository.GetListAsync(a =>
@@ -2536,9 +2530,7 @@ public class ExamSeatAllocationAppService(
 
         var disabledSeats = ParseIntCsv(room.DisabledSeatNumbersCsv);
         var reservedSeats = ParseIntCsv(room.ReservedSeatNumbersCsv);
-        var totalSeats = room.TotalBenches > 0
-            ? room.TotalBenches * room.BenchCapacity
-            : room.Capacity;
+        var totalSeats = RoomSeatingLayout.GetCapacity(room);
         if (input.Students.Any(s =>
             s.SeatNumber > totalSeats ||
             disabledSeats.Contains(s.SeatNumber) ||
@@ -3093,7 +3085,8 @@ public class ExamSeatAllocationAppService(
 
         var items = paged.Select(r =>
         {
-            var capacity = r.TotalBenches > 0 ? r.TotalBenches * r.BenchCapacity : r.Capacity;
+            var capacity = RoomSeatingLayout.GetCapacity(r);
+            var usableCapacity = UsableCapacity(r);
             var allocated = allocByRoom.GetValueOrDefault(r.Id, 0);
             return new ExamRoomDto
             {
@@ -3102,8 +3095,8 @@ public class ExamSeatAllocationAppService(
                 RoomNumber = r.RoomName,
                 Capacity = capacity,
                 AllocatedSeats = allocated,
-                AvailableSeats = Math.Max(0, capacity - allocated),
-                IsAllocationCompleted = allocated >= capacity
+                AvailableSeats = Math.Max(0, usableCapacity - allocated),
+                IsAllocationCompleted = allocated >= usableCapacity
             };
         }).ToList();
 

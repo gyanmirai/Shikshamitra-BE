@@ -3,12 +3,45 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-18
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Class-wise combined assessment subjects (2026-10-21)
+
+Focused local validation covers nullable subject drafts, all-subject final submission, all three pass rules, whole-exam retakes, immutable booked profiles, mixed-class shared sessions, Offering profile coverage, scoped catalog lookup and Academic subject-reference protection. A started subject attempt remains non-cancellable after its marks are cleared; an untouched blank draft remains cancellable. Reference protection accepts the same nested JSON property casing as the policy reader.
+
+| Check | Current local evidence |
+|---|---|
+| Domain Assessment filter | 72 passed after the cancellation audit fix |
+| Application Assessment and Subject usage regression | 38 passed; the three provider-only cases were subsequently run separately |
+| Draft/cancellation and case-insensitive subject usage audit | 5 passed |
+| Workflow/Assessment HTTP contracts | 25 passed |
+| Assessment EF mapping | 1 passed |
+| PostgreSQL roster and resource-lock checks | 3 passed, no skips, using new guarded disposable loopback databases |
+
+TRX evidence is under the corresponding test projects' `TestResults/assessment-subjects-*.trx`. Builds use `.artifacts/assessment-subjects-test`, serialized MSBuild and disabled shared compilation. The latest Host leaf build passed with zero errors; existing dependency warnings are not treated as a full solution/analyzer gate.
+
+The additive `20261021100000_AddAdmissionAssessmentSubjectScores` migration was reviewed and applied only to the verified localhost `shikshamitra_local` database. EF reported no pending model changes. No application database was dropped or reseeded by this work. Final browser QA used the user's debugger Host after the duplicate background test Host was stopped to free its ports.
+
+Authenticated UI saved/reloaded and published `QA Subject Admission 21Oct` with Class 5 (three subjects, 100 marks, overall and per-subject passing) and Class 1 (two subjects, 40 marks, overall passing). Both class Offerings in the separate `QA Subject Assessment 21 Oct` cycle are Open/Ready. Synthetic applications `APP-2026-000006` and `APP-2026-000007` were created through staff and public inquiry flows, respectively, then booked into one shared session and marked Present. Read-only persistence checks confirmed distinct frozen profiles, a Class 5 partial draft with Mathematics zero and the other scores null, and final server-calculated outcomes: Class 5 failed at 71/100 because English 11 was below 12; Class 1 passed at the overall boundary 16/40 with one subject zero. The Class 5 retake request saved; an overlapping new appointment was correctly rejected by both preview eligibility and booking validation.
+
+The non-overlapping Class 5 retake booked with fresh nullable scores, retained the first attempt and respected the session-start attendance/result guard.
+An Applicant 360 partial draft saved `20 + 8 + null`; final submission at `20 + 8 + 12 = 40/100` passed both configured thresholds.
+Both applicants then completed Form, Document verification, the existing Finance handoff and Admission Decision through normal Student finalization; no bypass or direct database write was used.
+
+Read-only final audit `.artifacts/assessment-subjects-final-qa.json` confirms both applications have AdmissionFinalized status, five completed stages with completion timestamps, saved Student/Onboarding case links and explicit payment deferral.
+For `APP-2026-000006`, one accepted synthetic Birth certificate PDF is linked to Student and the frozen Onboarding document step is Required + Completed.
+For `APP-2026-000007`, the required Birth certificate is frozen in Onboarding with zero evidence and a Required + Pending step, preserving the existing activation blocker.
+Both have null StudentEnrollmentId and zero enrollment rows; no activation, payment posting or credential delivery was performed.
+The user's debugger Host served the final tests after the duplicate background test Host was stopped to free ports.
+
+The existing legacy Npgsql timestamp read/write convention was diagnosed read-only; it requires a separate compatibility audit before any global converter or historical-data change.
+The in-app browser's native inline PDF rendering remains uncertified; upload, downloaded-byte equality and document acceptance passed.
+Frontend evidence belongs to [frontend testing](../../../../Shikshamitra-FE/docs/student/testing.md).
 
 ## Activation readiness synchronization (2026-10-18)
 
@@ -973,3 +1006,9 @@ Local verification passed 12 Domain tests, all three Reopen Application scenario
 The six workflow HTTP contract tests passed with no skips using isolated test output. The ordinary HTTP test build was blocked by five unrelated `CS0121` errors in the concurrently edited `StudentRollNumberBatchContract_Tests.cs`; an ignored validation-only target excluded that one test source without changing tracked project files or normal test outputs. These checks verify controller/service metadata and direct controller behavior, not deployed authentication.
 
 HttpApi and Host leaf builds passed. Because concurrent builds exhausted workstation memory, the successful builds disabled analyzers/shared compilation and skipped dependency compilation only after checking that every workflow dependency DLL was newer than its feature source and contained the required methods/types. SHA256 comparison confirmed Host copied those exact normal dependency outputs. This is focused feature validation, not a full solution/analyzer gate. Student documentation validation passed; no schema migration was added.
+
+## Inquiry age capture context verification (21 October 2026)
+
+The two Institute Setup minimum-age context cases (configured 5 years and unconfigured 0) and the existing closed-offering capture-context regression pass: 3/3 application integration tests. They verify that the age cutoff comes from the cycle's Academic Year, including an academic start different from the admission-period start. The isolated API Host build passes with no errors; existing unrelated warnings remain. No migration or inquiry-blocking age rule was introduced.
+
+Local browser verification used this build to create and edit synthetic INQ-2026-000009. Existing class minimum 6 years and academic start 1 June 2026 were displayed, underage saves succeeded, DOB persisted after reload, and an exact-minimum DOB removed the advisory. Acknowledgement delivery was disabled. This does not establish stage/live deployment.

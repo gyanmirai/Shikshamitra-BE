@@ -10,6 +10,7 @@ using ShikshaMitra.Academic.Timetable.Settings.WeeklyLectureSlots;
 using ShikshaMitra.Academic.Timetable.Timetables;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -35,7 +36,8 @@ public class SubjectAppService(
 	IRepository<SubjectAuditLog, Guid> subjectAuditLogRepository,
 	IRepository<WeeklyLectureSlot, Guid> weeklyLectureSlotRepository,
 	IRepository<ShikshaMitra.Academic.Timetable.Timetables.Timetable, Guid> timetableRepository,
-	IRepository<Exam, Guid> examRepository
+	IRepository<Exam, Guid> examRepository,
+	AdmissionAssessmentSubjectUsageService admissionAssessmentUsage
 ) : ApplicationService, ISubjectAppService
 {
 	public async Task<SubjectDto> GetAsync(Guid id)
@@ -351,6 +353,8 @@ public class SubjectAppService(
 
 			// Block deletion if the subject is in use anywhere
 			var usageParts = new System.Collections.Generic.List<string>();
+			var assessmentCount = (await admissionAssessmentUsage.CountAsync([id]))[id];
+			if (assessmentCount > 0) usageParts.Add($"{assessmentCount} admission assessment stage(s)");
 
 			var allocationCount = await assignedSubjectRepository.CountAsync(a => a.SubjectId == id);
 			if (allocationCount > 0)
@@ -417,7 +421,7 @@ public class SubjectAppService(
 			var homeworks = usage.Homeworks;
 			var assignments = usage.Assignments;
 
-			var total = allocations + weeklySlots + timetableSlots + examSubjects + examResults + homeworks + assignments;
+			var total = usage.Total;
 
 			return new SubjectUsageCheckDto
 			{
@@ -430,7 +434,8 @@ public class SubjectAppService(
 				ExamSubjects = examSubjects,
 				ExamResults = examResults,
 				Homeworks = homeworks,
-				Assignments = assignments
+				Assignments = assignments,
+				AdmissionAssessments = usage.AdmissionAssessments
 			};
 		}
 		catch (Exception ex)
@@ -469,7 +474,8 @@ public class SubjectAppService(
 				ExamSchedulesCount = usage.ExamSubjects,
 				LessonPlansCount = usage.LessonPlans,
 				HomeworkCount = usage.Homeworks + usage.Assignments,
-				TeacherMappingsCount = usage.TeacherMappings
+				TeacherMappingsCount = usage.TeacherMappings,
+				AdmissionAssessmentsCount = usage.AdmissionAssessments
 			}
 		};
 
@@ -520,6 +526,8 @@ public class SubjectAppService(
 		{
 			return result;
 		}
+		var admissionCounts = await admissionAssessmentUsage.CountAsync(subjectIds);
+		foreach (var entry in admissionCounts) result[entry.Key].AdmissionAssessments = entry.Value;
 
 		var assignments = (await assignedSubjectRepository.GetQueryableAsync())
 			.Where(assignment => subjectIds.Contains(assignment.SubjectId));
@@ -611,8 +619,9 @@ public class SubjectAppService(
 		public int Assignments { get; set; }
 		public int TeacherMappings { get; set; }
 		public int LessonPlans { get; set; }
+		public int AdmissionAssessments { get; set; }
 		public int Total => Allocations + ElectiveGroups + Chapters + WeeklySlots + TimetableSlots
-			+ ExamSubjects + ExamResults + Homeworks + Assignments + TeacherMappings + LessonPlans;
+			+ ExamSubjects + ExamResults + Homeworks + Assignments + TeacherMappings + LessonPlans + AdmissionAssessments;
 	}
 
 	private static string ToJsonSnapshot(Subject subject)

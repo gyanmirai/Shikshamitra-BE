@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,10 +13,10 @@ internal sealed record SalaryTemplateEsiResolution(
 	SalaryTemplateEsiEvaluationContext? Context,
 	IReadOnlyList<string> Warnings,
 	bool RegistrationPending,
-	Guid? ConfigurationId, bool IsEnabled = false);
+	Guid? ConfigurationId, bool IsEnabled = false, Guid? PolicyId = null, string? PolicyName = null);
 
 public class SalaryTemplateEsiContextResolver(
-	IRepository<StatutoryRuleVersion, Guid> ruleRepository,
+	EsiPolicyResolver policyResolver,
 	EsiPayrollConfigurationResolver configurationResolver,
 	EsiEnrollmentResolver enrollmentResolver,
 	IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
@@ -31,7 +31,7 @@ public class SalaryTemplateEsiContextResolver(
 	internal async Task<SalaryTemplateEsiResolution> ResolveAsync(
 		DateTime effectiveMonth,
 		string jurisdictionCode,
-		Guid? employeeId)
+		Guid? employeeId, Guid? policyId = null, bool allowArchived = true)
 	{
 		var monthStart = new DateTime(effectiveMonth.Year, effectiveMonth.Month, 1);
 		var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -42,19 +42,8 @@ public class SalaryTemplateEsiContextResolver(
 			return new SalaryTemplateEsiResolution(null, [], false, configuration?.Id);
 		}
 
-		var rule = (await ruleRepository.GetListAsync(x =>
-			x.SchemeCode == SchemeCode &&
-			x.JurisdictionCode == jurisdictionCode &&
-			x.IsActive &&
-			x.EffectiveFrom <= monthEnd &&
-			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= monthStart)))
-			.OrderByDescending(x => x.EffectiveFrom)
-			.ThenByDescending(x => x.Version)
-			.FirstOrDefault();
-		if (rule == null)
-		{
-			return new SalaryTemplateEsiResolution(null, ["ESI_RULE_NOT_FOUND"], false, configuration?.Id, true);
-		}
+		var policy = await policyResolver.ResolveAsync(policyId, monthStart, allowArchived);
+		var rule = policy.Rule;
 
 		var treatments = (await treatmentRepository.GetListAsync(x =>
 			x.SchemeCode == SchemeCode &&
@@ -81,7 +70,7 @@ public class SalaryTemplateEsiContextResolver(
 		}
 
 		var canonicalDeduction = await deductionComponentRepository.FindByNameAsync(CanonicalEsiComponentName);
-		var calculationSettings = configuration.GetCalculationSettings();
+		var calculationSettings = rule.GetPolicySettings() ?? configuration.GetCalculationSettings();
 		calculationSettings = calculationSettings with
 		{
 			EligibilityComponentIsActive = calculationSettings.EligibilityComponentId == null ||
@@ -104,6 +93,6 @@ public class SalaryTemplateEsiContextResolver(
 			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending
 				? ["ESI_REGISTRATION_PENDING"]
 				: [],
-			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending, configuration?.Id, true);
+			enrollment?.Status == EmployeeStatutoryEnrollmentStatus.RegistrationPending, configuration?.Id, true, policy.Policy.Id, policy.Policy.Name);
 	}
 }

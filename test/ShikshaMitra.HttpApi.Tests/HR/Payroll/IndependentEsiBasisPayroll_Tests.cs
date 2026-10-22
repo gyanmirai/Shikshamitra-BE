@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -182,7 +182,7 @@ public class IndependentEsiBasisPayroll_Tests
 		{
 			var employee = await EmployeeTestHelper.CreateEmployeeAsync(api, name, dateOfJoining: month);
 			await workflow.EnrollAsync(employee.Id, "1234567890");
-			await EsiPayrollWorkflowScenario.RequireSuccess(await api.PutAsJsonAsync($"/api/payroll/employees/{employee.Id}/compensation", new SaveEmployeeCompensationDto
+			await EsiPayrollWorkflowScenario.RequireSuccess(await api.PutAsJsonAsync($"/api/payroll/employees/{employee.Id}/compensation", await PayrollTestHelper.BindEsiPolicyVersionAsync(api, new SaveEmployeeCompensationDto
 			{
 				TemplateVersionId = template.EditableVersion.Id,
 				SalaryBasis = "GROSS",
@@ -190,7 +190,7 @@ public class IndependentEsiBasisPayroll_Tests
 				EffectiveMonth = month,
 				PfApplicable = false,
 				IdempotencyKey = Guid.NewGuid().ToString("N")
-			}, json));
+			}), json));
 			await EsiPayrollWorkflowScenario.RequireSuccess(await workflow.ActivateAsync(employee.Id));
 			await workflow.SeedAttendanceAsync(employee.Id, month);
 			return employee.Id;

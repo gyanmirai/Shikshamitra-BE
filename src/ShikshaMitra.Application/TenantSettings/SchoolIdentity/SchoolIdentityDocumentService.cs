@@ -21,9 +21,9 @@ public class SchoolIdentityDocumentService(SchoolIdentityReadService reader,
 	IRepository<EducationBoard, Guid> boards) : ApplicationService, ITransientDependency
 {
 	// Callers enforce their own document permission and student/employee scope before capturing identity.
-	public async Task<SchoolIdentityDocumentSnapshotDto> CaptureAsync(Guid? boardId, Guid? mediumId, Guid? yearId, bool signature)
+	public async Task<SchoolIdentityDocumentSnapshotDto> CaptureAsync(Guid? boardId, Guid? mediumId, Guid? yearId, bool signature, Guid? organizationId = null)
 	{
-		var profile = await reader.ReadAsync(boardId, mediumId, yearId, signature);
+		var profile = await reader.ReadAsync(boardId, mediumId, yearId, signature, organizationId: organizationId);
 		return Snapshot(profile, CurrentTenant.Id!.Value);
 	}
 
@@ -35,12 +35,12 @@ public class SchoolIdentityDocumentService(SchoolIdentityReadService reader,
 		var board = await boards.GetAsync(medium.EducationBoardId);
 		if (stage.TenantId != CurrentTenant.Id || medium.TenantId != CurrentTenant.Id || board.TenantId != CurrentTenant.Id)
 			throw new BusinessException(SchoolIdentityErrorCodes.InvalidContext);
-		return await CaptureAsync(board.Id, medium.Id, board.AcademicYearId, signature);
+		return await CaptureAsync(board.Id, medium.Id, board.AcademicYearId, signature, stage.Id);
 	}
 
 	public static SchoolIdentityDocumentSnapshotDto Snapshot(SchoolIdentityProfileDto profile, Guid tenantId) => new()
 	{
-		TenantId = tenantId, BoardId = profile.BoardId, MediumId = profile.MediumId,
+		TenantId = tenantId, BoardId = profile.BoardId, MediumId = profile.MediumId, OrganizationId = profile.OrganizationId,
 		LogoAssetId = profile.Effective.GetValueOrDefault("logo")?.Selection.AssetId,
 		BannerAssetId = profile.Effective.GetValueOrDefault("banner")?.Selection.AssetId,
 		SignatureAssetId = profile.Effective.GetValueOrDefault("signature")?.Selection.AssetId,

@@ -22,6 +22,31 @@ namespace ShikshaMitra.HR.Reports;
 public class HrReportingWorkspaceApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private const string Root = "/api/hr/reports";
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task History_Query_Should_Filter_Owned_Runs_And_Reject_Unknown_Columns()
+	{
+		await PrepareAsync();
+		var created = await Client.PostAsJsonAsync(Root + "/runs", new HrReportCreateRunDto { TemplateId = "builtin:staff-directory", Revision = 1 }, JsonOptions);
+		created.EnsureSuccessStatusCode();
+		var run = (await created.Content.ReadFromJsonAsync<HrReportRunDto>(JsonOptions))!;
+		var input = new HrReportTablePageQueryDto { Take = 100, Criteria = new() {
+			Search = run.Name,
+			Filters = [new() { Column = "name", Type = "equals", Value = System.Text.Json.JsonSerializer.SerializeToElement(run.Name) }],
+			Sorts = [new() { Column = "capturedAt", Direction = "desc" }] } };
+		var response = await Client.PostAsJsonAsync(Root + "/runs/query", input, JsonOptions);
+		response.EnsureSuccessStatusCode();
+		var history = (await response.Content.ReadFromJsonAsync<HrReportRunHistoryDto>(JsonOptions))!;
+		history.Items.ShouldContain(item => item.Id == run.Id);
+		history.Items.ShouldAllBe(item => item.Name == run.Name);
+		using var other = Factory.CreateClient();
+		other.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
+		var otherResponse = await other.PostAsJsonAsync(Root + "/runs/query", input, JsonOptions);
+		otherResponse.EnsureSuccessStatusCode();
+		(await otherResponse.Content.ReadFromJsonAsync<HrReportRunHistoryDto>(JsonOptions))!.Items.ShouldBeEmpty();
+		input.Criteria.Sorts[0].Column = "ownerUserId";
+		(await Client.PostAsJsonAsync(Root + "/runs/query", input, JsonOptions)).IsSuccessStatusCode.ShouldBeFalse();
+	}
 	private async Task PrepareAsync()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
@@ -158,7 +183,7 @@ public class HrReportingWorkspaceApi_Tests(ShikshaMitraApiTestFactory factory) :
 	private static HrReportDesignDto Definition() => new() { DataSource = "employee", Columns = [new() { Field = "employeeCode" }, new() { Field = "employeeName" }], Parameters = [] };
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task History_Should_Keep_Pagination_Available_When_Current_Permissions_Hide_A_Page()
+	public async Task History_Should_Fill_Visible_Pages_After_Checking_Current_Permissions()
 	{
 		await PrepareAsync();
 		var staff = await PostAndReadAsync<HrReportRunDto>(Root + "/runs", new HrReportCreateRunDto { TemplateId = "builtin:staff-directory", Revision = 1 });
@@ -166,8 +191,9 @@ public class HrReportingWorkspaceApi_Tests(ShikshaMitraApiTestFactory factory) :
 		using var limited = Factory.CreateClient();
 		limited.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, string.Join(',', ShikshaMitraSubmodulePermissions.HR.Reports.View, ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View));
 		var hidden = (await limited.GetFromJsonAsync<HrReportRunHistoryDto>(Root + "/runs?take=1", JsonOptions))!;
-		hidden.Items.ShouldBeEmpty(); hidden.HasMore.ShouldBeTrue();
+		hidden.Items.Single().Id.ShouldBe(staff.Id);
 		var older = (await limited.GetFromJsonAsync<HrReportRunHistoryDto>(Root + "/runs?skip=1&take=1", JsonOptions))!;
-		older.Items.Single().Id.ShouldBe(staff.Id);
+		older.Items.ShouldNotContain(item => item.Id == staff.Id);
+		hidden.HasMore.ShouldBe(older.Items.Count > 0);
 	}
 }

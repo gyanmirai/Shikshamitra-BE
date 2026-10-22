@@ -16,6 +16,9 @@ public class EmployeeCompensationRevisionConfiguration : IEntityTypeConfiguratio
 		builder.Property(x => x.GrossSalary).HasPrecision(18, 2);
 		builder.Property(x => x.NetSalary).HasPrecision(18, 2);
 		builder.Property(x => x.EmployerCost).HasPrecision(18, 2);
+		builder.Property(x => x.EsiManagementMode).IsRequired().HasMaxLength(20).HasDefaultValue("IN_PLATFORM");
+		builder.Property(x => x.EsiExternalReason).HasMaxLength(500);
+		builder.HasOne<ShikshaMitra.HR.Payroll.Statutory.EsiPolicy>().WithMany().HasForeignKey(x => x.EsiPolicyId).OnDelete(DeleteBehavior.Restrict);
 		builder.Property(x => x.StatutoryProfile).IsRequired().HasMaxLength(16);
 		builder.Property(x => x.CalculationSnapshotJson).IsRequired().HasColumnType("jsonb");
 		builder.Property(x => x.IdempotencyKey).IsRequired().HasMaxLength(100);

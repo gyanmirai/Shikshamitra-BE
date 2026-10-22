@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -81,13 +81,15 @@ The readiness check requires a valid effective revision covering the later of th
 Pending registration is a warning and does not block activation when the salary and calculation rules are otherwise valid.
 HR can save registration details while the employee is inactive using the existing scoped enrollment endpoint.
 Readiness recalculates eligibility from saved earnings and applicable ESIC configuration, so off mode and employees outside coverage do not require a number.
-Later template or statutory changes do not silently change saved compensation.
+Later template changes do not replace saved compensation or its selected ESIC policy.
+Monthly payroll resolves the policy version for its month; protected employer cost is recalculated using the saved source template and overrides.
 One-time earnings and deductions remain separate employee salary components and do not become revision lines.
 ESIC uses the school-level default-on configuration without an activation journey.
 Save applies directly to current and future unlocked payroll with a concurrency stamp and idempotency key.
 School registration facts may be completed independently of salary calculation.
 The optional employee table projects the complete scoped population with server paging and attention filters.
-An active ESI scheme is evaluated for every payroll employee even when the selected salary template has no ESI row.
+Internally managed ESIC resolves the employee effective salary revision and its selected policy, even when the template has no ESIC row.
+Externally managed assignments omit both contributions.
 ESI coverage above the entry ceiling continues only through the recorded contribution-period end or an audited override.
 Derive continuity from prior finalized or paid payslips in the same contribution period, including when their payroll snapshots remain unlocked.
 Use locked snapshot evidence only where that employee-month has no finalized or paid payslip; drafts do not establish continuity.
@@ -237,7 +239,8 @@ The document-detail replacement operation is not a monetary correction mechanism
 ## Review a full-month salary estimate
 
 HR selects a staff member and preview month to see saved gross, effective salary date and current statutory decisions.
-The summary uses the saved earnings distribution without silently upgrading the salary template or rebalancing agreed gross.
+The summary retains the saved template version and agreed gross for gross-protected assignments.
+For employer-cost assignments, a changed ESIC policy version rebalances the transient earning distribution with the existing salary calculator while preserving the saved monthly target.
 Salary-template previews and saved summaries use the same professional-tax rule ordering and configured cessation-month exemption as monthly payroll.
 Missing rules or wage classifications remain actionable blockers; missing registration numbers remain follow-up warnings.
 Actual attendance, loss of pay and one-time adjustments belong to Run Payroll.
@@ -249,3 +252,11 @@ Locked payroll and finalized or paid payslips remain immutable.
 View an authorized table, apply filters and choose Excel or PDF from its shared Export menu.
 The server captures the complete matching population and publishes a private download after successful materialization.
 See [states, access and exceptions](./references/hr-table-exports.md).
+
+## Migrate ESIC policy assignments
+
+`NamedEsiPolicies` groups unambiguous tenant statutory versions into Standard ESIC and fills policy references on existing template versions and salary revisions.
+Duplicate legacy effective starts remain unassigned and surface setup blockers rather than choosing an arbitrary version.
+Existing legacy versions retain school-level calculation settings until a named policy version supplies its own settings.
+Migration does not rewrite payroll snapshots, calculation JSON or issued payslips.
+Policy writes share the payroll input fence and invalidate affected unlocked employee months; locked payroll and issued documents remain protected.

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 using ShikshaMitra.TenantSettings.SchoolIdentity;
 using Volo.Abp;
 using Volo.Abp.AspNetCore.Mvc;
@@ -18,13 +19,29 @@ public class SchoolIdentityController(ISchoolIdentityAppService service) : AbpCo
 	[HttpGet]
 	public Task<SchoolIdentityProfileDto> GetAsync([FromQuery] SchoolIdentityContextDto input) => service.GetAsync(input);
 	[HttpGet("branding")]
-	public Task<SchoolIdentityProfileDto> BrandingAsync() => service.GetBrandingAsync();
-	[HttpGet("branding/{kind:int}")]
-	public async Task<IActionResult> BrandingAssetAsync(SchoolIdentityAssetKind kind)
+	public Task<SchoolBrandingDto> BrandingAsync()
+	{
+		Response.Headers.CacheControl = "private, no-store";
+		return service.GetBrandingAsync();
+	}
+	[HttpGet("branding/logo")]
+	public Task<IActionResult> BrandingLogoAsync() => BrandingAssetAsync(SchoolIdentityAssetKind.Logo);
+	[HttpGet("branding/banner")]
+	public Task<IActionResult> BrandingBannerAsync() => BrandingAssetAsync(SchoolIdentityAssetKind.Banner);
+
+	private async Task<IActionResult> BrandingAssetAsync(SchoolIdentityAssetKind kind)
 	{
 		var result = await service.GetBrandingAssetAsync(kind);
-		Response.Headers.CacheControl = "private, no-store";
-		return File(result.Content, result.ContentType);
+		Response.Headers["X-Content-Type-Options"] = "nosniff";
+		Response.Headers.Append(HeaderNames.Vary, "Authorization, Cookie, __tenant");
+		if (result == null)
+		{
+			Response.Headers.CacheControl = "private, no-store";
+			return NoContent();
+		}
+		// Revalidate on every reuse so authorization and tenant checks always run before a 304.
+		Response.Headers.CacheControl = "private, no-cache";
+		return File(result.Content, result.ContentType, lastModified: null, entityTag: new EntityTagHeaderValue(result.EntityTag));
 	}
 	[HttpPost("preview")]
 	public async Task<IActionResult> PreviewAsync([FromBody] SchoolIdentityPreviewDto input)
@@ -57,12 +74,13 @@ public class SchoolIdentityController(ISchoolIdentityAppService service) : AbpCo
 		await using var stream = input.File.OpenReadStream();
 		await using var memory = new MemoryStream();
 		await stream.CopyToAsync(memory);
-		return await service.UploadAsync(input.Kind, input.BoardId, input.MediumId, input.File.FileName, memory.ToArray());
+		return await service.UploadAsync(input.Kind, input.BoardId, input.MediumId, input.File.FileName, memory.ToArray(), input.OrganizationId);
 	}
 }
 
 public sealed class SchoolIdentityUploadRequest
 {
+	public Guid? OrganizationId { get; set; }
 	public IFormFile? File { get; set; }
 	public SchoolIdentityAssetKind Kind { get; set; }
 	public Guid? BoardId { get; set; }

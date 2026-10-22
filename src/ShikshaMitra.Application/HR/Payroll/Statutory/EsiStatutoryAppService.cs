@@ -20,7 +20,6 @@ namespace ShikshaMitra.HR.Payroll.Statutory;
 
 [RemoteService(false)]
 public class EsiStatutoryAppService(
-	IRepository<StatutoryRuleVersion, Guid> ruleRepository,
 	IRepository<StatutoryEstablishment, Guid> establishmentRepository,
 	IRepository<EmployeeStatutoryEnrollment, Guid> enrollmentRepository,
 	IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
@@ -34,7 +33,7 @@ public class EsiStatutoryAppService(
 	IUserScopeService userScopeService,
 	IEarningComponentRepository earningComponentRepository,
 	EsiStatutoryPreviewReader previewReader,
-	EsiPayrollConfigurationResolver configurationResolver, EmployeeStatutoryProfileResolver profileResolver)
+	EsiPayrollConfigurationResolver configurationResolver, EmployeeStatutoryProfileResolver profileResolver, EsiPolicyResolver policyResolver)
 	: ApplicationService, IEsiStatutoryAppService
 {
 	private const string JurisdictionCode = "IN-GJ";
@@ -257,12 +256,7 @@ public class EsiStatutoryAppService(
 
 	private async Task<StatutoryRuleVersion> ResolveRuleAsync(DateTime effectiveOn)
 	{
-		var rules = await ruleRepository.GetListAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance && x.JurisdictionCode == JurisdictionCode &&
-			x.IsActive && x.EffectiveFrom <= effectiveOn.Date &&
-			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= effectiveOn.Date));
-		return rules.OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Version).FirstOrDefault()
-			?? throw new BusinessException(HRErrorCodes.StatutoryRuleNotFound);
+		return (await policyResolver.ResolveAsync(null, effectiveOn)).Rule;
 	}
 
 	private async Task<StatutoryEstablishment?> FindEstablishmentAsync() =>

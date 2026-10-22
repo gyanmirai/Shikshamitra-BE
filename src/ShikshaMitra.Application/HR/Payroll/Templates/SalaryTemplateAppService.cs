@@ -122,6 +122,7 @@ public class SalaryTemplateAppService(
 		var replay = await FindIdempotentSaveAsync(input.IdempotencyKey);
 		if (replay != null)
 		{
+			EnsureEsiAssignmentMatchesReplay(replay, input);
 			previewProofService.Validate(input.PreviewToken, PreviewBinding(ToPreview(input)), replay: true);
 			return await GetAsync(replay.TemplateId);
 		}
@@ -154,6 +155,7 @@ public class SalaryTemplateAppService(
 		var replay = await FindIdempotentSaveAsync(input.IdempotencyKey, id);
 		if (replay != null)
 		{
+			EnsureEsiAssignmentMatchesReplay(replay, input);
 			previewProofService.Validate(input.PreviewToken, PreviewBinding(ToPreview(input, id)), replay: true);
 			return await GetAsync(id);
 		}
@@ -182,6 +184,7 @@ public class SalaryTemplateAppService(
 			version.SetRules(rules);
 			version.SetQuoteDefaults(ParseSalaryBasis(input.DefaultSalaryBasis), ParseProtectionPolicy(input.DefaultProtectionPolicy));
 			version.SetPfDefaults(input.DefaultPfApplicable, input.DefaultPfRuleId);
+			version.SetEsiAssignment(input.DefaultEsiManagementMode, input.DefaultEsiPolicyId, input.DefaultEsiExternalReason);
 			version.SetSaveOperationKey(input.IdempotencyKey);
 			version.Publish(clock.Now);
 		}
@@ -279,10 +282,15 @@ public class SalaryTemplateAppService(
 		SalaryStructureTemplate template,
 		int versionNumber,
 		IReadOnlyList<SalaryTemplateRule> rules,
-		SaveSalaryTemplateDto input) => new(
-		GuidGenerator.Create(), CurrentTenant.Id, template.Id, versionNumber, rules,
-		ParseSalaryBasis(input.DefaultSalaryBasis), ParseProtectionPolicy(input.DefaultProtectionPolicy),
-		input.DefaultPfApplicable, input.DefaultPfRuleId, input.IdempotencyKey);
+		SaveSalaryTemplateDto input)
+	{
+		var version = new SalaryStructureTemplateVersion(
+			GuidGenerator.Create(), CurrentTenant.Id, template.Id, versionNumber, rules,
+			ParseSalaryBasis(input.DefaultSalaryBasis), ParseProtectionPolicy(input.DefaultProtectionPolicy),
+			input.DefaultPfApplicable, input.DefaultPfRuleId, input.IdempotencyKey);
+		version.SetEsiAssignment(input.DefaultEsiManagementMode, input.DefaultEsiPolicyId, input.DefaultEsiExternalReason);
+		return version;
+	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsSalaryTemplates.View)]
 	public async Task<SalaryTemplatePreviewDto> PreviewAsync(PreviewSalaryTemplateRequestDto input)
@@ -327,7 +335,8 @@ public class SalaryTemplateAppService(
 		{
 			SalaryBasis = input.SalaryBasis, ProtectionPolicy = input.ProtectionPolicy,
 			MonthlyAmount = GrossEarningAllocation.Money(input.MonthlyAmount), EffectiveMonth = input.EffectiveMonth.Date,
-			PfApplicable = input.PfApplicable, PfRuleId = input.PfRuleId
+			PfApplicable = input.PfApplicable, PfRuleId = input.PfRuleId,
+			EsiManagementMode = input.EsiManagementMode, EsiPolicyId = input.EsiPolicyId, EsiExternalReason = input.EsiExternalReason
 		});
 
 	private static void ValidatePreviewInput(PreviewSalaryTemplateRequestDto input)
@@ -343,7 +352,8 @@ public class SalaryTemplateAppService(
 		TemplateId = templateId, ExpectedActiveVersionId = input.ExpectedActiveVersionId, ConcurrencyStamp = input.ConcurrencyStamp,
 		Rules = input.Rules, SalaryBasis = input.DefaultSalaryBasis, ProtectionPolicy = input.DefaultProtectionPolicy,
 		MonthlyAmount = input.SampleMonthlyAmount, EffectiveMonth = input.SampleEffectiveMonth,
-		PfApplicable = input.DefaultPfApplicable, PfRuleId = input.DefaultPfRuleId
+		PfApplicable = input.DefaultPfApplicable, PfRuleId = input.DefaultPfRuleId,
+		EsiManagementMode = input.DefaultEsiManagementMode, EsiPolicyId = input.DefaultEsiPolicyId, EsiExternalReason = input.DefaultEsiExternalReason
 	};
 
 	private static object PreviewBinding(PreviewSalaryTemplateRequestDto input) => new
@@ -356,10 +366,17 @@ public class SalaryTemplateAppService(
 		}).ToArray(),
 		SalaryBasis = ParseSalaryBasis(input.SalaryBasis), ProtectionPolicy = ParseProtectionPolicy(input.ProtectionPolicy),
 		MonthlyAmount = GrossEarningAllocation.Money(input.MonthlyAmount), EffectiveMonth = input.EffectiveMonth.ToString("yyyy-MM"),
-		input.PfApplicable, input.PfRuleId
+		input.PfApplicable, input.PfRuleId, input.EsiManagementMode, input.EsiPolicyId, input.EsiExternalReason
 	};
 
-	private static List<SalaryTemplateRule> ApplyOverrides(
+	private static void EnsureEsiAssignmentMatchesReplay(SalaryStructureTemplateVersion replay, SaveSalaryTemplateDto input)
+	{
+		if (replay.DefaultEsiManagementMode != input.DefaultEsiManagementMode || replay.DefaultEsiPolicyId != input.DefaultEsiPolicyId ||
+			replay.DefaultEsiExternalReason != input.DefaultEsiExternalReason?.Trim())
+			throw new BusinessException("HR:Payroll:SalaryTemplateSaveConflict");
+	}
+
+	internal static List<SalaryTemplateRule> ApplyOverrides(
 		IReadOnlyList<SalaryTemplateRule> source,
 		IReadOnlyList<SalaryRuleOverrideDto> overrides)
 	{
@@ -460,13 +477,14 @@ public class SalaryTemplateAppService(
 		DefaultProtectionPolicy = ToContractEnum(version.DefaultProtectionPolicy.ToString()),
 		DefaultPfApplicable = version.DefaultPfApplicable,
 		DefaultPfRuleId = version.DefaultPfRuleId,
+		DefaultEsiManagementMode = version.DefaultEsiManagementMode, DefaultEsiPolicyId = version.DefaultEsiPolicyId, DefaultEsiExternalReason = version.DefaultEsiExternalReason,
 		Rules = MapRulesForContract(version.GetRules())
 	};
 
 	private static bool RequiresSetup(SalaryStructureTemplateVersion? version) =>
-		version != null &&
-		version.GetRules().Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund) &&
-		!version.DefaultPfRuleId.HasValue;
+		version != null && (
+			version.DefaultEsiManagementMode == EsiManagement.InPlatform && !version.DefaultEsiPolicyId.HasValue ||
+			version.GetRules().Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund) && !version.DefaultPfRuleId.HasValue);
 
 	private static List<SalaryTemplateRule> MapRules(IEnumerable<SalaryTemplateRuleDto> rules)
 	{

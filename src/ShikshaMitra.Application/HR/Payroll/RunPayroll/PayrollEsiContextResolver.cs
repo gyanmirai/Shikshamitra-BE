@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.HR.Payroll.RunPayroll;
 
 public class PayrollEsiContextResolver(
-	IRepository<StatutoryRuleVersion, Guid> ruleRepository,
+	EsiPolicyResolver policyResolver,
 	EsiPayrollConfigurationResolver configurationResolver,
 	EsiEnrollmentResolver enrollmentResolver,
 	IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
@@ -30,7 +30,8 @@ public class PayrollEsiContextResolver(
 		int year,
 		int month,
 		IReadOnlyCollection<Guid> employeeIds,
-		ILookup<Guid, EmployeePayrollComponent> componentsByEmployee)
+		ILookup<Guid, EmployeePayrollComponent> componentsByEmployee,
+		IReadOnlyDictionary<Guid, PayrollCompensationRevisionResolution>? compensation = null)
 	{
 		var payrollMonth = new DateTime(year, month, 1);
 		var monthEnd = payrollMonth.AddMonths(1).AddDays(-1);
@@ -41,19 +42,7 @@ public class PayrollEsiContextResolver(
 			return new Dictionary<Guid, PayrollEsiStatutoryContext>();
 		}
 
-		var rule = (await ruleRepository.GetListAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
-			x.JurisdictionCode == JurisdictionCode &&
-			x.IsActive &&
-			x.EffectiveFrom <= monthEnd &&
-			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= payrollMonth)))
-			.OrderByDescending(x => x.EffectiveFrom)
-			.ThenByDescending(x => x.Version)
-			.FirstOrDefault();
-		if (rule is null)
-		{
-			throw new BusinessException(HRErrorCodes.StatutoryRuleNotFound);
-		}
+		var effectivePolicies = await policyResolver.ResolveAllAsync(payrollMonth);
 
 		var treatments = (await treatmentRepository.GetListAsync(x =>
 			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
@@ -77,18 +66,30 @@ public class PayrollEsiContextResolver(
 			.GroupBy(x => x.EmployeeId)
 			.ToDictionary(x => x.Key, x => (IReadOnlyList<StatutoryOverride>) x.ToList());
 		var canonicalDeduction = await deductionComponentRepository.FindByNameAsync(CanonicalEsiComponentName);
-		var calculationSettings = configuration.GetCalculationSettings();
-		calculationSettings = calculationSettings with
+		var configurationSettings = configuration.GetCalculationSettings();
+		configurationSettings = configurationSettings with
 		{
-			EligibilityComponentIsActive = calculationSettings.EligibilityComponentId == null ||
-			activeEarnings.Any(x => x.Id == calculationSettings.EligibilityComponentId),
-			CalculationComponentIsActive = calculationSettings.CalculationComponentId == null ||
-			activeEarnings.Any(x => x.Id == calculationSettings.CalculationComponentId)
+			EligibilityComponentIsActive = configurationSettings.EligibilityComponentId == null ||
+			activeEarnings.Any(x => x.Id == configurationSettings.EligibilityComponentId),
+			CalculationComponentIsActive = configurationSettings.CalculationComponentId == null ||
+			activeEarnings.Any(x => x.Id == configurationSettings.CalculationComponentId)
 		};
 
 		var result = new Dictionary<Guid, PayrollEsiStatutoryContext>();
 		foreach (var employeeId in requestedEmployeeIds)
 		{
+			var revision = compensation?.GetValueOrDefault(employeeId)?.Revision;
+			if (compensation != null && revision == null) continue;
+			if (revision is { EsiPolicyId: null, EsiManagementMode: EsiManagement.InPlatform }) throw EsiPolicyResolver.NotEffective(null, payrollMonth);
+			if (revision?.EsiManagementMode == EsiManagement.External) continue;
+			var policy = revision?.EsiPolicyId is { } policyId ? effectivePolicies.GetValueOrDefault(policyId)
+				: effectivePolicies.Values.SingleOrDefault(x => x.Policy.IsDefault);
+			if (policy == null) throw EsiPolicyResolver.NotEffective(revision?.EsiPolicyId, payrollMonth);
+			var rule = policy.Rule;
+			var calculationSettings = rule.GetPolicySettings() ?? configurationSettings;
+			calculationSettings = calculationSettings with {
+				EligibilityComponentIsActive = calculationSettings.EligibilityComponentId == null || activeEarnings.Any(x => x.Id == calculationSettings.EligibilityComponentId),
+				CalculationComponentIsActive = calculationSettings.CalculationComponentId == null || activeEarnings.Any(x => x.Id == calculationSettings.CalculationComponentId) };
 			var source = componentsByEmployee[employeeId]
 				.FirstOrDefault(x => !x.IsEarning && x.SemanticType == PayrollComponentSemanticType.EmployeeStateInsurance)
 				?? BuildTransientDeduction(employeeId, canonicalDeduction);

@@ -1,13 +1,47 @@
 using System;
 using System.Text.Json;
+using System.Threading.Tasks;
+using NSubstitute;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.DependencyInjection;
 using Xunit;
 
 namespace ShikshaMitra.HR.Reports;
 
 public class HrTableExport_Tests
 {
+	[Fact]
+	public async Task Captured_Export_Access_Checks_Should_Validate_Metadata_Without_Reading_Population()
+	{
+		var id = Guid.NewGuid();
+		var run = new HrReportRunDto { Id = id, Status = "Completed", Columns = [new() { Id = "netPay", Type = "money" }] };
+		var workspace = Substitute.For<IHrReportingWorkspaceAppService>();
+		workspace.GetAsync(id).Returns(run);
+		var services = Substitute.For<IAbpLazyServiceProvider>();
+		services.LazyGetRequiredService<IHrReportingWorkspaceAppService>().Returns(workspace);
+		var source = new HrTableExportSources(services);
+		var request = Request("hr-generated-report", "netPay");
+		request.Query = JsonSerializer.SerializeToElement(new { runId = id, criteria = new { filters = new[] { new { column = "netPay", type = "greaterThan", value = 0 } } } });
+		await source.EnsureAccessAsync(request);
+		await workspace.Received(1).GetAsync(id);
+		workspace.ReceivedCalls().ShouldNotContain(call => call.GetMethodInfo().Name == "GetRowsAsync" || call.GetMethodInfo().Name == "GetExportRowsAsync");
+		run.IsExpired = true;
+		await Should.ThrowAsync<BusinessException>(() => source.EnsureAccessAsync(request));
+		run.IsExpired = false;
+		run.Status = "Queued";
+		await Should.ThrowAsync<BusinessException>(() => source.EnsureAccessAsync(request));
+	}
+	[Fact]
+	public async System.Threading.Tasks.Task Filtered_Captured_Exports_Should_Omit_Unfiltered_Totals()
+	{
+		var source = new HrTableExportSources(null!);
+		var request = Request("hr-generated-report", "netPay");
+		request.Query = JsonSerializer.SerializeToElement(new { criteria = new { search = "staff" } });
+		(await source.TotalsAsync(request, new())).ShouldBeEmpty();
+		request.Query = JsonSerializer.SerializeToElement(new { criteria = new { filters = new[] { new { column = "netPay", type = "greaterThan", value = 0 } } } });
+		(await source.TotalsAsync(request, new())).ShouldBeEmpty();
+	}
 	private static HrTableExportRequest Request(string table = "employee-table", string field = "fullName") => new() {
 		Table = table, Query = JsonSerializer.SerializeToElement(new { }), Columns = [new() { Id = field, Label = "Staff" }]
 	};

@@ -62,6 +62,7 @@ public partial class HRSeederContributor
 			defaultPfApplicable: defaultPfRule != null,
 			defaultPfRuleId: defaultPfRule?.Id);
 
+		version.SetEsiAssignment("IN_PLATFORM", (await _esiPolicyRepository.GetAsync(x => x.IsDefault)).Id, null);
 		version.Publish(new DateTime(2022, 4, 1));
 		template.MarkPublished(1);
 		template.SetDefault(true);

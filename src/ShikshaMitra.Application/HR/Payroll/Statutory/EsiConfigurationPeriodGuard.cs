@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Payroll.RunPayroll;
@@ -15,12 +16,12 @@ public class EsiConfigurationPeriodGuard(IRepository<PayrollRunItemSnapshot, Gui
 	IRepository<SalarySlip, Guid> slips, IRepository<PayrollRunReview, Guid> reviews,
 	IAsyncQueryableExecuter executor) : ITransientDependency
 {
-	public async Task InvalidateAsync(DateTime from, DateTime? until)
+	public async Task InvalidateAsync(DateTime from, DateTime? until, IReadOnlyCollection<Guid>? affectedEmployeeIds = null)
 	{
 		var firstMonth = from.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 		var candidates = (await executor.ToListAsync((await snapshots.GetQueryableAsync())
 			.Where(x => !x.IsLocked && string.Compare(x.MonthYear, firstMonth) >= 0)))
-			.Where(x => Includes(x.MonthYear, from, until)).ToList();
+			.Where(x => Includes(x.MonthYear, from, until) && (affectedEmployeeIds == null || affectedEmployeeIds.Contains(x.EmployeeId))).ToList();
 		var finalized = await executor.ToListAsync((await slips.GetQueryableAsync())
 			.Where(x => string.Compare(x.MonthYear, firstMonth) >= 0 &&
 				(x.Status == SalarySlipStatus.Finalized || x.Status == SalarySlipStatus.Paid)));

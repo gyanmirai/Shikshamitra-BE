@@ -29,6 +29,7 @@ public class AdmissionPipelineItemDto
 	public string? CurrentStageCode { get; set; }
 	public string? CurrentStageName { get; set; }
 	public AdmissionWorkflowStageType? StageType { get; set; }
+	public List<AdmissionPipelineStageProgressDto> StageProgress { get; set; } = [];
 	public string NextRequiredAction { get; set; } = string.Empty;
 	public DateTime CreationTime { get; set; }
 	public DateTime? EnteredAt { get; set; }
@@ -38,6 +39,15 @@ public class AdmissionPipelineItemDto
 	public int OpenFollowUpCount { get; set; }
 	public DateTime? NextFollowUpAt { get; set; }
 	public bool HasOverdueFollowUp { get; set; }
+	public int OverdueFollowUpCount { get; set; }
+	public string? NextFollowUpPurpose { get; set; }
+}
+
+public class AdmissionPipelineStageProgressDto
+{
+	public Guid Id { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public AdmissionRuntimeStageStatus Status { get; set; }
 }
 
 public class AdmissionPipelineStageOptionDto

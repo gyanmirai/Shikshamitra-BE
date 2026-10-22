@@ -13,6 +13,15 @@ namespace ShikshaMitra.Controllers.TenantSettings.RoomsManagement.Rooms;
 [Route("api/institute-setup/rooms")]
 public class RoomController(IRoomAppService roomAppService) : AbpController
 {
+	[HttpGet("{id}/image")]
+	public Task<RoomImageDto?> GetImageAsync(Guid id) => roomAppService.GetImageAsync(id);
+
+	[HttpGet("features")]
+	public Task<ListResultDto<RoomFeatureDto>> GetFeaturesAsync() => roomAppService.GetFeaturesAsync();
+
+	[HttpPost("features")]
+	public Task<RoomFeatureDto> CreateFeatureAsync([FromBody] CreateRoomFeatureDto input) => roomAppService.CreateFeatureAsync(input);
+
 	[HttpGet]
 	[ProducesResponseType(typeof(PagedResultDto<RoomDto>), StatusCodes.Status200OK)]
 	public async Task<PagedResultDto<RoomDto>> GetListAsync([FromQuery] GetRoomListDto input)

@@ -83,6 +83,7 @@ public class AdmissionOfferingConfigurationValidator(
 			errors.Add(Error(AdmissionOfferingValidationCodes.RteRequiresDirectRegistration,
 				"RTE offerings must start with Registration, without an Inquiry."));
 		await ValidatePublishedConfigurationAsync(input, errors);
+		await ValidateAssessmentProfilesAsync(input, errors);
 		await ValidateIntakeProfilesAsync(cycle, input, errors);
 		errors.AddRange(await inquiryValidator.ValidateAsync(cycle, input));
 		errors.AddRange(await reviewValidator.ValidateAsync(cycle, input));
@@ -241,6 +242,20 @@ public class AdmissionOfferingConfigurationValidator(
 		foreach (var error in await eligibilityValidator.ValidateAsync(
 			input.WorkflowDefinitionId, input.ApplicationFormDefinitionId, input.InquiryFormDefinitionId, input.EntryMode))
 			errors.Add(error);
+	}
+
+	private async Task ValidateAssessmentProfilesAsync(AdmissionOfferingWriteDto input, ICollection<AdmissionOfferingValidationError> errors)
+	{
+		if (!input.WorkflowDefinitionId.HasValue) return;
+		var assessmentStages = await workflowStageRepository.GetListAsync(item => item.WorkflowDefinitionId == input.WorkflowDefinitionId.Value && item.StageType == AdmissionWorkflowStageType.Assessment);
+		foreach (var stage in assessmentStages)
+		{
+			try { _ = AdmissionAssessmentPolicy.Read(stage.ConfigurationJson)?.Resolve(input.BoardId, input.MediumId, input.StandardId); }
+			catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+			{
+				errors.Add(Error(AdmissionOfferingValidationCodes.AssessmentProfileMissing, $"Stage '{stage.Name}': {exception.Message}"));
+			}
+		}
 	}
 
 	private async Task ValidateIntakeProfilesAsync(AdmissionCycle cycle, AdmissionOfferingWriteDto input,
@@ -406,6 +421,7 @@ public class AdmissionOfferingConfigurationValidator(
 	{
 		AdmissionOfferingValidationCodes.EligibilityFormMismatch => AdmissionEligibilityErrorCodes.OfferingFormMismatch,
 		AdmissionOfferingValidationCodes.WorkflowFormMismatch => AdmissionFormStageErrorCodes.OfferingFormMismatch,
+		AdmissionOfferingValidationCodes.AssessmentProfileMissing => AdmissionAssessmentErrorCodes.InvalidPolicy,
 		AdmissionOfferingValidationCodes.InquiryCounsellorUnavailable => AdmissionErrorCodes.InquiryCounsellorInvalid,
 		AdmissionOfferingValidationCodes.ReviewAssigneeUnavailable => AdmissionReviewErrorCodes.ReviewerNotAllowed,
 		AdmissionOfferingValidationCodes.HierarchyInvalid => AdmissionErrorCodes.OfferingAcademicHierarchyInvalid,

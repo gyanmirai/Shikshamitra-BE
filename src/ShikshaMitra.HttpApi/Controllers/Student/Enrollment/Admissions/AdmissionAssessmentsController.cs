@@ -51,6 +51,8 @@ public class AdmissionAssessmentsController(IAdmissionAssessmentAppService servi
 	public async Task<Result<AdmissionAssessmentDto>> RecordAttendanceAsync(Guid id, AdmissionAssessmentAttendanceInput input) => Result.Success(await service.RecordAttendanceAsync(id, input));
 	[HttpPut("attempts/{id:guid}/result"), Authorize(Permissions.RecordResults)]
 	public async Task<Result<AdmissionAssessmentDto>> RecordResultAsync(Guid id, AdmissionAssessmentResultInput input) => Result.Success(await service.RecordResultAsync(id, input));
+	[HttpPut("attempts/{id:guid}/result-draft"), Authorize(Permissions.RecordResults)]
+	public async Task<Result<AdmissionAssessmentDto>> SaveResultDraftAsync(Guid id, AdmissionAssessmentResultInput input) => Result.Success(await service.SaveResultDraftAsync(id, input));
 	[HttpPost("attempts/{id:guid}/review"), Authorize(Permissions.Review)]
 	public async Task<Result<AdmissionAssessmentDto>> ReviewAsync(Guid id, AdmissionAssessmentReviewInput input) => Result.Success(await service.ReviewAsync(id, input));
 	[HttpPost("attempts/{id:guid}/retake"), Authorize(Permissions.Book)]

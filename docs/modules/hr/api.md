@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -179,7 +179,7 @@ Exactly one Basic earning is required, while an explicitly designated balancing 
 Underlying earnings must allocate gross before rounding; `HR:Payroll:SalaryTemplateAllocationMismatch` includes gross, allocated earnings, difference, and a readable explanation.
 Salary generation and payroll share `GrossEarningAllocation`, evaluating earning dependencies at decimal precision and distributing fractional paise by largest remainder, with ties ordered by ordinary earnings before Basic and then component ID.
 Fixed monthly inputs are normalized to two decimals, attendance is applied once, and deductions use finalized earnings.
-Basic at 100 percent with PF does not require Special Allowance, and ESI remains system-managed.
+Basic at 100 percent with PF does not require Special Allowance; ESIC is calculated from the employee assignment and effective policy when managed in ShikshaMitra.
 Active versions are immutable and carry a default salary basis, derived protection target, PF applicability, and PF rule.
 The calculate endpoint accepts Monthly salary (GROSS) or Monthly cost to school (EMPLOYER_COST), an effective month, and optional employee context.
 It returns earnings, employee deductions, employer contributions, ESI coverage and contribution details, statutory references, target variance, warnings, and a formula trace.
@@ -242,11 +242,14 @@ Coverage decisions contain both the stable decision code and a server-authored d
 Preview responses include `generatedAtUtc` and a deterministic SHA-256 `previewFingerprint` over activation-relevant rule, establishment, classification, employee, enrollment, override, and calculated result inputs.
 `PUT /api/payroll/statutory-schemes/esi/configuration` saves directly with a concurrency stamp and idempotency key; it does not require a client impact-preview fingerprint.
 The former establishment activation and standalone classification mutation routes have been removed.
+Configuration save and draft-preview validation reject school employee/employer rate overrides, including documented overrides.
+Contribution rates come from the effective statutory policy; component classification continues through the existing effective-dated configuration command.
 Compensation audit identities, timestamps, legacy workflow details, and calculation snapshots require `HR.PayrollManagement.CompensationRevisions.ViewAudit`.
 Payroll resolves the latest effective revision for the month and keeps one-time salary components separate.
 Locked payroll at or after the effective month prevents compensation revision changes.
 Payroll records quote provenance and blocks locking when the normalized protected amount differs from the saved target.
-Resolution requires an explicit compensation change; ESIC configuration never silently reduces established wages.
+Gross-protected salaries retain agreed gross.
+Employer-cost assignments reuse their immutable source template and saved overrides to rebalance recurring earnings when the selected ESIC policy version changes, without rewriting salary revisions or calculation snapshots.
 This follows the wage-protection principle in [Social Security Code section 124](https://labour.gov.in/sites/default/files/ss_code_as_passed_by_lok_sabha.pdf).
 The calculation retains the Gujarat profile, employee and employer rates of 0.75% and 3.25%, and upward rupee rounding under [Central Rules 2026 rule 19](https://www.labour.gov.in/static/uploads/2026/05/49aa9b62c2125499c37399b90e969d67.pdf).
 Monthly-rated average daily wages use contractual monthly statutory wages divided by 26; the employee share is exempt up to Rs 176 per day, while the employer share remains payable, as described in the [ESIC official report](https://www.esic.gov.in/attachments/publicationfile/b830b6c5a968aae81fdbc3a09e9063fb.pdf).
@@ -408,7 +411,7 @@ There is no public document URL or arbitrary email-recipient override.
 | GET /api/payroll/payslip-deliveries?salarySlipId= | GenerateSalarySlip.View | Delivery history across all issued revisions, with recipient, actor, times, status and safe error category. |
 | POST /api/payroll/payslip-deliveries | GenerateSalarySlip.Add | DocumentId and IdempotencyKey; queues the current official document for its employee. |
 | GET /api/payroll/payslip-settings | GenerateSalarySlip.View | SchoolName, SchoolAddress, AutomaticEmail, ConcurrencyStamp and last IdempotencyKey. |
-| PUT /api/payroll/payslip-settings | GenerateSalarySlip.Add | Same settings fields; optimistic concurrency and idempotent retries under the payroll fence. |
+| PUT /api/payroll/payslip-settings | GenerateSalarySlip.Add | Presentation, AutomaticEmail, ConcurrencyStamp and IdempotencyKey; optimistic concurrency and idempotent retries under the payroll fence. Incoming school details are ignored. |
 
 These short permission suffixes refer to the existing HR payroll payslip permission catalogue, not new grants.
 Background delivery from payroll locking rechecks the recorded RunPayroll.Lock action, so an approver does not need RunPayroll.Add to distribute an already reviewed payroll.
@@ -535,7 +538,11 @@ Changed profiles invalidate affected unlocked previews and reviews, preserve iss
 Payroll snapshots retain reference and applied amounts, number presence, flags, rule versions and warning reasons.
 Review records the current warning codes and profile version before locking.
 
-Payslip settings add Compact/Detailed layouts, a logo reference, optional staff/bank/attendance/earnings/zero-deduction fields and statement/register column presets.
+Payroll document settings own Compact/Detailed layouts, optional staff/bank/attendance/earnings/zero-deduction fields and statement/register column presets.
+SchoolName and SchoolAddress are read-only projections of the Institute Setup tenant profile.
+New payslips, previews, payroll statement/register branding and salary-document table exports resolve the current institute name and postal address on the server.
+The school-level School Identity logo replaces the former payroll-specific logo override.
+Settings edits retain existing preferences and issued documents; no data migration or historical PDF rewrite occurs.
 Identity, period and totals always remain; every nonzero deduction always appears.
 Issuance freezes the presentation version, school branding and logo checksum with the stored PDF.
 Statements and registers read saved evidence, use issued payroll for official output and label draft-inclusive output Preview.
@@ -559,3 +566,47 @@ Refreshing current unlocked payroll applies eligible contributions before regist
 ## HR table export interface
 
 See [complete HR table exports](./references/hr-table-exports.md) for the allowlisted background capture API, private authenticated downloads, source permissions and explicit limits.
+
+## Named ESIC policies
+
+| Endpoint | Contract and authorization |
+|---|---|
+| `GET /api/payroll/statutory-schemes/esi/policies` | Tenant policy/version catalogue; Statutory Schemes View |
+| `GET /api/payroll/statutory-schemes/esi/policies/options` | Selection catalogue; statutory View, template View/Add, or compensation View/Manage |
+| `POST /api/payroll/statutory-schemes/esi/policies` | Name, code and initial version; existing Edit, Activate, ConfigureCalculation and HR-wide scope |
+| `POST /api/payroll/statutory-schemes/esi/policies/{id}/versions` | New immutable version with expected concurrency stamp and GUID idempotency key; same write permissions |
+| `POST /api/payroll/statutory-schemes/esi/policies/{id}/archive` | Expected concurrency stamp; same write permissions; default policy cannot be archived |
+
+Version inputs include employee/employer percentages, wage ceilings, daily exemption, establishment threshold, caps, rounding, calculation settings, source and verification date.
+Versions begin on a month boundary; each later version supersedes its predecessor without editing historical versions.
+Reject duplicate/backdated version starts, stale writes and changed-body retries.
+The response includes `appliesUntil`; expired versions and gaps never fall back to an older version.
+Template read/save contracts carry `defaultEsiManagementMode`, `defaultEsiPolicyId` and `defaultEsiExternalReason`.
+Preview/calculate and employee compensation contracts carry `esiManagementMode`, `esiPolicyId` and `esiExternalReason`.
+Employee compensation saves require `expectedEsiPolicyVersionId` from the preview's `employeeStateInsurance.ruleId` when ESIC is calculated in the platform.
+The effective version is checked under the payroll input transaction lock before any salary or statutory-profile changes.
+A changed version returns HTTP 409 with `HR:Payroll:CompensationPreviewStale`; refresh the preview before retrying.
+Idempotent retries compare the original saved version rather than recalculating the saved result.
+`IN_PLATFORM` requires a tenant policy; `EXTERNAL` requires a reason and no policy ID.
+External management suppresses both ESIC shares and payslip presentation, while retaining enrollment facts.
+Policy selection does not confer eligibility; the existing wage classifications, enrollment, contribution continuity and rounding engine still apply.
+Missing effective versions return `HR:Payroll:EsiPolicyNotEffective`; missing/invalid assignment returns `HR:Payroll:EsiPolicySelectionInvalid`.
+New assignments reject archived policies; existing employee assignments and historical references continue resolving them.
+Preview proof and compensation idempotency include assignment values and resolved calculation evidence.
+Reusing a template save key with a changed ESIC assignment or submitting a stale template write returns HTTP 409.
+
+### Reporting table queries
+
+`POST /api/hr/reports/runs/query` accepts `skip`, `take` and `criteria` for private generated-report history.
+`POST /api/hr/reports/runs/{id}/rows/query` accepts `page`, `pageSize` and `criteria` for an immutable captured result.
+Criteria contain `search`, `filters` (`column`, `type`, `value`) and `sorts` (`column`, `direction`).
+Only columns from server-owned history or captured-result metadata are accepted.
+Search is limited to 256 characters, criteria to 32 KB, filters to 30 and distinct sorts to 60.
+Filter alternatives within one column use OR, and different columns use AND.
+Numbers and money support equals, greaterThan, lessThan and inclusive between; dates support equals and inclusive after/before; booleans support equals.
+Date-time comparisons use school time and minute precision, while ordering preserves full timestamp precision and stable capture-order ties.
+History status filtering includes computed Expired, and access checks run before visible pagination.
+Existing GET history/row reads remain available without table criteria.
+Reporting table exports accept the same criteria object in their query and preserve visible ordered columns.
+Filtered captured exports omit original report totals rather than attach totals from the unfiltered population.
+No grants, ownership checks, tenant filters, captured data or retention rules change.

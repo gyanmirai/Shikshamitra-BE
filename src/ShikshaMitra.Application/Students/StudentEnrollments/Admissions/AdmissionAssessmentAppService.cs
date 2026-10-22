@@ -58,6 +58,8 @@ public class AdmissionAssessmentAppService(AdmissionAssessmentSessionService ses
 	public Task<AdmissionAssessmentDto> RecordAttendanceAsync(Guid attemptId, AdmissionAssessmentAttendanceInput input) => commands.RecordAttendanceAsync(attemptId, input);
 	[Authorize(Permissions.RecordResults)]
 	public Task<AdmissionAssessmentDto> RecordResultAsync(Guid attemptId, AdmissionAssessmentResultInput input) => commands.RecordResultAsync(attemptId, input);
+	[Authorize(Permissions.RecordResults)]
+	public Task<AdmissionAssessmentDto> SaveResultDraftAsync(Guid attemptId, AdmissionAssessmentResultInput input) => commands.SaveResultDraftAsync(attemptId, input);
 	[Authorize(Permissions.Review)]
 	public Task<AdmissionAssessmentDto> ReviewAsync(Guid attemptId, AdmissionAssessmentReviewInput input) => commands.ReviewAsync(attemptId, input);
 	[Authorize(Permissions.Book)]

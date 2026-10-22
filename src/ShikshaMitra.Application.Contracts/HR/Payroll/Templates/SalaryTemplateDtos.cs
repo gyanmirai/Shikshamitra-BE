@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ShikshaMitra.HR.Payroll.Statutory;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -51,6 +51,9 @@ public class SaveSalaryTemplateDto
 	public string DefaultProtectionPolicy { get => DefaultSalaryBasis == "EMPLOYER_COST" ? "PROTECT_EMPLOYER_COST" : "PROTECT_GROSS"; set { } }
 	public bool DefaultPfApplicable { get; set; }
 	public Guid? DefaultPfRuleId { get; set; }
+	public string DefaultEsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? DefaultEsiPolicyId { get; set; }
+	public string? DefaultEsiExternalReason { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
 	public string IdempotencyKey { get; set; } = string.Empty;
 	public Guid? ExpectedActiveVersionId { get; set; }
@@ -71,6 +74,9 @@ public class SalaryTemplateVersionDto : EntityDto<Guid>
 	public string DefaultProtectionPolicy { get; set; } = "PROTECT_GROSS";
 	public bool DefaultPfApplicable { get; set; }
 	public Guid? DefaultPfRuleId { get; set; }
+	public string DefaultEsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? DefaultEsiPolicyId { get; set; }
+	public string? DefaultEsiExternalReason { get; set; }
 	public List<SalaryTemplateRuleDto> Rules { get; set; } = [];
 }
 
@@ -122,6 +128,9 @@ public class CalculateSalaryTemplateRequestDto
 	[System.Text.Json.Serialization.JsonRequired]
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public string? EsiExternalReason { get; set; }
 	public string StatutoryProfile { get; set; } = "IN-GJ";
 	public List<SalaryRuleOverrideDto> Overrides { get; set; } = [];
 	public string? CustomizationReason { get; set; }
@@ -140,6 +149,9 @@ public class PreviewSalaryTemplateRequestDto
 	public DateTime EffectiveMonth { get; set; }
 	public bool PfApplicable { get; set; }
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public string? EsiExternalReason { get; set; }
 }
 
 public class SalaryTemplatePreviewDto
@@ -189,6 +201,9 @@ public class SalaryTemplateTargetResultDto
 
 public class SalaryTemplateEsiPreviewDto
 {
+	public Guid? PolicyId { get; set; }
+	public string? PolicyName { get; set; }
+	public string ManagementMode { get; set; } = EsiManagement.InPlatform;
 	public decimal EligibilityWages { get; set; }
 	public decimal EmployeePercentage { get; set; }
 	public decimal EmployerPercentage { get; set; }
@@ -237,6 +252,9 @@ public class SalaryTemplateCalculationDto
 	public List<string> FormulaTrace { get; set; } = [];
 	public List<string> Warnings { get; set; } = [];
 	public Guid? PfRuleId { get; set; }
+	public string EsiManagementMode { get; set; } = EsiManagement.InPlatform;
+	public Guid? EsiPolicyId { get; set; }
+	public string? EsiExternalReason { get; set; }
 	public int? PfRuleVersion { get; set; }
 	public string ProfessionalTaxProfile { get; set; } = "IN-GJ";
 	public DateTime GeneratedAt { get; set; }

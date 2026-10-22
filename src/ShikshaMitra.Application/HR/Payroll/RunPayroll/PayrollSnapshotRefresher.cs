@@ -42,7 +42,7 @@ public class PayrollSnapshotRefresher(
 	EsiPayrollConfigurationResolver esiConfigurationResolver,
 	IProfessionalTaxRepository professionalTaxRepository,
 	IRepository<PayslipCorrection, Guid> payslipCorrections,
-	ILogger<PayrollSnapshotRefresher> logger, PfEligibilityResolver pfEligibilityResolver, EmployeeStatutoryProfileResolver statutoryProfiles)
+	ILogger<PayrollSnapshotRefresher> logger, PfEligibilityResolver pfEligibilityResolver, EmployeeStatutoryProfileResolver statutoryProfiles, PayrollEsiPolicyCompensationRecalculator esiCompensation)
 	: ITransientDependency
 {
 	public async Task RefreshForEmployeeIdsAsync(
@@ -156,7 +156,7 @@ public class PayrollSnapshotRefresher(
 		if (scopedEmployees.Count == 0) return [];
 		var calendar = await payrollCalendarResolver.ResolveAsync(year, month, academicYearId);
 		var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
-		var applicationProfiles = await statutoryProfiles.ResolveAsync(new DateTime(year, month, 1), employeeIds);
+		var applicationProfiles = (await statutoryProfiles.ResolveAsync(new DateTime(year, month, 1), employeeIds)).ToDictionary(x => x.Key, x => x.Value);
 		var previousMonthNetPayByEmployee = (await salarySlipRepository.GetByMonthAsync(PayrollRunRules.GetPreviousMonth(internalMonthYear)))
 			.Where(x => x.Status is SalarySlipStatus.Finalized or SalarySlipStatus.Paid)
 			.GroupBy(x => x.EmployeeId)
@@ -186,6 +186,9 @@ public class PayrollSnapshotRefresher(
 			year,
 			month,
 			resolvedComponentsByEmployee);
+		foreach (var (employeeId, resolution) in compensationByEmployee)
+			if (resolution.Revision.EsiManagementMode == Statutory.EsiManagement.External && applicationProfiles.TryGetValue(employeeId, out var profile))
+				applicationProfiles[employeeId] = profile with { ApplyEsic = false, EsicDisabledReason = resolution.Revision.EsiExternalReason };
 		var compensationComponentsByEmployee = compensationByEmployee.Values
 			.SelectMany(x => x.Components)
 			.ToLookup(x => x.EmployeeId);
@@ -201,7 +204,8 @@ public class PayrollSnapshotRefresher(
 			year,
 			month,
 			employeeIds,
-			compensationComponentsByEmployee);
+			compensationComponentsByEmployee, compensationByEmployee);
+		await esiCompensation.RecalculateAsync(compensationByEmployee, esiContexts, applicationProfiles, new DateTime(year, month, 1));
 
 		var computedItems = new List<RunPayrollItem>();
 		using var policyReadBatch = hrPolicyResolver.BeginReadBatch(scopedEmployees);

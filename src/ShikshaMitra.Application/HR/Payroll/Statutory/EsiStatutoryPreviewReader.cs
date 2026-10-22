@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -17,7 +17,6 @@ using Volo.Abp.Timing;
 namespace ShikshaMitra.HR.Payroll.Statutory;
 
 public sealed class EsiStatutoryPreviewReader(
-	IRepository<StatutoryRuleVersion, Guid> ruleRepository,
 	EsiPayrollConfigurationResolver configurationResolver,
 	EsiEnrollmentResolver enrollmentResolver,
 	IRepository<PayrollComponentStatutoryTreatment, Guid> treatmentRepository,
@@ -26,7 +25,7 @@ public sealed class EsiStatutoryPreviewReader(
 	IEarningComponentRepository earningComponentRepository,
 	PayrollCompensationRevisionResolver compensationRevisionResolver,
 	PayrollScopedEmployeeResolver scopedEmployeeResolver,
-	IClock clock, EmployeeStatutoryProfileResolver profileResolver) : ITransientDependency
+	IClock clock, EmployeeStatutoryProfileResolver profileResolver, EsiPolicyResolver policyResolver, PayrollEsiPolicyCompensationRecalculator esiCompensation) : ITransientDependency
 {
 	private static string CreateSeverity(string code) => EsiStatutoryPresentation.CreateIssue(code).Severity;
 	private const string JurisdictionCode = "IN-GJ";
@@ -43,14 +42,8 @@ public sealed class EsiStatutoryPreviewReader(
 			return new EsiStatutoryPreviewCalculation(monthYear, [], new StatutoryImpactSummaryDto { CanActivate = true },
 				clock.Now.ToUniversalTime(), "DISABLED");
 		var monthEnd = new DateTime(payrollMonth.Year, payrollMonth.Month, 1).AddMonths(1).AddDays(-1);
-		var rules = await ruleRepository.GetListAsync(x =>
-			x.SchemeCode == StatutorySchemeCodes.EmployeeStateInsurance &&
-			x.JurisdictionCode == JurisdictionCode &&
-			x.IsActive &&
-			x.EffectiveFrom <= monthEnd &&
-			(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= monthEnd));
-		var rule = rules.OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.Version).FirstOrDefault()
-			?? throw new Volo.Abp.BusinessException(HRErrorCodes.StatutoryRuleNotFound);
+		var policies = await policyResolver.ResolveAllAsync(payrollMonth);
+		var rule = policies.Values.SingleOrDefault(x => x.Policy.IsDefault)?.Rule ?? throw EsiPolicyResolver.NotEffective(null, payrollMonth);
 		var employees = await scopedEmployeeResolver.GetScopedPayrollEmployeesAsync(
 			payrollMonth.Year, payrollMonth.Month, includeUnknownStageEmployees: false);
 		var employeeIds = employees.Select(x => x.Id).ToList();
@@ -86,6 +79,19 @@ public sealed class EsiStatutoryPreviewReader(
 			CalculationComponentIsActive = calculationSettings.CalculationComponentId == null ||
 			activeEarnings.Any(x => x.Id == calculationSettings.CalculationComponentId)
 		};
+		var compensationContexts = new Dictionary<Guid, ShikshaMitra.HR.Payroll.Services.PayrollEsiStatutoryContext>();
+		foreach (var (employeeId, salary) in compensation)
+		{
+			if (salary.Revision.EsiManagementMode == EsiManagement.External) continue;
+			var selected = salary.Revision.EsiPolicyId is { } selectedId ? policies.GetValueOrDefault(selectedId) : null;
+			if (selected == null) continue;
+			var source = salary.Components.FirstOrDefault(x => x.SemanticType == PayrollComponentSemanticType.EmployeeStateInsurance)
+				?? new EmployeePayrollComponent(Guid.Empty, employeeId, "Employee State Insurance (ESI) - Auto", null, null, 0m,
+					true, false, null, SalaryComponentType.Fixed, SalaryComponentDependency.None, false, false, PayrollComponentSemanticType.EmployeeStateInsurance);
+			compensationContexts[employeeId] = new(payrollMonth, selected.Rule, establishment!, enrollments.GetValueOrDefault(employeeId),
+				treatments, overrides[employeeId].ToList(), source) { CalculationSettings = selected.Rule.GetPolicySettings() ?? calculationSettings };
+		}
+		await esiCompensation.RecalculateAsync(compensation, compensationContexts, profiles, payrollMonth);
 		var items = new List<EmployeeStatutoryImpactDto>();
 
 		foreach (var employee in employees.OrderBy(x => x.EmployeeName).ThenBy(x => x.EmployeeCode))
@@ -110,6 +116,19 @@ public sealed class EsiStatutoryPreviewReader(
 				continue;
 			}
 
+			if (compensationResolution.Revision.EsiManagementMode == EsiManagement.External)
+			{
+				items.Add(new EmployeeStatutoryImpactDto { EmployeeId = employee.Id, EmployeeIdentifier = employee.EmployeeCode ?? "",
+					EmployeeName = employee.EmployeeName, CanCalculate = true, CoverageDecisionCode = "EXTERNALLY_MANAGED", CoverageDecisionLabel = "Handled outside ShikshaMitra" });
+				continue;
+			}
+			var assigned = compensationResolution.Revision.EsiPolicyId is { } assignedId ? policies.GetValueOrDefault(assignedId)
+				: policies.Values.SingleOrDefault(x => x.Policy.IsDefault);
+			if (assigned == null) throw EsiPolicyResolver.NotEffective(compensationResolution.Revision.EsiPolicyId, payrollMonth);
+			var employeeSettings = assigned.Rule.GetPolicySettings() ?? calculationSettings;
+			employeeSettings = employeeSettings with {
+				EligibilityComponentIsActive = employeeSettings.EligibilityComponentId == null || activeEarnings.Any(x => x.Id == employeeSettings.EligibilityComponentId),
+				CalculationComponentIsActive = employeeSettings.CalculationComponentId == null || activeEarnings.Any(x => x.Id == employeeSettings.CalculationComponentId) };
 			var wageLines = compensationResolution.Components
 				.Where(x => x.IsEarning)
 				.Select(x => new StatutoryWageLine(
@@ -119,8 +138,8 @@ public sealed class EsiStatutoryPreviewReader(
 					treatments.GetValueOrDefault(x.ComponentId ?? x.Id, StatutoryWageTreatment.Unclassified), x.IsTemp, x.SemanticType == PayrollComponentSemanticType.Basic))
 				.ToList();
 			var calculation = EsiStatutoryCalculator.Calculate(
-				payrollMonth, rule, establishment, enrollment, wageLines,
-				overrides[employee.Id].ToList(), calculationSettings: calculationSettings, payrollProfile: profiles.GetValueOrDefault(employee.Id));
+				payrollMonth, assigned.Rule, establishment, enrollment, wageLines,
+				overrides[employee.Id].ToList(), calculationSettings: employeeSettings, payrollProfile: profiles.GetValueOrDefault(employee.Id));
 			items.Add(new EmployeeStatutoryImpactDto
 			{
 				EmployeeId = employee.Id,
@@ -134,7 +153,7 @@ public sealed class EsiStatutoryPreviewReader(
 				EligibilityWages = calculation.EligibilityWages,
 				EmployeePercentage = calculation.EmployeePercentage,
 				EmployerPercentage = calculation.EmployerPercentage,
-				CalculationSettings = calculationSettings,
+				CalculationSettings = employeeSettings,
 				WageCeiling = calculation.WageCeiling,
 				EmployeeContribution = calculation.EmployeeContribution,
 				EmployerContribution = calculation.EmployerContribution,
@@ -171,14 +190,14 @@ public sealed class EsiStatutoryPreviewReader(
 		};
 		var inputEvidence = new
 		{
-			CalculationSettings = calculationSettings,
+			CalculationSettings = calculationSettings, PolicyVersions = policies.Values.Select(x => new { x.Policy.Id, RuleId = x.Rule.Id, x.Rule.Version }).OrderBy(x => x.Id),
 			Employees = employees.OrderBy(x => x.Id).Select(x => new { x.Id, x.ConcurrencyStamp }).ToList(),
 			Earnings = activeEarnings.OrderBy(x => x.Id).Select(x => new { x.Id, x.ConcurrencyStamp }).ToList(),
 			Compensation = compensation.OrderBy(x => x.Key).Select(x => new
 			{
 				EmployeeId = x.Key,
 				x.Value.Revision.Id,
-				x.Value.Revision.ConcurrencyStamp,
+				x.Value.Revision.ConcurrencyStamp, x.Value.Revision.EsiPolicyId, x.Value.Revision.EsiManagementMode,
 				// Statutory deduction source IDs are generated during projection and are not ESI inputs.
 				Components = x.Value.Components.Where(component => component.IsEarning).OrderBy(component => component.Id).Select(component => new
 				{ component.Id, component.ComponentId, component.IsEarning, component.Amount }).ToList()

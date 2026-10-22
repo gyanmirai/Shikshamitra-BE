@@ -46,6 +46,7 @@ namespace ShikshaMitra.Seeders;
 /// </summary>
 public partial class HRSeederContributor : BaseSeederContributor
 {
+	private readonly IRepository<EsiPolicy, Guid> _esiPolicyRepository;
 	public HRSeederContributor(
 		ICurrentTenant currentTenant,
 		IGuidGenerator guidGenerator,
@@ -57,6 +58,7 @@ public partial class HRSeederContributor : BaseSeederContributor
 		IProvidentFundRepository providentFundRepository,
 		IProfessionalTaxRepository professionalTaxRepository,
 		IRepository<StatutoryRuleVersion, Guid> statutoryRuleRepository,
+		IRepository<EsiPolicy, Guid> esiPolicyRepository,
 		IRepository<SalaryStructureTemplate, Guid> salaryStructureTemplateRepository,
 		IRepository<SalaryStructureTemplateVersion, Guid> salaryStructureTemplateVersionRepository,
 		IRepository<WorkCalendarPolicy, Guid> workCalendarPolicyRepository,
@@ -118,6 +120,7 @@ public partial class HRSeederContributor : BaseSeederContributor
 		_providentFundRepository = providentFundRepository;
 		_professionalTaxRepository = professionalTaxRepository;
 		_statutoryRuleRepository = statutoryRuleRepository;
+		_esiPolicyRepository = esiPolicyRepository;
 		_salaryStructureTemplateRepository = salaryStructureTemplateRepository;
 		_salaryStructureTemplateVersionRepository = salaryStructureTemplateVersionRepository;
 		_workCalendarPolicyRepository = workCalendarPolicyRepository;

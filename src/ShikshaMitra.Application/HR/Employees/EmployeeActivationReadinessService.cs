@@ -51,7 +51,9 @@ public class EmployeeActivationReadinessService(
 
 	private async Task<List<string>> GetEsiBlockersAsync(Guid employeeId, DateTime month, EmployeeCompensationRevision revision)
 	{
-		var resolution = await esiContextResolver.ResolveAsync(month, revision.StatutoryProfile, employeeId);
+		if (revision.EsiManagementMode == EsiManagement.External) return [];
+		if (!revision.EsiPolicyId.HasValue) return ["ESI_POLICY_REQUIRED"];
+		var resolution = await esiContextResolver.ResolveAsync(month, revision.StatutoryProfile, employeeId, revision.EsiPolicyId);
 		if (resolution.Context is not { } context)
 			return resolution.Warnings.ToList();
 

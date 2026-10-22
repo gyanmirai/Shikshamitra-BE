@@ -23,12 +23,12 @@ public class AdmissionAssessmentPolicy_Tests
     {
         var expected = Policy() with { AttendanceRequired = true, SchedulingEnabled = false };
         var json = JsonSerializer.Serialize(new { formDefinitionId = "published-form", assessment = expected });
-        AdmissionAssessmentPolicy.Read(json).ShouldBe(expected);
+        JsonSerializer.Serialize(AdmissionAssessmentPolicy.Read(json)).ShouldBe(JsonSerializer.Serialize(expected));
     }
 
     [Theory]
     [InlineData(0)]
-    [InlineData(2)]
+    [InlineData(3)]
     public void Unknown_Policy_Versions_Cannot_Enable_Managed_Assessment(int version)
     {
         Should.Throw<ArgumentException>(() => (Policy() with { Version = version }).Validate());

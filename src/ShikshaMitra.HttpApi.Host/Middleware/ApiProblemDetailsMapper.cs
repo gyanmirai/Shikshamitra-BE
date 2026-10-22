@@ -20,6 +20,8 @@ public static class ApiProblemDetailsMapper
 
 		return errorCode switch
 		{
+			Academic.Mobile.MobileSubmissionErrorCodes.SubmissionConflict or
+			Academic.Mobile.MobileSubmissionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
 			StudentRollNumberErrorCodes.StalePreview or StudentRollNumberErrorCodes.InvalidState => StatusCodes.Status409Conflict,
 			StudentRollNumberErrorCodes.AdminRequired or StudentRollNumberErrorCodes.ApproverRequired => StatusCodes.Status403Forbidden,
 			RoleErrorCodes.AssignedToUsers or RoleErrorCodes.ReferencedByEmployees => StatusCodes.Status409Conflict,
@@ -36,7 +38,9 @@ public static class ApiProblemDetailsMapper
 			HRErrorCodes.LeaveConflictTerminalState => StatusCodes.Status409Conflict,
 			HRErrorCodes.TakeAttendanceApprovedLeaveMutationNotAllowed => StatusCodes.Status409Conflict,
 			HRErrorCodes.StatutoryPreviewStale => StatusCodes.Status409Conflict,
-			"HR:Payroll:StatutoryProfileConflict" or "HR:Payroll:PfCoverageSaveConflict" or "HR:Payroll:CompensationSaveConflict" => StatusCodes.Status409Conflict,
+			HRErrorCodes.CompensationPreviewStale => StatusCodes.Status409Conflict,
+			"HR:Payroll:StatutoryProfileConflict" or "HR:Payroll:PfCoverageSaveConflict" or "HR:Payroll:CompensationSaveConflict" or
+			"HR:Payroll:SalaryTemplateSaveConflict" => StatusCodes.Status409Conflict,
 			HRErrorCodes.EsiConfigurationLocked or HRErrorCodes.EsiConfigurationCancellationInvalid => StatusCodes.Status409Conflict,
 			HRErrorCodes.LeaveAttachmentNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveFileTooLarge => StatusCodes.Status413PayloadTooLarge,

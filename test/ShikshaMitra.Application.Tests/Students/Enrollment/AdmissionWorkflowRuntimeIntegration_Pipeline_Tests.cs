@@ -17,6 +17,33 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public Task Pipeline_progress_should_use_each_application_runtime_without_mutating_or_mixing_workflows() =>
+		RunCertificationScenarioAsync(async () =>
+		{
+			var shortOffering = await CreateAvailableOfferingAsync((await CreateAndPublishWorkflowAsync()).Id);
+			var longOffering = await CreateAvailableOfferingAsync((await CreateAndPublishRealisticWorkflowAsync()).Id);
+			var first = await StartFixtureApplicationAsync((await CreateApplicantAsync("Short journey")).Id, shortOffering.Id);
+			var second = await StartFixtureApplicationAsync((await CreateApplicantAsync("Long journey")).Id, longOffering.Id);
+			var firstWorkflow = await _applicationAppService.GetWorkflowAsync(first.Id);
+			var secondWorkflow = await _applicationAppService.GetWorkflowAsync(second.Id);
+			firstWorkflow.Stages.Count.ShouldNotBe(secondWorkflow.Stages.Count);
+			var page = await _applicationAppService.GetPipelineAsync(new() { MyCases = false, MaxResultCount = 100 });
+			foreach (var pair in new[] { (first.Id, Workflow: firstWorkflow), (second.Id, Workflow: secondWorkflow) })
+			{
+				var row = page.Items.Single(item => item.Id == pair.Id);
+				row.StageProgress.Select(item => item.Id).ShouldBe(pair.Workflow.Stages.Select(item => item.Id));
+				row.StageProgress.Select(item => item.Status).ShouldBe(pair.Workflow.Stages.Select(item => item.Status));
+				row.StageProgress.Select(item => item.Name).ShouldBe(pair.Workflow.Stages.Select(item => item.Name));
+				row.StageProgress.Single(item => item.Id == row.CurrentStageInstanceId).Status.ShouldBe(AdmissionRuntimeStageStatus.Active);
+				var unchanged = await _applicationAppService.GetWorkflowAsync(pair.Id);
+				unchanged.CurrentStageInstanceId.ShouldBe(pair.Workflow.CurrentStageInstanceId);
+				unchanged.Stages.Select(item => item.Status).ShouldBe(pair.Workflow.Stages.Select(item => item.Status));
+			}
+			var scoped = await _applicationAppService.GetPipelineAsync(new() { MyCases = false, AdmissionOfferingId = shortOffering.Id, MaxResultCount = 1 });
+			scoped.Items.Single().StageProgress.Select(item => item.Id).ShouldBe(firstWorkflow.Stages.Select(item => item.Id));
+		});
+
+	[Fact]
 	public Task Pipeline_should_use_configured_fallback_manager_default_without_role_name_rules() =>
 		RunCertificationScenarioAsync(async () =>
 		{
@@ -227,6 +254,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			var row = (await _applicationAppService.GetPipelineAsync(new() { MyCases = false, AdmissionOfferingId = offering.Id })).Items.Single();
 			row.OpenFollowUpCount.ShouldBe(1);
+			row.NextFollowUpPurpose.ShouldBe("Confirm visit");
+			row.OverdueFollowUpCount.ShouldBe(0);
 			row.NextFollowUpAt.ShouldBe(scheduledAt.UtcDateTime);
 			row.NextFollowUpAt!.Value.Kind.ShouldBe(DateTimeKind.Utc);
 			var completionStartedAt = DateTime.UtcNow;
@@ -251,6 +280,11 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				await repository.UpdateAsync(followUp, true);
 			});
 			(await _applicationAppService.GetPipelineAsync(new() { MyCases = false, AdmissionOfferingId = offering.Id })).Items.Single().HasOverdueFollowUp.ShouldBeTrue();
+			state = await _applicationAppService.ScheduleFollowUpAsync(application.Id, new() { ConcurrencyStamp = state.ConcurrencyStamp, ScheduledAt = DateTimeOffset.UtcNow.AddDays(2), Purpose = "Later call" });
+			row = (await _applicationAppService.GetPipelineAsync(new() { MyCases = false, AdmissionOfferingId = offering.Id })).Items.Single();
+			row.OpenFollowUpCount.ShouldBe(2);
+			row.OverdueFollowUpCount.ShouldBe(1);
+			row.NextFollowUpPurpose.ShouldBe("Admission documents");
 			(await Should.ThrowAsync<BusinessException>(() => management.RecordContactAsync(inquiry.Id, new()
 			{
 				ConcurrencyStamp = state.ConcurrencyStamp, Channel = "PHONE", Direction = "OUTBOUND", Outcome = "CONNECTED", Note = "Transferred inquiry must stay locked."

@@ -11,8 +11,8 @@ public partial class SchoolIdentityAppService
 	public async Task<List<SchoolIdentityRevisionDto>> GetHistoryAsync(SchoolIdentityContextDto input)
 	{
 		await AuthorizationService.CheckAsync(SchoolIdentityPermissions.View);
-		await access.EnsureAsync(input.BoardId, input.MediumId);
-		var profile = await reader.FindAsync(input.BoardId, input.MediumId);
+		await access.EnsureAsync(input.BoardId, input.MediumId, organizationId: input.OrganizationId);
+		var profile = await reader.FindAsync(input.BoardId, input.MediumId, input.OrganizationId);
 		if (profile == null) return [];
 		var signature = await permissionChecker.IsGrantedAsync(SchoolIdentityPermissions.AccessSignature);
 		var query = await revisions.GetQueryableAsync();

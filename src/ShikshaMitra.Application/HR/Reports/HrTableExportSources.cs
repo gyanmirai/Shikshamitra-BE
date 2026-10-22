@@ -39,6 +39,8 @@ public record HrTableExportPage(List<JsonElement> Rows, long Total, int? NextOff
 // Client input can select only fields already exposed by that table; it cannot select a service or join.
 public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransientDependency
 {
+	private List<Dictionary<string, object?>>? _capturedRows;
+	private string? _capturedQuery;
 	private readonly Dictionary<Guid, string?> _calendarNames = [];
 	private readonly Dictionary<Guid, string?> _organizationNames = [];
 	private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -87,6 +89,25 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			|| request.Columns.Select(x => x.Id).Distinct().Count() != request.Columns.Count) throw HrReportingEngine.Invalid("Choose supported data columns and Excel or PDF.");
 		if (request.Query.ValueKind != JsonValueKind.Object || request.Query.GetRawText().Length > 32768) throw HrReportingEngine.Invalid("Provide a valid table query of at most 32 KB.");
 	}
+	public async Task EnsureAccessAsync(HrTableExportRequest request)
+	{
+		Validate(request);
+		if (request.Table == "hr-generated-report") {
+			var run = await CapturedRunAsync(request);
+			_ = new HrReportingTableQuery(ReportingCriteria(request), run.Columns, run.Parameters.TimeZone);
+			return;
+		}
+		await ReadAsync(request, 0, 1);
+	}
+	private async Task<HrReportRunDto> CapturedRunAsync(HrTableExportRequest request)
+	{
+		var id = request.Query.TryGetProperty("runId", out var runId) && runId.ValueKind == JsonValueKind.String && runId.TryGetGuid(out var parsedId) && parsedId != Guid.Empty ? parsedId : throw HrReportingEngine.Invalid("Choose a captured report before exporting.");
+		var run = await Service<IHrReportingWorkspaceAppService>().GetAsync(id);
+		if (run.IsExpired) throw new Volo.Abp.BusinessException(HRErrorCodes.ReportResultExpired);
+		if (run.Status != "Completed") throw new Volo.Abp.BusinessException(HRErrorCodes.ReportExportNotReady);
+		if (request.Columns.Any(x => !run.Columns.Any(c => c.Id == x.Id))) throw HrReportingEngine.Invalid("Choose columns present in this captured report.");
+		return run;
+	}
 	public async Task<HrTableExportPage> ReadAsync(HrTableExportRequest request, int offset, int size)
 	{
 		Validate(request);
@@ -105,16 +126,25 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			await Service<IAuthorizationService>().CheckAsync(ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_MarkAttendance.View);
 		if (request.Table == "hr-generated-report")
 		{
-			var id = request.Query.TryGetProperty("runId", out var runId) && runId.ValueKind == JsonValueKind.String && runId.TryGetGuid(out var parsedId) && parsedId != Guid.Empty ? parsedId : throw HrReportingEngine.Invalid("Choose a captured report before exporting.");
+			var run = await CapturedRunAsync(request);
+			var id = run.Id;
 			var service = Service<IHrReportingWorkspaceAppService>();
-			var run = await service.GetAsync(id);
-			if (request.Columns.Any(x => !run.Columns.Any(c => c.Id == x.Id))) throw HrReportingEngine.Invalid("Choose columns present in this captured report.");
-			var page = await service.GetRowsAsync(id, offset / size + 1, size);
+			var criteria = ReportingCriteria(request);
+			if (criteria.HasCriteria)
+			{
+				var key = request.Query.GetRawText();
+				if (_capturedQuery != key) {
+					_capturedRows = await service.GetExportRowsAsync(id, criteria);
+					_capturedQuery = key;
+				}
+				return new(_capturedRows!.Skip(offset).Take(size).Select(x => JsonSerializer.SerializeToElement(x, Json)).ToList(), _capturedRows.Count);
+			}
+			var page = await service.GetRowsAsync(id, offset / size + 1, size, criteria);
 			return new(page.Rows.Select(x => JsonSerializer.SerializeToElement(x, Json)).ToList(), page.TotalCount);
 		}
 		if (request.Table == "hr-generated-report-history")
 		{
-			var history = await Service<IHrReportingWorkspaceAppService>().GetRunsAsync(offset, size);
+			var history = await Service<IHrReportingWorkspaceAppService>().GetRunsAsync(offset, size, ReportingCriteria(request));
 			return new(history.Items.Select(x => JsonSerializer.SerializeToElement(x, Json)).ToList(), offset + size + (history.HasMore ? 1 : 0), offset + size);
 		}
 		var q = JsonNode.Parse(request.Query.GetRawText())!.AsObject();
@@ -200,6 +230,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		query["page"] = offset / size;
 		return await Service<IEsiStatutoryAppService>().PreviewAsync(query.Deserialize<StatutoryImpactPreviewRequestDto>(Json)!);
 	}
+	private static HrReportTableQueryDto ReportingCriteria(HrTableExportRequest request) =>
+		request.Query.TryGetProperty("criteria", out var criteria) ? HrReportTableQueryDto.Parse(criteria.GetRawText()) : new();
 	public async Task<List<HrReportFieldDto>> ColumnsAsync(HrTableExportRequest request)
 	{
 		if (request.Table == "hr-salary-documents")
@@ -215,6 +247,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 	{
 		if (request.Table == "hr-generated-report")
 		{
+			var criteria = ReportingCriteria(request);
+			if (!string.IsNullOrWhiteSpace(criteria.Search) || criteria.Filters.Count > 0) return [];
 			var original = await Service<IHrReportingWorkspaceAppService>().GetAsync(request.Query.GetProperty("runId").GetGuid());
 			return original.Totals.Where(x => result.Columns.Any(c => c.Id == x.Key)).ToDictionary(x => x.Key, x => x.Value);
 		}
@@ -240,7 +274,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
             "hr-icard-templates" => "Staff identity card templates", "hr-self-leave-history" => "My leave history", _ => "HR table" };
 		var p = new HrReportParametersDto { TimeZone = timezone };
 		if (query.TryGetProperty("academicYearId", out var year) && year.ValueKind == JsonValueKind.String && Guid.TryParse(year.GetString(), out var yearId)) p.AcademicYearId = yearId;
-		if (request.Table == "hr-generated-report") { var original = await Service<IHrReportingWorkspaceAppService>().GetAsync(query.GetProperty("runId").GetGuid()); return (original.Name, original.Parameters, "Captured report rows; visible ordered data columns"); }
+		if (request.Table == "hr-generated-report") { var original = await Service<IHrReportingWorkspaceAppService>().GetAsync(query.GetProperty("runId").GetGuid()); return (original.Name, original.Parameters, "Captured report rows matching table search and filters; visible ordered data columns. Original report totals are omitted for filtered exports."); }
 		if (request.Table == "payroll-monthly-workbench-table")
 		{
 			var run = await Service<IPayrollPreviewRunAppService>().GetAsync(query.GetProperty("runId").GetGuid());

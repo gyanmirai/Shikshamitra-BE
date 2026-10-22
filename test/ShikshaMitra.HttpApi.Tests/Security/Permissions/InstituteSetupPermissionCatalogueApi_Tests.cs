@@ -9,6 +9,47 @@ namespace ShikshaMitra.Security.Permissions;
 public partial class PermissionConsistencyApi_Tests
 {
 	[Theory]
+	[InlineData(ShikshaMitraSubModulePermissions.BuildingManagement)]
+	[InlineData(ShikshaMitraSubModulePermissions.RoomTypeManagement)]
+	[InlineData(ShikshaMitraSubModulePermissions.Rooms)]
+	public async Task Rooms_and_buildings_visibility_supports_independent_role_grants_and_user_overrides(string name)
+	{
+		var (role, user) = await CreateTargetAsync();
+		var roleUrl = Url("R", role);
+		var actionNames = new[] { $"{name}.View", $"{name}.Add", $"{name}.Delete" };
+		var catalogue = await ReadAsync(roleUrl);
+		catalogue.Count(entry => entry.Name == name).ShouldBe(1);
+		catalogue.Single(entry => entry.Name == name).IsGranted.ShouldBeFalse();
+		foreach (var action in actionNames)
+			catalogue.Count(entry => entry.Name == action).ShouldBe(1);
+
+		await SetAsync(roleUrl, (name, true));
+		(await ReadAsync(roleUrl)).Single(entry => entry.Name == name).IsGranted.ShouldBeTrue();
+		await AssertOverrideAsync(user, name, "inherit", true);
+		await AssertRealCheckerAsync(user, role, name, true);
+		foreach (var action in actionNames)
+			await AssertRealCheckerAsync(user, role, action, false);
+
+		await SetOverridesAsync(user, (name, "deny"));
+		await AssertOverrideAsync(user, name, "deny", false);
+		await AssertRealCheckerAsync(user, role, name, false);
+		await SetOverridesAsync(user, (name, "allow"));
+		await AssertOverrideAsync(user, name, "allow", true);
+		await AssertRealCheckerAsync(user, role, name, true);
+		await SetOverridesAsync(user, (name, "inherit"));
+		await AssertOverrideAsync(user, name, "inherit", true);
+		await SetAsync(roleUrl, (name, false));
+		await AssertOverrideAsync(user, name, "inherit", false);
+		await AssertRealCheckerAsync(user, role, name, false);
+
+		await SetAsync(roleUrl, (actionNames[0], true));
+		await AssertRealCheckerAsync(user, role, actionNames[0], true);
+		await AssertRealCheckerAsync(user, role, name, false);
+		(await ReadAsync(roleUrl)).Single(entry => entry.Name == ShikshaMitraSubModulePermissions.RoomManagement)
+			.IsGranted.ShouldBeFalse();
+	}
+
+	[Theory]
 	[InlineData("ShiftManagement")]
 	[InlineData("AcademicSetup")]
 	public async Task Institute_setup_catalogue_actions_support_role_grants_and_user_overrides(string feature)

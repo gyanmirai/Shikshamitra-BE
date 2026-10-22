@@ -3,12 +3,33 @@ module: mobile-academics
 domain: validation
 content_type: Reference
 status: canonical
-updated_on: 2026-10-16
+updated_on: 2026-10-22
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate mobile Academics
+
+Submission regression cases are in `MobileHomeworkSubmission_Tests.cs` (the partial `MobileAcademicAppService_Tests` class), `MobileAnswerSanitizer_Tests`, and `MobileSubmissionRules_Tests`. They cover HTML/Unicode limits, stable receipt replay, stale revisions, draft/final separation, immutable files, teacher review, revoked-link replay, homework/assignment requirements, and deadline boundaries. The PostgreSQL HTTP fixture additionally applies `MobileHomeworkSubmissionReliability` and exercises repeated multipart uploads, simultaneous first-submit retries, competing replacements, and a response UPDATE paused while teacher review commits on another connection.
+
+Completion acknowledgment checks cover homework and assignments in both In person / No submission required modes: empty unchecked drafts, required final acknowledgment, optional evidence, persisted response reads, immutable snapshots, safe retries, a first submission after the deadline, and overdue edit rejection. The PostgreSQL fixture also executes `MobileHomeworkCompletionAcknowledgment` against the predecessor schema. On 2026-10-22, ten focused application cases, five domain cases, and three HTTP cases passed. Mobile checks passed 76 focused Cubit/API/widget cases, including View submission navigation for all four modes, actual saved dates, formatted answers, optional files, and read-only responses. The wider mobile run was stopped because of local resource contention; these focused files completed with serial execution.
+
+The overdue-policy regression covers homework and assignments in both text and file modes: allow a first submission after the deadline (including draft restoration and uploads), retain safe receipt replay, reject another first submission, reject drafts/edits after finalization, and record the response as late. Domain cases check the exact due-time boundary for edits. Mobile Cubit and detail-screen cases follow server permissions for late first submissions, permitted edits, and read-only overdue final submissions.
+
+On 2026-10-22, all six focused application cases, three domain cases, and 29 mobile Cubit/widget cases passed for the overdue policy. Flutter analysis reported no issues and module documentation validation passed. Backend validation used the same bounded migration-designer build described below; no additional migration is needed for this policy change.
+
+The authenticated development mobile session was also checked against the running local backend for the earlier overdue-policy fix. Its older process still returned `canSubmit: false` and `DeadlinePassed` for unsubmitted overdue work. After restarting that service with the updated build, fresh requests from the same signed-in mobile session returned `canSubmit: true` with no lock reason for overdue online-text and file-upload tasks. In-person and no-submission-required tasks were still unavailable at that point; the subsequent acknowledgment extension now permits their completion responses. No student response was submitted during that development-session check.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~MobileAcademicAppService_Tests|FullyQualifiedName~MobileAnswerSanitizer_Tests" -m:1 -p:UseSharedCompilation=false
+dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~MobileSubmissionRules_Tests -m:1 -p:UseSharedCompilation=false
+```
+
+The EF project includes a large historical migration source set. Keep local build concurrency bounded on memory-constrained machines. PostgreSQL validation must use the fresh disposable database convention described below; never point it at a school database.
+
+Submission validation on 2026-10-21 passed 42 focused application cases, three domain cases, and three HTTP cases (the PostgreSQL workflow and two conflict-mapping cases). The PostgreSQL workflow applied the new migration and verified upload replay, simultaneous first submissions, competing edits, first-submission timestamp preservation, immutable attachment protection, and a concurrent teacher review. Flutter validation passed 114 homework/API tests, subsequent focused checks passed after the final error-mapping change, and `flutter analyze` reported no issues. Both submission themes were rendered and inspected.
+
+For local submission validation, an ignored build target excluded historical migration designer files except the exercised migrations; migration bodies and the current model snapshot remained included. The normal full migration-designer compilation and full repository test suites were not validated. The initial 2026-10-21 test run did not apply a submission migration to the application database. The local development database now has both submission migrations, including the two acknowledgment columns, applied without seeding. Remote deployment remains outstanding. Repository-wide documentation validation still reports two pre-existing missing student test-result links.
 
 `test/ShikshaMitra.Application.Tests/Academic/Mobile/MobileAcademicAppService_Tests.cs` covers student/guardian reads without staff grants, saved subject colours in the Syllabus dashboard, chapter publication and audience across dashboard/list/details, revoked/unlinked denial, draft/final persistence and locks, unpublished/withheld marks, generated PDF bytes, legacy attendance dates, guardian-only reasons, leave school-day duration and half-day times, school decision locks, and foreign attachment references.
 

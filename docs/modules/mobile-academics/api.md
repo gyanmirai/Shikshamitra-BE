@@ -3,20 +3,29 @@ module: mobile-academics
 domain: contracts
 content_type: Reference
 status: canonical
-updated_on: 2026-10-12
+updated_on: 2026-10-22
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Mobile academic API contracts
 
-All 41 routes require bearer authentication and a current tenant. Reads and multipart uploads take `studentId` and `academicYearId` in the query; JSON writes take them in the body. Context can omit the year. The backend validates enrollment and persisted student access independently of client selections or role claims.
+All 42 routes require bearer authentication and a current tenant. Reads and multipart uploads take `studentId` and `academicYearId` in the query; JSON writes take them in the body. Context can omit the year. The backend validates enrollment and persisted student access independently of client selections or role claims.
 
 JSON success uses the existing `Result<T>` envelope (`success`, `data`). ABP supplies HTTP validation, authorization, business, and not-found errors; clients must treat failed HTTP responses as failures. Downloads return binary content with the filename and MIME type. Deletes return 204.
 
 Paged endpoints return `studentId`, `academicYearId`, `items`, `totalCount`, `pageNumber`, and `pageSize`. Pages start at 1; size defaults to 20 and is limited to 100. Supported filtering is implemented in each service, not every list: homework has search/status/tab/subject/date; chapters have search/status; exams and results have search/status; leave has status. Calendar takes numeric `year` and `month`. Dates use ISO `yyyy-MM-dd`; half-day times use `HH:mm:ss`.
 
+`GET /api/mobile/v1/academics/homework/subjects` returns `data` as an array of `{ id, name, code }`, sorted by name, for the student's published class subjects and locked elective selections, including subjects without tasks.
+Homework and assignment reads include older records with a null academic-year field only within the student's validated year-specific class and division; explicit mismatching years remain excluded.
+Legacy class-subject assignment IDs are resolved to canonical subject IDs in task responses, names, codes, and subject filtering.
+Division publication and publish-time checks continue to apply to task reads.
+
 `GET /api/mobile/v1/academics/syllabus/dashboard` returns the saved subject-master colour as `data.subjects[].color` (for example, `"#008967"`). It uses the same subject ID as the name and progress fields. The value is nullable when the subject master is unavailable; the API does not derive colours from subject names.
+
+The syllabus dashboard includes overall counts in `data.totalChapters` and `data.chaptersCovered`, and per-subject counts in `data.subjects[]`: `totalChapters`, `completedChapters`, `inProgressChapters`, and `upcomingChapters`.
+
+The subject chapters endpoint additionally returns `data.summary` with `totalChapters`, `completedChapters`, `inProgressChapters`, `upcomingChapters`, and `coveragePercentage`. This summary covers all published chapters visible to the current student/guardian for the subject, before search, status filtering, or pagination. `totalCount` remains the count after filtering, before pagination. Completion means division progress is 100; in progress means 1–99; upcoming means 0. Coverage is the rounded mean chapter progress, or 0 for no visible chapters. Draft, in-review, archived, and audience-inaccessible chapters do not contribute to these counts.
 
 ## Academics prefix: `/api/mobile/v1/academics`
 
@@ -27,6 +36,7 @@ Paged endpoints return `studentId`, `academicYearId`, `items`, `totalCount`, `pa
 | GET | `/holidays-events` |
 | GET | `/holidays-events/{id}` |
 | GET | `/homework` |
+| GET | `/homework/subjects` |
 | GET | `/homework/{id}` |
 | PUT | `/homework/{id}/submission/draft` |
 | POST | `/homework/{id}/submission` |
@@ -76,4 +86,38 @@ Paged endpoints return `studentId`, `academicYearId`, `items`, `totalCount`, `pa
 
 ## Write contracts
 
-Homework accepts `textAnswer` (maximum 5000 characters) and `attachmentIds`. Leave accepts `leaveTypeId`, `startDate`, `endDate`, `isHalfDay`, optional paired `halfDayStartTime`/`halfDayEndTime`, `description`, and `attachmentIds`. Absence reason accepts `reason` (maximum 500 characters). Cancel accepts student/year context only. Multipart uploads use field `file`, allow five distinct attachments per response, and enforce a 5 MB per-file limit plus extension, MIME, and signature validation. Staged uploads belong to the uploading identity, student, and task; retained attachments may be used by another authorized guardian/self account after they are saved.
+Homework accepts legacy `textAnswer` or sanitized `textAnswerHtml` (100,000 UTF-16 text units), plus `attachmentIds`. See the submission contract below. Leave accepts `leaveTypeId`, `startDate`, `endDate`, `isHalfDay`, optional paired `halfDayStartTime`/`halfDayEndTime`, `description`, and `attachmentIds`. Absence reason accepts `reason` (maximum 500 characters). Cancel accepts student/year context only. Multipart uploads use field `file`, allow five distinct attachments per response, and enforce a 5 MiB per-file limit plus extension, MIME, and signature validation. Staged uploads belong to the uploading identity, student, and task; retained attachments may be used by another authorized guardian/self account after they are saved.
+
+## Homework submission contract
+
+The homework routes serve both homework and assignments. `type` identifies the task family. Detail and write responses remain `Result<MobileHomeworkDto>`; preview and confirmation are local client steps.
+
+| Field | Contract |
+|---|---|
+| `textAnswerHtml` | Optional formatted answer; mutually exclusive with legacy `textAnswer`. Server strips active content and permits paragraphs, breaks, bold, italic, underline, lists, and code. |
+| `attachmentIds` | Complete replacement list of up to five distinct staged or retained attachment IDs. |
+| `acknowledged` | Completion checkbox; required to be `true` for final `inPerson` and `noSubmissionRequired` responses. Files and answer text are optional for these modes. Defaults to `false` for older clients. |
+| `expectedRevision` | Opaque revision from detail or the previous successful write; `"0"` before a submission row exists. |
+| `clientRequestId` | UUID retained for retries of the same draft, first submission, or replacement operation. |
+
+All three write routes use these fields plus student/year context. HTML, an affirmative acknowledgment, revision, or request-ID usage requires both `expectedRevision` and `clientRequestId`. Legacy plain-text clients can omit both. HTML is limited to 1 MiB of UTF-8 before parsing and 100,000 decoded UTF-16 text units after sanitization, excluding one structural terminal newline. Plain-text legacy answers retain their 100,000-unit limit.
+
+Responses add `textAnswerHtml`, `acknowledged`, `revision`, `savedAt`, `updatedAt`, `canSaveDraft`, and `submissionReasonCode`. `textAnswer` remains a plain-text projection for existing assessment clients. `submittedDate` preserves the first final submission time; replacement writes update `updatedAt`. Every submission-row update, including review, changes the concurrency stamp. Submitted answers, acknowledgment, and submission attachments remain readable through detail when editing is unavailable; viewing is independent of `canSubmit` and `canEdit`.
+
+| Action | Required server state |
+|---|---|
+| Save draft | Any of the four supported modes, no final submission, open and unreviewed; available after the due time as well. Empty/unchecked drafts are accepted. |
+| First submission | `canSubmit`, including overdue work with no prior final submission; text is required for `online`, a file for `fileUpload`, or `acknowledged: true` for `inPerson` / `noSubmissionRequired`. Supplementary content is accepted. |
+| Replace submission | `canEdit`; only at or before the division due time while open and unreviewed. Once submitted, another first-submission POST is rejected. Previous final snapshots and file references are preserved. |
+| Upload/remove staged file | `canSubmit` or `canEdit`, including optional evidence for acknowledgment modes. |
+
+Multipart homework uploads accept optional form field `clientUploadId` (UUID). Retain it for retrying the same name, MIME, and bytes. Upload responses keep `{ id, name, url, contentType, size, fileName }`. Supported document extensions remain JPG/JPEG, PNG, PDF, DOC/DOCX, and XLS/XLSX. Files remain separate from the rich-text answer.
+
+Save a draft without a removed file before deleting it. A final snapshot's files cannot be physically deleted, including after replacement. Deletion retains an internal ownership receipt so repeated authorized deletion returns 204. A linked guardian can release and delete a retained draft attachment after saving the replacement draft.
+
+Successful write/upload receipts are persisted atomically with their changes and scoped to tenant, identity, student, academic year, task, and operation. Matching retries return the original response, including after the deadline; current student access and task visibility are checked before replay. Changing a receipt's payload or using a stale revision returns HTTP 409 (`MobileAcademics:IdempotencyConflict` / `MobileAcademics:SubmissionConflict`). A PostgreSQL transaction lock serializes mobile writes for a student/task; EF concurrency also rejects changes racing with teacher review.
+
+Malformed metadata, ambiguous answers, invalid attachment lists, oversized content, missing required content, draft-after-submission attempts, and final-file deletion return coded HTTP 400 errors. An unchecked completion response returns `MobileAcademics:AcknowledgmentRequired`. Closed/reviewed work is locked. Submitted work past its due time returns a deadline reason and cannot be edited; overdue work without a final submission remains eligible for its first submission. Authentication and persisted student-link checks remain mandatory.
+
+Apply migration `20261021110849_MobileHomeworkSubmissionReliability` before deploying this backend or the updated mobile client. It adds HTML/timestamps/concurrency stamps, backfills existing stamps, and creates receipt and final-snapshot tables. No seeding or permission changes are required.
+Apply `20261022072327_MobileHomeworkCompletionAcknowledgment` next; it adds a non-null `Acknowledged` flag with default `false` to submissions and final snapshots, preserving existing responses.

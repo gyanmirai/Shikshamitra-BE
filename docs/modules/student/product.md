@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-16
+updated_on: 2026-10-22
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,12 @@ audience: humans-and-agents
 # Understand Student Enrollment Admissions behavior
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
+
+## Automatic application numbers
+
+Schools may configure a common application-number format across all admission offerings. Allocation occurs at the existing application lifecycle entry point, including Inquiry handoff, RTE/Management/Staff registration and returning students. The offering's Admission Period identifies the academic year; the server clock is used only for explicit calendar-year formats. Schools without a saved rule retain `APP-YYYY-000001` generation.
+
+Rule changes are immutable creation-audited revisions for future allocations. Previously issued application numbers remain unchanged across Pipeline, Applications and Onboarding. Counters are tenant/scope-specific and serialized with PostgreSQL transaction-level advisory locks; issuing an application and its number participates in the same transaction. Replay returns the existing application before allocation. Default-to-custom format changes carry the legacy sequence forward even when the prefix changes. Calendar reset uses that calendar's legacy counter, continuous uses the highest legacy counter, and academic reset uses issued default numbers in the selected academic year. Matching historic numbers (including soft-deleted applications), the existing custom counter and the configured starting minimum prevent rewinds. Starting number and reset policy lock after first custom issuance. Previews use the same calculation and show the actual next available number without saving or reserving it; concurrent registrations can change the next number. The existing tenant/application-number unique index remains authoritative.
 
 ## Staff data scope
 
@@ -244,12 +250,12 @@ Soft deletion preserves historical references and uniqueness semantics.
 
 Inquiry stages can opt into version 1 of the `inquiry` policy inside `ConfigurationJson`.
 Missing configuration or `enabled: false` preserves the existing Basic inquiry and application-start behavior.
-Managed Inquiry constrains allowed sources and assigns offering-scoped active counsellors manually or round robin.
+Intake setup, automatic/manual counsellor assignment and Onboarding case ownership are retired. New cases carry no designated owner; authorized staff act within their existing tenant and academic scope. Legacy assignment columns and audit records remain intact.
 All intake profiles, workflow policies, and persisted snapshot reads use standard behavior: contact and qualification do not gate application start, source detail is optional for every source, and policy-level guardian email and applicant date-of-birth requirements are disabled.
 Stored historical JSON and entered data are preserved; published form requirements remain authoritative.
 Automatic duplicate detection remains enabled; a separate family on an actual current-cycle duplicate requires a reason, while an eligible sibling can link to its existing family.
 First-contact and qualification deadlines are snapshotted when the inquiry is created.
-Follow-ups retain assignment, purpose, due time, completion or cancellation state, actor, and audit timestamps.
+Follow-ups retain purpose, due time, completion/cancellation, actual actor and audit timestamps without requiring an assignee. Historical follow-up timing settings remain readable. New activity/event/transition writes capture staff ID and display name on the server; completed steps expose their recorded handler. Anonymous/system actions and missing historical names remain explicit.
 Inquiry staff can create a linked family communication for WhatsApp, SMS, or Email. The CRM records the campaign handoff in admission activity while the shared Communication module owns approval, consent, providers, delivery attempts, retries, and usage; no duplicate Admissions messaging store is introduced.
 
 Application Experience creates Inquiry and Registration forms. Correction requests reopen the submitted Registration form, and consent questions may be included in that form. Offering activation accepts only a published Inquiry form in the inquiry slot and a published Registration form in the application slot. Admission lifecycle content is stored as `Admissions lifecycle` Communication templates for inquiry acknowledgement, application receipt, missing documents, exam schedule, hall ticket, result, offer, payment reminder, and finalization. Communication remains the delivery owner.

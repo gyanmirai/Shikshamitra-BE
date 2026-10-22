@@ -121,6 +121,11 @@ public class AdmissionApplicationStageInstance : Entity<Guid>, IMultiTenant
 
 public class AdmissionWorkflowTransitionHistory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	public void RecordHandler(Guid? actorId, string? actorName)
+	{
+		CreatorId = actorId;
+		ExtraProperties["ActorName"] = actorName;
+	}
 	public Guid? TenantId { get; private set; }
 	public Guid ApplicationId { get; private set; }
 	public Guid WorkflowInstanceId { get; private set; }
@@ -232,6 +237,11 @@ public class AdmissionFormChangeHistory : FullAuditedAggregateRoot<Guid>, IMulti
 
 public class AdmissionActivity : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	public void RecordHandler(Guid? actorId, string? actorName)
+	{
+		CreatorId = actorId;
+		MetadataJson = StudentJourneyActorMetadata.Capture(MetadataJson, actorId, actorName);
+	}
 	public Guid? TenantId { get; private set; }
 	public Guid? ApplicantId { get; private set; }
 	public Guid? ApplicationId { get; private set; }

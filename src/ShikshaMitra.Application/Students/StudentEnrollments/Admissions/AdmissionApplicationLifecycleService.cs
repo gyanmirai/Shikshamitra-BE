@@ -27,7 +27,7 @@ public class AdmissionApplicationLifecycleService(
 	IRepository<AdmissionFormFieldValue, Guid> valueRepository,
 	IRepository<AdmissionFormChangeHistory, Guid> historyRepository,
 	IRepository<AdmissionActivity, Guid> activityRepository,
-	IAdmissionReferenceSequenceRepository referenceSequenceRepository,
+	AdmissionApplicationNumberingService applicationNumbering,
 	AdmissionOfferingRuntimeService offeringRuntimeService,
 	AdmissionInquiryAvailabilityService inquiryAvailability,
 	AdmissionInquiryRuntimeService inquiryRuntime,
@@ -78,16 +78,10 @@ public class AdmissionApplicationLifecycleService(
 		if (workflow == null || !workflow.Status.IsRuntimeVersion() || form?.Status != AdmissionFormStatus.Published)
 			throw new BusinessException(AdmissionApplicationErrorCodes.ConfigurationNotPublished);
 
-		var referenceYear = Clock.Now.ToUniversalTime().Year;
-		var applicationNumber = AdmissionReferenceNumber.Format(
-			AdmissionReferenceKind.Application,
-			referenceYear,
-			await referenceSequenceRepository.IncrementAndGetAsync(referenceYear, AdmissionReferenceKind.Application));
+		var applicationNumber = await applicationNumbering.AllocateAsync(offering.AdmissionCycleId);
 		var application = new AdmissionApplication(
 			GuidGenerator.Create(), CurrentTenant.Id, applicationNumber, applicantId, inquiryId,
 			offering.AdmissionCycleId, offeringId, workflow.Id, form.Id);
-		if (inquiry?.AssignedCounsellorId is { } counsellorId)
-			application.AssignCounsellor(counsellorId);
 		var workflowInstance = new AdmissionApplicationWorkflowInstance(
 			GuidGenerator.Create(), CurrentTenant.Id, application.Id, workflow.Id);
 		var stageDefinitions = (await stageRepository.GetListAsync(stage => stage.WorkflowDefinitionId == workflow.Id))
@@ -217,14 +211,11 @@ public class AdmissionApplicationLifecycleService(
 			inquiry.SetStatus(AdmissionInquiryStatus.ApplicationStarted);
 			await inquiryRepository.UpdateAsync(inquiry, false);
 		}
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"WorkflowStarted", $"Workflow {workflow.Name} v{workflow.Version} started", application.ApplicantId,
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("WorkflowStarted", $"Workflow {workflow.Name} v{workflow.Version} started", application.ApplicantId,
 			application.Id, inquiryId), false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"WorkflowStageEntered", $"Stage entered: {entry.Name}", application.ApplicantId,
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("WorkflowStageEntered", $"Stage entered: {entry.Name}", application.ApplicantId,
 			application.Id, inquiryId), false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"ApplicationStarted", "Application started", application.ApplicantId, application.Id, inquiryId), true);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationStarted", "Application started", application.ApplicantId, application.Id, inquiryId), true);
 	}
 
 }

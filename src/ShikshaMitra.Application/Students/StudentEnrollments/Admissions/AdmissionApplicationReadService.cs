@@ -37,7 +37,6 @@ public class AdmissionApplicationReadService(
 			(!input.Status.HasValue || application.Status == input.Status) &&
 			(!input.AdmissionCycleId.HasValue || application.AdmissionCycleId == input.AdmissionCycleId) &&
 			(!input.AdmissionOfferingId.HasValue || application.AdmissionOfferingId == input.AdmissionOfferingId) &&
-			(!input.AssignedCounsellorId.HasValue || application.AssignedCounsellorId == input.AssignedCounsellorId) &&
 			(!input.CurrentStageInstanceId.HasValue || application.CurrentStageInstanceId == input.CurrentStageInstanceId) &&
 			(string.IsNullOrWhiteSpace(input.CurrentStageSearch) ||
 				stageQuery.Any(stage => stage.Id == application.CurrentStageInstanceId && stage.Name.Contains(input.CurrentStageSearch!))));

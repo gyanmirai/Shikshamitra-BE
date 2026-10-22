@@ -22,16 +22,15 @@ public class StudentModuleDashboardAdmissionsReader(AdmissionInquiryScopeAccessS
 	public async Task FillAsync(StudentModuleDashboardSectionDto result, StudentModuleDashboardContextDto context)
 	{
 		var schoolOverview = context.Mode is "admin" or "leadership";
-		result.Description = schoolOverview ? "Admissions and onboarding across your permitted academic scope." : "Your assigned inquiries and setup cases, plus applications visible in your academic scope.";
+		result.Description = schoolOverview ? "Admissions and onboarding across your permitted academic scope." : "Inquiries, applications and onboarding cases visible in your academic scope.";
 		if (context.Links.Any(link => link.Id == "inquiries"))
 		{
 			await AuthorizationService.CheckAsync(P.AdmissionInquiries.View);
 			var yearCycles = (await cycles.GetQueryableAsync()).Where(c => c.TenantId == CurrentTenant.Id && c.AcademicYearId == result.AcademicYearId);
 			var inquiries = (await inquiryScope.GetScopedQueryAsync()).Where(i => i.TenantId == CurrentTenant.Id && yearCycles.Any(c => c.Id == i.AdmissionCycleId));
-			if (!schoolOverview) inquiries = inquiries.Where(i => i.AssignedCounsellorId == CurrentUser.Id);
 			var count = await AsyncExecuter.CountAsync(inquiries.Where(i => i.Status == AdmissionInquiryStatus.New || i.Status == AdmissionInquiryStatus.Contacted || i.Status == AdmissionInquiryStatus.Interested || i.Status == AdmissionInquiryStatus.FollowUp));
-			Add(result, "inquiries", schoolOverview ? "Open inquiries" : "My open inquiries", count,
-				schoolOverview ? "/student/admissions/inquiries" : "/student/admissions/inquiries?owner=__mine__", P.AdmissionInquiries.View);
+			Add(result, "inquiries", "Open inquiries", count,
+				"/student/admissions/inquiries", P.AdmissionInquiries.View);
 		}
 		if (context.Links.Any(link => link.Id == "applications"))
 		{
@@ -54,7 +53,6 @@ public class StudentModuleDashboardAdmissionsReader(AdmissionInquiryScopeAccessS
 			(scope.WildcardBoardAcademicYearIds.Contains(c.AcademicYearId) || scope.WildcardMediumBoardIds.Contains(c.IntendedBoardId) ||
 			 scope.WildcardMediumStageMediumIds.Contains(c.IntendedMediumId) || scope.WildcardStandardMediumStageIds.Contains(c.IntendedStageId) ||
 			 scope.WildcardDivisionStandardIds.Contains(c.IntendedStandardId) || c.DivisionId.HasValue && scope.DivisionIds.Contains(c.DivisionId.Value)));
-		if (!schoolOverview) query = query.Where(c => c.AssignedToUserId == CurrentUser.Id);
 		var now = Clock.Now;
 		var counts = await AsyncExecuter.FirstOrDefaultAsync(query.GroupBy(_ => 1).Select(group => new
 		{
@@ -62,7 +60,7 @@ public class StudentModuleDashboardAdmissionsReader(AdmissionInquiryScopeAccessS
 			Ready = group.Count(c => c.Status == StudentOnboardingStatus.ReadyForActivation),
 			Attention = group.Count(c => c.Status == StudentOnboardingStatus.NeedsAttention || c.Status != StudentOnboardingStatus.Completed && c.Status != StudentOnboardingStatus.Cancelled && c.DueAt < now)
 		}));
-		var prefix = schoolOverview ? "" : "My ";
+		const string prefix = "";
 		Add(result, "setup", prefix + "unfinished setup cases", counts?.Active ?? 0, "/student/onboarding/setup", P.StudentOnboarding.View);
 		Add(result, "ready", prefix + "ready for activation", counts?.Ready ?? 0, "/student/onboarding/setup", P.StudentOnboarding.View, "success");
 		Add(result, "attention", prefix + "setup needing attention", counts?.Attention ?? 0, "/student/onboarding/setup", P.StudentOnboarding.View, "warning");

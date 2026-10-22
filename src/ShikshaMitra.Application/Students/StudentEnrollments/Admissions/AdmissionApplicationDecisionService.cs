@@ -270,8 +270,6 @@ public class AdmissionApplicationDecisionService(
 			onboardingCase.ExtraProperties["RecordReturnTransitionId"] = reviewedReturn.TransitionId!.Value.ToString("D");
 			onboardingCase.ExtraProperties["RecordReturnHandoffId"] = reviewedReturn.Id.ToString("D");
 		}
-		if (context.Application.AssignedCounsellorId.HasValue)
-			onboardingCase.AssignOwner(context.Application.AssignedCounsellorId);
 		await onboardingRepository.InsertAsync(onboardingCase, false);
 		await CreateDefaultStepsAsync(onboardingCase, policy, student, now);
 
@@ -283,11 +281,9 @@ public class AdmissionApplicationDecisionService(
 		await historyRepository.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(),
 			CurrentTenant.Id, context.Application.Id, AdmissionApplicationStatus.AdmissionFinalized,
 			"Admission finalized and transferred to Student Onboarding", CurrentUser.Id), false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"AdmissionFinalized", "Student identity linked and onboarding case created",
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("AdmissionFinalized", "Student identity linked and onboarding case created",
 			context.Applicant.Id, context.Application.Id), false);
-		await eventRepository.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id,
-			onboardingCase.Id, "CaseCreated", "Admission finalized; onboarding responsibility started."), false);
+		await eventRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateOnboardingEvent(onboardingCase.Id, "CaseCreated", "Admission finalized; onboarding responsibility started."), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.IAdmissionFinanceIntegration>()
 			.LinkFinalizedStudentAsync(context.Application.Id, student.Id);
@@ -542,8 +538,7 @@ public class AdmissionApplicationDecisionService(
 		await applicationRepository.UpdateAsync(application, false);
 		await historyRepository.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(), CurrentTenant.Id,
 			application.Id, application.Status, input.Reason, CurrentUser.Id), false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"ApplicationDecisionChanged", $"Application status changed to {application.Status}", application.ApplicantId, application.Id), false);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationDecisionChanged", $"Application status changed to {application.Status}", application.ApplicantId, application.Id), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		var result = AdmissionApplicationMapper.ToDto(application);
 		return result;

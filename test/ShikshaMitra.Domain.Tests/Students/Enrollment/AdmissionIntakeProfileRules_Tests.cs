@@ -39,7 +39,7 @@ public class AdmissionIntakeProfileRules_Tests
 	}
 
 	[Fact]
-	public void Offering_intake_marker_tracks_selected_profiles_and_can_be_cleared()
+	public void Offering_writes_ignore_retired_intake_profiles()
 	{
 		var offering = new AdmissionOffering(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null,
 			Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "GRADE-1", true,
@@ -48,9 +48,9 @@ public class AdmissionIntakeProfileRules_Tests
 		offering.RequireIntakeConfiguration();
 		offering.IntakeConfigurationRequired.ShouldBeFalse();
 		offering.ConfigureIntake(Guid.NewGuid(), Guid.NewGuid());
-		offering.IntakeConfigurationRequired.ShouldBeTrue();
-		offering.InquiryIntakeProfileId.ShouldNotBeNull();
-		offering.CounsellorAssignmentProfileId.ShouldNotBeNull();
+		offering.IntakeConfigurationRequired.ShouldBeFalse();
+		offering.InquiryIntakeProfileId.ShouldBeNull();
+		offering.CounsellorAssignmentProfileId.ShouldBeNull();
 		offering.ConfigureIntake(null, null);
 		offering.InquiryIntakeProfileId.ShouldBeNull();
 		offering.CounsellorAssignmentProfileId.ShouldBeNull();

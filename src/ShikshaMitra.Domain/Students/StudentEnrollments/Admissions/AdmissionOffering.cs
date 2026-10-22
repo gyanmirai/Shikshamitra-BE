@@ -122,13 +122,14 @@ public class AdmissionOffering : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void ConfigureIntake(Guid? inquiryIntakeProfileId, Guid? counsellorAssignmentProfileId)
 	{
-		InquiryIntakeProfileId = inquiryIntakeProfileId;
-		CounsellorAssignmentProfileId = counsellorAssignmentProfileId;
-		IntakeConfigurationRequired = inquiryIntakeProfileId.HasValue || counsellorAssignmentProfileId.HasValue;
+		// Retain legacy storage, but new writes no longer configure intake or ownership.
+		InquiryIntakeProfileId = null;
+		CounsellorAssignmentProfileId = null;
+		IntakeConfigurationRequired = false;
 	}
 
 	public void RequireIntakeConfiguration() =>
-		IntakeConfigurationRequired = InquiryIntakeProfileId.HasValue || CounsellorAssignmentProfileId.HasValue;
+		IntakeConfigurationRequired = false;
 
 	public DateTimeOffset GetEffectiveOpenDate(DateTime cycleStartDate) =>
 		OpenDate ?? ToUtcDateOffset(cycleStartDate);

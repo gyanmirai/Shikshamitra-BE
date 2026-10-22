@@ -60,7 +60,7 @@ public class AdmissionDocumentFileService(IBlobContainer blobs, AdmissionDocumen
 		var context = await access.GetContextAsync(row.ApplicationId, row.StageInstanceId, false);
 		if (row.BlobName == null) throw Invalid("This evidence revision has no uploaded file.");
 		var content = await blobs.GetAllBytesOrNullAsync(row.BlobName) ?? throw Invalid("The private document file is unavailable.");
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "AdmissionDocumentDownloaded",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("AdmissionDocumentDownloaded",
 			$"Downloaded {row.RequirementLabel}, revision {row.VersionNumber}.", context.Application.ApplicantId, row.ApplicationId,
 			metadataJson: JsonSerializer.Serialize(new { ActorUserId = CurrentUser.Id, EvidenceId = id, row.VersionNumber })), false);
 		return new() { Content = content, FileName = row.FileName!, ContentType = row.ContentType! };

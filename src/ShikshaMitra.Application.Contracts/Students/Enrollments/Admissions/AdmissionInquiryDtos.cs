@@ -167,6 +167,7 @@ public class ConfirmAdmissionInquiryOfferingDto
 
 public class AdmissionInquiryTimelineItemDto
 {
+	public string? ActorName { get; set; }
 	public Guid Id { get; set; }
 	public string ActivityType { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;

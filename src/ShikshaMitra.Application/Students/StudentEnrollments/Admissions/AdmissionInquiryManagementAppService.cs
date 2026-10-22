@@ -127,15 +127,7 @@ public class AdmissionInquiryManagementAppService(
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.FollowUpLimitReached,
 				$"This policy allows up to {policy.MaxOpenFollowUps} open follow-ups.");
 		}
-		if (requestedAssignee.HasValue && requestedAssignee != inquiry.AssignedCounsellorId)
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Follow-ups belong to the inquiry's assigned counsellor. Transfer the inquiry owner to change responsibility.");
-		var assignee = inquiry.AssignedCounsellorId;
-		if (assignee.HasValue)
-			await assignments.EnsureValidAsync(assignee.Value,
-				inquiry.AdmissionOfferingId ?? throw new BusinessException(AdmissionErrorCodes.InquiryOfferingRequired));
-		if (policy.RestrictActionsToAssignedCounsellor && !assignee.HasValue)
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.CounsellorRequired);
-		return assignee;
+		return null;
 	}
 
 	private async Task<Guid> InsertFollowUpAsync(AdmissionInquiry inquiry, AdmissionInquiryManagement state, Guid? assignee, DateTime scheduledAt, string purpose, Guid? applicationId = null)
@@ -335,12 +327,7 @@ public class AdmissionInquiryManagementAppService(
 
 	private void EnsureActor(AdmissionInquiryPolicy policy, AdmissionInquiry inquiry)
 	{
-		if (!policy.RestrictActionsToAssignedCounsellor) return;
-		if (!CurrentUser.Id.HasValue || !inquiry.AssignedCounsellorId.HasValue)
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.CounsellorRequired);
-		if (CurrentUser.Id.Value != inquiry.AssignedCounsellorId.Value)
-			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState,
-				"Only the assigned counsellor can perform this action.");
+		// Action permission and academic scope are enforced by the owning command.
 	}
 
 	private static void ValidateAnswers(AdmissionInquiryPolicy policy, QualifyAdmissionInquiryDto input)
@@ -412,7 +399,7 @@ public class AdmissionInquiryManagementAppService(
 
 	private async Task AddActivityAsync(AdmissionInquiry inquiry, string type, string description, object metadata, Guid? applicationId = null, bool autoSave = true)
 	{
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, type, description,
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(type, description,
 			inquiry.ApplicantId, applicationId, inquiryId: inquiry.Id, metadataJson: JsonSerializer.Serialize(metadata, JsonOptions)), autoSave);
 	}
 

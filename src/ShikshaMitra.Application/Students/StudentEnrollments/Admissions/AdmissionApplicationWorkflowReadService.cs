@@ -27,6 +27,7 @@ public class AdmissionApplicationWorkflowReadService(
 		var allTransitions = await transitionRepository.GetListAsync(item => item.WorkflowDefinitionId == workflow.WorkflowDefinitionId);
 		var transitions = allTransitions.Where(transition => transition.FromStageId == current?.DefinitionStageId).ToList();
 		var history = await historyRepository.GetListAsync(item => item.WorkflowInstanceId == workflow.Id);
+		var actorNames = await LazyServiceProvider.LazyGetRequiredService<StudentJourneyActorReader>().ReadAsync(stages.Select(item => item.CompletedBy).Concat(history.Select(item => item.CreatorId)));
 		return new AdmissionApplicationWorkflowDto
 		{
 			WorkflowDefinitionId = application.WorkflowDefinitionId,
@@ -68,6 +69,7 @@ public class AdmissionApplicationWorkflowReadService(
 				EnteredAt = NormalizeUtc(stage.EnteredAt),
 				CompletedAt = NormalizeUtc(stage.CompletedAt),
 				CompletedBy = stage.CompletedBy,
+				CompletedByName = StudentJourneyActorReader.Name(actorNames, stage.CompletedBy),
 				CompletionReason = stage.CompletionReason
 			}).ToList(),
 			AvailableTransitions = transitions.OrderBy(transition => transition.Priority).Select(transition =>
@@ -87,6 +89,7 @@ public class AdmissionApplicationWorkflowReadService(
 			History = history.OrderBy(item => item.OccurredAt).Select(item => new AdmissionWorkflowTransitionHistoryDto
 			{
 				Id = item.Id,
+				ActorName = item.ExtraProperties.TryGetValue("ActorName", out var capturedName) && capturedName is string name && !string.IsNullOrWhiteSpace(name) ? name : StudentJourneyActorReader.Name(actorNames, item.CreatorId),
 				FromStageInstanceId = item.FromStageInstanceId,
 				ToStageInstanceId = item.ToStageInstanceId,
 				TransitionDefinitionId = item.TransitionDefinitionId,

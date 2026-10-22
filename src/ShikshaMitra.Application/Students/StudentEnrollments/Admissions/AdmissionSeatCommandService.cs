@@ -215,8 +215,7 @@ public class AdmissionSeatCommandService(
 		await history.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(), CurrentTenant.Id,
 			context.Application.Id, context.Application.Status, reason, CurrentUser.Id, action,
 			context.Stage.Id, key, metadataJson), false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			$"AdmissionSeat{string.Concat(action.Split('-').Skip(1).Select(value => char.ToUpperInvariant(value[0]) + value[1..]))}",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity($"AdmissionSeat{string.Concat(action.Split('-').Skip(1).Select(value => char.ToUpperInvariant(value[0]) + value[1..]))}",
 			$"{context.Stage.Name}: {action.Replace('-', ' ')} recorded.", context.Application.ApplicantId,
 			context.Application.Id, metadataJson: metadataJson), false);
 		try { await CurrentUnitOfWork!.SaveChangesAsync(); }

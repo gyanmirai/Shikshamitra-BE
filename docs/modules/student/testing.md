@@ -3,12 +3,24 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-22
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Retired staff ownership and handling history
+
+Run `AdmissionRetiredOwnership_Tests` domain cases and the application `Retired_ownership` scenarios. Retained regressions cover public capture/replay, published form and creator scope, follow-up notes and concurrency, workflow transitions, and current Onboarding completion. New history must show the authenticated action actor, never a designated case owner. Verify legacy assigned-only policies cannot block permitted staff; keep tenant/academic isolation, lifecycle gates and Finance assertions.
+
+Focused verification passed six domain cases and 56 application scenarios across the main run, corrected public-link fixture rerun and legacy unmatched access check. Coverage includes owner-free follow-ups, retained scope/concurrency, public capture replay, and finalization/Onboarding handler history. A real local inquiry and follow-up were also persisted without ownership and returned the authenticated staff name.
+
+Local automated checks do not establish staging or production acceptance. Browser verification must use current Host binaries and a real API; no simulated persistence is acceptance evidence.
+
+## Application numbering
+
+`AdmissionApplicationNumbering_Tests` covers formats, reset/year compatibility, numeric ranges and monotonic counters. The `Numbering_` scenarios in `AdmissionWorkflowRuntimeIntegration_Tests` cover persisted legacy/new numbers, automatic APP-to-school-prefix continuation (50 → 51), non-consuming actual-next previews, RTE/Management/Staff registration, replay, revision edits, stale saves, locked sequence settings, academic/calendar/continuous scope, configured minimum and tenant isolation. `Numbering_postgres_http_settings_concurrent_allocations_rollback_and_tenant_isolation` uses the existing disposable loopback `STUDENT_RECORDS_APPLICATION_POSTGRES` harness to exercise actual GET/PUT/POST preview validation, repeated non-consuming preview, twelve parallel allocations after legacy 50, rollback and tenant isolation. Preview retains View authorization at both controller/service entry points; anonymous calls must fail. These are local checks, not staging/production proof.
 
 ## Class-wise combined assessment subjects (2026-10-21)
 

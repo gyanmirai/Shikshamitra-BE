@@ -253,10 +253,6 @@ public class AdmissionOfferingReadService(
 				row.InquiryForm.Purpose == AdmissionFormPurpose.Inquiry) &&
 			(!row.Offering.InquiryFormDefinitionId.HasValue ||
 				row.InquiryForm != null && row.InquiryForm.Purpose == AdmissionFormPurpose.Inquiry) &&
-			(!row.Offering.InquiryIntakeProfileId.HasValue || row.InquiryProfile != null && row.InquiryProfile.Kind == AdmissionIntakeProfileKind.Inquiry) &&
-			(!row.Offering.CounsellorAssignmentProfileId.HasValue || row.AssignmentProfile != null && row.AssignmentProfile.Kind == AdmissionIntakeProfileKind.CounsellorAssignment) &&
-			(!(row.Offering.InquiryIntakeProfileId.HasValue || row.Offering.CounsellorAssignmentProfileId.HasValue) ||
-				(row.Offering.EntryMode == AdmissionEntryMode.DirectRegistration || row.InquiryProfile != null) && row.AssignmentProfile != null) &&
 			row.ApplicationForm != null && row.ApplicationForm.Status == AdmissionFormStatus.Published &&
 			row.ApplicationForm.Purpose == AdmissionFormPurpose.Registration);
 
@@ -281,10 +277,6 @@ public class AdmissionOfferingReadService(
 				row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)) ||
 			(row.Offering.InquiryFormDefinitionId.HasValue &&
 				(row.InquiryForm == null || row.InquiryForm.Purpose != AdmissionFormPurpose.Inquiry)) ||
-			(row.Offering.InquiryIntakeProfileId.HasValue && (row.InquiryProfile == null || row.InquiryProfile.Kind != AdmissionIntakeProfileKind.Inquiry)) ||
-			(row.Offering.CounsellorAssignmentProfileId.HasValue && (row.AssignmentProfile == null || row.AssignmentProfile.Kind != AdmissionIntakeProfileKind.CounsellorAssignment)) ||
-			((row.Offering.InquiryIntakeProfileId.HasValue || row.Offering.CounsellorAssignmentProfileId.HasValue) &&
-				(row.Offering.EntryMode != AdmissionEntryMode.DirectRegistration && row.InquiryProfile == null || row.AssignmentProfile == null)) ||
 			row.ApplicationForm == null || row.ApplicationForm.Status != AdmissionFormStatus.Published ||
 			row.ApplicationForm.Purpose != AdmissionFormPurpose.Registration);
 

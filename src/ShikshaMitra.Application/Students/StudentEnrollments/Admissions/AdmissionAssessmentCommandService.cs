@@ -148,7 +148,7 @@ public class AdmissionAssessmentCommandService(
 	private async Task<AdmissionAssessmentDto> SaveAsync(AdmissionAssessmentContext context, AdmissionAssessmentAttempt attempt, string action)
 	{
 		await applications.UpdateAsync(context.Application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, action,
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(action,
 			$"{context.Stage.Name}: attempt {attempt.AttemptNumber}, {attempt.Outcome}.", context.Application.ApplicantId,
 			context.Application.Id, metadataJson: JsonSerializer.Serialize(new
 			{

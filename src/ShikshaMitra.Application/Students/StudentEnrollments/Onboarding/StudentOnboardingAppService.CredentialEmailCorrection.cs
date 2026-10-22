@@ -35,7 +35,7 @@ public partial class StudentOnboardingAppService
 		// Preserve every other pinned requirement and the school/Offering configuration.
 		rules["sendGuardianCredentialEmail"] = true;
 		item.ExtraProperties["ReadinessRulesSnapshot"] = rules.ToJsonString();
-		await eventRepository.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id, id,
+		await eventRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyAuditWriter>().CreateOnboardingEvent(id,
 			"GuardianCredentialEmailEnabled", $"Parent/guardian credential email enabled for this case only. Reason: {input.Reason.Trim()}",
 			JsonSerializer.Serialize(new { Rule = "sendGuardianCredentialEmail", PreviousValue = false, NewValue = true })), false);
 		await caseRepository.UpdateAsync(item, false);

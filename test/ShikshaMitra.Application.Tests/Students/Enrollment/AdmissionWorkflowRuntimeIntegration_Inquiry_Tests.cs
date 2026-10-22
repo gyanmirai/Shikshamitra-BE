@@ -94,7 +94,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	}
 
 	[Fact]
-	public async Task Inquiry_list_should_support_unassigned_and_counsellor_queues()
+	public async Task Inquiry_list_should_ignore_retired_ownership_filters_and_preserve_followup_queues()
 	{
 		using (_currentTenant.Change(TestTenantId))
 		using (_principalAccessor.Change(BuildAdminPrincipal()))
@@ -129,7 +129,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				Mode = AdmissionCounsellorAssignmentMode.Manual,
 				CounsellorId = counsellorId,
 				Reason = "Transfer the case to the covering counsellor."
-			}))).Code.ShouldBe(AdmissionErrorCodes.InquiryCounsellorInvalid);
+			}))).Code.ShouldBe("Admissions.StaffAssignmentRetired");
 			// Preserve a historical owner fixture to verify queue and follow-up projections independently.
 			var inquiryRepository = GetRequiredService<Volo.Abp.Domain.Repositories.IRepository<AdmissionInquiry, Guid>>();
 			var ownedInquiry = await inquiryRepository.GetAsync(inquiry.Id);
@@ -144,7 +144,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			assigned.Items.ShouldContain(item => item.Id == inquiry.Id);
 			(await inquiries.GetListAsync(new() { IsAssigned = false, MaxResultCount = 50 }))
-				.Items.ShouldNotContain(item => item.Id == inquiry.Id);
+				.Items.ShouldContain(item => item.Id == inquiry.Id);
 
 			var management = GetRequiredService<IAdmissionInquiryManagementAppService>();
 			var state = await management.GetAsync(inquiry.Id);
@@ -163,7 +163,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var followUpItem = followUpQueue.Items.Single(item => item.Id == inquiry.Id);
 			followUpItem.OpenFollowUpCount.ShouldBe(1);
 			followUpItem.NextFollowUpAt.ShouldNotBeNull();
-			followUpItem.AssignedCounsellorName.ShouldNotBeNullOrWhiteSpace();
+			followUpItem.AssignedCounsellorName.ShouldBeNull();
 		}
 	}
 

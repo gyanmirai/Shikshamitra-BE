@@ -1,5 +1,13 @@
 namespace ShikshaMitra.Domain.Finance.Policies;
 
+/// <summary>Legacy preserves existing assignments; configured modes follow the collection ledger order.</summary>
+public enum CollectionAllocationBasis
+{
+	Legacy = 0,
+	Installment = 1,
+	FeeHead = 2
+}
+
 public enum CollectionPolicyStatus
 {
 	Active = 0,

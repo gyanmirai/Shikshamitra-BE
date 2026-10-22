@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp;
+using Volo.Abp.Uow;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
@@ -25,13 +26,15 @@ public class FeeHeadAppService(
 	IRepository<TransactionCategory, Guid> incomeCategoryRepository,
 	IRepository<AccountHead, Guid> accountHeadRepository,
 	FeeCategoryManager feeCategoryManager,
-	FeeHeadAccountingManager accountingManager
+	FeeHeadAccountingManager accountingManager,
+	FeeHeadDependencyQuery dependencyQuery
 ) : ApplicationService, IFeeHeadAppService
 {
+	[UnitOfWork(isTransactional: true)]
 	public async Task<FeeHeadResponse> CreateAsync(Guid academicYearId, FeeHeadCreateRequest input)
     {
 		await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(academicYearId, input.FeeCategoryId, input.Name);
-		await accountingManager.GetValidMappingAsync(academicYearId, input.IncomeCategoryId);
+		await accountingManager.GetValidMappingAsync(academicYearId, input.IncomeCategoryId, creatingReference: true);
 
 		var feeHead = new FeeHead(
             GuidGenerator.Create(),
@@ -85,14 +88,15 @@ public class FeeHeadAppService(
 		var accountHeads = await accountHeadRepository.GetListAsync(x => accountHeadIds.Contains(x.Id));
 		var accountHeadDict = accountHeads.ToDictionary(x => x.Id);
 
-		var usedFeeHeadIds = await GetUsedFeeHeadIdsAsync(items.Select(x => x.Id).ToList());
+		var dependencies = await dependencyQuery.GetAsync(items.Select(x => x.Id));
 
         var dtos = items.Select(x =>
         {
             var response = ObjectMapper.Map<FeeHead, FeeHeadResponse>(x);
             response.FeeCategoryName = categoryDict.GetValueOrDefault(x.FeeCategoryId);
 			PopulateAccountingMapping(response, x, incomeCategoryDict, accountHeadDict);
-            response.IsUsedInDownstream = usedFeeHeadIds.Contains(x.Id);
+            response.Dependencies = dependencies[x.Id];
+            response.IsUsedInDownstream = response.Dependencies.IsBlocked;
             return response;
         }).ToList();
 
@@ -112,11 +116,14 @@ public class FeeHeadAppService(
 		var feeHeadQuery = await feeHeadRepository.GetQueryableAsync();
 		var categoryQuery = await feeCategoryRepository.GetQueryableAsync();
 		var incomeCategoryQuery = await incomeCategoryRepository.GetQueryableAsync();
+		var accountHeadQuery = await accountHeadRepository.GetQueryableAsync();
 
 		return await AsyncExecuter.ToListAsync(
 			from feeHead in feeHeadQuery
 			join category in categoryQuery on feeHead.FeeCategoryId equals category.Id
 			join incomeCategory in incomeCategoryQuery on feeHead.IncomeCategoryId equals incomeCategory.Id
+			join mappedAccountHead in accountHeadQuery on incomeCategory.DefaultAccountHeadId equals (Guid?)mappedAccountHead.Id into accountHeadGroup
+			from accountHead in accountHeadGroup.DefaultIfEmpty()
 			where feeHead.AcademicYearId == academicYearId &&
 				feeHead.IsActive &&
 				category.AcademicYearId == academicYearId &&
@@ -133,6 +140,8 @@ public class FeeHeadAppService(
 				FeeCategoryName = category.Name,
 				IncomeCategoryId = incomeCategory.Id,
 				IncomeCategoryName = incomeCategory.Name,
+				IncomeAccountHeadId = accountHead == null ? Guid.Empty : accountHead.Id,
+				IncomeAccountHeadName = accountHead == null ? string.Empty : accountHead.Name,
 				Name = feeHead.Name,
 				Module = feeHead.Module,
 				IsConcessionApplied = feeHead.IsConcessionApplied
@@ -145,13 +154,14 @@ public class FeeHeadAppService(
 		return await MapToResponseAsync(feeHead);
 	}
 
+	[UnitOfWork(isTransactional: true)]
     public async Task<FeeHeadResponse> UpdateAsync(Guid feeHeadId, FeeHeadUpdateRequest input)
     {
 		var feeHead = await feeHeadRepository.GetAsync(feeHeadId);
 
 		await feeCategoryManager.EnsureFeeHeadNameIsUniqueAsync(
 			feeHead.AcademicYearId, input.FeeCategoryId, input.Name, feeHeadId);
-		await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, input.IncomeCategoryId);
+		await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, input.IncomeCategoryId, creatingReference: true);
 		if (feeHead.IncomeCategoryId != input.IncomeCategoryId &&
 			(await GetUsedFeeHeadIdsAsync([feeHeadId])).Count > 0)
 		{
@@ -168,10 +178,10 @@ public class FeeHeadAppService(
 
     public async Task<MessageResponse> DeleteAsync(Guid feeHeadId)
     {
-		if ((await GetUsedFeeHeadIdsAsync([feeHeadId])).Count > 0)
-		{
-			throw new BusinessException(FinanceFeeHeadErrorCodes.CannotDeleteInUse);
-		}
+		var head = await feeHeadRepository.GetAsync(feeHeadId);
+		var dependencies = (await dependencyQuery.GetAsync([feeHeadId]))[feeHeadId];
+		if (dependencies.IsBlocked)
+			throw FeeHeadDependencyQuery.Blocked(FinanceFeeHeadErrorCodes.CannotDeleteInUse, head.Name, dependencies);
 
 		await feeHeadRepository.DeleteAsync(feeHeadId);
 
@@ -192,9 +202,11 @@ public class FeeHeadAppService(
 			await accountingManager.GetValidMappingAsync(feeHead.AcademicYearId, feeHead.IncomeCategoryId);
 		}
 
-		if (!input.IsActive && (await GetUsedFeeHeadIdsAsync([feeHeadId])).Count > 0)
+		if (!input.IsActive)
 		{
-			throw new BusinessException(FinanceFeeHeadErrorCodes.CannotDeactivateInUse);
+			var dependencies = (await dependencyQuery.GetAsync([feeHeadId]))[feeHeadId];
+			if (dependencies.IsBlocked)
+				throw FeeHeadDependencyQuery.Blocked(FinanceFeeHeadErrorCodes.CannotDeactivateInUse, feeHead.Name, dependencies);
 		}
 
 		feeHead.SetActiveStatus(input.IsActive, input.DeactivationReason);
@@ -211,16 +223,7 @@ public class FeeHeadAppService(
 			return [];
 		}
 
-		var structureQuery = await feeStructureRepository.GetQueryableAsync();
-		var usedIds = await feeStructureRepository.AsyncExecuter.ToListAsync(
-			structureQuery.Where(fs => fs.IsLocked)
-						  .SelectMany(fs => fs.FeeStructureDetails)
-						  .Where(fsd => feeHeadIds.Contains(fsd.FeeHeadId))
-						  .Select(fsd => fsd.FeeHeadId)
-						  .Distinct()
-		);
-
-		return [.. usedIds];
+		return (await dependencyQuery.GetAsync(feeHeadIds)).Where(x => x.Value.IsBlocked).Select(x => x.Key).ToHashSet();
 	}
 
 	private async Task<FeeHeadResponse> MapToResponseAsync(FeeHead feeHead)
@@ -235,7 +238,8 @@ public class FeeHeadAppService(
 		response.IncomeCategoryName = incomeCategory?.Name;
 		response.IncomeAccountHeadId = accountHead?.Id ?? Guid.Empty;
 		response.IncomeAccountHeadName = accountHead?.Name;
-		response.IsUsedInDownstream = (await GetUsedFeeHeadIdsAsync([feeHead.Id])).Count > 0;
+		response.Dependencies = (await dependencyQuery.GetAsync([feeHead.Id]))[feeHead.Id];
+		response.IsUsedInDownstream = response.Dependencies.IsBlocked;
 
 		return response;
 	}

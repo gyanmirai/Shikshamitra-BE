@@ -5,6 +5,7 @@ namespace ShikshaMitra.Finance.Fees.Settings.Dtos;
 
 public class FeeHeadResponse : EntityDto<Guid>
 {
+	public FeeHeadDependenciesDto Dependencies { get; set; } = new();
     public Guid AcademicYearId { get; set; }
     public Guid FeeCategoryId { get; set; }
     public string FeeCategoryName { get; set; }

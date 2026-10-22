@@ -37,6 +37,24 @@ public partial class StudentFeeStructureAppService
 		var standards = await standardRepository.GetQueryableAsync();
 		if (input.BoardId.HasValue) enrollments = enrollments.Where(e => standards.Any(s => s.Id == e.StandardId && s.EducationMediumStage.EducationMedium.EducationBoardId == input.BoardId));
 		if (input.EducationMediumId.HasValue) enrollments = enrollments.Where(e => standards.Any(s => s.Id == e.StandardId && s.EducationMediumStage.EducationMediumId == input.EducationMediumId));
+		if (input.FeeHeadId.HasValue)
+		{
+			var dueQuery = await dueFeeRepository.GetQueryableAsync();
+			var headQuery = await feeHeadRepository.GetQueryableAsync();
+			var assignmentQuery = await studentFeeStructureRepository.GetQueryableAsync();
+			var detailQuery = await feeStructureDetailRepository.GetQueryableAsync();
+			var relevantAssignments = await AsyncExecuter.ToListAsync(assignmentQuery.Where(a => a.AcademicYearId == input.AcademicYearId &&
+				detailQuery.Any(d => d.FeeStructureId == a.FeeStructureStandardId && d.FeeHeadId == input.FeeHeadId))
+				.Select(a => new { a.StudentId, a.AssignmentSnapshotJson }));
+			var selectedStudentIds = relevantAssignments.Where(a => {
+				if (a.AssignmentSnapshotJson == null) return true;
+				try { return JsonSerializer.Deserialize<StudentFeeAssignmentPreviewDto>(a.AssignmentSnapshotJson)?.Heads?.Any(h => h.FeeHeadId == input.FeeHeadId && h.Included) ?? true; }
+				catch (JsonException) { return true; }
+			}).Select(a => a.StudentId).Distinct().ToArray();
+			enrollments = enrollments.Where(e => headQuery.Any(h => h.Id == input.FeeHeadId && h.AcademicYearId == input.AcademicYearId) &&
+				(Enumerable.Contains(selectedStudentIds, e.StudentId) || dueQuery.Any(d => d.StudentId == e.StudentId && d.FeeHeadId == input.FeeHeadId &&
+					(!d.StudentFeeStructureId.HasValue || assignmentQuery.Any(a => a.Id == d.StudentFeeStructureId && a.AcademicYearId == input.AcademicYearId)))));
+		}
 		var students = await studentRepository.GetQueryableAsync();
 		var divisions = await divisionRepository.GetQueryableAsync();
 		var assignments = await studentFeeStructureRepository.GetQueryableAsync();
@@ -138,6 +156,13 @@ public partial class StudentFeeStructureAppService
 					InstallmentLabel = d.GetDisplayInstallmentLabel(), DueDate = d.DueDate, DemandDate = d.DemandDate,
 					ScheduledAmount = d.ScheduledAmount, ProratedAmount = d.OriginalAmount, PaymentTermVersionId = d.PaymentTermVersionId }).ToList() };
 		}
+		// Resolve current master labels without changing immutable financial evidence.
+		var currentHeadIds = snapshot.Heads.Select(x => x.FeeHeadId).Concat(snapshot.Lines.Select(x => x.FeeHeadId)).Distinct().ToList();
+		var currentNames = (await feeHeadRepository.GetListAsync(x => currentHeadIds.Contains(x.Id))).ToDictionary(x => x.Id, x => x.Name);
+		foreach (var head in snapshot.Heads)
+			if (currentNames.TryGetValue(head.FeeHeadId, out var name)) head.FeeHeadName = name;
+		foreach (var line in snapshot.Lines)
+			if (currentNames.TryGetValue(line.FeeHeadId, out var name)) line.FeeHeadName = name;
 		snapshot.ScheduledTotal = snapshot.Lines.Sum(x => x.ScheduledAmount);
 		snapshot.ProratedTotal = snapshot.Lines.Sum(x => x.ProratedAmount);
 		snapshot.ReductionTotal = snapshot.ScheduledTotal - snapshot.ProratedTotal;

@@ -10,12 +10,13 @@ namespace ShikshaMitra.Finance.Charges;
 /// </summary>
 public abstract class ChargeApiTestsBase : ShikshaMitraApiTestBase
 {
-	protected const string BaseUrl = "/api/app/charges";
+	protected const string BaseUrl = "/api/charges";
 	protected const string ChargeCategoriesUrl = "/api/charge-categories";
 
 	protected ChargeApiTestsBase(ShikshaMitraApiTestFactory factory) : base(factory)
 	{
 		ChargeTestHelper.DefaultAcademicYearId = factory.SeededAcademicYearId;
+		ChargeTestHelper.DefaultBoardId = factory.SeededBoardId;
 		ChargeTestHelper.DefaultMediumId = factory.SeededMediumId;
 		ChargeTestHelper.DefaultStandardId = factory.SeededStandardId;
 		ChargeTestHelper.DefaultDivisionId = factory.SeededDivisionId;

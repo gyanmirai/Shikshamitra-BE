@@ -6,6 +6,8 @@ namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
 public class AssignmentStudentListInput : PagedResultRequestDto
 {
+	/// <summary>Narrows the scoped list to students with obligations for this fee head.</summary>
+	public Guid? FeeHeadId { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public Guid? BoardId { get; set; }
 	public Guid? EducationMediumId { get; set; }

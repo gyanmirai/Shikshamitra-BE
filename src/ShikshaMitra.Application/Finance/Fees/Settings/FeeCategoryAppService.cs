@@ -9,6 +9,7 @@ using ShikshaMitra.Domain.Finance.Fees.Settings.Managers;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Fees.Settings.Dtos;
 using Volo.Abp;
+using Volo.Abp.Uow;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
@@ -23,9 +24,11 @@ public class FeeCategoryAppService(
 	IRepository<TransactionCategory, Guid> incomeCategoryRepository,
 	IRepository<AccountHead, Guid> accountHeadRepository,
 	FeeCategoryManager feeCategoryManager,
-	FeeHeadAccountingManager accountingManager
+	FeeHeadAccountingManager accountingManager,
+	FeeHeadDependencyQuery dependencyQuery
 ) : ApplicationService, IFeeCategoryAppService
 {
+	[UnitOfWork(isTransactional: true)]
 	public async Task<FeeCategoryResponse> CreateAsync(Guid academicYearId, FeeCategoryCreateRequest input)
 	{
 		await feeCategoryManager.EnsureNameIsUniqueAsync(academicYearId, input.Name);
@@ -45,7 +48,7 @@ public class FeeCategoryAppService(
 
 		foreach (var headInput in input.FeeHeads)
 		{
-			await accountingManager.GetValidMappingAsync(academicYearId, headInput.IncomeCategoryId);
+			await accountingManager.GetValidMappingAsync(academicYearId, headInput.IncomeCategoryId, creatingReference: true);
 			var normalizedName = headInput.Name.Trim();
 			if (!seenNames.Add(normalizedName))
 			{
@@ -223,14 +226,14 @@ public class FeeCategoryAppService(
 		return await MapToResponseAsync(feeCategory, feeHeads);
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<FeeCategoryResponse> UpdateAsync(Guid id, FeeCategoryUpdateRequest input)
 	{
 		var feeCategory = await feeCategoryRepository.GetAsync(id);
 
 		await feeCategoryManager.EnsureNameIsUniqueAsync(feeCategory.AcademicYearId, input.Name, id);
 
-		feeCategory.Update(input.Name.Trim(), input.Description);
-		await feeCategoryRepository.UpdateAsync(feeCategory);
+
 
 		var existingHeads = await feeHeadRepository.GetListAsync(x => x.FeeCategoryId == id);
 		var existingHeadsById = existingHeads.ToDictionary(x => x.Id);
@@ -245,13 +248,21 @@ public class FeeCategoryAppService(
 		}
 		var incomingIds = input.FeeHeads.Where(x => x.Id.HasValue).Select(x => x.Id!.Value).ToHashSet();
 		var usedFeeHeadIds = await GetUsedFeeHeadIdsAsync(existingHeads.Select(x => x.Id).ToList());
+		foreach (var removed in existingHeads.Where(x => !incomingIds.Contains(x.Id)))
+		{
+			var dependencies = (await dependencyQuery.GetAsync([removed.Id]))[removed.Id];
+			if (dependencies.IsBlocked)
+				throw FeeHeadDependencyQuery.Blocked(FinanceFeeHeadErrorCodes.CannotDeleteInUse, removed.Name, dependencies);
+		}
+		feeCategory.Update(input.Name.Trim(), input.Description);
+		await feeCategoryRepository.UpdateAsync(feeCategory);
 
 		var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 		var resultHeads = new List<FeeHead>();
 
 		foreach (var headInput in input.FeeHeads)
 		{
-			await accountingManager.GetValidMappingAsync(feeCategory.AcademicYearId, headInput.IncomeCategoryId);
+			await accountingManager.GetValidMappingAsync(feeCategory.AcademicYearId, headInput.IncomeCategoryId, creatingReference: true);
 			var normalizedName = headInput.Name.Trim();
 			if (!seenNames.Add(normalizedName))
 			{
@@ -296,15 +307,11 @@ public class FeeCategoryAppService(
 		var removedHeads = existingHeads.Where(x => !incomingIds.Contains(x.Id)).ToList();
 		if (removedHeads.Count > 0)
 		{
-			var removedIds = removedHeads.Select(x => x.Id).ToList();
-			var usedIds = usedFeeHeadIds.Where(removedIds.Contains).ToHashSet();
-			if (usedIds.Count > 0)
-			{
-				throw new BusinessException(FinanceFeeHeadErrorCodes.CannotDeleteInUse);
-			}
-
+			var removalDependencies = await dependencyQuery.GetAsync(removedHeads.Select(x => x.Id));
 			foreach (var removedHead in removedHeads)
 			{
+				if (removalDependencies[removedHead.Id].IsBlocked)
+					throw FeeHeadDependencyQuery.Blocked(FinanceFeeHeadErrorCodes.CannotDeleteInUse, removedHead.Name, removalDependencies[removedHead.Id]);
 				await feeHeadRepository.DeleteAsync(removedHead);
 			}
 		}
@@ -342,12 +349,9 @@ public class FeeCategoryAppService(
 
 		if (!input.IsActive)
 		{
-			var usedIds = await GetUsedFeeHeadIdsAsync(feeHeads.Select(x => x.Id).ToList());
-			if (usedIds.Count > 0)
-			{
-				throw new BusinessException(FinanceFeeCategoryErrorCodes.CannotDeleteInUse)
-					.WithData("Reason", "Cannot deactivate a fee category whose fee heads are in use.");
-			}
+			var dependencies = await dependencyQuery.GetAsync(feeHeads.Select(x => x.Id));
+			foreach (var head in feeHeads.Where(x => dependencies[x.Id].IsBlocked))
+				throw FeeHeadDependencyQuery.Blocked(FinanceFeeHeadErrorCodes.CannotDeactivateInUse, head.Name, dependencies[head.Id]);
 		}
 
 		feeCategory.SetStatus(input.IsActive, input.DeactivationReason);
@@ -373,15 +377,7 @@ public class FeeCategoryAppService(
 			return new HashSet<Guid>();
 		}
 
-		var structureQuery = await feeStructureRepository.GetQueryableAsync();
-		var usedIds = await feeStructureRepository.AsyncExecuter.ToListAsync(
-			structureQuery.SelectMany(fs => fs.FeeStructureDetails)
-						  .Where(fsd => feeHeadIds.Contains(fsd.FeeHeadId))
-						  .Select(fsd => fsd.FeeHeadId)
-						  .Distinct()
-		);
-
-		return new HashSet<Guid>(usedIds);
+		return (await dependencyQuery.GetAsync(feeHeadIds)).Where(x => x.Value.IsBlocked).Select(x => x.Key).ToHashSet();
 	}
 
 	private async Task<FeeCategoryResponse> MapToResponseAsync(FeeCategory feeCategory, List<FeeHead> feeHeads, HashSet<Guid> usedFeeHeadIds = null)
@@ -395,6 +391,7 @@ public class FeeCategoryAppService(
 		var accountHeads = await accountHeadRepository.GetListAsync(x => accountHeadIds.Contains(x.Id));
 		var accountHeadDict = accountHeads.ToDictionary(x => x.Id);
 
+		var dependencies = await dependencyQuery.GetAsync(feeHeads.Select(x => x.Id));
 		var response = ObjectMapper.Map<FeeCategory, FeeCategoryResponse>(feeCategory);
 		response.FeeHeads = feeHeads.Select(feeHead =>
 		{
@@ -410,7 +407,8 @@ public class FeeCategoryAppService(
 					headResponse.IncomeAccountHeadName = accountHead.Name;
 				}
 			}
-			headResponse.IsUsedInDownstream = usedFeeHeadIds.Contains(feeHead.Id);
+			headResponse.Dependencies = dependencies[feeHead.Id];
+			headResponse.IsUsedInDownstream = headResponse.Dependencies.IsBlocked;
 			return headResponse;
 		}).ToList();
 		response.IsUsedInDownstream = feeHeads.Any(x => usedFeeHeadIds.Contains(x.Id));

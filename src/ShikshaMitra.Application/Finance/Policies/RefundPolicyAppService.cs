@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance;
@@ -168,7 +169,7 @@ public class RefundPolicyAppService(
 	{
 		await EnsureReferencesAsync(input);
 		var code = string.IsNullOrWhiteSpace(input.PolicyCode)
-			? $"REF-{GuidGenerator.Create():N}"[..16].ToUpperInvariant()
+			? $"REF-{Guid.NewGuid():N}"[..28].ToUpperInvariant()
 			: input.PolicyCode.Trim().ToUpperInvariant();
 		await EnsureUniqueAsync(input.AcademicYearId, input.PolicyName, code, null);
 		var model = RefundPolicyMapping.ToUpdateModel(input, code);
@@ -227,7 +228,11 @@ public class RefundPolicyAppService(
 		return await CreateAsync(new CreateUpdateRefundPolicyDto
 		{
 			AcademicYearId = targetYear,
-			PolicyName = string.IsNullOrWhiteSpace(input.Name) ? $"{source.PolicyName} Copy" : input.Name,
+			PolicyName = string.IsNullOrWhiteSpace(input.Name)
+				? FinanceName.NextCopy(source.PolicyName, await AsyncExecuter.ToListAsync(
+					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == (input.TargetAcademicYearId ?? source.AcademicYearId))
+					.Select(x => x.PolicyName)))
+				: FinanceName.Normalize(input.Name),
 			Status = "Draft",
 			IsDefault = false,
 			Description = source.Description,
@@ -348,15 +353,19 @@ public class RefundPolicyAppService(
 
 	private async Task EnsureUniqueAsync(Guid yearId, string name, string code, Guid? excludeId)
 	{
-		var normalizedName = name.Trim().ToLower();
-		var normalizedCode = code.Trim().ToLower();
+		var normalizedName = FinanceName.Normalize(name);
+		var normalizedCode = code.Trim().ToUpperInvariant();
 		var query = await repository.GetQueryableAsync();
+		var candidates = await AsyncExecuter.ToListAsync(query.Where(x => x.AcademicYearId == yearId &&
+			(!excludeId.HasValue || x.Id != excludeId.Value)).Select(x => new { x.PolicyName, x.Status }));
+		var existing = candidates.FirstOrDefault(x => FinanceName.Equals(x.PolicyName, normalizedName));
+		if (existing != null)
+			throw new BusinessException(RefundPolicyErrorCodes.DuplicateName)
+				.WithData("Name", normalizedName)
+				.WithData("Location", existing.Status == RefundPolicyStatus.Archived ? "Archived" : "Current");
 		if (await AsyncExecuter.AnyAsync(query.Where(x => x.AcademicYearId == yearId &&
-			x.PolicyName.ToLower() == normalizedName && (!excludeId.HasValue || x.Id != excludeId.Value))))
-			throw new BusinessException(RefundPolicyErrorCodes.DuplicateName);
-		if (await AsyncExecuter.AnyAsync(query.Where(x => x.AcademicYearId == yearId &&
-			x.PolicyCode.ToLower() == normalizedCode && (!excludeId.HasValue || x.Id != excludeId.Value))))
-			throw new BusinessException(RefundPolicyErrorCodes.DuplicateCode);
+			x.PolicyCode.ToUpper() == normalizedCode && (!excludeId.HasValue || x.Id != excludeId.Value))))
+			throw new BusinessException(RefundPolicyErrorCodes.DuplicateCode).WithData("Code", normalizedCode);
 	}
 
 	private async Task<HashSet<Guid>> GetUsedIdsAsync(List<Guid> ids)

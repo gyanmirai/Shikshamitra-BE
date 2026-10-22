@@ -66,7 +66,7 @@ public partial class AdmissionFeeCollectionAppService
         var medium = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<EducationMedium, Guid>>().GetAsync(source.MediumId);
         var division = source.DivisionId.HasValue
             ? await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<Division, Guid>>().GetAsync(source.DivisionId.Value) : null;
-        return new FeeCollectFormDto
+        return CollectionAllocationContext.Apply(new FeeCollectFormDto
         {
             Student = new StudentInfoDto
             {
@@ -84,7 +84,7 @@ public partial class AdmissionFeeCollectionAppService
                 TotalRoundingAdjustment = (double)rows.Sum(d => Math.Ceiling(d.OutstandingAmount) - d.OutstandingAmount),
             },
             Ledger = ledger, Charges = lateCharges, AllowOnlineCollection = rules.Policy?.AllowOnlineCollection ?? true,
-        };
+        }, rules.Policy);
     }
 
     // Read projection only: amounts/status come from canonical dues and the shared balance services.
@@ -93,6 +93,7 @@ public partial class AdmissionFeeCollectionAppService
     {
         DueFeeId = due.Id, FeeHeadId = due.FeeHeadId, FeeHeadName = name,
         InstallmentLabel = due.GetDisplayInstallmentLabel(), DueDate = due.ScheduleDueDate ?? due.DueDate,
+        InstallmentId = due.PaymentTermInstallmentId,
         CoverageStartDate = due.CoverageStartDate, CoverageEndDate = due.CoverageEndDate,
         ScheduleSource = due.ScheduleSource.ToString(), Total = (double)due.OriginalAmount, ScheduledTotal = (double)due.ScheduledAmount,
         Paid = (double)due.PaidAmount, Due = (double)due.OutstandingAmount,

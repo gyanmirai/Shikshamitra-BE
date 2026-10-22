@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -69,7 +70,7 @@ public class RefundPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		ValidateRules(model);
 
-		PolicyName = model.PolicyName.Trim();
+		PolicyName = FinanceName.Normalize(model.PolicyName);
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;

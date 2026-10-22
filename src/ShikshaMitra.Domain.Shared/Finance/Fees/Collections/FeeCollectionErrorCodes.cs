@@ -14,4 +14,5 @@ public static class FeeCollectionErrorCodes
     public const string InvalidDueFee = Prefix + "InvalidDueFee";
     public const string LateFeeAmountExceedsComputed = Prefix + "LateFeeAmountExceedsComputed";
     public const string IdempotencyConflict = Prefix + "IdempotencyConflict";
+	public const string AllocationChanged = Prefix + "AllocationChanged";
 }

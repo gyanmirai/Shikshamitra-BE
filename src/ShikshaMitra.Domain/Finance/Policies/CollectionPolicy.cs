@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -73,6 +74,11 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Online Collection
 	public bool AllowOnlineCollection { get; protected set; }
 
+	// Stored in the existing JSON extension column, so historical rows remain Legacy.
+	[NotMapped]
+	public CollectionAllocationBasis AllocationBasis => Enum.Parse<CollectionAllocationBasis>(
+		this.GetProperty<string>(nameof(AllocationBasis), nameof(CollectionAllocationBasis.Legacy)));
+
 	public int Version { get; protected set; }
 
 	protected CollectionPolicy()
@@ -128,9 +134,11 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyMustBeActive);
 		}
 
+		if (!Enum.IsDefined(model.AllocationBasis))
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidAllocationBasis).WithData("field", "allocationBasis");
 		ValidateRules(model, model.Status == CollectionPolicyStatus.Active, validateInputBounds);
 
-		PolicyName = model.PolicyName.Trim();
+		PolicyName = FinanceName.Normalize(model.PolicyName);
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;
@@ -173,6 +181,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		this.SetProperty(EnableChargeWaiverProperty, model.EnableChargeWaiver);
 
 		AllowOnlineCollection = model.AllowOnlineCollection;
+		this.SetProperty(nameof(AllocationBasis), model.AllocationBasis.ToString());
 
 		Version++;
 	}
@@ -305,7 +314,8 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EnableChargeWaiver = EnableChargeWaiver,
 		RequiresApproval = RequiresApproval,
 		ApprovalRoleIds = GetApprovalRoleIds().ToList(),
-		AllowOnlineCollection = AllowOnlineCollection
+		AllowOnlineCollection = AllowOnlineCollection,
+		AllocationBasis = AllocationBasis
 	};
 
 	public static CollectionPolicy FromSnapshot(
@@ -470,4 +480,5 @@ public sealed record CollectionPolicyUpdateModel(
 	bool RequiresApproval,
 	IReadOnlyList<Guid> ApprovalRoleIds,
 	bool AllowOnlineCollection,
-	Guid? LateFeeIncomeCategoryId = null);
+	Guid? LateFeeIncomeCategoryId = null,
+	CollectionAllocationBasis AllocationBasis = CollectionAllocationBasis.Legacy);

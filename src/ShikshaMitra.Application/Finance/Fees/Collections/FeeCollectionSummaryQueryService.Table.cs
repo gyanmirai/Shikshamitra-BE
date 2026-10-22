@@ -20,7 +20,7 @@ public partial class FeeCollectionSummaryQueryService
         ["totalConcessionAmount"] = new(FinanceTableValueType.Number),
         ["totalCharges"] = new(FinanceTableValueType.Number),
         ["pendingCharges"] = new(FinanceTableValueType.Number),
-        ["status"] = new(FinanceTableValueType.Enum, false, [0, 1, 2, 7])
+        ["status"] = new(FinanceTableValueType.Enum, true, [0, 1, 2, 7])
     };
 
     private static readonly IReadOnlyDictionary<string, LambdaExpression> TableFields = new Dictionary<string, LambdaExpression>

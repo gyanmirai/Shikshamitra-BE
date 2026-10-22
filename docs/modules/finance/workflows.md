@@ -10,6 +10,13 @@ audience: humans-and-agents
 
 # Trace Finance backend workflows
 
+Collection Policy's allocation basis is versioned with the assignment/account policy snapshot.
+For configured policies, collect-form supplies the ordered eligible ledger and balance revision;
+collection repeats that calculation transactionally before accepting the submitted line amounts.
+No fee-head priority is configured separately. Existing snapshots remain Legacy until refreshed
+through the assignment workflow. See [automatic collection allocation](./api.md#automatic-collection-allocation)
+for the request, compatibility, permission, rounding, error and receipt-evidence contract.
+
 TL;DR: use this page to understand how Finance changes affect due rows, approvals, receipts, and reports.
 
 ## Core workflows

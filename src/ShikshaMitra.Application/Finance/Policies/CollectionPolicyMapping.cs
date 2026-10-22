@@ -8,6 +8,13 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 internal static class CollectionPolicyMapping
 {
+	private static CollectionAllocationBasis ParseAllocationBasis(string? value) => value switch
+	{
+		null or "Legacy" => CollectionAllocationBasis.Legacy,
+		"Installment" => CollectionAllocationBasis.Installment,
+		"FeeHead" => CollectionAllocationBasis.FeeHead,
+		_ => throw new BusinessException(CollectionPolicyErrorCodes.InvalidAllocationBasis)
+	};
 	public static CollectionPolicyStatus ParseStatus(string value) => Normalize(value) switch
 	{
 		"draft" => CollectionPolicyStatus.Draft,
@@ -193,7 +200,7 @@ internal static class CollectionPolicyMapping
 			false,
 			false,
 			Array.Empty<Guid>(),
-			input.AllowOnlineCollection, input.LateFeeIncomeCategoryId);
+			input.AllowOnlineCollection, input.LateFeeIncomeCategoryId, ParseAllocationBasis(input.AllocationBasis));
 
 	public static CollectionPolicyDto ToDto(CollectionPolicy entity) => new()
 	{
@@ -225,6 +232,7 @@ internal static class CollectionPolicyMapping
 		MaximumLateFeeAmount = entity.MaximumLateFeeAmount,
 		MaximumChargingDays = entity.MaximumChargingDays,
 		AllowOnlineCollection = entity.AllowOnlineCollection,
+		AllocationBasis = entity.AllocationBasis.ToString(),
 		Version = entity.Version,
 		CreationTime = entity.CreationTime,
 		CreatorId = entity.CreatorId,

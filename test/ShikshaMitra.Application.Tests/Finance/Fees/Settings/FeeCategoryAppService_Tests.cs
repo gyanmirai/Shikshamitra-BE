@@ -1,3 +1,5 @@
+using ShikshaMitra.Domain.Finance.Fees.Settings.Managers;
+using Volo.Abp;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,6 +19,22 @@ public class FeeCategoryAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 	{
 		_feeCategories = GetRequiredService<IFeeCategoryAppService>();
 		_feeCategoryRepository = GetRequiredService<IRepository<FeeCategory, Guid>>();
+	}
+
+	[Fact]
+	public async Task Uniqueness_Normalizes_Whitespace_And_Identifies_Archived_Conflicts()
+	{
+		var year = Guid.NewGuid();
+		var archived = new FeeCategory(Guid.NewGuid(), null, year, " 8th   FEE CATEGORY ", null);
+		archived.Name.ShouldBe("8th FEE CATEGORY");
+		archived.SetStatus(false, "Retired");
+		await _feeCategoryRepository.InsertAsync(archived, autoSave: true);
+		var manager = GetRequiredService<FeeCategoryManager>();
+		var error = await Should.ThrowAsync<BusinessException>(() => manager.EnsureNameIsUniqueAsync(year, "8th fee\t category"));
+		error.Code.ShouldBe(FinanceFeeCategoryErrorCodes.DuplicateName);
+		error.Data["Location"].ShouldBe("Archived");
+		await manager.EnsureNameIsUniqueAsync(year, "8th fee category", archived.Id);
+		await manager.EnsureNameIsUniqueAsync(Guid.NewGuid(), "8th fee category");
 	}
 
 	[Fact]

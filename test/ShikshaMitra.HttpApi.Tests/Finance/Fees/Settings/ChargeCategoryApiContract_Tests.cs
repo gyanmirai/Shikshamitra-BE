@@ -14,6 +14,15 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 public class ChargeCategoryApiContract_Tests
 {
 	[Fact]
+	public void Approval_configuration_defaults_to_required_and_allows_explicit_false()
+	{
+		new CreateChargeCategoryRequest().IsApprovalRequired.ShouldBeTrue();
+		new CreateChargeCategoryRequest { IsApprovalRequired = false }.IsApprovalRequired.ShouldBeFalse();
+		new UpdateChargeCategoryRequest().IsApprovalRequired.ShouldBeNull();
+		new UpdateChargeCategoryRequest { IsApprovalRequired = false }.IsApprovalRequired.ShouldBe(false);
+	}
+
+	[Fact]
 	public void Status_route_supports_put_and_patch_with_change_status_permission()
 	{
 		var method = typeof(ChargeCategoryController)

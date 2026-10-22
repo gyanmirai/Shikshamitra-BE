@@ -10,6 +10,7 @@ using ShikshaMitra.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Transactions.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp;
+using Volo.Abp.Uow;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
@@ -20,6 +21,7 @@ public partial class TransactionAppService(
 	IRepository<Transaction, Guid> transactionRepository,
 	IRepository<TransactionCategory, Guid> transactionCategoryRepository,
 	IRepository<AccountHead, Guid> accountHeadRepository,
+	ITransactionCategoryReferenceLock referenceLock,
 	FinanceScopeAccessService financeScopeAccessService,
     FinanceRoutingManager routingManager,
     IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid> academicYears
@@ -75,6 +77,7 @@ public partial class TransactionAppService(
 		};
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<TransactionCreateUpdateResponse> CreateAsync(Guid academicYearId, TransactionCreateRequest input, TransactionType transactionType)
 	{
         var paymentDate = input.PaymentDate.UtcDateTime;
@@ -100,6 +103,7 @@ public partial class TransactionAppService(
                 return MapToCreateUpdateResponse(prior, await transactionCategoryRepository.GetAsync(prior.CategoryId));
             }
         }
+		await referenceLock.AcquireAsync();
         var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
 			?? throw new BusinessException("ShikshaMitra:TransactionCategoryNotFound").WithData("CategoryId", input.CategoryId);
 
@@ -160,6 +164,7 @@ public partial class TransactionAppService(
 		};
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<TransactionCreateUpdateResponse> UpdateAsync(Guid transactionId, TransactionUpdateRequest input, TransactionType transactionType)
 	{
 		await CheckPermissionAsync(transactionType, "Add");
@@ -170,6 +175,7 @@ public partial class TransactionAppService(
 		await EnsureTransactionYearAsync(transaction);
 		EnsureTransactionType(transaction, transactionType);
 
+		await referenceLock.AcquireAsync();
 		var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
 			?? throw new BusinessException("ShikshaMitra:TransactionCategoryNotFound").WithData("CategoryId", input.CategoryId);
 

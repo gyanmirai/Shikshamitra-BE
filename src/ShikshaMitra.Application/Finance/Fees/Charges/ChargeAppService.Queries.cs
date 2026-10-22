@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Volo.Abp.Data;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
 using System;
@@ -148,7 +149,7 @@ public partial class ChargeAppService
 				Status = (int)DeriveRequestStatus(detail.Lines.Select(l => l.Charge.Status).ToList()),
 				AdditionalNotes = detail.Request.AdditionalNotes, Audience = audience,
 				AppliedCount = detail.Lines.Count(l => l.Charge.Status == ChargeStatus.Approved),
-				IsApprovalRequired = true,
+				IsApprovalRequired = detail.Request.GetProperty<bool>("IsApprovalRequiredAtCreation", true),
 				WorkflowStatus = workflowStatus,
 				Students = studentLines,
 				Requestor = new RequestorInfo

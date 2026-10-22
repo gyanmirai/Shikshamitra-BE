@@ -3,12 +3,45 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-17
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Use Finance backend APIs
+
+## Automatic collection allocation
+
+Collection Policy DTOs accept `allocationBasis`: `Installment` or `FeeHead`; `Legacy` preserves
+deployed behavior. Omitted values preserve the saved basis on update and use Legacy on older
+create clients. The UI defaults new policies to Installment. Invalid values fail validation.
+The enum is persisted in the aggregate's existing `ExtraProperties` JSON, copied by clone and
+included in immutable `CollectionPolicySnapshot` versions. Existing rows/snapshots need no
+schema migration and resolve to Legacy. No fee-head priority/rank records are introduced.
+
+Student and Admission collect-form responses add `allocationBasis`, `collectionPolicyId`,
+`collectionPolicyName`, `collectionPolicyVersion`, `allocationDueFeeOrder` and `allocationRevision`.
+Configured modes use the same ordered ledger in the screen and command validation. Installment
+groups use schedule installment IDs (date/label fallback for legacy dues), not month labels alone.
+Fee-head groups retain the collection head-name order. Both retain the displayed line sequence.
+
+Configured collection commands require `automaticAllocation: { revision, dueFeeIds, chargeIds }`.
+Selection includes unfunded rows. The server reloads the scope-checked, assignment/account-pinned
+collect form inside the existing serializable transaction, checks its revision and recalculates
+allocations in decimal currency. Principal retains the existing whole-rupee ceiling; no additional
+rounding mode is added. Linked late fee follows its principal, and selected charges follow fees.
+The sum of accepted allocations equals tendered money; partial and exact payments work, excess
+is rejected. Unknown/duplicate selections, stale revisions and altered amounts fail before writes.
+`ShikshaMitra:FeeCollection:AllocationChanged` instructs the caller to refresh and review again.
+Retry replay is checked before current-balance validation, preserving the original result.
+
+The collection metadata's `AutomaticAllocation` extension stores the applied policy/version,
+basis, revision and selected sequence with the existing immutable allocation and receipt evidence.
+Policy changes do not rewrite existing assignment snapshots or posted receipts. Basis resolution
+uses `CollectionPolicyResolver`: pinned assignment/account version, with existing direct-attachment
+and academic-year-default resolution where applicable. Student late-fee overrides do not alter basis.
+Permissions remain the existing Collection Policy View/Add and Fee Collection View/Add plus payer
+scope; no override grant is added. Legacy calls retain their existing request/fingerprint behavior.
 
 TL;DR: use this page to find Finance endpoint families and route ownership.
 Controller source paths are canonical when a route detail changes.
@@ -49,6 +82,10 @@ list every month in the selected academic year. The list retains tenant and user
 scope filtering, optional class/division and receipt-kind filters, and server pagination.
 
 Fee-category and fee-head create/update contracts accept `module` as an optional numeric `FeeHeadModule` enum value. Send `null` or omit the property when no module applies. The fee-head module lookup returns numeric `value` fields with user-facing `displayName` labels. Every standalone or nested Fee Head request must also send `incomeCategoryId`. Responses return the Income Category. Historical Income Account Head fields are compatibility evidence. The backend accepts active, effective Income Categories from the Fee Head's academic year without requiring an Account Head.
+
+Fee Head list/detail responses and nested Fee Category heads expose `dependencies` with distinct `studentCount`, `assignmentCount`, `feeStructureCount`, `paymentTermCount`, and `isBlocked`. Deactivation and category head removal repeat these checks on the server and return `Finance:FeeHead:010002` and `:010001` respectively, with the head name and numeric counts in error data. Legacy student obligations remain dependencies even when they have no assignment ID. `GET api/student-fee-structure/students` accepts optional `feeHeadId` to narrow the existing tenant/year/user-scoped student list to affected obligations. Assignment details resolve current master fee-head labels while preserving the original stored pricing, policy, service-period, and label evidence.
+
+Charge Category creation defaults omitted `isApprovalRequired` to true and accepts explicit false; omitted update values preserve the stored flag. Charge Category search matches name, description and linked Income Category name before pagination. Interactive charge creation with explicit no-approval configuration applies collectible lines through the existing approval side effects and pins the approval rule on the request. Approval-required categories retain the existing checker flow and documented administrator creation exception. Existing pending requests and source-module commands keep their current workflow.
 
 Fee Head status changes reject an archived parent category with `Finance:FeeHead:010007` (restore the category before changing status). This rejects both activation and deactivation; active-head lookups also exclude archived categories.
 
@@ -92,6 +129,7 @@ Staged concession uploads are tenant- and uploader-bound. Their stored receipt r
 | Contract | Validation and exposure |
 |---|---|
 | Income Category name | Required trimmed business text, maximum 40 characters on create/update; Expense Category maximum remains 128; numbers, punctuation and Unicode are preserved |
+| Category deletion | Income Category `canDelete` is true whenever unused, including newly created active categories. DELETE checks Fee Head, charge-category, policy and transaction references; `deletionBlockedReason` identifies an actual dependency. PostgreSQL uses a shared tenant transaction lock for income-category deletion and its initial reference writers, preventing concurrent creation after the usage proof. Expense Categories still require deactivation and no references. |
 | Bank names | Bank, branch and holder names are required trimmed business text, maximum 100 characters; Purpose maximum 500 |
 | Bank list/status response | Full `accountNumber` and `upiId` remain null; `maskedAccountNumber`, masked `ifscCode` and `maskedUpiId` are the safe display/export values; UPI masks the entire local part (`***@handle`) |
 | Bank detail/edit response | Existing authorized detail route retains full identifiers; list projection is never used as an edit payload |
@@ -210,3 +248,13 @@ GET `/api/accounts/register/{source}/{id}` accepts academicYearId and enforces t
 POST `/api/incomes` and `/api/expenses` accept optional bankAccountId, counterparty, paymentReference and UUID idempotencyKey alongside the existing manual fields.
 Financial routing lookups add income-entry and expense-entry operations using the exact owning Add grant.
 See [the workspace contract](./references/income-expense-workspaces.md) for field meanings, lifecycle, compatibility and integrity.
+
+## Configuration name validation and cloning
+
+Fee Category and all four Finance policy types trim names, collapse Unicode whitespace, and compare names case-insensitively within the current tenant and academic year, including archived records. Duplicate errors carry `Name` and `Location` (`Current` or `Archived`); Fee Category additionally carries `CorrectiveAction`. Archived conflicts direct users to restore the record or choose another name. Existing records and historical snapshots are not rewritten.
+
+Cloning without an explicit name selects the first available `Copy`, `Copy 2`, etc. name across Current and Archived policies, bounded to the 128-character name limit. Explicit names still undergo duplicate validation. Copies remain Draft and nondefault; cloning the default leaves the source default unchanged. Automatically generated policy codes use random GUID material rather than truncated sequential GUID prefixes, which can repeat across clones. Existing database unique indexes remain the final exact-name/code collision guard. Legacy normalization collisions must be reconciled before introducing a database normalized-key index.
+
+Payment Term duplicate generated codes retain error `Finance:PaymentTerm:000023`, with a specific message identifying the code and asking for another name or code. Concession policy percentages accept at most two decimal places; excessive precision is rejected rather than rounded silently (`Finance:ConcessionPolicy:010027`).
+
+Concession Apply On retains the canonical enum contract: `0 = AllOutstanding`, `1 = CurrentInstallment`, `2 = FutureInstallments`, `3 = AllFees`. DTOs expose the symbolic strings; immutable historical snapshot JSON retains its original numeric enum representation. History presentation must compare canonical enum values before displaying labels.

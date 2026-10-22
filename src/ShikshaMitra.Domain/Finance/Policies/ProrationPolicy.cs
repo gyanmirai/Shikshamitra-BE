@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -52,7 +53,7 @@ public class ProrationPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(ProrationPolicyErrorCodes.DefaultPolicyMustBeActive);
 
 		ValidateRules(model.Rules);
-		PolicyName = model.PolicyName.Trim();
+		PolicyName = FinanceName.Normalize(model.PolicyName);
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;

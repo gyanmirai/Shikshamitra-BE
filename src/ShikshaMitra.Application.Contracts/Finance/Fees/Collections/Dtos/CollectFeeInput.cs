@@ -111,6 +111,18 @@ public class CollectFeeInput
     [Required]
     [MinLength(1)]
     public List<FeePaymentDto> Payments { get; set; } = [];
+
+	/// <summary>Selected rows, including unfunded rows, from the authoritative collect form.</summary>
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public AutomaticCollectionSelectionDto? AutomaticAllocation { get; set; }
+}
+
+public class AutomaticCollectionSelectionDto
+{
+	[Required, MaxLength(64)]
+	public string Revision { get; set; } = string.Empty;
+	public List<Guid> DueFeeIds { get; set; } = [];
+	public List<Guid> ChargeIds { get; set; } = [];
 }
 
 /// <summary>Allocates part of a payment to a specific monthly due fee row.</summary>

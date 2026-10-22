@@ -15,9 +15,23 @@ public class FeeStructurePolicyTestModule : AbpModule
 		context.Services.Replace(ServiceDescriptor.Singleton<IClock>(new FixtureClock()));
 	}
 
-	private sealed class FixtureClock : IClock
+	public sealed class FixtureClock : IClock
 	{
-		public DateTime Now => new(2025, 10, 1);
+		public DateTime Current { get; set; } = new(2025, 10, 1);
+		public DateTime? AdvanceAfterNextRead { get; set; }
+		public DateTime Now
+		{
+			get
+			{
+				var now = Current;
+				if (AdvanceAfterNextRead.HasValue)
+				{
+					Current = AdvanceAfterNextRead.Value;
+					AdvanceAfterNextRead = null;
+				}
+				return now;
+			}
+		}
 		public DateTimeKind Kind => DateTimeKind.Unspecified;
 		public bool SupportsMultipleTimezone => false;
 		public DateTime Normalize(DateTime dateTime) => dateTime;

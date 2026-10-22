@@ -3,7 +3,7 @@ module: finance
 domain: student-fee-assignment
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -87,7 +87,14 @@ Each `servicePeriods` item contains `feeHeadId`, `source`, and source-specific f
 
 The server normalizes service dates to UTC midnight. It stores the verification label, source reference/revision and reasons in the assignment snapshot.
 
-The protected token expires after 20 minutes and binds tenant, user, command, exact prepared result and source/configuration revisions. Commit reloads and recalculates; changed inputs or facts require a new preview. App hosts use ASP.NET Data Protection. Multiple instances must share the application's protected key ring for previews to survive routing between instances.
+The protected token expires after 20 minutes and binds tenant, user, command, exact prepared result and source/configuration revisions.
+Preview additionally returns optional UTC `previewExpiresAt` for client feedback; this field is absent from saved evidence and the prepared-result fingerprint.
+Expiry is checked against the server's confirmation acceptance time, captured once for the entire bulk command, before expensive recalculation.
+A token already expired when confirmation arrives is rejected without writes; a valid token cannot expire merely because earlier bulk items or recalculation take time.
+Commit still reloads and recalculates each student; changed inputs, scope or authoritative facts require a new preview.
+An identical saved command returns `AlreadyAssigned` before token validation, including after expiry, without generating additional dues.
+App hosts use ASP.NET Data Protection.
+Multiple instances must share the application's protected key ring for previews to survive routing between instances.
 
 ## Amounts, terms and policy evidence
 
@@ -101,7 +108,12 @@ The protected token expires after 20 minutes and binds tenant, user, command, ex
 
 ## Transactions, retries and integrity
 
-Each student commit owns a new transactional unit of work containing the assignment, all generated dues and the current-year student shortcut. Bulk items commit independently, and counters are incremented only after commit completes. The existing unique tenant/student/year assignment index arbitrates concurrent requests. A failed context is disposed before checking for a concurrent successful commit.
+Each student commit owns a new transactional unit of work containing the assignment, all generated dues and the current-year student shortcut.
+Bulk items commit independently, and counters are incremented only after a durable canonical outcome is established.
+The existing unique tenant/student/year assignment index arbitrates concurrent requests.
+After a non-authorization, non-cancellation failure, the write context is disposed before a fresh scoped read checks for an identical saved command.
+This also recovers a durable assignment when a completion callback fails after commit; mismatching commands never count as a recovered success.
+If no matching saved assignment exists, known business failures retain their original error.
 
 The normalized command fingerprint excludes the preview token. An identical retry returns `AlreadyAssigned` with the saved result; a different command cannot overwrite an existing assignment. Subsequent payments and master edits never cause assignment regeneration. Existing collection resolves an assignment's exact pinned policy and fails if it cannot be found.
 

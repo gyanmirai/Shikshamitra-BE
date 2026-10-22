@@ -2,6 +2,7 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 public static class CollectionPolicyErrorCodes
 {
+	public const string InvalidAllocationBasis = "Finance:CollectionPolicy:InvalidAllocationBasis";
 	public const string DefaultPolicyCannotBeRemoved = "Finance:CollectionPolicy:010033";
 	private const string Prefix = "Finance:CollectionPolicy:";
 
@@ -36,5 +37,6 @@ public static class CollectionPolicyErrorCodes
 	public const string PolicyInUse = Prefix + "010029";
 	public const string FeeHeadMismatch = Prefix + "010030";
 	public const string WorkingDayGraceNotSupported = Prefix + "010031";
+	public const string DuplicateName = Prefix + "010034";
 	public const string DuplicatePolicyCode = Prefix + "010032";
 }

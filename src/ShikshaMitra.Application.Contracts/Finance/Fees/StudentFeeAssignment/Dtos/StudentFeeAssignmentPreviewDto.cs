@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace ShikshaMitra.Finance.Fees.StudentFeeAssignment.Dtos;
 
@@ -17,6 +18,9 @@ public class StudentFeeAssignmentPreviewDto
     public string Currency { get; set; } = "INR";
     public string CalculationVersion { get; set; } = "assignment-v2";
     public string PreviewToken { get; set; } = "";
+    // Absent on saved assignments and older responses; not part of the prepared-result hash.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? PreviewExpiresAt { get; set; }
     public List<AssignmentHeadDto> Heads { get; set; } = [];
     public List<AssignmentPolicyDto> Policies { get; set; } = [];
     public List<string> Warnings { get; set; } = [];

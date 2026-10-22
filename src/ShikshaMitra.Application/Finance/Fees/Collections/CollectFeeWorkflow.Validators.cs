@@ -16,7 +16,7 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 
 public partial class CollectFeeWorkflow
 {
-	private async Task ValidatePaymentChannelPolicyAsync(CollectFeeInput input)
+	private async Task<CollectionPolicy?> ValidatePaymentChannelPolicyAsync(CollectFeeInput input)
 	{
 		if (input.FinanceFeeAccountId.HasValue)
 		{
@@ -24,21 +24,21 @@ public partial class CollectFeeWorkflow
 			if (rules.Policy?.AllowOnlineCollection == false && input.Payments.Any(p => p.PaymentMethod is
 				PaymentMethodEnum.BankTransfer or PaymentMethodEnum.CreditCard or PaymentMethodEnum.DebitCard or PaymentMethodEnum.UPI))
 				throw new BusinessException(FinanceChargeErrorCodes.OnlineCollectionNotAllowed);
-			return;
+			return rules.Policy;
 		}
 		var assignment = await studentFeeStructureRepository.FirstOrDefaultAsync(x =>
 			x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
-		if (assignment is null) return;
+		if (assignment is null) return null;
 
 		var effectiveRules = await policyResolver.ResolveEffectiveRulesForStudentAsync(
 			input.StudentId!.Value, assignment.FeeStructureStandardId);
-		if (effectiveRules.Policy?.AllowOnlineCollection != false) return;
 
 		var containsOnlineMethod = input.Payments.Any(payment => payment.PaymentMethod is
 			PaymentMethodEnum.BankTransfer or PaymentMethodEnum.CreditCard or
 			PaymentMethodEnum.DebitCard or PaymentMethodEnum.UPI);
-		if (containsOnlineMethod)
+		if (effectiveRules.Policy?.AllowOnlineCollection == false && containsOnlineMethod)
 			throw new BusinessException(FinanceChargeErrorCodes.OnlineCollectionNotAllowed);
+		return effectiveRules.Policy;
 	}
 
 	private async Task<(Student Student, AcademicYear AcademicYear)> ValidateAndLoadStudentForCollectionAsync(

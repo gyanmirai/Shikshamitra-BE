@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using ShikshaMitra.Domain.Finance.Accounts.Settings;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance;
@@ -9,6 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.Uow;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -32,6 +34,7 @@ public class CollectionPolicyAppService(
 	LateFeeCalculationService lateFeeCalculationService,
 	ExceptionWindowResolver exceptionWindowResolver,
 	FinanceRoutingManager routingManager,
+	ITransactionCategoryReferenceLock referenceLock,
 	FinanceScopeAccessService scopeAccess,
 	IClock clock)
 	: ApplicationService, ICollectionPolicyAppService
@@ -156,6 +159,7 @@ public class CollectionPolicyAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add)]
+	[UnitOfWork(isTransactional: true)]
 	public async Task<CollectionPolicyDto> CreateAsync(CreateUpdateCollectionPolicyDto input)
 	{
 		var model = await BuildValidatedModelAsync(input);
@@ -179,6 +183,7 @@ public class CollectionPolicyAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Policies_CollectionPolicy.Add)]
+	[UnitOfWork(isTransactional: true)]
 	public async Task<CollectionPolicyDto> UpdateAsync(Guid id, CreateUpdateCollectionPolicyDto input)
 	{
 		var entity = await GetEntityOrThrowAsync(id);
@@ -193,6 +198,7 @@ public class CollectionPolicyAppService(
 		{
 			throw new BusinessException(CollectionPolicyErrorCodes.ArchivedPolicyNotEditable);
 		}
+		if (input.AllocationBasis is null) model = model with { AllocationBasis = entity.AllocationBasis };
 		if (entity.Status == CollectionPolicyStatus.Active && model.Status == CollectionPolicyStatus.Draft &&
 			(await GetUsageCountsAsync(new[] { id })).Contains(id))
 		{
@@ -220,6 +226,7 @@ public class CollectionPolicyAppService(
 	}
 
 	[Authorize]
+	[UnitOfWork(isTransactional: true)]
 	public async Task<CollectionPolicyDto> CloneAsync(Guid id, CollectionPolicyCloneRequestDto input)
 	{
 		await EnsureCanCloneAsync();
@@ -232,8 +239,13 @@ public class CollectionPolicyAppService(
 		var createDto = new CreateUpdateCollectionPolicyDto
 		{
 			AcademicYearId = targetAcademicYearId,
-			PolicyName = string.IsNullOrWhiteSpace(input.Name) ? $"{source.PolicyName} Copy" : input.Name!,
-			PolicyCode = $"CP-{GuidGenerator.Create().ToString("N")[..8].ToUpperInvariant()}",
+			PolicyName = string.IsNullOrWhiteSpace(input.Name)
+				? FinanceName.NextCopy(source.PolicyName, await AsyncExecuter.ToListAsync(
+					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == (input.TargetAcademicYearId ?? source.AcademicYearId))
+					.Select(x => x.PolicyName)))
+				: FinanceName.Normalize(input.Name),
+			// Sequential GUID prefixes can repeat. Use random GUID material within the code length limit.
+			PolicyCode = $"CP-{Guid.NewGuid():N}"[..27].ToUpperInvariant(),
 			Description = source.Description,
 			Status = "Draft",
 			IsDefault = false,
@@ -257,7 +269,8 @@ public class CollectionPolicyAppService(
 			LateFeeIncomeCategoryId = sameAcademicYear ? sourceDto.LateFeeIncomeCategoryId : null,
 			MaximumLateFeeAmount = sourceDto.MaximumLateFeeAmount,
 			MaximumChargingDays = sourceDto.MaximumChargingDays,
-			AllowOnlineCollection = sourceDto.AllowOnlineCollection
+			AllowOnlineCollection = sourceDto.AllowOnlineCollection,
+			AllocationBasis = sourceDto.AllocationBasis
 		};
 
 		var model = await BuildValidatedModelAsync(createDto);
@@ -458,21 +471,29 @@ public class CollectionPolicyAppService(
 
 	private async Task EnsureUniqueAsync(Guid academicYearId, string name, string code, Guid? excludeId)
 	{
-		var normalizedName = (name ?? string.Empty).Trim().ToLower();
-		var normalizedCode = (code ?? string.Empty).Trim().ToUpper();
+		var normalizedName = FinanceName.Normalize(name);
+		var normalizedCode = code.Trim().ToUpperInvariant();
 		var query = await repository.GetQueryableAsync();
-		if (query.Any(x => x.AcademicYearId == academicYearId && x.Id != excludeId &&
-			(x.PolicyName.ToLower() == normalizedName || x.PolicyCode.ToUpper() == normalizedCode)))
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.DuplicatePolicyCode);
-		}
+		var candidates = await AsyncExecuter.ToListAsync(query.Where(x => x.AcademicYearId == academicYearId &&
+			(!excludeId.HasValue || x.Id != excludeId.Value)).Select(x => new { x.PolicyName, x.Status }));
+		var existing = candidates.FirstOrDefault(x => FinanceName.Equals(x.PolicyName, normalizedName));
+		if (existing != null)
+			throw new BusinessException(CollectionPolicyErrorCodes.DuplicateName)
+				.WithData("Name", normalizedName)
+				.WithData("Location", existing.Status == CollectionPolicyStatus.Archived ? "Archived" : "Current");
+		if (await AsyncExecuter.AnyAsync(query.Where(x => x.AcademicYearId == academicYearId &&
+			x.PolicyCode.ToUpper() == normalizedCode && (!excludeId.HasValue || x.Id != excludeId.Value))))
+			throw new BusinessException(CollectionPolicyErrorCodes.DuplicatePolicyCode).WithData("Code", normalizedCode);
 	}
 
 	private async Task<CollectionPolicyUpdateModel> BuildValidatedModelAsync(CreateUpdateCollectionPolicyDto input)
 	{
 		await scopeAccess.EnsureAcademicContextAccessibleAsync(input.AcademicYearId, null, null, null, null);
 		if (input.LateFeeIncomeCategoryId.HasValue || (input.EnableLateFee && input.Status == "Active"))
+		{
+			await referenceLock.AcquireAsync();
 			await routingManager.RequireCategoryAsync(input.AcademicYearId, input.LateFeeIncomeCategoryId, TransactionType.Income);
+		}
 		var year = await academicYearRepository.FindAsync(input.AcademicYearId)
 			?? throw new BusinessException(CollectionPolicyErrorCodes.AcademicYearRequired);
 		var model = CollectionPolicyMapping.ToUpdateModel(input, year.StartDate.Date, year.EndDate.Date);

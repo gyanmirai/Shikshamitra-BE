@@ -22,6 +22,7 @@ using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Transport;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Authorization;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Uow;
 
@@ -60,42 +61,62 @@ public partial class StudentFeeStructureAppService(
 	{
 		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
 		var prepared = await PrepareAsync(input);
+		var expires = Clock.Now.AddMinutes(20);
+		prepared.Preview.PreviewExpiresAt = new DateTimeOffset(expires).ToUniversalTime();
 		prepared.Preview.PreviewToken = Protector.Protect(JsonSerializer.Serialize(new PreviewAssertion(
-			CurrentTenant.Id, CurrentUser.Id, CommandFingerprint(input), prepared.Fingerprint, Clock.Now.AddMinutes(20))));
+			CurrentTenant.Id, CurrentUser.Id, CommandFingerprint(input), prepared.Fingerprint, expires)));
 		return prepared.Preview;
 	}
 
 	[Authorize(AssignPermission)]
 	public async Task<AssignmentCommitResultDto> AssignAsync(AssignStudentFeeStructureDto input)
+		=> await AssignAcceptedAsync(input, Clock.Now);
+
+	private async Task<AssignmentCommitResultDto> AssignAcceptedAsync(AssignStudentFeeStructureDto input, DateTime acceptedAt)
 	{
 		ValidateInput(input);
-		try { return await CommitAsync(input); }
-		catch (Exception exception) when (exception.GetType().Name is "DbUpdateException" or "AbpDbConcurrencyException")
+		try { return await CommitAsync(input, acceptedAt); }
+		catch (Exception exception) when (exception is not OperationCanceledException and not AbpAuthorizationException and not UnauthorizedAccessException)
 		{
-			// The failed context is disposed before retrieving a concurrent commit.
+			// CommitAsync has disposed its write context. Completion/event failures can
+			// occur after persistence, so only a fresh scoped read can establish success.
 			using var retry = unitOfWorkManager.Begin(requiresNew: true, isTransactional: false);
 			await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, false);
 			var existing = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
-			if (existing != null) return await ExistingResultAsync(existing, CommandFingerprint(input));
-			Logger.LogError(exception, "Assignment commit failed");
-			throw new BusinessException(AssignmentErrorCodes.CommitFailed);
+			var fingerprint = CommandFingerprint(input);
+			if (existing?.AssignmentRequestFingerprint == fingerprint && existing.AssignmentSnapshotJson != null)
+			{
+				Logger.LogWarning(exception, "Returning the durable assignment after an interrupted commit");
+				return await ExistingResultAsync(existing, fingerprint);
+			}
+			if (exception.GetType().Name is "DbUpdateException" or "AbpDbConcurrencyException")
+			{
+				if (existing != null) return await ExistingResultAsync(existing, fingerprint);
+				Logger.LogError(exception, "Assignment commit failed");
+				throw new BusinessException(AssignmentErrorCodes.CommitFailed);
+			}
+			throw;
 		}
 	}
 
-	private async Task<AssignmentCommitResultDto> CommitAsync(AssignStudentFeeStructureDto input)
+	private async Task<AssignmentCommitResultDto> CommitAsync(AssignStudentFeeStructureDto input, DateTime acceptedAt)
 	{
 		using var uow = unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
 		await RequireEnrollmentAsync(input.StudentId, input.AcademicYearId, false);
 		var commandFingerprint = CommandFingerprint(input);
 		var existing = await studentFeeStructureRepository.FirstOrDefaultAsync(x => x.StudentId == input.StudentId && x.AcademicYearId == input.AcademicYearId);
 		if (existing != null) return await ExistingResultAsync(existing, commandFingerprint);
-		var prepared = await PrepareAsync(input);
 		PreviewAssertion assertion;
 		try { assertion = JsonSerializer.Deserialize<PreviewAssertion>(Protector.Unprotect(input.PreviewToken ?? ""))!; }
 		catch (Exception ex) when (ex is CryptographicException or JsonException or ArgumentException)
 		{ throw new BusinessException(AssignmentErrorCodes.StalePreview); }
 		if (assertion == null || assertion.TenantId != CurrentTenant.Id || assertion.UserId != CurrentUser.Id ||
-			assertion.Command != commandFingerprint || assertion.Prepared != prepared.Fingerprint || assertion.Expires < Clock.Now)
+			assertion.Command != commandFingerprint || assertion.Expires <= acceptedAt)
+			throw new BusinessException(AssignmentErrorCodes.StalePreview);
+		// Expiry is checked at confirmation, before recalculation. Bulk queue time cannot
+		// expire an accepted preview, but changed authoritative facts still fail closed.
+		var prepared = await PrepareAsync(input);
+		if (assertion.Prepared != prepared.Fingerprint)
 			throw new BusinessException(AssignmentErrorCodes.StalePreview);
 		var id = GuidGenerator.Create();
 		var structure = prepared.Structure;

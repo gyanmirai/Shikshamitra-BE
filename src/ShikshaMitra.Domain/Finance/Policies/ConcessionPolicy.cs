@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -66,7 +67,7 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		ValidateRules(model);
 
-		PolicyName = model.PolicyName.Trim();
+		PolicyName = FinanceName.Normalize(model.PolicyName);
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;
@@ -145,6 +146,9 @@ public class ConcessionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	private static void ValidateRules(ConcessionPolicyUpdateModel model)
 	{
+		if ((model.PercentageValue.HasValue && decimal.Round(model.PercentageValue.Value, 2) != model.PercentageValue.Value) ||
+			(model.MaximumPercentage.HasValue && decimal.Round(model.MaximumPercentage.Value, 2) != model.MaximumPercentage.Value))
+			throw new BusinessException(ConcessionPolicyErrorCodes.PercentagePrecision);
 		if (model.AutoCreateRefund == true && model.ApplyOn != ConcessionApplyOn.AllFees)
 			throw new BusinessException(ConcessionPolicyErrorCodes.RefundRequiresPaidScope);
 		if (model.ValueSource == ConcessionValueSource.PolicyFixed)

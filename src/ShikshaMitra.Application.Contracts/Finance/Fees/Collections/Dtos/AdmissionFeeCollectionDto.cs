@@ -70,6 +70,7 @@ public class PrepareAdmissionFeeCollectionDto
 /// <summary>No student or academic-scope identifier is accepted from the client.</summary>
 public class CollectAdmissionFeeInput
 {
+	public AutomaticCollectionSelectionDto? AutomaticAllocation { get; set; }
 	[Required, MaxLength(100)]
 	public string IdempotencyKey { get; set; } = string.Empty;
 	[MaxLength(1000)]

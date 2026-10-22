@@ -26,6 +26,8 @@ public class TransactionCategoryAppService(
 	IRepository<AccountHead, Guid> accountHeadRepository,
 	IRepository<Transaction, Guid> transactionRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
+	IRepository<ChargeCategory, Guid> chargeCategories,
+	ITransactionCategoryReferenceLock referenceLock,
 	IRepository<ShikshaMitra.Finance.Fees.Charges.ChargeRequest, Guid> chargeRequests,
  ChargeRoutingUsageManager chargeRoutingUsage,
  IRepository<ShikshaMitra.Domain.Finance.Policies.FinancePolicyVersion, Guid> policyVersions,
@@ -134,10 +136,12 @@ public class TransactionCategoryAppService(
 		return await MapAsync(entity);
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<TransactionCategoryResponse> UpdateStatusAsync(Guid id,
 		AccountSettingStatusUpdateRequest input, TransactionType categoryType)
 	{
 		await CheckPermissionAsync(categoryType, "ChangeStatus");
+		await referenceLock.AcquireAsync();
 		var entity = await categoryRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureCategoryType(entity, categoryType);
@@ -150,15 +154,19 @@ public class TransactionCategoryAppService(
 		return await MapAsync(entity);
 	}
 
-	[UnitOfWork]
+	[UnitOfWork(isTransactional: true)]
 	public async Task DeleteAsync(Guid id, TransactionType categoryType)
 	{
 		await CheckPermissionAsync(categoryType, "Delete");
+		await referenceLock.AcquireAsync();
 		var entity = await categoryRepository.GetAsync(id);
 		await EnsureScopeAsync(entity.AcademicYearId);
 		EnsureCategoryType(entity, categoryType);
-		if (entity.IsActive) throw new BusinessException(AccountSettingErrorCodes.ActiveRecordCannotBeDeleted);
-		if (await IsUsedAsync(id)) throw new BusinessException(AccountSettingErrorCodes.CategoryInUse);
+		if (entity.CategoryType != TransactionType.Income && entity.IsActive)
+			throw new BusinessException(AccountSettingErrorCodes.ActiveRecordCannotBeDeleted);
+		var blockedReason = await GetDeletionBlockedReasonAsync(id);
+		if (blockedReason != null)
+			throw new BusinessException(AccountSettingErrorCodes.CategoryInUse).WithData("Reason", blockedReason);
 		await categoryRepository.DeleteAsync(entity, autoSave: true);
 	}
 
@@ -179,14 +187,19 @@ public class TransactionCategoryAppService(
 			throw new BusinessException(AccountSettingErrorCodes.DuplicateName).WithData("Name", name);
 	}
 
-	private async Task<bool> IsUsedAsync(Guid id) =>
-		await transactionRepository.AnyAsync(x => x.CategoryId == id) ||
-		await feeHeadRepository.AnyAsync(x => x.IncomeCategoryId == id) ||
-        await chargeRequests.AnyAsync(x => x.IncomeCategoryId == id) ||
-        await refunds.AnyAsync(x => x.ExpenseCategoryId == id) ||
-        await collectionPolicies.AnyAsync(x => x.LateFeeIncomeCategoryId == id) ||
-        await refundPolicies.AnyAsync(x => x.ExpenseCategoryId == id) ||
-        await policyVersions.AnyAsync(x=>x.SnapshotJson.Contains(id.ToString()));
+	private async Task<string?> GetDeletionBlockedReasonAsync(Guid id)
+	{
+		if (await transactionRepository.AnyAsync(x => x.CategoryId == id)) return "Used by transactions.";
+		if (await feeHeadRepository.AnyAsync(x => x.IncomeCategoryId == id)) return "Used by fee heads.";
+		if (await chargeRequests.AnyAsync(x => x.IncomeCategoryId == id)) return "Used by charge requests.";
+		if (await refunds.AnyAsync(x => x.ExpenseCategoryId == id)) return "Used by refund requests.";
+		if (await collectionPolicies.AnyAsync(x => x.LateFeeIncomeCategoryId == id)) return "Used by collection policies.";
+		if (await refundPolicies.AnyAsync(x => x.ExpenseCategoryId == id)) return "Used by refund policies.";
+		if (await policyVersions.AnyAsync(x => x.SnapshotJson.Contains(id.ToString()))) return "Used by policy versions.";
+		// Charge Category routing is an ABP ExtraProperty, not a mapped SQL member.
+		var configuredCharges = await chargeCategories.GetListAsync();
+		return configuredCharges.Any(x => x.IncomeCategoryId == id) ? "Used by charge categories." : null;
+	}
 
  private async Task<bool> IsConfiguredForFuturePaymentsAsync(Guid id)
  {
@@ -199,6 +212,7 @@ public class TransactionCategoryAppService(
 	private async Task<TransactionCategoryResponse> MapAsync(TransactionCategory entity)
 	{
 		var account = entity.DefaultAccountHeadId.HasValue ? await accountHeadRepository.FindAsync(entity.DefaultAccountHeadId.Value) : null;
+		var blockedReason = await GetDeletionBlockedReasonAsync(entity.Id);
 		return new TransactionCategoryResponse
 		{
 			Id = entity.Id, AcademicYearId = entity.AcademicYearId, Code = entity.Code,
@@ -207,7 +221,9 @@ public class TransactionCategoryAppService(
 			EffectiveFrom = entity.EffectiveFrom, EffectiveTo = entity.EffectiveTo,
 			IsActive = entity.IsActive, DeactivationReason = entity.DeactivationReason,
 			Version = entity.Version, ConcurrencyStamp = entity.ConcurrencyStamp,
-			IsUsedInDownstream = await IsUsedAsync(entity.Id)
+			IsUsedInDownstream = blockedReason != null,
+			DeletionBlockedReason = blockedReason,
+			CanDelete = blockedReason == null && (entity.CategoryType == TransactionType.Income || !entity.IsActive)
 		};
 	}
 

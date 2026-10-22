@@ -36,6 +36,51 @@ public class ConcessionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	};
 
 	[Fact]
+	public async Task Clone_Skips_Archived_Copy_Names_And_Remains_Nondefault_Draft()
+	{
+		var year = _guidGenerator.Create();
+		var source = await _concessionPolicies.CreateAsync(BuildInput(year, "Sibling support"));
+		var first = await _concessionPolicies.CloneAsync(source.Id, new());
+		await _concessionPolicies.ArchiveAsync(first.Id);
+		var second = await _concessionPolicies.CloneAsync(source.Id, new());
+		second.PolicyName.ShouldBe("Sibling support Copy 2");
+		second.Status.ShouldBe("Draft");
+		second.IsDefault.ShouldBeFalse();
+	}
+
+	[Fact]
+	public async Task Names_Normalize_And_Reject_Archived_Whitespace_Duplicates()
+	{
+		var year = _guidGenerator.Create();
+		var source = await _concessionPolicies.CreateAsync(BuildInput(year, " Sibling   support "));
+		source.PolicyName.ShouldBe("Sibling support");
+		await _concessionPolicies.ArchiveAsync(source.Id);
+		var error = await Should.ThrowAsync<BusinessException>(() =>
+			_concessionPolicies.CreateAsync(BuildInput(year, " SIBLING\t support ")));
+		error.Code.ShouldBe(ConcessionPolicyErrorCodes.DuplicateName);
+		error.Data["Location"].ShouldBe("Archived");
+		// The same display name remains available in another academic year.
+		await _concessionPolicies.CreateAsync(BuildInput(_guidGenerator.Create(), "Sibling support"));
+	}
+
+	[Fact]
+	public async Task Rejects_Excess_Percentage_Precision_Without_Silent_Rounding()
+	{
+		var input = BuildInput(_guidGenerator.Create(), "Precision policy");
+		input.MaximumPercentage = 0.111125m;
+		var error = await Should.ThrowAsync<BusinessException>(() => _concessionPolicies.CreateAsync(input));
+		error.Code.ShouldBe(ConcessionPolicyErrorCodes.PercentagePrecision);
+		input.MaximumPercentage = 0.11m;
+		(await _concessionPolicies.CreateAsync(input)).MaximumPercentage.ShouldBe(0.11m);
+		var fixedInput = BuildInput(_guidGenerator.Create(), "Fixed precision policy");
+		fixedInput.ValueSource = "PolicyFixed";
+		fixedInput.MaximumPercentage = null;
+		fixedInput.PercentageValue = 12.345m;
+		var fixedError = await Should.ThrowAsync<BusinessException>(() => _concessionPolicies.CreateAsync(fixedInput));
+		fixedError.Code.ShouldBe(ConcessionPolicyErrorCodes.PercentagePrecision);
+	}
+
+	[Fact]
 	public async Task List_Should_Separate_Current_And_Archived_Policies()
 	{
 		var academicYearId = _guidGenerator.Create();

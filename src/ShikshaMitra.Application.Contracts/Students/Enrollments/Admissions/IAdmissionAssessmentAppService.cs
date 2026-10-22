@@ -25,6 +25,7 @@ public interface IAdmissionAssessmentAppService : IApplicationService
 	Task<AdmissionAssessmentDto> BookAsync(Guid applicationId, Guid stageInstanceId, AdmissionAssessmentBookingInput input);
 	Task<AdmissionAssessmentDto> RecordAttendanceAsync(Guid attemptId, AdmissionAssessmentAttendanceInput input);
 	Task<AdmissionAssessmentDto> RecordResultAsync(Guid attemptId, AdmissionAssessmentResultInput input);
+	Task<AdmissionAssessmentDto> SaveResultDraftAsync(Guid attemptId, AdmissionAssessmentResultInput input);
 	Task<AdmissionAssessmentDto> ReviewAsync(Guid attemptId, AdmissionAssessmentReviewInput input);
 	Task<AdmissionAssessmentDto> RetakeAsync(Guid attemptId, AdmissionAssessmentActionInput input);
 	Task<AdmissionAssessmentDto> CancelAttemptAsync(Guid attemptId, AdmissionAssessmentActionInput input);

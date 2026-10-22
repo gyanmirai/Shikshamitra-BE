@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-16
+updated_on: 2026-10-21
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -64,6 +64,7 @@ Admissions Application, Inquiry (including CSV export), Offering, Pipeline/optio
 
 `GET /api/student/enrollment/admissions/applications/pipeline` requires AdmissionApplications.View and projects active inquiry-linked applications and started RTE/Management/Staff special registrations before Admission Decision within existing tenant and offering scope. Unlinked historical General applications and special rows without a started workflow remain excluded. Direct cases return nullable `inquiryId`, `sourceInquiryAvailable: false`, primary guardian contact data and zero Inquiry follow-ups; no synthetic Inquiry is created. Existing Inquiry-linked contact precedence is preserved. Inquiry follow-up commands still require an available source Inquiry.
 It accepts academic hierarchy, MyCases, assigned counsellor, status, stage code, search, whitelisted sorting and bounded paging.
+Each row includes `stageProgress` (runtime stage ID, name and status in display order), `nextFollowUpPurpose` (the earliest scheduled inquiry follow-up) and `overdueFollowUpCount` (only scheduled follow-ups before the server UTC clock). Progress is batched for the authorized result page from existing workflow instances, never inferred from a global stage list or from the number of completed steps. These additive read fields do not mutate stages, follow-ups or Finance data and require no database migration.
 `GET /api/student/enrollment/admissions/applications/pipeline/options` supplies complete scoped active counsellor/stage choices, current user and the authoritative default queue without page/search truncation.
 Administrators identified by the existing user scope and configured fallback managers default to All; other staff default to My.
 The queue preference never changes academic access.
@@ -430,6 +431,7 @@ Permission names below use only `Students.Admissions.Assessments.View`, `.Add`, 
 | `POST /applications/{applicationId}/stages/{stageInstanceId}/attempts` | `Book` | Create an attempt, with a matching session when scheduling is enabled |
 | `PUT /attempts/{id}/attendance` | `RecordAttendance` | Record `present` or `absent` |
 | `PUT /attempts/{id}/result` | `RecordResults` | Record marks or an unscored passed/failed outcome |
+| `PUT /attempts/{id}/result-draft` | `RecordResults` | Save partial subject scores on a pending attempt without completing it |
 | `POST /attempts/{id}/review` | `Review` | Approve evidence or return it for correction |
 | `POST /attempts/{id}/retake` | `Book` | Permit another attempt within the configured limit |
 | `POST /attempts/{id}/cancel` | `Book` | Cancel an unstarted attempt and release its booking |
@@ -440,6 +442,20 @@ Scope choices also include optional `offeringCode` and `workflowName` for readab
 The configuration shape is `{ "assessment": { "version": 1, "enabled": true, "schedulingEnabled": false, "attendanceRequired": false, "scoringEnabled": true, "totalMarks": 100, "passingMarks": 40, "reviewRequired": false, "maxAttempts": 1 } }`.
 Version 1 supports 1 to 10 attempts and positive total marks up to 10000, with passing marks between zero and the total.
 Attendance can also be required in result-only mode.
+
+Version 2 adds `scoringMode: "total" | "subjects"` and `classProfiles`.
+Each profile contains `id`, `name`, `boardId`, `mediumId`, `standardIds`, `passRule` (`overall`, `everySubject`, `both`), `passingMarks` and `subjects`.
+Each subject contains a stable `code`, nullable Academic `subjectId`, frozen `name`, `totalMarks` and nullable `passingMarks`; per-subject rules require every subject threshold.
+Assessment configuration accepts up to 64,000 characters; other stage configuration retains its existing 8,000-character bound.
+`GET /api/student/enrollment/admissions/workflows/assessment-catalog` requires Workflow View and returns tenant/user-scoped `classes` with Board, Medium and year context, and active Medium `subjects` with `assignedStandardIds` suggestions.
+No Academic module permission or published class assignment is required to select an active Medium subject.
+An Offering without one matching class profile fails readiness validation.
+
+Subject result draft and final requests use `{ concurrencyStamp, notes?, subjectScores: [{ code, marks: number | null }] }`.
+Drafts may omit subjects or leave null marks; final writes require all configured scores within their frozen maxima.
+The server derives total and passed/failed; caller totals or outcomes cannot override subject rules.
+The assessment and attempt DTOs expose `effectiveProfile`; attempts include `subjectScores`, and the summary includes `canSaveResultDraft` and `canSubmitResult`.
+These flags retain the existing session, attendance, action and scope checks.
 
 Session input requires offering/stage identifiers, name, ISO date-times, location, and capacity from 1 to 10000.
 Session update/cancellation requires the session concurrency stamp.
@@ -478,6 +494,8 @@ Negative outcome routes must contain a matching `Equals` or array-valued `In` co
 Unknown policy versions, stale stamps, unavailable capacity, missing evidence, and missing negative-outcome routes are rejected using `Admissions:Assessment:*` error codes.
 
 ## Inquiry management APIs
+
+The existing inquiry capture-context response includes nullable `academicYearStartDate` (a calendar date) and `minimumAgeYears`. After the offering scope check, these are read from its cycle's Academic Year and its Standard's existing `AgeLowerLimit`; non-positive minima return null. Clients use them for advisory DOB age feedback in inquiry create/edit. This does not add inquiry validation, change workflow eligibility policies, require Institute Setup permissions, or introduce persisted settings/migrations.
 
 The inquiry collection route prefix is `/api/student/enrollment/admissions/inquiries`.
 

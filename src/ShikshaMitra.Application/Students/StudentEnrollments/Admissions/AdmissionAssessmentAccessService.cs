@@ -53,7 +53,7 @@ public class AdmissionAssessmentAccessService(
 	{
 		var application = await applications.FindAsync(applicationId) ?? throw new EntityNotFoundException(typeof(AdmissionApplication), applicationId);
 		await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationScopeAccessService>().EnsureCanAccessAsync(application);
-		await GetOfferingAsync(application.AdmissionOfferingId);
+		var offering = await GetOfferingAsync(application.AdmissionOfferingId);
 		var stage = await stages.FindAsync(stageId) ?? throw new EntityNotFoundException(typeof(AdmissionApplicationStageInstance), stageId);
 		var workflow = await instances.FindAsync(stage.WorkflowInstanceId);
 		if (workflow?.ApplicationId != applicationId || workflow.WorkflowDefinitionId != application.WorkflowDefinitionId ||
@@ -62,7 +62,7 @@ public class AdmissionAssessmentAccessService(
 		var definition = await definitions.GetAsync(stage.DefinitionStageId);
 		if (definition.WorkflowDefinitionId != application.WorkflowDefinitionId)
 			throw new EntityNotFoundException(typeof(AdmissionWorkflowStageDefinition), definition.Id);
-		var context = new AdmissionAssessmentContext(application, stage, definition, ReadPolicy(definition)) { WorkflowStatus = workflow.Status };
+		var context = new AdmissionAssessmentContext(application, stage, definition, ResolvePolicy(ReadPolicy(definition), offering)) { WorkflowStatus = workflow.Status };
 		if (requireActive && (!context.IsActive || context.Policy == null || workflow.Status != AdmissionWorkflowInstanceStatus.Active))
 			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "The managed assessment stage must be active.");
 		if (requirePreparation && (!context.CanPrepare || context.Policy == null))
@@ -92,7 +92,22 @@ public class AdmissionAssessmentAccessService(
 			(offering.WorkflowDefinitionId != definition.WorkflowDefinitionId && !await applications.AnyAsync(application =>
 				application.AdmissionOfferingId == offeringId && application.WorkflowDefinitionId == definition.WorkflowDefinitionId)))
 			throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidState, "Choose a managed assessment stage belonging to this offering.");
+		_ = ResolvePolicy(ReadPolicy(definition), offering);
 		return definition;
+	}
+
+	public static AdmissionAssessmentPolicy? ResolvePolicy(AdmissionAssessmentPolicy? policy, AdmissionOffering offering)
+	{
+		try { return policy?.Resolve(offering.BoardId, offering.MediumId, offering.StandardId); }
+		catch (ArgumentException exception) { throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message); }
+	}
+
+	public static AdmissionAssessmentPolicy? ReadAttemptPolicy(AdmissionAssessmentAttempt? attempt, AdmissionAssessmentPolicy? fallback)
+	{
+		if (attempt == null) return fallback;
+		try { return AdmissionAssessmentPolicy.Read(attempt.PolicySnapshotJson) is { } policy ? policy with { ReviewRequired = false } : fallback; }
+		catch (Exception exception) when (exception is ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
+		{ throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message); }
 	}
 
 	public static AdmissionAssessmentPolicy? ReadPolicy(AdmissionWorkflowStageDefinition definition)

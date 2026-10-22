@@ -43,7 +43,7 @@ public class AdmissionAssessmentSessionService(
 		foreach (var stage in stageRows.Where(stage => stage.WorkflowDefinitionId == offering.WorkflowDefinitionId ||
 			pinned.Any(application => application.AdmissionOfferingId == offering.Id && application.WorkflowDefinitionId == stage.WorkflowDefinitionId)))
 		{
-			var policy = AdmissionAssessmentAccessService.ReadPolicy(stage);
+			var policy = AdmissionAssessmentAccessService.ResolvePolicy(AdmissionAssessmentAccessService.ReadPolicy(stage), offering);
 			if (policy == null || !workflowRows.TryGetValue(stage.WorkflowDefinitionId, out var workflow)) continue;
 			result.Add(new AdmissionAssessmentScopeDto
 			{

@@ -15,6 +15,10 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 [Route("api/student/enrollment/admissions/workflows")]
 public class AdmissionWorkflowsController(IAdmissionWorkflowAppService appService) : AbpController
 {
+	[HttpGet("assessment-catalog")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
+	public async Task<Result<AdmissionAssessmentCatalogDto>> GetAssessmentCatalog() => Result.Success(await appService.GetAssessmentCatalogAsync());
+
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public async Task<Result<PagedResultDto<AdmissionWorkflowDto>>> GetList([FromQuery] AdmissionWorkflowListInput input) => Result.Success(await appService.GetListAsync(input));

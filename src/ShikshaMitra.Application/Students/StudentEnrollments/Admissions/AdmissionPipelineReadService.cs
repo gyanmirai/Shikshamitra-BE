@@ -55,7 +55,17 @@ public class AdmissionPipelineReadService(
 		var inquiryIds = rows.Where(row => row.InquiryId.HasValue).Select(row => row.InquiryId!.Value).ToArray();
 		var pending = await followUps.GetListAsync(item => Enumerable.Contains(inquiryIds, item.InquiryId) && item.Status == AdmissionInquiryFollowUpStatus.Scheduled);
 		var stageIds = rows.Where(row => row.CurrentStageInstanceId.HasValue).Select(row => row.CurrentStageInstanceId!.Value).ToArray();
-		var stageRows = await stages.GetListAsync(item => Enumerable.Contains(stageIds, item.Id));
+		var applicationIds = rows.Select(row => row.Id).ToArray();
+		var stageQuery = await stages.GetQueryableAsync();
+		var workflowQuery = await workflows.GetQueryableAsync();
+		// One bounded page-level projection, rather than fetching a workflow for every table row.
+		var progressRows = await AsyncExecuter.ToListAsync(
+			from stage in stageQuery
+			join workflow in workflowQuery on stage.WorkflowInstanceId equals workflow.Id
+			where Enumerable.Contains(applicationIds, workflow.ApplicationId)
+			select new { workflow.ApplicationId, Stage = stage });
+		var stageRows = progressRows.Where(item => Enumerable.Contains(stageIds, item.Stage.Id)).Select(item => item.Stage).ToList();
+		var progressByApplication = progressRows.ToLookup(item => item.ApplicationId);
 		var definitionIds = stageRows.Select(row => row.DefinitionStageId).ToArray();
 		var stageDefinitions = (await definitions.GetListAsync(item => Enumerable.Contains(definitionIds, item.Id))).ToDictionary(row => row.Id);
 		var pendingByInquiry = pending.ToLookup(item => item.InquiryId);
@@ -68,9 +78,14 @@ public class AdmissionPipelineReadService(
 			row.EnteredAt = row.EnteredAt.HasValue ? AdmissionOfferUtcTime.Normalize(row.EnteredAt.Value) : null;
 			row.AssignedCounsellorName = row.AssignedCounsellorId.HasValue ? ownerNames.GetValueOrDefault(row.AssignedCounsellorId.Value) : null;
 			var open = row.InquiryId.HasValue ? pendingByInquiry[row.InquiryId.Value].ToList() : [];
+			var nextFollowUp = open.OrderBy(item => item.ScheduledAt).ThenBy(item => item.Id).FirstOrDefault();
 			row.OpenFollowUpCount = open.Count;
-			row.NextFollowUpAt = open.Count > 0 ? AdmissionOfferUtcTime.Normalize(open.Min(item => item.ScheduledAt)) : null;
-			row.HasOverdueFollowUp = row.NextFollowUpAt < utcNow;
+			row.NextFollowUpAt = nextFollowUp == null ? null : AdmissionOfferUtcTime.Normalize(nextFollowUp.ScheduledAt);
+			row.NextFollowUpPurpose = nextFollowUp?.Purpose;
+			row.OverdueFollowUpCount = open.Count(item => AdmissionOfferUtcTime.Normalize(item.ScheduledAt) < utcNow);
+			row.HasOverdueFollowUp = row.OverdueFollowUpCount > 0;
+			row.StageProgress = progressByApplication[row.Id].OrderBy(item => item.Stage.DisplayOrder).ThenBy(item => item.Stage.Id)
+				.Select(item => new AdmissionPipelineStageProgressDto { Id = item.Stage.Id, Name = item.Stage.Name, Status = item.Stage.Status }).ToList();
 			if (row.CurrentStageInstanceId.HasValue && stagesById.TryGetValue(row.CurrentStageInstanceId.Value, out var stage))
 			{
 				row.NextRequiredAction = AdmissionWorkflowStageTypeRegistry.Find(stage.StageType)?.NextRequiredAction ?? "Review the current step";

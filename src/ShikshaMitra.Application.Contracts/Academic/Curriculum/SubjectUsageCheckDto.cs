@@ -30,4 +30,7 @@ public class SubjectUsageCheckDto
 
     /// <summary>Assignments referencing this subject.</summary>
     public int Assignments { get; set; }
+
+    /// <summary>Live admission workflow stages containing this school subject.</summary>
+    public int AdmissionAssessments { get; set; }
 }

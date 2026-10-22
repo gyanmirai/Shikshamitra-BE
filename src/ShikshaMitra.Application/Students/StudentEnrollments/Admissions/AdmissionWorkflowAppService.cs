@@ -12,9 +12,13 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public class AdmissionWorkflowAppService(
 	AdmissionWorkflowReadService readService,
 	AdmissionWorkflowCommandService commandService,
-	AdmissionWorkflowGovernanceService governanceService)
+	AdmissionWorkflowGovernanceService governanceService,
+	AdmissionAssessmentCatalogService assessmentCatalog)
 	: ApplicationService, IAdmissionWorkflowAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
+	public Task<AdmissionAssessmentCatalogDto> GetAssessmentCatalogAsync() => assessmentCatalog.GetAsync();
+
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionWorkflows.View)]
 	public Task<PagedResultDto<AdmissionWorkflowDto>> GetListAsync(AdmissionWorkflowListInput input) =>
 		readService.GetListAsync(input);

@@ -40,6 +40,7 @@ public static class AdmissionOfferingValidationCodes
 	public const string ApplicationFormPurposeMismatch = "ApplicationFormPurposeMismatch";
 	public const string ApplicationFormIdentityIncomplete = "ApplicationFormIdentityIncomplete";
 	public const string WorkflowFormMismatch = "WorkflowFormMismatch";
+	public const string AssessmentProfileMissing = "AssessmentProfileMissing";
 	public const string EligibilityFormMismatch = "EligibilityFormMismatch";
 	public const string InquiryCounsellorUnavailable = "InquiryCounsellorUnavailable";
 	public const string ReviewAssigneeUnavailable = "ReviewAssigneeUnavailable";

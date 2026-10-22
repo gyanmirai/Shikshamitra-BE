@@ -71,7 +71,19 @@ public class AdmissionAssessmentCommandService(
 		MutateAsync(id, input, "AssessmentResultRecorded", async (context, attempt) =>
 		{
 			await EnsureSessionStartedAsync(attempt);
-			attempt.RecordResult(input.Marks, input.Outcome, input.Notes, Actor(), context.Policy!);
+			if (context.Policy!.ScoringMode == "subjects") attempt.RecordSubjectResult(input.SubjectScores, input.Notes, Actor(), context.Policy);
+			else
+			{
+				if (input.SubjectScores?.Count > 0) throw Invalid("This assessment uses one total result, without subject marks.");
+				attempt.RecordResult(input.Marks, input.Outcome, input.Notes, Actor(), context.Policy);
+			}
+		});
+
+	public Task<AdmissionAssessmentDto> SaveResultDraftAsync(Guid id, AdmissionAssessmentResultInput input) =>
+		MutateAsync(id, input, "AssessmentResultDraftSaved", async (context, attempt) =>
+		{
+			await EnsureSessionStartedAsync(attempt);
+			attempt.SaveResultDraft(input.SubjectScores, input.Notes, context.Policy!);
 		});
 
 	public Task<AdmissionAssessmentDto> ReviewAsync(Guid id, AdmissionAssessmentReviewInput input) =>
@@ -124,6 +136,7 @@ public class AdmissionAssessmentCommandService(
 	{
 		var attempt = await attempts.FindAsync(id) ?? throw new EntityNotFoundException(typeof(AdmissionAssessmentAttempt), id);
 		var context = await access.GetContextAsync(attempt.ApplicationId, attempt.StageInstanceId, requireActive: false, requirePreparation: true);
+		context = context with { Policy = AdmissionAssessmentAccessService.ReadAttemptPolicy(attempt, context.Policy) };
 		AdmissionAssessmentAccessService.EnsureConcurrency(attempt, input.ConcurrencyStamp);
 		if (await attempts.AnyAsync(item => item.StageInstanceId == attempt.StageInstanceId && item.Status != "cancelled" && item.AttemptNumber > attempt.AttemptNumber))
 			throw Invalid("Only the latest assessment attempt can be changed.");
@@ -140,14 +153,14 @@ public class AdmissionAssessmentCommandService(
 			context.Application.Id, metadataJson: JsonSerializer.Serialize(new
 			{
 				ActorUserId = Actor(), AttemptId = attempt.Id, attempt.StageInstanceId, attempt.Status, attempt.Outcome, attempt.Attendance,
-				attempt.Marks, attempt.RecordedBy, attempt.ReviewedBy, attempt.Notes, attempt.ReviewNotes
+				attempt.Marks, SubjectScores = attempt.GetSubjectScores(), attempt.RecordedBy, attempt.ReviewedBy, attempt.Notes, attempt.ReviewNotes
 			})), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await reader.GetAsync(context.Application.Id, context.Stage.Id);
 	}
 	private AdmissionAssessmentAttempt NewAttempt(AdmissionAssessmentContext context, Guid? sessionId, int number) =>
 		new(GuidGenerator.Create(), CurrentTenant.Id, context.Application.Id, context.Stage.Id, sessionId, number,
-			JsonSerializer.Serialize(new { assessment = context.Policy }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+			JsonSerializer.Serialize(new { assessment = context.Policy?.EffectiveProfile is { } profile ? context.Policy with { ClassProfiles = [profile] } : context.Policy }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 	private async Task EnsureSessionStartedAsync(AdmissionAssessmentAttempt attempt)
 	{
 		if (!attempt.SessionId.HasValue) return;

@@ -19,6 +19,10 @@ public class AdmissionAssessmentModelMapping_Tests : ShikshaMitraEntityFramework
 		session.FindProperty("ConcurrencyStamp")!.IsConcurrencyToken.ShouldBeTrue();
 		attempt.FindProperty("ConcurrencyStamp")!.IsConcurrencyToken.ShouldBeTrue();
 		attempt.FindProperty("PolicySnapshotJson")!.IsNullable.ShouldBeFalse();
+		attempt.FindProperty("SubjectScoresJson")!.IsNullable.ShouldBeTrue();
+		attempt.FindProperty("SubjectScoresJson")!.GetColumnType().ShouldBe("text");
+		model.FindEntityType(typeof(AdmissionWorkflowStageDefinition))!.FindProperty("ConfigurationJson")!.GetMaxLength()
+			.ShouldBe(AdmissionWorkflowConsts.MaxAssessmentConfigurationLength);
 		attempt.FindProperty("Marks")!.GetColumnType().ShouldBe("numeric");
 		attempt.FindProperty("Marks")!.GetPrecision().ShouldBeNull();
 		attempt.GetIndexes().ShouldContain(index => index.IsUnique &&

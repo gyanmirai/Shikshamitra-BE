@@ -27454,6 +27454,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(24)
                         .HasColumnType("character varying(24)");
 
+                    b.Property<string>("SubjectScoresJson")
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("TenantId");
@@ -30787,8 +30790,8 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("character varying(64)");
 
                     b.Property<string>("ConfigurationJson")
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
+                        .HasMaxLength(64000)
+                        .HasColumnType("character varying(64000)");
 
                     b.Property<string>("Description")
                         .HasMaxLength(512)

@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
 
@@ -7,6 +11,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	private const string SubjectMarksEnteredProperty = "AdmissionAssessmentSubjectMarksEntered";
 	public Guid? TenantId { get; private set; }
 	public Guid ApplicationId { get; private set; }
 	public Guid StageInstanceId { get; private set; }
@@ -24,6 +29,7 @@ public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMulti
 	public Guid? ReviewedBy { get; private set; }
 	public DateTime? ReviewedAt { get; private set; }
 	public string PolicySnapshotJson { get; private set; } = string.Empty;
+	public string? SubjectScoresJson { get; private set; }
 
 	protected AdmissionAssessmentAttempt() { }
 	public AdmissionAssessmentAttempt(Guid id, Guid? tenantId, Guid applicationId, Guid stageId,
@@ -39,6 +45,7 @@ public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMulti
 
 	public void RecordAttendance(string attendance, string? notes, Guid userId, AdmissionAssessmentPolicy policy)
 	{
+		policy = SnapshotPolicy(policy);
 		EnsurePending();
 		if (attendance is not ("present" or "absent")) throw Invalid("Select present or absent.");
 		var normalizedNotes = Normalize(notes);
@@ -54,8 +61,10 @@ public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMulti
 
 	public void RecordResult(decimal? marks, string? outcome, string? notes, Guid userId, AdmissionAssessmentPolicy policy)
 	{
+		policy = SnapshotPolicy(policy);
 		EnsurePending();
 		if (policy.AttendanceRequired && Attendance != "present") throw Invalid("Record attendance before the result.");
+		if (policy.ScoringMode == "subjects") throw Invalid("Enter all subject marks before submitting this result.");
 		var normalizedNotes = Normalize(notes);
 		if (policy.ScoringEnabled)
 		{
@@ -68,6 +77,76 @@ public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMulti
 		RecordOutcome(outcome!, userId, policy);
 	}
 
+	public IReadOnlyList<AdmissionAssessmentSubjectScore> GetSubjectScores() => string.IsNullOrWhiteSpace(SubjectScoresJson)
+		? [] : JsonSerializer.Deserialize<List<AdmissionAssessmentSubjectScore>>(SubjectScoresJson) ?? [];
+	public bool HasEnteredSubjectMarks() => this.GetProperty<bool>(SubjectMarksEnteredProperty) || GetSubjectScores().Any(score => score.Marks.HasValue);
+
+	public void SaveResultDraft(IReadOnlyCollection<AdmissionAssessmentSubjectScore> scores, string? notes, AdmissionAssessmentPolicy policy)
+	{
+		policy = SnapshotPolicy(policy);
+		EnsureResultEntry(policy);
+		var normalized = ValidateSubjectScores(scores, policy, false);
+		var normalizedNotes = Normalize(notes);
+		if (HasEnteredSubjectMarks() || normalized.Any(score => score.Marks.HasValue)) this.SetProperty(SubjectMarksEnteredProperty, true);
+		SubjectScoresJson = JsonSerializer.Serialize(normalized);
+		Notes = normalizedNotes;
+	}
+
+	public void RecordSubjectResult(IReadOnlyCollection<AdmissionAssessmentSubjectScore> scores, string? notes, Guid userId, AdmissionAssessmentPolicy policy)
+	{
+		policy = SnapshotPolicy(policy);
+		EnsureResultEntry(policy);
+		var normalized = ValidateSubjectScores(scores, policy, true);
+		var normalizedNotes = Normalize(notes);
+		var profile = policy.EffectiveProfile!;
+		var total = normalized.Sum(score => score.Marks!.Value);
+		var subjectPassed = profile.Subjects.All(subject => normalized.Single(score => score.Code == subject.Code).Marks >= subject.PassingMarks.GetValueOrDefault());
+		var passed = profile.PassRule switch { "overall" => total >= profile.PassingMarks, "everySubject" => subjectPassed, _ => subjectPassed && total >= profile.PassingMarks };
+		this.SetProperty(SubjectMarksEnteredProperty, true);
+		SubjectScoresJson = JsonSerializer.Serialize(normalized);
+		Marks = total;
+		Notes = normalizedNotes;
+		RecordOutcome(passed ? "passed" : "failed", userId, policy);
+	}
+
+	public bool HasCompleteSubjectScores(AdmissionAssessmentPolicy policy)
+	{
+		policy = SnapshotPolicy(policy);
+		if (policy.ScoringMode != "subjects") return false;
+		try { ValidateSubjectScores(GetSubjectScores().ToList(), policy, true); return true; }
+		catch (BusinessException) { return false; }
+	}
+
+	private void EnsureResultEntry(AdmissionAssessmentPolicy policy)
+	{
+		EnsurePending();
+		if (policy.ScoringMode != "subjects" || policy.EffectiveProfile == null) throw Invalid("Choose a valid class assessment profile before entering subject marks.");
+		if (policy.AttendanceRequired && Attendance != "present") throw Invalid("Record attendance before the result.");
+	}
+
+	private AdmissionAssessmentPolicy SnapshotPolicy(AdmissionAssessmentPolicy fallback)
+	{
+		try { return AdmissionAssessmentPolicy.Read(PolicySnapshotJson) is { } policy ? policy with { ReviewRequired = false } : fallback; }
+		catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
+		{ throw new BusinessException(AdmissionAssessmentErrorCodes.InvalidPolicy, exception.Message); }
+	}
+
+	private static List<AdmissionAssessmentSubjectScore> ValidateSubjectScores(IReadOnlyCollection<AdmissionAssessmentSubjectScore> scores, AdmissionAssessmentPolicy policy, bool complete)
+	{
+		var subjects = policy.EffectiveProfile?.Subjects ?? throw Invalid("The class assessment profile is missing.");
+		if (scores == null || scores.Count > subjects.Count || scores.Any(score => score == null || string.IsNullOrWhiteSpace(score.Code)) ||
+			scores.Select(score => score.Code).Distinct(StringComparer.Ordinal).Count() != scores.Count || scores.Any(score => !subjects.Any(subject => subject.Code == score.Code)))
+			throw Invalid("Use each configured assessment subject once.");
+		var normalized = subjects.Select(subject => new AdmissionAssessmentSubjectScore { Code = subject.Code, Marks = scores.SingleOrDefault(score => score.Code == subject.Code)?.Marks }).ToList();
+		foreach (var score in normalized)
+		{
+			var subject = subjects.Single(item => item.Code == score.Code);
+			if (score.Marks < 0 || score.Marks > subject.TotalMarks || complete && !score.Marks.HasValue)
+				throw Invalid($"{subject.Name}: enter marks from zero to {subject.TotalMarks} before submitting.");
+		}
+		return normalized;
+	}
+
 	public void Review(bool approved, string? notes, Guid userId, DateTime now)
 	{
 		if (Status != "pendingReview") throw Invalid("Only a result awaiting review can be reviewed.");
@@ -76,7 +155,7 @@ public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMulti
 		ReviewedBy = userId;
 		ReviewedAt = now;
 		Status = approved ? "completed" : "pending";
-		if (!approved) { Outcome = "pending"; Marks = null; Attendance = "pending"; }
+		if (!approved) { Outcome = "pending"; Marks = null; SubjectScoresJson = null; Attendance = "pending"; }
 	}
 
 	public void RequestRetake(string? notes)
@@ -89,7 +168,7 @@ public class AdmissionAssessmentAttempt : FullAuditedAggregateRoot<Guid>, IMulti
 
 	public void Cancel(string? notes)
 	{
-		if (Status != "pending" || Attendance != "pending") throw Invalid("Only an unstarted attempt can be cancelled.");
+		if (Status != "pending" || Attendance != "pending" || HasEnteredSubjectMarks()) throw Invalid("Only an unstarted attempt can be cancelled.");
 		var normalizedNotes = Normalize(notes);
 		Status = "cancelled";
 		Notes = normalizedNotes;

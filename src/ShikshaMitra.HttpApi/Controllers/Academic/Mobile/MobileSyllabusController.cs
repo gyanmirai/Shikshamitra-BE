@@ -12,7 +12,7 @@ namespace ShikshaMitra.Controllers.Academic.Mobile;
 public class MobileSyllabusController(IMobileSyllabusAppService service) : ShikshaMitraController
 {
 	[HttpGet("dashboard")] public async Task<Result<MobileSyllabusDto>> Dashboard([FromQuery] MobileAcademicInput input) => Result.Success(await service.GetDashboardAsync(input));
-	[HttpGet("subjects/{subjectId:guid}/chapters")] public async Task<Result<MobilePage<MobileChapterDto>>> Chapters(Guid subjectId, [FromQuery] MobileListInput input) => Result.Success(await service.GetChaptersAsync(subjectId, input));
+	[HttpGet("subjects/{subjectId:guid}/chapters")] public async Task<Result<MobileChapterPageDto>> Chapters(Guid subjectId, [FromQuery] MobileListInput input) => Result.Success(await service.GetChaptersAsync(subjectId, input));
 	[HttpGet("chapters/{id:guid}")] public async Task<Result<MobileChapterDto>> Chapter(Guid id, [FromQuery] MobileAcademicInput input) => Result.Success(await service.GetChapterAsync(id, input));
 	[HttpGet("chapters/{chapterId:guid}/resources/{resourceId:guid}/download")]
 	public async Task<IActionResult> Download(Guid chapterId, Guid resourceId, [FromQuery] MobileAcademicInput input)

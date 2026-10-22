@@ -20,6 +20,8 @@ public static class ApiProblemDetailsMapper
 
 		return errorCode switch
 		{
+			Academic.Mobile.MobileSubmissionErrorCodes.SubmissionConflict or
+			Academic.Mobile.MobileSubmissionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
 			StudentRollNumberErrorCodes.StalePreview or StudentRollNumberErrorCodes.InvalidState => StatusCodes.Status409Conflict,
 			StudentRollNumberErrorCodes.AdminRequired or StudentRollNumberErrorCodes.ApproverRequired => StatusCodes.Status403Forbidden,
 			RoleErrorCodes.AssignedToUsers or RoleErrorCodes.ReferencedByEmployees => StatusCodes.Status409Conflict,

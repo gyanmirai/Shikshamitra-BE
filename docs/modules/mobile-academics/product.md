@@ -3,7 +3,7 @@ module: mobile-academics
 domain: behavior
 content_type: Reference
 status: canonical
-updated_on: 2026-10-16
+updated_on: 2026-10-22
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -23,6 +23,8 @@ audience: humans-and-agents
 The authenticated identity must be active and confirmed, with a persisted self or guardian link to the requested student. Revoked links deny reads and writes. Server placement resolves the selected enrollment, including historical classes for results; a legacy placement is used only when no enrollment history exists.
 
 Students can submit their own work. Leave changes and absence reasons require a guardian link. Guardians cannot approve their own leave. Only pending leave can be edited or cancelled; overlapping active requests and unconfigured school days are rejected. Half-day times and school-day duration are persisted. School dates use Asia/Kolkata.
+
+Homework and assignments share the mobile submission workflow. The teacher's requirement controls final validation: online text needs an answer, file upload needs a file, and In person / No submission required need a checked completion acknowledgment with optional evidence files. Confirming an acknowledgment creates a normal submitted response. Answers support sanitized formatting up to 100,000 decoded UTF-16 units; responses allow five files up to 5 MiB each. Drafts can be empty or unchecked but are only available before final submission. Open, unreviewed work allows one first submission even after its division deadline; late submissions are recorded as late. After the first submission, only editing is allowed, and only at or before the deadline. Submitted work becomes read-only after the deadline, with its answer, acknowledgment, and files still available to view. Retry receipts and revision checks prevent duplicate or stale mobile writes; confirmed replacements preserve final history and its files.
 
 Absent records remain empty or unavailable. A zero attendance denominator produces a null percentage. Unpublished or withheld results expose no marks or report card. Class comparisons include only published marks belonging to released class results.
 

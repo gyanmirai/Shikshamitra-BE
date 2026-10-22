@@ -39,8 +39,21 @@ jobs:
               # Match the ABP 9.0.0 packages and .NET 9 SDK used by this solution.
               run: dotnet tool install -g Volo.Abp.Cli --version 9.0.0
 
+            - name: Setup Node.js for ABP libraries
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '20'
+
+            - name: Install Yarn
+              run: npm install --global yarn@1.22.22
+
             - name: Download ABP libraries
+              working-directory: src/ShikshaMitra.HttpApi.Host
               run: abp install-libs
+
+            - name: Validate restored ABP libraries
+              shell: pwsh
+              run: ./scripts/deployment/Test-AbpLibraries.ps1 -WebRoot src/ShikshaMitra.HttpApi.Host/wwwroot
 
             - name: Build
               run: dotnet build --configuration Release
@@ -63,6 +76,10 @@ jobs:
             # ⭐ Publish Host App
             - name: Publish
               run: dotnet publish src/ShikshaMitra.HttpApi.Host -c Release -o ./publish
+
+            - name: Validate published ABP libraries
+              shell: pwsh
+              run: ./scripts/deployment/Test-AbpLibraries.ps1 -WebRoot publish/wwwroot
 
             - name: Validate Azure publish profile
               shell: pwsh

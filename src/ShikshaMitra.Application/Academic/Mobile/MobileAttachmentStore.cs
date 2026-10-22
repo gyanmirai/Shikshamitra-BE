@@ -32,15 +32,16 @@ public class MobileAttachmentStore(IBlobContainer blobs) : ApplicationService, I
 		int length;
 		while ((length = await stream.ReadAsync(buffer)) > 0)
 		{
-			if (content.Length + length > 5 * 1024 * 1024) throw MobileAcademicContextAppService.Invalid("Files must be at most 5 MB.");
+			if (content.Length + length > 5 * 1024 * 1024) throw new BusinessException(MobileSubmissionErrorCodes.SubmissionTooLarge);
 			await content.WriteAsync(buffer.AsMemory(0, length));
 		}
 		var name = Path.GetFileName((file.FileName ?? "").Replace('\\', '/'));
 		var bytes = content.ToArray();
-		FileValidationService.ValidateDocumentUpload(name, bytes, bytes.Length);
+		try { FileValidationService.ValidateDocumentUpload(name, bytes, bytes.Length); }
+		catch (BusinessException exception) { throw new BusinessException(MobileSubmissionErrorCodes.InvalidFile, innerException: exception); }
 		var extension = Path.GetExtension(name).ToLowerInvariant();
 		if (!FileValidationService.IsMatchingDocumentContentType(extension, file.ContentType))
-			throw MobileAcademicContextAppService.Invalid("The file content type does not match its extension.");
+			throw new BusinessException(MobileSubmissionErrorCodes.InvalidFile);
 		var id = GuidGenerator.Create();
 		var blob = $"files/{CurrentTenant.Id}/{id:N}{extension}";
 		var attachment = new MobileStoredAttachment(id, name, blob, file.ContentType!, bytes.Length);
@@ -73,9 +74,25 @@ public class MobileAttachmentStore(IBlobContainer blobs) : ApplicationService, I
 	public async Task DeleteAsync(Guid studentId, Guid referenceId, Guid id, string? retainedJson)
 	{
 		if (Read(retainedJson).Any(x => x.Id == id)) throw MobileAcademicContextAppService.Invalid("Remove the attachment from the draft before deleting it.");
-		var item = (await ResolveAsync(studentId, referenceId, [id])).Single();
+		var meta = await blobs.GetAllBytesOrNullAsync(Prefix(studentId, referenceId) + id.ToString("N") + ".json");
+		if (meta == null) throw MobileAcademicContextAppService.Invalid("The attachment is unavailable or belongs to another upload.");
+		var item = JsonSerializer.Deserialize<MobileStoredAttachment>(meta, JsonOptions)!;
+		if (item.Id != id || !item.BlobName.StartsWith($"files/{CurrentTenant.Id}/", StringComparison.Ordinal))
+			throw MobileAcademicContextAppService.Invalid("The attachment is unavailable.");
 		await blobs.DeleteAsync(item.BlobName);
-		await blobs.DeleteAsync(Prefix(studentId, referenceId) + id.ToString("N") + ".json");
+		// Keep the ownership receipt so a retry after a lost 204 remains idempotent.
+	}
+
+	public async Task RetainDraftAccessAsync(Guid studentId, Guid referenceId, string? retainedJson)
+	{
+		// Called only after task/student authorization. A second linked guardian can release a saved draft file.
+		foreach (var item in Read(retainedJson))
+		{
+			if (!item.BlobName.StartsWith($"files/{CurrentTenant.Id}/", StringComparison.Ordinal))
+				throw MobileAcademicContextAppService.Invalid("The attachment is unavailable.");
+			await blobs.SaveAsync(Prefix(studentId, referenceId) + item.Id.ToString("N") + ".json",
+				JsonSerializer.SerializeToUtf8Bytes(item, JsonOptions), overrideExisting: true);
+		}
 	}
 
 	public async Task<MobileFileDto> DownloadAsync(MobileStoredAttachment item) =>

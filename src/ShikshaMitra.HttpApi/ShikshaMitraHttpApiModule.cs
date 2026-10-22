@@ -25,6 +25,24 @@ public class ShikshaMitraHttpApiModule : AbpModule
 	public override void ConfigureServices(ServiceConfigurationContext context)
 	{
 		ConfigureLocalization();
+		Configure<Volo.Abp.AspNetCore.ExceptionHandling.AbpExceptionHttpStatusCodeOptions>(options =>
+		{
+			options.Map("MobileAcademics:SubmissionConflict", System.Net.HttpStatusCode.Conflict);
+			options.Map("MobileAcademics:IdempotencyConflict", System.Net.HttpStatusCode.Conflict);
+			foreach (var code in new[] {
+				Academic.Mobile.MobileSubmissionErrorCodes.AmbiguousAnswer,
+				Academic.Mobile.MobileSubmissionErrorCodes.InvalidRequestId,
+				Academic.Mobile.MobileSubmissionErrorCodes.RequestMetadataRequired,
+				Academic.Mobile.MobileSubmissionErrorCodes.InvalidAttachments,
+				Academic.Mobile.MobileSubmissionErrorCodes.InvalidFile,
+				Academic.Mobile.MobileSubmissionErrorCodes.SubmissionTooLarge,
+				Academic.Mobile.MobileSubmissionErrorCodes.SubmissionRequired,
+				Academic.Mobile.MobileSubmissionErrorCodes.AcknowledgmentRequired,
+				Academic.Mobile.MobileSubmissionErrorCodes.SubmissionNotSupported,
+				Academic.Mobile.MobileSubmissionErrorCodes.DraftAfterSubmission,
+				Academic.Mobile.MobileSubmissionErrorCodes.FinalAttachmentProtected })
+				options.Map(code, System.Net.HttpStatusCode.BadRequest);
+		});
 	}
 
 	private void ConfigureLocalization()

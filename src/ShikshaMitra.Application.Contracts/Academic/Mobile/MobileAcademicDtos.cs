@@ -41,6 +41,8 @@ public record MobileAttachmentDto(Guid Id, string Name, string Url, string Conte
 public record MobileFileDto(byte[] Content, string Name, string ContentType);
 public record MobileRubricScoreDto(string Title, decimal MaxScore, decimal? Score);
 
+public record MobileHomeworkSubjectDto(Guid Id, string Name, string Code);
+
 public class MobileHomeworkDto
 {
 	public Guid Id { get; set; }
@@ -60,7 +62,14 @@ public class MobileHomeworkDto
 	public decimal? MaxMarks { get; set; }
 	public bool CanSubmit { get; set; }
 	public bool CanEdit { get; set; }
+	public bool Acknowledged { get; set; }
 	public string? TextAnswer { get; set; }
+	public string? TextAnswerHtml { get; set; }
+	public string Revision { get; set; } = "0";
+	public DateTimeOffset? SavedAt { get; set; }
+	public DateTimeOffset? UpdatedAt { get; set; }
+	public bool CanSaveDraft { get; set; }
+	public string? SubmissionReasonCode { get; set; }
 	public string? Feedback { get; set; }
 	public DateTimeOffset? ReviewedOn { get; set; }
 	public List<MobileAttachmentDto> Attachments { get; set; } = [];
@@ -70,7 +79,11 @@ public class MobileHomeworkDto
 
 public class MobileSubmissionInput : MobileAcademicInput
 {
+	public bool Acknowledged { get; set; }
 	[StringLength(100000)] public string? TextAnswer { get; set; }
+	[StringLength(1048576)] public string? TextAnswerHtml { get; set; }
+	[StringLength(40)] public string? ExpectedRevision { get; set; }
+	public Guid? ClientRequestId { get; set; }
 	public List<Guid> AttachmentIds { get; set; } = [];
 }
 
@@ -131,6 +144,11 @@ public class MobileChapterDto
 	public string CoverageStatus { get; set; } = "notStarted";
 	public List<MobileAttachmentDto> Resources { get; set; } = [];
 }
+public record MobileChapterSummaryDto(int TotalChapters, int CompletedChapters, int InProgressChapters, int UpcomingChapters, int CoveragePercentage);
+public class MobileChapterPageDto : MobilePage<MobileChapterDto>
+{
+	public MobileChapterSummaryDto Summary { get; set; } = new(0, 0, 0, 0, 0);
+}
 public record MobileSubjectProgressDto(Guid Id, string Name, string Code, int CoveragePercentage, int TotalChapters, int CompletedChapters, int InProgressChapters, int UpcomingChapters, string? Color = null);
 public record MobileSyllabusDto(Guid StudentId, Guid AcademicYearId, string StudentName, string Grade, int OverallCoveragePercentage, int ChaptersCovered, int TotalChapters, List<MobileSubjectProgressDto> Subjects);
 
@@ -177,10 +195,11 @@ public interface IMobileAcademicContextAppService : IApplicationService
 }
 public interface IMobileHomeworkAppService : IApplicationService
 {
+	Task<List<MobileHomeworkSubjectDto>> GetSubjectsAsync(MobileAcademicInput input);
 	Task<MobilePage<MobileHomeworkDto>> GetListAsync(MobileListInput input);
 	Task<MobileHomeworkDto> GetAsync(Guid id, MobileAcademicInput input);
 	Task<MobileHomeworkDto> SaveAsync(Guid id, MobileSubmissionInput input, bool draft, bool replace);
-	Task<MobileAttachmentDto> UploadAsync(Guid id, MobileAcademicInput input, IRemoteStreamContent file);
+	Task<MobileAttachmentDto> UploadAsync(Guid id, MobileAcademicInput input, IRemoteStreamContent file, Guid? clientUploadId = null);
 	Task DeleteAttachmentAsync(Guid id, Guid attachmentId, MobileAcademicInput input);
 	Task<MobileFileDto> DownloadAsync(Guid id, Guid attachmentId, MobileAcademicInput input);
 }
@@ -201,7 +220,7 @@ public interface IMobileAttendanceAppService : IApplicationService
 public interface IMobileSyllabusAppService : IApplicationService
 {
 	Task<MobileSyllabusDto> GetDashboardAsync(MobileAcademicInput input);
-	Task<MobilePage<MobileChapterDto>> GetChaptersAsync(Guid subjectId, MobileListInput input);
+	Task<MobileChapterPageDto> GetChaptersAsync(Guid subjectId, MobileListInput input);
 	Task<MobileChapterDto> GetChapterAsync(Guid id, MobileAcademicInput input);
 	Task<MobileFileDto> DownloadAsync(Guid chapterId, Guid resourceId, MobileAcademicInput input);
 }

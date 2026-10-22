@@ -21,7 +21,7 @@ public class MobileHomeworkAppService(
 	IRepository<HomeworkAssignmentEntity, Guid> homework,
 	IRepository<AssignmentEntity, Guid> assignments,
 	IRepository<StudentSubmissionEntity, Guid> submissions,
-	StudentSubmissionManager manager,
+	MobileHomeworkSubmissionService writer,
 	IRepository<Subject, Guid> subjects,
 	MobileAttachmentStore files, IRepository<AssessmentRubric, Guid> rubrics,
 	IRepository<RubricEvaluation, Guid> evaluations, IRepository<IdentityUser, Guid> users) : ApplicationService, IMobileHomeworkAppService
@@ -31,24 +31,42 @@ public class MobileHomeworkAppService(
 
 	private async Task<List<Work>> ReadWorksAsync(MobilePlacement p)
 	{
-		var selected = (await context.GetSubjectsAsync(p)).Select(x => x.SubjectId).ToArray();
+		var selectedSubjects = await context.GetSubjectsAsync(p);
+		// Older learning tasks may reference the class subject assignment instead of the subject master.
+		var subjectIds = selectedSubjects.ToDictionary(x => x.Id, x => x.SubjectId);
+		foreach (var subject in selectedSubjects) subjectIds[subject.SubjectId] = subject.SubjectId;
+		var selected = subjectIds.Keys.ToArray();
+		// ResolveAsync already validates that this class belongs to the selected academic year.
+		// Web homework creation historically left AcademicYearId null.
 		var hq = (await homework.WithDetailsAsync(x => x.DivisionSchedules)).Where(x => x.TenantId == CurrentTenant.Id &&
-			x.StandardId == p.StandardId && x.AcademicYearId == p.Year.Id && Enumerable.Contains(selected, x.SubjectId) &&
+			x.StandardId == p.StandardId && (!x.AcademicYearId.HasValue || x.AcademicYearId == p.Year.Id) && Enumerable.Contains(selected, x.SubjectId) &&
 			((!x.DivisionSchedules.Any() && x.DivisionId == p.DivisionId && x.IsPublished) ||
 			 x.DivisionSchedules.Any(s => s.DivisionId == p.DivisionId && s.IsPublished && (!s.PublishedAt.HasValue || s.PublishedAt <= Clock.Now))));
 		var aq = (await assignments.WithDetailsAsync(x => x.DivisionSchedules)).Where(x => x.TenantId == CurrentTenant.Id &&
-			x.StandardId == p.StandardId && x.AcademicYearId == p.Year.Id && Enumerable.Contains(selected, x.SubjectId) &&
+			x.StandardId == p.StandardId && (!x.AcademicYearId.HasValue || x.AcademicYearId == p.Year.Id) && Enumerable.Contains(selected, x.SubjectId) &&
 			x.DivisionSchedules.Any(s => s.DivisionId == p.DivisionId && s.IsPublished && (!s.PublishedAt.HasValue || s.PublishedAt <= Clock.Now)));
 		var hs = await AsyncExecuter.ToListAsync(hq);
 		var ass = await AsyncExecuter.ToListAsync(aq);
-		return hs.Select(x => new Work(x.Id, x.SubjectId, x.Title, x.Description, "homework", x.SubmissionType,
+		return hs.Select(x => new Work(x.Id, subjectIds[x.SubjectId], x.Title, x.Description, "homework", x.SubmissionType,
 			x.DivisionSchedules.FirstOrDefault(s => s.DivisionId == p.DivisionId)?.PublishedAt ?? x.CreationTime,
 			x.DivisionSchedules.FirstOrDefault(s => s.DivisionId == p.DivisionId)?.DueDate ?? x.DueDate ?? x.CreationTime,
 			x.Status == HomeworkStatus.Closed, null, x.AttachmentsJson ?? x.DocumentUrl, x.CreatorId))
-			.Concat(ass.Select(x => new Work(x.Id, x.SubjectId, x.Title, x.Description, "assignment", x.SubmissionType,
+			.Concat(ass.Select(x => new Work(x.Id, subjectIds[x.SubjectId], x.Title, x.Description, "assignment", x.SubmissionType,
 				x.DivisionSchedules.First(s => s.DivisionId == p.DivisionId).PublishedAt ?? x.CreationTime,
 				x.DivisionSchedules.First(s => s.DivisionId == p.DivisionId).DueDate, x.Status == AssignmentStatus.Closed, x.TotalMarks, x.AttachmentsJson, x.CreatorId)))
 			.OrderBy(x => x.Due).ThenBy(x => x.Id).ToList();
+	}
+
+	public async Task<List<MobileHomeworkSubjectDto>> GetSubjectsAsync(MobileAcademicInput input)
+	{
+		var p = await context.ResolveAsync(input);
+		var assigned = await context.GetSubjectsAsync(p);
+		var ids = assigned.Select(x => x.SubjectId).Distinct().ToArray();
+		var names = (await subjects.GetListAsync(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(ids, x.Id)))
+			.ToDictionary(x => x.Id, x => x.Name);
+		return assigned.Where(x => names.ContainsKey(x.SubjectId))
+			.Select(x => new MobileHomeworkSubjectDto(x.SubjectId, names[x.SubjectId], x.SubjectCode))
+			.OrderBy(x => x.Name).ThenBy(x => x.Id).ToList();
 	}
 
 	public async Task<MobilePage<MobileHomeworkDto>> GetListAsync(MobileListInput input)
@@ -88,6 +106,9 @@ public class MobileHomeworkAppService(
 	private MobileHomeworkDto Map(Work w, StudentSubmissionEntity? s, string subjectName, MobilePlacement p)
 	{
 		var editable = MobileSubmissionRules.CanEdit(s, w.Due, Clock.Now, w.Closed);
+		var supported = w.SubmissionType is SubmissionType.FileUpload or SubmissionType.OnlineText or SubmissionType.InPersonSubmission or SubmissionType.NoSubmissionRequired;
+		var canSubmit = supported && MobileSubmissionRules.CanSubmit(s, w.Closed);
+		var submitted = s?.SubmissionDate != null;
 		var status = s?.Status switch { SubmissionStatus.Draft => "draft", SubmissionStatus.Reviewed => "checked",
 			SubmissionStatus.Excused => "completed",
 			SubmissionStatus.NeedsReview when s.SubmissionDate.HasValue => "submitted",
@@ -95,8 +116,13 @@ public class MobileHomeworkAppService(
 			_ => Clock.Now > w.Due ? "late" : "pending" };
 		return new() { Id = w.Id, SubjectId = w.SubjectId, SubjectName = subjectName, Title = w.Title, Description = w.Description,
 			Type = w.Type, SubmissionType = w.SubmissionType switch { SubmissionType.FileUpload => "fileUpload", SubmissionType.OnlineText => "online", SubmissionType.NoSubmissionRequired => "noSubmissionRequired", _ => "inPerson" },
-			AssignedDate = w.Assigned, DueDate = w.Due, Status = status, CanSubmit = editable && w.SubmissionType is SubmissionType.FileUpload or SubmissionType.OnlineText,
-			CanEdit = editable, SubmittedDate = s?.SubmissionDate, TextAnswer = s?.SubmittedContent,
+			AssignedDate = w.Assigned, DueDate = w.Due, Status = status, CanSubmit = canSubmit,
+			CanSaveDraft = canSubmit, CanEdit = editable && supported && submitted,
+			SubmittedDate = s?.SubmissionDate?.ToUniversalTime(), TextAnswer = s?.SubmittedContent, TextAnswerHtml = s?.SubmittedContentHtml,
+			Acknowledged = s?.Acknowledged ?? false,
+			Revision = s?.ConcurrencyStamp ?? "0", SavedAt = s?.MobileSavedAt?.ToUniversalTime(), UpdatedAt = s?.MobileUpdatedAt?.ToUniversalTime(),
+			SubmissionReasonCode = !supported ? MobileSubmissionErrorCodes.SubmissionNotSupported : w.Closed ? MobileSubmissionErrorCodes.SubmissionLocked :
+				submitted && Clock.Now > w.Due ? MobileSubmissionErrorCodes.DeadlinePassed : !canSubmit && !editable ? MobileSubmissionErrorCodes.SubmissionLocked : null,
 			Marks = s?.Status == SubmissionStatus.Reviewed ? s.Marks : null, MaxMarks = w.TotalMarks,
 			Feedback = s?.Status == SubmissionStatus.Reviewed ? s.Feedback : null, ReviewedOn = s?.Status == SubmissionStatus.Reviewed ? s.ReviewedAt : null,
 			SubmissionAttachments = MobileAttachmentStore.Read(s?.MobileAttachmentsJson).Select(x => MobileAttachmentStore.Map(x, DownloadRoute(w.Id, x.Id, p))).ToList() };
@@ -130,39 +156,14 @@ public class MobileHomeworkAppService(
 		return dto;
 	}
 
-	public async Task<MobileHomeworkDto> SaveAsync(Guid id, MobileSubmissionInput input, bool draft, bool replace)
-	{
-		var p = await context.ResolveAsync(input);
-		var w = (await ReadWorksAsync(p)).SingleOrDefault(x => x.Id == id) ?? throw new EntityNotFoundException(typeof(HomeworkAssignmentEntity), id);
-		var s = await submissions.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == p.Student.Id && (x.HomeworkAssignmentId == id || x.AssignmentId == id));
-		MobileSubmissionRules.Validate(s, w.Due, Clock.Now, w.Closed, w.SubmissionType, draft, replace, input.TextAnswer, input.AttachmentIds.Count);
-		var attachments = await files.ResolveAsync(p.Student.Id, id, input.AttachmentIds, s?.MobileAttachmentsJson);
-		s ??= w.Type == "assignment"
-			? await manager.CreateOrGetSubmissionForAssignmentAsync(id, p.Student.Id, p.DivisionId, w.Due, CurrentTenant.Id)
-			: await manager.CreateOrGetSubmissionAsync(id, p.Student.Id, p.DivisionId, w.Due, CurrentTenant.Id);
-		MobileSubmissionRules.Validate(s, w.Due, Clock.Now, w.Closed, w.SubmissionType, draft, replace, input.TextAnswer, input.AttachmentIds.Count);
-		s.SaveMobileResponse(input.TextAnswer, MobileAttachmentStore.Serialize(attachments), System.IO.Path.GetFileName(attachments.FirstOrDefault()?.BlobName), attachments.FirstOrDefault()?.Name, draft, DateTimeOffset.UtcNow);
-		await submissions.UpdateAsync(s, autoSave: true);
-		return await GetAsync(id, input);
-	}
+	public Task<MobileHomeworkDto> SaveAsync(Guid id, MobileSubmissionInput input, bool draft, bool replace) =>
+		writer.SaveAsync(id, input, draft, replace, () => GetAsync(id, input));
 
-	public async Task<MobileAttachmentDto> UploadAsync(Guid id, MobileAcademicInput input, IRemoteStreamContent file)
-	{
-		var dto = await GetAsync(id, input);
-		if (!dto.CanSubmit) throw MobileAcademicContextAppService.Invalid("This submission is locked.");
-		var p = await context.ResolveAsync(input);
-		var item = await files.UploadAsync(p.Student.Id, id, file);
-		return MobileAttachmentStore.Map(item, DownloadRoute(id, item.Id, p));
-	}
+	public Task<MobileAttachmentDto> UploadAsync(Guid id, MobileAcademicInput input, IRemoteStreamContent file, Guid? clientUploadId = null) =>
+		writer.UploadAsync(id, input, file, clientUploadId, () => GetAsync(id, input));
 
-	public async Task DeleteAttachmentAsync(Guid id, Guid attachmentId, MobileAcademicInput input)
-	{
-		var dto = await GetAsync(id, input);
-		if (!dto.CanSubmit) throw MobileAcademicContextAppService.Invalid("This submission is locked.");
-		var p = await context.ResolveAsync(input);
-		var s = await submissions.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == p.Student.Id && (x.HomeworkAssignmentId == id || x.AssignmentId == id));
-		await files.DeleteAsync(p.Student.Id, id, attachmentId, s?.MobileAttachmentsJson);
-	}
+	public Task DeleteAttachmentAsync(Guid id, Guid attachmentId, MobileAcademicInput input) =>
+		writer.DeleteAsync(id, attachmentId, input, () => GetAsync(id, input));
 
 	public async Task<MobileFileDto> DownloadAsync(Guid id, Guid attachmentId, MobileAcademicInput input)
 	{

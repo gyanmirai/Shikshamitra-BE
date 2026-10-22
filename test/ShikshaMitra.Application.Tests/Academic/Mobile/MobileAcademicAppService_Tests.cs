@@ -35,7 +35,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Mobile;
 
-public class MobileAcademicAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class MobileAcademicAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private async Task<T> Insert<T>(T entity) where T : class, Volo.Abp.Domain.Entities.IEntity<Guid> =>
 		await GetRequiredService<IRepository<T, Guid>>().InsertAsync(entity, true);
@@ -75,6 +75,82 @@ public class MobileAcademicAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 	}
 
 	[Theory]
+	[InlineData(false, false)]
+	[InlineData(true, false)]
+	[InlineData(false, true)]
+	[InlineData(true, true)]
+	public Task Published_web_homework_without_year_is_visible_with_canonical_subject_data(bool parent, bool assignedSubjectId) => WithUnitOfWorkAsync(async () =>
+	{
+		var tenantId = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f = await Seed(tenantId, parent); using var identity = SignIn(f.User.Id);
+		var assigned = await GetRequiredService<IRepository<AssignedSubject, Guid>>().GetAsync(x => x.SubjectId == f.SubjectId);
+		var type = await GetRequiredService<HomeworkTypeManager>().CreateAsync(f.Student.AcademicMediumId, "Written practice");
+		var homework = new HomeworkAssignmentEntity(Guid.NewGuid(), f.Enrollment.StandardId!.Value,
+			assignedSubjectId ? assigned.Id : f.SubjectId, "Web homework", "Published task", type.Id, SubmissionType.OnlineText, tenantId);
+		homework.AddDivisionSchedule(new HomeworkDivisionSchedule(Guid.NewGuid(), homework.Id, f.Enrollment.DivisionId!.Value,
+			DateTime.UtcNow, DateTime.UtcNow.AddDays(2), tenantId));
+		homework.PublishAll();
+		await Insert(homework);
+		// Older assignments can use the same storage conventions.
+		f.Assignment.AcademicYearId = null;
+		f.Assignment.SubjectId = assignedSubjectId ? assigned.Id : f.SubjectId;
+		await GetRequiredService<IRepository<AssignmentEntity, Guid>>().UpdateAsync(f.Assignment, true);
+		var service = GetRequiredService<IMobileHomeworkAppService>();
+		var page = await service.GetListAsync(new() { StudentId = f.Student.Id, AcademicYearId = f.Year.Id, SubjectId = f.SubjectId });
+		page.TotalCount.ShouldBe(2);
+		foreach (var item in page.Items)
+		{
+			item.SubjectId.ShouldBe(f.SubjectId);
+			item.SubjectName.ShouldBe("Mathematics");
+			item.SubjectCode.ShouldBe("MATH");
+			(await service.GetAsync(item.Id, new() { StudentId = f.Student.Id, AcademicYearId = f.Year.Id })).SubjectId.ShouldBe(f.SubjectId);
+		}
+	});
+
+	[Theory]
+	[InlineData("year")]
+	[InlineData("class")]
+	[InlineData("division")]
+	[InlineData("unpublished")]
+	[InlineData("future")]
+	[InlineData("subject")]
+	public Task Homework_compatibility_keeps_placement_and_publication_boundaries(string excludedBy) => WithUnitOfWorkAsync(async () =>
+	{
+		var tenantId = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f = await Seed(tenantId, false); using var identity = SignIn(f.User.Id);
+		var type = await GetRequiredService<HomeworkTypeManager>().CreateAsync(f.Student.AcademicMediumId, "Written practice");
+		var homework = new HomeworkAssignmentEntity(Guid.NewGuid(),
+			excludedBy == "class" ? Guid.NewGuid() : f.Enrollment.StandardId!.Value,
+			excludedBy == "subject" ? Guid.NewGuid() : f.SubjectId,
+			"Hidden task", "Must remain hidden", type.Id, SubmissionType.OnlineText, tenantId,
+			academicYearId: excludedBy == "year" ? Guid.NewGuid() : null);
+		var schedule = new HomeworkDivisionSchedule(Guid.NewGuid(), homework.Id,
+			excludedBy == "division" ? Guid.NewGuid() : f.Enrollment.DivisionId!.Value, DateTime.UtcNow, DateTime.UtcNow.AddDays(2), tenantId);
+		if (excludedBy != "unpublished") schedule.Publish();
+		if (excludedBy == "future") schedule.PublishedAt = DateTime.UtcNow.AddDays(1);
+		homework.AddDivisionSchedule(schedule);
+		await Insert(homework);
+		var service = GetRequiredService<IMobileHomeworkAppService>();
+		(await service.GetListAsync(new() { StudentId = f.Student.Id, AcademicYearId = f.Year.Id })).Items.ShouldNotContain(x => x.Id == homework.Id);
+		await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(() => service.GetAsync(homework.Id,
+			new() { StudentId = f.Student.Id, AcademicYearId = f.Year.Id }));
+	});
+
+	[Fact]
+	public Task Homework_subjects_include_published_subjects_without_tasks() => WithUnitOfWorkAsync(async () =>
+	{
+		var tenantId = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f = await Seed(tenantId, false); using var identity = SignIn(f.User.Id);
+		var subject = await Insert(new Subject(Guid.NewGuid(), tenantId, "Gujarati", "#008967", f.Student.AcademicMediumId));
+		await Insert(new AssignedSubject(Guid.NewGuid(), tenantId, f.Enrollment.StandardId!.Value, subject.Id, "GUJ", SubjectStatus.Published));
+		var draft = await Insert(new Subject(Guid.NewGuid(), tenantId, "Draft subject", "#008967", f.Student.AcademicMediumId));
+		await Insert(new AssignedSubject(Guid.NewGuid(), tenantId, f.Enrollment.StandardId.Value, draft.Id, "DRAFT"));
+		var subjects = await GetRequiredService<IMobileHomeworkAppService>().GetSubjectsAsync(new() { StudentId = f.Student.Id, AcademicYearId = f.Year.Id });
+		subjects.Select(x => x.Name).ShouldBe(new[] { "Gujarati", "Mathematics" });
+		subjects.Single(x => x.Id == subject.Id).Code.ShouldBe("GUJ");
+	});
+
+	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
 	public Task Student_and_guardian_read_published_academics_without_staff_grants(bool parent) => WithUnitOfWorkAsync(async () =>
@@ -100,6 +176,46 @@ public class MobileAcademicAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		await GetRequiredService<IRepository<AssignedSubjectChapter, Guid>>().UpdateAsync(chapter, true);
 		if (parent) (await GetRequiredService<IMobileSyllabusAppService>().GetChapterAsync(f.ChapterId, input)).ChapterName.ShouldBe("Fractions");
 		else await Should.ThrowAsync<Volo.Abp.Domain.Entities.EntityNotFoundException>(() => GetRequiredService<IMobileSyllabusAppService>().GetChapterAsync(f.ChapterId, input));
+	});
+
+	[Fact]
+	public Task Syllabus_summary_counts_all_visible_chapters_before_search_and_pagination() => WithUnitOfWorkAsync(async () =>
+	{
+		var tenantId = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f = await Seed(tenantId, false); using var identity = SignIn(f.User.Id);
+		var original = await GetRequiredService<IRepository<AssignedSubjectChapter, Guid>>().GetAsync(f.ChapterId);
+		for (var number = 2; number <= 4; number++)
+		{
+			var chapter = await Insert(new AssignedSubjectChapter(Guid.NewGuid(), original.AssignedSubjectId, number, $"Chapter {number}", DateTime.Today, DateTime.Today.AddDays(1)) {
+				AssignedSubjectId = original.AssignedSubjectId, TenantId = tenantId,
+				PublishStatus = number == 4 ? "Draft" : "Published", Visibility = "Students"
+			});
+			if (number < 4)
+			{
+				var coverage = new ShikshaMitra.Academic.Syllabus.ChapterProgress(chapter.Id, f.Enrollment.DivisionId!.Value);
+				coverage.UpdateProgress(number == 2 ? 100 : 50);
+				await Insert(coverage);
+			}
+		}
+		var service = GetRequiredService<IMobileSyllabusAppService>();
+		var page = await service.GetChaptersAsync(f.SubjectId, new() {
+			StudentId = f.Student.Id, AcademicYearId = f.Year.Id, PageSize = 1, PageNumber = 2
+		});
+		page.Items.Count.ShouldBe(1);
+		page.TotalCount.ShouldBe(3);
+		page.Summary.ShouldBe(new MobileChapterSummaryDto(3, 1, 1, 1, 50));
+		var filtered = await service.GetChaptersAsync(f.SubjectId, new() {
+			StudentId = f.Student.Id, AcademicYearId = f.Year.Id, Search = "missing"
+		});
+		filtered.TotalCount.ShouldBe(0);
+		filtered.Items.ShouldBeEmpty();
+		filtered.Summary.ShouldBe(page.Summary);
+		var dashboard = await service.GetDashboardAsync(new() { StudentId = f.Student.Id, AcademicYearId = f.Year.Id });
+		dashboard.TotalChapters.ShouldBe(3);
+		dashboard.ChaptersCovered.ShouldBe(1);
+		dashboard.OverallCoveragePercentage.ShouldBe(50);
+		dashboard.Subjects.Single().TotalChapters.ShouldBe(page.Summary.TotalChapters);
+		dashboard.Subjects.Single().CompletedChapters.ShouldBe(page.Summary.CompletedChapters);
 	});
 
 	[Theory]
@@ -131,6 +247,8 @@ public class MobileAcademicAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 		dashboard.Subjects.Single().TotalChapters.ShouldBe(visible ? 1 : 0);
 		var list = await service.GetChaptersAsync(f.SubjectId, new() { StudentId = f.Student.Id, AcademicYearId = f.Year.Id });
 		list.TotalCount.ShouldBe(visible ? 1 : 0);
+		list.Summary.TotalChapters.ShouldBe(visible ? 1 : 0);
+		list.Summary.UpcomingChapters.ShouldBe(visible ? 1 : 0);
 		if (visible)
 		{
 			list.Items.Single().Id.ShouldBe(f.ChapterId);
@@ -154,6 +272,7 @@ public class MobileAcademicAppService_Tests : ShikshaMitraApplicationTestBase<Sh
 			var input = new MobileAcademicInput { StudentId = studentId, AcademicYearId = f.Year.Id };
 			await Should.ThrowAsync<AbpAuthorizationException>(() => GetRequiredService<IMobileAcademicContextAppService>().GetAsync(input));
 			await Should.ThrowAsync<AbpAuthorizationException>(() => GetRequiredService<IMobileHomeworkAppService>().GetAsync(f.Assignment.Id, input));
+			await Should.ThrowAsync<AbpAuthorizationException>(() => GetRequiredService<IMobileHomeworkAppService>().GetSubjectsAsync(input));
 			await Should.ThrowAsync<AbpAuthorizationException>(() => GetRequiredService<IMobileSyllabusAppService>().GetChapterAsync(f.ChapterId, input));
 			await Should.ThrowAsync<AbpAuthorizationException>(() => GetRequiredService<IMobileAttendanceAppService>().GetOverviewAsync(input));
 			await Should.ThrowAsync<AbpAuthorizationException>(() => GetRequiredService<IMobileExamAppService>().GetAsync(f.Exam.Id, input));

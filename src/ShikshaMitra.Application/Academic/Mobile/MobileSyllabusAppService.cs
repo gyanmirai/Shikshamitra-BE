@@ -54,23 +54,37 @@ public class MobileSyllabusAppService(MobileAcademicContextAppService context,
 		{
 			var group = rows.Where(c => c.SubjectId == a.SubjectId).ToList();
 			var subject = subjectDetails.GetValueOrDefault(a.SubjectId);
+			var summary = Summarize(group);
 			return new MobileSubjectProgressDto(a.SubjectId, subject?.Name ?? "", a.SubjectCode,
-				group.Count == 0 ? 0 : (int)Math.Round(group.Average(c => c.ProgressPercentage)), group.Count,
-				group.Count(c => c.ProgressPercentage == 100), group.Count(c => c.ProgressPercentage is > 0 and < 100), group.Count(c => c.ProgressPercentage == 0), subject?.Color);
+				summary.CoveragePercentage, summary.TotalChapters, summary.CompletedChapters, summary.InProgressChapters, summary.UpcomingChapters, subject?.Color);
 		}).ToList();
+		var total = Summarize(rows);
 		return new(p.Student.Id, p.Year.Id, MobileAcademicContextAppService.Name(p.Student), $"{p.StandardName} - {p.DivisionName}",
-			rows.Count == 0 ? 0 : (int)Math.Round(rows.Average(c => c.ProgressPercentage)), rows.Count(c => c.ProgressPercentage == 100), rows.Count, summaries);
+			total.CoveragePercentage, total.CompletedChapters, total.TotalChapters, summaries);
 	}
 
-	public async Task<MobilePage<MobileChapterDto>> GetChaptersAsync(Guid subjectId, MobileListInput input)
+	public async Task<MobileChapterPageDto> GetChaptersAsync(Guid subjectId, MobileListInput input)
 	{
 		var p = await context.ResolveAsync(input);
 		if (!(await context.GetSubjectsAsync(p)).Any(x => x.SubjectId == subjectId)) throw new EntityNotFoundException(typeof(Subject), subjectId);
-		var rows = (await ReadChaptersAsync(p)).Where(x => x.SubjectId == subjectId);
+		var chaptersForSubject = (await ReadChaptersAsync(p)).Where(x => x.SubjectId == subjectId).ToList();
+		var summary = Summarize(chaptersForSubject);
+		IEnumerable<MobileChapterDto> rows = chaptersForSubject;
 		if (!string.IsNullOrEmpty(input.Status)) rows = rows.Where(x => x.CoverageStatus == input.Status);
 		if (!string.IsNullOrWhiteSpace(input.Search)) rows = rows.Where(x => x.ChapterName.Contains(input.Search.Trim(), StringComparison.OrdinalIgnoreCase));
-		return MobileAcademicContextAppService.Page(rows, input, p);
+		var page = MobileAcademicContextAppService.Page(rows, input, p);
+		return new MobileChapterPageDto {
+			StudentId = page.StudentId, AcademicYearId = page.AcademicYearId,
+			Items = page.Items, TotalCount = page.TotalCount, PageNumber = page.PageNumber,
+			PageSize = page.PageSize, Summary = summary
+		};
 	}
+
+	private static MobileChapterSummaryDto Summarize(List<MobileChapterDto> rows) => new(
+		rows.Count, rows.Count(c => c.ProgressPercentage == 100),
+		rows.Count(c => c.ProgressPercentage is > 0 and < 100),
+		rows.Count(c => c.ProgressPercentage == 0),
+		rows.Count == 0 ? 0 : (int)Math.Round(rows.Average(c => c.ProgressPercentage)));
 
 	public async Task<List<LearningResource>> ReadResourcesAsync(MobilePlacement p, Guid subjectId, Guid? chapterId = null)
 	{

@@ -60,9 +60,7 @@ public class AdmissionDirectRegistrationService(
 		if (offering.EntryMode is not (AdmissionEntryMode.DirectRegistration or AdmissionEntryMode.Both))
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationEntryNotAllowed,
 				"Choose a direct Registration Offering. This Offering starts with Inquiry.");
-		var selectedCounsellorId = input.CounsellorId ?? await intakeAssignmentService.ResolveAsync(offering);
-		if (input.CounsellorId.HasValue)
-			await peopleService.EnsureCanAccessOfferingAsync(input.CounsellorId.Value, offering.Id);
+		Guid? selectedCounsellorId = null;
 		if (string.IsNullOrWhiteSpace(input.ApplicantFirstName) || !input.ApplicantDateOfBirth.HasValue ||
 			input.ApplicantDateOfBirth.Value.Date > Clock.Now.Date ||
 			!Enum.TryParse<GenderEnum>(input.ApplicantGender, true, out var gender) || !Enum.IsDefined(gender) ||
@@ -118,15 +116,7 @@ public class AdmissionDirectRegistrationService(
 		var application = returningStudent == null
 			? await lifecycleService.StartForSpecialRegistrationAsync(applicant.Id, offering.Id)
 			: await lifecycleService.StartForReturnAsync(applicant.Id, offering.Id);
-		if (selectedCounsellorId.HasValue)
-		{
-			var created = await applicationRepository.GetAsync(application.Id);
-			created.AssignCounsellor(selectedCounsellorId.Value);
-			await applicationRepository.UpdateAsync(created, autoSave: true);
-			application = AdmissionApplicationMapper.ToDto(created);
-		}
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"DirectRegistrationStarted", "Registration started without an inquiry", applicant.Id, application.Id, null,
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("DirectRegistrationStarted", "Registration started without an inquiry", applicant.Id, application.Id, null,
 			JsonSerializer.Serialize(new
 			{
 				offering.Track, input.CounsellorId, AssignedCounsellorId = selectedCounsellorId,
@@ -151,9 +141,6 @@ public class AdmissionDirectRegistrationService(
 		if (application == null)
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict,
 				"This request ID already belongs to another registration.");
-		if (await GetInitialCounsellorAsync(application.Id) != input.CounsellorId)
-			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict,
-				"This request ID was already used with a different counsellor.");
 		await applicationScope.EnsureCanAccessAsync(application);
 		var family = await familyRepository.FindAsync(applicant.FamilyId);
 		var guardian = family?.PrimaryGuardianId.HasValue == true
@@ -179,14 +166,4 @@ public class AdmissionDirectRegistrationService(
 	private static string? Normalize(string? value) =>
 		string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-	private async Task<Guid?> GetInitialCounsellorAsync(Guid applicationId)
-	{
-		var activity = await activityRepository.FindAsync(item => item.ApplicationId == applicationId &&
-			item.ActivityType == "DirectRegistrationStarted");
-		if (string.IsNullOrWhiteSpace(activity?.MetadataJson)) return null;
-		using var metadata = JsonDocument.Parse(activity.MetadataJson);
-		return metadata.RootElement.TryGetProperty("CounsellorId", out var value) &&
-			value.ValueKind == JsonValueKind.String && Guid.TryParse(value.GetString(), out var id)
-			? id : null;
-	}
 }

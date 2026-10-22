@@ -45,7 +45,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
 		await EnsureSelectableAdmissionUserAsync();
 		var service = GetRequiredService<IAdmissionIntakeSetupAppService>();
-		var setup = await service.CreateAsync(ValidSetupInput("Simple intake"));
+		var setup = await CreateHistoricalIntakeSetupAsync(ValidSetupInput("Simple intake"));
 		var workflow = await CreateAndPublishWorkflowAsync();
 		var offering = await CreateAvailableOfferingAsync(workflow.Id);
 		const string oldRules = "{\"version\":1,\"duplicateRule\":2,\"applicationStartRequirement\":2," +
@@ -113,30 +113,4 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			.ConfigurationJson.ShouldBe(oldRules);
 	}
 
-	[Fact]
-	public async Task Setup_writes_should_ignore_retired_requirements_and_counsellor_lookup_should_return_active_scoped_people()
-	{
-		using var tenant = _currentTenant.Change(TestTenantId);
-		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
-		await EnsureSelectableAdmissionUserAsync();
-		var input = ValidSetupInput("Simple intake writes");
-		input.InquiryRules.DuplicateRule = AdmissionInquiryDuplicateRule.Block;
-		input.InquiryRules.ApplicationStartRequirement = AdmissionInquiryApplicationStartRequirement.Qualified;
-		input.InquiryRules.RequireGuardianEmail = true;
-		input.InquiryRules.RequireApplicantDateOfBirth = true;
-		input.InquiryRules.RequireSourceDetailFor = [AdmissionInquirySource.Referral];
-		var created = await GetRequiredService<IAdmissionIntakeSetupAppService>().CreateAsync(input);
-		created.InquiryRules.ApplicationStartRequirement.ShouldBe(AdmissionInquiryApplicationStartRequirement.Captured);
-		created.InquiryRules.DuplicateRule.ShouldBe(AdmissionInquiryDuplicateRule.RequireReason);
-		created.InquiryRules.RequireGuardianEmail.ShouldBeFalse();
-		created.InquiryRules.RequireApplicantDateOfBirth.ShouldBeFalse();
-		created.InquiryRules.RequireSourceDetailFor.ShouldBeEmpty();
-		var profiles = GetRequiredService<IRepository<AdmissionIntakeProfile, Guid>>();
-		var saved = JsonSerializer.Deserialize<AdmissionInquiryIntakeRules>((await profiles.GetAsync(created.InquiryIntakeProfileId)).ConfigurationJson,
-			new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-		saved.RequireGuardianEmail.ShouldBeFalse();
-		saved.RequireSourceDetailFor.ShouldBeEmpty();
-		var choices = await GetRequiredService<IAdmissionIntakeProfileAppService>().GetCounsellorsAsync();
-		choices.ShouldContain(person => person.Id == TestUserId && !string.IsNullOrWhiteSpace(person.Name));
-	}
 }

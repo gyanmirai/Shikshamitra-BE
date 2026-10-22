@@ -191,7 +191,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			note.Status.ShouldBe(AdmissionInquiryStatus.Interested);
 			note.ReminderAt.ShouldBe(reminder);
 			note.AuthorName.ShouldNotBeNullOrWhiteSpace();
-			recorded.FollowUps.Single().AssignedCounsellorId.ShouldBe(TestUserId);
+			recorded.FollowUps.Single().AssignedCounsellorId.ShouldBeNull();
 			recorded.FollowUps.Single().ScheduledAt.ShouldBe(reminder.UtcDateTime);
 			var noteActivity = (await GetRequiredService<IRepository<AdmissionActivity, Guid>>().GetListAsync(item => item.InquiryId == inquiry.Id && item.ActivityType == "InquiryFollowUpNoteRecorded")).Single();
 			using var metadata = JsonDocument.Parse(noteActivity.MetadataJson!);
@@ -317,7 +317,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		});
 
 	[Fact]
-	public Task Follow_up_note_should_enforce_assigned_actor_before_any_mutation() =>
+	public Task Follow_up_note_should_ignore_retired_assigned_actor_restrictions() =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var inquiry = await CreateFollowUpNoteInquiryAsync();
@@ -332,11 +332,10 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await states.UpdateAsync(state, true);
 			inquiry = await GetRequiredService<IAdmissionInquiryAppService>().GetAsync(inquiry.Id);
 			var service = GetRequiredService<IAdmissionInquiryManagementAppService>();
-			(await Should.ThrowAsync<BusinessException>(async () => await service.RecordFollowUpNoteAsync(inquiry.Id,
-				NoteInput(inquiry, await service.GetAsync(inquiry.Id), AdmissionInquiryStatus.Interested, DateTimeOffset.UtcNow.AddDays(1)))))
-				.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.InvalidState);
-			(await service.GetAsync(inquiry.Id)).Notes.ShouldBeEmpty();
-			(await repository.GetAsync(inquiry.Id)).Status.ShouldBe(AdmissionInquiryStatus.New);
+			await service.RecordFollowUpNoteAsync(inquiry.Id,
+				NoteInput(inquiry, await service.GetAsync(inquiry.Id), AdmissionInquiryStatus.Interested, DateTimeOffset.UtcNow.AddDays(1)));
+			(await service.GetAsync(inquiry.Id)).Notes.ShouldHaveSingleItem();
+			(await repository.GetAsync(inquiry.Id)).Status.ShouldBe(AdmissionInquiryStatus.Interested);
 		});
 
 	[Fact]

@@ -24,8 +24,6 @@ public class AdmissionInquiryRuntimeService(
 		if (state != null)
 		{
 			var policy = AdmissionInquiryPolicyResolver.ReadSnapshot(state.PolicySnapshotJson);
-			if (policy.RestrictActionsToAssignedCounsellor && inquiry.AssignedCounsellorId != CurrentUser.Id)
-				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidState, "Only the assigned counsellor can update the inquiry status.");
 			if (status == AdmissionInquiryStatus.New) { if (state.Outcome.HasValue) state.Reopen(); }
 			else state.RecordOutcome(status == AdmissionInquiryStatus.Interested ? AdmissionInquiryQualificationOutcome.Qualified : AdmissionInquiryQualificationOutcome.NotInterested,
 				"[]", status == AdmissionInquiryStatus.NotInterested ? "OTHER" : null, string.IsNullOrWhiteSpace(reason) ? "Family confirmed interest in admission." : reason, CurrentUser.Id ?? Guid.Empty, Clock.Now);

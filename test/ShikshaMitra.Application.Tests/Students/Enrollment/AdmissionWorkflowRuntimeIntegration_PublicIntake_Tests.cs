@@ -13,7 +13,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
-	public Task Inactive_offering_can_save_an_unscoped_assignment_but_cannot_activate() =>
+	public Task Retired_assignment_should_not_block_an_otherwise_ready_offering() =>
 		RunCertificationScenarioAsync(async () =>
 		{
 			var offering = await CreateOptionalIntakeOfferingAsync();
@@ -54,17 +54,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				IsActive = false,
 				ConcurrencyStamp = current.ConcurrencyStamp
 			});
-			updated.CounsellorAssignmentProfileId.ShouldBe(profile.Id);
-			updated.IsActive.ShouldBeFalse();
-			updated.Configuration.Errors.Count(error => error.Code ==
-				AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid).ShouldBe(2);
-			var validation = await WithUnitOfWorkAsync(async () =>
-				await _offeringValidator.ValidateStoredAsync(await _offeringRepository.GetAsync(offering.Id)));
-			validation.Errors.Count(error => error.Code ==
-				AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid).ShouldBe(2);
-			var activation = await Should.ThrowAsync<BusinessException>(() =>
-				service.ActivateAsync(offering.Id, updated.ConcurrencyStamp));
-			activation.Code.ShouldBe(AdmissionErrorCodes.OfferingConfigurationIncomplete);
+			updated.CounsellorAssignmentProfileId.ShouldBeNull();
+			updated.Configuration.IsValid.ShouldBeTrue();
+			(await service.ActivateAsync(offering.Id, updated.ConcurrencyStamp)).IsActive.ShouldBeTrue();
 		});
 
 	[Fact]
@@ -96,6 +88,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{
 				AdmissionCycleId = offering.AdmissionCycleId,
 				CounsellorAssignmentProfileId = profile.Id,
+				InquiryFormDefinitionId = offering.InquiryFormDefinitionId,
 				Name = "Existing QR", Source = AdmissionInquirySource.QrCode,
 				SourceDetail = "Front desk"
 			});
@@ -145,7 +138,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				item.AdmissionCycleId == offering.AdmissionCycleId && item.NormalizedPhone == "9876543211"))
 				.Single();
 			saved.AdmissionOfferingId.ShouldBe(offering.Id);
-			saved.AssignedCounsellorId.ShouldBe(TestUserId);
+			saved.AssignedCounsellorId.ShouldBeNull();
 			saved.FormResponseDefinitionId.ShouldBe(offering.InquiryFormDefinitionId);
 			saved.FormResponseSnapshotJson.ShouldContain("Enjoys reading");
 			var detail = await GetRequiredService<IAdmissionInquiryAppService>().GetAsync(saved.Id);
@@ -175,6 +168,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{
 				AdmissionCycleId = offering.AdmissionCycleId,
 				CounsellorAssignmentProfileId = profile.Id,
+				InquiryFormDefinitionId = offering.InquiryFormDefinitionId,
 				Name = "Autumn fair",
 				Source = AdmissionInquirySource.SchoolFair,
 				SourceDetail = "Main hall"
@@ -193,7 +187,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 						CounsellorUserIds = [Guid.NewGuid()]
 					})
 				}));
-			invalidUpdate.Code.ShouldBe(AdmissionIntakeProfileErrorCodes.InvalidConfiguration);
+			invalidUpdate.Code.ShouldBe("Admissions.StaffAssignmentRetired");
 			var input = new SubmitPublicAdmissionInquiryDto
 			{
 				AdmissionOfferingId = offering.Id, BoardId = offering.BoardId,
@@ -229,13 +223,13 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				item.AdmissionCycleId == offering.AdmissionCycleId && item.NormalizedPhone == input.GuardianPhone));
 			matches.Count.ShouldBe(1);
 			matches.Single().AdmissionOfferingId.ShouldBe(offering.Id);
-			matches.Single().AssignedCounsellorId.ShouldBe(TestUserId);
+			matches.Single().AssignedCounsellorId.ShouldBeNull();
 			matches.Single().Source.ShouldBe(AdmissionInquirySource.SchoolFair);
 			matches.Single().SourceDetail.ShouldContain("Grade 5");
 			var inquiryService = GetRequiredService<IAdmissionInquiryAppService>();
 			var confirmed = await inquiryService.GetAsync(matches.Single().Id);
 			confirmed.AdmissionOfferingId.ShouldBe(offering.Id);
-			confirmed.AssignedCounsellorId.ShouldBe(TestUserId);
+			confirmed.AssignedCounsellorId.ShouldBeNull();
 			await service.RevokeLinkAsync(link.Id, link.ConcurrencyStamp);
 			var error = await Should.ThrowAsync<BusinessException>(() => service.GetPublicAsync(link.Token));
 			error.Code.ShouldBe("Admissions.PublicInquiry.LinkUnavailable");

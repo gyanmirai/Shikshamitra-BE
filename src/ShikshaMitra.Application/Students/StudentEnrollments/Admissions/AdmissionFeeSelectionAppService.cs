@@ -131,7 +131,7 @@ public class AdmissionFeeSelectionAppService(
 	private async Task SaveAsync(AdmissionApplication application, string eventType, object evidence)
 	{
 		await applications.UpdateAsync(application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, eventType,
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(eventType,
 			eventType == "AdmissionFeeSelectionSaved" ? "Admissions fee structure confirmed." : "Saved fee structure confirmed in Onboarding.",
 			application.ApplicantId, application.Id, metadataJson: JsonSerializer.Serialize(evidence)), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();

@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-22
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,20 @@ audience: humans-and-agents
 # Find Student Enrollment Admissions APIs
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
+
+## Application numbering settings
+
+| Endpoint | Permission | Contract |
+|---|---|---|
+| `GET /api/student/enrollment/admissions/application-numbering` | `Students.Admissions.View` | Current school-wide rule, `expectedVersion`, `isConfigured`, `sequenceLocked`; unconfigured schools receive the legacy APP/calendar-year defaults. |
+| `PUT /api/student/enrollment/admissions/application-numbering` | `Students.Admissions.Add` | `expectedVersion`, `prefix`, `separator`, `suffix`, `yearFormat`, `resetPolicy`, `digits`, `startingNumber`; returns the saved immutable revision. |
+| `POST /api/student/enrollment/admissions/application-numbering/preview` | `Students.Admissions.View` | Same draft fields plus optional `academicYearId` (required for academic-year format/reset). Returns `nextNumber` and `nextSequence` from the allocation calculation without saving a rule, reserving a number or creating a counter. Stale `expectedVersion` returns `.Changed`. |
+
+Year format: 0 none, 1 UTC calendar year, 2 offering-period academic year (`YYYY-YY`). Reset policy: 0 continuous, 1 calendar year, 2 academic year. Yearly resets require the matching year token. Prefix is 1–20 ASCII letters/digits/hyphens, suffix 0–20; separators are `/`, `-`, or empty; digits 1–12; starting number 1–999999999. Starting number/reset policy lock after first custom issuance. Stale saves return `Students.Admissions.Numbering.Changed`; invalid combinations use `.Invalid`; sequence changes after issuance use `.SequenceLocked`. Existing action permissions and registration permissions are unchanged.
+
+Apply `AddAdmissionApplicationNumbering` before starting the updated API. The migration adds rule/counter tables only and does not rewrite applications or seed school settings.
+
+Changing from the default format to a school prefix carries the existing sequence: `APP-2026-000050` → `DDVS-2026-0051` with four digits. Starting number is a minimum. Calendar reset adopts the matching legacy calendar counter; continuous adopts the highest legacy counter; academic reset adopts issued default APP numbers in that academic year, including soft-deleted applications. Existing custom scope counters and matching historic numbers also set a floor. Preview and issuance share this logic under the same tenant transaction lock; previews are current observations, not reservations. This continuation/preview change adds no schema migration.
 
 ## Student action permissions
 
@@ -95,23 +109,17 @@ Ending a journey records Withdrawn with actor, reason, decision history and acti
 
 ## Intake setup lifecycle
 
-POST `/api/student/enrollment/admissions/intake-setups/{id}/restore` requires Admission Offerings Add authority in both controller and application service. It accepts `{concurrencyStamp}` and returns the shared envelope containing the updated setup DTO. Tenant filtering and the same stale-write guard used by archive apply; blank or oversized stamps fail validation, and stale stamps return `Admissions.Intake.ConcurrencyConflict`. Restore clears the archive flag, time and actor without replacing profile IDs or rules. A repeated restore using the current stamp is a no-op. It does not reactivate historical Offerings or links, or change existing inquiry assignments; ordinary configuration and staff checks still govern subsequent usage. No schema migration is required.
+Intake setup create/update/archive/restore and intake-profile writes are retired. Existing permission attributes remain, and authorized mutation attempts return `Admissions.StaffAssignmentRetired` without changing records. Legacy read contracts and stored profile references remain for compatibility.
 
 ## Intake counsellor options
 
-`GET /api/student/enrollment/admissions/intake-profiles/counsellors` requires Admission Offerings View and returns up to 50 active current-tenant identities with admission scope access in the shared response envelope.
-Optional `filter` searches username and display-name parts; optional `counsellorOnly` defaults to `false`, preserving the existing broad staff lookup.
-With `counsellorOnly=true`, database membership in the canonical seeded `Admissions Counselor` role (`ADMISSIONS COUNSELOR` normalized name) is applied before candidate batching and the 50-result cap.
-A missing role or no eligible members returns an empty list without broadening to other staff.
-Selectability retains active identity and admission scope checks without adding a mandatory HR Employee link; existing account-only candidates and runtime assignment validation remain unchanged.
-
-Offering create, update, clone, bulk and activation accept both intake profile IDs omitted. Selecting a setup still validates its paired Inquiry and assignment references, active counsellor access, fallback and rules; omitting both does not bypass published workflow, form, hierarchy, dates or UserScope validation. Clearing both references resets the intake marker, and a historical marker alone does not make an otherwise ready Offering incomplete.
-
-Inquiry `GET /api/student/enrollment/admissions/inquiries/counsellors?admissionOfferingId=...` and manual assignment retain Inquiry Assign, Offering Add and academic scope checks. An Offering without an assignment profile lists only active canonical `Admissions Counselor` identities with access to that Offering; manual assignment rechecks that membership and access. Configured Offerings retain their stored pool/fallback restrictions and manual capacity checks. An unassigned inquiry can be transferred to an eligible Offering without inventing an owner; an existing owner must remain eligible or the transfer must use configured routing.
+Admissions no longer selects or assigns a counsellor or Onboarding case owner. Inquiry/application assignment and Onboarding owner commands reject with `Admissions.StaffAssignmentRetired`. Legacy list ownership filters are ignored; action, tenant and academic scope checks remain authoritative. Offering writes ignore intake profile references; readiness still validates workflow, forms, hierarchy and dates.
 
 ## Public inquiry link options
 
-Public-link creation options are exposed through `GET /api/student/enrollment/admissions/public-inquiry-links/options?admissionCycleId={guid}` with Admission Offerings View authority. The response envelope contains distinct `{counsellorAssignmentProfileId, inquiryFormDefinitionId}` pairs from active Inquiry/Both Offerings in the published period and the current user's academic scope, including null-profile manual-routing options. Archived setups and unpublished/non-Inquiry forms are excluded. An unknown or unpublished period returns an empty list. Create retains Add authority and accepts omitted/null `counsellorAssignmentProfileId` when a compatible published `inquiryFormDefinitionId` is supplied. That null value explicitly suppresses automatic assignment, including Offering and legacy workflow defaults; captured inquiries remain Unassigned until staff assign them. Configured links retain exact profile/form matching and pool/fallback eligibility validation. `Admissions.PublicInquiry.OfferingRequired` remains HTTP 400 and includes corrective text plus `PeriodName`, `SetupName`, and `Reason` for absent Offerings or unmatched profile/form linkage. Persistence uses the nullable-column migration `MakePublicInquiryAssignmentOptional`.
+`GET /api/student/enrollment/admissions/public-inquiry-links/options?admissionCycleId={guid}` retains Offerings View and returns distinct published Inquiry forms from accessible active Inquiry/Both Offerings. The legacy assignment-profile field is always null. Create retains Offerings Add and requires the selected published form on an accessible active Offering in that period. It stores no assignment profile. Existing links retain their form, token hash, source, expiry and revocation behavior; their former routing profile no longer controls public capture. `Admissions.PublicInquiry.OfferingRequired` remains HTTP 400 with corrective form/Offering guidance and `PeriodName`. No new schema migration is required.
+
+Activity and timeline DTOs return `actorName`; completed workflow and Onboarding steps return `completedByName`, and Onboarding events return `actorName`. New activities/events/transitions snapshot the authenticated server actor. Historical rows resolve retained creator IDs in the current tenant where possible; missing attribution is not replaced by a former case owner.
 
 ## Admission student field contracts
 

@@ -36,33 +36,15 @@ public class AdmissionIntakeProfileAppService(IRepository<AdmissionIntakeProfile
 		people.GetCounsellorsAsync(filter, counsellorOnly: counsellorOnly);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
-	public async Task<AdmissionIntakeProfileDto> CreateAsync(SaveAdmissionIntakeProfileDto input)
+	public Task<AdmissionIntakeProfileDto> CreateAsync(SaveAdmissionIntakeProfileDto input)
 	{
-		EnsureIdentity(input);
-		input.ConfigurationJson = NormalizeInquiryConfiguration(input.Kind, input.ConfigurationJson);
-		Validate(input.Kind, input.ConfigurationJson);
-		var id = GuidGenerator.Create();
-		var code = AdmissionSettingsCode.ForCreate(input.Code,
-			input.Kind == AdmissionIntakeProfileKind.Inquiry ? "INQ" : "COUNSELLOR", id);
-		await EnsureUniqueAsync(input.Kind, code, null);
-		var profile = new AdmissionIntakeProfile(id, CurrentTenant.Id,
-			input.Kind, code, input.Name, input.ConfigurationJson);
-		try { await profiles.InsertAsync(profile, true); }
-		catch (Exception error) when (IsUniqueConstraintViolation(error))
-		{
-			throw new BusinessException(AdmissionIntakeProfileErrorCodes.DuplicateCode);
-		}
-		return Map(profile);
+		throw new Volo.Abp.BusinessException("Admissions.StaffAssignmentRetired", "Staff handling is recorded automatically in the activity history.");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
-	public async Task<AdmissionIntakeProfileDto> UpdateAsync(Guid id, SaveAdmissionIntakeProfileDto input)
+	public Task<AdmissionIntakeProfileDto> UpdateAsync(Guid id, SaveAdmissionIntakeProfileDto input)
 	{
-		if (await setups.AnyAsync(item => item.InquiryIntakeProfileId == id ||
-			item.CounsellorAssignmentProfileId == id))
-			throw new BusinessException(AdmissionIntakeProfileErrorCodes.SetupManagedProfile,
-				"This profile belongs to an intake setup and must be edited through that setup.");
-		return await UpdateCoreAsync(id, input);
+		throw new Volo.Abp.BusinessException("Admissions.StaffAssignmentRetired", "Staff handling is recorded automatically in the activity history.");
 	}
 
 	[RemoteService(false)]

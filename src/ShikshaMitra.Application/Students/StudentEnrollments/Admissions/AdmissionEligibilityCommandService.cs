@@ -54,7 +54,7 @@ public class AdmissionEligibilityCommandService(AdmissionEligibilityAccessServic
 	private async Task<AdmissionEligibilityDto> SaveAsync(AdmissionEligibilityState state, string action, Guid recordId, string description)
 	{
 		await applications.UpdateAsync(state.Context.Application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, action, description,
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(action, description,
 			state.Context.Application.ApplicantId, state.Context.Application.Id,
 			metadataJson: JsonSerializer.Serialize(new { RecordId = recordId, StageId = state.Context.Stage.Id, ActorId = Actor() })), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();

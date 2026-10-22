@@ -37,7 +37,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var offering = await CreateOptionalIntakeOfferingAsync();
 			if (offeringHasSetup)
 			{
-				var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>().CreateAsync(ValidSetupInput("Optional public routing"));
+				var setup = await CreateHistoricalIntakeSetupAsync(ValidSetupInput("Optional public routing"));
 				await LinkInputAsync(offering, setup);
 			}
 			else await WithUnitOfWorkAsync(async () =>

@@ -41,8 +41,7 @@ public class AdmissionFormStageCommandService(
 				Reason = reason
 			}), CurrentUser.Id), false);
 		await applications.UpdateAsync(context.Application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			input.Verified ? "AdmissionFormSectionVerified" : "AdmissionFormSectionVerificationRevoked",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(input.Verified ? "AdmissionFormSectionVerified" : "AdmissionFormSectionVerificationRevoked",
 			input.Verified ? $"Form section verified: {section.Name}" : $"Form section verification revoked: {section.Name}",
 			context.Application.ApplicantId, applicationId,
 			metadataJson: JsonSerializer.Serialize(new { StageId = stageId, SectionId = section.Id, Reason = reason })), false);
@@ -70,8 +69,7 @@ public class AdmissionFormStageCommandService(
 		await history.InsertAsync(new AdmissionFormChangeHistory(GuidGenerator.Create(), CurrentTenant.Id,
 			context.Form.Id, applicationId, "CorrectionRequested",
 			JsonSerializer.Serialize(new { Reason = reason }), CurrentUser.Id), false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"AdmissionFormCorrectionRequested", "Application form returned for correction",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("AdmissionFormCorrectionRequested", "Application form returned for correction",
 			context.Application.ApplicantId, applicationId,
 			metadataJson: JsonSerializer.Serialize(new { StageId = stageId, Reason = reason })), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();

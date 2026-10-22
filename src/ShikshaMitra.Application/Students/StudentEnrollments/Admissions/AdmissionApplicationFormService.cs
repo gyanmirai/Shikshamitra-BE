@@ -128,8 +128,7 @@ public class AdmissionApplicationFormService(
 		await historyRepository.InsertAsync(new AdmissionFormChangeHistory(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, application.Id,
 			"DraftSaved", System.Text.Json.JsonSerializer.Serialize(input.Values.Select(value => value.FieldCode).Distinct(StringComparer.OrdinalIgnoreCase)), CurrentUser.Id), false);
 		await applicationRepository.UpdateAsync(application, false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"ApplicationSaved", "Application draft saved", application.ApplicantId, application.Id), true);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationSaved", "Application draft saved", application.ApplicantId, application.Id), true);
 		return await GetAsync(applicationId);
 	}
 
@@ -178,8 +177,7 @@ public class AdmissionApplicationFormService(
 		application.Submit();
 		await workflowService.AdvanceAfterSubmitAsync(application);
 		await applicationRepository.UpdateAsync(application, false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"ApplicationSubmitted", "Application submitted", application.ApplicantId, application.Id), true);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationSubmitted", "Application submitted", application.ApplicantId, application.Id), true);
 		return new AdmissionApplicationSubmitResultDto { Application = AdmissionApplicationMapper.ToDto(application) };
 	}
 

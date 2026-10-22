@@ -113,7 +113,7 @@ public class AdmissionPaymentCommandService(
 	private async Task<AdmissionPaymentStageDto> SaveAsync(AdmissionPaymentContext context, AdmissionPaymentTransaction payment, string action)
 	{
 		await applications.UpdateAsync(context.Application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, action,
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(action,
 			$"{context.Stage.Name}: {payment.Currency} {payment.Amount:0.00}, {payment.Status}.",
 			context.Application.ApplicantId, context.Application.Id, metadataJson: JsonSerializer.Serialize(new
 			{ PaymentId = payment.Id, payment.StageInstanceId, payment.AttemptNumber, payment.Method, payment.Status })), false);

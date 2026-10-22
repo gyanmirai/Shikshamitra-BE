@@ -80,7 +80,7 @@ public class AdmissionDocumentCommandService(IRepository<AdmissionDocumentEviden
 		AdmissionDocumentReview? review = null)
 	{
 		await applications.UpdateAsync(context.Application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, action,
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(action,
 			$"{row.RequirementLabel}: evidence revision {row.VersionNumber}.", context.Application.ApplicantId, context.Application.Id,
 			metadataJson: JsonSerializer.Serialize(new { ActorUserId = Actor(), EvidenceId = row.Id, row.StageInstanceId, row.RequirementCode,
 				row.VersionNumber, row.Kind, row.Sha256Hash, row.OriginalSeen, row.Notes, ReviewId = review?.Id, review?.Decision, review?.Reason })), false);

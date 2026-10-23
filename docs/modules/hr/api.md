@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -49,7 +49,7 @@ Employee APIs manage staff identity, profile data, documents, status, reporting,
 | Employee profile dashboard | `/api/employees/{id}/dashboard` | Own employee or `HR.Employee.EmployeeList.View` with HR user-scope enforcement |
 | Personal info | `/api/employees/{id}/personal-info` | `HR.Employee.EmployeeList.*` |
 | Controlled account email | GET/PUT `/api/employees/{id}/account-email` | `HR.Employee.EmployeeList.Edit` AND `AbpIdentity.Users.Update`, employee scope |
-| Family info | `/api/employees/{id}/family` | `HR.Employee.EmployeeList.*` |
+| Family info | GET/PUT `/api/employees/{id}/family-info` | `HR.Employee.EmployeeList.View` / `.Edit`, employee scope |
 | Additional info | `/api/employees/{id}/additional-info` | `HR.Employee.EmployeeList.*` |
 | Work experience | `/api/employees/{id}/work-experience` | `HR.Employee.EmployeeList.*` |
 | Employee payroll details | `/api/employees/{id}/payroll` | `HR.Employee.EmployeeList.*` |
@@ -61,6 +61,11 @@ Employee APIs manage staff identity, profile data, documents, status, reporting,
 | Public employee application | `/api/public/employee-applications/{token}`, `/api/public/employee-applications/{token}/submit` | Anonymous token |
 
 Employee create and update flows must protect email, mobile, date of birth, date of joining, role, and academic scope consistency.
+Before academic assignment, profile reads and edits may access the caller's own newly created staff draft.
+The persisted `CreatorId` must match, status must be Inactive with no status-change history, and the employee must have no organization assignments, including deleted assignments.
+The caller still needs the endpoint's action permission, current Staff Add, and at least one valid accessible HR stage. Missing or revoked scope denies access.
+Organization assignment or any status transition ends this draft exception; normal employee scope applies. Payroll and other module-specific scope checks do not use it.
+Family reads and writes enforce employee access in the application service as well as the controller.
 The staff role lookup returns `items` containing only `id`, `name`, `roleAudience`, `employeeGroupAudience`, and `employeeOnboardingAssignable` for explicitly approved Employee-audience roles in the current tenant.
 Reserved Admin, Super Admin, Student, and Parent names are excluded; Identity role-management APIs retain their own permissions.
 Creating personal information with `policyOverride` requires `HR.Policies.Assign`; the onboarding default-policy confirmation marker also requires `HR.Policies.PreviewImpact`.

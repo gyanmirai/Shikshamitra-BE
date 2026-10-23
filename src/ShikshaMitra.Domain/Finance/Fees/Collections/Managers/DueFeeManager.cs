@@ -58,6 +58,9 @@ public class DueFeeManager(
 		var dueFees = new List<DueFee>();
 		foreach (var detail in feeStructure.FeeStructureDetails)
 		{
+			// This structure-level choice is immutable once assigned. No due means no
+			// regular collection, late fee, receipt allocation or income posting.
+			if (detail.CollectAtAdmission) continue;
 			if (detail.IsOptional && !selectedOptionalFeeHeadIds.Contains(detail.FeeHeadId))
 				continue;
 

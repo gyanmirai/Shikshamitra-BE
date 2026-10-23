@@ -33,7 +33,6 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Late Fee
 	public bool EnableLateFee { get; protected set; }
 	public int GracePeriodDays { get; protected set; }
-	public GracePeriodType GracePeriodType { get; protected set; }
 	public string LateFeeApplyOnFeeHeadsJson { get; protected set; } = "[]";
 	public LateFeeCalculationType LateFeeType { get; protected set; }
 	public decimal? FlatAmount { get; protected set; }
@@ -148,7 +147,6 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		EnableLateFee = model.EnableLateFee;
 		GracePeriodDays = model.GracePeriodDays;
-		GracePeriodType = model.GracePeriodType;
 		LateFeeApplyOnFeeHeadsJson = SerializeGuids(model.LateFeeApplyOnFeeHeads);
 		LateFeeType = model.LateFeeType;
 		FlatAmount = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.FlatAmount);
@@ -292,7 +290,6 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EffectiveTo = EffectiveTo,
 		EnableLateFee = EnableLateFee,
 		GracePeriodDays = GracePeriodDays,
-		GracePeriodType = GracePeriodType,
 		LateFeeApplyOnFeeHeads = GetLateFeeApplyOnFeeHeads().ToList(),
 		LateFeeType = LateFeeType,
 		FlatAmount = FlatAmount,
@@ -348,11 +345,6 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (validateInputBounds)
 			ValidateNumericRule(model.FlatAmount, model.Percentage, model.AmountPerDay, model.AmountPerWeek,
 				model.AmountPerMonth, model.MaximumLateFeeAmount, model.MaximumChargingDays);
-
-		if (model.Status == CollectionPolicyStatus.Active && model.GracePeriodType == GracePeriodType.WorkingDay)
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.WorkingDayGraceNotSupported);
-		}
 
 		if (model.EnableLateFee)
 		{
@@ -458,7 +450,6 @@ public sealed record CollectionPolicyUpdateModel(
 	DateTime? EffectiveTo,
 	bool EnableLateFee,
 	int GracePeriodDays,
-	GracePeriodType GracePeriodType,
 	IReadOnlyList<Guid> LateFeeApplyOnFeeHeads,
 	LateFeeCalculationType LateFeeType,
 	decimal? FlatAmount,

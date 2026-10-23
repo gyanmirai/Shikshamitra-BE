@@ -75,15 +75,6 @@ internal static class CollectionPolicyMapping
 
 	public static string MapRoundingMethod(RoundingMethodType value) => value.ToString();
 
-	public static GracePeriodType ParseGracePeriodType(string value) => Normalize(value) switch
-	{
-		"calendar" => GracePeriodType.Calendar,
-		"workingday" => GracePeriodType.WorkingDay,
-		_ => throw InvalidEnum("gracePeriodType")
-	};
-
-	public static string MapGracePeriodType(GracePeriodType value) => value.ToString();
-
 	public static EscalationCalculationType ParseEscalationCalculationType(string value) => Normalize(value) switch
 	{
 		"flat" => EscalationCalculationType.Flat,
@@ -179,7 +170,6 @@ internal static class CollectionPolicyMapping
 			effectiveTo,
 			input.EnableLateFee,
 			input.GracePeriodDays,
-			ParseGracePeriodType(input.GracePeriodType),
 			input.LateFeeApplyOnFeeHeads,
 			ParseLateFeeType(input.LateFeeType),
 			input.FlatAmount,
@@ -213,7 +203,6 @@ internal static class CollectionPolicyMapping
 		IsDefault = entity.IsDefault,
 		EnableLateFee = entity.EnableLateFee,
 		GracePeriodDays = entity.GracePeriodDays,
-		GracePeriodType = MapGracePeriodType(entity.GracePeriodType),
 		LateFeeApplyOnFeeHeads = entity.GetLateFeeApplyOnFeeHeads().ToList(),
 		LateFeeType = MapLateFeeType(entity.LateFeeType),
 		FlatAmount = entity.FlatAmount,

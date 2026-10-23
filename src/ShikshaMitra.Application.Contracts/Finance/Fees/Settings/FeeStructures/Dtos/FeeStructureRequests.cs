@@ -81,6 +81,8 @@ public class FeeHeadAssignmentRequest
     public bool IsVariable { get; set; }
 	public bool IsOneTime { get; set; }
 	public bool IsOptional { get; set; }
+    /// <summary>Exclude this head from regular dues, Fee Collection and income. Does not record an admission payment.</summary>
+    public bool CollectAtAdmission { get; set; }
 	public MonthEnum PayableMonth { get; set; }
 	public int PayableYear { get; set; }
 

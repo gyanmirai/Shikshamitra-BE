@@ -3,12 +3,20 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Use Finance backend APIs
+
+## Collection grace period
+
+Collection Policy grace periods and late-fee day counts always use calendar days, including weekends and holidays.
+`gracePeriodDays` remains an integer from 0 to 365; `gracePeriodType` is removed from create/update/read/clone contracts and new version snapshots.
+Legacy snapshots containing either the string or numeric day type remain readable: the obsolete property is ignored, retaining the existing calendar-day calculation and all stored historical JSON.
+The `RemoveCollectionPolicyGracePeriodType` migration removes only the unused column from `Finance_CollectionPolicies`; it does not rewrite policy versions, dues, collections or receipts.
+Rollback restores the obsolete column with its Calendar value (0), since working-day counting was never implemented.
 
 ## Automatic collection allocation
 

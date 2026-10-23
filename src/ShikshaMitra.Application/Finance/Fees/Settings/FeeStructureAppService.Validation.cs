@@ -50,6 +50,18 @@ public partial class FeeStructureAppService
 			if (head == null) continue;
 			var coverage = new FeeStructureCoverageDto { FeeHeadId = head.Id, Name = head.Name };
 			result.Coverage.Add(coverage);
+			if (line.CollectAtAdmission)
+			{
+				line.PaymentTermId = null;
+				line.PaymentTermVersionId = null;
+				line.ScheduleMode = ScheduleMode.Inherited;
+				line.InstallmentOverrides.Clear();
+				coverage.Accounting = "Excluded from income; no payment recorded";
+				coverage.Collection = "Admission only; excluded from Fee Collection";
+				coverage.Concession = "Not applicable; no regular due";
+				coverage.Refund = "Not applicable; no payment recorded";
+				continue;
+			}
 			try
 			{
 				var map = await accountingManager.GetValidMappingAsync(year.Id, head.IncomeCategoryId);
@@ -173,6 +185,7 @@ public partial class FeeStructureAppService
 				(publishing ? result.Errors : result.Warnings).Add("The Refund Policy has no matching Fee Heads. Choose a compatible policy or remove the attachment before publishing.");
 			foreach (var row in result.Coverage)
 			{
+				if (candidate.FeeHeads.Any(x => x.FeeHeadId == row.FeeHeadId && x.CollectAtAdmission)) continue;
 				row.Collection = cp is { EnableLateFee: true } && cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId) ? "Late fee applies" : "No late fee";
 				row.Concession = cn != null && candidate.ConcessionApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Eligible on approval" : "Not eligible";
 				row.Refund = rp == null ? "No refund policy attached" : rp.FeeHeadScope != RefundFeeHeadScope.SelectedFeeHeads || rp.ApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Policy eligible" : "Excluded";

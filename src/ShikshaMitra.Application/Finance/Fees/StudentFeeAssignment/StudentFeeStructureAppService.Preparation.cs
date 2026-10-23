@@ -80,6 +80,7 @@ public partial class StudentFeeStructureAppService
 		var optionalDetails = new List<CustomOptionalFeeHeadDetail>();
 		foreach (var detail in details)
 		{
+			if (detail.CollectAtAdmission) continue;
 			var included = !detail.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(detail.FeeHeadId);
 			var head = new AssignmentHeadDto { FeeHeadId = detail.FeeHeadId, FeeHeadName = names.GetValueOrDefault(detail.FeeHeadId, "Fee head"),
 				IsOptional = detail.IsOptional, IsVariable = detail.IsVariable, IsOneTime = detail.IsOneTime, Included = included, ConfiguredAmount = detail.Amount,

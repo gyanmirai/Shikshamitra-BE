@@ -101,6 +101,7 @@ public class AdmissionWorkflowValidationService(
 			if (issues.Any(issue => issue.StageId == stage.Id && issue.Severity == AdmissionWorkflowValidationSeverity.Error)) continue;
 			try
 			{
+				_ = AdmissionPaymentCompletionReader.ReadPolicy(stage.ConfigurationJson);
 				var policy = AdmissionPaymentAccessService.ReadPolicy(stage);
 				if (policy?.AcceptedMethods.Contains("onlineGateway", StringComparer.Ordinal) == true)
 					issues.Add(new AdmissionWorkflowValidationIssueDto

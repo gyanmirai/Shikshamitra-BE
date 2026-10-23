@@ -86,6 +86,7 @@ public class AdmissionFeeSelectionAppService(
 			caseEditable = item != null && item.Status is not (StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled);
 		}
 		var blocker = await onboarding.GetBlockerAsync(application);
+		var paymentCompletion = await LazyServiceProvider.LazyGetRequiredService<AdmissionPaymentCompletionReader>().ReadAsync(context);
 		var confirmed = snapshot != null && blocker == null;
 		return new AdmissionFeeSelectionDto
 		{
@@ -94,6 +95,7 @@ public class AdmissionFeeSelectionAppService(
 			CurrentStageId = application.CurrentStageInstanceId, Currency = context.Currency,
 			Available = context.Owner != null || snapshot != null, IsRequired = context.IsRequired,
 			IsLocked = context.HasPaymentEvidence, HasRecordedFeePayment = context.HasPaymentEvidence,
+			PaymentCompletion = paymentCompletion,
 			FeeCollectionDeferral = deferral == null ? null : new AdmissionFeeCollectionDeferralDto
 			{
 				StageId = deferral.StageId, Reason = deferral.Reason, DeferredBy = deferral.DeferredBy, DeferredAt = deferral.DeferredAt

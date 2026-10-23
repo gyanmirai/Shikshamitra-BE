@@ -31,6 +31,7 @@ public partial class StudentOnboardingAppService
 		if (!input.IsLocked)
 		{
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair);
+			if (!(await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value)).IsAdmin) throw new AbpAuthorizationException();
 			if (string.IsNullOrWhiteSpace(input.Reason)) throw new BusinessException(StudentOnboardingErrorCodes.WaiverReasonRequired);
 		}
 		using var work = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);

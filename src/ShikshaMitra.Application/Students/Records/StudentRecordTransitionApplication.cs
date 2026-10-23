@@ -68,7 +68,8 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 		catch (BusinessException exception) { await MarkExceptionAsync(id, exception.Code ?? "Students:Records:ValidationConflict"); }
 		catch (AbpAuthorizationException) { await MarkExceptionAsync(id, "Students:Records:AuthorityChanged"); }
 		catch (AbpDbConcurrencyException) { await MarkExceptionAsync(id, "Students:Records:ConcurrencyConflict"); }
-		catch (Exception exception) when (StudentOnboardingRollConflictMapper.IsSerializationConflict(exception))
+		catch (Exception exception) when (StudentOnboardingRollConflictMapper.IsSerializationConflict(exception) ||
+			ShikshaMitra.Finance.Fees.Collections.WithdrawalProrationService.IsSourceConflict(exception))
 		{ await MarkExceptionAsync(id, "Students:Records:ConcurrencyConflict"); }
 	}
 	private async Task ApplyCoreAsync(StudentRecordTransition item, StudentRecordsPolicy policy)
@@ -95,6 +96,9 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 		}
 		if (item.Outcome is "Graduate" or "Withdraw" or "Transfer")
 		{
+			if (item.Outcome == "Withdraw")
+				await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.WithdrawalProrationService>()
+					.ApplyAsync(item.Id, item.StudentId, item.AcademicYearId, item.EffectiveDate, item.Reason);
 			var removalDate = policy.Transitions.RosterRemovalTiming == "Approval"
 				? AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now) : item.EffectiveDate;
 			source.Enrollment.Deactivate(removalDate); source.Student.ChangeOperationalStatus(StudentStatus.Left, item.Reason);

@@ -46,6 +46,7 @@ public partial class StudentFeeStructureAppService
             throw new BusinessException(AssignmentErrorCodes.InvalidInput);
         foreach (var detail in details.Where(d => structure.FeeStructureDetails.All(x => x.Id != d.Id))) structure.AddDetail(detail);
 		var selectedPolicies = await ResolveAssignedPoliciesAsync(structure, year.Id, input.Policies, input.PolicyOverrideReason);
+		if (admission != null) selectedPolicies["proration"] = admission.Proration;
 		var collection = selectedPolicies["collection"];
 		var proration = selectedPolicies["proration"];
 		var refund = selectedPolicies["refund"];
@@ -68,11 +69,19 @@ public partial class StudentFeeStructureAppService
 			throw new BusinessException(AssignmentErrorCodes.ConfigurationInvalid);
 		var headIds = details.Select(d => d.FeeHeadId).ToList();
 		var headRecords = (await feeHeadRepository.GetListAsync(h => headIds.Contains(h.Id))).ToDictionary(h => h.Id);
+		var applicableProration = prorationRules?.Rules.Any(r => details.Any(d => d.FeeHeadId == r.FeeHeadId && !d.IsOneTime &&
+			(!d.IsOptional || input.SelectedOptionalFeeHeadIds.Contains(d.FeeHeadId))) && (r.ApplyOnAdmission || r.ApplyOnEarlyWithdrawal)) == true;
+		if (admission != null && applicableProration && !admission.JoiningDate.HasValue)
+			throw new BusinessException(ProrationPolicyErrorCodes.JoiningDateRequired);
+		if (admission?.JoiningDate?.Date > year.EndDate.Date)
+			throw new BusinessException(ProrationPolicyErrorCodes.JoiningDateInvalid);
+		var admissionStart = admission?.JoiningDate?.Date > year.StartDate.Date ? admission.JoiningDate.Value.Date : year.StartDate.Date;
 		var names = headRecords.ToDictionary(h => h.Key, h => h.Value.Name);
 		var preview = new StudentFeeAssignmentPreviewDto {
 			StudentId = studentId, AcademicYearId = year.Id, EnrollmentId = enrollment?.Id,
 			StructureId = structure.Id, StructureName = structure.Name, RevisionNumber = structure.RevisionNumber,
-			ChargeStartDate = DateTime.SpecifyKind(year.StartDate.Date, DateTimeKind.Utc), ChargeEndDate = DateTime.SpecifyKind(year.EndDate.Date, DateTimeKind.Utc),
+			RegistrationJoiningDate = admission?.JoiningDate,
+			ChargeStartDate = DateTime.SpecifyKind(admission != null && applicableProration ? admissionStart : year.StartDate.Date, DateTimeKind.Utc), ChargeEndDate = DateTime.SpecifyKind(year.EndDate.Date, DateTimeKind.Utc),
 			OverrideReason = input.OverrideReason?.Trim(),
 			PolicyOverrideReason = input.PolicyOverrideReason?.Trim(),
 			ProrationPolicyId = proration?.PolicyId, ProrationPolicyVersionId = proration?.Id
@@ -121,6 +130,9 @@ public partial class StudentFeeStructureAppService
 				throw new BusinessException(AssignmentErrorCodes.InvalidInput);
 			if (admission != null && requested.Source != "AcademicYear") throw new BusinessException(AssignmentErrorCodes.SourceUnavailable);
 			var fact = await ResolveServiceAsync(input.StudentId, requested, year);
+			var admissionRule = prorationRules?.Rules.FirstOrDefault(r => r.FeeHeadId == detail.FeeHeadId);
+			if (admission != null && !detail.IsOneTime && admissionRule is { ApplyOnAdmission: true } && admissionRule.RuleType != ProrationRuleType.FullCharge) fact = (new AssignmentServicePeriodDto { FeeHeadId = detail.FeeHeadId,
+				Source = "Registration", StartDate = DateTime.SpecifyKind(admissionStart, DateTimeKind.Utc), EndDate = DateTime.SpecifyKind(year.EndDate.Date, DateTimeKind.Utc) }, "Verified registration joining date", admission.SourceRevision);
 			head.ServicePeriod = fact.Period;
 			head.Verification = detail.IsVariable ? "Student amount entered during assignment; " + fact.Verification : fact.Verification;
 			head.SourceRevision = fact.Revision;
@@ -147,7 +159,7 @@ public partial class StudentFeeStructureAppService
 		{
 			var policy = new AssignmentPolicyDto { Family = version!.PolicyType, PolicyId = version.PolicyId, VersionId = version.Id,
 				Version = version.VersionNumber, Name = version.PolicyName };
-			policy.Source = StructurePolicyVersions(structure)[version.PolicyType] == version.Id ? "FeeStructure" : "StudentOverride";
+			policy.Source = admission != null && version.PolicyType == "proration" ? "FinanceDefault" : StructurePolicyVersions(structure)[version.PolicyType] == version.Id ? "FeeStructure" : "StudentOverride";
 			foreach (var head in preview.Heads)
 				policy.HeadTreatment[head.FeeHeadId] = !head.Included ? "Not included" : version.PolicyType switch {
 					"collection" => collectionRules.EnableLateFee && collectionRules.LateFeeApplyOnFeeHeads.Contains(head.FeeHeadId)

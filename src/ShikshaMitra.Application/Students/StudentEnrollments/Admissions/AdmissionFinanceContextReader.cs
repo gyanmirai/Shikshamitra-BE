@@ -52,7 +52,8 @@ public class AdmissionFinanceContextReader(
 			offering.StandardId, item?.DivisionId, application.StudentId ?? applicant.ExistingStudentId,
 			string.Join(" ", new[] { applicant.FirstName, applicant.MiddleName, applicant.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))),
 			application.ApplicationNumber, standard.Name, application.ConcurrencyStamp, selection?.StructureId, selection?.RevisionNumber,
-			selection?.Heads.Where(h => h.IsOptional).Select(h => h.FeeHeadId).ToList() ?? [], blocker == null, blocker, item?.StudentEnrollmentId);
+			selection?.Heads.Where(h => h.IsOptional).Select(h => h.FeeHeadId).ToList() ?? [], blocker == null, blocker, item?.StudentEnrollmentId,
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionJoiningDateReader>().ReadAsync(application));
 	}
 
 	public async Task RecordPaymentEvidenceAsync(Guid applicationId, Guid accountId)

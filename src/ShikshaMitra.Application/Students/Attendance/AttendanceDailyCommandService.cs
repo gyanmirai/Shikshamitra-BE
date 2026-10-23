@@ -54,7 +54,7 @@ public class AttendanceDailyCommandService(AttendanceRosterService rosters, Atte
 		var changed = input.Entries.Where(e => Changed(roster.Members.SingleOrDefault(r => r.Student.Id == e.StudentId)?.Entry, e)).ToList();
 		foreach (var item in input.Entries)
 		{
-			var member = roster.Members.SingleOrDefault(r => r.Student.Id == item.StudentId);
+			var member = roster.DailyMembers.SingleOrDefault(r => r.Student.Id == item.StudentId);
 			if (member == null || !member.Expected || item.EnrollmentId.HasValue && item.EnrollmentId != member.Enrollment.Id)
 				throw new BusinessException(AttendanceOperationErrorCodes.StudentOutsideDatedRoster);
 			AttendanceEntryRules.Validate(item, roster.Options);
@@ -80,14 +80,16 @@ public class AttendanceDailyCommandService(AttendanceRosterService rosters, Atte
 		if (roster.Day?.IsSubmitted == true && input.Entries.Any(e => e.Status == AttendanceStatus.Pending))
 			throw new BusinessException(AttendanceOperationErrorCodes.CannotUnmarkSubmittedAttendance);
 		var day = roster.Day ?? await manager.GetOrCreateAttendanceDayAsync(input.AcademicYearId, input.StandardId, input.DivisionId, input.Date);
-		var entriesToSave = input.Submit ? roster.Members.Where(r => r.Expected).Select(r =>
+		// Hidden submitted observations remain stored as-is; submitting visible students
+		// must not rewrite their historical marks, roll numbers or credit snapshots.
+		var entriesToSave = input.Submit ? roster.DailyMembers.Where(r => r.Expected).Select(r =>
 			input.Entries.SingleOrDefault(e => e.StudentId == r.Student.Id) ?? new AttendanceEntryDto {
 				StudentId = r.Student.Id, EnrollmentId = r.Enrollment.Id, Status = r.Entry!.Status,
 				Late = r.Entry.Late, HalfDay = r.Entry.HalfDay, Remarks = r.Entry.Remarks }).ToList() : input.Entries;
 		// Compare the dated roster's enrollment revisions in the same transaction as attendance.
 		// Placement, start-date and individual schedule writers update these same aggregate stamps.
 		var affectedIds = input.Entries.Select(e => e.StudentId).ToHashSet();
-		await enrollmentRecords.UpdateManyAsync(roster.Members.Where(r => affectedIds.Contains(r.Student.Id) || input.Submit && r.Expected).Select(r => r.Enrollment));
+		await enrollmentRecords.UpdateManyAsync(roster.DailyMembers.Where(r => affectedIds.Contains(r.Student.Id) || input.Submit && r.Expected).Select(r => r.Enrollment));
 		foreach (var item in changed.Where(_ => roster.Day?.IsSubmitted == true))
 		{
 			var before = roster.Members.Single(r => r.Student.Id == item.StudentId);

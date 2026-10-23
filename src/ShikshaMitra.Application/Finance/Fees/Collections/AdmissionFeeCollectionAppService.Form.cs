@@ -109,6 +109,8 @@ public partial class AdmissionFeeCollectionAppService
         ProrationEligibleEndDate = due.ProrationEligibleEndDate, ProrationCoverageDays = due.ProrationCoverageDays,
         ProrationEligibleDays = due.ProrationEligibleDays, ProrationChargedDays = due.ProrationChargedDays,
         ProrationExplanation = due.ProrationExplanation,
+        WithdrawalProrationCredit = due.GetWithdrawalProrationCredit(),
+        WithdrawalProrationExplanation = due.GetWithdrawalProrationExplanation(),
     };
 
     private static ChargeDetailDto AccountLateFeeCharge(DueFee due, string name, LateFeeBalanceService.Balance balance) => new()

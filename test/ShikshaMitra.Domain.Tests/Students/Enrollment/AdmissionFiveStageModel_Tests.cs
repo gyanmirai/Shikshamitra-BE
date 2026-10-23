@@ -76,6 +76,21 @@ public class AdmissionFiveStageModel_Tests
 	}
 
 	[Fact]
+	public void Form_settings_retire_section_verification_without_losing_other_settings()
+	{
+		var json = AdmissionStageConfiguration.Normalize(AdmissionWorkflowStageType.Form,
+			"{\"extension\":\"keep\",\"form\":{\"responsibility\":\"shared\",\"dueInDays\":7,\"maxSubmissionAttempts\":5,\"requireSectionVerification\":true,\"verificationSectionCodes\":[\"STUDENT\"]}}");
+		var policy = AdmissionFormStagePolicy.Read(json)!;
+		policy.RequireSectionVerification.ShouldBeFalse();
+		policy.VerificationSectionCodes.ShouldBeEmpty();
+		policy.Responsibility.ShouldBe("shared");
+		policy.DueInDays.ShouldBe(7);
+		policy.MaxSubmissionAttempts.ShouldBe(5);
+		using var document = JsonDocument.Parse(json!);
+		document.RootElement.GetProperty("extension").GetString().ShouldBe("keep");
+	}
+
+	[Fact]
 	public void Approved_admission_finalizes_without_offer_and_retry_preserves_identifiers()
 	{
 		var application = Application();

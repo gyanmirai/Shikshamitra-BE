@@ -37,6 +37,7 @@ public sealed class StudentRecordTransitionIssueDto
 }
 public sealed class StudentRecordTransitionPreviewRowDto
 {
+	public ShikshaMitra.Finance.Fees.Collections.Dtos.FeeProrationResultDto? Proration { get; set; }
 	public string RollNumberScope { get; set; } = "class-division";
 	public string RollAssignmentMode { get; set; } = "manual";
 	public int? ProposedRollNumber { get; set; }

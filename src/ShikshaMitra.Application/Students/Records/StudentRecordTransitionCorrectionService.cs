@@ -44,6 +44,16 @@ public class StudentRecordTransitionCorrectionService(IRepository<StudentRecordT
 			await HasActiveDocumentDependencyAsync(original)))
 			StudentRecordTransitionReadinessService.Add(row, "DownstreamDependency", "Attendance or issued documents depend on this transition. Resolve them in their owning module first.");
 		row.StudentConcurrencyStamp = student.ConcurrencyStamp;
+		if (original.Outcome == "Withdraw")
+		{
+			try
+			{
+				var blocker = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.WithdrawalProrationService>()
+					.CorrectionBlockerAsync(original.Id, original.StudentId, original.AcademicYearId);
+				if (blocker != null) StudentRecordTransitionReadinessService.Add(row, blocker, "Finance must resolve the linked withdrawal adjustment before this correction can proceed.");
+			}
+			catch (BusinessException error) { StudentRecordTransitionReadinessService.Add(row, error.Code!, "Complete pending Finance workflows before correcting this withdrawal."); }
+		}
 		row.EnrollmentConcurrencyStamp = currentEnrollment?.ConcurrencyStamp ?? "";
 		row.Ready = row.Issues.Count == 0; return row;
 	}
@@ -62,6 +72,9 @@ public class StudentRecordTransitionCorrectionService(IRepository<StudentRecordT
 			await HasActiveDocumentDependencyAsync(original))
 			throw new BusinessException("Students:Records:DownstreamDependency");
 		var before = JsonSerializer.Deserialize<StudentRecordTransitionSnapshot>(original.BeforeJson)!;
+		if (original.Outcome == "Withdraw")
+			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.WithdrawalProrationService>()
+				.ReverseAsync(correction.Id, original.Id, original.StudentId, original.AcademicYearId, correction.Reason);
 		var source = await enrollments.GetAsync(x => x.Id == before.EnrollmentId && x.TenantId == CurrentTenant.Id);
 		if (before.EnrollmentActive && before.DivisionId.HasValue && (!source.IsActive || current.Id != source.Id))
 			await placement.ValidateCapacityAsync(student.Id, before.AcademicYearId, before.DivisionId.Value, before.RollNumber, (await divisions.GetAsync(x => x.Id == before.DivisionId && x.TenantId == CurrentTenant.Id)).Strength);

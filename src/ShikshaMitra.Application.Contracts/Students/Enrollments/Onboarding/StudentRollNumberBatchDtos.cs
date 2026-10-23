@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using FluentValidation;
 using Volo.Abp.Application.Dtos;
@@ -16,6 +17,7 @@ public class StudentRollScopeInput
 public class PreviewStudentRollBatchInput : StudentRollScopeInput
 {
 	public string Operation { get; set; } = "assign-missing";
+	public List<Guid>? CaseIds { get; set; }
 }
 public class SubmitStudentRollBatchInput
 {
@@ -50,6 +52,10 @@ public class StudentRollNumberBatchDto : EntityDto<Guid>
 	public string Reason { get; set; } = "";
 	public string Grouping { get; set; } = "mixed";
 	public bool ReasonRequired { get; set; }
+	public IReadOnlyList<Guid>? CaseIds { get; set; }
+	public bool ApprovalRequired { get; set; }
+	public IReadOnlyList<IReadOnlyList<string>> ApprovalStages { get; set; } = [];
+	public Guid? PolicyVersionId { get; set; }
 	public string? IdempotencyKey { get; set; }
 	public string SortBy { get; set; } = "studentName";
 	public string NameFormat { get; set; } = "first-name-first";
@@ -77,6 +83,8 @@ public class PreviewStudentRollBatchInputValidator : AbstractValidator<PreviewSt
 	{
 		RuleFor(x => x.AcademicYearId).NotEmpty(); RuleFor(x => x.StandardId).NotEmpty(); RuleFor(x => x.DivisionId).NotEmpty();
 		RuleFor(x => x.Operation).Must(x => x is "assign-missing" or "renumber");
+		RuleFor(x => x.CaseIds).Must(x => x == null || x.Count is > 0 and <= 100 && x.All(id => id != Guid.Empty) && x.Distinct().Count() == x.Count);
+		RuleFor(x => x.Operation).Equal("assign-missing").When(x => x.CaseIds != null);
 	}
 }
 public class SubmitStudentRollBatchInputValidator : AbstractValidator<SubmitStudentRollBatchInput>

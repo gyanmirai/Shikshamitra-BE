@@ -197,6 +197,8 @@ public partial class StudentFeeDetailsQueryService(
 							ProrationEligibleDays = d.ProrationEligibleDays,
 							ProrationChargedDays = d.ProrationChargedDays,
 							ProrationExplanation = d.ProrationExplanation,
+							WithdrawalProrationCredit = d.GetWithdrawalProrationCredit(),
+							WithdrawalProrationExplanation = d.GetWithdrawalProrationExplanation(),
 							//ConcessionAmount = concessions.Where(c => c.DueFeeId == d.Id).Sum(c => c.Amount),
 							ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
 							RefundAmount = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Amount,

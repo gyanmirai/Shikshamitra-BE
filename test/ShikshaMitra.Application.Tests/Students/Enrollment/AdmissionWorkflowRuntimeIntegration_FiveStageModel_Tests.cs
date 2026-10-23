@@ -20,7 +20,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 	[Theory]
 	[InlineData(false)]
 	[InlineData(true)]
-	public async Task New_Form_defaults_advance_on_submit_but_required_verification_holds(bool requireVerification)
+	public async Task Form_defaults_advance_on_submit_and_ignore_legacy_required_verification(bool requireVerification)
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);
 		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
@@ -37,6 +37,14 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					form = new AdmissionFormStagePolicy { Enabled = true, Version = 1, AutoAdvanceOnSubmit = false,
 						RequireSectionVerification = requireVerification, VerificationSectionCodes = requireVerification ? ["STUDENT"] : [] } }) }] });
 		await _workflowAppService.PublishAsync(draft.Id, draft.ConcurrencyStamp);
+		var savedPolicy = AdmissionFormStagePolicy.Read(draft.Stages.Single().ConfigurationJson)!;
+		savedPolicy.RequireSectionVerification.ShouldBeFalse();
+		savedPolicy.VerificationSectionCodes.ShouldBeEmpty();
+		if (requireVerification)
+			await SetLegacyFormStagePolicyAsync(draft.Id, savedPolicy with
+			{
+				RequireSectionVerification = true, VerificationSectionCodes = ["STUDENT"]
+			});
 		draft.Stages.Single().AllowManualSkip.ShouldBeFalse();
 		var application = await StartFixtureApplicationAsync((await CreateApplicantAsync("Form QA")).Id, offering.Id);
 		var before = await _applicationAppService.GetWorkflowAsync(application.Id);
@@ -46,16 +54,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			.Code.ShouldBe(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
 		(await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
 		var after = await _applicationAppService.GetWorkflowAsync(application.Id);
-		if (!requireVerification) { after.Status.ShouldBe(AdmissionWorkflowInstanceStatus.Completed); return; }
-		after.CurrentStageInstanceId.ShouldBe(before.CurrentStageInstanceId);
-		var service = GetRequiredService<IAdmissionFormStageAppService>();
-		var pending = await service.GetAsync(application.Id, after.CurrentStageInstanceId!.Value);
-		pending.CanComplete.ShouldBeFalse(); pending.Policy!.AutoAdvanceOnSubmit.ShouldBeTrue();
-		var verified = await service.VerifySectionAsync(application.Id, after.CurrentStageInstanceId.Value, pending.Sections.Single(item => item.Required).SectionId,
-			new() { ConcurrencyStamp = pending.ConcurrencyStamp, Verified = true });
-		verified.CanComplete.ShouldBeTrue();
-		(await _applicationAppService.AdvanceWorkflowAsync(application.Id, new() { ExpectedCurrentStageInstanceId = after.CurrentStageInstanceId.Value,
-			ConcurrencyStamp = verified.ConcurrencyStamp, IdempotencyKey = "complete-verified-form" })).Status.ShouldBe(AdmissionWorkflowInstanceStatus.Completed);
+		after.Status.ShouldBe(AdmissionWorkflowInstanceStatus.Completed);
+		after.Stages.Single().Status.ShouldBe(AdmissionRuntimeStageStatus.Completed);
 	}
 
 	[Theory]

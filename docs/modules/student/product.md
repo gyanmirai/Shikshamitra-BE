@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-22
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -58,7 +58,9 @@ Admission event instants use UTC and timezone-aware persistence parameters. Prev
 | Area | Implemented rule |
 |---|---|
 | Observation | The register offers Full day, Half day, Absent and Pending. The stored observation is Present or Absent, with a HalfDay flag for Half day; Pending means unmarked. |
-| Membership | Formal enrollment and a school-confirmed AttendanceStartDate determine historical eligibility. For the current school date, an active student in the selected class may be marked before an imported attendance start date is confirmed. Dated placement/activation/exit history prevents current class changes from rewriting the historical roster. Fee or portal provisioning does not independently block operational attendance. |
+| Daily visibility | On both current and past dates, Daily Attendance and its work queue show only students eligible for the current Active Student Directory, within the selected dated class and staff scope. Inactive, departed or no-longer-directory-eligible students cannot be marked through Daily Attendance. This filter does not activate or repair Onboarding records. |
+| Membership | Formal enrollment and a school-confirmed AttendanceStartDate determine dated eligibility within that visible population. For the current school date, an active student in the selected class may be marked before an imported attendance start date is confirmed. Dated placement/activation/exit history remains authoritative for historical eligibility and saved attendance. Fee or portal provisioning does not independently block operational attendance. |
+| Saved history | Removing a student from Daily visibility preserves saved Present/Absent observations, details, credits and enrollment revisions for Reports/History and existing audited corrections. Saving or resubmitting visible students leaves hidden saved observations untouched. Hidden Pending drafts do not block visible submission. |
 | School days | Existing published Academic Calendar owns working days, holidays, vacations and emergency closures. The current school date remains expected when calendar or working-day setup is missing, and its unsnapshotted reports remain provisional. Other dates with missing setup and ambiguous calendars fail closed; an explicit holiday is a confirmed exclusion. |
 | Settings | Staff manage student leave types by name, color and active status. The former attendance policy and individual-schedule configuration is retired; runtime uses fixed defaults while submitted attendance retains its stored snapshots. |
 | Save and submit | Partial drafts are allowed. Submit checks all eligible students, including persisted draft rows, and pins policy/credits/membership/roll snapshots. No unmarked row may be submitted. |
@@ -300,11 +302,11 @@ Eligibility, Review, and Offer are retired Admission Stage types. New drafts can
 
 ## Managed Form stages
 
-Form defaults to managed Submission with rules with applicant Save Draft retained. Optional responsibility, deadlines, late submission, corrections and section verification use existing validators. Submission limits remain backend safeguards, not an editor field. Valid submissions advance when verification is not required; required section verification holds the stage until authorized staff complete it and Continue.
+Form defaults to managed Submission with rules with applicant Save Draft retained. Optional responsibility, deadlines, late submission and corrections use existing validators. Submission limits remain backend safeguards, not an editor field. Separate section verification is retired: new stage normalization clears its flags and effective runtime policy ignores legacy verification requirements. Valid submissions advance when configured; legacy manual-continuation settings still allow Continue after authoritative validation.
 
 ## Managed Payment stages
 
-Payment is Finance fee-structure confirmation. Candidates must be published and match the tenant and Offering academic-year/Board/Medium/Class context. Confirmation saves the versioned structure and mandatory/optional head snapshot with application concurrency and creates no Finance assignment, due, receipt or settlement. Completion requires a valid saved snapshot.
+Payment is a configurable Finance completion checkpoint. Candidates must be published and match the tenant and Offering academic-year/Board/Medium/Class context. Selection saves the versioned structure and mandatory/optional head snapshot with application concurrency and creates no Finance assignment, due, receipt or settlement. Its pinned version 1 completion policy defaults to confirmed partial payment with audited collection deferral enabled. Full payment means the entire selected class structure, including future installments, is settled by Finance; confirmed zero-payable clearance requires no artificial payment. Missing/unprepared data, pending verification and historical payment flags do not establish full settlement. Disabling collection deferral removes the capability and rejects direct deferral commands. Ordinary completion requires both a valid saved snapshot and the policy's Finance decision; allowed deferral retains the existing mandatory reason and handoff behavior. Finance module code and monetary contracts remain unchanged.
 
 Actual fee assignment and collection remain Finance-owned. Offering-linked Onboarding reads/selects/confirms the existing structure only. This confirmation is never a Paid status. Admission payer, purpose, independent amount, collection settings and financial transaction actions are removed from the supported stage.
 
@@ -324,7 +326,7 @@ One tenant-scoped pool owns reserved and confirmed counts for each Admission Off
 
 Managed Seat cannot be skipped. Confirmation is always an allowed completion outcome; waitlisted, released, or expired completion requires both policy permission and an explicit matching `seat.status` transition. Every mutation checks application, pool, and reservation concurrency, and repeats with the same idempotency key return the recorded result.
 
-The Form-stage definition must equal the Offering application form. Applications still pin the published definition and record immutable submission snapshots. Managed submit enforces visible required fields, deadline, and attempt limits. Automatic advancement occurs only when configured and no section verification remains. Staff verification and reasoned revocation are audited. A correction request reopens the same form and invalidates all earlier section verification; the applicant must resubmit within the remaining attempt limit. Normal completion cannot bypass unresolved Form blockers.
+The Form-stage definition must equal the Offering application form. Applications still pin the published definition and record immutable submission snapshots. Managed submit enforces visible required fields, deadline, and attempt limits. Automatic advancement occurs only when configured. Historical verification and reasoned revocation records remain auditable but do not gate current Form completion. A correction request reopens the same form; the applicant must resubmit within the remaining attempt limit. Normal completion cannot bypass unresolved Form blockers.
 ## Division roll-number batches
 
 Published Onboarding roll rules support Mixed, Boys First and Girls First grouping, first-name-first or surname-first names, and ascending/descending name, GR, admission-date or admission-number ordering.
@@ -334,8 +336,10 @@ The same ordering evaluator serves initial Onboarding, active Records and annual
 
 Each academic-year Class-Division starts independently at 1.
 Assign Missing reads the complete division on the server, preserves assigned numbers and appends after the persisted last-issued cursor; exits and cancelled reservations do not free that cursor.
+An optional bounded onboarding-case target list limits assignment to eligible unassigned cases on the chosen page; omitted targets retain full-division behavior.
+Published ordering, full-division reservations, freshness checks and active-enrollment approval remain authoritative for either scope.
 The upgrade cursor baseline uses retained enrollment, onboarding, renewal, transition and placement audit history; records deleted before this release cannot be reconstructed.
-Only an explicit administrator Renumber Division resets the current sequence, requires a reason, and respects individual/group identifier locks.
+Only an explicit authorized Renumber Division resets the current sequence, requires a reason, and respects individual/group identifier locks.
 Existing Records placement approval applies once to a mixed or active-enrollment batch, with independent current-role approvers and atomic application after approval.
 Renumbering uses the application day's school-local date and does not rewrite submitted attendance, issued documents or historical enrollment facts.
 Pending return/promotion reservations and unresolved provisioning block unsafe renumbering.

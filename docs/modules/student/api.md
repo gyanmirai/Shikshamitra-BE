@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-22
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -174,7 +174,7 @@ An ambiguous mobile match fails closed; the owner verifies the mailbox and chang
 
 All routes below are under `/api/student/onboarding`, enforce tenant/academic scope, and retain existing Onboarding permission aliases.
 
-`GET /filter-options` returns scalar academic IDs, names and parent links derived only from the scoped cases, with the optional year filter applied first. It does not materialize the recursively auto-included academic entity graph. The response and existing View/identifier-unlock permissions are unchanged.
+`GET /filter-options` returns scalar academic IDs, names and parent links derived only from the scoped cases, with the optional year filter applied first. It does not materialize the recursively auto-included academic entity graph. View remains independent of the identifier-Unlock capability, which additionally requires configured database administrator membership.
 
 The worklist GET applies all filters and counts in the scoped database query before paging.
 `placementDivisionId` narrows current placement alongside the existing Board/Medium/Class/Division selectors.
@@ -399,7 +399,7 @@ Rollback still creates a separate Draft and never rewrites an Offering or Applic
 
 `POST /api/student/enrollment/admissions/applications/{id}/workflow/advance` requires `Students.Admissions.Applications.Add`.
 The body includes `expectedCurrentStageInstanceId`, a unique `idempotencyKey`, required `concurrencyStamp`, and optional transition, skip, override, reason and `deferFeeCollection` fields.
-`deferFeeCollection: true` is accepted only in the active Payment stage with a nonblank reason of at most 512 characters. It cannot be combined with skip or override. Deferral uses configured routing, records actor/time/reason, and creates no Finance account, assignment, dues or receipt. A regular Payment continuation requires recorded collection evidence and a matching saved fee selection; no full-payment threshold is introduced.
+`deferFeeCollection: true` is accepted only in the active Payment stage when its pinned completion policy permits deferral, with a nonblank reason of at most 512 characters. It cannot be combined with skip or override. Deferral uses configured routing, records actor/time/reason, and creates no Finance account, assignment, dues or receipt. Regular continuation enforces the pinned partial/full rule against Finance and requires a matching saved fee selection; the historical payment flag alone is insufficient.
 Admin overrides additionally require `Students.Admissions.Applications.Add`.
 The response returns current workflow status, stage timestamps, immutable transition history, and `nextRequiredAction`. The next action is derived from the server stage-type registry and is `null` after the workflow completes.
 
@@ -680,18 +680,18 @@ Base: `/api/student/enrollment/admissions/applications/{applicationId}/form-stag
 
 | Method and relative route | Behavior |
 |---|---|
-| GET base | Return pinned policy, form status, deadline, attempts, verification state, blockers, concurrency and capability flags |
-| POST `sections/{sectionId}/verification` | Verify or revoke one configured section; revocation requires a reason |
+| GET base | Return effective pinned policy, form status, deadline, attempts, historical verification state, blockers, concurrency and capability flags; retired verification requirements are disabled |
+| POST `sections/{sectionId}/verification` | Legacy compatibility route; effective policy disables new section verification |
 | POST `correction` | Require a reason, append audit history, reopen the form, and invalidate earlier section verification |
 
-Commands carry the application `concurrencyStamp`; route identifiers are excluded from bodies. Managed submit also enforces the deadline and maximum attempts through the existing application-form endpoint. A managed stage may hold after submit for verification or explicit continuation. Missing or disabled `configurationJson.form` retains legacy Form behavior. Offering configuration rejects a Form-stage definition that differs from the Offering application form.
+Commands carry the application `concurrencyStamp`; route identifiers are excluded from bodies. Managed submit also enforces the deadline and maximum attempts through the existing application-form endpoint. Legacy manual-continuation settings may hold after submit for explicit continuation; retired section-verification flags do not block completion. Stored configuration and verification history remain unchanged. Missing or disabled `configurationJson.form` retains legacy Form behavior. Offering configuration rejects a Form-stage definition that differs from the Offering application form.
 
 ## Managed Payment stage APIs
 
 ### Application fee selection
 
 Base: `/api/student/enrollment/admissions/fee-selections/applications/{applicationId}`.
-The service returns server-controlled ownership, requiredness, locking and confirmation capabilities alongside an optional saved Finance-reference snapshot. `hasRecordedFeePayment` reports recorded evidence (not a settled/paid status); `feeCollectionDeferral` exposes stage ID, reason, actor and UTC timestamp for Admissions and linked Onboarding.
+The service returns server-controlled ownership, requiredness, locking and confirmation capabilities alongside an optional saved Finance-reference snapshot. `hasRecordedFeePayment` reports historical evidence, not progression readiness. `paymentCompletion` supplies `paymentRule`, `allowCollectionLater`, `canComplete`, `canDeferCollection`, `status` and `blocker`. Workflow configuration stores version 1 `paymentCompletion: { paymentRule: "partial" | "full", allowCollectionLater: boolean }`; absent settings default to partial/true. Unsupported versions or invalid values reject publication/advancement. `feeCollectionDeferral` exposes stage ID, reason, actor and UTC timestamp for Admissions and linked Onboarding.
 
 | Method and relative route | Contract |
 |---|---|
@@ -705,7 +705,7 @@ Saving requires `Students.Admissions.Applications.Add`; confirmation requires th
 These endpoints preserve the standard `Result<T>` envelope.
 They do not create Finance assignments, dues, allocations or receipts.
 
-Payment summary reads remain at `/api/student/enrollment/admissions/payments/applications/{applicationId}/stages/{stageId}` and expose `feeStructureRequired`, `collectionPending`, `collectionRecorded` or `collectionDeferred`, blockers and ordinary completion readiness. A confirmed structure alone never means Paid. Legacy admission record/review/waive/reverse capabilities remain false; use the Finance collection adapter for actual collection. Existing payment permission identifiers remain intact.
+Payment summary reads remain at `/api/student/enrollment/admissions/payments/applications/{applicationId}/stages/{stageId}` and include the same completion decision, with `feeStructureRequired`, `collectionPending`, `partiallyPaid`, `pendingVerification`, `financeCleared` or historical `collectionDeferred` status. A confirmed structure alone never means Paid. Partial evidence reads require existing Finance collection View permission; full/zero clearance consumes the existing scoped internal settlement decision. Legacy admission record/review/waive/reverse capabilities remain false; use the Finance collection adapter for actual collection. Existing payment permission identifiers remain intact.
 
 Confirmation saves through the existing fee-selection PUT with structureId, optionalHeadIds and current application concurrencyStamp. Workflow advancement remains a separate permissioned/idempotent command. Actual collection uses the Finance-owned application adapter at `/api/fee-collections/admission-applications/{applicationId}`: read `summary`, explicitly `prepare` canonical dues, read `collect-form`, then POST a payment with its stable retry key. Collection View/Add and academic scope remain mandatory even when the Finance menu is hidden. Deferring collection invokes none of those monetary commands. See [Finance collection ownership and handoff](../finance/references/admission-fee-collection.md).
 
@@ -776,7 +776,7 @@ The authenticated controller root is `/api/students/roll-number-batches`.
 | Method and suffix | Contract |
 |---|---|
 | GET `context` | Academic year, Class and Division IDs; returns capabilities, unassigned count and latest 20 non-preview batch summaries. |
-| POST `preview` | Scope plus operation `assign-missing` or `renumber`; freezes the complete server cohort and returns its first 25 rows. No client student IDs or proposed numbers are accepted. |
+| POST `preview` | Scope plus operation `assign-missing` or `renumber`; optional `caseIds` bounds `assign-missing` to 1–100 distinct, current-tenant onboarding cases in that scope. Omission retains full-division behavior. The server still owns ordering and proposed numbers and returns the first 25 proposal rows. |
 | GET `{id}` | Scoped immutable proposal; `skipCount` and `maxResultCount` page display only, maximum 100 rows. |
 | POST `{id}/submit` | Current stamp, stable idempotency key and reason; previews expire after 15 minutes. Direct-policy batches apply atomically; governed batches await approval. |
 | POST `{id}/decision` | Current stamp, approve/reject and review note; requires Records Changes Add authority and the current configured stage role. |
@@ -788,6 +788,12 @@ Active-enrollment batch history also requires Records Changes View.
 Records eligibility, provisioning policy, required placement reasons and Identity masking remain enforced.
 Conflicting or expired proposals use `Students:RollNumbers:StalePreview`; blocked rows, invalid states/rules and missing action/approver authority have localized errors in `StudentRollNumberErrorCodes`.
 Committed replay returns the saved batch without a second assignment.
+Case-targeted batches persist their target IDs and revalidate them on submit, approval and apply; assigned students are excluded rather than renumbered.
+The full division remains the reservation and concurrency basis, including students not on the selected page.
+Preview and batch responses expose `caseIds`, `reasonRequired`, `approvalRequired`, approval-stage role names and the policy version ID so clients show the applicable frozen policy before submission.
+Identifier Unlock additionally requires database-resolved configured administrator membership and the existing Onboarding Add/Repair authority; Lock retains existing action and division-scope checks.
+`GET /filter-options` returns `canUnlockIdentifiers` only when both administrator and action requirements pass.
+An unassigned Roll remains null in storage; a client may display it as zero, but assigned numbers must remain positive.
 
 ## Archived workflow restoration
 

@@ -25,7 +25,7 @@ namespace ShikshaMitra.HR.Employees;
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.HR)]
 [TestTier(TestTraits.Tiers.Critical)]
-public class EmployeeCreationFamilyAccessApi_Tests(ShikshaMitraApiTestFactory factory)
+public partial class EmployeeCreationFamilyAccessApi_Tests(ShikshaMitraApiTestFactory factory)
 	: ShikshaMitraApiTestBase(factory)
 {
 	private const string StaffAdd = ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add;

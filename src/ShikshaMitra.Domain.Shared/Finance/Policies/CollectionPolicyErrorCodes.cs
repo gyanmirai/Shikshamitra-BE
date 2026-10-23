@@ -36,7 +36,6 @@ public static class CollectionPolicyErrorCodes
 	public const string PolicyNotAttached = Prefix + "010028";
 	public const string PolicyInUse = Prefix + "010029";
 	public const string FeeHeadMismatch = Prefix + "010030";
-	public const string WorkingDayGraceNotSupported = Prefix + "010031";
 	public const string DuplicateName = Prefix + "010034";
 	public const string DuplicatePolicyCode = Prefix + "010032";
 }

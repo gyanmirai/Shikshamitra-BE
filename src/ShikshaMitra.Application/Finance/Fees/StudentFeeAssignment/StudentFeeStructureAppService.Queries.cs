@@ -96,7 +96,7 @@ public partial class StudentFeeStructureAppService
 		var metadataIds = (await feeStructureMetadataRepository.GetListAsync(x => x.AcademicYearId == academicYearId)).Select(x => x.Id).ToList();
 		var structures = await feeStructureRepository.GetListAsync(x => x.IsLocked && x.StandardId == enrollment.StandardId && metadataIds.Contains(x.FeeStructureMetadataId));
 		var ids = structures.Select(x => x.Id).ToList();
-		var details = await feeStructureDetailRepository.GetListAsync(x => ids.Contains(x.FeeStructureId));
+		var details = await feeStructureDetailRepository.GetListAsync(x => ids.Contains(x.FeeStructureId) && !x.CollectAtAdmission);
 		var headIds = details.Select(x => x.FeeHeadId).Distinct().ToList();
 		var heads = (await feeHeadRepository.GetListAsync(x => headIds.Contains(x.Id))).ToDictionary(x => x.Id);
 		var candidates = structures.OrderBy(x => x.Name).ThenByDescending(x => x.RevisionNumber).Select(s => new AssignmentCandidateDto {

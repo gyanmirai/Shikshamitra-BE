@@ -3,7 +3,7 @@ module: finance
 domain: collection-policy
 content_type: Reference
 status: active
-updated_on: 2026-09-24
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -153,8 +153,7 @@ The backend derives and stores the academic-year start and end dates for version
 | Field | Required when | Target rule |
 |---|---|---|
 | Enable late fee | Always | When false, clear/ignore late-fee formula fields and return zero |
-| Grace-period type | Late fee enabled | `Calendar`; expose `WorkingDay` only after a holiday-calendar source is integrated |
-| Grace-period days | Late fee enabled | Integer 0-365 |
+| Grace-period days | Late fee enabled | Integer 0-365 calendar days, including weekends and holidays; no configurable day-count type |
 | Late-fee fee heads | Late fee enabled | At least one valid, active fee head from the same tenant/year |
 | Calculation type | Late fee enabled | `Flat`, `Percentage`, `PerDay`, `PerWeek`, `PerMonth`, `Compound`, `Slab` |
 | Flat amount | Type = Flat | 0.01-999999, at most two decimal places |
@@ -694,7 +693,7 @@ The following gaps must be closed before treating this page as shipped behavior:
 13. The Fee Structure screen can edit shared Collection Policy overrides, which should be read-only there.
 14. Frontend policy routing uses Fee Collections permission instead of Collection Policy permissions.
 15. The frontend locally reimplements calculation and can drift from server caps/rules.
-16. WorkingDay grace, overlapping exception windows, and `DisableOnlineCollection` are not fully enforced.
+16. Overlapping exception windows and `DisableOnlineCollection` are not fully enforced. Collection grace periods always use calendar days.
 17. Remaining previously paid late fee, idempotency, reversal, accounting, receipts, reports, and notification consistency need end-to-end completion.
 
 ## Source map

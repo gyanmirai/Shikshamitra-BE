@@ -251,7 +251,6 @@ public class CollectionPolicyAppService(
 			IsDefault = false,
 			EnableLateFee = sourceDto.EnableLateFee,
 			GracePeriodDays = sourceDto.GracePeriodDays,
-			GracePeriodType = sourceDto.GracePeriodType,
 			LateFeeApplyOnFeeHeads = sameAcademicYear ? sourceDto.LateFeeApplyOnFeeHeads : new List<Guid>(),
 			LateFeeType = sourceDto.LateFeeType,
 			FlatAmount = sourceDto.FlatAmount,

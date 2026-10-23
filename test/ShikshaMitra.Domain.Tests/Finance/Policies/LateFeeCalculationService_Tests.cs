@@ -34,6 +34,33 @@ public class LateFeeCalculationService_Tests
 
 	// ── Grace period ──────────────────────────────────────────────────────────
 
+	[Theory]
+	[InlineData("\"Calendar\"")]
+	[InlineData("\"WorkingDay\"")]
+	[InlineData("0")]
+	[InlineData("1")]
+	public void Legacy_Snapshots_Use_Calendar_Days_Regardless_Of_Their_Removed_Day_Type(string legacyDayType)
+	{
+		var original = BuildPolicy(b =>
+		{
+			b.LateFeeType = LateFeeCalculationType.PerDay;
+			b.AmountPerDay = 20;
+			b.GracePeriodDays = 2;
+		});
+		var json = original.ToSnapshot().Serialize();
+		var legacyJson = json.Insert(1, $"\"GracePeriodType\":{legacyDayType},");
+		var snapshot = CollectionPolicySnapshot.Deserialize(legacyJson);
+		var restored = new CollectionPolicy(Guid.NewGuid(), null, Guid.NewGuid(), snapshot.ToUpdateModel());
+
+		// Friday's due date to Monday includes Saturday and Sunday as grace days.
+		Assert.Equal(0, _service.Calculate(restored, Input(daysLate: 2)).LateFee);
+		var result = _service.Calculate(restored, Input(daysLate: 3));
+		Assert.Equal(20, result.LateFee);
+		Assert.Equal(1, result.EffectiveDaysLate);
+		Assert.Equal(2, result.EffectiveGracePeriodDays);
+		Assert.DoesNotContain("GracePeriodType", snapshot.Serialize());
+	}
+
 	[Fact]
 	public void Within_Grace_Period_Produces_Zero_Late_Fee()
 	{

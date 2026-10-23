@@ -55,7 +55,6 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 
 	public bool EnableLateFee { get; set; }
 	public int GracePeriodDays { get; set; }
-	public string GracePeriodType { get; set; } = "Calendar";
 	public List<Guid> LateFeeApplyOnFeeHeads { get; set; } = new();
 	public string LateFeeType { get; set; } = "Flat";
 	public decimal? FlatAmount { get; set; }
@@ -97,7 +96,6 @@ public class CreateUpdateCollectionPolicyDto
 
 	public bool EnableLateFee { get; set; }
 	public int GracePeriodDays { get; set; }
-	public string GracePeriodType { get; set; } = "Calendar";
 	public List<Guid> LateFeeApplyOnFeeHeads { get; set; } = new();
 	public string LateFeeType { get; set; } = "Flat";
 	public decimal? FlatAmount { get; set; }

@@ -26,7 +26,6 @@ public sealed class CollectionPolicyUpdateModelBuilder
 	public DateTime? EffectiveTo { get; set; }
 	public bool EnableLateFee { get; set; } = true;
 	public int GracePeriodDays { get; set; }
-	public GracePeriodType GracePeriodType { get; set; } = GracePeriodType.Calendar;
 	public IReadOnlyList<Guid> LateFeeApplyOnFeeHeads { get; set; } = Array.Empty<Guid>();
 	public LateFeeCalculationType LateFeeType { get; set; } = LateFeeCalculationType.Flat;
 	public decimal? FlatAmount { get; set; } = 10;
@@ -51,7 +50,7 @@ public sealed class CollectionPolicyUpdateModelBuilder
 
 	public CollectionPolicyUpdateModel Build() => new(
 		PolicyName, PolicyCode, Description, Status, IsDefault, EffectiveFrom, EffectiveTo,
-		EnableLateFee, GracePeriodDays, GracePeriodType, LateFeeApplyOnFeeHeads, LateFeeType,
+		EnableLateFee, GracePeriodDays, LateFeeApplyOnFeeHeads, LateFeeType,
 		FlatAmount, Percentage, PercentageBase, AmountPerDay, AmountPerWeek, AmountPerMonth,
 		CompoundFrequency, EscalationRules, FeeHeadOverrides, RoundingMethod, ConsiderAsIncome, LateFeeIncomeHeadId,
 		MaximumLateFeeAmount, MaximumChargingDays, EnableWaiver, EnableChargeWaiver,

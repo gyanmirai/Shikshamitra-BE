@@ -131,6 +131,12 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
     [Authorize(ShikshaMitraPermissions.UserScope.BulkAssign)]
     public async Task<BulkScopeAssignmentResultDto> BulkAssignAsync(BulkScopeAssignmentDto input)
     {
+        return await ReplaceEmployeeScopesAsync(input);
+    }
+
+    // The HR entry point checks the employee, draft ownership and delegation bounds first.
+    internal async Task<BulkScopeAssignmentResultDto> ReplaceEmployeeScopesAsync(BulkScopeAssignmentDto input)
+    {
         var correlationId = Guid.NewGuid();
 
         try
@@ -475,15 +481,19 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
     [Authorize]
     public async Task<UserScopeHierarchyDto> GetUserScopeHierarchyAsync(Guid userId, Guid? academicYearId = null)
     {
+        if (CurrentUser.Id != userId)
+            await AuthorizationService.CheckAsync(ShikshaMitraPermissions.UserScope.View);
+        return await ReadEmployeeScopeHierarchyAsync(userId, academicYearId);
+    }
+
+    internal async Task<UserScopeHierarchyDto> ReadEmployeeScopeHierarchyAsync(Guid userId, Guid? academicYearId)
+    {
         var cancellation = LazyServiceProvider.LazyGetRequiredService<ICancellationTokenProvider>().Token;
         var timer = Stopwatch.StartNew();
         var correlation = Activity.Current?.TraceId.ToString() ?? Guid.NewGuid().ToString("N");
         try
         {
             if (!CurrentUser.IsAuthenticated) throw new AbpAuthorizationException();
-            if (CurrentUser.Id != userId)
-                await AuthorizationService.CheckAsync(ShikshaMitraPermissions.UserScope.View);
-
             var user = await _userRepository.FindAsync(userId, includeDetails: false, cancellationToken: cancellation);
             if (user == null || user.TenantId != CurrentTenant.Id)
                 throw new EntityNotFoundException(typeof(IdentityUser), userId);

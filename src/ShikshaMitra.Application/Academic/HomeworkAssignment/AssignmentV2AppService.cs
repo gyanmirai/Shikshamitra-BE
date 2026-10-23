@@ -1066,8 +1066,8 @@ public class AssignmentV2AppService(
             {
                 DivisionId = s.DivisionId,
                 DivisionName = divisionLookup.GetValueOrDefault(s.DivisionId, string.Empty),
-                PublishAt = s.PublishDate,
-                DueAt = s.DueDate,
+                PublishAt = LearningTaskScheduleTimestamp.FromUtcStorage(s.PublishDate),
+                DueAt = LearningTaskScheduleTimestamp.FromUtcStorage(s.DueDate),
                 IsPublished = s.IsPublished,
             })
             .ToList(),

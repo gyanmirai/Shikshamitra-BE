@@ -1,6 +1,14 @@
 {
     "Culture": "en",
     "Texts": {
+        "Finance:Proration:JoiningDateRequired": "Complete the actual joining date in the registration form before preparing fees.",
+        "Finance:Proration:JoiningDateInvalid": "Correct the actual joining date in the registration form. It must be a valid, unambiguous date within or before this academic year.",
+        "Finance:Proration:PolicyAmbiguous": "Finance must configure one active default proration policy for this academic year.",
+        "Finance:Proration:PolicyVersionMissing": "Finance must publish the current proration policy version.",
+        "Finance:Proration:WithdrawalEvidenceInvalid": "Finance must reconcile the saved assignment, joining date and policy evidence before withdrawal can be recalculated.",
+        "Finance:Proration:ReconciliationPending": "Complete pending payment, refund and adjustment workflows in Finance before recalculating withdrawal fees.",
+        "Finance:Proration:RecalculationPermissionRequired": "An authorized Finance user with proration recalculation permission must process this withdrawal adjustment.",
+        "Finance:Proration:AdjustmentConflict": "Finance balances changed or a withdrawal adjustment already exists. Refresh and resolve its linked correction before continuing.",
         "InstituteReports:InvalidReport": "Choose an available Institute Setup report.",
         "InstituteReports:YearRequired": "Select an academic year for this report.",
         "InstituteReports:InvalidRequest": "The report contains unsupported fields or filters.",

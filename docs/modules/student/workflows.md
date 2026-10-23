@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-18
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -110,7 +110,7 @@ GR and Roll assignment are separate commands. GR assignment does not require Rol
 
 GR and Roll settings are saved as Draft and then Published. Published edits create a new Draft version; published and superseded history remains immutable. Unassigned numbers use the currently published applicable numbering rule; requirements snapshots do not freeze an unselected number format. Existing assigned numbers are not renumbered by publication.
 
-GR and Roll locks are independent policies for a selected division group. They lock identifiers rather than Division placement. Operators with Onboarding Add/Update and access to the selected division may unlock with an audited reason and correct identifiers. A new entrant into a locked group receives the next automatic GR and division Roll even if the school's ordinary mode is manual. Placement remains editable; a preserved locked Roll cannot move into a conflicting occupied number.
+GR and Roll locks are independent policies for a selected division group. They lock identifiers rather than Division placement. Operators with Onboarding Add/Update and access to the selected division may lock; Unlock additionally requires database-resolved configured administrator membership, the existing Repair action and an audited reason. A new entrant into a locked group receives the next automatic GR and division Roll even if the school's ordinary mode is manual. Placement remains editable; a preserved locked Roll cannot move into a conflicting occupied number.
 
 Activation preview evaluates the Finance step against the same current confirmation evidence used by the checklist, even if its stored step is stale. It preserves existing verification history and the case concurrency stamp. A preview with blockers never reports Ready for activation; `LastError` contains the current reasons. The activation command still refreshes persisted readiness and rechecks every existing gate before committing enrollment.
 
@@ -330,18 +330,18 @@ Eligibility, Review, and Offer are retired Admission Stage types. New drafts can
 
 ## Run a managed Form stage
 
-1. Form is managed Submission with rules by default. Attach the published Registration form and configure responsibility, deadline/late behavior, corrections and optional section verification.
+1. Form is managed Submission with rules by default. Attach the published Registration form and configure responsibility, deadline/late behavior and corrections. Separate section verification is retired.
 2. Applicant Save Draft remains enabled. Submission-limit and automatic-next configuration controls are hidden; server submission/correction safeguards remain.
-3. Submit validates frozen fields and policy. Without required verification, submit advances automatically.
-4. With verification, authorized staff verify configured sections and Continue explicitly only after all blockers resolve. Revocation/correction requires a reason; correction makes earlier verification stale.
+3. Submit validates frozen fields and policy, then advances automatically when configured. Legacy manual-continuation policies retain Continue after a valid submission.
+4. Effective runtime policy ignores old verification requirements without changing stored JSON or historical audit. Authorized correction requires a reason and resubmission; it retains the existing attempt and deadline safeguards.
 5. Preserve immutable submissions/change history and current concurrency through every command.
 
 ## Run a managed Payment stage
 
-1. Add Payment as an optional collection checkpoint; no independent admission collection policy is authored.
+1. Add Payment with a versioned Admissions completion policy: partial confirmed payment (default) or full Finance settlement, and whether audited collection deferral is allowed (default on). No admission pricing or collection-method policy is authored.
 2. Read only published structures matching the Offering tenant, academic year, Board, Medium and Class. Missing candidates prevent collection but do not prevent audited deferral.
 3. Save the structure and optional heads using application concurrency. Mandatory heads and an immutable structure-version snapshot are included by the server.
-4. Collect through the Finance adapter with the valid saved snapshot, or choose Collect later in Onboarding with a mandatory reason. No structure or payment is needed for deferral. Both commands retain configured transition routing; deferral is a completed checkpoint, not a Paid/Waived outcome or an administrative skip.
+4. Collect through the Finance adapter with the valid saved snapshot. Partial requires a positive Finance-confirmed payment; a historical or unverified payment flag alone is insufficient. Full requires the entire selected class structure, including future installments, to be settled under the existing Finance contract. Finance-verified zero-payable obligations can continue without a payment entry; missing/unprepared data never counts as zero. If enabled, Collect later in Onboarding requires a reason and no structure or payment. The server rejects deferral when disabled. Both commands retain configured transition routing; deferral is a completed checkpoint, not a Paid/Waived outcome or an administrative skip.
 5. Approve and finalize through the normal Admission decision flow. Finalization hands the saved intent and deferral reason to Onboarding. Deferral itself creates no account, dues, assignment or receipt. Onboarding still requires structure confirmation before activation; it does not require payment. Finance alone owns actual obligations and collections.
 
 Legacy Admission record, verification, waiver and reversal commands are unavailable in this flow. Repeated workflow keys replay the existing transition and do not duplicate deferral audit or Finance rows. Confirmation/deferral alone perform no Finance ledger mutation; actual collection uses the Finance integration and its persistence requirements.

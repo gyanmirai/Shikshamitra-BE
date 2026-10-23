@@ -145,7 +145,8 @@ public partial class StudentOnboardingAppService(
 				.Where(item => academicYearIds.Contains(item.Id)).Select(item => new { item.Id, item.Name }));
 		return new StudentOnboardingFilterOptionsDto
 		{
-            CanUnlockIdentifiers = await LazyServiceProvider.LazyGetRequiredService<Volo.Abp.Authorization.Permissions.IPermissionChecker>().IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair),
+            CanUnlockIdentifiers = CurrentUser.Id.HasValue && (await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value)).IsAdmin &&
+                await LazyServiceProvider.LazyGetRequiredService<Volo.Abp.Authorization.Permissions.IPermissionChecker>().IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair),
 			AcademicYears = academicYears.OrderByDescending(item => item.Name)
 				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name }).ToList(),
 			Boards = boards.OrderBy(item => item.Type)

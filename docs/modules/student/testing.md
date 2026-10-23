@@ -3,7 +3,7 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-22
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -381,13 +381,19 @@ Focused local compile/test results and remaining acceptance limits must be repor
 | HTTP | `test/ShikshaMitra.HttpApi.Tests/Students/Attendance/`: 27/27 passed on 1 October 2026 against the fresh final Application build, with no skips. Covers complete/partial roster, atomic invalid batches, stale/idempotent writes, individual schedules, review/no-self-approval, unknown start, calendar closure, settings authorization, school-day leave overlap, audited retroactive leave credits, immutable correction previews and stale leave-source approval rejection. Offset POST dates match date-only GET roster revisions. Tenant-wide, narrow-division and empty scope checks accompany real leave create/list/approval. Fixtures use formal enrollment and scalar academic queries. |
 | Actual provider | `test/ShikshaMitra.EntityFrameworkCore.Tests/EntityFrameworkCore/StudentAttendancePostgres_Tests.cs`: passed on 1 October 2026 against a newly created empty loopback PostgreSQL database. Verified migration/backfill, unchanged Student identity, ambiguous history preservation, enrollment/date uniqueness, untouched rollback/re-upgrade and used-feature rollback guard. Requires a new empty attendance_tests_* database; an environment-skipped run is not provider verification. |
 | Integration | Check register/profile/daily/dashboard agreement, a historical class move, null/provisional metrics, approved leave treatment and current-school target/cutoff. |
+| Active-only Daily | `StudentAttendanceApi_Tests.ActiveDirectoryVisibility.cs` covers current/past Active Directory parity, inactive/departed/incomplete-onboarding exclusions, rejected hidden-student writes, batched queue parity, unchanged saved history and enrollment revisions, hidden Pending drafts and visible resubmission without roster-review drift. Reports/History retain hidden recorded observations. |
 | UI | [Frontend Student checks](../../../../Shikshamitra-FE/docs/student/testing.md) own focused tests, lint/typecheck and authenticated browser walkthrough. Source checks do not replace browser evidence. |
+
+On 23 October 2026, the isolated-output HTTP run passed all 41 selected cases with zero skips: the complete `StudentAttendanceApi_Tests` class, including eight Active Directory visibility cases, plus the batched register snapshot/query-count regression.
+Build and test evidence is retained in `.artifacts/attendance-active-list-20261023/regression-validation.log`.
+Student module documentation validation also passed; this local verification does not certify a staging deployment or browser walkthrough.
 
 Run focused checks from the backend root:
 
 ```powershell
 dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~Students.Attendance
 dotnet test test/ShikshaMitra.HttpApi.Tests --filter 'FullyQualifiedName~StudentAttendanceApi_Tests|FullyQualifiedName~AttendanceSettingsAuthorizationApi_Tests|FullyQualifiedName~StudentLeaveApi_Tests'
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter 'FullyQualifiedName~StudentAttendanceApi_Tests.Daily_attendance_|FullyQualifiedName~StudentModuleDashboardApi_Tests.Batched_register_snapshot'
 dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests --filter FullyQualifiedName~StudentAttendancePostgres_Tests
 powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module student
 ```
@@ -1024,3 +1030,25 @@ HttpApi and Host leaf builds passed. Because concurrent builds exhausted worksta
 The two Institute Setup minimum-age context cases (configured 5 years and unconfigured 0) and the existing closed-offering capture-context regression pass: 3/3 application integration tests. They verify that the age cutoff comes from the cycle's Academic Year, including an academic start different from the admission-period start. The isolated API Host build passes with no errors; existing unrelated warnings remain. No migration or inquiry-blocking age rule was introduced.
 
 Local browser verification used this build to create and edit synthetic INQ-2026-000009. Existing class minimum 6 years and academic start 1 June 2026 were displayed, underage saves succeeded, DOB persisted after reload, and an exact-minimum DOB removed the advisory. Acknowledgement delivery was disabled. This does not establish stage/live deployment.
+
+## Payment completion policy verification (22 October 2026)
+
+- `AdmissionPaymentCompletionPolicy_Tests`: 12 passing cases for default compatibility, partial/full rules, deferral policy, normalization, extensions and malformed versions/values.
+- `AdmissionPaymentCompletionReader_Tests`: 14 passing cases for confirmed partial versus full settlement, verified zero versus unknown zero, permissions, pending/historical evidence, disabled deferral, inactive stages, configuration failure and reused selection ownership.
+- The application integration run passes all three new `Payment_completion_` cases: actual Finance collection of 300/1000 permits Partial and blocks Full until the remaining 700 is collected; disabled deferral rejects a direct command; prepared zero-payable Finance obligations advance without a transaction. Existing fee-selection concurrency/scope, reason-based deferral/replay/finalization, unchanged Onboarding policy and Finance settlement regression cases also pass. The initial unit fixture failures were corrected and all 14 reader cases passed on rerun; no production service changes were needed for those fixture corrections.
+- Domain/Application/EF and test leaf builds pass in isolated output with analyzers disabled for workstation memory. The initial clean dependency build was interrupted under high memory use; the completed isolated EF output was then reused. This is focused validation, not a full-solution analyzer gate.
+- Student documentation validation passes. Finance source hashes match the pre-task baseline (761 backend files). No schema migration or Finance module change was introduced, and no live payment was made. Restart/rebuild the debugger Host before expecting its new completion capabilities in the local browser.
+
+## Form section verification retirement (23 October 2026)
+
+- Focused Domain coverage passes 15 tests for Form normalization, preserved policy fields and raw historical compatibility. The isolated Application run passes 5 tests for legacy manual continuation, correction/history, automatic submission and document handoff. The existing legacy Inquiry-to-Form handoff also passes separately, for 6 integration cases total.
+- Stored published JSON and verification history are preserved. Effective Form policy ignores retired section-verification requirements; new workflow saves clear those flags. Required-field, submission-limit, deadline, correction authorization and application concurrency gates remain.
+- The wider Domain batch has one unchanged Assessment-version expectation failure: `Unknown_policy_version_is_rejected_instead_of_silently_downgraded` expects version 2 rejection although the current Assessment policy accepts versions 1 and 2. Focused Form cases pass independently.
+- Evidence: `.artifacts/form-stage-domain-focused-test.log`, `.artifacts/form-stage-application-test.log`, `.artifacts/form-stage-legacy-handoff-test.log`. Student documentation validation passes. No migration, API restart, deployment or live financial operation was performed for this change.
+
+## Current-page identifier assignment (23 October 2026)
+
+- The focused Application run passes 29/29 cases: legacy Roll batch ordering/approval/concurrency plus bounded current-page targeting, preservation of other-page and assigned students, rejected wrong-division targets, policy metadata and configured approval, database-admin Unlock with spoofed admin claims rejected, staff Lock and 17 canonical action-denial checks.
+- The additional pending-case rerun passes after extending the stale/off-page/tenant scenario with a fresh one-click assignment, no unnecessary reason/approval, positive number 13 following reserved number 12, and unchanged off-page student. An initial fixture failure was fixed by reusing the canonical default-checklist/snapshot seeding helper, not by weakening production readiness.
+- The Roll batch HTTP contract suite passes 11/11 cases, including optional target-list bounds, duplicate/empty IDs and rejection of client-targeted Renumber. Existing endpoint authorization, stamps and stable submission keys remain covered.
+- Isolated serialized Host build passes with zero errors; existing warnings remain. Student docs validation and `git diff --check` pass. Evidence: `.artifacts/current-page-roll/results/current-page-roll-final.trx` and `current-page-roll-direct.trx` in that directory. These local SQLite and contract checks do not establish production-provider race coverage, deployed behavior or real account/email delivery. No migration or Finance module change was introduced.

@@ -27,6 +27,7 @@ public class StudentFeeAssignmentPreviewDto
 
 	public Guid? ProrationPolicyId { get; set; }
 	public Guid? ProrationPolicyVersionId { get; set; }
+	public DateTime? RegistrationJoiningDate { get; set; }
 	public DateTime ChargeStartDate { get; set; }
 	public DateTime ChargeEndDate { get; set; }
 	public decimal ScheduledTotal { get; set; }

@@ -19,7 +19,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 public sealed record StudentRollRoster(string RuleJson, string PolicyJson, string Hash, IReadOnlyList<StudentRollBatchRow> Rows, string ScopeLabel, Guid? PolicyVersionId);
 
-/// <summary>Reads the complete division before ordering. Search and page parameters never select the cohort.</summary>
+/// <summary>Reads the complete division for reservations and freshness; optional validated case IDs bound assign-missing targets.</summary>
 [RemoteService(false)]
 public class StudentRollRosterReader(IStudentRepository students, IRepository<StudentOnboardingCase, Guid> cases,
 	IRepository<StudentEnrollment, Guid> enrollments, IRepository<StudentRecordRenewalCase, Guid> renewals,
@@ -36,6 +36,16 @@ public class StudentRollRosterReader(IStudentRepository students, IRepository<St
 		var pending = await AsyncExecuter.ToListAsync((await cases.GetQueryableAsync())
 			.Where(x => x.TenantId == CurrentTenant.Id && x.AcademicYearId == input.AcademicYearId && x.IntendedStandardId == input.StandardId && x.DivisionId == input.DivisionId && !x.StudentEnrollmentId.HasValue && x.Status != StudentOnboardingStatus.Cancelled && x.Status != StudentOnboardingStatus.Completed && x.Status != StudentOnboardingStatus.Provisioning)
 			.Select(x => new { x.Id, x.StudentId, x.RollNumber, x.ConcurrencyStamp, x.ExtraProperties }));
+		var targetIds = input.CaseIds?.OrderBy(x => x).ToArray();
+		var targetCases = targetIds == null ? null : await AsyncExecuter.ToListAsync((await cases.GetQueryableAsync())
+			.Where(x => x.TenantId == CurrentTenant.Id && Enumerable.Contains(targetIds, x.Id))
+			.Select(x => new { x.Id, x.StudentId, x.AcademicYearId, x.IntendedStandardId, x.DivisionId, x.StudentEnrollmentId, x.ConcurrencyStamp }));
+		if (targetCases != null && (targetCases.Count != targetIds!.Length || targetCases.Any(x =>
+			x.AcademicYearId != input.AcademicYearId || (x.StudentEnrollmentId.HasValue
+				? !members.Any(member => member.StudentId == x.StudentId && member.Id == x.StudentEnrollmentId)
+				: x.IntendedStandardId != input.StandardId || x.DivisionId != input.DivisionId || !pending.Any(item => item.Id == x.Id)))))
+			throw new BusinessException(StudentRollNumberErrorCodes.InvalidBatch);
+		var targetStudents = targetCases?.Select(x => x.StudentId).ToHashSet();
 		var memberIds = members.Select(x => x.StudentId).ToHashSet();
 		var studentIds = memberIds.Concat(pending.Select(x => x.StudentId)).Distinct().OrderBy(x => x).ToArray();
 		var people = await AsyncExecuter.ToListAsync((await students.GetQueryableWithoutAutoIncludesAsync())
@@ -73,6 +83,7 @@ public class StudentRollRosterReader(IStudentRepository students, IRepository<St
 		var rows = new List<StudentRollBatchRow>();
 		foreach (var id in studentIds)
 		{
+			if (targetStudents != null && !targetStudents.Contains(id)) continue;
 			var person = people.SingleOrDefault(x => x.Id == id);
 			if (person == null || !candidates.TryGetValue(id, out var source)) throw new BusinessException(StudentRollNumberErrorCodes.BatchBlocked);
 			var enrollment = members.SingleOrDefault(x => x.StudentId == id);
@@ -97,7 +108,7 @@ public class StudentRollRosterReader(IStudentRepository students, IRepository<St
 				sequence++; return lookup[x.StudentId] with { ProposedRollNumber = sequence <= int.MaxValue ? (int)sequence : null,
 					Issue = sequence > int.MaxValue ? "The available roll-number range is exhausted." : null }; }).ToList();
 		}
-		var basis = JsonSerializer.Serialize(new { json, policy, policySnapshot.VersionId, division.ConcurrencyStamp, last, reserved,
+		var basis = JsonSerializer.Serialize(new { json, policy, policySnapshot.VersionId, division.ConcurrencyStamp, last, reserved, targetIds, targetCases = targetCases?.OrderBy(x => x.Id),
 			members = members.OrderBy(x => x.Id), pending = pending.OrderBy(x => x.Id), linked = linked.OrderBy(x => x.StudentId), people = people.OrderBy(x => x.Id), sources = candidates.Values.OrderBy(x => x.StudentId) });
 		return new(json, policy, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(basis))), rows, path.Name + " / " + division.Name, policySnapshot.VersionId);
 	}

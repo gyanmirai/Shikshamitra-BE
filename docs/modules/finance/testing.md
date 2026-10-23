@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-17
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -31,6 +31,16 @@ git diff --check
 ```
 
 ## Focused test map
+
+### Admission and withdrawal proration
+
+| Gate | Coverage |
+|---|---|
+| Calendar and ledger equation | `WithdrawalProration_Tests`, `AssignmentAmountCalculator_Tests`, `ProrationEventCalculation_Tests` |
+| Registration/default/version/no-reduction/one-time behavior, paid-date lock, Onboarding activation continuity | `AdmissionProrationIntegration_Tests` (partial `AdmissionWorkflowRuntimeIntegration_Tests`) and existing Admission collection/handoff tests |
+| Real PostgreSQL permissions, source replay, correction and rollback | `StudentRecordWithdrawalProrationPostgres_Tests` (partial `StudentRecordMidnightSchedule_Tests`); fresh disposable loopback `records_tests_*` database through `STUDENT_RECORDS_APPLICATION_POSTGRES` |
+
+The SQLite application harness disables physical transactions and cannot certify rollback. PostgreSQL tests use separate synthetic records; they do not change live school policies or issue real payments. Receipt/refund approval and late-fee workflows retain their own gates.
 
 ### Receipt Book and audit permission boundaries
 

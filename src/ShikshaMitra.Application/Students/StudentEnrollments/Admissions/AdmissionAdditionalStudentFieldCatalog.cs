@@ -16,6 +16,7 @@ internal static class AdmissionAdditionalStudentFieldCatalog
 	private static readonly IReadOnlyList<AdmissionFormSystemFieldMetadataDto> Fields =
 	[
 		// Student profile
+		Field("Academic.JoiningDate", "Actual joining date", AdmissionFormFieldType.Date),
 		Field("Applicant.ProfilePhoto", "Student profile photo"),
 		Field("Identity.AadhaarNumber", "Student Aadhaar number"),
 		Field("Identity.PanNumber", "Student PAN number"),

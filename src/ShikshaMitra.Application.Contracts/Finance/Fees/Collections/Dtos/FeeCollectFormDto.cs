@@ -105,6 +105,8 @@ public class FeeLedgerLineDto
     public int? ProrationEligibleDays { get; set; }
     public int? ProrationChargedDays { get; set; }
     public string? ProrationExplanation { get; set; }
+    public decimal WithdrawalProrationCredit { get; set; }
+    public string? WithdrawalProrationExplanation { get; set; }
 
     /// <summary>Amount already paid (cleared) against this obligation.</summary>
     public double Paid { get; set; }

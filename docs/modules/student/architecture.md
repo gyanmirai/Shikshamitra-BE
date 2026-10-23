@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-13
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -297,7 +297,7 @@ The main application detail exposes Review decision capabilities so existing dec
 
 `AdmissionFormStagePolicy` defines the opt-in versioned behavior while the existing `AdmissionFormDefinition`, `AdmissionFormInstance`, immutable submissions, and change history remain the source of truth. `AdmissionFormStageAccessService` resolves a scope-safe pinned context and enforces that the stage form equals the frozen application form. Read, command, and runtime services separately compose summaries, audited verification/correction commands, submit gates, and workflow completion gates.
 
-Section verification is reconstructed from immutable form change history. A correction marker makes every earlier verification stale, so no mutable verification table or migration is required. Writes serialize through the parent application concurrency stamp and append both form history and admission activity. The Offering validator checks workflow/form compatibility before activation and again before new applications start.
+Separate section verification is retired. `AdmissionFormStageAccessService` normalizes the effective policy to disable verification and clear its section-code list, including for pinned legacy applications; stored JSON and immutable history remain unchanged. New stage configuration normalization also clears the retired flags. Historical verification can still be reconstructed from change history, without a migration. Correction writes retain parent-application concurrency, form history and admission activity. The Offering validator checks workflow/form compatibility before activation and again before new applications start.
 
 ## Managed Seat ownership
 
@@ -321,6 +321,7 @@ The pool concurrency stamp serializes changes to shared offering capacity, while
 | Persistence | `src/ShikshaMitra.EntityFrameworkCore/Students/StudentEnrollments/Onboarding/StudentRollNumberBatchConfiguration.cs`, the Student-only batch table migration and existing Division ExtraProperties cursor |
 
 Batch commands use a new Serializable unit of work, frozen stamps/fingerprints, optimistic division-cursor concurrency and unique submission keys.
+Current-page Assign Missing persists validated case targets in existing batch ExtraProperties; no new schema is needed, and the complete division still supplies reservation and freshness fingerprints.
 Renumber stages only changed active slots to null inside that transaction, then installs the full mapping under the immediate unique active-division index.
 Dated placement history is captured before staging; enrollments, Student mirrors, unfinished linked cases, audit and cursor commit together.
 Finance mappings and commands are not modified.

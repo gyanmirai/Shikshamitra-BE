@@ -32,8 +32,8 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 		var roster = await rosters.LoadAsync(input.AcademicYearId, input.StandardId, input.DivisionId, input.Date);
 		var range = await reports.RangeAsync(input.AcademicYearId, default, input.Date);
 		var cumulative = (await register.BuildRowsAsync(input.AcademicYearId, range.Start, range.End,
-			roster.Members.Select(r => r.Enrollment).ToList(), includeDaily: false)).ToDictionary(r => r.StudentId);
-		var students = roster.Members.Select(r => new StudentAttendanceDto {
+			roster.DailyMembers.Select(r => r.Enrollment).ToList(), includeDaily: false)).ToDictionary(r => r.StudentId);
+		var students = roster.DailyMembers.Select(r => new StudentAttendanceDto {
 			StudentId = r.Student.Id, EnrollmentId = r.Enrollment.Id, GrNo = r.Student.GrNo,
 			GrNumber = r.Student.GrNumber ?? r.Student.GrNo?.ToString(System.Globalization.CultureInfo.InvariantCulture), RollNo = r.RollNumber,
 			StandardId = input.StandardId, DivisionId = input.DivisionId,
@@ -51,7 +51,8 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 		var canMark = roster.Date <= AttendanceSchoolDate.Today(roster.Options, Clock.Now) && roster.SchoolDay.IsExpected &&
 			!(roster.Day?.IsLocked ?? false) && await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add) &&
 			await workspaceAccess.CanMarkClassAsync(input.AcademicYearId, input.StandardId, input.DivisionId);
-		var needsReview = roster.Day?.IsSubmitted == true && (roster.Day.SubmittedRosterRevision != roster.Revision || students.Any(s => s.NeedsCreditCorrection));
+		var needsReview = roster.Day?.IsSubmitted == true && (roster.Day.SubmittedRosterRevision != roster.Revision ||
+			roster.Members.Any(r => AttendanceEntryRules.NeedsCreditCorrection(r, roster)));
 		return new() { AttendanceDayId = roster.Day?.Id, Date = roster.Date, IsLocked = roster.Day?.IsLocked ?? false,
 			IsSubmitted = roster.Day?.IsSubmitted ?? false, Revision = roster.Day?.Revision.ToString() ?? "0",
 			NeedsReview = needsReview,
@@ -60,7 +61,8 @@ public class StudentAttendanceAppService(AttendanceRosterService rosters, Attend
 			NotExpectedReason = roster.SchoolDay.IsExpected ? null : roster.SchoolDay.Reason,
 			CanMark = canMark, CanSubmit = canMark && students.Any(s => s.IsExpected),
 			CanLock = roster.Day?.IsSubmitted == true && !roster.Day.IsLocked && !needsReview &&
-				!students.Any(s => s.IsExpected && s.Status == AttendanceStatus.Pending) && await workspaceAccess.CanMarkClassAsync(input.AcademicYearId, input.StandardId, input.DivisionId) &&
+				students.Any(s => s.IsExpected) && !roster.Members.Any(r => r.Expected && (r.Entry == null || r.Entry.Status == AttendanceStatus.Pending)) &&
+				await workspaceAccess.CanMarkClassAsync(input.AcademicYearId, input.StandardId, input.DivisionId) &&
 				await permissions.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.Attendance_MarkAttendance.Add),
 			TotalStudents = students.Count(s => s.IsExpected), PresentCount = students.Count(s => s.IsExpected && s.Status == AttendanceStatus.Present),
 			AbsentCount = students.Count(s => s.IsExpected && s.Status == AttendanceStatus.Absent), PendingCount = students.Count(s => s.IsExpected && s.Status == AttendanceStatus.Pending), Students = students };

@@ -38,9 +38,9 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await _applicationAppService.SubmitAsync(application.Id)).ValidationErrors.ShouldBeEmpty();
 		var formService = GetRequiredService<IAdmissionFormStageAppService>();
 		var submitted = await formService.GetAsync(application.Id, formId);
-		await formService.VerifySectionAsync(application.Id, formId, submitted.Sections.Single(item => item.Required).SectionId,
-			new() { ConcurrencyStamp = submitted.ConcurrencyStamp, Verified = true });
-		await AdvanceAssessmentAsync(application.Id, formId);
+		submitted.CanVerify.ShouldBeFalse();
+		submitted.Sections.ShouldAllBe(item => !item.Required);
+		(await _applicationAppService.GetWorkflowAsync(application.Id)).CurrentStageInstanceId.ShouldBe(documentId);
 		state = await service.GetAsync(application.Id, documentId);
 		state.IsActive.ShouldBeTrue();
 		state.CanCollectDuringForm.ShouldBeFalse();

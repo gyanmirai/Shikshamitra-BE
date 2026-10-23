@@ -3,7 +3,7 @@ module: finance
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-07-06
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -18,6 +18,8 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 Admissions collections use one Finance account and canonical due schedule through real Student linking and enrollment assignment: [admission fee collection](./references/admission-fee-collection.md).
 
 ## Layer map
+
+Proration integration uses `AdmissionProrationPolicyResolver` for the Finance year default, `AdmissionJoiningDateReader` for the Registration fact, assignment preparation for canonical calculation, and `WithdrawalProrationService` for withdrawal projection/application/correction. `WithdrawalProrationAllocation` and named `DueFee` transitions enforce credit invariants. `FinanceAuditWriter` accepts a deterministic owner event ID. Existing DueFee extensions and Finance audit storage are reused; no migration is added.
 
 | Layer | Path |
 |---|---|

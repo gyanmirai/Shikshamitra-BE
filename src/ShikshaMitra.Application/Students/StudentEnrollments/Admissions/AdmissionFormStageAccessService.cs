@@ -61,7 +61,17 @@ public class AdmissionFormStageAccessService(
 
 	public static AdmissionFormStagePolicy? ReadPolicy(AdmissionWorkflowStageDefinition definition)
 	{
-		try { return AdmissionFormStagePolicy.Read(definition.ConfigurationJson); }
+		try
+		{
+			var policy = AdmissionFormStagePolicy.Read(definition.ConfigurationJson);
+			// Published workflows retain their original JSON and verification history. Section
+			// verification is retired, so existing applications must not wait on hidden actions.
+			return policy is null ? null : policy with
+			{
+				RequireSectionVerification = false,
+				VerificationSectionCodes = []
+			};
+		}
 		catch (Exception exception) when (exception is ArgumentException or JsonException or InvalidOperationException)
 		{ throw new BusinessException(AdmissionFormStageErrorCodes.InvalidPolicy, exception.Message); }
 	}

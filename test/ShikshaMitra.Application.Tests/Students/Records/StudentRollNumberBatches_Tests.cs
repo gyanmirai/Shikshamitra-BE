@@ -12,6 +12,7 @@ using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.Authorization;
 using ShikshaMitra.Security.UserScope;
 using Xunit;
 
@@ -60,6 +61,93 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		GetRequiredService<IStudentRollNumberBatchAppService>().PreviewAsync(new() { AcademicYearId = scope.AcademicYearId, StandardId = scope.StandardId, DivisionId = scope.DivisionId, Operation = operation });
 	private static SubmitStudentRollBatchInput RollBatchSubmit(StudentRollNumberBatchDto preview, string reason = "Reviewed division roster") => new() { ConcurrencyStamp = preview.ConcurrencyStamp, IdempotencyKey = preview.Id.ToString("D"), Reason = reason };
 
+	[Fact]
+	public Task Roll_batch_current_page_targets_only_missing_visible_cases_and_preserves_other_pages() => RunCertificationScenarioAsync(async () => {
+		var fixture = await RollBatchFixtureAsync(); await PlaceRollBatchStudentAsync(fixture.Student.Id, fixture.Scope, 7);
+		var offering = await WithUnitOfWorkAsync(async () => (await _offeringRepository.GetListAsync(x => x.StandardId == fixture.Scope.StandardId)).First());
+		var visible = await CreateFinalizedPlacementFixtureAsync(offering, fixture.Scope.DivisionId, activated: true);
+		var nextPage = await CreateFinalizedPlacementFixtureAsync(offering, fixture.Scope.DivisionId, activated: true);
+		var target = await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(x => x.ApplicationId == visible.ApplicationId));
+		var untouched = await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(x => x.ApplicationId == nextPage.ApplicationId));
+		var service = GetRequiredService<IStudentRollNumberBatchAppService>();
+		var preview = await service.PreviewAsync(new() { AcademicYearId = fixture.Scope.AcademicYearId, StandardId = fixture.Scope.StandardId, DivisionId = fixture.Scope.DivisionId, CaseIds = [target.Id] });
+		preview.TotalCount.ShouldBe(1); preview.Items.Single().StudentId.ShouldBe(target.StudentId); preview.Items.Single().ProposedRollNumber.ShouldBe(8);
+		preview.CaseIds!.ToArray().ShouldBe(new[] { target.Id });
+		(await service.GetAsync(preview.Id, new PagedResultRequestDto { MaxResultCount = 25 })).CaseIds!.ToArray().ShouldBe(new[] { target.Id });
+		(await service.SubmitAsync(preview.Id, RollBatchSubmit(preview))).Status.ShouldBe("Applied");
+		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(target.StudentId))).RollNo.ShouldBe(8);
+		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(untouched.StudentId))).RollNo.ShouldBeNull();
+		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(fixture.Student.Id))).RollNo.ShouldBe(7);
+		var alreadyAssigned = await service.PreviewAsync(new() { AcademicYearId = fixture.Scope.AcademicYearId, StandardId = fixture.Scope.StandardId, DivisionId = fixture.Scope.DivisionId, CaseIds = [target.Id] });
+		alreadyAssigned.TotalCount.ShouldBe(0); alreadyAssigned.CanSubmit.ShouldBeFalse();
+	});
+	[Fact]
+	public Task Roll_batch_current_page_retains_policy_reason_and_approval_before_assignment() => RunCertificationScenarioAsync(async () => {
+		var fixture = await RollBatchFixtureAsync(approval: true);
+		var offering = await WithUnitOfWorkAsync(async () => (await _offeringRepository.GetListAsync(x => x.StandardId == fixture.Scope.StandardId)).First());
+		var visible = await CreateFinalizedPlacementFixtureAsync(offering, fixture.Scope.DivisionId, activated: true);
+		var target = await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(x => x.ApplicationId == visible.ApplicationId));
+		var service = GetRequiredService<IStudentRollNumberBatchAppService>();
+		var preview = await service.PreviewAsync(new() { AcademicYearId = fixture.Scope.AcademicYearId, StandardId = fixture.Scope.StandardId, DivisionId = fixture.Scope.DivisionId, CaseIds = [target.Id] });
+		preview.ReasonRequired.ShouldBeTrue(); preview.ApprovalRequired.ShouldBeTrue(); preview.ApprovalStages.Single().ShouldContain("admin"); preview.PolicyVersionId.ShouldNotBeNull();
+		(await Should.ThrowAsync<BusinessException>(() => service.SubmitAsync(preview.Id, RollBatchSubmit(preview, "")))).Code.ShouldBe(StudentRollNumberErrorCodes.InvalidBatch);
+		(await service.SubmitAsync(preview.Id, RollBatchSubmit(preview))).Status.ShouldBe("PendingApproval");
+		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(target.StudentId))).RollNo.ShouldBeNull();
+	});
+	[Fact]
+	public Task Roll_batch_current_page_revalidates_off_page_reservations_and_target_tenant() => RunCertificationScenarioAsync(async () => {
+		var fixture = await RollBatchFixtureAsync();
+		var offering = await WithUnitOfWorkAsync(async () => (await _offeringRepository.GetListAsync(x => x.StandardId == fixture.Scope.StandardId)).First());
+		var visible = await CreateFinalizedPlacementFixtureAsync(offering, fixture.Scope.DivisionId, activated: false);
+		var target = await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(x => x.ApplicationId == visible.ApplicationId));
+		await WithUnitOfWorkAsync(async () => await SeedOnboardingWorklistRequirementsAsync(
+			await _onboardingCaseRepository.GetAsync(target.Id), await _applicationRepository.GetAsync(target.ApplicationId), await _studentRepository.GetAsync(target.StudentId)));
+		var service = GetRequiredService<IStudentRollNumberBatchAppService>();
+		var input = new PreviewStudentRollBatchInput { AcademicYearId = fixture.Scope.AcademicYearId, StandardId = fixture.Scope.StandardId, DivisionId = fixture.Scope.DivisionId, CaseIds = [target.Id] };
+		var preview = await service.PreviewAsync(input); preview.ReasonRequired.ShouldBeFalse(); preview.ApprovalRequired.ShouldBeFalse();
+		await PlaceRollBatchStudentAsync(fixture.Student.Id, fixture.Scope, 12);
+		(await Should.ThrowAsync<BusinessException>(() => service.SubmitAsync(preview.Id, RollBatchSubmit(preview)))).Code.ShouldBe(StudentRollNumberErrorCodes.StalePreview);
+		(await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(target.Id))).RollNumber.ShouldBeNull();
+		using (_currentTenant.Change(Guid.NewGuid())) await Should.ThrowAsync<Exception>(() => service.PreviewAsync(input));
+		input.CaseIds = [Guid.NewGuid()]; await Should.ThrowAsync<Exception>(() => service.PreviewAsync(input));
+		(await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(target.Id))).RollNumber.ShouldBeNull();
+		input.CaseIds = [target.Id]; var refreshed = await service.PreviewAsync(input);
+		refreshed.Items.Single().ProposedRollNumber.ShouldBe(13);
+		(await service.SubmitAsync(refreshed.Id, RollBatchSubmit(refreshed, ""))).Status.ShouldBe("Applied");
+		(await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(target.Id))).RollNumber.ShouldBe(13);
+		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(fixture.Student.Id))).RollNo.ShouldBe(12);
+	});
+	[Fact]
+	public Task Roll_batch_current_page_rejects_wrong_division_case_without_any_assignments() => RunCertificationScenarioAsync(async () => {
+		var fixture = await RollBatchFixtureAsync();
+		var offering = await WithUnitOfWorkAsync(async () => (await _offeringRepository.GetListAsync(x => x.StandardId == fixture.Scope.StandardId)).First());
+		var division = await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<Division, Guid>>().InsertAsync(new(Guid.NewGuid(), TestTenantId, "OutsideRollB", fixture.Scope.StandardId, 100, ""), true));
+		var outside = await CreateFinalizedPlacementFixtureAsync(offering, division.Id, activated: true);
+		var target = await WithUnitOfWorkAsync(() => _onboardingCaseRepository.GetAsync(x => x.ApplicationId == outside.ApplicationId));
+		var service = GetRequiredService<IStudentRollNumberBatchAppService>();
+		(await Should.ThrowAsync<BusinessException>(() => service.PreviewAsync(new() { AcademicYearId = fixture.Scope.AcademicYearId, StandardId = fixture.Scope.StandardId, DivisionId = fixture.Scope.DivisionId, CaseIds = [target.Id] }))).Code.ShouldBe(StudentRollNumberErrorCodes.InvalidBatch);
+		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(fixture.Student.Id))).RollNo.ShouldBeNull();
+	});
+	[Theory]
+	[InlineData("gr")]
+	[InlineData("roll")]
+	public Task Identifier_unlock_requires_database_admin_while_scoped_staff_can_lock(string type) => RunCertificationScenarioAsync(async () => {
+		var fixture = await RollBatchFixtureAsync(); var service = GetRequiredService<IStudentOnboardingAppService>();
+		var operatorId = Guid.NewGuid(); await EnsureTestIdentityUserAsync(operatorId, "identifier-operator");
+		await WithUnitOfWorkAsync(() => _scopeRepository.InsertAsync(new UserScopeAssignment(Guid.NewGuid(), TestTenantId, userId: operatorId, description: "Scoped staff"), true));
+		var principal = ProfilePrincipal(operatorId);
+		((System.Security.Claims.ClaimsIdentity)principal.Identity!).AddClaim(new(Volo.Abp.Security.Claims.AbpClaimTypes.Role, "admin"));
+		using (_principalAccessor.Change(principal))
+		{
+			(await service.GetFilterOptionsAsync(fixture.Scope.AcademicYearId)).CanUnlockIdentifiers.ShouldBeFalse();
+			await service.SetIdentifierLockAsync(new() { AcademicYearId = fixture.Scope.AcademicYearId, DivisionId = fixture.Scope.DivisionId, IdentifierType = type, IsLocked = true });
+			await Should.ThrowAsync<AbpAuthorizationException>(() => service.SetIdentifierLockAsync(new() { AcademicYearId = fixture.Scope.AcademicYearId, DivisionId = fixture.Scope.DivisionId, IdentifierType = type, IsLocked = false, Reason = "Staff correction attempt" }));
+		}
+		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(fixture.Student.Id))).IsIdentifierLocked(type).ShouldBeTrue();
+		(await service.GetFilterOptionsAsync(fixture.Scope.AcademicYearId)).CanUnlockIdentifiers.ShouldBeTrue();
+		await service.SetIdentifierLockAsync(new() { AcademicYearId = fixture.Scope.AcademicYearId, DivisionId = fixture.Scope.DivisionId, IdentifierType = type, IsLocked = false, Reason = "Admin correction" });
+		(await WithUnitOfWorkAsync(() => _studentRepository.GetAsync(fixture.Student.Id))).IsIdentifierLocked(type).ShouldBeFalse();
+	});
 	[Fact]
 	public Task Roll_batch_assigns_full_server_cohort_and_does_not_reuse_the_departed_highest_number() => RunCertificationScenarioAsync(async () => {
 		var fixture = await RollBatchFixtureAsync(); var service = GetRequiredService<IStudentRollNumberBatchAppService>();

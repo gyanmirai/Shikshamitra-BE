@@ -665,7 +665,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
         (await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<PaymentMethodRecord, Guid>>().CountAsync(r => r.FinanceFeeAccountId == accountId))).ShouldBe(1);
     }
 
-    private async Task<CollectibleAdmissionFixture> CreateCollectibleAdmissionAsync(string name, bool paymentStage = true)
+    private async Task<CollectibleAdmissionFixture> CreateCollectibleAdmissionAsync(string name, bool paymentStage = true,
+        AdmissionPaymentCompletionPolicy? completion = null, decimal amount = 1000m, bool oneTime = true)
     {
         await WithUnitOfWorkAsync(async () =>
         {
@@ -682,7 +683,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             Name = "Finance collection journey", Code = $"COLLECT_{Guid.NewGuid():N}"[..24],
             Stages = paymentStage ? [new() { Id = entry, Code = "FEES", Name = "Fee structure confirmation",
                 StageType = AdmissionWorkflowStageType.Payment,
-                IsEntryStage = true, IsRequired = true }, new() { Id = decision, Code = "DECISION", Name = "Admission decision",
+                IsEntryStage = true, IsRequired = true,
+                ConfigurationJson = completion == null ? null : System.Text.Json.JsonSerializer.Serialize(new { paymentCompletion = completion }) }, new() { Id = decision, Code = "DECISION", Name = "Admission decision",
                 StageType = AdmissionWorkflowStageType.Approval, DisplayOrder = 1, IsTerminalStage = true, IsRequired = true }]
                 : [new() { Id = decision, Code = "DECISION", Name = "Admission decision", StageType = AdmissionWorkflowStageType.Approval,
                     IsEntryStage = true, IsTerminalStage = true, IsRequired = true }],
@@ -726,7 +728,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             var metadata = await GetRequiredService<IRepository<FeeStructureMetadata, Guid>>().InsertAsync(new(Guid.NewGuid(), TestTenantId, year.Id,
                 offering.BoardId, offering.MediumId, null, "Admission counter metadata"), true);
             var value = new FeeStructure(Guid.NewGuid(), TestTenantId, metadata.Id, offering.StandardId, "Admission counter plan");
-            var detail = new FeeStructureDetail(Guid.NewGuid(), TestTenantId, value.Id, head.Id, 1000m, true, false, null, null);
+            var detail = new FeeStructureDetail(Guid.NewGuid(), TestTenantId, value.Id, head.Id, amount, oneTime, false, null, null);
             detail.AttachPaymentTerm(term.Id, version.Id);
             value.AddDetail(detail);
             value.AttachCollectionPolicy(policy.Id, policy.CurrentVersionId!.Value);

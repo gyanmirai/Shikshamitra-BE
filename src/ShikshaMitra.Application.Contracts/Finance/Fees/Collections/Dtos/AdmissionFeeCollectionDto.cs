@@ -26,6 +26,7 @@ public class AdmissionFeeCollectionDto
 	public bool IsSettled { get; set; }
 	public string? Blocker { get; set; }
 	public bool HasPaymentEvidence { get; set; }
+	public FeeProrationResultDto? Proration { get; set; }
 	public List<AdmissionCollectionFeeHeadDto> FeeHeads { get; set; } = [];
 	public List<AdmissionCollectionReceiptDto> Receipts { get; set; } = [];
 	public List<AssignmentHeadDto> VariableFeeHeads { get; set; } = [];

@@ -15,18 +15,19 @@ public class AdmissionPaymentReadService(AdmissionPaymentAccessService access,
 	{
 		var context = await access.GetContextAsync(applicationId, stageId);
 		var selectionContext = await feeSelection.GetContextAsync(context.Application);
-		var selection = context.Application.GetFeeSelection();
-		var confirmed = selection != null && selection.OwnerStageId == selectionContext.Owner?.Id;
 		var deferred = context.Application.GetFeeCollectionDeferral()?.StageId == stageId;
-		var recorded = selectionContext.HasPaymentEvidence;
+		var completion = await LazyServiceProvider.LazyGetRequiredService<AdmissionPaymentCompletionReader>()
+			.ReadAsync(context.Application, context.Stage, context.Definition,
+				context.Workflow.Status == AdmissionWorkflowInstanceStatus.Active, selectionContext.Owner?.Id);
 		return new AdmissionPaymentStageDto
 		{
 			ApplicationId = applicationId, StageId = stageId, PaymentStageEnabled = true,
 			IsActive = context.IsActive, Currency = selectionContext.Currency ?? string.Empty,
-			Status = deferred ? "collectionDeferred" : recorded ? "collectionRecorded" : confirmed ? "collectionPending" : "feeStructureRequired",
+			Completion = completion,
+			Status = deferred ? "collectionDeferred" : completion.Status,
 			ConcurrencyStamp = context.Application.ConcurrencyStamp,
-			Blockers = deferred || recorded && confirmed ? [] : ["Collect fees or choose Collect later in Onboarding and enter a reason."],
-			CanComplete = context.IsActive && recorded && confirmed, CanRecord = false, CanVerify = false,
+			Blockers = deferred || completion.Blocker == null ? [] : [completion.Blocker],
+			CanComplete = completion.CanComplete, CanRecord = false, CanVerify = false,
 			CanWaive = false, CanReverse = false, CanStartOnlinePayment = false
 		};
 	}

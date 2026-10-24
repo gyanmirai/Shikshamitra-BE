@@ -49,6 +49,7 @@ public class AdmissionFeeSelectionDto
 	public bool IsRequired { get; set; }
 	public bool IsLocked { get; set; }
 	public bool HasRecordedFeePayment { get; set; }
+	public AdmissionPaymentCompletionDto? PaymentCompletion { get; set; }
 	public AdmissionFeeCollectionDeferralDto? FeeCollectionDeferral { get; set; }
 	public bool CanEdit { get; set; }
 	public bool CanConfirmOnboarding { get; set; }
@@ -56,6 +57,16 @@ public class AdmissionFeeSelectionDto
 	public bool AutomaticallyConfirmedFromAdmissions { get; set; }
 	public string? OnboardingBlocker { get; set; }
 	public AdmissionFeeSelectionSnapshotDto? Selection { get; set; }
+}
+
+public class AdmissionPaymentCompletionDto
+{
+	public string PaymentRule { get; set; } = "partial";
+	public bool AllowCollectionLater { get; set; } = true;
+	public bool CanComplete { get; set; }
+	public bool CanDeferCollection { get; set; }
+	public string Status { get; set; } = "collectionPending";
+	public string? Blocker { get; set; }
 }
 
 public class AdmissionFeeCollectionDeferralDto

@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,7 +33,6 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	// Late Fee
 	public bool EnableLateFee { get; protected set; }
 	public int GracePeriodDays { get; protected set; }
-	public GracePeriodType GracePeriodType { get; protected set; }
 	public string LateFeeApplyOnFeeHeadsJson { get; protected set; } = "[]";
 	public LateFeeCalculationType LateFeeType { get; protected set; }
 	public decimal? FlatAmount { get; protected set; }
@@ -72,6 +72,11 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	// Online Collection
 	public bool AllowOnlineCollection { get; protected set; }
+
+	// Stored in the existing JSON extension column, so historical rows remain Legacy.
+	[NotMapped]
+	public CollectionAllocationBasis AllocationBasis => Enum.Parse<CollectionAllocationBasis>(
+		this.GetProperty<string>(nameof(AllocationBasis), nameof(CollectionAllocationBasis.Legacy)));
 
 	public int Version { get; protected set; }
 
@@ -128,9 +133,11 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(CollectionPolicyErrorCodes.DefaultPolicyMustBeActive);
 		}
 
+		if (!Enum.IsDefined(model.AllocationBasis))
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidAllocationBasis).WithData("field", "allocationBasis");
 		ValidateRules(model, model.Status == CollectionPolicyStatus.Active, validateInputBounds);
 
-		PolicyName = model.PolicyName.Trim();
+		PolicyName = FinanceName.Normalize(model.PolicyName);
 		PolicyCode = model.PolicyCode.Trim().ToUpperInvariant();
 		Description = model.Description?.Trim() ?? string.Empty;
 		Status = model.Status;
@@ -140,7 +147,6 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		EnableLateFee = model.EnableLateFee;
 		GracePeriodDays = model.GracePeriodDays;
-		GracePeriodType = model.GracePeriodType;
 		LateFeeApplyOnFeeHeadsJson = SerializeGuids(model.LateFeeApplyOnFeeHeads);
 		LateFeeType = model.LateFeeType;
 		FlatAmount = ShikshaMitra.Finance.WholeRupeeAmounts.RoundUp(model.FlatAmount);
@@ -173,6 +179,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		this.SetProperty(EnableChargeWaiverProperty, model.EnableChargeWaiver);
 
 		AllowOnlineCollection = model.AllowOnlineCollection;
+		this.SetProperty(nameof(AllocationBasis), model.AllocationBasis.ToString());
 
 		Version++;
 	}
@@ -283,7 +290,6 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EffectiveTo = EffectiveTo,
 		EnableLateFee = EnableLateFee,
 		GracePeriodDays = GracePeriodDays,
-		GracePeriodType = GracePeriodType,
 		LateFeeApplyOnFeeHeads = GetLateFeeApplyOnFeeHeads().ToList(),
 		LateFeeType = LateFeeType,
 		FlatAmount = FlatAmount,
@@ -305,7 +311,8 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		EnableChargeWaiver = EnableChargeWaiver,
 		RequiresApproval = RequiresApproval,
 		ApprovalRoleIds = GetApprovalRoleIds().ToList(),
-		AllowOnlineCollection = AllowOnlineCollection
+		AllowOnlineCollection = AllowOnlineCollection,
+		AllocationBasis = AllocationBasis
 	};
 
 	public static CollectionPolicy FromSnapshot(
@@ -338,11 +345,6 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		if (validateInputBounds)
 			ValidateNumericRule(model.FlatAmount, model.Percentage, model.AmountPerDay, model.AmountPerWeek,
 				model.AmountPerMonth, model.MaximumLateFeeAmount, model.MaximumChargingDays);
-
-		if (model.Status == CollectionPolicyStatus.Active && model.GracePeriodType == GracePeriodType.WorkingDay)
-		{
-			throw new BusinessException(CollectionPolicyErrorCodes.WorkingDayGraceNotSupported);
-		}
 
 		if (model.EnableLateFee)
 		{
@@ -448,7 +450,6 @@ public sealed record CollectionPolicyUpdateModel(
 	DateTime? EffectiveTo,
 	bool EnableLateFee,
 	int GracePeriodDays,
-	GracePeriodType GracePeriodType,
 	IReadOnlyList<Guid> LateFeeApplyOnFeeHeads,
 	LateFeeCalculationType LateFeeType,
 	decimal? FlatAmount,
@@ -470,4 +471,5 @@ public sealed record CollectionPolicyUpdateModel(
 	bool RequiresApproval,
 	IReadOnlyList<Guid> ApprovalRoleIds,
 	bool AllowOnlineCollection,
-	Guid? LateFeeIncomeCategoryId = null);
+	Guid? LateFeeIncomeCategoryId = null,
+	CollectionAllocationBasis AllocationBasis = CollectionAllocationBasis.Legacy);

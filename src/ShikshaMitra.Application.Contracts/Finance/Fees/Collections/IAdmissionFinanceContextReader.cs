@@ -16,4 +16,4 @@ public sealed record AdmissionFinanceContext(
 	Guid MediumId, Guid StageId, Guid StandardId, Guid? DivisionId, Guid? StudentId,
 	string ApplicantName, string ApplicationNumber, string StandardName, string SourceRevision,
 	Guid? StructureId, int? StructureRevision, IReadOnlyList<Guid> OptionalHeadIds,
-	bool CanCollect, string? Blocker, Guid? EnrollmentId);
+	bool CanCollect, string? Blocker, Guid? EnrollmentId, DateTime? JoiningDate = null);

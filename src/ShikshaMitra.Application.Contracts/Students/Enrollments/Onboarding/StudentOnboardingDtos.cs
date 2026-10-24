@@ -68,6 +68,7 @@ public class StudentOnboardingAnalyticsDto
 
 public class StudentOnboardingStepDto
 {
+	public string? CompletedByName { get; set; }
 	public Guid Id { get; set; }
 	public string Key { get; set; } = string.Empty;
 	public string Label { get; set; } = string.Empty;
@@ -82,6 +83,7 @@ public class StudentOnboardingStepDto
 
 public class StudentOnboardingEventDto
 {
+	public string? ActorName { get; set; }
 	public Guid Id { get; set; }
 	public string EventType { get; set; } = string.Empty;
 	public string Description { get; set; } = string.Empty;
@@ -282,6 +284,7 @@ public class ActivateStudentOnboardingDto
 {
 	public string? ConcurrencyStamp { get; set; }
 	public string IdempotencyKey { get; set; } = string.Empty;
+	public StudentSiblingParentSelectionDto? SiblingParentSelection { get; set; }
 }
 
 public class CancelStudentOnboardingDto

@@ -10,41 +10,6 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
-	[Theory]
-	[InlineData(AdmissionIntakeProfileKind.Inquiry)]
-	[InlineData(AdmissionIntakeProfileKind.CounsellorAssignment)]
-	public async Task SettingsCode_Profiles_Should_Create_Unique_References_And_Preserve_Legacy_On_Edit(
-		AdmissionIntakeProfileKind kind)
-	{
-		using var tenant = _currentTenant.Change(TestTenantId);
-		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
-		var service = GetRequiredService<IAdmissionIntakeProfileAppService>();
-		var configuration = kind == AdmissionIntakeProfileKind.Inquiry ? "{}" :
-			JsonSerializer.Serialize(new AdmissionCounsellorAssignmentRules { CounsellorUserIds = [TestUserId] });
-		var first = await service.CreateAsync(new SaveAdmissionIntakeProfileDto
-		{
-			Kind = kind, Name = "General admission", ConfigurationJson = configuration
-		});
-		var second = await service.CreateAsync(new SaveAdmissionIntakeProfileDto
-		{
-			Kind = kind, Name = first.Name, Code = " ", ConfigurationJson = configuration
-		});
-		first.Code.ShouldNotBe(second.Code);
-		first.Code.ShouldStartWith(kind == AdmissionIntakeProfileKind.Inquiry ? "INQ_" : "COUNSELLOR_");
-		(await service.GetListAsync(kind)).Single(item => item.Id == first.Id).Code.ShouldBe(first.Code);
-
-		var legacy = await service.CreateAsync(new SaveAdmissionIntakeProfileDto
-		{
-			Kind = kind, Name = "Legacy profile", Code = "GENERAL_INQUIRY", ConfigurationJson = configuration
-		});
-		var edited = await service.UpdateAsync(legacy.Id, new SaveAdmissionIntakeProfileDto
-		{
-			Kind = kind, Name = "Renamed profile", Code = " ", ConfigurationJson = configuration,
-			ConcurrencyStamp = legacy.ConcurrencyStamp
-		});
-		edited.Code.ShouldBe("GENERAL_INQUIRY");
-		edited.Name.ShouldBe("Renamed profile");
-	}
 
 	[Fact]
 	public async Task SettingsCode_Workflows_Should_Create_And_Clone_With_Independent_References()

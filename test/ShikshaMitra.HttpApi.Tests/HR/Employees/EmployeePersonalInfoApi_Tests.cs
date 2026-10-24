@@ -37,6 +37,68 @@ public class EmployeePersonalInfoApi_Tests : ShikshaMitraApiTestBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Create_Employee_With_Staff_Add_And_No_Policy_Permissions()
+	{
+		using var client = CreatePermissionClient(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add);
+		var input = EmployeeTestHelper.BuildPersonalInfoRequest("DelegatedCreator");
+		input.PolicyOverride.ShouldBeNull();
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(JsonSerializer.Serialize(input, JsonOptions)), "data");
+
+		var response = await client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var created = await response.Content.ReadFromJsonAsync<PersonalInfoResponse>(JsonOptions);
+		created.ShouldNotBeNull();
+		created.Id.ShouldNotBe(Guid.Empty);
+		created.UserId.ShouldNotBeNull();
+		created.FirstName.ShouldBe(input.FirstName);
+		created.PolicyOverride.ShouldBeNull();
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Staff_Creation_Without_Staff_Add_Even_With_Policy_Access()
+	{
+		using var client = CreatePermissionClient(
+			ShikshaMitraSubmodulePermissions.HR.Policies.View,
+			ShikshaMitraSubmodulePermissions.HR.Policies.Assign,
+			ShikshaMitraSubmodulePermissions.HR.Policies.PreviewImpact);
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(JsonSerializer.Serialize(
+			EmployeeTestHelper.BuildPersonalInfoRequest("NoStaffAdd"), JsonOptions)), "data");
+
+		var response = await client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Should_Reject_Explicit_Policy_Override_With_Staff_Add_Only()
+	{
+		using var client = CreatePermissionClient(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add);
+		var input = EmployeeTestHelper.BuildPersonalInfoRequest("DeniedOverride");
+		input.PolicyOverride = new PersonalInfoPolicyOverrideRequest
+		{
+			AcademicYearId = Factory.SeededAcademicYearId,
+			PayrollPolicyId = Guid.NewGuid(),
+			AttendancePolicyId = Guid.NewGuid(),
+			LeavePolicyId = Guid.NewGuid(),
+			EffectiveFrom = DateTime.UtcNow.Date,
+			ConfirmationToken = "__employee_onboarding_default_policy_assignment__"
+		};
+		using var content = new MultipartFormDataContent();
+		content.Add(new StringContent(JsonSerializer.Serialize(input, JsonOptions)), "data");
+
+		var response = await client.PostAsync($"{BaseUrl}/personal-info", content);
+
+		response.IsSuccessStatusCode.ShouldBeFalse();
+		(await response.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.EmployeePolicyAccessRequired);
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Create_Employee_Via_PersonalInfo_Returns_Success()
 	{
 		var personalInfo = EmployeeTestHelper.BuildPersonalInfoRequest("CreateTest");

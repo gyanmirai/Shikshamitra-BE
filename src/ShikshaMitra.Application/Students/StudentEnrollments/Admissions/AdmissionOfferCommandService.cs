@@ -34,10 +34,6 @@ public class AdmissionOfferCommandService(
 		if (context.Application.Status != AdmissionApplicationStatus.Approved)
 			throw Invalid("Approve the application before issuing its offer.");
 		await reviewGuard.EnsureApplicationCompleteAsync(context.Application);
-		EnsureJourneyOwnerContinuity(context.Application, input.CounsellorId);
-		var effectiveCounsellorId = input.CounsellorId ?? context.Application.AssignedCounsellorId;
-		if (effectiveCounsellorId.HasValue)
-			await people.EnsureCanAccessOfferingAsync(effectiveCounsellorId.Value, context.Application.AdmissionOfferingId);
 		var expiresAt = Expiry(context.Policy!, input.ExpiresAt);
 		context.Application.IssueOffer(expiresAt, CurrentUser.Id, reason);
 		return await SaveAsync(context, "issue", key, fingerprint, reason,
@@ -108,10 +104,6 @@ public class AdmissionOfferCommandService(
 		var state = await reader.GetAsync(applicationId, stageId);
 		if (context.Policy?.AllowReissue != true || !state.CanReissue)
 			throw new BusinessException(AdmissionOfferStageErrorCodes.ReissueNotAllowed, "This offer cannot be reissued again.");
-		EnsureJourneyOwnerContinuity(context.Application, input.CounsellorId);
-		var effectiveCounsellorId = input.CounsellorId ?? context.Application.AssignedCounsellorId;
-		if (effectiveCounsellorId.HasValue)
-			await people.EnsureCanAccessOfferingAsync(effectiveCounsellorId.Value, context.Application.AdmissionOfferingId);
 		var expiresAt = Expiry(context.Policy, input.ExpiresAt);
 		context.Application.ReissueOffer(expiresAt, CurrentUser.Id, reason);
 		return await SaveAsync(context, "reissue", key, fingerprint, reason,
@@ -156,8 +148,7 @@ public class AdmissionOfferCommandService(
 		await applications.UpdateAsync(context.Application, false);
 		await history.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(), CurrentTenant.Id,
 			context.Application.Id, context.Application.Status, reason, CurrentUser.Id, action, context.Stage.Id, key, metadataJson), false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			$"AdmissionOffer{char.ToUpperInvariant(action[0])}{action[1..]}", $"{context.Stage.Name}: offer {action} recorded.",
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity($"AdmissionOffer{char.ToUpperInvariant(action[0])}{action[1..]}", $"{context.Stage.Name}: offer {action} recorded.",
 			context.Application.ApplicantId, context.Application.Id, metadataJson: metadataJson), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return await reader.GetAsync(context.Application.Id, context.Stage.Id);

@@ -70,8 +70,7 @@ public class AdmissionJourneyClosureService(
 		await applications.UpdateAsync(application, false);
 		await history.InsertAsync(new AdmissionApplicationDecisionHistory(GuidGenerator.Create(), CurrentTenant.Id,
 			id, AdmissionApplicationStatus.Withdrawn, reason, actor, "journey-ended", previousStageId), false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"AdmissionJourneyEnded", "Admission journey ended", application.ApplicantId, id, application.InquiryId,
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("AdmissionJourneyEnded", "Admission journey ended", application.ApplicantId, id, application.InquiryId,
 			JsonSerializer.Serialize(new { Reason = reason, ActorUserId = actor, PreviousStageInstanceId = previousStageId })), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();
 		return AdmissionApplicationMapper.ToDto(application);

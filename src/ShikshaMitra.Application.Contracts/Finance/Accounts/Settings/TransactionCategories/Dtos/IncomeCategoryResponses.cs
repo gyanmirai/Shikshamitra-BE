@@ -20,7 +20,8 @@ public class TransactionCategoryResponse
 	public int Version { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public bool IsUsedInDownstream { get; set; }
-	public bool CanDelete => !IsActive && !IsUsedInDownstream;
+	public string? DeletionBlockedReason { get; set; }
+	public bool CanDelete { get; set; }
 }
 
 public class PaginatedTransactionCategoryResponse

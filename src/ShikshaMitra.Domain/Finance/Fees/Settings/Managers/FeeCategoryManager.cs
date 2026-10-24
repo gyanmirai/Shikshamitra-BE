@@ -1,3 +1,4 @@
+using ShikshaMitra.Finance;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -24,18 +25,19 @@ public class FeeCategoryManager(
 
 	public async Task EnsureNameIsUniqueAsync(Guid academicYearId, string name, Guid? excludeId = null)
 	{
-		var normalizedName = name.Trim();
-		var comparisonName = normalizedName.ToUpperInvariant();
-
-		var existing = await feeCategoryRepository.FirstOrDefaultAsync(x =>
+		var normalizedName = FinanceName.Normalize(name);
+		// Include archived records and normalize legacy names without rewriting history.
+		var candidates = await feeCategoryRepository.GetListAsync(x =>
 			x.AcademicYearId == academicYearId &&
-			x.Name.ToUpper() == comparisonName &&
 			(!excludeId.HasValue || x.Id != excludeId.Value));
-
+		var existing = candidates.FirstOrDefault(x => FinanceName.Equals(x.Name, normalizedName));
 		if (existing != null)
 		{
 			throw new BusinessException(FinanceFeeCategoryErrorCodes.DuplicateName)
-				.WithData("Name", normalizedName);
+				.WithData("Name", normalizedName)
+				.WithData("Location", existing.IsActive ? "Current" : "Archived")
+				.WithData("CorrectiveAction", existing.IsActive
+					? "Use a different name." : "Restore it from the Archived tab or use a different name.");
 		}
 	}
 

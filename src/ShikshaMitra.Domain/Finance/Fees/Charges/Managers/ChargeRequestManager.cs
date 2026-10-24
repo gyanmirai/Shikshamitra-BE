@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
@@ -20,6 +21,7 @@ public class ChargeRequestManager(
 	IStudentRepository studentRepository,
 	IRepository<ChargeCategory, Guid> chargeCategoryRepository,
 	FinanceRoutingManager routingManager,
+	ITransactionCategoryReferenceLock referenceLock,
 	ChargeAudienceResolver audienceResolver,
 	IGuidGenerator guidGenerator,
 	ILogger<ChargeRequestManager> logger) : DomainService
@@ -58,6 +60,7 @@ public class ChargeRequestManager(
 			audienceSnapshot,
 			additionalNotes);
 
+		request.SetProperty("IsApprovalRequiredAtCreation", category.IsApprovalRequired);
 		await SetIncomeCategoryFromChargeCategoryAsync(request, category);
 		await chargeRequestRepository.InsertAsync(request, autoSave: false);
 
@@ -260,6 +263,8 @@ public class ChargeRequestManager(
 
 	private async Task<ChargeCategory> GetActiveCategoryAsync(Guid chargeCategoryId, Guid academicYearId)
 	{
+		// Mapping reads and the resulting request/line writes share the deletion lock.
+		await referenceLock.AcquireAsync();
 		var category = await chargeCategoryRepository.FindAsync(chargeCategoryId)
 			?? throw new BusinessException(FinanceChargeErrorCodes.ChargeCategoryNotFound)
 				.WithData("ChargeCategoryId", chargeCategoryId);

@@ -19,6 +19,8 @@ public static class AdmissionStageConfiguration
 				var form = Settings(root, "form");
 				form["allowSaveAndResume"] = true;
 				form["autoAdvanceOnSubmit"] = true;
+				form["requireSectionVerification"] = false;
+				form["verificationSectionCodes"] = new JsonArray();
 				break;
 			case AdmissionWorkflowStageType.Assessment:
 				var assessment = Settings(root, "assessment");
@@ -27,6 +29,7 @@ public static class AdmissionStageConfiguration
 				break;
 			case AdmissionWorkflowStageType.Payment:
 				root.Remove("payment");
+				_ = AdmissionPaymentCompletionPolicy.Read(root.ToJsonString());
 				break;
 			case AdmissionWorkflowStageType.DocumentVerification:
 				var documents = Settings(root, "documentVerification");

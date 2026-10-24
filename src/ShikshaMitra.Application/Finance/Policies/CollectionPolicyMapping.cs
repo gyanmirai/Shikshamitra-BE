@@ -8,6 +8,13 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 
 internal static class CollectionPolicyMapping
 {
+	private static CollectionAllocationBasis ParseAllocationBasis(string? value) => value switch
+	{
+		null or "Legacy" => CollectionAllocationBasis.Legacy,
+		"Installment" => CollectionAllocationBasis.Installment,
+		"FeeHead" => CollectionAllocationBasis.FeeHead,
+		_ => throw new BusinessException(CollectionPolicyErrorCodes.InvalidAllocationBasis)
+	};
 	public static CollectionPolicyStatus ParseStatus(string value) => Normalize(value) switch
 	{
 		"draft" => CollectionPolicyStatus.Draft,
@@ -67,15 +74,6 @@ internal static class CollectionPolicyMapping
 	};
 
 	public static string MapRoundingMethod(RoundingMethodType value) => value.ToString();
-
-	public static GracePeriodType ParseGracePeriodType(string value) => Normalize(value) switch
-	{
-		"calendar" => GracePeriodType.Calendar,
-		"workingday" => GracePeriodType.WorkingDay,
-		_ => throw InvalidEnum("gracePeriodType")
-	};
-
-	public static string MapGracePeriodType(GracePeriodType value) => value.ToString();
 
 	public static EscalationCalculationType ParseEscalationCalculationType(string value) => Normalize(value) switch
 	{
@@ -172,7 +170,6 @@ internal static class CollectionPolicyMapping
 			effectiveTo,
 			input.EnableLateFee,
 			input.GracePeriodDays,
-			ParseGracePeriodType(input.GracePeriodType),
 			input.LateFeeApplyOnFeeHeads,
 			ParseLateFeeType(input.LateFeeType),
 			input.FlatAmount,
@@ -193,7 +190,7 @@ internal static class CollectionPolicyMapping
 			false,
 			false,
 			Array.Empty<Guid>(),
-			input.AllowOnlineCollection, input.LateFeeIncomeCategoryId);
+			input.AllowOnlineCollection, input.LateFeeIncomeCategoryId, ParseAllocationBasis(input.AllocationBasis));
 
 	public static CollectionPolicyDto ToDto(CollectionPolicy entity) => new()
 	{
@@ -206,7 +203,6 @@ internal static class CollectionPolicyMapping
 		IsDefault = entity.IsDefault,
 		EnableLateFee = entity.EnableLateFee,
 		GracePeriodDays = entity.GracePeriodDays,
-		GracePeriodType = MapGracePeriodType(entity.GracePeriodType),
 		LateFeeApplyOnFeeHeads = entity.GetLateFeeApplyOnFeeHeads().ToList(),
 		LateFeeType = MapLateFeeType(entity.LateFeeType),
 		FlatAmount = entity.FlatAmount,
@@ -225,6 +221,7 @@ internal static class CollectionPolicyMapping
 		MaximumLateFeeAmount = entity.MaximumLateFeeAmount,
 		MaximumChargingDays = entity.MaximumChargingDays,
 		AllowOnlineCollection = entity.AllowOnlineCollection,
+		AllocationBasis = entity.AllocationBasis.ToString(),
 		Version = entity.Version,
 		CreationTime = entity.CreationTime,
 		CreatorId = entity.CreatorId,

@@ -6,6 +6,7 @@ public static class ConcessionPolicyErrorCodes
 	public const string DefaultPolicyCannotBeRemoved = "Finance:ConcessionPolicy:010026";
 	private const string Prefix = "Finance:ConcessionPolicy:";
 
+	public const string PercentagePrecision = Prefix + "010027";
 	public const string PolicyNotFound = Prefix + "010001";
 	public const string NameRequired = Prefix + "010002";
 	public const string CodeRequired = Prefix + "010003";

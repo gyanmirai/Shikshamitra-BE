@@ -52,7 +52,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			});
 			var service = GetRequiredService<IAdmissionOfferingAppService>();
 			(await service.GetAsync(offering.Id)).Configuration.IsValid.ShouldBeTrue();
-			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>().CreateAsync(ValidSetupInput("Optional setup"));
+			var setup = await CreateHistoricalIntakeSetupAsync(ValidSetupInput("Optional setup"));
 			await WithUnitOfWorkAsync(async () =>
 			{
 				var stored = await _offeringRepository.GetAsync(offering.Id);
@@ -86,7 +86,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{
 				if (usingSetup)
 				{
-					var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>().CreateAsync(ValidSetupInput("Automatic setup"));
+					var setup = await CreateHistoricalIntakeSetupAsync(ValidSetupInput("Automatic setup"));
 					var stored = await _offeringRepository.GetAsync(offering.Id);
 					stored.ConfigureIntake(setup.InquiryIntakeProfileId, setup.CounsellorAssignmentProfileId);
 					await _offeringRepository.UpdateAsync(stored, true);
@@ -100,69 +100,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			{ IsAssigned = false, MaxResultCount = 100 })).Items.ShouldContain(item => item.Id == inquiry.Id);
 		});
 
-	[Fact]
-	public Task Optional_intake_should_preserve_configured_pool_and_manual_capacity_guards() =>
-		RunCertificationScenarioAsync(async () =>
-		{
-			var outsidePool = await CreateReviewUserAsync("Admissions Counselor");
-			var offering = await CreateOptionalIntakeOfferingAsync();
-			var setupInput = ValidSetupInput("Capacity guard setup");
-			setupInput.CounsellorAssignmentRules.MaxActiveCasesPerCounsellor = 1;
-			var setup = await GetRequiredService<IAdmissionIntakeSetupAppService>().CreateAsync(setupInput);
-			await WithUnitOfWorkAsync(async () =>
-			{
-				var stored = await _offeringRepository.GetAsync(offering.Id);
-				stored.ConfigureIntake(setup.InquiryIntakeProfileId, setup.CounsellorAssignmentProfileId);
-				await _offeringRepository.UpdateAsync(stored, true);
-			});
-			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
-			var current = await WithUnitOfWorkAsync(() => GetRequiredService<AdmissionInquiryAppService>().CreateFromPublicLinkAsync(
-				ManagedInquiryInput(offering), setup.CounsellorAssignmentProfileId, offering.InquiryFormDefinitionId));
-			current.AssignedCounsellorId.ShouldBe(TestUserId);
-			(await inquiries.GetAssignableCounsellorsAsync(offering.Id)).ShouldNotContain(item => item.Id == outsidePool);
-			var pending = await WithUnitOfWorkAsync(() => GetRequiredService<AdmissionInquiryAppService>().CreateFromPublicLinkAsync(
-				ManagedInquiryInput(offering), null, offering.InquiryFormDefinitionId));
-			var outsideError = await Should.ThrowAsync<BusinessException>(() => inquiries.AssignCounsellorAsync(pending.Id,
-				new() { Mode = AdmissionCounsellorAssignmentMode.Manual, CounsellorId = outsidePool, Reason = "Transfer" }));
-			outsideError.Code.ShouldBe(AdmissionErrorCodes.InquiryCounsellorInvalid);
-			var capacityError = await Should.ThrowAsync<BusinessException>(() => inquiries.AssignCounsellorAsync(pending.Id,
-				new() { Mode = AdmissionCounsellorAssignmentMode.Manual, CounsellorId = TestUserId, Reason = "Transfer" }));
-			capacityError.Code.ShouldBe(AdmissionInquiryManagementErrorCodes.CounsellorRequired);
-			capacityError.Message.ShouldContain("capacity");
-			(await inquiries.GetAsync(pending.Id)).AssignedCounsellorId.ShouldBeNull();
-		});
 
-	[Fact]
-	public Task Optional_intake_manual_assignment_should_use_role_scope_and_active_state_then_leave_unassigned_queue() =>
-		RunCertificationScenarioAsync(async () =>
-		{
-			var active = await CreateReviewUserAsync("Admissions Counselor");
-			var inactive = await CreateReviewUserAsync("Admissions Counselor", active: false);
-			var unscoped = await CreateReviewUserAsync("Admissions Counselor", grantScope: false);
-			var nonCounsellor = await CreateReviewUserAsync("Teacher");
-			var offering = await CreateOptionalIntakeOfferingAsync();
-			var inquiries = GetRequiredService<IAdmissionInquiryAppService>();
-			var inquiry = await WithUnitOfWorkAsync(() => GetRequiredService<AdmissionInquiryAppService>().CreateFromPublicLinkAsync(
-				ManagedInquiryInput(offering), null, offering.InquiryFormDefinitionId));
-			var options = await inquiries.GetAssignableCounsellorsAsync(offering.Id);
-			options.ShouldContain(item => item.Id == active);
-			options.ShouldNotContain(item => item.Id == inactive || item.Id == unscoped || item.Id == nonCounsellor);
-			foreach (var denied in new[] { inactive, unscoped, nonCounsellor })
-			{
-				var error = await Should.ThrowAsync<BusinessException>(() => inquiries.AssignCounsellorAsync(inquiry.Id,
-					new() { Mode = AdmissionCounsellorAssignmentMode.Manual, CounsellorId = denied, Reason = "Manual routing" }));
-				error.Code.ShouldBe(AdmissionErrorCodes.InquiryCounsellorInvalid);
-				(await inquiries.GetAsync(inquiry.Id)).AssignedCounsellorId.ShouldBeNull();
-			}
-			var assigned = await inquiries.AssignCounsellorAsync(inquiry.Id, new()
-			{ Mode = AdmissionCounsellorAssignmentMode.Manual, CounsellorId = active, Reason = "Staff accepted the inquiry" });
-			assigned.AssignedCounsellorId.ShouldBe(active);
-			(await inquiries.GetListAsync(new() { IsAssigned = false, MaxResultCount = 100 }))
-				.Items.ShouldNotContain(item => item.Id == inquiry.Id);
-			var activities = GetRequiredService<IRepository<AdmissionActivity, Guid>>();
-			(await activities.GetListAsync(item => item.InquiryId == inquiry.Id))
-				.ShouldContain(item => item.ActivityType == "CounsellorAssigned" && item.MetadataJson!.Contains("Staff accepted the inquiry"));
-		});
 
 	private async Task<AdmissionOffering> CreateOptionalIntakeOfferingAsync(bool legacyPolicy = false)
 	{

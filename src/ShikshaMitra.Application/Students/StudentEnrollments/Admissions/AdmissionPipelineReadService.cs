@@ -36,8 +36,6 @@ public class AdmissionPipelineReadService(
 	{
 		var query = await GetQueryAsync(input);
 		var myCases = input.MyCases ?? await DefaultMyCasesAsync();
-		if (myCases) query = query.Where(row => CurrentUser.Id.HasValue && row.AssignedCounsellorId == CurrentUser.Id);
-		if (input.AssignedCounsellorId.HasValue) query = query.Where(row => row.AssignedCounsellorId == input.AssignedCounsellorId);
 		if (input.Status.HasValue) query = query.Where(row => row.Status == input.Status);
 		if (!string.IsNullOrWhiteSpace(input.CurrentStageCode)) query = query.Where(row => row.CurrentStageCode == input.CurrentStageCode);
 		if (!string.IsNullOrWhiteSpace(input.CurrentStageSearch)) query = query.Where(row => row.CurrentStageName != null && row.CurrentStageName.Contains(input.CurrentStageSearch));
@@ -110,13 +108,11 @@ public class AdmissionPipelineReadService(
 	{
 		// Academic filters apply, but search, owner, stage and pagination never truncate available choices.
 		var query = await GetQueryAsync(input);
-		var ids = await AsyncExecuter.ToListAsync(query.Where(row => row.AssignedCounsellorId.HasValue).Select(row => row.AssignedCounsellorId!.Value).Distinct());
-		var names = await people.GetNamesAsync(ids);
 		var stageOptions = await AsyncExecuter.ToListAsync(query.Where(row => row.CurrentStageCode != null).Select(row => new AdmissionPipelineStageOptionDto { Code = row.CurrentStageCode!, Name = row.CurrentStageName! }).Distinct());
 		return new()
 		{
 			CurrentUserId = CurrentUser.Id, DefaultMyCases = await DefaultMyCasesAsync(),
-			Counsellors = names.OrderBy(item => item.Value).Select(item => new AdmissionInquiryCounsellorDto { Id = item.Key, Name = item.Value, UserName = item.Value }).ToList(),
+			Counsellors = [],
 			Stages = stageOptions.GroupBy(item => item.Code, StringComparer.Ordinal).Select(group => new AdmissionPipelineStageOptionDto
 			{
 				Code = group.Key,
@@ -125,25 +121,9 @@ public class AdmissionPipelineReadService(
 		};
 	}
 
-	private async Task<bool> DefaultMyCasesAsync()
+	private Task<bool> DefaultMyCasesAsync()
 	{
-		if (!CurrentUser.Id.HasValue) return true;
-		if ((await userScopes.GetCurrentUserScopeAsync()).IsAdmin) return false;
-		var offerings = await access.GetScopedOfferingsAsync();
-		var profileQuery = await profiles.GetQueryableAsync();
-		var configurations = await AsyncExecuter.ToListAsync(profileQuery.Where(profile => profile.Kind == AdmissionIntakeProfileKind.CounsellorAssignment && offerings.Any(offering => offering.CounsellorAssignmentProfileId == profile.Id)).Select(profile => profile.ConfigurationJson));
-		foreach (var json in configurations)
-		{
-			try
-			{
-				var rules = JsonSerializer.Deserialize<AdmissionCounsellorAssignmentRules>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-				if (rules == null) continue;
-				rules.Validate();
-				if (rules.FallbackManagerUserId == CurrentUser.Id) return false;
-			}
-			catch (Exception exception) when (exception is JsonException or ArgumentException) { /* Invalid configuration never widens the default queue. */ }
-		}
-		return true;
+		return Task.FromResult(false);
 	}
 
 	private async Task<IQueryable<AdmissionPipelineItemDto>> GetQueryAsync(AdmissionPipelineListInput input)

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using ShikshaMitra.Domain.Finance.Policies;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -63,6 +64,7 @@ public partial class AdmissionFeeCollectionAppService(
 		{
 			result.StructureName = current.StructureName; result.StructureRevision = current.RevisionNumber;
 			var rows = await dues.GetListAsync(d => d.FinanceFeeAccountId == account!.Id);
+			result.Proration = ProrationResult(current, rows);
 			var tx = await transactions.GetListAsync(t => t.FinanceFeeAccountId == account!.Id ||
 				t.FinanceFeeAccountId == null && account!.StudentId.HasValue && t.StudentId == account.StudentId && t.AcademicYearId == account.AcademicYearId);
 			result.HasPaymentEvidence = result.HasPaymentEvidence || tx.Count > 0 || rows.Any(d => d.PaidAmount > 0m || d.RefundedAmount > 0m);
@@ -114,7 +116,15 @@ public partial class AdmissionFeeCollectionAppService(
 			if (result.VariableFeeHeads.Count > 0) result.Blocker = "Enter the initial amounts for the Finance-configured variable fees.";
 			else
 			{
-				var calculated = await assignmentCalculator.PrepareAdmissionAsync(source, account?.Id ?? GuidGenerator.Create(), []);
+				AdmissionAssignmentPreparation calculated;
+				try { calculated = await assignmentCalculator.PrepareAdmissionAsync(source, account?.Id ?? GuidGenerator.Create(), []); }
+				catch (BusinessException error) when (error.Code == ProrationPolicyErrorCodes.JoiningDateRequired)
+				{
+					result.CanCollect = false;
+					result.Blocker = "Complete the actual joining date in the registration form before preparing fees.";
+					return result;
+				}
+				result.Proration = ProrationResult(calculated.Preview, calculated.Dues);
 				result.StructureName = calculated.Preview.StructureName; result.StructureRevision = calculated.Preview.RevisionNumber;
 				result.TotalAmount = result.OutstandingAmount = calculated.Preview.ProratedTotal;
 				result.FeeHeads = calculated.Preview.Heads.Where(h => h.Included).Select(h => new AdmissionCollectionFeeHeadDto
@@ -135,7 +145,26 @@ public partial class AdmissionFeeCollectionAppService(
 
 	internal static bool SelectionMatches(AdmissionFinanceContext source, StudentFeeAssignmentPreviewDto saved) =>
 		source.StructureId == saved.StructureId && source.StructureRevision == saved.RevisionNumber &&
+		(!saved.RegistrationJoiningDate.HasValue && !saved.ProrationPolicyVersionId.HasValue || source.JoiningDate?.Date == saved.RegistrationJoiningDate?.Date) &&
 		source.OptionalHeadIds.Order().SequenceEqual(saved.Heads.Where(h => h.Included && h.IsOptional).Select(h => h.FeeHeadId).Order());
+
+	internal static FeeProrationResultDto? ProrationResult(StudentFeeAssignmentPreviewDto saved, System.Collections.Generic.IReadOnlyList<DueFee> rows)
+	{
+		var policy = saved.Policies.FirstOrDefault(x => x.Family == "proration");
+		var withdrawal = rows.Sum(x => x.GetWithdrawalProrationCredit());
+		if (policy == null || saved.ReductionTotal <= 0m && withdrawal <= 0m) return null;
+		return new()
+		{
+			PolicyId = policy.PolicyId, PolicyVersionId = policy.VersionId,
+			PolicyName = policy.Name, PolicyVersion = policy.Version, JoiningDate = saved.RegistrationJoiningDate ?? saved.ChargeStartDate,
+			ChargeStartDate = saved.ChargeStartDate, ChargeEndDate = saved.ChargeEndDate,
+			ScheduledAmount = saved.ScheduledTotal, AdmissionReduction = saved.ReductionTotal, WithdrawalCredit = withdrawal,
+			PayableAmount = rows.Sum(x => Math.Max(0m, x.OriginalAmount - x.NetAmount)),
+			ExcessPaidAmount = rows.Sum(x => x.OverpaymentAmount),
+			Explanations = rows.Where(x => x.ScheduledAmount != x.OriginalAmount || x.GetWithdrawalProrationCredit() > 0m)
+				.Select(x => x.GetWithdrawalProrationCredit() > 0m ? x.GetWithdrawalProrationExplanation() : x.ProrationExplanation ?? string.Empty).Distinct().ToList()
+		};
+	}
 
 	private async Task<List<AssignmentHeadDto>> VariableHeadsAsync(AdmissionFinanceContext source)
 	{

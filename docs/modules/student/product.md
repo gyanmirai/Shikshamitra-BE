@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-16
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,23 @@ audience: humans-and-agents
 # Understand Student Enrollment Admissions behavior
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
+
+## Add or update an app-login email during onboarding
+
+Authorized staff can add or update the selected Student, Father or Mother email directly from App Login, including when Admission did not capture it.
+Before account creation, the narrow edit saves the current profile and explicit Student-recipient provenance without sending credentials or granting portal access.
+Manual Send Credentials retains saved account-access policy, activation/readiness checks, identity permissions, cooldown and durable delivery rules.
+An email already used by an existing account never silently merges families or grants that account access to another child.
+For an already-linked account, an authorized identity updater requests owner verification of the new email; the old login remains unchanged until that verification succeeds.
+A shared parent change requires confirmation and applies to all existing child links atomically, keeping the same identity, password and relationships.
+Pending guardian-access reviews, out-of-scope children, stale profiles, changed links, invalid/expired tokens and email collisions block the change rather than partially rewriting profiles.
+Historical generic-guardian accounts retain their existing reviewed repair path; the new staff choices remain Student, Father and Mother.
+
+## Automatic application numbers
+
+Schools may configure a common application-number format across all admission offerings. Allocation occurs at the existing application lifecycle entry point, including Inquiry handoff, RTE/Management/Staff registration and returning students. The offering's Admission Period identifies the academic year; the server clock is used only for explicit calendar-year formats. Schools without a saved rule retain `APP-YYYY-000001` generation.
+
+Rule changes are immutable creation-audited revisions for future allocations. Previously issued application numbers remain unchanged across Pipeline, Applications and Onboarding. Counters are tenant/scope-specific and serialized with PostgreSQL transaction-level advisory locks; issuing an application and its number participates in the same transaction. Replay returns the existing application before allocation. Default-to-custom format changes carry the legacy sequence forward even when the prefix changes. Calendar reset uses that calendar's legacy counter, continuous uses the highest legacy counter, and academic reset uses issued default numbers in the selected academic year. Matching historic numbers (including soft-deleted applications), the existing custom counter and the configured starting minimum prevent rewinds. Starting number and reset policy lock after first custom issuance. Previews use the same calculation and show the actual next available number without saving or reserving it; concurrent registrations can change the next number. The existing tenant/application-number unique index remains authoritative.
 
 ## Staff data scope
 
@@ -43,7 +60,7 @@ Admission event instants use UTC and timezone-aware persistence parameters. Prev
 | Delivery | A durable tenant-owned request tracks Pending/Sent/Failed/Cancelled; dispatch rechecks current actor grants/scope, owner mailbox, links, settings and readiness. A new passwordless account receives a random initial password and owner setup link; temporary secrets are encrypted until transport acceptance or cancellation. Staff responses never return secrets. Existing identities keep their password; repeats use owner recovery. |
 | Account and delivery settings | Not needed disables new preparation/delivery; Optional permits it without blocking completion; Required gates completion on the account and required delivery work. Legacy false/true retains Not needed/Required semantics. Account preparation and delivery eligibility remain separate. Explicitly selecting automatic delivery enables email only for enabled account types; manual is the default and leaves sending to staff. Existing saved automatic choices remain intact. Optional accounts may be requested after completion without reopening the case, and requested delivery remains visible in Credentials until sent. |
 | Automatic recipients | Automatic mode can prepare enabled accounts with eligible saved contact details and existing identity grants. New App Login rules with multiple saved parents require staff to select the recipient through Send Credentials. Missing optional contact details do not hold setup open. No new mailbox-verification bypass is introduced. |
-| One-click staff delivery | Send Credentials authorizes only the current saved Student or legal parent recipient, prepares or safely reuses its account and records durable intent in one transaction. Explicit manual intent may send with automatic email Off without changing saved flags, required-account policy, readiness, timing or identity grants. An explicit send is not fabricated mailbox verification. Missing or changed email requires Records review, and guardian-fallback Student email is not eligible. Completion-timed requests wait without generating a password until non-email requirements complete. |
+| One-click staff delivery | Send Credentials authorizes only the current saved Student or legal parent recipient, prepares or safely reuses its account and records durable intent in one transaction. Explicit manual intent may send with automatic email Off without changing saved flags, required-account policy, readiness, timing or identity grants. An explicit send is not fabricated mailbox verification. The scoped App Login command saves missing/unlinked email; a linked login changes only after owner verification. Wider contact/owner repairs retain Records review, and guardian-fallback Student email is not eligible. Completion-timed requests wait without generating a password until non-email requirements complete. |
 | Exit | Applied Withdraw/Transfer/Graduate transitions set Left and revoke only that child's portal links. Current portal reads and token renewal deny departed children; shared Parent identities retain access to other children. Reviewed corrections restore only recorded links that still match the owner profile and exclusive role. |
 | Verification boundary | Sent means the configured email sender accepted delivery. Inbox arrival and the separately maintained mobile-app UI require their own acceptance checks. |
 
@@ -52,7 +69,9 @@ Admission event instants use UTC and timezone-aware persistence parameters. Prev
 | Area | Implemented rule |
 |---|---|
 | Observation | The register offers Full day, Half day, Absent and Pending. The stored observation is Present or Absent, with a HalfDay flag for Half day; Pending means unmarked. |
-| Membership | Formal enrollment and a school-confirmed AttendanceStartDate determine historical eligibility. For the current school date, an active student in the selected class may be marked before an imported attendance start date is confirmed. Dated placement/activation/exit history prevents current class changes from rewriting the historical roster. Fee or portal provisioning does not independently block operational attendance. |
+| Daily visibility | On both current and past dates, Daily Attendance and its work queue show only students eligible for the current Active Student Directory, within the selected dated class and staff scope. Inactive, departed or no-longer-directory-eligible students cannot be marked through Daily Attendance. This filter does not activate or repair Onboarding records. |
+| Membership | Formal enrollment and a school-confirmed AttendanceStartDate determine dated eligibility within that visible population. For the current school date, an active student in the selected class may be marked before an imported attendance start date is confirmed. Dated placement/activation/exit history remains authoritative for historical eligibility and saved attendance. Fee or portal provisioning does not independently block operational attendance. |
+| Saved history | Removing a student from Daily visibility preserves saved Present/Absent observations, details, credits and enrollment revisions for Reports/History and existing audited corrections. Saving or resubmitting visible students leaves hidden saved observations untouched. Hidden Pending drafts do not block visible submission. |
 | School days | Existing published Academic Calendar owns working days, holidays, vacations and emergency closures. The current school date remains expected when calendar or working-day setup is missing, and its unsnapshotted reports remain provisional. Other dates with missing setup and ambiguous calendars fail closed; an explicit holiday is a confirmed exclusion. |
 | Settings | Staff manage student leave types by name, color and active status. The former attendance policy and individual-schedule configuration is retired; runtime uses fixed defaults while submitted attendance retains its stored snapshots. |
 | Save and submit | Partial drafts are allowed. Submit checks all eligible students, including persisted draft rows, and pins policy/credits/membership/roll snapshots. No unmarked row may be submitted. |
@@ -244,12 +263,16 @@ Soft deletion preserves historical references and uniqueness semantics.
 
 Inquiry stages can opt into version 1 of the `inquiry` policy inside `ConfigurationJson`.
 Missing configuration or `enabled: false` preserves the existing Basic inquiry and application-start behavior.
-Managed Inquiry constrains allowed sources and assigns offering-scoped active counsellors manually or round robin.
+Intake setup, automatic/manual counsellor assignment and Onboarding case ownership are retired. New cases carry no designated owner; authorized staff act within their existing tenant and academic scope. Legacy assignment columns and audit records remain intact.
 All intake profiles, workflow policies, and persisted snapshot reads use standard behavior: contact and qualification do not gate application start, source detail is optional for every source, and policy-level guardian email and applicant date-of-birth requirements are disabled.
 Stored historical JSON and entered data are preserved; published form requirements remain authoritative.
 Automatic duplicate detection remains enabled; a separate family on an actual current-cycle duplicate requires a reason, while an eligible sibling can link to its existing family.
+The explicit sibling flow supports Father/Mother only and treats a matching saved parent email/mobile as a family suggestion, not proof of relationship or portal authorization.
+Staff confirms the existing family and source parent; a changed mobile with the same email is allowed after this confirmation without changing the shared parent's stored details.
+Each child retains a separate admission identity; generic historical family links and public submissions do not gain trusted sibling-account provenance.
+Current parent profiles take precedence over stale captured admission contact values; existing duplicate and finalization identity policies remain unchanged rather than treating a matching name/date of birth as conclusive identity.
 First-contact and qualification deadlines are snapshotted when the inquiry is created.
-Follow-ups retain assignment, purpose, due time, completion or cancellation state, actor, and audit timestamps.
+Follow-ups retain purpose, due time, completion/cancellation, actual actor and audit timestamps without requiring an assignee. Historical follow-up timing settings remain readable. New activity/event/transition writes capture staff ID and display name on the server; completed steps expose their recorded handler. Anonymous/system actions and missing historical names remain explicit.
 Inquiry staff can create a linked family communication for WhatsApp, SMS, or Email. The CRM records the campaign handoff in admission activity while the shared Communication module owns approval, consent, providers, delivery attempts, retries, and usage; no duplicate Admissions messaging store is introduced.
 
 Application Experience creates Inquiry and Registration forms. Correction requests reopen the submitted Registration form, and consent questions may be included in that form. Offering activation accepts only a published Inquiry form in the inquiry slot and a published Registration form in the application slot. Admission lifecycle content is stored as `Admissions lifecycle` Communication templates for inquiry acknowledgement, application receipt, missing documents, exam schedule, hall ticket, result, offer, payment reminder, and finalization. Communication remains the delivery owner.
@@ -294,11 +317,11 @@ Eligibility, Review, and Offer are retired Admission Stage types. New drafts can
 
 ## Managed Form stages
 
-Form defaults to managed Submission with rules with applicant Save Draft retained. Optional responsibility, deadlines, late submission, corrections and section verification use existing validators. Submission limits remain backend safeguards, not an editor field. Valid submissions advance when verification is not required; required section verification holds the stage until authorized staff complete it and Continue.
+Form defaults to managed Submission with rules with applicant Save Draft retained. Optional responsibility, deadlines, late submission and corrections use existing validators. Submission limits remain backend safeguards, not an editor field. Separate section verification is retired: new stage normalization clears its flags and effective runtime policy ignores legacy verification requirements. Valid submissions advance when configured; legacy manual-continuation settings still allow Continue after authoritative validation.
 
 ## Managed Payment stages
 
-Payment is Finance fee-structure confirmation. Candidates must be published and match the tenant and Offering academic-year/Board/Medium/Class context. Confirmation saves the versioned structure and mandatory/optional head snapshot with application concurrency and creates no Finance assignment, due, receipt or settlement. Completion requires a valid saved snapshot.
+Payment is a configurable Finance completion checkpoint. Candidates must be published and match the tenant and Offering academic-year/Board/Medium/Class context. Selection saves the versioned structure and mandatory/optional head snapshot with application concurrency and creates no Finance assignment, due, receipt or settlement. Its pinned version 1 completion policy defaults to confirmed partial payment with audited collection deferral enabled. Full payment means the entire selected class structure, including future installments, is settled by Finance; confirmed zero-payable clearance requires no artificial payment. Missing/unprepared data, pending verification and historical payment flags do not establish full settlement. Disabling collection deferral removes the capability and rejects direct deferral commands. Ordinary completion requires both a valid saved snapshot and the policy's Finance decision; allowed deferral retains the existing mandatory reason and handoff behavior. Finance module code and monetary contracts remain unchanged.
 
 Actual fee assignment and collection remain Finance-owned. Offering-linked Onboarding reads/selects/confirms the existing structure only. This confirmation is never a Paid status. Admission payer, purpose, independent amount, collection settings and financial transaction actions are removed from the supported stage.
 
@@ -318,7 +341,7 @@ One tenant-scoped pool owns reserved and confirmed counts for each Admission Off
 
 Managed Seat cannot be skipped. Confirmation is always an allowed completion outcome; waitlisted, released, or expired completion requires both policy permission and an explicit matching `seat.status` transition. Every mutation checks application, pool, and reservation concurrency, and repeats with the same idempotency key return the recorded result.
 
-The Form-stage definition must equal the Offering application form. Applications still pin the published definition and record immutable submission snapshots. Managed submit enforces visible required fields, deadline, and attempt limits. Automatic advancement occurs only when configured and no section verification remains. Staff verification and reasoned revocation are audited. A correction request reopens the same form and invalidates all earlier section verification; the applicant must resubmit within the remaining attempt limit. Normal completion cannot bypass unresolved Form blockers.
+The Form-stage definition must equal the Offering application form. Applications still pin the published definition and record immutable submission snapshots. Managed submit enforces visible required fields, deadline, and attempt limits. Automatic advancement occurs only when configured. Historical verification and reasoned revocation records remain auditable but do not gate current Form completion. A correction request reopens the same form; the applicant must resubmit within the remaining attempt limit. Normal completion cannot bypass unresolved Form blockers.
 ## Division roll-number batches
 
 Published Onboarding roll rules support Mixed, Boys First and Girls First grouping, first-name-first or surname-first names, and ascending/descending name, GR, admission-date or admission-number ordering.
@@ -328,8 +351,10 @@ The same ordering evaluator serves initial Onboarding, active Records and annual
 
 Each academic-year Class-Division starts independently at 1.
 Assign Missing reads the complete division on the server, preserves assigned numbers and appends after the persisted last-issued cursor; exits and cancelled reservations do not free that cursor.
+An optional bounded onboarding-case target list limits assignment to eligible unassigned cases on the chosen page; omitted targets retain full-division behavior.
+Published ordering, full-division reservations, freshness checks and active-enrollment approval remain authoritative for either scope.
 The upgrade cursor baseline uses retained enrollment, onboarding, renewal, transition and placement audit history; records deleted before this release cannot be reconstructed.
-Only an explicit administrator Renumber Division resets the current sequence, requires a reason, and respects individual/group identifier locks.
+Only an explicit authorized Renumber Division resets the current sequence, requires a reason, and respects individual/group identifier locks.
 Existing Records placement approval applies once to a mixed or active-enrollment batch, with independent current-role approvers and atomic application after approval.
 Renumbering uses the application day's school-local date and does not rewrite submitted attendance, issued documents or historical enrollment facts.
 Pending return/promotion reservations and unresolved provisioning block unsafe renumbering.

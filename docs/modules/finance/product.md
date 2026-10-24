@@ -3,7 +3,7 @@ module: finance
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-05
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,8 @@ audience: humans-and-agents
 
 TL;DR: Finance protects fee accuracy, payment history, concessions, refunds, adjustments, and account reconciliation.
 Treat incorrect Finance reports or due balances as production defects.
+
+Admission/Onboarding proration uses the Finance academic-year default and saved Registration actual joining date. Withdrawal uses its actual effective leaving date and the assignment's pinned policy. Student modules display results without configuring rules or calculating balances. See [the operational flow](./workflows.md#registration-joining-date-and-withdrawal-proration) for non-cash credits, corrections and refund boundaries.
 
 ## Product areas
 

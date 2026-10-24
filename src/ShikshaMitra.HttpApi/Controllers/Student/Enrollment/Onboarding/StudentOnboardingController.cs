@@ -65,6 +65,22 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 	public async Task<Result<StudentCredentialsWorkspaceDto>> SendCredentialsAsync(Guid id, SendStudentCredentialsDto input) =>
 		Result.Success(await service.SendCredentialsAsync(id, input));
 
+	[HttpPut("{id:guid}/credentials/email")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	public async Task<Result<StudentCredentialsWorkspaceDto>> UpdateCredentialsEmailAsync(Guid id, UpdateStudentCredentialsEmailDto input) =>
+		Result.Success(await service.UpdateCredentialsEmailAsync(id, input));
+
+	[HttpPost("{id:guid}/credentials/retry-parent-setup")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	public async Task<Result<StudentCredentialsWorkspaceDto>> RetryParentSetupAsync(Guid id, RetryStudentParentSetupDto input) =>
+		Result.Success(await service.RetryParentSetupAsync(id, input));
+
+	[HttpPost("{id:guid}/credentials/link-parent")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	[Authorize(Volo.Abp.Identity.IdentityPermissions.Users.Update)]
+	public async Task<Result<StudentCredentialsWorkspaceDto>> LinkParentAsync(Guid id, LinkStudentSiblingParentDto input) =>
+		Result.Success(await service.LinkParentAsync(id, input));
+
 	// Case-only policy correction; never provisions accounts or sends an email.
 	[HttpPost("{id:guid}/guardian-credential-email/enable")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]

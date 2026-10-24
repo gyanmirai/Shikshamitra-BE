@@ -77,8 +77,7 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 			await guardianRepository.UpdateAsync(guardian, false);
 		}
 		await applicantRepository.UpdateAsync(applicant, false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"ApplicantProfileUpdated", "Applicant identity and guardian contact updated", id, null, null), true);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicantProfileUpdated", "Applicant identity and guardian contact updated", id, null, null), true);
 		return Map(applicant);
 	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.View)]
@@ -86,12 +85,13 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 	{
 		var query = await applicantScope.ApplyActivityScopeAsync(await activityRepository.GetQueryableAsync(), id);
 		var rows = await AsyncExecuter.ToListAsync(query.Where(x => x.ApplicantId == id)
-			.OrderByDescending(x => x.OccurredAt).Take(200));
+			.OrderByDescending(x => x.OccurredAt));
+		var actors = await LazyServiceProvider.LazyGetRequiredService<StudentJourneyActorReader>().ReadAsync(rows.Select(item => item.CreatorId));
 		return rows.Select(x => new AdmissionActivityDto
 		{
 			Id = x.Id, ApplicantId = x.ApplicantId, ApplicationId = x.ApplicationId,
 			InquiryId = x.InquiryId, ActivityType = x.ActivityType, Description = x.Description,
-			OccurredAt = x.OccurredAt, CreatorId = x.CreatorId
+			OccurredAt = x.OccurredAt, CreatorId = x.CreatorId, ActorName = StudentJourneyActorMetadata.Name(x.MetadataJson) ?? StudentJourneyActorReader.Name(actors, x.CreatorId)
 		}).ToList();
 	}
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesView)]
@@ -101,8 +101,8 @@ public class AdmissionApplicantAppService(IRepository<AdmissionApplicant, Guid> 
 		return (await noteRepository.GetListAsync(x => x.ApplicantId == id && x.TenantId == CurrentTenant.Id))
 			.OrderByDescending(x => x.CreationTime).Select(Map).ToList();
 	}
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesCreate)] public async Task<AdmissionNoteDto> CreateNoteAsync(Guid id, CreateAdmissionNoteDto input) { await GetApplicantAsync(id); var note = new AdmissionNote(GuidGenerator.Create(), CurrentTenant.Id, id, input.Text); await noteRepository.InsertAsync(note, false); await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "NoteAdded", "Applicant note added", id, null, null), true); return Map(note); }
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesEdit)] public async Task<AdmissionNoteDto> UpdateNoteAsync(Guid id, Guid noteId, UpdateAdmissionNoteDto input) { await GetApplicantAsync(id); var note = await noteRepository.FindAsync(x => x.Id == noteId && x.ApplicantId == id) ?? throw new EntityNotFoundException(typeof(AdmissionNote), noteId); note.UpdateText(input.Text); await noteRepository.UpdateAsync(note, false); await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, "NoteModified", "Applicant note modified", id), true); return Map(note); }
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesCreate)] public async Task<AdmissionNoteDto> CreateNoteAsync(Guid id, CreateAdmissionNoteDto input) { await GetApplicantAsync(id); var note = new AdmissionNote(GuidGenerator.Create(), CurrentTenant.Id, id, input.Text); await noteRepository.InsertAsync(note, false); await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("NoteAdded", "Applicant note added", id, null, null), true); return Map(note); }
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplicants.NotesEdit)] public async Task<AdmissionNoteDto> UpdateNoteAsync(Guid id, Guid noteId, UpdateAdmissionNoteDto input) { await GetApplicantAsync(id); var note = await noteRepository.FindAsync(x => x.Id == noteId && x.ApplicantId == id) ?? throw new EntityNotFoundException(typeof(AdmissionNote), noteId); note.UpdateText(input.Text); await noteRepository.UpdateAsync(note, false); await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("NoteModified", "Applicant note modified", id), true); return Map(note); }
 	private Task<AdmissionApplicant> GetApplicantAsync(Guid id) => applicantScope.GetAsync(id);
 	private static AdmissionApplicantDto Map(AdmissionApplicant x) => new() { Id = x.Id, FamilyId = x.FamilyId, FirstName = x.FirstName, MiddleName = x.MiddleName, LastName = x.LastName, DateOfBirth = x.DateOfBirth, Gender = x.Gender, AddressLine1 = x.AddressLine1, AddressLine2 = x.AddressLine2, City = x.City, State = x.State, Country = x.Country, PostalCode = x.PostalCode, Status = x.Status, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId };
 	private static AdmissionGuardianDto Map(AdmissionGuardian x) => new() { Id = x.Id, FamilyId = x.FamilyId, FirstName = x.FirstName, LastName = x.LastName, Mobile = x.Mobile, Email = x.Email, Relationship = x.Relationship, IsPrimaryContact = x.IsPrimaryContact, CreationTime = x.CreationTime, CreatorId = x.CreatorId, LastModificationTime = x.LastModificationTime, LastModifierId = x.LastModifierId };

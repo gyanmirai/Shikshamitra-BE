@@ -31,22 +31,21 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 		if (year.TenantId != CurrentTenant.Id || date < year.StartDate.Date || date > year.EndDate.Date)
 			throw new BusinessException(AttendanceOperationErrorCodes.DateOutsideAcademicYear);
 		var day = await days.FindByDateAndDivisionAsync(yearId, standardId, divisionId, date, includeEntries: true);
+		var savedIds = day?.Entries.Where(entry => entry.EnrollmentId.HasValue && HasRecordedAttendance(entry))
+			.Select(entry => entry.EnrollmentId!.Value).ToHashSet() ?? [];
 		var members = await LoadMembersAsync(yearId, divisionId);
 		var candidates = members.Where(e => IsRosterCandidate(e, standardId, divisionId, date,
-			day?.IsSubmitted == true && day.Entries.Any(entry => entry.EnrollmentId == e.Id && entry.ExpectedAtSubmission == true))).ToList();
+			savedIds.Contains(e.Id) || day?.IsSubmitted == true && day.Entries.Any(entry => entry.EnrollmentId == e.Id && entry.ExpectedAtSubmission == true))).ToList();
 		var context = await applicability.LoadAsync(yearId, standardId, divisionId, date, date, candidates.Select(e => e.Id).ToArray());
 		var policy = await policies.ResolveAsync(yearId, date, context.Scope);
 		var options = day?.PolicySnapshotJson != null ? JsonSerializer.Deserialize<AttendancePolicyOptions>(day.PolicySnapshotJson)! : policy.Options;
 		var currentSchoolDate = AttendanceSchoolDate.Today(options, Clock.Now);
-		if (date == currentSchoolDate)
-		{
-			var population = await directory.GetPopulationAsync(new StudentDirectoryRequest {
-				AcademicYearId = yearId, StandardId = standardId, DivisionId = divisionId, Population = "Active" });
-			var visibleIds = (await AsyncExecuter.ToListAsync(population.Select(s => s.Id))).ToHashSet();
-			// Submitted facts remain reviewable when a student leaves during the school day.
-			candidates = candidates.Where(e => visibleIds.Contains(e.StudentId) ||
-				day?.IsSubmitted == true && day.Entries.Any(entry => entry.EnrollmentId == e.Id && entry.ExpectedAtSubmission == true)).ToList();
-		}
+		var population = await directory.GetPopulationAsync(new StudentDirectoryRequest {
+			AcademicYearId = yearId, StandardId = standardId, DivisionId = divisionId, Population = "Active" });
+		var visibleIds = (await AsyncExecuter.ToListAsync(population.Select(s => s.Id))).ToHashSet();
+		// Daily visibility follows the Active Student List for every date. Keep recorded
+		// facts internally for historical corrections, credit validation and roster revisions.
+		candidates = candidates.Where(e => visibleIds.Contains(e.StudentId) || savedIds.Contains(e.Id)).ToList();
 		var studentIds = candidates.Select(e => e.StudentId).ToArray();
 		var identities = await AsyncExecuter.ToListAsync((await students.GetQueryableWithoutAutoIncludesAsync())
 			.Where(s => s.TenantId == CurrentTenant.Id && Enumerable.Contains(studentIds, s.Id)));
@@ -73,7 +72,8 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 			var matches = approvedLeaves.Where(l => l.StudentId == enrollment.StudentId).ToList();
 			if (matches.Count > 1) throw new BusinessException(AttendanceOperationErrorCodes.OverlappingApprovedLeave);
 			var entry = day?.Entries.SingleOrDefault(e => e.StudentId == identity.Id);
-			var snapshotExpected = day?.IsSubmitted == true && entry?.ExpectedAtSubmission == true;
+			var snapshotExpected = entry?.ExpectedAtSubmission == true &&
+				(day?.IsSubmitted == true || !visibleIds.Contains(identity.Id) && savedIds.Contains(enrollment.Id));
 			var alreadyRecorded = otherRecorded.Any(e => e.EnrollmentId == enrollment.Id);
 			rows.Add(new(enrollment, identity, snapshotExpected ? entry!.HistoricalRollNo : placement?.RollNumber ?? enrollment.RollNumber,
 				IsExpected(enrollment, standardId, divisionId, date, currentSchoolDate, snapshotExpected, alreadyRecorded, expected.IsExpected),
@@ -82,8 +82,11 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 		}
 		var revision = RevisionFor(yearId, standardId, divisionId, date, options, rows.Select(r =>
 			new AttendanceRosterRevisionRow(r.Enrollment, r.Expected, r.ScheduleLabel, r.Leave)));
-		return new(yearId, standardId, divisionId, date, day, rows.OrderBy(r => r.RollNumber).ThenBy(r => r.Student.FirstName).ToList(),
-			options, revision, day?.IsSubmitted == true ? new AttendanceApplicabilityResult(true, "Submitted school day") : context.For(Guid.Empty, date, currentSchoolDate));
+		var orderedRows = rows.OrderBy(r => r.RollNumber).ThenBy(r => r.Student.FirstName).ToList();
+		return new(yearId, standardId, divisionId, date, day, orderedRows,
+			options, revision, day?.IsSubmitted == true ? new AttendanceApplicabilityResult(true, "Submitted school day") : context.For(Guid.Empty, date, currentSchoolDate)) {
+			DailyMembers = orderedRows.Where(r => visibleIds.Contains(r.Student.Id)).ToList()
+		};
 	}
 
 	public async Task<List<StudentEnrollment>> LoadMembersAsync(Guid yearId, Guid divisionId)
@@ -104,6 +107,9 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 			!enrollment.AttendanceStartDate.HasValue && enrollment.StandardId == standardId && enrollment.DivisionId == divisionId && enrollment.IsActive;
 	}
 
+	internal static bool HasRecordedAttendance(AttendanceEntry entry) => entry.ExpectedAtSubmission == true &&
+		entry.Status is AttendanceStatus.Present or AttendanceStatus.Absent;
+
 	internal static bool IsExpected(StudentEnrollment enrollment, Guid standardId, Guid divisionId, DateTime date, DateTime schoolToday,
 		bool submittedMember, bool alreadyRecorded, bool calendarExpected) => !alreadyRecorded && (submittedMember ||
 		(enrollment.AttendanceStartDate.HasValue && enrollment.AttendanceStartDate.Value.Date <= date ||
@@ -118,7 +124,10 @@ public class AttendanceRosterService(IRepository<StudentEnrollment, Guid> enroll
 }
 
 public sealed record AttendanceRoster(Guid AcademicYearId, Guid StandardId, Guid DivisionId, DateTime Date, AttendanceDay? Day,
-	List<AttendanceRosterMember> Members, AttendancePolicyOptions Options, string Revision, AttendanceApplicabilityResult SchoolDay);
+	List<AttendanceRosterMember> Members, AttendancePolicyOptions Options, string Revision, AttendanceApplicabilityResult SchoolDay)
+{
+	public IReadOnlyList<AttendanceRosterMember> DailyMembers { get; init; } = Members;
+}
 public sealed record AttendanceRosterMember(StudentEnrollment Enrollment, Student Student, int? RollNumber, bool Expected,
 	string? Reason, string? ScheduleLabel, AttendanceApprovedLeave? Leave, AttendanceEntry? Entry);
 

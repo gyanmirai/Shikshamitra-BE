@@ -77,8 +77,6 @@ public partial class StudentOnboardingAppService(
 		if (input.DivisionId.HasValue) query = query.Where(item => item.DivisionId == input.DivisionId.Value);
 		if (input.StandardIds.Count > 0) query = query.Where(item => Enumerable.Contains(input.StandardIds, item.IntendedStandardId));
 		if (input.DivisionIds.Count > 0) query = query.Where(item => item.DivisionId.HasValue && Enumerable.Contains(input.DivisionIds, item.DivisionId.Value));
-		if (input.AssignedToUserId.HasValue) query = query.Where(item => item.AssignedToUserId == input.AssignedToUserId.Value);
-		if (input.UnassignedOnly == true) query = query.Where(item => !item.AssignedToUserId.HasValue);
 		if (input.OverdueOnly == true)
 			query = query.Where(item => item.Status != StudentOnboardingStatus.Completed &&
 				item.Status != StudentOnboardingStatus.Cancelled && item.DueAt < DateTime.UtcNow);
@@ -147,7 +145,8 @@ public partial class StudentOnboardingAppService(
 				.Where(item => academicYearIds.Contains(item.Id)).Select(item => new { item.Id, item.Name }));
 		return new StudentOnboardingFilterOptionsDto
 		{
-            CanUnlockIdentifiers = await LazyServiceProvider.LazyGetRequiredService<Volo.Abp.Authorization.Permissions.IPermissionChecker>().IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair),
+            CanUnlockIdentifiers = CurrentUser.Id.HasValue && (await userScopeService.GetUserScopeAsync(CurrentUser.Id.Value)).IsAdmin &&
+                await LazyServiceProvider.LazyGetRequiredService<Volo.Abp.Authorization.Permissions.IPermissionChecker>().IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Repair),
 			AcademicYears = academicYears.OrderByDescending(item => item.Name)
 				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name }).ToList(),
 			Boards = boards.OrderBy(item => item.Type)
@@ -262,6 +261,7 @@ public partial class StudentOnboardingAppService(
 		EnsureConcurrency(onboardingCase, concurrencyStamp);
 		if (onboardingCase.StudentEnrollmentId.HasValue)
 		{
+			await LinkSiblingParentAsync(onboardingCase);
 			await PrepareAutomaticPortalAccountsAsync(onboardingCase);
 			await RefreshProvisioningAsync(onboardingCase);
 			return await MapCaseAsync(onboardingCase, true);
@@ -277,17 +277,9 @@ public partial class StudentOnboardingAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
-	public async Task<StudentOnboardingCaseDto> AssignOwnerAsync(Guid id, AssignStudentOnboardingOwnerDto input)
+	public Task<StudentOnboardingCaseDto> AssignOwnerAsync(Guid id, AssignStudentOnboardingOwnerDto input)
 	{
-		var onboardingCase = await GetCaseAsync(id);
-		EnsureConcurrency(onboardingCase, input.ConcurrencyStamp);
-		if (input.UserId.HasValue && await identityUserRepository.FindAsync(input.UserId.Value) == null)
-			throw new BusinessException(StudentOnboardingErrorCodes.OwnerInvalid);
-		onboardingCase.AssignOwner(input.UserId);
-		await AddEventAsync(id, "OwnerChanged", input.UserId.HasValue ? "Onboarding owner assigned." : "Onboarding owner cleared.");
-		await caseRepository.UpdateAsync(onboardingCase, false);
-		await CurrentUnitOfWork!.SaveChangesAsync();
-		return await MapCaseAsync(onboardingCase, true);
+		throw new Volo.Abp.BusinessException("Admissions.StaffAssignmentRetired", "Staff handling is recorded automatically in the activity history.");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
@@ -661,6 +653,7 @@ public partial class StudentOnboardingAppService(
         {
             using var preparation = unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
             var item = await GetCaseAsync(id);
+            await LinkSiblingParentAsync(item);
             await PrepareAutomaticPortalAccountsAsync(item);
             await QueueAutomaticCredentialEmailsAsync(item);
             await RefreshProvisioningAsync(item);
@@ -693,6 +686,7 @@ public partial class StudentOnboardingAppService(
 		var onboardingCase = await GetCaseAsync(id);
 		if (onboardingCase.StudentEnrollmentId.HasValue)
 		{
+			await PrepareSiblingParentSelectionAsync(onboardingCase, input.SiblingParentSelection);
 			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.IAdmissionFinanceIntegration>()
 				.BindActivatedStudentAsync(onboardingCase.ApplicationId, onboardingCase.StudentId, onboardingCase.StudentEnrollmentId.Value);
 			await CurrentUnitOfWork!.SaveChangesAsync();
@@ -701,6 +695,7 @@ public partial class StudentOnboardingAppService(
 		var reviewedReturn = ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(onboardingCase).HasValue;
 		if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(onboardingCase);
 		EnsureConcurrency(onboardingCase, input.ConcurrencyStamp);
+		await PrepareSiblingParentSelectionAsync(onboardingCase, input.SiblingParentSelection);
 		onboardingCase.BeginActivation(input.IdempotencyKey);
 		var now = DateTime.UtcNow;
 		var steps = await stepRepository.GetListAsync(item => item.OnboardingCaseId == id);
@@ -782,8 +777,7 @@ public partial class StudentOnboardingAppService(
 			var reason = GetSafeActivationFailureReason(exception);
 			onboardingCase.RequireAttention(reason);
 			await caseRepository.UpdateAsync(onboardingCase, false);
-			await eventRepository.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id,
-				id, "ActivationFailed", reason), false);
+			await eventRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyAuditWriter>().CreateOnboardingEvent(id, "ActivationFailed", reason), false);
 		}
 		await repairUnitOfWork.CompleteAsync();
 	}
@@ -1090,8 +1084,7 @@ public partial class StudentOnboardingAppService(
 			enrollment.LinkOnboardingCase(onboardingCase.Id);
 			await applicationRepository.UpdateAsync(application, false);
 			await enrollmentRepository.UpdateAsync(enrollment, false);
-			await eventRepository.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id,
-				onboardingCase.Id, "HistoricalBackfill",
+			await eventRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyAuditWriter>().CreateOnboardingEvent(onboardingCase.Id, "HistoricalBackfill",
 				"Imported from a verified legacy application and StudentEnrollment link; historical checklist evidence was not fabricated."), false);
 			result.Backfilled++;
 		}
@@ -1365,6 +1358,7 @@ public partial class StudentOnboardingAppService(
 		var events = includeEvents
 			? await eventRepository.GetListAsync(item => item.OnboardingCaseId == onboardingCase.Id)
 			: [];
+		var actorNames = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyActorReader>().ReadAsync(events.Select(item => item.CreatorId).Concat(steps.Select(item => item.CompletedByUserId)));
 		var feeSelection = application?.GetFeeSelection();
 		var feeConfirmed = application != null && await admissionFeeSelectionReader.IsConfirmedAsync(application);
 		// Readiness is derived from current evidence even for existing cases, without
@@ -1437,11 +1431,8 @@ public partial class StudentOnboardingAppService(
 			IntendedStandardId = onboardingCase.IntendedStandardId,
 			IntendedStandardName = standard?.Name ?? string.Empty,
 			Status = onboardingCase.Status,
-			AssignedToUserId = onboardingCase.AssignedToUserId,
-			AssignedToUserName = owner == null ? null :
-				(string.IsNullOrWhiteSpace(owner.Name) && string.IsNullOrWhiteSpace(owner.Surname)
-					? owner.UserName
-					: $"{owner.Name} {owner.Surname}".Trim()),
+			AssignedToUserId = null,
+			AssignedToUserName = null,
 			DueAt = onboardingCase.DueAt,
 			IsHistoricalBackfill = onboardingCase.IsHistoricalBackfill,
 			DivisionId = onboardingCase.DivisionId,
@@ -1465,8 +1456,8 @@ public partial class StudentOnboardingAppService(
 			CreatorId = onboardingCase.CreatorId,
 			LastModificationTime = onboardingCase.LastModificationTime,
 			LastModifierId = onboardingCase.LastModifierId,
-			Steps = steps.OrderBy(step => step.DisplayOrder).Select(MapStep).ToList(),
-			Events = events.OrderByDescending(item => item.CreationTime).Select(MapEvent).ToList()
+			Steps = steps.OrderBy(step => step.DisplayOrder).Select(step => { var dto = MapStep(step); dto.CompletedByName = ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyActorReader.Name(actorNames, step.CompletedByUserId); return dto; }).ToList(),
+			Events = events.OrderByDescending(item => item.CreationTime).Select(item => { var dto = MapEvent(item); dto.ActorName = ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyActorMetadata.Name(item.MetadataJson) ?? ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyActorReader.Name(actorNames, item.CreatorId); return dto; }).ToList()
 		};
 	}
 
@@ -1526,8 +1517,7 @@ public partial class StudentOnboardingAppService(
 	};
 
 	private async Task AddEventAsync(Guid caseId, string eventType, string description) =>
-		await eventRepository.InsertAsync(new StudentOnboardingEvent(GuidGenerator.Create(), CurrentTenant.Id,
-			caseId, eventType, description), false);
+		await eventRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.StudentEnrollments.Admissions.StudentJourneyAuditWriter>().CreateOnboardingEvent(caseId, eventType, description), false);
 
 	private async Task<StudentOnboardingCase> GetCaseAsync(Guid id)
 	{

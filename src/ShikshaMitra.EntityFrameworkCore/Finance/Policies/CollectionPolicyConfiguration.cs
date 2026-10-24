@@ -19,7 +19,6 @@ public class CollectionPolicyConfiguration : IEntityTypeConfiguration<Collection
 		builder.Property(x => x.PolicyCode).IsRequired().HasMaxLength(32);
 		builder.Property(x => x.Description).HasMaxLength(500);
 		builder.Property(x => x.Status).IsRequired().HasConversion<int>();
-		builder.Property(x => x.GracePeriodType).IsRequired().HasConversion<int>();
 		builder.Property(x => x.LateFeeType).IsRequired().HasConversion<int>();
 		builder.Property(x => x.PercentageBase).IsRequired().HasConversion<int>();
 		builder.Property(x => x.CompoundFrequency).IsRequired().HasConversion<int>();

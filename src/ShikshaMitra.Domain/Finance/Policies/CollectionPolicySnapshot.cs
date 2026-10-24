@@ -27,7 +27,6 @@ public sealed class CollectionPolicySnapshot
 	public DateTime? EffectiveTo { get; set; }
 	public bool EnableLateFee { get; set; }
 	public int GracePeriodDays { get; set; }
-	public GracePeriodType GracePeriodType { get; set; }
 	public List<Guid> LateFeeApplyOnFeeHeads { get; set; } = [];
 	public LateFeeCalculationType LateFeeType { get; set; }
 	public decimal? FlatAmount { get; set; }
@@ -50,6 +49,7 @@ public sealed class CollectionPolicySnapshot
 	public bool RequiresApproval { get; set; }
 	public List<Guid> ApprovalRoleIds { get; set; } = [];
 	public bool AllowOnlineCollection { get; set; }
+	public CollectionAllocationBasis AllocationBasis { get; set; } = CollectionAllocationBasis.Legacy;
 
 	public string Serialize() => JsonSerializer.Serialize(this, JsonOptions);
 
@@ -59,9 +59,9 @@ public sealed class CollectionPolicySnapshot
 
 	public CollectionPolicyUpdateModel ToUpdateModel() => new(
 		PolicyName, PolicyCode, Description, Status, IsDefault, EffectiveFrom, EffectiveTo,
-		EnableLateFee, GracePeriodDays, GracePeriodType, LateFeeApplyOnFeeHeads, LateFeeType,
+		EnableLateFee, GracePeriodDays, LateFeeApplyOnFeeHeads, LateFeeType,
 		FlatAmount, Percentage, PercentageBase, AmountPerDay, AmountPerWeek, AmountPerMonth,
 		CompoundFrequency, EscalationRules, FeeHeadOverrides, RoundingMethod, ConsiderAsIncome,
 		LateFeeIncomeHeadId, MaximumLateFeeAmount, MaximumChargingDays, EnableWaiver,
-		EnableChargeWaiver, RequiresApproval, ApprovalRoleIds, AllowOnlineCollection, LateFeeIncomeCategoryId);
+		EnableChargeWaiver, RequiresApproval, ApprovalRoleIds, AllowOnlineCollection, LateFeeIncomeCategoryId, AllocationBasis);
 }

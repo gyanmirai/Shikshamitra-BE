@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR;
 using ShikshaMitra.Security.UserScope;
@@ -41,7 +42,7 @@ public class EmployeeAuthorizationService(
 
 			if (!isOwnData)
 			{
-				await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeAccessAsync));
+				await EnsureEmployeeInCurrentUserScopeAsync(employee, nameof(CheckEmployeeAccessAsync), allowCreationDraft: true);
 			}
 
 			return;
@@ -54,7 +55,7 @@ public class EmployeeAuthorizationService(
 
 		if (!isOwnData)
 		{
-			await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeAccessAsync));
+			await EnsureEmployeeInCurrentUserScopeAsync(employee, nameof(CheckEmployeeAccessAsync), allowCreationDraft: true);
 		}
 	}
 
@@ -68,7 +69,7 @@ public class EmployeeAuthorizationService(
 			throw new AbpAuthorizationException("Access denied: Staff edit permission is required to modify staff data.");
 		}
 
-		await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeModifyAccessAsync));
+		await EnsureEmployeeInCurrentUserScopeAsync(employee, nameof(CheckEmployeeModifyAccessAsync), allowCreationDraft: true);
 	}
 
 	public async Task CheckEmployeeScopedPermissionAsync(Guid employeeId, string permission)
@@ -77,7 +78,7 @@ public class EmployeeAuthorizationService(
 			throw new AbpAuthorizationException("Access denied: The required module permission is missing.");
 		var employee = await employeeRepository.GetAsync(employeeId);
 		EnsureSameTenant(employee, "Access denied: Cross-tenant access not allowed.");
-		await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeScopedPermissionAsync));
+		await EnsureEmployeeInCurrentUserScopeAsync(employee, nameof(CheckEmployeeScopedPermissionAsync));
 	}
 
 	public async Task CheckEmployeeScopeAccessAsync(Guid employeeId)
@@ -90,7 +91,7 @@ public class EmployeeAuthorizationService(
 			return;
 		}
 
-		await EnsureEmployeeInCurrentUserScopeAsync(employeeId, nameof(CheckEmployeeScopeAccessAsync));
+		await EnsureEmployeeInCurrentUserScopeAsync(employee, nameof(CheckEmployeeScopeAccessAsync));
 	}
 
 	private void EnsureSameTenant(Employee employee, string message)
@@ -113,8 +114,9 @@ public class EmployeeAuthorizationService(
 	private async Task<bool> CanModifyEmployeeListAsync() =>
 		await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit);
 
-	private async Task EnsureEmployeeInCurrentUserScopeAsync(Guid employeeId, string operation)
+	private async Task EnsureEmployeeInCurrentUserScopeAsync(Employee employee, string operation, bool allowCreationDraft = false)
 	{
+		var employeeId = employee.Id;
 		var userId = currentUser.Id;
 		if (!userId.HasValue)
 		{
@@ -136,6 +138,18 @@ public class EmployeeAuthorizationService(
 		var stageLookup = await employeeScopeQueryService.BuildEmployeeStageLookupAsync([employeeId]);
 		if (!stageLookup.TryGetValue(employeeId, out var stageIds) || stageIds.Count == 0)
 		{
+			// Academic assignment happens after profile entry; only its creator may complete an unassigned draft.
+			if (allowCreationDraft &&
+				employee.CreatorId == userId &&
+				employee.EmployeeStatusType == EmployeeStatusType.Inactive &&
+				!employee.StatusLastChangedAt.HasValue &&
+				await permissionChecker.IsGrantedAsync(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add) &&
+				(await employeeScopeQueryService.GetAccessibleStageIdsAsync(scope)).Count > 0 &&
+				!await employeeScopeQueryService.HasOrganizationAssignmentHistoryAsync(employeeId))
+			{
+				return;
+			}
+
 			hrScopeAccessService.LogDeniedAccess(scope, operation, "Employee", employeeId);
 			throw new AbpAuthorizationException("Access denied: Staff is outside your organization scope.");
 		}

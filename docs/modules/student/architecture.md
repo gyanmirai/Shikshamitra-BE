@@ -3,7 +3,7 @@ module: student
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-13
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -24,11 +24,25 @@ TL;DR: Admissions remains inside the Student modular-monolith boundary and separ
 
 `AdmissionApplicationScopeAccessService` and `AdmissionOfferingScopeQuery` authorize class-level offerings. Offering reads and source commands use that same query. `AdmissionInquiryScopeAccessService` handles offering-linked and unallocated inquiries. `AdmissionApplicantScopeAccessService` guards applicant identity, shared profile changes and activity references; application services and controllers retain exact action permissions.
 
+## Admissions sibling-parent provenance
+
+Admissions parent matching is owned by `Application/Students/StudentEnrollments/Admissions/AdmissionDirectFamilyMatchService.cs`.
+It combines existing admission scope with exact saved contacts, current Student parent projections and a provider-backed pending JSON-parent contact predicate; it does not create accounts or send credentials.
+`Domain/Students/StudentEnrollments/Admissions/Repositories/IAdmissionApplicantRepository.cs` and `EntityFrameworkCore/Students/StudentEnrollments/Admissions/EfCoreAdmissionApplicantRepository.cs` own this composable PostgreSQL/SQLite query, with parameterized contact values and tenant/soft-delete boundaries retained.
+`AdmissionSiblingParentSelection.cs` records parent-only flow version, selected relationship and server-resolved source/family/email/actor/time confirmation in existing applicant extra properties.
+Inquiry and Direct Registration own explicit selection; inquiry/application form writers protect the shared primary contact after confirmation.
+Finalization maps new parent-only captures into Father/Mother profile storage without fabricating a Guardian profile.
+`AdmissionFirstParentContactMapping.cs` synchronizes generic form contact aliases only into the explicitly selected first parent's canonical fields, retaining per-field server provenance for structured answers and intentional clears.
+Registration and Inquiry edits recover older saved ownership before alias mutation; new-Student finalization catches up accepted unfinalized records from saved binding answers, excluding untouched Registration prefills.
+Confirmed siblings, existing Students, returns and legacy flows do not use this synchronization.
+Legacy records and mobile-only callers remain readable and do not gain trusted confirmation through inference.
+
 ## Onboarding email and access ownership
 
 | Concern | Source |
 |---|---|
 | Manual one-click credentials | `StudentOnboardingAppService.Credentials.cs` owns the scoped workspace and transactional send; `StudentCredentialsRecipientReader.cs` reads legal current owners and Student email provenance; `StudentCredentialsDtos.cs` supplies bounded DTO validation. The existing portal preparation core and credential outbox remain owners of linking and transport. |
+| Confirmed sibling parent reuse | `Application/Students/StudentEnrollments/Onboarding/StudentSiblingParentService.cs` resolves confirmed-family provenance, current verified Father/Mother identities and the exact original setup request. `StudentOnboardingAppService.SiblingParents.cs` validates the activation selection, enforces identity-update authority and links/retries under scoped transactions. Parent-only automatic suppression is enforced in orchestration, low-level requests/queueing and dispatch, without changing Student or legacy guardian behavior. |
 | Automatic admission requirements | `Application/Students/StudentEnrollments/Onboarding/OnboardingRequirementSnapshotService.cs`, `Domain/Students/StudentEnrollments/Onboarding/Services/AutomaticOnboardingReadinessRules.cs`; finalization determines document requirements before Student profile writes and reuses the prepared JSON at case creation. Pending case extra properties capture common readiness, current account choices and published workflow document policy automatically. Actual snapshot changes receive an adoption audit event; unchanged activation previews do not rewrite step evidence. Activated and terminal snapshots remain fixed. Required document overrides are rejected. |
 | Canonical documents | `Application/Students/StudentEnrollments/Onboarding/OnboardingWorkflowDocumentsAppService.cs` delegates finalized-application upload/original/review to existing Admissions owners and permissions. |
 | Fee intent | `StudentOnboardingAppService.Fees.cs` owns selection and confirmation of an existing published fee structure. Fee assignment, dues, collection and refunds remain owned by the existing Finance services. |
@@ -297,7 +311,7 @@ The main application detail exposes Review decision capabilities so existing dec
 
 `AdmissionFormStagePolicy` defines the opt-in versioned behavior while the existing `AdmissionFormDefinition`, `AdmissionFormInstance`, immutable submissions, and change history remain the source of truth. `AdmissionFormStageAccessService` resolves a scope-safe pinned context and enforces that the stage form equals the frozen application form. Read, command, and runtime services separately compose summaries, audited verification/correction commands, submit gates, and workflow completion gates.
 
-Section verification is reconstructed from immutable form change history. A correction marker makes every earlier verification stale, so no mutable verification table or migration is required. Writes serialize through the parent application concurrency stamp and append both form history and admission activity. The Offering validator checks workflow/form compatibility before activation and again before new applications start.
+Separate section verification is retired. `AdmissionFormStageAccessService` normalizes the effective policy to disable verification and clear its section-code list, including for pinned legacy applications; stored JSON and immutable history remain unchanged. New stage configuration normalization also clears the retired flags. Historical verification can still be reconstructed from change history, without a migration. Correction writes retain parent-application concurrency, form history and admission activity. The Offering validator checks workflow/form compatibility before activation and again before new applications start.
 
 ## Managed Seat ownership
 
@@ -311,6 +325,22 @@ Section verification is reconstructed from immutable form change history. A corr
 | Tenant tables, unique ownership and operational indexes | EF `AdmissionSeatConfiguration.cs` |
 
 The pool concurrency stamp serializes changes to shared offering capacity, while the application and reservation stamps protect applicant state. Filtered unique indexes prevent duplicate live pools and duplicate application-stage allocations. The additive `20260911084131_AddManagedAdmissionSeats` migration creates only the pool and reservation tables, indexes, and restrictive ownership links.
+## App-login profile email ownership
+
+| Concern | Source |
+|---|---|
+| Staff command and saved-recipient evidence | `src/ShikshaMitra.Application/Students/StudentEnrollments/Onboarding/StudentOnboardingAppService.ProfileEmails.cs`, `StudentCredentialsRecipientReader.cs` in that directory |
+| Email-only domain mutation and explicit Student provenance | `src/ShikshaMitra.Domain/Students/Portal/Services/StudentPortalProfileEmail.cs` |
+| Existing-account owner verification and transactional shared-child update | `src/ShikshaMitra.Application/Students/Portal/StudentPortalEmailChangeService.cs`, `StudentPortalEmailChangeState.cs` and `StudentPortalEmailChangeJob.cs` in that directory |
+| Public token boundary | `src/ShikshaMitra.Application.Contracts/Students/Portal/IStudentPortalEmailChangeAppService.cs`, `src/ShikshaMitra.HttpApi/Controllers/Student/Enrollment/Onboarding/StudentPortalEmailController.cs` |
+
+The expiring non-secret request lives in the existing identity's audited ExtraProperties; the existing ABP job store persists its exact tenant/user/request IDs.
+Credentials use `GetCredentialsProfileAsync` for minimal untracked contact/family reads; only an explicit email write requests tracking, preventing read-time graph changes from invalidating its own version checks.
+Protected owner tokens are generated at delivery, never returned to staff or persisted in job arguments.
+Verified-profile changes refresh existing parent-selection email guards without replacing account links or submitted Admission evidence.
+Fresh reserved Student IDs participate in scoped sibling-family profile matching, so current saved parent email wins over historical Admission answers.
+Existing-parent link insertion advances identity optimistic concurrency to fence simultaneous verification changes without altering password/security state.
+
 ## Roll-number batch ownership
 
 | Layer | Source |
@@ -321,6 +351,7 @@ The pool concurrency stamp serializes changes to shared offering capacity, while
 | Persistence | `src/ShikshaMitra.EntityFrameworkCore/Students/StudentEnrollments/Onboarding/StudentRollNumberBatchConfiguration.cs`, the Student-only batch table migration and existing Division ExtraProperties cursor |
 
 Batch commands use a new Serializable unit of work, frozen stamps/fingerprints, optimistic division-cursor concurrency and unique submission keys.
+Current-page Assign Missing persists validated case targets in existing batch ExtraProperties; no new schema is needed, and the complete division still supplies reservation and freshness fingerprints.
 Renumber stages only changed active slots to null inside that transaction, then installs the full mapping under the immediate unique active-division index.
 Dated placement history is captured before staging; enrollments, Student mirrors, unfinished linked cases, audit and cursor commit together.
 Finance mappings and commands are not modified.

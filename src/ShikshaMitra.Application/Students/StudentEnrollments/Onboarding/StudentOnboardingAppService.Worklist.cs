@@ -49,7 +49,7 @@ public partial class StudentOnboardingAppService
 				DivisionName = division == null ? "" : division!.Name
 			};
 		query = FilterWorklistText(query, input.StudentNameFilter, input.StudentNameOperator, false);
-		query = FilterWorklistText(query, input.OwnerNameFilter, input.OwnerNameOperator, true);
+
 		if (input.RollNumberFilter.HasValue || input.RollNumberMin.HasValue || input.RollNumberMax.HasValue)
 		{
 			var operation = input.RollNumberOperator ?? "equals";

@@ -21,6 +21,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using System.Data;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -80,7 +81,8 @@ public partial class CollectFeeWorkflow(
 					FinanceFeeAccountId = resolvedAccountId, AcademicYearId = input.AcademicYearId,
 					Notes = input.Notes, PaymentConfirmed = input.PaymentConfirmed,
 					DueFeePayments = input.DueFeePayments, ChargePayments = input.ChargePayments,
-					LateFeePayments = input.LateFeePayments, Payments = input.Payments
+					LateFeePayments = input.LateFeePayments, Payments = input.Payments,
+					AutomaticAllocation = input.AutomaticAllocation
 				};
 			}
 		}
@@ -125,7 +127,8 @@ public partial class CollectFeeWorkflow(
 		var student = account == null ? (await ValidateAndLoadStudentForCollectionAsync(input)).Student :
 			account.StudentId.HasValue ? await studentRepository.FindAsync(account.StudentId.Value) : null;
 		var academicYear = await academicYearRepository.GetAsync(input.AcademicYearId);
-		await ValidatePaymentChannelPolicyAsync(input);
+		var effectivePolicy = await ValidatePaymentChannelPolicyAsync(input);
+		var allocationContext = await ValidateAutomaticAllocationAsync(input, account, effectivePolicy);
 		var dueFeeContext = await LoadAndValidateDueFeesContextAsync(input);
 		var chargeContext = await LoadAndValidateChargesContextAsync(input);
 		var lateFeeMap = await ValidateLateFeePaymentsAsync(input);
@@ -168,6 +171,14 @@ public partial class CollectFeeWorkflow(
 			await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().UpdateAsync(account, false);
 			await LazyServiceProvider.LazyGetRequiredService<IAdmissionFinanceContextReader>().RecordPaymentEvidenceAsync(account.ApplicationId, account.Id);
 		}
+		if (allocationContext != null)
+			transaction.Metadata.SetProperty("AutomaticAllocation", new
+			{
+				allocationContext.AllocationBasis, allocationContext.CollectionPolicyId,
+				allocationContext.CollectionPolicyVersion, allocationContext.AllocationRevision,
+				DueFeeOrder = allocationContext.AllocationDueFeeOrder.Where(input.AutomaticAllocation!.DueFeeIds.Contains).ToArray(),
+				input.AutomaticAllocation.ChargeIds
+			});
 
 		await SaveIncomeRoutingAsync(input, transaction, routing, status != FeeCollectionStatus.InReconciliation);
         // Flush the unique retry key before creating external blob side effects. A racing
@@ -255,9 +266,11 @@ public partial class CollectFeeWorkflow(
 	{
 		// Student identity can be linked later. The application's retry fingerprint
 		// contains payment facts and its stable Finance account, never the derived link.
-		var json = input.FinanceFeeAccountId.HasValue ? JsonSerializer.Serialize(new {
+		var json = input.FinanceFeeAccountId.HasValue ? input.AutomaticAllocation == null ? JsonSerializer.Serialize(new {
 			input.FinanceFeeAccountId, input.AcademicYearId, input.IdempotencyKey, input.Notes, input.PaymentConfirmed,
-			input.DueFeePayments, input.ChargePayments, input.LateFeePayments, input.Payments }) : JsonSerializer.Serialize(input);
+			input.DueFeePayments, input.ChargePayments, input.LateFeePayments, input.Payments }) : JsonSerializer.Serialize(new {
+			input.FinanceFeeAccountId, input.AcademicYearId, input.IdempotencyKey, input.Notes, input.PaymentConfirmed,
+			input.DueFeePayments, input.ChargePayments, input.LateFeePayments, input.Payments, input.AutomaticAllocation }) : JsonSerializer.Serialize(input);
 		return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
 	}
 

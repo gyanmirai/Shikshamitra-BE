@@ -19,7 +19,7 @@ public interface IAdmissionApplicationAppService : IApplicationService
 	Task<AdmissionApplicationDto?> FindAsync(Guid id);
 	Task<AdmissionApplicationDto> StartAsync(Guid applicantId, Guid offeringId, Guid? inquiryId = null);
 	Task<AdmissionApplicationDto> StartDirectRegistrationAsync(StartAdmissionDirectRegistrationDto input);
-	Task<List<AdmissionDirectFamilyMatchDto>> FindDirectRegistrationFamiliesAsync(Guid offeringId, string guardianMobile);
+	Task<List<AdmissionDirectFamilyMatchDto>> FindDirectRegistrationFamiliesAsync(Guid offeringId, string guardianMobile, string? guardianEmail = null);
 	Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(Guid? offeringId = null, string? filter = null);
 	Task<AdmissionApplicationDto> AssignCounsellorAsync(Guid id, AssignAdmissionApplicationCounsellorDto input);
 	Task<AdmissionApplicationWorkflowDto> GetWorkflowAsync(Guid id);

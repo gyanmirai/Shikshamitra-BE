@@ -115,7 +115,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 	private async Task<(Guid AcademicYearId, Guid StudentId, Guid FeeHeadId, Guid DueFeeId, Guid FeeStructureId)>
 		SeedStudentWithOverdueDueFeeAsync(int daysOverdue, bool attachPolicy, double? maximumLateFeeAmount = null,
 			bool enableLateFee = true, bool futurePaymentTerm = false, bool attachProrationPolicy = false,
-		bool percentageLateFee = false, decimal principalAmount = 5000m)
+		bool percentageLateFee = false, decimal principalAmount = 5000m, string? allocationBasis = null)
 	{
 		await EnsureAdminUserExistsAsync();
 
@@ -185,6 +185,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 				RoundingMethod = "None",
 				MaximumLateFeeAmount = maximumLateFeeAmount.HasValue ? (decimal)maximumLateFeeAmount.Value : null,
 				AllowOnlineCollection = true,
+				AllocationBasis = allocationBasis,
 			});
 			policy = await _collectionPolicies.GetAsync(policy.Id);
 			policy.CurrentVersionId.ShouldNotBeNull();
@@ -245,6 +246,69 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 			AcademicYearId = yearId, BoardId = student.AcademicBoardId!.Value,
 			EducationMediumId = student.AcademicMediumId, MaxResultCount = 100,
 		})).Items.Single(x => x.StudentId == studentId);
+	}
+
+	[Theory]
+	[InlineData("Installment")]
+	[InlineData("FeeHead")]
+	public async Task Allocation_Basis_Survives_Save_Update_And_Clone(string basis)
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (year, student, _, _, _) = await SeedStudentWithOverdueDueFeeAsync(10, true,
+				enableLateFee: false, allocationBasis: basis);
+			var initialForm = await _feeCollections.GetCollectFormAsync(student, year);
+			var saved = await _collectionPolicies.GetAsync(initialForm.CollectionPolicyId!.Value);
+			saved.AllocationBasis.ShouldBe(basis);
+			var update = new CreateUpdateCollectionPolicyDto
+			{
+				AcademicYearId = year, PolicyName = saved.PolicyName, PolicyCode = saved.PolicyCode,
+				Status = "Active", IsDefault = saved.IsDefault, EnableLateFee = false, AllocationBasis = null
+			};
+			(await _collectionPolicies.UpdateAsync(saved.Id, update)).AllocationBasis.ShouldBe(basis);
+			(await _collectionPolicies.CloneAsync(saved.Id, new CollectionPolicyCloneRequestDto())).AllocationBasis.ShouldBe(basis);
+			// The original assignment still resolves the version captured at assignment time.
+			(await _feeCollections.GetCollectFormAsync(student, year)).AllocationBasis.ShouldBe(basis);
+		}
+	}
+
+	[Theory]
+	[InlineData("Installment")]
+	[InlineData("FeeHead")]
+	public async Task Automatic_Allocation_Rejects_Tampering_And_Stale_Review_And_Replays_Safely(string basis)
+	{
+		using (_currentTenant.Change(TestTenantId))
+		{
+			var (year, student, head, firstId, _) = await SeedStudentWithOverdueDueFeeAsync(10, true,
+				enableLateFee: false, principalAmount: 100m, allocationBasis: basis);
+			var first = await _dueFeeRepo.GetAsync(firstId);
+			var date = first.DueDate.AddMonths(1);
+			var second = new DueFee(Guid.NewGuid(), TestTenantId, student, head,
+				(MonthEnum)(date.Month - 1), date.Year, false, 100m, date);
+			second.BindAssignment(first.StudentFeeStructureId!.Value);
+			await _dueFeeRepo.InsertAsync(second, autoSave: true);
+			var form = await _feeCollections.GetCollectFormAsync(student, year);
+			form.AllocationBasis.ShouldBe(basis);
+			form.AllocationDueFeeOrder.ShouldBe(new[] { firstId, second.Id });
+			var command = new CollectFeeInput
+			{
+				StudentId = student, AcademicYearId = year, IdempotencyKey = Guid.NewGuid().ToString("N"),
+				AutomaticAllocation = new() { Revision = form.AllocationRevision!, DueFeeIds = [firstId, second.Id] },
+				DueFeePayments = [new() { DueFeeId = firstId, FeeHeadId = head, Amount = 50 }, new() { DueFeeId = second.Id, FeeHeadId = head, Amount = 75 }],
+				Payments = [new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 125 }]
+			};
+			(await Should.ThrowAsync<BusinessException>(() => _feeCollections.CollectFeeAsync(command))).Code.ShouldBe(FeeCollectionErrorCodes.AllocationChanged);
+			(await _dueFeeRepo.GetAsync(firstId)).PaidAmount.ShouldBe(0m);
+			command.DueFeePayments[0].Amount = 100; command.DueFeePayments[1].Amount = 25;
+			command.AutomaticAllocation.Revision = "stale";
+			(await Should.ThrowAsync<BusinessException>(() => _feeCollections.CollectFeeAsync(command))).Code.ShouldBe(FeeCollectionErrorCodes.AllocationChanged);
+			command.AutomaticAllocation.Revision = form.AllocationRevision!;
+			var result = await _feeCollections.CollectFeeAsync(command);
+			result.ReceivedAmount.ShouldBe(125);
+			(await _feeCollections.CollectFeeAsync(command)).Id.ShouldBe(result.Id);
+			(await _dueFeeRepo.GetAsync(firstId)).OutstandingAmount.ShouldBe(0m);
+			(await _dueFeeRepo.GetAsync(second.Id)).OutstandingAmount.ShouldBe(75m);
+		}
 	}
 
 	[Theory]

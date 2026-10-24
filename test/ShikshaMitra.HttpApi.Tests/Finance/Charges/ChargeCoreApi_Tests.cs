@@ -6,10 +6,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.Infrastructure.Auth;
+using ShikshaMitra.Security.UserScope;
 using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using ShikshaMitra.Finance.Fees.Charges.Dtos;
+using ShikshaMitra.Finance.Fees.Settings.Dtos;
+using System.Text.Json;
+using System.Linq;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Xunit;
@@ -22,6 +26,37 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 {
 	public ChargeCoreApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
 	{
+	}
+
+	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Charge_Category_Search_Matches_Income_And_Approval_Default_And_False_Persist()
+	{
+		var incomeName = $"10th Income {Guid.NewGuid():N}"[..39];
+		var incomeResponse = await Client.PostAsJsonAsync($"/api/income-categories?academicYearId={Factory.SeededAcademicYearId}",
+			new { name = incomeName, tags = Array.Empty<string>() }, JsonOptions);
+		incomeResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await incomeResponse.Content.ReadAsStringAsync());
+		var income = await incomeResponse.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		var incomeId = income.GetProperty("id").GetGuid();
+		var name = $"Test Charge {Guid.NewGuid():N}";
+		// Omit the approval field on the wire to exercise the server's backwards-compatible true default.
+		var createdResponse = await Client.PostAsJsonAsync($"{ChargeCategoriesUrl}?academicYearId={Factory.SeededAcademicYearId}",
+			new { name, incomeCategoryId = incomeId, description = "Approval configuration regression" }, JsonOptions);
+		createdResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await createdResponse.Content.ReadAsStringAsync());
+		var category = await createdResponse.Content.ReadFromJsonAsync<ChargeCategoryResponse>(JsonOptions);
+		category.ShouldNotBeNull();
+		category.IsApprovalRequired.ShouldBeTrue();
+		var search = await Client.GetFromJsonAsync<PaginatedChargeCategoryResponse>(
+			$"{ChargeCategoriesUrl}?academicYearId={Factory.SeededAcademicYearId}&search={Uri.EscapeDataString(incomeName.ToUpperInvariant())}", JsonOptions);
+		search.ShouldNotBeNull();
+		search.TotalCount.ShouldBe(1);
+		search.Items.Single().Id.ShouldBe(category.Id);
+		var updated = await Client.PutAsJsonAsync($"{ChargeCategoriesUrl}/{category.Id}",
+			new UpdateChargeCategoryRequest { Name = name, IncomeCategoryId = incomeId, IsApprovalRequired = false }, JsonOptions);
+		updated.StatusCode.ShouldBe(HttpStatusCode.OK, await updated.Content.ReadAsStringAsync());
+		var saved = await Client.GetFromJsonAsync<ChargeCategoryResponse>($"{ChargeCategoriesUrl}/{category.Id}", JsonOptions);
+		saved.ShouldNotBeNull();
+		saved.IsApprovalRequired.ShouldBeFalse();
 	}
 
 	#region Tier 0 — Critical
@@ -48,6 +83,10 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 				$"charge-admin-{administratorId:N}@example.test", tenantId);
 			user.AddRole(role.Id);
 			db.Set<IdentityUser>().Add(user);
+			db.Set<UserScopeAssignment>().Add(new UserScopeAssignment(Guid.NewGuid(), tenantId,
+				userId: administratorId, academicYearId: Factory.SeededAcademicYearId,
+				educationBoardId: Factory.SeededBoardId, description: "Charge administrator regression scope"));
+			await db.SaveChangesAsync();
 			await uow.CompleteAsync();
 		}
 		using var adminClient = CreateClientAs(administratorId);
@@ -85,7 +124,7 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 
 	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
-	public async Task Should_Create_Charge_With_No_Approval_Category_Still_Returns_Pending_Status()
+	public async Task Should_Create_Charge_With_No_Approval_Category_Returns_Approved_Status()
 	{
 		var (studentId, _) = await ChargeTestHelper.CreateStudentAsync(Client, Factory);
 		var categoryId = await ChargeTestHelper.CreateChargeCategoryAsync(Client, isApprovalRequired: false);
@@ -98,7 +137,11 @@ public class ChargeCoreApi_Tests : ChargeApiTestsBase
 		var body = await response.Content.ReadFromJsonAsync<ChargeResponse>(JsonOptions);
 		body.ShouldNotBeNull();
 		body.Data.ShouldNotBeNull();
-		body.Data.Status.ShouldBe(0); // All categories require approval
+		body.Data.Status.ShouldBe(1); // Category explicitly permits charges without approval
+		var detail = await Client.GetFromJsonAsync<ChargeDetailResponse>($"{BaseUrl}/{body.Data.ChargeId}", JsonOptions);
+		detail.ShouldNotBeNull();
+		detail.Data.IsApprovalRequired.ShouldBeFalse();
+		detail.Data.Students.ShouldAllBe(x => x.Status == 1 && x.OutstandingAmount == request.Amount);
 	}
 
 	[Fact]

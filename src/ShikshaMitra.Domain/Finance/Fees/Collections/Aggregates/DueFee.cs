@@ -378,6 +378,45 @@ public DueFee(
 		RecalculateBalancesAndStatus();
 	}
 
+	// Kept in the existing extension column, alongside other owner calculation evidence.
+	// This is a non-cash reduction. Original obligation, receipts and paid amounts stay immutable.
+	public decimal GetWithdrawalProrationCredit() => this.GetProperty<decimal>("WithdrawalProrationCredit", 0m);
+	public Guid? GetWithdrawalProrationSource() => this.GetProperty<Guid?>("WithdrawalProrationSource");
+	public string GetWithdrawalProrationExplanation() => this.GetProperty<string>("WithdrawalProrationExplanation", string.Empty);
+
+	public void ApplyWithdrawalProration(Guid sourceId, decimal credit, string explanation)
+	{
+		if (sourceId == Guid.Empty || credit < 0m || decimal.Round(credit, 2) != credit ||
+			credit > Math.Max(0m, OriginalAmount - NetAmount) || string.IsNullOrWhiteSpace(explanation))
+			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+		if (GetWithdrawalProrationSource().HasValue)
+		{
+			if (GetWithdrawalProrationSource() == sourceId && GetWithdrawalProrationCredit() == credit) return;
+			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+		}
+		this.SetProperty("WithdrawalProrationCredit", credit);
+		this.SetProperty("WithdrawalProrationSource", sourceId);
+		this.SetProperty("WithdrawalProrationExplanation", explanation);
+		AdjustmentCreditAmount += credit;
+		NetAmount += credit;
+		RecalculateBalancesAndStatus();
+	}
+
+	public void ReverseWithdrawalProration(Guid originalSourceId)
+	{
+		if (GetWithdrawalProrationSource() != originalSourceId)
+			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+		var credit = GetWithdrawalProrationCredit();
+		if (credit > AdjustmentCreditAmount || credit > NetAmount)
+			throw new BusinessException(ProrationPolicyErrorCodes.AdjustmentConflict);
+		AdjustmentCreditAmount -= credit;
+		NetAmount -= credit;
+		this.RemoveProperty("WithdrawalProrationCredit");
+		this.RemoveProperty("WithdrawalProrationSource");
+		this.RemoveProperty("WithdrawalProrationExplanation");
+		RecalculateBalancesAndStatus();
+	}
+
 	private void RecalculateBalancesAndStatus()
 	{
 		var netPaid = Math.Max(0m, PaidAmount - RefundedAmount);

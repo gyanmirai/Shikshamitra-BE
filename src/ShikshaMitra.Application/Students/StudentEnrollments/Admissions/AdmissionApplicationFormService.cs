@@ -83,6 +83,9 @@ public class AdmissionApplicationFormService(
 		var unknownCode = input.Values.FirstOrDefault(value => !definitionCodes.Contains(value.FieldCode))?.FieldCode;
 		if (!string.IsNullOrWhiteSpace(unknownCode))
 			throw new BusinessException(AdmissionApplicationErrorCodes.UnknownFormField).WithData("FieldCode", unknownCode);
+		if (applicant != null)
+			await RecoverFirstParentContactAsync(application, applicant, instance, definitions, existingValues);
+		var parentAnswers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 		foreach (var item in input.Values
 			.DistinctBy(value => value.FieldCode.ToUpperInvariant())
 			.Select(value => new
@@ -113,24 +116,60 @@ public class AdmissionApplicationFormService(
 				await valueRepository.UpdateAsync(existing, false);
 			}
 			if (definition.BindingType == AdmissionFormBindingType.System && applicant is not null &&
-				!(applicant.ExistingStudentId.HasValue && definition.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email"))
+				!((applicant.ExistingStudentId.HasValue || AdmissionSiblingParentSelection.ReadConfirmation(applicant) != null) && definition.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email"))
 			{
 				var value = AdmissionApplicationValueConverter.Unwrap(valueJson);
+				parentAnswers[definition.BindingKey!] = value;
 				if (!string.IsNullOrWhiteSpace(value) ||
-					AdmissionAdditionalStudentFieldCatalog.Metadata.ContainsKey(definition.BindingKey!))
+					AdmissionAdditionalStudentFieldCatalog.Metadata.ContainsKey(definition.BindingKey!) ||
+					(AdmissionFirstParentContactMapping.CanMap(applicant) && definition.BindingKey is "Guardian.Email" or "Guardian.LastName"))
 					AdmissionFormBindingRegistry.ApplyValue(definition.BindingKey!, value, applicant, guardian);
 			}
 		}
-		if (applicant is not null) await applicantRepository.UpdateAsync(applicant, false);
-		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true) await guardianRepository.UpdateAsync(guardian, false);
+		if (applicant is not null)
+		{
+			AdmissionFirstParentContactMapping.Apply(applicant, parentAnswers, guardian);
+			await applicantRepository.UpdateAsync(applicant, false);
+		}
+		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true && (applicant == null || AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null)) await guardianRepository.UpdateAsync(guardian, false);
 		instance.MarkSaved();
 		await instanceRepository.UpdateAsync(instance, false);
 		await historyRepository.InsertAsync(new AdmissionFormChangeHistory(GuidGenerator.Create(), CurrentTenant.Id, instance.Id, application.Id,
 			"DraftSaved", System.Text.Json.JsonSerializer.Serialize(input.Values.Select(value => value.FieldCode).Distinct(StringComparer.OrdinalIgnoreCase)), CurrentUser.Id), false);
 		await applicationRepository.UpdateAsync(application, false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"ApplicationSaved", "Application draft saved", application.ApplicantId, application.Id), true);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationSaved", "Application draft saved", application.ApplicantId, application.Id), true);
 		return await GetAsync(applicationId);
+	}
+
+	internal async Task RecoverFirstParentContactAsync(AdmissionApplication application, AdmissionApplicant applicant,
+		AdmissionFormInstance? instance = null, IReadOnlyCollection<AdmissionFormFieldDefinition>? definitions = null,
+		IReadOnlyCollection<AdmissionFormFieldValue>? values = null)
+	{
+		if (!AdmissionFirstParentContactMapping.CanMap(applicant)) return;
+		var answers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+		if (application.InquiryId.HasValue)
+		{
+			var inquiry = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionInquiry, Guid>>().FindAsync(application.InquiryId.Value);
+			if (inquiry?.ApplicantId == applicant.Id && inquiry.FormResponseDefinitionId.HasValue && !string.IsNullOrWhiteSpace(inquiry.FormResponseSnapshotJson))
+			{
+				var inquiryFields = await fieldRepository.GetListAsync(field => field.FormDefinitionId == inquiry.FormResponseDefinitionId.Value);
+				answers = AdmissionFirstParentContactMapping.ReadInquiryAnswers(inquiry, inquiryFields);
+			}
+		}
+		instance ??= await GetInstanceAsync(application.Id);
+		definitions ??= await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
+		values ??= await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
+		var saves = await historyRepository.GetListAsync(item => item.FormInstanceId == instance.Id && item.ChangeType == "DraftSaved");
+		var editedCodes = saves.SelectMany(save => JsonSerializer.Deserialize<string[]>(save.ChangedFieldsJson ?? "[]") ?? [])
+			.ToHashSet(StringComparer.OrdinalIgnoreCase);
+		// Initial prefills are not authored answers and cannot claim structured ownership over an Inquiry clear.
+		foreach (var field in definitions.Where(field => field.BindingType == AdmissionFormBindingType.System && field.BindingKey != null && !field.ReadOnly && editedCodes.Contains(field.Code)))
+		{
+			var value = values.FirstOrDefault(value => string.Equals(value.FieldCode, field.Code, StringComparison.OrdinalIgnoreCase));
+			if (value != null) answers[field.BindingKey!] = AdmissionApplicationValueConverter.Unwrap(value.ValueJson);
+		}
+		// Only accepted, server-saved answers repair pre-fix unfinalized records; no blanket shared-contact fallback.
+		AdmissionFirstParentContactMapping.Apply(applicant, answers, recoverSavedAnswers: true);
 	}
 
 	public async Task<AdmissionApplicationSubmitResultDto> SubmitAsync(Guid applicationId)
@@ -178,8 +217,7 @@ public class AdmissionApplicationFormService(
 		application.Submit();
 		await workflowService.AdvanceAfterSubmitAsync(application);
 		await applicationRepository.UpdateAsync(application, false);
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			"ApplicationSubmitted", "Application submitted", application.ApplicantId, application.Id), true);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationSubmitted", "Application submitted", application.ApplicantId, application.Id), true);
 		return new AdmissionApplicationSubmitResultDto { Application = AdmissionApplicationMapper.ToDto(application) };
 	}
 

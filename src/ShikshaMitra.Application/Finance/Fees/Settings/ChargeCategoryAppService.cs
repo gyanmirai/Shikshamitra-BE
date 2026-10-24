@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
+using Volo.Abp.Uow;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
@@ -22,9 +23,11 @@ public class ChargeCategoryAppService(
 	IRepository<Charge, Guid> chargeRepository,
 	IRepository<TransactionCategory, Guid> transactionCategoryRepository,
 	IRepository<AccountHead, Guid> accountHeadRepository,
+	ITransactionCategoryReferenceLock referenceLock,
 	FinanceScopeAccessService financeScopeAccessService
 ) : ApplicationService, IChargeCategoryAppService
 {
+	[UnitOfWork(isTransactional: true)]
     public async Task<ChargeCategoryResponse> CreateAsync(Guid academicYearId, CreateChargeCategoryRequest input)
     {
 		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
@@ -67,7 +70,18 @@ public class ChargeCategoryAppService(
 
         if (!search.IsNullOrWhiteSpace())
         {
-            query = query.Where(x => x.Name.Contains(search));
+            var text = search!.Trim().ToLowerInvariant();
+            var incomeQuery = await transactionCategoryRepository.GetQueryableAsync();
+            var matchingIncomeIds = await AsyncExecuter.ToListAsync(incomeQuery
+                .Where(x => x.AcademicYearId == academicYearId && x.CategoryType == TransactionType.Income && x.Name.ToLower().Contains(text))
+                .Select(x => x.Id));
+            // Accounting links live in ABP ExtraProperties and cannot be translated as CLR properties.
+            // Resolve matching category IDs within the already year/status-filtered tenant query, before pagination.
+            var yearCategories = await AsyncExecuter.ToListAsync(query);
+            var categoryIds = yearCategories.Where(x => x.IncomeCategoryId.HasValue && matchingIncomeIds.Contains(x.IncomeCategoryId.Value))
+                .Select(x => x.Id).ToArray();
+            query = query.Where(x => x.Name.ToLower().Contains(text) ||
+                (x.Description != null && x.Description.ToLower().Contains(text)) || Enumerable.Contains(categoryIds, x.Id));
         }
 
         var totalCount = await AsyncExecuter.CountAsync(query);
@@ -106,6 +120,7 @@ public class ChargeCategoryAppService(
 		return await ToResponseAsync(chargeCategory);
     }
 
+	[UnitOfWork(isTransactional: true)]
     public async Task<ChargeCategoryResponse> UpdateAsync(Guid id, UpdateChargeCategoryRequest input)
     {
         var chargeCategory = await chargeCategoryRepository.GetAsync(id);
@@ -137,6 +152,7 @@ public class ChargeCategoryAppService(
 		return await ToResponseAsync(chargeCategory);
     }
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<ChargeCategoryResponse> UpdateStatusAsync(Guid id, UpdateChargeCategoryStatusRequest input)
 	{
 		var category = await chargeCategoryRepository.GetAsync(id);
@@ -168,6 +184,7 @@ public class ChargeCategoryAppService(
 	private async Task<(TransactionCategory Category, AccountHead? AccountHead)> ValidateAccountingMappingAsync(
 		Guid academicYearId, Guid incomeCategoryId)
 	{
+		await referenceLock.AcquireAsync();
 		var category = await transactionCategoryRepository.FindAsync(incomeCategoryId);
 		if (category is null || category.AcademicYearId != academicYearId ||
 			category.CategoryType != TransactionType.Income || !category.IsActive)

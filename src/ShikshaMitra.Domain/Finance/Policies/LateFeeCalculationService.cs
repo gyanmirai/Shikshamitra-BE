@@ -61,10 +61,8 @@ public class LateFeeCalculationService : ITransientDependency
 		}
 
 		// Step 3 — grace-period offset: student override wins if set, else the policy's own
-		// gracePeriodDays, plus any exception-window extension from step 2. GracePeriodType
-		// (Calendar vs WorkingDay) can't yet be computed differently without a holiday-calendar
-		// source (see implementation plan Open Questions) — WorkingDay degrades to Calendar-day
-		// counting rather than producing a silently wrong answer.
+		// gracePeriodDays, plus any exception-window extension from step 2. All day counts
+		// use calendar days, including weekends and holidays.
 		var effectiveGracePeriodDays =
 			(input.CustomGracePeriodDays ?? policy.GracePeriodDays) + exceptionGracePeriodExtensionDays;
 

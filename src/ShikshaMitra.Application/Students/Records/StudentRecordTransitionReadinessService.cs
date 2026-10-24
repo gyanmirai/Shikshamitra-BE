@@ -142,7 +142,9 @@ public class StudentRecordTransitionReadinessService(StudentRecordsAccessService
 		}
 		else if (input.TargetAcademicYearId.HasValue || input.TargetStandardId.HasValue || input.TargetDivisionId.HasValue || input.RollNumber.HasValue)
 			Add(row, "InvalidPlacement", "This outcome does not create a new-year placement.");
-		if (policy.Transitions.OutcomeChecks.TryGetValue(input.Outcome, out var checks)) await AddOwnerChecksAsync(row, source.Enrollment, checks);
+		if (policy.Transitions.OutcomeChecks.TryGetValue(input.Outcome, out var checks))
+			await AddOwnerChecksAsync(row, source.Student.Id, source.Enrollment.AcademicYearId, source.Enrollment.StandardId, checks,
+				input.Outcome == "Withdraw" ? input.EffectiveDate : null);
 		row.Ready = row.Issues.Count == 0; return row;
 	}
 	public Task<string> CaptureRollRuleAsync(StudentRecordTransitionInput input) => rollRules.CaptureAsync(input.StudentId, input.TargetAcademicYearId!.Value, input.TargetStandardId!.Value, input.TargetDivisionId!.Value);
@@ -227,7 +229,7 @@ public class StudentRecordTransitionReadinessService(StudentRecordsAccessService
 	}
 	private Task AddOwnerChecksAsync(StudentRecordTransitionPreviewRowDto row, StudentEnrollment source, StudentRecordsOutcomeChecks checks) =>
 		AddOwnerChecksAsync(row, source.StudentId, source.AcademicYearId, source.StandardId, checks);
-	private async Task AddOwnerChecksAsync(StudentRecordTransitionPreviewRowDto row, Guid studentId, Guid academicYearId, Guid? standardId, StudentRecordsOutcomeChecks checks)
+	private async Task AddOwnerChecksAsync(StudentRecordTransitionPreviewRowDto row, Guid studentId, Guid academicYearId, Guid? standardId, StudentRecordsOutcomeChecks checks, DateTime? withdrawalDate = null)
 	{
 		if (checks.RequireAcademicResult)
 		{
@@ -237,9 +239,10 @@ public class StudentRecordTransitionReadinessService(StudentRecordsAccessService
 				examQuery.Any(e => e.Id == x.ExamId && e.TenantId == CurrentTenant.Id && e.StandardId == standardId))))
 				Add(row, "AcademicResultRequired", "Publish an available source-class academic result before this transition.");
 		}
-		if (checks.RequireFinanceClearance)
+		if (checks.RequireFinanceClearance || withdrawalDate.HasValue)
 		{
-			var clearance = await finance.GetAsync(studentId, academicYearId);
+			var clearance = await finance.GetAsync(studentId, academicYearId, withdrawalDate, checks.RequireFinanceClearance);
+			row.Proration = clearance.Proration;
 			if (!clearance.Cleared) Add(row, "FinanceClearanceRequired", clearance.Detail);
 		}
 		if (checks.RequireLibraryClearance)

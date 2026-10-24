@@ -55,7 +55,6 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 
 	public bool EnableLateFee { get; set; }
 	public int GracePeriodDays { get; set; }
-	public string GracePeriodType { get; set; } = "Calendar";
 	public List<Guid> LateFeeApplyOnFeeHeads { get; set; } = new();
 	public string LateFeeType { get; set; } = "Flat";
 	public decimal? FlatAmount { get; set; }
@@ -75,6 +74,7 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 	public int? MaximumChargingDays { get; set; }
 
 	public bool AllowOnlineCollection { get; set; }
+	public string AllocationBasis { get; set; } = "Legacy";
 
 	public int Version { get; set; }
 	public bool IsUsedInDownstream { get; set; }
@@ -96,7 +96,6 @@ public class CreateUpdateCollectionPolicyDto
 
 	public bool EnableLateFee { get; set; }
 	public int GracePeriodDays { get; set; }
-	public string GracePeriodType { get; set; } = "Calendar";
 	public List<Guid> LateFeeApplyOnFeeHeads { get; set; } = new();
 	public string LateFeeType { get; set; } = "Flat";
 	public decimal? FlatAmount { get; set; }
@@ -116,12 +115,16 @@ public class CreateUpdateCollectionPolicyDto
 	public int? MaximumChargingDays { get; set; }
 
 	public bool AllowOnlineCollection { get; set; } = true;
+	/// <summary>Omitted on older clients: preserve the saved mode on update; Legacy on create.</summary>
+	public string? AllocationBasis { get; set; }
 }
 
 public class CreateUpdateCollectionPolicyDtoValidator : AbstractValidator<CreateUpdateCollectionPolicyDto>
 {
 	public CreateUpdateCollectionPolicyDtoValidator()
 	{
+		RuleFor(x => x.AllocationBasis).Must(value => value is null or "Legacy" or "Installment" or "FeeHead")
+			.WithMessage("Choose By installment or By fee head.");
 		RuleFor(x => x.ChangeReason).MaximumLength(500);
 		RuleFor(x => x.GracePeriodDays).InclusiveBetween(0, CollectionPolicyNumericLimits.MaximumDays);
 		RuleFor(x => x.MaximumChargingDays).InclusiveBetween(1, CollectionPolicyNumericLimits.MaximumDays);

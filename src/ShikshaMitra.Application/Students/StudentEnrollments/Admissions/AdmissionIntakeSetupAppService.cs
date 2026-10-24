@@ -58,72 +58,16 @@ public class AdmissionIntakeSetupAppService(
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	[UnitOfWork]
-	public async Task<AdmissionIntakeSetupDto> CreateAsync(CreateAdmissionIntakeSetupDto input)
+	public Task<AdmissionIntakeSetupDto> CreateAsync(CreateAdmissionIntakeSetupDto input)
 	{
-		EnsureInput(input);
-		await EnsurePeopleAreSelectableAsync(input.CounsellorAssignmentRules);
-		var inquiry = await profileService.CreateAsync(new SaveAdmissionIntakeProfileDto
-		{
-			Kind = AdmissionIntakeProfileKind.Inquiry,
-			Name = input.Name.Trim(),
-			ConfigurationJson = Serialize(ToRules(input.InquiryRules))
-		});
-		var assignment = await profileService.CreateAsync(new SaveAdmissionIntakeProfileDto
-		{
-			Kind = AdmissionIntakeProfileKind.CounsellorAssignment,
-			Name = input.Name.Trim(),
-			ConfigurationJson = Serialize(ToRules(input.CounsellorAssignmentRules))
-		});
-		var setup = new AdmissionIntakeSetup(GuidGenerator.Create(), CurrentTenant.Id, input.Name,
-			inquiry.Id, assignment.Id);
-		await setups.InsertAsync(setup, autoSave: true);
-		var profileRows = await profiles.GetListAsync(item => item.Id == inquiry.Id || item.Id == assignment.Id);
-		return Map(setup, profileRows.ToDictionary(item => item.Id), 0, 0);
+		throw new Volo.Abp.BusinessException("Admissions.StaffAssignmentRetired", "Staff handling is recorded automatically in the activity history.");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	[UnitOfWork]
-	public async Task<AdmissionIntakeSetupDto> UpdateAsync(Guid id, UpdateAdmissionIntakeSetupDto input)
+	public Task<AdmissionIntakeSetupDto> UpdateAsync(Guid id, UpdateAdmissionIntakeSetupDto input)
 	{
-		EnsureInput(input);
-		var setup = await GetSetupAsync(id);
-		EnsureConcurrency(setup, input.ConcurrencyStamp);
-		if (setup.IsArchived) throw new BusinessException(AdmissionIntakeProfileErrorCodes.SetupArchived);
-		await EnsurePeopleAreSelectableAsync(input.CounsellorAssignmentRules);
-		var profileRows = await profiles.GetListAsync(item =>
-			item.Id == setup.InquiryIntakeProfileId || item.Id == setup.CounsellorAssignmentProfileId);
-		var inquiry = profileRows.SingleOrDefault(item => item.Id == setup.InquiryIntakeProfileId &&
-			item.Kind == AdmissionIntakeProfileKind.Inquiry) ??
-			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration,
-				"The setup inquiry profile is missing or invalid.");
-		var assignment = profileRows.SingleOrDefault(item => item.Id == setup.CounsellorAssignmentProfileId &&
-			item.Kind == AdmissionIntakeProfileKind.CounsellorAssignment) ??
-			throw new BusinessException(AdmissionIntakeProfileErrorCodes.InvalidConfiguration,
-				"The setup counsellor assignment profile is missing or invalid.");
-
-		await profileService.UpdateManagedAsync(setup.Id, inquiry.Id, new SaveAdmissionIntakeProfileDto
-		{
-			Kind = inquiry.Kind,
-			Code = inquiry.Code,
-			Name = input.Name.Trim(),
-			ConfigurationJson = Serialize(ToRules(input.InquiryRules)),
-			ConcurrencyStamp = inquiry.ConcurrencyStamp
-		});
-		await profileService.UpdateManagedAsync(setup.Id, assignment.Id, new SaveAdmissionIntakeProfileDto
-		{
-			Kind = assignment.Kind,
-			Code = assignment.Code,
-			Name = input.Name.Trim(),
-			ConfigurationJson = Serialize(ToRules(input.CounsellorAssignmentRules)),
-			ConcurrencyStamp = assignment.ConcurrencyStamp
-		});
-		setup.UpdateName(input.Name);
-		await setups.UpdateAsync(setup, autoSave: true);
-		var usage = await GetUsageCoreAsync(setup);
-		var updatedProfiles = await profiles.GetListAsync(item =>
-			item.Id == setup.InquiryIntakeProfileId || item.Id == setup.CounsellorAssignmentProfileId);
-		return Map(setup, updatedProfiles.ToDictionary(item => item.Id),
-			usage.ActiveOfferingCount, usage.ActivePublicInquiryLinkCount);
+		throw new Volo.Abp.BusinessException("Admissions.StaffAssignmentRetired", "Staff handling is recorded automatically in the activity history.");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.View)]
@@ -132,41 +76,16 @@ public class AdmissionIntakeSetupAppService(
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	[UnitOfWork]
-	public async Task<AdmissionIntakeSetupDto> ArchiveAsync(Guid id, ArchiveAdmissionIntakeSetupDto input)
+	public Task<AdmissionIntakeSetupDto> ArchiveAsync(Guid id, ArchiveAdmissionIntakeSetupDto input)
 	{
-		var setup = await GetSetupAsync(id);
-		EnsureConcurrency(setup, input?.ConcurrencyStamp);
-		if (!setup.IsArchived)
-		{
-			var usage = await GetUsageCoreAsync(setup);
-			if (usage.HasActiveUsage)
-				throw new BusinessException(AdmissionIntakeProfileErrorCodes.SetupInUse,
-					$"This setup is used by {usage.ActiveOfferingCount} active offering(s) and " +
-					$"{usage.ActivePublicInquiryLinkCount} active public inquiry link(s).");
-			setup.Archive(Clock.Now, CurrentUser.Id);
-			await setups.UpdateAsync(setup, autoSave: true);
-		}
-		var profileRows = await profiles.GetListAsync(item =>
-			item.Id == setup.InquiryIntakeProfileId || item.Id == setup.CounsellorAssignmentProfileId);
-		return Map(setup, profileRows.ToDictionary(item => item.Id), 0, 0);
+		throw new Volo.Abp.BusinessException("Admissions.StaffAssignmentRetired", "Staff handling is recorded automatically in the activity history.");
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionOfferings.Add)]
 	[UnitOfWork]
-	public async Task<AdmissionIntakeSetupDto> RestoreAsync(Guid id, RestoreAdmissionIntakeSetupDto input)
+	public Task<AdmissionIntakeSetupDto> RestoreAsync(Guid id, RestoreAdmissionIntakeSetupDto input)
 	{
-		var setup = await GetSetupAsync(id);
-		EnsureConcurrency(setup, input?.ConcurrencyStamp);
-		if (setup.IsArchived)
-		{
-			setup.Restore();
-			await setups.UpdateAsync(setup, autoSave: true);
-		}
-		var profileRows = await profiles.GetListAsync(item =>
-			item.Id == setup.InquiryIntakeProfileId || item.Id == setup.CounsellorAssignmentProfileId);
-		var usage = await GetUsageCoreAsync(setup);
-		return Map(setup, profileRows.ToDictionary(item => item.Id),
-			usage.ActiveOfferingCount, usage.ActivePublicInquiryLinkCount);
+		throw new Volo.Abp.BusinessException("Admissions.StaffAssignmentRetired", "Staff handling is recorded automatically in the activity history.");
 	}
 
 	private async Task<AdmissionIntakeSetupUsageDto> GetUsageCoreAsync(AdmissionIntakeSetup setup)

@@ -45,7 +45,7 @@ public class HomeworkDivisionScheduleDto
 {
     public Guid DivisionId { get; set; }
     public string DivisionName { get; set; } = string.Empty;
-    public DateTime? PublishAt { get; set; }
-    public DateTime DueAt { get; set; }
+    public DateTimeOffset? PublishAt { get; set; }
+    public DateTimeOffset DueAt { get; set; }
     public bool IsPublished { get; set; }
 }

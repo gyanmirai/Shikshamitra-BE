@@ -123,12 +123,17 @@ public class AdmissionApplicationWorkflowService(
 		var review = managedReview ? await reviewRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
 		var managedPayment = current.StageType == AdmissionWorkflowStageType.Payment;
 		if (managedPayment && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
+		if (managedPayment && input.DeferFeeCollection && !AdmissionPaymentCompletionReader.ReadPolicy(definition.ConfigurationJson).AllowCollectionLater)
+			throw new BusinessException(AdmissionFeeSelectionErrorCodes.CollectionOrDeferralRequired,
+				"This workflow does not allow collection to be deferred to Onboarding.");
 		if (managedPayment && !input.DeferFeeCollection)
 		{
-			var feeContext = await feeSelection.GetContextAsync(application);
-			if (!feeContext.HasPaymentEvidence)
+			var selectionContext = await feeSelection.GetContextAsync(application);
+			var completion = await LazyServiceProvider.LazyGetRequiredService<AdmissionPaymentCompletionReader>()
+				.ReadAsync(application, current, definition, true, selectionContext.Owner?.Id);
+			if (!completion.CanComplete)
 				throw new BusinessException(AdmissionFeeSelectionErrorCodes.CollectionOrDeferralRequired,
-					"Collect fees or choose Collect later in Onboarding and enter a reason.");
+					completion.Blocker ?? "Complete the configured Payment requirement before continuing.");
 			await feeSelection.EnsureSelectionAsync(application);
 		}
 		AdmissionPaymentStageDto? payment = null;
@@ -242,8 +247,7 @@ public class AdmissionApplicationWorkflowService(
 		AdvanceAdmissionWorkflowDto input,
 		IReadOnlyDictionary<string, string>? assessedValues = null)
 	{
-		await historyRepository.InsertAsync(new AdmissionWorkflowTransitionHistory(
-			GuidGenerator.Create(), CurrentTenant.Id, application.Id, workflow.Id, current.Id, next?.Id,
+		await historyRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateTransition(application.Id, workflow.Id, current.Id, next?.Id,
 			selected?.Id, GetAction(input), input.IdempotencyKey.Trim(), input.Reason,
 			JsonSerializer.Serialize(new { selected?.Id, selected?.IsDefault, selected?.ConditionRuleJson, AssessedValues = assessedValues })), false);
 		await applicationRepository.UpdateAsync(application, false);
@@ -256,22 +260,18 @@ public class AdmissionApplicationWorkflowService(
 		AdmissionApplicationStageInstance? next,
 		AdvanceAdmissionWorkflowDto input)
 	{
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			input.SkipCurrentStage ? "WorkflowStageSkipped" : "WorkflowStageCompleted",
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(input.SkipCurrentStage ? "WorkflowStageSkipped" : "WorkflowStageCompleted",
 			input.SkipCurrentStage ? $"Stage skipped: {current.Name}" : $"Stage completed: {current.Name}",
 			application.ApplicantId, application.Id,
 			metadataJson: JsonSerializer.Serialize(new { current.Id, NextStageInstanceId = next?.Id, input.Reason })), false);
 		if (input.DeferFeeCollection)
-			await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-				"FeeCollectionDeferred", "Fee collection deferred to Onboarding.", application.ApplicantId, application.Id,
+			await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("FeeCollectionDeferred", "Fee collection deferred to Onboarding.", application.ApplicantId, application.Id,
 				metadataJson: JsonSerializer.Serialize(application.GetFeeCollectionDeferral())), false);
 		var eventType = next == null ? "WorkflowCompleted" : "WorkflowTransitioned";
 		var description = next == null ? $"Workflow completed at {current.Name}" : $"Workflow moved from {current.Name} to {next.Name}";
-		await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-			eventType, description, application.ApplicantId, application.Id), false);
+		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(eventType, description, application.ApplicantId, application.Id), false);
 		if (next != null)
-			await activityRepository.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id,
-				"WorkflowStageEntered", $"Stage entered: {next.Name}", application.ApplicantId, application.Id), false);
+			await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("WorkflowStageEntered", $"Stage entered: {next.Name}", application.ApplicantId, application.Id), false);
 	}
 
 	private static AdmissionWorkflowTransitionAction GetAction(AdvanceAdmissionWorkflowDto input) =>

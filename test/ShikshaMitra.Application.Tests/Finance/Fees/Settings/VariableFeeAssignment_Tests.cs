@@ -47,7 +47,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         original.FeeHeads.Single().IsVariable.ShouldBeTrue();
     }
 
-    private async Task<(AssignStudentFeeStructureDto Input, Guid HeadId)> VariableAssignmentAsync(bool variable, bool optional)
+    private async Task<(AssignStudentFeeStructureDto Input, Guid HeadId)> VariableAssignmentAsync(bool variable, bool optional, bool collectAtAdmission = false, bool addAdmissionHead = false, decimal fixedAmount = 1000.01m)
     {
         var (metadataId, standardId, candidate) = await ReadyCandidateAsync();
         candidate.ConcessionPolicyId = null;
@@ -55,10 +55,19 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         var head = candidate.FeeHeads.Single();
         head.IsVariable = variable;
         head.IsOptional = optional;
-        head.Amount = variable ? null : 1000.01m;
+        head.CollectAtAdmission = collectAtAdmission;
+        head.Amount = variable ? null : fixedAmount;
+        if (addAdmissionHead)
+        {
+            var original = await _feeHeadRepo.GetAsync(head.FeeHeadId);
+            var admissionHead = new FeeHead(Guid.NewGuid(), TestTenantId, original.AcademicYearId,
+                original.FeeCategoryId, "Admission reference", original.Module, false, null, original.IncomeCategoryId);
+            await _feeHeadRepo.InsertAsync(admissionHead, autoSave: true);
+            candidate.FeeHeads.Add(new() { FeeHeadId = admissionHead.Id, Amount = 750m, CollectAtAdmission = true });
+        }
         var draft = await _feeStructures.CreateAsync(metadataId, new() { StandardId = standardId, StandardFeeStructures = candidate });
-        draft.FeeHeads.Single().IsVariable.ShouldBe(variable);
-        draft.FeeHeads.Single().Amount.ShouldBe(head.Amount);
+        draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).IsVariable.ShouldBe(variable);
+        draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).Amount.ShouldBe(head.Amount);
         var structure = await _feeStructures.PublishAsync(draft.Id, new() { ConcurrencyStamp = draft.ConcurrencyStamp });
         var metadata = await _metadataRepo.GetAsync(metadataId);
         var standard = await _standardRepo.GetAsync(standardId);

@@ -258,59 +258,10 @@ public class AdmissionOfferingConfigurationValidator(
 		}
 	}
 
-	private async Task ValidateIntakeProfilesAsync(AdmissionCycle cycle, AdmissionOfferingWriteDto input,
+	private Task ValidateIntakeProfilesAsync(AdmissionCycle cycle, AdmissionOfferingWriteDto input,
 		ICollection<AdmissionOfferingValidationError> errors)
 	{
-		var usingProfiles = input.InquiryIntakeProfileId.HasValue || input.CounsellorAssignmentProfileId.HasValue;
-		if (!usingProfiles) return;
-		if (input.EntryMode is AdmissionEntryMode.Inquiry or AdmissionEntryMode.Both)
-			await ValidateIntakeProfileAsync(input.InquiryIntakeProfileId, AdmissionIntakeProfileKind.Inquiry,
-				AdmissionOfferingValidationCodes.InquiryIntakeProfileMissing,
-				AdmissionOfferingValidationCodes.InquiryIntakeProfileInvalid, errors);
-		else if (input.InquiryIntakeProfileId.HasValue)
-			errors.Add(Error(AdmissionOfferingValidationCodes.InquiryIntakeProfileInvalid,
-				"A direct-only offering cannot use an Inquiry profile."));
-		await ValidateIntakeProfileAsync(input.CounsellorAssignmentProfileId, AdmissionIntakeProfileKind.CounsellorAssignment,
-			AdmissionOfferingValidationCodes.CounsellorAssignmentProfileMissing,
-			AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid, errors);
-		var profileIds = new[] { input.InquiryIntakeProfileId, input.CounsellorAssignmentProfileId }
-			.Where(id => id.HasValue).Select(id => id!.Value).ToArray();
-		if (profileIds.Length > 0 && await intakeSetupRepository.AnyAsync(setup => setup.IsArchived &&
-			(Enumerable.Contains(profileIds, setup.InquiryIntakeProfileId) ||
-			 Enumerable.Contains(profileIds, setup.CounsellorAssignmentProfileId))))
-		{
-			errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
-				"Archived intake setups cannot be used by an active Admission Offering.", activationOnly: true));
-		}
-		if (input.CounsellorAssignmentProfileId.HasValue)
-		{
-			var profile = await intakeProfileRepository.FindAsync(input.CounsellorAssignmentProfileId.Value);
-			if (profile?.Kind == AdmissionIntakeProfileKind.CounsellorAssignment)
-			{
-				try
-				{
-					var rules = JsonSerializer.Deserialize<AdmissionCounsellorAssignmentRules>(profile.ConfigurationJson,
-						new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ??
-						throw new ArgumentException("Assignment settings are missing.");
-					rules.Validate();
-					var eligible = false;
-					foreach (var userId in rules.CounsellorUserIds)
-						if (await people.CanAccessHierarchyAsync(userId, cycle, input)) { eligible = true; break; }
-					if (!eligible)
-						errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
-							"Select an active counsellor who has access to this class in the assignment profile.", activationOnly: true));
-					if (rules.FallbackManagerUserId.HasValue &&
-						!await people.CanAccessHierarchyAsync(rules.FallbackManagerUserId.Value, cycle, input))
-						errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
-							"The fallback manager in the assignment profile must be active and have access to this class.", activationOnly: true));
-				}
-				catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException)
-				{
-					errors.Add(Error(AdmissionOfferingValidationCodes.CounsellorAssignmentProfileInvalid,
-							"The assignment profile has invalid rules."));
-				}
-			}
-		}
+		return Task.CompletedTask;
 	}
 
 	private async Task ValidateIntakeProfileAsync(Guid? id, AdmissionIntakeProfileKind kind,

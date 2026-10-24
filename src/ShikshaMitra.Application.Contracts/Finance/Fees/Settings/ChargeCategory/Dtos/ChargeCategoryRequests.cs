@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 using System;
 
@@ -10,7 +10,7 @@ public class CreateChargeCategoryRequest
     public string Name { get; set; }
 
     [Required]
-    public bool IsApprovalRequired { get; set; }
+    public bool IsApprovalRequired { get; set; } = true;
 
     public string? Description { get; set; }
 

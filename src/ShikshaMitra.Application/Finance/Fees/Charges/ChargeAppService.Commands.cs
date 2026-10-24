@@ -23,12 +23,13 @@ public partial class ChargeAppService
 	[UnitOfWork(IsDisabled = true)]
 	public async Task<ChargeResponse> CreateAsync(Guid academicYearId, CreateChargeRequest input)
 	{
-		var autoApprove = await userScopeService.IsAdminUserAsync(currentUser.Id!.Value);
-		if (autoApprove)
-			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve);
 		using var uow = unitOfWorkManager.Begin(isTransactional: true);
 		await EnsureAcademicYearExistsAsync(academicYearId);
-
+		var category = await chargeCategoryRepository.GetAsync(input.ChargeCategoryId);
+		var approvalNotRequired = !category.IsApprovalRequired;
+		var autoApprove = approvalNotRequired || await userScopeService.IsAdminUserAsync(currentUser.Id!.Value);
+		if (autoApprove && !approvalNotRequired)
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Approve);
 		var audienceDto = await ResolveAudienceDtoAsync(input);
 		var audience = ChargeAudienceMapper.ToDomain(audienceDto);
 		var snapshot = ChargeAudienceMapper.SerializeSnapshot(audienceDto);
@@ -50,13 +51,13 @@ public partial class ChargeAppService
 		if (autoApprove)
 		{
 			await chargeRequestManager.ApproveLinesAsync(request, null, currentUser.Id!.Value,
-				"Automatically approved on administrator creation.");
+				approvalNotRequired ? "Approval is not required by the charge category." : "Automatically approved on administrator creation.");
 			await chargeRequestRepository.UpdateAsync(request, autoSave: false);
 			await CurrentUnitOfWork!.SaveChangesAsync();
 			await financeAuditWriter.WriteAsync(
 				academicYearId, FinanceAuditEntityTypes.FeeCharge, request.Id, request.ChargeName,
 				FinanceAuditActions.Approve, $"Automatically approved charge lines for {lines.Count} student(s).",
-				reason: "Administrator creation; automatic approval.");
+				reason: approvalNotRequired ? "Charge category does not require approval." : "Administrator creation; automatic approval.");
 		}
 		await uow.CompleteAsync();
 		if (autoApprove)
@@ -70,6 +71,7 @@ public partial class ChargeAppService
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Update)]
+	[UnitOfWork(isTransactional: true)]
 	public async Task<ChargeResponse> UpdateAsync(Guid chargeId, UpdateChargeRequest input)
 	{
 		var request = await GetChargeRequestOrThrowAsync(chargeId);

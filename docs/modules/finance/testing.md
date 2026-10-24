@@ -3,12 +3,19 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-17
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Finance backend changes
+
+Automatic collection allocation: `CollectionAllocation_Tests` covers snapshot compatibility,
+invalid enums, decimal conservation, partial/excess and duplicate targets.
+`LateFeeCollectionRuntime_Tests` has `Allocation_Basis_Survives_Save_Update_And_Clone` and
+`Automatic_Allocation_Rejects_Tampering_And_Stale_Review_And_Replays_Safely` for both modes,
+using tenant-scoped admin fixtures and real collection persistence. These verify omitted-field
+compatibility, pinned snapshots, no writes on altered/stale commands and idempotent replay.
 
 TL;DR: use focused Finance tests for changed financial behavior, then run module docs validation.
 
@@ -24,6 +31,16 @@ git diff --check
 ```
 
 ## Focused test map
+
+### Admission and withdrawal proration
+
+| Gate | Coverage |
+|---|---|
+| Calendar and ledger equation | `WithdrawalProration_Tests`, `AssignmentAmountCalculator_Tests`, `ProrationEventCalculation_Tests` |
+| Registration/default/version/no-reduction/one-time behavior, paid-date lock, Onboarding activation continuity | `AdmissionProrationIntegration_Tests` (partial `AdmissionWorkflowRuntimeIntegration_Tests`) and existing Admission collection/handoff tests |
+| Real PostgreSQL permissions, source replay, correction and rollback | `StudentRecordWithdrawalProrationPostgres_Tests` (partial `StudentRecordMidnightSchedule_Tests`); fresh disposable loopback `records_tests_*` database through `STUDENT_RECORDS_APPLICATION_POSTGRES` |
+
+The SQLite application harness disables physical transactions and cannot certify rollback. PostgreSQL tests use separate synthetic records; they do not change live school policies or issue real payments. Receipt/refund approval and late-fee workflows retain their own gates.
 
 ### Receipt Book and audit permission boundaries
 
@@ -58,7 +75,7 @@ Changes before entity-history registration cannot be reconstructed; missing know
 
 | Change area | First tests |
 |---|---|
-| Batch lifecycle | `ChargeWorkflowStatusResolver_Tests`, `ChargeBatchLifecycleApi_Tests`: mandatory approval for all categories, partial decisions/payments, all-student completion, rejection inbox, waiver settlement, payment reversal, status validation and detail/list/count parity |
+| Batch lifecycle | `ChargeWorkflowStatusResolver_Tests`, `ChargeBatchLifecycleApi_Tests`: approval-required categories remain pending, explicit no-approval categories apply immediately with collectible balances, partial decisions/payments, all-student completion, rejection inbox, waiver settlement, payment reversal, status validation and detail/list/count parity |
 | Charges | `ChargeAppService_Tests`, `ChargeCoreApi_Tests`, `ChargeValidationApi_Tests`, `ChargeWorkflowApi_Tests`; add the missing isolation, mixed-batch, concurrency, idempotency, source-replay, receipt/account, and correction cases from [Charge management end to end](./references/charge-management-end-to-end.md) |
 | Concessions | `ConcessionTypeLifecycle_Tests`, `ConcessionRequestCoreApi_Tests`, `ConcessionRequestValidationApi_Tests`, `ConcessionRequestWorkflowApi_Tests` |
 | Paid-fee concessions | `ConcessionEligibility_Tests`, `DueFee_Mutations_Tests`; verify a fully paid installment remains Paid, approval creates the exact receipt-linked refund request, and only settlement decreases the paid cash balance |

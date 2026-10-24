@@ -31,6 +31,15 @@ public class FeeCollectFormDto
     /// Attached"). The staff collect form and the payment-method selector both read this.
     /// </summary>
     public bool AllowOnlineCollection { get; set; } = true;
+
+	public string AllocationBasis { get; set; } = "Legacy";
+	public Guid? CollectionPolicyId { get; set; }
+	public string? CollectionPolicyName { get; set; }
+	public int? CollectionPolicyVersion { get; set; }
+	/// <summary>Complete ledger sequence used by the screen and automatic allocation, before filtering.</summary>
+	public List<Guid> AllocationDueFeeOrder { get; set; } = [];
+	/// <summary>Opaque balance/order/policy revision; collect must revalidate it.</summary>
+	public string? AllocationRevision { get; set; }
 }
 
 /// <summary>All fee obligations grouped under one calendar month.</summary>
@@ -62,6 +71,7 @@ public class FeeLedgerLineDto
 
     /// <summary>Payment Term installment label when available, otherwise month/year.</summary>
     public string InstallmentLabel { get; set; } = string.Empty;
+	public Guid? InstallmentId { get; set; }
 
     /// <summary>Authoritative due date from the Payment Term schedule, when available.</summary>
     public DateTime? DueDate { get; set; }
@@ -95,6 +105,8 @@ public class FeeLedgerLineDto
     public int? ProrationEligibleDays { get; set; }
     public int? ProrationChargedDays { get; set; }
     public string? ProrationExplanation { get; set; }
+    public decimal WithdrawalProrationCredit { get; set; }
+    public string? WithdrawalProrationExplanation { get; set; }
 
     /// <summary>Amount already paid (cleared) against this obligation.</summary>
     public double Paid { get; set; }

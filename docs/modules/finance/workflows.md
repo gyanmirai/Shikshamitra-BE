@@ -3,16 +3,34 @@ module: finance
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Trace Finance backend workflows
 
+Collection Policy's allocation basis is versioned with the assignment/account policy snapshot.
+For configured policies, collect-form supplies the ordered eligible ledger and balance revision;
+collection repeats that calculation transactionally before accepting the submitted line amounts.
+No fee-head priority is configured separately. Existing snapshots remain Legacy until refreshed
+through the assignment workflow. See [automatic collection allocation](./api.md#automatic-collection-allocation)
+for the request, compatibility, permission, rounding, error and receipt-evidence contract.
+
 TL;DR: use this page to understand how Finance changes affect due rows, approvals, receipts, and reports.
 
 ## Core workflows
+
+### Registration joining date and withdrawal proration
+
+1. Finance configures one Active default Proration Policy for the academic year, with independent admission and early-withdrawal rules per recurring fee head. Fee structures do not attach proration policies.
+2. Registration supplies the saved `Academic.JoiningDate` Date binding. Explicit legacy Date codes `JOINING_DATE` and `ACTUAL_JOINING_DATE` are also supported. Creation timestamps, date of birth, previous-school dates and application-window dates are never substitutes. Published forms are not rewritten; a missing joining date blocks preparation when an included recurring head has an applicable rule.
+3. First Admission/Onboarding preparation pins the Finance default version and joining date. No default means normal fees. Head entitlement is calculated once from original scheduled fees and then allocated using the published term. One-time/unmatched heads retain full charges. Changing the master policy never reprices an existing preparation, receipt or paid amount. A changed used joining date requires owner correction. Both Student surfaces reuse one account and due IDs through finalization and activation.
+4. A Records Withdraw preview passes the actual effective leaving date to Finance. The pinned policy and original annual basis determine the additional non-cash reduction before Finance clearance. Pending payment/refund/adjustment/concession work blocks recalculation. Existing charges and late fees are not silently waived.
+5. Application repeats tenant/scope/evidence/balance checks and the existing `Finance.Policies.ProrationPolicy.Recalculate` permission. The credit and approved withdrawal share a serializable transaction. Credits cancel unpaid principal first, latest installment first, then reduce paid principal. Original obligations, paid amounts and receipts remain unchanged. Excess paid goes through normal Finance refund review, with no automatic payout.
+6. Existing Finance audit rows store result and line evidence, keyed uniquely by the source transition ID. Due extensions track credit/source/explanation. A named Records correction reverses linked credit in the same transaction and appends an audit event. Later financial activity blocks correction until resolved by its owner. No schema migration or permission grants are added.
+
+Historic assignments without a pinned proration version are not assigned today's policy retroactively. Promote, Transfer, Graduate and Return keep their existing fee behavior.
 
 ### Concessions and Collections list queries
 

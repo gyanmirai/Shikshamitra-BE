@@ -17,7 +17,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 
 
 
-	private async Task<AdmissionWorkflowDto> CreateFeeSelectionWorkflowAsync(Guid registrationFormId)
+	private async Task<AdmissionWorkflowDto> CreateFeeSelectionWorkflowAsync(Guid registrationFormId, AdmissionPaymentCompletionPolicy? completion = null)
 	{
 		var startId = Guid.NewGuid();
 		var paymentId = Guid.NewGuid();
@@ -32,7 +32,8 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 					IsEntryStage = true, IsRequired = true,
 					ConfigurationJson = JsonSerializer.Serialize(new { formDefinitionId = registrationFormId }) },
 				new() { Id = paymentId, Code = "PAYMENT", Name = "Application payment",
-					StageType = AdmissionWorkflowStageType.Payment, DisplayOrder = 1, IsRequired = true },
+					StageType = AdmissionWorkflowStageType.Payment, DisplayOrder = 1, IsRequired = true,
+					ConfigurationJson = completion == null ? null : JsonSerializer.Serialize(new { paymentCompletion = completion }) },
 				new() { Id = doneId, Code = "DONE", Name = "Payment complete",
 					StageType = AdmissionWorkflowStageType.Approval, DisplayOrder = 2,
 					IsTerminalStage = true, IsRequired = true }

@@ -27,6 +27,7 @@ internal static class AdmissionFeeCollectionInputMapper
 			throw new AbpValidationException("Invalid fee collection.", [new ValidationResult("Choose valid fee allocations and matching payment amounts.")]);
 		return new CollectFeeInput
 		{
+			AutomaticAllocation = input.AutomaticAllocation,
 			StudentId = account.StudentId, FinanceFeeAccountId = account.Id, AcademicYearId = account.AcademicYearId,
 			IdempotencyKey = input.IdempotencyKey, Notes = input.Notes, PaymentConfirmed = input.PaymentConfirmed,
 			DueFeePayments = input.DueFeePayments.Select(p => new DueFeePaymentDto { DueFeeId = p.DueFeeId, FeeHeadId = p.FeeHeadId, Amount = (double)p.Amount }).ToList(),

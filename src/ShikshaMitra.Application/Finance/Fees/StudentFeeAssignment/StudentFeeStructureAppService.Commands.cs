@@ -27,12 +27,13 @@ public partial class StudentFeeStructureAppService
 	[Authorize(AssignPermission)]
 	public async Task<BulkAssignStudentFeeStructureResultDto> BulkAssignAsync(BulkAssignStudentFeeStructureDto input)
 	{
+		var acceptedAt = Clock.Now;
 		var result = new BulkAssignStudentFeeStructureResultDto();
 		foreach (var item in BulkItems(input))
 		{
 			try
 			{
-				var committed = await AssignAsync(item);
+				var committed = await AssignAcceptedAsync(item, acceptedAt);
 				result.Results.Add(new() { StudentId = item.StudentId, Outcome = committed.Outcome, Success = true, Result = committed });
 				if (committed.Outcome == "AlreadyAssigned") result.AlreadyAssignedCount++; else result.SuccessCount++;
 			}

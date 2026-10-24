@@ -71,7 +71,12 @@ public sealed record AdmissionInquiryPolicy
 		ApplicationStartRequirement = AdmissionInquiryApplicationStartRequirement.Captured,
 		RequireGuardianEmail = false,
 		RequireApplicantDateOfBirth = false,
-		RequireSourceDetailFor = []
+		RequireSourceDetailFor = [],
+		AssignmentMode = AdmissionCounsellorAssignmentMode.Manual,
+		DefaultCounsellorId = null,
+		CounsellorPoolUserIds = [],
+		RestrictActionsToAssignedCounsellor = false,
+		AllowedSources = []
 	};
 
 	public static AdmissionInquiryPolicy? Read(string? json)

@@ -60,6 +60,19 @@ public class StudentCredentialEmailRequest : FullAuditedAggregateRoot<Guid>, IMu
 		if (!IsDue(now)) throw new InvalidOperationException("Email is not due.");
 		Status = "Processing"; ClaimedAt = now; AttemptCount++;
 	}
+	/// <summary>A new explicit intent after an owner-verified address change; never resend stale secrets.</summary>
+	public void RequeueForRecipient(Guid? actor, DateTime now, string email)
+	{
+		if (string.IsNullOrWhiteSpace(email)) throw new ArgumentException("Email is required.", nameof(email));
+		var previousEmail = Email;
+		Requeue(actor, now);
+		if (!string.Equals(previousEmail, email.Trim(), StringComparison.OrdinalIgnoreCase))
+		{
+			ExtraProperties["PreviousRecipientEmail"] = previousEmail;
+			Email = email.Trim();
+			ClearInitialPassword();
+		}
+	}
 	public void SetInitialPassword(string encryptedPassword) => EncryptedInitialPassword = encryptedPassword;
 	public void ClearInitialPassword() => EncryptedInitialPassword = null;
 	public void Sent(DateTime now)

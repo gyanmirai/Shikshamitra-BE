@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -25,6 +25,20 @@ Configured school masks and protected identity rules are applied before serializ
 Sibling option labels are limited to the caller's linked students; unavailable saved choices are represented without exposing unrelated identities.
 No retained form returns an empty `formSources` array, not a fixed substitute schema.
 The endpoint is implemented by `Application/Students/Portal/MobileStudentProfileAppService.cs` with shared Records reading/projection helpers; the existing staff endpoint and its permissions are unchanged.
+
+## Application numbering settings
+
+| Endpoint | Permission | Contract |
+|---|---|---|
+| `GET /api/student/enrollment/admissions/application-numbering` | `Students.Admissions.View` | Current school-wide rule, `expectedVersion`, `isConfigured`, `sequenceLocked`; unconfigured schools receive the legacy APP/calendar-year defaults. |
+| `PUT /api/student/enrollment/admissions/application-numbering` | `Students.Admissions.Add` | `expectedVersion`, `prefix`, `separator`, `suffix`, `yearFormat`, `resetPolicy`, `digits`, `startingNumber`; returns the saved immutable revision. |
+| `POST /api/student/enrollment/admissions/application-numbering/preview` | `Students.Admissions.View` | Same draft fields plus optional `academicYearId` (required for academic-year format/reset). Returns `nextNumber` and `nextSequence` from the allocation calculation without saving a rule, reserving a number or creating a counter. Stale `expectedVersion` returns `.Changed`. |
+
+Year format: 0 none, 1 UTC calendar year, 2 offering-period academic year (`YYYY-YY`). Reset policy: 0 continuous, 1 calendar year, 2 academic year. Yearly resets require the matching year token. Prefix is 1–20 ASCII letters/digits/hyphens, suffix 0–20; separators are `/`, `-`, or empty; digits 1–12; starting number 1–999999999. Starting number/reset policy lock after first custom issuance. Stale saves return `Students.Admissions.Numbering.Changed`; invalid combinations use `.Invalid`; sequence changes after issuance use `.SequenceLocked`. Existing action permissions and registration permissions are unchanged.
+
+Apply `AddAdmissionApplicationNumbering` before starting the updated API. The migration adds rule/counter tables only and does not rewrite applications or seed school settings.
+
+Changing from the default format to a school prefix carries the existing sequence: `APP-2026-000050` → `DDVS-2026-0051` with four digits. Starting number is a minimum. Calendar reset adopts the matching legacy calendar counter; continuous adopts the highest legacy counter; academic reset adopts issued default APP numbers in that academic year, including soft-deleted applications. Existing custom scope counters and matching historic numbers also set a floor. Preview and issuance share this logic under the same tenant transaction lock; previews are current observations, not reservations. This continuation/preview change adds no schema migration.
 
 ## Student action permissions
 
@@ -67,7 +81,9 @@ The scoped Onboarding case-detail GET includes optional `portalAccountOwners` wi
 
 `POST /api/student/onboarding/{id}/guardian-credential-email/enable` accepts `{reason,concurrencyStamp}` and returns the updated case detail. Controller and application service require Onboarding Configure (currently `Students.Onboarding.Add`), a current tenant/user, scoped case access, current stamp, an activated open case, a reviewed `ReadinessRulesSnapshot` and `guardianAccount=true`. The reason is required (3–400 characters). The command enables only `sendGuardianCredentialEmail` in this case's pinned snapshot, retains every other rule and school/Offering settings, and adds a creation-audited `GuardianCredentialEmailEnabled` event with previous/new values. An already-enabled current-stamp retry is a no-op. The command never provisions accounts, refreshes provisioning or enqueues emails. No schema migration is needed.
 
-Canonical Father/Mother/Guardian contact corrections continue through the existing Records snapshot/change APIs, including their section authority, stale snapshot check, approval policy and guardian-access review. The selected saved email and ownership checks remain mandatory during portal provisioning.
+General Father/Mother/Guardian contact corrections continue through the existing Records snapshot/change APIs, including their section authority, stale snapshot check, approval policy and guardian-access review.
+The explicitly approved Onboarding email-only command is the narrow exception described in [app-login email edits](#onboarding-app-login-email-edits); it does not replace those wider contact/account-repair workflows.
+The selected saved email and ownership checks remain mandatory during portal provisioning.
 
 ## Decision history display
 
@@ -116,23 +132,17 @@ Ending a journey records Withdrawn with actor, reason, decision history and acti
 
 ## Intake setup lifecycle
 
-POST `/api/student/enrollment/admissions/intake-setups/{id}/restore` requires Admission Offerings Add authority in both controller and application service. It accepts `{concurrencyStamp}` and returns the shared envelope containing the updated setup DTO. Tenant filtering and the same stale-write guard used by archive apply; blank or oversized stamps fail validation, and stale stamps return `Admissions.Intake.ConcurrencyConflict`. Restore clears the archive flag, time and actor without replacing profile IDs or rules. A repeated restore using the current stamp is a no-op. It does not reactivate historical Offerings or links, or change existing inquiry assignments; ordinary configuration and staff checks still govern subsequent usage. No schema migration is required.
+Intake setup create/update/archive/restore and intake-profile writes are retired. Existing permission attributes remain, and authorized mutation attempts return `Admissions.StaffAssignmentRetired` without changing records. Legacy read contracts and stored profile references remain for compatibility.
 
 ## Intake counsellor options
 
-`GET /api/student/enrollment/admissions/intake-profiles/counsellors` requires Admission Offerings View and returns up to 50 active current-tenant identities with admission scope access in the shared response envelope.
-Optional `filter` searches username and display-name parts; optional `counsellorOnly` defaults to `false`, preserving the existing broad staff lookup.
-With `counsellorOnly=true`, database membership in the canonical seeded `Admissions Counselor` role (`ADMISSIONS COUNSELOR` normalized name) is applied before candidate batching and the 50-result cap.
-A missing role or no eligible members returns an empty list without broadening to other staff.
-Selectability retains active identity and admission scope checks without adding a mandatory HR Employee link; existing account-only candidates and runtime assignment validation remain unchanged.
-
-Offering create, update, clone, bulk and activation accept both intake profile IDs omitted. Selecting a setup still validates its paired Inquiry and assignment references, active counsellor access, fallback and rules; omitting both does not bypass published workflow, form, hierarchy, dates or UserScope validation. Clearing both references resets the intake marker, and a historical marker alone does not make an otherwise ready Offering incomplete.
-
-Inquiry `GET /api/student/enrollment/admissions/inquiries/counsellors?admissionOfferingId=...` and manual assignment retain Inquiry Assign, Offering Add and academic scope checks. An Offering without an assignment profile lists only active canonical `Admissions Counselor` identities with access to that Offering; manual assignment rechecks that membership and access. Configured Offerings retain their stored pool/fallback restrictions and manual capacity checks. An unassigned inquiry can be transferred to an eligible Offering without inventing an owner; an existing owner must remain eligible or the transfer must use configured routing.
+Admissions no longer selects or assigns a counsellor or Onboarding case owner. Inquiry/application assignment and Onboarding owner commands reject with `Admissions.StaffAssignmentRetired`. Legacy list ownership filters are ignored; action, tenant and academic scope checks remain authoritative. Offering writes ignore intake profile references; readiness still validates workflow, forms, hierarchy and dates.
 
 ## Public inquiry link options
 
-Public-link creation options are exposed through `GET /api/student/enrollment/admissions/public-inquiry-links/options?admissionCycleId={guid}` with Admission Offerings View authority. The response envelope contains distinct `{counsellorAssignmentProfileId, inquiryFormDefinitionId}` pairs from active Inquiry/Both Offerings in the published period and the current user's academic scope, including null-profile manual-routing options. Archived setups and unpublished/non-Inquiry forms are excluded. An unknown or unpublished period returns an empty list. Create retains Add authority and accepts omitted/null `counsellorAssignmentProfileId` when a compatible published `inquiryFormDefinitionId` is supplied. That null value explicitly suppresses automatic assignment, including Offering and legacy workflow defaults; captured inquiries remain Unassigned until staff assign them. Configured links retain exact profile/form matching and pool/fallback eligibility validation. `Admissions.PublicInquiry.OfferingRequired` remains HTTP 400 and includes corrective text plus `PeriodName`, `SetupName`, and `Reason` for absent Offerings or unmatched profile/form linkage. Persistence uses the nullable-column migration `MakePublicInquiryAssignmentOptional`.
+`GET /api/student/enrollment/admissions/public-inquiry-links/options?admissionCycleId={guid}` retains Offerings View and returns distinct published Inquiry forms from accessible active Inquiry/Both Offerings. The legacy assignment-profile field is always null. Create retains Offerings Add and requires the selected published form on an accessible active Offering in that period. It stores no assignment profile. Existing links retain their form, token hash, source, expiry and revocation behavior; their former routing profile no longer controls public capture. `Admissions.PublicInquiry.OfferingRequired` remains HTTP 400 with corrective form/Offering guidance and `PeriodName`. No new schema migration is required.
+
+Activity and timeline DTOs return `actorName`; completed workflow and Onboarding steps return `completedByName`, and Onboarding events return `actorName`. New activities/events/transitions snapshot the authenticated server actor. Historical rows resolve retained creator IDs in the current tenant where possible; missing attribution is not replaced by a former case owner.
 
 ## Admission student field contracts
 
@@ -165,16 +175,28 @@ Pending cases adopt current school choices through the existing admission-derive
 |---|---|
 | GET `/api/student/onboarding/{caseId}/credentials` | Onboarding.View plus current tenant/user and case scope; returns `caseId`, `concurrencyStamp` and legal saved recipients with `accountType`, `relationship`, `name`, `email`, `canSend`, `blockedReason` and optional delivery status. No credentials or tokens. |
 | POST same credentials route | Onboarding.Edit plus current scope; `{accountType,relationship,expectedEmail,concurrencyStamp}` authorizes the selected saved owner, prepares or safely reuses the account and records a durable email intent in one transaction. New preparation additionally requires Identity.Users.Create; verified sibling Parent reuse also requires Identity.Users.Update. Returns the refreshed workspace. |
+| POST `/api/student/onboarding/{caseId}/credentials/retry-parent-setup` | Onboarding.Edit plus current tenant/user, target stamp and scope for both this case and the original setup case. Accepts `{concurrencyStamp}`; retries the server-resolved original failed parent setup intent with its existing cooldown and saved-recipient checks. It never accepts an arbitrary source-case ID or creates a sibling email request. |
+| POST `/api/student/onboarding/{caseId}/credentials/link-parent` | Onboarding.Edit and Identity.Users.Update plus current tenant, enrolled case scope and stamp. Accepts `{concurrencyStamp,siblingParentSelection?}` and revalidates confirmed family/current parent proof. Attaches an existing parent after enrollment, including completed optional-parent cases, without replaying placement, identifiers, fee binding or enrollment. Returns the credentials workspace; it never creates a parent identity or sibling email intent. |
 | GET `/api/student/onboarding/{caseId}/credential-emails` | Onboarding.View and current academic scope; returns student/guardian rows including NotRequested/Blocked, mailbox, enabled flag and server canSend. No password/token fields. |
 | POST same route | Onboarding.Edit and current scope; `{accountType, concurrencyStamp?}` uses the onboarding case stamp and current mandatory readiness. Returns durable status; already-pending requests are idempotent. |
 | POST `/api/student/onboarding/{caseId}/documents/override` | Retained route rejects required-document override attempts; use canonical workflow evidence and verification. |
 
 Email status DTO includes id, accountType, email, status, message, sentAt, attemptCount, emailEnabled and canSend.
+For the explicit Father/Mother admission flow, the credentials workspace adds `parentSibling` with current eligible candidates, selection/link status, optional saved selection, review blockers and server `canLink`/`canRetrySetup` capabilities.
+Candidate email and identity ID are drift guards, not permission to link by email alone.
+Activation accepts optional `siblingParentSelection: {relationship,expectedEmail,expectedUserId}`; two eligible parents require an explicit choice, while one eligible parent can be selected deterministically.
+Reuse requires Onboarding.Add and Identity.Users.Update, current scope, a confirmed family, a verified Father/Mother link for another child, matching current saved parent email and an active Parent-only identity.
+An unconfirmed identity additionally requires the exact verified child's existing setup request; no new identity, password or sibling email is created.
+Historical generic parent links are eligible only for the exact confirmed source child, matching current saved email and the staff-confirmed new Father/Mother relationship; the old relationship is never relabeled.
+Parent access disabled by saved rules grants no link; failed reviewed-selection or contact drift leaves a reviewable access-pending state rather than switching identities.
+New parent-only first accounts remain manual even under retained automatic school configuration; Student self-login and legacy guardian behavior are unchanged.
+Reused account status is `Linked`, not a fabricated `Sent`; original setup Pending/Failed remains separately visible.
 `expectedEmail` detects saved-profile drift and is not an arbitrary destination.
 The new command preserves pinned account requirements, readiness and delivery timing; explicit manual requests can send when automatic email is Off without changing school/case flags.
 Only an authorized saved-recipient manual intent receives this delivery authority; unmarked automatic requests and legacy commands retain their original email-enabled checks.
 The command never invokes a case-only policy override, fabricates mailbox verification or resets an existing password.
-Student recipients require explicit Applicant email capture matching the current profile, or an applied Records email correction that actually changed to the current email; inherited guardian email is not a Student recipient.
+Student recipients require explicit Applicant email capture matching the current profile, an applied Records correction that actually changed to the current email, or the explicit scoped Onboarding email-only capture marker matching the current Student profile.
+Inherited parent/guardian email is never a Student recipient.
 Completed cases allow eligible delivery retries without reopening or replacing their account links.
 Completion-timed one-click intents may remain Pending until all non-email completion requirements pass; the dispatcher postpones only this typed timing condition before generating a password.
 Exact already-pending owner intent retries are idempotent, while different owners, changed emails and stale new writes are rejected.
@@ -187,7 +209,7 @@ An ambiguous mobile match fails closed; the owner verifies the mailbox and chang
 
 All routes below are under `/api/student/onboarding`, enforce tenant/academic scope, and retain existing Onboarding permission aliases.
 
-`GET /filter-options` returns scalar academic IDs, names and parent links derived only from the scoped cases, with the optional year filter applied first. It does not materialize the recursively auto-included academic entity graph. The response and existing View/identifier-unlock permissions are unchanged.
+`GET /filter-options` returns scalar academic IDs, names and parent links derived only from the scoped cases, with the optional year filter applied first. It does not materialize the recursively auto-included academic entity graph. View remains independent of the identifier-Unlock capability, which additionally requires configured database administrator membership.
 
 The worklist GET applies all filters and counts in the scoped database query before paging.
 `placementDivisionId` narrows current placement alongside the existing Board/Medium/Class/Division selectors.
@@ -341,16 +363,35 @@ Generic create/update/bulk date contracts retain validated custom-date compatibi
 Fresh special Registration and family matching accept only RTE, Management, or Staff offerings configured for DirectRegistration or retained Both entry.
 RTE configuration still requires DirectRegistration, Form entry, no Inquiry stage and no Assessment stage.
 General and Inquiry-first offerings reject these special-entry commands with `Admissions.DirectRegistration.EntryNotAllowed`.
-New starts and family lookups require active/open/published-ready, current-tenant, accessible offerings; lookup returns only scoped active families matching the primary guardian mobile.
+New starts and family lookups require active/open/published-ready, current-tenant, accessible offerings.
+Parent-only family matching accepts a saved Father/Mother email or mobile, while legacy mobile-only family linking remains compatible without gaining trusted sibling-account provenance.
 Ordinary application start still requires Inquiry evidence; the server-internal Records return coordinator and existing applications retain their governed lifecycle.
 
 | Method | Application route suffix | Permission | Contract |
 | --- | --- | --- | --- |
 | POST | `direct-registration` | `Students.Admissions.Applications.Add` | System-owned applicant/guardian identity, Offering ID, stable `requestId`, optional counsellor and explicit existing/separate family choice; creates a Registration-first application transactionally. |
-| GET | `direct-registration/family-matches?offeringId=...&guardianMobile=...` | `Students.Admissions.Applications.Add` | Matching scoped family identities and visible sibling names for an available special Registration offering. |
+| GET | `direct-registration/family-matches?offeringId=...&guardianMobile=...&guardianEmail=...` | `Students.Admissions.Applications.Add` | Matching scoped family identities, visible child names and saved parent candidates for an available special Registration offering. Mobile may be empty when email is supplied. |
 
 These existing routes are under `/api/student/enrollment/admissions/applications` and enforce the same Start permission on both controller and application service.
 The same-request/same-payload retry returns the existing scoped application without creating a second family/applicant; changed identity, offering, or initial counsellor conflicts.
+
+### Parent-only sibling selection
+
+Inquiry creation and Direct Registration accept additive `parentRelationship` (`father` or `mother`) and `existingParentApplicantId` alongside `existingFamilyId`.
+An existing family in this new flow requires the source applicant and explicit parent relationship; a family ID or matching email alone never grants portal access.
+Family match responses add `parents: [{sourceApplicantId,relationship,name,firstName,lastName,email,mobile}]`, `matchByEmail` and `matchByMobile`.
+A legacy generic Parent contact has nullable `relationship`; staff must explicitly identify Father or Mother rather than the server guessing.
+Legacy mobile-only responses retain the saved primary contact display name, but Guardian/Relative contacts are not promoted into parent candidates.
+Inquiry `duplicate-check` additionally accepts up to two `parentContacts: [{relationship,email,mobile}]` for authored Father/Mother fields and returns the same parent candidates on each family match.
+Cross-cycle suggestions require a matching saved parent contact and existing admission scope, not a name-only signal.
+Selection rechecks the active family, source applicant visibility, current saved contact and tenant before recording server-owned confirmation on the new applicant.
+The selected saved parent profile wins over typed child-form values; shared family contact rows are not overwritten.
+Public Inquiry rejects trusted existing-parent selection.
+Existing duplicate previews, cycle rules, request replay and finalization identity checks remain authoritative; name/date-of-birth similarity alone introduces no new hard identity block.
+Direct Registration retries compare the recorded submitted email/mobile and selected relationship/source to reject changed payloads.
+Pending authored parent profiles use a parameterized provider-backed JSON contact predicate intersected with current admission scope before projecting family IDs.
+Current Student Father/Mother contacts and ordinary saved primary contacts also use targeted queries; there is no arbitrary pending-applicant ceiling, unrelated JSON-profile materialization, Student aggregate graph or per-child query.
+These additive fields use existing audited extra-property storage and require no migration or new permission.
 
 | Method | Route | Permission |
 |---|---|---|
@@ -412,7 +453,7 @@ Rollback still creates a separate Draft and never rewrites an Offering or Applic
 
 `POST /api/student/enrollment/admissions/applications/{id}/workflow/advance` requires `Students.Admissions.Applications.Add`.
 The body includes `expectedCurrentStageInstanceId`, a unique `idempotencyKey`, required `concurrencyStamp`, and optional transition, skip, override, reason and `deferFeeCollection` fields.
-`deferFeeCollection: true` is accepted only in the active Payment stage with a nonblank reason of at most 512 characters. It cannot be combined with skip or override. Deferral uses configured routing, records actor/time/reason, and creates no Finance account, assignment, dues or receipt. A regular Payment continuation requires recorded collection evidence and a matching saved fee selection; no full-payment threshold is introduced.
+`deferFeeCollection: true` is accepted only in the active Payment stage when its pinned completion policy permits deferral, with a nonblank reason of at most 512 characters. It cannot be combined with skip or override. Deferral uses configured routing, records actor/time/reason, and creates no Finance account, assignment, dues or receipt. Regular continuation enforces the pinned partial/full rule against Finance and requires a matching saved fee selection; the historical payment flag alone is insufficient.
 Admin overrides additionally require `Students.Admissions.Applications.Add`.
 The response returns current workflow status, stage timestamps, immutable transition history, and `nextRequiredAction`. The next action is derived from the server stage-type registry and is `null` after the workflow completes.
 
@@ -531,7 +572,7 @@ The inquiry collection route prefix is `/api/student/enrollment/admissions/inqui
 | `POST` | `{inquiryId}/assign` | `Students.Admissions.Inquiries.Assign` | Assign manually or through the configured candidate pool after rechecking active status and offering scope |
 | `POST` | `bulk/assign` | `Students.Admissions.Inquiries.Assign` | Atomically apply one validated assignment to up to 100 scoped inquiries |
 | `POST` | `{inquiryId}/communications` | `Students.Admissions.Inquiries.Manage` plus Communication permissions | Create a family-facing Communication campaign linked to the inquiry; `Communication.Campaigns.Add` is always required and `Communication.Campaigns.Send` is additionally required for immediate delivery |
-| `POST` | `duplicate-check` | `Students.Admissions.Inquiries.Manage` | Find current-cycle duplicate signals and same-mobile families visible in staff scope across admission cycles before creation |
+| `POST` | `duplicate-check` | `Students.Admissions.Inquiries.Manage` | Find current-cycle duplicate signals and saved-parent email/mobile family matches visible in staff scope across admission cycles before creation |
 
 `isAssigned=false` is the authoritative Unassigned queue. Combining `isAssigned=true` with `assignedCounsellorId` produces a specific counsellor queue without loading and filtering all inquiries in the browser.
 
@@ -565,12 +606,10 @@ The response contains `notes: [{id,occurredAt,note,status,reminderAt,authorName}
 New note metadata includes `followUpId`; `ScheduledAt` binds through a field-level timezone-aware converter, with no global clock change or rewrite of existing persisted tasks.
 Internal policy snapshot JSON and qualification-answer JSON are never returned directly.
 Create Inquiry accepts `duplicateOverrideReason`; enabled policies can block duplicates or require this reason when staff explicitly create a separate family.
-`existingFamilyId` is accepted only for an active, admission-scope-visible family whose primary guardian mobile
-matches the normalized mobile in the request. A duplicate-check result based only on name or email is not
-authorization to link that family. Duplicate-check marks each result with `canLinkFamily` for the supplied
-guardian mobile; Create Inquiry rechecks the rule rather than trusting that preview flag.
-Cross-cycle matches are limited to the supplied guardian mobile and an applicant visible through a
-scoped Inquiry or Application; name/email-only duplicate signals remain within the requested cycle.
+Legacy `existingFamilyId` without parent-flow fields still requires an active, admission-scope-visible family and a matching primary guardian mobile.
+The explicit Father/Mother sibling flow instead uses the server-resolved saved parent candidate described above; same email with a changed mobile requires staff confirmation.
+Duplicate-check marks eligible results with `canLinkFamily`, but creation rechecks the family and selected source rather than trusting a preview flag.
+Name-only duplicate signals remain within the requested cycle.
 
 ## Applicant 360 APIs
 
@@ -693,18 +732,18 @@ Base: `/api/student/enrollment/admissions/applications/{applicationId}/form-stag
 
 | Method and relative route | Behavior |
 |---|---|
-| GET base | Return pinned policy, form status, deadline, attempts, verification state, blockers, concurrency and capability flags |
-| POST `sections/{sectionId}/verification` | Verify or revoke one configured section; revocation requires a reason |
+| GET base | Return effective pinned policy, form status, deadline, attempts, historical verification state, blockers, concurrency and capability flags; retired verification requirements are disabled |
+| POST `sections/{sectionId}/verification` | Legacy compatibility route; effective policy disables new section verification |
 | POST `correction` | Require a reason, append audit history, reopen the form, and invalidate earlier section verification |
 
-Commands carry the application `concurrencyStamp`; route identifiers are excluded from bodies. Managed submit also enforces the deadline and maximum attempts through the existing application-form endpoint. A managed stage may hold after submit for verification or explicit continuation. Missing or disabled `configurationJson.form` retains legacy Form behavior. Offering configuration rejects a Form-stage definition that differs from the Offering application form.
+Commands carry the application `concurrencyStamp`; route identifiers are excluded from bodies. Managed submit also enforces the deadline and maximum attempts through the existing application-form endpoint. Legacy manual-continuation settings may hold after submit for explicit continuation; retired section-verification flags do not block completion. Stored configuration and verification history remain unchanged. Missing or disabled `configurationJson.form` retains legacy Form behavior. Offering configuration rejects a Form-stage definition that differs from the Offering application form.
 
 ## Managed Payment stage APIs
 
 ### Application fee selection
 
 Base: `/api/student/enrollment/admissions/fee-selections/applications/{applicationId}`.
-The service returns server-controlled ownership, requiredness, locking and confirmation capabilities alongside an optional saved Finance-reference snapshot. `hasRecordedFeePayment` reports recorded evidence (not a settled/paid status); `feeCollectionDeferral` exposes stage ID, reason, actor and UTC timestamp for Admissions and linked Onboarding.
+The service returns server-controlled ownership, requiredness, locking and confirmation capabilities alongside an optional saved Finance-reference snapshot. `hasRecordedFeePayment` reports historical evidence, not progression readiness. `paymentCompletion` supplies `paymentRule`, `allowCollectionLater`, `canComplete`, `canDeferCollection`, `status` and `blocker`. Workflow configuration stores version 1 `paymentCompletion: { paymentRule: "partial" | "full", allowCollectionLater: boolean }`; absent settings default to partial/true. Unsupported versions or invalid values reject publication/advancement. `feeCollectionDeferral` exposes stage ID, reason, actor and UTC timestamp for Admissions and linked Onboarding.
 
 | Method and relative route | Contract |
 |---|---|
@@ -718,7 +757,7 @@ Saving requires `Students.Admissions.Applications.Add`; confirmation requires th
 These endpoints preserve the standard `Result<T>` envelope.
 They do not create Finance assignments, dues, allocations or receipts.
 
-Payment summary reads remain at `/api/student/enrollment/admissions/payments/applications/{applicationId}/stages/{stageId}` and expose `feeStructureRequired`, `collectionPending`, `collectionRecorded` or `collectionDeferred`, blockers and ordinary completion readiness. A confirmed structure alone never means Paid. Legacy admission record/review/waive/reverse capabilities remain false; use the Finance collection adapter for actual collection. Existing payment permission identifiers remain intact.
+Payment summary reads remain at `/api/student/enrollment/admissions/payments/applications/{applicationId}/stages/{stageId}` and include the same completion decision, with `feeStructureRequired`, `collectionPending`, `partiallyPaid`, `pendingVerification`, `financeCleared` or historical `collectionDeferred` status. A confirmed structure alone never means Paid. Partial evidence reads require existing Finance collection View permission; full/zero clearance consumes the existing scoped internal settlement decision. Legacy admission record/review/waive/reverse capabilities remain false; use the Finance collection adapter for actual collection. Existing payment permission identifiers remain intact.
 
 Confirmation saves through the existing fee-selection PUT with structureId, optionalHeadIds and current application concurrencyStamp. Workflow advancement remains a separate permissioned/idempotent command. Actual collection uses the Finance-owned application adapter at `/api/fee-collections/admission-applications/{applicationId}`: read `summary`, explicitly `prepare` canonical dues, read `collect-form`, then POST a payment with its stable retry key. Collection View/Add and academic scope remain mandatory even when the Finance menu is hidden. Deferring collection invokes none of those monetary commands. See [Finance collection ownership and handoff](../finance/references/admission-fee-collection.md).
 
@@ -789,7 +828,7 @@ The authenticated controller root is `/api/students/roll-number-batches`.
 | Method and suffix | Contract |
 |---|---|
 | GET `context` | Academic year, Class and Division IDs; returns capabilities, unassigned count and latest 20 non-preview batch summaries. |
-| POST `preview` | Scope plus operation `assign-missing` or `renumber`; freezes the complete server cohort and returns its first 25 rows. No client student IDs or proposed numbers are accepted. |
+| POST `preview` | Scope plus operation `assign-missing` or `renumber`; optional `caseIds` bounds `assign-missing` to 1–100 distinct, current-tenant onboarding cases in that scope. Omission retains full-division behavior. The server still owns ordering and proposed numbers and returns the first 25 proposal rows. |
 | GET `{id}` | Scoped immutable proposal; `skipCount` and `maxResultCount` page display only, maximum 100 rows. |
 | POST `{id}/submit` | Current stamp, stable idempotency key and reason; previews expire after 15 minutes. Direct-policy batches apply atomically; governed batches await approval. |
 | POST `{id}/decision` | Current stamp, approve/reject and review note; requires Records Changes Add authority and the current configured stage role. |
@@ -801,6 +840,29 @@ Active-enrollment batch history also requires Records Changes View.
 Records eligibility, provisioning policy, required placement reasons and Identity masking remain enforced.
 Conflicting or expired proposals use `Students:RollNumbers:StalePreview`; blocked rows, invalid states/rules and missing action/approver authority have localized errors in `StudentRollNumberErrorCodes`.
 Committed replay returns the saved batch without a second assignment.
+Case-targeted batches persist their target IDs and revalidate them on submit, approval and apply; assigned students are excluded rather than renumbered.
+The full division remains the reservation and concurrency basis, including students not on the selected page.
+Preview and batch responses expose `caseIds`, `reasonRequired`, `approvalRequired`, approval-stage role names and the policy version ID so clients show the applicable frozen policy before submission.
+Identifier Unlock additionally requires database-resolved configured administrator membership and the existing Onboarding Add/Repair authority; Lock retains existing action and division-scope checks.
+`GET /filter-options` returns `canUnlockIdentifiers` only when both administrator and action requirements pass.
+An unassigned Roll remains null in storage; a client may display it as zero, but assigned numbers must remain positive.
+
+## Onboarding app-login email edits
+
+| Endpoint | Contract |
+|---|---|
+| PUT `/api/student/onboarding/{id}/credentials/email` | Onboarding Add/Update, case scope and current case stamp; `accountType`, saved `relationship` (`self`, `father`, `mother`), `expectedEmail`, new `email`, server `emailEditToken` and `confirmSharedParent`. Unlinked profile edits save only the email; manual credentials remain a separate command. |
+| POST `/api/student/portal/email/confirm` | Owner-delivered protected token; requires matching `__tenant` header/body `tenantId`, `userId`, `requestId` and `token`. Opening the email link does not perform this write. Request/token auditing is disabled. |
+
+Existing-account edits additionally require `AbpIdentity.Users.Update`, all linked students in scope, no pending guardian access review or processing credential delivery, exact account role/profile/link integrity, duplicate checks and explicit shared-parent confirmation.
+The response exposes recipient `canEditEmail`, `emailEditToken`, `hasLinkedAccount`, `linkedStudentCount`, `pendingEmail` and `emailChangeStatus` without passwords or verification tokens.
+The existing identity retains its login email until owner verification; verification updates the email-as-username and linked profiles atomically, preserving password hashes and child links.
+Existing sessions are revoked through the same token/cache pattern as controlled account-email changes; the owner signs in again with the new email and existing password.
+Requests expire after 24 hours; manual replacement/resend has a two-minute cooldown and supersedes the old verification request.
+The same scoped PUT accepts `cancelPendingChange: true` with the reviewed current email, case stamp and edit token to cancel pending verification. It does not require a new email or shared-change confirmation, changes no login/profile/password/link, and invalidates the previous owner-confirmation request.
+Current case/profile/account/link stamps reject stale edits; tenant, staff authority and scope are rechecked before queued verification delivery and owner confirmation.
+The existing persistent ABP background-job store delivers verification emails; it must be enabled operationally for those queued requests to send.
+No new schema, Finance command, automatic credential preference or onboarding completion policy is introduced.
 
 ## Archived workflow restoration
 

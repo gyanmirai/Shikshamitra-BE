@@ -26,7 +26,7 @@ public class FinanceTableQuery_Tests
     private static readonly Dictionary<string, FinanceTableColumn> Columns = new()
     {
         ["name"] = new(FinanceTableValueType.Text), ["classDivision"] = new(FinanceTableValueType.Text),
-        ["amount"] = new(FinanceTableValueType.Number), ["status"] = new(FinanceTableValueType.Enum, false, [0, 1, 2, 7]),
+        ["amount"] = new(FinanceTableValueType.Number), ["status"] = new(FinanceTableValueType.Enum, true, [0, 1, 2, 7]),
         ["createdAt"] = new(FinanceTableValueType.Date),
         ["rollNumber"] = new(FinanceTableValueType.Number)
     };
@@ -39,6 +39,17 @@ public class FinanceTableQuery_Tests
     };
     private static FinanceTableQuery Query(string filters, string? sort = null, string? order = null) =>
         FinanceTableQuery.Parse(filters, null, sort, order, Columns);
+
+    [Theory]
+    [InlineData("asc", 0, 7)]
+    [InlineData("desc", 7, 0)]
+    public void Status_Sorting_Is_Applied_Before_Paging(string direction, int first, int last)
+    {
+        var rows = new[] { new Row { Status = 7 }, new Row { Status = 1 }, new Row { Status = 0 } }.AsQueryable();
+        var sorted = Query("[]", "status", direction).Order(rows, Fields, "name", false, r => r.Id);
+        sorted.Take(1).Single().Status.ShouldBe(first);
+        sorted.Last().Status.ShouldBe(last);
+    }
 
     [Fact]
     public void Filters_Use_Display_Values_And_Count_Before_Paging()
@@ -101,7 +112,7 @@ public class FinanceTableQuery_Tests
     [Fact]
     public void Invalid_Sort_And_Tab_Are_Rejected()
     {
-        Should.Throw<AbpValidationException>(() => Query("[]", "status", "asc"));
+        Should.Throw<AbpValidationException>(() => Query("[]", "actions", "asc"));
         Should.Throw<AbpValidationException>(() => Query("[]", "name", "unknown"));
         Should.Throw<AbpValidationException>(() => ConcessionApplicationsTable.Statuses("unknown"));
     }

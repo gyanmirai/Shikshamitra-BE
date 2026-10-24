@@ -24,6 +24,7 @@ public partial class StudentOnboardingAppService
 		var resolver = LazyServiceProvider.LazyGetRequiredService<StudentOnboardingCredentialEligibilityResolver>();
 		foreach (var type in new[] { "student", "guardian" })
 		{
+			if (type == "guardian" && await SiblingParents.IsParentFlowAsync(item)) continue;
 			if (!StudentPortalAccountRules.IsEnabled(rules, type)) continue;
 			if (await portalLinkRepository.AnyAsync(link => link.StudentId == student.Id && link.AccountType == type)) continue;
 			// The resolver checks committed placement and current documents before it reports a missing account.
@@ -65,7 +66,7 @@ public partial class StudentOnboardingAppService
 			!await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)) return;
 		var emails = LazyServiceProvider.LazyGetRequiredService<StudentCredentialEmailAppService>();
 		await emails.QueueAsync(item.Id, "student");
-		await emails.QueueAsync(item.Id, "guardian");
+		if (!await SiblingParents.IsParentFlowAsync(item)) await emails.QueueAsync(item.Id, "guardian");
 		// Repeated provisioning/manual-send calls in this transaction must see the
 		// same queued intent. A flush keeps the enclosing unit of work atomic.
 		await CurrentUnitOfWork!.SaveChangesAsync();

@@ -68,4 +68,16 @@ public class StudentCredentialEmailRequest_Tests
 		row.Requeue(Guid.NewGuid(), Now.AddMinutes(2)); row.RequiresSavedOwnerValidation().ShouldBeFalse();
 		row.RequireSavedOwnerValidation(); row.RequiresSavedOwnerValidation().ShouldBeTrue();
 	}
+	[Fact]
+	public void Owner_verified_recipient_change_drops_stale_secret_and_requires_a_new_manual_intent()
+	{
+		var row = NewRequest(); var previous = row.Email;
+		row.RequireSavedOwnerValidation(); row.Claim(Now); row.SetInitialPassword("encrypted-secret"); row.Failed(Now);
+		Should.Throw<InvalidOperationException>(() => row.RequeueForRecipient(Guid.NewGuid(), Now.AddMinutes(1), "new@example.test"));
+		row.Email.ShouldBe(previous);
+		row.RequeueForRecipient(Guid.NewGuid(), Now.AddMinutes(2), "new@example.test");
+		row.Email.ShouldBe("new@example.test"); row.EncryptedInitialPassword.ShouldBeNull();
+		row.ExtraProperties["PreviousRecipientEmail"].ShouldBe(previous);
+		row.RequiresSavedOwnerValidation().ShouldBeFalse(); row.RequireSavedOwnerValidation();
+	}
 }

@@ -86,6 +86,7 @@ public class AdmissionFeeSelectionAppService(
 			caseEditable = item != null && item.Status is not (StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled);
 		}
 		var blocker = await onboarding.GetBlockerAsync(application);
+		var paymentCompletion = await LazyServiceProvider.LazyGetRequiredService<AdmissionPaymentCompletionReader>().ReadAsync(context);
 		var confirmed = snapshot != null && blocker == null;
 		return new AdmissionFeeSelectionDto
 		{
@@ -94,6 +95,7 @@ public class AdmissionFeeSelectionAppService(
 			CurrentStageId = application.CurrentStageInstanceId, Currency = context.Currency,
 			Available = context.Owner != null || snapshot != null, IsRequired = context.IsRequired,
 			IsLocked = context.HasPaymentEvidence, HasRecordedFeePayment = context.HasPaymentEvidence,
+			PaymentCompletion = paymentCompletion,
 			FeeCollectionDeferral = deferral == null ? null : new AdmissionFeeCollectionDeferralDto
 			{
 				StageId = deferral.StageId, Reason = deferral.Reason, DeferredBy = deferral.DeferredBy, DeferredAt = deferral.DeferredAt
@@ -131,7 +133,7 @@ public class AdmissionFeeSelectionAppService(
 	private async Task SaveAsync(AdmissionApplication application, string eventType, object evidence)
 	{
 		await applications.UpdateAsync(application, false);
-		await activities.InsertAsync(new AdmissionActivity(GuidGenerator.Create(), CurrentTenant.Id, eventType,
+		await activities.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity(eventType,
 			eventType == "AdmissionFeeSelectionSaved" ? "Admissions fee structure confirmed." : "Saved fee structure confirmed in Onboarding.",
 			application.ApplicantId, application.Id, metadataJson: JsonSerializer.Serialize(evidence)), false);
 		await CurrentUnitOfWork!.SaveChangesAsync();

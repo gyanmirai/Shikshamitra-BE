@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-18
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,15 @@ audience: humans-and-agents
 # Trace Student Enrollment Admissions workflows
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
+
+## Correct app-login email without leaving onboarding
+
+1. Staff selects Student or a saved Father/Mother in App Login and opens Add email or Update email.
+2. An unlinked owner saves only the selected profile email; Send Credentials remains an explicit staff action after normal readiness checks.
+3. For an existing login, staff with Identity Users Update confirms any shared-parent impact and requests verification of the proposed email.
+4. The queued verification job rechecks the requesting staff's active identity, permissions, all linked students' scope and exact unchanged account/profile/link state before delivery.
+5. The owner opens the protected link and explicitly confirms. The normal school resolver and protected Identity token are validated before an atomic update to the existing login and linked profiles.
+6. The password and child links remain intact; pending deliveries to the old email are cancelled and a subsequent authorized manual Student request uses the current recipient, never stale encrypted credentials.
 
 ## Carry admission answers into student profiles
 
@@ -30,6 +39,16 @@ The applicant retains original captured evidence. Finalization retries preserve 
 4. Read the resulting Applied audit from the existing Changes history API. The original submitted form remains immutable; conditional hidden custom answers remain stored, and guardian changes retain their configured access-review handoff.
 
 ## Deliver student and parent credentials
+
+For new explicit Father/Mother admissions, use this sibling branch:
+
+1. Staff confirms Add sibling against a scoped existing family and selected saved parent; a same-email/different-mobile match requires explicit confirmation and never overwrites the existing shared contact.
+2. At Save & Activate, select Father or Mother if both have eligible existing accounts. The reviewed identity/email/relationship is persisted with activation and revalidated before linking.
+3. An eligible existing account is linked to the new child without another password or credential email. Required account handoffs acknowledge the real link; no case-local Sent request is invented.
+4. If there is no eligible existing account, first-time parent account preparation and email sending remain a manual Send Credentials action. Student self-login and historical guardian records retain their prior behavior.
+5. If the reused parent's original setup is Pending or Failed, show that state independently of the link. Authorized staff may retry only the original failed setup under both cases' scope; owner email verification/password setup is not bypassed.
+6. If the child was already activated before the parent's first manual account preparation, Link Parent uses the same confirmed selection without replaying student setup. This also supports completed cases with optional parent access; it does not prepare a new parent or send sibling credentials.
+7. After owner setup, the existing portal students API returns the parent's eligible linked children. Mobile-client refresh behavior requires separate app verification.
 
 1. Configure student and parent/guardian login requirements in Onboarding Settings. Existing delivery mode, timing and guardian relationship preferences retain their compatibility behavior.
 2. Finalize Admissions; common checks and published document requirements are inherited automatically. Pending cases adopt current account requirements without rewriting their frozen document policies. Activated, completed and cancelled cases retain their snapshots. Complete placement, identifiers and required document evidence; required evidence cannot be waived through an onboarding override.
@@ -110,7 +129,7 @@ GR and Roll assignment are separate commands. GR assignment does not require Rol
 
 GR and Roll settings are saved as Draft and then Published. Published edits create a new Draft version; published and superseded history remains immutable. Unassigned numbers use the currently published applicable numbering rule; requirements snapshots do not freeze an unselected number format. Existing assigned numbers are not renumbered by publication.
 
-GR and Roll locks are independent policies for a selected division group. They lock identifiers rather than Division placement. Operators with Onboarding Add/Update and access to the selected division may unlock with an audited reason and correct identifiers. A new entrant into a locked group receives the next automatic GR and division Roll even if the school's ordinary mode is manual. Placement remains editable; a preserved locked Roll cannot move into a conflicting occupied number.
+GR and Roll locks are independent policies for a selected division group. They lock identifiers rather than Division placement. Operators with Onboarding Add/Update and access to the selected division may lock; Unlock additionally requires database-resolved configured administrator membership, the existing Repair action and an audited reason. A new entrant into a locked group receives the next automatic GR and division Roll even if the school's ordinary mode is manual. Placement remains editable; a preserved locked Roll cannot move into a conflicting occupied number.
 
 Activation preview evaluates the Finance step against the same current confirmation evidence used by the checklist, even if its stored step is stale. It preserves existing verification history and the case concurrency stamp. A preview with blockers never reports Ready for activation; `LastError` contains the current reasons. The activation command still refreshes persisted readiness and rechecks every existing gate before committing enrollment.
 
@@ -179,12 +198,12 @@ Existing applications retain their frozen runtime; the internal Student Records 
 ### Start a special-track Registration
 
 1. Staff with Applications Start authority choose an active/open/published-ready special Registration offering within their tenant and academic scope.
-2. Capture system-owned applicant and primary-guardian identity; resolve matching scoped families by primary guardian mobile and explicitly choose a sibling family or record a separate-family reason when applicable.
+2. Capture applicant and Father/Mother identity; resolve scoped saved-parent email/mobile matches and explicitly confirm the family and source parent for a sibling, or record a separate-family reason when applicable.
 3. Retain the same request ID across retries; the transaction creates/links the family, creates one applicant and reserved Student identity, and starts at the workflow's Registration Form stage without an Inquiry.
-4. Use an explicitly selected eligible counsellor, the configured assignment profile, or manual assignment when no profile exists.
+4. Start without a counsellor assignment; handling staff are recorded by each action.
 5. Continue through the offering's frozen common Form/evidence/decision/finalization and Onboarding stages; special entry is not automatic approval.
 
-Same-payload retries return the existing scoped application; a different identity, offering, or initial counsellor rejects the reused request ID.
+Same-payload retries return the existing scoped application; a different identity, offering, rejects the reused request ID.
 
 ## Activate, deactivate, and delete
 
@@ -194,7 +213,7 @@ Delete compares concurrency and succeeds only when no application references the
 
 ## Clone and bulk setup
 
-Clone retains source routing, workflow, forms, intake references and default active state, but always uses null date overrides and inherits the target cycle window.
+Clone retains source routing, workflow, forms and default active state, but always uses null date overrides and inherits the target cycle window.
 It does not change source dates; later controlled target-cycle window revisions flow into the clone's effective dates.
 The caller supplies a new cycle and academic identity, and the backend revalidates uniqueness and scope.
 Bulk preview validates each standard and returns structured row errors together with separate
@@ -203,28 +222,25 @@ when every row is valid for the requested inactive or active state.
 
 ## Configure intake and assignment for new Offerings
 
-1. An Admission Head or administrator may create a reusable Admission Intake Setup when shared handling and automatic routing are needed. The setup combines allowed inquiry sources, deadlines, and follow-up defaults with Counsellor routing rules; its fallback manager is required when a setup is used. Duplicate handling uses automatic detection with a reason for a separate family, and application start does not require contact or qualification. Source detail, guardian email, and applicant date of birth have no policy-level requirement. Published form validation still applies. Counsellors do not configure these rules and only work the inquiries assigned to them.
-2. Optionally select the setup on an Inquiry Offering. Selecting it stores both underlying profile references and validates the selected setup; leaving both references empty permits activation when the workflow, forms, hierarchy and dates are ready. Direct-only offerings may use its counsellor-assignment reference without an Inquiry profile. Historical Offerings retain routing once applications exist; unused Offering updates retain their selected type and mode.
-3. When an Offering has a setup, it supplies the policy and assignment pool at inquiry creation or special Registration start as applicable. Assignment counts open inquiry, application, and onboarding cases, then chooses the least-loaded counsellor below capacity. A database transaction lock serializes assignments for one profile. The configured fallback receives the case only when every configured counsellor is at capacity. Governed Student Records returns retain their internal assignment route.
-4. A staff-captured inquiry with no known Offering is tied to a published cycle and remains unassigned for triage. Staff confirm an open Offering later; its current setup policy and assignment then apply when configured. For an Offering without an assignment profile, staff manually assign from active Admissions Counselor identities with access to that Offering; the inquiry leaves Unassigned after assignment. Configured Offerings retain their pool and manual capacity restrictions. Linked inquiry and application ownership is kept together when the application owner changes, and scheduled follow-ups move with it. Finalization seeds onboarding ownership from the application.
-5. An administrator may create a revocable public inquiry link for one published cycle and published Inquiry form, with an optional Admission Intake Setup, fixed source, optional campaign detail, and optional expiry. Selecting a setup retains automatic assignment from its pool. Leaving the setup empty explicitly keeps every inquiry from that link Unassigned, even when the selected Offering has its own automatic routing or legacy workflow default; staff assign a counsellor later. The confirmed Offering supplies its Inquiry handling policy. The raw link token is returned only on creation; only its SHA-256 hash is stored. The public form requires contact consent. Repeated phone submissions receive the same acknowledgement without creating another inquiry. Requests are limited per link in the HTTP host.
-   Link creation requires an accessible active Inquiry/Both Offering in the selected cycle using the selected Inquiry form. A configured link additionally requires that Offering to use its assignment profile and validates active pool/fallback access. A manual link does not require a matching setup and stores a null assignment profile. The authenticated `GET public-inquiry-links/options?admissionCycleId=...` projection requires Admission Offerings View and returns distinct compatible profile/form pairs, including null-profile manual options, within the current user's Offering scope; archived setups and unpublished or non-Inquiry forms are excluded. Missing Offering, counsellor access, fallback access, and past expiry return distinct `Admissions.PublicInquiry.OfferingRequired`, `CounsellorUnavailable`, `FallbackUnavailable`, and `ExpiryInvalid` errors with corrective guidance. `OfferingRequired` includes `Reason` (`NoActiveInquiryOffering`, `SetupNotLinked`, or `FormNotLinked`) and explicit corrective text. A rejection does not create a link; staff may correct the selection and retry.
-6. Editing a setup changes the shared rules for future processing wherever it is selected. Archiving is allowed only when no active Offering or active unexpired public link still uses it. Existing cases keep their persisted snapshots and ownership history. Archived setups may be restored with their latest concurrency stamp, making them editable and available for future selections again. Restore preserves profile references and rules and does not reactivate historical Offerings or public links. A restored setup may be archived again under the same usage guard.
+1. Publish the Inquiry form and Admission Stage workflow, then configure an Offering with its existing academic path and dates. Intake setup and counsellor profiles are no longer part of readiness.
+2. Create a public inquiry link for a published period and a published Inquiry form used by an accessible active Inquiry/Both Offering. Source, optional campaign detail, expiry, consent, hash-only token persistence and repeat-submit acknowledgement remain unchanged.
+3. Staff create and handle inquiries, follow-ups, applications and Onboarding through their existing action grants and academic scope, without assignment or a case owner.
+4. Review the actual handler on completed steps and the activity/event history. Old assignments remain historical data and cannot reactivate routing.
 
 ## Historical managed Inquiry
 
-1. Existing published Inquiry-stage policies and stored snapshots retain historical JSON; effective reads normalize retired duplicate, application-start, source-detail, email, and date-of-birth settings to the same standard behavior as new intake setups.
-2. Allowed sources, counsellor assignment, deadlines, follow-up defaults, and qualification checklist continue to apply. The current stage editor does not create new Inquiry stages.
-3. Validate and publish the workflow, then attach it to an offering whose forms and counsellor scope are compatible.
-4. Create an inquiry; the server validates the selected source and published form, accepts optional source detail (including QR-code and school-fair sources), stores the preferred language, checks current-cycle duplicates, suggests same-mobile families from other cycles only when their applicant is visible in staff admission scope, snapshots policy and deadlines, assigns a counsellor when configured, and records duplicate-override context in audit activity. A separate family on an actual duplicate requires a reason in both basic and managed flows.
-5. Work from All, My inquiries, Unassigned, a specific counsellor, Overdue, Awaiting first contact, Awaiting qualification, or Open follow-ups. Operational queues are filtered before server paging, URL-backed clients can restore the same view, and each row carries its next-action and SLA summary.
+1. Existing published Inquiry-stage policies and stored snapshots retain historical JSON; effective reads normalize retired duplicate, application-start, source-detail, email, and date-of-birth settings to the standard inquiry behavior.
+2. Counsellor routing, assigned-only actions and source restrictions are ignored. Historical deadlines, follow-up defaults and qualification checklist remain readable. The current stage editor does not create new Inquiry stages.
+3. Validate and publish the workflow, then attach it to an offering whose published forms and academic scope are compatible.
+4. Create an inquiry; the server validates the selected source and published form, accepts optional source detail (including QR-code and school-fair sources), stores the preferred language, checks current-cycle duplicates, suggests same-mobile families from other cycles only when their applicant is visible in staff admission scope, snapshots policy and deadlines, records duplicate-override context in audit activity. A separate family on an actual duplicate requires a reason in both basic and managed flows.
+5. Work from All, Overdue, Awaiting first contact, Awaiting qualification, or Open follow-ups. Operational queues are filtered before server paging, URL-backed clients can restore the same view, and each row carries its next-action and SLA summary.
 6. Assign one inquiry or atomically assign up to 100 inquiries. Manual assignment lists only active staff who can access the inquiry's offering and rechecks that scope on save; default and round-robin workflow policies remain available for historical Offerings.
 7. Edit identity, contact, source, source detail, or language before application start. The concurrency stamp rejects stale edits, and the activity timeline preserves the change.
 8. Compose a preferred-language family communication from the Inquiry list. Staff with Communication Add permission can create a draft; staff with Communication Send permission can request immediate delivery. Existing Communication approval, provider, consent, tracking, retry, and usage rules stay authoritative.
 
 Pipeline projects active inquiry-linked applications before Admission Decision from existing workflow state, current application ownership and retained inquiry follow-ups.
 Explicit inquiry handoff remains idempotent and never resets scheduled reminder dates.
-Post-handoff follow-up commands use the linked active application, existing management policy/owner restrictions and concurrency stamps; they do not unlock inquiry qualification or details.
+Post-handoff follow-up commands use the linked active application, existing management policy and concurrency stamps; they do not unlock inquiry qualification or details.
 Entering Admission Decision transfers workspace ownership from Pipeline to Applications before approve/reject/waitlist; no application is duplicated or deleted.
 Applications retains decision, finalized and correction cases using persisted decision-entry evidence, while pre-decision terminal status alone does not imply transfer.
 Successful admission finalization retains the existing Student/Onboarding handoff; failed commands preserve the application and its workspace ownership.
@@ -235,14 +251,23 @@ Special Registration applications, historical direct applications and governed S
 
 Basic workflows retain the existing inquiry commands and do not create managed records.
 
-When linking a sibling to an existing family, Inquiry and direct Registration both require an active family
-visible through the staff member's admission scope and a matching primary-guardian mobile number.
-An arbitrary family ID or a name/email-only duplicate suggestion does not authorize linking;
-staff must verify or update a changed guardian number through a separate family-maintenance flow.
+The explicit Father/Mother sibling flow requires an active family visible through staff admission scope, a selected source applicant and a matching saved parent email or mobile.
+Same email with a different mobile may be confirmed by staff, but the existing parent's saved details are reused rather than overwritten.
+When both parents are present, staff selects one; a generic historical Parent contact requires explicit Father/Mother identification.
+The new child receives its own applicant, application and Student identity, plus a server-recorded family/source-parent confirmation for the later Onboarding account handoff.
+Admission capture itself grants no portal access and sends no credentials.
+For the selected first parent, a generic Registration contact email collected after an Inquiry without email maps into that Father's or Mother's saved profile before the Student handoff.
+Explicit structured contact answers, including clears, take precedence over generic aliases across stages; corrections to generic-owned contacts remain editable without changing the other parent or Student login fields.
+Older unfinalized parent-only records recover ownership from the saved Inquiry definition/answers and actually saved Registration field codes before edits or finalization; generated prefills alone do not establish structured ownership.
+This recovery never rewrites confirmed sibling sources, returning/existing Student profiles or legacy guardian records.
+Public inquiry cannot submit trusted sibling confirmation.
+Legacy mobile-only family linking remains compatible and does not acquire the new trusted confirmation automatically.
 
 ## Inquiry and application runtime
 
-Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values. Create-time duplicate enforcement stays in the selected admission cycle. The duplicate precheck additionally suggests scoped prior-cycle families with the same guardian mobile for sibling linking; a name/email-only signal does not cross cycles.
+Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values.
+Legacy create-time duplicate enforcement stays in the selected admission cycle; the new parent flow also requires explicit existing/separate family choice when a scoped saved-parent contact matches.
+Duplicate precheck suggests scoped prior-cycle families through saved Father/Mother email/mobile contacts; name-only signals do not cross cycles.
 Application start checks the same availability service, validates any linked inquiry, and freezes the offering's published workflow and application form references.
 Later changes to offering defaults affect only future runtime records.
 
@@ -333,18 +358,18 @@ Eligibility, Review, and Offer are retired Admission Stage types. New drafts can
 
 ## Run a managed Form stage
 
-1. Form is managed Submission with rules by default. Attach the published Registration form and configure responsibility, deadline/late behavior, corrections and optional section verification.
+1. Form is managed Submission with rules by default. Attach the published Registration form and configure responsibility, deadline/late behavior and corrections. Separate section verification is retired.
 2. Applicant Save Draft remains enabled. Submission-limit and automatic-next configuration controls are hidden; server submission/correction safeguards remain.
-3. Submit validates frozen fields and policy. Without required verification, submit advances automatically.
-4. With verification, authorized staff verify configured sections and Continue explicitly only after all blockers resolve. Revocation/correction requires a reason; correction makes earlier verification stale.
+3. Submit validates frozen fields and policy, then advances automatically when configured. Legacy manual-continuation policies retain Continue after a valid submission.
+4. Effective runtime policy ignores old verification requirements without changing stored JSON or historical audit. Authorized correction requires a reason and resubmission; it retains the existing attempt and deadline safeguards.
 5. Preserve immutable submissions/change history and current concurrency through every command.
 
 ## Run a managed Payment stage
 
-1. Add Payment as an optional collection checkpoint; no independent admission collection policy is authored.
+1. Add Payment with a versioned Admissions completion policy: partial confirmed payment (default) or full Finance settlement, and whether audited collection deferral is allowed (default on). No admission pricing or collection-method policy is authored.
 2. Read only published structures matching the Offering tenant, academic year, Board, Medium and Class. Missing candidates prevent collection but do not prevent audited deferral.
 3. Save the structure and optional heads using application concurrency. Mandatory heads and an immutable structure-version snapshot are included by the server.
-4. Collect through the Finance adapter with the valid saved snapshot, or choose Collect later in Onboarding with a mandatory reason. No structure or payment is needed for deferral. Both commands retain configured transition routing; deferral is a completed checkpoint, not a Paid/Waived outcome or an administrative skip.
+4. Collect through the Finance adapter with the valid saved snapshot. Partial requires a positive Finance-confirmed payment; a historical or unverified payment flag alone is insufficient. Full requires the entire selected class structure, including future installments, to be settled under the existing Finance contract. Finance-verified zero-payable obligations can continue without a payment entry; missing/unprepared data never counts as zero. If enabled, Collect later in Onboarding requires a reason and no structure or payment. The server rejects deferral when disabled. Both commands retain configured transition routing; deferral is a completed checkpoint, not a Paid/Waived outcome or an administrative skip.
 5. Approve and finalize through the normal Admission decision flow. Finalization hands the saved intent and deferral reason to Onboarding. Deferral itself creates no account, dues, assignment or receipt. Onboarding still requires structure confirmation before activation; it does not require payment. Finance alone owns actual obligations and collections.
 
 Legacy Admission record, verification, waiver and reversal commands are unavailable in this flow. Repeated workflow keys replay the existing transition and do not duplicate deferral audit or Finance rows. Confirmation/deferral alone perform no Finance ledger mutation; actual collection uses the Finance integration and its persistence requirements.

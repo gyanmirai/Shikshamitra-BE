@@ -53,6 +53,7 @@ public partial class StudentRollNumberBatchAppService(IRepository<StudentRollNum
 	{
 		if (!(await new PreviewStudentRollBatchInputValidator().ValidateAsync(input)).IsValid) throw new BusinessException(StudentRollNumberErrorCodes.InvalidBatch);
 		await access.EnsureScopeAsync(input);
+		await access.EnsureTargetsAsync(input);
 		var item = await BuildAsync(input);
 		await access.EnsureRowsAsync(item, true);
 		await batches.InsertAsync(item, true);
@@ -69,6 +70,7 @@ public partial class StudentRollNumberBatchAppService(IRepository<StudentRollNum
 		var result = new StudentRollNumberBatch(GuidGenerator.Create(), CurrentTenant.Id!.Value, input.AcademicYearId, input.StandardId, input.DivisionId,
 			CurrentUser.Id!.Value, input.Operation, data.Hash, data.RuleJson, JsonSerializer.Serialize(data.Rows), data.PolicyJson, Now());
 		result.ExtraProperties["ScopeLabel"] = data.ScopeLabel;
+		if (input.CaseIds != null) result.ExtraProperties["TargetCaseIds"] = JsonSerializer.Serialize(input.CaseIds.OrderBy(x => x));
 		if (data.PolicyVersionId.HasValue) result.ExtraProperties["PolicyVersionId"] = data.PolicyVersionId.Value.ToString("D");
 		return result;
 	}
@@ -96,12 +98,17 @@ public partial class StudentRollNumberBatchAppService(IRepository<StudentRollNum
 	{
 		var rows = item.Rows(); var rule = StudentOnboardingRollRuleReader.Parse(item.RuleJson)!.Value;
 		var ordering = new StudentRollOrdering(rule);
+		var placementPolicy = StudentRecordsPolicy.FromJson(item.PolicyJson).Changes["Placement"];
+		var approvalRequired = rows.Any(x => x.EnrollmentId.HasValue) && placementPolicy.RequiresApproval(false, false, false);
 		var write = item.Status is "Preview" or "Approved" && await CanWriteAsync(item);
 		return new() { Id = item.Id, CreationTime = item.CreationTime, AcademicYearId = item.AcademicYearId, StandardId = item.StandardId, DivisionId = item.DivisionId,
 			ScopeLabel = item.ExtraProperties.TryGetValue("ScopeLabel", out var label) ? label?.ToString() ?? "" : "",
 			ConcurrencyStamp = item.ConcurrencyStamp, Operation = item.Operation, Status = item.Status, Reason = item.Reason, IdempotencyKey = item.SubmissionKey,
 			Grouping = ordering.Grouping, SortBy = ordering.SortBy,
 			NameFormat = ordering.NameFormat, SortDirection = ordering.SortDirection,
+			CaseIds = TargetCaseIds(item), ApprovalRequired = approvalRequired,
+			ApprovalStages = approvalRequired ? placementPolicy.Stages.Select(x => (IReadOnlyList<string>)x.RoleNames).ToList() : [],
+			PolicyVersionId = item.ExtraProperties.TryGetValue("PolicyVersionId", out var version) && Guid.TryParse(version?.ToString(), out var policyVersionId) ? policyVersionId : null,
 			ReasonRequired = item.Operation == "renumber" || rows.Any(x => x.EnrollmentId.HasValue) && StudentRecordsPolicy.FromJson(item.PolicyJson).Changes["Placement"].RequireReason,
 			TotalCount = rows.Count, BlockedCount = rows.Count(x => x.Issue != null), AppliedAt = item.AppliedAt,
 			CanSubmit = item.Status == "Preview" && item.RequestedBy == CurrentUser.Id && write && rows.Count > 0 && rows.All(x => x.Issue == null) && Now() - item.PreviewedAt <= TimeSpan.FromMinutes(15),
@@ -115,7 +122,14 @@ public partial class StudentRollNumberBatchAppService(IRepository<StudentRollNum
 	}
 	private async Task EnsureFreshAsync(StudentRollNumberBatch item)
 	{
-		var fresh = await roster.ReadAsync(new() { AcademicYearId = item.AcademicYearId, StandardId = item.StandardId, DivisionId = item.DivisionId, Operation = item.Operation });
+		var input = new PreviewStudentRollBatchInput { AcademicYearId = item.AcademicYearId, StandardId = item.StandardId, DivisionId = item.DivisionId, Operation = item.Operation, CaseIds = TargetCaseIds(item)?.ToList() };
+		await access.EnsureTargetsAsync(input);
+		StudentRollRoster fresh;
+		try { fresh = await roster.ReadAsync(input); }
+		catch (BusinessException exception) when (input.CaseIds != null && exception.Code == StudentRollNumberErrorCodes.InvalidBatch)
+		{ throw new BusinessException(StudentRollNumberErrorCodes.StalePreview); }
 		if (fresh.Hash != item.RosterHash || fresh.Rows.Any(x => x.Issue != null) || !fresh.Rows.SequenceEqual(item.Rows())) throw new BusinessException(StudentRollNumberErrorCodes.StalePreview);
 	}
+	private static IReadOnlyList<Guid>? TargetCaseIds(StudentRollNumberBatch item) =>
+		item.ExtraProperties.TryGetValue("TargetCaseIds", out var value) ? JsonSerializer.Deserialize<List<Guid>>(value.ToString()!) : null;
 }

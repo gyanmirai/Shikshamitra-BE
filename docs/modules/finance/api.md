@@ -3,12 +3,53 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-17
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Use Finance backend APIs
+
+## Collection grace period
+
+Collection Policy grace periods and late-fee day counts always use calendar days, including weekends and holidays.
+`gracePeriodDays` remains an integer from 0 to 365; `gracePeriodType` is removed from create/update/read/clone contracts and new version snapshots.
+Legacy snapshots containing either the string or numeric day type remain readable: the obsolete property is ignored, retaining the existing calendar-day calculation and all stored historical JSON.
+The `RemoveCollectionPolicyGracePeriodType` migration removes only the unused column from `Finance_CollectionPolicies`; it does not rewrite policy versions, dues, collections or receipts.
+Rollback restores the obsolete column with its Calendar value (0), since working-day counting was never implemented.
+
+## Automatic collection allocation
+
+Collection Policy DTOs accept `allocationBasis`: `Installment` or `FeeHead`; `Legacy` preserves
+deployed behavior. Omitted values preserve the saved basis on update and use Legacy on older
+create clients. The UI defaults new policies to Installment. Invalid values fail validation.
+The enum is persisted in the aggregate's existing `ExtraProperties` JSON, copied by clone and
+included in immutable `CollectionPolicySnapshot` versions. Existing rows/snapshots need no
+schema migration and resolve to Legacy. No fee-head priority/rank records are introduced.
+
+Student and Admission collect-form responses add `allocationBasis`, `collectionPolicyId`,
+`collectionPolicyName`, `collectionPolicyVersion`, `allocationDueFeeOrder` and `allocationRevision`.
+Configured modes use the same ordered ledger in the screen and command validation. Installment
+groups use schedule installment IDs (date/label fallback for legacy dues), not month labels alone.
+Fee-head groups retain the collection head-name order. Both retain the displayed line sequence.
+
+Configured collection commands require `automaticAllocation: { revision, dueFeeIds, chargeIds }`.
+Selection includes unfunded rows. The server reloads the scope-checked, assignment/account-pinned
+collect form inside the existing serializable transaction, checks its revision and recalculates
+allocations in decimal currency. Principal retains the existing whole-rupee ceiling; no additional
+rounding mode is added. Linked late fee follows its principal, and selected charges follow fees.
+The sum of accepted allocations equals tendered money; partial and exact payments work, excess
+is rejected. Unknown/duplicate selections, stale revisions and altered amounts fail before writes.
+`ShikshaMitra:FeeCollection:AllocationChanged` instructs the caller to refresh and review again.
+Retry replay is checked before current-balance validation, preserving the original result.
+
+The collection metadata's `AutomaticAllocation` extension stores the applied policy/version,
+basis, revision and selected sequence with the existing immutable allocation and receipt evidence.
+Policy changes do not rewrite existing assignment snapshots or posted receipts. Basis resolution
+uses `CollectionPolicyResolver`: pinned assignment/account version, with existing direct-attachment
+and academic-year-default resolution where applicable. Student late-fee overrides do not alter basis.
+Permissions remain the existing Collection Policy View/Add and Fee Collection View/Add plus payer
+scope; no override grant is added. Legacy calls retain their existing request/fingerprint behavior.
 
 TL;DR: use this page to find Finance endpoint families and route ownership.
 Controller source paths are canonical when a route detail changes.
@@ -18,6 +59,10 @@ Fee Structure configuration, publication and revision contracts: [workspace impl
 Contextual Admissions/Onboarding collections, nullable applicant payers and Finance receipt/refund continuity: [admission fee collection](./references/admission-fee-collection.md).
 
 ## Shared request rules
+
+Admission collection summary/prepare responses include nullable, output-only `proration` (`FeeProrationResultDto`): policy/version IDs, joining/service dates, scheduled fees, admission reduction, withdrawal credit, payable fees, excess paid and explanations. Collection requests accept neither policy choices nor computed totals. `FeeLedgerLineDto` separately exposes withdrawal credit/explanation without replacing original or paid totals.
+
+Records withdrawal preview rows use the same Finance result. There is no new public recalculation endpoint. An actual monetary adjustment requires existing `Finance.Policies.ProrationPolicy.Recalculate` and the approved transition's serializable transaction; Collection View/Add and Records permissions stay unchanged. Stable `Finance:Proration:*` errors identify missing/invalid joining date, ambiguous default, unavailable version, invalid evidence, pending owner workflows, denied recalculation and adjustment conflicts.
 
 Finance APIs require authenticated access and tenant context through the platform pipeline.
 Mutations must enforce backend permissions and audit important financial actions.
@@ -29,16 +74,16 @@ Year-only setup checks permit users with database-backed tenant-wide scope to co
 
 ## Fees API families
 
-| Family | Controller path | Main routes or base route |
-|---|---|---|
-| Charges | `Controllers/Finance/Fees/Charges/ChargeController.cs` | `api/charges` |
-| Concession requests | `Controllers/Finance/Fees/Concessions/ConcessionRequestController.cs` | `api/concession-request`, `api/concession-requests` |
-| Fee adjustments | `Controllers/Finance/Fees/Adjustments/FeeAdjustmentController.cs` | `api/fee-adjustments` |
-| Fee collection | `Controllers/Finance/Fees/Collections/FeeCollectionController.cs` | Fee collection routes |
-| Fee receipts | `Controllers/Finance/Fees/Receipts/FeeReceiptController.cs` | Fee receipt routes |
-| Fee refunds | `Controllers/Finance/Fees/Refunds/FeeRefundController.cs` | Fee refund routes |
-| Student fee assignment | `Controllers/Finance/Fees/StudentFeeAssignment/StudentFeeStructureController.cs` | Student fee structure routes |
-| Fee settings | `Controllers/Finance/Fees/Settings/**` | Fee category, fee head, fee structure, receipt book, concession type, and charge category routes |
+| Family                 | Controller path                                                                  | Main routes or base route                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Charges                | `Controllers/Finance/Fees/Charges/ChargeController.cs`                           | `api/charges`                                                                                    |
+| Concession requests    | `Controllers/Finance/Fees/Concessions/ConcessionRequestController.cs`            | `api/concession-request`, `api/concession-requests`                                              |
+| Fee adjustments        | `Controllers/Finance/Fees/Adjustments/FeeAdjustmentController.cs`                | `api/fee-adjustments`                                                                            |
+| Fee collection         | `Controllers/Finance/Fees/Collections/FeeCollectionController.cs`                | Fee collection routes                                                                            |
+| Fee receipts           | `Controllers/Finance/Fees/Receipts/FeeReceiptController.cs`                      | Fee receipt routes                                                                               |
+| Fee refunds            | `Controllers/Finance/Fees/Refunds/FeeRefundController.cs`                        | Fee refund routes                                                                                |
+| Student fee assignment | `Controllers/Finance/Fees/StudentFeeAssignment/StudentFeeStructureController.cs` | Student fee structure routes                                                                     |
+| Fee settings           | `Controllers/Finance/Fees/Settings/**`                                           | Fee category, fee head, fee structure, receipt book, concession type, and charge category routes |
 
 `GET /api/fee-categories` accepts academic year, active status, search, page, and page size. Its optional `filters` query value is a JSON array of `{column,type,value}` entries: `name` and `description` support contains, equals, startsWith, and endsWith; `totalFeeHeads` supports equals, greaterThan, lessThan, and an inclusive `{min,max}` between range. `sortBy` accepts `name`, `description`, or `totalFeeHeads`, with `sortDirection` `asc` or `desc`. Filtering and sorting run before pagination; ties use category ID.
 
@@ -49,6 +94,10 @@ list every month in the selected academic year. The list retains tenant and user
 scope filtering, optional class/division and receipt-kind filters, and server pagination.
 
 Fee-category and fee-head create/update contracts accept `module` as an optional numeric `FeeHeadModule` enum value. Send `null` or omit the property when no module applies. The fee-head module lookup returns numeric `value` fields with user-facing `displayName` labels. Every standalone or nested Fee Head request must also send `incomeCategoryId`. Responses return the Income Category. Historical Income Account Head fields are compatibility evidence. The backend accepts active, effective Income Categories from the Fee Head's academic year without requiring an Account Head.
+
+Fee Head list/detail responses and nested Fee Category heads expose `dependencies` with distinct `studentCount`, `assignmentCount`, `feeStructureCount`, `paymentTermCount`, and `isBlocked`. Deactivation and category head removal repeat these checks on the server and return `Finance:FeeHead:010002` and `:010001` respectively, with the head name and numeric counts in error data. Legacy student obligations remain dependencies even when they have no assignment ID. `GET api/student-fee-structure/students` accepts optional `feeHeadId` to narrow the existing tenant/year/user-scoped student list to affected obligations. Assignment details resolve current master fee-head labels while preserving the original stored pricing, policy, service-period, and label evidence.
+
+Charge Category creation defaults omitted `isApprovalRequired` to true and accepts explicit false; omitted update values preserve the stored flag. Charge Category search matches name, description and linked Income Category name before pagination. Interactive charge creation with explicit no-approval configuration applies collectible lines through the existing approval side effects and pins the approval rule on the request. Approval-required categories retain the existing checker flow and documented administrator creation exception. Existing pending requests and source-module commands keep their current workflow.
 
 Fee Head status changes reject an archived parent category with `Finance:FeeHead:010007` (restore the category before changing status). This rejects both activation and deactivation; active-head lookups also exclude archived categories.
 
@@ -89,32 +138,33 @@ Staged concession uploads are tenant- and uploader-bound. Their stored receipt r
 
 ### Category and bank settings data
 
-| Contract | Validation and exposure |
-|---|---|
-| Income Category name | Required trimmed business text, maximum 40 characters on create/update; Expense Category maximum remains 128; numbers, punctuation and Unicode are preserved |
-| Bank names | Bank, branch and holder names are required trimmed business text, maximum 100 characters; Purpose maximum 500 |
-| Bank list/status response | Full `accountNumber` and `upiId` remain null; `maskedAccountNumber`, masked `ifscCode` and `maskedUpiId` are the safe display/export values; UPI masks the entire local part (`***@handle`) |
-| Bank detail/edit response | Existing authorized detail route retains full identifiers; list projection is never used as an edit payload |
-| Versions | Categories and banks register with ABP entity-history selectors; edits and status changes record safe field diffs; sensitive bank identifiers remain excluded from entity and input-argument auditing |
-| Older versions | Known versions without recorded details are explicitly unavailable; actors/times/values are never reconstructed |
+| Contract                  | Validation and exposure                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Income Category name      | Required trimmed business text, maximum 40 characters on create/update; Expense Category maximum remains 128; numbers, punctuation and Unicode are preserved                                                                                                                                                                                                                                                                                                                 |
+| Category deletion         | Income Category `canDelete` is true whenever unused, including newly created active categories. DELETE checks Fee Head, charge-category, policy and transaction references; `deletionBlockedReason` identifies an actual dependency. PostgreSQL uses a shared tenant transaction lock for income-category deletion and its initial reference writers, preventing concurrent creation after the usage proof. Expense Categories still require deactivation and no references. |
+| Bank names                | Bank, branch and holder names are required trimmed business text, maximum 100 characters; Purpose maximum 500                                                                                                                                                                                                                                                                                                                                                                |
+| Bank list/status response | Full `accountNumber` and `upiId` remain null; `maskedAccountNumber`, masked `ifscCode` and `maskedUpiId` are the safe display/export values; UPI masks the entire local part (`***@handle`)                                                                                                                                                                                                                                                                                  |
+| Bank detail/edit response | Existing authorized detail route retains full identifiers; list projection is never used as an edit payload                                                                                                                                                                                                                                                                                                                                                                  |
+| Versions                  | Categories and banks register with ABP entity-history selectors; edits and status changes record safe field diffs; sensitive bank identifiers remain excluded from entity and input-argument auditing                                                                                                                                                                                                                                                                        |
+| Older versions            | Known versions without recorded details are explicitly unavailable; actors/times/values are never reconstructed                                                                                                                                                                                                                                                                                                                                                              |
 
 No schema narrowing or automatic cleanup of historical over-limit names is performed.
 Existing over-limit text must be corrected before a subsequent details save; lifecycle checks do not silently rename it.
 
-| Family | Controller path |
-|---|---|
-| Income | `Controllers/Finance/Accounts/Income/IncomeController.cs` |
-| Expense | `Controllers/Finance/Accounts/Expense/ExpenseController.cs` |
-| Bank accounts | `Controllers/Finance/Accounts/Settings/BankAccountController.cs` |
-| Account heads | `Controllers/Finance/Accounts/Settings/AccountHeadController.cs` |
+| Family                 | Controller path                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| Income                 | `Controllers/Finance/Accounts/Income/IncomeController.cs`                                           |
+| Expense                | `Controllers/Finance/Accounts/Expense/ExpenseController.cs`                                         |
+| Bank accounts          | `Controllers/Finance/Accounts/Settings/BankAccountController.cs`                                    |
+| Account heads          | `Controllers/Finance/Accounts/Settings/AccountHeadController.cs`                                    |
 | Transaction categories | `Controllers/Finance/Accounts/Settings/IncomeCategoryController.cs`, `ExpenseCategoryController.cs` |
-| Reconciliation | `Controllers/Finance/Accounts/Reconciliation/ReconciliationController.cs` |
+| Reconciliation         | `Controllers/Finance/Accounts/Reconciliation/ReconciliationController.cs`                           |
 
 ## Reports and audit API families
 
-| Family | Controller path |
-|---|---|
-| Finance reports | `Controllers/Finance/Reports/FinanceReportController.cs` |
+| Family              | Controller path                                            |
+| ------------------- | ---------------------------------------------------------- |
+| Finance reports     | `Controllers/Finance/Reports/FinanceReportController.cs`   |
 | Finance audit trail | `Controllers/Finance/Audit/FinanceAuditTrailController.cs` |
 
 ## Permission families
@@ -152,7 +202,6 @@ Do not create a parallel curated contract tree for Finance.
 Add endpoint details here when Finance API docs need more route detail.
 Do not restore generated exports under `docs/`.
 
-
 ## Receipt Book and audit authorization
 
 Receipt Book list/detail reads require `Finance.Settings.ReceiptBook.View`.
@@ -173,11 +222,11 @@ Application regression coverage: `RefundProrationPolicyArchiveFiltering_Tests.cs
 
 Fee Structure and each of the four policy configuration families expose exactly three actions: `View`, `Add`, and `Delete`.
 
-| Action | Fee Structure | Collection, Concession, Refund and Proration policies |
-|---|---|---|
-| View | Lists, details, context, readiness review | Lists, detail, version/audit history, simulation |
-| Add | Create, edit/PATCH, publish and create revision | Create, edit, activate, clone, restore and manage attachments |
-| Delete | Delete an unused draft | Archive/delete where the existing endpoint supports it |
+| Action | Fee Structure                                   | Collection, Concession, Refund and Proration policies         |
+| ------ | ----------------------------------------------- | ------------------------------------------------------------- |
+| View   | Lists, details, context, readiness review       | Lists, detail, version/audit history, simulation              |
+| Add    | Create, edit/PATCH, publish and create revision | Create, edit, activate, clone, restore and manage attachments |
+| Delete | Delete an unused draft                          | Archive/delete where the existing endpoint supports it        |
 
 Canonical roots are `Finance.Settings.FeeStructure` and `Finance.Policies.{CollectionPolicy,ConcessionPolicy,RefundPolicy,ProrationPolicy}`. Menu/module visibility grants do not authorize these API actions. Structure attachment changes require both structure Add and the supported changed policy family's Add. Proration is not a supported structure attachment; its attachment-impact endpoint is retired. Context capability flags named `edit` and `publish` both derive from structure Add.
 
@@ -210,3 +259,13 @@ GET `/api/accounts/register/{source}/{id}` accepts academicYearId and enforces t
 POST `/api/incomes` and `/api/expenses` accept optional bankAccountId, counterparty, paymentReference and UUID idempotencyKey alongside the existing manual fields.
 Financial routing lookups add income-entry and expense-entry operations using the exact owning Add grant.
 See [the workspace contract](./references/income-expense-workspaces.md) for field meanings, lifecycle, compatibility and integrity.
+
+## Configuration name validation and cloning
+
+Fee Category and all four Finance policy types trim names, collapse Unicode whitespace, and compare names case-insensitively within the current tenant and academic year, including archived records. Duplicate errors carry `Name` and `Location` (`Current` or `Archived`); Fee Category additionally carries `CorrectiveAction`. Archived conflicts direct users to restore the record or choose another name. Existing records and historical snapshots are not rewritten.
+
+Cloning without an explicit name selects the first available `Copy`, `Copy 2`, etc. name across Current and Archived policies, bounded to the 128-character name limit. Explicit names still undergo duplicate validation. Copies remain Draft and nondefault; cloning the default leaves the source default unchanged. Automatically generated policy codes use random GUID material rather than truncated sequential GUID prefixes, which can repeat across clones. Existing database unique indexes remain the final exact-name/code collision guard. Legacy normalization collisions must be reconciled before introducing a database normalized-key index.
+
+Payment Term duplicate generated codes retain error `Finance:PaymentTerm:000023`, with a specific message identifying the code and asking for another name or code. Concession policy percentages accept at most two decimal places; excessive precision is rejected rather than rounded silently (`Finance:ConcessionPolicy:010027`).
+
+Concession Apply On retains the canonical enum contract: `0 = AllOutstanding`, `1 = CurrentInstallment`, `2 = FutureInstallments`, `3 = AllFees`. DTOs expose the symbolic strings; immutable historical snapshot JSON retains its original numeric enum representation. History presentation must compare canonical enum values before displaying labels.

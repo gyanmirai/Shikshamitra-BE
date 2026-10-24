@@ -85,6 +85,7 @@ public partial class StudentFeeDetailsQueryService(
 		var systemLateFeeCharges = new List<ChargeDetailDto>();
 		var feeSummary = new FeeSummaryDto();
 		var allowOnlineCollection = true;
+		CollectionPolicy? allocationPolicy = null;
 
 		if (feeStructureAssignment != null)
 		{
@@ -125,6 +126,7 @@ public partial class StudentFeeDetailsQueryService(
 			var effectiveRules = await policyResolver.ResolveEffectiveRulesForStudentAsync(
 				studentId, feeStructureAssignment.FeeStructureStandardId);
 			allowOnlineCollection = effectiveRules.Policy?.AllowOnlineCollection ?? true;
+			allocationPolicy = effectiveRules.Policy;
 
 			var lateFeeBalances = await lateFeeBalanceService.GetBalancesAsync(dueFees, academicYearId, today);
 
@@ -167,6 +169,7 @@ public partial class StudentFeeDetailsQueryService(
 							FeeHeadId = d.FeeHeadId,
 							FeeHeadName = feeHeadNameMap.GetValueOrDefault(d.FeeHeadId, string.Empty),
 							InstallmentLabel = d.GetDisplayInstallmentLabel(),
+							InstallmentId = d.PaymentTermInstallmentId,
 							DueDate = d.ScheduleDueDate ?? d.DueDate,
 							CoverageStartDate = d.CoverageStartDate,
 							CoverageEndDate = d.CoverageEndDate,
@@ -194,6 +197,8 @@ public partial class StudentFeeDetailsQueryService(
 							ProrationEligibleDays = d.ProrationEligibleDays,
 							ProrationChargedDays = d.ProrationChargedDays,
 							ProrationExplanation = d.ProrationExplanation,
+							WithdrawalProrationCredit = d.GetWithdrawalProrationCredit(),
+							WithdrawalProrationExplanation = d.GetWithdrawalProrationExplanation(),
 							//ConcessionAmount = concessions.Where(c => c.DueFeeId == d.Id).Sum(c => c.Amount),
 							ReconciliationAmount = reconByDueFee.GetValueOrDefault(d.Id, 0d),
 							RefundAmount = refundByDueFee.GetValueOrDefault(d.Id, (Amount: 0d, Description: string.Empty)).Amount,
@@ -293,14 +298,14 @@ public partial class StudentFeeDetailsQueryService(
 			}));
 		}
 
-		return new FeeCollectFormDto
+		return CollectionAllocationContext.Apply(new FeeCollectFormDto
 		{
 			Student = BuildStudentInfo(student),
 			Summary = feeSummary,
 			Ledger = ledger,
 			Charges = chargeDtos,
 			AllowOnlineCollection = allowOnlineCollection,
-		};
+		}, allocationPolicy);
 	}
 
 	private async Task<Dictionary<Guid, (double Amount, string Description)>> GetRefundsByDueFeeAsync(Guid studentId)

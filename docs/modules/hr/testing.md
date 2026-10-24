@@ -3,7 +3,7 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -112,7 +112,8 @@ Use this table to pick focused tests:
 
 | Change area | First backend tests |
 |---|---|
-| Employee profile, family, documents, status, or reporting | `EmployeeListApi_Tests`, `EmployeePersonalInfoApi_Tests`, `FamilyInfoApi_Tests`, `EmployeeDocumentApi_Tests`, `EmployeeStatusApi_Tests` |
+| Employee profile, family, documents, status, or reporting | `EmployeeListApi_Tests`, `EmployeePersonalInfoApi_Tests`, `FamilyInfoApi_Tests`, `EmployeeCreationFamilyAccessApi_Tests`, `EmployeeFamilyInfoAccess_Tests`, `EmployeeDocumentApi_Tests`, `EmployeeStatusApi_Tests` |
+| Staff draft academic permission | `EmployeeCreationFamilyAccessApi_Tests` (academic cases in `EmployeeCreationAcademicPermissionApi_Tests.cs`), `EmployeeAcademicPermissionAccess_Tests`, `UserScopeAppService_BulkAssign_Tests`; global denial, bounded creator assignment, retry, parent/mixed escalation, target substitution, tenant, action and manual-assignment protection, invalid-hierarchy rollback and direct service access |
 | Employee profile dashboard | `EmployeeDashboardProjection_Tests`, `EmployeeListApi_Tests.Should_Get_Employee_Dashboard_From_Stored_HR_Data`, and the attendance-only resolver regression in `HrPolicyAppService_Tests` |
 | Employee onboarding and public submission | `EmployeeApplication_Tests` for the forward-only terminal state graph and token regeneration, `EmployeeApplicationAppService_Tests` for validation, unique invitation numbers, legacy uploads, atomic scope changes, and deferred effects, `EmployeeOnboardingAcademicScopeAssigner_Tests` for the BulkAssign gate, `EmployeeApplicationUploadPolicy_Tests` for strict-new and legacy-stored MIME behavior, `EmployeePersonalInfoAppService_Tests` for explicit role approval and employee-group audiences, `RolesSeederContributor_Tests` for stable role metadata, `EfCoreSampleAppServiceTests` for identity-role metadata round trips, and `EmployeeApplicationPublicApi_Tests` for multipart validation and upload limits |
 | Payroll settings | `SalaryTemplateCalculator_Tests`, `EmployeeCompensationRevision_Tests`, `SalaryTemplateComposerAppService_Tests`, `SalaryTemplateApi_Tests`, `EsiStatutoryCalculator_Tests`, `EsiStatutoryPreviewProjection_Tests`, `EsiStatutoryApi_Tests`, `EarningComponentAppService_Tests` dependency lifecycle tests, `EarningComponentDependencyConcurrency_Tests` two-transaction graph races, `EarningComponentApi_Tests`, `DeductionComponentApi_Tests`, `PfRuleApi_Tests`, `PayElementApi_Tests`, `HrPolicyApi_Tests` |

@@ -26,6 +26,7 @@ public class AdmissionFeeCollectionDto
 	public bool IsSettled { get; set; }
 	public string? Blocker { get; set; }
 	public bool HasPaymentEvidence { get; set; }
+	public FeeProrationResultDto? Proration { get; set; }
 	public List<AdmissionCollectionFeeHeadDto> FeeHeads { get; set; } = [];
 	public List<AdmissionCollectionReceiptDto> Receipts { get; set; } = [];
 	public List<AssignmentHeadDto> VariableFeeHeads { get; set; } = [];
@@ -70,6 +71,7 @@ public class PrepareAdmissionFeeCollectionDto
 /// <summary>No student or academic-scope identifier is accepted from the client.</summary>
 public class CollectAdmissionFeeInput
 {
+	public AutomaticCollectionSelectionDto? AutomaticAllocation { get; set; }
 	[Required, MaxLength(100)]
 	public string IdempotencyKey { get; set; } = string.Empty;
 	[MaxLength(1000)]

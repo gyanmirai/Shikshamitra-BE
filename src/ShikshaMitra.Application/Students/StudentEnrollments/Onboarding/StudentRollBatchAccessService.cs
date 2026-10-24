@@ -33,6 +33,12 @@ public class StudentRollBatchAccessService(StudentScopeAccessService scope, Stud
 		if (division?.StandardId != input.StandardId || standard?.YearId != input.AcademicYearId) throw new BusinessException(StudentOnboardingErrorCodes.PlacementInvalid);
 	}
 	public async Task<bool> IsAdminAsync() => (await scopes.GetCurrentUserScopeAsync()).IsAdmin;
+	public async Task EnsureTargetsAsync(PreviewStudentRollBatchInput input)
+	{
+		if (input.CaseIds == null) return;
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View);
+		foreach (var id in input.CaseIds) await onboarding.EnsureCaseAccessAsync(id);
+	}
 	public async Task EnsureRowsAsync(StudentRollNumberBatch item, bool write)
 	{
 		if (write && !await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add))

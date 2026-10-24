@@ -102,6 +102,7 @@ public class StudentGuardianAccessAppService(IRepository<StudentGuardianAccessRe
 		if (guardian == null || !SameEmail(guardian.Email, email) || string.IsNullOrWhiteSpace(guardian.FullName)) throw new BusinessException("Students:Records:GuardianIdentityMismatch");
 		if (!await roles.RoleExistsAsync("Parent")) throw new BusinessException("Students:Records:GuardianPortalRoleMissing");
 		var user = await users.FindByEmailAsync(email);
+		var existingIdentity = user != null;
 		if (input.ExistingUserId.HasValue)
 		{
 			await AuthorizationService.CheckAsync(IdentityPermissions.Users.Update);
@@ -118,6 +119,10 @@ public class StudentGuardianAccessAppService(IRepository<StudentGuardianAccessRe
 			if (!(await users.CreateAsync(user)).Succeeded || !(await users.AddToRoleAsync(user, "Parent")).Succeeded)
 				throw new BusinessException("Students:Records:GuardianAccountCreationRejected");
 		}
+		// Preserve the reviewed identity under a concurrent owner email change.
+		// Only optimistic concurrency advances; credentials and role grants stay intact.
+		if (existingIdentity && !(await users.UpdateAsync(user)).Succeeded)
+			throw new BusinessException("Students:Records:GuardianIdentityMismatch");
 		await links.InsertAsync(new StudentPortalAccountLink(GuidGenerator.Create(), CurrentTenant.Id!.Value, student.Id, user.Id,
 			"guardian", input.Relationship, CurrentUser.Id!.Value), autoSave: true);
 	}

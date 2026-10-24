@@ -30,8 +30,8 @@ public class AdmissionDirectRegistrationService(
 	public Task<AdmissionApplicationDto> StartAsync(StartAdmissionDirectRegistrationDto input) =>
 		StartCoreAsync(input, null);
 
-	public Task<List<AdmissionDirectFamilyMatchDto>> FindFamiliesAsync(Guid offeringId, string guardianMobile) =>
-		familyMatchService.FindForSpecialRegistrationAsync(offeringId, guardianMobile);
+	public Task<List<AdmissionDirectFamilyMatchDto>> FindFamiliesAsync(Guid offeringId, string guardianMobile, string? guardianEmail = null) =>
+		familyMatchService.FindForSpecialRegistrationAsync(offeringId, guardianMobile, guardianEmail);
 
 	internal Task<AdmissionApplicationDto> StartForReturnAsync(StartAdmissionDirectRegistrationDto input, Student student)
 		=> StartCoreAsync(input, student);
@@ -69,6 +69,10 @@ public class AdmissionDirectRegistrationService(
 			throw new BusinessException(AdmissionErrorCodes.InquiryIdentityIncomplete,
 				"Applicant and primary guardian identity is incomplete.");
 		var phone = AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(input.GuardianMobile);
+		if (input.ParentRelationship != null && (!AdmissionSiblingParentSelection.IsRelationship(input.ParentRelationship) || input.GuardianRelationship != AdmissionGuardianRelationship.Parent) ||
+			input.ExistingParentApplicantId.HasValue && (!input.ExistingFamilyId.HasValue || input.ParentRelationship == null) ||
+			input.ExistingFamilyId.HasValue && input.ParentRelationship != null && !input.ExistingParentApplicantId.HasValue)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Choose an existing family and Father or Mother.");
 		if (input.ExistingFamilyId.HasValue && input.CreateSeparateFamily)
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose an existing family or create a separate family, not both.");
@@ -81,15 +85,22 @@ public class AdmissionDirectRegistrationService(
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value)
 			: null;
-		if (family != null && (guardian == null || guardian.FamilyId != family.Id || guardian.Mobile != phone))
+		AdmissionSiblingParentCandidateDto? selectedParent = null;
+		if (family != null && input.ExistingParentApplicantId.HasValue)
+		{
+			if (!CurrentUser.Id.HasValue) throw new BusinessException(AdmissionErrorCodes.DirectRegistrationFamilyMismatch);
+			selectedParent = await familyMatchService.ResolveParentAsync(family.Id, input.ExistingParentApplicantId.Value,
+				input.ParentRelationship, phone, input.GuardianEmail, AdmissionErrorCodes.DirectRegistrationFamilyMismatch);
+		}
+		if (family != null && selectedParent == null && (guardian == null || guardian.FamilyId != family.Id || guardian.Mobile != phone))
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationFamilyMismatch,
 				"The selected family's primary guardian does not match this mobile number.");
-		if (family != null)
+		if (family != null && selectedParent == null)
 			await familyMatchService.EnsureCanLinkAsync(family.Id, phone);
 
 		if (family == null)
 		{
-			var accessibleMatches = await familyMatchService.FindAsync(offering.Id, phone);
+			var accessibleMatches = await familyMatchService.FindAsync(offering.Id, phone, input.ParentRelationship == null ? null : input.GuardianEmail);
 			if (accessibleMatches.Count > 0 && !input.CreateSeparateFamily)
 				throw new BusinessException(AdmissionApplicantErrorCodes.DuplicateFamily,
 					"A family with this guardian mobile already exists. Link that family or explicitly create a separate family.");
@@ -112,6 +123,11 @@ public class AdmissionDirectRegistrationService(
 			input.ApplicantFirstName, input.ApplicantMiddleName, input.ApplicantLastName,
 			input.ApplicantDateOfBirth, input.ApplicantGender, existingStudentId: returningStudent?.Id,
 			reservedStudentId: GuidGenerator.Create());
+		if (selectedParent != null)
+			AdmissionSiblingParentSelection.Confirm(applicant, selectedParent, CurrentUser.Id!.Value, Clock.Now.ToUniversalTime(), phone, input.GuardianEmail);
+		else if (input.ParentRelationship != null)
+			AdmissionSiblingParentSelection.CaptureParent(applicant, input.ParentRelationship,
+				string.Join(" ", new[] { input.GuardianFirstName, input.GuardianLastName }.Where(value => !string.IsNullOrWhiteSpace(value))), phone, input.GuardianEmail);
 		await applicantRepository.InsertAsync(applicant, autoSave: true);
 		var application = returningStudent == null
 			? await lifecycleService.StartForSpecialRegistrationAsync(applicant.Id, offering.Id)
@@ -121,7 +137,7 @@ public class AdmissionDirectRegistrationService(
 			{
 				offering.Track, input.CounsellorId, AssignedCounsellorId = selectedCounsellorId,
 				input.ExistingFamilyId, input.CreateSeparateFamily,
-				input.SeparateFamilyReason, GuardianRelationship = input.GuardianRelationship.ToString()
+				input.SeparateFamilyReason, GuardianRelationship = input.GuardianRelationship.ToString(), input.ExistingParentApplicantId, input.ParentRelationship
 			})), autoSave: true);
 		return application;
 	}
@@ -146,6 +162,16 @@ public class AdmissionDirectRegistrationService(
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;
 		var phone = AdmissionInquiryPhoneValidator.NormalizeAndValidateIndianMobile(input.GuardianMobile);
+		var confirmation = AdmissionSiblingParentSelection.ReadConfirmation(applicant);
+		if (AdmissionSiblingParentSelection.IsParentFlow(applicant) && AdmissionSiblingParentSelection.ReadRelationship(applicant) != input.ParentRelationship)
+			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict);
+		if (input.ExistingParentApplicantId.HasValue || confirmation != null)
+		{
+			if (confirmation == null || confirmation.SourceApplicantId != input.ExistingParentApplicantId ||
+				confirmation.Relationship != input.ParentRelationship || confirmation.SubmittedMobile != phone ||
+				confirmation.SubmittedEmail != AdmissionSiblingParentSelection.NormalizeEmail(input.GuardianEmail))
+				throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict);
+		}
 		if (!string.Equals(applicant.FirstName, input.ApplicantFirstName?.Trim(), StringComparison.OrdinalIgnoreCase) ||
 			!string.Equals(applicant.MiddleName, Normalize(input.ApplicantMiddleName), StringComparison.OrdinalIgnoreCase) ||
 			!string.Equals(applicant.LastName, Normalize(input.ApplicantLastName), StringComparison.OrdinalIgnoreCase) ||
@@ -156,7 +182,7 @@ public class AdmissionDirectRegistrationService(
 				 !string.Equals(guardian?.LastName, Normalize(input.GuardianLastName), StringComparison.OrdinalIgnoreCase) ||
 				 !string.Equals(guardian?.Email, Normalize(input.GuardianEmail)?.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase) ||
 				 guardian?.Relationship != input.GuardianRelationship)) ||
-			guardian?.Mobile != phone ||
+			(confirmation == null && guardian?.Mobile != phone) ||
 			(input.ExistingFamilyId.HasValue && applicant.FamilyId != input.ExistingFamilyId.Value))
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict,
 				"This request ID was already used for different applicant or family details.");

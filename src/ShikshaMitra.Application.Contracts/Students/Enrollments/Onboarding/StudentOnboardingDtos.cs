@@ -284,6 +284,7 @@ public class ActivateStudentOnboardingDto
 {
 	public string? ConcurrencyStamp { get; set; }
 	public string IdempotencyKey { get; set; } = string.Empty;
+	public StudentSiblingParentSelectionDto? SiblingParentSelection { get; set; }
 }
 
 public class CancelStudentOnboardingDto

@@ -241,6 +241,8 @@ public class AdmissionApplicationDecisionService(
 		{
 			if (await studentRepository.AnyAsync(item => item.Id == context.Applicant.ReservedStudentId))
 				throw new BusinessException(AdmissionApplicantErrorCodes.ReservedStudentIdConflict);
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionApplicationFormService>()
+				.RecoverFirstParentContactAsync(context.Application, context.Applicant);
 			student = CreateStudent(context);
 			await studentRepository.InsertAsync(student, false);
 			await ApplyNewProfileAsync(context.Applicant, student);
@@ -501,9 +503,10 @@ public class AdmissionApplicationDecisionService(
 			state: string.IsNullOrWhiteSpace(applicant.State) ? null : new State(applicant.State, string.Empty),
 			country: string.IsNullOrWhiteSpace(applicant.Country) ? null : new Country(applicant.Country, string.Empty),
 			pincode: applicant.PostalCode);
-		student.UpdateFamilyInfo(null, null, new ParentGuardianDetails(
-			$"{guardian.FirstName} {guardian.LastName}".Trim(), null, null, guardian.Email, guardian.Mobile,
-			null, null, null, null, null, null, null, null), null);
+		if (!AdmissionSiblingParentSelection.IsParentFlow(applicant))
+			student.UpdateFamilyInfo(null, null, new ParentGuardianDetails(
+				$"{guardian.FirstName} {guardian.LastName}".Trim(), null, null, guardian.Email, guardian.Mobile,
+				null, null, null, null, null, null, null, null), null);
 		AdmissionAdditionalStudentFieldCatalog.CopyToStudent(applicant, student);
 		student.MoveToAdmission();
 		return student;

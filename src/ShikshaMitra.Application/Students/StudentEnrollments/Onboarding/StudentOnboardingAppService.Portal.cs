@@ -39,6 +39,8 @@ public partial class StudentOnboardingAppService
 	{
 		if (!CurrentTenant.Id.HasValue || !CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
 		var item = await GetCaseAsync(id);
+		var parentFlow = input.AccountType == "guardian" && await SiblingParents.IsParentFlowAsync(item);
+		if (parentFlow && input.Relationship is not ("father" or "mother")) throw PortalInvalid("Choose Father or Mother for parent app login.");
 		var existingLink = await portalLinkRepository.FindAsync(x => x.StudentId == item.StudentId && x.AccountType == input.AccountType);
 		if (ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(item).HasValue)
 			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(item, false);
@@ -48,6 +50,14 @@ public partial class StudentOnboardingAppService
 			if (!linkedUser.IsActive || !string.Equals(linkedUser.Email, input.Email.Trim(), StringComparison.OrdinalIgnoreCase) ||
 				existingLink.Relationship != input.Relationship)
 				throw PortalInvalid("The existing account link differs or is inactive. Use the identity administrator's reviewed repair workflow.");
+			if (parentFlow && await SiblingParents.ResolveSelectedAsync(item) is { } selected)
+			{
+				await AuthorizationService.CheckAsync(IdentityPermissions.Users.Update);
+				if (selected.UserId != linkedUser.Id || selected.Relationship != existingLink.Relationship || existingLink.VerifiedByUserId == Guid.Empty)
+					throw PortalInvalid("The linked parent differs from the reviewed sibling account.");
+				SiblingParents.MarkReused(item);
+				await caseRepository.UpdateAsync(item, false);
+			}
 			await QueueAutomaticCredentialEmailsAsync(item);
 			return (await MapPortalLinksAsync([existingLink]))[0];
 		}
@@ -86,8 +96,16 @@ public partial class StudentOnboardingAppService
 		if (!await portalRoleManager.RoleExistsAsync(role))
 			throw PortalInvalid("The required portal role has not been configured by an identity administrator.");
 		var user = await portalUserManager.FindByEmailAsync(email);
+		var existingIdentity = user != null;
+		var reusingParent = parentFlow && user != null;
 		if (user != null)
 		{
+			if (parentFlow)
+			{
+				var selected = await SiblingParents.ResolveSelectedAsync(item);
+				if (selected == null || selected.UserId != user.Id || selected.Relationship != input.Relationship)
+					throw PortalInvalid("Confirm this parent through Add sibling in Admissions, then activate the student to link the existing account.");
+			}
 			// Existing staff identities and unverified email matches are never silently repurposed.
 			await AuthorizationService.CheckAsync(IdentityPermissions.Users.Update);
 			var roles = await portalUserManager.GetRolesAsync(user);
@@ -116,9 +134,16 @@ public partial class StudentOnboardingAppService
 				if (!phone.Succeeded) throw PortalInvalid("The saved account-owner mobile could not be assigned.");
 			}
 		}
+		if (existingIdentity && !(await portalUserManager.UpdateAsync(user)).Succeeded)
+			throw PortalInvalid("The existing parent account changed. Refresh before linking.");
 		var link = new StudentPortalAccountLink(GuidGenerator.Create(), CurrentTenant.Id.Value, student.Id,
 			user.Id, input.AccountType, input.Relationship, CurrentUser.Id.Value);
 		await portalLinkRepository.InsertAsync(link, false);
+		if (reusingParent)
+		{
+			SiblingParents.MarkReused(item);
+			await caseRepository.UpdateAsync(item, false);
+		}
 		handoff.Acknowledge(DateTime.UtcNow);
 		await handoffRepository.UpdateAsync(handoff, false);
 		await AddEventAsync(id, "PortalAccountLinked", credentialsRequested

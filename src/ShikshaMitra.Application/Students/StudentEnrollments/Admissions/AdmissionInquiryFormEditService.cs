@@ -28,7 +28,15 @@ public class AdmissionInquiryFormEditService(
 		var applicant = inquiry.ApplicantId.HasValue ? await applicants.FindAsync(inquiry.ApplicantId.Value) : null;
 		var family = inquiry.FamilyId.HasValue ? await families.FindAsync(inquiry.FamilyId.Value) : null;
 		var guardian = family?.PrimaryGuardianId.HasValue == true ? await guardians.FindAsync(family.PrimaryGuardianId.Value) : null;
+		var confirmedSibling = applicant != null && AdmissionSiblingParentSelection.ReadConfirmation(applicant) != null;
 		var definitions = formId.HasValue ? await fields.GetListAsync(field => field.FormDefinitionId == formId.Value) : [];
+		if (applicant != null && AdmissionFirstParentContactMapping.CanMap(applicant) && inquiry.FormResponseDefinitionId.HasValue)
+		{
+			var savedDefinitions = inquiry.FormResponseDefinitionId == formId ? definitions :
+				await fields.GetListAsync(field => field.FormDefinitionId == inquiry.FormResponseDefinitionId.Value);
+			AdmissionFirstParentContactMapping.Apply(applicant,
+				AdmissionFirstParentContactMapping.ReadInquiryAnswers(inquiry, savedDefinitions), recoverSavedAnswers: true);
+		}
 		if (input.FormValues != null)
 		{
 			if (!formId.HasValue || (await forms.FindAsync(formId.Value))?.Status is not (AdmissionFormStatus.Published or AdmissionFormStatus.Archived))
@@ -67,7 +75,7 @@ public class AdmissionInquiryFormEditService(
 					if (siblings.Contains(applicant.ExistingStudentId ?? applicant.ReservedStudentId) || !await dataSources.AreSiblingIdsAllowedAsync(siblings))
 						throw new BusinessException("Admissions:InvalidSiblingSelection");
 				}
-				if (applicant.ExistingStudentId.HasValue && definition.BindingKey!.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase)) continue;
+				if ((applicant.ExistingStudentId.HasValue || confirmedSibling) && definition.BindingKey!.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase)) continue;
 				if (string.IsNullOrWhiteSpace(value) && definition.BindingKey is "Applicant.FirstName" or "Guardian.FirstName" or "Guardian.Mobile")
 					throw new BusinessException(AdmissionErrorCodes.InquiryIdentityIncomplete);
 				if (string.IsNullOrWhiteSpace(value) && definition.BindingKey == "Applicant.DateOfBirth")
@@ -75,12 +83,17 @@ public class AdmissionInquiryFormEditService(
 						applicant.AddressLine1, applicant.AddressLine2, applicant.City, applicant.State, applicant.Country, applicant.PostalCode);
 				else AdmissionFormBindingRegistry.ApplyValue(definition.BindingKey!, value, applicant, guardian);
 			}
+			if (applicant != null)
+				AdmissionFirstParentContactMapping.Apply(applicant, definitions
+					.Where(field => field.BindingType == AdmissionFormBindingType.System && field.BindingKey != null && values.ContainsKey(field.Code))
+					.GroupBy(field => field.BindingKey!, StringComparer.OrdinalIgnoreCase)
+					.ToDictionary(group => group.Key, group => values[group.Last().Code], StringComparer.OrdinalIgnoreCase), guardian);
 			var snapshot = input.FormValues.Join(definitions, value => value.FieldCode, field => field.Code,
 				(value, field) => new { Key = string.IsNullOrWhiteSpace(field.BindingKey) ? field.Code : field.BindingKey!, value.ValueJson }, StringComparer.OrdinalIgnoreCase)
 				.GroupBy(value => value.Key, StringComparer.OrdinalIgnoreCase).ToDictionary(group => group.Key, group => group.Last().ValueJson, StringComparer.OrdinalIgnoreCase);
 			inquiry.RecordFormResponseSnapshot(JsonSerializer.Serialize(snapshot), formId);
 			if (applicant != null) input.ApplicantName = string.Join(" ", new[] { applicant.FirstName, applicant.MiddleName, applicant.LastName }.Where(value => !string.IsNullOrWhiteSpace(value)));
-			if (guardian != null && applicant?.ExistingStudentId.HasValue != true)
+			if (guardian != null && applicant?.ExistingStudentId.HasValue != true && !confirmedSibling)
 			{
 				if (definitions.Any(field => field.BindingKey == "Guardian.Mobile")) input.Phone = guardian.Mobile;
 				if (definitions.Any(field => field.BindingKey == "Guardian.Email")) input.Email = guardian.Email;
@@ -94,9 +107,17 @@ public class AdmissionInquiryFormEditService(
 				applicant.UpdateProfile(input.ApplicantName, null, null, applicant.DateOfBirth, applicant.Gender, applicant.AddressLine1, applicant.AddressLine2, applicant.City, applicant.State, applicant.Country, applicant.PostalCode);
 			await applicants.UpdateAsync(applicant, false);
 		}
-		if (guardian != null && applicant?.ExistingStudentId.HasValue != true)
+		if (guardian != null && applicant?.ExistingStudentId.HasValue != true && !confirmedSibling)
 		{
 			guardian.UpdateContact(guardian.FirstName, guardian.LastName, input.Phone, input.Email);
+			if (applicant != null && input.FormValues == null)
+			{
+				AdmissionFirstParentContactMapping.Apply(applicant, new Dictionary<string, string>
+				{
+					["Guardian.Mobile"] = input.Phone, ["Guardian.Email"] = input.Email ?? string.Empty
+				}, guardian);
+				await applicants.UpdateAsync(applicant, false);
+			}
 			await guardians.UpdateAsync(guardian, false);
 		}
 	}

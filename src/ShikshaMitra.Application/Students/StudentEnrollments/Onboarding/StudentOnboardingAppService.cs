@@ -261,6 +261,7 @@ public partial class StudentOnboardingAppService(
 		EnsureConcurrency(onboardingCase, concurrencyStamp);
 		if (onboardingCase.StudentEnrollmentId.HasValue)
 		{
+			await LinkSiblingParentAsync(onboardingCase);
 			await PrepareAutomaticPortalAccountsAsync(onboardingCase);
 			await RefreshProvisioningAsync(onboardingCase);
 			return await MapCaseAsync(onboardingCase, true);
@@ -652,6 +653,7 @@ public partial class StudentOnboardingAppService(
         {
             using var preparation = unitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
             var item = await GetCaseAsync(id);
+            await LinkSiblingParentAsync(item);
             await PrepareAutomaticPortalAccountsAsync(item);
             await QueueAutomaticCredentialEmailsAsync(item);
             await RefreshProvisioningAsync(item);
@@ -684,6 +686,7 @@ public partial class StudentOnboardingAppService(
 		var onboardingCase = await GetCaseAsync(id);
 		if (onboardingCase.StudentEnrollmentId.HasValue)
 		{
+			await PrepareSiblingParentSelectionAsync(onboardingCase, input.SiblingParentSelection);
 			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Fees.Collections.IAdmissionFinanceIntegration>()
 				.BindActivatedStudentAsync(onboardingCase.ApplicationId, onboardingCase.StudentId, onboardingCase.StudentEnrollmentId.Value);
 			await CurrentUnitOfWork!.SaveChangesAsync();
@@ -692,6 +695,7 @@ public partial class StudentOnboardingAppService(
 		var reviewedReturn = ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(onboardingCase).HasValue;
 		if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(onboardingCase);
 		EnsureConcurrency(onboardingCase, input.ConcurrencyStamp);
+		await PrepareSiblingParentSelectionAsync(onboardingCase, input.SiblingParentSelection);
 		onboardingCase.BeginActivation(input.IdempotencyKey);
 		var now = DateTime.UtcNow;
 		var steps = await stepRepository.GetListAsync(item => item.OnboardingCaseId == id);

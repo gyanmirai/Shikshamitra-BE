@@ -214,6 +214,8 @@ public class AdmissionInquiryAppService(
 	private async Task<AdmissionInquiryDto> CreateCoreAsync(CreateAdmissionInquiryDto input, bool isPublic,
 		Guid? publicAssignmentProfileId, Guid? publicFormDefinitionId = null, Student? returningStudent = null)
 	{
+		if (isPublic && input.ExistingParentApplicantId.HasValue)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Only authorized school staff can confirm an existing parent.");
 		if (!Enum.IsDefined(input.Source))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose a valid inquiry source.");
@@ -319,6 +321,11 @@ public class AdmissionInquiryAppService(
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.SourceNotAllowed);
 		}
 		var phone = guardianPhone;
+		if (input.ParentRelationship != null && !AdmissionSiblingParentSelection.IsRelationship(input.ParentRelationship) ||
+			input.ExistingParentApplicantId.HasValue && (!input.ExistingFamilyId.HasValue || input.ParentRelationship == null) ||
+			input.ExistingFamilyId.HasValue && input.ParentRelationship != null && !input.ExistingParentApplicantId.HasValue ||
+			isPublic && input.ExistingParentApplicantId.HasValue || input.ExistingFamilyId.HasValue && input.CreateSeparateFamily)
+			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Only authorized school staff can confirm an existing parent. Choose Father or Mother.");
 		var query = await inquiryRepository.GetQueryableAsync();
 		var duplicateExists = !input.ExistingFamilyId.HasValue && await AsyncExecuter.AnyAsync(query.Where(x =>
 			x.AdmissionCycleId == cycle.Id && x.NormalizedPhone == phone));
@@ -329,6 +336,7 @@ public class AdmissionInquiryAppService(
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.DuplicateReasonRequired);
 		}
 		AdmissionFamily? existingFamily = null;
+		AdmissionSiblingParentCandidateDto? selectedParent = null;
 		if (input.ExistingFamilyId.HasValue)
 		{
 			existingFamily = await familyRepository.FindAsync(input.ExistingFamilyId.Value);
@@ -337,12 +345,25 @@ public class AdmissionInquiryAppService(
 			var primaryGuardian = existingFamily.PrimaryGuardianId.HasValue
 				? await guardianRepository.FindAsync(existingFamily.PrimaryGuardianId.Value)
 				: null;
-			if (primaryGuardian == null || primaryGuardian.FamilyId != existingFamily.Id ||
-				primaryGuardian.Mobile != phone)
+			if (input.ExistingParentApplicantId.HasValue)
+			{
+				if (!CurrentUser.Id.HasValue) throw new BusinessException(AdmissionErrorCodes.InquiryFamilyMismatch);
+				selectedParent = await familyMatchService.ResolveParentAsync(existingFamily.Id, input.ExistingParentApplicantId.Value,
+					input.ParentRelationship, phone, input.GuardianEmail, AdmissionErrorCodes.InquiryFamilyMismatch);
+			}
+			if (selectedParent == null && (primaryGuardian == null || primaryGuardian.FamilyId != existingFamily.Id ||
+				primaryGuardian.Mobile != phone))
 				throw new BusinessException(AdmissionErrorCodes.InquiryFamilyMismatch,
 					"The selected family's primary guardian does not match this mobile number.");
-			await familyMatchService.EnsureCanLinkAsync(existingFamily.Id, phone,
+			if (selectedParent == null) await familyMatchService.EnsureCanLinkAsync(existingFamily.Id, phone,
 				AdmissionErrorCodes.InquiryFamilyMismatch);
+		}
+		if (input.ParentRelationship != null && existingFamily == null && !isPublic)
+		{
+			var matches = await familyMatchService.FindAccessibleMatchesAsync(phone, input.GuardianEmail);
+			if (matches.Count > 0 && !input.CreateSeparateFamily) throw new BusinessException(AdmissionErrorCodes.InquiryDuplicate);
+			if (matches.Count > 0 && string.IsNullOrWhiteSpace(input.DuplicateOverrideReason))
+				throw new BusinessException(AdmissionInquiryManagementErrorCodes.DuplicateReasonRequired);
 		}
 		var referenceYear = Clock.Now.ToUniversalTime().Year;
 		var inquiryNumber = AdmissionReferenceNumber.Format(
@@ -368,7 +389,7 @@ public class AdmissionInquiryAppService(
 			!string.IsNullOrWhiteSpace(value)))
 		{
 			// A return captures fresh answers without modifying shared family or permanent identity.
-			if (returningStudent != null && field.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email") continue;
+			if ((returningStudent != null || selectedParent != null) && field.BindingKey is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email") continue;
 			if (field.BindingKey == "Family.SiblingStudentIds")
 			{
 				var siblingIds = AdmissionStudentProfileMapping.ReadSiblings(values[field.Code]) ?? [];
@@ -377,6 +398,28 @@ public class AdmissionInquiryAppService(
 				await LazyServiceProvider.LazyGetRequiredService<StudentScopeAccessService>().EnsureCanAccessStudentsAsync(siblingIds, nameof(CreateAsync));
 			}
 			AdmissionFormBindingRegistry.ApplyValue(field.BindingKey!, values[field.Code], applicant, guardian);
+		}
+		if (selectedParent != null)
+		{
+			AdmissionSiblingParentSelection.Confirm(applicant, selectedParent, CurrentUser.Id!.Value, Clock.Now.ToUniversalTime(), phone, input.GuardianEmail);
+			var prefix = selectedParent.Relationship == "father" ? "Father" : "Mother";
+			foreach (var field in inquiryFields.Where(field => field.BindingKey == prefix + ".Name" || field.BindingKey == prefix + ".Mobile" || field.BindingKey == prefix + ".Email"))
+			{
+				var answer = input.FormValues.FirstOrDefault(value => string.Equals(value.FieldCode, field.Code, StringComparison.OrdinalIgnoreCase));
+				if (answer != null) answer.ValueJson = JsonSerializer.Serialize(AdmissionStudentProfileMapping.Read(applicant, field.BindingKey!));
+			}
+		}
+		else if (input.ParentRelationship != null)
+		{
+			var prefix = input.ParentRelationship == "father" ? "Father" : "Mother";
+			AdmissionSiblingParentSelection.CaptureParent(applicant, input.ParentRelationship,
+				AdmissionStudentProfileMapping.Read(applicant, prefix + ".Name") ?? string.Join(" ", new[] { input.GuardianFirstName, input.GuardianLastName }.Where(value => !string.IsNullOrWhiteSpace(value))),
+				AdmissionStudentProfileMapping.Read(applicant, prefix + ".Mobile") ?? phone,
+				AdmissionStudentProfileMapping.Read(applicant, prefix + ".Email") ?? input.GuardianEmail);
+			AdmissionFirstParentContactMapping.Apply(applicant, inquiryFields
+				.Where(field => field.BindingType == AdmissionFormBindingType.System && field.BindingKey != null && values.ContainsKey(field.Code))
+				.GroupBy(field => field.BindingKey!, StringComparer.OrdinalIgnoreCase)
+				.ToDictionary(group => group.Key, group => values[group.Last().Code], StringComparer.OrdinalIgnoreCase), guardian);
 		}
 		if (!input.ExistingFamilyId.HasValue) await familyRepository.InsertAsync(family, autoSave: false);
 		if (newGuardian) await guardianRepository.InsertAsync(guardian!, autoSave: false);
@@ -402,7 +445,7 @@ public class AdmissionInquiryAppService(
 		await inquiryRepository.InsertAsync(inquiry, autoSave: false);
 		await inquiryRuntime.EnsureManagementAsync(inquiry);
 		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("InquiryCreated", "Inquiry created", applicant.Id, null, inquiry.Id,
-			JsonSerializer.Serialize(new { Managed = managedPolicy != null, IsPublic = isPublic, input.DuplicateOverrideReason })), autoSave: true);
+			JsonSerializer.Serialize(new { Managed = managedPolicy != null, IsPublic = isPublic, input.DuplicateOverrideReason, input.ExistingParentApplicantId, input.ParentRelationship })), autoSave: true);
 		return Map(inquiry);
 	}
 
@@ -556,9 +599,10 @@ public class AdmissionInquiryAppService(
 			(offering.EntryMode == AdmissionEntryMode.Inquiry || offering.EntryMode == AdmissionEntryMode.Both))))
 			throw new EntityNotFoundException(typeof(AdmissionCycle), input.AdmissionCycleId);
 		var phone = string.Concat((input.GuardianPhone ?? string.Empty).Where(char.IsDigit));
+		var parentMatches = await familyMatchService.FindAccessibleMatchesAsync(phone, input.GuardianEmail, input.ParentContacts);
 		var guardians = await guardianRepository.GetListAsync(x => x.Mobile == phone || (!string.IsNullOrWhiteSpace(input.GuardianEmail) && x.Email == input.GuardianEmail!.Trim().ToLowerInvariant()));
 		var applicants = await applicantRepository.GetListAsync(x => (!string.IsNullOrWhiteSpace(input.ApplicantName) && (x.FirstName + " " + (x.LastName ?? string.Empty)).Trim().Contains(input.ApplicantName)) && (!input.ApplicantDateOfBirth.HasValue || x.DateOfBirth == input.ApplicantDateOfBirth.Value.Date));
-		var familyIds = guardians.Select(x => x.FamilyId).Concat(applicants.Select(x => x.FamilyId)).Distinct().ToList();
+		var familyIds = guardians.Select(x => x.FamilyId).Concat(applicants.Select(x => x.FamilyId)).Concat(parentMatches.Select(match => match.FamilyId)).Distinct().ToList();
 		if (familyIds.Count == 0) return [];
 		var familyApplicants = await applicantRepository.GetListAsync(x => familyIds.Contains(x.FamilyId));
 		if (familyApplicants.Count == 0) return [];
@@ -583,7 +627,7 @@ public class AdmissionInquiryAppService(
 		var currentCycleApplicantIds = scopedInquiries.Where(x => x.AdmissionCycleId == input.AdmissionCycleId)
 			.Select(x => x.ApplicantId!.Value).ToHashSet();
 		var matchingPhoneFamilyIds = guardians.Where(x => x.Mobile == phone)
-			.Select(x => x.FamilyId).ToHashSet();
+			.Select(x => x.FamilyId).Concat(parentMatches.Select(match => match.FamilyId)).ToHashSet();
 		var allApplicants = familyApplicants.Where(x => visibleApplicantIds.Contains(x.Id) &&
 			(currentCycleApplicantIds.Contains(x.Id) || matchingPhoneFamilyIds.Contains(x.FamilyId))).ToList();
 		var familyGuardians = await guardianRepository.GetListAsync(x => familyIds.Contains(x.FamilyId) && x.IsPrimaryContact);
@@ -593,8 +637,9 @@ public class AdmissionInquiryAppService(
 		return allApplicants.Select(x =>
 		{
 			var guardian = familyGuardians.FirstOrDefault(g => g.FamilyId == x.FamilyId);
+			var parentMatch = parentMatches.FirstOrDefault(match => match.FamilyId == x.FamilyId);
 			var canLinkFamily = activeFamilies.TryGetValue(x.FamilyId, out var family) &&
-				guardian != null && family!.PrimaryGuardianId == guardian.Id && guardian.Mobile == phone;
+				(parentMatch?.Parents.Count > 0 || guardian != null && family!.PrimaryGuardianId == guardian.Id && guardian.Mobile == phone);
 			var existingInquiry = scopedInquiries.OrderByDescending(item => item.CreationTime)
 				.FirstOrDefault(item => item.ApplicantId == x.Id);
 			return new AdmissionInquiryDuplicateMatchDto
@@ -604,7 +649,8 @@ public class AdmissionInquiryAppService(
 				ApplicantName = string.Join(" ", new[] { x.FirstName, x.LastName }
 					.Where(y => !string.IsNullOrWhiteSpace(y))),
 				GuardianPhone = guardian?.Mobile, GuardianEmail = guardian?.Email, DateOfBirth = x.DateOfBirth,
-				CanLinkFamily = canLinkFamily
+				CanLinkFamily = canLinkFamily, Parents = parentMatch?.Parents ?? [],
+				MatchByEmail = parentMatch?.MatchByEmail ?? false, MatchByMobile = parentMatch?.MatchByMobile ?? false
 			};
 		}).ToList();
 	}

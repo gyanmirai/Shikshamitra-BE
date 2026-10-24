@@ -3,7 +3,7 @@ module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,17 @@ audience: humans-and-agents
 # Understand Student Enrollment Admissions behavior
 
 TL;DR: an Admission Offering is the tenant-scoped, auditable configuration that connects one cycle and academic hierarchy to published workflow and form versions.
+
+## Add or update an app-login email during onboarding
+
+Authorized staff can add or update the selected Student, Father or Mother email directly from App Login, including when Admission did not capture it.
+Before account creation, the narrow edit saves the current profile and explicit Student-recipient provenance without sending credentials or granting portal access.
+Manual Send Credentials retains saved account-access policy, activation/readiness checks, identity permissions, cooldown and durable delivery rules.
+An email already used by an existing account never silently merges families or grants that account access to another child.
+For an already-linked account, an authorized identity updater requests owner verification of the new email; the old login remains unchanged until that verification succeeds.
+A shared parent change requires confirmation and applies to all existing child links atomically, keeping the same identity, password and relationships.
+Pending guardian-access reviews, out-of-scope children, stale profiles, changed links, invalid/expired tokens and email collisions block the change rather than partially rewriting profiles.
+Historical generic-guardian accounts retain their existing reviewed repair path; the new staff choices remain Student, Father and Mother.
 
 ## Automatic application numbers
 
@@ -49,7 +60,7 @@ Admission event instants use UTC and timezone-aware persistence parameters. Prev
 | Delivery | A durable tenant-owned request tracks Pending/Sent/Failed/Cancelled; dispatch rechecks current actor grants/scope, owner mailbox, links, settings and readiness. A new passwordless account receives a random initial password and owner setup link; temporary secrets are encrypted until transport acceptance or cancellation. Staff responses never return secrets. Existing identities keep their password; repeats use owner recovery. |
 | Account and delivery settings | Not needed disables new preparation/delivery; Optional permits it without blocking completion; Required gates completion on the account and required delivery work. Legacy false/true retains Not needed/Required semantics. Account preparation and delivery eligibility remain separate. Explicitly selecting automatic delivery enables email only for enabled account types; manual is the default and leaves sending to staff. Existing saved automatic choices remain intact. Optional accounts may be requested after completion without reopening the case, and requested delivery remains visible in Credentials until sent. |
 | Automatic recipients | Automatic mode can prepare enabled accounts with eligible saved contact details and existing identity grants. New App Login rules with multiple saved parents require staff to select the recipient through Send Credentials. Missing optional contact details do not hold setup open. No new mailbox-verification bypass is introduced. |
-| One-click staff delivery | Send Credentials authorizes only the current saved Student or legal parent recipient, prepares or safely reuses its account and records durable intent in one transaction. Explicit manual intent may send with automatic email Off without changing saved flags, required-account policy, readiness, timing or identity grants. An explicit send is not fabricated mailbox verification. Missing or changed email requires Records review, and guardian-fallback Student email is not eligible. Completion-timed requests wait without generating a password until non-email requirements complete. |
+| One-click staff delivery | Send Credentials authorizes only the current saved Student or legal parent recipient, prepares or safely reuses its account and records durable intent in one transaction. Explicit manual intent may send with automatic email Off without changing saved flags, required-account policy, readiness, timing or identity grants. An explicit send is not fabricated mailbox verification. The scoped App Login command saves missing/unlinked email; a linked login changes only after owner verification. Wider contact/owner repairs retain Records review, and guardian-fallback Student email is not eligible. Completion-timed requests wait without generating a password until non-email requirements complete. |
 | Exit | Applied Withdraw/Transfer/Graduate transitions set Left and revoke only that child's portal links. Current portal reads and token renewal deny departed children; shared Parent identities retain access to other children. Reviewed corrections restore only recorded links that still match the owner profile and exclusive role. |
 | Verification boundary | Sent means the configured email sender accepted delivery. Inbox arrival and the separately maintained mobile-app UI require their own acceptance checks. |
 
@@ -256,6 +267,10 @@ Intake setup, automatic/manual counsellor assignment and Onboarding case ownersh
 All intake profiles, workflow policies, and persisted snapshot reads use standard behavior: contact and qualification do not gate application start, source detail is optional for every source, and policy-level guardian email and applicant date-of-birth requirements are disabled.
 Stored historical JSON and entered data are preserved; published form requirements remain authoritative.
 Automatic duplicate detection remains enabled; a separate family on an actual current-cycle duplicate requires a reason, while an eligible sibling can link to its existing family.
+The explicit sibling flow supports Father/Mother only and treats a matching saved parent email/mobile as a family suggestion, not proof of relationship or portal authorization.
+Staff confirms the existing family and source parent; a changed mobile with the same email is allowed after this confirmation without changing the shared parent's stored details.
+Each child retains a separate admission identity; generic historical family links and public submissions do not gain trusted sibling-account provenance.
+Current parent profiles take precedence over stale captured admission contact values; existing duplicate and finalization identity policies remain unchanged rather than treating a matching name/date of birth as conclusive identity.
 First-contact and qualification deadlines are snapshotted when the inquiry is created.
 Follow-ups retain purpose, due time, completion/cancellation, actual actor and audit timestamps without requiring an assignee. Historical follow-up timing settings remain readable. New activity/event/transition writes capture staff ID and display name on the server; completed steps expose their recorded handler. Anonymous/system actions and missing historical names remain explicit.
 Inquiry staff can create a linked family communication for WhatsApp, SMS, or Email. The CRM records the campaign handoff in admission activity while the shared Communication module owns approval, consent, providers, delivery attempts, retries, and usage; no duplicate Admissions messaging store is introduced.

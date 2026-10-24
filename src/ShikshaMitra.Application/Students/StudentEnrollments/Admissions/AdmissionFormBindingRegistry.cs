@@ -36,25 +36,42 @@ internal static class AdmissionFormBindingRegistry
 		return metadata;
 	}
 
-	public static object? GetValue(string key, AdmissionApplicant applicant, AdmissionGuardian? guardian) => key switch
+	public static object? GetValue(string key, AdmissionApplicant applicant, AdmissionGuardian? guardian)
 	{
-		"Applicant.FirstName" => applicant.FirstName,
-		"Applicant.MiddleName" => applicant.MiddleName,
-		"Applicant.LastName" => applicant.LastName,
-		"Applicant.DateOfBirth" => applicant.DateOfBirth,
-		"Applicant.Gender" => applicant.Gender,
-		"Guardian.FirstName" => guardian?.FirstName,
-		"Guardian.LastName" => guardian?.LastName,
-		"Guardian.Mobile" => guardian?.Mobile,
-		"Guardian.Email" => guardian?.Email,
-		"Address.AddressLine1" => applicant.AddressLine1,
-		"Address.AddressLine2" => applicant.AddressLine2,
-		"Address.City" => applicant.City,
-		"Address.State" => applicant.State,
-		"Address.Country" => applicant.Country,
-		"Address.PostalCode" => applicant.PostalCode,
-		_ => AdmissionAdditionalStudentFieldCatalog.GetValue(key, applicant)
-	};
+		var confirmed = AdmissionSiblingParentSelection.ReadConfirmation(applicant);
+		if (confirmed != null && key is "Guardian.FirstName" or "Guardian.LastName" or "Guardian.Mobile" or "Guardian.Email")
+		{
+			var prefix = confirmed.Relationship == "father" ? "Father" : "Mother";
+			var name = confirmed.Name ?? AdmissionStudentProfileMapping.Read(applicant, prefix + ".Name") ?? string.Empty;
+			var parts = name.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+			return key switch
+			{
+				"Guardian.FirstName" => confirmed.FirstName ?? (parts.Length > 0 ? parts[0] : string.Empty),
+				"Guardian.LastName" => confirmed.LastName ?? (parts.Length > 1 ? parts[1] : null),
+				"Guardian.Mobile" => confirmed.Mobile ?? AdmissionStudentProfileMapping.Read(applicant, prefix + ".Mobile"),
+				_ => confirmed.Email
+			};
+		}
+		return key switch
+		{
+			"Applicant.FirstName" => applicant.FirstName,
+			"Applicant.MiddleName" => applicant.MiddleName,
+			"Applicant.LastName" => applicant.LastName,
+			"Applicant.DateOfBirth" => applicant.DateOfBirth,
+			"Applicant.Gender" => applicant.Gender,
+			"Guardian.FirstName" => guardian?.FirstName,
+			"Guardian.LastName" => guardian?.LastName,
+			"Guardian.Mobile" => guardian?.Mobile,
+			"Guardian.Email" => guardian?.Email,
+			"Address.AddressLine1" => applicant.AddressLine1,
+			"Address.AddressLine2" => applicant.AddressLine2,
+			"Address.City" => applicant.City,
+			"Address.State" => applicant.State,
+			"Address.Country" => applicant.Country,
+			"Address.PostalCode" => applicant.PostalCode,
+			_ => AdmissionAdditionalStudentFieldCatalog.GetValue(key, applicant)
+		};
+	}
 
 	public static bool ApplyValue(string key, string value, AdmissionApplicant applicant, AdmissionGuardian? guardian)
 	{

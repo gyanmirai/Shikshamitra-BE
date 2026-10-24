@@ -84,6 +84,16 @@ public class EfCoreStudentRepository(
     }
 
     /// <inheritdoc/>
+    public async Task<Student?> GetCredentialsProfileAsync(Guid id, bool trackChanges = false, CancellationToken cancellationToken = default)
+    {
+        var query = (await GetDbSetAsync()).IgnoreAutoIncludes()
+            .Include(s => s.ContactDetail).Include(s => s.FamilyDetail);
+        return trackChanges
+            ? await query.AsTracking().FirstOrDefaultAsync(s => s.Id == id, cancellationToken)
+            : await query.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task<Student?> GetByGrNoAsync(int grNo, CancellationToken cancellationToken = default)
     {
         var dbSet = await GetDbSetAsync();

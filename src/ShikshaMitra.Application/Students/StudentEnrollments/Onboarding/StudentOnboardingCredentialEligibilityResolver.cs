@@ -53,7 +53,7 @@ public class StudentOnboardingCredentialEligibilityResolver(
 		if (item == null || !tenant.Id.HasValue || item.TenantId != tenant.Id)
 			throw new EntityNotFoundException(typeof(StudentOnboardingCase), caseId);
 		if (!item.HasCampusSnapshot) item.UseLegacyCampusId((await offerings.FindAsync(item.OfferingId))?.CampusId);
-		var student = await students.GetWithDetailsAsync(item.StudentId);
+		var student = await students.GetCredentialsProfileAsync(item.StudentId);
 		var settings = await configuration.GetAsync(item.AcademicYearId);
 		var rules = settings?.Readiness(item);
         if (item.ExtraProperties.TryGetValue("ReadinessRulesSnapshot", out var snapshot) && snapshot is string text)

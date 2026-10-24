@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,20 @@ audience: humans-and-agents
 # Find Student Enrollment Admissions APIs
 
 TL;DR: Admission Offering APIs use `api/student/enrollment/admissions/offerings` and separate read, validation, state, clone, delete, and bulk commands.
+
+## Mobile student profile
+
+`GET /api/mobile/v1/students/{studentId}/profile?academicYearId={academicYearId}` is an authenticated, read-only portal API.
+It requires an active self-student or guardian association in the current tenant; Student Records staff grants do not replace portal ownership.
+An explicit academic year must belong to the student's available enrollments; omission uses the student's current year.
+The response uses the normal `Result<MobileStudentProfileDto>` envelope with `studentId`, `academicYear`, `summary`, and `formSources`.
+Each form source contains the retained definition/version, current values, masked field codes, and selected option labels, including repeated field paths.
+The retained profile definition survives promotion, matching the web Details tab rather than filtering forms to the selected enrollment year.
+Original submissions, change evidence, edit permissions, file bytes and field defaults are excluded.
+Configured school masks and protected identity rules are applied before serialization; masked answers are null and identified by `formMaskedFieldCodes`.
+Sibling option labels are limited to the caller's linked students; unavailable saved choices are represented without exposing unrelated identities.
+No retained form returns an empty `formSources` array, not a fixed substitute schema.
+The endpoint is implemented by `Application/Students/Portal/MobileStudentProfileAppService.cs` with shared Records reading/projection helpers; the existing staff endpoint and its permissions are unchanged.
 
 ## Student action permissions
 
@@ -37,6 +51,13 @@ No schema migration or grant reseed is required for this permission change.
 ## Portal account owner profiles and case correction
 
 `GET /api/account/my-profile` returns the identity profile with authorized linked student contexts under `extraProperties.studentContexts`.
+It also returns `extraProperties.portalSession`: `{version:1,status:"ready"|"restricted",students:[{account,context,contextStatus}]}`.
+`account` uses the existing `StudentPortalAccountDto` contract, including student/user IDs, student name, account type, relationship, email, confirmation and activity flags. `context` uses `PortalTimetableContextDto`.
+`contextStatus` is `loaded`, `unavailable` (transient context-read failure), or `invalid` (invalid/ambiguous placement); failed contexts are null. Valid no-enrollment/no-published-timetable states remain loaded contexts with their existing `availability` values.
+Restricted portal access returns no student records. Association-query failures are errors, never successful empty association lists. Context reads use an isolated read-only unit of work; authorization errors and cancellation are not converted to partial enrollment success.
+The profile resolves associations once and batches context reads for all linked students. Legacy `studentContexts` is derived from the successful results. `/api/student/onboarding/portal/my-students` remains available for older consumers.
+Deploy this additive backend contract before the updated mobile client. The updated client uses only this profile endpoint for login/shared student details and treats a missing/unsupported `portalSession` as a contract error. Authentication and academic feature endpoints remain separate.
+Profile diagnostics record association/context durations, record counts and failure categories; they do not log bearer tokens or profile payloads. Compare staging latency distributions before claiming a transport or database stall is resolved.
 Each context's `student` includes nullable `gender` (`0` Male, `1` Female; null when unrecorded), `mediumId`, `mediumName`, `stageId`, and `stageName`, alongside its existing identity, standard, division, and roll number fields.
 Medium and stage come from the validated current class placement and remain null when no current academic year, active enrollment, or complete class assignment is available.
 The same student fields are returned by `GET /api/mobile/v1/academics/timetable/context`.

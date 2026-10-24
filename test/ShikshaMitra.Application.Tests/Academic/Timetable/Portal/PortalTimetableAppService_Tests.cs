@@ -49,9 +49,18 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
     {
         var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
         var f = await Seed(id, parent: parent, legacySelf: legacySelf, gender: gender); using var identity = SignIn(f.User.Id);
+        var config = new ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotConfig(Guid.NewGuid(), id, f.Student.StandardId!.Value, "08:30-14:30");
+        config.AddSlotGroup(new ShikshaMitra.Academic.Timetable.Settings.LectureSlots.LectureSlotGroup(Guid.NewGuid(), config.Id, 1, 1, 1, [1]));
+        await Insert(config);
         var service = GetRequiredService<IProfileAppService>();
         var profile = await service.GetAsync();
         profile.UserName.ShouldBe(f.User.UserName);
+        var session = (PortalSessionDto)profile.ExtraProperties["portalSession"]!;
+        session.Version.ShouldBe(1);
+        session.Status.ShouldBe("ready");
+        session.Students.Single().Account.StudentId.ShouldBe(f.Student.Id);
+        session.Students.Single().Account.Relationship.ShouldBe(parent ? "mother" : "self");
+        session.Students.Single().ContextStatus.ShouldBe("loaded");
         var contexts = ((List<PortalTimetableContextDto>)profile.ExtraProperties["studentContexts"]!).Single();
         contexts.Student.Id.ShouldBe(f.Student.Id);
         contexts.Student.Gender.ShouldBe(gender);
@@ -65,11 +74,15 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         contexts.Student.RollNumber.ShouldBe(12);
         contexts.CurrentAcademicYear!.Id.ShouldBe(f.Year.Id);
         contexts.AvailableAcademicYears.Single().Id.ShouldBe(f.Year.Id);
-        contexts.WorkingDays.ShouldBe(["monday"]);
+        contexts.WorkingDays.ShouldBe(["tuesday"]);
         contexts.Timezone.ShouldBe("Asia/Kolkata");
         contexts.Availability.ShouldBe("available");
         var json = JsonSerializer.SerializeToElement(profile, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         var studentJson = json.GetProperty("extraProperties").GetProperty("studentContexts")[0].GetProperty("student");
+        var sessionJson = json.GetProperty("extraProperties").GetProperty("portalSession");
+        sessionJson.GetProperty("version").GetInt32().ShouldBe(1);
+        sessionJson.GetProperty("students")[0].GetProperty("account").GetProperty("userId").GetGuid().ShouldBe(f.User.Id);
+        sessionJson.GetProperty("students")[0].GetProperty("context").GetRawText().ShouldBe(json.GetProperty("extraProperties").GetProperty("studentContexts")[0].GetRawText());
         studentJson.GetProperty("id").GetGuid().ShouldBe(f.Student.Id);
         studentJson.GetProperty("gender").GetInt32().ShouldBe((int)gender);
         studentJson.GetProperty("mediumId").GetGuid().ShouldBe(f.Medium.Id);
@@ -87,6 +100,9 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         ((List<PortalTimetableContextDto>)(await service.GetAsync()).ExtraProperties["studentContexts"]!).Count.ShouldBe(1);
         f.User.SetEmailConfirmed(false); await GetRequiredService<IRepository<IdentityUser, Guid>>().UpdateAsync(f.User, true);
         ((List<PortalTimetableContextDto>)(await service.GetAsync()).ExtraProperties["studentContexts"]!).ShouldBeEmpty();
+        var restricted = (PortalSessionDto)(await service.GetAsync()).ExtraProperties["portalSession"]!;
+        restricted.Status.ShouldBe("restricted");
+        restricted.Students.ShouldBeEmpty();
         f.User.SetEmailConfirmed(true); await GetRequiredService<IRepository<IdentityUser, Guid>>().UpdateAsync(f.User, true);
         await GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().DeleteAsync(f.Link, true);
         ((List<PortalTimetableContextDto>)(await service.GetAsync()).ExtraProperties["studentContexts"]!).ShouldBeEmpty();
@@ -114,6 +130,99 @@ public class PortalTimetableAppService_Tests : ShikshaMitraApplicationTestBase<S
         context.Availability.ShouldBe("noEnrollment");
         context.CurrentAcademicYear.ShouldBeNull();
     });
+
+    [Fact]
+    public Task Profile_preserves_good_children_when_one_enrollment_is_invalid() => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id, parent: true); using var identity = SignIn(f.User.Id);
+        var medium = await Insert(await GetRequiredService<EducationMediumManager>().CreateAsync(f.Medium.EducationBoardId, "Other"));
+        var sibling = await Insert(new Student(Guid.NewGuid(), id, "Second", "", "Child", f.Year.Id, f.Student.AcademicBoardId!.Value,
+            medium.Id, f.Student.AcademicMediumStageId!.Value, f.Student.StandardId, f.Student.DivisionId));
+        await Insert(StudentEnrollment.Create(Guid.NewGuid(), id, sibling.Id, f.Year.Id, f.Student.StandardId, f.Student.DivisionId, 2));
+        await Insert(new StudentPortalAccountLink(Guid.NewGuid(), id, sibling.Id, f.User.Id, "guardian", "mother", Guid.NewGuid()));
+        var profile = await GetRequiredService<IProfileAppService>().GetAsync();
+        var session = (PortalSessionDto)profile.ExtraProperties["portalSession"]!;
+        session.Students.Count.ShouldBe(2);
+        session.Students.Single(x => x.Account.StudentId == f.Student.Id).ContextStatus.ShouldBe("loaded");
+        var failed = session.Students.Single(x => x.Account.StudentId == sibling.Id);
+        failed.ContextStatus.ShouldBe("invalid"); failed.Context.ShouldBeNull();
+        ((List<PortalTimetableContextDto>)profile.ExtraProperties["studentContexts"]!).Single().Student.Id.ShouldBe(f.Student.Id);
+        await Should.ThrowAsync<BusinessException>(() => Service.GetContextAsync(sibling.Id));
+    });
+
+    [Fact]
+    public Task Profile_batches_context_queries_and_resolves_associations_once() => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id, parent: true); using var identity = SignIn(f.User.Id);
+        using var queries = new PortalProfileQueryObserver();
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        await GetRequiredService<IProfileAppService>().GetAsync();
+        var oneCount = queries.Commands.Count;
+        var oneMs = timer.ElapsedMilliseconds;
+        for (var index = 0; index < 2; index++)
+        {
+            var sibling = await Insert(new Student(Guid.NewGuid(), id, "Sibling", "", $"{index}", f.Year.Id, f.Student.AcademicBoardId!.Value,
+                f.Medium.Id, f.Student.AcademicMediumStageId!.Value, f.Student.StandardId, f.Student.DivisionId));
+            await Insert(StudentEnrollment.Create(Guid.NewGuid(), id, sibling.Id, f.Year.Id, f.Student.StandardId, f.Student.DivisionId, index + 2));
+            await Insert(new StudentPortalAccountLink(Guid.NewGuid(), id, sibling.Id, f.User.Id, "guardian", "mother", Guid.NewGuid()));
+        }
+        queries.Commands.Clear(); timer.Restart();
+        var session = (PortalSessionDto)(await GetRequiredService<IProfileAppService>().GetAsync()).ExtraProperties["portalSession"]!;
+        var threeMs = timer.ElapsedMilliseconds;
+        session.Students.Count.ShouldBe(3);
+        session.Students.ShouldAllBe(x => x.ContextStatus == "loaded");
+        queries.Commands.Count.ShouldBe(oneCount);
+        queries.Commands.Count(x => x.Contains("StudentPortalAccountLinks", StringComparison.Ordinal)).ShouldBe(2);
+        Console.WriteLine($"Portal profile local query sample: one child {oneCount} commands/{oneMs} ms; three children {queries.Commands.Count} commands/{threeMs} ms.");
+    });
+
+    [Theory]
+    [InlineData("timeout")]
+    [InlineData("authorization")]
+    [InlineData("cancellation")]
+    public Task Profile_context_failures_preserve_their_security_and_retry_meaning(string failure) => WithUnitOfWorkAsync(async () =>
+    {
+        var id = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(id);
+        var f = await Seed(id, parent: true); using var identity = SignIn(f.User.Id);
+        Exception error = failure switch
+        {
+            "timeout" => new TimeoutException("Fixture timeout"),
+            "authorization" => new AbpAuthorizationException(),
+            _ => new OperationCanceledException()
+        };
+        var service = new StudentPortalProfileAppService(GetRequiredService<IdentityUserManager>(),
+            GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Identity.IdentityOptions>>(),
+            GetRequiredService<StudentPortalAccessService>(), new FaultingContextReader(error))
+            { LazyServiceProvider = new Volo.Abp.DependencyInjection.AbpLazyServiceProvider(ServiceProvider) };
+        if (failure == "cancellation")
+        {
+            await Should.ThrowAsync<OperationCanceledException>(() => service.GetAsync());
+            return;
+        }
+        var profile = await service.GetAsync();
+        var session = (PortalSessionDto)profile.ExtraProperties["portalSession"]!;
+        ((List<PortalTimetableContextDto>)profile.ExtraProperties["studentContexts"]!).ShouldBeEmpty();
+        if (failure == "authorization")
+        {
+            session.Status.ShouldBe("restricted"); session.Students.ShouldBeEmpty();
+        }
+        else
+        {
+            session.Status.ShouldBe("ready");
+            session.Students.Single().Account.StudentId.ShouldBe(f.Student.Id);
+            session.Students.Single().ContextStatus.ShouldBe("unavailable");
+            session.Students.Single().Context.ShouldBeNull();
+        }
+    });
+
+    [Volo.Abp.DependencyInjection.DisableConventionalRegistration]
+    private sealed class FaultingContextReader(Exception error) : PortalStudentContextReader(null!, null!, null!, null!, null!, null!, null!, null!)
+    {
+        protected internal override Task<Dictionary<Guid, PortalStudentContextResult>> ReadAsync(Guid[] authorizedIds, Guid? academicYearId = null) =>
+            Task.FromException<Dictionary<Guid, PortalStudentContextResult>>(error);
+    }
 
     private async Task<T> Insert<T>(T entity) where T : class, Volo.Abp.Domain.Entities.IEntity<Guid> =>
         await GetRequiredService<IRepository<T, Guid>>().InsertAsync(entity, autoSave: true);

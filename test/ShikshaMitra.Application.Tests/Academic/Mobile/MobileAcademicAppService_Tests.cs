@@ -376,6 +376,50 @@ public partial class MobileAcademicAppService_Tests : ShikshaMitraApplicationTes
 		await Should.ThrowAsync<BusinessException>(() => service.SaveLeaveAsync(half.Id, input));
 	});
 
+	[Theory]
+	[InlineData(true, DateTimeKind.Utc)]
+	[InlineData(false, DateTimeKind.Utc)]
+	[InlineData(true, DateTimeKind.Unspecified)]
+	[InlineData(false, DateTimeKind.Unspecified)]
+	public Task Leave_list_accepts_UTC_year_dates_and_preserves_school_date_boundaries(bool parent, DateTimeKind kind) => WithUnitOfWorkAsync(async () =>
+	{
+		var tenantId = Guid.NewGuid(); using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f = await Seed(tenantId, parent); using var identity = SignIn(f.User.Id);
+		var firstDate = MobileAcademicContextAppService.SchoolToday.AddDays(1);
+		var lastDate = firstDate.AddDays(10);
+		await GetRequiredService<AcademicYearManager>().UpdateAsync(f.Year, f.Year.Name,
+			DateTime.SpecifyKind(firstDate, kind), DateTime.SpecifyKind(lastDate, kind));
+		await GetRequiredService<IRepository<AcademicYear, Guid>>().UpdateAsync(f.Year, true);
+		f.Year.StartDate.Kind.ShouldBe(kind);
+		var input = new MobileListInput { StudentId = f.Student.Id, AcademicYearId = f.Year.Id, PageNumber = 1, PageSize = 100 };
+		var service = GetRequiredService<IMobileAttendanceAppService>();
+		(await service.GetLeavesAsync(input)).Items.ShouldBeEmpty();
+
+		var type = await Insert(await GetRequiredService<StudentLeaveTypeManager>().CreateAsync("Medical", "#123456"));
+		var manager = GetRequiredService<StudentLeaveManager>();
+		async Task<StudentLeave> Add(DateTimeOffset date) => await Insert(await manager.CreateAsync(f.Student, type.Id, true,
+			date.ToUniversalTime(), null, "Synthetic appointment", null, null, null));
+		var start = new DateTimeOffset(firstDate, TimeSpan.FromHours(5.5));
+		var endExclusive = new DateTimeOffset(lastDate.AddDays(1), TimeSpan.FromHours(5.5));
+		await Add(start.AddTicks(-1));
+		var first = await Add(start);
+		var last = await Add(endExclusive.AddTicks(-1));
+		await Add(endExclusive);
+		first.Approve("Approved by school");
+		await GetRequiredService<IRepository<StudentLeave, Guid>>().UpdateAsync(first, true);
+
+		var page = await service.GetLeavesAsync(input);
+		page.TotalCount.ShouldBe(2);
+		page.Items.Select(x => x.Id).Order().ShouldBe(new[] { first.Id, last.Id }.Order());
+		page.Items.Single(x => x.Id == first.Id).StartDate.ShouldBe(DateOnly.FromDateTime(firstDate));
+		page.Items.Single(x => x.Id == last.Id).StartDate.ShouldBe(DateOnly.FromDateTime(lastDate));
+		page.Items.Single(x => x.Id == last.Id).CanEdit.ShouldBe(parent);
+		input.PageSize = 1;
+		(await service.GetLeavesAsync(input)).Items.Count.ShouldBe(1);
+		input.Status = "pending";
+		(await service.GetLeavesAsync(input)).Items.Single().Id.ShouldBe(last.Id);
+	});
+
 	[Fact]
 	public Task Attachment_upload_rejects_foreign_references_and_cross_tenant_blob_paths() => WithUnitOfWorkAsync(async () =>
 	{

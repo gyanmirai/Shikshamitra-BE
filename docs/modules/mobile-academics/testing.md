@@ -3,12 +3,30 @@ module: mobile-academics
 domain: validation
 content_type: Reference
 status: canonical
-updated_on: 2026-10-22
+updated_on: 2026-10-23
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate mobile Academics
+
+The leave-list regression `Leave_list_accepts_UTC_year_dates_and_preserves_school_date_boundaries`
+in `MobileAcademicAppService_Tests.cs` covers academic-year dates with UTC and
+unspecified kinds for both guardian and student reads. PostgreSQL materializes
+year dates as UTC timestamps; the leave list must treat their date components as
+school calendar dates before applying the India offset. Otherwise even an empty
+list throws `ArgumentException` before reading leave records. The cases also
+cover inclusive first/last school dates, UTC leave timestamps on either side of
+the year, status filtering, pagination, and guardian-only edit flags. This fix
+requires a backend deployment, with no schema migration or mobile API change.
+
+On 2026-10-23, the regression reproduced two UTC-date failures before the fix
+while the two unspecified-date cases passed. After the fix, all four cases and
+the three existing attendance/guardian-leave cases passed (seven total). The
+application build succeeded with existing warnings, using the bounded local
+migration-designer target described below; the full backend suite was not run.
+Read-only staging checks returned 500 for leave requests and 200 for overview,
+calendar, and leave types. Deployed verification of the fix remains outstanding.
 
 Submission regression cases are in `MobileHomeworkSubmission_Tests.cs` (the partial `MobileAcademicAppService_Tests` class), `MobileAnswerSanitizer_Tests`, and `MobileSubmissionRules_Tests`. They cover HTML/Unicode limits, stable receipt replay, stale revisions, draft/final separation, immutable files, teacher review, revoked-link replay, homework/assignment requirements, and deadline boundaries. The PostgreSQL HTTP fixture additionally applies `MobileHomeworkSubmissionReliability` and exercises repeated multipart uploads, simultaneous first-submit retries, competing replacements, and a response UPDATE paused while teacher review commits on another connection.
 

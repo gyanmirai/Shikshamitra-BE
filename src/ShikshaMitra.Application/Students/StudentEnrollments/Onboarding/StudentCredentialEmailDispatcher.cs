@@ -27,7 +27,7 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 	IStringEncryptionService encryption, IUnitOfWorkManager units, ICurrentTenant tenant,
 	IUserClaimsPrincipalFactory<IdentityUser> principals, ICurrentPrincipalAccessor currentPrincipal,
 	IPermissionChecker permissions, IStudentOnboardingAppService onboarding,
-	IStudentCredentialRecipientVerifier? recipients = null) : ITransientDependency
+	IStudentCredentialRecipientVerifier? recipients = null, StudentSiblingParentService? siblingParents = null) : ITransientDependency
 {
 	public async Task DispatchAsync(Guid id)
 	{
@@ -36,6 +36,16 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 		{
 			var row = await requests.FindAsync(id);
 			if (row == null || !tenant.Id.HasValue || row.TenantId != tenant.Id) return;
+			if (siblingParents != null && (await siblingParents.IsReusedAsync(row.CaseId, row.AccountType) ||
+				!row.RequiresSavedOwnerValidation() && await siblingParents.IsManualParentCaseAsync(row.CaseId, row.AccountType)))
+			{
+				if (row.Status is "Pending" or "Processing" or "Failed")
+				{
+					row.Cancel("Parent login uses the existing account or requires a manual first-time request.");
+					await requests.UpdateAsync(row, false);
+				}
+				await prepare.CompleteAsync(); return;
+			}
 			if (row.Status == "Processing")
 			{
 				row.RecoverInterrupted(DateTime.UtcNow);
@@ -97,7 +107,8 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 		{
 			// Re-read the relationship immediately before sending, including exits and guardian replacements.
 			var state = await ResolveDeliveryAsync(request);
-			if (!Matches(request, state) || !await SavedRecipientMatchesAsync(request, state) || !await ActorMaySendAsync(request)) request.Cancel("Account access, staff authorization or readiness changed. Email cancelled.");
+			if (siblingParents != null && await siblingParents.IsReusedAsync(request.CaseId, request.AccountType) ||
+				!Matches(request, state) || !await SavedRecipientMatchesAsync(request, state) || !await ActorMaySendAsync(request)) request.Cancel("Account access, staff authorization or readiness changed. Email cancelled.");
 			else
 			{
 				var user = await users.FindByIdAsync(request.UserId.ToString());

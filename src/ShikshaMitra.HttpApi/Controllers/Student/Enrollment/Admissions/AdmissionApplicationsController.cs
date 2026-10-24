@@ -66,8 +66,8 @@ public class AdmissionApplicationsController(IAdmissionApplicationAppService ser
 	[HttpGet("direct-registration/family-matches")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	public async Task<Result<List<AdmissionDirectFamilyMatchDto>>> FindDirectRegistrationFamiliesAsync(
-		[FromQuery] Guid offeringId, [FromQuery] string guardianMobile) =>
-		Result.Success(await service.FindDirectRegistrationFamiliesAsync(offeringId, guardianMobile));
+		[FromQuery] Guid offeringId, [FromQuery] string guardianMobile = "", [FromQuery] string? guardianEmail = null) =>
+		Result.Success(await service.FindDirectRegistrationFamiliesAsync(offeringId, guardianMobile, guardianEmail));
 
 	[HttpGet("counsellors")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]

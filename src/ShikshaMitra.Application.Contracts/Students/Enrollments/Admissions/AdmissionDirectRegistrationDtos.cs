@@ -13,6 +13,9 @@ public class StartAdmissionDirectRegistrationDto
 	public Guid AdmissionOfferingId { get; set; }
 
 	public Guid? ExistingFamilyId { get; set; }
+	public Guid? ExistingParentApplicantId { get; set; }
+	[RegularExpression("^(father|mother)$")]
+	public string? ParentRelationship { get; set; }
 	public Guid? CounsellorId { get; set; }
 	public bool CreateSeparateFamily { get; set; }
 	[StringLength(512)]
@@ -46,4 +49,26 @@ public class AdmissionDirectFamilyMatchDto
 	public string FamilyNumber { get; set; } = string.Empty;
 	public string PrimaryGuardianName { get; set; } = string.Empty;
 	public List<string> Applicants { get; set; } = [];
+	public List<AdmissionSiblingParentCandidateDto> Parents { get; set; } = [];
+	public bool MatchByEmail { get; set; }
+	public bool MatchByMobile { get; set; }
+}
+
+public class AdmissionSiblingParentCandidateDto
+{
+	public Guid SourceApplicantId { get; set; }
+	public string? Relationship { get; set; }
+	public string Name { get; set; } = string.Empty;
+	public string FirstName { get; set; } = string.Empty;
+	public string? LastName { get; set; }
+	public string? Email { get; set; }
+	public string? Mobile { get; set; }
+}
+
+public class AdmissionSiblingParentContactDto
+{
+	[RegularExpression("^(father|mother)$")]
+	public string Relationship { get; set; } = string.Empty;
+	[EmailAddress, StringLength(256)] public string? Email { get; set; }
+	[StringLength(32)] public string? Mobile { get; set; }
 }

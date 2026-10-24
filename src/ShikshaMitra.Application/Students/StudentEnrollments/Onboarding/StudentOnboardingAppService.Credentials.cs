@@ -40,6 +40,18 @@ public partial class StudentOnboardingAppService
 		if (owner.BlockedReason != null) throw PortalInvalid(owner.BlockedReason);
 		if (!StudentCredentialsRecipientReader.SameEmail(owner.Email, input.ExpectedEmail))
 			throw PortalInvalid("The saved email changed. Refresh the recipient before sending credentials.");
+		if (input.AccountType == "guardian" && await SiblingParents.IsParentFlowAsync(item))
+		{
+			if (input.Relationship is not ("father" or "mother")) throw PortalInvalid("Choose Father or Mother for parent app login.");
+			var parent = await ReadSiblingParentContextAsync(item);
+			if (parent.BlockedReason != null) throw PortalInvalid(parent.BlockedReason);
+			if (parent.IsLinked && await SiblingParents.IsReusedAsync(id, "guardian")) return await MapCredentialsAsync(item);
+			if (parent.Candidates.Count > 0) throw PortalInvalid("Save and activate the student to link the confirmed existing parent. No new credentials are needed.");
+			var identity = await portalUserManager.FindByEmailAsync(owner.Email!);
+			if (identity != null && !await portalLinkRepository.AnyAsync(link => link.StudentId == item.StudentId &&
+				link.AccountType == "guardian" && link.UserId == identity.Id && link.Relationship == input.Relationship && link.VerifiedByUserId != Guid.Empty))
+				throw PortalInvalid("Confirm this parent through Add sibling in Admissions before linking an existing account.");
+		}
 		var resolver = LazyServiceProvider.LazyGetRequiredService<StudentOnboardingCredentialEligibilityResolver>();
 		var state = await resolver.ResolveSendPreparationAsync(id, input.AccountType);
 		EnsureCredentialsPreparation(state, owner);
@@ -81,6 +93,9 @@ public partial class StudentOnboardingAppService
 	private async Task<StudentCredentialsWorkspaceDto> MapCredentialsAsync(StudentOnboardingCase item)
 	{
 		var owners = await LazyServiceProvider.LazyGetRequiredService<StudentCredentialsRecipientReader>().GetAsync(item);
+		var parent = await ReadSiblingParentContextAsync(item);
+		if (parent.Enabled) owners = owners.Where(owner => owner.AccountType != "guardian" || owner.Relationship is "father" or "mother").ToArray();
+		if (parent.Status == "SetupFailed") parent.CanRetrySetup = await CanRetryParentSetupAsync(item);
 		var requests = await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>()
 			.GetListAsync(row => row.CaseId == item.Id);
 		var resolver = LazyServiceProvider.LazyGetRequiredService<StudentOnboardingCredentialEligibilityResolver>();
@@ -92,6 +107,15 @@ public partial class StudentOnboardingAppService
 		var canUpdate = await AuthorizationService.IsGrantedAsync(IdentityPermissions.Users.Update);
 		foreach (var owner in owners)
 		{
+			if (owner.AccountType == "guardian" && parent.Enabled && parent.FamilyConfirmed &&
+				(parent.IsLinked || parent.Candidates.Count > 0 || parent.BlockedReason != null))
+			{
+				owner.CanSend = false;
+				owner.BlockedReason = parent.BlockedReason ?? (parent.IsLinked
+					? "Uses the existing parent login. No new credentials are needed."
+					: "The existing parent will be linked when you save and activate the student.");
+				continue;
+			}
 			var state = states[owner.AccountType];
 			owner.BlockedReason ??= PreparationBlockedReason(state, owner);
 			if (owner.BlockedReason == null && !canEdit) owner.BlockedReason = "You do not have permission to send credentials.";
@@ -105,7 +129,8 @@ public partial class StudentOnboardingAppService
 				var identity = await portalUserManager.FindByEmailAsync(owner.Email!);
 				if (identity != null)
 				{
-					if (!canUpdate) owner.BlockedReason = "An authorized identity administrator must link this existing account.";
+					if (parent.Enabled) owner.BlockedReason = "Confirm this parent through Add sibling in Admissions before linking an existing account.";
+					else if (!canUpdate) owner.BlockedReason = "An authorized identity administrator must link this existing account.";
 					else
 					{
 						var roles = await portalUserManager.GetRolesAsync(identity);
@@ -115,17 +140,25 @@ public partial class StudentOnboardingAppService
 					}
 				}
 			}
-			var row = requests.FirstOrDefault(request => request.AccountType == owner.AccountType && request.LinkId == state.LinkId &&
-				StudentCredentialsRecipientReader.SameEmail(request.Email, owner.Email));
+			var linkRequest = requests.FirstOrDefault(request => request.AccountType == owner.AccountType && request.LinkId == state.LinkId);
+			var row = linkRequest != null && StudentCredentialsRecipientReader.SameEmail(linkRequest.Email, owner.Email) ? linkRequest : null;
 			if (state.LinkId.HasValue && state.Relationship == owner.Relationship)
 				owner.Delivery = StudentCredentialEmailAppService.Map(owner.AccountType, state, row);
-			if (owner.BlockedReason == null && (row?.Status is "Pending" or "Processing"))
+			if (owner.BlockedReason == null && (linkRequest?.Status is "Pending" or "Processing"))
 				owner.BlockedReason = state.WaitingForCompletion ? "Credentials are queued for onboarding completion." : "Credentials are already queued.";
-			else if (owner.BlockedReason == null && row != null && !row.CanRequest(DateTime.UtcNow))
+			else if (owner.BlockedReason == null && linkRequest != null && !linkRequest.CanRequest(DateTime.UtcNow))
 				owner.BlockedReason = "Wait two minutes before sending credentials again.";
 			owner.CanSend = owner.BlockedReason == null;
 		}
-		return new() { CaseId = item.Id, ConcurrencyStamp = item.ConcurrencyStamp, Recipients = owners };
+		await LazyServiceProvider.LazyGetRequiredService<StudentPortalEmailChangeService>()
+			.EnrichAsync(owners, item.StudentId, canEdit && item.Status != StudentOnboardingStatus.Cancelled, canUpdate);
+		foreach (var owner in owners.Where(x => x.AccountType == "guardian" && !x.HasLinkedAccount &&
+			parent.Candidates.Any(candidate => candidate.Relationship == x.Relationship)))
+		{
+			owner.CanEditEmail = false;
+			owner.EmailEditBlockedReason = "Link the confirmed parent before requesting a login email change.";
+		}
+		return new() { CaseId = item.Id, ConcurrencyStamp = item.ConcurrencyStamp, Recipients = owners, ParentSibling = parent.Enabled ? parent : null };
 	}
 
 	private void EnsureCredentialsActor()

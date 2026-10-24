@@ -70,8 +70,8 @@ public class AdmissionApplicationAppService(
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.Start)]
 	public Task<List<AdmissionDirectFamilyMatchDto>> FindDirectRegistrationFamiliesAsync(
-		Guid offeringId, string guardianMobile) =>
-		directRegistrationService.FindFamiliesAsync(offeringId, guardianMobile);
+		Guid offeringId, string guardianMobile, string? guardianEmail = null) =>
+		directRegistrationService.FindFamiliesAsync(offeringId, guardianMobile, guardianEmail);
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View)]
 	public Task<List<AdmissionInquiryCounsellorDto>> GetAssignableCounsellorsAsync(Guid? offeringId = null, string? filter = null) =>

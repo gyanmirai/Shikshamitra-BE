@@ -28,6 +28,13 @@ public class StartAdmissionDirectRegistrationDtoValidator : AbstractValidator<St
 		RuleFor(input => input.GuardianRelationship).IsInEnum();
 		RuleFor(input => input.ExistingFamilyId).NotEqual(Guid.Empty)
 			.When(input => input.ExistingFamilyId.HasValue);
+		RuleFor(input => input.ParentRelationship).Must(value => value is null or "father" or "mother")
+			.WithMessage("Choose Father or Mother.");
+		RuleFor(input => input.ExistingParentApplicantId).NotEqual(Guid.Empty).When(input => input.ExistingParentApplicantId.HasValue);
+		RuleFor(input => input.ExistingParentApplicantId).NotNull().When(input => input.ExistingFamilyId.HasValue && input.ParentRelationship != null);
+		RuleFor(input => input.ExistingFamilyId).NotNull().When(input => input.ExistingParentApplicantId.HasValue);
+		RuleFor(input => input.ParentRelationship).NotEmpty().When(input => input.ExistingParentApplicantId.HasValue);
+		RuleFor(input => input.GuardianRelationship).Equal(AdmissionGuardianRelationship.Parent).When(input => input.ParentRelationship != null);
 		RuleFor(input => input.CreateSeparateFamily).Equal(false)
 			.When(input => input.ExistingFamilyId.HasValue)
 			.WithMessage("Choose an existing family or create a separate family, not both.");

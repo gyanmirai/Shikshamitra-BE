@@ -26,6 +26,10 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 			var state = await eligibility.ResolveAsync(caseId, type);
 			var row = state.LinkId.HasValue ? await requests.FindAsync(x => x.CaseId == caseId && x.AccountType == type && x.LinkId == state.LinkId) : null;
 			var dto = Map(type, state, row);
+			if (await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsReusedAsync(caseId, type))
+			{
+				dto.Status = "Linked"; dto.CanSend = false; dto.Message = "Uses the existing parent login. No new credentials are needed.";
+			}
 			dto.CanSend &= await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
 			result.Add(dto);
 		}
@@ -40,16 +44,28 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 	internal Task<StudentCredentialEmailDto> RequestPreparedAsync(Guid caseId, string accountType, string concurrencyStamp) =>
 		RequestCoreAsync(caseId, new() { AccountType = accountType, ConcurrencyStamp = concurrencyStamp }, allowCompletionWait: true);
 
-	private async Task<StudentCredentialEmailDto> RequestCoreAsync(Guid caseId, RequestStudentCredentialEmailDto input, bool allowCompletionWait)
+	internal Task<StudentCredentialEmailDto> RetryOriginalParentSetupAsync(StudentCredentialEmailRequest original, string concurrencyStamp) =>
+		RequestCoreAsync(original.CaseId, new() { AccountType = "guardian", ConcurrencyStamp = concurrencyStamp },
+			allowCompletionWait: true, originalSetup: original);
+
+	private async Task<StudentCredentialEmailDto> RequestCoreAsync(Guid caseId, RequestStudentCredentialEmailDto input, bool allowCompletionWait,
+		StudentCredentialEmailRequest? originalSetup = null)
 	{
 		ValidateType(input.AccountType);
+		if (await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsReusedAsync(caseId, input.AccountType))
+			throw Invalid("This student uses the existing parent login. No new credentials are needed.");
 		var state = allowCompletionWait ? await eligibility.ResolveExplicitAsync(caseId, input.AccountType)
 			: await eligibility.ResolveAsync(caseId, input.AccountType);
 		EnsureReady(state, allowCompletionWait);
+		if (originalSetup != null && (state.LinkId != originalSetup.LinkId || state.UserId != originalSetup.UserId ||
+			state.StudentId != originalSetup.StudentId || !StudentCredentialsRecipientReader.SameEmail(state.Email, originalSetup.Email)))
+			throw Invalid("The original parent account changed. Review its setup before retrying.");
 		var item = await cases.GetAsync(caseId);
 		if (!string.IsNullOrWhiteSpace(input.ConcurrencyStamp) && input.ConcurrencyStamp != item.ConcurrencyStamp)
 			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
 		var row = await FindAsync(caseId, input.AccountType, state.LinkId!.Value);
+		if (originalSetup != null && row?.Id != originalSetup.Id) throw Invalid("The original parent setup request is no longer available.");
+		if (originalSetup != null && row!.Status is "Sent" or "Pending" or "Processing") return Map(input.AccountType, state, row);
 		if (row == null) row = await InsertAsync(state, input.AccountType, allowCompletionWait);
 		else
 		{
@@ -57,7 +73,7 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 			if (row.Status is not ("Pending" or "Processing"))
 			{
 				if (!row.CanRequest(DateTime.UtcNow)) throw Invalid("Wait at least two minutes between email requests.");
-				row.Requeue(CurrentUser.Id, DateTime.UtcNow); changed = true;
+				row.RequeueForRecipient(CurrentUser.Id, DateTime.UtcNow, state.Email); changed = true;
 			}
 			if (allowCompletionWait)
 			{
@@ -74,6 +90,7 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add);
 		ValidateType(accountType);
+		if (await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsManualParentCaseAsync(caseId, accountType)) return;
 		var state = await eligibility.ResolveAsync(caseId, accountType);
 		if (!state.EmailEnabled || !state.IsReady || !state.LinkId.HasValue || !state.UserId.HasValue) return;
 		if (await FindAsync(caseId, accountType, state.LinkId.Value) != null) return;

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Students.StudentEnrollments.Onboarding;
+using ShikshaMitra.Students.Portal;
 using Shouldly;
 using Xunit;
 
@@ -11,6 +12,20 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 
 public class StudentOnboardingApiContract_Tests
 {
+	[Fact]
+	public void Profile_email_write_is_scoped_and_owner_confirmation_is_separate_without_token_auditing()
+	{
+		Put(nameof(StudentOnboardingController.UpdateCredentialsEmailAsync)).ShouldBe("{id:guid}/credentials/email");
+		var type = typeof(StudentPortalEmailController);
+		Route(type).ShouldBe("api/student/portal/email");
+		var confirm = type.GetMethod(nameof(StudentPortalEmailController.ConfirmAsync))!;
+		confirm.GetCustomAttribute<HttpPostAttribute>()!.Template.ShouldBe("confirm");
+		confirm.GetCustomAttribute<AllowAnonymousAttribute>().ShouldNotBeNull();
+		confirm.GetCustomAttribute<Volo.Abp.Auditing.DisableAuditingAttribute>().ShouldNotBeNull();
+		typeof(StudentPortalEmailChangeService).GetMethod(nameof(StudentPortalEmailChangeService.ConfirmAsync))!
+			.GetCustomAttribute<Volo.Abp.Auditing.DisableAuditingAttribute>().ShouldNotBeNull();
+	}
+
 	[Fact]
 	public void Portal_creation_requires_both_onboarding_and_identity_permissions_on_both_boundaries()
 	{
@@ -41,6 +56,8 @@ public class StudentOnboardingApiContract_Tests
 		Post(nameof(StudentOnboardingController.SetPlacementAsync)).ShouldBe("{id:guid}/placement");
 		Post(nameof(StudentOnboardingController.AllocateIdentifierAsync)).ShouldBe("{id:guid}/identifiers");
 		Post(nameof(StudentOnboardingController.ActivateAsync)).ShouldBe("{id:guid}/activate");
+		Post(nameof(StudentOnboardingController.RetryParentSetupAsync)).ShouldBe("{id:guid}/credentials/retry-parent-setup");
+		Post(nameof(StudentOnboardingController.LinkParentAsync)).ShouldBe("{id:guid}/credentials/link-parent");
 		Get(nameof(StudentOnboardingController.PreviewActivationAsync)).ShouldBe("{id:guid}/activation-preview");
 		Post(nameof(StudentOnboardingController.CancelAsync)).ShouldBe("{id:guid}/cancel");
 		Post(nameof(StudentOnboardingController.ConfirmServiceConsentAsync))
@@ -68,6 +85,8 @@ public class StudentOnboardingApiContract_Tests
 	[InlineData(nameof(StudentOnboardingAppService.GetPlacementOptionsAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.GetAvailableIdentifierSeriesAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	[InlineData(nameof(StudentOnboardingAppService.RefreshReadinessAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	[InlineData(nameof(StudentOnboardingAppService.RetryParentSetupAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
+	[InlineData(nameof(StudentOnboardingAppService.UpdateCredentialsEmailAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	[InlineData(nameof(StudentOnboardingAppService.UpdateStepAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit)]
 	[InlineData(nameof(StudentOnboardingAppService.SetPlacementAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateSeat)]
 	[InlineData(nameof(StudentOnboardingAppService.AllocateIdentifierAsync), ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.AllocateIdentifier)]
@@ -96,6 +115,19 @@ public class StudentOnboardingApiContract_Tests
 		typeof(StudentOnboardingController).GetMethod(nameof(StudentOnboardingController.ConfirmServiceConsentAsync))!
 			.GetCustomAttribute<AuthorizeAttribute>()!.Policy.ShouldBe(
 				ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
+	}
+
+	[Fact]
+	public void Parent_link_requires_both_onboarding_edit_and_identity_update_at_each_boundary()
+	{
+		foreach (var type in new[] { typeof(StudentOnboardingAppService), typeof(StudentOnboardingController) })
+		{
+			var policies = type.GetMethod(nameof(StudentOnboardingController.LinkParentAsync))!
+				.GetCustomAttributes<AuthorizeAttribute>().Select(attribute => attribute.Policy).ToArray();
+			policies.Length.ShouldBe(2);
+			policies.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
+			policies.ShouldContain(Volo.Abp.Identity.IdentityPermissions.Users.Update);
+		}
 	}
 
 	private static string? Route(System.Type controller) =>

@@ -78,6 +78,7 @@ public class StudentRenewalPortalCoordinator(StudentRecordRenewalCoordinator ren
 			throw Invalid("Choose a saved Father or Mother profile. Other guardian is available only when neither parent is recorded.");
 		if (!await roles.RoleExistsAsync(role)) throw Invalid("The portal role must be configured by an identity administrator.");
 		var user = await users.FindByEmailAsync(email);
+		var existingIdentity = user != null;
 		if (user != null)
 		{
 			await authority.EnsureCurrentPermissionsAsync(IdentityPermissions.Users.Update);
@@ -94,6 +95,8 @@ public class StudentRenewalPortalCoordinator(StudentRecordRenewalCoordinator ren
 		}
 		// The account owner completes the existing protected password-setup flow.
 		// This handoff neither generates a password nor confirms an unverified mailbox.
+		if (existingIdentity && !(await users.UpdateAsync(user)).Succeeded)
+			throw Invalid("The existing parent account changed. Refresh before linking.");
 		var link = new StudentPortalAccountLink(GuidGenerator.Create(), CurrentTenant.Id!.Value, student.Id, user.Id, input.AccountType, input.Relationship, CurrentUser.Id!.Value);
 		await links.InsertAsync(link, autoSave: true);
 		if (item.TransitionId.HasValue) await events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id.Value, item.TransitionId.Value, CurrentUser.Id.Value,

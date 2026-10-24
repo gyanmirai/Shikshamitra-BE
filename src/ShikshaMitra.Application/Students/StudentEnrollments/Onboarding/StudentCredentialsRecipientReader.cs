@@ -5,6 +5,7 @@ using System.Net.Mail;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ShikshaMitra.Students.Records;
+using ShikshaMitra.Students.Portal;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
@@ -21,13 +22,13 @@ public class StudentCredentialsRecipientReader(IStudentRepository students,
 {
 	public async Task<IReadOnlyList<StudentCredentialsRecipientDto>> GetAsync(StudentOnboardingCase item)
 	{
-		var student = await students.GetWithDetailsAsync(item.StudentId);
+		var student = await students.GetCredentialsProfileAsync(item.StudentId);
 		if (student == null || student.TenantId != item.TenantId) return [];
 		var email = Normalize(student.ContactDetail?.Email);
 		var applicant = await applicants.FindAsync(item.ApplicantId);
 		var capturedEmail = applicant != null && (applicant.ExistingStudentId == student.Id || applicant.ReservedStudentId == student.Id)
 			? AdmissionStudentProfileMapping.Read(applicant, "Applicant.Email") : null;
-		var studentEmailRecorded = SameEmail(email, capturedEmail);
+		var studentEmailRecorded = SameEmail(email, capturedEmail) || email != null && StudentPortalProfileEmail.HasStudentCapture(student, email);
 		if (!studentEmailRecorded && email != null)
 		{
 			var applied = await changes.GetListAsync(change => change.StudentId == student.Id &&

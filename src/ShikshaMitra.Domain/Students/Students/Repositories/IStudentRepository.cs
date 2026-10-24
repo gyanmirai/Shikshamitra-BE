@@ -41,6 +41,9 @@ public interface IStudentRepository : IRepository<Student, Guid>
     /// </summary>
     Task<Student?> GetRegistrationAggregateAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>Loads only app-login contact/family data, untracked by default; email writes explicitly request tracking.</summary>
+    Task<Student?> GetCredentialsProfileAsync(Guid id, bool trackChanges = false, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Gets a student with all 1:1 aggregate parts eagerly loaded
     /// (AdditionalDetail, ContactDetail, FamilyDetail, CommunicationDetail,

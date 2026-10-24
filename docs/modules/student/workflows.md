@@ -3,7 +3,7 @@ module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,15 @@ audience: humans-and-agents
 # Trace Student Enrollment Admissions workflows
 
 TL;DR: setup commands produce validated offering defaults, while inquiry and application runtime commands consume only offerings that are open and ready.
+
+## Correct app-login email without leaving onboarding
+
+1. Staff selects Student or a saved Father/Mother in App Login and opens Add email or Update email.
+2. An unlinked owner saves only the selected profile email; Send Credentials remains an explicit staff action after normal readiness checks.
+3. For an existing login, staff with Identity Users Update confirms any shared-parent impact and requests verification of the proposed email.
+4. The queued verification job rechecks the requesting staff's active identity, permissions, all linked students' scope and exact unchanged account/profile/link state before delivery.
+5. The owner opens the protected link and explicitly confirms. The normal school resolver and protected Identity token are validated before an atomic update to the existing login and linked profiles.
+6. The password and child links remain intact; pending deliveries to the old email are cancelled and a subsequent authorized manual Student request uses the current recipient, never stale encrypted credentials.
 
 ## Carry admission answers into student profiles
 
@@ -30,6 +39,16 @@ The applicant retains original captured evidence. Finalization retries preserve 
 4. Read the resulting Applied audit from the existing Changes history API. The original submitted form remains immutable; conditional hidden custom answers remain stored, and guardian changes retain their configured access-review handoff.
 
 ## Deliver student and parent credentials
+
+For new explicit Father/Mother admissions, use this sibling branch:
+
+1. Staff confirms Add sibling against a scoped existing family and selected saved parent; a same-email/different-mobile match requires explicit confirmation and never overwrites the existing shared contact.
+2. At Save & Activate, select Father or Mother if both have eligible existing accounts. The reviewed identity/email/relationship is persisted with activation and revalidated before linking.
+3. An eligible existing account is linked to the new child without another password or credential email. Required account handoffs acknowledge the real link; no case-local Sent request is invented.
+4. If there is no eligible existing account, first-time parent account preparation and email sending remain a manual Send Credentials action. Student self-login and historical guardian records retain their prior behavior.
+5. If the reused parent's original setup is Pending or Failed, show that state independently of the link. Authorized staff may retry only the original failed setup under both cases' scope; owner email verification/password setup is not bypassed.
+6. If the child was already activated before the parent's first manual account preparation, Link Parent uses the same confirmed selection without replaying student setup. This also supports completed cases with optional parent access; it does not prepare a new parent or send sibling credentials.
+7. After owner setup, the existing portal students API returns the parent's eligible linked children. Mobile-client refresh behavior requires separate app verification.
 
 1. Configure student and parent/guardian login requirements in Onboarding Settings. Existing delivery mode, timing and guardian relationship preferences retain their compatibility behavior.
 2. Finalize Admissions; common checks and published document requirements are inherited automatically. Pending cases adopt current account requirements without rewriting their frozen document policies. Activated, completed and cancelled cases retain their snapshots. Complete placement, identifiers and required document evidence; required evidence cannot be waived through an onboarding override.
@@ -179,7 +198,7 @@ Existing applications retain their frozen runtime; the internal Student Records 
 ### Start a special-track Registration
 
 1. Staff with Applications Start authority choose an active/open/published-ready special Registration offering within their tenant and academic scope.
-2. Capture system-owned applicant and primary-guardian identity; resolve matching scoped families by primary guardian mobile and explicitly choose a sibling family or record a separate-family reason when applicable.
+2. Capture applicant and Father/Mother identity; resolve scoped saved-parent email/mobile matches and explicitly confirm the family and source parent for a sibling, or record a separate-family reason when applicable.
 3. Retain the same request ID across retries; the transaction creates/links the family, creates one applicant and reserved Student identity, and starts at the workflow's Registration Form stage without an Inquiry.
 4. Start without a counsellor assignment; handling staff are recorded by each action.
 5. Continue through the offering's frozen common Form/evidence/decision/finalization and Onboarding stages; special entry is not automatic approval.
@@ -232,14 +251,23 @@ Special Registration applications, historical direct applications and governed S
 
 Basic workflows retain the existing inquiry commands and do not create managed records.
 
-When linking a sibling to an existing family, Inquiry and direct Registration both require an active family
-visible through the staff member's admission scope and a matching primary-guardian mobile number.
-An arbitrary family ID or a name/email-only duplicate suggestion does not authorize linking;
-staff must verify or update a changed guardian number through a separate family-maintenance flow.
+The explicit Father/Mother sibling flow requires an active family visible through staff admission scope, a selected source applicant and a matching saved parent email or mobile.
+Same email with a different mobile may be confirmed by staff, but the existing parent's saved details are reused rather than overwritten.
+When both parents are present, staff selects one; a generic historical Parent contact requires explicit Father/Mother identification.
+The new child receives its own applicant, application and Student identity, plus a server-recorded family/source-parent confirmation for the later Onboarding account handoff.
+Admission capture itself grants no portal access and sends no credentials.
+For the selected first parent, a generic Registration contact email collected after an Inquiry without email maps into that Father's or Mother's saved profile before the Student handoff.
+Explicit structured contact answers, including clears, take precedence over generic aliases across stages; corrections to generic-owned contacts remain editable without changing the other parent or Student login fields.
+Older unfinalized parent-only records recover ownership from the saved Inquiry definition/answers and actually saved Registration field codes before edits or finalization; generated prefills alone do not establish structured ownership.
+This recovery never rewrites confirmed sibling sources, returning/existing Student profiles or legacy guardian records.
+Public inquiry cannot submit trusted sibling confirmation.
+Legacy mobile-only family linking remains compatible and does not acquire the new trusted confirmation automatically.
 
 ## Inquiry and application runtime
 
-Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values. Create-time duplicate enforcement stays in the selected admission cycle. The duplicate precheck additionally suggests scoped prior-cycle families with the same guardian mobile for sibling linking; a name/email-only signal does not cross cycles.
+Inquiry creation checks cycle consistency and shared offering availability before validating inquiry form values.
+Legacy create-time duplicate enforcement stays in the selected admission cycle; the new parent flow also requires explicit existing/separate family choice when a scoped saved-parent contact matches.
+Duplicate precheck suggests scoped prior-cycle families through saved Father/Mother email/mobile contacts; name-only signals do not cross cycles.
 Application start checks the same availability service, validates any linked inquiry, and freezes the offering's published workflow and application form references.
 Later changes to offering defaults affect only future runtime records.
 

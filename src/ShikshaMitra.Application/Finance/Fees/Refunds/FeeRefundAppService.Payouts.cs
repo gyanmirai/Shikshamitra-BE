@@ -27,44 +27,58 @@ public partial class FeeRefundAppService
         var request = await RequireAsync(id);
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
         EnsureSettlementMethodAllowed(request, input.Method);
-        var reference = input.Method == "Cash" && string.IsNullOrWhiteSpace(input.ExternalReference)
-            ? $"CASH-{request.VoucherNumber}"
-            : input.ExternalReference?.Trim();
-        var priorPayout = request.Settlements.FirstOrDefault(x => x.IdempotencyKey == input.IdempotencyKey);
+        var priorPayout = request.Settlements.FirstOrDefault(x =>
+            x.IdempotencyKey == input.IdempotencyKey || x.VerificationKey == input.IdempotencyKey);
+        var pendingPayout = request.Settlements.SingleOrDefault(x => x.Status == FeeRefundSettlementStatus.Processing);
+        var storedPayout = priorPayout ?? pendingPayout;
+        var reference = input.ExternalReference?.Trim();
+        // Read DTO references are masked. Resume the already identified server payment;
+        // never replace its immutable reference with that display value.
+        if (storedPayout?.ExternalReference is { } storedReference &&
+            (string.IsNullOrWhiteSpace(reference) || reference == Mask(storedReference)))
+            reference = storedReference;
+        if (input.Method == "Cash" && string.IsNullOrWhiteSpace(reference))
+            reference = $"CASH-{request.VoucherNumber}";
         if (priorPayout != null)
         {
             if (priorPayout.Method != input.Method || priorPayout.Amount != input.Amount ||
                 (priorPayout.SettlementDate - input.PaymentDate).Duration() > TimeSpan.FromMilliseconds(1) ||
                 priorPayout.ExternalReference != reference ||
-                priorPayout.BankAccountId != input.BankAccountId)
+                (priorPayout.Status == FeeRefundSettlementStatus.Processed &&
+                    (priorPayout.BankAccountId != input.BankAccountId || request.ExpenseCategoryId != input.ExpenseCategoryId)))
                 throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
-            return await MapAsync(request);
+            if (priorPayout.Status == FeeRefundSettlementStatus.Processed)
+            {
+                var replay = await MapAsync(request);
+                await uow.CompleteAsync();
+                return replay;
+            }
         }
         if ((request.RefundMethod != null && request.RefundMethod != input.Method) ||
             input.Amount != request.ApprovedAmount ||
-            input.PaymentDate == default || string.IsNullOrWhiteSpace(input.EvidenceReference) ||
-            string.IsNullOrWhiteSpace(reference) ||
-            (input.Method != "Cash" && !input.BankAccountId.HasValue))
+            input.PaymentDate == default || string.IsNullOrWhiteSpace(reference))
             throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
-        if (request.ExpenseCategoryId.HasValue && request.PayingBankAccountId != input.BankAccountId)
-            throw new BusinessException("Finance:Routing:BankMismatch");
-        if (input.BankAccountId.HasValue)
+        var category = await routingManager.RequireCategoryAsync(request.AcademicYearId,
+            input.ExpenseCategoryId, ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense);
+        var bank = await routingManager.RequireBankAsync(request.AcademicYearId,
+            input.BankAccountId, input.PaymentDate);
+        if (pendingPayout != null && (pendingPayout.Method != input.Method ||
+            pendingPayout.Amount != input.Amount || pendingPayout.ExternalReference != reference ||
+            (pendingPayout.SettlementDate - input.PaymentDate).Duration() > TimeSpan.FromMilliseconds(1)))
         {
-            var bank = await bankAccountRepository.FindAsync(input.BankAccountId.Value);
-            if (bank == null || !bank.IsActive || bank.AcademicYearId != request.AcademicYearId ||
-                bank.TenantId != CurrentTenant.Id)
-                throw new BusinessException(FeeRefundErrorCodes.PayoutMethodNotAllowed);
+            throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
         }
         if (await feeRefundRepository.IsPayoutReferenceUsedAsync(input.Method,
             reference!, request.Id))
             throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
-        var payout = request.RecordPayout(GuidGenerator.Create(), currentUser.GetId(), input.IdempotencyKey,
-            input.Method, input.Amount, input.PaymentDate, reference, null,
-            input.BankAccountId, input.EvidenceReference);
-        await feeRefundRepository.StageNewSettlementAsync(payout);
-        await WriteAuditAsync(request, FinanceAuditActions.Update,
-            $"Refund payout recorded for {request.VoucherNumber}; awaiting verification.",
-            context: new { PayoutId = payout.Id, input.Method, ExternalReference = reference });
+        request.SetPayoutRouting(category.Id, category.Name, bank.Id,
+            $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}", input.Method);
+        var evidence = string.IsNullOrWhiteSpace(input.EvidenceReference)
+            ? $"Payment recorded for {request.VoucherNumber}" : input.EvidenceReference.Trim();
+        var payout = pendingPayout ?? request.RecordPayout(GuidGenerator.Create(), currentUser.GetId(), input.IdempotencyKey,
+            input.Method, input.Amount, input.PaymentDate, reference, null, bank.Id, evidence);
+        if (pendingPayout == null) await feeRefundRepository.StageNewSettlementAsync(payout);
+        await CompleteRecordedPayoutAsync(request, payout, input.IdempotencyKey, evidence);
         await uow.CompleteAsync();
         return await MapAsync(request);
     }
@@ -90,8 +104,16 @@ public partial class FeeRefundAppService
         }
         if (payout.InitiatedByUserId == currentUser.GetId() && payout.Method != "Cash")
             throw new BusinessException(FeeRefundErrorCodes.MakerCheckerViolation);
-        await feeRefundManager.ConfirmPayoutAsync(request, payoutId, currentUser.GetId(),
-            input.IdempotencyKey, input.EvidenceReference);
+        await CompleteRecordedPayoutAsync(request, payout, input.IdempotencyKey, input.EvidenceReference);
+        await uow.CompleteAsync();
+        return await MapAsync(request);
+    }
+
+    private async Task CompleteRecordedPayoutAsync(FeeRefundRequest request, FeeRefundSettlement payout,
+        string idempotencyKey, string evidenceReference)
+    {
+        await feeRefundManager.ConfirmPayoutAsync(request, payout.Id, currentUser.GetId(),
+            idempotencyKey, evidenceReference);
         var amount = request.Lines.Sum(x => x.ProcessedAmount - x.ReversedAmount);
         if (amount != request.ProcessedAmount || amount != payout.Amount ||
             request.Lines.Any(x => x.SourceAllocationId == null || x.SourceReceiptId != request.OriginalReceiptId))
@@ -100,7 +122,7 @@ public partial class FeeRefundAppService
             GuidGenerator.Create(), CurrentTenant.Id, request.Id, payout.Id,
             request.OriginalReceiptId, payout.BankAccountId, payout.Method,
             payout.ExternalReference, amount, false, null, FeeHeadBreakdown(request),
-            input.EvidenceReference, currentUser.GetId()), autoSave: false);
+            evidenceReference, currentUser.GetId()), autoSave: false);
         if (request.ExpenseCategoryId is { } categoryId)
             await automaticTransactions.RecordAsync(request.AcademicYearId, categoryId,
                 request.ExpenseCategoryName!, payout.BankAccountId, request.PayingBankLabel,
@@ -109,15 +131,14 @@ public partial class FeeRefundAppService
                 $"refund:{payout.Id:N}", request.Id, request.StudentId, paymentDate: payout.SettlementDate.UtcDateTime,
                 financeFeeAccountId: request.FinanceFeeAccountId);
         await WriteAuditAsync(request, FinanceAuditActions.Refund,
-            $"Refund {request.VoucherNumber} confirmed paid.", context: new { PayoutId = payoutId });
+            $"Refund {request.VoucherNumber} completed and recorded as an expense.",
+            context: new { PayoutId = payout.Id, request.ExpenseCategoryId, request.PayingBankAccountId });
         await eventBus.PublishAsync(new FeeRefundApprovedEto
         {
             RefundRequestId = request.Id, StudentId = request.StudentId, FinanceFeeAccountId = request.FinanceFeeAccountId,
             AcademicYearId = request.AcademicYearId, TotalRefundAmount = Convert.ToDouble(request.ProcessedAmount),
             TenantId = CurrentTenant.Id, ApprovedAt = Clock.Now
         });
-        await uow.CompleteAsync();
-        return await MapAsync(request);
     }
 
     [Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Refund.FailPayout)]
@@ -194,6 +215,7 @@ public partial class FeeRefundAppService
         {
             x.FeeHeadId,
             x.DueFeeId,
+            x.ChargeId,
             x.SourceAllocationId,
             x.SourceReceiptId,
             Amount = x.ProcessedAmount - x.ReversedAmount

@@ -316,7 +316,10 @@ public partial class ConcessionRequestAppService
 			.Skip(skip)
 			.Take(pageSize));
 
-		var student  = await studentRepository.GetAsync(studentId) ?? throw new BusinessException("Student not found.");
+		var students = await studentRepository.WithDetailsAsync(
+			x => x.AcademicBoard!, x => x.AcademicMedium!, x => x.Standard!, x => x.Division!);
+		var student = await AsyncExecuter.FirstOrDefaultAsync(students.Where(x => x.Id == studentId))
+			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
 		var standard = student?.Standard?.Name;
 		var division = student?.Division?.Name;
 
@@ -365,6 +368,8 @@ public partial class ConcessionRequestAppService
 				GrNumber     = student.GrNo?.ToString() ?? string.Empty,
 				StandardName = standard ?? string.Empty,
 				DivisionName = division ?? string.Empty,
+				BoardName = student.AcademicBoard?.Name ?? string.Empty,
+				EducationMediumName = student.AcademicMedium?.Name ?? string.Empty,
 			},
 			ConcessionBasicDetail = new ConcessionBasicDetailDto
 			{

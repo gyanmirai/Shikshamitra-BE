@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using ShikshaMitra.Students;
 using System.Threading;
 using System.Threading.Tasks;
 using ShikshaMitra.Finance.Fees.Receipts.Dtos;
@@ -15,14 +17,14 @@ public partial class FeeReceiptAppService
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
 
-        if (receipt.PdfBlobName != null)
+        if (receipt.PdfBlobName != null && receipt.PdfBlobName.Contains("/v2/", StringComparison.Ordinal))
         {
             var cached = await blobManager.GetPdfOrNullAsync(receipt.PdfBlobName, cancellationToken);
             if (cached != null) return cached;
         }
 
-        var student      = receipt.StudentId.HasValue ? await studentRepository.FindAsync(receipt.StudentId.Value, cancellationToken: cancellationToken) : null;
-        var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, cancellationToken: cancellationToken);
+        var student      = receipt.StudentId.HasValue ? await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == receipt.StudentId.Value), cancellationToken) : null;
+        var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, includeDetails: false, cancellationToken: cancellationToken);
 
         var pdfBytes = await pdfGenerator.GenerateAsync(receipt, student, academicYear, cancellationToken);
         var blobName = await blobManager.SavePdfAsync(receipt.Id, receipt.ReceiptKind, pdfBytes, cancellationToken);
@@ -44,9 +46,10 @@ public partial class FeeReceiptAppService
 
     public static string GetKindLabel(FeeReceiptKind kind) => kind switch
     {
-        FeeReceiptKind.FinalFee          => "Final Receipt",
-        FeeReceiptKind.ProvisionalFee    => "Kachi Receipt (Fee)",
-        FeeReceiptKind.ProvisionalCharge => "Kachi Receipt (Charge)",
+        FeeReceiptKind.FinalFee          => "Official Receipt (Fee)",
+        FeeReceiptKind.FinalCharge       => "Official Receipt (Charge)",
+        FeeReceiptKind.ProvisionalFee    => "Provisional Receipt (Fee)",
+        FeeReceiptKind.ProvisionalCharge => "Provisional Receipt (Charge)",
         _                               => kind.ToString(),
     };
 }

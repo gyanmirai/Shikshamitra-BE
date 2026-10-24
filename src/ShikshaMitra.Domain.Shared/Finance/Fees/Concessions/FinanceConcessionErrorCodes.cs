@@ -29,6 +29,7 @@ public static class FinanceConcessionErrorCodes
 	public const string FeeStructureAssignmentRequired = "Finance:Concession:010029";
 	public const string RefundSourceUnavailable = "Finance:Concession:010030";
 	public const string RefundRequestBlocksReversal = "Finance:Concession:010031";
+	public const string WholeRupeeAmountRequired = "Finance:Concession:010032";
 
 	public const string StudentNotFound = "Finance:Concession:020002";
 	public const string ConcessionTypeNotFound = "Finance:Concession:020003";

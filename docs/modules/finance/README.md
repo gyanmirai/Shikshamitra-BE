@@ -10,6 +10,8 @@ audience: humans-and-agents
 
 # Understand the Finance backend module
 
+Receipt classification, approval, PDF format and naming: [Provisional and official receipts](./references/receipt-lifecycle.md).
+
 TL;DR: use this page as the entrypoint for Finance behavior, API families, architecture, workflows, and validation.
 Finance covers fees, collections, concessions, adjustments, refunds, receipts, accounts, audit, and reports.
 

@@ -38,6 +38,7 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 	HRDashboardPayrollReader hrDashboardPayrollReader,
 	IUserScopeAccessService userScopeAccessService,
 	IFeePaymentReceiptRepository feePaymentReceiptRepository,
+	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRepository,
 	IDueFeeRepository dueFeeRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IConcessionRequestRepository concessionRequestRepository,
@@ -90,9 +91,10 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 			if (needsCollection && summary.DashboardTemplate == Leadership && academicYearId.HasValue)
 			{
 				var receiptQuery = await feePaymentReceiptRepository.GetQueryableAsync();
+				var chargeQuery = await chargeCollectionRepository.GetQueryableAsync();
 				var scopedFeeReceipts = receiptQuery.Where(r =>
 					r.AcademicYearId == academicYearId.Value &&
-					r.ReceiptScope == FeeReceiptScope.Fee &&
+					(r.ReceiptScope == FeeReceiptScope.Fee || r.ReceiptScope == FeeReceiptScope.Combined) &&
 					r.VerificationStatus != FeeReceiptVerificationStatus.Rejected &&
 					r.LinkedFinalReceiptId == null &&
 					((!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value)) ||
@@ -100,7 +102,8 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 
 				var periodRows = await asyncExecuter.ToListAsync(scopedFeeReceipts
 					.Where(r => r.ReceiptDate >= fromDate && r.ReceiptDate <= toDate)
-					.Select(r => new FinanceAmountRow(r.TotalPaidAmount, r.StudentId, r.FinanceFeeAccountId)));
+					.Select(r => new FinanceAmountRow(r.TotalPaidAmount - (r.ReceiptScope == FeeReceiptScope.Combined
+						? chargeQuery.Where(c => c.FeeRecordMetadataId == r.FeeCollectionTransactionId).Sum(c => (double?)c.Amount) ?? 0d : 0d), r.StudentId, r.FinanceFeeAccountId)));
 				var periodTotal = periodRows.Sum(x => x.Amount);
 				var subtitle = periodRows.Count == 0
 					? "No scoped fee receipts in selected range"
@@ -117,9 +120,10 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 			if (summary.DashboardTemplate == FinanceHr && (needsCollection || needsFinanceModule) && academicYearId.HasValue)
 			{
 				var receiptQuery = await feePaymentReceiptRepository.GetQueryableAsync();
+				var chargeQuery = await chargeCollectionRepository.GetQueryableAsync();
 				var scopedFeeReceipts = receiptQuery.Where(r =>
 					r.AcademicYearId == academicYearId.Value &&
-					r.ReceiptScope == FeeReceiptScope.Fee &&
+					(r.ReceiptScope == FeeReceiptScope.Fee || r.ReceiptScope == FeeReceiptScope.Combined) &&
 					r.VerificationStatus != FeeReceiptVerificationStatus.Rejected &&
 					r.LinkedFinalReceiptId == null &&
 					((!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudentIdsQuery.Contains(r.StudentId.Value)) ||
@@ -127,7 +131,8 @@ public class DashboardFinanceHrSnapshotSliceProvider(
 
 				todayRows = await asyncExecuter.ToListAsync(scopedFeeReceipts
 					.Where(r => r.ReceiptDate == toDate)
-					.Select(r => new FinanceAmountRow(r.TotalPaidAmount, r.StudentId, r.FinanceFeeAccountId)));
+					.Select(r => new FinanceAmountRow(r.TotalPaidAmount - (r.ReceiptScope == FeeReceiptScope.Combined
+						? chargeQuery.Where(c => c.FeeRecordMetadataId == r.FeeCollectionTransactionId).Sum(c => (double?)c.Amount) ?? 0d : 0d), r.StudentId, r.FinanceFeeAccountId)));
 
 				if (needsCollection)
 				{

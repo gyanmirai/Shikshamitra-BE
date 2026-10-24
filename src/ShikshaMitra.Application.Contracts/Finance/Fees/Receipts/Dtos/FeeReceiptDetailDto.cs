@@ -15,6 +15,8 @@ public class FeeReceiptDetailDto
     public string ReceiptNumber { get; set; } = string.Empty;
     public FeeReceiptKind ReceiptKind { get; set; }
     public string ReceiptKindLabel { get; set; } = string.Empty;
+    public string PaymentMethodLabel { get; set; } = string.Empty;
+    public string PdfFileName { get; set; } = string.Empty;
     public FeeReceiptScope ReceiptScope { get; set; }
 
     // ── Verification ──────────────────────────────────────────────────────────
@@ -28,6 +30,8 @@ public class FeeReceiptDetailDto
     // ── Amounts ───────────────────────────────────────────────────────────────
 
     public double TotalPaidAmount { get; set; }
+	public decimal FeePaidAmount { get; set; }
+	public decimal ChargePaidAmount { get; set; }
 
     // ── Student ───────────────────────────────────────────────────────────────
 

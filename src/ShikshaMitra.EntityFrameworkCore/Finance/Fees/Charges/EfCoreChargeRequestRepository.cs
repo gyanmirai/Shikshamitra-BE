@@ -123,8 +123,8 @@ public class EfCoreChargeRequestRepository(
 			await chargeCategoryRepository.GetQueryableAsync(), columnFilters);
 		// Class/division and user scope select requests, but their lifecycle uses the entire batch.
 		var candidateIds = await chargeQuery.Select(r => r.Id).ToListAsync(cancellationToken);
-		var workflows = await GetWorkflowsAsync(candidateIds, cancellationToken);
-		var matchingIds = workflows.Where(x => (int)x.Value == status && ChargeColumnFilter.MatchesStatus(columnFilters, x.Value))
+		var progress = await GetPaymentProgressAsync(candidateIds, cancellationToken, chargeLineQuery);
+		var matchingIds = progress.Where(x => (int)x.Value.WorkflowStatus == status && ChargeColumnFilter.MatchesStatus(columnFilters, x.Value.WorkflowStatus))
 			.Select(x => x.Key).ToList();
 		chargeQuery = chargeQuery.Where(r => matchingIds.Contains(r.Id));
 
@@ -141,10 +141,29 @@ public class EfCoreChargeRequestRepository(
 			"priority" => descending ? chargeQuery.OrderByDescending(r => r.Priority) : chargeQuery.OrderBy(r => r.Priority),
 			_ => chargeQuery.OrderByDescending(r => r.CreationTime)
 		};
-		var charges = await ordered.ThenBy(r => r.Id)
-			.Skip((page - 1) * pageSize)
-			.Take(pageSize)
-			.ToListAsync(cancellationToken);
+		var progressSort = (sortBy ?? string.Empty).Trim().ToLowerInvariant();
+		List<ChargeRequest> charges;
+		if (progressSort is "paidstudentcount" or "outstandingstudentcount" or "waivedstudentcount" or "studentcount")
+		{
+			// Payment progress is calculated from allocations before paging, just like lifecycle status.
+			var candidates = await chargeQuery.ToListAsync(cancellationToken);
+			var studentCounts = await chargeLineQuery.GroupBy(line => line.ChargeRequestId)
+				.Select(group => new { Id = group.Key, Count = group.Count() }).ToDictionaryAsync(x => x.Id, x => x.Count, cancellationToken);
+			int SortValue(ChargeRequest request) => progressSort switch
+			{
+				"paidstudentcount" => progress[request.Id].PaidStudentCount,
+				"outstandingstudentcount" => progress[request.Id].OutstandingStudentCount,
+				"waivedstudentcount" => progress[request.Id].WaivedStudentCount,
+				_ => studentCounts.GetValueOrDefault(request.Id)
+			};
+			charges = (descending ? candidates.OrderByDescending(SortValue) : candidates.OrderBy(SortValue))
+				.ThenBy(request => request.Id).Skip((page - 1) * pageSize).Take(pageSize).ToList();
+		}
+		else
+		{
+			charges = await ordered.ThenBy(r => r.Id).Skip((page - 1) * pageSize)
+				.Take(pageSize).ToListAsync(cancellationToken);
+		}
 
 		var chargeLines = await chargeLineQuery.OrderByDescending(r => r.CreationTime).ToListAsync(cancellationToken);
 
@@ -177,7 +196,11 @@ public class EfCoreChargeRequestRepository(
 						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id),
 						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id && cl.Status == ChargeStatus.Pending),
 						 chargeLines.Count(cl => cl.ChargeRequestId == charge.Id && cl.Status != ChargeStatus.Pending),
-						 workflows[charge.Id]
+						 progress[charge.Id].WorkflowStatus,
+						 progress[charge.Id].PaidStudentCount,
+						 progress[charge.Id].OutstandingStudentCount,
+						 progress[charge.Id].WaivedStudentCount,
+						 progress[charge.Id].CanCancel
 					 );
 
 		return (result.ToList(), totalCount);
@@ -259,8 +282,9 @@ public class EfCoreChargeRequestRepository(
 		if (requestIds.Count == 0)
 			return new ChargeRequestStatusCounts(0, 0);
 
-		var workflows = await GetWorkflowsAsync(requestIds, cancellationToken);
-		workflows = workflows.Where(x => ChargeColumnFilter.MatchesStatus(columnFilters, x.Value)).ToDictionary(x => x.Key, x => x.Value);
+		var progress = await GetPaymentProgressAsync(requestIds, cancellationToken);
+		var workflows = progress.Where(x => ChargeColumnFilter.MatchesStatus(columnFilters, x.Value.WorkflowStatus))
+			.ToDictionary(x => x.Key, x => x.Value.WorkflowStatus);
 		return new ChargeRequestStatusCounts(
 			workflows.Count(x => x.Value == ChargeWorkflowStatus.Pending),
 			workflows.Count(x => x.Value == ChargeWorkflowStatus.InProcess),
@@ -268,8 +292,8 @@ public class EfCoreChargeRequestRepository(
 			workflows.Count(x => x.Value == ChargeWorkflowStatus.Rejected));
 	}
 
-	private async Task<Dictionary<Guid, ChargeWorkflowStatus>> GetWorkflowsAsync(
-		List<Guid> requestIds, CancellationToken cancellationToken)
+	private async Task<Dictionary<Guid, ChargePaymentProgress>> GetPaymentProgressAsync(
+		List<Guid> requestIds, CancellationToken cancellationToken, IQueryable<Charge>? visibleLineQuery = null)
 	{
 		if (requestIds.Count == 0) return [];
 		var db = await GetDbContextAsync();
@@ -287,9 +311,26 @@ public class EfCoreChargeRequestRepository(
 			.Where(x => chargeIds.Contains(x.ChargeId)).ToListAsync(cancellationToken);
 		var waived = waivers.GroupBy(x => x.ChargeId)
 			.ToDictionary(g => g.Key, g => g.Sum(x => x.EffectiveAmount));
+		// Cancellation must also fail closed for allocations with missing transaction evidence,
+		// exactly like the command guard. Only an explicitly reversed collection is safe.
+		var activeCollectionIds = (await db.Set<ChargeCollectionRecord>().AsNoTracking()
+			.Where(allocation => chargeIds.Contains(allocation.ChargeId) &&
+				!db.Set<FeeRecordMetadata>().Any(transaction => transaction.Id == allocation.FeeRecordMetadataId &&
+					transaction.Status == FeeCollectionStatus.Reversed))
+			.Select(allocation => allocation.ChargeId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+		var visibleIds = visibleLineQuery is null ? null :
+			(await visibleLineQuery.Where(line => requestIds.Contains(line.ChargeRequestId))
+				.Select(line => line.Id).ToListAsync(cancellationToken)).ToHashSet();
 		var linesByRequest = lines.ToLookup(line => line.ChargeRequestId);
-		return requestIds.ToDictionary(id => id, id => ChargeWorkflowStatusResolver.Resolve(
-			linesByRequest[id].Select(line => new ChargeWorkflowLine(line.Status,
-				Math.Max(0m, line.Amount - collected.GetValueOrDefault(line.Id) - waived.GetValueOrDefault(line.Id))))));
+		return requestIds.ToDictionary(id => id, id =>
+		{
+			ChargePaymentLine Map(Charge line) => new(line.Status, line.Amount,
+				collected.GetValueOrDefault(line.Id), waived.GetValueOrDefault(line.Id), activeCollectionIds.Contains(line.Id));
+			var entireBatch = ChargePaymentProgress.Resolve(linesByRequest[id].Select(Map));
+			if (visibleIds is null) return entireBatch;
+			// Counts obey the same row scope and class/division filters as StudentCount.
+			var visible = ChargePaymentProgress.Resolve(linesByRequest[id].Where(line => visibleIds.Contains(line.Id)).Select(Map));
+			return visible with { CanCancel = entireBatch.CanCancel, WorkflowStatus = entireBatch.WorkflowStatus };
+		});
 	}
 }

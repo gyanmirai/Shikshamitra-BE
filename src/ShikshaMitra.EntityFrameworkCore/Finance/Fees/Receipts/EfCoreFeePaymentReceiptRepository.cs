@@ -85,6 +85,8 @@ public class EfCoreFeePaymentReceiptRepository(
                 : null
             select new
             {
+                ReceiptScope = r.ReceiptScope,
+                PaymentReceiptCount = db.Set<FeePaymentReceipt>().Count(sibling => sibling.FeeCollectionTransactionId == r.FeeCollectionTransactionId && sibling.LinkedProvisionalReceiptId == null),
                 ReceiptId                  = r.Id,
                 ReceiptNumber              = r.ReceiptNumber,
                 VerificationStatus         = r.VerificationStatus,
@@ -113,9 +115,9 @@ public class EfCoreFeePaymentReceiptRepository(
         var txIds = rawRows.Select(x => x.FeeCollectionTransactionId).Distinct().ToList();
 
         var paymentRecords = await db.Set<PaymentMethodRecord>()
-            .Where(p => txIds.Contains(p.FeeRecordMetadataId)
-                     && p.PaymentMethod != PaymentMethodEnum.Cash)
-            .OrderBy(p => p.CreationTime)
+            .Where(p => txIds.Contains(p.FeeRecordMetadataId))
+            .OrderBy(p => p.PaymentMethod == PaymentMethodEnum.Cash)
+            .ThenBy(p => p.CreationTime)
             .ToListAsync(cancellationToken);
 
         var paymentByTx = paymentRecords
@@ -129,6 +131,7 @@ public class EfCoreFeePaymentReceiptRepository(
                 paymentByTx.TryGetValue(x.FeeCollectionTransactionId, out var pmr);
                 return new ReconciliationRow
                 {
+                    ReceiptScope = x.ReceiptScope, PaymentReceiptCount = x.PaymentReceiptCount,
                     ReceiptId                  = x.ReceiptId,
                     ReceiptNumber              = x.ReceiptNumber,
                     VerificationStatus         = x.VerificationStatus,
@@ -175,7 +178,10 @@ public class EfCoreFeePaymentReceiptRepository(
         var receiptQ = db.Set<FeePaymentReceipt>()
             .Where(r => r.AcademicYearId == academicYearId
                      && (r.ReceiptKind == FeeReceiptKind.ProvisionalFee
-                         || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge));
+                         || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge
+                         || ((r.ReceiptKind == FeeReceiptKind.FinalFee || r.ReceiptKind == FeeReceiptKind.FinalCharge)
+                             && db.Set<PaymentMethodRecord>().Any(p => p.FeeRecordMetadataId == r.FeeCollectionTransactionId)
+                             && !db.Set<PaymentMethodRecord>().Any(p => p.FeeRecordMetadataId == r.FeeCollectionTransactionId && p.PaymentMethod != PaymentMethodEnum.Cash))));
 
         // User scope — only count receipts for students accessible to the caller
         receiptQ = ApplyPayerScope(receiptQ, scopedStudentIdsQuery, scopedAccountIdsQuery);
@@ -183,8 +189,11 @@ public class EfCoreFeePaymentReceiptRepository(
         var q = from r in receiptQ
                 join pmr in db.Set<PaymentMethodRecord>()
                     on r.FeeCollectionTransactionId equals pmr.FeeRecordMetadataId
-                where pmr.PaymentMethod != PaymentMethodEnum.Cash
-                select new { r.VerificationStatus, pmr.PaymentMethod, r.ReceiptDate };
+                where (pmr.PaymentMethod != PaymentMethodEnum.Cash &&
+                    (r.ReceiptKind == FeeReceiptKind.ProvisionalFee || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge)) ||
+                    (pmr.PaymentMethod == PaymentMethodEnum.Cash &&
+                    (r.ReceiptKind == FeeReceiptKind.FinalFee || r.ReceiptKind == FeeReceiptKind.FinalCharge))
+                select new { r.Id, r.VerificationStatus, pmr.PaymentMethod, r.ReceiptDate };
 
         if (month.HasValue)
             q = q.Where(x => x.ReceiptDate.Month == month.Value);
@@ -192,7 +201,7 @@ public class EfCoreFeePaymentReceiptRepository(
         if (year.HasValue)
             q = q.Where(x => x.ReceiptDate.Year == year.Value);
 
-        var grouped = await q
+        var grouped = await q.Distinct()
             .GroupBy(x => new { x.PaymentMethod, x.VerificationStatus })
             .Select(g => new ReconciliationStatusCount
             {
@@ -211,8 +220,10 @@ public class EfCoreFeePaymentReceiptRepository(
     {
         var query = db.Set<FeePaymentReceipt>()
             .Where(r => r.AcademicYearId == filter.AcademicYearId
-                     && (r.ReceiptKind == FeeReceiptKind.ProvisionalFee
-                         || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge));
+                     && (filter.PaymentMethod == PaymentMethodEnum.Cash
+                         ? (r.ReceiptKind == FeeReceiptKind.FinalFee || r.ReceiptKind == FeeReceiptKind.FinalCharge) &&
+                           !db.Set<PaymentMethodRecord>().Any(p => p.FeeRecordMetadataId == r.FeeCollectionTransactionId && p.PaymentMethod != PaymentMethodEnum.Cash)
+                         : (r.ReceiptKind == FeeReceiptKind.ProvisionalFee || r.ReceiptKind == FeeReceiptKind.ProvisionalCharge)));
 
         if (filter.Month.HasValue)
             query = query.Where(r => r.ReceiptDate.Month == filter.Month.Value);

@@ -71,7 +71,10 @@ public class UpdateFeeRefundRequestDtoValidator : AbstractValidator<UpdateFeeRef
 
         RuleForEach(x => x.Lines).ChildRules(line =>
         {
-            line.RuleFor(l => l.DueFeeId).NotEmpty();
+            line.RuleFor(l => l).Must(l => l.DueFeeId.HasValue != l.ChargeId.HasValue)
+                .WithMessage("Specify either a fee due or a charge.");
+            line.RuleFor(l => l.DueFeeId).NotEqual(Guid.Empty).When(l => l.DueFeeId.HasValue);
+            line.RuleFor(l => l.ChargeId).NotEqual(Guid.Empty).When(l => l.ChargeId.HasValue);
             line.RuleFor(l => l.SourceAllocationId).NotEmpty();
             line.RuleFor(l => l.Amount).GreaterThan(0);
         });

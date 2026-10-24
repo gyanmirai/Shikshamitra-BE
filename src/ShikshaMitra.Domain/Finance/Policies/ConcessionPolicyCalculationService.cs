@@ -45,6 +45,12 @@ public class ConcessionPolicyCalculationService : DomainService
 			};
 			if (requestedBasis != expectedBasis)
 				throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
+			if (requestedBasis == DiscountBasis.FlatAmount &&
+				decimal.Truncate(requestedValue.Value) != requestedValue.Value)
+				throw new BusinessException(FinanceConcessionErrorCodes.WholeRupeeAmountRequired);
+			if (requestedBasis == DiscountBasis.Percentage &&
+				decimal.Round(requestedValue.Value, 2) != requestedValue.Value)
+				throw new BusinessException(ConcessionPolicyErrorCodes.PercentagePrecision);
 			if (requestedBasis == DiscountBasis.Percentage && requestedValue > 100)
 				throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
 			if (requestedBasis == DiscountBasis.Percentage &&

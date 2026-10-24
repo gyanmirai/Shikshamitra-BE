@@ -28,6 +28,9 @@ public static class ApiProblemDetailsMapper
 			TenantSettingsDomainErrorCodes.DuplicateStandardName or
 			TenantSettingsDomainErrorCodes.DuplicateDivisionName => StatusCodes.Status409Conflict,
 			FeeCollectionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
+            Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyVerified or
+            Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyRejected or
+            Finance.Accounts.Reconciliation.ReconciliationErrorCodes.TerminalStatus => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewStale or HRErrorCodes.PayrollPreviewNotReady => StatusCodes.Status409Conflict,
 			HRErrorCodes.PayrollPreviewNotFound => StatusCodes.Status404NotFound,
 			HRErrorCodes.LeaveEmployeeNotFound => StatusCodes.Status403Forbidden,

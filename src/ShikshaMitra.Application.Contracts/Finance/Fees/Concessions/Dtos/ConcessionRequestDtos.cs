@@ -592,6 +592,8 @@ public class StudentBasicDetailDto
 	public string GrNumber { get; set; } = string.Empty;
 	public string StandardName { get; set; } = string.Empty;
 	public string DivisionName { get; set; } = string.Empty;
+	public string BoardName { get; set; } = string.Empty;
+	public string EducationMediumName { get; set; } = string.Empty;
 }
 
 public class ConcessionBasicDetailDto

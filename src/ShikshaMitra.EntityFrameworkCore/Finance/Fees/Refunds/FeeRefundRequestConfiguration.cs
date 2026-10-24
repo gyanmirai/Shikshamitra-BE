@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Volo.Abp.EntityFrameworkCore.Modeling;
@@ -68,6 +68,9 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             lb.Property(l => l.ProcessedAmount).HasColumnType("numeric(18,2)");
             lb.Property(l => l.ReversedAmount).HasColumnType("numeric(18,2)");
             lb.Ignore(l => l.Amount);
+            lb.HasIndex(l => l.ChargeId);
+            lb.ToTable(t => t.HasCheckConstraint("CK_FeeRefundLines_Source",
+                "(\"DueFeeId\" IS NOT NULL AND \"ChargeId\" IS NULL) OR (\"DueFeeId\" IS NULL AND \"ChargeId\" IS NOT NULL)"));
             lb.HasIndex(l => l.DueFeeId)
                 .HasDatabaseName("IX_FeeRefundLines_DueFeeId");
         });
@@ -77,6 +80,7 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             rb.ToTable("Finance_FeeRefundReservations", ShikshaMitraConsts.DbSchema);
             rb.WithOwner().HasForeignKey("FeeRefundRequestId");
             rb.HasKey(x => x.Id);
+            rb.HasIndex(x => new { x.ChargeId, x.Status });
             rb.Property(x => x.Amount).HasColumnType("numeric(18,2)");
             rb.HasIndex(x => new { x.DueFeeId, x.Status });
             rb.HasIndex(x => new { x.FeeRefundRequestId, x.FeeRefundLineId }).IsUnique();

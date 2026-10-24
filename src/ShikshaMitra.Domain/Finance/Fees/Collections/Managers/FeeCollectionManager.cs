@@ -1,4 +1,5 @@
 ﻿using System;
+using ShikshaMitra.Domain.Finance.Policies;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -54,7 +55,8 @@ public class FeeCollectionManager(
 		IReadOnlyList<(Guid DueFeeId, double Amount)>? LateFeeAllocations = null,
 		string? IdempotencyKey = null,
 		string? CommandFingerprint = null,
-		Guid? FinanceFeeAccountId = null);
+		Guid? FinanceFeeAccountId = null,
+		CollectionReceiptGrouping ReceiptGrouping = CollectionReceiptGrouping.Separate);
 
 	public sealed record CollectFeeTransactionResult(
 		FeeRecordMetadata Metadata,
@@ -178,7 +180,7 @@ public class FeeCollectionManager(
 			chargeLinesTotal: chargeLinesTotal,
 			paymentMethods: command.Payments.Select(p => p.Method).ToList(),
 			bankReceiptConfirmed: command.BankReceiptConfirmed,
-			remarks: command.Notes, financeFeeAccountId: command.FinanceFeeAccountId);
+			remarks: command.Notes, financeFeeAccountId: command.FinanceFeeAccountId, receiptGrouping: command.ReceiptGrouping);
 
 		if (receipts.Count > 0)
 			await feePaymentReceiptRepository.InsertManyAsync(receipts, autoSave: false);

@@ -23,7 +23,11 @@ public record ChargeRequestJoinResult(
 	int StudentCount,
 	int PendingCount,
 	int ProcessedCount,
-	ChargeWorkflowStatus WorkflowStatus = ChargeWorkflowStatus.Pending);
+	ChargeWorkflowStatus WorkflowStatus = ChargeWorkflowStatus.Pending,
+	int PaidStudentCount = 0,
+	int OutstandingStudentCount = 0,
+	int WaivedStudentCount = 0,
+	bool CanCancel = false);
 
 public record ChargeRequestDetailResult(
 	ChargeRequest Request,

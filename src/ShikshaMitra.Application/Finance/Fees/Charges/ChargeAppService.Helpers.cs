@@ -57,7 +57,7 @@ public partial class ChargeAppService
 					request.RequestorId,
 					lines.Any(l => l.Status == ChargeStatus.Pending),
 					lines.Count == 0 || lines.All(l => l.Status == ChargeStatus.Pending),
-					workflowStatus == ChargeWorkflowStatus.InProcess)
+					await CanCancelAsync(lines))
 			},
 			Message = message
 		};
@@ -74,6 +74,8 @@ public partial class ChargeAppService
 			Priority = (int)r.Request.Priority,
 			DisplayStatus = (int)r.WorkflowStatus, WorkflowStatus = r.WorkflowStatus,
 			StudentCount = r.StudentCount, ProcessedCount = r.ProcessedCount,
+			PaidStudentCount = r.PaidStudentCount, OutstandingStudentCount = r.OutstandingStudentCount,
+			WaivedStudentCount = r.WaivedStudentCount,
 			RequestorId = r.Requestor.Id,
 			RequestorName = r.Requestor.Name ?? r.Requestor.UserName ?? string.Empty,
 			RequestedOn = r.Request.AppliedOn, AdditionalNotes = r.Request.AdditionalNotes
@@ -183,7 +185,7 @@ public partial class ChargeAppService
 	}
 
 	private async Task<List<string>> GetAvailableActionsAsync(
-		Guid requestorId, bool hasPending, bool allPending, bool hasApproved)
+		Guid requestorId, bool hasPending, bool allPending, bool canCancel)
 	{
 		var actions = new List<string> { "View" };
 		if (allPending && await AuthorizationService.IsGrantedAsync(
@@ -198,10 +200,21 @@ public partial class ChargeAppService
 		if (hasPending && CurrentUser.Id != requestorId && await AuthorizationService.IsGrantedAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Reject))
 			actions.Add("Reject");
-		if (hasApproved && await AuthorizationService.IsGrantedAsync(
+		if (canCancel && await AuthorizationService.IsGrantedAsync(
 			ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Charges.Void))
 			actions.Add("Void");
 		return actions;
+	}
+
+	private async Task<bool> CanCancelAsync(IReadOnlyList<Charge> lines)
+	{
+		var approvedIds = lines.Where(line => line.Status == ChargeStatus.Approved).Select(line => line.Id).ToList();
+		if (approvedIds.Count == 0) return false;
+		var allocations = await chargeCollectionRecordRepository.GetListAsync(x => approvedIds.Contains(x.ChargeId));
+		var transactionIds = allocations.Select(x => x.FeeRecordMetadataId).Distinct().ToList();
+		var reversedIds = (await feeRecordMetadataRepository.GetListAsync(x => transactionIds.Contains(x.Id) &&
+			x.Status == ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.Reversed)).Select(x => x.Id).ToHashSet();
+		return allocations.All(x => reversedIds.Contains(x.FeeRecordMetadataId));
 	}
 
 	private async Task<ChargeWorkflowStatus> GetWorkflowStatusAsync(IReadOnlyList<Charge> lines)

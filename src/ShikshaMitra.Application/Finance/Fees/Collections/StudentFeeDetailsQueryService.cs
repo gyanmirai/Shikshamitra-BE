@@ -38,6 +38,7 @@ public partial class StudentFeeDetailsQueryService(
 	IRepository<FeeCollectionDueFeeAllocation, Guid> dueFeeAllocationRepository,
 	IRepository<ChargeCollectionRecord, Guid> chargeCollectionRecordRepository,
 	IRepository<PaymentMethodRecord, Guid> paymentMethodRecordRepository,
+	IFeePaymentReceiptRepository paymentReceiptRepository,
 	IRepository<FeeHead, Guid> feeHeadRepository,
 	IReadOnlyRepository<FinancePolicyVersion, Guid> financePolicyVersionRepository,
 	IRepository<Charge, Guid> chargeRepository,
@@ -176,7 +177,7 @@ public partial class StudentFeeDetailsQueryService(
 							ScheduleSource = d.ScheduleSource.ToString(),
 							Total = (double) d.OriginalAmount,
 							ScheduledTotal = (double) d.ScheduledAmount,
-							Paid = (double) d.PaidAmount,
+							Paid = (double) d.AppliedPaymentAmount,
 							Due = (double) d.OutstandingAmount,
 							CollectionAmount = collectionAmount,
 							RoundingAmount = roundingAmount,
@@ -239,7 +240,7 @@ public partial class StudentFeeDetailsQueryService(
 			feeSummary = new FeeSummaryDto
 			{
 				TotalFee = (double) dueFees.Sum(d => d.OriginalAmount),
-				PaidFee = (double) dueFees.Sum(d => d.PaidAmount),
+				PaidFee = (double) dueFees.Sum(d => d.AppliedPaymentAmount),
 				PendingFee = (double) dueFees.Sum(d => d.OutstandingAmount),
 				ReconciliationAmount = reconByDueFee.Values.Sum(),
 				TotalCollectionAmount = (double) dueFees.Sum(d => Math.Ceiling(d.OutstandingAmount)),
@@ -314,8 +315,8 @@ public partial class StudentFeeDetailsQueryService(
 			(r.Status == FeeRefundStatus.Processed ||
 			 (r.Status == FeeRefundStatus.Approved && r.RefundPolicyVersionId == null &&
 				r.ConcessionRequestId == null)));
-		return refunds.SelectMany(r => r.Lines.Select(l => new
-		{ l.DueFeeId, Amount = r.RefundPolicyVersionId == null ? l.Amount : l.ProcessedAmount - l.ReversedAmount, r.Reason }))
+		return refunds.SelectMany(r => r.Lines.Where(l => l.DueFeeId.HasValue).Select(l => new
+		{ DueFeeId = l.DueFeeId!.Value, Amount = r.RefundPolicyVersionId == null ? l.Amount : l.ProcessedAmount - l.ReversedAmount, r.Reason }))
 			.GroupBy(x => x.DueFeeId)
 			.ToDictionary(g => g.Key, g => (
 				Amount: Convert.ToDouble(g.Sum(x => x.Amount)),

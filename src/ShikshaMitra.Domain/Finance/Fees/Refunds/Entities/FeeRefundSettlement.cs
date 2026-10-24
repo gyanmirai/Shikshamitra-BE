@@ -39,6 +39,13 @@ public class FeeRefundSettlement : Entity<Guid>
         EvidenceReference = Check.NotNullOrWhiteSpace(evidenceReference, nameof(evidenceReference), 500);
         VerifiedAt = DateTimeOffset.UtcNow; CompletedAt = VerifiedAt;
     }
+    internal void SetPaymentBank(Guid bankId)
+    {
+        if (Status != FeeRefundSettlementStatus.Processing ||
+            (BankAccountId.HasValue && BankAccountId != bankId))
+            throw new BusinessException("Finance:Routing:BankMismatch");
+        BankAccountId = bankId;
+    }
     internal void Fail(Guid userId, string key, string reason, string evidenceReference)
     {
         if (Status != FeeRefundSettlementStatus.Processing) throw new InvalidOperationException("Payout is not awaiting verification.");

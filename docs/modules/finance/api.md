@@ -10,6 +10,23 @@ audience: humans-and-agents
 
 # Use Finance backend APIs
 
+## Paid charges in refund requests
+
+`GET /api/fee-refunds/eligibility` includes settled charge payments when the assignment's pinned
+refund policy has `includePaidCharges=true`. The separate **Paid charges** group has a null
+`feeHeadId`; its rows carry `chargeId`, `chargeName`, `sourceAllocationId` (the charge payment),
+and `sourceReceiptId`. A create/preview line supplies exactly one of `dueFeeId` or `chargeId`.
+The server checks the policy, payer, academic year, receipt and available payment balance.
+Reversed collections and unverified provisional receipts are excluded. Reservations and net
+processed refunds reduce eligibility; returned payouts restore it. Charges participate in the
+same policy amount limits, whole-receipt selection rule, approval, payout and refund subledger.
+Fee-head scope applies to fee dues; the paid-charge toggle independently controls charge sources.
+
+Apply `EnablePaidChargeRefunds` before deploying this contract. It adds nullable charge references
+to refund lines/reservations and makes the alternative fee-due references nullable, retaining all
+existing refund history. Its downgrade rejects removal after charge-refund evidence exists.
+Focused regression cases are `FeeRefundApi_Tests.Paid_Charges_*`.
+
 ## Collection grace period
 
 Collection Policy grace periods and late-fee day counts always use calendar days, including weekends and holidays.
@@ -133,6 +150,10 @@ An `AllFees` concession policy permits paid installments. Approval preview repor
 Every retryable command requires its idempotency key; every mutation of an existing request requires the request concurrency stamp, and submit/approve also require the current preview fingerprint. Approval requires explicit due-row allocations and due-row stamps. Exact actions are `View`, `Add`, `Edit`, `Submit`, `Cancel`, `UploadDocument`, `ViewDocument`, `Delete`, `Approve`, `Reject`, and `Reverse` under `Finance.Fees.Concession`.
 
 Staged concession uploads are tenant- and uploader-bound. Their stored receipt records the concession type and document definition; attaching a URL binds it to one request and rejects another uploader, requirement, type, tenant, request, or an upload older than 24 hours. Removing or replacing evidence on a Draft releases its old upload for cleanup in the same transaction. An hourly worker removes at most 100 expired unattached uploads per tenant per run and never selects evidence still attached to a request. Submitted requirement and due-row selections are immutable snapshots. Only approval changes due balances, and reversal reopens the linked obligation without rewriting payment or receipt history.
+
+The student concession detail endpoint, `GET api/concession-requests/{studentId}`, includes
+`studentDetails.boardName` and `studentDetails.educationMediumName` from the saved student's
+academic board and medium. Existing Concession View authorization and student-scope checks apply.
 
 ## Accounts API families
 

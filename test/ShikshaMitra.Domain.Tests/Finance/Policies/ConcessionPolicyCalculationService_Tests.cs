@@ -10,6 +10,39 @@ public class ConcessionPolicyCalculationService_Tests
 {
 	private readonly ConcessionPolicyCalculationService _service = new();
 
+	[Theory]
+	[InlineData("0.1")]
+	[InlineData("500.25")]
+	public void Request_fixed_amount_rejects_minor_units_instead_of_rounding(string value)
+	{
+		var policy = BuildPolicy(ConcessionValueSource.RequestEnteredWithinLimits,
+			ConcessionCalculationMethod.FixedAmount, maximumFixedAmount: 11111m);
+		var exception = Assert.Throws<BusinessException>(() => _service.Calculate(
+			policy, 59198m, DiscountBasis.FlatAmount, decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture)));
+		Assert.Equal(FinanceConcessionErrorCodes.WholeRupeeAmountRequired, exception.Code);
+	}
+
+	[Theory]
+	[InlineData(10501)]
+	[InlineData(11111)]
+	public void Valid_whole_rupee_requests_within_policy_ceiling_keep_their_amount(int value)
+	{
+		var policy = BuildPolicy(ConcessionValueSource.RequestEnteredWithinLimits,
+			ConcessionCalculationMethod.FixedAmount, maximumFixedAmount: 11111m);
+		Assert.Equal(value, _service.Calculate(policy, 59198m, DiscountBasis.FlatAmount, value));
+	}
+
+	[Fact]
+	public void Request_percentage_accepts_two_decimal_places_but_rejects_extra_precision()
+	{
+		var policy = BuildPolicy(ConcessionValueSource.RequestEnteredWithinLimits,
+			ConcessionCalculationMethod.Percentage, maximumPercentage: 100m);
+		Assert.Equal(1m, _service.Calculate(policy, 100m, DiscountBasis.Percentage, 0.1m));
+		var exception = Assert.Throws<BusinessException>(() =>
+			_service.Calculate(policy, 100m, DiscountBasis.Percentage, 0.123m));
+		Assert.Equal(ConcessionPolicyErrorCodes.PercentagePrecision, exception.Code);
+	}
+
 	[Fact]
 	public void Fixed_Percentage_Is_Calculated_From_Eligible_Outstanding()
 	{

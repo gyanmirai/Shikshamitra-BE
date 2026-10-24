@@ -190,7 +190,12 @@ internal static class CollectionPolicyMapping
 			false,
 			false,
 			Array.Empty<Guid>(),
-			input.AllowOnlineCollection, input.LateFeeIncomeCategoryId, ParseAllocationBasis(input.AllocationBasis));
+			input.AllowOnlineCollection, input.LateFeeIncomeCategoryId, ParseAllocationBasis(input.AllocationBasis), input.ReceiptGrouping switch
+			{
+				null or "Separate" => CollectionReceiptGrouping.Separate,
+				"Combined" => CollectionReceiptGrouping.Combined,
+				_ => throw new BusinessException(CollectionPolicyErrorCodes.InvalidReceiptGrouping)
+			});
 
 	public static CollectionPolicyDto ToDto(CollectionPolicy entity) => new()
 	{
@@ -222,6 +227,7 @@ internal static class CollectionPolicyMapping
 		MaximumChargingDays = entity.MaximumChargingDays,
 		AllowOnlineCollection = entity.AllowOnlineCollection,
 		AllocationBasis = entity.AllocationBasis.ToString(),
+		ReceiptGrouping = entity.ReceiptGrouping.ToString(),
 		Version = entity.Version,
 		CreationTime = entity.CreationTime,
 		CreatorId = entity.CreatorId,

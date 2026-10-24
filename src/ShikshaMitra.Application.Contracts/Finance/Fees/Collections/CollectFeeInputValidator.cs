@@ -37,13 +37,8 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
         RuleFor(x => x.Notes)
             .MaximumLength(1000).When(x => x.Notes != null);
 
-        // ── BankReceiptConfirmed rules ────────────────────────────────────────
-        // When ANY payment method is CashierDecided, the flag is mandatory.
-        RuleFor(x => x.PaymentConfirmed)
-            .NotNull()
-            .WithMessage(
-                "BankReceiptConfirmed is required when using UPI, card, bank transfer, or online gateway.")
-            .When(x => x.Payments.Any(p => CashierDecidedMethods.Contains(p.PaymentMethod)));
+        // Legacy electronic clients may still send PaymentConfirmed. It is optional
+        // and never changes the server's non-cash verification requirement.
 
         // For Cash/Cheque/DD only transactions, the flag must not be supplied.
         RuleFor(x => x.PaymentConfirmed)
@@ -106,16 +101,11 @@ public class CollectFeeInputValidator : AbstractValidator<CollectFeeInput>
         RuleFor(x => x)
             .Must(x =>
             {
-                var needsVerification = x.Payments.Any(p => p.PaymentMethod is
-                    PaymentMethodEnum.Cheque or PaymentMethodEnum.DemandDraft)
-                    || (x.PaymentConfirmed == false && x.Payments.Any(p =>
-                        CashierDecidedMethods.Contains(p.PaymentMethod)));
+                var needsVerification = x.Payments.Any(p => p.PaymentMethod != PaymentMethodEnum.Cash);
                 if (!needsVerification) return true;
-                var receiptKinds = (x.DueFeePayments.Count > 0 || x.LateFeePayments.Count > 0 ? 1 : 0)
-                    + (x.ChargePayments.Count > 0 ? 1 : 0);
-                return x.Payments.Count == 1 && receiptKinds == 1;
+                return x.Payments.Count == 1;
             })
-            .WithMessage("Payments awaiting verification must use one payment method and one fee or charge receipt. Record the other payment separately.");
+            .WithMessage("Payments awaiting verification must use one payment method. Record additional payment instruments separately.");
 
         RuleForEach(x => x.Payments).ChildRules(payment =>
         {

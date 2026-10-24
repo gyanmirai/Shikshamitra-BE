@@ -13,6 +13,7 @@ internal static class CollectionAllocationContext
 {
 	public static FeeCollectFormDto Apply(FeeCollectFormDto form, CollectionPolicy? policy)
 	{
+		form.ReceiptGrouping = (policy?.ReceiptGrouping ?? CollectionReceiptGrouping.Separate).ToString();
 		form.AllocationBasis = (policy?.AllocationBasis ?? CollectionAllocationBasis.Legacy).ToString();
 		form.CollectionPolicyId = policy?.Id;
 		form.CollectionPolicyName = policy?.PolicyName;

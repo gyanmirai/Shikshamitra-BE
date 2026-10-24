@@ -13,6 +13,8 @@ namespace ShikshaMitra.Finance.Accounts.Reconciliation.Dtos;
 /// </summary>
 public class ReconciliationListItemDto
 {
+	public int PaymentReceiptCount { get; set; } = 1;
+	public string ReceiptScope { get; set; } = string.Empty;
     public Guid Id { get; set; }
 
 	/// <summary>Provisional receipt number (KFE-*).</summary>
@@ -85,6 +87,7 @@ public class ReconciliationListResponse
 /// </summary>
 public class ReconciliationTabCountsDto
 {
+    public int CashOfficial { get; set; }
     public int TotalPending { get; set; }
     public int ChequePending { get; set; }
     public int ChequeApproved { get; set; }

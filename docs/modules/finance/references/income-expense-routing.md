@@ -3,7 +3,7 @@ module: finance
 domain: accounts
 content_type: Reference
 status: active
-updated_on: 2026-10-14
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -23,20 +23,19 @@ Account Heads are retired from active account settings. Fee Heads remain, and ea
 | Activate a Collection Policy with late fees | Required Late Fee Income Category | Pinned with the policy version |
 | Activate a Refund Policy | Required Expense Category; default paying bank if any non-cash method is allowed | Defaults are pinned in the refund policy snapshot |
 | Collect fees or charges | Actual school bank on each instrument | Confirmed payment creates Income; deferred payment stores hidden routing snapshots |
-| Approve a refund | Expense Category, payout method, and actual paying bank | Reserves refundable allocations; creates no Expense |
-| Record a refund payout | Evidence, reference, approved bank and method | Still awaiting verification; creates no Expense |
-| Confirm a refund payout | Verification evidence and existing maker-checker rules | Creates Expense exactly once |
+| Approve a refund | Optional approval notes | Reserves refundable allocations; creates no Expense |
+| Record a refund payout | Expense Category, source school bank, method, date and non-cash reference | Completes the refund and creates Expense exactly once in the same transaction |
 | Return a confirmed refund payout | Evidence and reason | Creates an opposite signed Expense correction |
 
 Cash fee and charge collections may omit a bank. Non-cash instruments require an active school bank selected for the payment. Charges carry no receiving-bank restriction.
 
-Refund approval may use another active category or paying bank; changing a configured policy default requires approval notes. Payout recording must use the approved bank and method. Confirmation uses the saved payout evidence, so later master deactivation does not invalidate an already recorded payout.
+Refund payment recording validates the selected active, effective, tenant/year expense category and bank for every method. Policy defaults prefill the dialog; approval does not collect routing. The saved request method stays fixed. Existing pending payments retain their saved bank, reference and date while completing through the same payment dialog. See the [refund payout workflow](./fee-refund-payout-workflow.md) for compatibility endpoints and transaction guarantees.
 
 ## Contracts and access
 
 `GET /api/finance-routing-options?academicYearId=...&operation=...` supplies active, effective, tenant-scoped categories and masked school-bank labels. Supported operations are `collection`, `refund`, `refund-policy`, `collection-policy`, `fee-head`, and `charge-category`. Each operation checks its owning write/approval permission; a setting module or unrelated action grant does not grant access. The response contains `incomeCategories`, `expenseCategories`, and `bankAccounts`, with `id` and `label` options.
 
-Charge create/update DTOs include `chargeCategoryId`; the backend resolves its Income Category mapping. Collection instruments include `bankAccountId`. Collection policies include `lateFeeIncomeCategoryId`. Refund policies include `expenseCategoryId` and `defaultPayingBankAccountId`. Refund approval accepts `expenseCategoryId`, `bankAccountId`, and `method`, alongside notes; omitted approval defaults are resolved from the request's saved policy version.
+Charge create/update DTOs include `chargeCategoryId`; the backend resolves its Income Category mapping. Collection instruments include `bankAccountId`. Collection policies include `lateFeeIncomeCategoryId`. Refund policies include `expenseCategoryId` and `defaultPayingBankAccountId`. Refund payout recording requires `expenseCategoryId` and `bankAccountId`; the approval dialog collects optional notes.
 
 `/api/account-heads` returns HTTP 410 for authenticated requests. Legacy category head lookups return no options. Historical head fields are compatibility data rather than inputs to new financial routing.
 
@@ -64,5 +63,5 @@ PostgreSQL migration application, payout replay/concurrency, and authenticated b
 
 Frontend controls and route details: [frontend routing reference](../../../../../Shikshamitra-FE/docs/finance/references/income-expense-routing.md).
 
-Approved refunds have a read-only Awaiting payout projection in Expenses; recognition still occurs only on confirmation.
+Approved refunds remain in Refunds until payment is recorded. Expenses shows paid refunds and linked returned-payment corrections, with no unpaid request projection.
 See [the workspace contract](./income-expense-workspaces.md) for direction scopes and selected-record details.

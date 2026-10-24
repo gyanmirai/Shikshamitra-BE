@@ -1,4 +1,7 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using QuestPDF.Fluent;
@@ -11,209 +14,125 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.Common.PDF;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Application.Finance.Fees.Receipts;
 
-/// <summary>
-/// Generates PDF receipts using QuestPDF.
-/// Selects the appropriate layout based on <see cref="FeeReceiptKind"/>.
-/// </summary>
-public class FeeReceiptPdfGenerator : IFeeReceiptPdfGenerator, ITransientDependency
+/// <summary>Printable receipt evidence. Payment methods come from the original collection.</summary>
+public class FeeReceiptPdfGenerator(
+    IReadOnlyRepository<FinanceFeeAccount, Guid>? accounts = null,
+    IReadOnlyRepository<PaymentMethodRecord, Guid>? paymentRecords = null,
+    IReadOnlyRepository<FeeCollectionDueFeeAllocation, Guid>? allocations = null,
+    IFeePaymentReceiptRepository? receipts = null,
+    ICurrentTenant? currentTenant = null) : IFeeReceiptPdfGenerator, ITransientDependency
 {
-    private readonly IReadOnlyRepository<FinanceFeeAccount, Guid>? accounts;
+    private static string Money(decimal value) => $"INR {value.ToString("N2", CultureInfo.GetCultureInfo("en-IN"))}";
 
-    public FeeReceiptPdfGenerator(IReadOnlyRepository<FinanceFeeAccount, Guid>? accounts = null)
-    {
-        this.accounts = accounts;
-    }
-
-    public async Task<byte[]> GenerateAsync(
-        FeePaymentReceipt receipt,
-        Student? student,
-        AcademicYear? academicYear,
-        CancellationToken cancellationToken = default)
+    public async Task<byte[]> GenerateAsync(FeePaymentReceipt receipt, Student? student,
+        AcademicYear? academicYear, CancellationToken cancellationToken = default)
     {
         QuestPDF.Settings.License = LicenseType.Community;
         PortablePdfFonts.EnsureRegistered();
         var applicantName = receipt.FinanceFeeAccountId.HasValue && accounts != null
-            ? (await accounts.GetAsync(receipt.FinanceFeeAccountId.Value, cancellationToken: cancellationToken)).ApplicantName
-            : null;
-
-        var bytes = receipt.ReceiptKind switch
-        {
-            FeeReceiptKind.FinalFee          => GenerateFinalFeeReceipt(receipt, student, academicYear, applicantName),
-            FeeReceiptKind.ProvisionalFee    => GenerateProvisionalFeeReceipt(receipt, student, academicYear, applicantName),
-            FeeReceiptKind.ProvisionalCharge => GenerateProvisionalChargeReceipt(receipt, student, academicYear, applicantName),
-            _                               => GenerateFinalFeeReceipt(receipt, student, academicYear, applicantName),
-        };
-
-        return bytes;
-    }
-
-    // ── FinalFee template ─────────────────────────────────────────────────────
-
-    private static byte[] GenerateFinalFeeReceipt(
-        FeePaymentReceipt receipt,
-        Student? student,
-        AcademicYear? academicYear, string? applicantName)
-    {
-        return Document.Create(container =>
-        {
-            container.Page(page =>
-            {
-                page.Size(PageSizes.A5.Landscape());
-                page.Margin(20, Unit.Point);
-                page.PageColor(Colors.White);
-                page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
-
-                page.Header().Element(c => BuildHeader(c, "PAYMENT RECEIPT", receipt, Colors.Green.Medium));
-                page.Content().Element(c => BuildContent(c, receipt, student, academicYear, applicantName, isFinal: true));
-                page.Footer().Element(BuildFooter);
-            });
-        }).GeneratePdf();
-    }
-
-    // ── ProvisionalFee template ───────────────────────────────────────────────
-
-    private static byte[] GenerateProvisionalFeeReceipt(
-        FeePaymentReceipt receipt,
-        Student? student,
-        AcademicYear? academicYear, string? applicantName)
-    {
-        return Document.Create(container =>
-        {
-            container.Page(page =>
-            {
-                page.Size(PageSizes.A5.Landscape());
-                page.Margin(20, Unit.Point);
-                page.PageColor(Colors.White);
-                page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
-
-                page.Header().Element(c => BuildHeader(c, "PROVISIONAL RECEIPT (KACHI)", receipt, Colors.Orange.Medium));
-                page.Content().Column(col =>
-                {
-                    col.Item().Element(c => BuildContent(c, receipt, student, academicYear, applicantName, isFinal: false));
-                    col.Item().PaddingTop(5).Text(
-                        "* This is a provisional receipt subject to realisation of the instrument. " +
-                        "A final receipt will be issued upon bank clearance.")
-                        .FontColor(Colors.Red.Medium).FontSize(8).Italic();
-                });
-                page.Footer().Element(BuildFooter);
-            });
-        }).GeneratePdf();
-    }
-
-    // ── ProvisionalCharge template ────────────────────────────────────────────
-
-    private static byte[] GenerateProvisionalChargeReceipt(
-        FeePaymentReceipt receipt,
-        Student? student,
-        AcademicYear? academicYear, string? applicantName)
-    {
-        return Document.Create(container =>
-        {
-            container.Page(page =>
-            {
-                page.Size(PageSizes.A5.Landscape());
-                page.Margin(20, Unit.Point);
-                page.PageColor(Colors.White);
-                page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
-
-                page.Header().Element(c => BuildHeader(c, "CHARGE RECEIPT (KACHI)", receipt, Colors.Blue.Medium));
-                page.Content().Element(c => BuildContent(c, receipt, student, academicYear, applicantName, isFinal: false, isCharge: true));
-                page.Footer().Element(BuildFooter);
-            });
-        }).GeneratePdf();
-    }
-
-    // ── Shared content builders ───────────────────────────────────────────────
-
-    private static void BuildHeader(IContainer container, string title, FeePaymentReceipt receipt, string accentColor)
-    {
-        container.Column(col =>
-        {
-            col.Item().BorderBottom(1).BorderColor(accentColor).PaddingBottom(6).Row(row =>
-            {
-                row.RelativeItem().Text(title)
-                    .Bold().FontSize(16).FontColor(accentColor);
-
-                row.AutoItem().AlignRight().Column(rc =>
-                {
-                    rc.Item().Text($"Receipt No: {receipt.ReceiptNumber}").Bold();
-                    rc.Item().Text($"Date: {receipt.ReceiptDate:dd-MMM-yyyy}");
-                });
-            });
-        });
-    }
-
-    private static void BuildContent(
-        IContainer container,
-        FeePaymentReceipt receipt,
-        Student? student,
-        AcademicYear? academicYear,
-        string? applicantName,
-        bool isFinal,
-        bool isCharge = false)
-    {
-        var studentName = student != null
+            ? (await accounts.GetAsync(receipt.FinanceFeeAccountId.Value, cancellationToken: cancellationToken)).ApplicantName : null;
+        List<PaymentMethodRecord> payments = paymentRecords == null ? [] : await paymentRecords.GetListAsync(
+            p => p.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+        List<FeeCollectionDueFeeAllocation> feeLines = allocations == null || receipt.ReceiptScope == FeeReceiptScope.Charge ? [] : await allocations.GetListAsync(
+            a => a.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
+        var predecessor = receipt.LinkedProvisionalReceiptId.HasValue && receipts != null
+            ? await receipts.FindAsync(receipt.LinkedProvisionalReceiptId.Value, cancellationToken: cancellationToken) : null;
+        var provisional = FeeReceiptPresentation.IsProvisional(receipt.ReceiptKind);
+        var accent = provisional ? Colors.Orange.Darken3 : Colors.Green.Darken3;
+        var name = student != null
             ? $"{student.FirstName} {student.MiddleName} {student.LastName}".Trim().Replace("  ", " ")
-            : applicantName ?? "—";
+            : applicantName ?? "Not recorded";
 
-        container.PaddingTop(10).Column(col =>
+        return Document.Create(document => document.Page(page =>
         {
-            col.Item().Table(table =>
+            page.Size(PageSizes.A4);
+            page.Margin(32);
+            page.DefaultTextStyle(t => t.FontSize(10).FontFamily(PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily));
+            page.Header().BorderBottom(2).BorderColor(accent).PaddingBottom(12).Column(column =>
             {
-                table.ColumnsDefinition(cols =>
+                column.Item().Text(currentTenant?.Name ?? "ShikshaMitra").FontSize(18).Bold();
+                column.Item().PaddingTop(6).Text(provisional ? "PROVISIONAL RECEIPT" : "OFFICIAL RECEIPT")
+                    .FontSize(16).Bold().FontColor(accent);
+                column.Item().PaddingTop(6).Row(row =>
                 {
-                    cols.RelativeColumn(2);
-                    cols.RelativeColumn(3);
-                    cols.RelativeColumn(2);
-                    cols.RelativeColumn(3);
+                    row.RelativeItem().Text($"Receipt number: {receipt.ReceiptNumber}").SemiBold();
+                    row.AutoItem().Text($"Issued: {receipt.ReceiptDate:dd-MMM-yyyy}");
                 });
-
-                void AddRow(string label1, string val1, string label2, string val2)
-                {
-                    table.Cell().PaddingBottom(4).Text(label1).SemiBold();
-                    table.Cell().PaddingBottom(4).Text(val1);
-                    table.Cell().PaddingBottom(4).Text(label2).SemiBold();
-                    table.Cell().PaddingBottom(4).Text(val2);
-                }
-
-                AddRow(student == null && applicantName != null ? "Applicant Name" : "Student Name", studentName,
-                    "GR Number", student?.GrNo?.ToString() ?? "—");
-                AddRow("Academic Year", academicYear?.Name ?? "—",
-                    "Receipt Type", isCharge ? "Charge Receipt" : (isFinal ? "Final Fee Receipt" : "Provisional Fee Receipt"));
-                AddRow("Amount Paid", $"\u20B9 {receipt.TotalPaidAmount:N2}",
-                    "Payment reference", receipt.ReceiptNumber);
             });
-
-            col.Item().PaddingTop(12).Background(Colors.Grey.Lighten3).Padding(8).Text(
-                $"Total Amount: \u20B9 {receipt.TotalPaidAmount:N2}")
-                .FontSize(13).Bold();
-
-            if (!isFinal && !isCharge)
+            page.Content().PaddingTop(18).Column(column =>
             {
-                col.Item().PaddingTop(6).Text(
-                    "Note: Final receipt will be issued upon clearance of the instrument.")
-                    .FontSize(8).Italic().FontColor(Colors.Grey.Medium);
-            }
-        });
-    }
-
-    private static void BuildFooter(IContainer container)
-    {
-        container.Row(row =>
-        {
-            row.RelativeItem().Text("Authorised Signatory").AlignLeft();
-            row.RelativeItem().Text("School Seal").AlignCenter();
-            row.RelativeItem().AlignRight()
-                .Text(text =>
+                column.Spacing(12);
+                column.Item().Table(table =>
                 {
-                    text.Span("Page ");
-                    text.CurrentPageNumber();
-                    text.Span(" / ");
-                    text.TotalPages();
+                    table.ColumnsDefinition(c => { c.ConstantColumn(110); c.RelativeColumn(); });
+                    void Fact(string label, string value)
+                    {
+                        table.Cell().PaddingVertical(4).Text(label).FontColor(Colors.Grey.Darken2);
+                        table.Cell().PaddingVertical(4).Text(value);
+                    }
+                    Fact(student == null && applicantName != null ? "Applicant" : "Student", name);
+                    Fact("GR number", student?.GrNo?.ToString() ?? "Not applicable");
+                    Fact("Academic year", academicYear?.Name ?? "Not recorded");
+                    Fact("Receipt covers", FeeReceiptPresentation.GetScopeLabel(receipt.ReceiptScope));
+                    Fact("Payment method", payments.Count == 0 ? "Not recorded" : string.Join(", ", payments
+                        .Select(p => p.PaymentMethod).Distinct().OrderBy(m => m).Select(FeeReceiptPresentation.GetPaymentMethodLabel)));
+                    if (payments.Count > 0)
+                        Fact("Payment received", payments.Min(p => p.PaymentDate).ToString("dd-MMM-yyyy"));
+                    if (predecessor != null) Fact("Provisional receipt", predecessor.ReceiptNumber);
                 });
-        });
+                column.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(c => { c.RelativeColumn(3); c.RelativeColumn(2); c.RelativeColumn(); });
+                    table.Header(header =>
+                    {
+                        header.Cell().Background(Colors.Grey.Lighten3).Padding(8).Text("Description").SemiBold();
+                        header.Cell().Background(Colors.Grey.Lighten3).Padding(8).Text("Installment").SemiBold();
+                        header.Cell().Background(Colors.Grey.Lighten3).Padding(8).AlignRight().Text("Amount").SemiBold();
+                    });
+                    void Line(string description, string period, decimal amount)
+                    {
+                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(8).Text(description);
+                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(8).Text(period);
+                        table.Cell().BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).Padding(8).AlignRight().Text(Money(amount));
+                    }
+                    foreach (var line in feeLines.OrderBy(a => a.DueDate).ThenBy(a => a.FeeHeadName))
+                        Line(line.FeeHeadName ?? "Fee payment", line.InstallmentLabel ?? "—", (decimal)line.Amount);
+                    var feeTotal = receipt.ReceiptScope == FeeReceiptScope.Combined ? receipt.FeePaidAmount
+                        : receipt.ReceiptScope == FeeReceiptScope.Fee ? (decimal)receipt.TotalPaidAmount : 0m;
+                    var remainder = feeTotal - feeLines.Sum(a => (decimal)a.Amount);
+                    if (remainder > 0) Line(feeLines.Count == 0 ? "Fees (including applicable late fees)" : "Late fees / other fee allocations", "—", remainder);
+                    if (receipt.ReceiptScope is FeeReceiptScope.Charge or FeeReceiptScope.Combined)
+                        Line("Charges", "—", receipt.ReceiptScope == FeeReceiptScope.Combined ? receipt.ChargePaidAmount : (decimal)receipt.TotalPaidAmount);
+                });
+                column.Item().Background(Colors.Grey.Lighten3).Padding(12).Row(row =>
+                {
+                    row.RelativeItem().Text("Total amount received").Bold();
+                    row.AutoItem().Text(Money((decimal)receipt.TotalPaidAmount)).FontSize(14).Bold();
+                });
+                column.Item().Text(provisional
+                    ? "Subject to payment verification. An official receipt will be issued after approval in reconciliation. This document does not confirm bank clearance."
+                    : predecessor != null
+                        ? "Payment verified. This official receipt supersedes the provisional receipt referenced above; both documents represent the same payment."
+                        : payments.Count > 0 && payments.All(p => p.PaymentMethod == ShikshaMitra.Finance.Fees.Collections.PaymentMethodEnum.Cash)
+                            ? "Cash payment received. This official receipt acknowledges the amount shown above."
+                            : "This official receipt acknowledges the payment recorded above.")
+                    .FontSize(9).FontColor(accent);
+                if (!string.IsNullOrWhiteSpace(receipt.Remarks)) column.Item().Text($"Remarks: {receipt.Remarks}").FontSize(9);
+                column.Item().PaddingTop(24).Row(row =>
+                {
+                    row.RelativeItem().Text("Authorised signatory");
+                    row.RelativeItem().AlignRight().Text("School seal");
+                });
+            });
+            page.Footer().BorderTop(0.5f).BorderColor(Colors.Grey.Lighten2).PaddingTop(8).Row(row =>
+            {
+                row.RelativeItem().Text("Retain this receipt for your records. Currency: INR.").FontSize(8).FontColor(Colors.Grey.Darken1);
+                row.AutoItem().Text(text => { text.CurrentPageNumber(); text.Span(" / "); text.TotalPages(); });
+            });
+        })).GeneratePdf();
     }
 }

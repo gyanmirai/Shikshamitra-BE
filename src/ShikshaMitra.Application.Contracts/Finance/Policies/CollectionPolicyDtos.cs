@@ -75,6 +75,7 @@ public class CollectionPolicyDto : EntityDto<Guid>, ICurrentPolicyDto
 
 	public bool AllowOnlineCollection { get; set; }
 	public string AllocationBasis { get; set; } = "Legacy";
+	public string ReceiptGrouping { get; set; } = "Separate";
 
 	public int Version { get; set; }
 	public bool IsUsedInDownstream { get; set; }
@@ -117,12 +118,15 @@ public class CreateUpdateCollectionPolicyDto
 	public bool AllowOnlineCollection { get; set; } = true;
 	/// <summary>Omitted on older clients: preserve the saved mode on update; Legacy on create.</summary>
 	public string? AllocationBasis { get; set; }
+	public string? ReceiptGrouping { get; set; }
 }
 
 public class CreateUpdateCollectionPolicyDtoValidator : AbstractValidator<CreateUpdateCollectionPolicyDto>
 {
 	public CreateUpdateCollectionPolicyDtoValidator()
 	{
+		RuleFor(x => x.ReceiptGrouping).Must(value => value is null or "Separate" or "Combined")
+			.WithMessage("Choose single combined or separate receipts.");
 		RuleFor(x => x.AllocationBasis).Must(value => value is null or "Legacy" or "Installment" or "FeeHead")
 			.WithMessage("Choose By installment or By fee head.");
 		RuleFor(x => x.ChangeReason).MaximumLength(500);

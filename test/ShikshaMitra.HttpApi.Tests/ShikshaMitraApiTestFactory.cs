@@ -91,7 +91,7 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 		return host;
 	}
 
-	private async Task ResolveSeededLookupsAsync(IServiceProvider services)
+	protected async Task ResolveSeededLookupsAsync(IServiceProvider services, bool includeHrFixtures = true)
 	{
 		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 		var currentTenant = services.GetRequiredService<ICurrentTenant>();
@@ -112,8 +112,10 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			// correctly. Without this, the charge requestor JOIN returns null and the charge is
 			// reported as "not found" immediately after creation.
 			await EnsureTestAuthUserExistsAsync(services, tenantId, lookupNormalizer);
-			await EnsureTestAuthEmployeeExistsAsync(services);
+			if (includeHrFixtures) await EnsureTestAuthEmployeeExistsAsync(services);
 			await EnsureTestAuthUserHasTenantWideScopeAsync(services, tenantId);
+			if (includeHrFixtures)
+			{
 			var payslipSettings = services.GetRequiredService<IRepository<ShikshaMitra.HR.Payroll.SalarySlips.PayslipSettings, Guid>>();
 			if (await payslipSettings.FindAsync(tenantId) == null)
 			{
@@ -126,6 +128,8 @@ public class ShikshaMitraApiTestFactory : WebApplicationFactory<Program>
 			var fullDayShift = await (await shiftRepo.GetQueryableAsync()).AsNoTracking()
 				.FirstOrDefaultAsync(s => s.ShiftName == "Full Day Shift");
 			SeededShiftId = fullDayShift?.Id ?? Guid.Empty;
+			}
+
 
 			var academicYearRepo = services.GetRequiredService<IAcademicYearRepository>();
 			var firstYear = await (await academicYearRepo.GetQueryableAsync()).AsNoTracking()

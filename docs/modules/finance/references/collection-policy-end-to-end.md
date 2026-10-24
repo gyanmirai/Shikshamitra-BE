@@ -19,6 +19,27 @@ School staff configure the policy once, verify it with an impact preview, activa
 > The final section lists those gaps so current behavior is never mistaken for the target behavior.
 > Collection Policy contains no waiver configuration. Eligible late-fee balances receive a reason-only full-waiver toggle directly in Fee Collection; there is no separate Waiver module or approval flow. See [Fee Collection waiver end to end](./fee-collection-waiver-end-to-end.md).
 
+## Receipt grouping for fees and charges
+
+`receiptGrouping` belongs to the academic-year Collection Policy and its immutable version: `Separate` preserves existing behavior; `Combined` issues one document when a collection includes both fees and charges. Late fees belong to the fee component. A fees-only or charges-only collection produces one document in either mode. Older rows and version JSON without this field retain `Separate`; omitted update fields preserve the saved value. Cloning copies the choice. No database schema migration or historical receipt rewrite is required because the policy and amount breakdown use existing extension JSON.
+
+| Contract | Implemented behavior |
+|---|---|
+| Owner and actor | Finance policy editors use existing Collection Policy create/update permissions; existing collection, receipt-view and reconciliation permissions remain authoritative. |
+| Scope and resolution | Current tenant and payer academic year; `CollectionPolicyResolver` selects the assignment/account's pinned version before creating receipts. A cashier cannot override grouping in a collection request. |
+| Preconditions | Existing payer scope, due/charge eligibility, payment validation and active assignment checks still apply. |
+| Combined | One `Combined` scope receipt, one number and one PDF; stored decimal fee/charge components sum to its total. The collection response uses the primary `feeReceiptId` for this document. |
+| Separate | A `Fee` receipt and a `Charge` receipt with distinct numbers/PDFs when both components are paid. Their amounts sum to the same collection total. |
+| Verification queue | One row per original provisional document: one combined row or two separate rows. Finalization documents are linked successors and do not create extra queue entries. Cash follows the existing immediate settlement path. |
+| Decision boundary | One instrument is approved/rejected atomically across all its original documents. Acting on either separate row updates both. Mixed provisional instruments remain blocked until instrument allocation shares exist. |
+| States and correction | Pending documents become Verified with individually linked final documents, or Rejected with the existing allocation reversal. A second terminal decision conflicts. History uses the original policy and receipt evidence. |
+| Money and downstream use | Receipt grouping changes document count only. Allocation amounts, income routing and fee-only dashboard totals remain invariant; refunds against combined receipts still use canonical fee allocations, excluding charge money. |
+| Failure, retry and audit | Collection keeps its existing serializable/idempotent transaction. Verification uses a serializable unit of work for all siblings. Metadata records policy ID/version/grouping, and each document retains existing receipt/audit/event links. |
+| Evidence | `CollectionReceiptGrouping_Tests`, `ReceiptGroupingReconciliationApi_Tests`, and the collect-input validator tests cover grouping, historical defaults, exact totals, queue rows, terminal decisions and reversals. |
+
+The frontend owns the configuration and receipt-preview workflow in [Finance workflows](../../../../../Shikshamitra-FE/docs/finance/workflows.md).
+
+
 ## Goals and boundaries
 
 The policy must make these questions deterministic:

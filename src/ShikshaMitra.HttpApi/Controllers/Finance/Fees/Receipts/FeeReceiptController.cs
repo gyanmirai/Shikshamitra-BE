@@ -68,6 +68,7 @@ public class FeeReceiptController(
         CancellationToken cancellationToken = default)
     {
         var pdfBytes = await feeReceiptAppService.GetPdfAsync(id, cancellationToken);
-        return File(pdfBytes, MediaTypeNames.Application.Pdf, $"receipt-{id}.pdf");
+        var receipt = await feeReceiptAppService.GetAsync(id, cancellationToken);
+        return File(pdfBytes, MediaTypeNames.Application.Pdf, receipt.PdfFileName);
     }
 }

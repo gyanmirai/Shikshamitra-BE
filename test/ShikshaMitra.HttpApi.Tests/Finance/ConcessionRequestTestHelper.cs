@@ -1,4 +1,10 @@
 ﻿using System;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.TenantSettings.Standards;
+using ShikshaMitra.TenantSettings.EducationMediums;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -71,6 +77,35 @@ public static class ConcessionRequestTestHelper
 		return (details.StudentId, details.AcademicBoardId);
 	}
 
+
+	// Receipt tests seed prerequisite students directly; the legacy registration HTTP route was retired.
+	public static async Task<(Guid StudentId, Guid BoardId)> CreateStudentAsync(IServiceProvider services, Guid? divisionId = null)
+	{
+		var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+		using var scope = services.CreateScope();
+		using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId);
+		using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+		var standard = await scope.ServiceProvider.GetRequiredService<IRepository<Standard, Guid>>().GetAsync(DefaultStandardId, includeDetails: false);
+		var medium = await scope.ServiceProvider.GetRequiredService<IRepository<EducationMedium, Guid>>().GetAsync(DefaultMediumId, includeDetails: false);
+		var boardId = medium.EducationBoardId;
+		var student = Student.CreateDirectRegistration(Guid.NewGuid(), tenantId,
+			TestDataHelper.UniqueName("ReceiptStudent"), null, "Synthetic", DefaultAcademicYearId,
+			boardId, DefaultMediumId, standard.EducationMediumStageId, DefaultStandardId,
+			divisionId ?? DefaultDivisionId, DateTimeOffset.UtcNow.AddYears(-12), GenderEnum.Male,
+			TestDataHelper.UniquePhone());
+		await scope.ServiceProvider.GetRequiredService<IRepository<Student, Guid>>().InsertAsync(student);
+		await uow.CompleteAsync();
+		return (student.Id, boardId);
+	}
+
+	private static async Task<Guid> CreateFeeIncomeCategoryAsync(HttpClient client)
+	{
+		var response = await client.PostAsJsonAsync($"/api/income-categories?academicYearId={DefaultAcademicYearId}",
+			new { name = TestDataHelper.UniqueName("Receipt income"), description = "Synthetic fee income routing", tags = Array.Empty<string>() }, JsonOptions);
+		await EnsureSuccessAsync(response, "Fee income category creation failed");
+		var income = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		return income.GetProperty("id").GetGuid();
+	}
 	public static async Task<Guid> CreateConcessionTypeAsync(HttpClient client, string? nameSuffix = null)
 	{
 		var name = TestDataHelper.UniqueName(nameSuffix ?? "ConcType");
@@ -101,6 +136,7 @@ public static class ConcessionRequestTestHelper
 	public static async Task<Guid> CreateFeeCategoryAsync(HttpClient client)
 	{
 		var name = TestDataHelper.UniqueName("FeeCat");
+		var incomeCategoryId = await CreateFeeIncomeCategoryAsync(client);
 		var request = new FeeCategoryCreateRequest
 		{
 			Name = name,
@@ -112,7 +148,8 @@ public static class ConcessionRequestTestHelper
 					Name = TestDataHelper.UniqueName("Head"),
 					Module = ShikshaMitra.Finance.Fees.Settings.FeeHeadModule.Finance,
 					IsConcessionApplied = false,
-					Description = "Seed fee head"
+					Description = "Seed fee head",
+					IncomeCategoryId = incomeCategoryId
 				}
 			}
 		};
@@ -136,9 +173,11 @@ public static class ConcessionRequestTestHelper
 	public static async Task<Guid> CreateFeeHeadAsync(HttpClient client, Guid feeCategoryId)
 	{
 		var name = TestDataHelper.UniqueName("FeeHead");
+		var incomeCategoryId = await CreateFeeIncomeCategoryAsync(client);
 		var request = new FeeHeadCreateRequest
 		{
 			FeeCategoryId = feeCategoryId,
+			IncomeCategoryId = incomeCategoryId,
 			Name = name,
 			Description = "Test fee head",
 		};

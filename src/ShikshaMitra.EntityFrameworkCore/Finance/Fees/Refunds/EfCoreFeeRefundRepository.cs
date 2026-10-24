@@ -172,8 +172,8 @@ public class EfCoreFeeRefundRepository(
         var dbSet = await GetDbSetAsync();
         var query = dbSet.Where(r => !excludingRequestId.HasValue || r.Id != excludingRequestId.Value)
             .SelectMany(r => r.Reservations)
-            .Where(r => dueFeeIds.Contains(r.DueFeeId) && r.Status == FeeRefundReservationStatus.Active);
-        return await query.GroupBy(r => r.DueFeeId)
+            .Where(r => r.DueFeeId.HasValue && dueFeeIds.Contains(r.DueFeeId.Value) && r.Status == FeeRefundReservationStatus.Active);
+        return await query.GroupBy(r => r.DueFeeId!.Value)
             .Select(g => new { DueFeeId = g.Key, Amount = g.Sum(x => x.Amount) })
             .ToDictionaryAsync(x => x.DueFeeId, x => x.Amount, cancellationToken);
     }

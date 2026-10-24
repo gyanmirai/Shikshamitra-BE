@@ -157,8 +157,26 @@ public class CollectFeeInputValidator_Tests
         result.Errors.ShouldContain(e => e.ErrorMessage.Contains("one payment method"));
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Should_Reject_Mixed_Cash_And_Electronic_Even_When_Cashier_Confirms(bool? confirmed)
+    {
+        var input = ValidInput();
+        input.PaymentConfirmed = confirmed;
+        input.Payments =
+        [
+            new() { PaymentMethod = PaymentMethodEnum.Cash, Amount = 400d },
+            new() { PaymentMethod = PaymentMethodEnum.UPI, Amount = 600d,
+                Details = MinimalDetails(PaymentMethodEnum.UPI) }
+        ];
+
+        _validator.Validate(input).Errors.ShouldContain(e => e.ErrorMessage.Contains("one payment method"));
+    }
+
     [Fact]
-    public void Should_Reject_Provisional_Fee_And_Charge_In_One_Receipt_Decision()
+    public void Should_Accept_Fee_And_Charge_For_One_Provisional_Instrument()
     {
         var input = ValidInput();
         input.ChargePayments = [new() { ChargeId = Guid.NewGuid(), Amount = 500d }];
@@ -166,7 +184,7 @@ public class CollectFeeInputValidator_Tests
             Details = MinimalDetails(PaymentMethodEnum.Cheque) }];
 
         var result = _validator.Validate(input);
-        result.Errors.ShouldContain(e => e.ErrorMessage.Contains("one fee or charge receipt"));
+        result.IsValid.ShouldBeTrue(string.Join("; ", result.Errors.Select(e => e.ErrorMessage)));
     }
 
     [Fact]
@@ -248,7 +266,7 @@ public class CollectFeeInputValidator_Tests
     [InlineData(PaymentMethodEnum.CreditCard)]
     [InlineData(PaymentMethodEnum.DebitCard)]
     [InlineData(PaymentMethodEnum.BankTransfer)]
-    public void Should_Reject_CashierDecided_Method_Without_BankReceiptConfirmed(PaymentMethodEnum method)
+    public void Should_Accept_Electronic_Method_Without_Legacy_Confirmation(PaymentMethodEnum method)
     {
         var input = ValidInput();
         input.Payments = new List<FeePaymentDto>
@@ -258,8 +276,7 @@ public class CollectFeeInputValidator_Tests
 
         var result = _validator.Validate(input);
 
-        result.IsValid.ShouldBeFalse();
-        result.Errors.ShouldContain(e => e.PropertyName == "PaymentConfirmed");
+        result.IsValid.ShouldBeTrue();
     }
 
     [Theory]

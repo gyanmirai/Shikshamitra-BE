@@ -32,6 +32,22 @@ Admission/Onboarding proration uses the Finance academic-year default and saved 
 
 ## Data-integrity rules
 
+Collections summary, collect-form principal lines and Fee Details use `DueFee.AppliedPaymentAmount`
+for paid principal. It is `min(max(0, PaidAmount - RefundedAmount), NetPayableAmount)`, where
+`NetPayableAmount = max(0, OriginalAmount - ConcessionAmount - AdjustmentCreditAmount)`.
+Excess retained cash remains `OverpaymentAmount`; it is never silently refunded or discarded.
+Fee Details exposes gross payments, processed refunds, adjustment credits and excess separately.
+For example, original fees of 50,000 and concessions of 37,500 leave 12,500 net fees. If recorded
+cash is 62,500 with no refunds, 12,500 applies to fees and 50,000 remains excess. A concession
+without a payment leaves paid principal at zero.
+
+This is a read projection over existing tenant/year scoped dues. It changes no stored payment,
+allocation, receipt, refund, accounting entry, policy or permission, and needs no schema migration.
+Collections View remains the read permission. Payment history retains each original transaction
+amount and status, including reversals; linked saved receipt documents use InvoiceReceipt View
+and the existing receipt scope checks for authenticated PDF downloads. Verified provisional
+documents resolve to their official replacements without duplicating documents.
+
 | Rule | Consequence |
 |---|---|
 | Student academic scope is server-owned | Charge and fee workflows must not trust caller-provided class or division scope |
@@ -107,3 +123,11 @@ Money remains decimal-typed for storage and ledger compatibility. New fee-struct
 Installments floor each percentage share of the rounded total and put the exact remainder into the final installment in schedule order. For example, Rs. 1,000 at 33.33%, 33.33%, 33.34% produces Rs. 333, Rs. 333, Rs. 334. The annual total, generated dues and preview totals reconcile exactly.
 
 Refunds, concessions and late fees never exceed eligible balances or hard caps: if a legacy cap is fractional, the largest permitted whole rupee is used. Exact full waivers and previously approved fractional concession allocations retain historical minor units so existing balances can be extinguished without rewriting posted evidence. Existing receipts, paid balances, reversals and journal history are not backfilled. Percentages, dates, service-day factors and statutory calculation precision retain their own units.
+
+New request-entered fixed concession amounts are validated as positive whole rupees rather than
+silently rounded: `0.1` is rejected with `Finance:Concession:010032`, identifying the due and fee
+head in error data. Request percentages retain up to two decimal places. The concession preview
+and submission evaluate the same explicitly entered due IDs, so leaving a sibling installment
+empty cannot itself invalidate the preview fingerprint. Current-source
+`Finance:Concession:010020` represents a changed preview, including a real balance or concurrency
+change; it is not a policy-maximum error.

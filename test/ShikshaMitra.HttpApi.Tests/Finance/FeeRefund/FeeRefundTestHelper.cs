@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -160,6 +160,36 @@ public static class FeeRefundTestHelper
         return id;
     }
 
+    public static async Task<Guid> SeedPendingPayoutAsync(IServiceProvider services,
+        Guid requestId, Guid userId, RecordRefundPayoutDto input)
+    {
+        using var scope = services.CreateScope();
+        using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>()
+            .Change(Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+            .Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+        var repository = scope.ServiceProvider.GetRequiredService<ShikshaMitra.Finance.Fees.FeeRefund.Repositories.IFeeRefundRepository>();
+        var request = (await repository.FindWithLinesAsync(requestId))!;
+        var payout = request.RecordPayout(Guid.NewGuid(), userId, input.IdempotencyKey,
+            input.Method, input.Amount, input.PaymentDate, input.ExternalReference, null,
+            input.BankAccountId, input.EvidenceReference ?? "Existing payment record");
+        await repository.StageNewSettlementAsync(payout);
+        await uow.CompleteAsync();
+        return payout.Id;
+    }
+
+    public static async Task<List<ShikshaMitra.Finance.Accounts.Incomes.Transaction>> GetRefundExpensesAsync(
+        IServiceProvider services, Guid requestId)
+    {
+        using var scope = services.CreateScope();
+        using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>()
+            .Change(Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>()
+            .Begin(new AbpUnitOfWorkOptions(), requiresNew: true);
+        var repository = scope.ServiceProvider.GetRequiredService<IRepository<ShikshaMitra.Finance.Accounts.Incomes.Transaction, Guid>>();
+        return await repository.GetListAsync(x => x.SourceId == requestId);
+    }
+
     // ── Composite seed helper ─────────────────────────────────────────────────
 
     /// <summary>
@@ -171,14 +201,14 @@ public static class FeeRefundTestHelper
         HttpClient client,
         IServiceProvider services,
         double feeAmount = 1000d,
-        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods = null)
+        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods = null, bool includePaidCharges = false, bool allowPartialRefund = true)
     {
         var studentId = await SeedStudentOnlyAsync(services);
         var feeHeadId = await SeedFeeHeadAsync(services);
 
         // Seed DueFee record first
         var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(services, studentId, feeHeadId, feeAmount);
-        await AttachRefundPolicyAsync(services, studentId, dueFeeId, allowedPayoutMethods);
+        await AttachRefundPolicyAsync(services, studentId, dueFeeId, allowedPayoutMethods, includePaidCharges, allowPartialRefund);
 
         await SeedSettledCollectionAsync(services, studentId, dueFeeId, feeAmount);
 
@@ -316,7 +346,7 @@ public static class FeeRefundTestHelper
     }
 
     private static async Task AttachRefundPolicyAsync(IServiceProvider services, Guid studentId, Guid dueFeeId,
-        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods)
+        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods, bool includePaidCharges = false, bool allowPartialRefund = true)
     {
         var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         using var scope = services.CreateScope();
@@ -336,8 +366,8 @@ public static class FeeRefundTestHelper
             new RefundPolicyUpdateModel(
                 $"Refund policy {policyId:N}", ($"RP-{policyId:N}")[..20], "API test policy",
                 RefundPolicyStatus.Active, false, RefundFeeHeadScope.AllFeeHeads,
-                [], false, false, true,
-                RefundAmountMode.ManualUpToEligible, null, null, null, null,
+                [], includePaidCharges, false, allowPartialRefund,
+                allowPartialRefund ? RefundAmountMode.ManualUpToEligible : RefundAmountMode.RemainingPaidAmount, null, null, null, null,
                 RoundingMethodType.None, RefundDeductionType.None, null, null, null,
                 allowedPayoutMethods ?? [RefundPayoutMethod.Cash, RefundPayoutMethod.BankTransfer], 2));
         var snapshot = JsonSerializer.Serialize(policy.ToSnapshot());
@@ -355,6 +385,59 @@ public static class FeeRefundTestHelper
         await assignmentRepository.InsertAsync(assignment, autoSave: false);
         await dueFeeRepository.UpdateAsync(dueFee, autoSave: false);
         await uow.CompleteAsync();
+    }
+
+    public static async Task<(Guid ChargeId, Guid AllocationId, Guid ReceiptId)> SeedPaidChargeAsync(
+        IServiceProvider services, Guid studentId, decimal amount = 250m,
+        FeeCollectionStatus status = FeeCollectionStatus.Paid, bool combined = true)
+    {
+        var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        using var scope = services.CreateScope();
+        var provider = scope.ServiceProvider;
+        using var tenant = provider.GetRequiredService<ICurrentTenant>().Change(tenantId);
+        using var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+        var charge = new ShikshaMitra.Finance.Fees.Charges.Charge(Guid.NewGuid(), tenantId,
+            DefaultAcademicYearId, Guid.NewGuid(), "Exam materials", Guid.NewGuid(), studentId,
+            DefaultBoardId, DefaultMediumId, DefaultStandardId, DefaultDivisionId, "Refund charge fixture",
+            amount, DateTimeOffset.UtcNow.AddDays(2), ShikshaMitra.Finance.Fees.Charges.ChargePriority.Medium,
+            ShikshaMitra.Finance.Fees.Charges.ChargeStatus.Approved, Guid.NewGuid());
+        await provider.GetRequiredService<IRepository<ShikshaMitra.Finance.Fees.Charges.Charge, Guid>>().InsertAsync(charge);
+        var collections = provider.GetRequiredService<IRepository<FeeRecordMetadata, Guid>>();
+        var receipts = provider.GetRequiredService<IRepository<FeePaymentReceipt, Guid>>();
+        var receipt = combined ? (await receipts.GetListAsync(x => x.StudentId == studentId)).Single() : null;
+        var collection = receipt == null ? new FeeRecordMetadata(Guid.NewGuid(), tenantId, studentId,
+            DefaultAcademicYearId, (double)amount, $"CH-{Guid.NewGuid():N}"[..20], status)
+            : await collections.GetAsync(receipt.FeeCollectionTransactionId);
+        if (receipt == null)
+        {
+            await collections.InsertAsync(collection);
+            receipt = new FeePaymentReceipt(Guid.NewGuid())
+            {
+                TenantId = tenantId, StudentId = studentId, AcademicYearId = DefaultAcademicYearId,
+                FeeCollectionTransactionId = collection.Id, ReceiptNumber = collection.ReceiptNumber,
+                ReceiptScope = FeeReceiptScope.Fee, ReceiptKind = status == FeeCollectionStatus.InReconciliation
+                    ? FeeReceiptKind.ProvisionalFee : FeeReceiptKind.FinalFee,
+                VerificationStatus = status == FeeCollectionStatus.InReconciliation
+                    ? FeeReceiptVerificationStatus.PendingVerification : FeeReceiptVerificationStatus.Verified,
+                TotalPaidAmount = (double)amount, BoardId = DefaultBoardId, EducationMediumId = DefaultMediumId,
+                ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow)
+            };
+            await receipts.InsertAsync(receipt);
+        }
+        else
+        {
+            receipt.ReceiptScope = FeeReceiptScope.Combined;
+            receipt.TotalPaidAmount += (double)amount;
+            await receipts.UpdateAsync(receipt);
+        }
+        var allocation = new ChargeCollectionRecord(Guid.NewGuid())
+        {
+            TenantId = tenantId, StudentId = studentId, ChargeId = charge.Id, Amount = (double)amount,
+            PaymentDate = DateTimeOffset.UtcNow, FeeRecordMetadataId = collection.Id
+        };
+        await provider.GetRequiredService<IRepository<ChargeCollectionRecord, Guid>>().InsertAsync(allocation);
+        await uow.CompleteAsync();
+        return (charge.Id, allocation.Id, receipt.Id);
     }
 
     public static async Task<RefundEligibilityMonthDto> GetEligibleLineAsync(

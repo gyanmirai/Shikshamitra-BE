@@ -73,7 +73,7 @@ public partial class CollectFeeWorkflow
 
 		var auditEventIds = new List<Guid> { paymentWrite.EventId };
 
-		var feeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Fee);
+		var feeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope is FeeReceiptScope.Fee or FeeReceiptScope.Combined);
 		if (feeReceipt != null)
 		{
 			var receiptWrite = await financeAuditWriter.WriteAsync(
@@ -135,7 +135,7 @@ public partial class CollectFeeWorkflow
 		var isAnyPartial = dueFeePayments.Any(dfp => (decimal)dfp.Amount < dueFeeMap[dfp.DueFeeId].OutstandingAmount)
 			|| chargePayments.Any(cp => cp.Amount < pendingChargeMap[cp.ChargeId]);
 
-		return FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods) || !isBankReceiptConfirmed
+		return FeeReceiptPaymentPolicy.RequiresVerification(paymentMethods)
 			? FeeCollectionStatus.InReconciliation
 			: (isAnyPartial ? FeeCollectionStatus.Partial : FeeCollectionStatus.Paid);
 	}

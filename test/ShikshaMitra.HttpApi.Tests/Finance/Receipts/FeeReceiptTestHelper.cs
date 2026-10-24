@@ -8,6 +8,7 @@ using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.FeeCollections;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Uow;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Finance.FeeReceipts;
 
@@ -37,11 +38,12 @@ public static class FeeReceiptTestHelper
     {
         using var scope2 = services.CreateScope();
         var uowManager = scope2.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+        using var tenant = scope2.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse("11111111-1111-1111-1111-111111111111"));
         using var uow = uowManager.Begin(requiresNew: true);
 
         var receiptRepo = scope2.ServiceProvider.GetRequiredService<IFeePaymentReceiptRepository>();
 
-        var verificationStatus = kind == FeeReceiptKind.ProvisionalFee
+        var verificationStatus = kind is FeeReceiptKind.ProvisionalFee or FeeReceiptKind.ProvisionalCharge
             ? FeeReceiptVerificationStatus.PendingVerification
             : FeeReceiptVerificationStatus.NotApplicable;
 
@@ -57,7 +59,7 @@ public static class FeeReceiptTestHelper
 
         var receipt = new FeePaymentReceipt(Guid.NewGuid())
         {
-            TenantId                   = null,
+            TenantId                   = Guid.Parse("11111111-1111-1111-1111-111111111111"),
             FeeCollectionTransactionId = feeCollectionTransactionId ?? Guid.NewGuid(),
             StudentId                  = studentId,
             AcademicYearId             = DefaultAcademicYearId,

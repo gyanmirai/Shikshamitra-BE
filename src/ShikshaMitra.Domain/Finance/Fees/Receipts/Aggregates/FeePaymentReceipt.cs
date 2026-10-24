@@ -1,4 +1,6 @@
 ﻿using System;
+using System.ComponentModel.DataAnnotations.Schema;
+using Volo.Abp.Data;
 using Volo.Abp;
 using Volo.Abp.Domain.Entities.Auditing;
 using Volo.Abp.MultiTenancy;
@@ -8,10 +10,8 @@ namespace ShikshaMitra.Finance.Fees.Receipts;
 /// <summary>
 /// A printable fee or charge receipt document.
 /// <para>
-/// One receipt is created per <see cref="FeeReceiptScope"/> per collection event.
-/// A single <c>CollectFee</c> that includes both fee lines and charge lines
-/// produces two separate receipt rows — one with <see cref="FeeReceiptScope.Fee"/>
-/// and one with <see cref="FeeReceiptScope.Charge"/>.
+/// Collection policy chooses separate fee/charge documents or one combined document.
+/// Combined documents retain an immutable fee/charge amount breakdown.
 /// </para>
 /// <para>
 /// The parent transaction is <c>FeeRecordMetadata</c> (acting as <c>FeeCollectionTransaction</c>
@@ -63,6 +63,23 @@ public class FeePaymentReceipt : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// Total amount covered by this receipt (sum of the lines for this scope only).
     /// </summary>
     public double TotalPaidAmount { get; set; }
+
+    [NotMapped]
+    public decimal FeePaidAmount => this.GetProperty<decimal>(nameof(FeePaidAmount), ReceiptScope == FeeReceiptScope.Fee ? (decimal)TotalPaidAmount : 0m);
+
+    [NotMapped]
+    public decimal ChargePaidAmount => this.GetProperty<decimal>(nameof(ChargePaidAmount), ReceiptScope == FeeReceiptScope.Charge ? (decimal)TotalPaidAmount : 0m);
+
+    public void SetAmountBreakdown(decimal feeAmount, decimal chargeAmount)
+    {
+        if (feeAmount < 0m || chargeAmount < 0m || feeAmount + chargeAmount != (decimal)TotalPaidAmount)
+            throw new BusinessException(ShikshaMitra.Finance.Fees.Collections.FeeCollectionErrorCodes.PaymentDetailsMismatch);
+        if (ExtraProperties.ContainsKey(nameof(FeePaidAmount)) &&
+            (FeePaidAmount != feeAmount || ChargePaidAmount != chargeAmount))
+            throw new BusinessException(ShikshaMitra.Finance.Fees.Collections.FeeCollectionErrorCodes.PaymentDetailsMismatch);
+        this.SetProperty(nameof(FeePaidAmount), feeAmount);
+        this.SetProperty(nameof(ChargePaidAmount), chargeAmount);
+    }
 
     // ── Student / context ─────────────────────────────────────────────────────
 

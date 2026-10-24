@@ -34,9 +34,10 @@ public class RecordRefundPayoutDto
     [Required, MaxLength(100)] public string Method { get; set; } = string.Empty;
     [Range(typeof(decimal), "0.01", "9999999999999999")] public decimal Amount { get; set; }
     public DateTimeOffset PaymentDate { get; set; }
+    public Guid? ExpenseCategoryId { get; set; }
     public Guid? BankAccountId { get; set; }
     [MaxLength(200)] public string? ExternalReference { get; set; }
-    [Required, MaxLength(500)] public string EvidenceReference { get; set; } = string.Empty;
+    [MaxLength(500)] public string? EvidenceReference { get; set; }
 }
 
 public class ResolveRefundPayoutDto

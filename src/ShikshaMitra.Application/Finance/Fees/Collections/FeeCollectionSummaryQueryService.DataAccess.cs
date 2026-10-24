@@ -86,7 +86,7 @@ public partial class FeeCollectionSummaryQueryService
 		{
 			if (!rowsByPayer.TryGetValue(FinanceReportPayerKey.From(due.StudentId, due.FinanceFeeAccountId), out var row)) continue;
 			row.TotalFees += (double)due.OriginalAmount;
-			row.PaidFees += (double)due.PaidAmount;
+			row.PaidFees += (double)due.AppliedPaymentAmount;
 			if (due.ScheduleSource == ScheduleSource.Legacy || !due.DemandDate.HasValue || due.DemandDate.Value <= currentDate)
 				row.OutstandingFees += (double)due.OutstandingAmount;
 			if (isOverdue(due)) row.OverdueFees += (double)due.OutstandingAmount;

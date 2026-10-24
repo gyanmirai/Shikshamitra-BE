@@ -120,8 +120,10 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         var invalidMoney = await Client.PostAsJsonAsync($"/api/{route}?academicYearId={Factory.SeededAcademicYearId}", new { name = reference, categoryId = category.GetProperty("id").GetGuid(), amount = 12.345m, paymentMethod = 0, paymentDate = at });
         invalidMoney.IsSuccessStatusCode.ShouldBeFalse();
     }
-    [Fact]
-    public async Task Approved_refund_projection_is_replaced_by_confirmed_expense_and_linked_return()
+    [Theory]
+    [InlineData(FeeRefundStatus.Approved)]
+    [InlineData(FeeRefundStatus.Processing)]
+    public async Task Unpaid_refunds_are_excluded_until_confirmed_expense_and_linked_return(FeeRefundStatus unpaidStatus)
     {
         var at = await SeedScopeAsync();
         var refundId = Guid.NewGuid(); var voucher = $"REF-{Guid.NewGuid():N}";
@@ -138,7 +140,7 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
             typeof(FeeRefundRequest).GetProperty("Id")!.SetValue(request, refundId);
             foreach (var field in new (string Name, object? Value)[] {
                 ("TenantId", Guid.Parse(TestAuthHandler.TestTenantId)), ("AcademicYearId", Factory.SeededAcademicYearId),
-                ("StudentId", studentId), ("VoucherNumber", voucher), ("Status", FeeRefundStatus.Approved),
+                ("StudentId", studentId), ("VoucherNumber", voucher), ("Status", unpaidStatus),
                 ("ApprovedAmount", 200m), ("TotalAmount", 200m), ("ExpenseCategoryId", categoryId),
                 ("ExpenseCategoryName", "Student refunds"), ("RefundMethod", "Cash"), ("CreationTime", at) })
                 typeof(FeeRefundRequest).GetProperty(field.Name)!.SetValue(request, field.Value);
@@ -146,18 +148,13 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         });
         var url = $"/api/accounts/register?academicYearId={Factory.SeededAcademicYearId}&direction=expense&source=refund&search={voucher}";
         var pending = await ReadPageAsync(url);
-        pending.Items.Single().SourceStatus.ShouldBe("Awaiting payout");
-        pending.Items.Single().Amount.ShouldBe(200m);
+        pending.TotalCount.ShouldBe(0);
+        pending.Items.ShouldBeEmpty();
         using var detailTimeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
         using var studentDetailResponse = await Client.GetAsync(
             $"/api/accounts/register/refund/{refundId}?academicYearId={Factory.SeededAcademicYearId}", detailTimeout.Token);
         studentDetailResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await studentDetailResponse.Content.ReadAsStringAsync());
         var studentDetail = await studentDetailResponse.Content.ReadFromJsonAsync<AccountsActivityDetailDto>(JsonOptions);
-        pending.Items.Single().GrNumber.ShouldBe(studentDetail!.GrNumber);
-        pending.Items.Single().ClassDivision.ShouldBe(studentDetail.ClassName == null && studentDetail.DivisionName == null ? "" :
-            $"{studentDetail.ClassName ?? "—"} - {studentDetail.DivisionName ?? "—"}");
-        var identityFilter = ColumnFilters(new { column = "studentIdentity", type = "contains", value = pending.Items.Single().StudentName });
-        (await ReadPageAsync(url + identityFilter)).TotalCount.ShouldBe(1);
         await WithTenantAsync(async services =>
         {
             var refunds = services.GetRequiredService<IRepository<FeeRefundRequest, Guid>>();
@@ -171,6 +168,11 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         });
         var paid = await ReadPageAsync(url);
         paid.TotalCount.ShouldBe(1); paid.Items.Single().SourceStatus.ShouldBe("Paid");
+        paid.Items.Single().GrNumber.ShouldBe(studentDetail!.GrNumber);
+        paid.Items.Single().ClassDivision.ShouldBe(studentDetail.ClassName == null && studentDetail.DivisionName == null ? "" :
+            $"{studentDetail.ClassName ?? "—"} - {studentDetail.DivisionName ?? "—"}");
+        var identityFilter = ColumnFilters(new { column = "studentIdentity", type = "contains", value = paid.Items.Single().StudentName });
+        (await ReadPageAsync(url + identityFilter)).TotalCount.ShouldBe(1);
         await WithTenantAsync(async services =>
         {
             await services.GetRequiredService<IRepository<Transaction, Guid>>().InsertAsync(Transaction.Automatic(Guid.NewGuid(),
@@ -255,7 +257,7 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Applicant_refund_pending_and_historical_payout_keep_payer_identity(bool linked)
+    public async Task Applicant_refund_is_visible_only_when_paid_and_keeps_payer_identity(bool linked)
     {
         var at = await SeedScopeAsync(); var refundId = Guid.NewGuid(); var accountId = Guid.NewGuid();
         var voucher = $"M-{Guid.NewGuid():N}"; var applicant = $"Refund applicant {Guid.NewGuid():N}";
@@ -280,9 +282,8 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         });
         var url = $"/api/accounts/register?academicYearId={Factory.SeededAcademicYearId}&direction=expense&source=refund&search={voucher}";
         var pending = await ReadPageAsync(url);
-        pending.Items.Single().FinanceFeeAccountId.ShouldBe(accountId);
-        pending.Items.Single().StudentName.ShouldBe(applicant);
-        pending.Items.Single().SourceStatus.ShouldBe("Awaiting payout");
+        pending.TotalCount.ShouldBe(0);
+        pending.Items.ShouldBeEmpty();
         var detailResponse = await Client.GetAsync($"/api/accounts/register/refund/{refundId}?academicYearId={Factory.SeededAcademicYearId}");
         detailResponse.StatusCode.ShouldBe(HttpStatusCode.OK, await detailResponse.Content.ReadAsStringAsync());
         (await detailResponse.Content.ReadFromJsonAsync<AccountsActivityDetailDto>(JsonOptions))!.FinanceFeeAccountId.ShouldBe(accountId);
@@ -304,6 +305,7 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         });
         var paid = await ReadPageAsync(url);
         paid.TotalCount.ShouldBe(1); paid.Items.Single().Amount.ShouldBe(25m);
+        paid.Items.Single().SourceStatus.ShouldBe("Paid");
         paid.Items.Single().StudentName.ShouldBe(applicant); paid.Items.Single().FinanceFeeAccountId.ShouldBe(accountId);
         (await restricted.GetFromJsonAsync<AccountsActivityPageDto>(url, JsonOptions))!.TotalCount.ShouldBe(0);
     }

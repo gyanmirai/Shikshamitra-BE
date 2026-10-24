@@ -245,7 +245,7 @@ public partial class ChargeAppService
 		await chargeRequestRepository.UpdateAsync(request, autoSave: false);
 		await financeAuditWriter.WriteAsync(
 			request.AcademicYearId, FinanceAuditEntityTypes.FeeCharge, request.Id, request.ChargeName,
-			FinanceAuditActions.RemoveCharge, $"Voided charge lines for {approvedLines.Count} student(s).",
+			FinanceAuditActions.RemoveCharge, $"Cancelled charge lines for {approvedLines.Count} student(s).",
 			reason: input.Reason);
 		await uow.CompleteAsync();
 
@@ -264,7 +264,7 @@ public partial class ChargeAppService
 				ApprovedOn = Clock.Now,
 				ApprovalNotes = input.Reason
 			},
-			Message = $"Charge voided for {approvedLines.Count} student(s)"
+			Message = $"Charge cancelled for {approvedLines.Count} student(s)"
 		};
 	}
 

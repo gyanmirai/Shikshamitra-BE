@@ -13,7 +13,7 @@ using Xunit;
 
 namespace ShikshaMitra.Finance.Accounts.Reconciliation;
 
-[Collection(ApiTestCollection.Name)]
+[Collection(FinanceReceiptApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Finance)]
 public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
 {
@@ -21,7 +21,7 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
 
     private Guid AcademicYearId => Factory.SeededAcademicYearId;
 
-    public ReconciliationApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
+    public ReconciliationApi_Tests(FinanceReceiptApiTestFactory factory) : base(factory)
     {
         FeeCollectionTestHelper.DefaultAcademicYearId = factory.SeededAcademicYearId;
         FeeCollectionTestHelper.DefaultMediumId = factory.SeededMediumId;
@@ -126,8 +126,8 @@ public class ReconciliationApi_Tests : ShikshaMitraApiTestBase
         json.TryGetProperty("bankTransferPending", out _).ShouldBeTrue();
         json.TryGetProperty("creditCardPending", out _).ShouldBeTrue();
         json.TryGetProperty("upiPending", out _).ShouldBeTrue();
-        json.TryGetProperty("onlineGatewayPending", out _).ShouldBeTrue();
-        json.TryGetProperty("walletPending", out _).ShouldBeTrue();
+        json.TryGetProperty("cashOfficial", out _).ShouldBeTrue(json.GetRawText());
+        json.TryGetProperty("debitCardPending", out _).ShouldBeTrue();
     }
 
     [Fact]

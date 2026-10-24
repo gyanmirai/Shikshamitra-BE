@@ -125,6 +125,8 @@ public sealed class ReconciliationListFilter
 /// </summary>
 public sealed class ReconciliationRow
 {
+    public int PaymentReceiptCount { get; init; } = 1;
+    public FeeReceiptScope ReceiptScope { get; init; }
     public Guid ReceiptId { get; init; }
     public string ReceiptNumber { get; init; } = string.Empty;
     public FeeReceiptVerificationStatus VerificationStatus { get; init; }

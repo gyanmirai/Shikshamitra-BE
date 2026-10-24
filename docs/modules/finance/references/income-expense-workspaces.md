@@ -1,9 +1,9 @@
-﻿---
+---
 module: finance
 domain: accounts-workspaces
 content_type: Reference
 status: canonical
-updated_on: 2026-10-14
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -36,7 +36,7 @@ Frontend ownership is documented in [the frontend workspace contract](../../../.
 Month/year must be supplied together and intersect the server-owned academic-year dates.
 Use the application's India calendar for month boundaries and half-open UTC instant ranges; clip boundary months to the academic period.
 No month means the selected academic year's complete date interval.
-Collections use recorded payment date, manual entries use payment date, awaiting refunds use request creation date and paid refunds use payout/posting date.
+Collections use recorded payment date, manual entries use payment date, and paid refunds use payout/posting date.
 Covered fee periods are detail facts and do not change payment-month filtering.
 Bank labels are masked snapshots; category labels retain historical snapshots when available.
 Amounts remain decimal with their canonical precision; formatting never changes payload values.
@@ -45,9 +45,9 @@ Unavailable legacy facts remain unavailable.
 ## Monetary and lifecycle invariants
 
 Confirmed collections appear in Income; provisional/rejected collections do not.
-Approved/Processing refunds (including recorded payouts awaiting verification) without a paid accounting entry are read-only Awaiting payout projections.
+Approved/Processing refunds without paid accounting evidence are excluded from Expenses and remain in Refunds.
 Approval does not create an expense or reduce bank balance.
-Payout confirmation creates the expense exactly once using the approved category, bank and method; the pending projection then disappears.
+Recording payment creates the expense exactly once using the selected category, bank and method. It appears as Paid immediately; linked returns appear as Returned.
 Positive expense values represent outward money; signed returned-payout corrections remain separate linked evidence.
 Automatic category/instrument allocations must retain their exact totals and must not be counted again through receipt/refund header fallbacks.
 Manual bank/reference facts use existing transaction fields so no schema migration is required unless source inspection proves otherwise.
@@ -57,7 +57,7 @@ Do not change unrelated legacy Update/Delete contracts or maker-checker rules.
 
 Cover exact action denials, tenant/student/year isolation, month clipping/timezone boundaries, source/category/search paging, direct detail IDOR and duplicate suppression.
 Cover manual cash/non-cash category/bank validation and decimal payload persistence.
-Reuse refund routing/confirmation/retry/returned-payment regression tests and add awaiting projection checks.
+Reuse refund routing/confirmation/retry/returned-payment regression tests and verify unpaid requests are absent from register counts and rows.
 Run focused domain/API tests, backend build, docs checks and git diff --check.
 Ship backend contracts before frontend clients; old register routes remain compatible during rollout.
 

@@ -72,6 +72,12 @@ public class ChargeListItem
 	public Guid EducationMediumId { get; set; }
 	/// <summary>Total number of student lines in this charge request.</summary>
 	public int StudentCount { get; set; }
+	/// <summary>Approved students fully settled with a positive collected amount.</summary>
+	public int PaidStudentCount { get; set; }
+	/// <summary>Approved students with a positive remaining collectible amount.</summary>
+	public int OutstandingStudentCount { get; set; }
+	/// <summary>Approved students with an effective waiver; may also be paid or outstanding.</summary>
+	public int WaivedStudentCount { get; set; }
 	/// <summary>Number of lines that are no longer pending (approved + rejected).</summary>
 	public int ProcessedCount { get; set; }
 	public Guid RequestorId { get; set; }

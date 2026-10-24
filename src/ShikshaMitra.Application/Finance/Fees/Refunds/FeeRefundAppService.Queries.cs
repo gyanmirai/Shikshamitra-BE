@@ -72,18 +72,23 @@ public partial class FeeRefundAppService
             var postings = await refundAccountingRepository.GetListAsync(x => x.RefundRequestId == id);
             var net = postings.Sum(x => x.IsCorrection ? -x.Amount : x.Amount);
             var lineNet = request.Lines.Sum(x => x.ProcessedAmount - x.ReversedAmount);
-            var dueIds = request.Lines.Select(x => x.DueFeeId).Distinct().ToList();
+            var dueIds = request.Lines.Where(x => x.DueFeeId.HasValue).Select(x => x.DueFeeId!.Value).Distinct().ToList();
             var dues = await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id));
-            var allocationIds = request.Lines.Where(x => x.SourceAllocationId.HasValue)
+            var allocationIds = request.Lines.Where(x => x.DueFeeId.HasValue && x.SourceAllocationId.HasValue)
                 .Select(x => x.SourceAllocationId!.Value).Distinct().ToList();
             var allocations = await allocationRepository.GetListAsync(x => allocationIds.Contains(x.Id));
+            var chargeSources = await paidChargeRefundService.GetSourcesAsync(request.StudentId, request.AcademicYearId,
+                request.FinanceFeeAccountId, request.OriginalReceiptId, request.Id);
+            var chargeEvidenceValid = request.Lines.Where(x => x.ChargeId.HasValue).All(line =>
+                chargeSources.Any(source => source.ChargeId == line.ChargeId && source.AllocationId == line.SourceAllocationId &&
+                    source.ReceiptId == line.SourceReceiptId && source.Paid >= line.ProcessedAmount - line.ReversedAmount));
             dto.RefundSubledgerNetAmount = net;
             dto.IsRefundSubledgerBalanced = net == request.ProcessedAmount - request.ReversedAmount &&
-                net == lineNet && postings.Count(x => !x.IsCorrection) <= 1 &&
+                net == lineNet && chargeEvidenceValid && postings.Count(x => !x.IsCorrection) <= 1 &&
                 postings.Count(x => x.IsCorrection) <= 1 &&
                 (request.Status != FeeRefundStatus.Processed || postings.Count(x => !x.IsCorrection) == 1) &&
                 dues.Count == dueIds.Count && allocations.Count == allocationIds.Count &&
-                request.Lines.All(line => line.SourceAllocationId.HasValue &&
+                request.Lines.Where(line => line.DueFeeId.HasValue).All(line => line.SourceAllocationId.HasValue &&
                     allocations.Any(allocation => allocation.Id == line.SourceAllocationId.Value &&
                         allocation.DueFeeId == line.DueFeeId &&
                         Convert.ToDecimal(allocation.Amount) >= line.ProcessedAmount - line.ReversedAmount) &&
@@ -124,7 +129,7 @@ public partial class FeeRefundAppService
         {
             var hasPaidDues = dues.Count > 0;
             dues = dues.Where(x => policy.ApplicableFeeHeadIds.Contains(x.FeeHeadId)).ToList();
-            if (hasPaidDues && dues.Count == 0)
+            if (hasPaidDues && dues.Count == 0 && !policy.IncludePaidCharges)
                 throw new BusinessException(FeeRefundErrorCodes.FeeHeadNotEligible);
         }
         var dueIds = dues.Select(x => x.Id).ToList();
@@ -135,7 +140,7 @@ public partial class FeeRefundAppService
         var collectionIds = collections.Select(x => x.Id).ToList();
         var receipts = await feePaymentReceiptRepository.GetListAsync(x => collectionIds.Contains(x.FeeCollectionTransactionId) &&
             (!originalReceiptId.HasValue || x.Id == originalReceiptId.Value) &&
-            x.ReceiptScope == FeeReceiptScope.Fee && (x.ReceiptKind == FeeReceiptKind.FinalFee ||
+            (x.ReceiptScope == FeeReceiptScope.Fee || x.ReceiptScope == FeeReceiptScope.Combined) && (x.ReceiptKind == FeeReceiptKind.FinalFee ||
             (x.ReceiptKind == FeeReceiptKind.ProvisionalFee && x.VerificationStatus == FeeReceiptVerificationStatus.Verified)));
         var receiptByCollection = receipts.GroupBy(x => x.FeeCollectionTransactionId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.ReceiptKind == FeeReceiptKind.FinalFee).ThenByDescending(x => x.CreationTime).First());
@@ -143,7 +148,8 @@ public partial class FeeRefundAppService
         var allocations = await allocationRepository.GetListAsync(x => eligibleCollectionIds.Contains(x.FeeRecordMetadataId) && dueIds.Contains(x.DueFeeId));
         var allocationIds = allocations.Select(x => x.Id).ToList();
         var committed = await feeRefundRepository.GetCommittedAllocationAmountsAsync(allocationIds);
-        var dueRemaining = dues.ToDictionary(x => x.Id, x => x.RefundableBalance);
+        var reserved = await feeRefundRepository.GetActiveReservedAmountsAsync(dueIds);
+        var dueRemaining = dues.ToDictionary(x => x.Id, x => Math.Max(0m, x.RefundableBalance - reserved.GetValueOrDefault(x.Id)));
         var heads = (await feeHeadRepository.GetListAsync(x => dues.Select(d => d.FeeHeadId).Contains(x.Id))).ToDictionary(x => x.Id, x => x.Name);
         var dueMap = dues.ToDictionary(x => x.Id);
         var rows = new List<RefundEligibilityMonthDto>();
@@ -163,14 +169,31 @@ public partial class FeeRefundAppService
                 Refunded = committed.GetValueOrDefault(allocation.Id), Refundable = available
             });
         }
-        var grouped = rows.GroupBy(x => dueMap[x.DueFeeId].FeeHeadId).Select(g => new RefundEligibilityFeeHeadDto
+        var grouped = rows.GroupBy(x => dueMap[x.DueFeeId!.Value].FeeHeadId).Select(g => new RefundEligibilityFeeHeadDto
         {
             FeeHeadId = g.Key, FeeHeadName = heads.GetValueOrDefault(g.Key, "Fee head"),
             TotalPaid = g.Sum(x => x.Paid), TotalRefunded = g.Sum(x => x.Refunded),
             TotalRefundable = g.Sum(x => x.Refundable), Months = g.ToList()
         }).ToList();
-        var totalPaid = allocations.Sum(x => Convert.ToDecimal(x.Amount));
-        var totalCommitted = allocationIds.Sum(x => committed.GetValueOrDefault(x));
+        var chargeSources = policy.IncludePaidCharges
+            ? await paidChargeRefundService.GetSourcesAsync(payer.StudentId, academicYearId, payer.FinanceFeeAccountId, originalReceiptId)
+            : [];
+        var chargeRows = chargeSources.Where(x => x.Available > 0).Select(x => new RefundEligibilityMonthDto
+        {
+            ChargeId = x.ChargeId, ChargeName = x.ChargeName, SourceAllocationId = x.AllocationId,
+            SourceReceiptId = x.ReceiptId, ReceiptNumber = x.ReceiptNumber,
+            Month = (MonthEnum)x.ReceiptDate.Month, Year = x.ReceiptDate.Year,
+            Total = x.Total, Paid = x.Paid, Refunded = x.Committed, Refundable = x.Available
+        }).ToList();
+        if (chargeRows.Count > 0)
+            grouped.Add(new RefundEligibilityFeeHeadDto
+            {
+                FeeHeadName = "Paid charges", TotalPaid = chargeRows.Sum(x => x.Paid),
+                TotalRefunded = chargeRows.Sum(x => x.Refunded), TotalRefundable = chargeRows.Sum(x => x.Refundable), Months = chargeRows
+            });
+        rows.AddRange(chargeRows);
+        var totalPaid = allocations.Sum(x => Convert.ToDecimal(x.Amount)) + chargeSources.Sum(x => x.Paid);
+        var totalCommitted = allocationIds.Sum(x => committed.GetValueOrDefault(x)) + chargeSources.Sum(x => x.Committed);
         var studentYearCommitted = await GetPayerYearCommittedAsync(payer, academicYearId);
         var refundableFromAllocations = grouped.Sum(x => x.TotalRefundable);
         // Eligibility is a read of the current balance, not a request for a manual amount.
@@ -190,9 +213,10 @@ public partial class FeeRefundAppService
             TotalRefunded = totalCommitted, TotalRefundable = totalRefundable, FeeHeads = grouped,
             Receipts = rows.GroupBy(x => x.SourceReceiptId).Select(g =>
             {
-                var receipt = receipts.Single(x => x.Id == g.Key);
-                return new RefundEligibleReceiptDto { ReceiptId = receipt.Id, ReceiptNumber = receipt.ReceiptNumber,
-                    ReceiptDate = receipt.ReceiptDate, PaidAmount = g.Sum(x => x.Paid), RefundableAmount = g.Sum(x => x.Refundable) };
+                var receipt = receipts.SingleOrDefault(x => x.Id == g.Key);
+                var chargeReceipt = chargeSources.FirstOrDefault(x => x.ReceiptId == g.Key);
+                return new RefundEligibleReceiptDto { ReceiptId = g.Key, ReceiptNumber = receipt?.ReceiptNumber ?? chargeReceipt!.ReceiptNumber,
+                    ReceiptDate = receipt?.ReceiptDate ?? chargeReceipt!.ReceiptDate, PaidAmount = g.Sum(x => x.Paid), RefundableAmount = g.Sum(x => x.Refundable) };
             }).OrderByDescending(x => x.ReceiptDate).ToList()
         };
     }

@@ -32,7 +32,13 @@ public class StudentSummaryDto
 /// <summary>Aggregated financial overview for the academic year.</summary>
 public class FeeOverviewDto
 {
+    public decimal NetFee { get; set; }
+    public decimal GrossPaidAmount { get; set; }
+    public decimal RefundedAmount { get; set; }
+    public decimal OverpaymentAmount { get; set; }
+    public decimal AdjustmentCreditAmount { get; set; }
     public double TotalFee { get; set; }
+    /// <summary>Retained cash applied to principal, excluding processed refunds and excess payment.</summary>
     public double PaidFee { get; set; }
     public double PendingFee { get; set; }
     public double? ConcessionAmount { get; set; }
@@ -53,9 +59,16 @@ public class FeeOverviewDto
 /// <summary>Per-fee-head payment breakdown.</summary>
 public class FeeHeadSummaryDto
 {
+    public decimal NetFee { get; set; }
+    public decimal ConcessionAmount { get; set; }
+    public decimal GrossPaidAmount { get; set; }
+    public decimal RefundedAmount { get; set; }
+    public decimal OverpaymentAmount { get; set; }
+    public decimal AdjustmentCreditAmount { get; set; }
     public Guid FeeHeadId { get; set; }
     public string FeeHeadName { get; set; } = string.Empty;
     public double Amount { get; set; }
+    /// <summary>Retained cash applied to this fee head's principal, excluding refunds and excess.</summary>
     public double PaidAmount { get; set; }
     public double? PendingAmount { get; set; }
     public string Description { get; set; } = string.Empty;
@@ -84,6 +97,7 @@ public class FeeChargeDetailDto
 /// <summary>Single payment transaction in the payment history.</summary>
 public class FeePaymentHistoryDto
 {
+    public List<FeePaymentHistoryReceiptDto> Receipts { get; set; } = [];
     public Guid PaymentId { get; set; }
     public string ReceiptNumber { get; set; } = string.Empty;
     public DateOnly Date { get; set; }
@@ -91,6 +105,15 @@ public class FeePaymentHistoryDto
     public List<PaymentMethodEnum> PaymentMethods { get; set; } = [];
     public string? ReceiptUrl { get; set; }
     public FeeCollectionStatus Status { get; set; }
+}
+
+/// <summary>Saved receipt document linked to a collection, distinct from its transaction ID.</summary>
+public class FeePaymentHistoryReceiptDto
+{
+    public Guid ReceiptId { get; set; }
+    public string ReceiptNumber { get; set; } = string.Empty;
+    public string Scope { get; set; } = string.Empty;
+    public bool HasPdf { get; set; }
 }
 
 /// <summary>Applied concession with amount for the student.</summary>

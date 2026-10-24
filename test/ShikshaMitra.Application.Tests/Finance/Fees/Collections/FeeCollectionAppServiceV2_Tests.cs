@@ -134,7 +134,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     // ── Scenario: UPI + BankReceiptConfirmed=true → FinalFee receipt (FIN-*) ─
 
     [Fact]
-    public async Task UPI_BankConfirmed_True_Should_Generate_FinalFee_Receipt()
+    public async Task UPI_BankConfirmed_True_Should_Still_Generate_Provisional_Receipt()
     {
         using (_currentTenant.Change(TestTenantId))
         {
@@ -148,8 +148,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             var output = await _service.CollectFeeAsync(input);
 
             output.FeeReceiptNumber.ShouldNotBeNull();
-            output.FeeReceiptNumber!.StartsWith("FIN-").ShouldBeTrue(
-                $"UPI with bank confirmed=true must be FinalFee; got: {output.FeeReceiptNumber}");
+            output.FeeReceiptNumber!.StartsWith("KFE-").ShouldBeTrue(
+                $"UPI with cashier confirmation must remain provisional; got: {output.FeeReceiptNumber}");
+            output.Status.ShouldBe(FeeCollectionStatus.InReconciliation);
         }
     }
 
@@ -254,7 +255,7 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
     // ── Scenario: DebitCard + confirmed=true → FinalFee ──────────────────────
 
     [Fact]
-    public async Task DebitCard_BankConfirmed_True_Should_Generate_FinalFee_Receipt()
+    public async Task DebitCard_BankConfirmed_True_Should_Still_Generate_Provisional_Receipt()
     {
         using (_currentTenant.Change(TestTenantId))
         {
@@ -268,8 +269,9 @@ public class FeeCollectionAppServiceV2_Tests : ShikshaMitraApplicationTestBase<S
             var output = await _service.CollectFeeAsync(input);
 
             output.FeeReceiptNumber.ShouldNotBeNull();
-            output.FeeReceiptNumber!.StartsWith("FIN-").ShouldBeTrue(
-                $"DebitCard confirmed must be FinalFee; got: {output.FeeReceiptNumber}");
+            output.FeeReceiptNumber!.StartsWith("KFE-").ShouldBeTrue(
+                $"DebitCard with cashier confirmation must remain provisional; got: {output.FeeReceiptNumber}");
+            output.Status.ShouldBe(FeeCollectionStatus.InReconciliation);
         }
     }
 

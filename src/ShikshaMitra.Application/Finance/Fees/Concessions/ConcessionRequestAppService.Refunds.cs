@@ -83,7 +83,7 @@ public partial class ConcessionRequestAppService
 		var receipts = (await paymentReceiptRepository.GetListAsync(x =>
 			transactionIds.Contains(x.FeeCollectionTransactionId) &&
 			x.StudentId == request.StudentId && x.AcademicYearId == request.AcademicYearId &&
-			x.ReceiptScope == FeeReceiptScope.Fee))
+			(x.ReceiptScope == FeeReceiptScope.Fee || x.ReceiptScope == FeeReceiptScope.Combined)))
 			.Where(x => x.ReceiptKind == FeeReceiptKind.FinalFee ||
 				(x.ReceiptKind == FeeReceiptKind.ProvisionalFee &&
 				 x.VerificationStatus == FeeReceiptVerificationStatus.Verified))

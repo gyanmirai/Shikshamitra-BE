@@ -51,6 +51,8 @@ public sealed class CollectionPolicySnapshot
 	public bool AllowOnlineCollection { get; set; }
 	public CollectionAllocationBasis AllocationBasis { get; set; } = CollectionAllocationBasis.Legacy;
 
+	public CollectionReceiptGrouping ReceiptGrouping { get; set; } = CollectionReceiptGrouping.Separate;
+
 	public string Serialize() => JsonSerializer.Serialize(this, JsonOptions);
 
 	public static CollectionPolicySnapshot Deserialize(string json) =>
@@ -63,5 +65,5 @@ public sealed class CollectionPolicySnapshot
 		FlatAmount, Percentage, PercentageBase, AmountPerDay, AmountPerWeek, AmountPerMonth,
 		CompoundFrequency, EscalationRules, FeeHeadOverrides, RoundingMethod, ConsiderAsIncome,
 		LateFeeIncomeHeadId, MaximumLateFeeAmount, MaximumChargingDays, EnableWaiver,
-		EnableChargeWaiver, RequiresApproval, ApprovalRoleIds, AllowOnlineCollection, LateFeeIncomeCategoryId, AllocationBasis);
+		EnableChargeWaiver, RequiresApproval, ApprovalRoleIds, AllowOnlineCollection, LateFeeIncomeCategoryId, AllocationBasis, ReceiptGrouping);
 }

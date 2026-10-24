@@ -163,6 +163,7 @@
         "Finance:FeeRefund:010025": "The original payment is not settled and cannot be refunded yet.",
         "ShikshaMitra:FeeCollection:IdempotencyConflict": "This retry key was already used for a different fee collection request.",
         "ShikshaMitra:FeeCollection:AllocationChanged": "The collection policy, order, or balances changed. Refresh the dues and review the payment allocation again.",
+        "Finance:CollectionPolicy:InvalidReceiptGrouping": "Choose single combined or separate fee and charge receipts.",
         "Finance:CollectionPolicy:InvalidAllocationBasis": "Choose By installment or By fee head for automatic payment allocation.",
         "Finance:LateFeeWaiver:010006": "Enter a reason for rejecting the waiver request.",
         "Finance:LateFeeWaiver:010007": "The user who submitted this waiver request cannot approve or reject it.",
@@ -249,6 +250,17 @@
         "Finance:Assignment:ConfigurationInvalid": "Review the published payment terms and policy versions for every included fee head.",
         "Finance:Assignment:CommitFailed": "The assignment could not be completed. Retry to check its final status.",
         "Finance:Concession:010029": "No fee structure is assigned to this student for the selected academic year. Assign a fee structure before creating a concession request.",
+        "Finance:Concession:010020": "The selected installments or balances changed after the preview. Review the refreshed amounts and submit again.",
+        "Finance:Concession:010032": "Concession amount must be a whole rupee. Enter 1 or more for the affected installment.",
+        "Finance:Concession:010004": "Upload every required document for the selected concession type before submitting.",
+        "Finance:Concession:010011": "This installment has no remaining eligible balance under the selected concession policy. Refresh the student's fee details and choose an eligible installment.",
+        "Finance:Concession:010013": "The concession exceeds the installment's outstanding balance. Refresh the fee details and reduce the amount.",
+        "Finance:Concession:020007": "A selected installment is no longer eligible for this concession. Refresh the student's fee details and select an eligible installment.",
+        "Finance:Concession:020009": "A selected installment does not belong to the selected fee head. Refresh the student's fee details and select it again.",
+        "Finance:Concession:010002": "The concession amount exceeds the installment's eligible amount. Reduce the amount or refresh the student's fee details.",
+        "Finance:Concession:010010": "A pending concession request already exists for this student and concession type. Review that request before submitting another.",
+        "Finance:ConcessionPolicy:010015": "The concession exceeds the selected policy's limit. Reduce the installment amounts or select an eligible policy.",
+        "Finance:ConcessionPolicy:010016": "These concession values are not permitted by the selected policy. Check its calculation method and enter positive values for eligible installments.",
         "Finance:Concession:030001": "You cannot approve or reject your own concession request.",
         "Finance:Concession:030002": "A current concurrency stamp is required to submit this concession request.",
         "Finance:Concession:030003": "This concession request was changed elsewhere. Refresh the request and try again.",
@@ -820,6 +832,8 @@
         "Students:RollNumbers:ApproverRequired": "An eligible independent school approver must review this roll-number batch.",
         "ShikshaMitra:SchoolDocuments:InvalidDetails": "Enter a document name of up to 200 characters, select a category, and keep notes within 2000 characters.",
         "ShikshaMitra:SchoolDocuments:InvalidFiles": "Attach between 1 and 5 files belonging to this document.",
-        "ShikshaMitra:SchoolDocuments:InvalidFile": "Select a non-empty PDF, JPG or PNG file up to 5 MB. The file contents must match its extension and type."
+        "ShikshaMitra:SchoolDocuments:InvalidFile": "Select a non-empty PDF, JPG or PNG file up to 5 MB. The file contents must match its extension and type.",
+        "Finance:Charge:010018": "This charge has a collection and cannot be cancelled. Reverse the collection through reconciliation or use the refund workflow.",
+        "Finance:Charge:010019": "Only approved, uncollected charge lines can be cancelled. Refresh the charge and review its student list."
     }
 }

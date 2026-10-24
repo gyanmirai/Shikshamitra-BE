@@ -56,6 +56,11 @@ dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Fee
 
 ### Concessions and Collections list queries
 
+`ConcessionRequestCoreApi_Tests.Should_Include_Board_And_Medium_In_Student_Concession_Details`
+checks that the student concession detail response supplies the saved academic board and medium
+names. Run the HTTP API suite with that test name as its `FullyQualifiedName` filter after
+changing the student detail projection.
+
 `test/ShikshaMitra.EntityFrameworkCore.Tests/Finance/FinanceTableQuery_Tests.cs` covers combined column alternatives, numeric ranges, explicit status zero, local-day date bounds, operational concession tab groups, query allowlists, stable sorting and PostgreSQL translation.
 Build Application, HttpApi and EntityFrameworkCore after changing the contracts or query wiring.
 Verify scoped concession counts/draft visibility and Collections canonical balance filters before pagination against a rebuilt local API.
@@ -129,3 +134,8 @@ See [the workspace contract](./references/income-expense-workspaces.md) for sepa
 Accounts workspace coverage: `AccountsRegisterPeriod_Tests`, `IncomeExpenseRouting_Tests` and `AccountsRegisterApi_Tests`.
 The register API suite uses isolated SQLite state fixtures for approval/paid/returned read projections; it does not execute payout commands.
 Actual payout command/replay scenarios remain in `FeeRefundApi_Tests` and require SHIKSHAMITRA_REFUND_TEST_DB pointing to a migrated disposable refund_workflow_test_ PostgreSQL database.
+
+
+## Collection receipt grouping
+
+`CollectionReceiptGrouping_Tests` covers version snapshots, legacy defaults, exact decimal component totals, one-component collections and provisional status parity. `ReceiptGroupingReconciliationApi_Tests` covers combined/separate queue row counts, total preservation, either-row whole-instrument approval/rejection, final receipt links, principal restoration, charge rollback and duplicate decisions. The collect-input validator suite accepts fee-plus-charge collections with one instrument and retains mixed-provisional-instrument containment.

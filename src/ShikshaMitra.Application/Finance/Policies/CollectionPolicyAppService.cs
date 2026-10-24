@@ -199,6 +199,7 @@ public class CollectionPolicyAppService(
 			throw new BusinessException(CollectionPolicyErrorCodes.ArchivedPolicyNotEditable);
 		}
 		if (input.AllocationBasis is null) model = model with { AllocationBasis = entity.AllocationBasis };
+		if (input.ReceiptGrouping is null) model = model with { ReceiptGrouping = entity.ReceiptGrouping };
 		if (entity.Status == CollectionPolicyStatus.Active && model.Status == CollectionPolicyStatus.Draft &&
 			(await GetUsageCountsAsync(new[] { id })).Contains(id))
 		{
@@ -269,6 +270,7 @@ public class CollectionPolicyAppService(
 			MaximumLateFeeAmount = sourceDto.MaximumLateFeeAmount,
 			MaximumChargingDays = sourceDto.MaximumChargingDays,
 			AllowOnlineCollection = sourceDto.AllowOnlineCollection,
+			ReceiptGrouping = sourceDto.ReceiptGrouping,
 			AllocationBasis = sourceDto.AllocationBasis
 		};
 

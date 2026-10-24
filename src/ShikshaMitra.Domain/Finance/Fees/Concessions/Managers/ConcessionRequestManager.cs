@@ -150,7 +150,9 @@ public class ConcessionRequestManager(
 			assignment,
 			policy,
 			mappings,
-			GetSelectedEligibleDueFees(dueFees, policy, mappings.Select(x => x.FeeHeadId)).ToList());
+			dueFeeConcessions is { Count: > 0 }
+				? dueFees.Where(x => dueFeeConcessions.Any(input => input.DueFeeId == x.Id)).ToList()
+				: GetSelectedEligibleDueFees(dueFees, policy, mappings.Select(x => x.FeeHeadId)).ToList());
 	}
 
 	public async Task ReplaceFeeHeadMappingsAsync(
@@ -473,6 +475,10 @@ public class ConcessionRequestManager(
 			if (!eligible.TryGetValue(input.DueFeeId, out var dueFee) || dueFee.FeeHeadId != input.FeeHeadId)
 				throw new BusinessException(FinanceConcessionErrorCodes.DueFeeNotFound)
 					.WithData("DueFeeId", input.DueFeeId);
+			if (basis == DiscountBasis.FlatAmount && decimal.Truncate(input.Amount) != input.Amount)
+				throw new BusinessException(FinanceConcessionErrorCodes.WholeRupeeAmountRequired)
+					.WithData("DueFeeId", input.DueFeeId)
+					.WithData("FeeHeadId", input.FeeHeadId);
 			if (basis == DiscountBasis.FlatAmount && input.Amount > GetConcessionCapacity(dueFee, policy))
 				throw new BusinessException(FinanceConcessionErrorCodes.DiscountExceedsBase)
 					.WithData("DueFeeId", input.DueFeeId);
@@ -539,6 +545,11 @@ public class ConcessionRequestManager(
 		if (requestEnteredFixed && inputs.Any(x =>
 			x.BasedOn != DiscountBasis.FlatAmount || (!allowIncomplete && x.Amount <= 0m)))
 			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
+		var fractionalHead = requestEnteredFixed
+			? inputs.FirstOrDefault(x => decimal.Truncate(x.Amount) != x.Amount) : null;
+		if (fractionalHead is not null)
+			throw new BusinessException(FinanceConcessionErrorCodes.WholeRupeeAmountRequired)
+				.WithData("FeeHeadId", fractionalHead.FeeHeadId);
 		var candidates = new List<(FeeHeadConcessionInput Input, decimal Base, decimal Amount)>();
 		foreach (var input in inputs)
 		{

@@ -67,7 +67,7 @@ public partial class FeeReceiptAppService(
             return new PagedResultDto<FeeReceiptListItemDto>(0, []);
 
         var studentIds = receipts.Where(r => r.StudentId.HasValue).Select(r => r.StudentId!.Value).Distinct().ToList();
-        var students   = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));
+        var students   = await AsyncExecuter.ToListAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => Enumerable.Contains(studentIds, s.Id)), cancellationToken);
         var studentMap = students.ToDictionary(s => s.Id);
         var accountIds = receipts.Where(r => r.FinanceFeeAccountId.HasValue).Select(r => r.FinanceFeeAccountId!.Value).Distinct().ToList();
         var accountRepository = LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FinanceFeeAccount, Guid>>();
@@ -80,6 +80,12 @@ public partial class FeeReceiptAppService(
             ? await receiptRepository.GetListAsync(r => linkedFinalIds.Contains(r.Id))
             : [];
         var linkedFinalMap = linkedFinals.ToDictionary(r => r.Id, r => r.ReceiptNumber);
+        var transactionIds = receipts.Select(r => r.FeeCollectionTransactionId).Distinct().ToList();
+        var payments = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<PaymentMethodRecord, Guid>>()
+            .GetListAsync(p => transactionIds.Contains(p.FeeRecordMetadataId), cancellationToken: cancellationToken);
+        var methodLabels = payments.GroupBy(p => p.FeeRecordMetadataId).ToDictionary(g => g.Key,
+            g => string.Join(", ", g.Select(p => p.PaymentMethod).Distinct().OrderBy(m => m)
+                .Select(FeeReceiptPresentation.GetPaymentMethodLabel)));
 
         var items = receipts.Select(r =>
         {
@@ -90,7 +96,9 @@ public partial class FeeReceiptAppService(
                 Id                         = r.Id,
                 ReceiptNumber              = r.ReceiptNumber,
                 ReceiptKind                = r.ReceiptKind,
-                ReceiptKindLabel           = GetKindLabel(r.ReceiptKind),
+                ReceiptKindLabel           = FeeReceiptPresentation.GetLabel(r.ReceiptKind, r.ReceiptScope),
+                PaymentMethodLabel         = methodLabels.GetValueOrDefault(r.FeeCollectionTransactionId, "Not recorded"),
+                PdfFileName                = FeeReceiptPresentation.GetPdfFileName(r.ReceiptKind, r.ReceiptScope, r.ReceiptNumber, r.ReceiptDate),
                 ReceiptScope               = r.ReceiptScope,
                 VerificationStatus         = r.VerificationStatus,
                 LinkedFinalReceiptNumber   = r.LinkedFinalReceiptId.HasValue
@@ -121,13 +129,13 @@ public partial class FeeReceiptAppService(
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
 
-        var student      = receipt.StudentId.HasValue ? await studentRepository.FindAsync(receipt.StudentId.Value, cancellationToken: cancellationToken) : null;
+        var student      = receipt.StudentId.HasValue ? await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == receipt.StudentId.Value), cancellationToken) : null;
         var account = receipt.FinanceFeeAccountId.HasValue
             ? await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<FinanceFeeAccount, Guid>>().GetAsync(receipt.FinanceFeeAccountId.Value, cancellationToken: cancellationToken)
             : null;
-        var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, cancellationToken: cancellationToken);
-        var board        = await boardRepository.FindAsync(receipt.BoardId, cancellationToken: cancellationToken);
-        var medium       = await mediumRepository.FindAsync(receipt.EducationMediumId, cancellationToken: cancellationToken);
+        var academicYear = await academicYearRepository.FindAsync(receipt.AcademicYearId, includeDetails: false, cancellationToken: cancellationToken);
+        var board        = await AsyncExecuter.FirstOrDefaultAsync((await boardRepository.GetQueryableAsync()).Where(b => b.Id == receipt.BoardId).Select(b => new { b.Type }), cancellationToken);
+        var medium       = await AsyncExecuter.FirstOrDefaultAsync((await mediumRepository.GetQueryableAsync()).Where(m => m.Id == receipt.EducationMediumId).Select(m => new { m.Name }), cancellationToken);
 
         var siblings = await receiptRepository.GetListAsync(
             r => r.FeeCollectionTransactionId == receipt.FeeCollectionTransactionId && r.Id != receipt.Id,
@@ -148,19 +156,19 @@ public partial class FeeReceiptAppService(
         var divisionId = account?.DivisionId ?? student?.DivisionId;
         if (standardId.HasValue)
         {
-            var std = await standardRepository.FindAsync(standardId.Value, cancellationToken: cancellationToken);
+            var std = await AsyncExecuter.FirstOrDefaultAsync((await standardRepository.GetQueryableAsync()).Where(s => s.Id == standardId.Value).Select(s => new { s.Name }), cancellationToken);
             className = std?.Name;
         }
         if (divisionId.HasValue)
         {
-            var div = await divisionRepository.FindAsync(divisionId.Value, cancellationToken: cancellationToken);
+            var div = await AsyncExecuter.FirstOrDefaultAsync((await divisionRepository.GetQueryableAsync()).Where(d => d.Id == divisionId.Value).Select(d => new { d.Name }), cancellationToken);
             division = div?.Name;
         }
 
         var allocationDetails = new List<FeeReceiptAllocationLineDto>();
         var paidFeeHeads = new List<FeeReceiptPaidHeadDto>();
 
-        if (receipt.ReceiptScope == FeeReceiptScope.Fee)
+        if (receipt.ReceiptScope is FeeReceiptScope.Fee or FeeReceiptScope.Combined)
         {
             var allocations = await dueFeeAllocationRepository.GetListAsync(
                 a => a.FeeRecordMetadataId == receipt.FeeCollectionTransactionId,
@@ -205,12 +213,16 @@ public partial class FeeReceiptAppService(
                 }).ToList();
         }
 
+        var receiptPayments = await LazyServiceProvider.LazyGetRequiredService<IReadOnlyRepository<PaymentMethodRecord, Guid>>()
+            .GetListAsync(p => p.FeeRecordMetadataId == receipt.FeeCollectionTransactionId, cancellationToken: cancellationToken);
         return new FeeReceiptDetailDto
         {
             Id                             = receipt.Id,
             ReceiptNumber                  = receipt.ReceiptNumber,
             ReceiptKind                    = receipt.ReceiptKind,
-            ReceiptKindLabel               = GetKindLabel(receipt.ReceiptKind),
+            ReceiptKindLabel               = FeeReceiptPresentation.GetLabel(receipt.ReceiptKind, receipt.ReceiptScope),
+            PaymentMethodLabel             = receiptPayments.Count == 0 ? "Not recorded" : string.Join(", ", receiptPayments.Select(p => p.PaymentMethod).Distinct().OrderBy(m => m).Select(FeeReceiptPresentation.GetPaymentMethodLabel)),
+            PdfFileName                    = FeeReceiptPresentation.GetPdfFileName(receipt.ReceiptKind, receipt.ReceiptScope, receipt.ReceiptNumber, receipt.ReceiptDate),
             ReceiptScope                   = receipt.ReceiptScope,
             VerificationStatus             = receipt.VerificationStatus,
             LinkedProvisionalReceiptId     = receipt.LinkedProvisionalReceiptId,
@@ -218,6 +230,7 @@ public partial class FeeReceiptAppService(
             LinkedFinalReceiptId           = receipt.LinkedFinalReceiptId,
             LinkedFinalReceiptNumber       = linkedFinal?.ReceiptNumber,
             TotalPaidAmount                = receipt.TotalPaidAmount,
+			FeePaidAmount = receipt.FeePaidAmount, ChargePaidAmount = receipt.ChargePaidAmount,
             StudentId                      = receipt.StudentId,
             FinanceFeeAccountId            = receipt.FinanceFeeAccountId,
             StudentName                    = student != null

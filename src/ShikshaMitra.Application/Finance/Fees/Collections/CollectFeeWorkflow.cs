@@ -125,8 +125,8 @@ public partial class CollectFeeWorkflow(
 				throw new BusinessException(AdmissionFeeCollectionErrorCodes.SelectionChanged);
 		}
 		var student = account == null ? (await ValidateAndLoadStudentForCollectionAsync(input)).Student :
-			account.StudentId.HasValue ? await studentRepository.FindAsync(account.StudentId.Value) : null;
-		var academicYear = await academicYearRepository.GetAsync(input.AcademicYearId);
+			account.StudentId.HasValue ? await AsyncExecuter.FirstOrDefaultAsync((await LazyServiceProvider.LazyGetRequiredService<IStudentRepository>().GetQueryableWithoutAutoIncludesAsync()).Where(s => s.Id == account.StudentId.Value)) : null;
+		var academicYear = await academicYearRepository.GetAsync(input.AcademicYearId, includeDetails: false);
 		var effectivePolicy = await ValidatePaymentChannelPolicyAsync(input);
 		var allocationContext = await ValidateAutomaticAllocationAsync(input, account, effectivePolicy);
 		var dueFeeContext = await LoadAndValidateDueFeesContextAsync(input);
@@ -164,7 +164,8 @@ public partial class CollectFeeWorkflow(
 				ChargePayments: input.ChargePayments.Select(cp => (cp.ChargeId, cp.Amount)).ToList(),
 				DueFeeAllocations: allAllocations, Payments: paymentRows,
 				LateFeeAllocations: input.LateFeePayments.Select(lfp => (lfp.DueFeeId, lfp.Amount)).ToList(),
-				IdempotencyKey: idempotencyKey, CommandFingerprint: commandFingerprint, FinanceFeeAccountId: account?.Id));
+				IdempotencyKey: idempotencyKey, CommandFingerprint: commandFingerprint, FinanceFeeAccountId: account?.Id,
+				ReceiptGrouping: effectivePolicy?.ReceiptGrouping ?? CollectionReceiptGrouping.Separate));
 		if (account != null)
 		{
 			account.RecordPaymentEvidence();
@@ -180,6 +181,12 @@ public partial class CollectFeeWorkflow(
 				input.AutomaticAllocation.ChargeIds
 			});
 
+		transaction.Metadata.SetProperty("ReceiptPolicy", new
+		{
+			ReceiptGrouping = (effectivePolicy?.ReceiptGrouping ?? CollectionReceiptGrouping.Separate).ToString(),
+			PolicyId = effectivePolicy?.Id, PolicyVersion = effectivePolicy?.Version
+		});
+
 		await SaveIncomeRoutingAsync(input, transaction, routing, status != FeeCollectionStatus.InReconciliation);
         // Flush the unique retry key before creating external blob side effects. A racing
 		// duplicate fails here and the unit of work rolls back all collection mutations.
@@ -191,15 +198,18 @@ public partial class CollectFeeWorkflow(
 			await WriteAuditTrailAsync(input, received, status, dueFeeContext, dueFeeBeforeSnapshots,
 				paymentMethods, transaction, student, account);
 
-		var feeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Fee);
+		var feeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope is FeeReceiptScope.Fee or FeeReceiptScope.Combined);
 		var chargeReceipt = transaction.Receipts.FirstOrDefault(r => r.ReceiptScope == FeeReceiptScope.Charge);
 		var collectedAt = clock.Now;
 
 		var output = new CollectFeeOutput
 		{
 			Id = transaction.Metadata.Id, ReceiptNumber = transaction.ReceiptNumber,
+			ReceiptGrouping = (effectivePolicy?.ReceiptGrouping ?? CollectionReceiptGrouping.Separate).ToString(),
 			FeeReceiptNumber = feeReceipt?.ReceiptNumber, FeeReceiptId = feeReceipt?.Id,
 			ChargeReceiptId = chargeReceipt?.Id, ChargeReceiptNumber = chargeReceipt?.ReceiptNumber,
+            FeeReceiptPdfFileName = feeReceipt == null ? null : FeeReceiptPresentation.GetPdfFileName(feeReceipt.ReceiptKind, feeReceipt.ReceiptScope, feeReceipt.ReceiptNumber, feeReceipt.ReceiptDate),
+            ChargeReceiptPdfFileName = chargeReceipt == null ? null : FeeReceiptPresentation.GetPdfFileName(chargeReceipt.ReceiptKind, chargeReceipt.ReceiptScope, chargeReceipt.ReceiptNumber, chargeReceipt.ReceiptDate),
 			StudentId = input.StudentId, FinanceFeeAccountId = account?.Id, AcademicYearId = input.AcademicYearId,
 			TotalAmount = received, ReceivedAmount = received, Status = status,
 			CollectedBy = CurrentUser.Id ?? Guid.Empty, CollectedAt = collectedAt, CreatedAt = collectedAt,

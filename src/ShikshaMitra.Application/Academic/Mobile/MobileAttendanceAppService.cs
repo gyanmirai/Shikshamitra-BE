@@ -96,8 +96,10 @@ public class MobileAttendanceAppService(MobileAcademicContextAppService context,
 	public async Task<MobilePage<MobileLeaveDto>> GetLeavesAsync(MobileListInput input)
 	{
 		var p = await context.ResolveAsync(input);
-		var start = new DateTimeOffset(p.Year.StartDate.Date, TimeSpan.FromHours(5.5));
-		var end = new DateTimeOffset(p.Year.EndDate.Date.AddDays(1), TimeSpan.FromHours(5.5));
+		// Academic-year boundaries are school calendar dates, even when PostgreSQL
+		// materializes them as UTC timestamps. Apply the school offset to an unspecified date.
+		var start = new DateTimeOffset(DateTime.SpecifyKind(p.Year.StartDate.Date, DateTimeKind.Unspecified), TimeSpan.FromHours(5.5));
+		var end = new DateTimeOffset(DateTime.SpecifyKind(p.Year.EndDate.Date.AddDays(1), DateTimeKind.Unspecified), TimeSpan.FromHours(5.5));
 		var list = (await leaves.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == p.Student.Id)).Where(x => x.LeaveDate >= start && x.LeaveDate < end);
 		var types = (await leaveTypes.GetListAsync(x => x.TenantId == CurrentTenant.Id)).ToDictionary(x => x.Id, x => x.LeaveTypeName);
 		var rows = list.OrderByDescending(x => x.CreationTime).Select(x => Map(x, types.GetValueOrDefault(x.StudentLeaveTypeId, ""), p));

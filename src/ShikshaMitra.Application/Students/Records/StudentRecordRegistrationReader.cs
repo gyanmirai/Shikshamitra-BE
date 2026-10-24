@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -82,9 +82,15 @@ public class StudentRecordRegistrationReader(
 			x.ApplicationId == row.ApplicationId && (!row.FinalizedAt.HasValue || x.SubmittedAt <= row.FinalizedAt)).OrderByDescending(x => x.AttemptNumber)
 			.ThenByDescending(x => x.SubmittedAt).Select(x => x.Id).FirstOrDefault()).Where(id => id != Guid.Empty).ToHashSet());
 	}
-	public async Task<List<StudentRecordRegistrationSourceDto>> GetAsync(Guid studentId)
+	public Task<List<StudentRecordRegistrationSourceDto>> GetAsync(Guid studentId) => ReadAsync(studentId, true);
+	internal async Task<List<StudentRecordRegistrationSourceDto>> GetForPortalAsync(Guid studentId)
 	{
-		var rows = await AsyncExecuter.ToListAsync(await GetSourceRowsAsync(studentId, true));
+		await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Portal.StudentPortalAccessService>().ResolveStudentAsync(studentId);
+		return await ReadAsync(studentId, false);
+	}
+	private async Task<List<StudentRecordRegistrationSourceDto>> ReadAsync(Guid studentId, bool scoped)
+	{
+		var rows = await AsyncExecuter.ToListAsync(await GetSourceRowsAsync(studentId, scoped));
 		if (rows.Count == 0) return [];
 		// A narrower user's visible returning admission must never become a new baseline.
 		var baseline = await AsyncExecuter.FirstOrDefaultAsync((await GetSourceRowsAsync(studentId, false)).Select(x => (Guid?)x.ApplicationId));

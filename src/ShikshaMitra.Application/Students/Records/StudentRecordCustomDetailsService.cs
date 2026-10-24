@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -26,6 +26,13 @@ public class StudentRecordCustomDetailsService(StudentRecordRegistrationReader r
 	public async Task<List<StudentRecordRegistrationSourceDto>> ReadAsync(Guid studentId)
 	{
 		var sources = await reader.GetAsync(studentId);
+		await PopulateCurrentValuesAsync(studentId, sources);
+		if (sources.Any(x => StudentRecordCurrentRuleReader.ReferencedFields(x).Count > 0) && !await IsMaskedAsync(studentId))
+			await currentRules.RefreshAsync(studentId, sources);
+		return sources;
+	}
+	internal async Task PopulateCurrentValuesAsync(Guid studentId, List<StudentRecordRegistrationSourceDto> sources)
+	{
 		var stored = await profiles.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId);
 		var current = BaselineValues(sources);
 		var readOnlyIdentities = sources.SelectMany(source => CustomFields(source).Where(field => field.ReadOnly || !CanEditField(field))
@@ -47,10 +54,8 @@ public class StudentRecordCustomDetailsService(StudentRecordRegistrationReader r
 						SubmittedValue = submitted, CanReview = !readOnlyIdentities.Contains(key) });
 			}
 		}
-		if (sources.Any(x => StudentRecordCurrentRuleReader.ReferencedFields(x).Count > 0) && !await IsMaskedAsync(studentId))
-			await currentRules.RefreshAsync(studentId, sources);
-		return sources;
 	}
+
 	public async Task<bool> IsMaskedAsync(Guid studentId, string? recordedSourceSet = null)
 	{
 		var record = await access.EnsureReadableAsync(studentId);

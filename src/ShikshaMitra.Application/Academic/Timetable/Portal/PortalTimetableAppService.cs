@@ -30,11 +30,7 @@ namespace ShikshaMitra.Academic.Timetable.Portal;
 [RemoteService(false)]
 public class PortalTimetableAppService(
     StudentPortalAccessService portalAccess,
-    IDataFilter dataFilter,
-    IRepository<StudentEnrollment, Guid> enrollments,
-    IRepository<AcademicYear, Guid> years,
-    IRepository<Standard, Guid> standards,
-    IRepository<Division, Guid> divisions,
+    PortalStudentContextReader contextReader,
     ITimetableRepository timetables,
     ILectureSlotConfigRepository configs,
     IRepository<Subject, Guid> subjects,
@@ -51,74 +47,9 @@ public class PortalTimetableAppService(
     public async Task<PortalTimetableContextDto> GetContextAsync(Guid? studentId = null, Guid? academicYearId = null)
     {
         var student = await ResolveStudentAsync(studentId);
-        var context = new PortalTimetableContextDto
-        {
-            Student = new() { Id = student.Id, Gender = student.AdditionalDetail?.Gender, Name = string.Join(" ", new[]
-                { student.FirstName, student.MiddleName, student.LastName }.Where(x => !string.IsNullOrWhiteSpace(x))) }
-        };
-        var today = SchoolNow().Date;
-        var currentYears = await years.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
-            x.StartDate <= today && x.EndDate >= today && (!academicYearId.HasValue || x.Id == academicYearId));
-        if (currentYears.Count == 0)
-        {
-            if (academicYearId.HasValue) throw Invalid("Historical timetables are not versioned; only the current academic year is supported.");
-            context.Availability = "noAcademicYear";
-            return context;
-        }
-        var yearIds = currentYears.Select(x => x.Id).ToArray();
-        List<StudentEnrollment> enrollmentHistory;
-        using (dataFilter.Disable<ISoftDelete>())
-            enrollmentHistory = await enrollments.GetListAsync(x => x.TenantId == CurrentTenant.Id &&
-                x.StudentId == student.Id && Enumerable.Contains(yearIds, x.AcademicYearId));
-        var matches = enrollmentHistory.Where(x => x.IsActive && !x.IsDeleted).ToList();
-        // Older admitted students keep their placement on Student, as used by Academic 360.
-        // Explicit inactive/deleted enrollment records take precedence over that snapshot.
-        var useLegacyPlacement = matches.Count == 0 && enrollmentHistory.Count == 0 &&
-            student.Status is StudentLifeCycleStatusEnum.Admission or StudentLifeCycleStatusEnum.Enrolled &&
-            student.AcademicYearId.HasValue && yearIds.Contains(student.AcademicYearId.Value);
-        if (matches.Count == 0 && !useLegacyPlacement) return context;
-        if (matches.Count > 1) throw Invalid("The student's current enrollment is ambiguous.");
-        var enrollment = matches.SingleOrDefault();
-        var placementYearId = enrollment?.AcademicYearId ?? student.AcademicYearId!.Value;
-        var standardId = enrollment?.StandardId ?? (useLegacyPlacement ? student.StandardId : null);
-        var divisionId = enrollment?.DivisionId ?? (useLegacyPlacement ? student.DivisionId : null);
-        var year = currentYears.Single(x => x.Id == placementYearId);
-        context.CurrentAcademicYear = new() { Id = year.Id, Name = year.Name,
-            StartDate = DateOnly.FromDateTime(year.StartDate), EndDate = DateOnly.FromDateTime(year.EndDate) };
-        context.AvailableAcademicYears.Add(context.CurrentAcademicYear);
-        context.Student.RollNumber = enrollment?.RollNumber ?? (useLegacyPlacement ? student.RollNo : null);
-        if (!standardId.HasValue || !divisionId.HasValue)
-        {
-            context.Availability = "noClassAssignment";
-            return context;
-        }
-        var standard = await AsyncExecuter.FirstOrDefaultAsync((await standards.GetQueryableAsync())
-            .Where(x => x.TenantId == CurrentTenant.Id && x.Id == standardId)
-            .Select(x => new { x.Id, x.Name, MediumId = x.EducationMediumStage.EducationMediumId,
-                MediumName = x.EducationMediumStage.EducationMedium.Name,
-                StageId = x.EducationMediumStageId, StageName = x.EducationMediumStage.Name,
-                YearId = x.EducationMediumStage.EducationMedium.EducationBoard.AcademicYearId }));
-        var division = await divisions.FindAsync(x => x.TenantId == CurrentTenant.Id &&
-            x.Id == divisionId && x.StandardId == standardId);
-        if (standard == null || division == null || standard.YearId != year.Id || standard.MediumId != student.AcademicMediumId)
-            throw Invalid("The student's class assignment does not match the enrolled academic year.");
-        context.Student.StandardId = standard.Id;
-        context.Student.StandardName = standard.Name;
-        context.Student.MediumId = standard.MediumId;
-        context.Student.MediumName = standard.MediumName;
-        context.Student.StageId = standard.StageId;
-        context.Student.StageName = standard.StageName;
-        context.Student.DivisionId = division.Id;
-        context.Student.DivisionName = division.Name;
-        var config = await configs.FindByStandardIdAsync(standard.Id);
-        var timetable = await timetables.FindByStandardAndDivisionAsync(standard.Id, division.Id);
-        var dayIndexes = config?.SlotGroups.SelectMany(x => x.ActiveDays).Distinct().Order().ToList() ?? [];
-        if (dayIndexes.Count == 0 && timetable?.Status == TimetableStatus.Published)
-            dayIndexes = timetable.Slots.Select(x => (int)x.Day).Distinct().Order().ToList();
-        context.WorkingDays = dayIndexes.Where(x => Enum.IsDefined((TimetableDayOfWeek)x))
-            .Select(x => ((TimetableDayOfWeek)x).ToString().ToLowerInvariant()).ToList();
-        context.Availability = timetable?.Status == TimetableStatus.Published ? "available" : "noPublishedTimetable";
-        return context;
+        var result = (await contextReader.ReadAsync([student.Id], academicYearId))[student.Id];
+        if (result.Error != null) throw result.Error;
+        return result.Context!;
     }
 
     public async Task<PortalTimetableScheduleDto> GetScheduleAsync(PortalTimetableScheduleInput input)

@@ -50,18 +50,6 @@ public partial class FeeStructureAppService
 			if (head == null) continue;
 			var coverage = new FeeStructureCoverageDto { FeeHeadId = head.Id, Name = head.Name };
 			result.Coverage.Add(coverage);
-			if (line.CollectAtAdmission)
-			{
-				line.PaymentTermId = null;
-				line.PaymentTermVersionId = null;
-				line.ScheduleMode = ScheduleMode.Inherited;
-				line.InstallmentOverrides.Clear();
-				coverage.Accounting = "Excluded from income; no payment recorded";
-				coverage.Collection = "Admission only; excluded from Fee Collection";
-				coverage.Concession = "Not applicable; no regular due";
-				coverage.Refund = "Not applicable; no payment recorded";
-				continue;
-			}
 			try
 			{
 				var map = await accountingManager.GetValidMappingAsync(year.Id, head.IncomeCategoryId);
@@ -136,6 +124,7 @@ public partial class FeeStructureAppService
 			var effective = selected ?? (id == previousId ? previousVersion : null);
 			var versions = availableVersions.Where(x => x.PolicyType == family && x.PolicyId == id).OrderByDescending(x => x.VersionNumber).ToList();
 			var version = effective.HasValue ? versions.SingleOrDefault(x => x.Id == effective) : versions.FirstOrDefault();
+			var familyLabel = $"{char.ToUpperInvariant(family[0])}{family[1..]} Policy";
 			if (version != null && (id != previousId || version.Id != previousVersion))
 			{
 				var currentNumber = family switch
@@ -146,9 +135,15 @@ public partial class FeeStructureAppService
 					_ => 0
 				};
 				if (version.VersionNumber != currentNumber)
-					result.Errors.Add($"{family}: the selected snapshot is not the active master's current version. Refresh this policy and explicitly select its current version.");
+					result.Errors.Add($"{familyLabel} \"{version.PolicyName}\": selected snapshot v{version.VersionNumber}; current active version v{currentNumber}. Refresh and select the current policy version before copying or attaching it.");
 			}
-			if (version == null) result.Errors.Add($"{family}: selected policy/version is unavailable or belongs to another academic year. Select an active version.");
+			if (version == null)
+			{
+				var historical = (await financePolicyVersionRepository.GetListAsync(x => x.PolicyType == family && x.PolicyId == id && x.AcademicYearId == year.Id))
+					.SingleOrDefault(x => x.Id == effective);
+				var label = historical == null ? familyLabel : $"{familyLabel} \"{historical.PolicyName}\" (selected snapshot v{historical.VersionNumber})";
+				result.Errors.Add($"{label}: selected policy/version is unavailable, inactive or belongs to another academic year. Refresh and select an active current version.");
+			}
 			return version;
 		}
 		var collection = await Resolve("collection", candidate.CollectionPolicyId, candidate.CollectionPolicyVersionId, current?.CollectionPolicyId, current?.CollectionPolicyVersionId, true);
@@ -185,7 +180,6 @@ public partial class FeeStructureAppService
 				(publishing ? result.Errors : result.Warnings).Add("The Refund Policy has no matching Fee Heads. Choose a compatible policy or remove the attachment before publishing.");
 			foreach (var row in result.Coverage)
 			{
-				if (candidate.FeeHeads.Any(x => x.FeeHeadId == row.FeeHeadId && x.CollectAtAdmission)) continue;
 				row.Collection = cp is { EnableLateFee: true } && cp.LateFeeApplyOnFeeHeads.Contains(row.FeeHeadId) ? "Late fee applies" : "No late fee";
 				row.Concession = cn != null && candidate.ConcessionApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Eligible on approval" : "Not eligible";
 				row.Refund = rp == null ? "No refund policy attached" : rp.FeeHeadScope != RefundFeeHeadScope.SelectedFeeHeads || rp.ApplicableFeeHeadIds.Contains(row.FeeHeadId) ? "Policy eligible" : "Excluded";

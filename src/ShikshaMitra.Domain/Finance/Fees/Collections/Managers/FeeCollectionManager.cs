@@ -359,6 +359,16 @@ public class FeeCollectionManager(
 		string Get(string key) =>
 			details.TryGetValue(key, out var v) ? v?.ToString() ?? string.Empty : string.Empty;
 
+		DateOnly? GetDate(string key)
+		{
+			var value = Get(key);
+			if (DateOnly.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+				System.Globalization.DateTimeStyles.None, out var date)) return date;
+			return DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+				System.Globalization.DateTimeStyles.None, out var timestamp)
+				? DateOnly.FromDateTime(timestamp.DateTime) : null;
+		}
+
 		return method switch
 		{
 			PaymentMethodEnum.Cheque => new ChequeDetails(
@@ -370,10 +380,10 @@ public class FeeCollectionManager(
 
 			PaymentMethodEnum.DemandDraft => new DemandDraftDetails(
 				ddNumber: Get("ddNumber"),
-				issuingBankName: Get("issuingBankName"),
+				issuingBankName: string.IsNullOrWhiteSpace(Get("issuingBankName")) ? Get("bankName") : Get("issuingBankName"),
 				branchName: Get("branchName"),
-				ddDate: DateOnly.TryParse(Get("ddDate"), out var dd)
-					? dd : DateOnly.FromDateTime(DateTime.UtcNow)),
+				ddDate: GetDate(string.IsNullOrWhiteSpace(Get("issueDate")) ? "ddDate" : "issueDate"),
+				paymentDate: GetDate("paymentDate")),
 
 			PaymentMethodEnum.BankTransfer => new BankTransferDetails(
 				transactionReferenceNumber: Get("transactionReferenceNumber"),

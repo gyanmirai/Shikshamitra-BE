@@ -498,6 +498,8 @@ public partial class ConcessionRequestAppService
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
 		EnsurePendingDecisionStatus(request);
+		if (request.Status == ConcessionRequestStatus.Draft)
+			await concessionRequestManager.ValidateDraftApprovalAsync(request);
 		EnsureRequiredDocumentsPresent(request);
 
 		var evaluation = await concessionRequestManager.EvaluateSubmittedAsync(request);
@@ -563,12 +565,12 @@ public partial class ConcessionRequestAppService
 			if (replayId.Value != id) throw new BusinessException(FinanceConcessionErrorCodes.IdempotencyKeyConflict);
 			var replay = await concessionRequestRepository.GetWithDetailsAsync(id);
 			await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId);
-			EnsureIndependentApprover(replay);
+			await EnsureDecisionActorAsync(replay);
 			return await BuildApprovalResponseAsync(replay);
 		}
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
-		EnsureIndependentApprover(request);
+		var allowCreatorDecision = await EnsureDecisionActorAsync(request);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
 		await PromoteDraftToPendingAsync(request);
 		var evaluation = await concessionRequestManager.EvaluateSubmittedAsync(request);
@@ -586,7 +588,7 @@ public partial class ConcessionRequestAppService
 		var approvedTotal = allocations.Sum(x => x.ConcessionAmount);
 
 		var approvedAt = Clock.Now;
-		request.Approve(currentUser.Id!.Value, input.Message, allocations, approvedAt);
+		request.Approve(currentUser.Id!.Value, input.Message, allocations, approvedAt, allowCreatorDecision);
 
 		var affectedDueFees = allocations.Select(a => dueFees.First(df => df.Id == a.DueFeeId))
 			.DistinctBy(x => x.Id).ToList();
@@ -613,7 +615,8 @@ public partial class ConcessionRequestAppService
 			$"Concession request approved for {approvedTotal:0.00}.",
 			input.Message,
 			new { Requested = request.GetTotalRequestedConcession(), Approved = approvedTotal,
-				Allocations = allocations.Count, RefundRequestIds = refundRequests.Select(x => x.Id).ToList() });
+				Allocations = allocations.Count, AdministratorOwnDecision = allowCreatorDecision,
+				RefundRequestIds = refundRequests.Select(x => x.Id).ToList() });
 		try
 		{
 			await uow.CompleteAsync();
@@ -671,19 +674,19 @@ public partial class ConcessionRequestAppService
 			if (replayId.Value != id) throw new BusinessException(FinanceConcessionErrorCodes.IdempotencyKeyConflict);
 			var replay = await concessionRequestRepository.GetWithDetailsAsync(id);
 			await financeScopeAccessService.EnsureStudentAccessibleAsync(replay.StudentId);
-			EnsureIndependentApprover(replay);
+			await EnsureDecisionActorAsync(replay);
 			return BuildRejectionResponse(replay);
 		}
 		var request = await concessionRequestRepository.GetWithDetailsAsync(id);
 		await financeScopeAccessService.EnsureStudentAccessibleAsync(request.StudentId);
-		EnsureIndependentApprover(request);
+		var allowCreatorDecision = await EnsureDecisionActorAsync(request);
 		EnsureConcurrencyStamp(request, input.RequestConcurrencyStamp);
 
-		await PromoteDraftToPendingAsync(request);
-		request.Reject(currentUser.Id!.Value, input.Message, Clock.Now);
+		request.Reject(currentUser.Id!.Value, input.Message, Clock.Now, allowCreatorDecision);
 		await concessionRequestRepository.UpdateAsync(request, autoSave: false);
 		await RecordCommandReceiptAsync("reject", input.IdempotencyKey, input, request.Id);
-		await WriteRequestAuditAsync(request, "reject", "Concession request rejected.", input.Message);
+		await WriteRequestAuditAsync(request, "reject", allowCreatorDecision
+			? "Concession request rejected by its administrator creator." : "Concession request rejected.", input.Message);
 		await uow.CompleteAsync();
 
 		return BuildRejectionResponse(request);

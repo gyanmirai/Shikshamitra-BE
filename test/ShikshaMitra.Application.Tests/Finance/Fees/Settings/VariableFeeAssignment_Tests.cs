@@ -47,7 +47,7 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         original.FeeHeads.Single().IsVariable.ShouldBeTrue();
     }
 
-    private async Task<(AssignStudentFeeStructureDto Input, Guid HeadId)> VariableAssignmentAsync(bool variable, bool optional, bool collectAtAdmission = false, bool addAdmissionHead = false, decimal fixedAmount = 1000.01m)
+    private async Task<(AssignStudentFeeStructureDto Input, Guid HeadId)> VariableAssignmentAsync(bool variable, bool optional, bool addAdditionalHead = false, decimal fixedAmount = 1000.01m)
     {
         var (metadataId, standardId, candidate) = await ReadyCandidateAsync();
         candidate.ConcessionPolicyId = null;
@@ -55,15 +55,14 @@ public partial class FeeStructureAppService_CollectionPolicy_Tests
         var head = candidate.FeeHeads.Single();
         head.IsVariable = variable;
         head.IsOptional = optional;
-        head.CollectAtAdmission = collectAtAdmission;
         head.Amount = variable ? null : fixedAmount;
-        if (addAdmissionHead)
+        if (addAdditionalHead)
         {
             var original = await _feeHeadRepo.GetAsync(head.FeeHeadId);
-            var admissionHead = new FeeHead(Guid.NewGuid(), TestTenantId, original.AcademicYearId,
-                original.FeeCategoryId, "Admission reference", original.Module, false, null, original.IncomeCategoryId);
-            await _feeHeadRepo.InsertAsync(admissionHead, autoSave: true);
-            candidate.FeeHeads.Add(new() { FeeHeadId = admissionHead.Id, Amount = 750m, CollectAtAdmission = true });
+            var additionalHead = new FeeHead(Guid.NewGuid(), TestTenantId, original.AcademicYearId,
+                original.FeeCategoryId, "Additional fee", original.Module, false, null, original.IncomeCategoryId);
+            await _feeHeadRepo.InsertAsync(additionalHead, autoSave: true);
+            candidate.FeeHeads.Add(new() { FeeHeadId = additionalHead.Id, Amount = 750m, PaymentTermId = head.PaymentTermId, PaymentTermVersionId = head.PaymentTermVersionId });
         }
         var draft = await _feeStructures.CreateAsync(metadataId, new() { StandardId = standardId, StandardFeeStructures = candidate });
         draft.FeeHeads.Single(x => x.FeeHeadId == head.FeeHeadId).IsVariable.ShouldBe(variable);

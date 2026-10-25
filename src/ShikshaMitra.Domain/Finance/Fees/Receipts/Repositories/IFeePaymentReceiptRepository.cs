@@ -139,6 +139,7 @@ public sealed class ReconciliationRow
 
     // Payment instrument
     public PaymentMethodEnum PaymentMethod { get; init; }
+    public DateTimeOffset? PaymentDate { get; init; }
     public string? PaymentDetailsJson { get; init; }
 
     // Student

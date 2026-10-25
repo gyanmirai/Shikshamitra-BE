@@ -193,6 +193,27 @@ public class ConcessionRequestManager(
 		PrepareSubmissionEvidence(request, type, dueFees, policy, dueFeeConcessions);
 	}
 
+	public async Task ValidateDraftApprovalAsync(ConcessionRequest request)
+	{
+		request.EnsureDraft();
+		var dueInputs = ReadDueFeeEvidence(request).Select(x => new DueFeeConcessionInput(
+			x.DueFeeId, x.FeeHeadId, x.Amount)).ToList();
+		var inputs = request.ConcessionFeeHeadMappings.Select(x => new FeeHeadConcessionInput(
+			x.FeeHeadId, x.UserSpecifiedConcessionAmountType, x.UserSpecifiedConcessionAmountValue)).ToList();
+		if (dueInputs.Count > 0) inputs.Clear();
+		// Revalidate current configuration without replacing the saved amounts or evidence reviewed by the checker.
+		await PreviewAsync(request.TenantId, request.AcademicYearId, request.StudentId,
+			request.ConcessionPolicyId, request.ConcessionPolicyVersionId, request.ConcessionTypeId,
+			inputs, request.StudentFeeStructureId, dueInputs);
+		var type = await LoadConcessionTypeAsync(request.ConcessionTypeId, request.AcademicYearId);
+		var uploadedIds = request.ConcessionRequestDocuments
+			.Where(x => x.Status == 1 && !string.IsNullOrWhiteSpace(x.Url)).Select(x => x.DocumentId).ToHashSet();
+		var missing = type.ConcessionTypeDocuments.Where(x => x.IsRequired && !uploadedIds.Contains(x.Id)).ToList();
+		if (missing.Count > 0)
+			throw new BusinessException(FinanceConcessionErrorCodes.MissingRequiredDocuments)
+				.WithData("DocumentIds", missing.Select(x => x.Id).ToArray());
+	}
+
 	public Task RefreshDraftAsync(ConcessionRequest request)
 	{
 		request.EnsureDraft();

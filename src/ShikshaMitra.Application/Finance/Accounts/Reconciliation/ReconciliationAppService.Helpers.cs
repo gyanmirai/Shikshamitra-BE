@@ -99,6 +99,7 @@ public partial class ReconciliationAppService
             VerificationStatus         = row.VerificationStatus,
             FinalReceiptNumber         = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? row.ReceiptNumber : row.LinkedFinalReceiptNumber,
             ReceiptDate                = row.ReceiptDate,
+            PaymentDate                = row.PaymentDate,
             Remarks                    = row.Remarks,
             FinalReceiptId             = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? row.ReceiptId : row.LinkedFinalReceiptId,
         };

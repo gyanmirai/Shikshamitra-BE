@@ -13,7 +13,6 @@ public class FeeStructureDetailConfiguration : IEntityTypeConfiguration<FeeStruc
 		builder.ConfigureByConvention();
 		builder.Property(x => x.Amount).HasPrecision(18, 2);
         builder.Property(x => x.IsVariable).HasDefaultValue(false);
-        builder.Property(x => x.CollectAtAdmission).HasDefaultValue(false);
 
 		// add navigation for fee head
 		builder.HasOne(x => x.FeeHead)

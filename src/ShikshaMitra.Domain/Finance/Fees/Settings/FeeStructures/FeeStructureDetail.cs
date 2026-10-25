@@ -20,8 +20,6 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     public bool IsVariable { get; private set; }
     public bool IsOneTime { get; private set; }
     public bool IsOptional { get; private set; }
-    /// <summary>Admission-only reference; never generates a Finance due or income entry.</summary>
-    public bool CollectAtAdmission { get; private set; }
 
 	public MonthEnum? PayableMonth { get; private set; }
 	public int? PayableYear { get; private set; }
@@ -68,12 +66,6 @@ public class FeeStructureDetail : FullAuditedEntity<Guid>, IMultiTenant
     }
 
     // ── Payment Term attachment mutations ─────────────────────────────────────
-
-    public void SetAdmissionCollection(bool collectAtAdmission)
-    {
-        CollectAtAdmission = collectAtAdmission;
-        if (collectAtAdmission) DetachPaymentTerm();
-    }
 
     /// <summary>Attaches a Payment Term version to this fee head in inherited mode.</summary>
     public void AttachPaymentTerm(Guid paymentTermId, Guid paymentTermVersionId)

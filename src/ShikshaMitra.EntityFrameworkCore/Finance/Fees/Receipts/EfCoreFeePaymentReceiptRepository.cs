@@ -142,6 +142,7 @@ public class EfCoreFeePaymentReceiptRepository(
                     LinkedFinalReceiptNumber   = x.LinkedFinalReceiptNumber,
                     FeeCollectionTransactionId = x.FeeCollectionTransactionId,
                     PaymentMethod              = pmr?.PaymentMethod ?? PaymentMethodEnum.Cash,
+                    PaymentDate                = pmr?.PaymentDate,
                     PaymentDetailsJson         = pmr?.PaymentDetails is null
                         ? null
                         : JsonSerializer.Serialize(pmr.PaymentDetails, PaymentDetailsJsonOptions),

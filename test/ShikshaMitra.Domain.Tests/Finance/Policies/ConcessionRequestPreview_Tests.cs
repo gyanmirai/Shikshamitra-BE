@@ -25,6 +25,30 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 public class ConcessionRequestPreview_Tests
 {
 	[Fact]
+	public async Task Direct_approval_validation_preserves_saved_amount_when_percentage_capacity_increases()
+	{
+		var (manager, student, type, assignment, policy, version, dues) = BuildManager(percentage: true);
+		var due = dues[1];
+		due.ApplyPayment(10000m);
+		var request = await manager.CreatePendingAsync(null, policy.AcademicYearId, student.Id, policy.PolicyId,
+			version.Id, type.Id, null, [], assignment.Id, allowIncomplete: true, enforcePendingUniqueness: false,
+			dueFeeConcessions: [new(due.Id, due.FeeHeadId, 10m)]);
+		var savedEvidence = request.RequestInputSnapshotJson;
+		var savedDueIds = request.SelectedDueFeeIdsJson;
+		Assert.Equal(2000m, request.GetTotalRequestedConcession());
+
+		due.ReversePayment(10000m);
+		await manager.ValidateDraftApprovalAsync(request);
+
+		Assert.Equal(savedEvidence, request.RequestInputSnapshotJson);
+		Assert.Equal(savedDueIds, request.SelectedDueFeeIdsJson);
+		Assert.Equal(2000m, request.GetTotalRequestedConcession());
+		var evaluation = await manager.EvaluateSubmittedAsync(request);
+		Assert.Equal(3000m, evaluation.Mappings.Sum(x => x.FeeHeadConcessionAmount));
+		var allocations = manager.BuildSubmittedDueFeeAllocations(request, evaluation.DueFees.ToList(), evaluation.Policy);
+		Assert.Equal(2000m, allocations.Sum(x => x.ConcessionAmount));
+	}
+	[Fact]
 	public async Task Preview_and_submission_use_the_same_selected_installments_with_unentered_siblings()
 	{
 		var (manager, student, type, assignment, policy, version, dues) = BuildManager();
@@ -58,7 +82,7 @@ public class ConcessionRequestPreview_Tests
 	}
 
 	private static (ConcessionRequestManager Manager, Student Student, ConcessionType Type,
-		StudentFeeStructure Assignment, ConcessionPolicySnapshot Policy, FinancePolicyVersion Version, List<DueFee> Dues) BuildManager()
+		StudentFeeStructure Assignment, ConcessionPolicySnapshot Policy, FinancePolicyVersion Version, List<DueFee> Dues) BuildManager(bool percentage = false)
 	{
 		var yearId = Guid.NewGuid();
 		var student = new Student(Guid.NewGuid(), null, "Synthetic", null, "Student", yearId,
@@ -66,8 +90,10 @@ public class ConcessionRequestPreview_Tests
 		var type = new ConcessionType(Guid.NewGuid(), null, yearId, "Test concession");
 		var assignment = new StudentFeeStructure(Guid.NewGuid(), null, student.Id, Guid.NewGuid(), yearId);
 		var policy = new ConcessionPolicySnapshot(Guid.NewGuid(), yearId, "8th test policy", "TEST", ConcessionPolicyStatus.Active,
-			false, ConcessionValueSource.RequestEnteredWithinLimits, ConcessionCalculationMethod.FixedAmount,
-			null, null, null, 11111m, ConcessionApplyOn.AllOutstanding, RoundingMethodType.RoundUp, 19);
+			false, ConcessionValueSource.RequestEnteredWithinLimits,
+			percentage ? ConcessionCalculationMethod.Percentage : ConcessionCalculationMethod.FixedAmount,
+			null, null, percentage ? 100m : null, percentage ? null : 11111m,
+			ConcessionApplyOn.AllOutstanding, RoundingMethodType.RoundUp, 19);
 		var version = new FinancePolicyVersion(Guid.NewGuid(), null, "concession", policy.PolicyId, yearId,
 			19, policy.PolicyName, "Active", JsonSerializer.Serialize(policy), "created");
 		var head = new FeeHead(Guid.NewGuid(), null, yearId, Guid.NewGuid(), "Tuition", null, true, null, Guid.NewGuid());

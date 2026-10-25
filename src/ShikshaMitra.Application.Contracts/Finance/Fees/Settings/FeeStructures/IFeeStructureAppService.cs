@@ -8,6 +8,7 @@ namespace ShikshaMitra.Finance.Fees.Settings;
 
 public interface IFeeStructureAppService : IApplicationService
 {
+	Task<List<FeeStructureCopyPolicyDto>> GetCopyPoliciesAsync(Guid id, Guid feeStructureMetadataId, Guid standardId);
 	Task<FeeStructureContextDto> GetContextAsync(Guid feeStructureMetadataId, Guid standardId);
 	Task<FeeStructureCreateResponse> PatchAsync(Guid id, FeeStructurePatchRequest input);
 	Task<FeeStructureSettingsDto> GetSettingsAsync(Guid feeStructureMetadataId, Guid standardId);

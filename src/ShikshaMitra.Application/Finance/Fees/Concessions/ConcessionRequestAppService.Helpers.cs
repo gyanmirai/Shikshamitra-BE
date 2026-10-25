@@ -140,7 +140,7 @@ public partial class ConcessionRequestAppService
 		if (request.Status == ConcessionRequestStatus.Pending) return;
 
 		request.EnsureDraft();
-		await concessionRequestManager.RefreshDraftAsync(request);
+		await concessionRequestManager.ValidateDraftApprovalAsync(request);
 		if (await concessionRequestRepository.HasPendingForStudentAndTypeAsync(
 			request.StudentId, request.ConcessionTypeId, request.AcademicYearId, request.Id))
 			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.DuplicatePendingRequest);
@@ -167,12 +167,15 @@ public partial class ConcessionRequestAppService
 			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ScopeMismatch);
 	}
 
-	private void EnsureIndependentApprover(ConcessionRequest request)
+	private async Task<bool> EnsureDecisionActorAsync(ConcessionRequest request)
 	{
-		if (!currentUser.Id.HasValue || !request.CreatorId.HasValue ||
-			currentUser.Id == request.CreatorId)
+		if (!currentUser.Id.HasValue || !request.CreatorId.HasValue)
 			throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor)
-				.WithData("Message", "A request must be decided by a different user from its creator.");
+				.WithData("Message", "Decision identity is unavailable.");
+		if (currentUser.Id != request.CreatorId) return false;
+		if (await userScopeService.IsAdminUserAsync(currentUser.Id.Value)) return true;
+		throw new Volo.Abp.BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor)
+			.WithData("Message", "Only a configured administrator may decide their own concession request.");
 	}
 
 	private static void EnsureRequiredDocumentsPresent(ConcessionRequest request)
@@ -355,6 +358,7 @@ public partial class ConcessionRequestAppService
 
     private async Task<ConcessionRequestDetailDto> MapDetailAsync(ConcessionRequest request)
     {
+		var isAdministrator = currentUser.Id.HasValue && await userScopeService.IsAdminUserAsync(currentUser.Id.Value);
 		var canViewDocuments = await AuthorizationService.IsGrantedAsync(
 			ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.ViewDocument);
 		var canViewRefunds = await AuthorizationService.IsGrantedAsync(
@@ -375,9 +379,14 @@ public partial class ConcessionRequestAppService
 		List<ConcessionTypeRequirementSnapshot> requirementSnapshot;
 		try
 		{
-			requirementSnapshot = JsonSerializer.Deserialize<List<ConcessionTypeRequirementSnapshot>>(
-				request.TypeRequirementsSnapshotJson ?? string.Empty, CommandJsonOptions)
-				?? [];
+			requirementSnapshot = string.IsNullOrWhiteSpace(request.TypeRequirementsSnapshotJson) &&
+				!request.SubmittedOn.HasValue && request.Status is
+					(ConcessionRequestStatus.Draft or ConcessionRequestStatus.Rejected or ConcessionRequestStatus.Cancelled)
+				? type.ConcessionTypeDocuments.Select(d => new ConcessionTypeRequirementSnapshot(
+					d.Id, d.DocumentName, d.IsRequired, d.MaxFileSizeBytes,
+					d.AcceptedFormats.Select(format => format.DocumentType).ToList())).ToList()
+				: JsonSerializer.Deserialize<List<ConcessionTypeRequirementSnapshot>>(
+					request.TypeRequirementsSnapshotJson ?? string.Empty, CommandJsonOptions) ?? [];
 		}
 		catch (JsonException)
 		{
@@ -470,19 +479,21 @@ public partial class ConcessionRequestAppService
 			MissingDocumentIds = requiredDocs.Where(x => x.IsRequired && !x.IsUploaded)
 				.Select(x => x.DocumentId).ToList(),
             CreatedAt = request.CreationTime,
-			AvailableActions = BuildAvailableActions(request),
+			AvailableActions = BuildAvailableActions(request, isAdministrator),
 			Timeline = BuildTimeline(request),
         };
     }
 
-	private List<string> BuildAvailableActions(ConcessionRequest request)
+	private List<string> BuildAvailableActions(ConcessionRequest request, bool isAdministrator)
 	{
 		var isOwner = request.CreatorId.HasValue && request.CreatorId == currentUser.Id;
-		var canDecide = request.CreatorId.HasValue && currentUser.Id.HasValue && !isOwner;
+		var canDecide = request.CreatorId.HasValue && currentUser.Id.HasValue && (!isOwner || isAdministrator);
 		return request.Status switch
 		{
 			ConcessionRequestStatus.Draft =>
-				["view", "edit", "delete", "upload-document"],
+				isOwner && canDecide ? ["view", "edit", "delete", "upload-document", "approve", "reject"] :
+				canDecide ? ["view", "approve", "reject"] :
+				isOwner ? ["view", "edit", "delete", "upload-document"] : ["view"],
 			ConcessionRequestStatus.Pending =>
 				canDecide ? ["view", "approve", "reject"] : ["view"],
 			ConcessionRequestStatus.Rejected or ConcessionRequestStatus.Cancelled when isOwner =>
@@ -500,7 +511,7 @@ public partial class ConcessionRequestAppService
 			new()
 			{
 				Action = "created",
-				Status = request.SubmittedOn.HasValue ? ConcessionRequestStatus.Draft : request.Status,
+				Status = ConcessionRequestStatus.Draft,
 				ActorId = request.CreatorId,
 				OccurredAt = request.CreationTime,
 			},
@@ -675,7 +686,7 @@ public partial class ConcessionRequestAppService
 
     private StudentConcessionRequestItemDto MapStudentItem(
         ConcessionRequest request, ConcessionType? type, Dictionary<Guid, string> feeHeadMap,
-		bool canViewDocuments, IReadOnlyList<ConcessionRefundReferenceDto> refundRequests)
+		bool canViewDocuments, IReadOnlyList<ConcessionRefundReferenceDto> refundRequests, bool isAdministrator)
     {
 		List<ConcessionTypeRequirementSnapshot> requirements;
 		try
@@ -731,7 +742,7 @@ public partial class ConcessionRequestAppService
             Message = request.ApproverMessage ?? request.RejectionReason,
 			ApprovedAt = request.GetApprovedOn(),
 			ConcurrencyStamp = request.ConcurrencyStamp,
-			AvailableActions = BuildAvailableActions(request),
+			AvailableActions = BuildAvailableActions(request, isAdministrator),
 			Timeline = BuildTimeline(request),
         };
     }

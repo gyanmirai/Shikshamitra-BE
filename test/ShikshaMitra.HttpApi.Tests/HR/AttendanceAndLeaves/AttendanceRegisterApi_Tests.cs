@@ -39,6 +39,47 @@ public class AttendanceRegisterApi_Tests : ShikshaMitraApiTestBase
 	public AttendanceRegisterApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory) { }
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Multi_Division_Register_Should_Compose_Staff_Group_Search_Paging_And_Reset()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var organizations = await SeedRegisterAcademicOrganizationsAsync();
+		var marker = $"RegisterMulti{Guid.NewGuid():N}";
+		var date = DateTime.UtcNow.Date.AddDays(-1);
+		var first = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}A", dateOfJoining: date.AddDays(-10));
+		var second = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}B", dateOfJoining: date.AddDays(-10));
+		var unassigned = await EmployeeTestHelper.CreateEmployeeAsync(Client, $"{marker}C", dateOfJoining: date.AddDays(-10));
+		foreach (var id in new[] { first.Id, second.Id, unassigned.Id })
+		{
+			await EmployeeTestHelper.SetActiveStatusForTestAsync(Factory, id);
+			await ClearEmployeeOrganizationAssignmentsAsync(id);
+		}
+		await AssignEmployeeToStageAsync(first.Id, organizations.CurrentYearStageId);
+		await AssignEmployeeToStageAsync(second.Id, organizations.OtherYearStageId);
+		var baseline = $"{RegisterUrl}/grouped?startDate={date:yyyy-MM-dd}&endDate={date:yyyy-MM-dd}&search={marker}&sorting=employeeName%20asc";
+		var divisions = $"&educationMediumStageIds[0]={organizations.CurrentYearStageId}&educationMediumStageIds[1]={organizations.OtherYearStageId}";
+		async Task<GroupedAttendanceRegisterResponse> Read(string suffix)
+		{
+			var response = await Client.GetAsync(baseline + suffix);
+			response.StatusCode.ShouldBe(HttpStatusCode.OK);
+			return (await response.Content.ReadFromJsonAsync<GroupedAttendanceRegisterResponse>(JsonOptions))!;
+		}
+		var pageOne = await Read(divisions + "&employeeGroup=Teaching&maxResultCount=1");
+		pageOne.TotalCount.ShouldBe(2);
+		pageOne.Items.Single().EmployeeId.ShouldBe(first.Id);
+		var pageTwo = await Read(divisions + "&employeeGroup=Teaching&maxResultCount=1&skipCount=1");
+		pageTwo.Items.Single().EmployeeId.ShouldBe(second.Id);
+		(await Read(divisions + $"&employeeId={second.Id}&employeeGroup=Teaching")).TotalCount.ShouldBe(1);
+		(await Read(divisions + $"&employeeId={unassigned.Id}")).TotalCount.ShouldBe(0);
+		(await Read(divisions + "&department=NoSuchSyntheticDepartment")).Items.ShouldBeEmpty();
+		(await Read("")).TotalCount.ShouldBe(3);
+		var scopedUser = Guid.NewGuid();
+		await EnsureUserHasStageScopeAsync(scopedUser, organizations.CurrentYearStageId);
+		var denied = await CreateClientAs(scopedUser).GetAsync(baseline + divisions);
+		denied.StatusCode.ShouldBeOneOf(HttpStatusCode.BadRequest, HttpStatusCode.Forbidden);
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Important)]
 	public async Task Register_Should_Mark_Holiday_Attendance_As_Non_Editable()
 	{

@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -120,6 +120,17 @@ The endpoint returns explicit unavailable states when an academic year or leave 
 The HR dashboard excludes approved-leave employees without stored attendance from the missing-attendance count and attendance-rate denominator.
 Approved half-day leave removes one-half attendance unit but leaves the unrecorded remainder visible as missing attendance.
 A stored attendance row suppresses the same-day leave overlay in HR dashboard totals and trend points.
+
+### Application finalization salary contract
+
+`POST /api/employee-applications/{id}/finalize` requires `salary` using the existing `SaveEmployeeCompensationDto` contract.
+The optional `statutoryProfile` is forwarded to the canonical compensation save as its statutory profile override.
+Existing compensation Manage, statutory enrollment, employee scope, template, PF/ESIC, validation, and effective-month rules still apply.
+The saved salary must cover the employee's required activation month.
+The application ID supplies the stable initial salary idempotency key; concurrent submissions and response-loss retries return the same finalized employee.
+The response includes `activationReadiness`, including the persisted `compensationRevisionId` and remaining blocker codes.
+Employee status remains Inactive; activation remains a separate authorized status transition and login does not change employee status.
+Deploy this backend contract before the corresponding frontend onboarding change.
 
 ## Attendance and leave API families
 

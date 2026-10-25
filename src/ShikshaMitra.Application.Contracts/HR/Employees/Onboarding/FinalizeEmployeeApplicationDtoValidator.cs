@@ -10,6 +10,9 @@ public class FinalizeEmployeeApplicationDtoValidator : AbstractValidator<Finaliz
 {
 	public FinalizeEmployeeApplicationDtoValidator(IClock clock)
 	{
+		RuleFor(x => x.Salary).NotNull()
+			.SetValidator(new ShikshaMitra.HR.Payroll.Compensation.SaveEmployeeCompensationDtoValidator());
+
 		RuleFor(x => x.PersonalInfo)
 			.NotNull()
 			.SetValidator(new CreateEmployeePersonalInfoDtoValidator(clock));

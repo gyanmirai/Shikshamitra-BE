@@ -29,7 +29,7 @@ public abstract class ConcessionRequestApiTestsBase : ShikshaMitraApiTestBase
 
 	protected async Task<Guid> CreatePendingRequestWithFeeHeadAsync()
 	{
-		var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+		var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
 		var typeId = await ConcessionRequestTestHelper.CreateConcessionTypeAsync(Client);
 		var feeCategoryId = await ConcessionRequestTestHelper.CreateFeeCategoryAsync(Client);
 		var feeHeadId = await ConcessionRequestTestHelper.CreateFeeHeadAsync(Client, feeCategoryId);

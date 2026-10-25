@@ -3,7 +3,7 @@ module: finance
 domain: fee-structure
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -38,24 +38,19 @@ flowchart LR
 
 Drafts may be incomplete. New/changed attachments must be valid: wrong-year, inactive, foreign-version, duplicate-head, corrupt-snapshot, and invalid-custom-schedule errors block relationship changes. Name/amount-only PATCH operations validate the command and monetary shape without revalidating unrelated master settings; full preview/publication always revalidates everything. `SaveAsDraft=false` requests complete validation on a save; publication remains a separate explicit action.
 
-Publication requires at least one active Fee Head, a Collection policy, and an active valid accounting mapping plus a published/superseded version of an active Payment Term for each regular-collection head. Admission-only heads need neither a regular schedule nor income mapping at structure publication. Refund is optional. Proration is removed from request/response contracts, settings catalogs, context capabilities, attachment validation, coverage and publication warnings; no Refund attachment means no refund policy has been configured by this workspace.
+Publication requires at least one active Fee Head, a Collection policy, and an active valid accounting mapping plus a published/superseded version of an active Payment Term for every head. Refund is optional. Proration is removed from request/response contracts, settings catalogs, context capabilities, attachment validation, coverage and publication warnings; no Refund attachment means no refund policy has been configured by this workspace.
 
-## Admission-only fee heads
+## Fee head collection
 
-`FeeHeadAssignmentRequest.collectAtAdmission` is a structure-detail boolean owned by the authorized Fee Structure editor. Its default is `false`, including existing rows. The field is returned on every head, accepted by create and the explicit add/update PATCH operations, copied on revision, and frozen by the existing publication/used-structure protections. Saving configuration records no payment.
+Every assigned Fee Head participates in normal due generation and Fee Collection. The retired `collectAtAdmission` field is absent from request/response DTOs and domain entities, and explicit PATCH add/update operations reject it. Older create payloads cannot activate the retired behavior. Candidates include every configured head; optional heads generate dues only when selected, and included variable heads still require a student-specific amount.
 
-| Choice | Assignment and accounting behavior |
-|---|---|
-| `false` | Existing optional/fixed/variable rules, pinned payment schedule, dues and subsequent collection apply |
-| `true` | Reference-only head; excluded from assignment candidate amounts/heads, generated dues, Fee Collection, late-fee balances, receipt allocations and resulting income entries |
+Each head receives the normal schedule, accounting and policy validation. Configuration and assignment do not record payment or income; collection retains its existing receipt, allocation and posting rules.
 
-The authoritative `DueFeeManager` skips admission-only heads for both legacy and Payment Term schedules, including mandatory, optional and variable heads. Assignment preparation skips their amount/service-period inputs. Regular obligation totals are the sum of regular included heads only; an admission-only head contributes exactly zero to scheduled, outstanding, collected and income amounts. No fake paid amount, waived balance, receipt or income transaction represents the exclusion. No admission payment UI or admission collection command is added.
+`RemoveFeeStructureAdmissionCollection` drops only the retired configuration column. It does not rewrite existing assignments, dues, receipts or accounting evidence, and rollback restores the column with `false`. Historical migration files remain intact. If the former option cleared a head's payment term, select a valid payment frequency in a draft/revision before publication and new assignment; the migration does not invent a schedule. Previously assigned students whose heads never generated dues require the existing controlled reassignment/correction workflow, not an automatic historical backfill.
 
-Server validation clears term/version/overrides for an admission-only head and explains the collection/income exclusion in publication coverage. Switching back to regular collection requires a valid published payment schedule before publication. The Fee Head master and its income mapping are not changed, because the same head can have different treatment in other structures.
+Saved reviews containing the retired collection exclusion are omitted from current responses without rewriting their stored evidence. Automatic fee-assignment repair skips published structures with a missing required-head schedule, rather than generating legacy dues or assignment evidence; actual legacy structures without a publication review retain their existing repair behavior.
 
-The additive `AddFeeStructureAdmissionCollection` migration adds a non-null boolean with default `false`; it does not backfill payments or reinterpret historical dues, receipts, assignments or income. Apply it before deploying the new backend. Rollback removes the option column; retain a backup of configured choices if rollback is required. A published or used structure must be revised rather than edited retroactively. Existing action permissions, tenant/class scope, concurrency stamps, audit and request retry checks continue to govern the field.
-
-Regression proof: `AdmissionCollection_Tests.cs` covers PATCH retry, publish/revision/readback, locked-history protection, switching back without a schedule, mixed regular/admission heads, optional/variable exclusions, zero generated dues/income and assignment retry.
+Regression proof: `FeeStructureCollectionHeads_Tests.cs` checks rejection of the retired patch field, preserved historical evidence, safe repair, and all-head visibility through candidates, assignment, generated dues and the Fee Collection form, including assignment retry. `VariableFeeAssignment_Tests.cs` retains fixed/variable and optional/required coverage.
 
 Concession Policy setup has been removed from the Fee Structure UI. New structures can be published and assigned without an attachment; no default concession is selected and no discount is granted. Existing attachment/version/scope fields remain for compatibility and historical request processing; supplied legacy attachments still receive their existing validation. The request flow has not moved to request-level policy selection: a new assignment without a snapshot cannot create a concession request, and its legacy concession-context read returns `PolicyNotAttached`. Existing snapshots are preserved. No database migration or historical rewrite is required.
 

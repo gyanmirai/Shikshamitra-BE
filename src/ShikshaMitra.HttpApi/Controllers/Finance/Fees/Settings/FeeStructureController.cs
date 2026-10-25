@@ -74,6 +74,11 @@ public class FeeStructureController(
 	public Task<FeeStructureContextDto> GetContextAsync([FromQuery] Guid feeStructureMetadataId, [FromQuery] Guid standardId) =>
 		feeStructureAppService.GetContextAsync(feeStructureMetadataId, standardId);
 
+	[HttpGet("{id}/copy-policies")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.View)]
+	public Task<List<FeeStructureCopyPolicyDto>> GetCopyPoliciesAsync(Guid id, [FromQuery] Guid feeStructureMetadataId, [FromQuery] Guid standardId) =>
+		feeStructureAppService.GetCopyPoliciesAsync(id, feeStructureMetadataId, standardId);
+
 	[HttpPatch("{id}")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Finance.Fees_Settings_FeeStructure.Add)]
 	public Task<FeeStructureCreateResponse> PatchAsync(Guid id, [FromBody] FeeStructurePatchRequest input) => feeStructureAppService.PatchAsync(id, input);

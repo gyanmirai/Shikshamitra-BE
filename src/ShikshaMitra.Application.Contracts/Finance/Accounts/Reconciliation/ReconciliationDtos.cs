@@ -59,6 +59,9 @@ public class ReconciliationListItemDto
     // ── Dates ─────────────────────────────────────────────────────────────
     public DateOnly ReceiptDate { get; set; }
 
+    /// <summary>When collection was recorded. Instrument details retain any entered DD payment date.</summary>
+    public DateTimeOffset? PaymentDate { get; set; }
+
     // ── Acted-by (populated after approve / reject) ───────────────────────
     public Guid? ActedBy { get; set; }
     public string? ActedByName { get; set; }

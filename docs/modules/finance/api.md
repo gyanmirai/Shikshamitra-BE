@@ -3,12 +3,33 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Use Finance backend APIs
+
+## Fee structure copy policy preflight
+
+`GET /api/fee-structures/{id}/copy-policies?feeStructureMetadataId=...&standardId=...`
+requires Fee Structure View and checks source/target tenant and academic scope. It returns
+linked policy family/name, source snapshot ID/version, current active snapshot ID/version
+and an actionable error when unavailable. Current means the active master's version,
+not the highest historical snapshot number. It performs no writes. Legacy concession
+attachments can be inspected; existing retirement of structure-level concessions is preserved.
+Draft creation retains its existing permissions, idempotency and authoritative validation.
+Stale attachments identify policy name and selected/current versions before any insertion.
+
+## Demand Draft collection dates
+
+Collection DD details accept `issueDate` and `paymentDate` from the collection form;
+legacy `ddDate` remains an issue-date alias. Both are preserved independently as calendar
+dates in the existing instrument JSON. Missing issue dates remain null instead of defaulting
+to today. Reconciliation adds nullable `paymentDate` from the linked payment record, allowing
+legacy instruments without an entered payment date to show their recorded collection date.
+Receipt issuance date is a separate fact. No schema migration or historical rewrite occurs;
+previously discarded entered dates or substituted issue dates cannot be reconstructed.
 
 ## Paid charges in refund requests
 

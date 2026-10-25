@@ -13,6 +13,7 @@ using Volo.Abp.TenantManagement;
 using Volo.Abp.Uow;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.TenantSettings.InitialSetup;
+using ShikshaMitra.HR.Policies;
 
 namespace ShikshaMitra.HostTenants;
 
@@ -44,6 +45,8 @@ public class HostTenantAppService(
 		Validate(input);
 		var tenant = await tenantManager.CreateAsync(input.Name.Trim());
 		ApplyDetails(tenant, input);
+		// Only new production tenants opt in; existing schools and demo seeders stay untouched.
+		tenant.SetProperty(HrStarterPolicyDefaults.TenantEnabledProperty, true);
 		tenant.SetProperty(HostTenantConsts.IsActiveProperty, true);
 		await tenants.InsertAsync(tenant);
 		await CurrentUnitOfWork!.SaveChangesAsync();

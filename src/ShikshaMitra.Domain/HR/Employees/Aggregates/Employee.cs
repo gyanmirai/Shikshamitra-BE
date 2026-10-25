@@ -58,9 +58,12 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public virtual ICollection<EmployeeFamilyMember> FamilyMembers { get; private set; } = new List<EmployeeFamilyMember>();
 	public virtual ICollection<EmployeeOrganizationAssignment> OrganizationAssignments { get; private set; } = new List<EmployeeOrganizationAssignment>();
 	public Guid? ReportingManagerId { get; private set; }
+	// Tenant administrators can have a login without a staff profile.
+	public Guid? ReportingManagerUserId { get; private set; }
 	public virtual IdentityRole? Role { get; private set; }
 	public virtual ShiftManagement? Shift { get; private set; }
 	public virtual Employee? ReportingManager { get; private set; }
+	public virtual IdentityUser? ReportingManagerUser { get; private set; }
 	public virtual EmployeeAdditionalDetails? AdditionalDetails { get; private set; }
 
 	public string EmployeeNameWithFather => JoinNameParts(FirstName, MiddleName, LastName);
@@ -166,8 +169,21 @@ public class Employee : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			throw new BusinessException(HRErrorCodes.EmployeeAccountEmailRejected).WithData("field", "Email");
 		Email = email;
 	}
-	public void AssignReportingManager(Guid reportingManagerId) => ReportingManagerId = reportingManagerId;
-	public void RemoveReportingManager() => ReportingManagerId = null;
+	public void AssignReportingManager(Guid reportingManagerId)
+	{
+		ReportingManagerId = reportingManagerId;
+		ReportingManagerUserId = null;
+	}
+	public void AssignAdministratorReportingManager(Guid userId)
+	{
+		ReportingManagerUserId = userId;
+		ReportingManagerId = null;
+	}
+	public void RemoveReportingManager()
+	{
+		ReportingManagerId = null;
+		ReportingManagerUserId = null;
+	}
 
 	private static string JoinNameParts(params string?[] parts) =>
 		string.Join(" ", parts.Where(x => !string.IsNullOrWhiteSpace(x)));

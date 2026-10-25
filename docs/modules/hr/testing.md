@@ -30,6 +30,8 @@ Final authenticated browser acceptance must use a running backend with valid loc
 
 # Validate HR backend changes
 
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~FirstEmployeeReportingManagerApi_Tests` for the clean-school regression. It uses the existing `InitialSetupTestFactory` and synthetic tenants only, verifies the bootstrapped login is selectable with zero employees, creates the first HR staff profile, rejects absent manager IDs and wrong identity kinds, verifies persisted/reloaded references, tests foreign-tenant rejection and unchanged saved values, and denies requests without the existing action permissions. Existing `ReportingManagerApi_Tests` and `LeaveReportingChain_Tests` cover employee-manager swaps, active status, self-reference and cycles. Distinguish this local test evidence from authenticated deployed acceptance.
+
 PF eligibility and ESIC basis/rate coverage is in `StatutoryCalculationSettings_Tests` and `StatutoryCalculationApi_Tests`.
 The ESIC cases cover all nine independent basis combinations, full-month eligibility, payable contributions, daily-wage exemption, inactive Basic components, continued coverage, and unchanged older configuration JSON.
 `IndependentEsiBasisPayroll_Tests` uses a fresh loopback `payroll_tests_*` PostgreSQL database through `PAYROLL_TEST_POSTGRES` to verify both mixed Gross/Basic choices through salary setup and actual payroll, with locked results preserved.

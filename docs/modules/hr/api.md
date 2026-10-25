@@ -39,6 +39,12 @@ Deploy this backend endpoint before the frontend picker changes.
 
 ## Employee API families
 
+`GET /api/employees/reporting-manager/options?search=...` requires Staff View and returns existing visible active employees plus active, unlocked, current-tenant administrator logins without an employee profile. Administrator eligibility uses current database membership in the configured administrator roles. Linked employee profiles retain the directory's active/status and joining-date rules. No role, scope, or permission is granted by this lookup.
+
+`PUT /api/employees/{employeeId}/reporting-manager` still requires a nonempty `reportingManagerId` and Staff Edit with employee scope. `reportingManagerKind` is `Employee` (default for existing clients) or `TenantAdministrator`. Employee IDs persist in `ReportingManagerId`; administrator login IDs persist in the separate `ReportingManagerUserId` identity foreign key. The server rechecks administrator eligibility at save, rejects self-reference, and clears the other reference on a swap. GET returns the saved manager's `id` and `kind`; existing inactive assignments remain readable. Staff-only reporting hierarchy, scope inheritance, leave and review access rules are unchanged.
+
+Apply `AddAdministratorReportingManager` before starting the updated backend, then deploy the frontend selector. The additive nullable column, restricted identity foreign key and exclusive-reference constraint preserve existing employee-manager relationships. No bootstrap backfill, synthetic employee profile, or tenant reseed is needed.
+
 Employee APIs manage staff identity, profile data, documents, status, reporting, and employee payroll details:
 
 | Family | Routes | Permission family |

@@ -155,7 +155,7 @@ public partial class FeeRefundAppService : IFamilyRefundService
                 Refunded = committed.GetValueOrDefault(allocation.Id), Refundable = available
             });
         }
-        var grouped = rows.GroupBy(x => dueMap[x.DueFeeId].FeeHeadId).Select(g => new RefundEligibilityFeeHeadDto
+        var grouped = rows.GroupBy(x => dueMap[x.DueFeeId!.Value].FeeHeadId).Select(g => new RefundEligibilityFeeHeadDto
         {
             FeeHeadId = g.Key, FeeHeadName = heads.GetValueOrDefault(g.Key, "Fee head"),
             TotalPaid = g.Sum(x => x.Paid), TotalRefunded = g.Sum(x => x.Refunded),

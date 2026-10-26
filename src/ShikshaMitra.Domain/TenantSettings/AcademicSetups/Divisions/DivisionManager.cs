@@ -2,13 +2,17 @@ using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.Divisions;
 using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Linq;
+using ShikshaMitra.TenantSettings.AcademicSetups.Services;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
+using ShikshaMitra.TenantSettings.AcademicSetups.Formatting;
 
 namespace ShikshaMitra.TenantSettings.AcademicSetups;
 
-public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenerator guidGenerator) : DomainService
+public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenerator guidGenerator, AcademicFieldFormattingStore formatting) : DomainService
 {
 	public async Task<Division> CreateAsync(
 		Guid standardId,
@@ -17,10 +21,13 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 		string roomNumber = "")
 	{
 		Check.NotNullOrWhiteSpace(name, nameof(name));
+		name = AcademicNameFormatter.Format(name, (await formatting.GetAsync()).Division);
 		name = name.Trim();
 		await ValidateDivisionAsync(name, standardId);
 
-		return new Division(
+		var nextOrder = await AsyncExecuter.MaxAsync((await divisionRepository.GetQueryableAsync())
+			.Where(x => x.StandardId == standardId).Select(x => (int?)x.SortOrder)) ?? -1;
+		var division = new Division(
 			guidGenerator.Create(),
 			tenantId: CurrentTenant.Id,
 			name,
@@ -28,6 +35,15 @@ public class DivisionManager(IDivisionRepository divisionRepository, IGuidGenera
 			strength,
 			roomNumber
 		);
+		division.SetSortOrder(checked(nextOrder + 1));
+		return division;
+	}
+
+	public void Reorder(IReadOnlyList<Division> siblings, IReadOnlyList<Guid> ids)
+	{
+		AcademicSiblingOrder.Validate(ids, siblings.Select(x => x.Id));
+		var byId = siblings.ToDictionary(x => x.Id);
+		for (var index = 0; index < ids.Count; index++) byId[ids[index]].SetSortOrder(index);
 	}
 
 	public async Task<Division> UpdateAsync(

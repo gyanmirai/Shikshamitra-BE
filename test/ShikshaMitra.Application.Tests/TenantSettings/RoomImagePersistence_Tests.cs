@@ -24,7 +24,7 @@ public class RoomImagePersistence_Tests : ShikshaMitraApplicationTestBase<Shiksh
 			var building = await GetRequiredService<IRepository<Building, Guid>>()
 				.InsertAsync(new Building { BuildingName = "Photo Test", TotalFloors = 1 }, autoSave: true);
 			var floor = await GetRequiredService<IRepository<Floor, Guid>>()
-				.InsertAsync(new Floor { FloorName = "Ground", BuildingId = building.Id, FloorNo = 0 }, autoSave: true);
+				.InsertAsync(new Floor { FloorName = "Ground", BuildingId = building.Id, FloorNo = 0, TotalRoom = 1 }, autoSave: true);
 			var type = await GetRequiredService<IRepository<RoomType, Guid>>()
 				.InsertAsync(new RoomType { RoomTypeName = "Classroom", ShortName = "CR" }, autoSave: true);
 			return new CreateUpdateRoomDto

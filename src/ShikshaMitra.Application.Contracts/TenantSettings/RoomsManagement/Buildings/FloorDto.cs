@@ -8,4 +8,5 @@ public class FloorDto
 	public int FloorNo { get; set; }
 	public string FloorName { get; set; }
 	public int TotalRoom { get; set; }
+	public int RoomCount { get; set; }
 }

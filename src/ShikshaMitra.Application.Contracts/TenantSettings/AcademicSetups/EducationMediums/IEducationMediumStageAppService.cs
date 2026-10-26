@@ -1,5 +1,6 @@
 ﻿using System;
 using Volo.Abp.Application.Dtos;
+using System.Threading.Tasks;
 using Volo.Abp.Application.Services;
 
 namespace ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
@@ -8,4 +9,7 @@ public interface IEducationMediumStageAppService : ICrudAppService<
 	EducationMediumStageDto,
 	Guid,
 	PagedAndSortedResultRequestDto,
-	CreateUpdateEducationMediumStageDto>;
+	CreateUpdateEducationMediumStageDto>
+{
+	Task ReorderAsync(Guid educationMediumId, ReorderAcademicChildrenDto input);
+}

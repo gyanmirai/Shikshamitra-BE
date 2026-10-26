@@ -3,7 +3,7 @@ module: institute-setup
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -63,6 +63,50 @@ Action names are `InstituteSetup.SchoolDocuments.View`, `.Add` and `.Delete`; vi
 
 Validation errors return 400, missing actions or host context 403, missing/cross-tenant/deleted records or mismatched file parents 404, and stale stamps 409. Upload endpoints accept at most 30 MiB including multipart overhead; each file remains limited to 5 MiB. Align reverse-proxy request limits with this endpoint. `ShikshaMitra:SchoolDocuments:InvalidDetails`, `InvalidFiles` and `InvalidFile` are localized business codes.
 
+## Institute form field formatting
+
+`InstituteFieldFormattingController` exposes tenant-owned formatting settings independently of the Academic Setup settings. The application service checks the owning scope's existing permissions even when called directly. Host callers cannot read or write tenant settings. No migration or new permission grant is required.
+
+| Method and route | Contract |
+| --- | --- |
+| `GET /api/app/institute-field-formatting/{scope}` | Returns `{ fields: { fieldKey: textCase } }`; absent tenant settings return Default for every field |
+| `PUT /api/app/institute-field-formatting/{scope}` | Accepts and returns the complete scope settings object; rejects missing/unknown fields and unsupported modes atomically |
+| `POST /api/app/institute-field-formatting/{scope}/preview` | Accepts `{ value, textCase }`, up to 2000 characters, and returns `{ value }` using the server formatter |
+
+| Scope | Field keys | Read/preview permission | Write permission |
+| --- | --- | --- | --- |
+| `buildings` | `buildingName`, `floorName`, `description` | Building Management View | Building Management Add |
+| `roomTypes` | `roomTypeName`, `shortName` | Room Type Management View | Room Type Management Add |
+| `rooms` | `roomName`, `featureName` | Room Management View | Room Management Add |
+| `shifts` | `shiftName` | Shift Management View | Shift Management Edit |
+| `schoolIdentity` | `principalName`, `designation` | School Identity View | School Identity ManageDefaults and AccessSignature |
+| `schoolDocuments` | `name`, `notes` | School Documents View | School Documents Add |
+
+Modes use the existing `AcademicTextCase` values: 0 Default, 1 Capitalize each word, 2 camelCase, 3 PascalCase and 4 Uppercase. Default preserves entered case. Settings use separate tenant-only ABP setting values per scope, without global fallback. Creates normalize text on the server and validate required values and maximum lengths after formatting. Updates preserve existing spelling; new floors, new feature catalogue entries and explicitly changed School Identity signature fields use the current settings. Signature fields are compared independently, so changing one does not reformat the other. Existing catalogue matches retain their stored names.
+
+## Academic field formatting
+
+`GET /api/app/academic-field-formatting` reads the current school's rules with Academic Setup View.
+`PUT /api/app/academic-field-formatting` writes all five rules atomically with Academic Setup Edit and returns the saved rules.
+Both the controller and application service enforce these actions, and host context is rejected with 403.
+The server chooses the tenant; requests cannot select another school.
+
+The request/response has numeric properties `board`, `medium`, `stage`, `standard`, and `division`.
+Modes are `0` Default, `1` Capitalize each word, `2` camelCase, `3` PascalCase, and `4` Uppercase.
+Missing saved rules default to `0`; the board value must remain `0` because CBSE/GSEB are canonical catalogue values.
+Unsupported modes and a nondefault board rule return 400 without saving any part of the request.
+Rules are stored as one tenant-provider ABP setting; no migration or historical data rewrite is required.
+
+`POST /api/app/academic-field-formatting/preview` requires the same View action and tenant context, accepts `{ "value": "raw name", "textCase": 2 }`, and returns `{ "value": "rawName" }` without changing settings or school records.
+Values may be empty but cannot be null or exceed 512 UTF-16 characters; `textCase` must be 0-4.
+This read-only calculation uses the same .NET invariant Unicode casing as creation, avoiding browser/server differences for Turkish dotted I, Greek sigma, sharp S, and other non-ASCII names.
+Uppercase changes letter case only and preserves whitespace; Default returns the preview value exactly as entered.
+
+Create requests must send the raw name; the server performs one transformation before domain duplicate and entity-length validation.
+Clients may preview the result but must not pre-format their payload, because camelCase and PascalCase are not idempotent under repeated word normalization.
+Only new medium, stage, standard, and division names use the selected rule.
+Updates and read projections preserve the saved spelling regardless of later rule changes.
+
 ## Academic Setup validation
 
 Standards use the ABP routes `POST /api/app/standard` and `PUT /api/app/standard/{id}`. Duplicate names within the same medium stage return HTTP 409 with the existing ProblemDetails format: `errorCode: ShikshaMitra.TenantSettings:DuplicateStandardName`, `detail: A standard named 'Class 3' already exists in this academic stage.`, and `data.name`. Names are compared literally after trimming and case normalization; editing excludes the current standard. Repository tenant filters remain enabled. The same name is allowed in another stage.
@@ -70,6 +114,30 @@ Standards use the ABP routes `POST /api/app/standard` and `PUT /api/app/standard
 Division create/update routes remain `/api/app/division` and `/api/app/division/{id}`. Omitting or passing null for `roomNumber` leaves existing allocations unchanged on update and creates an unassigned division on create. An explicitly supplied empty string clears the room. Academic hierarchy forms no longer expose room allocation; no schema change is required.
 
 Division creation needs only `name`, `strength` (a whole number from 1 to 500), and `standardId`. Neither a room nor a shift is required. Within the current tenant and standard, names are trimmed and compared case-insensitively as literal text. Duplicate creation or renaming returns HTTP 409 with `errorCode: ShikshaMitra.TenantSettings:DuplicateDivisionName` and `detail: A division named '{name}' already exists in this standard.` Editing excludes the current record, including case-only name changes. No database migration is needed for this validation change.
+
+## Academic hierarchy order
+
+| Operation | Route |
+| --- | --- |
+| Reorder stages within a medium | `PUT /api/education-mediums/{mediumId}/stages/order` |
+| Reorder classes within a stage | `PUT /api/education-medium-stages/{stageId}/standards/order` |
+| Reorder divisions within a class | `PUT /api/standards/{standardId}/divisions/order` |
+
+All three routes accept `{ "ids": ["<first-id>", "<second-id>"] }` and return 204 after a successful atomic write.
+The list must contain every current sibling exactly once, with no duplicates, omitted, foreign or unrelated IDs.
+The controller and application services require `InstituteSetup.AcademicSetup.Edit`.
+The parent must belong to the current tenant, and UserScope must permit every sibling being reordered.
+Invalid sequences use `ShikshaMitra.TenantSettings:InvalidAcademicOrder`; rejected requests do not change saved positions.
+
+Stages, standards and divisions expose a persisted `sortOrder` in read DTOs.
+Hierarchy responses, default lists and class-with-division lookups use the saved sibling order, including stage groups within a medium; explicit supported list sorting still takes precedence when requested.
+New siblings append after existing positions.
+The ordering migration backfills the existing creation sequence once; subsequent default reads use saved positions with deterministic name/ID ties.
+Apply all pending migrations before starting the updated backend, then deploy the frontend.
+`20261026110754_RepairAcademicStageOrderColumn` repairs databases that applied the earlier class/division version of `20261026051530_AddAcademicSiblingOrder` before stage ordering was added.
+It adds and backfills the stage column only when missing, creates the stage order index when needed, and preserves existing saved positions.
+An already-recorded migration ID is skipped by EF; restarting the API alone cannot repair PostgreSQL error `42703` for a missing `academic_EducationMediumStages.SortOrder` column.
+The [frontend guide](../../../../Shikshamitra-FE/docs/institute-setup/workflows.md#academic-hierarchy-standard-and-division-dialogs) owns the dialog workflow.
 
 ## Shift Management API
 
@@ -144,6 +212,19 @@ Contracts live in `src/ShikshaMitra.Application.Contracts/TenantSettings/Initial
 Localized error codes live in `src/ShikshaMitra.Domain.Shared/TenantSettings/InitialSetup/InitialSetupErrorCodes.cs`.
 
 ## Rooms Management endpoint families
+
+Building list/detail and mutation responses include `floors[].roomCount`, the current tenant's saved room count on that floor, alongside the configured `totalRoom` limit.
+Room creation and floor moves reject a destination whose count has reached its limit; room updates exclude that room from the count, so an existing room can be edited on a full floor.
+Building updates reject a floor limit below its saved room count.
+These validations require no schema migration.
+
+| Capacity error code | Meaning |
+| --- | --- |
+| `ShikshaMitra.TenantSettings:RoomFloorLimitReached` | The selected floor has no room place available; increase its configured limit through the building update |
+| `ShikshaMitra.TenantSettings:FloorRoomLimitBelowUsage` | The requested floor limit is below the number of saved rooms |
+
+Both business errors use HTTP 400 ProblemDetails with `errorCode`, a localized `detail`, and `BuildingId`, `FloorId`, `FloorName`, `RoomLimit` and `RoomCount` in its top-level `data` object.
+Room writes keep the existing Room Management Add policy; building reads require `ShikshaMitra.Module.InstituteSetup.BuildingManagement.View` and building updates require `ShikshaMitra.Module.InstituteSetup.BuildingManagement.Add`.
 
 Room create/update DTOs accept optional `columnRows`, an ordered array of bench-row counts per column. When supplied, the domain requires 1 to 50 columns, 1 to 100 rows in each column, and 1 to 20 students per bench. It derives `benchesPerColumn` from the array length, `benchesPerRow` from its maximum, `totalBenches` from its sum, and `capacity` from total benches times bench capacity. Older requests may omit the array and keep their rectangular layout contract. Responses return the saved array.
 

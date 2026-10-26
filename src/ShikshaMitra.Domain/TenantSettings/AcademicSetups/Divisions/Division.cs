@@ -13,8 +13,11 @@ public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Name { get; internal set; }
 
 	public int Strength { get; internal set; }
+	public int SortOrder { get; private set; }
 
 	public string RoomNumber { get; internal set; }
+
+	internal void SetSortOrder(int sortOrder) => SortOrder = Check.Range(sortOrder, nameof(sortOrder), 0, int.MaxValue);
 
 	// Foreign key
 	public Guid StandardId { get; }

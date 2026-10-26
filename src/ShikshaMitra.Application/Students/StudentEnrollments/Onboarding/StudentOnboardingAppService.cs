@@ -130,11 +130,12 @@ public partial class StudentOnboardingAppService(
 		var mediums = await AsyncExecuter.ToListAsync((await mediumRepository.GetQueryableAsync())
 			.Where(item => mediumIds.Contains(item.Id)).Select(item => new { item.Id, item.Name, item.EducationBoardId }));
 		var divisions = await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
-			.Where(item => divisionIds.Contains(item.Id)).Select(item => new { item.Id, item.Name, item.StandardId }));
+			.Where(item => divisionIds.Contains(item.Id)).Select(item => new { item.Id, item.Name, item.StandardId, item.SortOrder }));
 		var standards = standardIds.Count == 0
 			? []
 			: await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
-				.Where(item => standardIds.Contains(item.Id)).Select(item => new { item.Id, item.Name, item.EducationMediumStageId }));
+				.Where(item => standardIds.Contains(item.Id)).Select(item => new { item.Id, item.Name, item.EducationMediumStageId, item.SortOrder,
+					MediumId = item.EducationMediumStage.EducationMediumId, StageSortOrder = item.EducationMediumStage.SortOrder, StageName = item.EducationMediumStage.Name }));
 		var stageIds = standards.Select(item => item.EducationMediumStageId).Distinct().ToList();
 		var mediumByStage = (await AsyncExecuter.ToListAsync((await mediumStageRepository.GetQueryableAsync())
 			.Where(item => stageIds.Contains(item.Id)).Select(item => new { item.Id, item.EducationMediumId })))
@@ -154,10 +155,10 @@ public partial class StudentOnboardingAppService(
 			Mediums = mediums.OrderBy(item => item.Name)
 				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name,
 					ParentId = item.EducationBoardId }).ToList(),
-			Standards = standards.OrderBy(item => item.Name)
+			Standards = standards.OrderBy(item => item.MediumId).ThenBy(item => item.StageSortOrder).ThenBy(item => item.StageName).ThenBy(item => item.EducationMediumStageId).ThenBy(item => item.SortOrder).ThenBy(item => item.Name).ThenBy(item => item.Id)
 				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name,
 					ParentId = mediumByStage.GetValueOrDefault(item.EducationMediumStageId) }).ToList(),
-			Divisions = divisions.OrderBy(item => item.Name)
+			Divisions = divisions.OrderBy(item => item.StandardId).ThenBy(item => item.SortOrder).ThenBy(item => item.Name).ThenBy(item => item.Id)
 				.Select(item => new StudentOnboardingFilterOptionDto { Id = item.Id, Name = item.Name,
 					ParentId = item.StandardId }).ToList()
 		};
@@ -209,7 +210,7 @@ public partial class StudentOnboardingAppService(
 		var divisions = await AsyncExecuter.ToListAsync(divisionQuery.Where(item => item.StandardId == onboardingCase.IntendedStandardId));
 		var now = DateTime.UtcNow;
 		var options = new List<StudentOnboardingPlacementOptionDto>(divisions.Count);
-		foreach (var division in divisions.OrderBy(item => item.Name))
+		foreach (var division in divisions.OrderBy(item => item.SortOrder).ThenBy(item => item.Name).ThenBy(item => item.Id))
 		{
 			var activeEnrollments = await enrollmentRepository.CountAsync(item =>
 				item.AcademicYearId == onboardingCase.AcademicYearId && item.DivisionId == division.Id && item.IsActive);

@@ -43,7 +43,7 @@ public class HRDashboardOperationalStaffReader(
 		var stageRows = await executer.ToListAsync(stageQuery.Where(x => displayStageIds.Contains(x.Id) &&
 			x.EducationMedium.EducationBoard.AcademicYear.StartDate <= selectedDay &&
 			x.EducationMedium.EducationBoard.AcademicYear.EndDate >= selectedDay)
-			.Select(x => new { x.Id, x.Name, Medium = x.EducationMedium.Name, Board = x.EducationMedium.EducationBoard.Type }));
+			.Select(x => new { x.Id, x.Name, x.SortOrder, Medium = x.EducationMedium.Name, Board = x.EducationMedium.EducationBoard.Type }));
 		var stageNames = stageRows.ToDictionary(x => x.Id, x => $"{x.Board} / {x.Medium} / {x.Name}");
 		var shiftIds = all.Where(x => x.ShiftId.HasValue).Select(x => x.ShiftId!.Value).Distinct().ToList();
 		var shiftQuery = await shiftRepository.GetQueryableAsync();
@@ -51,7 +51,8 @@ public class HRDashboardOperationalStaffReader(
 		var options = new HRDashboardFilterOptionsDto
 		{
 			Departments = all.Select(x => x.Department).Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!).Distinct().OrderBy(x => x).ToList(),
-			Stages = stageNames.Select(x => new HRDashboardOptionDto { Id = x.Key, Name = x.Value }).OrderBy(x => x.Name).ToList(),
+			Stages = stageRows.OrderBy(x => x.Board.ToString()).ThenBy(x => x.Medium).ThenBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id)
+				.Select(x => new HRDashboardOptionDto { Id = x.Id, Name = stageNames[x.Id] }).ToList(),
 			Shifts = shifts.Select(x => new HRDashboardOptionDto { Id = x.Id, Name = x.ShiftName }).OrderBy(x => x.Name).ToList()
 		};
 		var employees = all.Where(x =>

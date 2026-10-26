@@ -580,15 +580,15 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
         var mediumIds = mediumRows.Where(medium => !fullAccessAnalysis.MediumFullMediumStageAccess.Contains(medium.Id)).Select(medium => medium.Id).ToArray();
         var stageRows = await AsyncExecuter.ToListAsync((await _educationMediumStageRepository.GetQueryableAsync())
             .Where(stage => Enumerable.Contains(mediumIds, stage.EducationMediumId))
-            .Select(stage => new { stage.Id, stage.EducationMediumId, stage.Name }), cancellationToken);
+            .Select(stage => new { stage.Id, stage.EducationMediumId, stage.Name, stage.SortOrder }), cancellationToken);
         var stageIds = stageRows.Where(stage => !fullAccessAnalysis.MediumStageFullStandardAccess.Contains(stage.Id)).Select(stage => stage.Id).ToArray();
         var standardRows = await AsyncExecuter.ToListAsync((await _standardRepository.GetQueryableAsync())
             .Where(standard => Enumerable.Contains(stageIds, standard.EducationMediumStageId))
-            .Select(standard => new { standard.Id, standard.EducationMediumStageId, standard.Name }), cancellationToken);
+            .Select(standard => new { standard.Id, standard.EducationMediumStageId, standard.Name, standard.SortOrder }), cancellationToken);
         var standardIds = standardRows.Where(standard => !fullAccessAnalysis.StandardFullDivisionAccess.Contains(standard.Id)).Select(standard => standard.Id).ToArray();
         var divisionRows = await AsyncExecuter.ToListAsync((await _divisionRepository.GetQueryableAsync())
             .Where(division => Enumerable.Contains(standardIds, division.StandardId))
-            .Select(division => new { division.Id, division.StandardId, division.Name, division.RoomNumber }), cancellationToken);
+            .Select(division => new { division.Id, division.StandardId, division.Name, division.RoomNumber, division.SortOrder }), cancellationToken);
         var boardsByYear = boardRows.ToLookup(board => board.AcademicYearId);
         var mediumsByBoard = mediumRows.ToLookup(medium => medium.EducationBoardId);
         var stagesByMedium = stageRows.ToLookup(stage => stage.EducationMediumId);
@@ -675,7 +675,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                     // Load all medium stages for this medium
                     var mediumStages = stagesByMedium[medium.Id];
 
-                    foreach (var mediumStage in mediumStages.OrderBy(ms => ms.Name))
+                    foreach (var mediumStage in mediumStages.OrderBy(ms => ms.SortOrder).ThenBy(ms => ms.Name).ThenBy(ms => ms.Id))
                     {
                         var mediumStageNode = new MediumStageScopeNode
                         {
@@ -701,7 +701,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                         // Load all standards for this medium stage
                         var standards = standardsByStage[mediumStage.Id];
 
-                        foreach (var standard in standards.OrderBy(s => s.Name))
+                        foreach (var standard in standards.OrderBy(s => s.SortOrder).ThenBy(s => s.Name).ThenBy(s => s.Id))
                         {
                             var standardNode = new StandardScopeNode
                             {
@@ -727,7 +727,7 @@ public class UserScopeAppService : ApplicationService, IUserScopeAppService
                             // Load all divisions for this standard
                             var divisions = divisionsByStandard[standard.Id];
 
-                            foreach (var division in divisions.OrderBy(d => d.Name))
+                            foreach (var division in divisions.OrderBy(d => d.SortOrder).ThenBy(d => d.Name).ThenBy(d => d.Id))
                             {
                                 var divisionNode = new DivisionScopeNode
                                 {

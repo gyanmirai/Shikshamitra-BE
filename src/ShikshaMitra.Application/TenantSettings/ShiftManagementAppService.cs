@@ -10,6 +10,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Entities;
+using ShikshaMitra.TenantSettings.Formatting;
 
 namespace ShikshaMitra.TenantSettings;
 
@@ -32,10 +33,13 @@ public class ShiftManagementAppService(
 			?? throw new EntityNotFoundException(typeof(ShiftManagement), id);
 	}
 
-	public override Task<ShiftManagementDto> CreateAsync(CreateUpdateShiftManagementDto input)
+	public override async Task<ShiftManagementDto> CreateAsync(CreateUpdateShiftManagementDto input)
 	{
+		await CheckCreatePolicyAsync();
 		ValidateShiftTimeRange(input);
-		return base.CreateAsync(input);
+		var rules = await LazyServiceProvider.LazyGetRequiredService<InstituteFieldFormattingStore>().GetAsync("shifts");
+		input.ShiftName = InstituteFieldFormattingCatalog.Required(rules, "shiftName", input.ShiftName);
+		return await base.CreateAsync(input);
 	}
 
 	public override Task<ShiftManagementDto> UpdateAsync(Guid id, CreateUpdateShiftManagementDto input)

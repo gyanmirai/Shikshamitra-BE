@@ -16,6 +16,7 @@ public class Standard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string Name { get; internal set; }
 
 	public int AgeLowerLimit { get; internal set; }
+	public int SortOrder { get; private set; }
 
 	public Guid? ShiftId { get; internal set; }
 
@@ -47,6 +48,8 @@ public class Standard : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Name = Check.NotNullOrWhiteSpace(name, nameof(name), maxLength: StandardConsts.MaxNameLength);
 		return this;
 	}
+
+	internal void SetSortOrder(int sortOrder) => SortOrder = Check.Range(sortOrder, nameof(sortOrder), 0, int.MaxValue);
 
 	// Navigation property
 	public EducationMediumStage EducationMediumStage { get; set; }

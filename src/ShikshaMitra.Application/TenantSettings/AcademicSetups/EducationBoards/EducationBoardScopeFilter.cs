@@ -160,6 +160,7 @@ internal static class EducationBoardScopeFilter
             Id = stage.Id,
             EducationMediumId = stage.EducationMediumId,
             Name = stage.Name,
+            SortOrder = stage.SortOrder,
             BannerPicture = stage.BannerPicture,
             Standards = standards
                 ?? stage.Standards?.Select(standard => CloneStandard(standard)).ToList()
@@ -178,6 +179,7 @@ internal static class EducationBoardScopeFilter
             Id = standard.Id,
             Name = standard.Name,
             AgeLowerLimit = standard.AgeLowerLimit,
+            SortOrder = standard.SortOrder,
             Divisions = divisions
                 ?? standard.Divisions?.Select(division => CloneDivision(division)).ToList()
                 ?? [],
@@ -197,6 +199,7 @@ internal static class EducationBoardScopeFilter
             Name = division.Name,
             HeadCount = division.HeadCount,
             Strength = division.Strength,
+            SortOrder = division.SortOrder,
             RoomNumber = division.RoomNumber,
             RoomId = division.RoomId,
             StandardId = division.StandardId,

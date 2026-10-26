@@ -55,12 +55,18 @@ Zero limited leave allocations remain valid stored values but carry a notice eve
 fingerprint and optional sample employee/date. No migration, reset or backfill is required. Unknown/corrupt evidence fails closed without overwrite.
 
 Hashes include tenant/year/dates and ordered policy configurations with child rules/holidays. Attendance/payroll include calendar dependencies.
+Calendar review also hashes the stable finalized holiday-preview fields for active linked calendars using `PolicyHolidayImpactFinalizedHolidayReader`.
+Temporary generated row IDs are excluded. Central holidays already replaced by a stored school override are excluded by that reader's existing semantics;
+snapshot and independent calendars do not acquire a dependency on unmaterialized central holidays. This tracks visible linked-preview evidence without changing payroll calculations.
 The sample includes all section hashes, selected staff concurrency stamp and actual resolution outcome/steps.
 Invalidation is conservative: versions and audited DTO metadata are included, so renaming an unused year policy can require review again.
 
 Reads/writes use serializable transactions. Writes compare the displayed hash and AcademicYear revision, then use ABP aggregate concurrency checking.
 Two reviewers with the same revision cannot silently overwrite evidence. Configuration writes ordered after review can immediately make it stale on the next read;
 review acknowledges captured settings and does not lock future configuration edits.
+AcademicYear saves that change only `HrSetupReviewV1` plus concurrency/audit bookkeeping do not rotate the payroll input revision or stale an otherwise-current payroll preview.
+The EF change detector compares actual original/current values, including other ExtraProperties. Year dates, other year configuration, additions/deletions and policy changes retain their existing payroll invalidation.
+This narrow exclusion applies to synchronous and asynchronous saves; mixed real input changes still rotate the fence. Storage and API contracts are unchanged and no migration is needed.
 Clients refresh conflicts and request a new deliberate acknowledgement; they must not automatically resubmit a replacement hash.
 `HR:SetupReview:Conflict` rejects stale input; `HR:SetupReview:Invalid` rejects unsupported sections, invalid state or unsupported stored evidence.
 Database concurrency/serialization failures retain the existing error pipeline and require refresh/retry; failure is never reported as success.
@@ -75,3 +81,10 @@ Database concurrency/serialization failures retain the existing error pipeline a
 
 Synthetic in-memory tests do not establish deployed PostgreSQL race behavior or real-school acceptance.
 Roll out this additive API before mounting the [frontend checklist](../../../../../Shikshamitra-FE/docs/hr/references/setup-review.md).
+
+## Review coverage limits
+
+The checklist covers calendar/workweek policy settings and their linked holiday preview, attendance policy thresholds/capture mode, leave allocations, payroll policy basis,
+and one explicitly displayed staff/date policy-resolution result. It does not certify shift definitions, capture integration operation or a payroll calculation.
+The UI automatically selects and displays an authorized sample rather than providing staff/date selectors; the API supports explicit selection and the UI offers deliberate resampling.
+Storage retains the latest evidence per section. There is no dedicated append-only review/re-review event history; normal configured ABP auditing remains unchanged.

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -18,7 +19,8 @@ public class HrSetupReviewConfigurationReader(
 	IRepository<WorkCalendarHoliday, Guid> holidays,
 	IRepository<AttendancePolicy, Guid> attendance,
 	IRepository<PayrollPolicy, Guid> payroll,
-	ILeavePolicyRepository leave) : ApplicationService, ITransientDependency
+	ILeavePolicyRepository leave,
+	PolicyHolidayImpactFinalizedHolidayReader finalizedHolidays) : ApplicationService, ITransientDependency
 {
 	public static string Hash(object value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
 
@@ -31,8 +33,19 @@ public class HrSetupReviewConfigurationReader(
 		bool CalendarUsable(Guid id) => calendarRows.Any(x => x.Id == id && x.Status == HrPolicyStatus.Active && HrSetupReviewValidity.Calendar(x));
 		if (section == HrSetupReviewSections.Calendar)
 		{
+			var linkedPreviewDependencies = new List<object>();
+			foreach (var calendar in calendarRows.Where(x => x.Status == HrPolicyStatus.Active && x.HolidaySyncMode == WorkCalendarHolidaySyncMode.LinkedWithOverrides).OrderBy(x => x.Id))
+			{
+				var rows = await finalizedHolidays.GetAsync(year.Id, calendar);
+				// The owning preview synthesizes new row IDs for unmaterialized central holidays on
+				// every read. Hash its stable visible configuration, including its override semantics.
+				linkedPreviewDependencies.Add(new { CalendarId = calendar.Id, Holidays = rows
+					.OrderBy(x => x.CalendarHolidayId).ThenBy(x => x.FromDate).ThenBy(x => x.HolidayName, StringComparer.Ordinal)
+					.Select(x => new { x.CalendarHolidayId, x.AcademicYearId, x.WorkCalendarPolicyId, x.FromDate, x.ToDate,
+						x.HolidayName, x.Source, x.IsIncluded, x.Notes }) });
+			}
 			configuration = new { Calendars = calendarRows.OrderBy(x => x.Id).Select(HrPolicyMapping.ToDto),
-				Holidays = holidayRows.OrderBy(x => x.Id).Select(HrPolicyMapping.ToDto) };
+				Holidays = holidayRows.OrderBy(x => x.Id).Select(HrPolicyMapping.ToDto), LinkedPreviewDependencies = linkedPreviewDependencies };
 			var active = calendarRows.Where(x => x.Status == HrPolicyStatus.Active).ToList();
 			result.ConfigurationState = active.Count == 0 ? "missing" : active.All(HrSetupReviewValidity.Calendar) ? "valid" : "invalid";
 			result.Details = active.Select(x => $"{x.Name}: {HrPolicyMapping.MapWeeklyOffPattern(x.WeeklyOffPattern)}; {HrPolicyMapping.MapHolidaySyncMode(x.HolidaySyncMode)}").ToList();

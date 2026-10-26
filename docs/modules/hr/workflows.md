@@ -123,6 +123,10 @@ Archived work-calendar, attendance, payroll, and leave policies release their na
 Current and archived policy workspaces use independent server-side search, count, and pagination so accumulated history cannot hide live policies.
 Leave policies are restored as drafts, and restoration stops with the standard duplicate-name error if a current policy has reused the archived name.
 Normal leave-policy create and update calls reject Archived status, and only the separately authorized archive workflow may archive a current policy.
+Leave archive rejects active same-tenant, same-year assignment references whose end date is today or later, including future-start assignments and open-ended ranges.
+The existing default-policy requirement remains independent; historical ended or inactive assignments and referenced rule identities are retained without reassignment.
+Archive and assignment-reference creation/update acquire the same tenant-scoped PostgreSQL policy-row lock for the transaction, then recheck references or policy usability before writing.
+The archive business error is `ShikshaMitra:LeavePolicyHasActiveAssignments` and reports the reference count; it does not disclose another tenant's assignments or replace the policy automatically.
 
 ## Reports and notifications
 

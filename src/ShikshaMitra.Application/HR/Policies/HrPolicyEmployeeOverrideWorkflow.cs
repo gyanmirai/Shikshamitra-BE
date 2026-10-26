@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Employees;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
@@ -16,6 +17,7 @@ public class HrPolicyEmployeeOverrideWorkflow(
 	IRepository<Employee, Guid> employeeRepository,
 	HrPolicyAssignmentAuditWriter auditWriter,
 	HrPolicyAssignmentImpactService assignmentImpactService,
+	ILeavePolicyReferenceLock leaveReferenceLock,
 	HrPolicyEmployeeOverrideDisabler employeeOverrideDisabler)
 	: ApplicationService, ITransientDependency
 {
@@ -27,6 +29,7 @@ public class HrPolicyEmployeeOverrideWorkflow(
 		var effectiveFrom = input.EffectiveFrom.Date;
 		var effectiveTo = input.EffectiveTo?.Date;
 		var payload = HrPolicyEmployeeOverridePayloadFactory.Build(input, employee, targetKey, effectiveFrom, effectiveTo);
+		await leaveReferenceLock.AcquireAsync(payload.LeavePolicyId, CurrentTenant.Id);
 		await assignmentImpactService.ValidateReferencesAsync(payload);
 		var existing = await FindExistingAsync(input, targetType, targetKey, effectiveFrom, effectiveTo);
 		if (existing == null)

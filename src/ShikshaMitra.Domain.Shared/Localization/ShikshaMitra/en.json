@@ -1,6 +1,7 @@
 {
     "Culture": "en",
     "Texts": {
+        "ShikshaMitra:LeavePolicyHasActiveAssignments": "This leave policy has {assignmentCount} active current or future assignments. Resolve those policy assignments before archiving. Historical requests remain unchanged.",
         "Permission:Finance.SelfService.View": "View linked student finances",
         "Permission:Finance.SelfService.DownloadReceipts": "Download linked student receipts",
         "Permission:Finance.SelfService.DownloadStatement": "Download linked student statement",

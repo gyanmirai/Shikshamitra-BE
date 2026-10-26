@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,6 +10,8 @@ using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Validation;
 using Volo.Abp.Uow;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
 using Xunit;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -410,6 +412,66 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 					Rule(paidType: "Unpaid", leaveCount: 5, carryForward: true)
 				]
 			}));
+	}
+
+	[Theory]
+	[InlineData(-5, 0, true, true, false)]
+	[InlineData(1, 10, true, true, false)]
+	[InlineData(-10, -1, true, false, false)]
+	[InlineData(-5, 5, false, false, false)]
+	[InlineData(-5, 5, true, false, true)]
+	public async Task Archive_Should_Block_Only_Current_Or_Future_Active_Assignments(
+		int startOffset, int endOffset, bool active, bool shouldBlock, bool foreignTenant)
+	{
+		var academicYearId = await GetAcademicYearIdAsync();
+		await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = $"Default-{Guid.NewGuid():N}",
+			Status = "Active",
+			IsDefault = true,
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = DefaultRules()
+		});
+		var policy = await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
+		{
+			PolicyTitle = $"Assigned-{Guid.NewGuid():N}",
+			Status = "Active",
+			EffectiveFrom = DateTime.UtcNow.Date,
+			Rules = DefaultRules()
+		});
+		var assignments = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
+		var tenant = GetRequiredService<ICurrentTenant>();
+		var assignment = new HrPolicyAssignment(Guid.NewGuid(), foreignTenant ? Guid.NewGuid() : tenant.Id, academicYearId,
+			HrPolicyAssignmentTargetType.Employee, Guid.NewGuid().ToString(), "Synthetic staff",
+			Guid.NewGuid(), Guid.NewGuid(), policy.Id, DateTime.UtcNow.Date.AddDays(startOffset),
+			DateTime.UtcNow.Date.AddDays(endOffset), active);
+		using (var uow = _unitOfWorkManager.Begin(requiresNew: true))
+		{
+			await assignments.InsertAsync(assignment, autoSave: true);
+			await uow.CompleteAsync();
+		}
+		if (shouldBlock)
+		{
+			var error = await Should.ThrowAsync<BusinessException>(() => _leavePolicyAppService.DeleteLeavePolicyAsync(policy.Id));
+			error.Code.ShouldBe(HRErrorCodes.LeavePolicyHasActiveAssignments);
+			error.Data["assignmentCount"].ShouldBe(1);
+			(await _leavePolicyAppService.GetLeavePolicyByIdAsync(policy.Id)).Status.ShouldBe("Active");
+		}
+		else
+		{
+			await _leavePolicyAppService.DeleteLeavePolicyAsync(policy.Id);
+			(await _leavePolicyAppService.GetLeavePolicyByIdAsync(policy.Id)).Status.ShouldBe("Archived");
+		}
+		var after = await _leavePolicyAppService.GetLeavePolicyByIdAsync(policy.Id);
+		after.Rules.Select(rule => rule.Id).OrderBy(id => id).ShouldBe(policy.Rules.Select(rule => rule.Id).OrderBy(id => id));
+		using (var uow = _unitOfWorkManager.Begin(requiresNew: true))
+		{
+			using var referenceTenant = tenant.Change(assignment.TenantId);
+			var preserved = await assignments.GetAsync(assignment.Id);
+			preserved.LeavePolicyId.ShouldBe(policy.Id);
+			preserved.IsActive.ShouldBe(active);
+			await uow.CompleteAsync();
+		}
 	}
 
 	private static List<LeavePolicyRuleRequest> DefaultRules() =>

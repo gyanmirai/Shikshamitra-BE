@@ -171,6 +171,7 @@ public class HrOperationalTableQueryApi_Tests(HrOperationalTableApiTestFactory f
 	}
 	[Theory, TestTier(TestTraits.Tiers.Critical)]
 	[InlineData("employee-table", "fullName")]
+	[InlineData("employee-icard-selection-table", "fullName")]
 	[InlineData("employee-onboarding-table", "candidate")]
 	[InlineData("hr-shifts", "shiftName")]
 	[InlineData("hr-pf-rules", "name")]
@@ -188,14 +189,16 @@ public class HrOperationalTableQueryApi_Tests(HrOperationalTableApiTestFactory f
 		var response = await client.PostAsJsonAsync(Root, Request(table, field), JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden, await response.Content.ReadAsStringAsync());
 	}
-	[Fact, TestTier(TestTraits.Tiers.Critical)]
-	public async Task Claimed_Admin_Role_Should_Not_Replace_Current_Directory_Row_Scope()
+	[Theory, TestTier(TestTraits.Tiers.Critical)]
+	[InlineData("employee-table")]
+	[InlineData("employee-icard-selection-table")]
+	public async Task Claimed_Admin_Role_Should_Not_Replace_Current_Directory_Row_Scope(string table)
 	{
 		using var client = Factory.CreateClient();
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, Guid.NewGuid().ToString());
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader, "admin");
 		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View);
-		var response = await client.PostAsJsonAsync(Root, Request(), JsonOptions);
+		var response = await client.PostAsJsonAsync(Root, Request(table), JsonOptions);
 		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
 		var page = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
 		page.GetProperty("totalCount").GetInt32().ShouldBe(0);

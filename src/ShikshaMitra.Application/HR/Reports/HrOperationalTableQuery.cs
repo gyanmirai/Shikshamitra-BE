@@ -7,6 +7,9 @@ using System.Text.Json.Nodes;
 namespace ShikshaMitra.HR.Reports;
 
 public record HrOperationalTableRow(JsonElement Export, JsonElement Raw, Dictionary<string, object?> Values);
+// Native enum codes and readable labels represent one authorized field, not another data source.
+public record HrOperationalEnumValue(object? Display, JsonElement Native);
+public record HrOperationalTextValue(object? Display, object? Order);
 
 // Query/export share the same authorized population and server-owned projection. No client type,
 // expression, property path or permission can choose an additional data source or hidden field.

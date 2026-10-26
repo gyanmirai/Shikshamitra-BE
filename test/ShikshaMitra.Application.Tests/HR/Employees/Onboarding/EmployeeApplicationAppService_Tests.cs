@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
+using Volo.Abp.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -8,6 +10,9 @@ using ShikshaMitra.Common;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.HR.Payroll.Settings;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.TenantSettings;
@@ -293,7 +298,9 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	[Fact]
 	public async Task FinalizeAsync_Should_Create_Default_Policy_Assignment_When_Override_Is_Missing()
 	{
+		using var admin = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildAdminPrincipalAsync());
 		await CreateDefaultPoliciesAsync();
+		var salary = await BuildSalaryAsync();
 
 		var invite = await _applications.CreateAsync(new CreateEmployeeApplicationInviteDto
 		{
@@ -326,7 +333,8 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		personalInfo.EmployeeGroup = EmployeeGroupType.NonTeaching;
 		var result = await _applications.FinalizeAsync(submitted.Id, new FinalizeEmployeeApplicationDto
 		{
-			PersonalInfo = personalInfo
+			PersonalInfo = personalInfo,
+			Salary = salary
 		});
 		result.Employee.EmployeeStatusType.ShouldBe(EmployeeStatusType.Inactive);
 
@@ -336,7 +344,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			x.TargetKey == result.Employee.Id.ToString("D").ToLowerInvariant());
 
 		assignments.ShouldContain(x =>
-			x.AssignmentReason == "Employee onboarding default policy assignment" &&
+			x.AssignmentReason == "Staff onboarding default policy assignment" &&
 			x.AttendancePolicyId != Guid.Empty &&
 			x.PayrollPolicyId != Guid.Empty &&
 			x.LeavePolicyId.HasValue &&
@@ -348,7 +356,9 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	[Fact]
 	public async Task FinalizeAsync_Should_Create_Teaching_Scope_In_The_Finalization_Transaction()
 	{
+		using var admin = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildAdminPrincipalAsync());
 		var academicYearId = await CreateDefaultPoliciesAsync();
+		var salary = await BuildSalaryAsync();
 		var submitted = await CreateSubmittedApplicationAsync("teaching-scope");
 		var personalInfo = await BuildPersonalInfoAsync();
 		personalInfo.EmployeeGroup = EmployeeGroupType.Teaching;
@@ -356,6 +366,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		var result = await _applications.FinalizeAsync(submitted.Id, new FinalizeEmployeeApplicationDto
 		{
 			PersonalInfo = personalInfo,
+			Salary = salary,
 			AcademicYearId = academicYearId,
 			AcademicScopes = [new EmployeeApplicationAcademicScopeDto()]
 		});
@@ -366,13 +377,15 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			x.UserId == result.Employee.UserId &&
 			x.AcademicYearId == academicYearId);
 		scopes.Count.ShouldBe(1);
-		scopes[0].Description.ShouldBe("Employee onboarding academic permission");
+		scopes[0].Description.ShouldBe("Staff onboarding academic permission");
 	}
 
 	[Fact]
 	public async Task FinalizeAsync_Should_Roll_Back_Employee_When_Teaching_Scope_Is_Invalid()
 	{
+		using var admin = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildAdminPrincipalAsync());
 		await CreateDefaultPoliciesAsync();
+		var salary = await BuildSalaryAsync();
 		var submitted = await CreateSubmittedApplicationAsync("invalid-teaching-scope");
 		var personalInfo = await BuildPersonalInfoAsync();
 		personalInfo.EmployeeGroup = EmployeeGroupType.Teaching;
@@ -382,6 +395,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			_applications.FinalizeAsync(submitted.Id, new FinalizeEmployeeApplicationDto
 			{
 				PersonalInfo = personalInfo,
+			Salary = salary,
 				AcademicYearId = Guid.NewGuid(),
 				AcademicScopes = [new EmployeeApplicationAcademicScopeDto()]
 			}));
@@ -419,8 +433,10 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	[Fact]
 	public async Task FinalizeAsync_Should_Attach_Legacy_Generic_Content_Type_Resume()
 	{
+		using var admin = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildAdminPrincipalAsync());
 		_welcomeEmailService.Reset();
 		await CreateDefaultPoliciesAsync();
+		var salary = await BuildSalaryAsync();
 		var submitted = await CreateSubmittedApplicationAsync("legacy-finalize-resume");
 		await SetLegacyResumeAsync(
 			submitted.Id,
@@ -432,6 +448,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			new FinalizeEmployeeApplicationDto
 			{
 				PersonalInfo = await BuildPersonalInfoAsync(),
+				Salary = salary,
 				AttachResumeAsDocument = true,
 				UseSubmittedPhoto = true
 			});
@@ -449,8 +466,10 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	[Fact]
 	public async Task FinalizeAsync_Should_Not_Run_PostCommit_Effects_When_Late_Upload_Validation_Fails()
 	{
+		using var admin = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildAdminPrincipalAsync());
 		_welcomeEmailService.Reset();
 		await CreateDefaultPoliciesAsync();
+		var salary = await BuildSalaryAsync();
 		var submitted = await CreateSubmittedApplicationAsync("rollback-external-effects");
 		await SetLegacyResumeAsync(
 			submitted.Id,
@@ -465,6 +484,7 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 				new FinalizeEmployeeApplicationDto
 				{
 					PersonalInfo = personalInfo,
+			Salary = salary,
 					AttachResumeAsDocument = true,
 					UseSubmittedPhoto = true
 				}));
@@ -486,7 +506,9 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 	[InlineData("missing-employee-group")]
 	public async Task FinalizeAsync_Should_Reject_Invalid_Personal_Info_Before_Employee_Creation(string scenario)
 	{
+		using var admin = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildAdminPrincipalAsync());
 		await CreateDefaultPoliciesAsync();
+		var salary = await BuildSalaryAsync();
 		var submitted = await CreateSubmittedApplicationAsync(scenario);
 		var personalInfo = await BuildPersonalInfoAsync();
 		var employeeEmail = personalInfo.Email!;
@@ -509,7 +531,8 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 		await Should.ThrowAsync<AbpValidationException>(() =>
 			_applications.FinalizeAsync(submitted.Id, new FinalizeEmployeeApplicationDto
 			{
-				PersonalInfo = personalInfo
+				PersonalInfo = personalInfo,
+			Salary = salary
 			}));
 
 		(await _employeeRepository.GetListAsync(x => x.Email == employeeEmail)).ShouldBeEmpty();
@@ -632,6 +655,93 @@ public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBa
 			RoleId = await EnsureRoleExistsAsync(),
 			ShiftId = await EnsureShiftExistsAsync()
 		};
+	}
+
+
+
+	private async Task<ClaimsPrincipal> BuildAdminPrincipalAsync()
+	{
+		using var uow = _unitOfWorkManager.Begin(requiresNew: true);
+		var users = GetRequiredService<IdentityUserManager>();
+		var role = (await _roleRepository.GetListAsync()).FirstOrDefault(x => x.Name == "admin")
+			?? await _roleRepository.InsertAsync(new IdentityRole(Guid.NewGuid(), "admin", _currentTenant.Id), autoSave: true);
+		var id = Guid.NewGuid();
+		var user = new IdentityUser(id, $"onboarding-admin-{id:N}", $"onboarding-admin-{id:N}@test.com", _currentTenant.Id);
+		(await users.CreateAsync(user, "Test@1234")).Succeeded.ShouldBeTrue();
+		(await users.AddToRoleAsync(user, role.Name)).Succeeded.ShouldBeTrue();
+		await uow.CompleteAsync();
+		return new ClaimsPrincipal(new ClaimsIdentity(new[]
+		{
+			new Claim(AbpClaimTypes.UserId, id.ToString()), new Claim(AbpClaimTypes.UserName, user.UserName),
+			new Claim(AbpClaimTypes.Role, role.Name)
+		}, "Test"));
+	}
+
+	private async Task<SaveEmployeeCompensationDto> BuildSalaryAsync()
+	{
+		var month = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+		var component = await GetRequiredService<IRepository<EarningComponent, Guid>>().InsertAsync(new EarningComponent(
+			Guid.NewGuid(), _currentTenant.Id, $"Onboarding Basic {Guid.NewGuid():N}", null, EarningComponentType.Fixed,
+			CalculationType.Amount, 0m, null, null, ComponentDependency.None, true), autoSave: true);
+		var templates = GetRequiredService<ISalaryTemplateAppService>();
+		var input = new SaveSalaryTemplateDto
+		{
+			Name = $"Onboarding salary {Guid.NewGuid():N}", DefaultSalaryBasis = "GROSS",
+			DefaultEsiManagementMode = "EXTERNAL", DefaultEsiExternalReason = "Synthetic component-only fixture",
+			SampleMonthlyAmount = 50000m, SampleEffectiveMonth = month, IdempotencyKey = Guid.NewGuid().ToString("N"),
+			Rules = [new SalaryTemplateRuleDto { ComponentId = component.Id, LineKind = "EARNING", SemanticType = "BASIC", FormulaType = "PERCENTAGE_OF_GROSS", Value = 100m }]
+		};
+		input.PreviewToken = (await templates.PreviewAsync(new PreviewSalaryTemplateRequestDto
+		{
+			Rules = input.Rules, SalaryBasis = input.DefaultSalaryBasis, MonthlyAmount = input.SampleMonthlyAmount,
+			EffectiveMonth = month, PfApplicable = false, EsiManagementMode = "EXTERNAL", EsiExternalReason = input.DefaultEsiExternalReason
+		})).PreviewToken;
+		var template = await templates.CreateAsync(input);
+		return new SaveEmployeeCompensationDto
+		{
+			TemplateVersionId = template.EditableVersion.Id, SalaryBasis = "GROSS", MonthlyAmount = 50000m,
+			EffectiveMonth = month, PfApplicable = false, PfEnrollment = new() { Membership = "NOT_MEMBER" },
+			EsiManagementMode = "EXTERNAL", EsiExternalReason = input.DefaultEsiExternalReason,
+			IdempotencyKey = Guid.NewGuid().ToString("N"),
+			StatutoryProfileOverride = new PayrollStatutoryProfile { ApplyPf = false, PfDisabledReason = "Synthetic optional PF opt-out", ApplyEsic = false, EsicDisabledReason = "Synthetic external ESIC" }
+		};
+	}
+
+	[Fact]
+	public async Task FinalizeAsync_Should_Save_Salary_Once_And_Keep_Activation_Separate()
+	{
+		using var admin = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildAdminPrincipalAsync());
+		await CreateDefaultPoliciesAsync();
+		var submitted = await CreateSubmittedApplicationAsync("salary-finalization");
+		var input = new FinalizeEmployeeApplicationDto { PersonalInfo = await BuildPersonalInfoAsync(), Salary = await BuildSalaryAsync() };
+		var first = await _applications.FinalizeAsync(submitted.Id, input);
+		first.Employee.EmployeeStatusType.ShouldBe(EmployeeStatusType.Inactive);
+		first.ActivationReadiness.CanActivate.ShouldBeTrue();
+		var replay = await _applications.FinalizeAsync(submitted.Id, input);
+		replay.Employee.Id.ShouldBe(first.Employee.Id);
+		var compensation = GetRequiredService<ICompensationRevisionAppService>();
+		var history = await compensation.GetListAsync(first.Employee.Id);
+		history.Items.Count.ShouldBe(1);
+		history.Items[0].QuotedMonthlyAmount.ShouldBe(50000m);
+		// Existing employee salary editing stays on the canonical revision service.
+		input.Salary.ExpectedRevision = 1;
+		input.Salary.IdempotencyKey = Guid.NewGuid().ToString("N");
+		input.Salary.MonthlyAmount = 55000m;
+		input.Salary.StatutoryProfileOverride = null;
+		(await compensation.SaveAsync(first.Employee.Id, input.Salary)).RevisionNumber.ShouldBe(2);
+		(await _employeeRepository.GetAsync(first.Employee.Id)).EmployeeStatusType.ShouldBe(EmployeeStatusType.Inactive);
+	}
+
+	[Fact]
+	public async Task FinalizeAsync_Should_Reject_Missing_Salary_Before_Creating_Staff()
+	{
+		using var admin = GetRequiredService<ICurrentPrincipalAccessor>().Change(await BuildAdminPrincipalAsync());
+		await CreateDefaultPoliciesAsync();
+		var submitted = await CreateSubmittedApplicationAsync("missing-salary");
+		var personal = await BuildPersonalInfoAsync();
+		await Should.ThrowAsync<AbpValidationException>(() => _applications.FinalizeAsync(submitted.Id, new() { PersonalInfo = personal }));
+		(await _employeeRepository.GetListAsync(x => x.Email == personal.Email)).ShouldBeEmpty();
+		(await _applicationRepository.GetAsync(submitted.Id)).FinalizedEmployeeId.ShouldBeNull();
 	}
 
 	private static PublicEmployeeApplicationSubmitDto BuildSubmitDto(string email) =>

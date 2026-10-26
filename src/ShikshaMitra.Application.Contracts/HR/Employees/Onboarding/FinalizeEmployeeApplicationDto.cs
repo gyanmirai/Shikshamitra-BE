@@ -19,4 +19,7 @@ public class FinalizeEmployeeApplicationDto
 	[Volo.Abp.Auditing.DisableAuditing]
 	public ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryProfile? StatutoryProfile { get; set; }
 	public bool AttachResumeAsDocument { get; set; } = true;
+
+	[Required]
+	public ShikshaMitra.HR.Payroll.Compensation.SaveEmployeeCompensationDto Salary { get; set; } = null!;
 }

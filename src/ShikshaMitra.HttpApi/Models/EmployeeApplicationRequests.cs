@@ -31,4 +31,8 @@ public class EmployeeApplicationFinalizeRequest
 	public List<EmployeeApplicationWorkExperienceDto> WorkExperiences { get; set; } = [];
 	public bool UseSubmittedPhoto { get; set; } = true;
 	public bool AttachResumeAsDocument { get; set; } = true;
+	[Required]
+	public ShikshaMitra.HR.Payroll.Compensation.SaveEmployeeCompensationDto Salary { get; set; } = null!;
+	[Volo.Abp.Auditing.DisableAuditing]
+	public ShikshaMitra.HR.Payroll.Statutory.PayrollStatutoryProfile? StatutoryProfile { get; set; }
 }

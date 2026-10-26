@@ -87,7 +87,9 @@ public class EmployeeApplicationController(IEmployeeApplicationAppService appSer
 			AdditionalInfo = request.AdditionalInfo,
 			WorkExperiences = request.WorkExperiences,
 			UseSubmittedPhoto = request.UseSubmittedPhoto,
-			AttachResumeAsDocument = request.AttachResumeAsDocument
+			AttachResumeAsDocument = request.AttachResumeAsDocument,
+			Salary = request.Salary,
+			StatutoryProfile = request.StatutoryProfile
 		});
 	}
 

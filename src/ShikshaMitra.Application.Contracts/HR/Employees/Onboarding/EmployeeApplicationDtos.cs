@@ -173,6 +173,7 @@ public class EmployeeApplicationFinalizeResultDto
 {
 	public EmployeeApplicationDto Application { get; set; } = new();
 	public EmployeePersonalInfoDto Employee { get; set; } = new();
+	public EmployeeActivationReadinessDto ActivationReadiness { get; set; } = new();
 }
 
 public class EmployeeApplicationFileInput

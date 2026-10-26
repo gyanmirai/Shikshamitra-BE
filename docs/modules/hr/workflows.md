@@ -14,6 +14,8 @@ audience: humans-and-agents
 
 `EmployeeEmailService` resolves the current tenant's school code through `ITenantStore` and builds an absolute application login link from `App:ClientUrl`. The HTML email includes a visible Login to ShikshaMitra button, a copyable URL and the HTML-encoded school code next to the synthetic-tested credentials layout. The frontend accepts the editable `organization` query parameter as the school-code prefill; authentication still validates credentials and tenant access normally.
 
+Deferred staff-creation effects restore the tenant captured when the callback was registered before uploading the optional profile picture, publishing the creation event and rendering the welcome email after unit-of-work completion. The callback then restores its caller's tenant context. A fake-sender regression exercises a different ambient tenant at completion and verifies the creating school's login link.
+
 `App:ClientUrl` must be an HTTP(S) application root without user information, query or fragment. Missing or invalid configuration, or an unresolved tenant school code, uses the existing logged email-failure path instead of sending a guessed destination. No password or login credential is placed in the URL. This change does not send emails during validation, activate staff, alter account creation or guarantee SMTP delivery.
 
 TL;DR: use this page to understand how HR actions move through employees, attendance, leave, policies, payroll, and reports.

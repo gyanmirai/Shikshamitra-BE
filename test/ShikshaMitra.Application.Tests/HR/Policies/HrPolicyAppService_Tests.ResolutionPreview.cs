@@ -119,7 +119,8 @@ public partial class HrPolicyAppService_Tests
 		});
 		preview.IsComplete.ShouldBeFalse();
 		preview.Proposed.ShouldBeNull();
-		preview.UnavailableReason.ShouldContain("final ID");
+		preview.UnavailableReason.ShouldNotBeNull();
+		preview.UnavailableReason!.ShouldContain("final ID");
 		preview.Current.MatchedPriority.ShouldBe(10);
 	}
 

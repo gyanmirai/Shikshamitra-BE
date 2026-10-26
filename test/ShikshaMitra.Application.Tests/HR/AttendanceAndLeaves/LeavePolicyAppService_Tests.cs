@@ -12,6 +12,7 @@ using Volo.Abp.Validation;
 using Volo.Abp.Uow;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
+using Volo.Abp.Timing;
 using Xunit;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
@@ -423,6 +424,8 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 	public async Task Archive_Should_Block_Only_Current_Or_Future_Active_Assignments(
 		int startOffset, int endOffset, bool active, bool shouldBlock, bool foreignTenant)
 	{
+		// Use the same configured clock as archive validation, including across UTC/local midnight.
+		var today = GetRequiredService<IClock>().Now.Date;
 		var academicYearId = await GetAcademicYearIdAsync();
 		await _leavePolicyAppService.CreateLeavePolicyAsync(academicYearId, new LeavePolicyCreateRequest
 		{
@@ -443,8 +446,8 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		var tenant = GetRequiredService<ICurrentTenant>();
 		var assignment = new HrPolicyAssignment(Guid.NewGuid(), foreignTenant ? Guid.NewGuid() : tenant.Id, academicYearId,
 			HrPolicyAssignmentTargetType.Employee, Guid.NewGuid().ToString(), "Synthetic staff",
-			Guid.NewGuid(), Guid.NewGuid(), policy.Id, DateTime.UtcNow.Date.AddDays(startOffset),
-			DateTime.UtcNow.Date.AddDays(endOffset), active);
+			Guid.NewGuid(), Guid.NewGuid(), policy.Id, today.AddDays(startOffset),
+			today.AddDays(endOffset), active);
 		using (var uow = _unitOfWorkManager.Begin(requiresNew: true))
 		{
 			await assignments.InsertAsync(assignment, autoSave: true);

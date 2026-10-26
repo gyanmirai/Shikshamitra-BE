@@ -1,6 +1,14 @@
 {
   "culture": "hi",
   "texts": {
+    "Permission:Finance.SelfService.View": "जुड़े हुए विद्यार्थी की फीस देखें",
+    "Permission:Finance.SelfService.DownloadReceipts": "जुड़े हुए विद्यार्थी की रसीद डाउनलोड करें",
+    "Permission:Finance.SelfService.DownloadStatement": "जुड़े हुए विद्यार्थी का फीस विवरण डाउनलोड करें",
+    "Permission:Finance.SelfService.RequestConcession": "जुड़े हुए विद्यार्थी की फीस में छूट का अनुरोध करें",
+    "Permission:Finance.SelfService.RequestRefund": "जुड़े हुए विद्यार्थी की फीस वापसी का अनुरोध करें",
+    "Permission:Finance.SelfService.RequestAdjustment": "जुड़े हुए विद्यार्थी की फीस समायोजन का अनुरोध करें",
+    "Finance:SelfService:InvalidRequest": "सही शैक्षणिक वर्ष, फ़िल्टर और पृष्ठ चुनकर फिर प्रयास करें।",
+    "Finance:SelfService:PaymentEvidenceIncomplete": "भुगतान का विवरण अधूरा है। इस लेन-देन के मिलान के लिए विद्यालय की वित्त टीम से संपर्क करें।",
     "Finance:LateFeeWaiver:010006": "छूट अनुरोध अस्वीकार करने का कारण दर्ज करें।",
     "Finance:LateFeeWaiver:010007": "छूट अनुरोध जमा करने वाला उपयोगकर्ता उसे स्वीकृत या अस्वीकृत नहीं कर सकता।",
     "Menu:Home": "घर",

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Common;
 using ShikshaMitra.Domain.Finance.Policies;
@@ -72,18 +73,18 @@ public partial class ConcessionRequestAppService
 			{
 				x.Id,
 				x.FeeHeadId,
-				x.OutstandingAmount,
-				x.PaidAmount,
-				x.RefundedAmount,
-				x.NetAmount,
+				OutstandingAmount = x.OutstandingAmount.ToString("G29", CultureInfo.InvariantCulture),
+				PaidAmount = x.PaidAmount.ToString("G29", CultureInfo.InvariantCulture),
+				RefundedAmount = x.RefundedAmount.ToString("G29", CultureInfo.InvariantCulture),
+				NetAmount = x.NetAmount.ToString("G29", CultureInfo.InvariantCulture),
 				x.ConcurrencyStamp
 			}),
 			Mappings = mappings.OrderBy(x => x.FeeHeadId).Select(x => new
 			{
 				x.FeeHeadId,
 				x.UserSpecifiedConcessionAmountType,
-				x.UserSpecifiedConcessionAmountValue,
-				x.FeeHeadConcessionAmount
+				UserSpecifiedConcessionAmountValue = x.UserSpecifiedConcessionAmountValue.ToString("G29", CultureInfo.InvariantCulture),
+				FeeHeadConcessionAmount = x.FeeHeadConcessionAmount.ToString("G29", CultureInfo.InvariantCulture)
 			})
 		};
 		return ComputeCommandHash(evidence);

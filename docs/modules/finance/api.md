@@ -333,3 +333,83 @@ Bank transfer collection details retain `transactionReferenceNumber`, `transferD
 Reconciliation list rows expose the stored evidence in `instrumentDetails` and the original receiving bank through `bankAccountId` and `bankLabel`. Receipt detail responses expose the same evidence in `paymentInstruments[]`, including method, amount, collection timestamp, bank snapshot and instrument details. Provisional and official receipt PDFs show the bank transfer reference, transfer date, account holder and masked receiving bank for fee, charge and combined receipts. Verification reads the original payment instrument rather than recreating its evidence.
 
 Missing historical transfer dates and account holder names remain unknown; receipt or collection dates must not be substituted for the entered transfer date. Previously discarded references or names cannot be recovered without independent evidence. This change uses the existing JSONB column and requires no schema migration or automatic backfill. Receipt PDF cache version `v3` regenerates earlier cached documents from the available original evidence without altering amounts, payment status or receipt numbering. Existing tenant, academic scope and action permissions continue to apply.
+
+## Family mobile Finance
+
+Family monetary responses identify `currency: "INR"` and encode amounts as decimal strings. Concession and adjustment preview fingerprints normalize equivalent decimal scales before hashing. Clients must refresh older previews after this normalization; existing command receipts continue matching their original submitted payloads for replay.
+
+Root: `/api/mobile/v1/finance/students/{studentId}`. Reads return the standard
+`{success:true,data:...}` envelope; PDF routes return `application/pdf`.
+`academicYearId` is required except for `context`. Pages use `page=1&pageSize=20`
+(maximum 100) and return `{items,totalCount,page,pageSize}`. Money is an INR
+fixed two-decimal string; due dates are date-only, activity timestamps UTC instants.
+
+| GET suffix | Exact permission | Result |
+|---|---|---|
+| `context` | `Finance.SelfService.View` | Linked student, enrolled years, selected year, exact capabilities and disabled reasons |
+| `overview` | `Finance.SelfService.View` | Billed principal, verified and pending payments, billed outstanding, future scheduled principal, late fees, charges, concession, waivers, adjustments and refunds as separate fields |
+| `installments`, `charges` | `Finance.SelfService.View` | Canonical obligations and charge balances |
+| `payments` | `Finance.SelfService.View` | Paged transactions with decimal payment-method totals and real associated receipt IDs; optional case-insensitive `status` (`Rejected` maps to `Reversed`) |
+| `receipts` | `Finance.SelfService.View` | Paged official receipt identity, kind, verification state and provisional/final linkage |
+| `receipts/{receiptId}/pdf` | `Finance.SelfService.DownloadReceipts` | Official receipt PDF after exact tenant, student and year ownership validation |
+| `requests` | `Finance.SelfService.View` | Paged concession/refund/adjustment history, optional `kind` filter |
+| `statement/pdf` | `Finance.SelfService.DownloadStatement` | Official statement over the same canonical decimal read model and installment rows |
+
+Every call reloads persisted portal association and identity through
+`StudentPortalAccessService`. Staff Finance grants, class assignments and role claims
+cannot grant this family surface. Inactive/departed students, revoked links, revoked
+enrollments, foreign children and years fail closed. Legacy year fallback is allowed
+only without enrollment history. A student-self identity stays read-only even when
+also linked as guardian. Parent commands additionally require a persisted guardian
+association and the exact `Finance.SelfService.RequestConcession`, `RequestRefund`
+or `RequestAdjustment` permission; existing roles are never reseeded to add grants.
+
+Principal amounts come from decimal DueFee ledger values; transaction amounts come
+from decimal PaymentMethodRecord splits. Legacy charge/receipt storage is converted
+per row at the boundary, never summed through the legacy double DTOs. Stored
+outstanding already reflects provisional allocations; pending verification is shown
+separately. Future scheduled amount is remaining principal before demand generation.
+LateFeeAmount is outstanding policy-assessed late fee; ChargeOutstandingAmount is
+outstanding approved ad hoc charge. Neither is hidden inside billed principal.
+Concession and noncash adjustment are principal credits. WaiverAmount covers charge
+and late-fee waiver evidence. RefundedAmount is refunded principal.
+
+Request history includes submitted staff-created requests and the current actor's
+drafts. Other people's drafts, evidence, payout beneficiaries, internal notes and
+rejection/approval commentary are excluded. Own draft concessions expose actions
+only to a guardian with the request permission. Receipt PDFs reuse the official
+receipt generator directly after ownership checks; no staff API bypass is added.
+Statements use the same overview, installment and payment projection, show the academic year,
+INR, as-of date and provisional-payment distinction, and create no financial writes.
+
+Family command contracts live in `Application.Contracts/Finance/Mobile`; each group
+uses the same student/year root above and the standard response envelope.
+
+| Method / suffix | Permission | Behavior |
+|---|---|---|
+| GET `concessions/eligibility`, POST `concessions/preview` | `Finance.SelfService.RequestConcession` | Assigned effective policy, allowed types/document requirements, canonical decimal preview and fingerprint |
+| POST `concessions/drafts`, GET/PUT `concessions/{requestId}` | `Finance.SelfService.RequestConcession` | Own draft form, nested source validation and concurrency stamp; other actors' forms/evidence stay private |
+| POST `concessions/{requestId}/submit` or `/cancel` | `Finance.SelfService.RequestConcession` | Own request transition, reviewed preview fingerprint, concurrency stamp and idempotency key |
+| POST `concessions/documents/{concessionTypeId}/{documentId}` | `Finance.SelfService.RequestConcession` | Requirement/signature/size validated staged base64 upload (10 MiB hard cap), opaque staged URL |
+| GET `concessions/{requestId}/documents/{documentId}` | `Finance.SelfService.RequestConcession` | Exact creator/child/year protected evidence download |
+| GET `refunds/eligibility`, POST `refunds/preview`, POST `refunds` | `Finance.SelfService.RequestRefund` | Eligible settled original receipt/allocation IDs, assigned policy methods, beneficiary input, fingerprint and pending review |
+| GET `adjustments/eligibility`, POST `adjustments/preview`, POST `adjustments` | `Finance.SelfService.RequestAdjustment` | Exact eligible child/year source dues, canonical preview, fingerprint and pending noncash review |
+| GET `activity`, GET `notifications` | `Finance.SelfService.View` | Safe paged financial status events; notifications support `unreadOnly=true` |
+| POST `notifications/{eventId}/read` | `Finance.SelfService.View` | Persist a per-user read marker only for an event in this exact child/year |
+
+Financial mutations require a stable nonempty `idempotencyKey` (maximum 100
+characters); reuse the key and original payload after an unknown outcome. Changed
+payloads do not reuse a key. Concession edits and actions include the current
+`concurrencyStamp`; submission and refund/adjustment creation include the server
+`previewFingerprint`. Parent-created submissions always wait for staff review,
+including when the guardian also has administrator permissions. Source receipt,
+allocation, due, policy, type and document IDs are checked against the authorized
+child/year and current workflow state. Payout references, school bank choices,
+staff approval fields and caller-calculated final amounts are not trusted inputs.
+
+Activity and notification content is a fixed safe status projection over durable
+Finance audit events; private audit payloads and evidence are excluded. Per-user
+read markers deduplicate by event identity and survive reloads. Marking a status
+message read does not mutate financial history. There is no push delivery or
+scheduled reminder worker in this surface.
+A missing or incomplete decimal payment-method split does not become a zero payment. `Finance:SelfService:PaymentEvidenceIncomplete` fails the affected overview/history/statement and directs the caller to school Finance for reconciliation; the legacy header is used only to check evidence completeness.

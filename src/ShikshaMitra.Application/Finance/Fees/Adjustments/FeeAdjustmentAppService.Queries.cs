@@ -15,15 +15,15 @@ public partial class FeeAdjustmentAppService
     {
         await financeScopeAccessService.EnsureStudentAccessibleAsync(studentId);
 
+        var feeHeads = await feeHeadRepository.GetListAsync(fh => fh.AcademicYearId == academicYearId);
+        var feeHeadIds = feeHeads.Select(fh => fh.Id).ToList();
         var dueFees = await dueFeeRepository.GetListAsync(
-            df => df.StudentId == studentId && df.OutstandingAmount > 0);
+            df => df.StudentId == studentId && feeHeadIds.Contains(df.FeeHeadId) && df.OutstandingAmount > 0);
         var pendingSource = await feeAdjustmentRepository.GetPendingSourceAmountsByDueFeeAsync(studentId);
 
         if (dueFees.Count == 0)
             return new AdjustmentEligibilityDto { StudentId = studentId, AcademicYearId = academicYearId };
 
-        var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
-        var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
         var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
 
         var grouped = dueFees

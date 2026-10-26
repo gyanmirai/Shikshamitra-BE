@@ -1,6 +1,14 @@
 {
     "Culture": "en",
     "Texts": {
+        "Permission:Finance.SelfService.View": "View linked student finances",
+        "Permission:Finance.SelfService.DownloadReceipts": "Download linked student receipts",
+        "Permission:Finance.SelfService.DownloadStatement": "Download linked student statement",
+        "Permission:Finance.SelfService.RequestConcession": "Request concession for linked student",
+        "Permission:Finance.SelfService.RequestRefund": "Request refund for linked student",
+        "Permission:Finance.SelfService.RequestAdjustment": "Request adjustment for linked student",
+        "Finance:SelfService:InvalidRequest": "Select a valid academic year, filter and page, then try again.",
+        "Finance:SelfService:PaymentEvidenceIncomplete": "Payment evidence is incomplete. Contact the school finance team to reconcile this transaction.",
         "Finance:Proration:JoiningDateRequired": "Complete the actual joining date in the registration form before preparing fees.",
         "Finance:Proration:JoiningDateInvalid": "Correct the actual joining date in the registration form. It must be a valid, unambiguous date within or before this academic year.",
         "Finance:Proration:PolicyAmbiguous": "Finance must configure one active default proration policy for this academic year.",

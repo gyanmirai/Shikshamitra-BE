@@ -42,8 +42,10 @@ public partial class StudentFeeDetailsQueryService
 					ChargeId = d.Id, Name = $"Late Fee - {names.GetValueOrDefault(d.FeeHeadId, string.Empty)} ({d.GetDisplayInstallmentLabel()})",
 					Amount = (double)balance.Total, PaidAmount = (double)balance.PaidAmount,
 					PendingAmount = (double)balance.PendingAmount, WaivedAmount = (double)balance.WaivedAmount,
+					ReconciliationAmount = balance.ReconciliationAmount,
 					CanWaive = balance.PendingAmount > 0m,
-					Status = balance.PendingAmount <= 0m ? (balance.WaivedAmount > 0m ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
+					Status = balance.ReconciliationAmount > 0m ? FeeCollectionStatus.InReconciliation
+						: balance.PendingAmount <= 0m ? (balance.WaivedAmount > 0m ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
 						: (balance.PaidAmount > 0m ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending)
 				};
 			}));
@@ -129,29 +131,32 @@ public partial class StudentFeeDetailsQueryService
 		var chargeIds = studentCharges.Select(c => c.Id).ToList();
 		var waivedPerCharge = (await chargeWaiverRepository.GetListAsync(x => chargeIds.Contains(x.ChargeId)))
 			.GroupBy(x => x.ChargeId)
-			.ToDictionary(x => x.Key, x => x.Sum(w => (double)w.EffectiveAmount));
+			.ToDictionary(x => x.Key, x => x.Sum(w => w.EffectiveAmount));
 
 		var chargeCollQ = await chargeCollectionRecordRepository.GetQueryableAsync();
-		var reversedTxIds = await GetReversedTransactionIdsAsync();
-		var paidPerCharge = chargeCollQ
-			.Where(r => r.StudentId == studentId && !reversedTxIds.Contains(r.FeeRecordMetadataId))
-			.GroupBy(r => r.ChargeId)
-			.Select(g => new { ChargeId = g.Key, Paid = g.Sum(r => r.Amount) })
-			.ToDictionary(x => x.ChargeId, x => x.Paid);
+		var metadataQ = await feeRecordMetadataRepository.GetQueryableAsync();
+		var activeTxIds = metadataQ.Where(x => x.StudentId == studentId && x.AcademicYearId == academicYearId && x.Status != FeeCollectionStatus.Reversed).Select(x => x.Id);
+		var pendingTxIds = (await AsyncExecuter.ToListAsync(metadataQ.Where(x => x.StudentId == studentId && x.AcademicYearId == academicYearId && x.Status == FeeCollectionStatus.InReconciliation).Select(x => x.Id))).ToHashSet();
+		var allocations = await AsyncExecuter.ToListAsync(chargeCollQ.Where(r => r.StudentId == studentId && chargeIds.Contains(r.ChargeId) && activeTxIds.Contains(r.FeeRecordMetadataId)));
+		var paidPerCharge = allocations.GroupBy(x => x.ChargeId).ToDictionary(x => x.Key, x => x.Sum(r => (decimal)r.Amount));
+		var reconPerCharge = allocations.Where(x => pendingTxIds.Contains(x.FeeRecordMetadataId)).GroupBy(x => x.ChargeId)
+			.ToDictionary(x => x.Key, x => x.Sum(r => (decimal)r.Amount));
 
 		return studentCharges.Select(c =>
 		{
-			var net = (double)c.Amount;
-			var paid = paidPerCharge.GetValueOrDefault(c.Id, 0d);
-			var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0d);
-			var pending = Math.Max(0d, net - paid - waived);
+			var net = c.Amount;
+			var paid = paidPerCharge.GetValueOrDefault(c.Id, 0m);
+			var waived = waivedPerCharge.GetValueOrDefault(c.Id, 0m);
+			var pending = Math.Max(0m, net - paid - waived);
+			var reconciliation = reconPerCharge.GetValueOrDefault(c.Id, 0m);
 			return new FeeChargeDetailDto
 			{
 				ChargeId = c.Id, Name = string.IsNullOrWhiteSpace(c.ChargeName) ? c.PurposeDescription : c.ChargeName,
-				Amount = net, PaidAmount = paid, PendingAmount = pending,
-				WaivedAmount = waived, CanWaive = pending > 0,
-				Status = pending <= 0d ? (waived > 0d ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
-					: (paid > 0d ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
+				Amount = (double)net, PaidAmount = (double)paid, PendingAmount = (double)pending,
+				WaivedAmount = (double)waived, ReconciliationAmount = reconciliation, CanWaive = pending > 0m,
+				Status = reconciliation > 0m ? FeeCollectionStatus.InReconciliation
+					: pending <= 0m ? (waived > 0m ? FeeCollectionStatus.Waived : FeeCollectionStatus.Paid)
+					: (paid > 0m ? FeeCollectionStatus.Partial : FeeCollectionStatus.Pending),
 			};
 		}).ToList();
 	}

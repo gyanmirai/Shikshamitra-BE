@@ -135,7 +135,10 @@ public partial class ConcessionRequestAppService
 	public async Task<ApiDataResponseDto<ConcessionRequestDetailDto>> SubmitAsync(
 		Guid id, SubmitConcessionRequestDto input)
 	{
-		var autoApprove = await userScopeService.IsAdminUserAsync(currentUser.GetId());
+		var origin = await concessionRequestRepository.GetAsync(id);
+		await financeScopeAccessService.EnsureStudentAccessibleAsync(origin.StudentId);
+		var autoApprove = !origin.GetProperty<bool>(FamilyFinanceOrigin.MarkerProperty) &&
+			await userScopeService.IsAdminUserAsync(currentUser.GetId());
 		if (autoApprove)
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve);
 		using var uow = unitOfWorkManager.Begin(isTransactional: true);

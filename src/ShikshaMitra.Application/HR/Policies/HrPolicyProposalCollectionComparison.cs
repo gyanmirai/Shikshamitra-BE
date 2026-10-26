@@ -16,13 +16,20 @@ internal static class HrPolicyProposalCollectionComparison
 		{
 			var value = properties[key];
 			if (value.ValueKind != JsonValueKind.Array) continue;
+			if (key == "customWeeklyOffs")
+			{
+				// The shared version formatter consumes numeric weekdays. Canonicalize
+				// their order without replacing their JSON type with display text.
+				properties[key] = JsonSerializer.SerializeToElement(value.EnumerateArray().Select(row => row.GetInt32()).OrderBy(day => day).ToArray());
+				continue;
+			}
 			var rows = value.EnumerateArray().Select(row => Describe(key, row)).OrderBy(x => x, StringComparer.Ordinal).ToArray();
 			properties[key] = JsonSerializer.SerializeToElement(rows);
 		}
 	}
 
-	public static string Display(JsonElement rows) => rows.ValueKind == JsonValueKind.Array && rows.GetArrayLength() > 0
-		? string.Join("\n", rows.EnumerateArray().Select(x => x.GetString())) : "None";
+	public static string Display(string field, JsonElement rows) => rows.ValueKind == JsonValueKind.Array && rows.GetArrayLength() > 0
+		? string.Join("\n", rows.EnumerateArray().Select(row => field == "customWeeklyOffs" ? Describe(field, row) : row.GetString())) : "None";
 
 	private static string Describe(string field, JsonElement row)
 	{

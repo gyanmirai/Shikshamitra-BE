@@ -133,8 +133,8 @@ public class HrPolicyVersionReadService(
 		var differences = HrPolicyVersionDiffBuilder.BuildDifferences(fromJson, toJson, await BuildDisplayContextAsync(fromJson, toJson));
 		foreach (var difference in differences.Where(x => HrPolicyProposalCollectionComparison.Supports(x.Field)))
 		{
-			difference.FromDisplayValue = difference.FromValue = HrPolicyProposalCollectionComparison.Display(currentProperties[difference.Field]);
-			difference.ToDisplayValue = difference.ToValue = HrPolicyProposalCollectionComparison.Display(proposedProperties[difference.Field]);
+			difference.FromDisplayValue = difference.FromValue = HrPolicyProposalCollectionComparison.Display(difference.Field, currentProperties[difference.Field]);
+			difference.ToDisplayValue = difference.ToValue = HrPolicyProposalCollectionComparison.Display(difference.Field, proposedProperties[difference.Field]);
 		}
 		return differences;
 	}

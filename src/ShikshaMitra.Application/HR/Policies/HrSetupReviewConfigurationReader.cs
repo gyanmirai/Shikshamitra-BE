@@ -24,6 +24,13 @@ public class HrSetupReviewConfigurationReader(
 {
 	public static string Hash(object value) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(value)));
 
+	internal static object[] CanonicalLinkedHolidayValues(IEnumerable<WorkCalendarHoliday> rows) => rows
+		.OrderBy(x => x.CalendarHolidayId).ThenBy(x => x.FromDate).ThenBy(x => x.HolidayName, StringComparer.Ordinal)
+		.ThenBy(x => x.AcademicYearId).ThenBy(x => x.WorkCalendarPolicyId).ThenBy(x => x.ToDate)
+		.ThenBy(x => x.Source).ThenBy(x => x.IsIncluded).ThenBy(x => x.Notes, StringComparer.Ordinal)
+		.Select(x => (object)new { x.CalendarHolidayId, x.AcademicYearId, x.WorkCalendarPolicyId, x.FromDate, x.ToDate,
+			x.HolidayName, x.Source, x.IsIncluded, x.Notes }).ToArray();
+
 	public async Task<HrSetupReviewDto> ReadAsync(AcademicYear year, string section)
 	{
 		var result = new HrSetupReviewDto { AcademicYearId = year.Id, Section = section };
@@ -39,10 +46,7 @@ public class HrSetupReviewConfigurationReader(
 				var rows = await finalizedHolidays.GetAsync(year.Id, calendar);
 				// The owning preview synthesizes new row IDs for unmaterialized central holidays on
 				// every read. Hash its stable visible configuration, including its override semantics.
-				linkedPreviewDependencies.Add(new { CalendarId = calendar.Id, Holidays = rows
-					.OrderBy(x => x.CalendarHolidayId).ThenBy(x => x.FromDate).ThenBy(x => x.HolidayName, StringComparer.Ordinal)
-					.Select(x => new { x.CalendarHolidayId, x.AcademicYearId, x.WorkCalendarPolicyId, x.FromDate, x.ToDate,
-						x.HolidayName, x.Source, x.IsIncluded, x.Notes }) });
+				linkedPreviewDependencies.Add(new { CalendarId = calendar.Id, Holidays = CanonicalLinkedHolidayValues(rows) });
 			}
 			configuration = new { Calendars = calendarRows.OrderBy(x => x.Id).Select(HrPolicyMapping.ToDto),
 				Holidays = holidayRows.OrderBy(x => x.Id).Select(HrPolicyMapping.ToDto), LinkedPreviewDependencies = linkedPreviewDependencies };

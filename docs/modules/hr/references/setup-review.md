@@ -57,6 +57,7 @@ fingerprint and optional sample employee/date. No migration, reset or backfill i
 Hashes include tenant/year/dates and ordered policy configurations with child rules/holidays. Attendance/payroll include calendar dependencies.
 Calendar review also hashes the stable finalized holiday-preview fields for active linked calendars using `PolicyHolidayImpactFinalizedHolidayReader`.
 Temporary generated row IDs are excluded. Central holidays already replaced by a stored school override are excluded by that reader's existing semantics;
+all serialized stable holiday fields participate in total deterministic ordering, including ties between excluded manual rows.
 snapshot and independent calendars do not acquire a dependency on unmaterialized central holidays. This tracks visible linked-preview evidence without changing payroll calculations.
 The sample includes all section hashes, selected staff concurrency stamp and actual resolution outcome/steps.
 Invalidation is conservative: versions and audited DTO metadata are included, so renaming an unused year policy can require review again.

@@ -3,7 +3,7 @@ module: hr
 domain: hr-policy-architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-07-08
+updated_on: 2026-10-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -70,6 +70,16 @@ Resolution order is specificity-first:
 Groups are the v1 abstraction for dynamic role, department, employment-type, and mixed targeting. Only active policies can be assigned. Active assignments for the same target type/key and academic year cannot overlap by date range. Employee assignments always beat group assignments. Within the same specificity, higher priority wins; ties use the latest effective-from date. The preview APIs return the winning source and resolution steps for skipped candidates.
 
 ## Policy lifecycle
+
+### New production tenant initialization
+
+`HostTenantAppService.CreateAsync` sets the internal `HrStarterPoliciesEnabled` tenant extra property only for newly created production schools. It still avoids `IDataSeeder` and demo school data. `MultiTenancyAppService.CreateAsync` also opts in only its newly created tenant after the legacy base creation/seed pipeline returns, then initializes any empty academic years that pipeline just created. It preserves any seeded/customized policies. Generic demo seeders, tenant updates and deployment runs never opt existing schools into this initializer.
+
+`AcademicYearHrStarterPolicyHandler` handles the local `EntityCreatedEventData<AcademicYear>` event before the creation unit of work commits. `HrStarterPolicyInitializer` checks the opt-in and academic-year `HrStarterPoliciesInitialized` marker, switches to the year owner's tenant context, and uses explicit tenant/year predicates while preserving ABP filters. It ensures one tenant-wide shift when none exists, creates the calendar, then default payroll, attendance and leave policies (including paid/unpaid rules), and finally marks the year initialized. All references point to the same tenant/year calendar. Domain constructors enforce policy validity. The tenant-level `HrStarterShiftInitialized` marker preserves shift edits/deletions across academic years; shift IDs derive from the tenant alone.
+
+The year, policy set, rules and marker commit together. A failure propagates and rolls back creation; callers may retry the normal setup request. IDs derive deterministically from tenant ID, academic-year ID and record kind, so duplicate delivery cannot insert a second starter set. Concurrent stale deliveries may encounter a database primary-key/concurrency conflict and must retry the transaction. Completed years and existing policy setups are skipped; the initializer never rewrites customized defaults, promotes drafts, repairs deleted policies or runs as a migration/backfill contributor. There is no automatic rollover on year updates; each newly created academic year in an opted-in school receives its own initial set. Changing an existing year's dates follows the existing policy-edit workflow.
+
+Starter settings and review obligations are documented in [HR product behavior](../product.md#new-school-starter-policies). No FE deployment or schema migration is required: flags use existing tenant/year extra-property storage. Deploy the backend before creating new production tenants. Existing tenants remain unchanged and would require a separately reviewed explicit backfill feature.
 
 Policy create, edit, clone, restore, set-default, and archive operations capture `HrPolicyVersion` snapshots. Restoring a version always creates a new draft policy; it does not mutate active policy history. Risky changes use impact preview and confirmation tokens before write operations when employees, assignments, payroll snapshots, or attendance evaluations may be affected. Locked payroll impact remains blocking.
 

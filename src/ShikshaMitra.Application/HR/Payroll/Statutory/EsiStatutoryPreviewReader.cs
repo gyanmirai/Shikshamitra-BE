@@ -46,6 +46,8 @@ public sealed class EsiStatutoryPreviewReader(
 		var rule = policies.Values.SingleOrDefault(x => x.Policy.IsDefault)?.Rule ?? throw EsiPolicyResolver.NotEffective(null, payrollMonth);
 		var employees = await scopedEmployeeResolver.GetScopedPayrollEmployeesAsync(
 			payrollMonth.Year, payrollMonth.Month, includeUnknownStageEmployees: false);
+		if (employees.Count > ShikshaMitra.HR.Reports.HrReportingEngine.MaximumPopulation)
+			throw new Volo.Abp.BusinessException(HRErrorCodes.ReportPopulationTooLarge);
 		var employeeIds = employees.Select(x => x.Id).ToList();
 		var existingComponents = await payrollComponentRepository.GetByEmployeeIdsAsync(employeeIds);
 		var existingComponentsByEmployee = existingComponents.SelectMany(x => x).ToLookup(x => x.EmployeeId);
@@ -239,7 +241,7 @@ public sealed class EsiStatutoryPreviewReader(
 
 	public static StatutoryImpactPreviewDto Project(
 		EsiStatutoryPreviewCalculation calculation,
-		StatutoryImpactPreviewRequestDto input)
+		StatutoryImpactPreviewRequestDto input, bool allRows = false)
 	{
 		IEnumerable<EmployeeStatutoryImpactDto> filtered = calculation.Items;
 		var search = input.Search?.Trim();
@@ -280,7 +282,7 @@ public sealed class EsiStatutoryPreviewReader(
 			TotalCount = totalCount,
 			Page = input.Page,
 			PageSize = input.PageSize,
-			Items = filtered.Skip((int) Math.Min((long) input.Page * input.PageSize, int.MaxValue)).Take(input.PageSize).ToList(),
+			Items = allRows ? filtered.ToList() : filtered.Skip((int) Math.Min((long) input.Page * input.PageSize, int.MaxValue)).Take(input.PageSize).ToList(),
 			GeneratedAtUtc = calculation.GeneratedAtUtc,
 			PreviewFingerprint = calculation.PreviewFingerprint
 		};

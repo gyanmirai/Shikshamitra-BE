@@ -35,7 +35,7 @@ public class ProfessionalManagementCycleWorkflow(
 		var totalCount = await asyncExecuter.CountAsync(query);
 		var cycles = await asyncExecuter.ToListAsync(
 			query
-				.OrderByDescending(x => x.PeriodStart)
+				.OrderByDescending(x => x.PeriodStart).ThenBy(x => x.Id)
 				.Skip((page - 1) * pageSize)
 				.Take(pageSize));
 		var ids = cycles.Select(x => x.Id).ToList();

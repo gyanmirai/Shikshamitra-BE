@@ -38,6 +38,8 @@ public class LeavePolicyRuleItem
 
 public class LeavePolicyItem
 {
+	public DateTime CreationTime { get; set; }
+	public DateTime? LastModificationTime { get; set; }
 	public Guid Id { get; set; }
 	public string PolicyTitle { get; set; } = string.Empty;
 	public string Status { get; set; } = "Draft";

@@ -218,6 +218,8 @@ public class StatutoryImpactPreviewDto
 
 public interface IEsiStatutoryAppService : IApplicationService
 {
+	// Internal authorized table/export reader; the HTTP preview retains its page-size contract.
+	Task<StatutoryImpactPreviewDto> GetTablePopulationAsync(StatutoryImpactPreviewRequestDto input);
 	Task<StatutoryRuleVersionDto> GetCurrentRuleAsync(DateTime? effectiveOn = null);
 	Task<StatutoryEstablishmentDto> GetEstablishmentAsync();
 	Task<List<PayrollComponentStatutoryTreatmentDto>> GetComponentTreatmentsAsync(DateTime? effectiveOn = null);

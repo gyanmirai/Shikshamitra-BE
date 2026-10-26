@@ -30,6 +30,7 @@ public static class HrTableExportProjection
 			"calculationType" => Text(field).ToUpperInvariant(),
 			"amount" => Text("calculationType") == "Percentage" ? Get("percentage") : Get("amount"),
 			"customComponent.componentName" => Text("dependOn") == "Gross" ? "Gross Salary" : Get("selectedEarningComponentName") ?? Get("selectedDeductionComponentName"),
+			"visibleInPayslip" => Get(field) is true ? "Yes" : "No",
 			_ => Get(field) };
 		if (table == "hr-policy-assignments") return field switch {
 			"target" => Get("targetDisplayName") ?? Get("targetKey"), "sourceType" => Text("targetType") == "employee" ? "Staff" : "Group",
@@ -59,11 +60,18 @@ public static class HrTableExportProjection
 		};
 		if (table == "hr-payroll-registration-readiness") return field switch
 		{
-			"applyPf" => Get("applyPf") is true ? Get("pfNumberPresent") is true ? "Registered" : "Registration required" : "Not applicable",
-			"applyEsic" => Get("applyEsic") is true ? Get("esicNumberPresent") is true ? "Registered" : "Registration required" : "Not applicable", _ => Get(field)
+			"applyPf" => Get("applyPf") is true ? Get("pfNumberPresent") is true ? "Number recorded" : "Number missing" : "Turned off",
+			"applyEsic" => Get("applyEsic") is true ? Get("esicNumberPresent") is true ? "Number recorded" : "Number missing" : "Turned off", _ => Get(field)
 		};
+		if (table == "payroll-monthly-workbench-table") return field switch {
+			"netSalary" => Get("netPay"),
+			"status" => Get("isLocked") is true ? "LOCKED" : Get("reviewStatus"),
+			"issueFilter" => PayrollIssues(row), _ => Get(field) };
 		if (table is "hr-leave-requests" or "hr-self-leave-history") return field switch { "submittedBy" => Get("submittedByName"), "employeeName" => Get("name"), "employeeIdentifier" => Get("employeeIdentifier"), "organization" => Get("mediumStageName"), "reason" => Get("description"), _ => Get(field) };
-		if (table == "hr-manual-attendance") return field switch { "attendanceDate" => Get("dateIso"), "errors" or "warnings" => row.TryGetProperty(field, out var values) ? string.Join("; ", values.EnumerateArray().Select(x => x.GetString())) : null, _ => Get(field) };
+		if (table == "hr-manual-attendance") return field switch {
+			"employeeName" => Get("fullName"), "attendanceDate" => Get("dateIso"), "timeIn" => Get("inTime"), "timeOut" => Get("outTime"),
+			"status" or "attendanceStatus" => Get("isHoliday") is true ? "Holiday" : Text("status") is "NotMarked" or "0" ? "Pending" : Get("status"),
+			"errors" or "warnings" => row.TryGetProperty(field, out var values) ? string.Join("; ", values.EnumerateArray().Select(x => x.GetString())) : null, _ => Get(field) };
 		if (table == "esi-employee-impact" && field == "readiness") return row.TryGetProperty("issues", out var issues) && issues.GetArrayLength() > 0
 			? string.Join("; ", issues.EnumerateArray().Select(x => x.GetProperty("title").GetString())) : Get("isCovered") is true ? "Ready" : "No action needed";
 		if (table == "hr-policy-leave" && field is "buckets" or "entitlements" or "controls")
@@ -99,10 +107,18 @@ public static class HrTableExportProjection
 		if (table == "hr-attendance-import-rows") return field is "errors" or "warnings" && row.TryGetProperty(field, out var messages) ? string.Join("; ", messages.EnumerateArray().Select(x => x.GetString())) : field == "attendanceStatus" ? Get("status") ?? "Pending" : Get(field);
 		return Get(field);
 	}
+	private static string PayrollIssues(JsonElement row)
+	{
+		var codes = row.TryGetProperty("issueCodes", out var issues) ? issues.EnumerateArray().Select(issue => issue.GetString() ?? "").ToList() : [];
+		if (codes.Count == 0) return "CLEAN";
+		// Presentation categories already used by the payroll workbench, not new lock rules.
+		string[] critical = ["ESI_COMPONENT_REQUIRED", "PF_MEMBERSHIP_REVIEW_REQUIRED", "PF_ENROLLMENT_REQUIRED", "PF_CONSENT_REQUIRED", "PF_ESTABLISHMENT_NOT_COVERED", "ESI_BASIC_COMPONENT_REQUIRED", "PF_WAGE_BASIS_REQUIRED", "MISSING_SALARY_STRUCTURE", "NO_ATTENDANCE", "NEGATIVE_NET_PAY", "PAYROLL_POLICY_CONFIGURATION", "ESI_ESTABLISHMENT_INACTIVE", "ESI_WAGE_CLASSIFICATION_REQUIRED", "ESI_ENROLLMENT_REVIEW_REQUIRED", "COMPENSATION_REVISION_REQUIRED", "COMPENSATION_TARGET_VARIANCE"];
+		return codes.Any(code => Enumerable.Contains(critical, code)) ? "CRITICAL" : "HAS_ISSUES";
+	}
 	public static HrReportFieldDto Field(HrTableExportColumn column)
 	{
 		var money = new[] { "fullGrossSalary", "grossSalary", "additionalEarnings", "totalEarnings", "totalDeduction", "netSalary", "previousMonthNetPay", "netPayDelta", "statutoryWages", "employeeContribution", "employerContribution", "wageCeiling", "fromSalary", "toSalary", "taxAmount" };
-		var number = new[] { "employeePercentage", "employerPercentage", "present", "payableDays", "holidayCount", "version", "versionNumber", "ruleCount", "totalDays", "rowCount", "assignedCount", "finalizedCount", "weight", "priority", "documentSize", "totalRows", "validRows", "invalidRows", "amount" };
+		var number = new[] { "rowNumber", "employeePercentage", "employerPercentage", "present", "payableDays", "holidayCount", "version", "versionNumber", "ruleCount", "totalDays", "rowCount", "assignedCount", "finalizedCount", "weight", "priority", "documentSize", "totalRows", "validRows", "invalidRows", "amount" };
 		return new() { Id = column.Id, Label = column.Label, Type = money.Contains(column.Id) ? "money" : number.Contains(column.Id) ? "number" : column.Id is "dob" or "doi" or "startDate" or "endDate" or "attendanceDate" or "periodStart" or "periodEnd" or "effectiveFrom" ? "date" : column.Id is "submittedAt" or "tokenExpiresAt" or "updatedAt" or "appliedOn" or "creationTime" or "capturedAt" or "importedAt" or "appliedDate" ? "datetime" : "string" };
 	}
 }

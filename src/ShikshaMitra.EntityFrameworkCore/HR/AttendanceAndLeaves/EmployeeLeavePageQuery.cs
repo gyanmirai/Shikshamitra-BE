@@ -142,7 +142,7 @@ internal static class EmployeeLeavePageQuery
 	{
 		var totalCount = await query.CountAsync(cancellationToken);
 		var pageIds = await query
-			.OrderByDescending(x => x.CreationTime)
+			.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id)
 			.Skip(skip)
 			.Take(take)
 			.Select(x => x.Id)

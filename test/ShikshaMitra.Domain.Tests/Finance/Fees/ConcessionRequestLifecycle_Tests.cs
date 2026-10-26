@@ -8,6 +8,53 @@ namespace ShikshaMitra.Domain.Finance.Fees;
 
 public class ConcessionRequestLifecycle_Tests
 {
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public void Explicit_administrator_creator_decision_preserves_actor_and_terminal_state(bool approve)
+	{
+		var request = CreateDraft();
+		var creator = Guid.NewGuid();
+		typeof(ConcessionRequest).GetProperty(nameof(ConcessionRequest.CreatorId))!.SetValue(request, creator);
+		var now = DateTime.UtcNow;
+		if (approve)
+		{
+			request.PrepareSubmissionEvidence([Guid.NewGuid()], "{\"inputs\":[]}", "[]");
+			request.Submit(now);
+			request.Approve(creator, "Administrator reviewed own request", [], now, allowCreatorDecision: true);
+			Assert.Equal(ConcessionRequestStatus.Approved, request.Status);
+		}
+		else
+		{
+			request.Reject(creator, "Administrator rejected own incomplete request", now, allowCreatorDecision: true);
+			Assert.Equal(ConcessionRequestStatus.Rejected, request.Status);
+			Assert.Null(request.SubmittedOn);
+		}
+		Assert.Equal(creator, request.GetApprovedBy());
+		Assert.Equal(now, request.GetApprovedOn());
+		Assert.Throws<BusinessException>(() => request.Reject(creator, "Cannot decide an already decided request", now, allowCreatorDecision: true));
+	}
+
+	[Fact]
+	public void Incomplete_saved_request_can_be_rejected_without_submission()
+	{
+		var request = CreateDraft();
+		var creator = Guid.NewGuid();
+		typeof(ConcessionRequest).GetProperty(nameof(ConcessionRequest.CreatorId))!.SetValue(request, creator);
+		var checker = Guid.NewGuid();
+		var now = DateTime.UtcNow;
+		Assert.Throws<BusinessException>(() => request.Reject(creator, "Cannot decide own request", now));
+		Assert.Throws<BusinessException>(() => request.Reject(checker, "short", now));
+		Assert.Equal(ConcessionRequestStatus.Draft, request.Status);
+
+		request.Reject(checker, "Incomplete request is no longer required", now);
+
+		Assert.Equal(ConcessionRequestStatus.Rejected, request.Status);
+		Assert.Null(request.SubmittedOn);
+		Assert.Equal(checker, request.GetApprovedBy());
+		Assert.Empty(request.ConcessionDueFeeAllocations);
+		Assert.Throws<BusinessException>(() => request.Reject(checker, "Already decided request", now));
+	}
 	[Fact]
 	public void Administrator_creation_transition_requires_the_original_creator()
 	{

@@ -43,6 +43,15 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         ExpenseCategoryId = categoryId; ExpenseCategoryName = name;
         PayingBankAccountId = bankId; PayingBankLabel = bankLabel; RefundMethod = method;
     }
+    public void SetPayoutRouting(Guid categoryId, string name, Guid bankId, string bankLabel, string method)
+    {
+        if (WorkflowVersion != 1 || Status != FeeRefundStatus.Approved ||
+            (RefundMethod != null && RefundMethod != method))
+            ThrowIllegalTransition(FeeRefundStatus.Processed);
+        foreach (var settlement in _settlements) settlement.SetPaymentBank(bankId);
+        ExpenseCategoryId = categoryId; ExpenseCategoryName = name;
+        PayingBankAccountId = bankId; PayingBankLabel = bankLabel; RefundMethod = method;
+    }
     public string? RefundMethod { get; private set; }
     public RefundPaymentDetails? RefundPaymentDetails { get; private set; }
     public string? Reason { get; private set; }
@@ -181,14 +190,15 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     {
         EnsureTransitionAny(FeeRefundStatus.Approved, FeeRefundStatus.Submitted, FeeRefundStatus.UnderReview);
         var reservationList = reservations.ToList();
-        if (reservationList.Count != _lines.Count || reservationList.Any(r => r.FeeRefundRequestId != Id) ||
+        if (reservationList.Count != _lines.Count(l => l.CalculatedAmount > 0) || reservationList.Any(r => r.FeeRefundRequestId != Id) ||
             reservationList.GroupBy(r => r.FeeRefundLineId).Any(g => g.Count() != 1))
             throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
         foreach (var line in _lines)
         {
+            if (line.CalculatedAmount == 0) { line.Approve(0); continue; }
             var reservation = reservationList.SingleOrDefault(r => r.FeeRefundLineId == line.Id)
                 ?? throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
-            if (reservation.DueFeeId != line.DueFeeId || reservation.SourceAllocationId != line.SourceAllocationId ||
+            if (reservation.ChargeId != line.ChargeId || reservation.DueFeeId != line.DueFeeId || reservation.SourceAllocationId != line.SourceAllocationId ||
                 reservation.Amount != line.CalculatedAmount)
                 throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
             line.Approve(reservation.Amount);

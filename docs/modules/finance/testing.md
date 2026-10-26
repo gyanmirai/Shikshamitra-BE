@@ -3,12 +3,21 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-24
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Finance backend changes
+
+Direct pending decisions: `ConcessionDirectDecisionApi_Tests.Checker_Can_Decide_Saved_Request_Without_Separate_Submission` covers scoped reviewer visibility, view-only draft privacy and approval/rejection without submission. Its percentage scenario increases live capacity after save and requires approval to equal the reviewed saved amount. `Checker_Can_Reject_Incomplete_Saved_Request_Without_Submission`, `ConcessionRequestLifecycle_Tests` and `ConcessionRequestPreview_Tests` cover incomplete rejection, audit status, independent actors and preserved monetary evidence.
+
+Copy-policy regressions live in `FeeStructureAppService_Copy_Tests.cs` (partial
+`FeeStructureAppService_CollectionPolicy_Tests`). Cover current/stale refund selection,
+active-master version precedence, legacy concession inspection, inactive/missing snapshots,
+named errors, no insert on failure, unchanged source/policy data and idempotent retry.
+`DemandDraftCollectionDates_Tests` covers independent dates, offset ISO inputs, legacy aliases,
+missing dates and backward-compatible instrument JSON round trips.
 
 Automatic collection allocation: `CollectionAllocation_Tests` covers snapshot compatibility,
 invalid enums, decimal conservation, partial/excess and duplicate targets.
@@ -55,6 +64,11 @@ dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Fee
 ```
 
 ### Concessions and Collections list queries
+
+`ConcessionRequestCoreApi_Tests.Should_Include_Board_And_Medium_In_Student_Concession_Details`
+checks that the student concession detail response supplies the saved academic board and medium
+names. Run the HTTP API suite with that test name as its `FullyQualifiedName` filter after
+changing the student detail projection.
 
 `test/ShikshaMitra.EntityFrameworkCore.Tests/Finance/FinanceTableQuery_Tests.cs` covers combined column alternatives, numeric ranges, explicit status zero, local-day date bounds, operational concession tab groups, query allowlists, stable sorting and PostgreSQL translation.
 Build Application, HttpApi and EntityFrameworkCore after changing the contracts or query wiring.
@@ -129,3 +143,8 @@ See [the workspace contract](./references/income-expense-workspaces.md) for sepa
 Accounts workspace coverage: `AccountsRegisterPeriod_Tests`, `IncomeExpenseRouting_Tests` and `AccountsRegisterApi_Tests`.
 The register API suite uses isolated SQLite state fixtures for approval/paid/returned read projections; it does not execute payout commands.
 Actual payout command/replay scenarios remain in `FeeRefundApi_Tests` and require SHIKSHAMITRA_REFUND_TEST_DB pointing to a migrated disposable refund_workflow_test_ PostgreSQL database.
+
+
+## Collection receipt grouping
+
+`CollectionReceiptGrouping_Tests` covers version snapshots, legacy defaults, exact decimal component totals, one-component collections and provisional status parity. `ReceiptGroupingReconciliationApi_Tests` covers combined/separate queue row counts, total preservation, either-row whole-instrument approval/rejection, final receipt links, principal restoration, charge rollback and duplicate decisions. The collect-input validator suite accepts fee-plus-charge collections with one instrument and retains mixed-provisional-instrument containment.

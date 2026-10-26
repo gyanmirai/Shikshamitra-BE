@@ -37,6 +37,8 @@ public class GetAttendanceRegisterInput : PagedAndSortedResultRequestDto
 	public string EndDate { get; set; } = string.Empty;
 	public Guid? AcademicYearId { get; set; }
 	public Guid? EducationMediumStageId { get; set; }
+	/// <summary>Any selected organization assignment; combined with other criteria using AND.</summary>
+	public List<Guid> EducationMediumStageIds { get; set; } = [];
 	public Guid? EmployeeId { get; set; }
 	public EmployeeGroupType? EmployeeGroup { get; set; }
 	public string? Department { get; set; }

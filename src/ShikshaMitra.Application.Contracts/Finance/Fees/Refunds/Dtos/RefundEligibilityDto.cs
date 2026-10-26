@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using ShikshaMitra.Finance.Fees.Collections;
 
@@ -6,7 +6,7 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
 
 /// <summary>
 /// Summary of a student's refund eligibility for an academic year.
-/// Keyed by <see cref="DueFeeId"/> so the frontend can include stable IDs in create requests.
+/// Rows identify the original payment allocation and either its fee due or paid charge.
 /// </summary>
 public class RefundEligibilityDto
 {
@@ -15,7 +15,7 @@ public class RefundEligibilityDto
 
     public Guid AcademicYearId { get; set; }
 
-    /// <summary>Total amount paid across all fee heads and months.</summary>
+    /// <summary>Total eligible fee and charge payments.</summary>
     public decimal TotalPaid { get; set; }
 
     /// <summary>Total amount already refunded.</summary>
@@ -32,14 +32,15 @@ public class RefundEligibilityDto
     public bool AllowPartialRefund { get; set; }
     public List<RefundEligibleReceiptDto> Receipts { get; set; } = [];
 
-    /// <summary>Per fee-head groups with their monthly breakdowns.</summary>
+    /// <summary>Fee-head groups and the separate paid-charge group, with their payment rows.</summary>
     public List<RefundEligibilityFeeHeadDto> FeeHeads { get; set; } = [];
 }
 
-/// <summary>Eligibility summary grouped by fee head.</summary>
+/// <summary>Eligibility summary for a fee head or the paid-charge group.</summary>
 public class RefundEligibilityFeeHeadDto
 {
-    public Guid FeeHeadId { get; set; }
+    /// <summary>Null for the paid-charge group.</summary>
+    public Guid? FeeHeadId { get; set; }
 
     public string FeeHeadName { get; set; } = default!;
 
@@ -49,17 +50,22 @@ public class RefundEligibilityFeeHeadDto
 
     public decimal TotalRefundable { get; set; }
 
-    /// <summary>Monthly obligation rows — each row carries a stable <see cref="DueFeeId"/>.</summary>
+    /// <summary>Settled payment rows with stable source identifiers.</summary>
     public List<RefundEligibilityMonthDto> Months { get; set; } = [];
 }
 
-/// <summary>Eligibility for one monthly DueFee obligation.</summary>
+/// <summary>Eligibility for one settled fee or charge payment allocation.</summary>
 public class RefundEligibilityMonthDto
 {
-    /// <summary>The stable DueFee row ID — use this as the <c>DueFeeId</c> when creating refund lines.</summary>
-    public Guid DueFeeId { get; set; }
+    /// <summary>Charge source; mutually exclusive with DueFeeId.</summary>
+    public Guid? ChargeId { get; set; }
+    /// <summary>Due line whose collected late fee is being refunded; distinct from principal.</summary>
+    public Guid? LateFeeDueFeeId { get; set; }
+    /// <summary>Fee-due source; mutually exclusive with ChargeId.</summary>
+    public Guid? DueFeeId { get; set; }
     public Guid SourceAllocationId { get; set; }
     public Guid SourceReceiptId { get; set; }
+    public string? ChargeName { get; set; }
     public string ReceiptNumber { get; set; } = string.Empty;
 
     public MonthEnum Month { get; set; }
@@ -78,6 +84,7 @@ public class RefundEligibilityMonthDto
 public class RefundEligibleReceiptDto
 {
     public Guid ReceiptId { get; set; }
+    public string? ChargeName { get; set; }
     public string ReceiptNumber { get; set; } = string.Empty;
     public DateOnly ReceiptDate { get; set; }
     public decimal PaidAmount { get; set; }

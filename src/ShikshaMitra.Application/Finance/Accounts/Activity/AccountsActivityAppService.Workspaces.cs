@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Fees.Collections;
-using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.Receipts;
 using ShikshaMitra.Finance.Common;
 using Volo.Abp;
@@ -144,25 +143,7 @@ public partial class AccountsActivityAppService
         {
             var refunds = await refundRepository.GetQueryableAsync();
             var entries = await refundEntryRepository.GetQueryableAsync();
-            queries.Add(from r in refunds
-                        join s in students on r.StudentId equals (Guid?)s.Id into studentGroup
-                        from s in studentGroup.DefaultIfEmpty()
-                        join a in accounts on r.FinanceFeeAccountId equals (Guid?)a.Id into accountGroup
-                        from a in accountGroup.DefaultIfEmpty()
-                        where r.AcademicYearId == input.AcademicYearId &&
-                            ((r.FinanceFeeAccountId.HasValue && scopedAccounts.Contains(r.FinanceFeeAccountId.Value)) ||
-                             (!r.FinanceFeeAccountId.HasValue && r.StudentId.HasValue && scopedStudents.Contains(r.StudentId.Value))) &&
-                            (r.Status == FeeRefundStatus.Approved || r.Status == FeeRefundStatus.Processing) &&
-                            !entries.Any(e => e.RefundRequestId == r.Id) && !automatic.Any(t => t.SourceId == r.Id)
-                        select new WorkspaceRecord
-                        {
-                            Id = r.Id, SourceId = r.Id, StudentId = r.StudentId, FinanceFeeAccountId = r.FinanceFeeAccountId,
-                            StudentName = a != null ? a.ApplicantName : s == null ? "" : ((s.FirstName ?? "") + " " + (s.MiddleName == null || s.MiddleName == "" ? "" : s.MiddleName + " ") + (s.LastName ?? "")).Trim(),
-                            CategoryId = r.ExpenseCategoryId, CategoryName = r.ExpenseCategoryName ?? "",
-                            BankAccountId = r.PayingBankAccountId, BankLabel = r.PayingBankLabel ?? "",
-                            Reference = r.VoucherNumber, Amount = r.ApprovedAmount,
-                            Date = r.CreationTime, Source = "Refund", Status = "Awaiting payout"
-                        });
+            // Approval only reserves refundable money. Expenses begin with paid evidence.
             // Historical subledger timestamps are DateTimeOffset; materialize only the
             // already tenant/year/student-scoped fallback slice for SQLite/PostgreSQL parity.
             var legacy = await AsyncExecuter.ToListAsync(from e in entries

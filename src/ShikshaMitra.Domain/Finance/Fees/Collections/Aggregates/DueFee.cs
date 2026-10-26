@@ -297,6 +297,12 @@ public DueFee(
 	/// <summary>Paid money above the remaining obligation after approved concessions and adjustments.</summary>
 	public decimal OverpaymentAmount => Math.Max(0m, PaidAmount - RefundedAmount + NetAmount - OriginalAmount);
 
+	/// <summary>Principal remaining after non-cash concessions and adjustment credits.</summary>
+	public decimal NetPayableAmount => Math.Max(0m, OriginalAmount - NetAmount);
+
+	/// <summary>Retained payment applied to principal; excess money remains separately refundable.</summary>
+	public decimal AppliedPaymentAmount => Math.Min(RefundableBalance, NetPayableAmount);
+
 	public decimal AdjustableBalance => Math.Max(0m, OutstandingAmount);
 
 	public void ReversePayment(decimal amount)

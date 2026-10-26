@@ -46,7 +46,7 @@ public class HrTableExportJob(IRepository<HrReportRun, Guid> runs, IRepository<H
 				if (run == null || !run.DataSource.StartsWith("table:", StringComparison.Ordinal) || !run.Start(args.AttemptId, clock.Now)) return;
 				await runs.UpdateAsync(run, true); await claim.CompleteAsync();
 			}
-			using var capture = uows.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.RepeatableRead }, requiresNew: true);
+			using var capture = uows.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
 			var current = await runs.GetAsync(args.RunId);
 			using var actor = principal.Change(await principals.PrincipalAsync(current.OwnerUserId));
 			await access.EnsureAsync(current);

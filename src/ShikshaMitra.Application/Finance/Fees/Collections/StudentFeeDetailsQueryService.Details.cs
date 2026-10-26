@@ -51,7 +51,7 @@ public partial class StudentFeeDetailsQueryService
 
 		var payments = await BuildPaymentHistoryAsync(studentId, academicYearId);
 		var concessions = await BuildConcessionDetailsAsync(studentId, academicYearId);
-		var feeOverview = BuildFeeOverview(feeHeads, concessions, overdueFee);
+		var feeOverview = BuildFeeOverview(feeHeads, overdueFee);
 
 		return new StudentFeeDetailsDto
 		{
@@ -95,13 +95,19 @@ public partial class StudentFeeDetailsQueryService
 		{
 			var feeHead = feeHeads.GetValueOrDefault(group.Key);
 			var total = (double)group.Sum(d => d.OriginalAmount);
-			var paid = (double)group.Sum(d => d.PaidAmount);
+			var paid = (double)group.Sum(d => d.AppliedPaymentAmount);
 			var pending = (double)group.Where(d => d.IsBillGeneratedOn(today)).Sum(d => d.OutstandingAmount);
 			var recon = reconByFeeHead.GetValueOrDefault(group.Key, 0d);
 			return new FeeHeadSummaryDto
 			{
 				FeeHeadId = group.Key, FeeHeadName = feeHead?.Name ?? string.Empty,
 				Amount = total, PaidAmount = paid, PendingAmount = pending,
+				NetFee = group.Sum(d => d.NetPayableAmount),
+				ConcessionAmount = group.Sum(d => d.ConcessionAmount),
+				GrossPaidAmount = group.Sum(d => d.PaidAmount),
+				RefundedAmount = group.Sum(d => d.RefundedAmount),
+				OverpaymentAmount = group.Sum(d => d.OverpaymentAmount),
+				AdjustmentCreditAmount = group.Sum(d => d.AdjustmentCreditAmount),
 				Description = feeHead?.Description ?? string.Empty,
 				ReconciliationAmount = recon > 0d ? recon : null,
 				Status = group.Any(isOverdue) ? FeeCollectionStatus.Overdue
@@ -160,6 +166,19 @@ public partial class StudentFeeDetailsQueryService
 
 		var paymentMethodQ = await paymentMethodRecordRepository.GetQueryableAsync();
 		var metadataIds = metadataForStudent.Select(m => m.Id).ToList();
+		var receipts = await paymentReceiptRepository.GetListAsync(r =>
+			r.StudentId == studentId && r.AcademicYearId == academicYearId
+			&& metadataIds.Contains(r.FeeCollectionTransactionId));
+		var receiptsByMetadata = receipts.GroupBy(r => r.FeeCollectionTransactionId)
+			.ToDictionary(g => g.Key, g => g
+				// A verified provisional document is replaced by its linked official receipt.
+				.Where(r => !r.LinkedFinalReceiptId.HasValue)
+				.OrderBy(r => r.ReceiptNumber)
+				.Select(r => new FeePaymentHistoryReceiptDto
+				{
+					ReceiptId = r.Id, ReceiptNumber = r.ReceiptNumber,
+					Scope = r.ReceiptScope.ToString(), HasPdf = r.PdfBlobName != null,
+				}).ToList());
 		// Keep the database projection flat. A nested collection inside GroupBy cannot be
 		// translated reliably by the production EF provider when a student has payments.
 		var methodRows = await AsyncExecuter.ToListAsync(paymentMethodQ
@@ -175,6 +194,7 @@ public partial class StudentFeeDetailsQueryService
 			Amount = m.TotalPaidFee,
 			PaymentMethods = methodsByMetadata.TryGetValue(m.Id, out var methods) ? methods : [],
 			ReceiptUrl = null, Status = m.Status,
+			Receipts = receiptsByMetadata.GetValueOrDefault(m.Id, []),
 		}).ToList();
 	}
 
@@ -206,13 +226,18 @@ public partial class StudentFeeDetailsQueryService
 	}
 
 	private static FeeOverviewDto BuildFeeOverview(
-		List<FeeHeadSummaryDto> feeHeads, List<ConcessionDetailDto>? concessions, double overdueFee)
+		List<FeeHeadSummaryDto> feeHeads, double overdueFee)
 	{
-		var totalConcession = concessions?.Sum(c => c.Amount ?? 0d) ?? 0d;
+		var totalConcession = (double)feeHeads.Sum(fh => fh.ConcessionAmount);
 		var totalRecon = feeHeads.Sum(fh => fh.ReconciliationAmount ?? 0d);
 		return new FeeOverviewDto
 		{
 			TotalFee = feeHeads.Sum(fh => fh.Amount),
+			NetFee = feeHeads.Sum(fh => fh.NetFee),
+			GrossPaidAmount = feeHeads.Sum(fh => fh.GrossPaidAmount),
+			RefundedAmount = feeHeads.Sum(fh => fh.RefundedAmount),
+			OverpaymentAmount = feeHeads.Sum(fh => fh.OverpaymentAmount),
+			AdjustmentCreditAmount = feeHeads.Sum(fh => fh.AdjustmentCreditAmount),
 			PaidFee = feeHeads.Sum(fh => fh.PaidAmount),
 			PendingFee = feeHeads.Sum(fh => fh.PendingAmount ?? 0d),
 			ConcessionAmount = totalConcession > 0d ? totalConcession : null,

@@ -16,13 +16,13 @@ using Xunit;
 
 namespace ShikshaMitra.Finance.FeeReceiptTests;
 
-[Collection(ApiTestCollection.Name)]
+[Collection(FinanceReceiptApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.Finance)]
 public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
 {
     private const string BaseUrl = "/api/v1/fee-receipts";
 
-    public FeeReceiptApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
+    public FeeReceiptApi_Tests(FinanceReceiptApiTestFactory factory) : base(factory)
     {
         FeeReceiptTestHelper.DefaultAcademicYearId = factory.SeededAcademicYearId;
         FeeReceiptTestHelper.DefaultMediumId       = factory.SeededMediumId;
@@ -39,7 +39,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Return_200_With_PagedResultDto_When_Board_And_Medium_Provided()
     {
-        var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (_, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         var url = $"{BaseUrl}?academicYearId={FeeReceiptTestHelper.DefaultAcademicYearId}" +
@@ -71,7 +71,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Filtered_Receipts_By_ReceiptKind()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         await FeeReceiptTestHelper.SeedReceiptAsync(Factory.Services, studentId, FeeReceiptKind.FinalFee);
@@ -92,7 +92,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Receipts_With_Kind_Label()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         await FeeReceiptTestHelper.SeedReceiptAsync(Factory.Services, studentId, FeeReceiptKind.ProvisionalCharge, FeeReceiptScope.Charge);
@@ -104,14 +104,14 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
 
         var body = await GetAndReadAsync<PagedResultDto<FeeReceiptListItemDto>>(url);
 
-        body.Items.ShouldAllBe(r => r.ReceiptKindLabel == "Kachi Receipt (Charge)");
+        body.Items.ShouldAllBe(r => r.ReceiptKindLabel == "Provisional Receipt (Charge)");
     }
 
     [Fact]
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Two_Rows_For_Same_Transaction_With_Fee_And_Charge_Lines()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         var sharedTxnId = Guid.NewGuid();
@@ -138,7 +138,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Filter_By_Month_Returning_Only_Receipts_In_That_Month(int month)
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         var receipt = await FeeReceiptTestHelper.SeedReceiptAsync(
@@ -166,7 +166,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Paginated_Results()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         for (int i = 0; i < 3; i++)
@@ -187,7 +187,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Critical)]
     public async Task Should_Return_Receipt_Detail_With_Kind_Label()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         var receipt = await FeeReceiptTestHelper.SeedReceiptAsync(Factory.Services, studentId, FeeReceiptKind.ProvisionalFee);
@@ -196,7 +196,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
 
         detail.Id.ShouldBe(receipt.Id);
         detail.ReceiptKind.ShouldBe(FeeReceiptKind.ProvisionalFee);
-        detail.ReceiptKindLabel.ShouldBe("Kachi Receipt (Fee)");
+        detail.ReceiptKindLabel.ShouldBe("Provisional Receipt (Fee)");
         detail.VerificationStatus.ShouldBe(FeeReceiptVerificationStatus.PendingVerification);
     }
 
@@ -214,7 +214,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Generate_And_Return_Pdf_For_FinalFee_Receipt()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         var receipt = await FeeReceiptTestHelper.SeedReceiptAsync(Factory.Services, studentId, FeeReceiptKind.FinalFee);
@@ -231,7 +231,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Generate_And_Return_Pdf_For_ProvisionalFee_Receipt()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         var receipt = await FeeReceiptTestHelper.SeedReceiptAsync(Factory.Services, studentId, FeeReceiptKind.ProvisionalFee);
@@ -247,7 +247,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Generate_And_Return_Pdf_For_ProvisionalCharge_Receipt()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         var receipt = await FeeReceiptTestHelper.SeedReceiptAsync(
@@ -264,7 +264,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Extended)]
     public async Task Should_Cache_Pdf_After_First_Request()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         var receipt = await FeeReceiptTestHelper.SeedReceiptAsync(Factory.Services, studentId);
@@ -288,7 +288,7 @@ public class FeeReceiptApi_Tests : ShikshaMitraApiTestBase
     [TestTier(TestTraits.Tiers.Important)]
     public async Task Should_Return_Receipt_With_Verification_Status_PendingVerification_For_ProvisionalFee()
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
         FeeReceiptTestHelper.DefaultBoardId = boardId;
 
         var receipt = await FeeReceiptTestHelper.SeedReceiptAsync(

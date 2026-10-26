@@ -33,7 +33,11 @@ using Volo.Abp.DependencyInjection;
 
 namespace ShikshaMitra.HR.Reports;
 
-public record HrTableExportPage(List<JsonElement> Rows, long Total, int? NextOffset = null);
+public record HrTableExportPage(List<JsonElement> Rows, long Total, int? NextOffset = null)
+{
+	// Preserve the owning reader's wire contract (including numeric enums and editing metadata).
+	public JsonElement Envelope { get; init; }
+}
 
 // Each entry calls the owning read service, including its permission, actor and scope rules.
 // Client input can select only fields already exposed by that table; it cannot select a service or join.
@@ -43,6 +47,11 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 	private string? _capturedQuery;
 	private readonly Dictionary<Guid, string?> _calendarNames = [];
 	private readonly Dictionary<Guid, string?> _organizationNames = [];
+	private List<HrOperationalTableRow>? _operationalRows;
+	private string? _operationalQuery;
+	private JsonElement _operationalEnvelope;
+	private StatutoryImpactPreviewDto? _esiPopulation;
+	private string? _esiQuery;
 	private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
 	{
 		Converters = { new JsonStringEnumConverter() }
@@ -57,7 +66,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		["hr-performance-templates"] = ["name", "boardType", "staffCategory", "sections", "status", "weight"],
 		["hr-earning-components"] = ["earningComponentName", "description", "earningType", "calculationType", "amount", "customComponent.componentName", "visibleInPayslip"],
 		["hr-deduction-components"] = ["deductionComponentName", "description", "deductionType", "calculationType", "amount", "customComponent.componentName", "visibleInPayslip"],
-		["hr-attendance-import-rows"] = ["employeeName", "attendanceDate", "timeIn", "timeOut", "errors", "warnings", "status", "attendanceStatus"],
+		["hr-attendance-import-rows"] = ["rowNumber", "employeeName", "attendanceDate", "timeIn", "timeOut", "errors", "warnings", "status", "attendanceStatus"],
 		["hr-attendance-imports"] = ["fileName", "payrollMonth", "importedAt", "importedByName", "totalRows", "validRows", "invalidRows", "status", "isBatchLocked"],
 		["hr-shifts"] = ["shiftName", "startTime", "endTime"],
 		["hr-document-settings"] = ["title", "documentSize", "documentTypesString"],
@@ -71,7 +80,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		["employee-table"] = ["roleValue", "fullName", "dob", "genderValue", "doi", "email", "mobileNo", "isTeaching", "shiftName", "organization", "statusValue"],
 		["employee-onboarding-table"] = ["candidate", "position", "status", "submittedAt", "tokenExpiresAt"],
 		["hr-attendance-register"] = ["employeeName", "present", "exceptions", "employeeGroup", "department", "editability"],
-		["hr-manual-attendance"] = ["employeeCode", "employeeName", "fullName", "attendanceDate", "attendanceStatus", "status", "inTime", "outTime", "remarks", "errors", "warnings"],
+		["hr-manual-attendance"] = ["employeeCode", "employeeName", "fullName", "attendanceDate", "attendanceStatus", "status", "inTime", "outTime", "timeIn", "timeOut", "remarks", "errors", "warnings"],
 		["payroll-monthly-workbench-table"] = ["employeeName", "payableDays", "fullGrossSalary", "grossSalary", "additionalEarnings", "totalEarnings", "totalDeduction", "netSalary", "previousMonthNetPay", "netPayDelta", "issueFilter", "status"],
 		["hr-payroll-registration-readiness"] = ["employeeCode", "employeeName", "applyPf", "applyEsic", "effectiveMonth"],
 		["esi-employee-impact"] = ["employeeName", "coverageDecisionLabel", "enrollmentStatus", "statutoryWages", "employeeContribution", "employerContribution", "readiness"],
@@ -97,7 +106,10 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			_ = new HrReportingTableQuery(ReportingCriteria(request), run.Columns, run.Parameters.TimeZone);
 			return;
 		}
-		await ReadAsync(request, 0, 1);
+		// Authorize with the owning reader, but leave population capture to the export job.
+		await ReadUnfilteredAsync(request, 0, 1);
+		if (ReportingCriteria(request).HasCriteria)
+			_ = new HrReportingTableQuery(ReportingCriteria(request), await OperationalColumnsAsync(request), await Service<HrReportingTimeZone>().GetAsync());
 	}
 	private async Task<HrReportRunDto> CapturedRunAsync(HrTableExportRequest request)
 	{
@@ -108,7 +120,70 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		if (request.Columns.Any(x => !run.Columns.Any(c => c.Id == x.Id))) throw HrReportingEngine.Invalid("Choose columns present in this captured report.");
 		return run;
 	}
-	public async Task<HrTableExportPage> ReadAsync(HrTableExportRequest request, int offset, int size)
+	public async Task<HrTableExportPage> ReadAsync(HrTableExportRequest request, int offset, int size, bool capturePopulation = false)
+	{
+		Validate(request);
+		if (request.Table is "hr-generated-report" or "hr-generated-report-history" || (!capturePopulation && !ReportingCriteria(request).HasCriteria))
+			return await ReadUnfilteredAsync(request, offset, size);
+		var key = request.Table + request.Query.GetRawText();
+		if (_operationalQuery != key)
+		{
+			// Capture through the owning authorized reader. Never apply criteria to just its first page.
+			// A failed/incomplete capture returns an error, never a plausible partial result.
+			var columns = await OperationalColumnsAsync(request);
+			var timezone = await Service<HrReportingTimeZone>().GetAsync();
+			var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById(timezone)).DateTime);
+			var engine = new HrReportingTableQuery(ReportingCriteria(request), columns, timezone);
+			var all = new List<HrOperationalTableRow>();
+			var next = 0;
+			long? expected = null;
+			while (true)
+			{
+				Service<Volo.Abp.Threading.ICancellationTokenProvider>().Token.ThrowIfCancellationRequested();
+				var page = await ReadUnfilteredAsync(request, next, 100);
+				if (page.Total > HrReportingEngine.MaximumPopulation) throw new Volo.Abp.BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+				expected ??= page.Total;
+				if (page.Total != expected || page.Rows.Count != HrOperationalTableQuery.Items(page.Envelope).Count)
+					throw HrReportingEngine.Invalid("The table population changed during capture. Retry the query.");
+				if (next == 0) _operationalEnvelope = page.Envelope;
+				var raw = HrOperationalTableQuery.Items(page.Envelope);
+				all.AddRange(page.Rows.Select((row, index) => new HrOperationalTableRow(row, raw[index],
+					columns.ToDictionary(column => column.Id, column => HrTableExportProjection.Value(request.Table, column.Id, row, today)))));
+				next = page.NextOffset ?? next + page.Rows.Count;
+				if (next >= page.Total) break;
+				if (page.Rows.Count < 100 || next > HrReportingEngine.MaximumPopulation) throw HrReportingEngine.Invalid("The table source returned an incomplete population. Retry the query.");
+			}
+			if (all.Count != expected) throw HrReportingEngine.Invalid("The table source returned an incomplete population. Retry the query.");
+			_operationalRows = engine.Apply(all, row => row.Values).ToList();
+			_operationalQuery = key;
+		}
+		var selected = _operationalRows!.Skip(offset).Take(size).ToList();
+		return new(selected.Select(row => row.Export).ToList(), _operationalRows.Count)
+		{
+			Envelope = HrOperationalTableQuery.Envelope(request.Table, _operationalEnvelope, selected, _operationalRows, offset, size, await OperationalColumnsAsync(request))
+		};
+	}
+	public async Task<List<HrReportFieldDto>> OperationalColumnsAsync(HrTableExportRequest request)
+	{
+		if (request.Table is "hr-generated-report" or "hr-generated-report-history") throw HrReportingEngine.Invalid("Use the captured reporting query for this table.");
+		if (request.Table == "hr-salary-documents")
+		{
+			var selected = request.Query.TryGetProperty("columns", out var configured) && configured.ValueKind == JsonValueKind.Array
+				? configured.Deserialize<List<string>>() ?? [] : request.Columns.Select(column => column.Id).ToList();
+			var source = request.Query.GetProperty("dataSource").GetString()!;
+			var fields = HrReportCatalog.GetSource(source).Fields;
+			if (selected.Count is < 1 or > 60 || selected.Distinct().Count() != selected.Count || selected.Any(id => !fields.Any(field => field.Id == id)))
+				throw HrReportingEngine.Invalid("Choose supported salary document columns.");
+			return selected.Select(id => fields.Single(field => field.Id == id)).ToList();
+		}
+		return Fields[request.Table].Select(id => {
+			var field = HrTableExportProjection.Field(new() { Id = id, Label = id });
+			if (id is "status" or "statusValue" or "isTeaching" or "genderValue" or "paidType" or "sourceType" or "changeAction" or "earningType" or "deductionType" or "calculationType" or "contributionBasis" or "orientation" or "staffCategory" or "boardType" or "issueFilter" or "enrollmentStatus" or "attendanceStatus") field.Type = "enum";
+			if (id is "startTime" or "endTime" or "inTime" or "outTime" or "timeIn" or "timeOut") field.Type = "clock";
+			return field;
+		}).ToList();
+	}
+	private async Task<HrTableExportPage> ReadUnfilteredAsync(HrTableExportRequest request, int offset, int size)
 	{
 		Validate(request);
 		// These legacy readers enforce view access in their HTTP controllers.
@@ -151,6 +226,8 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		foreach (var entry in q.ToList())
 			if (entry.Value is JsonValue value && value.TryGetValue<string>(out var text) && string.IsNullOrWhiteSpace(text)) q.Remove(entry.Key);
 		if (request.Table is "hr-shifts" or "hr-professional-tax") q.Remove("sorting");
+		if (request.Table == "hr-shifts") q["sorting"] = "ShiftName asc, Id asc";
+		if (request.Table == "hr-professional-tax") q["sorting"] = "JurisdictionCode asc, EffectiveFrom asc, FromSalary asc, Id asc";
 		q["skipCount"] = offset; q["maxResultCount"] = size; q["page"] = offset / size + 1; q["pageSize"] = size;
 		T Input<T>()
 		{
@@ -164,7 +241,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			"hr-policy-versions" => await Service<IHrPolicyVersionAppService>().GetListAsync(q["policyType"]?.ToString() ?? "", RequiredId("policyId"), Input<PagedAndSortedResultRequestDto>(), q["search"]?.ToString(), q["action"]?.ToString()),
 			"hr-policy-assignments" => await Service<IHrPolicyAssignmentAppService>().GetListAsync(Input<PolicyListRequestDto>()),
 			"hr-performance-cycles" => await Service<IProfessionalManagementAppService>().GetReviewCyclesAsync(offset / size + 1, size, q["search"]?.ToString()),
-			"hr-performance-templates" => await Service<IProfessionalManagementAppService>().GetTemplatesAsync(offset / size + 1, size, q["search"]?.ToString()),
+			"hr-performance-templates" => await Service<IProfessionalManagementAppService>().GetTemplatesAsync(offset / size + 1, size, q["search"]?.ToString(), q["staffCategory"] == null ? null : q["staffCategory"]!.Deserialize<PerformanceStaffCategory>(Json)),
 			"hr-earning-components" => await Service<IEarningComponentAppService>().GetFilteredListAsync(offset, size, q["search"]?.ToString()),
 			"hr-deduction-components" => await Service<IDeductionComponentAppService>().GetFilteredListAsync(offset, size, q["search"]?.ToString()),
 			"hr-attendance-import-rows" => await Service<IAttendanceImportLogAppService>().GetRowsAsync(RequiredId("importId"), Input<GetAttendanceImportRowsInput>()),
@@ -214,7 +291,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 				rows[index] = JsonSerializer.SerializeToElement(node, Json);
 			}
 		}
-		return new(rows, root.GetProperty("totalCount").GetInt64());
+		return new(rows, root.GetProperty("totalCount").GetInt64()) { Envelope = JsonSerializer.SerializeToElement(response, new JsonSerializerOptions(JsonSerializerDefaults.Web)) };
 	}
 	private async Task<object> ReadSalaryAsync(HrTableExportRequest request, JsonObject query)
 	{
@@ -222,13 +299,24 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		if (input.DataSource is not ("payroll_statement" or "payroll_register")) throw HrReportingEngine.Invalid("Choose a salary statement or payroll register.");
 		var fields = HrReportCatalog.GetSource(input.DataSource).Fields;
 		if (request.Columns.Any(x => !fields.Any(f => f.Id == x.Id))) throw HrReportingEngine.Invalid("Choose supported salary document columns.");
-		input.Columns = request.Columns.Select(x => x.Id).Append("employeeCode").Distinct().ToList();
+		input.Columns = (await OperationalColumnsAsync(request)).Select(x => x.Id).Append("employeeCode").Distinct().ToList();
 		return await Service<IHrReportAppService>().PreviewAsync(input);
 	}
 	private async Task<object> ReadEsiAsync(JsonObject query, int offset, int size)
 	{
-		query["page"] = offset / size;
-		return await Service<IEsiStatutoryAppService>().PreviewAsync(query.Deserialize<StatutoryImpactPreviewRequestDto>(Json)!);
+		var input = query.Deserialize<StatutoryImpactPreviewRequestDto>(Json)!;
+		input.Page = 0; input.PageSize = 100;
+		var key = JsonSerializer.Serialize(input, Json);
+		if (_esiQuery != key)
+		{
+			// Calculate one authorized model per capture, not once for every source page.
+			_esiPopulation = await Service<IEsiStatutoryAppService>().GetTablePopulationAsync(input);
+			_esiQuery = key;
+		}
+		return new StatutoryImpactPreviewDto { MonthYear = _esiPopulation!.MonthYear, Summary = _esiPopulation.Summary,
+			TotalCount = _esiPopulation.TotalCount, Page = offset / size, PageSize = size,
+			Items = _esiPopulation.Items.Skip(offset).Take(size).ToList(), GeneratedAtUtc = _esiPopulation.GeneratedAtUtc,
+			PreviewFingerprint = _esiPopulation.PreviewFingerprint };
 	}
 	private static HrReportTableQueryDto ReportingCriteria(HrTableExportRequest request) =>
 		request.Query.TryGetProperty("criteria", out var criteria) ? HrReportTableQueryDto.Parse(criteria.GetRawText()) : new();

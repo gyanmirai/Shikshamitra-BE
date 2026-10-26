@@ -2,6 +2,13 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.Domain.Finance.Accounts.Settings;
+using ShikshaMitra.Finance.Accounts.Settings;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.MultiTenancy;
+using Volo.Abp.Uow;
 using ShikshaMitra.Finance.FeeCollectionTests;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
@@ -32,13 +39,26 @@ public static class ReconciliationTestHelper
             Guid academicYearId,
             Guid feeHeadId,
             double amount = 1500d,
-            PaymentMethodEnum method = PaymentMethodEnum.Cheque)
+            PaymentMethodEnum method = PaymentMethodEnum.Cheque,
+            System.Collections.Generic.Dictionary<string, object?>? details = null)
     {
-        var (studentId, _) = await Finance.ConcessionRequests.ConcessionRequestTestHelper.CreateStudentAsync(client);
+        var (studentId, _) = await Finance.ConcessionRequests.ConcessionRequestTestHelper.CreateStudentAsync(services);
 
         var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(services, studentId, feeHeadId, amount);
 
         var input = BuildNonCashCollectFeeInput(studentId, academicYearId, feeHeadId, dueFeeId, amount, method);
+        if (details != null) input.Payments[0].Details = details;
+        using (var scope = services.CreateScope())
+        using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse("11111111-1111-1111-1111-111111111111")))
+        using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))
+        {
+            var bank = new BankAccount(Guid.NewGuid(), academicYearId, "Synthetic Test Bank", "Test branch", null, "Synthetic School",
+                Enum.GetValues<BankAccountType>().First(), BitConverter.ToUInt64(Guid.NewGuid().ToByteArray(), 0).ToString(),
+                "Receipt verification tests", "TEST0001234", "synthetic@test", tenantId: Guid.Parse("11111111-1111-1111-1111-111111111111"));
+            await scope.ServiceProvider.GetRequiredService<IRepository<BankAccount, Guid>>().InsertAsync(bank);
+            await uow.CompleteAsync();
+            input.Payments[0].BankAccountId = bank.Id;
+        }
         var response = await client.PostAsJsonAsync(FeeCollectionUrl, input, JsonOptions);
         response.EnsureSuccessStatusCode();
 

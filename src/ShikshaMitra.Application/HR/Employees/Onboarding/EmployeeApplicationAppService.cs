@@ -11,6 +11,8 @@ using ShikshaMitra.Common;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees.PersonalInfo;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.HR.Payroll.Compensation;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
@@ -41,7 +43,12 @@ public class EmployeeApplicationAppService(
 	IUnitOfWorkManager unitOfWorkManager,
 	IStringEncryptionService stringEncryptionService,
 	IEmployeeOnboardingInvitationEmailService invitationEmailService,
-	EmployeeOnboardingAcademicScopeAssigner academicScopeAssigner, ShikshaMitra.HR.Payroll.Statutory.EmployeeStatutoryProfileAppService statutoryProfiles)
+	EmployeeOnboardingAcademicScopeAssigner academicScopeAssigner,
+	ICompensationRevisionAppService compensationRevisions,
+	IRepository<EmployeeCompensationRevision, Guid> compensationRepository,
+	IPayrollInputRevisionStore payrollFence,
+	EmployeePersonalInfoProjection personalInfoProjection,
+	EmployeeActivationReadinessService activationReadiness)
 	: ApplicationService, IEmployeeApplicationAppService
 {
 	private const int TokenExpiryDays = 30;
@@ -75,7 +82,7 @@ public class EmployeeApplicationAppService(
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var applications = await AsyncExecuter.ToListAsync(
 			query
-				.OrderByDescending(x => x.CreationTime)
+				.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id)
 				.Skip(input.SkipCount)
 				.Take(input.MaxResultCount));
 
@@ -215,7 +222,25 @@ public class EmployeeApplicationAppService(
 		using var finalizationUnitOfWork = unitOfWorkManager.Begin(
 			new AbpUnitOfWorkOptions { IsTransactional = true },
 			requiresNew: true);
+		// Serialize with salary saves before reading application state. A lost response may be retried safely.
+		await payrollFence.LockAsync();
 		var application = await GetApplicationAsync(id);
+		var salaryRequestKey = $"onboarding:{id:D}";
+		if (application.Status == EmployeeApplicationStatus.Finalized && application.FinalizedEmployeeId is { } finalizedEmployeeId)
+		{
+			if (!await compensationRepository.AnyAsync(x => x.EmployeeId == finalizedEmployeeId && x.IdempotencyKey == salaryRequestKey))
+				throw new BusinessException(HRErrorCodes.EmployeeApplicationAlreadyFinalized);
+			var completed = new EmployeeApplicationFinalizeResultDto
+			{
+				Application = MapToDto(application, includePublicPath: true),
+				Employee = await personalInfoProjection.ToPersonalInfoDtoAsync(await employeeRepository.GetAsync(finalizedEmployeeId)),
+				ActivationReadiness = await activationReadiness.GetAsync(finalizedEmployeeId)
+			};
+			await finalizationUnitOfWork.CompleteAsync();
+			return completed;
+		}
+		if (input.Salary == null)
+			throw new AbpValidationException("Preview and assign salary before finalizing onboarding.");
 		if (!application.SubmittedAt.HasValue)
 		{
 			throw new BusinessException(
@@ -268,9 +293,14 @@ public class EmployeeApplicationAppService(
 				input.AcademicScopes);
 		}
 
-		if (input.StatutoryProfile is { } statutoryProfile)
-			await statutoryProfiles.SaveAsync(employee.Id, new ShikshaMitra.HR.Payroll.Statutory.SaveEmployeeStatutoryProfileDto
-			{ Profile = statutoryProfile, IdempotencyKey = GuidGenerator.Create() });
+		// Reuse the canonical compensation validation, permissions, statutory snapshot and calculation.
+		// All writes enlist in this finalization transaction; no employee survives a failed salary save.
+		input.Salary.IdempotencyKey = salaryRequestKey;
+		if (input.StatutoryProfile != null)
+			input.Salary.StatutoryProfileOverride = input.StatutoryProfile;
+		var salary = await compensationRevisions.SaveAsync(employee.Id, input.Salary);
+		if (salary.ActivationReadiness.BlockerCodes.Contains("PAYROLL_SETUP_REQUIRED"))
+			throw new AbpValidationException("Salary must cover the employee's required activation month.");
 
 		var workExperiences = (input.WorkExperiences.Count > 0
 				? input.WorkExperiences
@@ -304,7 +334,8 @@ public class EmployeeApplicationAppService(
 		var result = new EmployeeApplicationFinalizeResultDto
 		{
 			Application = MapToDto(application, includePublicPath: true),
-			Employee = employee
+			Employee = employee,
+			ActivationReadiness = salary.ActivationReadiness
 		};
 		await finalizationUnitOfWork.CompleteAsync();
 		return result;

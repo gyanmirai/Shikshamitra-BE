@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -100,7 +100,7 @@ public class ProvidentFundAppService(
 				x.Code.ToLower().Contains(term));
 		}
 
-		queryable = queryable.OrderBy(x => x.Name);
+		queryable = queryable.OrderBy(x => x.Name).ThenBy(x => x.Id);
 
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 		var items = await AsyncExecuter.ToListAsync(

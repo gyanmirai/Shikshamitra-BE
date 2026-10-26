@@ -93,7 +93,7 @@ public partial class AdmissionFeeCollectionAppService(
 				result.Receipts = receiptRows.Select(r => new AdmissionCollectionReceiptDto
 				{
 					Id = r.Id, ReceiptNumber = r.ReceiptNumber, Amount = (decimal)r.TotalPaidAmount,
-					Scope = r.ReceiptScope == FeeReceiptScope.Fee ? "fee" : "charge",
+					Scope = r.ReceiptScope != FeeReceiptScope.Charge ? "fee" : "charge",
 					CollectedAt = new DateTimeOffset(DateTime.SpecifyKind(r.CreationTime, DateTimeKind.Utc)),
 					Status = r.VerificationStatus == FeeReceiptVerificationStatus.Rejected ? "reversed" : tx.FirstOrDefault(t => t.Id == r.FeeCollectionTransactionId)?.Status is FeeCollectionStatus.InReconciliation
 						? "pendingVerification" : tx.FirstOrDefault(t => t.Id == r.FeeCollectionTransactionId)?.Status is FeeCollectionStatus.Reversed ? "reversed" : "confirmed",

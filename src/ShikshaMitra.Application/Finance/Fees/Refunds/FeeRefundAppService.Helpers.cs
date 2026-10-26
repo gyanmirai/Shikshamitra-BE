@@ -114,7 +114,7 @@ public partial class FeeRefundAppService
 			CreationTime = r.CreationTime, SubmittedAt = r.SubmittedAt, ReviewStartedAt = r.ReviewStartedAt,
 			ReversedAt = r.ReversedAt, FailureReason = r.FailureReason, ReversalReason = r.ReversalReason,
 			AvailableActions = isLegacy ? [] : GetAvailableActions(r),
-			Lines = r.Lines.Select(l => new FeeRefundLineDto { Id = l.Id, DueFeeId = l.DueFeeId,
+			Lines = r.Lines.Select(l => new FeeRefundLineDto { Id = l.Id, DueFeeId = l.DueFeeId, ChargeId = l.ChargeId, LateFeeDueFeeId = l.LateFeeDueFeeId,
 				SourceAllocationId = l.SourceAllocationId, SourceReceiptId = l.SourceReceiptId,
 				FeeHeadId = l.FeeHeadId, FeeHeadName = l.FeeHeadName, InstallmentLabel = l.InstallmentLabel,
 				SettledPaidAmount = l.SettledPaidAmount, Amount = l.Amount,
@@ -145,7 +145,7 @@ public partial class FeeRefundAppService
 			{
 				FeeRefundStatus.Submitted => ["approve", "reject"],
 				FeeRefundStatus.Approved when request.Settlements.Count == 0 => ["recordPayout", "reject"],
-				FeeRefundStatus.Approved => ["confirmPayout", "failPayout"],
+				FeeRefundStatus.Approved => ["recordPayout"],
 				FeeRefundStatus.Failed => ["createReplacement"],
 				FeeRefundStatus.Processed when request.RefundMethod != "Cash" => ["returnPayout"],
 				_ => []
@@ -243,14 +243,14 @@ public partial class FeeRefundAppService
 	{
 		dto.RefundRequestId = request.Id;
 
-		var lineDueFeeIds = request.Lines.Select(l => l.DueFeeId).ToList();
+		var lineDueFeeIds = request.Lines.Where(l => l.DueFeeId.HasValue).Select(l => l.DueFeeId!.Value).ToList();
 		var dueFees = await dueFeeRepository.GetListAsync(df =>
 			(request.FinanceFeeAccountId.HasValue ? df.FinanceFeeAccountId == request.FinanceFeeAccountId
 				: df.StudentId == request.StudentId &&
 					(!request.StudentFeeStructureId.HasValue || df.StudentFeeStructureId == request.StudentFeeStructureId)) &&
 			(df.PaidAmount > 0 || lineDueFeeIds.Contains(df.Id)));
 
-		if (dueFees.Count == 0)
+		if (dueFees.Count == 0 && !request.Lines.Any(x => x.ChargeId.HasValue || x.LateFeeDueFeeId.HasValue))
 		{
 			dto.TotalFeeHeads = 0; dto.TotalPaidAmount = 0; dto.TotalRefundedAmount = 0; dto.FeeHeads = [];
 			return;
@@ -259,7 +259,7 @@ public partial class FeeRefundAppService
 		var feeHeadIds = dueFees.Select(df => df.FeeHeadId).Distinct().ToList();
 		var feeHeads = await feeHeadRepository.GetListAsync(fh => feeHeadIds.Contains(fh.Id));
 		var feeHeadMap = feeHeads.ToDictionary(fh => fh.Id, fh => fh.Name);
-		var lineMap = request.Lines.ToDictionary(l => l.DueFeeId, l => l.Amount);
+		var lineMap = request.Lines.Where(l => l.DueFeeId.HasValue).GroupBy(l => l.DueFeeId!.Value).ToDictionary(g => g.Key, g => g.Sum(l => l.Amount));
 
 		var grouped = dueFees.GroupBy(df => df.FeeHeadId)
 			.Select(g =>
@@ -283,7 +283,33 @@ public partial class FeeRefundAppService
 			}).ToList();
 
 		dto.FeeHeads = grouped;
-		dto.TotalFeeHeads = grouped.Count;
+        var chargeLines = request.Lines.Where(x => x.ChargeId.HasValue).ToList();
+        if (chargeLines.Count > 0)
+            grouped.Add(new RefundFeeHeadDto
+            {
+                FeeHeadName = "Paid charges", TotalPaid = (double)chargeLines.Sum(x => x.SettledPaidAmount),
+                TotalRefunded = (double)chargeLines.Sum(x => x.ProcessedAmount - x.ReversedAmount),
+                Items = chargeLines.Select(x => new RefundMonthItemDto
+                {
+                    InstallmentId = x.ChargeId!.Value, Month = x.InstallmentLabel,
+                    Total = (double)x.SettledPaidAmount, Paid = (double)x.SettledPaidAmount,
+                    RefundAmount = (double)x.Amount, Status = (int)ShikshaMitra.Finance.Fees.Collections.FeeStatus.Paid
+                }).ToList()
+            });
+        var lateLines = request.Lines.Where(x => x.LateFeeDueFeeId.HasValue).ToList();
+        if (lateLines.Count > 0)
+            grouped.Add(new RefundFeeHeadDto
+            {
+                FeeHeadName = "Paid late fees", TotalPaid = (double)lateLines.Sum(x => x.SettledPaidAmount),
+                TotalRefunded = (double)lateLines.Sum(x => x.ProcessedAmount - x.ReversedAmount),
+                Items = lateLines.Select(x => new RefundMonthItemDto
+                {
+                    InstallmentId = x.LateFeeDueFeeId!.Value, Month = x.InstallmentLabel,
+                    Total = (double)x.SettledPaidAmount, Paid = (double)x.SettledPaidAmount,
+                    RefundAmount = (double)x.Amount, Status = (int)ShikshaMitra.Finance.Fees.Collections.FeeStatus.Paid
+                }).ToList()
+            });
+        dto.TotalFeeHeads = grouped.Count;
 		dto.TotalPaidAmount = grouped.Sum(fh => fh.TotalPaid);
 		dto.TotalRefundedAmount = grouped.Sum(fh => fh.TotalRefunded);
 	}

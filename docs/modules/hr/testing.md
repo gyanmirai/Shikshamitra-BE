@@ -3,10 +3,14 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-25
 owner: backend-team
 audience: humans-and-agents
 ---
+
+## New-school starter policy regression coverage
+
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~InitialSetupApi_Tests"` for clean-school setup and starter-policy coverage. `InitialSetupApi_Tests.HrStarterPolicies.cs` covers fresh tenant creation through the host and legacy APIs, academic-year lifecycle initialization, policy/shift list and edit APIs, employee input validation and finalization policy resolution, repeated initialization, customization/deletion preservation across years, tenant isolation, no existing-tenant backfill, and failure/rollback with a valid retry. The fixture uses synthetic schools and in-memory SQLite; its legacy seeder creates only one synthetic year and never provisions a real tenant. PostgreSQL concurrent-delivery behavior is protected by deterministic IDs/database primary keys but is not exercised by this SQLite suite.
 
 ## ESI enrollment response authorization (2026-10-16)
 
@@ -29,6 +33,8 @@ Do not treat that baseline comparison as full payroll workflow acceptance.
 Final authenticated browser acceptance must use a running backend with valid local database configuration.
 
 # Validate HR backend changes
+
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~FirstEmployeeReportingManagerApi_Tests` for the clean-school regression. It uses the existing `InitialSetupTestFactory` and synthetic tenants only, verifies the bootstrapped login is selectable with zero employees, creates the first HR staff profile, rejects absent manager IDs and wrong identity kinds, verifies persisted/reloaded references, tests foreign-tenant rejection and unchanged saved values, and denies requests without the existing action permissions. Existing `ReportingManagerApi_Tests` and `LeaveReportingChain_Tests` cover employee-manager swaps, active status, self-reference and cycles. Distinguish this local test evidence from authenticated deployed acceptance.
 
 PF eligibility and ESIC basis/rate coverage is in `StatutoryCalculationSettings_Tests` and `StatutoryCalculationApi_Tests`.
 The ESIC cases cover all nine independent basis combinations, full-month eligibility, payable contributions, daily-wage exemption, inactive Basic components, continued coverage, and unchanged older configuration JSON.
@@ -1120,3 +1126,9 @@ Run the existing ESIC domain, enrollment, contribution-period and rounding regre
 Run `HrReportingTableQuery_Tests`, `HrReportingEngine_Tests`, `HrTableExport_Tests`, `HrReportingWorkspaceApi_Tests` and `HrTableExportApi_Tests`.
 Run `HrReportingPostgres_Tests` with a fresh loopback `reporting_tests_*` database.
 The chunk-boundary scenario verifies global filtering, stable ordering, filtered paging, complete Excel export and another-user denial for the query endpoint.
+
+### Operational table query and export checks
+
+Run `HrOperationalTableQuery_UnitTests` and `HrOperationalTableQueryApi_Tests`. They cover 10,000/25,000-row bounded captures, changed/incomplete/over-cap failures, typed values, raw enums, ESI single-model reuse, real HTTP pagination/counts across a 100-row source boundary, tenant and restricted-role scope, anonymous/unsupported-field denial and a complete filtered Excel download. The API fixture retains the real HTTP/EF/authorization/owning-service pipeline with a disposable synthetic tenant and no unrelated background workers. The general all-module fixture exceeded the local inactivity bound before its first API case; this is not recorded as a passing API run.
+
+The 26 October local completion run, including the final offset correction, passed all 34 operational API/unit cases and 46 existing `HrTableExport_Tests`, `HrReportingTableQuery_Tests` and `EsiStatutoryPreviewProjection_Tests` cases with the pinned .NET 9 SDK. The offset case uses an isolated 130-row tenant and compares empty and active criteria at offset 1 / size 5, then a size-500 request across source pages. The existing 125-row fixture and twelve-match export assertions remain unchanged. The HTTP host and both test assemblies compiled. HR documentation validation reports the same two issues as an exact-main archive under this checkout layout (including the unavailable sibling frontend link); no issue was added. Authenticated tenant browser acceptance and PostgreSQL performance/serializable-concurrency acceptance remain separate checks; synthetic reader allocation measurements do not establish production latency.

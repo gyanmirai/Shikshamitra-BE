@@ -125,6 +125,8 @@ public sealed class ReconciliationListFilter
 /// </summary>
 public sealed class ReconciliationRow
 {
+    public int PaymentReceiptCount { get; init; } = 1;
+    public FeeReceiptScope ReceiptScope { get; init; }
     public Guid ReceiptId { get; init; }
     public string ReceiptNumber { get; init; } = string.Empty;
     public FeeReceiptVerificationStatus VerificationStatus { get; init; }
@@ -137,7 +139,10 @@ public sealed class ReconciliationRow
 
     // Payment instrument
     public PaymentMethodEnum PaymentMethod { get; init; }
+    public DateTimeOffset? PaymentDate { get; init; }
     public string? PaymentDetailsJson { get; init; }
+    public Guid? BankAccountId { get; init; }
+    public string? BankLabel { get; init; }
 
     // Student
     public Guid? StudentId { get; init; }

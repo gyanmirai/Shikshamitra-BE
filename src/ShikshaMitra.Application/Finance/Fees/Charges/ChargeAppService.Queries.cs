@@ -47,7 +47,7 @@ public partial class ChargeAppService
 			var dto = MapToListItem(item);
 			dto.AvailableActions = await GetAvailableActionsAsync(
 				item.Request.RequestorId, item.PendingCount > 0, item.PendingCount == item.StudentCount,
-				item.WorkflowStatus == ChargeWorkflowStatus.InProcess);
+				item.CanCancel);
 			mappedItems.Add(dto);
 		}
 
@@ -133,8 +133,9 @@ public partial class ChargeAppService
 		}).ToList();
 		var workflowStatus = ChargeWorkflowStatusResolver.Resolve(studentLines.Select(line =>
 			new ChargeWorkflowLine((ChargeStatus)line.Status, line.OutstandingAmount)));
+		var canCancel = await CanCancelAsync(detail.Lines.Select(line => line.Charge).ToList());
 		var availableActions = await GetAvailableActionsAsync(
-			detail.Request.RequestorId, hasPending, allPending, workflowStatus == ChargeWorkflowStatus.InProcess);
+			detail.Request.RequestorId, hasPending, allPending, canCancel);
 
 		return new ChargeDetailResponse
 		{

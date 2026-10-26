@@ -34,6 +34,8 @@ public partial class FeeRefundAppService(
 	IRepository<FeePaymentReceipt, Guid> feePaymentReceiptRepository,
 	IRepository<FeeCollectionDueFeeAllocation, Guid> allocationRepository,
 	IRepository<FeeRecordMetadata, Guid> collectionRepository,
+    PaidChargeRefundService paidChargeRefundService,
+    PaidLateFeeRefundService paidLateFeeRefundService,
 	IRepository<StudentFeeStructure, Guid> assignmentRepository,
     IRepository<FinanceFeeAccount, Guid> accountRepository,
 	IRepository<AcademicYear, Guid> academicYearRepository,

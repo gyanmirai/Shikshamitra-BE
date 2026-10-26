@@ -50,6 +50,58 @@ public class PaymentTermAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 	}
 
 	[Fact]
+	public async Task Installment_Ranges_RoundTrip_After_Create_And_Edit()
+	{
+		var (yearId, boardId, _) = await SeedAcademicContextAsync();
+		var input = BuildInput(yearId, boardId, "Range round trip", "RANGE-ROUND-TRIP");
+		input.Installments[0].CoverageStartDate = new DateTime(2026, 6, 1);
+		input.Installments[0].CoverageEndDate = new DateTime(2026, 12, 31);
+		input.Installments[0].DemandDate = new DateTime(2026, 6, 1);
+		input.Installments[0].DueDate = new DateTime(2026, 6, 15);
+		input.Installments[0].AllocationPercentage = 50m;
+		input.Installments.Add(new()
+		{
+			Sequence = 2,
+			Name = "Second",
+			CoverageStartDate = new DateTime(2027, 1, 1),
+			CoverageEndDate = new DateTime(2027, 5, 31),
+			DemandDate = new DateTime(2027, 1, 1),
+			DueDate = new DateTime(2027, 1, 15),
+			AllocationPercentage = 50m,
+			DemandEnabled = true
+		});
+		var created = await _paymentTerms.CreateAsync(input);
+		var reopened = await _paymentTerms.GetAsync(created.Id);
+		var saved = reopened.Versions.Single(version => version.Status == PaymentTermVersionStatus.Draft)
+			.Installments.OrderBy(installment => installment.Sequence).ToList();
+		saved.Count.ShouldBe(2);
+		saved[0].CoverageStartDate.ShouldBe(new DateTime(2026, 6, 1));
+		saved[0].CoverageEndDate.ShouldBe(new DateTime(2026, 12, 31));
+		saved[1].CoverageStartDate.ShouldBe(new DateTime(2027, 1, 1));
+		saved[1].CoverageEndDate.ShouldBe(new DateTime(2027, 5, 31));
+
+		input.Installments[0].CoverageStartDate = new DateTime(2026, 6, 2);
+		input.Installments[0].DemandDate = new DateTime(2026, 6, 2);
+		input.Installments[1].CoverageEndDate = new DateTime(2027, 5, 30);
+		await _paymentTerms.UpdateDraftAsync(created.Id, new()
+		{
+			Name = input.Name,
+			Code = input.Code,
+			Status = PaymentTermSaveStatus.Draft,
+			HolidayShiftingMethod = input.HolidayShiftingMethod,
+			DemandGenerationRule = input.DemandGenerationRule,
+			Installments = input.Installments
+		});
+		reopened = await _paymentTerms.GetAsync(created.Id);
+		saved = reopened.Versions.Single(version => version.Status == PaymentTermVersionStatus.Draft)
+			.Installments.OrderBy(installment => installment.Sequence).ToList();
+		saved[0].CoverageStartDate.ShouldBe(new DateTime(2026, 6, 2));
+		saved[0].CoverageEndDate.ShouldBe(new DateTime(2026, 12, 31));
+		saved[1].CoverageStartDate.ShouldBe(new DateTime(2027, 1, 1));
+		saved[1].CoverageEndDate.ShouldBe(new DateTime(2027, 5, 30));
+	}
+
+	[Fact]
 	public async Task Each_Board_Can_Have_Its_Own_Active_Default()
 	{
 		var (yearId, firstBoardId, secondBoardId) = await SeedAcademicContextAsync();

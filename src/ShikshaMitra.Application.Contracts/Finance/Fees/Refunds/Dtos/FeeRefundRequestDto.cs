@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace ShikshaMitra.Finance.Fees.FeeRefund.Dtos;
@@ -125,11 +125,14 @@ public class FeeRefundLineDto
 {
     public Guid Id { get; set; }
 
-    public Guid DueFeeId { get; set; }
+    public Guid? ChargeId { get; set; }
+    /// <summary>Due line whose collected late fee is being refunded; distinct from principal.</summary>
+    public Guid? LateFeeDueFeeId { get; set; }
+    public Guid? DueFeeId { get; set; }
 
     public Guid? SourceAllocationId { get; set; }
     public Guid? SourceReceiptId { get; set; }
-    public Guid FeeHeadId { get; set; }
+    public Guid? FeeHeadId { get; set; }
     public string FeeHeadName { get; set; } = string.Empty;
     public string InstallmentLabel { get; set; } = string.Empty;
     public decimal SettledPaidAmount { get; set; }
@@ -158,7 +161,7 @@ public class FeeRefundSettlementDto
 
 public class RefundFeeHeadDto
 {
-    public Guid FeeHeadId { get; set; }
+    public Guid? FeeHeadId { get; set; }
 
     public string FeeHeadName { get; set; } = string.Empty;
 

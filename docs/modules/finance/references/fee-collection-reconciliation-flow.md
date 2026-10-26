@@ -3,12 +3,16 @@ module: finance
 domain: fee-collection-reconciliation
 content_type: Reference
 status: active
-updated_on: 2026-10-01
+updated_on: 2026-10-23
 owner: product-and-engineering
 audience: humans-and-agents
 ---
 
 # Fee Collection to bank reconciliation: current gaps and target flow
+
+## Receipt lifecycle update (23 October 2026)
+
+The implemented receipt contract is now [Provisional and official receipts](receipt-lifecycle.md): cash issues official evidence immediately; every non-cash method issues provisional evidence, independent of cashier confirmation. Existing reconciliation approval issues linked official evidence. One non-cash instrument may cover combined or separate fee/charge documents, approved or rejected together. Multiple instruments remain blocked. The read-only Cash tab shows counter-issued official receipts. The historical observations and larger bank-matching target below do not override this current receipt contract; bank-statement import/matching remains outside this delivery.
 
 ## Decision and scope
 
@@ -16,9 +20,11 @@ This is the implementation contract for money received through Fee Collection, f
 
 **Current readiness: blocked for full bank reconciliation.** The implemented approve/reject API handles provisional receipt verification. There is no bank statement ingestion, statement-line match model, or operational account-posting chain in this path. Existing approval must not be represented to users as bank-reconciled.
 
-The collection validator now rejects a provisional payment mixed with another
-instrument or spanning both fee and charge receipts. It asks staff to record
-those payments separately until each instrument has its own allocation shares.
+The collection validator rejects a provisional payment mixed with another
+instrument until instrument allocation shares exist. A single instrument can
+cover fees and charges together. Collection Policy chooses one combined receipt
+and queue row or separate fee/charge receipts and two queue rows. Both separate
+rows share one atomic verification decision. See [receipt grouping](./collection-policy-end-to-end.md#receipt-grouping-for-fees-and-charges).
 The frontend no longer exposes the nonexistent `match`, `by-head`, or
 `post-statement` operations or the In-Transit placeholder. These safeguards do
 not add bank matching or journal posting.
@@ -27,9 +33,9 @@ not add bank matching or journal posting.
 
 | Link | Current implementation | Observed gap |
 |---|---|---|
-| Collection | `FeeCollectionAppService`, `FeeCollectionManager`, `FeeRecordMetadata`, DueFee and charge allocations, payment-method records, and fee/charge receipts | One transaction may contain multiple instruments and fee plus charge scopes, but receipts are per scope and not linked to a specific instrument or its allocation share. |
-| Receipt policy | `FeeReceiptPaymentPolicy` and `FeeReceiptManager.CreateReceiptsForTransactionAsync` | Cheque/DD make a transaction provisional; cashier confirmation determines fee receipt status for other noncash methods. Charge receipt kind uses only cheque/DD verification and can disagree with a provisional fee receipt in the same transaction. |
-| Verification | `ReconciliationManager.ApproveAsync/RejectAsync` and `/api/v1/finance/reconciliations/{id}/approve|reject` | Approval creates a final receipt, then marks the provisional receipt verified. This change permits provisional charge transitions, returns the verified provisional status and ID, and blocks decisions when a collection has multiple instruments or original receipts. For the remaining single-instrument/single-receipt path, approval marks the parent Paid/Partial; rejection reverses that parent's scope allocations and marks it Reversed. Instrument-level attribution is still required before the blocked combinations can be processed. |
+| Collection | `FeeCollectionAppService`, `FeeCollectionManager`, `FeeRecordMetadata`, DueFee and charge allocations, payment-method records, and fee/charge receipts | One transaction may contain multiple instruments and fee plus charge scopes, with policy-controlled combined/separate scope receipts; individual instrument allocation shares are not modelled. |
+| Receipt policy | `FeeReceiptPaymentPolicy` and `FeeReceiptManager.CreateReceiptsForTransactionAsync` | Cheque/DD make a transaction provisional; cashier confirmation determines fee receipt status for other noncash methods. Both fee and charge documents use the same payment-method decision. |
+| Verification | `ReconciliationManager.ApproveAsync/RejectAsync` and `/api/v1/finance/reconciliations/{id}/approve|reject` | Approval creates a final receipt, then marks the provisional receipt verified. This change permits provisional charge transitions, returns the verified provisional status and ID, and blocks decisions when a collection has multiple instruments. A single instrument may have one combined or two separate original receipts; approval finalizes every original document and marks the parent Paid/Partial, while rejection reverses both fee and charge allocations and marks the parent Reversed atomically. |
 | Inbox | `EfCoreFeePaymentReceiptRepository` and reconciliation list/count APIs | List filters by any payment method on the parent transaction. Row detail chooses the first noncash instrument. Counts join every instrument to each provisional receipt. In a split payment, row, tab, amount, and evidence can describe different instruments. |
 | Accounting | Reconciliation event handlers in `FinanceEventHandlers` | The approved/rejected handlers only log. No verified posting, clearing-account transfer, bank match, or compensating journal is proved by this flow. |
 | Frontend | `/finance/reconciliation`, `Finance-reconciliation`, `redux/finance/reconciliation.ts` | Cheque/DD use approve/reject. Bank Transfer calls a `match` endpoint absent from `ReconciliationController`; `by-head` and `post-statement` clients also have no controller endpoints. "In-Transit" is a placeholder, and `BankStatements` reads the receipt-list response as `data.data`. Gateway/wallet count fields exist in the client contract but are not populated by backend count mapping. |
@@ -111,10 +117,10 @@ Store each command and audit intent with its financial DB transaction. Use trans
 
 ## Delivery order and release gates
 
-1. **P0 containment:** the backend now blocks unsafe approval/rejection of mixed or multi-receipt transactions, permits provisional charge transitions, and returns the provisional receipt ID in the action response. Add integration tests for fee-plus-charge and duplicate/concurrent actions. Remove or disable frontend controls for routes not implemented by the backend, including `match`, `by-head`, `post-statement`, and the In-Transit placeholder.
+1. **P0 containment:** the backend blocks unsafe approval/rejection of mixed-instrument transactions, permits provisional charge transitions, and returns the provisional receipt ID in the action response. Add integration tests for fee-plus-charge and duplicate/concurrent actions. Remove or disable frontend controls for routes not implemented by the backend, including `match`, `by-head`, `post-statement`, and the In-Transit placeholder.
 2. **P0 canonical model:** migrate money to decimal in the touched chain, add instrument allocation shares, separate settlement and bank-match status, backfill only deterministic legacy rows, and quarantine ambiguous history for manual review. Add unique constraints and concurrency versions.
 3. **P0 evidence and posting:** implement bank/provider import, normalized statement lines, matching and exceptions, balanced postings and reversals, outbox/PDF repair, and period gates. Test real PostgreSQL transactions and rollback.
 4. **P1 operations UI:** replace method-specific duplicated tables with one typed queue and tabs for Pending Verification, Unmatched Bank, Exceptions, In Transit, and Reconciled. Show receipt, instrument, account, amount, evidence, exact available actions, and reason. Provide an as-of reconciliation report and export.
 5. **Acceptance gate:** run end-to-end collection -> statement import -> independent verification -> posting -> match -> report, then failure, refund/reversal, concurrency, tenant/scope, permissions, duplicate import, and period-close cases. Prove `statement balance - adjusted book balance = 0` or explain every open item.
 
-Do not bulk-mark old provisional receipts "verified" during migration. For each legacy collection, derive instrument attribution only when one instrument and one receipt scope make it unambiguous; otherwise preserve the original record and place it in a reviewed exception queue. The frontend must label the current queue "Payment verification" until bank matching and account reconciliation are implemented.
+Do not bulk-mark old provisional receipts "verified" during migration. For each legacy collection, derive instrument attribution only when one instrument makes the whole-payment decision unambiguous; otherwise preserve the original record and place it in a reviewed exception queue. The frontend must label the current queue "Payment verification" until bank matching and account reconciliation are implemented.

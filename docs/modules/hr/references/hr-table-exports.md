@@ -87,3 +87,11 @@ Run HR docs validation and canonical executable security checks.
 Finish with frontend signed-in browser review and inspection of freshly generated Excel/PDF files.
 Deliver backend before the dependent frontend and obtain explicit approval before merging.
 Preserve deployment files, attendance, employee records, payroll evidence and official payslips.
+
+## Operational-query population capture
+
+The read-only operational endpoint and table export share the owning authorized readers, server field catalog and projection. Legacy endpoint inputs remain compatible. Criteria are applied to a complete bounded server capture, not a loaded browser page and not SQL predicate pushdown. A transactional snapshot covers the capture. Reader ordering has stable ID ties; raw numeric enum/editing envelopes are preserved. ESI calculates one authorized model per capture and slices that model for source batches. Its existing view/configuration-draft permissions still apply.
+
+The configured cap is 500,000 source rows, captured in batches of 100 (at most 5,000 reader pages). An over-cap population, changing total or incomplete page sequence returns an error with no partial result. Header filters cannot reduce the population before capture; narrow the existing period/staff/organization/domain-search scope first. Every new query request recaptures its population. This design has linear allocation/capture cost and sorting cost, and underlying reader/database cost varies by dataset. It is intended for scoped HR workspaces, not an unmeasured guarantee of interactive latency at the cap.
+
+Synthetic owning-reader measurements on this Windows host: 10,000 rows / 100 pages / 178 ms / about 37 MB allocated; 25,000 rows / 250 pages / 360 ms / about 99 MB allocated. Both return ten response rows and reuse the same captured population for export within the operation. These measurements exclude production database latency and are allocation totals, not peak resident memory. They do not establish performance at 500,000 rows. Changed-population and over-cap tests explicitly verify failure rather than partial answers. No migration, permission grant, hierarchy expansion or production data mutation is required.

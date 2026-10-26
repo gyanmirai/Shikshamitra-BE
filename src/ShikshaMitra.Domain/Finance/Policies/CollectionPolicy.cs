@@ -78,6 +78,10 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public CollectionAllocationBasis AllocationBasis => Enum.Parse<CollectionAllocationBasis>(
 		this.GetProperty<string>(nameof(AllocationBasis), nameof(CollectionAllocationBasis.Legacy)));
 
+	[NotMapped]
+	public CollectionReceiptGrouping ReceiptGrouping => Enum.Parse<CollectionReceiptGrouping>(
+		this.GetProperty<string>(nameof(ReceiptGrouping), nameof(CollectionReceiptGrouping.Separate)));
+
 	public int Version { get; protected set; }
 
 	protected CollectionPolicy()
@@ -135,6 +139,8 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		if (!Enum.IsDefined(model.AllocationBasis))
 			throw new BusinessException(CollectionPolicyErrorCodes.InvalidAllocationBasis).WithData("field", "allocationBasis");
+		if (!Enum.IsDefined(model.ReceiptGrouping))
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidReceiptGrouping).WithData("field", "receiptGrouping");
 		ValidateRules(model, model.Status == CollectionPolicyStatus.Active, validateInputBounds);
 
 		PolicyName = FinanceName.Normalize(model.PolicyName);
@@ -180,6 +186,7 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 		AllowOnlineCollection = model.AllowOnlineCollection;
 		this.SetProperty(nameof(AllocationBasis), model.AllocationBasis.ToString());
+		this.SetProperty(nameof(ReceiptGrouping), model.ReceiptGrouping.ToString());
 
 		Version++;
 	}
@@ -312,7 +319,8 @@ public class CollectionPolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		RequiresApproval = RequiresApproval,
 		ApprovalRoleIds = GetApprovalRoleIds().ToList(),
 		AllowOnlineCollection = AllowOnlineCollection,
-		AllocationBasis = AllocationBasis
+		AllocationBasis = AllocationBasis,
+		ReceiptGrouping = ReceiptGrouping
 	};
 
 	public static CollectionPolicy FromSnapshot(
@@ -472,4 +480,5 @@ public sealed record CollectionPolicyUpdateModel(
 	IReadOnlyList<Guid> ApprovalRoleIds,
 	bool AllowOnlineCollection,
 	Guid? LateFeeIncomeCategoryId = null,
-	CollectionAllocationBasis AllocationBasis = CollectionAllocationBasis.Legacy);
+	CollectionAllocationBasis AllocationBasis = CollectionAllocationBasis.Legacy,
+	CollectionReceiptGrouping ReceiptGrouping = CollectionReceiptGrouping.Separate);

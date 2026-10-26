@@ -277,10 +277,11 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		Remarks = remarks;
 	}
 
-	public void Approve(Guid approverId, string? message, IEnumerable<ConcessionDueFeeAllocation> allocations, DateTime approvedOn)
+	public void Approve(Guid approverId, string? message, IEnumerable<ConcessionDueFeeAllocation> allocations, DateTime approvedOn,
+		bool allowCreatorDecision = false)
 	{
 		EnsurePending();
-		EnsureIndependentApprover(approverId);
+		EnsureIndependentApprover(approverId, allowCreatorDecision);
 		ApplyApproval(approverId, message, allocations, approvedOn);
 	}
 
@@ -309,10 +310,12 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		}
 	}
 
-	public void Reject(Guid rejectorId, string reason, DateTime rejectedOn)
+	public void Reject(Guid rejectorId, string reason, DateTime rejectedOn, bool allowCreatorDecision = false)
 	{
-		EnsurePending();
-		EnsureIndependentApprover(rejectorId);
+		if (Status is not (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending))
+			throw new BusinessException(FinanceConcessionErrorCodes.NotPending)
+				.WithData("Status", Status.ToString());
+		EnsureIndependentApprover(rejectorId, allowCreatorDecision);
 
 		if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < 10)
 		{
@@ -325,9 +328,11 @@ public class ConcessionRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		this.SetProperty(ApprovedOnProperty, rejectedOn);
 	}
 
-	private void EnsureIndependentApprover(Guid actorId)
+	// The application service supplies this exception only after checking current
+	// configured administrator membership and the exact decision permission.
+	private void EnsureIndependentApprover(Guid actorId, bool allowCreatorDecision)
 	{
-		if (CreatorId.HasValue && CreatorId.Value == actorId)
+		if (!allowCreatorDecision && CreatorId.HasValue && CreatorId.Value == actorId)
 			throw new BusinessException(FinanceConcessionErrorCodes.ApproverCannotBeRequestor);
 	}
 

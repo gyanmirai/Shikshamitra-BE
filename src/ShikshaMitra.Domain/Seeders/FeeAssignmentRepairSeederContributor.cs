@@ -136,6 +136,18 @@ public class FeeAssignmentRepairSeederContributor : BaseSeederContributor
 		{
 			var feeStructureId = student.FeeStructureId!.Value;
 			var structure = await _feeStructureRepository.GetAsync(feeStructureId);
+			var details = await _feeStructureDetailRepository.GetListAsync(
+				d => d.FeeStructureId == feeStructureId);
+			// Published heads must retain their explicit schedules. A retired collection
+			// option may have cleared one; automatic legacy repair must not invent dues.
+			if (!string.IsNullOrEmpty(structure.GetProperty<string>("PublicationReview")) &&
+				details.Any(d => !d.IsOptional && (!d.PaymentTermId.HasValue || !d.PaymentTermVersionId.HasValue)))
+			{
+				_logger.LogWarning(
+					"[FeeAssignmentRepairSeeder] Structure {StructureId} needs explicit payment schedule correction for student {StudentId}; automatic assignment and due repair skipped.",
+					feeStructureId, student.Id);
+				continue;
+			}
 			var assignment = await _studentFeeStructureRepository.FirstOrDefaultAsync(
 				sfs => sfs.StudentId == student.Id);
 
@@ -163,8 +175,6 @@ public class FeeAssignmentRepairSeederContributor : BaseSeederContributor
 			if (await _dueFeeRepository.ExistsForStudentAsync(student.Id))
 				continue;
 
-			var details = await _feeStructureDetailRepository.GetListAsync(
-				d => d.FeeStructureId == feeStructureId);
 			if (details.Count == 0)
 				continue;
 

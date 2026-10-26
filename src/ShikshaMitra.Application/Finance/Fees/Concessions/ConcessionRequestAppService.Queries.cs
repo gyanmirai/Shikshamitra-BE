@@ -209,6 +209,9 @@ public partial class ConcessionRequestAppService
 		FinanceClassDivisionFilterValidator.Validate(input);
 
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
+		var canReviewDrafts = currentUser.Id.HasValue &&
+			(await AuthorizationService.IsGrantedAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Approve) ||
+			 await AuthorizationService.IsGrantedAsync(ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.Fees_Concession.Reject));
         var tableQuery = ShikshaMitra.Finance.Common.FinanceTableQuery.Parse(input.Filters, input.Search,
             input.SortBy, input.SortOrder, ConcessionApplicationsTable.Columns);
         ConcessionApplicationsTable.Statuses(input.Tab);
@@ -218,13 +221,16 @@ public partial class ConcessionRequestAppService
 
 		var counts = await concessionRequestRepository.GetStatusCountsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId, input.StandardId, input.DivisionId,
-			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery);
+			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery,
+			includeReviewableDrafts: canReviewDrafts);
 		var items  = await concessionRequestRepository.GetListForApplicationsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId, skip, pageSize,
-			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery, tab: input.Tab);
+			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery, tab: input.Tab,
+			includeReviewableDrafts: canReviewDrafts);
 		var total  = await concessionRequestRepository.CountForApplicationsAsync(
 			input.AcademicYearId, input.BoardId, input.EducationMediumId, status, input.StandardId, input.DivisionId,
-			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery, tab: input.Tab);
+			scopedStudentIdsQuery: scopedStudentIds, draftCreatorId: currentUser.Id, tableQuery: tableQuery, tab: input.Tab,
+			includeReviewableDrafts: canReviewDrafts);
 
 		var studentIds  = items.Select(i => i.StudentId).Distinct().ToList();
 		var students    = await studentRepository.GetListAsync(s => studentIds.Contains(s.Id));
@@ -248,6 +254,7 @@ public partial class ConcessionRequestAppService
 		var standardMap = standards.ToDictionary(s => s.Id, s => s.Name);
 		var divisionMap = divisions.ToDictionary(d => d.Id, d => d.Name);
 
+		var isAdministrator = currentUser.Id.HasValue && await userScopeService.IsAdminUserAsync(currentUser.Id.Value);
 		return new ConcessionApplicationsDto
 		{
 			DraftCount     = counts.GetValueOrDefault(ConcessionRequestStatus.Draft),
@@ -286,7 +293,7 @@ public partial class ConcessionRequestAppService
 					StatusName         = r.Status.ToString(),
 					CreatedAt          = r.CreationTime,
 					ConcurrencyStamp   = r.ConcurrencyStamp,
-					AvailableActions   = BuildAvailableActions(r),
+					AvailableActions   = BuildAvailableActions(r, isAdministrator),
 				};
 			}).ToList(),
 		};
@@ -316,7 +323,10 @@ public partial class ConcessionRequestAppService
 			.Skip(skip)
 			.Take(pageSize));
 
-		var student  = await studentRepository.GetAsync(studentId) ?? throw new BusinessException("Student not found.");
+		var students = await studentRepository.WithDetailsAsync(
+			x => x.AcademicBoard!, x => x.AcademicMedium!, x => x.Standard!, x => x.Division!);
+		var student = await AsyncExecuter.FirstOrDefaultAsync(students.Where(x => x.Id == studentId))
+			?? throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Student), studentId);
 		var standard = student?.Standard?.Name;
 		var division = student?.Division?.Name;
 
@@ -348,11 +358,12 @@ public partial class ConcessionRequestAppService
 					}).ToList())
 			: new Dictionary<Guid, IReadOnlyList<ConcessionRefundReferenceDto>>();
 
+		var isAdministrator = currentUser.Id.HasValue && await userScopeService.IsAdminUserAsync(currentUser.Id.Value);
 		var items = page.Select(r =>
 		{
 			typeMap.TryGetValue(r.ConcessionTypeId, out var type);
 			return MapStudentItem(r, type, feeHeadMap, canViewDocuments,
-				refundMap.GetValueOrDefault(r.Id, []));
+				refundMap.GetValueOrDefault(r.Id, []), isAdministrator);
 		}).ToList();
 
 		return new StudentConcessionRequestsDto
@@ -365,6 +376,8 @@ public partial class ConcessionRequestAppService
 				GrNumber     = student.GrNo?.ToString() ?? string.Empty,
 				StandardName = standard ?? string.Empty,
 				DivisionName = division ?? string.Empty,
+				BoardName = student.AcademicBoard?.Name ?? string.Empty,
+				EducationMediumName = student.AcademicMedium?.Name ?? string.Empty,
 			},
 			ConcessionBasicDetail = new ConcessionBasicDetailDto
 			{

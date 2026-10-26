@@ -33,6 +33,7 @@ public class FeeCollectFormDto
     public bool AllowOnlineCollection { get; set; } = true;
 
 	public string AllocationBasis { get; set; } = "Legacy";
+	public string ReceiptGrouping { get; set; } = "Separate";
 	public Guid? CollectionPolicyId { get; set; }
 	public string? CollectionPolicyName { get; set; }
 	public int? CollectionPolicyVersion { get; set; }

@@ -54,6 +54,22 @@ public class ConcessionRequestCoreApi_Tests : ConcessionRequestApiTestsBase
 	}
 
 	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task Should_Include_Board_And_Medium_In_Student_Concession_Details()
+	{
+		var (studentId, _) = await ConcessionRequestTestHelper.CreateStudentAsync(Factory.Services);
+		var response = await Client.GetAsync(
+			$"{ConcessionRequestsBaseUrl}/{studentId}?academicYearId={ConcessionRequestTestHelper.DefaultAcademicYearId}");
+
+		response.StatusCode.ShouldBe(HttpStatusCode.OK);
+		var body = await response.Content.ReadFromJsonAsync<StudentConcessionRequestsDto>(JsonOptions);
+		body.ShouldNotBeNull();
+		body.StudentDetails.StudentId.ShouldBe(studentId);
+		body.StudentDetails.BoardName.ShouldNotBeNullOrWhiteSpace();
+		body.StudentDetails.EducationMediumName.ShouldNotBeNullOrWhiteSpace();
+	}
+
+	[Fact]
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Should_Get_Concession_Request_By_Id_Returns_Correct_Shape()
 	{

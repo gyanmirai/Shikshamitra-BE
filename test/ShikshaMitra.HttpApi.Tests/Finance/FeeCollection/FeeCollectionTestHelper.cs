@@ -42,7 +42,7 @@ public static class FeeCollectionTestHelper
         IServiceProvider services,
         double feeAmount = 1000d)
     {
-        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(client);
+        var (studentId, boardId) = await ConcessionRequestTestHelper.CreateStudentAsync(services);
         var feeHeadId = await CreateFeeHeadAsync(client);
 
         var dueFeeId = await SeedDueFeeAsync(services, studentId, feeHeadId, feeAmount);

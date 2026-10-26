@@ -32,7 +32,7 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
 		CancellationToken cancellationToken = default,
-        FinanceTableQuery? tableQuery = null, string? tab = null);
+        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false);
 
 	Task<int> CountForApplicationsAsync(
 		Guid academicYearId,
@@ -44,7 +44,7 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
 		CancellationToken cancellationToken = default,
-        FinanceTableQuery? tableQuery = null, string? tab = null);
+        FinanceTableQuery? tableQuery = null, string? tab = null, bool includeReviewableDrafts = false);
 
 	Task<Dictionary<ConcessionRequestStatus, int>> GetStatusCountsAsync(
 		Guid academicYearId,
@@ -55,5 +55,5 @@ public interface IConcessionRequestRepository : IRepository<ConcessionRequest, G
 		IQueryable<Guid>? scopedStudentIdsQuery = null,
 		Guid? draftCreatorId = null,
 		CancellationToken cancellationToken = default,
-        FinanceTableQuery? tableQuery = null);
+        FinanceTableQuery? tableQuery = null, bool includeReviewableDrafts = false);
 }

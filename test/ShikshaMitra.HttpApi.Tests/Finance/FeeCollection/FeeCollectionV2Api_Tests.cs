@@ -427,6 +427,54 @@ public class FeeCollectionV2Api_Tests : ShikshaMitraApiTestBase
         body.Payments.ShouldNotBeEmpty();
         body.Payments![0].ReceiptNumber.ShouldBe(output.ReceiptNumber);
         body.Payments[0].PaymentMethods.ShouldContain(PaymentMethodEnum.Cash);
+        var receipt = body.Payments[0].Receipts.Single();
+        receipt.ReceiptId.ShouldBe(output.FeeReceiptId!.Value);
+        receipt.ReceiptId.ShouldNotBe(body.Payments[0].PaymentId);
+        receipt.HasPdf.ShouldBeTrue();
+        var pdf = await Client.GetAsync($"/api/v1/fee-receipts/{receipt.ReceiptId}/pdf");
+        pdf.StatusCode.ShouldBe(HttpStatusCode.OK);
+        pdf.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
+    }
+
+    [Theory]
+    [InlineData(0, 12500, 50000)]
+    [InlineData(50000, 12500, 0)]
+    [InlineData(52500, 10000, 0)]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Fee_details_should_separate_principal_refunds_and_excess(
+        int refund, int applied, int excess)
+    {
+        var (_, studentId, _, dueId) = await FeeCollectionTestHelper.CollectFeeAsync(Client, Factory.Services, 50_000d);
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
+            var manager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
+            using (tenant.Change(Guid.Parse(TestAuthHandler.TestTenantId)))
+            using (var uow = manager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
+            {
+                var repository = scope.ServiceProvider.GetRequiredService<IDueFeeRepository>();
+                var due = await repository.GetAsync(dueId);
+                due.ApplyConcession(37_500m);
+                // Reproduce existing excess cash, without issuing a new invalid collection.
+                due.ApplyPayment(12_500m);
+                if (refund > 0) due.ApplyRefund(refund);
+                await repository.UpdateAsync(due);
+                await uow.CompleteAsync();
+            }
+        }
+
+        var response = await Client.GetAsync(
+            $"{BaseUrl}/{studentId}/fee-details?academicYearId={FeeCollectionTestHelper.DefaultAcademicYearId}");
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<StudentFeeDetailsDto>(JsonOptions);
+        body!.FeeOverview.TotalFee.ShouldBe(50_000d);
+        body.FeeOverview.NetFee.ShouldBe(12_500m);
+        body.FeeOverview.PaidFee.ShouldBe(applied);
+        body.FeeOverview.OverpaymentAmount.ShouldBe(excess);
+        body.FeeOverview.RefundedAmount.ShouldBe(refund);
+        body.FeeOverview.GrossPaidAmount.ShouldBe(62_500m);
+        body.FeeHeads.Single().PaidAmount.ShouldBe(applied);
+        body.FeeHeads.Single().ConcessionAmount.ShouldBe(37_500m);
     }
 
     // ── GET /api/v2/fee-collections/{studentId}/collect-form ─────────────────

@@ -38,7 +38,7 @@ public partial class FeeRefundAppService
                 replay.ReplacesRefundRequestId != input.ReplacesRefundRequestId ||
                 replay.RefundMethod != input.RefundMethod || replay.Reason != input.Reason ||
                 replay.Lines.Count != input.Lines.Count ||
-                input.Lines.Any(x => !replay.Lines.Any(y => y.DueFeeId == x.DueFeeId &&
+                input.Lines.Any(x => !replay.Lines.Any(y => y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId && y.LateFeeDueFeeId == x.LateFeeDueFeeId &&
                     y.SourceAllocationId == x.SourceAllocationId && y.RequestedAmount == x.Amount)))
                 throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
             var replayResult = await MapAsync(replay);
@@ -59,7 +59,7 @@ public partial class FeeRefundAppService
         {
             if (!replaced.StudentFeeStructureId.HasValue || !replaced.OriginalReceiptId.HasValue ||
                 input.Lines.Count != replaced.Lines.Count ||
-                input.Lines.Any(x => !replaced.Lines.Any(y => y.DueFeeId == x.DueFeeId &&
+                input.Lines.Any(x => !replaced.Lines.Any(y => y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId && y.LateFeeDueFeeId == x.LateFeeDueFeeId &&
                     y.SourceAllocationId == x.SourceAllocationId && y.ApprovedAmount == x.Amount)))
                 throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
             var specs = replaced.Lines.Select(x => new RefundLineSpec(x.DueFeeId,
@@ -83,7 +83,7 @@ public partial class FeeRefundAppService
         if (replaced != null && (prepared.Lines.Sum(x => x.CalculatedAmount) != replaced.ApprovedAmount ||
             prepared.Lines.Count != replaced.Lines.Count ||
             prepared.Lines.Any(x => !replaced.Lines.Any(y => y.SourceAllocationId == x.SourceAllocationId &&
-                y.DueFeeId == x.DueFeeId && y.ApprovedAmount == x.CalculatedAmount))))
+                y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId && y.LateFeeDueFeeId == x.LateFeeDueFeeId && y.ApprovedAmount == x.CalculatedAmount))))
             throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
         var request = await feeRefundManager.CreatePendingAsync(prepared.StudentId, input.AcademicYearId,
             prepared.AssignmentId, prepared.PolicyId, prepared.PolicyVersionId, prepared.Receipt.Id,
@@ -164,20 +164,8 @@ public partial class FeeRefundAppService
     private async Task ApproveOnAdministratorSubmissionAsync(FeeRefundRequest request,
         FeeRefundRequest? replaced = null)
     {
-        var policy = string.IsNullOrWhiteSpace(request.PolicySnapshotJson)
-            ? null
-            : JsonSerializer.Deserialize<ShikshaMitra.Domain.Finance.Policies.RefundPolicySnapshot>(request.PolicySnapshotJson);
-        var category = await routingManager.RequireCategoryAsync(request.AcademicYearId,
-            policy?.ExpenseCategoryId ?? replaced?.ExpenseCategoryId,
-            ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense);
         var method = request.RefundMethod ?? "Cash";
         EnsureSettlementMethodAllowed(request, method);
-        var bankId = method == "Cash" ? null
-            : policy?.DefaultPayingBankAccountId ?? replaced?.PayingBankAccountId;
-        var bank = bankId.HasValue || method != "Cash"
-            ? await routingManager.RequireBankAsync(request.AcademicYearId, bankId) : null;
-        request.SetApprovalRouting(category.Id, category.Name, bank?.Id,
-            bank == null ? null : $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}", method);
         var existingReservationIds = request.Reservations.Select(x => x.Id).ToHashSet();
         await feeRefundManager.ApproveAsync(request, currentUser.GetId(),
             "Automatically approved on administrator submission.");
@@ -212,19 +200,8 @@ public partial class FeeRefundAppService
         var request = await RequireAsync(id);
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(request.StudentId, request.FinanceFeeAccountId);
         await EnsureMakerCheckerAsync(request);
-        var policy = string.IsNullOrWhiteSpace(request.PolicySnapshotJson) ? null : JsonSerializer.Deserialize<ShikshaMitra.Domain.Finance.Policies.RefundPolicySnapshot>(request.PolicySnapshotJson);
-        var category = await routingManager.RequireCategoryAsync(request.AcademicYearId,
-            input.ExpenseCategoryId ?? policy?.ExpenseCategoryId, ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Expense);
         var method = input.Method ?? request.RefundMethod ?? "Cash";
         EnsureSettlementMethodAllowed(request, method);
-        var bankId = method == "Cash" ? input.BankAccountId : input.BankAccountId ?? policy?.DefaultPayingBankAccountId;
-        var bank = bankId.HasValue || method != "Cash" ? await routingManager.RequireBankAsync(request.AcademicYearId, bankId) : null;
-        if (((policy?.ExpenseCategoryId.HasValue == true && policy.ExpenseCategoryId != category.Id) ||
-             (policy?.DefaultPayingBankAccountId.HasValue == true && method != "Cash" && policy.DefaultPayingBankAccountId != bank?.Id)) &&
-            string.IsNullOrWhiteSpace(input.Notes))
-            throw new UserFriendlyException("Add a reason when changing the refund policy's category or paying bank.");
-        request.SetApprovalRouting(category.Id, category.Name, bank?.Id,
-            bank == null ? null : $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}", method);
         var existingReservationIds = request.Reservations.Select(x => x.Id).ToHashSet();
         await feeRefundManager.ApproveAsync(request, currentUser.GetId(), input.Notes);
         await feeRefundRepository.StageNewReservationsAsync(

@@ -150,7 +150,9 @@ public class ConcessionRequestManager(
 			assignment,
 			policy,
 			mappings,
-			GetSelectedEligibleDueFees(dueFees, policy, mappings.Select(x => x.FeeHeadId)).ToList());
+			dueFeeConcessions is { Count: > 0 }
+				? dueFees.Where(x => dueFeeConcessions.Any(input => input.DueFeeId == x.Id)).ToList()
+				: GetSelectedEligibleDueFees(dueFees, policy, mappings.Select(x => x.FeeHeadId)).ToList());
 	}
 
 	public async Task ReplaceFeeHeadMappingsAsync(
@@ -189,6 +191,27 @@ public class ConcessionRequestManager(
 		request.ReplaceFeeHeadMappings(mappings);
 		var type = await LoadConcessionTypeAsync(request.ConcessionTypeId, request.AcademicYearId);
 		PrepareSubmissionEvidence(request, type, dueFees, policy, dueFeeConcessions);
+	}
+
+	public async Task ValidateDraftApprovalAsync(ConcessionRequest request)
+	{
+		request.EnsureDraft();
+		var dueInputs = ReadDueFeeEvidence(request).Select(x => new DueFeeConcessionInput(
+			x.DueFeeId, x.FeeHeadId, x.Amount)).ToList();
+		var inputs = request.ConcessionFeeHeadMappings.Select(x => new FeeHeadConcessionInput(
+			x.FeeHeadId, x.UserSpecifiedConcessionAmountType, x.UserSpecifiedConcessionAmountValue)).ToList();
+		if (dueInputs.Count > 0) inputs.Clear();
+		// Revalidate current configuration without replacing the saved amounts or evidence reviewed by the checker.
+		await PreviewAsync(request.TenantId, request.AcademicYearId, request.StudentId,
+			request.ConcessionPolicyId, request.ConcessionPolicyVersionId, request.ConcessionTypeId,
+			inputs, request.StudentFeeStructureId, dueInputs);
+		var type = await LoadConcessionTypeAsync(request.ConcessionTypeId, request.AcademicYearId);
+		var uploadedIds = request.ConcessionRequestDocuments
+			.Where(x => x.Status == 1 && !string.IsNullOrWhiteSpace(x.Url)).Select(x => x.DocumentId).ToHashSet();
+		var missing = type.ConcessionTypeDocuments.Where(x => x.IsRequired && !uploadedIds.Contains(x.Id)).ToList();
+		if (missing.Count > 0)
+			throw new BusinessException(FinanceConcessionErrorCodes.MissingRequiredDocuments)
+				.WithData("DocumentIds", missing.Select(x => x.Id).ToArray());
 	}
 
 	public Task RefreshDraftAsync(ConcessionRequest request)
@@ -473,6 +496,10 @@ public class ConcessionRequestManager(
 			if (!eligible.TryGetValue(input.DueFeeId, out var dueFee) || dueFee.FeeHeadId != input.FeeHeadId)
 				throw new BusinessException(FinanceConcessionErrorCodes.DueFeeNotFound)
 					.WithData("DueFeeId", input.DueFeeId);
+			if (basis == DiscountBasis.FlatAmount && decimal.Truncate(input.Amount) != input.Amount)
+				throw new BusinessException(FinanceConcessionErrorCodes.WholeRupeeAmountRequired)
+					.WithData("DueFeeId", input.DueFeeId)
+					.WithData("FeeHeadId", input.FeeHeadId);
 			if (basis == DiscountBasis.FlatAmount && input.Amount > GetConcessionCapacity(dueFee, policy))
 				throw new BusinessException(FinanceConcessionErrorCodes.DiscountExceedsBase)
 					.WithData("DueFeeId", input.DueFeeId);
@@ -539,6 +566,11 @@ public class ConcessionRequestManager(
 		if (requestEnteredFixed && inputs.Any(x =>
 			x.BasedOn != DiscountBasis.FlatAmount || (!allowIncomplete && x.Amount <= 0m)))
 			throw new BusinessException(ConcessionPolicyErrorCodes.InputNotAllowed);
+		var fractionalHead = requestEnteredFixed
+			? inputs.FirstOrDefault(x => decimal.Truncate(x.Amount) != x.Amount) : null;
+		if (fractionalHead is not null)
+			throw new BusinessException(FinanceConcessionErrorCodes.WholeRupeeAmountRequired)
+				.WithData("FeeHeadId", fractionalHead.FeeHeadId);
 		var candidates = new List<(FeeHeadConcessionInput Input, decimal Base, decimal Amount)>();
 		foreach (var input in inputs)
 		{

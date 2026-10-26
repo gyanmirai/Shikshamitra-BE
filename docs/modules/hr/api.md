@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -38,6 +38,12 @@ Payroll Structure filters active staff on the server; Payslips leaves status unf
 Deploy this backend endpoint before the frontend picker changes.
 
 ## Employee API families
+
+`GET /api/employees/reporting-manager/options?search=...` requires Staff View and returns existing visible active employees plus active, unlocked, current-tenant administrator logins without an employee profile. Administrator eligibility uses current database membership in the configured administrator roles. Linked employee profiles retain the directory's active/status and joining-date rules. No role, scope, or permission is granted by this lookup.
+
+`PUT /api/employees/{employeeId}/reporting-manager` still requires a nonempty `reportingManagerId` and Staff Edit with employee scope. `reportingManagerKind` is `Employee` (default for existing clients) or `TenantAdministrator`. Employee IDs persist in `ReportingManagerId`; administrator login IDs persist in the separate `ReportingManagerUserId` identity foreign key. The server rechecks administrator eligibility at save, rejects self-reference, and clears the other reference on a swap. GET returns the saved manager's `id` and `kind`; existing inactive assignments remain readable. Staff-only reporting hierarchy, scope inheritance, leave and review access rules are unchanged.
+
+Apply `AddAdministratorReportingManager` before starting the updated backend, then deploy the frontend selector. The additive nullable column, restricted identity foreign key and exclusive-reference constraint preserve existing employee-manager relationships. No bootstrap backfill, synthetic employee profile, or tenant reseed is needed.
 
 Employee APIs manage staff identity, profile data, documents, status, reporting, and employee payroll details:
 
@@ -120,6 +126,17 @@ The endpoint returns explicit unavailable states when an academic year or leave 
 The HR dashboard excludes approved-leave employees without stored attendance from the missing-attendance count and attendance-rate denominator.
 Approved half-day leave removes one-half attendance unit but leaves the unrecorded remainder visible as missing attendance.
 A stored attendance row suppresses the same-day leave overlay in HR dashboard totals and trend points.
+
+### Application finalization salary contract
+
+`POST /api/employee-applications/{id}/finalize` requires `salary` using the existing `SaveEmployeeCompensationDto` contract.
+The optional `statutoryProfile` is forwarded to the canonical compensation save as its statutory profile override.
+Existing compensation Manage, statutory enrollment, employee scope, template, PF/ESIC, validation, and effective-month rules still apply.
+The saved salary must cover the employee's required activation month.
+The application ID supplies the stable initial salary idempotency key; concurrent submissions and response-loss retries return the same finalized employee.
+The response includes `activationReadiness`, including the persisted `compensationRevisionId` and remaining blocker codes.
+Employee status remains Inactive; activation remains a separate authorized status transition and login does not change employee status.
+Deploy this backend contract before the corresponding frontend onboarding change.
 
 ## Attendance and leave API families
 
@@ -613,6 +630,12 @@ New assignments reject archived policies; existing employee assignments and hist
 Preview proof and compensation idempotency include assignment values and resolved calculation evidence.
 Reusing a template save key with a changed ESIC assignment or submitting a stale template write returns HTTP 409.
 
+### Attendance register query composition
+
+The grouped register (`GET /api/hr/attendance/register/grouped`) accepts indexed `educationMediumStageIds[0]`, `educationMediumStageIds[1]` query parameters. These identify academic organization assignments, not student/class divisions. Empty selection retains the existing all-authorized behavior. Selected IDs use OR; staff ID, group, department substring, date, attendance status, payroll state, exceptions and search combine using AND. The legacy single `educationMediumStageId` remains supported and intersects a supplied list. Every requested stage is checked against the actor's current scope before reading; year-specific assignment lookup still applies. Filtering occurs before day projection, summary and pagination.
+
+Grouped `sorting` accepts one `employeeName`, `present`, `employeeGroup` or `department` field with `asc`/`desc`. Unknown fields fall back to the existing exception-priority order. Employee ID provides stable ties. HR register Excel/PDF exports deserialize the same criteria and call the same grouped reader for every export batch; no loaded-page filter or separate unscoped query is used. This additive contract needs no schema migration.
+
 ### Reporting table queries
 
 `POST /api/hr/reports/runs/query` accepts `skip`, `take` and `criteria` for private generated-report history.
@@ -628,3 +651,13 @@ Existing GET history/row reads remain available without table criteria.
 Reporting table exports accept the same criteria object in their query and preserve visible ordered columns.
 Filtered captured exports omit original report totals rather than attach totals from the unfiltered population.
 No grants, ownership checks, tenant filters, captured data or retention rules change.
+
+## Operational table queries
+
+POST `/api/hr/table-query` accepts `{ table, query, criteria: { search, filters, sorts }, offset, size }`. Offset is zero-based, size is 1–500, query/criteria are bounded, and source/field/operator/type allowlists are server-owned. This read-only contract preserves each owning reader's response envelope and existing permission, tenant and staff scope. It cannot select arbitrary entities, joins, SQL expressions or hidden staff banking columns. Salary criteria are limited to the explicitly selected salary source columns. Existing authentication-only document-configuration reads retain their existing authorization; no grants are widened here.
+
+The operational endpoint always captures its bounded authorized population, including empty criteria, before slicing the response. Offsets need not align to a source page: `offset=1,size=5` returns rows 1–5, and the response size may exceed a reader's native 100-row page. This uses the same snapshot, cap and incomplete-population checks as active criteria; it never rounds an offset down to the beginning of a source page. Legacy aligned export reads retain their existing streaming path when no criteria are selected.
+
+Operational criteria and complete table exports share `HrTableExportSources` and its projection. Filters/count/order precede response pagination. Equal-column alternatives are OR; different columns are AND. Numeric/date/clock/enum handling is typed on the server. Unbounded amounts sort above finite values and do not match finite numeric criteria. Salary displayed-page totals and full-export available-value totals use their respective matching populations. See [implementation limits](references/hr-table-exports.md#operational-query-population-capture).
+
+The table count reflects matching rows. Other owning-reader business summary metadata retains its canonical domain scope (for example the selected payroll/calculation month); table header criteria do not recalculate payroll or statutory business totals. Salary totals explicitly labeled for displayed rows are recomputed for the displayed matching page.

@@ -3,7 +3,7 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -19,7 +19,7 @@ Employee workflows create and maintain staff records:
 
 | Workflow | Main steps | Validation focus |
 |---|---|---|
-| Employee onboarding | Validate the submitted application, create the identity user and employee aggregate, assign an explicitly onboarding-approved Employee-audience role compatible with the employee group, apply policy defaults and teaching scope, finalize in one unit of work, and run profile, event, and welcome-email effects after commit | Terminal application status, Category and Family Caste, duplicate contact data, role approval and employee-group audiences, BulkAssign permission for teaching scope, tenant scope, academic hierarchy, rollback, generated employee code, and deferred effects |
+| Employee onboarding | Validate the submitted application, create the identity user and employee aggregate, assign an explicitly onboarding-approved Employee-audience role compatible with the employee group, apply policy defaults and teaching scope, save the initial salary and statutory settings, finalize in one unit of work, and run profile, event, and welcome-email effects after commit | Terminal application status, Category and Family Caste, duplicate contact data, role approval and employee-group audiences, BulkAssign permission for teaching scope, tenant scope, academic hierarchy, rollback, generated employee code, and deferred effects |
 | Employee profile update | Update personal, family, additional, work experience, payroll, reporting, and academic data | Round-trip persistence, date validation, bank validation, manager validity, and role compatibility when the role or employee group changes |
 | Employee status change | Submit target status and remarks, then persist transition and audit metadata | Required remarks, blocked transitions, idempotent same-status behavior, and payroll or attendance eligibility impact |
 | Employee documents | Upload, list, download, replace, and delete configured document types | File size, file type, magic bytes, blob storage, and tenant scope |
@@ -71,7 +71,11 @@ Selecting an editable row opens its URL-backed editor directly in edit mode.
 Create and Save changes require a complete valid template and atomically create the active immutable version.
 Saving an existing template creates version N+1 and marks version N as Replaced for future assignments only.
 Existing employee compensation stays pinned to the version used when salary was saved.
-New employees are created Inactive and may complete onboarding before salary is configured.
+New employees are created Inactive.
+Application finalization requires a validated salary and saves its approved compensation revision, statutory profile, employee, identity, and application status in one transaction.
+A failed salary save rolls back finalization; retries after a lost response return the existing finalized employee without creating another revision.
+The tenant payroll fence serializes finalization with compensation saves.
+Direct employee creation retains its separate salary setup flow.
 Salary setup preselects the school default template, its quote defaults and PF defaults, and the employee joining month.
 The administrator calculates the salary and saves it directly as an effective immutable compensation revision.
 Saving another salary for the same month supersedes the older effective revision, while a future-effective revision remains scheduled.

@@ -12,7 +12,8 @@ public static class ReportingManagerProjection
 			EmployeeId = employee.Id,
 			ReportingManager = employee.ReportingManager != null
 				? ToEmployeeBasic(employee.ReportingManager)
-				: null
+				: employee.ReportingManagerUser?.TenantId == employee.TenantId && employee.ReportingManagerUser != null
+					? ToAdministrator(employee.ReportingManagerUser) : null
 		};
 	}
 
@@ -25,11 +26,24 @@ public static class ReportingManagerProjection
 		};
 	}
 
-	private static EmployeeBasicDto ToEmployeeBasic(Employee employee)
+	public static EmployeeBasicDto ToAdministrator(Volo.Abp.Identity.IdentityUser user) => new()
+	{
+		Id = user.Id,
+		Kind = "TenantAdministrator",
+		FullName = string.Join(" ", new[] { user.Name, user.Surname }.Where(part => !string.IsNullOrWhiteSpace(part))) is { Length: > 0 } name
+			? name : user.UserName,
+		Email = user.Email,
+		Designation = "Tenant administrator",
+		Status = user.IsActive ? 0 : 1
+	};
+
+	public static EmployeeBasicDto ToEmployeeBasic(Employee employee)
 	{
 		return new EmployeeBasicDto
 		{
 			Id = employee.Id,
+			Email = employee.Email,
+			Status = (int)(employee.EmployeeStatusType ?? Common.EmployeeStatusType.Active),
 			EmployeeCode = employee.EmployeeCode,
 			FullName = employee.EmployeeName,
 			Designation = employee.Designation

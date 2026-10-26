@@ -68,6 +68,8 @@ public class DueFeeConcessionValidator : AbstractValidator<DueFeeConcessionDto>
 		RuleFor(x => x.DueFeeId).NotEmpty();
 		RuleFor(x => x.FeeHeadId).NotEmpty();
 		RuleFor(x => x.Amount).GreaterThan(0m);
+		RuleFor(x => x.Amount).PrecisionScale(18, 2, true)
+			.WithMessage("Concession value must have no more than two decimal places.");
 	}
 }
 

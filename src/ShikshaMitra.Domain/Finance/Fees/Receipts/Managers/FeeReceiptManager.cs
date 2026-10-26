@@ -1,7 +1,9 @@
 using System;
+using ShikshaMitra.Domain.Finance.Policies;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Volo.Abp;
 using ShikshaMitra.Finance.Fees.Collections;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp.Domain.Services;
@@ -13,7 +15,7 @@ namespace ShikshaMitra.Finance.Fees.Receipts;
 /// <summary>
 /// Domain manager responsible for creating <see cref="FeePaymentReceipt"/> aggregates.
 /// One receipt is created per <see cref="FeeReceiptScope"/> per collection event.
-/// Fee lines and charge lines always produce separate receipt documents.
+/// The effective collection policy can combine fee and charge lines into one document.
 /// <list type="bullet">
 ///   <item><see cref="FeeReceiptKind.FinalFee"/> → <c>FIN-{yyyy}-{nnnnnn}</c></item>
 ///   <item><see cref="FeeReceiptKind.ProvisionalFee"/> → <c>KFE-{yyyy}-{nnnnnn}</c></item>
@@ -85,7 +87,7 @@ public class FeeReceiptManager(
 	/// <summary>
 	/// Creates 1–2 receipts for a single collection transaction.
 	/// Both fee and charge receipts follow the same payment-method policy:
-	/// Cheque/DD → Provisional (requires reconciliation); all other methods → Final.
+	/// Cheque/DD and unconfirmed noncash payments produce provisional documents.
 	/// </summary>
 	public async Task<List<FeePaymentReceipt>> CreateReceiptsForTransactionAsync(
 		Guid feeCollectionTransactionId,
@@ -98,10 +100,23 @@ public class FeeReceiptManager(
 		IEnumerable<PaymentMethodEnum> paymentMethods,
 		bool? bankReceiptConfirmed = null,
 		string? remarks = null,
-		Guid? financeFeeAccountId = null)
+		Guid? financeFeeAccountId = null,
+		CollectionReceiptGrouping receiptGrouping = CollectionReceiptGrouping.Separate)
 	{
 		var receipts = new List<FeePaymentReceipt>();
+		if (!Enum.IsDefined(receiptGrouping))
+			throw new BusinessException(CollectionPolicyErrorCodes.InvalidReceiptGrouping);
 		var methods = paymentMethods.ToList();
+
+		var feeKind = FeeReceiptPaymentPolicy.DetermineFeeReceiptKind(methods, bankReceiptConfirmed);
+		if (receiptGrouping == CollectionReceiptGrouping.Combined && feeLinesTotal > 0 && chargeLinesTotal > 0)
+		{
+			var number = await GenerateReceiptNumberAsync(feeKind);
+			var receipt = CreateReceipt(feeCollectionTransactionId, studentId, academicYearId, boardId, educationMediumId,
+				FeeReceiptScope.Combined, feeKind, (double)((decimal)feeLinesTotal + (decimal)chargeLinesTotal), number, remarks, financeFeeAccountId: financeFeeAccountId);
+			receipt.SetAmountBreakdown((decimal)feeLinesTotal, (decimal)chargeLinesTotal);
+			return [receipt];
+		}
 
 		if (feeLinesTotal > 0)
 		{
@@ -114,7 +129,7 @@ public class FeeReceiptManager(
 
 		if (chargeLinesTotal > 0)
 		{
-			var chargeKind = FeeReceiptPaymentPolicy.RequiresVerification(methods)
+			var chargeKind = feeKind == FeeReceiptKind.ProvisionalFee
 				? FeeReceiptKind.ProvisionalCharge
 				: FeeReceiptKind.FinalCharge;
 			var number = await GenerateReceiptNumberAsync(chargeKind);

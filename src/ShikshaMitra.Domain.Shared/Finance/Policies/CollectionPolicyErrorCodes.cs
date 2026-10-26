@@ -3,6 +3,7 @@ namespace ShikshaMitra.Domain.Finance.Policies;
 public static class CollectionPolicyErrorCodes
 {
 	public const string InvalidAllocationBasis = "Finance:CollectionPolicy:InvalidAllocationBasis";
+	public const string InvalidReceiptGrouping = "Finance:CollectionPolicy:InvalidReceiptGrouping";
 	public const string DefaultPolicyCannotBeRemoved = "Finance:CollectionPolicy:010033";
 	private const string Prefix = "Finance:CollectionPolicy:";
 

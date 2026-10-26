@@ -3,12 +3,64 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-26
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Use Finance backend APIs
+
+## Fee structure copy policy preflight
+
+`GET /api/fee-structures/{id}/copy-policies?feeStructureMetadataId=...&standardId=...`
+requires Fee Structure View and checks source/target tenant and academic scope. It returns
+linked policy family/name, source snapshot ID/version, current active snapshot ID/version
+and an actionable error when unavailable. Current means the active master's version,
+not the highest historical snapshot number. It performs no writes. Legacy concession
+attachments can be inspected; existing retirement of structure-level concessions is preserved.
+Draft creation retains its existing permissions, idempotency and authoritative validation.
+Stale attachments identify policy name and selected/current versions before any insertion.
+
+## Demand Draft collection dates
+
+Collection DD details accept `issueDate` and `paymentDate` from the collection form;
+legacy `ddDate` remains an issue-date alias. Both are preserved independently as calendar
+dates in the existing instrument JSON. Missing issue dates remain null instead of defaulting
+to today. Reconciliation adds nullable `paymentDate` from the linked payment record, allowing
+legacy instruments without an entered payment date to show their recorded collection date.
+Receipt issuance date is a separate fact. No schema migration or historical rewrite occurs;
+previously discarded entered dates or substituted issue dates cannot be reconstructed.
+
+## Paid charges in refund requests
+
+`GET /api/fee-refunds/eligibility` includes settled charge payments when the assignment's pinned
+refund policy has `includePaidCharges=true`. The separate **Paid charges** group has a null
+`feeHeadId`; its rows carry `chargeId`, `chargeName`, `sourceAllocationId` (the charge payment),
+and `sourceReceiptId`. A create/preview line supplies exactly one of `dueFeeId`, `chargeId`, or `lateFeeDueFeeId`.
+The server checks the policy, payer, academic year, receipt and available payment balance.
+Reversed collections and unverified provisional receipts are excluded. Reservations and net
+processed refunds reduce eligibility; returned payouts restore it. Charges participate in the
+same policy amount limits, whole-receipt selection rule, approval, payout and refund subledger.
+Fee-head scope applies to fee dues; the paid-charge toggle independently controls charge sources.
+
+Apply `EnablePaidChargeRefunds` before deploying this contract. It adds nullable charge references
+to refund lines/reservations and makes the alternative fee-due references nullable, retaining all
+existing refund history. Its downgrade rejects removal after charge-refund evidence exists.
+Focused regression cases are `FeeRefundApi_Tests.Paid_Charges_*`.
+
+The independent pinned `includePaidLateFee` setting enables a **Paid late fees** group with
+null `feeHeadId`. Its rows carry `lateFeeDueFeeId` (the source due, without refunding its
+principal), `chargeName` (the late-fee display label), the late-fee `sourceAllocationId`, and
+`sourceReceiptId`. Only settled `LateFeeCollectionAllocation` payments for the payer, year,
+and assignment qualify. The same reservation, payout, return, whole-receipt selection and
+policy caps apply; principal paid/refunded balances remain separate. Apply
+`EnablePaidLateFeeRefunds` before deployment. It adds one nullable refund-line reference,
+preserves history, and rejects a downgrade after late-fee refund evidence exists.
+Focused regression cases are `FeeRefundApi_Tests.Paid_Late_Fees_*`.
+
+Whole-receipt requests retain every selected source when a cap or deduction rounds an
+individual calculated share to zero. Such a line preserves selection evidence without a
+reservation or principal balance mutation; the request still requires a positive total payout.
 
 ## Collection grace period
 
@@ -133,6 +185,10 @@ An `AllFees` concession policy permits paid installments. Approval preview repor
 Every retryable command requires its idempotency key; every mutation of an existing request requires the request concurrency stamp, and submit/approve also require the current preview fingerprint. Approval requires explicit due-row allocations and due-row stamps. Exact actions are `View`, `Add`, `Edit`, `Submit`, `Cancel`, `UploadDocument`, `ViewDocument`, `Delete`, `Approve`, `Reject`, and `Reverse` under `Finance.Fees.Concession`.
 
 Staged concession uploads are tenant- and uploader-bound. Their stored receipt records the concession type and document definition; attaching a URL binds it to one request and rejects another uploader, requirement, type, tenant, request, or an upload older than 24 hours. Removing or replacing evidence on a Draft releases its old upload for cleanup in the same transaction. An hourly worker removes at most 100 expired unattached uploads per tenant per run and never selects evidence still attached to a request. Submitted requirement and due-row selections are immutable snapshots. Only approval changes due balances, and reversal reopens the linked obligation without rewriting payment or receipt history.
+
+The student concession detail endpoint, `GET api/concession-requests/{studentId}`, includes
+`studentDetails.boardName` and `studentDetails.educationMediumName` from the saved student's
+academic board and medium. Existing Concession View authorization and student-scope checks apply.
 
 ## Accounts API families
 
@@ -269,3 +325,11 @@ Cloning without an explicit name selects the first available `Copy`, `Copy 2`, e
 Payment Term duplicate generated codes retain error `Finance:PaymentTerm:000023`, with a specific message identifying the code and asking for another name or code. Concession policy percentages accept at most two decimal places; excessive precision is rejected rather than rounded silently (`Finance:ConcessionPolicy:010027`).
 
 Concession Apply On retains the canonical enum contract: `0 = AllOutstanding`, `1 = CurrentInstallment`, `2 = FutureInstallments`, `3 = AllFees`. DTOs expose the symbolic strings; immutable historical snapshot JSON retains its original numeric enum representation. History presentation must compare canonical enum values before displaying labels.
+
+## Bank transfer evidence
+
+Bank transfer collection details retain `transactionReferenceNumber`, `transferDate` (the entered calendar date), and `accountHolderName` in the original payment instrument JSON. Collection also accepts the existing `transactionId` input alias; a nonblank canonical reference takes precedence. The selected receiving bank remains the validated payment-level `bankAccountId`, with a masked `bankLabel` snapshot captured during collection.
+
+Reconciliation list rows expose the stored evidence in `instrumentDetails` and the original receiving bank through `bankAccountId` and `bankLabel`. Receipt detail responses expose the same evidence in `paymentInstruments[]`, including method, amount, collection timestamp, bank snapshot and instrument details. Provisional and official receipt PDFs show the bank transfer reference, transfer date, account holder and masked receiving bank for fee, charge and combined receipts. Verification reads the original payment instrument rather than recreating its evidence.
+
+Missing historical transfer dates and account holder names remain unknown; receipt or collection dates must not be substituted for the entered transfer date. Previously discarded references or names cannot be recovered without independent evidence. This change uses the existing JSONB column and requires no schema migration or automatic backfill. Receipt PDF cache version `v3` regenerates earlier cached documents from the available original evidence without altering amounts, payment status or receipt numbering. Existing tenant, academic scope and action permissions continue to apply.

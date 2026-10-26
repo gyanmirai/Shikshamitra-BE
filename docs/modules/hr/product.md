@@ -3,7 +3,7 @@ module: hr
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-25
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,22 @@ audience: humans-and-agents
 
 TL;DR: HR manages employee records, attendance, leave, payroll, HR policies, professional management, reports, notifications, and calendar-backed HR scenarios.
 Use this page for business behavior and shipped-surface status before reading API or code details.
+
+## New-school starter policies
+
+New schools created through the host tenant API or the legacy tenant API opt into editable HR starter settings. Policies need a real academic year, so they are created when that school's academic year is first saved, including through initial setup. The legacy creation path also initializes any empty years its existing seed pipeline has just created. The production host flow does not invent academic years, employees, holidays, salary amounts, statutory rates, or demo records. Existing tenants are not backfilled.
+
+| Setting | Starter value and rationale |
+|---|---|
+| Work calendar | Active for the selected academic year's dates; Monday-Friday work week, Saturday/Sunday off; linked central holidays with overrides, initially empty. Uses existing standard school calendar and API conventions. Schools can change the weekly pattern and add local holidays. |
+| Attendance | Active default, manual status capture (no device setup required), manual corrections allowed, missing punches require review. Existing thresholds 75%/50%/0%, five-minute grace and three late arrivals remain editable; penalties, early-exit rules, overtime and payroll preview are disabled. Holiday work creates no automatic benefit. |
+| Shift | One tenant-wide editable morning shift, 07:00-12:30, grounded in the existing demo catalogue's morning timing. Employee validation requires a shift reference even for manual status capture. Existing shifts are preserved; no employees/classes are automatically assigned. Later academic years neither duplicate the shift nor restore a deleted starter shift. |
+| Payroll | Active default using working days and full working Saturdays when the calendar makes Saturday a workday. Matches the existing standard payroll basis; no manual month overrides, holiday pay overrides, locks, salary values or statutory deductions are configured. Review before payroll. |
+| Leave | Active default with the two required paid/unpaid rules. Both have **zero unconfigured days**, yearly accrual, approval required, no negative balance, carry-forward or encashment. This supplies valid employee policy references without choosing contractual leave entitlements or automatically generating unpaid leave. Administrators must configure leave before requests can be accepted. Request controls start at zero notice days, 30 days per request, half-days allowed, no attachment requirement. |
+
+These are onboarding settings, not a claim of legal compliance or recommended leave entitlements. Policy names identify starter/review settings; the leave description explicitly explains the unconfigured allocations. They are ordinary records visible and editable through existing HR Policies and Rules APIs/UI, with the usual permission and impact-confirmation checks; the shift appears in the existing institute shift settings and employee selector. Employee finalization can resolve attendance, payroll, leave and calendar references. Salaries, academic scope and reporting-manager requirements retain their existing workflows.
+
+Initialization is transactional, tenant-scoped and repeat-safe. A completed academic year is never reseeded after customization or deletion. Any existing policy setup (including drafts or archived records) is preserved as a whole. See [policy architecture](./references/policy-architecture.md) for lifecycle details. No startup/migrator backfill or public backfill endpoint is added.
 
 ## Product areas
 

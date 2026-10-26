@@ -19,6 +19,8 @@ public class FeeReceiptListItemDto
 
     /// <summary>UI label: "Final Receipt" / "Kachi Receipt (Fee)" / "Kachi Receipt (Charge)".</summary>
     public string ReceiptKindLabel { get; set; } = string.Empty;
+    public string PaymentMethodLabel { get; set; } = string.Empty;
+    public string PdfFileName { get; set; } = string.Empty;
 
     /// <summary>Scope of this receipt (Fee or Charge).</summary>
     public FeeReceiptScope ReceiptScope { get; set; }

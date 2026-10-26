@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using FluentValidation;
@@ -44,11 +44,13 @@ public class CreateFeeRefundRequestDto
     public string? Reason { get; set; }
 }
 
-/// <summary>One refund line pointing to a specific DueFee row.</summary>
+/// <summary>One refund line identifying either a fee due or a paid charge and its payment allocation.</summary>
 public class CreateFeeRefundLineDto
 {
-    [Required]
-    public Guid DueFeeId { get; set; }
+    public Guid? ChargeId { get; set; }
+    /// <summary>Due line whose collected late fee is being refunded; distinct from principal.</summary>
+    public Guid? LateFeeDueFeeId { get; set; }
+    public Guid? DueFeeId { get; set; }
 
     [Required]
     public Guid SourceAllocationId { get; set; }
@@ -87,7 +89,11 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
 
         RuleForEach(x => x.Lines).ChildRules(line =>
         {
-            line.RuleFor(l => l.DueFeeId).NotEmpty();
+            line.RuleFor(l => l).Must(l => (l.DueFeeId.HasValue ? 1 : 0) + (l.ChargeId.HasValue ? 1 : 0) + (l.LateFeeDueFeeId.HasValue ? 1 : 0) == 1)
+                .WithMessage("Specify exactly one fee due, charge, or paid late fee.");
+            line.RuleFor(l => l.DueFeeId).NotEqual(Guid.Empty).When(l => l.DueFeeId.HasValue);
+            line.RuleFor(l => l.ChargeId).NotEqual(Guid.Empty).When(l => l.ChargeId.HasValue);
+            line.RuleFor(l => l.LateFeeDueFeeId).NotEqual(Guid.Empty).When(l => l.LateFeeDueFeeId.HasValue);
             line.RuleFor(l => l.SourceAllocationId).NotEmpty();
             line.RuleFor(l => l.Amount).GreaterThan(0);
         });

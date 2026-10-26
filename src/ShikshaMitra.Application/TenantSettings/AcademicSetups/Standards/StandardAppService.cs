@@ -14,6 +14,8 @@ using Volo.Abp;
 using Volo.Abp.Authorization;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using ShikshaMitra.Constants.Permissions;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.TenantSettings.Standards;
 
@@ -24,6 +26,7 @@ public class StandardAppService(
 	IEducationMediumStageRepository educationMediumRepository,
 	StandardManager standardManager,
 	AcademicOrganizationScopeAccessService scopeAccessService,
+	AcademicReorderAccessService reorderAccessService,
 	ShiftReferenceValidator shiftReferenceValidator) : CrudAppService<
 	Standard,
 	StandardDto,
@@ -31,6 +34,25 @@ public class StandardAppService(
 	PagedAndSortedResultRequestDto,
 	CreateUpdateStandardDto>(standardRepository), IStandardAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.InstituteSetup.AcademicSetup.Edit)]
+	[UnitOfWork(true)]
+	public async Task ReorderAsync(Guid educationMediumStageId, ReorderAcademicChildrenDto input)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.InstituteSetup.AcademicSetup.Edit);
+		var siblings = await standardRepository.GetListAsync(x => x.EducationMediumStageId == educationMediumStageId
+			&& x.TenantId == CurrentTenant.Id);
+		await reorderAccessService.CheckStandardsAsync(educationMediumStageId, siblings);
+		standardManager.Reorder(siblings, input.Ids);
+		await standardRepository.UpdateManyAsync(siblings, autoSave: true);
+	}
+
+	protected override IQueryable<Standard> ApplySorting(IQueryable<Standard> query, PagedAndSortedResultRequestDto input) =>
+		string.IsNullOrWhiteSpace(input.Sorting)
+			? query.OrderBy(x => x.EducationMediumStage.EducationMediumId).ThenBy(x => x.EducationMediumStage.SortOrder)
+				.ThenBy(x => x.EducationMediumStage.Name).ThenBy(x => x.EducationMediumStageId)
+				.ThenBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id)
+			: base.ApplySorting(query, input);
+
 	public override async Task<StandardDto> CreateAsync(CreateUpdateStandardDto input)
 	{
 		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
@@ -76,14 +98,12 @@ public class StandardAppService(
 		List<EducationMediumStage> educationMediumsStages =
 			await educationMediumRepository.GetEducationMediumStagesByEducationMediumIdAsync(educationMediumId);
 
-		educationMediumsStages = educationMediumsStages.OrderBy(x => x.Name).ToList();
+		educationMediumsStages = educationMediumsStages.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
 
 		if (educationMediumsStages.Count == 0)
 		{
 			return [];
 		}
-
-		// Find out all standards for the given education medium stage
 
 		List<Standard> standards = [];
 
@@ -94,17 +114,14 @@ public class StandardAppService(
 					educationMediumStage.Id
 				);
 
-			// sort divisions by it's name for each standard
 			foreach (Standard standard in standardsForEducationMedium)
 			{
-				// sort divisions in standard using orderby
-				standard.Divisions = standard.Divisions.OrderBy(x => x.Name).ToList();
+				standard.Divisions = standard.Divisions.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
 				standards.Add(standard);
 			}
 		}
 
 		standards = await scopeAccessService.FilterStandardsAsync(standards);
-		standards = StandardAcademicOrder.Sort(standards, x => x.Name, x => x.AgeLowerLimit, x => x.Id);
 
 		var standardDtos = ObjectMapper.Map<List<Standard>, List<StandardDto>>(standards);
 		await EnrichDivisionOccupancyAsync(standardDtos.SelectMany(s => s.Divisions ?? []).ToList());

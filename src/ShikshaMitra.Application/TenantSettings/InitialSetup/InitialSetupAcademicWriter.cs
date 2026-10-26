@@ -13,6 +13,8 @@ using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
 using System.Linq;
+using System.Collections.Generic;
+using ShikshaMitra.TenantSettings.AcademicSetups.Formatting;
 
 namespace ShikshaMitra.TenantSettings.InitialSetup;
 
@@ -24,7 +26,8 @@ public class InitialSetupAcademicWriter(
 	IRepository<EducationMedium, Guid> mediums, EducationMediumManager mediumManager,
 	IRepository<EducationMediumStage, Guid> stages, EducationMediumStageManager stageManager,
 	IRepository<Standard, Guid> standards, StandardManager standardManager,
-	IRepository<Division, Guid> divisions, DivisionManager divisionManager) : ShikshaMitraAppService
+	IRepository<Division, Guid> divisions, DivisionManager divisionManager,
+	AcademicFieldFormattingStore formatting) : ShikshaMitraAppService
 {
 	public async Task<AcademicYear> WriteYearAsync(SaveSetupYearInput input, Guid? savedYearId)
 	{
@@ -56,28 +59,45 @@ public class InitialSetupAcademicWriter(
 			?? await boards.InsertAsync(await boardManager.CreateAsync(year.Id, draft.BoardType.Value, year.StartDate, year.EndDate, customName));
 		var mediumName = draft.Medium.Trim(); var stageName = draft.Stage.Trim();
 		var className = draft.ClassName.Trim(); var divisionName = draft.DivisionName.Trim();
-		var medium = await mediums.FindAsync(x => x.TenantId == tenantId && x.EducationBoardId == board.Id && x.Name == mediumName)
+		var rules = await formatting.GetAsync();
+		var mediumNames = LookupNames(mediumName, rules.Medium);
+		var mediumCandidates = await mediums.GetListAsync(x => x.TenantId == tenantId && x.EducationBoardId == board.Id && Enumerable.Contains(mediumNames, x.Name));
+		var medium = Match(mediumCandidates, mediumNames, x => x.Name)
 			?? await mediums.InsertAsync(await mediumManager.CreateAsync(board.Id, mediumName));
-		var stage = await stages.FindAsync(x => x.TenantId == tenantId && x.EducationMediumId == medium.Id && x.Name == stageName)
+		var stageNames = LookupNames(stageName, rules.Stage);
+		var stageCandidates = await stages.GetListAsync(x => x.TenantId == tenantId && x.EducationMediumId == medium.Id && Enumerable.Contains(stageNames, x.Name));
+		var stage = Match(stageCandidates, stageNames, x => x.Name)
 			?? await stages.InsertAsync(await stageManager.CreateAsync(medium.Id, stageName));
-		var standard = await standards.FindAsync(x => x.TenantId == tenantId && x.EducationMediumStageId == stage.Id && x.Name == className);
+		var classNames = LookupNames(className, rules.Standard);
+		var classCandidates = await standards.GetListAsync(x => x.TenantId == tenantId && x.EducationMediumStageId == stage.Id && Enumerable.Contains(classNames, x.Name));
+		var standard = Match(classCandidates, classNames, x => x.Name);
 		if (standard == null) standard = await standards.InsertAsync(await standardManager.CreateAsync(stage.Id, className, draft.AgeLowerLimit.Value, null));
 		else if (standard.AgeLowerLimit != draft.AgeLowerLimit.Value)
 		{
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.InstituteSetup.AcademicSetup.Edit);
-			await standardManager.UpdateAsync(standard, className, draft.AgeLowerLimit.Value, standard.ShiftId);
+			await standardManager.UpdateAsync(standard, standard.Name, draft.AgeLowerLimit.Value, standard.ShiftId);
 			await standards.UpdateAsync(standard);
 		}
-		var division = await divisions.FindAsync(x => x.TenantId == tenantId && x.StandardId == standard.Id && x.Name == divisionName);
+		var divisionNames = LookupNames(divisionName, rules.Division);
+		var divisionCandidates = await divisions.GetListAsync(x => x.TenantId == tenantId && x.StandardId == standard.Id && Enumerable.Contains(divisionNames, x.Name));
+		var division = Match(divisionCandidates, divisionNames, x => x.Name);
 		if (division == null) division = await divisions.InsertAsync(await divisionManager.CreateAsync(standard.Id, divisionName, draft.Strength.Value, ""));
 		else if (division.Strength != draft.Strength.Value)
 		{
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.InstituteSetup.AcademicSetup.Edit);
-			await divisionManager.UpdateAsync(division, divisionName, draft.Strength.Value, division.RoomNumber);
+			await divisionManager.UpdateAsync(division, division.Name, draft.Strength.Value, division.RoomNumber);
 			await divisions.UpdateAsync(division);
 		}
 		return division.Id;
 	}
+	private static string[] LookupNames(string raw, AcademicTextCase current) =>
+		new[] { raw, AcademicNameFormatter.Format(raw, current) }
+			.Concat(Enum.GetValues<AcademicTextCase>().Select(mode => AcademicNameFormatter.Format(raw, mode)))
+			.Distinct(StringComparer.Ordinal).ToArray();
+
+	private static T? Match<T>(IReadOnlyList<T> candidates, IReadOnlyList<string> names, Func<T, string> getName) where T : class =>
+		names.Select(name => candidates.FirstOrDefault(candidate => getName(candidate) == name)).FirstOrDefault(candidate => candidate != null);
+
 	private async Task<Guid> AuthorizeAsync()
 	{
 		var tenantId = reader.RequireTenant();

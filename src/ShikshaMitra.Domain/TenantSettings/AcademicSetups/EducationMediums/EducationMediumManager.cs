@@ -6,15 +6,17 @@ using System;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
+using ShikshaMitra.TenantSettings.AcademicSetups.Formatting;
 
 namespace ShikshaMitra.TenantSettings.AcademicSetups;
 
-public class EducationMediumManager(IEducationMediumRepository educationMediumRepository) : DomainService
+public class EducationMediumManager(IEducationMediumRepository educationMediumRepository, AcademicFieldFormattingStore formatting) : DomainService
 {
 	private string EntityName => this.GetType().ToEntityNameFromManager();
 
 	public async Task<EducationMedium> CreateAsync(Guid educationBoardId, string name)
 	{
+		name = AcademicNameFormatter.Format(name, (await formatting.GetAsync()).Medium);
 		await ValidateEducationMediumAsync(name, educationBoardId);
 
 		return new EducationMedium(

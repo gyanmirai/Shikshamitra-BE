@@ -12,6 +12,8 @@ using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.TenantSettings;
 
@@ -31,21 +33,24 @@ public class TenantSettingsMapperProfile : Profile
         CreateMap<CreateUpdateEducationBoardDto, EducationBoard>();
 
         // Mapping for EducationBoardStage
-        CreateMap<EducationMediumStage, EducationMediumStageDto>();
-        CreateMap<CreateUpdateEducationMediumStageDto, EducationMediumStage>();
+        CreateMap<EducationMediumStage, EducationMediumStageDto>()
+			.ForMember(dest => dest.Standards, opt => opt.MapFrom(src => (src.Standards ?? new List<Standard>()).OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id)));
+        CreateMap<CreateUpdateEducationMediumStageDto, EducationMediumStage>().ForMember(dest => dest.SortOrder, opt => opt.Ignore());
 
         // Mapping for EducationMedium
-        CreateMap<EducationMedium, EducationMediumDto>();
+        CreateMap<EducationMedium, EducationMediumDto>()
+			.ForMember(dest => dest.EducationMediumStages, opt => opt.MapFrom(src => (src.EducationMediumStages ?? new List<EducationMediumStage>()).OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id)));
         CreateMap<CreateUpdateEducationMediumDto, EducationMedium>();
 
         // Mapping for Standard
-        CreateMap<Standard, StandardDto>();
-        CreateMap<CreateUpdateStandardDto, Standard>();
+        CreateMap<Standard, StandardDto>()
+			.ForMember(dest => dest.Divisions, opt => opt.MapFrom(src => (src.Divisions ?? new List<Division>()).OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id)));
+        CreateMap<CreateUpdateStandardDto, Standard>().ForMember(dest => dest.SortOrder, opt => opt.Ignore());
 
 		// Mapping for Division
 		CreateMap<Division, DivisionDto>()
 			.ForMember(dest => dest.RoomId, opt => opt.MapFrom(src => src.RoomNumber));
-        CreateMap<CreateUpdateDivisionDto, Division>();
+        CreateMap<CreateUpdateDivisionDto, Division>().ForMember(dest => dest.SortOrder, opt => opt.Ignore());
 
 		#endregion
 
@@ -61,7 +66,7 @@ public class TenantSettingsMapperProfile : Profile
 		CreateMap<UpdateBuildingDto, Building>();
 
 		// Floor mappings
-		CreateMap<Floor, FloorDto>();
+		CreateMap<Floor, FloorDto>().ForMember(dest => dest.RoomCount, opt => opt.Ignore());
 		CreateMap<CreateFloorDto, Floor>();
 		CreateMap<UpdateFloorDto, Floor>();
 		#endregion

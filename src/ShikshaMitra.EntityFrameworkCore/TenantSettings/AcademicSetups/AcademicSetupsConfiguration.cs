@@ -115,6 +115,8 @@ public class AcademicSetupsConfiguration
 			.Property(x => x.Name)
 			.IsRequired()
 			.HasMaxLength(EducationMediumStageConsts.MaxNameLength);
+		builder.Property(x => x.SortOrder).HasDefaultValue(0);
+		builder.HasIndex(x => new { x.TenantId, x.EducationMediumId, x.SortOrder });
 
 		// Define one-to-many relationship:
 		// One EducationMedium can have many EducationMediumStages
@@ -139,6 +141,8 @@ public class AcademicSetupsConfiguration
 
 		// Make the Name property required with a max length
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(StandardConsts.MaxNameLength);
+		builder.Property(x => x.SortOrder).HasDefaultValue(0);
+		builder.HasIndex(x => new { x.TenantId, x.EducationMediumStageId, x.SortOrder });
 
 		// Define many-to-one relationship:
 		// Many Standards can belong to one EducationBoardStage
@@ -167,6 +171,8 @@ public class AcademicSetupsConfiguration
 
 		// Make the Name property required with a max length
 		builder.Property(x => x.Name).IsRequired().HasMaxLength(DivisionConsts.MaxNameLength);
+		builder.Property(x => x.SortOrder).HasDefaultValue(0);
+		builder.HasIndex(x => new { x.TenantId, x.StandardId, x.SortOrder });
 
 		// Make the Strength property required with a range
 		builder.Property(x => x.Strength).IsRequired();

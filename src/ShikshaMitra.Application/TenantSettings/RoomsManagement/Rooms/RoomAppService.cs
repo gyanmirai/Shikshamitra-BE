@@ -9,6 +9,7 @@ using ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
 using ShikshaMitra.Constants.Permissions;
 using System.Collections.Generic;
+using ShikshaMitra.TenantSettings.Formatting;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
@@ -18,6 +19,7 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 	private readonly IRepository<Floor, Guid> _floorRepository;
 	private readonly IRepository<RoomType, Guid> _roomTypeRepository;
 	private readonly IRepository<RoomFeature, Guid> _featureRepository;
+	private BuildingRoomCapacityManager Capacity => LazyServiceProvider.LazyGetRequiredService<BuildingRoomCapacityManager>();
 
 	public RoomAppService(
 		IRepository<Room, Guid> repository,
@@ -39,7 +41,7 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 		DeletePolicyName = ShikshaMitraSubmodulePermissions.InstituteSetup.RoomManagement.Delete;
 	}
 
-	private async Task ValidateFloorBelongsToBuildingAsync(Guid floorId, Guid buildingId)
+	private async Task<Floor> ValidateFloorBelongsToBuildingAsync(Guid floorId, Guid buildingId)
 	{
 		if (floorId == Guid.Empty)
 		{
@@ -56,6 +58,7 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 		{
 			throw new UserFriendlyException($"Floor with ID {floorId} does not belong to the specified building.");
 		}
+		return floor;
 	}
 
 	protected override async Task<IQueryable<Room>> CreateFilteredQueryAsync(GetRoomListDto input)
@@ -142,8 +145,11 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 	public override async Task<RoomDto> CreateAsync(CreateUpdateRoomDto input)
 	{
 		await CheckCreatePolicyAsync();
-		// Validate that floor belongs to the specified building
-		await ValidateFloorBelongsToBuildingAsync(input.FloorId, input.BuildingId);
+		var rules = await LazyServiceProvider.LazyGetRequiredService<InstituteFieldFormattingStore>().GetAsync("rooms");
+		input.RoomName = InstituteFieldFormattingCatalog.Required(rules, "roomName", input.RoomName, RoomConsts.MaxRoomNameLength);
+		await Capacity.LockBuildingAsync(input.BuildingId);
+		var selectedFloor = await ValidateFloorBelongsToBuildingAsync(input.FloorId, input.BuildingId);
+		await Capacity.EnsureRoomSpaceAsync(selectedFloor);
 
 		var room = ObjectMapper.Map<CreateUpdateRoomDto, Room>(input);
 		room.TenantId = CurrentTenant.Id;
@@ -167,10 +173,10 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 	public override async Task<RoomDto> UpdateAsync(Guid id, CreateUpdateRoomDto input)
 	{
 		await CheckUpdatePolicyAsync();
-		// Validate that floor belongs to the specified building
-		await ValidateFloorBelongsToBuildingAsync(input.FloorId, input.BuildingId);
-
 		var room = await Repository.GetAsync(id);
+		await Capacity.LockBuildingAsync(input.BuildingId);
+		var selectedFloor = await ValidateFloorBelongsToBuildingAsync(input.FloorId, input.BuildingId);
+		await Capacity.EnsureRoomSpaceAsync(selectedFloor, id);
 		ObjectMapper.Map(input, room);
 		room.SetColumnLayout(input.ColumnRows, input.BenchCapacity);
 		room.Features = await ResolveFeaturesAsync(input.Features);
@@ -200,7 +206,9 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 	public async Task<RoomFeatureDto> CreateFeatureAsync(CreateRoomFeatureDto input)
 	{
 		await CheckCreatePolicyAsync();
-		var feature = new RoomFeature(GuidGenerator.Create(), CurrentTenant.Id, input.Name);
+		var rules = await LazyServiceProvider.LazyGetRequiredService<InstituteFieldFormattingStore>().GetAsync("rooms");
+		var name = InstituteFieldFormattingCatalog.Required(rules, "featureName", input.Name, 100);
+		var feature = new RoomFeature(GuidGenerator.Create(), CurrentTenant.Id, name);
 		var existing = await _featureRepository.FindAsync(x => x.NormalizedName == feature.NormalizedName);
 		if (existing != null) return new RoomFeatureDto { Id = existing.Id, Name = existing.Name };
 		await _featureRepository.InsertAsync(feature, autoSave: true);

@@ -15396,6 +15396,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid?>("ReportingManagerId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ReportingManagerUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid");
 
@@ -15449,6 +15452,8 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("ReportingManagerId")
                         .HasDatabaseName("IX_Employees_ReportingManagerId");
 
+                    b.HasIndex("ReportingManagerUserId");
+
                     b.HasIndex("RoleId")
                         .HasDatabaseName("IX_Employees_RoleId");
 
@@ -15477,7 +15482,10 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("TenantId", "EmployeeStatusType", "StatusEffectiveDate")
                         .HasDatabaseName("IX_Employees_TenantId_Status_EffectiveDate");
 
-                    b.ToTable("AppEmployees", (string) null);
+                    b.ToTable("AppEmployees", (string) null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Employees_ReportingManagerIdentity", "\"ReportingManagerId\" IS NULL OR \"ReportingManagerUserId\" IS NULL");
+                        });
                 });
 
             modelBuilder.Entity("ShikshaMitra.HR.Employees.EmployeeAdditionalDetails", b =>
@@ -39931,6 +39939,11 @@ namespace ShikshaMitra.Migrations
                         .HasForeignKey("ReportingManagerId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Volo.Abp.Identity.IdentityUser", "ReportingManagerUser")
+                        .WithMany()
+                        .HasForeignKey("ReportingManagerUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("Volo.Abp.Identity.IdentityRole", "Role")
                         .WithMany()
                         .HasForeignKey("RoleId")
@@ -40091,6 +40104,8 @@ namespace ShikshaMitra.Migrations
                     b.Navigation("Documents");
 
                     b.Navigation("ReportingManager");
+
+                    b.Navigation("ReportingManagerUser");
 
                     b.Navigation("Role");
 

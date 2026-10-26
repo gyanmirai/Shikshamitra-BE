@@ -114,6 +114,7 @@ public class EfCoreEmployeeRepository(
 		var dbSet = await GetDbSetAsync();
 		return await dbSet
 			.Include(e => e.ReportingManager)
+			.Include(e => e.ReportingManagerUser)
 			.FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 	}
 

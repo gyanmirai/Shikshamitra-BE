@@ -12,12 +12,14 @@ namespace ShikshaMitra.HR.Employees.ReportingManagerInfo;
 public class ReportingManagerRequest
 {
 	public string? ReportingManagerId { get; set; }
+	public string ReportingManagerKind { get; set; } = "Employee";
 }
 
 public class ReportingManagerRequestValidator : FluentValidation.AbstractValidator<ReportingManagerRequest>
 {
 	public ReportingManagerRequestValidator()
 	{
+		RuleFor(x => x.ReportingManagerKind).Must(kind => kind is "Employee" or "TenantAdministrator");
 		RuleFor(x => x.ReportingManagerId)
 			.NotEmpty()
 			.Must(value => Guid.TryParse(value, out var id) && id != Guid.Empty)
@@ -53,6 +55,9 @@ public class EmployeesUnderManagerResponse
 /// </summary>
 public class ManagerInfo
 {
+	public string Kind { get; set; } = "Employee";
+	public string? Email { get; set; }
+	public int? Status { get; set; }
 	[Required]
 	public Guid Id { get; set; }
 

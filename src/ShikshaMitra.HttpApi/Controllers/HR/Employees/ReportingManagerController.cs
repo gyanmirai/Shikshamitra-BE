@@ -46,6 +46,12 @@ public class ReportingManagerController : AbpControllerBase
 		return ReportingManagerContractMapper.ToResponse(result);
 	}
 
+	[HttpGet("reporting-manager/options")]
+	public virtual async Task<System.Collections.Generic.List<EmployeeBasicDto>> GetOptionsAsync([FromQuery] string? search = null)
+	{
+		return await _reportingManagerAppService.GetManagerOptionsAsync(search);
+	}
+
 	/// <summary>
 	/// Update employee reporting manager
 	/// </summary>
@@ -57,6 +63,7 @@ public class ReportingManagerController : AbpControllerBase
 		[FromBody] ReportingManagerRequest? request)
 	{
 		if (request?.ReportingManagerId == null ||
+		    request.ReportingManagerKind is not ("Employee" or "TenantAdministrator") ||
 		    !Guid.TryParse(request.ReportingManagerId, out var reportingManagerId) ||
 		    reportingManagerId == Guid.Empty)
 		{

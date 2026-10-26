@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.HR.Employees;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Emailing;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.Common;
 
@@ -15,13 +17,22 @@ public class EmployeeEmailService : IEmployeeEmailService, ITransientDependency
 {
 	private readonly IEmailSender emailSender;
 	private readonly ILogger<EmployeeEmailService> logger;
+	private readonly IConfiguration configuration;
+	private readonly ICurrentTenant currentTenant;
+	private readonly ITenantStore tenantStore;
 
 	public EmployeeEmailService(
 		IEmailSender emailSender,
-		ILogger<EmployeeEmailService> logger)
+		ILogger<EmployeeEmailService> logger,
+		IConfiguration configuration,
+		ICurrentTenant currentTenant,
+		ITenantStore tenantStore)
 	{
 		this.emailSender = emailSender;
 		this.logger = logger;
+		this.configuration = configuration;
+		this.currentTenant = currentTenant;
+		this.tenantStore = tenantStore;
 	}
 
 	/// <summary>
@@ -45,7 +56,13 @@ public class EmployeeEmailService : IEmployeeEmailService, ITransientDependency
 				return;
 			}
 
-			var htmlBody = BuildWelcomeEmailHtmlBody(employeeName, username, password);
+			var schoolCode = currentTenant.Id.HasValue
+				? (await tenantStore.FindAsync(currentTenant.Id.Value))?.Name
+				: null;
+			if (currentTenant.Id.HasValue && string.IsNullOrWhiteSpace(schoolCode))
+				throw new InvalidOperationException("The employee's school code could not be resolved.");
+			var loginUrl = EmployeeWelcomeEmailLink.Build(configuration["App:ClientUrl"], schoolCode);
+			var htmlBody = BuildWelcomeEmailHtmlBody(employeeName, username, password, loginUrl, schoolCode);
 
 			await emailSender.SendAsync(
 				to: employeeEmail,
@@ -67,10 +84,13 @@ public class EmployeeEmailService : IEmployeeEmailService, ITransientDependency
 	/// <summary>
 	/// Builds HTML body for welcome email with employee login credentials.
 	/// </summary>
-	private string BuildWelcomeEmailHtmlBody(string employeeName, string username, string password)
+	private static string BuildWelcomeEmailHtmlBody(string employeeName, string username, string password, string loginUrl, string? schoolCode)
 	{
 		var encodedUsername = HtmlEncoder.Default.Encode(username);
 		var encodedPassword = HtmlEncoder.Default.Encode(password);
+		var encodedLoginUrl = HtmlEncoder.Default.Encode(loginUrl);
+		var schoolDetails = string.IsNullOrWhiteSpace(schoolCode) ? string.Empty
+			: $"<p><span class='label'>School code:</span> {HtmlEncoder.Default.Encode(schoolCode)}</p>";
 
 		return $@"
 		<!DOCTYPE html>
@@ -104,7 +124,11 @@ public class EmployeeEmailService : IEmployeeEmailService, ITransientDependency
 					<div class='credentials'>
 						<p><span class='label'>Username:</span> <span class='value'>{encodedUsername}</span></p>
 						<p><span class='label'>Password:</span> <span class='value'>{encodedPassword}</span></p>
+						{schoolDetails}
 					</div>
+					<p><a href='{encodedLoginUrl}' style='display:inline-block;padding:12px 18px;background-color:#2c3e50;color:#ffffff;border-radius:4px;font-weight:bold;'>Login to ShikshaMitra</a></p>
+					<p>If the button does not open, copy this address into your browser:</p>
+					<p style='overflow-wrap:anywhere;word-break:break-word;'><a href='{encodedLoginUrl}'>{encodedLoginUrl}</a></p>
 
 					<div class='warning'>
 						<strong>⚠️ Important Security Notice:</strong>

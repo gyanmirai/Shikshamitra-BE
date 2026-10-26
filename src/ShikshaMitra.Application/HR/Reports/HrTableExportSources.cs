@@ -120,10 +120,10 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		if (request.Columns.Any(x => !run.Columns.Any(c => c.Id == x.Id))) throw HrReportingEngine.Invalid("Choose columns present in this captured report.");
 		return run;
 	}
-	public async Task<HrTableExportPage> ReadAsync(HrTableExportRequest request, int offset, int size)
+	public async Task<HrTableExportPage> ReadAsync(HrTableExportRequest request, int offset, int size, bool capturePopulation = false)
 	{
 		Validate(request);
-		if (request.Table is "hr-generated-report" or "hr-generated-report-history" || !ReportingCriteria(request).HasCriteria)
+		if (request.Table is "hr-generated-report" or "hr-generated-report-history" || (!capturePopulation && !ReportingCriteria(request).HasCriteria))
 			return await ReadUnfilteredAsync(request, offset, size);
 		var key = request.Table + request.Query.GetRawText();
 		if (_operationalQuery != key)

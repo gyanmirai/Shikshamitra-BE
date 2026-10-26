@@ -125,6 +125,50 @@ public class HrOperationalTableQueryApi_Tests(HrOperationalTableApiTestFactory f
 		sheet.Rows(6, 17).Select(row => row.Cell(1).GetString()).Distinct().Count().ShouldBe(12);
 		sheet.RowsUsed().SelectMany(row => row.CellsUsed()).ShouldNotContain(cell => cell.GetString().Contains("other-tenant", StringComparison.Ordinal));
 	}
+	[Fact, TestTier(TestTraits.Tiers.Critical)]
+	public async Task Empty_And_Active_Criteria_Should_Honor_The_Same_Non_Page_Aligned_Offset()
+	{
+		Guid tenantId;
+		var userId = Guid.NewGuid();
+		using (var scope = Factory.Services.CreateScope())
+		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(null))
+		using (var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true))
+		{
+			var tenant = await scope.ServiceProvider.GetRequiredService<ITenantManager>().CreateAsync("Offset test " + Guid.NewGuid().ToString("N"));
+			tenantId = tenant.Id;
+			await scope.ServiceProvider.GetRequiredService<IRepository<Tenant, Guid>>().InsertAsync(tenant, true);
+			using var tenantScope = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(tenantId);
+			await scope.ServiceProvider.GetRequiredService<IIdentityUserRepository>().InsertAsync(new IdentityUser(userId, "offset-reader", "offset@example.invalid", tenantId), true);
+			var repository = scope.ServiceProvider.GetRequiredService<IRepository<DocumentSetting, Guid>>();
+			await repository.InsertManyAsync(Enumerable.Range(0, 130).Select(index => new DocumentSetting(Guid.NewGuid(), tenantId,
+				"OffsetQuery-" + index.ToString("000"), index + 1, false, [DocumentType.Pdf])), true);
+			await unit.CompleteAsync();
+		}
+		using var client = Factory.CreateClient();
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestTenantIdHeader, tenantId.ToString());
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestUserIdHeader, userId.ToString());
+		var native = (await client.GetFromJsonAsync<DocumentListResponse>("/api/employees/documents?page=1&pageSize=100", JsonOptions))!;
+		native.TotalCount.ShouldBe(130);
+		var expected = native.Items.Skip(1).Take(5).Select(item => item.Id).ToArray();
+		expected.Length.ShouldBe(5);
+		var input = new HrOperationalTableQueryRequest { Table = "hr-document-settings", Query = JsonSerializer.SerializeToElement(new { }), Offset = 1, Size = 5 };
+		var response = await client.PostAsJsonAsync(Root, input, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var empty = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		empty.GetProperty("items").EnumerateArray().Select(row => row.GetProperty("id").GetGuid()).ShouldBe(expected);
+		empty.GetProperty("totalCount").GetInt32().ShouldBe(native.TotalCount);
+		input.Criteria = new() { Filters = [new() { Column = "documentSize", Type = "greaterThan", Value = JsonSerializer.SerializeToElement(0) }] };
+		response = await client.PostAsJsonAsync(Root, input, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		var filtered = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions);
+		filtered.GetProperty("items").EnumerateArray().Select(row => row.GetProperty("id").GetGuid()).ShouldBe(expected);
+		filtered.GetProperty("totalCount").GetInt32().ShouldBe(native.TotalCount);
+		// The contract permits a response size larger than a source reader's 100-row page.
+		input.Criteria = new(); input.Size = 500;
+		response = await client.PostAsJsonAsync(Root, input, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		(await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("items").GetArrayLength().ShouldBe(Math.Min(500, native.TotalCount - 1));
+	}
 	[Theory, TestTier(TestTraits.Tiers.Critical)]
 	[InlineData("employee-table", "fullName")]
 	[InlineData("employee-onboarding-table", "candidate")]

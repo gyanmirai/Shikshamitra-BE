@@ -36,7 +36,7 @@ public class HrOperationalTableQueryAppService(HrTableExportSources sources, IUn
 		HrTableExportSources.Validate(input);
 		// All pages use a single snapshot; filters/count/sort precede response pagination.
 		using var snapshot = uows.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
-		var page = await sources.ReadAsync(input, request.Offset, request.Size);
+		var page = await sources.ReadAsync(input, request.Offset, request.Size, capturePopulation: true);
 		await snapshot.CompleteAsync();
 		return page.Envelope;
 	}

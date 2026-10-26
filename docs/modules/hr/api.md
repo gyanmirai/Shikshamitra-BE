@@ -15,6 +15,8 @@ Use it for endpoint families, permissions, request conventions, errors, and know
 Use current controllers and application contracts when route behavior is unclear.
 Do not restore raw generated exports under `docs/`.
 
+Advisory school setup-review endpoints and storage are documented in [setup review](references/setup-review.md).
+
 ## Shared request rules
 
 All tenant-scoped HR APIs require authentication and tenant context:

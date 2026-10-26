@@ -75,9 +75,9 @@ public class HrTableExport_Tests
 	{
 		var staff = JsonSerializer.SerializeToElement(new { status = 0, doj = "2026-11-01" });
 		HrTableExportProjection.Value("employee-table", "statusValue", staff, new(2026, 10, 19)).ShouldBe("Upcoming");
-		var attendance = JsonSerializer.SerializeToElement(new { absent = 2, halfDay = 1, missingPunch = 0, editable = 3, locked = 7 });
-		HrTableExportProjection.Value("hr-attendance-register", "exceptions", attendance).ShouldBe("Absent: 2; half day: 1; missing punch: 0");
-		HrTableExportProjection.Value("hr-attendance-register", "editability", attendance).ShouldBe("Editable: 3; locked: 7");
+		var attendance = JsonSerializer.SerializeToElement(new { absent = 2, halfDay = 1, missingPunch = 0, editable = 3, locked = 7, hasExceptions = true });
+		HrTableExportProjection.Value("hr-attendance-register", "exceptions", attendance).ShouldBe("Absent 2; Half day 1; Locked 7");
+		HrTableExportProjection.Value("hr-attendance-register", "editability", attendance).ShouldBe("3 editable; 7 locked");
 	}
 	[Fact]
 	public void Export_Types_Should_Keep_Money_Dates_And_Counts_Distinct()

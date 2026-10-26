@@ -3,7 +3,7 @@ module: hr
 domain: references
 content_type: Reference
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -95,3 +95,5 @@ The read-only operational endpoint and table export share the owning authorized 
 The configured cap is 500,000 source rows, captured in batches of 100 (at most 5,000 reader pages). An over-cap population, changing total or incomplete page sequence returns an error with no partial result. Header filters cannot reduce the population before capture; narrow the existing period/staff/organization/domain-search scope first. Every new query request recaptures its population. This design has linear allocation/capture cost and sorting cost, and underlying reader/database cost varies by dataset. It is intended for scoped HR workspaces, not an unmeasured guarantee of interactive latency at the cap.
 
 Synthetic owning-reader measurements on this Windows host: 10,000 rows / 100 pages / 178 ms / about 37 MB allocated; 25,000 rows / 250 pages / 360 ms / about 99 MB allocated. Both return ten response rows and reuse the same captured population for export within the operation. These measurements exclude production database latency and are allocation totals, not peak resident memory. They do not establish performance at 500,000 rows. Changed-population and over-cap tests explicitly verify failure rather than partial answers. No migration, permission grant, hierarchy expansion or production data mutation is required.
+
+Column criteria retain their displayed meaning: staff names include the identifiers/context shown in their cell, onboarding candidate contact uses the visible email/mobile/application fallback, calendar ranges and custom weekdays use the frontend labels, and performance sections include SQAAF domains. Composite identity/range predicates preserve primary name/start-date ordering. Imported Attendance labels prioritize statusCode and normalize legacy text exactly as the editor does; aliases cannot make a contradictory raw status match. Enum choices accept existing native zero/false codes as well as visible labels except where a status is deliberately derived. The I-card selection source reuses the authorized staff reader and exposes only name/designation/readiness criteria; selection and document-export restrictions remain in the frontend workflow.

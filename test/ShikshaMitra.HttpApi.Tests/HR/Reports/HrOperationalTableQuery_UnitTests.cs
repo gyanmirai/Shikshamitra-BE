@@ -6,12 +6,17 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
+using ShikshaMitra.HR.Payroll.AttendanceImports;
+using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.HR.Employees.Onboarding;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.HR.Employees.Search;
 using ShikshaMitra.HR.Payroll.Statutory;
 using Shouldly;
 using Volo.Abp;
+using Volo.Abp.Authorization;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Settings;
@@ -48,6 +53,7 @@ public class HrOperationalTableQuery_UnitTests(ITestOutputHelper output)
 	[InlineData("employee-onboarding-table", "position", "{\"positionAppliedFor\":\"Teacher\",\"departmentAppliedFor\":\"unique-department\"}", "unique-department", "Teacher")]
 	[InlineData("hr-attendance-register", "employeeName", "{\"employeeName\":\"Zulu\",\"employeeCode\":\"unique-code\",\"educationMediumStageName\":\"unique-division\"}", "unique-division", "Zulu")]
 	[InlineData("hr-manual-attendance", "fullName", "{\"fullName\":\"Zulu\",\"employeeCode\":\"unique-code\"}", "unique-code", "Zulu")]
+	[InlineData("hr-attendance-import-rows", "employeeName", "{\"employeeName\":\"Zulu\",\"employeeCode\":\"unique-code\"}", "unique-code", "Zulu")]
 	[InlineData("payroll-monthly-workbench-table", "employeeName", "{\"employeeName\":\"Zulu\",\"employeeIdentifier\":\"unique-code\",\"employeeGroup\":\"Non-teaching\"}", "Non-teaching", "Zulu")]
 	[InlineData("esi-employee-impact", "employeeName", "{\"employeeName\":\"Zulu\",\"employeeIdentifier\":\"unique-code\"}", "unique-code", "Zulu")]
 	[InlineData("hr-leave-requests", "name", "{\"name\":\"Zulu\",\"employeeIdentifier\":\"unique-code\"}", "unique-code", "Zulu")]
@@ -178,6 +184,47 @@ public class HrOperationalTableQuery_UnitTests(ITestOutputHelper output)
 		Table = "employee-onboarding-table", Columns = [new() { Id = "candidate", Label = "Candidate" }],
 		Query = JsonSerializer.SerializeToElement(new { status = 0, search = "owning-reader-scope", criteria }, HrReportingEngine.Json)
 	};
+	[Fact]
+	public async Task Import_Staff_Code_Should_Filter_And_Search_The_Whole_Batch_And_Preserve_Name_Order_For_Export()
+	{
+		var batchId = Guid.NewGuid();
+		var data = Enumerable.Range(0, 125).Select(index => new AttendanceImportRowDto {
+			Id = Guid.NewGuid(), RowNumber = index + 1, EmployeeName = index == 124 ? "Alpha" : $"Zulu {index:000}",
+			EmployeeCode = index == 124 ? "VISIBLE-OFFPAGE-124" : $"CODE-{index:000}", AttendanceDate = "2026-10-01", StatusCode = AttendanceImportRowStatusCode.Present
+		}).ToList();
+		var reader = Substitute.For<IAttendanceImportLogAppService>();
+		reader.GetRowsAsync(batchId, Arg.Any<GetAttendanceImportRowsInput>()).Returns(call => {
+			var input = call.Arg<GetAttendanceImportRowsInput>();
+			return new PagedResultDto<AttendanceImportRowDto>(data.Count, data.Skip(input.SkipCount).Take(input.MaxResultCount).ToList());
+		});
+		var services = Substitute.For<IAbpLazyServiceProvider>();
+		services.LazyGetRequiredService<IAttendanceImportLogAppService>().Returns(reader);
+		var authorization = Substitute.For<IAbpAuthorizationService>();
+		authorization.CurrentPrincipal.Returns(new ClaimsPrincipal(new ClaimsIdentity()));
+		authorization.AuthorizeAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<object?>(), Arg.Any<string>()).Returns(call =>
+			Task.FromResult(call.ArgAt<string>(2) == ShikshaMitraSubmodulePermissions.HR.AttendanceAndLeave_BiometricAttendance.View ? AuthorizationResult.Success() : AuthorizationResult.Failed()));
+		services.LazyGetRequiredService<IAuthorizationService>().Returns(authorization);
+		var settings = Substitute.For<ISettingProvider>(); settings.GetOrNullAsync(Arg.Any<string>()).Returns("Asia/Kolkata");
+		services.LazyGetRequiredService<HrReportingTimeZone>().Returns(new HrReportingTimeZone(settings));
+		var cancellation = Substitute.For<ICancellationTokenProvider>(); cancellation.Token.Returns(CancellationToken.None); services.LazyGetRequiredService<ICancellationTokenProvider>().Returns(cancellation);
+		HrTableExportRequest RequestFor(HrReportTableQueryDto criteria) => new() { Table = "hr-attendance-import-rows", Columns = [new() { Id = "employeeName", Label = "Staff Name" }], Query = JsonSerializer.SerializeToElement(new { importId = batchId, criteria }, HrReportingEngine.Json) };
+		foreach (var criteria in new[] {
+			new HrReportTableQueryDto { Filters = [Filter("employeeName", "contains", "VISIBLE-OFFPAGE-124")] },
+			new HrReportTableQueryDto { Search = "VISIBLE-OFFPAGE-124" }
+		}) {
+			var source = new HrTableExportSources(services);
+			var request = RequestFor(criteria);
+			var page = await source.ReadAsync(request, 0, 25); page.Total.ShouldBe(1); page.Rows.Single().GetProperty("employeeCode").GetString().ShouldBe("VISIBLE-OFFPAGE-124");
+			var export = await source.ReadAsync(request, 0, 100); export.Total.ShouldBe(1); export.Rows.Single().GetRawText().ShouldBe(page.Rows.Single().GetRawText());
+			HrTableExportProjection.Value(request.Table, "employeeName", export.Rows.Single()).ShouldBe("Alpha (VISIBLE-OFFPAGE-124)");
+		}
+		foreach (var direction in new[] { "asc", "desc" }) {
+			var ordered = await new HrTableExportSources(services).ReadAsync(RequestFor(new() { Sorts = [new() { Column = "employeeName", Direction = direction }] }), 0, 25);
+			ordered.Total.ShouldBe(125);
+			ordered.Rows[0].GetProperty("employeeName").GetString().ShouldBe(direction == "asc" ? "Alpha" : "Zulu 123");
+		}
+		await reader.Received(8).GetRowsAsync(batchId, Arg.Is<GetAttendanceImportRowsInput>(input => input.MaxResultCount == 100));
+	}
 	[Fact]
 	public async Task Visible_Off_Page_Contact_Should_Use_Global_Criteria_Count_And_Export()
 	{

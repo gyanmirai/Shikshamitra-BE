@@ -18,7 +18,7 @@ public static class HrTableExportProjection
 			("employee-onboarding-table", "position") => "positionAppliedFor",
 			("hr-manual-attendance", "fullName") => "fullName",
 			("hr-leave-requests" or "hr-self-leave-history", "name") => "name",
-			("hr-attendance-register" or "payroll-monthly-workbench-table" or "esi-employee-impact", "employeeName") => "employeeName",
+			("hr-attendance-register" or "hr-attendance-import-rows" or "payroll-monthly-workbench-table" or "esi-employee-impact", "employeeName") => "employeeName",
 			("hr-policy-calendar" or "hr-policy-assignments", "effective") => "effectiveFrom",
 			_ => null
 		};
@@ -151,7 +151,10 @@ public static class HrTableExportProjection
 			"modeOrThresholds" => table == "hr-policy-payroll" ? $"{Text("dayCalculationType")} / {Text("saturdayWorkPolicy")}" : Text("captureMode") == "manual_status" ? "Manual status" : $"{(Text("captureMode") == "manual_with_time" ? "Manual with time" : "Integrated")} / {Text("fullDayThresholdPercentage")}%",
 			_ => Get(field)
 		};
-		if (table == "hr-attendance-import-rows") return field is "errors" or "warnings" && row.TryGetProperty(field, out var messages) ? string.Join("; ", messages.EnumerateArray().Select(x => x.GetString())) : field == "attendanceStatus" ? ImportAttendanceStatus(row) : Get(field);
+		if (table == "hr-attendance-import-rows") return field switch {
+			"employeeName" => string.IsNullOrWhiteSpace(Text("employeeCode")) ? Text("employeeName") : $"{Text("employeeName")} ({Text("employeeCode")})",
+			"errors" or "warnings" => row.TryGetProperty(field, out var messages) ? string.Join("; ", messages.EnumerateArray().Select(x => x.GetString())) : null,
+			"attendanceStatus" => ImportAttendanceStatus(row), _ => Get(field) };
 		return Get(field);
 	}
 	private static string EffectiveRange(string from, string to)

@@ -99,6 +99,13 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			|| request.Columns.Select(x => x.Id).Distinct().Count() != request.Columns.Count) throw HrReportingEngine.Invalid("Choose supported data columns and Excel or PDF.");
 		if (request.Query.ValueKind != JsonValueKind.Object || request.Query.GetRawText().Length > 32768) throw HrReportingEngine.Invalid("Provide a valid table query of at most 32 KB.");
 	}
+	public static void ValidateForExport(HrTableExportRequest request)
+	{
+		Validate(request);
+		// Selection query access must not admit a generic captured export or an old artifact.
+		if (request.Table == "employee-icard-selection-table")
+			throw HrReportingEngine.Invalid("Export selected staff through the I-card document workflow.");
+	}
 	public async Task EnsureAccessAsync(HrTableExportRequest request)
 	{
 		Validate(request);

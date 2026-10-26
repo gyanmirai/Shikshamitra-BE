@@ -12,6 +12,13 @@ namespace ShikshaMitra.HR.Reports;
 public class HrTableExport_Tests
 {
 	[Fact]
+	public void Query_Only_ICard_Source_Should_Not_Admit_Generic_Exports()
+	{
+		var request = Request("employee-icard-selection-table", "fullName");
+		Should.NotThrow(() => HrTableExportSources.Validate(request));
+		Should.Throw<BusinessException>(() => HrTableExportSources.ValidateForExport(request));
+	}
+	[Fact]
 	public async Task Captured_Export_Access_Checks_Should_Validate_Metadata_Without_Reading_Population()
 	{
 		var id = Guid.NewGuid();

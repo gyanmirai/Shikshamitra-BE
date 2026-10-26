@@ -9,6 +9,8 @@ public static class LeavePolicyProjection
 	public static LeavePolicyItem ToPolicyItem(LeavePolicy policy) => new()
 	{
 		Id = policy.Id,
+		CreationTime = policy.CreationTime,
+		LastModificationTime = policy.LastModificationTime,
 		PolicyTitle = policy.PolicyName,
 		Status = policy.Status.ToString(),
 		EffectiveFrom = policy.EffectiveFrom,
@@ -22,6 +24,8 @@ public static class LeavePolicyProjection
 	public static LeavePolicyDetailResponse ToDetail(LeavePolicy policy) => new()
 	{
 		Id = policy.Id,
+		CreationTime = policy.CreationTime,
+		LastModificationTime = policy.LastModificationTime,
 		PolicyTitle = policy.PolicyName,
 		Status = policy.Status.ToString(),
 		EffectiveFrom = policy.EffectiveFrom,

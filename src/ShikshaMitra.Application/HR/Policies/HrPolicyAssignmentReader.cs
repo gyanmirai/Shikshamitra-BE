@@ -51,7 +51,7 @@ public class HrPolicyAssignmentReader(
 			.OrderByDescending(x => x.IsActive)
 			.ThenBy(x => x.TargetType)
 			.ThenBy(x => x.TargetKey)
-			.ThenBy(x => x.EffectiveFrom)
+			.ThenBy(x => x.EffectiveFrom).ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 50 : input.MaxResultCount));
 

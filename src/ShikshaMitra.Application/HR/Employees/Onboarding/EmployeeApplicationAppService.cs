@@ -82,7 +82,7 @@ public class EmployeeApplicationAppService(
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var applications = await AsyncExecuter.ToListAsync(
 			query
-				.OrderByDescending(x => x.CreationTime)
+				.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id)
 				.Skip(input.SkipCount)
 				.Take(input.MaxResultCount));
 

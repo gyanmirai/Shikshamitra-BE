@@ -92,6 +92,9 @@ public sealed class HrReportingTableQuery
 		var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
 		if (type is "number" or "money") return decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number) ? number : null;
 		if (type == "boolean") return bool.TryParse(text, out var boolean) ? boolean : null;
+		if (type == "enum") return new string(text.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+		if (type == "clock" && (text.Contains(':') || text.Contains("AM", StringComparison.OrdinalIgnoreCase) || text.Contains("PM", StringComparison.OrdinalIgnoreCase)) &&
+			TimeOnly.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var time)) return time.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 		if (type == "date") return DateOnly.TryParseExact(text.Length >= 10 ? text[..10] : text, new[] { "yyyy-MM-dd", "dd-MM-yyyy" }, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
 		if (type == "datetime") {
 			DateTime local;
@@ -102,9 +105,14 @@ public sealed class HrReportingTableQuery
 		}
 		return text;
 	}
-	private object? SortValue(object? value, string type) =>
-		type == "datetime" && DateTimeOffset.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var timestamp)
+	private object? SortValue(object? value, string type)
+	{
+		var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+		// Unlimited is ordered above finite amounts, while remaining excluded from finite filters.
+		if (type is "money" or "number" && text is "No ceiling" or "No upper limit" or "Unlimited") return decimal.MaxValue;
+		return type == "datetime" && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var timestamp)
 			? timestamp.UtcDateTime : Typed(value, type);
+	}
 	private string Text(object? value, string type)
 	{
 		var typed = Typed(value, type);

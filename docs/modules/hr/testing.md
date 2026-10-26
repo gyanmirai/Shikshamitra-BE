@@ -1126,3 +1126,7 @@ Run the existing ESIC domain, enrollment, contribution-period and rounding regre
 Run `HrReportingTableQuery_Tests`, `HrReportingEngine_Tests`, `HrTableExport_Tests`, `HrReportingWorkspaceApi_Tests` and `HrTableExportApi_Tests`.
 Run `HrReportingPostgres_Tests` with a fresh loopback `reporting_tests_*` database.
 The chunk-boundary scenario verifies global filtering, stable ordering, filtered paging, complete Excel export and another-user denial for the query endpoint.
+
+### Operational table query and export checks
+
+Run `HrOperationalTableQuery_UnitTests` and `HrOperationalTableQueryApi_Tests`. They cover 10,000/25,000-row bounded captures, changed/incomplete/over-cap failures, typed values, raw enums, ESI single-model reuse, real HTTP pagination/counts across a 100-row source boundary, tenant and restricted-role scope, anonymous/unsupported-field denial and a complete filtered Excel download. The API fixture retains the real HTTP/EF/authorization/owning-service pipeline with a disposable synthetic tenant and no unrelated background workers. The general all-module fixture exceeded the local inactivity bound before its first API case; this is not recorded as a passing API run.

@@ -651,3 +651,9 @@ Existing GET history/row reads remain available without table criteria.
 Reporting table exports accept the same criteria object in their query and preserve visible ordered columns.
 Filtered captured exports omit original report totals rather than attach totals from the unfiltered population.
 No grants, ownership checks, tenant filters, captured data or retention rules change.
+
+## Operational table queries
+
+POST `/api/hr/table-query` accepts `{ table, query, criteria: { search, filters, sorts }, offset, size }`. Offset is zero-based, size is 1–500, query/criteria are bounded, and source/field/operator/type allowlists are server-owned. This read-only contract preserves each owning reader's response envelope and existing permission, tenant and staff scope. It cannot select arbitrary entities, joins, SQL expressions or hidden staff banking columns. Salary criteria are limited to the explicitly selected salary source columns. Existing authentication-only document-configuration reads retain their existing authorization; no grants are widened here.
+
+Operational criteria and complete table exports share `HrTableExportSources` and its projection. Filters/count/order precede response pagination. Equal-column alternatives are OR; different columns are AND. Numeric/date/clock/enum handling is typed on the server. Unbounded amounts sort above finite values and do not match finite numeric criteria. Salary displayed-page totals and full-export available-value totals use their respective matching populations. See [implementation limits](references/hr-table-exports.md#operational-query-population-capture).

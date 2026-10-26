@@ -42,7 +42,7 @@ public class HrPolicyVersionReadService(
 		}
 		var total = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query
-			.OrderByDescending(x => x.VersionNumber)
+			.OrderByDescending(x => x.VersionNumber).ThenBy(x => x.Id)
 			.Skip(input.SkipCount)
 			.Take(input.MaxResultCount <= 0 ? 20 : input.MaxResultCount));
 		var dtos = rows.Select(HrPolicyVersionProjection.ToDto).ToList();

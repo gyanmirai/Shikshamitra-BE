@@ -36,7 +36,7 @@ public class EmployeeICardTemplateReadService(
 		var totalCount = await asyncExecuter.CountAsync(query);
 		var items = await asyncExecuter.ToListAsync(
 			query
-				.OrderByDescending(x => x.CreationTime)
+				.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id)
 				.Skip((page - 1) * pageSize)
 				.Take(pageSize));
 

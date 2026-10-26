@@ -68,8 +68,8 @@ public class EfCoreLeavePolicyRepository : EfCoreRepository<ShikshaMitraDbContex
 		query = ApplySearch(query, search);
 
 		query = !string.IsNullOrWhiteSpace(sorting)
-			? query.OrderBy(sorting)
-			: query.OrderBy(x => x.PolicyName);
+			? query.OrderBy(sorting + ", Id ASC")
+			: query.OrderBy(x => x.PolicyName).ThenBy(x => x.Id);
 
 		return await query.Skip(skipCount).Take(maxResultCount).ToListAsync(cancellationToken);
 	}

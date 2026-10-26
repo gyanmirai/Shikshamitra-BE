@@ -191,7 +191,12 @@ public class EsiStatutoryAppService(
 	}
 
 	[Authorize(EsiPermissions.View)]
-	public async Task<StatutoryImpactPreviewDto> PreviewAsync(StatutoryImpactPreviewRequestDto input)
+	public Task<StatutoryImpactPreviewDto> PreviewAsync(StatutoryImpactPreviewRequestDto input) => ReadPreviewAsync(input, false);
+
+	[Authorize(EsiPermissions.View)]
+	public Task<StatutoryImpactPreviewDto> GetTablePopulationAsync(StatutoryImpactPreviewRequestDto input) => ReadPreviewAsync(input, true);
+
+	private async Task<StatutoryImpactPreviewDto> ReadPreviewAsync(StatutoryImpactPreviewRequestDto input, bool allRows)
 	{
 		await AuthorizationService.CheckAsync(EsiPermissions.View);
 		ArgumentNullException.ThrowIfNull(input);
@@ -206,7 +211,7 @@ public class EsiStatutoryAppService(
 				throw new BusinessException(HRErrorCodes.EsiConfigurationInvalidMonth);
 		}
 		var calculation = await previewReader.CalculateAsync(input.MonthYear, input.ConfigurationDraft);
-		return EsiStatutoryPreviewReader.Project(calculation, input);
+		return EsiStatutoryPreviewReader.Project(calculation, input, allRows);
 	}
 
 	private async Task<List<WageComponentCatalogItem>> GetWageComponentCatalogAsync(DateTime effectiveDate)

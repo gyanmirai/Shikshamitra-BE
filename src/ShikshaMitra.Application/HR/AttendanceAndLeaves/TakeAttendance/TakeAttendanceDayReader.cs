@@ -81,7 +81,7 @@ public class TakeAttendanceDayReader(
 				(e.MobileNo ?? "").ToLower().Contains(s));
 		}
 
-		empQuery = empQuery.OrderBy(e => e.FirstName).ThenBy(e => e.LastName);
+		empQuery = empQuery.OrderBy(e => e.FirstName).ThenBy(e => e.LastName).ThenBy(e => e.Id);
 
 		var allEmployeeIds = await asyncExecuter.ToListAsync(empQuery.Select(e => e.Id));
 		var employeeStageMap = await employeeStageResolver.ResolveEmployeeStagesAsync(allEmployeeIds, scope);

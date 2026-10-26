@@ -24,7 +24,7 @@ using Xunit;
 namespace ShikshaMitra.HR.Policies;
 
 [Collection(ApiTestCollection.Name), TestModule(TestTraits.Modules.HR), TestTier(TestTraits.Tiers.Critical)]
-public class HrSetupReviewApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
+public partial class HrSetupReviewApi_Tests(ShikshaMitraApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
 {
 	private static string Url(Guid year, string section) => $"/api/hr/setup-review/{year}/{section}";
 	private sealed record School(Guid TenantId, Guid ActorId, Guid YearId, Guid CalendarId);

@@ -386,9 +386,12 @@ public class FeeCollectionManager(
 				paymentDate: GetDate("paymentDate")),
 
 			PaymentMethodEnum.BankTransfer => new BankTransferDetails(
-				transactionReferenceNumber: Get("transactionReferenceNumber"),
+				transactionReferenceNumber: string.IsNullOrWhiteSpace(Get("transactionReferenceNumber"))
+					? Get("transactionId") : Get("transactionReferenceNumber"),
 				bankName: Get("bankName"),
-				ifscCode: Get("ifscCode")),
+				ifscCode: Get("ifscCode"),
+				transferDate: GetDate("transferDate"),
+				accountHolderName: details.ContainsKey("accountHolderName") ? Get("accountHolderName") : null),
 
 			PaymentMethodEnum.UPI => new UpiDetails(
 				upiTransactionId: Get("upiTransactionId"),

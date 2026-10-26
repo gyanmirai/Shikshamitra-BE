@@ -1,5 +1,8 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.Text.Json;
+using ShikshaMitra.Finance.Fees.FeeCollection;
 using ShikshaMitra.Students;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,6 +13,20 @@ namespace ShikshaMitra.Finance.Fees.Receipts;
 
 public partial class FeeReceiptAppService
 {
+    private static FeeReceiptPaymentInstrumentDto MapPaymentInstrument(PaymentMethodRecord payment)
+    {
+        var details = payment.PaymentDetails == null ? new Dictionary<string, string?>()
+            : JsonSerializer.SerializeToElement<PaymentDetails>(payment.PaymentDetails,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)).EnumerateObject()
+                .Where(p => p.Name != "$type")
+                .ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.Null ? null : p.Value.ToString());
+        return new FeeReceiptPaymentInstrumentDto
+        {
+            PaymentMethod = payment.PaymentMethod, Amount = payment.Amount, PaymentDate = payment.PaymentDate,
+            BankAccountId = payment.BankAccountId, BankLabel = payment.BankLabelSnapshot, InstrumentDetails = details,
+        };
+    }
+
     public async Task<byte[]> GetPdfAsync(
         Guid id, CancellationToken cancellationToken = default)
     {
@@ -17,7 +34,7 @@ public partial class FeeReceiptAppService
             ?? throw new UserFriendlyException(FeeReceiptErrorCodes.ReceiptNotFound, "Receipt not found.");
         await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId, cancellationToken);
 
-        if (receipt.PdfBlobName != null && receipt.PdfBlobName.Contains("/v2/", StringComparison.Ordinal))
+        if (receipt.PdfBlobName != null && receipt.PdfBlobName.Contains("/v3/", StringComparison.Ordinal))
         {
             var cached = await blobManager.GetPdfOrNullAsync(receipt.PdfBlobName, cancellationToken);
             if (cached != null) return cached;

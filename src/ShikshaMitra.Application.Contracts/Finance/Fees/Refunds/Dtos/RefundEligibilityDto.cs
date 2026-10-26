@@ -59,6 +59,8 @@ public class RefundEligibilityMonthDto
 {
     /// <summary>Charge source; mutually exclusive with DueFeeId.</summary>
     public Guid? ChargeId { get; set; }
+    /// <summary>Due line whose collected late fee is being refunded; distinct from principal.</summary>
+    public Guid? LateFeeDueFeeId { get; set; }
     /// <summary>Fee-due source; mutually exclusive with ChargeId.</summary>
     public Guid? DueFeeId { get; set; }
     public Guid SourceAllocationId { get; set; }

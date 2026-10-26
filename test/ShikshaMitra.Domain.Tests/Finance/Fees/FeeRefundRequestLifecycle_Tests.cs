@@ -9,6 +9,36 @@ namespace ShikshaMitra.Domain.Finance.Fees;
 public class FeeRefundRequestLifecycle_Tests
 {
     [Fact]
+    public void Capped_refund_retains_zero_rounded_source_evidence_without_reserving_or_paying_it()
+    {
+        var request = new FeeRefundRequest(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            "REF-CAPPED", "Cash", null, "Capped whole receipt");
+        var receiptId = Guid.NewGuid();
+        request.PinPolicy(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), receiptId, "RCPT-CAPPED", "{}", "{}", new string('a', 64));
+        var principal = new FeeRefundLine(Guid.NewGuid(), request.Id, Guid.NewGuid(), Guid.NewGuid(), receiptId,
+            Guid.NewGuid(), "Tuition", "June", 1000m, 1000m, 100m);
+        var late = new FeeRefundLine(Guid.NewGuid(), request.Id, null, Guid.NewGuid(), receiptId,
+            null, "Paid late fees", "June", 1m, 1m, 0m, lateFeeDueFeeId: principal.DueFeeId);
+        request.AddLine(principal);
+        request.AddLine(late);
+        request.Submit(Guid.NewGuid());
+        request.Approve(Guid.NewGuid(), [new FeeRefundReservation(Guid.NewGuid(), request.Id, principal.Id,
+            principal.DueFeeId, principal.SourceAllocationId, 100m)]);
+        Assert.Single(request.Reservations);
+        Assert.Equal(100m, request.ApprovedAmount);
+        Assert.Equal(0m, late.ApprovedAmount);
+        var settlement = request.StartProcessing(Guid.NewGuid(), Guid.NewGuid(), "capped", "Cash", 100m,
+            DateTimeOffset.UtcNow, "CASH-CAPPED", null);
+        request.CompleteSettlement(settlement.Id, Guid.NewGuid());
+        Assert.Equal(100m, request.ProcessedAmount);
+        Assert.Equal(0m, late.ProcessedAmount);
+        request.Reverse(settlement.Id, Guid.NewGuid(), "Returned capped payout");
+        Assert.Equal(100m, request.ReversedAmount);
+        Assert.Equal(0m, late.ReversedAmount);
+        Assert.Equal(2, request.Lines.Count);
+    }
+
+    [Fact]
     public void Legacy_request_is_initialized_with_lines_before_entering_submitted_state()
     {
         var requestId = Guid.NewGuid();

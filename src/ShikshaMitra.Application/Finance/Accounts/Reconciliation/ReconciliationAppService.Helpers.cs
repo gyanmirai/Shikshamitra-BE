@@ -93,6 +93,8 @@ public partial class ReconciliationAppService
             PaymentMethod              = row.PaymentMethod,
             PaymentMethodLabel         = FeeReceiptPresentation.GetPaymentMethodLabel(row.PaymentMethod),
             Amount                     = row.TotalPaidAmount,
+            BankAccountId              = row.BankAccountId,
+            BankLabel                  = row.BankLabel,
             InstrumentDetails          = ParseInstrumentDetails(row.PaymentDetailsJson),
             Status                     = statusInt,
             StatusLabel                = row.VerificationStatus == FeeReceiptVerificationStatus.NotApplicable ? "Official receipt issued" : statusLabel,
@@ -110,7 +112,7 @@ public partial class ReconciliationAppService
         if (string.IsNullOrWhiteSpace(json)) return [];
         try
         {
-            var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json);
             var result = new Dictionary<string, string?>();
             foreach (var prop in doc.RootElement.EnumerateObject())
             {

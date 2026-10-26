@@ -13,11 +13,12 @@ namespace ShikshaMitra.Finance.Fees.FeeRefund;
 
 public sealed record RefundLineSpec(Guid? DueFeeId, Guid? SourceAllocationId, Guid? SourceReceiptId,
     Guid? FeeHeadId, string FeeHeadName, string InstallmentLabel, decimal SettledPaidAmount,
-    decimal Amount, decimal CalculatedAmount, Guid? ChargeId = null);
+    decimal Amount, decimal CalculatedAmount, Guid? ChargeId = null, Guid? LateFeeDueFeeId = null);
 
 public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository dueFeeRepository,
     IRepository<FinanceFeeAccount, Guid> accountRepository,
     PaidChargeRefundService paidChargeRefundService,
+    PaidLateFeeRefundService paidLateFeeRefundService,
     ICurrentTenant currentTenant) : DomainService
 {
     public async Task<FeeRefundRequest> CreatePendingAsync(Guid? studentId, Guid academicYearId,
@@ -90,11 +91,24 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         var allocationCommitted = await repository.GetCommittedAllocationAmountsAsync(allocationIds, request.Id);
         var charges = await paidChargeRefundService.GetSourcesAsync(request.StudentId, request.AcademicYearId,
             request.FinanceFeeAccountId, request.OriginalReceiptId, request.Id);
+        var lateFees = request.Lines.Any(x => x.LateFeeDueFeeId.HasValue)
+            ? await paidLateFeeRefundService.GetSourcesAsync(request.StudentId, request.AcademicYearId,
+                request.FinanceFeeAccountId, request.OriginalReceiptId, request.Id, request.StudentFeeStructureId)
+            : [];
         var reservations = new List<FeeRefundReservation>();
         var dueRemaining = dues.ToDictionary(x => x.Key,
             x => x.Value.RefundableBalance - reserved.GetValueOrDefault(x.Key));
-        foreach (var line in request.Lines)
+        foreach (var line in request.Lines.Where(x => x.CalculatedAmount > 0))
         {
+            if (line.LateFeeDueFeeId.HasValue)
+            {
+                var source = lateFees.SingleOrDefault(x => x.DueFeeId == line.LateFeeDueFeeId && x.AllocationId == line.SourceAllocationId && x.ReceiptId == line.SourceReceiptId);
+                if (source == null || line.CalculatedAmount > source.Available)
+                    throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
+                reservations.Add(new FeeRefundReservation(GuidGenerator.Create(), request.Id, line.Id,
+                    null, line.SourceAllocationId, line.CalculatedAmount));
+                continue;
+            }
             if (line.ChargeId.HasValue)
             {
                 var source = charges.SingleOrDefault(x => x.ChargeId == line.ChargeId && x.AllocationId == line.SourceAllocationId);
@@ -137,7 +151,7 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
         if (settlement.Status == FeeRefundSettlementStatus.Processed) return settlement;
         var dueIds = request.Lines.Where(x => x.DueFeeId.HasValue).Select(x => x.DueFeeId!.Value).Distinct().ToList();
         var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
-        foreach (var line in request.Lines.Where(x => x.DueFeeId.HasValue))
+        foreach (var line in request.Lines.Where(x => x.DueFeeId.HasValue && x.ApprovedAmount > 0))
         {
             if (!dues.TryGetValue(line.DueFeeId!.Value, out var due)) throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
             due.ApplyRefund(line.ApprovedAmount);
@@ -152,7 +166,7 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
     {
         var dueIds = request.Lines.Where(x => x.DueFeeId.HasValue).Select(x => x.DueFeeId!.Value).Distinct().ToList();
         var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
-        foreach (var line in request.Lines.Where(x => x.DueFeeId.HasValue))
+        foreach (var line in request.Lines.Where(x => x.DueFeeId.HasValue && x.ApprovedAmount > 0))
         {
             if (!dues.TryGetValue(line.DueFeeId!.Value, out var due))
                 throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
@@ -167,7 +181,7 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
     {
         var dueIds = request.Lines.Where(x => x.DueFeeId.HasValue).Select(x => x.DueFeeId!.Value).Distinct().ToList();
         var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
-        foreach (var line in request.Lines.Where(x => x.DueFeeId.HasValue))
+        foreach (var line in request.Lines.Where(x => x.DueFeeId.HasValue && x.ProcessedAmount > 0))
         {
             if (!dues.TryGetValue(line.DueFeeId!.Value, out var due))
                 throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
@@ -181,7 +195,7 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
     {
         var dueIds = request.Lines.Where(x => x.DueFeeId.HasValue).Select(x => x.DueFeeId!.Value).Distinct().ToList();
         var dues = (await dueFeeRepository.GetListAsync(x => dueIds.Contains(x.Id))).ToDictionary(x => x.Id);
-        foreach (var line in request.Lines.Where(x => x.DueFeeId.HasValue))
+        foreach (var line in request.Lines.Where(x => x.DueFeeId.HasValue && x.ProcessedAmount > 0))
         {
             if (!dues.TryGetValue(line.DueFeeId!.Value, out var due)) throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
             due.ReverseRefund(line.ProcessedAmount);
@@ -204,7 +218,7 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
                 (studentId.HasValue && account.StudentId != studentId))
                 throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
         }
-        if (lines.Count == 0 || lines.Any(x => x.Amount <= 0 || x.CalculatedAmount <= 0 || x.CalculatedAmount > x.Amount) ||
+        if (lines.Count == 0 || lines.Sum(x => x.CalculatedAmount) <= 0 || lines.Any(x => x.Amount <= 0 || x.CalculatedAmount < 0 || x.CalculatedAmount > x.Amount) ||
             lines.Any(x => !x.SourceAllocationId.HasValue) ||
             lines.GroupBy(x => x.SourceAllocationId).Any(g => g.Count() > 1))
             throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
@@ -216,8 +230,19 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
             x => x.RefundableBalance - reserved.GetValueOrDefault(x.Id));
         var charges = await paidChargeRefundService.GetSourcesAsync(studentId, academicYearId!.Value,
             financeFeeAccountId, null, requestId);
+        var lateFees = lines.Any(x => x.LateFeeDueFeeId.HasValue)
+            ? await paidLateFeeRefundService.GetSourcesAsync(studentId, academicYearId.Value,
+                financeFeeAccountId, null, requestId, assignmentId)
+            : [];
         foreach (var line in lines)
         {
+            if (line.LateFeeDueFeeId.HasValue)
+            {
+                var source = lateFees.SingleOrDefault(x => x.DueFeeId == line.LateFeeDueFeeId && x.AllocationId == line.SourceAllocationId && x.ReceiptId == line.SourceReceiptId);
+                if (line.DueFeeId.HasValue || line.ChargeId.HasValue || source == null || line.Amount > source.Available)
+                    throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
+                continue;
+            }
             if (line.ChargeId.HasValue)
             {
                 var source = charges.SingleOrDefault(x => x.ChargeId == line.ChargeId && x.AllocationId == line.SourceAllocationId && x.ReceiptId == line.SourceReceiptId);
@@ -240,7 +265,7 @@ public class FeeRefundManager(IFeeRefundRepository repository, IDueFeeRepository
 
     private FeeRefundLine ToEntity(Guid requestId, RefundLineSpec line) => new(GuidGenerator.Create(), requestId,
         line.DueFeeId, line.SourceAllocationId, line.SourceReceiptId, line.FeeHeadId,
-        line.FeeHeadName, line.InstallmentLabel, line.SettledPaidAmount, line.Amount, line.CalculatedAmount, line.ChargeId);
+        line.FeeHeadName, line.InstallmentLabel, line.SettledPaidAmount, line.Amount, line.CalculatedAmount, line.ChargeId, line.LateFeeDueFeeId);
 
     private static string GenerateVoucherNumber() => $"REF-{DateTime.UtcNow:yyyy}-{Guid.NewGuid():N}"[..21].ToUpperInvariant();
 

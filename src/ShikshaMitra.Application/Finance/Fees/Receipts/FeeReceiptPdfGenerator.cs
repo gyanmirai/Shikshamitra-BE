@@ -82,6 +82,16 @@ public class FeeReceiptPdfGenerator(
                         .Select(p => p.PaymentMethod).Distinct().OrderBy(m => m).Select(FeeReceiptPresentation.GetPaymentMethodLabel)));
                     if (payments.Count > 0)
                         Fact("Payment received", payments.Min(p => p.PaymentDate).ToString("dd-MMM-yyyy"));
+                    foreach (var payment in payments.Where(p => p.PaymentDetails is BankTransferDetails))
+                    {
+                        var transfer = (BankTransferDetails)payment.PaymentDetails!;
+                        Fact("Transaction ID / UTR", string.IsNullOrWhiteSpace(transfer.TransactionReferenceNumber)
+                            ? "Not recorded" : transfer.TransactionReferenceNumber);
+                        Fact("Transfer date", transfer.TransferDate?.ToString("dd-MMM-yyyy", CultureInfo.InvariantCulture) ?? "Not recorded");
+                        Fact("Account holder", string.IsNullOrWhiteSpace(transfer.AccountHolderName)
+                            ? "Not recorded" : transfer.AccountHolderName);
+                        Fact("Receiving bank", payment.BankLabelSnapshot ?? "Not recorded");
+                    }
                     if (predecessor != null) Fact("Provisional receipt", predecessor.ReceiptNumber);
                 });
                 column.Item().Table(table =>

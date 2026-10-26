@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-24
+updated_on: 2026-10-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -36,7 +36,7 @@ previously discarded entered dates or substituted issue dates cannot be reconstr
 `GET /api/fee-refunds/eligibility` includes settled charge payments when the assignment's pinned
 refund policy has `includePaidCharges=true`. The separate **Paid charges** group has a null
 `feeHeadId`; its rows carry `chargeId`, `chargeName`, `sourceAllocationId` (the charge payment),
-and `sourceReceiptId`. A create/preview line supplies exactly one of `dueFeeId` or `chargeId`.
+and `sourceReceiptId`. A create/preview line supplies exactly one of `dueFeeId`, `chargeId`, or `lateFeeDueFeeId`.
 The server checks the policy, payer, academic year, receipt and available payment balance.
 Reversed collections and unverified provisional receipts are excluded. Reservations and net
 processed refunds reduce eligibility; returned payouts restore it. Charges participate in the
@@ -47,6 +47,20 @@ Apply `EnablePaidChargeRefunds` before deploying this contract. It adds nullable
 to refund lines/reservations and makes the alternative fee-due references nullable, retaining all
 existing refund history. Its downgrade rejects removal after charge-refund evidence exists.
 Focused regression cases are `FeeRefundApi_Tests.Paid_Charges_*`.
+
+The independent pinned `includePaidLateFee` setting enables a **Paid late fees** group with
+null `feeHeadId`. Its rows carry `lateFeeDueFeeId` (the source due, without refunding its
+principal), `chargeName` (the late-fee display label), the late-fee `sourceAllocationId`, and
+`sourceReceiptId`. Only settled `LateFeeCollectionAllocation` payments for the payer, year,
+and assignment qualify. The same reservation, payout, return, whole-receipt selection and
+policy caps apply; principal paid/refunded balances remain separate. Apply
+`EnablePaidLateFeeRefunds` before deployment. It adds one nullable refund-line reference,
+preserves history, and rejects a downgrade after late-fee refund evidence exists.
+Focused regression cases are `FeeRefundApi_Tests.Paid_Late_Fees_*`.
+
+Whole-receipt requests retain every selected source when a cap or deduction rounds an
+individual calculated share to zero. Such a line preserves selection evidence without a
+reservation or principal balance mutation; the request still requires a positive total payout.
 
 ## Collection grace period
 
@@ -311,3 +325,11 @@ Cloning without an explicit name selects the first available `Copy`, `Copy 2`, e
 Payment Term duplicate generated codes retain error `Finance:PaymentTerm:000023`, with a specific message identifying the code and asking for another name or code. Concession policy percentages accept at most two decimal places; excessive precision is rejected rather than rounded silently (`Finance:ConcessionPolicy:010027`).
 
 Concession Apply On retains the canonical enum contract: `0 = AllOutstanding`, `1 = CurrentInstallment`, `2 = FutureInstallments`, `3 = AllFees`. DTOs expose the symbolic strings; immutable historical snapshot JSON retains its original numeric enum representation. History presentation must compare canonical enum values before displaying labels.
+
+## Bank transfer evidence
+
+Bank transfer collection details retain `transactionReferenceNumber`, `transferDate` (the entered calendar date), and `accountHolderName` in the original payment instrument JSON. Collection also accepts the existing `transactionId` input alias; a nonblank canonical reference takes precedence. The selected receiving bank remains the validated payment-level `bankAccountId`, with a masked `bankLabel` snapshot captured during collection.
+
+Reconciliation list rows expose the stored evidence in `instrumentDetails` and the original receiving bank through `bankAccountId` and `bankLabel`. Receipt detail responses expose the same evidence in `paymentInstruments[]`, including method, amount, collection timestamp, bank snapshot and instrument details. Provisional and official receipt PDFs show the bank transfer reference, transfer date, account holder and masked receiving bank for fee, charge and combined receipts. Verification reads the original payment instrument rather than recreating its evidence.
+
+Missing historical transfer dates and account holder names remain unknown; receipt or collection dates must not be substituted for the entered transfer date. Previously discarded references or names cannot be recovered without independent evidence. This change uses the existing JSONB column and requires no schema migration or automatic backfill. Receipt PDF cache version `v3` regenerates earlier cached documents from the available original evidence without altering amounts, payment status or receipt numbering. Existing tenant, academic scope and action permissions continue to apply.

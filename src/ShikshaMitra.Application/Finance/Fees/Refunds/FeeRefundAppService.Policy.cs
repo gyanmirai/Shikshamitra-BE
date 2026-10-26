@@ -73,7 +73,7 @@ public partial class FeeRefundAppService
 
     private async Task<PreparedRefund> PrepareAsync(CreateFeeRefundRequestDto input, Guid? excludingRequestId = null)
     {
-        if (input.Lines.Count == 0 || input.Lines.Any(x => x.Amount <= 0 || x.DueFeeId.HasValue == x.ChargeId.HasValue) ||
+        if (input.Lines.Count == 0 || input.Lines.Any(x => x.Amount <= 0 || (x.DueFeeId.HasValue ? 1 : 0) + (x.ChargeId.HasValue ? 1 : 0) + (x.LateFeeDueFeeId.HasValue ? 1 : 0) != 1) ||
             input.Lines.Select(x => x.SourceAllocationId).Distinct().Count() != input.Lines.Count)
             throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
         var receipt = await feePaymentReceiptRepository.FindAsync(input.OriginalReceiptId)
@@ -173,6 +173,22 @@ public partial class FeeRefundAppService
                     source.ChargeName, source.Available, amount, 0m, source.ChargeId));
             }
         }
+        var lateLines = input.Lines.Where(x => x.LateFeeDueFeeId.HasValue).ToList();
+        if (lateLines.Count > 0)
+        {
+            if (!policy.IncludePaidLateFee) throw new BusinessException(FeeRefundErrorCodes.FeeHeadNotEligible);
+            var sources = await paidLateFeeRefundService.GetSourcesAsync(payer.StudentId, input.AcademicYearId,
+                payer.FinanceFeeAccountId, receipt.Id, excludingRequestId, payer.AssignmentId);
+            foreach (var item in lateLines)
+            {
+                var source = sources.SingleOrDefault(x => x.DueFeeId == item.LateFeeDueFeeId && x.AllocationId == item.SourceAllocationId);
+                if (source == null) throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
+                if (item.Amount > source.Available) throw new BusinessException(FeeRefundErrorCodes.InsufficientRefundBalance);
+                var amount = policy.AmountMode == RefundAmountMode.ManualUpToEligible ? item.Amount : source.Available;
+                specs.Add(new RefundLineSpec(null, source.AllocationId, receipt.Id, null, "Paid late fees",
+                    source.Name, source.Available, amount, 0m, LateFeeDueFeeId: source.DueFeeId));
+            }
+        }
         var requested = specs.Sum(x => x.Amount);
         var policyBase = specs.Sum(x => x.SettledPaidAmount);
         if (!policy.AllowPartialRefund)
@@ -225,6 +241,12 @@ public partial class FeeRefundAppService
         {
             var sources = await paidChargeRefundService.GetSourcesAsync(studentId, academicYearId!.Value,
                 accountId, receiptId, excludingRequestId);
+            expected.UnionWith(sources.Where(x => x.Available > 0).Select(x => x.AllocationId));
+        }
+        if (policy.IncludePaidLateFee)
+        {
+            var sources = await paidLateFeeRefundService.GetSourcesAsync(studentId, academicYearId!.Value,
+                accountId, receiptId, excludingRequestId, assignmentId);
             expected.UnionWith(sources.Where(x => x.Available > 0).Select(x => x.AllocationId));
         }
         if (!expected.SetEquals(selectedAllocationIds))

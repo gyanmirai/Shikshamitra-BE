@@ -201,16 +201,17 @@ public static class FeeRefundTestHelper
         HttpClient client,
         IServiceProvider services,
         double feeAmount = 1000d,
-        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods = null, bool includePaidCharges = false, bool allowPartialRefund = true)
+        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods = null, bool includePaidCharges = false, bool allowPartialRefund = true, bool includePaidLateFee = false,
+        double lateFeeAmount = 0, decimal? maximumPerRequest = null)
     {
         var studentId = await SeedStudentOnlyAsync(services);
         var feeHeadId = await SeedFeeHeadAsync(services);
 
         // Seed DueFee record first
         var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(services, studentId, feeHeadId, feeAmount);
-        await AttachRefundPolicyAsync(services, studentId, dueFeeId, allowedPayoutMethods, includePaidCharges, allowPartialRefund);
+        await AttachRefundPolicyAsync(services, studentId, dueFeeId, allowedPayoutMethods, includePaidCharges, allowPartialRefund, includePaidLateFee, maximumPerRequest);
 
-        await SeedSettledCollectionAsync(services, studentId, dueFeeId, feeAmount);
+        await SeedSettledCollectionAsync(services, studentId, dueFeeId, feeAmount, lateFeeAmount);
 
         return (studentId, dueFeeId);
     }
@@ -277,7 +278,7 @@ public static class FeeRefundTestHelper
     }
 
     private static async Task SeedSettledCollectionAsync(IServiceProvider services, Guid studentId,
-        Guid dueFeeId, double feeAmount)
+        Guid dueFeeId, double feeAmount, double lateFeeAmount = 0)
     {
         var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         using var scope = services.CreateScope();
@@ -294,7 +295,7 @@ public static class FeeRefundTestHelper
         var collectionId = Guid.NewGuid();
         var receiptNumber = $"FIN-{Guid.NewGuid().ToString("N")[..16]}";
         var collection = new FeeRecordMetadata(collectionId, tenantId, studentId,
-            DefaultAcademicYearId, feeAmount, receiptNumber, FeeCollectionStatus.Paid);
+            DefaultAcademicYearId, feeAmount + lateFeeAmount, receiptNumber, FeeCollectionStatus.Paid);
         var allocation = new FeeCollectionDueFeeAllocation(Guid.NewGuid(), tenantId,
             collectionId, dueFeeId, feeAmount);
         var receipt = new FeePaymentReceipt(Guid.NewGuid())
@@ -305,7 +306,7 @@ public static class FeeRefundTestHelper
             ReceiptKind = FeeReceiptKind.FinalFee,
             ReceiptScope = FeeReceiptScope.Fee,
             VerificationStatus = FeeReceiptVerificationStatus.Verified,
-            TotalPaidAmount = feeAmount,
+            TotalPaidAmount = feeAmount + lateFeeAmount,
             StudentId = studentId,
             AcademicYearId = DefaultAcademicYearId,
             BoardId = DefaultBoardId,
@@ -315,6 +316,9 @@ public static class FeeRefundTestHelper
         await dueFees.UpdateAsync(due, autoSave: false);
         await collections.InsertAsync(collection, autoSave: false);
         await allocations.InsertAsync(allocation, autoSave: false);
+        if (lateFeeAmount > 0)
+            await scope.ServiceProvider.GetRequiredService<IRepository<LateFeeCollectionAllocation, Guid>>()
+                .InsertAsync(new LateFeeCollectionAllocation(Guid.NewGuid(), tenantId, collectionId, dueFeeId, lateFeeAmount));
         await receipts.InsertAsync(receipt, autoSave: false);
         await uow.CompleteAsync();
     }
@@ -346,7 +350,7 @@ public static class FeeRefundTestHelper
     }
 
     private static async Task AttachRefundPolicyAsync(IServiceProvider services, Guid studentId, Guid dueFeeId,
-        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods, bool includePaidCharges = false, bool allowPartialRefund = true)
+        IReadOnlyCollection<RefundPayoutMethod>? allowedPayoutMethods, bool includePaidCharges = false, bool allowPartialRefund = true, bool includePaidLateFee = false, decimal? maximumPerRequest = null)
     {
         var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         using var scope = services.CreateScope();
@@ -366,8 +370,8 @@ public static class FeeRefundTestHelper
             new RefundPolicyUpdateModel(
                 $"Refund policy {policyId:N}", ($"RP-{policyId:N}")[..20], "API test policy",
                 RefundPolicyStatus.Active, false, RefundFeeHeadScope.AllFeeHeads,
-                [], includePaidCharges, false, allowPartialRefund,
-                allowPartialRefund ? RefundAmountMode.ManualUpToEligible : RefundAmountMode.RemainingPaidAmount, null, null, null, null,
+                [], includePaidCharges, includePaidLateFee, allowPartialRefund,
+                allowPartialRefund ? RefundAmountMode.ManualUpToEligible : RefundAmountMode.RemainingPaidAmount, null, null, maximumPerRequest, null,
                 RoundingMethodType.None, RefundDeductionType.None, null, null, null,
                 allowedPayoutMethods ?? [RefundPayoutMethod.Cash, RefundPayoutMethod.BankTransfer], 2));
         var snapshot = JsonSerializer.Serialize(policy.ToSnapshot());
@@ -385,6 +389,34 @@ public static class FeeRefundTestHelper
         await assignmentRepository.InsertAsync(assignment, autoSave: false);
         await dueFeeRepository.UpdateAsync(dueFee, autoSave: false);
         await uow.CompleteAsync();
+    }
+
+    public static async Task<(Guid AllocationId, Guid ReceiptId)> SeedPaidLateFeeAsync(
+        IServiceProvider services, Guid studentId, Guid dueFeeId, double amount = 250d,
+        FeeCollectionStatus status = FeeCollectionStatus.Paid)
+    {
+        using var scope = services.CreateScope();
+        var provider = scope.ServiceProvider;
+        var tenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        using var tenant = provider.GetRequiredService<ICurrentTenant>().Change(tenantId);
+        using var uow = provider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+        var collection = new FeeRecordMetadata(Guid.NewGuid(), tenantId, studentId,
+            DefaultAcademicYearId, amount, $"LATE-{Guid.NewGuid():N}"[..20], status);
+        var allocation = new LateFeeCollectionAllocation(Guid.NewGuid(), tenantId, collection.Id, dueFeeId, amount);
+        var receipt = new FeePaymentReceipt(Guid.NewGuid())
+        {
+            TenantId = tenantId, StudentId = studentId, AcademicYearId = DefaultAcademicYearId,
+            FeeCollectionTransactionId = collection.Id, ReceiptNumber = collection.ReceiptNumber,
+            ReceiptKind = FeeReceiptKind.FinalFee, ReceiptScope = FeeReceiptScope.Fee,
+            VerificationStatus = FeeReceiptVerificationStatus.Verified, TotalPaidAmount = amount,
+            BoardId = DefaultBoardId, EducationMediumId = DefaultMediumId,
+            ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        await provider.GetRequiredService<IRepository<FeeRecordMetadata, Guid>>().InsertAsync(collection);
+        await provider.GetRequiredService<IRepository<LateFeeCollectionAllocation, Guid>>().InsertAsync(allocation);
+        await provider.GetRequiredService<IRepository<FeePaymentReceipt, Guid>>().InsertAsync(receipt);
+        await uow.CompleteAsync();
+        return (allocation.Id, receipt.Id);
     }
 
     public static async Task<(Guid ChargeId, Guid AllocationId, Guid ReceiptId)> SeedPaidChargeAsync(

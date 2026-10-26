@@ -141,6 +141,8 @@ public sealed class ReconciliationRow
     public PaymentMethodEnum PaymentMethod { get; init; }
     public DateTimeOffset? PaymentDate { get; init; }
     public string? PaymentDetailsJson { get; init; }
+    public Guid? BankAccountId { get; init; }
+    public string? BankLabel { get; init; }
 
     // Student
     public Guid? StudentId { get; init; }

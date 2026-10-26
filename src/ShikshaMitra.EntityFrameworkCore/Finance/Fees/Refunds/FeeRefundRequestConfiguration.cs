@@ -69,8 +69,9 @@ public class FeeRefundRequestConfiguration : IEntityTypeConfiguration<FeeRefundR
             lb.Property(l => l.ReversedAmount).HasColumnType("numeric(18,2)");
             lb.Ignore(l => l.Amount);
             lb.HasIndex(l => l.ChargeId);
+            lb.HasIndex(l => l.LateFeeDueFeeId);
             lb.ToTable(t => t.HasCheckConstraint("CK_FeeRefundLines_Source",
-                "(\"DueFeeId\" IS NOT NULL AND \"ChargeId\" IS NULL) OR (\"DueFeeId\" IS NULL AND \"ChargeId\" IS NOT NULL)"));
+                "(CASE WHEN \"DueFeeId\" IS NULL THEN 0 ELSE 1 END + CASE WHEN \"ChargeId\" IS NULL THEN 0 ELSE 1 END + CASE WHEN \"LateFeeDueFeeId\" IS NULL THEN 0 ELSE 1 END) = 1"));
             lb.HasIndex(l => l.DueFeeId)
                 .HasDatabaseName("IX_FeeRefundLines_DueFeeId");
         });

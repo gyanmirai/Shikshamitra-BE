@@ -2,16 +2,24 @@
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
+using ShikshaMitra.HR.Payroll.RunPayroll;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.MultiTenancy;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
-public class EfCoreLeavePolicyReferenceLock(IDbContextProvider<ShikshaMitraDbContext> contexts)
+public class EfCoreLeavePolicyReferenceLock(IDbContextProvider<ShikshaMitraDbContext> contexts,
+	IPayrollInputRevisionStore payrollFence, ICurrentTenant currentTenant)
 	: ILeavePolicyReferenceLock, ITransientDependency
 {
 	public async Task AcquireAsync(Guid policyId, Guid? tenantId)
 	{
+		if (tenantId != currentTenant.Id)
+			throw new InvalidOperationException("Leave policy reference locking requires the current tenant.");
+		// SaveChanges and onboarding already take this tenant fence. Always acquire it
+		// before a policy row so archive/default/assignment writes cannot invert order.
+		await payrollFence.LockAsync();
 		var db = await contexts.GetDbContextAsync();
 		if (db.Database.IsNpgsql())
 		{

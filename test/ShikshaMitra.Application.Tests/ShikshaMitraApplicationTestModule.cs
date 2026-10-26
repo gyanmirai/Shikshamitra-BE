@@ -191,14 +191,16 @@ public class ShikshaMitraApplicationTestModule : AbpModule
             options.IsDynamicSettingStoreEnabled = false;
         });
 
-        context.Services.AddAlwaysDisableUnitOfWorkTransaction();
+        var familyPostgres = FamilyFinancePostgresHarness.IsEnabled;
+        if (!familyPostgres) context.Services.AddAlwaysDisableUnitOfWorkTransaction();
         context.Services.AddSingleton<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider());
         context.Services.AddHttpClient();
-        ConfigureInMemorySqlite(context.Services);
+        if (familyPostgres) FamilyFinancePostgresHarness.Configure(context.Services);
+        else ConfigureInMemorySqlite(context.Services);
 
         // Replace the PostgreSQL-specific sequence repository with an in-memory fake
         // so that application tests using SQLite don't fail on PostgreSQL-only SQL syntax.
-        context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
+        if (!familyPostgres) context.Services.AddTransient<IReceiptNumberSequenceRepository, FakeReceiptNumberSequenceRepository>();
         context.Services.AddTransient<IEmployeeLeaveRepository, FakeEmployeeLeaveRepository>();
         context.Services.AddTransient<IPayrollInputRevisionStore, NonTransactionalPayrollInputRevisionStore>();
         context.Services.AddSingleton<OnboardingAccountFailureProbe>();

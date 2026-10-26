@@ -1,0 +1,64 @@
+using System;
+using System.Net;
+using System.Threading.Tasks;
+using ShikshaMitra.Finance.Accounts;
+using ShikshaMitra.Infrastructure.Auth;
+using Shouldly;
+using Xunit;
+
+namespace ShikshaMitra.Finance.Mobile;
+
+[Collection(FinanceRoutingApiTestCollection.Name)]
+[Trait("Module","Finance")]
+[Trait("Tier","Critical")]
+public class MobileFinancePermissionApi_Tests(FinanceRoutingApiTestFactory factory) : ShikshaMitraApiTestBase(factory)
+{
+	[Theory]
+	[InlineData("context")]
+	[InlineData("overview")]
+	[InlineData("installments")]
+	[InlineData("charges")]
+	[InlineData("payments")]
+	[InlineData("receipts")]
+	[InlineData("requests")]
+	[InlineData("activity")]
+	[InlineData("notifications")]
+	[InlineData("statement/pdf")]
+	public async Task Family_routes_reject_anonymous_requests(string suffix)
+	{
+		using var client=CreateAnonymousClient();
+		client.DefaultRequestHeaders.Add("__tenant",TestAuthHandler.TestTenantId);
+		using var response=await client.GetAsync(Url(suffix));
+		response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized,await response.Content.ReadAsStringAsync());
+	}
+	[Theory]
+	[InlineData("context")]
+	[InlineData("overview")]
+	[InlineData("installments")]
+	[InlineData("charges")]
+	[InlineData("payments")]
+	[InlineData("receipts")]
+	[InlineData("requests")]
+	[InlineData("activity")]
+	[InlineData("notifications")]
+	[InlineData("statement/pdf")]
+	public async Task Staff_finance_grant_does_not_grant_a_family_route(string suffix)
+	{
+		using var client=Factory.CreateClient();
+		client.DefaultRequestHeaders.Add("__tenant",TestAuthHandler.TestTenantId);
+		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader,"accountant");
+		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,"Finance.Fees.FeeCollections.View");
+		using var response=await client.GetAsync(Url(suffix));
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden,await response.Content.ReadAsStringAsync());
+	}
+	[Fact]
+	public async Task Exact_family_view_still_requires_persisted_child_association()
+	{
+		using var client=Factory.CreateClient();
+		client.DefaultRequestHeaders.Add("__tenant",TestAuthHandler.TestTenantId);
+		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,"Finance.SelfService.View");
+		using var response=await client.GetAsync(Url("overview"));
+		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden,await response.Content.ReadAsStringAsync());
+	}
+	private string Url(string suffix)=>$"/api/mobile/v1/finance/students/{Guid.NewGuid()}/{suffix}?academicYearId={Factory.SeededAcademicYearId}";
+}

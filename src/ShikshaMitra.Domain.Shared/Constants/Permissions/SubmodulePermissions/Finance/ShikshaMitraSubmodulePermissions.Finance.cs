@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace ShikshaMitra.Constants.Permissions;
 
@@ -39,6 +39,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 
 		public static readonly Dictionary<string, SubmoduleInfo> Submodules = new()
 		{
+			{ "Finance.SelfService", new SubmoduleInfo(SelfService.All, SelfService.DisplayNames) },
 			// Fees submodules
 			{ "Finance.Fees.FeeCollections", new SubmoduleInfo(Fees_FeeCollections.All, Fees_FeeCollections.DisplayNames) },
 			{ "Finance.Fees.Charges", new SubmoduleInfo(Fees_Charges.All, Fees_Charges.DisplayNames) },

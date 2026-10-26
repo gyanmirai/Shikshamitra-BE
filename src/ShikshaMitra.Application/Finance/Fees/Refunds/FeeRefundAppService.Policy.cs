@@ -25,9 +25,9 @@ public partial class FeeRefundAppService
         Guid? AssignmentId, FinancePolicyVersion Version, RefundPolicySnapshot Policy);
 
     private async Task<RefundPolicyEvidence> RequirePolicyEvidenceAsync(Guid? studentId,
-        Guid academicYearId, Guid? accountId, Guid? assignmentId = null)
+        Guid academicYearId, Guid? accountId, Guid? assignmentId = null, bool familyAuthorized = false)
     {
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(studentId, accountId);
+        if (!familyAuthorized) await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(studentId, accountId);
         Guid policyId;
         Guid versionId;
         if (accountId.HasValue)
@@ -71,14 +71,15 @@ public partial class FeeRefundAppService
             ? feeRefundRepository.GetStudentYearCommittedAmountAsync(payer.StudentId.Value, yearId, excludingId)
             : feeRefundRepository.GetAccountYearCommittedAmountAsync(payer.FinanceFeeAccountId!.Value, yearId, excludingId);
 
-    private async Task<PreparedRefund> PrepareAsync(CreateFeeRefundRequestDto input, Guid? excludingRequestId = null)
+    private async Task<PreparedRefund> PrepareAsync(CreateFeeRefundRequestDto input, Guid? excludingRequestId = null, bool familyAuthorized = false)
     {
         if (input.Lines.Count == 0 || input.Lines.Any(x => x.Amount <= 0 || (x.DueFeeId.HasValue ? 1 : 0) + (x.ChargeId.HasValue ? 1 : 0) + (x.LateFeeDueFeeId.HasValue ? 1 : 0) != 1) ||
             input.Lines.Select(x => x.SourceAllocationId).Distinct().Count() != input.Lines.Count)
             throw new BusinessException(FeeRefundErrorCodes.RefundLineNotFound);
         var receipt = await feePaymentReceiptRepository.FindAsync(input.OriginalReceiptId)
             ?? throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
-        await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId);
+        if (!familyAuthorized) await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId);
+        if (familyAuthorized && receipt.StudentId != input.StudentId) throw new BusinessException(FeeRefundErrorCodes.SourceReceiptInvalid);
         if (input.FinanceFeeAccountId.HasValue && receipt.FinanceFeeAccountId != input.FinanceFeeAccountId ||
             !receipt.FinanceFeeAccountId.HasValue && receipt.StudentId != input.StudentId ||
             receipt.AcademicYearId != input.AcademicYearId ||
@@ -111,7 +112,7 @@ public partial class FeeRefundAppService
         if (!receipt.FinanceFeeAccountId.HasValue && (dues.Any(x => !x.StudentFeeStructureId.HasValue) || dues.Select(x => x.StudentFeeStructureId).Distinct().Count() > 1))
             throw new BusinessException(FeeRefundErrorCodes.AssignmentMismatch);
         var payer = await RequirePolicyEvidenceAsync(input.StudentId, input.AcademicYearId,
-            receipt.FinanceFeeAccountId, receipt.FinanceFeeAccountId.HasValue || dues.Count == 0 ? null : dues[0].StudentFeeStructureId);
+            receipt.FinanceFeeAccountId, receipt.FinanceFeeAccountId.HasValue || dues.Count == 0 ? null : dues[0].StudentFeeStructureId, familyAuthorized);
         if (!receipt.FinanceFeeAccountId.HasValue)
         {
             // Adoption binds the existing dues to an account; historical receipts and
@@ -203,8 +204,11 @@ public partial class FeeRefundAppService
         specs = AllocateCalculatedAmounts(specs, calculation.FinalRefund);
         var calculationJson = JsonSerializer.Serialize(new
         {
-            SourceReceiptId = receipt.Id, SourceReceiptNumber = receipt.ReceiptNumber,
-            PolicyVersionId = version.Id, RequestedAmount = requested, Result = calculation,
+            SourceReceiptId = receipt.Id,
+            SourceReceiptNumber = receipt.ReceiptNumber,
+            PolicyVersionId = version.Id,
+            RequestedAmount = requested,
+            Result = calculation,
             Lines = specs.OrderBy(x => x.SourceAllocationId)
         });
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(calculationJson))).ToLowerInvariant();
@@ -314,8 +318,8 @@ public partial class FeeRefundAppService
             "DemandDraft" or "Demand Draft (DD)" => RefundPayoutMethod.DemandDraft,
             "BankTransfer" or "Bank Transfer (NEFT/RTGS/IMPS)" => RefundPayoutMethod.BankTransfer,
             "Upi" or "UPI" => RefundPayoutMethod.Upi,
-            _ => (RefundPayoutMethod)(-1)
+            _ => (RefundPayoutMethod) (-1)
         };
-        return (int)method >= 0;
+        return (int) method >= 0;
     }
 }

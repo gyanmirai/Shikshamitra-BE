@@ -40,7 +40,7 @@ namespace ShikshaMitra.Finance.Fees.Collections;
 /// this is what silently broke FeeCollectionAppServiceV2_Tests's pre-existing tests too
 /// (verified: they fail the same way, independent of this change).
 /// </summary>
-public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private static readonly Guid TestTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 	private static readonly Guid FakeAdminUserId = Guid.Parse("2e701e62-0953-4dd3-910b-dc6cc93ccb0d");
@@ -115,7 +115,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 	private async Task<(Guid AcademicYearId, Guid StudentId, Guid FeeHeadId, Guid DueFeeId, Guid FeeStructureId)>
 		SeedStudentWithOverdueDueFeeAsync(int daysOverdue, bool attachPolicy, double? maximumLateFeeAmount = null,
 			bool enableLateFee = true, bool futurePaymentTerm = false, bool attachProrationPolicy = false,
-		bool percentageLateFee = false, decimal principalAmount = 5000m, string? allocationBasis = null)
+		bool percentageLateFee = false, decimal principalAmount = 5000m, string? allocationBasis = null, string? academicYearName = null)
 	{
 		await EnsureAdminUserExistsAsync();
 
@@ -127,7 +127,7 @@ public class LateFeeCollectionRuntime_Tests : ShikshaMitraApplicationTestBase<Sh
 		var feeHeadId = Guid.NewGuid();
 		var studentId = Guid.NewGuid();
 
-		var year = new AcademicYear(yearId, TestTenantId, "2025-26", new DateTime(2025, 4, 1), new DateTime(2026, 3, 31));
+		var year = new AcademicYear(yearId, TestTenantId, academicYearName ?? "2025-26", new DateTime(2025, 4, 1), new DateTime(2026, 3, 31));
 		await _academicYearRepo.InsertAsync(year, autoSave: true);
 
 		var board = new EducationBoard(boardId, TestTenantId, EducationBoardType.CBSE, yearId);

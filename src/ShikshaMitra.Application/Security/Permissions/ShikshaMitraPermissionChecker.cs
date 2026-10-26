@@ -342,5 +342,6 @@ public class ShikshaMitraPermissionChecker : PermissionChecker, IPermissionCheck
 	}
 
 	private static bool IsStudentPermission(string name) =>
-		name == "Students" || name.StartsWith("Students.", StringComparison.Ordinal);
+		name == "Students" || name.StartsWith("Students.", StringComparison.Ordinal) ||
+		name.StartsWith("Finance.SelfService.", StringComparison.Ordinal);
 }

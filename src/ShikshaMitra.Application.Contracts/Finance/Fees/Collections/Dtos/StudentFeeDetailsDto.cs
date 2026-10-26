@@ -90,6 +90,8 @@ public class FeeChargeDetailDto
     public double PaidAmount { get; set; }
     public double PendingAmount { get; set; }
     public double WaivedAmount { get; set; }
+    /// <summary>Uncleared charge/late-fee allocations, converted per source row to decimal INR.</summary>
+    public decimal ReconciliationAmount { get; set; }
     public bool CanWaive { get; set; }
     public FeeCollectionStatus Status { get; set; }
 }

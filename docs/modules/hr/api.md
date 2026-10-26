@@ -619,6 +619,12 @@ New assignments reject archived policies; existing employee assignments and hist
 Preview proof and compensation idempotency include assignment values and resolved calculation evidence.
 Reusing a template save key with a changed ESIC assignment or submitting a stale template write returns HTTP 409.
 
+### Attendance register query composition
+
+The grouped register (`GET /api/hr/attendance/register/grouped`) accepts indexed `educationMediumStageIds[0]`, `educationMediumStageIds[1]` query parameters. These identify academic organization assignments, not student/class divisions. Empty selection retains the existing all-authorized behavior. Selected IDs use OR; staff ID, group, department substring, date, attendance status, payroll state, exceptions and search combine using AND. The legacy single `educationMediumStageId` remains supported and intersects a supplied list. Every requested stage is checked against the actor's current scope before reading; year-specific assignment lookup still applies. Filtering occurs before day projection, summary and pagination.
+
+Grouped `sorting` accepts one `employeeName`, `present`, `employeeGroup` or `department` field with `asc`/`desc`. Unknown fields fall back to the existing exception-priority order. Employee ID provides stable ties. HR register Excel/PDF exports deserialize the same criteria and call the same grouped reader for every export batch; no loaded-page filter or separate unscoped query is used. This additive contract needs no schema migration.
+
 ### Reporting table queries
 
 `POST /api/hr/reports/runs/query` accepts `skip`, `take` and `criteria` for private generated-report history.

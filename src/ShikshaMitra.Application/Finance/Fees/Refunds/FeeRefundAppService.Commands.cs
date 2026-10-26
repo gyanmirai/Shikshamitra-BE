@@ -38,7 +38,7 @@ public partial class FeeRefundAppService
                 replay.ReplacesRefundRequestId != input.ReplacesRefundRequestId ||
                 replay.RefundMethod != input.RefundMethod || replay.Reason != input.Reason ||
                 replay.Lines.Count != input.Lines.Count ||
-                input.Lines.Any(x => !replay.Lines.Any(y => y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId &&
+                input.Lines.Any(x => !replay.Lines.Any(y => y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId && y.LateFeeDueFeeId == x.LateFeeDueFeeId &&
                     y.SourceAllocationId == x.SourceAllocationId && y.RequestedAmount == x.Amount)))
                 throw new BusinessException(FeeRefundErrorCodes.IdempotencyConflict);
             var replayResult = await MapAsync(replay);
@@ -59,7 +59,7 @@ public partial class FeeRefundAppService
         {
             if (!replaced.StudentFeeStructureId.HasValue || !replaced.OriginalReceiptId.HasValue ||
                 input.Lines.Count != replaced.Lines.Count ||
-                input.Lines.Any(x => !replaced.Lines.Any(y => y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId &&
+                input.Lines.Any(x => !replaced.Lines.Any(y => y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId && y.LateFeeDueFeeId == x.LateFeeDueFeeId &&
                     y.SourceAllocationId == x.SourceAllocationId && y.ApprovedAmount == x.Amount)))
                 throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
             var specs = replaced.Lines.Select(x => new RefundLineSpec(x.DueFeeId,
@@ -83,7 +83,7 @@ public partial class FeeRefundAppService
         if (replaced != null && (prepared.Lines.Sum(x => x.CalculatedAmount) != replaced.ApprovedAmount ||
             prepared.Lines.Count != replaced.Lines.Count ||
             prepared.Lines.Any(x => !replaced.Lines.Any(y => y.SourceAllocationId == x.SourceAllocationId &&
-                y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId && y.ApprovedAmount == x.CalculatedAmount))))
+                y.ChargeId == x.ChargeId && y.DueFeeId == x.DueFeeId && y.LateFeeDueFeeId == x.LateFeeDueFeeId && y.ApprovedAmount == x.CalculatedAmount))))
             throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
         var request = await feeRefundManager.CreatePendingAsync(prepared.StudentId, input.AcademicYearId,
             prepared.AssignmentId, prepared.PolicyId, prepared.PolicyVersionId, prepared.Receipt.Id,

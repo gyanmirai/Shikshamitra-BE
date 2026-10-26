@@ -47,6 +47,7 @@ public class ReceiptLifecycleApi_Tests : ShikshaMitraApiTestBase
     [InlineData(PaymentMethodEnum.Cheque, false, false)]
     [InlineData(PaymentMethodEnum.DemandDraft, false, false)]
     [InlineData(PaymentMethodEnum.BankTransfer, false, false)]
+    [InlineData(PaymentMethodEnum.BankTransfer, true, false)]
     [InlineData(PaymentMethodEnum.CreditCard, false, false)]
     [InlineData(PaymentMethodEnum.DebitCard, false, false)]
     [InlineData(PaymentMethodEnum.UPI, false, false)]
@@ -95,7 +96,8 @@ public class ReceiptLifecycleApi_Tests : ShikshaMitraApiTestBase
             PaymentMethodEnum.Cheque => new() { ["chequeNumber"] = "123456", ["bankName"] = "Test bank", ["chequeDate"] = DateTime.UtcNow.ToString("O") },
             PaymentMethodEnum.DemandDraft => new() { ["ddNumber"] = "123456", ["bankName"] = "Test bank", ["ddDate"] = DateTime.UtcNow.ToString("O") },
             PaymentMethodEnum.UPI => new() { ["transactionId"] = "TEST-UPI-" + Guid.NewGuid().ToString("N"), ["upiId"] = "synthetic@test" },
-            PaymentMethodEnum.BankTransfer => new() { ["transactionId"] = "TEST-NEFT-" + Guid.NewGuid().ToString("N"), ["bankName"] = "Test bank" },
+            PaymentMethodEnum.BankTransfer => new() { ["transactionId"] = "N123456789876", ["bankName"] = "Test bank",
+                ["transferDate"] = "2026-10-20", ["accountHolderName"] = "Rahul Sharma" },
             PaymentMethodEnum.CreditCard => new() { ["transactionId"] = "TEST-CARD", ["cardLast4"] = "1234", ["bankName"] = "Test bank" },
             _ => null
         };
@@ -117,7 +119,8 @@ public class ReceiptLifecycleApi_Tests : ShikshaMitraApiTestBase
             document.ReceiptKindLabel.ShouldStartWith(cash ? "Official Receipt" : "Provisional Receipt");
             document.PaymentMethodLabel.ShouldBe(FeeReceiptPresentation.GetPaymentMethodLabel(method));
             document.VerificationStatus.ShouldBe(cash ? FeeReceiptVerificationStatus.NotApplicable : FeeReceiptVerificationStatus.PendingVerification);
-            await CheckPdfAsync(document.Id, document.PdfFileName, !cash && method == PaymentMethodEnum.UPI && !includeCharge);
+            await CheckPdfAsync(document.Id, document.PdfFileName, !cash && method == PaymentMethodEnum.UPI && !includeCharge,
+                method == PaymentMethodEnum.BankTransfer);
         }
         var retry = await Client.PostAsJsonAsync("/api/fee-collections", input, JsonOptions);
         retry.StatusCode.ShouldBe(HttpStatusCode.Created);
@@ -143,7 +146,8 @@ public class ReceiptLifecycleApi_Tests : ShikshaMitraApiTestBase
                     official.TotalPaidAmount.ShouldBe(original.TotalPaidAmount);
                     official.PaymentMethodLabel.ShouldBe(original.PaymentMethodLabel);
                     official.ReceiptKindLabel.ShouldStartWith("Official Receipt");
-                    await CheckPdfAsync(official.Id, official.PdfFileName, method == PaymentMethodEnum.UPI && !includeCharge);
+                    await CheckPdfAsync(official.Id, official.PdfFileName, method == PaymentMethodEnum.UPI && !includeCharge,
+                        method == PaymentMethodEnum.BankTransfer);
                 }
             }
             var duplicate = await Client.PatchAsJsonAsync(actionUrl, new { remarks = "Duplicate synthetic decision" }, JsonOptions);
@@ -159,7 +163,7 @@ public class ReceiptLifecycleApi_Tests : ShikshaMitraApiTestBase
         await verifyUow.CompleteAsync();
     }
 
-    private async Task CheckPdfAsync(Guid receiptId, string filename, bool saveExample)
+    private async Task CheckPdfAsync(Guid receiptId, string filename, bool saveExample, bool bankTransfer = false)
     {
         var response = await Client.GetAsync($"/api/v1/fee-receipts/{receiptId}/pdf");
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
@@ -168,6 +172,14 @@ public class ReceiptLifecycleApi_Tests : ShikshaMitraApiTestBase
         (disposition.FileNameStar ?? disposition.FileName?.Trim('"')).ShouldBe(filename);
         var bytes = await response.Content.ReadAsByteArrayAsync();
         System.Text.Encoding.ASCII.GetString(bytes, 0, 5).ShouldBe("%PDF-");
+        if (bankTransfer)
+        {
+            var text = Accounts.Reconciliation.ReceiptPdfTextReader.Read(bytes);
+            text.ShouldContain("N123456789876");
+            text.ShouldContain("20-Oct-2026");
+            text.ShouldContain("Rahul Sharma");
+            text.ShouldContain("Synthetic Test Bank");
+        }
         var directory = Environment.GetEnvironmentVariable("RECEIPT_E2E_PDF_DIRECTORY");
         if (saveExample && !string.IsNullOrEmpty(directory))
         {

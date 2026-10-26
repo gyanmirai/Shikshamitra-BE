@@ -39523,6 +39523,9 @@ namespace ShikshaMitra.Migrations
                             b1.Property<Guid?>("ChargeId")
                                 .HasColumnType("uuid");
 
+                            b1.Property<Guid?>("LateFeeDueFeeId")
+                                .HasColumnType("uuid");
+
                             b1.Property<Guid?>("DueFeeId")
                                 .HasColumnType("uuid");
 
@@ -39565,6 +39568,8 @@ namespace ShikshaMitra.Migrations
 
                             b1.HasIndex("ChargeId");
 
+                            b1.HasIndex("LateFeeDueFeeId");
+
                             b1.HasIndex("DueFeeId")
                                 .HasDatabaseName("IX_FeeRefundLines_DueFeeId");
 
@@ -39572,7 +39577,7 @@ namespace ShikshaMitra.Migrations
 
                             b1.ToTable("Finance_FeeRefundLines", (string) null, t =>
                                 {
-                                    t.HasCheckConstraint("CK_FeeRefundLines_Source", "(\"DueFeeId\" IS NOT NULL AND \"ChargeId\" IS NULL) OR (\"DueFeeId\" IS NULL AND \"ChargeId\" IS NOT NULL)");
+                                    t.HasCheckConstraint("CK_FeeRefundLines_Source", "(CASE WHEN \"DueFeeId\" IS NULL THEN 0 ELSE 1 END + CASE WHEN \"ChargeId\" IS NULL THEN 0 ELSE 1 END + CASE WHEN \"LateFeeDueFeeId\" IS NULL THEN 0 ELSE 1 END) = 1");
                                 });
 
                             b1.WithOwner()

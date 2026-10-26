@@ -222,6 +222,7 @@ public partial class FeeReceiptAppService(
             ReceiptKind                    = receipt.ReceiptKind,
             ReceiptKindLabel               = FeeReceiptPresentation.GetLabel(receipt.ReceiptKind, receipt.ReceiptScope),
             PaymentMethodLabel             = receiptPayments.Count == 0 ? "Not recorded" : string.Join(", ", receiptPayments.Select(p => p.PaymentMethod).Distinct().OrderBy(m => m).Select(FeeReceiptPresentation.GetPaymentMethodLabel)),
+            PaymentInstruments             = receiptPayments.OrderBy(p => p.CreationTime).Select(MapPaymentInstrument).ToList(),
             PdfFileName                    = FeeReceiptPresentation.GetPdfFileName(receipt.ReceiptKind, receipt.ReceiptScope, receipt.ReceiptNumber, receipt.ReceiptDate),
             ReceiptScope                   = receipt.ReceiptScope,
             VerificationStatus             = receipt.VerificationStatus,

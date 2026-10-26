@@ -43,6 +43,99 @@ public class FeeRefundApi_Tests : ShikshaMitraApiTestBase
     }
 
     [Theory]
+    [InlineData(true, false, ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.Paid, 1250)]
+    [InlineData(false, true, ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.Paid, 1000)]
+    [InlineData(true, true, ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.InReconciliation, 1000)]
+    [InlineData(true, true, ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus.Reversed, 1000)]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Paid_Late_Fees_Should_Follow_Their_Own_Pinned_Policy_And_Settled_Evidence(
+        bool lateEnabled, bool chargesEnabled, ShikshaMitra.Finance.Fees.Collections.FeeCollectionStatus status, int expected)
+    {
+        var student = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services,
+            includePaidCharges: chargesEnabled, includePaidLateFee: lateEnabled);
+        var late = await FeeRefundTestHelper.SeedPaidLateFeeAsync(Factory.Services, student.StudentId, student.DueFeeId, status: status);
+        var url = $"{BaseUrl}/eligibility?studentId={student.StudentId}&academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}";
+        var eligibility = (await Client.GetFromJsonAsync<RefundEligibilityDto>(url, JsonOptions))!;
+        eligibility.TotalRefundable.ShouldBe(expected);
+        eligibility.FeeHeads.SelectMany(x => x.Months).Count(x => x.SourceAllocationId == late.AllocationId).ShouldBe(expected == 1250 ? 1 : 0);
+        var input = new CreateFeeRefundRequestDto
+        {
+            StudentId = student.StudentId, AcademicYearId = FeeRefundTestHelper.DefaultAcademicYearId,
+            OriginalReceiptId = late.ReceiptId, IdempotencyKey = Guid.NewGuid().ToString("N"),
+            RefundMethod = "Cash", PaymentDetails = new() { ["receivedBy"] = "QA Parent" },
+            Lines = [new() { LateFeeDueFeeId = student.DueFeeId, SourceAllocationId = late.AllocationId, Amount = 100m }]
+        };
+        var create = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+        if (expected != 1250) { create.IsSuccessStatusCode.ShouldBeFalse(); return; }
+        create.StatusCode.ShouldBe(HttpStatusCode.Created, $"{await create.Content.ReadAsStringAsync()}\n{_refundFactory.ServerErrors.LastOrDefault()}");
+        var request = (await create.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions))!;
+        request.Lines.Single().DueFeeId.ShouldBeNull();
+        request.Lines.Single().ChargeId.ShouldBeNull();
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var approve = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve", new FeeRefundActionDto
+        { ExpenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services) }, JsonOptions);
+        approve.StatusCode.ShouldBe(HttpStatusCode.OK, await approve.Content.ReadAsStringAsync());
+        (await Client.GetFromJsonAsync<RefundEligibilityDto>(url, JsonOptions))!.TotalRefundable.ShouldBe(1150m);
+        input.Lines[0].Amount = 151m;
+        var excessive = await Client.PostAsJsonAsync($"{BaseUrl}/preview", input, JsonOptions);
+        excessive.IsSuccessStatusCode.ShouldBeFalse();
+        (await excessive.Content.ReadAsStringAsync()).ShouldContain(FeeRefundErrorCodes.InsufficientRefundBalance);
+        var payout = await Client.PostAsJsonAsync($"{BaseUrl}/{request.Id}/payout", new RecordRefundPayoutDto
+        {
+            ExpenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services),
+            BankAccountId = await FeeRefundTestHelper.SeedSchoolBankAccountAsync(Factory.Services),
+            IdempotencyKey = Guid.NewGuid().ToString("N"), Method = "Cash", Amount = 100m,
+            PaymentDate = DateTimeOffset.UtcNow, EvidenceReference = "Signed late fee refund"
+        }, JsonOptions);
+        payout.StatusCode.ShouldBe(HttpStatusCode.OK, await payout.Content.ReadAsStringAsync());
+        var detail = (await Client.GetFromJsonAsync<FeeRefundRequestDto>($"{BaseUrl}/{request.Id}", JsonOptions))!;
+        detail.IsRefundSubledgerBalanced.ShouldBe(true);
+        detail.FeeHeads!.ShouldContain(x => x.FeeHeadName == "Paid late fees");
+        var after = (await Client.GetFromJsonAsync<RefundEligibilityDto>(url, JsonOptions))!;
+        after.TotalRefundable.ShouldBe(1150m);
+        after.FeeHeads.Where(x => x.FeeHeadId.HasValue).Sum(x => x.TotalRefundable).ShouldBe(1000m);
+    }
+
+    [Theory]
+    [InlineData(250, 1000, 200)]
+    [InlineData(1, 100, 0)]
+    [TestTier(TestTraits.Tiers.Critical)]
+    public async Task Paid_Late_Fees_Should_Preserve_All_Whole_Receipt_Sources_Under_A_Cap(double latePaid, int cap, int lateRefund)
+    {
+        var student = await FeeRefundTestHelper.SeedStudentWithPaidDueFeeAsync(Client, Factory.Services,
+            includePaidLateFee: true, allowPartialRefund: false, lateFeeAmount: latePaid, maximumPerRequest: cap);
+        var eligibility = (await Client.GetFromJsonAsync<RefundEligibilityDto>(
+            $"{BaseUrl}/eligibility?studentId={student.StudentId}&academicYearId={FeeRefundTestHelper.DefaultAcademicYearId}", JsonOptions))!;
+        var sources = eligibility.FeeHeads.SelectMany(x => x.Months).ToList();
+        var input = new CreateFeeRefundRequestDto
+        {
+            StudentId = student.StudentId, AcademicYearId = FeeRefundTestHelper.DefaultAcademicYearId,
+            OriginalReceiptId = sources[0].SourceReceiptId, IdempotencyKey = Guid.NewGuid().ToString("N"),
+            RefundMethod = "Cash", PaymentDetails = new() { ["receivedBy"] = "QA Parent" },
+            Lines = sources.Select(x => new CreateFeeRefundLineDto { DueFeeId = x.DueFeeId,
+                LateFeeDueFeeId = x.LateFeeDueFeeId, SourceAllocationId = x.SourceAllocationId, Amount = x.Refundable }).ToList()
+        };
+        var create = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+        create.StatusCode.ShouldBe(HttpStatusCode.Created, $"{await create.Content.ReadAsStringAsync()}\n{_refundFactory.ServerErrors.LastOrDefault()}");
+        var request = (await create.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions))!;
+        request.CalculatedAmount.ShouldBe(cap);
+        request.Lines.Count.ShouldBe(2);
+        request.Lines.Single(x => x.LateFeeDueFeeId.HasValue).CalculatedAmount.ShouldBe(lateRefund);
+        var replay = await Client.PostAsJsonAsync(BaseUrl, input, JsonOptions);
+        replay.StatusCode.ShouldBe(HttpStatusCode.Created, await replay.Content.ReadAsStringAsync());
+        (await replay.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions))!.Id.ShouldBe(request.Id);
+        var checkerId = Guid.NewGuid();
+        await FeeRefundTestHelper.SeedCheckerScopeAsync(Factory.Services, checkerId);
+        using var checker = CreateClientAs(checkerId);
+        var approval = await checker.PostAsJsonAsync($"{BaseUrl}/{request.Id}/approve", new FeeRefundActionDto
+        { ExpenseCategoryId = await FeeRefundTestHelper.SeedRefundExpenseCategoryAsync(Factory.Services) }, JsonOptions);
+        approval.StatusCode.ShouldBe(HttpStatusCode.OK, await approval.Content.ReadAsStringAsync());
+        (await approval.Content.ReadFromJsonAsync<FeeRefundRequestDto>(JsonOptions))!.ApprovedAmount.ShouldBe(cap);
+    }
+
+    [Theory]
     [InlineData(true, true)]
     [InlineData(false, true)]
     [InlineData(true, false)]

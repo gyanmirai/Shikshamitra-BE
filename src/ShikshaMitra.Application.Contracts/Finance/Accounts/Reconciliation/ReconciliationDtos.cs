@@ -37,6 +37,9 @@ public class ReconciliationListItemDto
     public PaymentMethodEnum PaymentMethod { get; set; }
     public string PaymentMethodLabel { get; set; } = string.Empty;
     public double Amount { get; set; }
+    public Guid? BankAccountId { get; set; }
+    /// <summary>Receiving bank label captured at collection; account number is masked.</summary>
+    public string? BankLabel { get; set; }
 
     /// <summary>Instrument-specific details (cheque no., UPI ID, transaction ref, etc.).</summary>
     public Dictionary<string, string?> InstrumentDetails { get; set; } = [];

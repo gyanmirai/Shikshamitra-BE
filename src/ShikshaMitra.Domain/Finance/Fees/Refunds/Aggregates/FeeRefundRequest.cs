@@ -190,11 +190,12 @@ public class FeeRefundRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     {
         EnsureTransitionAny(FeeRefundStatus.Approved, FeeRefundStatus.Submitted, FeeRefundStatus.UnderReview);
         var reservationList = reservations.ToList();
-        if (reservationList.Count != _lines.Count || reservationList.Any(r => r.FeeRefundRequestId != Id) ||
+        if (reservationList.Count != _lines.Count(l => l.CalculatedAmount > 0) || reservationList.Any(r => r.FeeRefundRequestId != Id) ||
             reservationList.GroupBy(r => r.FeeRefundLineId).Any(g => g.Count() != 1))
             throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
         foreach (var line in _lines)
         {
+            if (line.CalculatedAmount == 0) { line.Approve(0); continue; }
             var reservation = reservationList.SingleOrDefault(r => r.FeeRefundLineId == line.Id)
                 ?? throw new BusinessException(FeeRefundErrorCodes.ReservationConflict);
             if (reservation.ChargeId != line.ChargeId || reservation.DueFeeId != line.DueFeeId || reservation.SourceAllocationId != line.SourceAllocationId ||

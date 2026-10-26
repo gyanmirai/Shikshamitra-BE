@@ -126,6 +126,8 @@ public class FeeRefundLineDto
     public Guid Id { get; set; }
 
     public Guid? ChargeId { get; set; }
+    /// <summary>Due line whose collected late fee is being refunded; distinct from principal.</summary>
+    public Guid? LateFeeDueFeeId { get; set; }
     public Guid? DueFeeId { get; set; }
 
     public Guid? SourceAllocationId { get; set; }

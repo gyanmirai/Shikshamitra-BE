@@ -68,6 +68,6 @@ public class FeeReceiptBlobManager(
     public string BuildBlobName(Guid receiptId, FeeReceiptKind kind)
     {
         var tenantSegment = currentTenant.Id?.ToString() ?? "host";
-        return $"fee-receipts/{tenantSegment}/v2/{kind}/{receiptId}.pdf";
+        return $"fee-receipts/{tenantSegment}/v3/{kind}/{receiptId}.pdf";
     }
 }

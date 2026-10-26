@@ -48,6 +48,8 @@ public class CreateFeeRefundRequestDto
 public class CreateFeeRefundLineDto
 {
     public Guid? ChargeId { get; set; }
+    /// <summary>Due line whose collected late fee is being refunded; distinct from principal.</summary>
+    public Guid? LateFeeDueFeeId { get; set; }
     public Guid? DueFeeId { get; set; }
 
     [Required]
@@ -87,10 +89,11 @@ public class CreateFeeRefundRequestDtoValidator : AbstractValidator<CreateFeeRef
 
         RuleForEach(x => x.Lines).ChildRules(line =>
         {
-            line.RuleFor(l => l).Must(l => l.DueFeeId.HasValue != l.ChargeId.HasValue)
-                .WithMessage("Specify either a fee due or a charge.");
+            line.RuleFor(l => l).Must(l => (l.DueFeeId.HasValue ? 1 : 0) + (l.ChargeId.HasValue ? 1 : 0) + (l.LateFeeDueFeeId.HasValue ? 1 : 0) == 1)
+                .WithMessage("Specify exactly one fee due, charge, or paid late fee.");
             line.RuleFor(l => l.DueFeeId).NotEqual(Guid.Empty).When(l => l.DueFeeId.HasValue);
             line.RuleFor(l => l.ChargeId).NotEqual(Guid.Empty).When(l => l.ChargeId.HasValue);
+            line.RuleFor(l => l.LateFeeDueFeeId).NotEqual(Guid.Empty).When(l => l.LateFeeDueFeeId.HasValue);
             line.RuleFor(l => l.SourceAllocationId).NotEmpty();
             line.RuleFor(l => l.Amount).GreaterThan(0);
         });

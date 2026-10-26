@@ -39,13 +39,15 @@ public static class ReconciliationTestHelper
             Guid academicYearId,
             Guid feeHeadId,
             double amount = 1500d,
-            PaymentMethodEnum method = PaymentMethodEnum.Cheque)
+            PaymentMethodEnum method = PaymentMethodEnum.Cheque,
+            System.Collections.Generic.Dictionary<string, object?>? details = null)
     {
         var (studentId, _) = await Finance.ConcessionRequests.ConcessionRequestTestHelper.CreateStudentAsync(services);
 
         var dueFeeId = await FeeCollectionTestHelper.SeedDueFeeAsync(services, studentId, feeHeadId, amount);
 
         var input = BuildNonCashCollectFeeInput(studentId, academicYearId, feeHeadId, dueFeeId, amount, method);
+        if (details != null) input.Payments[0].Details = details;
         using (var scope = services.CreateScope())
         using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(Guid.Parse("11111111-1111-1111-1111-111111111111")))
         using (var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true))

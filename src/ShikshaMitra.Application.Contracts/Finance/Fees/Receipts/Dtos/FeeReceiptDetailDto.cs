@@ -16,6 +16,8 @@ public class FeeReceiptDetailDto
     public FeeReceiptKind ReceiptKind { get; set; }
     public string ReceiptKindLabel { get; set; } = string.Empty;
     public string PaymentMethodLabel { get; set; } = string.Empty;
+    /// <summary>Original collection evidence, shared by provisional and official receipts.</summary>
+    public List<FeeReceiptPaymentInstrumentDto> PaymentInstruments { get; set; } = [];
     public string PdfFileName { get; set; } = string.Empty;
     public FeeReceiptScope ReceiptScope { get; set; }
 

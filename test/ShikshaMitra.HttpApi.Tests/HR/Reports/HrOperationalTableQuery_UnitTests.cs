@@ -38,6 +38,7 @@ public class HrOperationalTableQuery_UnitTests(ITestOutputHelper output)
 		value.ShouldBe(expected);
 		var rows = new[] { new Dictionary<string, object?> { [field.Id] = value } };
 		new HrReportingTableQuery(new() { Filters = [Filter(field.Id, "equals", expected)] }, [field], "Asia/Kolkata").Apply(rows, item => item).Count().ShouldBe(1);
+		new HrReportingTableQuery(new() { Filters = [Filter(field.Id, "equals", expected == "Present" ? "Absent" : "Present")] }, [field], "Asia/Kolkata").Apply(rows, item => item).ShouldBeEmpty();
 		HrTableExportProjection.Value("hr-attendance-import-rows", field.Id, row).ShouldBe(expected);
 	}
 	[Theory]
@@ -78,6 +79,19 @@ public class HrOperationalTableQuery_UnitTests(ITestOutputHelper output)
 	{
 		var row = JsonSerializer.SerializeToElement(new { sections = new[] { new { name = "Section", weight = 25, sqaaDomain = 3 } } });
 		HrTableExportProjection.Value("hr-performance-templates", "sections", row).ShouldBe("Section: 25% Leadership & Governance");
+	}
+	[Fact]
+	public void Formatted_Range_Sorting_Should_Remain_Chronological_In_Both_Directions()
+	{
+		var field = new HrReportFieldDto { Id = "effective", Type = "string" };
+		var rows = new[] { "2026-12-01", "2026-02-20", "2025-10-26" }.Select(from => {
+			var row = JsonSerializer.SerializeToElement(new { effectiveFrom = from });
+			return new Dictionary<string, object?> { [field.Id] = HrTableExportProjection.QueryValue("hr-policy-calendar", field, row, row, new(2026, 10, 26)) };
+		}).ToList();
+		foreach (var direction in new[] { "asc", "desc" }) {
+			var sorted = new HrReportingTableQuery(new() { Sorts = [new() { Column = field.Id, Direction = direction }] }, [field], "Asia/Kolkata").Apply(rows, item => item).Select(item => ((HrOperationalTextValue)item[field.Id]!).Order).ToList();
+			sorted.ShouldBe(direction == "asc" ? new object?[] { "2025-10-26", "2026-02-20", "2026-12-01" } : new object?[] { "2026-12-01", "2026-02-20", "2025-10-26" });
+		}
 	}
 	[Fact]
 	public void Register_Exception_And_Editability_Queries_Should_Only_Match_Visible_Positive_Labels()

@@ -3,7 +3,7 @@ module: institute-setup
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -69,6 +69,31 @@ Confirm rollback preserves all old school records.
 Do not run a fixture or rollback against a live school database.
 The [frontend testing page](../../../../Shikshamitra-FE/docs/initial-setup/testing.md) owns wizard and browser checks.
 
+## Academic field formatting
+
+Run `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~AcademicNameFormatter_Tests` for all case modes, literal Default input, Unicode words, and invalid-mode handling.
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~AcademicFieldFormattingAuthorization_Tests` for exact read/write permissions and host denial on direct calls.
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~AcademicFieldFormattingApi_Tests` for the real GET/PUT route, default rules, tenant isolation, atomic invalid-input rejection, permissions, all four create paths, normalized duplicates/length checks, and historical-name preservation after policy changes and unrelated edits.
+These HTTP checks use disposable SQLite and synthetic authentication; deployed-school acceptance remains separate.
+`InitialSetupApi_Tests.FieldFormatting.cs` covers repeated raw structure drafts, legacy Default names, changes between Uppercase and CamelCase and from CamelCase to Capitalize/PascalCase, and unrelated age/strength updates without renaming saved records.
+`AcademicFieldFormattingApi_Tests` also verifies Uppercase settings round trips, creation at all four mutable levels, unchanged historical names, and rejection of mode 5 and nondefault board rules.
+`AcademicNamePreviewApi_Tests` covers authoritative Unicode previews including accented letters, Greek, sharp S and whitespace-preserving Uppercase, literal Default and empty inputs, invalid modes and bounds, View permission, host denial, and unchanged settings.
+`AcademicNamePreviewAuthorization_Tests` checks the same authorization/tenant boundary on direct calls and verifies preview works without settings storage.
+The [frontend testing guide](../../../../Shikshamitra-FE/docs/institute-setup/testing.md) owns the popover and live-preview browser checks.
+
+## Academic hierarchy order
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~AcademicChildOrder|FullyQualifiedName~AcademicStageOrder"` for persisted stage/class/division sequences, default lists/lookups, append behavior, invalid sibling sets and scoped authorization.
+HTTP coverage belongs in `AcademicOrderApi_Tests` and `AcademicStageOrderApi_Tests`; run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~AcademicOrderApi_Tests|FullyQualifiedName~AcademicStageOrderApi_Tests"` for real route binding, permissions, isolation and response order.
+Use isolated build outputs if another host holds assemblies open.
+Check EF model consistency and inspect generated migration SQL; apply UP/DOWN only to a disposable PostgreSQL database before deployment.
+The production-screen [frontend fixture](../../../../Shikshamitra-FE/docs/institute-setup/testing.md#academic-setup-regressions) covers browser persistence, cancellation and responsive controls against the disposable SQLite API bridge.
+These local checks do not establish deployed acceptance or PostgreSQL migration execution.
+
+Run `dotnet test test/ShikshaMitra.EntityFrameworkCore.Tests --filter AcademicStageOrderRepairMigration_Tests` for additive repair discovery, target-model consistency, stage-only operations and data-preserving rollback.
+For PostgreSQL repair verification, use disposable fixtures with both a missing stage column and existing saved positions; verify tenant/medium creation-order backfill, repeat execution and unchanged record data.
+On 2026-10-26, the compiled repair SQL passed both cases against session-local PostgreSQL temporary tables, with every transaction rolled back and the persistent stage schema unchanged. This verifies repair behavior without applying the migration to school data.
+
 ## Documentation checks
 
 Run this command after editing active Institute Setup docs.
@@ -78,6 +103,14 @@ powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module 
 ```
 
 ## Focused backend tests
+
+### Floor room limits
+
+Run `dotnet test test/ShikshaMitra.Application.Tests/ShikshaMitra.Application.Tests.csproj --filter "FullyQualifiedName~RoomFloorCapacity_Tests|FullyQualifiedName~RoomSearch_Tests|FullyQualifiedName~RoomAuthorization_Tests|FullyQualifiedName~RoomImagePersistence_Tests" --artifacts-path .artifacts/room-capacity-tests`.
+The capacity regressions cover full-floor creation, rejected floor moves with the original assignment retained, editing an existing room on a full floor, increasing/decreasing limits, building response counts, cross-tenant rejection before insertion and cross-tenant building deletion before its floors are touched.
+The application harness uses disposable SQLite and disables transactions; it validates business behavior and tenant boundaries but does not execute the PostgreSQL building-row lock.
+Simultaneous PostgreSQL room saves and building limit changes require separate disposable-database concurrency evidence before claiming that race coverage.
+On 2026-10-26, the focused set passed 25 tests with zero failures/skips using the command above plus `--no-restore -p:RunAnalyzers=false`; existing compiler warnings remain.
 
 Use these tests as the first validation set when Rooms Management affects Tenant Settings or scheduling.
 

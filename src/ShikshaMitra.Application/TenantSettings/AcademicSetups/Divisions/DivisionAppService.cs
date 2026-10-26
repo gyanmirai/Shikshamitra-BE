@@ -7,6 +7,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using ShikshaMitra.Constants.Permissions;
+using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using Volo.Abp.Authorization;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.TenantSettings.Divisions;
 
@@ -14,6 +18,8 @@ namespace ShikshaMitra.TenantSettings.Divisions;
 public class DivisionAppService(
 	IDivisionRepository divisionRepository,
 	DivisionManager divisionManager,
+	IStandardRepository standardRepository,
+	AcademicReorderAccessService reorderAccessService,
 	AcademicOrganizationScopeAccessService scopeAccessService) : CrudAppService<
 		Division,
 		DivisionDto,
@@ -22,6 +28,23 @@ public class DivisionAppService(
 		CreateUpdateDivisionDto>(divisionRepository),
 	IDivisionAppService
 {
+	[Authorize(ShikshaMitraSubmodulePermissions.InstituteSetup.AcademicSetup.Edit)]
+	[UnitOfWork(true)]
+	public async Task ReorderAsync(Guid standardId, ReorderAcademicChildrenDto input)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.InstituteSetup.AcademicSetup.Edit);
+		var standard = await standardRepository.GetAsync(standardId, includeDetails: false);
+		var siblings = await divisionRepository.GetListAsync(x => x.StandardId == standardId && x.TenantId == CurrentTenant.Id);
+		await reorderAccessService.CheckDivisionsAsync(standard, siblings);
+		divisionManager.Reorder(siblings, input.Ids);
+		await divisionRepository.UpdateManyAsync(siblings, autoSave: true);
+	}
+
+	protected override IQueryable<Division> ApplySorting(IQueryable<Division> query, PagedAndSortedResultRequestDto input) =>
+		string.IsNullOrWhiteSpace(input.Sorting)
+			? query.OrderBy(x => x.StandardId).ThenBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id)
+			: base.ApplySorting(query, input);
+
 	public override async Task<DivisionDto> CreateAsync(CreateUpdateDivisionDto input)
 	{
 		Division division = await divisionManager.CreateAsync(

@@ -130,6 +130,8 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 								stageSpec.Name,
 								bannerPicture: null,
 								medium.Id);
+							stage.SetSortOrder(checked(stagesByKey.Values
+								.Where(x => x.EducationMediumId == medium.Id).Select(x => x.SortOrder).DefaultIfEmpty(-1).Max() + 1));
 							stagesByKey[(medium.Id, stageSpec.Name)] = stage;
 							stagesToInsert.Add(stage);
 						}
@@ -145,6 +147,8 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 									standardSpec.AgeLowerLimit,
 									stage.Id,
 									shiftId: null);
+								standard.SetSortOrder(checked(standardsByKey.Values
+									.Where(x => x.EducationMediumStageId == stage.Id).Select(x => x.SortOrder).DefaultIfEmpty(-1).Max() + 1));
 								standardsByKey[(stage.Id, standardSpec.Name)] = standard;
 								standardsToInsert.Add(standard);
 							}
@@ -163,6 +167,8 @@ public class AcademicSetupSeederContributor : BaseSeederContributor
 									standard.Id,
 									divisionSpec.Strength,
 									roomNumber: "B101");
+								division.SetSortOrder(checked(divisionsByKey.Values
+									.Where(x => x.StandardId == standard.Id).Select(x => x.SortOrder).DefaultIfEmpty(-1).Max() + 1));
 								divisionsByKey[(standard.Id, divisionSpec.Name)] = division;
 								divisionsToInsert.Add(division);
 							}

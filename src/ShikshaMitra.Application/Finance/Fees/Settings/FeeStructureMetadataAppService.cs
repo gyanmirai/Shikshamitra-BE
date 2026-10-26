@@ -59,12 +59,12 @@ public class FeeStructureMetadataAppService(
 			.Where(x => mediumIds.Contains(x.EducationMediumStage.EducationMediumId)).Select(standard => new
 			{
 				MediumId = standard.EducationMediumStage.EducationMediumId,
-				StageId = standard.EducationMediumStageId, StandardId = standard.Id, standard.Name, standard.AgeLowerLimit
+				StageId = standard.EducationMediumStageId, StageName = standard.EducationMediumStage.Name, StageSortOrder = standard.EducationMediumStage.SortOrder,
+				StandardId = standard.Id, standard.Name, standard.SortOrder
 			}));
-		var accessible = all.ToDictionary(x => x.Id, x => StandardAcademicOrder.Sort(
-			classRows.Where(c => c.MediumId == x.MediumId &&
-				UserScopeQueryExtensions.HasAccessToEntity(new MetadataScope(x.AcademicYearId, x.BoardId, x.MediumId, c.StageId, c.StandardId), scope)),
-			c => c.Name, c => c.AgeLowerLimit, c => c.StandardId)
+		var accessible = all.ToDictionary(x => x.Id, x => classRows.Where(c => c.MediumId == x.MediumId &&
+				UserScopeQueryExtensions.HasAccessToEntity(new MetadataScope(x.AcademicYearId, x.BoardId, x.MediumId, c.StageId, c.StandardId), scope))
+			.OrderBy(c => c.StageSortOrder).ThenBy(c => c.StageName).ThenBy(c => c.StageId).ThenBy(c => c.SortOrder).ThenBy(c => c.Name).ThenBy(c => c.StandardId)
 			.Select(c => new FeeStructureClassOptionDto { Id = c.StandardId, Name = c.Name }).ToList());
 		var visible = all.Where(x => accessible[x.Id].Count > 0).ToList();
 		var totalCount = visible.Count;

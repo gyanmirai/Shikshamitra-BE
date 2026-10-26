@@ -47,6 +47,7 @@ public class AcademicOrganizationOptionsAppService(
 			select new AcademicOrganizationOptionRow(
 				stage.Id,
 				stage.Name,
+				stage.SortOrder,
 				medium.Id,
 				medium.Name,
 				board.Id,
@@ -71,7 +72,9 @@ public class AcademicOrganizationOptionsAppService(
 		var items = scopedRows
 			.OrderBy(x => x.BoardName)
 			.ThenBy(x => x.MediumName)
+			.ThenBy(x => x.StageSortOrder)
 			.ThenBy(x => x.StageName)
+			.ThenBy(x => x.StageId)
 			.Select(x => new AcademicOrganizationOptionDto
 			{
 				Id = x.StageId,
@@ -91,6 +94,7 @@ public class AcademicOrganizationOptionsAppService(
 	private sealed record AcademicOrganizationOptionRow(
 		Guid StageId,
 		string StageName,
+		int StageSortOrder,
 		Guid MediumId,
 		string MediumName,
 		Guid BoardId,

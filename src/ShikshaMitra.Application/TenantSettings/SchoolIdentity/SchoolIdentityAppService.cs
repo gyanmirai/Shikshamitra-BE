@@ -52,12 +52,7 @@ public partial class SchoolIdentityAppService(
 		if (profile != null && profile.ConcurrencyStamp != input.ConcurrencyStamp) throw new AbpDbConcurrencyException();
 		var original = profile?.Choices ?? new();
 		if (input.Choices.Signature != null) await AuthorizationService.CheckAsync(SchoolIdentityPermissions.AccessSignature);
-		var choices = new SchoolIdentityChoices
-		{
-			Logo = SchoolIdentityMapping.Domain(input.Choices.Logo),
-			Banner = SchoolIdentityMapping.Domain(input.Choices.Banner),
-			Signature = input.Choices.Signature == null ? original.Signature : SchoolIdentityMapping.Domain(input.Choices.Signature)
-		}.Validated();
+		var choices = await PrepareChoicesAsync(input.Choices, original);
 		await RetainAssetsAsync(choices, original);
 		if (profile == null)
 		{
@@ -194,9 +189,7 @@ public partial class SchoolIdentityAppService(
 			await access.EnsureAsync(input.BoardId, input.MediumId, manage: true, organizationId: input.OrganizationId);
 			var original = (await reader.FindAsync(input.BoardId, input.MediumId, input.OrganizationId))?.Choices ?? new();
 			if (input.Choices.Signature != null && !signature) throw new AbpAuthorizationException();
-			draft = new SchoolIdentityChoices { Logo = SchoolIdentityMapping.Domain(input.Choices.Logo),
-				Banner = SchoolIdentityMapping.Domain(input.Choices.Banner), Signature = input.Choices.Signature == null
-					? original.Signature : SchoolIdentityMapping.Domain(input.Choices.Signature) }.Validated();
+			draft = await PrepareChoicesAsync(input.Choices, original);
 			await RetainAssetsAsync(draft, original, retain: false);
 		}
 		var profile = await reader.ReadAsync(input.BoardId, input.MediumId, year, signature, draft, input.OrganizationId);

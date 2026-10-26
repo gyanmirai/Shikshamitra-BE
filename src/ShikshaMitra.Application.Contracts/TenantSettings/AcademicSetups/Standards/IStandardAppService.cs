@@ -14,4 +14,5 @@ public interface IStandardAppService :
         CreateUpdateStandardDto>
 {
 	Task<List<StandardDto>> GetStandardsByEducationMediumId(Guid educationMediumId);
+	Task ReorderAsync(Guid educationMediumStageId, ReorderAcademicChildrenDto input);
 }

@@ -3,7 +3,7 @@ module: institute-setup
 domain: product
 content_type: Conceptual
 status: canonical
-updated_on: 2026-10-21
+updated_on: 2026-10-26
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -12,6 +12,27 @@ audience: humans-and-agents
 
 TL;DR: Institute Setup owns durable first-login configuration and Rooms Management.
 Rooms Management stores buildings, floors, room types, and rooms used by academic scheduling and operations.
+
+## Academic field formatting
+
+Each school can choose Default, Capitalize each word, camelCase, PascalCase, or Uppercase independently for new medium, stage, standard, and division names.
+Default preserves the current name-entry behavior; existing trimming and validation still apply.
+Uppercase converts letters with .NET invariant casing without changing internal whitespace; existing entity trimming and validation still apply.
+The server formats the raw name once during creation, before duplicate and entity-length checks.
+Changing a rule never rewrites saved records, and update/read paths do not apply the current rule to historical names.
+CBSE and GSEB keep their canonical spelling; the board rule is fixed to Default.
+Rules belong to the current tenant, are independent of academic year, and persist through ABP setting management without a schema migration.
+The [API guide](api.md#academic-field-formatting) owns payloads, permissions, and validation.
+Initial setup retries reuse an exact raw-name match first, then the current formatted name, then the remaining supported case representations within the same parent.
+This deterministic lookup preserves legacy names and retries after rule changes without renaming reused records.
+
+## Academic hierarchy order
+
+Schools can save a display order for stages within a medium, classes within a stage and divisions within a class.
+Saved order controls default hierarchy and selection-list reads independently of creation time; newly created records append.
+Reordering changes positions only and requires Academic Setup Edit plus access to the complete sibling group in the active tenant.
+An incomplete, duplicated or unrelated sequence is rejected atomically.
+The [API guide](api.md#academic-hierarchy-order) owns endpoint contracts and rollout requirements.
 
 ## Reports
 
@@ -79,7 +100,14 @@ Rooms Management changes must preserve these rules.
 | A room must reference valid building and room type records | Timetable and exam assignments depend on those links |
 | Capacity and benches must remain valid numeric values | Scheduling and room allocation use them |
 | Building floor data must stay consistent with room floor data | Staff need a reliable physical location map |
+| Creating or moving a room must fit the selected floor's configured room limit | A full floor needs a building configuration update before another room can be added |
+| A floor's room limit cannot fall below its saved room count | Building edits cannot invalidate existing room assignments |
 | Delete behavior must respect downstream references | Timetable and examination flows may reference rooms |
+
+An existing room can be edited on a full floor because its own place is excluded from the capacity check.
+Saved room counts belong to the active tenant and are returned with building floor details.
+PostgreSQL room placements, building updates and building deletions lock the same tenant-owned building row until their transaction commits, serializing limit checks with the writes they protect and keeping the parent-before-floor lock order consistent.
+Room limits count room records; they are separate from a room's student seating capacity.
 
 ## Known partial surfaces
 

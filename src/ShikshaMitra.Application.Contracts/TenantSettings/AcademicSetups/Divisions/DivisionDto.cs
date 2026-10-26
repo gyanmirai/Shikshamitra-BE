@@ -10,6 +10,7 @@ public class DivisionDto : AuditedEntityDto<Guid>
 	public int HeadCount { get; set; }
 
 	public int Strength { get; set; }
+	public int SortOrder { get; set; }
 	public int CurrentStudentCount { get; set; }
 	public int AvailableSeats { get; set; }
 	public int MaleCount { get; set; }

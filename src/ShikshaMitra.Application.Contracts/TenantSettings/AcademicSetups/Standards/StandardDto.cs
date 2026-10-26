@@ -10,6 +10,7 @@ public class StandardDto : AuditedEntityDto<Guid>
 	public string Name { get; set; }
 
 	public int AgeLowerLimit { get; set; }
+	public int SortOrder { get; set; }
 
 	public List<DivisionDto> Divisions { get; set; }
 

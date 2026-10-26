@@ -27335,6 +27335,121 @@ namespace ShikshaMitra.Migrations
                     b.ToTable("AppAdmissionApplicationDecisionHistories", (string) null);
                 });
 
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionApplicationNumberCounter", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<int>("LastRuleVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastYearText")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<long>("NextValue")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(48)
+                        .HasColumnType("character varying(48)");
+
+                    b.Property<Guid>("StoredTenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoredTenantId", "ScopeKey")
+                        .IsUnique();
+
+                    b.ToTable("AppAdmissionApplicationNumberCounters", (string) null);
+                });
+
+            modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionApplicationNumberingRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ConcurrencyStamp")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("ConcurrencyStamp");
+
+                    b.Property<DateTime>("CreationTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("CreationTime");
+
+                    b.Property<Guid?>("CreatorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("CreatorId");
+
+                    b.Property<int>("Digits")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ExtraProperties")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("ExtraProperties");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("ResetPolicy")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Separator")
+                        .IsRequired()
+                        .HasMaxLength(1)
+                        .HasColumnType("character varying(1)");
+
+                    b.Property<long>("StartingNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("StoredTenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Suffix")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("TenantId");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("YearFormat")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoredTenantId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("AppAdmissionApplicationNumberingRules", (string) null);
+                });
+
             modelBuilder.Entity("ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionApplicationStageInstance", b =>
                 {
                     b.Property<Guid>("Id")
@@ -33362,6 +33477,13 @@ namespace ShikshaMitra.Migrations
 
                     b.HasIndex("StandardId");
 
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.HasIndex("TenantId", "StandardId", "SortOrder");
+
                     b.ToTable("academic_Divisions", (string) null);
                 });
 
@@ -33500,6 +33622,13 @@ namespace ShikshaMitra.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EducationMediumId");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.HasIndex("TenantId", "EducationMediumId", "SortOrder");
 
                     b.ToTable("academic_EducationMediumStages", (string) null);
                 });
@@ -34676,6 +34805,13 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("EducationMediumStageId");
 
                     b.HasIndex("ShiftId");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.HasIndex("TenantId", "EducationMediumStageId", "SortOrder");
 
                     b.ToTable("academic_Standards", (string) null);
                 });

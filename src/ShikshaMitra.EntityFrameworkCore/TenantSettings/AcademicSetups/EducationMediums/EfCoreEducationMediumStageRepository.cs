@@ -31,6 +31,7 @@ public class EfCoreEducationMediumStageRepository(IDbContextProvider<ShikshaMitr
 
 		return await dbSet
 			.Where(educationalMediumStage => educationalMediumStage.EducationMediumId == educationMediumId)
+			.OrderBy(stage => stage.SortOrder).ThenBy(stage => stage.Name).ThenBy(stage => stage.Id)
 			.ToListAsync();
 	}
 }

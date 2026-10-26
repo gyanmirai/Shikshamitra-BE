@@ -2,15 +2,18 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using ShikshaMitra.TenantSettings.Formatting;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 
-public class BuildingAppService(IRepository<Building, Guid> buildingRepository, IRepository<Floor, Guid> floorRepository)
+public class BuildingAppService(IRepository<Building, Guid> buildingRepository, IRepository<Floor, Guid> floorRepository,
+	BuildingRoomCapacityManager capacity)
 : ApplicationService, IBuildingAppService
 {
+	private InstituteFieldFormattingStore Formatting => LazyServiceProvider.LazyGetRequiredService<InstituteFieldFormattingStore>();
 	public async Task<List<BuildingDto>> GetListAsync()
 	{
 		var buildings = await buildingRepository
@@ -18,7 +21,9 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 
 		var buildingList = await AsyncExecuter.ToListAsync(buildings);
 
-		return ObjectMapper.Map<List<Building>, List<BuildingDto>>(buildingList);
+		var result = ObjectMapper.Map<List<Building>, List<BuildingDto>>(buildingList);
+		await PopulateRoomCountsAsync(result);
+		return result;
 	}
 
 	public async Task<BuildingDto> GetAsync(Guid id)
@@ -33,16 +38,19 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			throw new UserFriendlyException("Building not found");
 		}
 
-		return ObjectMapper.Map<Building, BuildingDto>(entity);
+		var result = ObjectMapper.Map<Building, BuildingDto>(entity);
+		await PopulateRoomCountsAsync([result]);
+		return result;
 	}
 
 	public async Task<BuildingDto> CreateAsync(CreateBuildingDto input)
 	{
+		var rules = await Formatting.GetAsync("buildings");
 		var building = new Building
 		{
-			BuildingName = input.BuildingName,
+			BuildingName = InstituteFieldFormattingCatalog.Required(rules, "buildingName", input.BuildingName, BuildingConsts.MaxNameLength),
 			TotalFloors = input.TotalFloors,
-			Description = input.Description
+			Description = InstituteFieldFormattingCatalog.Optional(rules, "description", input.Description, BuildingConsts.MaxDescriptionLength)
 		};
 
 		var createdBuilding = await buildingRepository.InsertAsync(building, autoSave: true);
@@ -51,7 +59,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 		{
 			var floor = new Floor
 			{
-				FloorName = floorDto.FloorName,
+				FloorName = InstituteFieldFormattingCatalog.Required(rules, "floorName", floorDto.FloorName, FloorConsts.MaxFloorNameLength),
 				TotalRoom = floorDto.TotalRoom,
 				BuildingId = createdBuilding.Id,
 				FloorNo = floorDto.FloorNo,
@@ -66,13 +74,8 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 
 	public async Task<BuildingDto> UpdateAsync(Guid id, UpdateBuildingDto input)
 	{
+		await capacity.LockBuildingAsync(id);
 		var building = await buildingRepository.GetAsync(id);
-
-		building.BuildingName = input.BuildingName;
-		building.TotalFloors = input.TotalFloors;
-		building.Description = input.Description;
-
-		await buildingRepository.UpdateAsync(building, autoSave: true);
 
 		var existingFloors = await AsyncExecuter.ToListAsync(
 			(await floorRepository.GetQueryableAsync()).Where(f => f.BuildingId == id)
@@ -98,6 +101,14 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			}
 		}
 
+		foreach (var floorDto in input.FloorsToUpdate)
+			await capacity.EnsureFloorLimitAsync(existingFloors.First(floor => floor.Id == floorDto.Id), floorDto.TotalRoom);
+
+		building.BuildingName = input.BuildingName;
+		building.TotalFloors = input.TotalFloors;
+		building.Description = input.Description;
+		await buildingRepository.UpdateAsync(building, autoSave: true);
+
 		// Delete floors explicitly marked for deletion
 		var floorsToDelete = existingFloors
 			.Where(f => input.FloorIdsToDelete.Contains(f.Id))
@@ -122,11 +133,12 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 		}
 
 		// Add new floors
+		var rules = input.FloorsToAdd.Count > 0 ? await Formatting.GetAsync("buildings") : null;
 		foreach (var floorDto in input.FloorsToAdd)
 		{
 			var newFloor = new Floor
 			{
-				FloorName = floorDto.FloorName,
+				FloorName = InstituteFieldFormattingCatalog.Required(rules!, "floorName", floorDto.FloorName, FloorConsts.MaxFloorNameLength),
 				TotalRoom = floorDto.TotalRoom,
 				FloorNo = floorDto.FloorNo,
 				BuildingId = id
@@ -139,8 +151,16 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 		return await GetAsync(id);
 	}
 
+	private async Task PopulateRoomCountsAsync(List<BuildingDto> buildings)
+	{
+		var counts = await capacity.GetRoomCountsAsync(buildings.Select(building => building.Id).ToArray());
+		foreach (var floor in buildings.SelectMany(building => building.Floors))
+			floor.RoomCount = counts.GetValueOrDefault(floor.Id);
+	}
+
 	public async Task DeleteAsync(Guid id)
 	{
+		await capacity.LockBuildingAsync(id);
 		var floors = await AsyncExecuter.ToListAsync(
 			(await floorRepository.GetQueryableAsync()).Where(f => f.BuildingId == id)
 		);

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Uow;
+using ShikshaMitra.TenantSettings.Formatting;
 
 namespace ShikshaMitra.TenantSettings.SchoolDocuments;
 
@@ -18,7 +19,10 @@ public partial class SchoolDocumentAppService
 		var tenantId = RequireTenant();
 		if (input.RetainedFileIds.Count != 0) throw new BusinessException(SchoolDocumentConsts.InvalidFiles);
 		SchoolDocumentFileRules.ValidateCount(input.Files.Count);
-		var document = new SchoolDocument(GuidGenerator.Create(), tenantId, input.Name, input.Category, input.Notes,
+		var rules = await LazyServiceProvider.LazyGetRequiredService<InstituteFieldFormattingStore>().GetAsync("schoolDocuments");
+		var name = InstituteFieldFormattingCatalog.Required(rules, "name", input.Name, SchoolDocumentConsts.MaxNameLength);
+		var notes = InstituteFieldFormattingCatalog.Optional(rules, "notes", input.Notes, SchoolDocumentConsts.MaxNotesLength);
+		var document = new SchoolDocument(GuidGenerator.Create(), tenantId, name, input.Category, notes,
 			CurrentUser.UserName ?? "School staff");
 		var prepared = PrepareFiles(document.Id, input.Files);
 		await documents.InsertAsync(document);

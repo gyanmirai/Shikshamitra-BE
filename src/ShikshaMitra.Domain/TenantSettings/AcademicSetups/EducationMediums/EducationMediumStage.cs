@@ -13,6 +13,7 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public Guid? TenantId { get; private set; }
 	public Guid EducationMediumId { get; private set; }
 	public string Name { get; private set; }
+	public int SortOrder { get; private set; }
 	public byte[]? BannerPicture { get; private set; }
 
 	private EducationMediumStage()
@@ -44,6 +45,8 @@ public class EducationMediumStage : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		);
 		return this;
 	}
+
+	internal void SetSortOrder(int sortOrder) => SortOrder = Check.Range(sortOrder, nameof(sortOrder), 0, int.MaxValue);
 
 	// Navigation property
 	public EducationMedium EducationMedium { get; set; }

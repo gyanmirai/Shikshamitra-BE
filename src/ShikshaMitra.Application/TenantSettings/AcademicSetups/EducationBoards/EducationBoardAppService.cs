@@ -64,13 +64,13 @@ public class EducationBoardAppService(
 
 			foreach (var medium in board.EducationMediums)
 			{
-				medium.EducationMediumStages = medium.EducationMediumStages.OrderBy(x => x.CreationTime).ToList();
+				medium.EducationMediumStages = medium.EducationMediumStages.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
 				foreach (var stage in medium.EducationMediumStages)
 				{
-					stage.Standards = stage.Standards.OrderBy(x => x.CreationTime).ToList();
+					stage.Standards = stage.Standards.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
 					foreach (var standard in stage.Standards)
 					{
-						standard.Divisions = standard.Divisions.OrderBy(x => x.CreationTime).ToList();
+						standard.Divisions = standard.Divisions.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
 					}
 				}
 			}

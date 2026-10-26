@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.HR.Policies;
+using ShikshaMitra.Constants.Permissions;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
@@ -38,6 +39,11 @@ public class HrPolicyAssignmentsController(IHrPolicyAssignmentAppService appServ
 	[HttpPost("impact-preview")]
 	public Task<HrPolicyImpactPreviewDto> PreviewImpactAsync([FromBody] HrPolicyAssignmentImpactPreviewRequestDto input) =>
 		appService.PreviewImpactAsync(input);
+
+	[HttpPost("resolution-preview")]
+	[Authorize(ShikshaMitraSubmodulePermissions.HR.Policies.PreviewImpact)]
+	public Task<PolicyAssignmentResolutionPreviewDto> PreviewResolutionAsync([FromBody] PolicyAssignmentResolutionPreviewRequestDto input) =>
+		appService.PreviewResolutionAsync(input);
 
 	[HttpPut("{id:guid}")]
 	public Task<HrPolicyAssignmentDto> UpdateAsync(Guid id, [FromBody] CreateUpdateHrPolicyAssignmentDto input) =>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Volo.Abp.Application.Dtos;
 
@@ -135,4 +135,21 @@ public class PolicyAssignmentPreviewRequestDto
 	public DateTime Date { get; set; }
 	public Guid? EmployeeId { get; set; }
 	public Guid? GroupId { get; set; }
+}
+
+public class PolicyAssignmentResolutionPreviewRequestDto
+{
+	public Guid? AssignmentId { get; set; }
+	public CreateUpdateHrPolicyAssignmentDto Assignment { get; set; } = new();
+	public DateTime Date { get; set; }
+	public Guid? SampleEmployeeId { get; set; }
+}
+
+public class PolicyAssignmentResolutionPreviewDto
+{
+	public EffectiveEmployeePoliciesDto Current { get; set; } = new();
+	public EffectiveEmployeePoliciesDto? Proposed { get; set; }
+	public bool IsComplete { get; set; }
+	public string Scope { get; set; } = string.Empty;
+	public string? UnavailableReason { get; set; }
 }

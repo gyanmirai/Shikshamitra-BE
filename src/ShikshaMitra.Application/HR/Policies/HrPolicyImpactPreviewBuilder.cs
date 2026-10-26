@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,6 +18,7 @@ public class HrPolicyImpactPreviewBuilder(
 	HrPolicyAffectedEmployeeResolver affectedEmployeeResolver,
 	HrPolicyPayrollRiskReader payrollRiskReader,
 	HrPolicyDefaultReplacementWarningService defaultReplacementWarningService,
+	HrPolicyProposedRuleDifferenceReader ruleDifferences,
 	IAsyncQueryableExecuter asyncExecuter)
 	: ITransientDependency
 {
@@ -34,6 +35,7 @@ public class HrPolicyImpactPreviewBuilder(
 		};
 
 		await FillCurrentVersionAsync(preview);
+		await ruleDifferences.FillAsync(preview, input);
 		preview.ProposedVersion = preview.CurrentVersion.HasValue ? preview.CurrentVersion.Value + 1 : 1;
 		var isRestoreDraft = string.Equals(preview.Action, "restore-draft", StringComparison.OrdinalIgnoreCase);
 		var includeDraftReferences = string.Equals(preview.Action, "archive", StringComparison.OrdinalIgnoreCase);
@@ -177,7 +179,7 @@ public class HrPolicyImpactPreviewBuilder(
 		{
 			"payroll" when input.PayrollPolicy != null => HrPolicyMapping.ParsePolicyStatus(input.PayrollPolicy.Status),
 			"attendance" when input.AttendancePolicy != null => HrPolicyMapping.ParsePolicyStatus(input.AttendancePolicy.Status),
-			_ => (HrPolicyStatus?)null
+			_ => (HrPolicyStatus?) null
 		};
 
 		HrPolicyImpactWarningBuilder.AddWorkCalendarStatusWarning(preview, workCalendar, proposedPolicyStatus);

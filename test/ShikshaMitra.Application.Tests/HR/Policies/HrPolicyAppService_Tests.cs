@@ -1,4 +1,4 @@
-using ShikshaMitra.Common;
+﻿using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Audit;
@@ -31,7 +31,7 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Policies;
 
-public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private readonly IWorkCalendarPolicyAppService _workCalendars;
 	private readonly IPayrollPolicyAppService _payrollPolicies;
@@ -5626,16 +5626,16 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	private static CreateUpdateWorkCalendarPolicyDto BuildWorkCalendarInput(
 		Guid academicYearId,
 		List<WorkCalendarHolidayDto> holidays) => new()
-	{
-		AcademicYearId = academicYearId,
-		Name = $"Calendar {Guid.NewGuid():N}",
-		Status = "active",
-		EffectiveFrom = new DateTime(2026, 4, 1),
-		EffectiveTo = new DateTime(2027, 3, 31),
-		WeeklyOffPattern = "saturday_sunday",
-		HolidaySyncMode = "linked_with_overrides",
-		Holidays = holidays
-	};
+		{
+			AcademicYearId = academicYearId,
+			Name = $"Calendar {Guid.NewGuid():N}",
+			Status = "active",
+			EffectiveFrom = new DateTime(2026, 4, 1),
+			EffectiveTo = new DateTime(2027, 3, 31),
+			WeeklyOffPattern = "saturday_sunday",
+			HolidaySyncMode = "linked_with_overrides",
+			Holidays = holidays
+		};
 
 	private static WorkCalendarHolidayDto BuildWorkCalendarHoliday(
 		Guid academicYearId,

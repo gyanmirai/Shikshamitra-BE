@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.EntityFrameworkCore;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using System;
@@ -178,7 +178,17 @@ public class EfCoreEmployeeLeaveRepository(
 			.Select(x => x.LeavePolicyRuleId)
 			.Distinct()
 			.ToListAsync(cancellationToken);
-
+		// Settlements pin both ends of a transfer, including rules without requests.
+		var db = await GetDbContextAsync();
+		var settlements = await db.Set<ShikshaMitra.HR.AttendanceAndLeaves.YearEndSettlements.LeaveYearEndSettlementItem>()
+			.AsNoTracking()
+			.Where(x => ruleIds.Contains(x.SourceLeavePolicyRuleId) ||
+				(x.TargetLeavePolicyRuleId.HasValue && ruleIds.Contains(x.TargetLeavePolicyRuleId.Value)))
+			.Select(x => new { x.SourceLeavePolicyRuleId, x.TargetLeavePolicyRuleId })
+			.ToListAsync(cancellationToken);
+		referenced.AddRange(settlements.Select(x => x.SourceLeavePolicyRuleId).Where(ruleIds.Contains));
+		referenced.AddRange(settlements.Where(x => x.TargetLeavePolicyRuleId.HasValue)
+			.Select(x => x.TargetLeavePolicyRuleId!.Value).Where(ruleIds.Contains));
 		return referenced.ToHashSet();
 	}
 

@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Audit;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -23,13 +24,16 @@ public class HrPolicyVersionCaptureService(
 
 	public async Task CaptureAsync(string policyType, object policyDto, string action, string? reason = null)
 	{
-		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
+		// Internal capture may enroll leave snapshots. Public type normalization stays
+		// unchanged until leave-specific read/restore authorization is implemented.
+		var normalized = policyType == "leave" ? "leave" : HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var snapshotJson = JsonSerializer.Serialize(policyDto, JsonOptions);
 		var version = normalized switch
 		{
 			"work_calendar" => BuildWorkCalendarVersion((WorkCalendarPolicyDto) policyDto, snapshotJson, action, reason),
 			"payroll" => BuildPayrollVersion((PayrollPolicyDto) policyDto, snapshotJson, action, reason),
 			"attendance" => BuildAttendanceVersion((AttendancePolicyDto) policyDto, snapshotJson, action, reason),
+			"leave" => BuildLeaveVersion((LeavePolicySnapshotDto) policyDto, snapshotJson, action, reason),
 			_ => throw new BusinessException(HRErrorCodes.HrPolicyInvalidType)
 		};
 
@@ -71,4 +75,7 @@ public class HrPolicyVersionCaptureService(
 
 	private HrPolicyVersion BuildAttendanceVersion(AttendancePolicyDto dto, string snapshotJson, string action, string? reason) =>
 		new(GuidGenerator.Create(), CurrentTenant.Id, "attendance", dto.Id, dto.AcademicYearId, dto.Version, dto.Name, dto.Status, null, null, snapshotJson, action, reason);
+
+	private HrPolicyVersion BuildLeaveVersion(LeavePolicySnapshotDto dto, string snapshotJson, string action, string? reason) =>
+		new(GuidGenerator.Create(), CurrentTenant.Id, "leave", dto.Id, dto.AcademicYearId, dto.Version, dto.PolicyTitle, dto.Status, dto.EffectiveFrom, dto.EffectiveTo, snapshotJson, action, reason);
 }

@@ -444,6 +444,9 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		});
 		var assignments = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
 		var tenant = GetRequiredService<ICurrentTenant>();
+		// Match the archive guard's clock so the inclusive end-date case remains
+		// today's assignment when local and UTC dates differ.
+		var today = GetRequiredService<Volo.Abp.Timing.IClock>().Now.Date;
 		var assignment = new HrPolicyAssignment(Guid.NewGuid(), foreignTenant ? Guid.NewGuid() : tenant.Id, academicYearId,
 			HrPolicyAssignmentTargetType.Employee, Guid.NewGuid().ToString(), "Synthetic staff",
 			Guid.NewGuid(), Guid.NewGuid(), policy.Id, today.AddDays(startOffset),

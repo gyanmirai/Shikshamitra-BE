@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text.Json;
 
 namespace ShikshaMitra.HR.Policies;
@@ -42,6 +42,7 @@ public static class HrPolicyVersionProjection
 		"work_calendar" => "work_calendar_policy",
 		"payroll" => "payroll_policy",
 		"attendance" => "attendance_policy",
+		"leave" => "leave_policy",
 		_ => "policy_version"
 	};
 

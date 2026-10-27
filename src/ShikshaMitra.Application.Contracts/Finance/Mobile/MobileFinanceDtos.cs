@@ -4,7 +4,8 @@ using System.Collections.Generic;
 namespace ShikshaMitra.Finance.Mobile;
 
 public record MobileFinanceYear(Guid Id, string Name);
-public record MobileFinanceCapabilities(bool CanView, bool CanDownloadReceipts, bool CanDownloadStatement, bool CanRequestConcession, bool CanRequestRefund, bool CanRequestAdjustment, bool OnlinePaymentEnabled = false);
+public record MobileFinanceCapabilities(bool CanView, bool CanDownloadReceipts, bool CanDownloadStatement, bool CanRequestConcession, bool CanRequestRefund, bool CanRequestAdjustment, bool OnlinePaymentEnabled = false,
+	bool CanViewCharges = false, bool CanViewReceipts = false, bool CanViewConcessions = false, bool CanViewRefunds = false, bool CanViewAdjustments = false);
 public record MobileFinanceContext(Guid StudentId, string StudentName, IReadOnlyList<MobileFinanceYear> AcademicYears, Guid? SelectedAcademicYearId, MobileFinanceCapabilities Capabilities, Dictionary<string, string> DisabledReasons) { public string Currency => "INR"; }
 public record MobileFinanceOverview(Guid StudentId, Guid AcademicYearId, string Currency, DateTimeOffset AsOf,
 	string BilledAmount, string VerifiedPaidAmount, string PendingVerificationAmount, string OutstandingAmount,

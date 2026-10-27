@@ -22,9 +22,10 @@ namespace ShikshaMitra.Finance.Fees.Concessions;
 [Volo.Abp.DependencyInjection.ExposeServices(typeof(ConcessionRequestAppService), typeof(IConcessionRequestAppService), typeof(IFamilyConcessionService))]
 public partial class ConcessionRequestAppService : IFamilyConcessionService
 {
-	private Task<MobileFinanceAccessContext> RequireFamilyAsync(Guid studentId, Guid yearId) =>
+	private Task<MobileFinanceAccessContext> RequireFamilyAsync(Guid studentId, Guid yearId, string permission = MobileFinancePermissions.ViewConcessions) =>
 		LazyServiceProvider.LazyGetRequiredService<MobileFinanceAccessService>().RequireAsync(studentId, yearId,
-			guardianOnly: true, permission: ShikshaMitraSubmodulePermissions.Finance.SelfService.RequestConcession);
+			guardianOnly: true, permission: permission);
+	private MobileFinanceAccessService FamilyAccess => LazyServiceProvider.LazyGetRequiredService<MobileFinanceAccessService>();
 	private MobileFinanceCommandStore FamilyCommands => LazyServiceProvider.LazyGetRequiredService<MobileFinanceCommandStore>();
 
 	private async Task RequireAssignedFamilyPolicyAsync(Guid child, Guid year, MobileConcessionInput input)
@@ -80,12 +81,19 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 					Name = d.DocumentName, d.IsRequired, MaxFileSizeBytes = Math.Min(d.MaxFileSizeBytes, 10 * 1024 * 1024),
 					AcceptedFormats = d.AcceptedFormats.Select(f => f.DocumentType.ToString()).ToArray() }).ToArray() }).ToArray() });
 		}
-		return new { Currency = "INR", Assignments = results };
+		return new { Currency = "INR", Assignments = results,
+			CanCreate = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.RequestConcession),
+			CanEdit = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.EditConcession),
+			CanSubmit = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.SubmitConcession),
+			CanUploadDocuments = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.UploadConcessionDocument) };
 	}
 
 	public virtual async Task<object> FamilyPreviewAsync(Guid child, Guid year, MobileConcessionInput input)
 	{
 		await RequireFamilyAsync(child, year);
+		if (!await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.RequestConcession) &&
+			!await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.EditConcession) &&
+			!await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.SubmitConcession)) throw new Volo.Abp.Authorization.AbpAuthorizationException();
 		await RequireAssignedFamilyPolicyAsync(child, year, input);
 		var preview = await concessionRequestManager.PreviewAsync(CurrentTenant.Id, year, child, input.ConcessionPolicyId,
 			input.ConcessionPolicyVersionId, input.ConcessionTypeId, FamilyHeads(input), input.StudentFeeStructureId, FamilyDues(input));
@@ -102,30 +110,39 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 		return request;
 	}
 
-	private static object FamilyDetail(ConcessionRequest request) => new { Currency = "INR", Id = request.Id, Kind = "concession", Status = request.Status.ToString(),
+	private async Task<object> FamilyDetailAsync(ConcessionRequest request)
+	{
+		var edit = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.EditConcession);
+		var submit = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.SubmitConcession);
+		var cancel = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.CancelConcession);
+		return new { Currency = "INR", Id = request.Id, Kind = "concession", Status = request.Status.ToString(),
 		Amount = MobileFinanceCommandRules.Money(request.GetTotalRequestedConcession()), request.ConcurrencyStamp,
-		AvailableActions = request.Status == ConcessionRequestStatus.Draft ? new[] { "edit", "submit", "cancel" } : request.Status == ConcessionRequestStatus.Pending ? new[] { "cancel" } : Array.Empty<string>(),
+		AvailableActions = new[] { request.Status == ConcessionRequestStatus.Draft && edit ? "edit" : null,
+			request.Status == ConcessionRequestStatus.Draft && submit ? "submit" : null,
+			request.Status is (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending) && cancel ? "cancel" : null }
+			.Where(x => x != null).Select(x => x!).ToArray(),
 		request.Remarks, request.StudentFeeStructureId, request.ConcessionPolicyId, request.ConcessionPolicyVersionId, request.ConcessionTypeId,
 		FeeHeadConcessions = request.ConcessionFeeHeadMappings.Select(x => new { x.FeeHeadId, BasedOn = (int)x.UserSpecifiedConcessionAmountType,
 			Amount = MobileFinanceCommandRules.Money(x.UserSpecifiedConcessionAmountValue) }).ToArray(),
 		DueFeeConcessions = ConcessionRequestManager.ReadDueFeeEvidence(request).Select(x => new { x.DueFeeId, x.FeeHeadId, Amount = MobileFinanceCommandRules.Money(x.Amount) }).ToArray(),
 		Documents = request.ConcessionRequestDocuments.Select(x => new { x.DocumentId, Url = BuildDocumentAccessUrl(request.Id, x.DocumentId), x.Status }).ToArray() };
+	}
 
 	public virtual async Task<object> FamilyGetAsync(Guid child, Guid year, Guid id)
 	{
 		await RequireFamilyAsync(child, year);
-		return FamilyDetail(await RequireOwnedFamilyRequestAsync(child, year, id));
+		return await FamilyDetailAsync(await RequireOwnedFamilyRequestAsync(child, year, id));
 	}
 
 	[UnitOfWork(IsDisabled = true)]
 	public virtual async Task<object> FamilySaveAsync(Guid child, Guid year, Guid? id, MobileConcessionInput input)
 	{
-		await RequireFamilyAsync(child, year);
+		await RequireFamilyAsync(child, year, id.HasValue ? MobileFinancePermissions.EditConcession : MobileFinancePermissions.RequestConcession);
 		using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
 		var payload = new { child, year, id, input };
 		var action = id.HasValue ? "concession_edit" : "concession_draft";
 		var replay = await FamilyCommands.ReplayAsync(action, input.IdempotencyKey, payload);
-		if (replay.HasValue) { var result = FamilyDetail(await RequireOwnedFamilyRequestAsync(child, year, replay.Value)); await uow.CompleteAsync(); return result; }
+		if (replay.HasValue) { var result = await FamilyDetailAsync(await RequireOwnedFamilyRequestAsync(child, year, replay.Value)); await uow.CompleteAsync(); return result; }
 		await RequireAssignedFamilyPolicyAsync(child, year, input);
 		ConcessionRequest request;
 		if (id.HasValue)
@@ -152,19 +169,19 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 		await FamilyCommands.RecordAsync(action, input.IdempotencyKey, payload, request.Id, child, year);
 		await WriteRequestAuditAsync(request, "create", "Family concession draft saved.");
 		await uow.CompleteAsync();
-		return FamilyDetail(request);
+		return await FamilyDetailAsync(request);
 	}
 
 	[UnitOfWork(IsDisabled = true)]
 	public virtual async Task<object> FamilyActionAsync(Guid child, Guid year, Guid id, MobileFinanceRequestAction input, bool submit)
 	{
-		await RequireFamilyAsync(child, year);
+		await RequireFamilyAsync(child, year, submit ? MobileFinancePermissions.SubmitConcession : MobileFinancePermissions.CancelConcession);
 		using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
 		var payload = new { child, year, id, input };
 		var action = submit ? "concession_submit" : "concession_cancel";
 		var replay = await FamilyCommands.ReplayAsync(action, input.IdempotencyKey, payload);
 		var request = await RequireOwnedFamilyRequestAsync(child, year, id);
-		if (replay.HasValue) { if (replay != id) throw new BusinessException(FamilyFinanceErrorCodes.IdempotencyConflict); await uow.CompleteAsync(); return FamilyDetail(request); }
+		if (replay.HasValue) { if (replay != id) throw new BusinessException(FamilyFinanceErrorCodes.IdempotencyConflict); await uow.CompleteAsync(); return await FamilyDetailAsync(request); }
 		EnsureConcurrencyStamp(request, input.ConcurrencyStamp);
 		if (submit)
 		{
@@ -185,12 +202,12 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 		await FamilyCommands.RecordAsync(action, input.IdempotencyKey, payload, id, child, year);
 		await WriteRequestAuditAsync(request, submit ? "submit" : "cancel", submit ? "Family concession submitted for staff review." : "Family concession cancelled.");
 		await uow.CompleteAsync();
-		return FamilyDetail(request);
+		return await FamilyDetailAsync(request);
 	}
 
 	public virtual async Task<FileDownloadResult> FamilyDownloadAsync(Guid child, Guid year, Guid id, Guid documentId)
 	{
-		await RequireFamilyAsync(child, year);
+		await RequireFamilyAsync(child, year, MobileFinancePermissions.ViewConcessionDocument);
 		var request = await RequireOwnedFamilyRequestAsync(child, year, id);
 		var document = request.ConcessionRequestDocuments.SingleOrDefault(x => x.DocumentId == documentId && x.Status == 1)
 			?? throw new BusinessException(FinanceConcessionErrorCodes.InvalidDocumentSubmission);
@@ -204,7 +221,7 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 		Guid documentId,
 		UploadConcessionDocumentFileDto input)
 	{
-		await RequireFamilyAsync(child, year);
+		await RequireFamilyAsync(child, year, MobileFinancePermissions.UploadConcessionDocument);
 		if (input.Content == null || input.Content.Length > 10 * 1024 * 1024) throw new BusinessException(ConcessionTypeErrorCodes.FileTooLarge);
 		var type = await concessionTypeRepository.GetAsync(concessionTypeId);
 		if (type.AcademicYearId != year || !type.IsActive) throw new BusinessException(ConcessionTypeErrorCodes.InvalidDocument);

@@ -7,7 +7,7 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using ShikshaMitra.Common.PDF;
-using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.SelfService;
+using Permissions = ShikshaMitra.Finance.Mobile.MobileFinancePermissions;
 
 namespace ShikshaMitra.Finance.Mobile;
 
@@ -20,7 +20,7 @@ public partial class MobileFinanceReadService
 		var snapshot=await ReadSnapshotAsync(studentId,academicYearId,cancellationToken);
 		var overview=snapshot.Overview;
 		var installments=await BuildInstallmentsAsync(studentId,academicYearId,snapshot.Dues,cancellationToken);
-		var chargeRows=snapshot.Charges;
+		var chargeRows=await access.IsGrantedAsync(Permissions.ViewCharges) ? snapshot.Charges : [];
 		var payments=await PaymentDtosAsync((await transactions.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId,cancellationToken:cancellationToken))
 			.OrderBy(x=>x.CreationTime).ThenBy(x=>x.Id).ToList(),studentId,academicYearId,cancellationToken);
 		QuestPDF.Settings.License=LicenseType.Community; PortablePdfFonts.EnsureRegistered();

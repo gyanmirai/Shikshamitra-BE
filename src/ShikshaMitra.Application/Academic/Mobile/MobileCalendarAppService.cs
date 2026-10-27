@@ -48,7 +48,9 @@ public class MobileCalendarAppService(MobileAcademicContextAppService context,
 	private static MobileSchoolMarkerDto Map(AcademicCalendarDay d)
 	{
 		var closed = d.DayType is DayType.Holiday or DayType.Vacation or DayType.EmergencyClosure;
-		DateTimeOffset? At(TimeSpan? time) => time.HasValue ? new DateTimeOffset(d.Date.Date.Add(time.Value), TimeSpan.FromHours(5.5)) : null;
+		// Calendar dates represent school wall time, regardless of the database DateTime kind.
+		var schoolDate = DateTime.SpecifyKind(d.Date.Date, DateTimeKind.Unspecified);
+		DateTimeOffset? At(TimeSpan? time) => time.HasValue ? new DateTimeOffset(schoolDate.Add(time.Value), TimeSpan.FromHours(5.5)) : null;
 		return new(d.Id, closed ? "holiday" : "event", DateOnly.FromDateTime(d.Date), d.Title, d.Description,
 			d.AppliesToAll ? "school" : "class", d.HolidayCategory?.ToString(), At(d.StartTime), At(d.EndTime), d.Venue, closed);
 	}

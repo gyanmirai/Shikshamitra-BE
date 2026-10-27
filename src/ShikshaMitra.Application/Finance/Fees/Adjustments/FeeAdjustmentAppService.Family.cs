@@ -17,7 +17,7 @@ public partial class FeeAdjustmentAppService : IFamilyAdjustmentService
 {
 	private Task<MobileFinanceAccessContext> RequireFamilyAdjustmentAsync(Guid child, Guid year) =>
 		LazyServiceProvider.LazyGetRequiredService<MobileFinanceAccessService>().RequireAsync(child, year,
-			guardianOnly: true, permission: ShikshaMitraSubmodulePermissions.Finance.SelfService.RequestAdjustment);
+			guardianOnly: true, permission: MobileFinancePermissions.RequestAdjustment);
 
 	private async Task<List<(DueFee Due, decimal Available)>> FamilyAdjustmentSourcesAsync(Guid child, Guid year)
 	{

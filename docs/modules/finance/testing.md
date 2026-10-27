@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-26
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -155,7 +155,7 @@ Actual payout command/replay scenarios remain in `FeeRefundApi_Tests` and requir
 receipt ownership across tenant/child/year, real receipt IDs and final/provisional
 linkage, and the student-self read-only discriminator. `MobileFinanceAccess_Tests`
 adds cases to the persisted mobile fixture using the real ABP permission checker:
-staff grant denial, exact family grant, guardian command permission, revoked links,
+existing collection grant acceptance, old SelfService-only denial, exact feature View and guardian command permissions, revoked links,
 foreign child/year, revoked enrollment without legacy fallback, and student-self
 with a simultaneous guardian link. The standard application harness always allows
 authorization, so these cases explicitly instantiate ShikshaMitraPermissionChecker.
@@ -166,13 +166,15 @@ dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Shi
 
 Request and activity cases are the `Guardian_and_database_administrator_guardian_submission_stays_pending_without_changing_dues`, `Every_parent_command_requires_guardian_and_exact_grant_before_body_or_resource_validation`, `Parent_request_permission_never_allows_an_unrelated_child`, `Durable_receipt_replays_same_command_and_rejects_changed_child_or_beneficiary`, and `Activity_omits_foreign_drafts_and_private_payloads_and_keeps_per_user_read_state` methods on `MobileAcademicAppService_Tests`. Their principals include the tenant claim, use committed exact grants and verify creator ownership. Guardian reassignment follows the existing one-active-guardian-account constraint.
 
-`MobileFinancePermissionApi_Tests` exercises 21 HTTP authorization/association cases. Receipt coverage also checks the statement download permission, rejects another year and generates an actual owned statement PDF.
+`MobileFinancePermissionApi_Tests` exercises 21 HTTP authorization/association cases. Receipt coverage also checks the existing Receipts View and Collections View statement permissions, rejects another year and generates an actual owned statement PDF.
 
 `FAMILY_FINANCE_TEST_POSTGRES` opts the application harness into a disposable PostgreSQL instance. It accepts only `Host=127.0.0.1;Port=55438;Database=family_finance_tests;Username=family_tests`, creates a fresh suffixed database per fixture and never resets an existing database. The PostgreSQL-only cases verify real Serializable connections, same-key replay, different-key reservation races and rollback of a losing duplicate command receipt. Parent and administrator-guardian submissions remain Pending with unchanged dues, including submission through the staff route. The ordinary SQLite harness cannot certify PostgreSQL transaction isolation or rollback.
 
 Local source verification compiled Domain.Shared, Domain, Application.Contracts, Application, HttpApi, Host and current EF runtime model/configuration/repository sources. Unchanged generated migration sources and tests referencing those generated classes were excluded through an external local build target; a full migration-inclusive CI build remains a release check. Disposable PostgreSQL used relaxed filesystem synchronization for test speed; these tests establish logical transaction behavior, not power-loss durability. The existing Finance documentation validator reports mojibake in `references/charge-management-e2e-test-plan.md`.
 
-Verification on 2026-10-26: all 47 focused application cases passed across targeted runs, all 21 HTTP authorization cases passed, and all six disposable PostgreSQL workflow/concurrency cases passed. These results cover statement PDF generation, exact family permissions, current association/year checks, creator-only private request/document access, notification privacy/read state, reconciliation and year regressions, policy-calculated refund history, decimal/currency contracts, replay, competing reservations and rollback. The local test database was stopped after verification.
+Verification on 2026-10-26: all 47 focused application cases passed across targeted runs, all 21 HTTP authorization cases passed, and all six disposable PostgreSQL workflow/concurrency cases passed. These earlier results cover statement PDF generation, the former family-permission mapping, current association/year checks, creator-only private request/document access, notification privacy/read state, reconciliation and year regressions, policy-calculated refund history, decimal/currency contracts, replay, competing reservations and rollback. The local test database was stopped after verification.
+
+Verification on 2026-10-27 for existing web Finance grants: 18 focused application cases and 30 HTTP/permission-contract cases passed, including role inheritance with explicit user denial, feature View filtering, association/year revocation, guardian-only commands and exact concession action checks. The companion mobile suite passed 109 cases before review and 26 affected cases after review fixes, including draft-only retry recovery; full and focused Flutter analysis were clean. The focused backend build retained the external generated-migration exclusion described above. The docs validator currently flags existing encoding issues in `references/charge-management-e2e-test-plan.md` and `references/income-expense-workspaces.md`.
 
 Synthetic test data only; no deployed school writes, permission reseeding, push,
 gateway checkout or scheduled reminder execution is part of this implementation.

@@ -21,10 +21,15 @@ public class MobileFinanceActivityService(MobileFinanceAccessService access, IRe
 	private async Task<IQueryable<FinanceAuditEvent>> VisibleAsync(Guid child, Guid year)
 	{
 		var actor = CurrentUser.Id;
+		var receipts = await access.IsGrantedAsync(MobileFinancePermissions.ViewReceipts);
+		var charges = await access.IsGrantedAsync(MobileFinancePermissions.ViewCharges);
+		var concessions = await access.IsGrantedAsync(MobileFinancePermissions.ViewConcessions);
+		var refunds = await access.IsGrantedAsync(MobileFinancePermissions.ViewRefunds);
+		var adjustments = await access.IsGrantedAsync(MobileFinancePermissions.ViewAdjustments);
 		return (await events.GetQueryableAsync()).Where(x => x.StudentId == child && x.AcademicYearId == year &&
-			(x.EntityType == FinanceAuditEntityTypes.FeePayment || x.EntityType == FinanceAuditEntityTypes.FeeReceipt ||
-			 x.EntityType == FinanceAuditEntityTypes.FeeRefund || x.EntityType == FinanceAuditEntityTypes.ConcessionRequest ||
-			 x.EntityType == FinanceAuditEntityTypes.FeeAdjustment || x.EntityType == FinanceAuditEntityTypes.FeeCharge) &&
+			(x.EntityType == FinanceAuditEntityTypes.FeePayment || receipts && x.EntityType == FinanceAuditEntityTypes.FeeReceipt ||
+			 refunds && x.EntityType == FinanceAuditEntityTypes.FeeRefund || concessions && x.EntityType == FinanceAuditEntityTypes.ConcessionRequest ||
+			 adjustments && x.EntityType == FinanceAuditEntityTypes.FeeAdjustment || charges && x.EntityType == FinanceAuditEntityTypes.FeeCharge) &&
 			(x.ActorUserId == actor || x.Action == "submit" || x.Action == "approve" || x.Action == "reject" ||
 			 x.Action == "cancel" || x.Action == "reverse" || x.Action == "verify" || x.Action == "process" ||
 			 x.EntityType == FinanceAuditEntityTypes.FeeRefund && x.Action == "create" ||

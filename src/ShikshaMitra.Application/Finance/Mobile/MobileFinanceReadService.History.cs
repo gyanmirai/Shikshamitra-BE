@@ -13,7 +13,7 @@ using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.Receipts;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
-using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.SelfService;
+using Permissions = ShikshaMitra.Finance.Mobile.MobileFinancePermissions;
 
 namespace ShikshaMitra.Finance.Mobile;
 
@@ -38,17 +38,19 @@ public partial class MobileFinanceReadService
 	{
 		var ids=rows.Select(x=>x.Id).ToArray();
 		var splits=await methods.GetListAsync(x=>x.StudentId==studentId&&Enumerable.Contains(ids,x.FeeRecordMetadataId),cancellationToken:cancellationToken);
-		var documents=await receipts.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&Enumerable.Contains(ids,x.FeeCollectionTransactionId),cancellationToken:cancellationToken);
+		var documents=await access.IsGrantedAsync(Permissions.ViewReceipts)
+			? await receipts.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&Enumerable.Contains(ids,x.FeeCollectionTransactionId),cancellationToken:cancellationToken)
+			: new List<FeePaymentReceipt>();
 		var documentMap=await ReceiptDtosAsync(documents,studentId,academicYearId,cancellationToken);
 		return rows.Select(x=>new MobileFinancePayment(x.Id,DateOnly.FromDateTime(x.CreationTime),
 			MobileFinanceProjection.Money(MobileFinanceProjection.PaymentAmount(x.TotalPaidFee,splits.Where(s=>s.FeeRecordMetadataId==x.Id).Select(s=>s.Amount).ToList())),x.Status.ToString(),
 			splits.Where(s=>s.FeeRecordMetadataId==x.Id).Select(s=>s.PaymentMethod.ToString()).Distinct().ToList(),
 			documents.Where(r=>r.FeeCollectionTransactionId==x.Id).Select(r=>documentMap[r.Id]).ToList())).ToList();
 	}
-	[Authorize(Permissions.View)]
+	[Authorize(Permissions.ViewReceipts)]
 	public async Task<MobileFinancePage<MobileFinanceReceipt>> ReceiptsAsync(Guid studentId, Guid academicYearId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
 	{
-		await access.RequireAsync(studentId,academicYearId,cancellationToken:cancellationToken); ValidatePage(page,pageSize);
+		await access.RequireAsync(studentId,academicYearId,permission:Permissions.ViewReceipts,cancellationToken:cancellationToken); ValidatePage(page,pageSize);
 		var query=(await receipts.GetQueryableAsync()).Where(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId);
 		var count=await AsyncExecuter.CountAsync(query,cancellationToken);
 		var rows=await AsyncExecuter.ToListAsync(query.OrderByDescending(x=>x.ReceiptDate).ThenBy(x=>x.Id).Skip(Skip(page,pageSize)).Take(pageSize),cancellationToken);
@@ -66,24 +68,32 @@ public partial class MobileFinanceReadService
 		// Reuse the official generator without invoking a staff-authorized service or writing a read-time cache.
 		return await receiptPdf.GenerateAsync(receipt,context.Student,context.AcademicYears.Single(x=>x.Id==academicYearId),cancellationToken);
 	}
-	[Authorize(Permissions.View)]
+	[Authorize]
 	public async Task<MobileFinancePage<MobileFinanceRequest>> RequestsAsync(Guid studentId, Guid academicYearId, string? kind = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
 	{
-		var context=await access.RequireAsync(studentId,academicYearId,cancellationToken:cancellationToken); ValidatePage(page,pageSize);
 		if (kind is not (null or "concession" or "refund" or "adjustment")) throw new BusinessException("Finance:SelfService:InvalidRequest");
+		var required = kind switch { "concession" => Permissions.ViewConcessions, "refund" => Permissions.ViewRefunds,
+			"adjustment" => Permissions.ViewAdjustments, _ => Permissions.View };
+		var context=await access.RequireAsync(studentId,academicYearId,permission:required,cancellationToken:cancellationToken); ValidatePage(page,pageSize);
+		var concession = await access.IsGrantedAsync(Permissions.ViewConcessions);
+		var refund = await access.IsGrantedAsync(Permissions.ViewRefunds);
+		var adjustment = await access.IsGrantedAsync(Permissions.ViewAdjustments);
+		if (!concession && !refund && !adjustment) throw new Volo.Abp.Authorization.AbpAuthorizationException();
 		var result=new List<MobileFinanceRequest>();
-		if (kind is null or "concession")
+		if (concession && kind is (null or "concession"))
 		{
 			var repository=LazyServiceProvider.LazyGetRequiredService<IConcessionRequestRepository>();
 			var rows=await AsyncExecuter.ToListAsync((await repository.GetQueryableAsync())
 				.Where(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&(x.Status!=ConcessionRequestStatus.Draft||x.CreatorId==context.UserId))
 				.Select(x=>new{x.Id,x.Status,x.CreatorId,x.CreationTime,x.Remarks,Amount=x.ConcessionFeeHeadMappings.Sum(m=>m.FeeHeadConcessionAmount)}),cancellationToken);
-			var canRequest=context.IsGuardian&&await AuthorizationService.IsGrantedAsync(Permissions.RequestConcession);
+			var edit=context.IsGuardian&&await access.IsGrantedAsync(Permissions.EditConcession);
+			var submit=context.IsGuardian&&await access.IsGrantedAsync(Permissions.SubmitConcession);
+			var cancel=context.IsGuardian&&await access.IsGrantedAsync(Permissions.CancelConcession);
 			result.AddRange(rows.Select(x=>new MobileFinanceRequest(x.Id,"concession","Concession request",x.Status.ToString(),MobileFinanceProjection.Money(x.Amount),Utc(x.CreationTime),
-				context.IsGuardian&&x.CreatorId==context.UserId?x.Remarks:null,canRequest&&x.CreatorId==context.UserId
-					?x.Status==ConcessionRequestStatus.Draft?["edit","submit","cancel"]:x.Status==ConcessionRequestStatus.Pending?["cancel"]:[]:[])));
+				context.IsGuardian&&x.CreatorId==context.UserId?x.Remarks:null,x.CreatorId==context.UserId
+					? ConcessionActions(x.Status, edit, submit, cancel) : [])));
 		}
-		if (kind is null or "refund")
+		if (refund && kind is (null or "refund"))
 		{
 			var repository=LazyServiceProvider.LazyGetRequiredService<IRepository<FeeRefundRequest,Guid>>();
 			var rows=await repository.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&(x.Status!=FeeRefundStatus.Draft||x.CreatorId==context.UserId),cancellationToken:cancellationToken);
@@ -91,7 +101,7 @@ public partial class MobileFinanceReadService
 				MobileFinanceProjection.Money(MobileFinanceProjection.RefundRequestAmount(x.TotalAmount,x.CalculatedAmount,
 					!x.RefundPolicyVersionId.HasValue&&!x.ConcessionRequestId.HasValue)),Utc(x.CreationTime),context.IsGuardian&&x.CreatorId==context.UserId?x.Reason:null,[])));
 		}
-		if (kind is null or "adjustment")
+		if (adjustment && kind is (null or "adjustment"))
 		{
 			var repository=LazyServiceProvider.LazyGetRequiredService<IRepository<FeeAdjustmentRequest,Guid>>();
 			var rows=await repository.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId,cancellationToken:cancellationToken);
@@ -99,6 +109,11 @@ public partial class MobileFinanceReadService
 		}
 		return new(result.OrderByDescending(x=>x.Date).ThenBy(x=>x.Id).Skip(Skip(page,pageSize)).Take(pageSize).ToList(),result.Count,page,pageSize);
 	}
+	private static string[] ConcessionActions(ConcessionRequestStatus status, bool edit, bool submit, bool cancel) =>
+		new[] { status == ConcessionRequestStatus.Draft && edit ? "edit" : null,
+			status == ConcessionRequestStatus.Draft && submit ? "submit" : null,
+			status is (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending) && cancel ? "cancel" : null }
+			.Where(x => x != null).Select(x => x!).ToArray();
 	private async Task<Dictionary<Guid,MobileFinanceReceipt>> ReceiptDtosAsync(List<FeePaymentReceipt> rows,Guid studentId,Guid yearId,CancellationToken ct)
 	{
 		var linkIds=rows.SelectMany(x=>new[]{x.LinkedFinalReceiptId,x.LinkedProvisionalReceiptId}).Where(x=>x.HasValue).Select(x=>x!.Value).Distinct().ToArray();

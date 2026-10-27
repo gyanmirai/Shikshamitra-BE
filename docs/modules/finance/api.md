@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-26
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -344,25 +344,32 @@ Root: `/api/mobile/v1/finance/students/{studentId}`. Reads return the standard
 (maximum 100) and return `{items,totalCount,page,pageSize}`. Money is an INR
 fixed two-decimal string; due dates are date-only, activity timestamps UTC instants.
 
-| GET suffix | Exact permission | Result |
+| GET suffix | Existing permission | Result |
 |---|---|---|
-| `context` | `Finance.SelfService.View` | Linked student, enrolled years, selected year, exact capabilities and disabled reasons |
-| `overview` | `Finance.SelfService.View` | Billed principal, verified and pending payments, billed outstanding, future scheduled principal, late fees, charges, concession, waivers, adjustments and refunds as separate fields |
-| `installments`, `charges` | `Finance.SelfService.View` | Canonical obligations and charge balances |
-| `payments` | `Finance.SelfService.View` | Paged transactions with decimal payment-method totals and real associated receipt IDs; optional case-insensitive `status` (`Rejected` maps to `Reversed`) |
-| `receipts` | `Finance.SelfService.View` | Paged official receipt identity, kind, verification state and provisional/final linkage |
-| `receipts/{receiptId}/pdf` | `Finance.SelfService.DownloadReceipts` | Official receipt PDF after exact tenant, student and year ownership validation |
-| `requests` | `Finance.SelfService.View` | Paged concession/refund/adjustment history, optional `kind` filter |
-| `statement/pdf` | `Finance.SelfService.DownloadStatement` | Official statement over the same canonical decimal read model and installment rows |
+| `context` | `Finance.Fees.FeeCollections.View` | Linked student, enrolled years, selected year, section/action capabilities and disabled reasons |
+| `overview`, `installments`, `payments` | `Finance.Fees.FeeCollections.View` | Collection-account summary, obligations and payment history; embedded receipt details additionally require Receipts View |
+| `charges` | `Finance.Fees.Charges.View` | Detailed approved child/year charges |
+| `receipts`, `receipts/{receiptId}/pdf` | `Finance.Fees.InvoiceReceipt.View` | Official receipts and PDF after tenant/student/year ownership checks |
+| `requests?kind=concession` | `Finance.Fees.Concession.View` | Authorized concession history |
+| `requests?kind=refund` | `Finance.Fees.Refund.View` | Authorized refund history |
+| `requests?kind=adjustment` | `Finance.Fees.Adjustment.View` | Authorized adjustment history |
+| `requests` without kind | `Finance.Fees.FeeCollections.View` plus at least one request-family View | Only permitted request families; pagination/count excludes denied families |
+| `statement/pdf` | `Finance.Fees.FeeCollections.View` | Official statement of the collection-account summary, installments and payment history |
 
-Every call reloads persisted portal association and identity through
-`StudentPortalAccessService`. Staff Finance grants, class assignments and role claims
-cannot grant this family surface. Inactive/departed students, revoked links, revoked
-enrollments, foreign children and years fail closed. Legacy year fallback is allowed
-only without enrollment history. A student-self identity stays read-only even when
-also linked as guardian. Parent commands additionally require a persisted guardian
-association and the exact `Finance.SelfService.RequestConcession`, `RequestRefund`
-or `RequestAdjustment` permission; existing roles are never reseeded to add grants.
+Every call reloads persisted portal association and identity through `StudentPortalAccessService`.
+Existing Finance grants authorize actions; class assignments or a Parent/Student role name alone never establish a family association.
+Inactive/departed students, revoked links, revoked enrollments, foreign children and years fail closed.
+Legacy year fallback is allowed only without enrollment history.
+A student-self identity stays read-only even when also linked as guardian.
+Parent commands additionally require a persisted guardian association and the exact existing write action below.
+
+`MobileFinancePermissions` references existing constants and is not a new permission catalogue or a runtime fallback.
+Old `Finance.SelfService.*` entries/grants remain untouched, but no longer authorize these routes.
+Existing role grants and explicit user denials are not reseeded or rewritten.
+The context requires Collections View and adds `canViewCharges`, `canViewReceipts`, `canViewConcessions`, `canViewRefunds` and `canViewAdjustments`.
+Request capabilities require the corresponding View and write grants; refund creation also requires Submit.
+The overview/statement is the collection-account financial summary (including charge, concession and refund totals); detailed feature lists require their separate View grant.
+Deploy this backend before the companion mobile update, whose missing section capabilities fail closed.
 
 Principal amounts come from decimal DueFee ledger values; transaction amounts come
 from decimal PaymentMethodRecord splits. Legacy charge/receipt storage is converted
@@ -377,7 +384,7 @@ and late-fee waiver evidence. RefundedAmount is refunded principal.
 Request history includes submitted staff-created requests and the current actor's
 drafts. Other people's drafts, evidence, payout beneficiaries, internal notes and
 rejection/approval commentary are excluded. Own draft concessions expose actions
-only to a guardian with the request permission. Receipt PDFs reuse the official
+only to the owning guardian with each exact edit, submit or cancel grant. Receipt PDFs reuse the official
 receipt generator directly after ownership checks; no staff API bypass is added.
 Statements use the same overview, installment and payment projection, show the academic year,
 INR, as-of date and provisional-payment distinction, and create no financial writes.
@@ -385,17 +392,21 @@ INR, as-of date and provisional-payment distinction, and create no financial wri
 Family command contracts live in `Application.Contracts/Finance/Mobile`; each group
 uses the same student/year root above and the standard response envelope.
 
-| Method / suffix | Permission | Behavior |
+| Method / suffix | Existing permission | Behavior |
 |---|---|---|
-| GET `concessions/eligibility`, POST `concessions/preview` | `Finance.SelfService.RequestConcession` | Assigned effective policy, allowed types/document requirements, canonical decimal preview and fingerprint |
-| POST `concessions/drafts`, GET/PUT `concessions/{requestId}` | `Finance.SelfService.RequestConcession` | Own draft form, nested source validation and concurrency stamp; other actors' forms/evidence stay private |
-| POST `concessions/{requestId}/submit` or `/cancel` | `Finance.SelfService.RequestConcession` | Own request transition, reviewed preview fingerprint, concurrency stamp and idempotency key |
-| POST `concessions/documents/{concessionTypeId}/{documentId}` | `Finance.SelfService.RequestConcession` | Requirement/signature/size validated staged base64 upload (10 MiB hard cap), opaque staged URL |
-| GET `concessions/{requestId}/documents/{documentId}` | `Finance.SelfService.RequestConcession` | Exact creator/child/year protected evidence download |
-| GET `refunds/eligibility`, POST `refunds/preview`, POST `refunds` | `Finance.SelfService.RequestRefund` | Eligible settled original receipt/allocation IDs, assigned policy methods, beneficiary input, fingerprint and pending review |
-| GET `adjustments/eligibility`, POST `adjustments/preview`, POST `adjustments` | `Finance.SelfService.RequestAdjustment` | Exact eligible child/year source dues, canonical preview, fingerprint and pending noncash review |
-| GET `activity`, GET `notifications` | `Finance.SelfService.View` | Safe paged financial status events; notifications support `unreadOnly=true` |
-| POST `notifications/{eventId}/read` | `Finance.SelfService.View` | Persist a per-user read marker only for an event in this exact child/year |
+| GET `concessions/eligibility`, GET `concessions/{requestId}` | `Finance.Fees.Concession.View` | Child-assigned policy/form, owner-only detail; eligibility includes create/edit/submit/upload capabilities |
+| POST `concessions/preview` | Concession View plus one of Add/Edit/Submit | Canonical preview; no financial mutation |
+| POST `concessions/drafts` | `Finance.Fees.Concession.Add` | Own draft, nested source validation and idempotency |
+| PUT `concessions/{requestId}` | `Finance.Fees.Concession.Edit` | Own draft, concurrency stamp and current state |
+| POST `concessions/{requestId}/submit` | `Finance.Fees.Concession.Submit` | Own request, reviewed preview fingerprint, concurrency and idempotency |
+| POST `concessions/{requestId}/cancel` | `Finance.Fees.Concession.Cancel` | Own request cancellation, reason, concurrency and idempotency |
+| POST `concessions/documents/{concessionTypeId}/{documentId}` | `Finance.Fees.Concession.UploadDocument` | Requirement/signature/size validated staged upload (10 MiB hard cap) |
+| GET `concessions/{requestId}/documents/{documentId}` | `Finance.Fees.Concession.ViewDocument` | Exact creator/child/year evidence download |
+| GET `refunds/eligibility`, POST `refunds/preview` | `Finance.Fees.Refund.Add` | Eligible settled receipt/allocation IDs, assigned policy and canonical preview |
+| POST `refunds` | `Finance.Fees.Refund.Add` and `.Submit` | Beneficiary validation, fingerprint and pending review |
+| GET `adjustments/eligibility`, POST `adjustments/preview`, POST `adjustments` | `Finance.Fees.Adjustment.Add` | Exact child/year sources, canonical preview and pending noncash review |
+| GET `activity`, GET `notifications` | `Finance.Fees.FeeCollections.View` | Safe status events filtered by each feature's View; `unreadOnly=true` supported |
+| POST `notifications/{eventId}/read` | `Finance.Fees.FeeCollections.View` and visibility of that event | Per-user marker for an event in this exact child/year |
 
 Financial mutations require a stable nonempty `idempotencyKey` (maximum 100
 characters); reuse the key and original payload after an unknown outcome. Changed

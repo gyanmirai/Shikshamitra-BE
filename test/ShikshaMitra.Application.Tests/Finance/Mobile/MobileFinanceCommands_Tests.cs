@@ -32,16 +32,17 @@ using Volo.Abp.PermissionManagement;
 using Volo.Abp.Uow;
 using Volo.Abp.Security.Claims;
 using Xunit;
-using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.SelfService;
+using Permissions = ShikshaMitra.Finance.Mobile.MobileFinancePermissions;
 
 namespace ShikshaMitra.Academic.Mobile;
 
 public partial class MobileAcademicAppService_Tests
 {
 	// Tenant users need the tenant claim as well as the live tenant scope for creation auditing.
-	private IDisposable FinanceIdentity(Guid userId)
+	private IDisposable FinanceIdentity(Guid userId, string? role = null)
 	{
 		var claims = new List<Claim> { new(AbpClaimTypes.UserId, userId.ToString()) };
+		if (role != null) claims.Add(new Claim(AbpClaimTypes.Role, role));
 		if (GetRequiredService<ICurrentTenant>().Id is Guid tenantId)
 			claims.Add(new Claim(AbpClaimTypes.TenantId, tenantId.ToString()));
 		return GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(claims, "test")));
@@ -91,7 +92,8 @@ public partial class MobileAcademicAppService_Tests
 			f.User.AddRole(role.Id);
 			await GetRequiredService<IRepository<IdentityUser, Guid>>().UpdateAsync(f.User, true);
 		}
-		await GrantFinancePermissionAsync(f.User.Id, Permissions.RequestConcession);
+		foreach (var permission in new[] { Permissions.ViewConcessions, Permissions.RequestConcession, Permissions.EditConcession, Permissions.SubmitConcession, Permissions.CancelConcession })
+			await GrantFinancePermissionAsync(f.User.Id, permission);
 		var category = await Insert(new FeeCategory(Guid.NewGuid(), tenantId, f.Year.Id, "Family fees", null));
 		var income = await Insert(new TransactionCategory(Guid.NewGuid(), tenantId, f.Year.Id, TransactionType.Income, "Family income", null));
 		var head = await Insert(new FeeHead(Guid.NewGuid(), tenantId, f.Year.Id, category.Id, "Tuition", null, true, null, income.Id));
@@ -141,6 +143,7 @@ public partial class MobileAcademicAppService_Tests
 		await GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().DeleteAsync(f.Link, true);
 		await Insert(new StudentPortalAccountLink(Guid.NewGuid(), tenantId, f.Student.Id, other.Id, "guardian", "father", Guid.NewGuid()));
 		await GrantFinancePermissionAsync(other.Id, Permissions.RequestConcession);
+		await GrantFinancePermissionAsync(other.Id, Permissions.ViewConcessions);
 		using var otherIdentity = FinanceIdentity(other.Id);
 		(await RealFinanceAccess().RequireAsync(f.Student.Id, f.Year.Id, true, Permissions.RequestConcession)).UserId.ShouldBe(other.Id);
 		await Should.ThrowAsync<AbpAuthorizationException>(() => service.FamilyGetAsync(f.Student.Id, f.Year.Id, id));
@@ -249,6 +252,9 @@ public partial class MobileAcademicAppService_Tests
 			DateTime.UtcNow, "secret beneficiary 1234567890", contextJson: "secret evidence");
 		var staff = Guid.NewGuid(); var draft = await Insert(Audit("create", staff)); var approved = await Insert(Audit("approve", staff));
 		var service = FamilyService<MobileFinanceActivityService>();
+		(await service.GetAsync(f.Student.Id, f.Year.Id)).Items.ShouldBeEmpty("Concession events need Concessions View.");
+		await Should.ThrowAsync<AbpAuthorizationException>(() => service.MarkReadAsync(f.Student.Id, f.Year.Id, approved.Id));
+		await GrantFinancePermissionAsync(f.User.Id, Permissions.ViewConcessions);
 		var before = await service.GetAsync(f.Student.Id, f.Year.Id);
 		before.Items.ShouldHaveSingleItem().Id.ShouldBe(approved.Id);
 		JsonSerializer.Serialize(before).ShouldNotContain("secret");
@@ -262,6 +268,7 @@ public partial class MobileAcademicAppService_Tests
 		await GetRequiredService<IRepository<StudentPortalAccountLink, Guid>>().DeleteAsync(f.Link, true);
 		await Insert(new StudentPortalAccountLink(Guid.NewGuid(), tenantId, f.Student.Id, second.Id, "guardian", "father", Guid.NewGuid()));
 		await GrantFinancePermissionAsync(second.Id, Permissions.View);
+		await GrantFinancePermissionAsync(second.Id, Permissions.ViewConcessions);
 		using var secondIdentity = FinanceIdentity(second.Id);
 		(await FamilyService<MobileFinanceActivityService>().GetAsync(f.Student.Id, f.Year.Id)).Items.ShouldHaveSingleItem().IsRead.ShouldBeFalse();
 	});

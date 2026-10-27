@@ -22,7 +22,7 @@ public partial class FeeRefundAppService : IFamilyRefundService
 {
 	private Task<MobileFinanceAccessContext> RequireFamilyRefundAsync(Guid child, Guid year) =>
 		LazyServiceProvider.LazyGetRequiredService<MobileFinanceAccessService>().RequireAsync(child, year,
-			guardianOnly: true, permission: ShikshaMitraSubmodulePermissions.Finance.SelfService.RequestRefund);
+			guardianOnly: true, permission: MobileFinancePermissions.RequestRefund);
 
 	private static CreateFeeRefundRequestDto FamilyRefundInput(Guid child, Guid year, MobileRefundInput input)
 	{
@@ -59,6 +59,8 @@ public partial class FeeRefundAppService : IFamilyRefundService
 	public virtual async Task<MobileFinanceCommandResult> FamilyRefundCreateAsync(Guid child, Guid year, MobileRefundInput input)
 	{
 		await RequireFamilyRefundAsync(child, year);
+		await LazyServiceProvider.LazyGetRequiredService<MobileFinanceAccessService>().RequireAsync(child, year,
+			guardianOnly: true, permission: MobileFinancePermissions.SubmitRefund);
 		using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
 		var store = LazyServiceProvider.LazyGetRequiredService<MobileFinanceCommandStore>();
 		var payload = new { child, year, input };

@@ -17,8 +17,9 @@ using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.PermissionManagement;
+using Volo.Abp.Uow;
 using Xunit;
-using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.SelfService;
+using Permissions = ShikshaMitra.Finance.Mobile.MobileFinancePermissions;
 
 namespace ShikshaMitra.Academic.Mobile;
 
@@ -37,18 +38,77 @@ public partial class MobileAcademicAppService_Tests
 		service.LazyServiceProvider=new AbpLazyServiceProvider(ServiceProvider);return service;
 	}
 	[Fact]
-	public Task Finance_requires_exact_grant_even_for_persisted_guardian_and_staff_finance_grants()=>WithUnitOfWorkAsync(async()=>
+	public Task Finance_existing_parent_role_grant_honors_explicit_user_denial()=>WithUnitOfWorkAsync(async()=>
+	{
+		var tenantId=Guid.NewGuid();using var tenant=GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f=await Seed(tenantId,true);
+		var role=await Insert(new Volo.Abp.Identity.IdentityRole(Guid.NewGuid(),"Parent",tenantId));
+		f.User.AddRole(role.Id);
+		await GetRequiredService<IRepository<Volo.Abp.Identity.IdentityUser,Guid>>().UpdateAsync(f.User,true);
+		using var identity=FinanceIdentity(f.User.Id,"Parent");
+		using (var grants=GetRequiredService<Volo.Abp.Uow.IUnitOfWorkManager>().Begin(requiresNew:true,isTransactional:true))
+		{
+			await GetRequiredService<IPermissionManager>().SetAsync(Permissions.View,"R","Parent",true);
+			await grants.CompleteAsync();
+		}
+		var access=RealFinanceAccess();
+		(await access.RequireAsync(f.Student.Id,f.Year.Id)).IsGuardian.ShouldBeTrue();
+		await GetRequiredService<IUserPermissionDenyStore>().SetDeniedAsync(f.User.Id,Permissions.View,true);
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>access.RequireAsync(f.Student.Id,f.Year.Id));
+	});
+	[Fact]
+	public Task Finance_context_reports_existing_read_grants_without_enabling_requests()=>WithUnitOfWorkAsync(async()=>
+	{
+		var tenantId=Guid.NewGuid();using var tenant=GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f=await Seed(tenantId,true);using var identity=FinanceIdentity(f.User.Id);
+		await GrantFinancePermissionAsync(f.User.Id,Permissions.View);
+		await GrantFinancePermissionAsync(f.User.Id,Permissions.ViewConcessions);
+		var reads=RealFinanceReads();
+		var capabilities=(await reads.ContextAsync(f.Student.Id)).Capabilities;
+		capabilities.CanView.ShouldBeTrue();
+		capabilities.CanDownloadStatement.ShouldBeTrue();
+		capabilities.CanViewConcessions.ShouldBeTrue();
+		capabilities.CanViewCharges.ShouldBeFalse();
+		capabilities.CanViewReceipts.ShouldBeFalse();
+		capabilities.CanRequestConcession.ShouldBeFalse();
+		capabilities.CanRequestRefund.ShouldBeFalse();
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>reads.ChargesAsync(f.Student.Id,f.Year.Id));
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>reads.ReceiptsAsync(f.Student.Id,f.Year.Id));
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>reads.RequestsAsync(f.Student.Id,f.Year.Id,"refund"));
+		(await reads.RequestsAsync(f.Student.Id,f.Year.Id,"concession")).Items.ShouldBeEmpty();
+	});
+	[Fact]
+	public Task Finance_concession_add_does_not_authorize_submit_cancel_edit_or_upload()=>WithUnitOfWorkAsync(async()=>
+	{
+		var tenantId=Guid.NewGuid();using var tenant=GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f=await Seed(tenantId,true);using var identity=FinanceIdentity(f.User.Id);
+		await GrantFinancePermissionAsync(f.User.Id,Permissions.RequestConcession);
+		var service=FamilyService<ShikshaMitra.Finance.Fees.Concessions.ConcessionRequestAppService>();
+		var id=Guid.NewGuid();
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>service.FamilyActionAsync(f.Student.Id,f.Year.Id,id,new(),true));
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>service.FamilyActionAsync(f.Student.Id,f.Year.Id,id,new(),false));
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>service.FamilySaveAsync(f.Student.Id,f.Year.Id,id,new()));
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>service.FamilyUploadAsync(f.Student.Id,f.Year.Id,id,id,new()));
+	});
+	[Fact]
+	public Task Finance_existing_collection_view_allows_linked_guardian_but_not_refund_creation()=>WithUnitOfWorkAsync(async()=>
 	{
 		var tenantId=Guid.NewGuid();using var tenant=GetRequiredService<ICurrentTenant>().Change(tenantId);
 		var f=await Seed(tenantId,true);using var identity=FinanceIdentity(f.User.Id);
 		var grants=GetRequiredService<IPermissionManager>();var access=RealFinanceAccess();
-		await grants.SetAsync("Finance.Fees.FeeCollections.View","U",f.User.Id.ToString(),true);
-		await Should.ThrowAsync<AbpAuthorizationException>(()=>access.RequireAsync(f.Student.Id,f.Year.Id));
-		await GrantFinancePermissionAsync(f.User.Id,Permissions.View);
+		await GrantFinancePermissionAsync(f.User.Id,"Finance.Fees.FeeCollections.View");
 		(await access.RequireAsync(f.Student.Id,f.Year.Id)).IsGuardian.ShouldBeTrue();
-		await Should.ThrowAsync<AbpAuthorizationException>(()=>access.RequireAsync(f.Student.Id,f.Year.Id,true,Permissions.RequestRefund));
-		await GrantFinancePermissionAsync(f.User.Id,Permissions.RequestRefund);
-		(await access.RequireAsync(f.Student.Id,f.Year.Id,true,Permissions.RequestRefund)).StudentId.ShouldBe(f.Student.Id);
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>access.RequireAsync(f.Student.Id,f.Year.Id,true,"Finance.Fees.Refund.Add"));
+		await GrantFinancePermissionAsync(f.User.Id,"Finance.Fees.Refund.Add");
+		(await access.RequireAsync(f.Student.Id,f.Year.Id,true,"Finance.Fees.Refund.Add")).StudentId.ShouldBe(f.Student.Id);
+	});
+	[Fact]
+	public Task Finance_old_self_service_grant_alone_does_not_authorize_collection_read()=>WithUnitOfWorkAsync(async()=>
+	{
+		var tenantId=Guid.NewGuid();using var tenant=GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var f=await Seed(tenantId,true);using var identity=FinanceIdentity(f.User.Id);
+		await GrantFinancePermissionAsync(f.User.Id,"Finance.SelfService.View");
+		await Should.ThrowAsync<AbpAuthorizationException>(()=>RealFinanceAccess().RequireAsync(f.Student.Id,f.Year.Id));
 	});
 	[Fact]
 	public Task Finance_rejects_foreign_child_foreign_year_and_revoked_link_after_allowed_read()=>WithUnitOfWorkAsync(async()=>
@@ -98,14 +158,16 @@ public partial class MobileAcademicAppService_Tests
 		var other=await Insert(new FeePaymentReceipt(Guid.NewGuid()){TenantId=tenantId,StudentId=Guid.NewGuid(),AcademicYearId=f.Year.Id,
 			FeeCollectionTransactionId=transaction.Id,ReceiptNumber="FIN-FAMILY-OTHER",ReceiptKind=FeeReceiptKind.FinalFee,ReceiptScope=FeeReceiptScope.Fee,TotalPaidAmount=1,ReceiptDate=receipt.ReceiptDate});
 		var reads=RealFinanceReads();var item=(await reads.PaymentsAsync(f.Student.Id,f.Year.Id)).Items.Single();
-		item.Amount.ShouldBe("0.30");item.Receipts.Single().Id.ShouldBe(receipt.Id);item.Receipts.Single().PaymentId.ShouldBe(transaction.Id);
+		item.Amount.ShouldBe("0.30");item.Receipts.ShouldBeEmpty("Receipt details require the existing Receipts View grant.");
 		await Should.ThrowAsync<AbpAuthorizationException>(()=>reads.ReceiptPdfAsync(f.Student.Id,f.Year.Id,receipt.Id));
 		await GrantFinancePermissionAsync(f.User.Id,Permissions.DownloadReceipts);
+		var permittedPayment=(await reads.PaymentsAsync(f.Student.Id,f.Year.Id)).Items.Single();
+		permittedPayment.Receipts.Single().Id.ShouldBe(receipt.Id);
+		permittedPayment.Receipts.Single().PaymentId.ShouldBe(transaction.Id);
 		await Should.ThrowAsync<AbpAuthorizationException>(()=>reads.ReceiptPdfAsync(f.Student.Id,f.Year.Id,other.Id));
 		var pdf=await reads.ReceiptPdfAsync(f.Student.Id,f.Year.Id,receipt.Id);
 		Encoding.ASCII.GetString(pdf,0,5).ShouldBe("%PDF-");
-		await Should.ThrowAsync<AbpAuthorizationException>(() => reads.StatementPdfAsync(f.Student.Id, f.Year.Id));
-		await GrantFinancePermissionAsync(f.User.Id, Permissions.DownloadStatement);
+		// Collections View also authorizes the linked child's statement; no separate download grant.
 		await Should.ThrowAsync<AbpAuthorizationException>(() => reads.StatementPdfAsync(f.Student.Id, Guid.NewGuid()));
 		var statement = await reads.StatementPdfAsync(f.Student.Id, f.Year.Id);
 		Encoding.ASCII.GetString(statement, 0, 5).ShouldBe("%PDF-");

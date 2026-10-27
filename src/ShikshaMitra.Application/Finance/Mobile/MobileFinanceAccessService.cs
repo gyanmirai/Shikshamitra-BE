@@ -30,21 +30,22 @@ public record MobileFinanceAccessContext(Guid StudentId, Guid? AcademicYearId, b
 public class MobileFinanceAccessService(StudentPortalAccessService portal, IRepository<StudentEnrollment, Guid> enrollments,
 	IRepository<AcademicYear, Guid> years, IDataFilter filter, IClock clock, IPermissionChecker permissions) : ApplicationService, ITransientDependency
 {
+	public Task<bool> IsGrantedAsync(string permission) => MobileFinancePermissions.IsSupported(permission)
+		? permissions.IsGrantedAsync(permission) : Task.FromResult(false);
+
 	public async Task<MobileFinanceAccessContext> RequireAsync(Guid studentId, Guid? academicYearId = null,
 		bool guardianOnly = false, string? permission = null, CancellationToken cancellationToken = default)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
-		var requiredPermission = permission ?? ShikshaMitraSubmodulePermissions.Finance.SelfService.View;
-		if (!ShikshaMitraSubmodulePermissions.Finance.SelfService.All.Contains(requiredPermission, StringComparer.Ordinal) ||
-			!await permissions.IsGrantedAsync(requiredPermission)) throw new AbpAuthorizationException();
+		var requiredPermission = permission ?? MobileFinancePermissions.View;
+		if (!await IsGrantedAsync(requiredPermission)) throw new AbpAuthorizationException();
 		var accounts = (await portal.GetMyStudentsAsync()).Where(x => x.StudentId == studentId).ToList();
 		if (accounts.Count == 0 || !CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
 		var student = await portal.ResolveStudentAsync(studentId);
 		if (student.Status is StudentLifeCycleStatusEnum.InActive or StudentLifeCycleStatusEnum.Left) throw new AbpAuthorizationException();
 		var guardian = IsGuardianOnlyAssociation(student.UserId == CurrentUser.Id || accounts.Any(x => x.AccountType == "student" && x.Relationship == "self"),
 			accounts.Any(x => x.AccountType == "guardian"));
-		var requestPermission = requiredPermission is ShikshaMitraSubmodulePermissions.Finance.SelfService.RequestConcession or
-			ShikshaMitraSubmodulePermissions.Finance.SelfService.RequestRefund or ShikshaMitraSubmodulePermissions.Finance.SelfService.RequestAdjustment;
+		var requestPermission = MobileFinancePermissions.RequiresGuardian(requiredPermission);
 		if ((guardianOnly || requestPermission) && !guardian) throw new AbpAuthorizationException();
 		List<StudentEnrollment> history;
 		using (filter.Disable<ISoftDelete>())

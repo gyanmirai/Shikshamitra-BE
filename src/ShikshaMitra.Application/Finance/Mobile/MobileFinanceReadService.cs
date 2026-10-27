@@ -17,7 +17,7 @@ using Volo.Abp.Authorization;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Timing;
-using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.Finance.SelfService;
+using Permissions = ShikshaMitra.Finance.Mobile.MobileFinancePermissions;
 
 namespace ShikshaMitra.Finance.Mobile;
 
@@ -35,17 +35,22 @@ public partial class MobileFinanceReadService(MobileFinanceAccessService access,
 	public async Task<MobileFinanceContext> ContextAsync(Guid studentId, Guid? academicYearId = null, CancellationToken cancellationToken = default)
 	{
 		var context = await access.RequireAsync(studentId, academicYearId, cancellationToken: cancellationToken);
-		async Task<bool> Can(string permission) => await AuthorizationService.IsGrantedAsync(permission);
+		Task<bool> Can(string permission) => access.IsGrantedAsync(permission);
 		var receipt = await Can(Permissions.DownloadReceipts); var statement = await Can(Permissions.DownloadStatement);
-		var concession = context.IsGuardian && await Can(Permissions.RequestConcession);
-		var refund = context.IsGuardian && await Can(Permissions.RequestRefund);
-		var adjustment = context.IsGuardian && await Can(Permissions.RequestAdjustment);
+		var viewCharges = await Can(Permissions.ViewCharges);
+		var viewConcessions = await Can(Permissions.ViewConcessions);
+		var viewRefunds = await Can(Permissions.ViewRefunds);
+		var viewAdjustments = await Can(Permissions.ViewAdjustments);
+		var concession = context.IsGuardian && viewConcessions && await Can(Permissions.RequestConcession);
+		var refund = context.IsGuardian && viewRefunds && await Can(Permissions.RequestRefund) && await Can(Permissions.SubmitRefund);
+		var adjustment = context.IsGuardian && viewAdjustments && await Can(Permissions.RequestAdjustment);
 		var disabled = new Dictionary<string, string> { ["onlinePayment"] = "Online payment is not enabled." };
 		foreach (var (key, enabled) in new[] { ("downloadReceipts",receipt),("downloadStatement",statement),("requestConcession",concession),("requestRefund",refund),("requestAdjustment",adjustment) })
 			if (!enabled) disabled[key] = key.StartsWith("request", StringComparison.Ordinal) && !context.IsGuardian ? "Only a linked guardian can send requests." : "This action has not been granted.";
 		var selected = academicYearId ?? context.AcademicYears.FirstOrDefault(x => x.StartDate.Date <= clock.Now.Date && x.EndDate.Date >= clock.Now.Date)?.Id ?? context.AcademicYears.FirstOrDefault()?.Id;
 		return new(studentId, context.StudentName, context.AcademicYears.Select(x => new MobileFinanceYear(x.Id,x.Name)).ToList(), selected,
-			new(true,receipt,statement,concession,refund,adjustment),disabled);
+			new(true,receipt,statement,concession,refund,adjustment, CanViewCharges: viewCharges,
+				CanViewReceipts: receipt, CanViewConcessions: viewConcessions, CanViewRefunds: viewRefunds, CanViewAdjustments: viewAdjustments),disabled);
 	}
 	[Authorize(Permissions.View)]
 	public async Task<MobileFinanceOverview> OverviewAsync(Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
@@ -81,10 +86,10 @@ public partial class MobileFinanceReadService(MobileFinanceAccessService access,
 			MobileFinanceProjection.Money(x.OriginalAmount),MobileFinanceProjection.Money(x.PaidAmount),MobileFinanceProjection.Money(x.OutstandingAmount),
 			pending.Contains(x.Id)?"InReconciliation":!x.IsBillGeneratedOn(clock.Now)?"Scheduled":x.OutstandingAmount<=0?"Paid":(x.ScheduleDueDate??x.DueDate).Date<clock.Now.Date?"Overdue":x.Status.ToString())).ToList();
 	}
-	[Authorize(Permissions.View)]
+	[Authorize(Permissions.ViewCharges)]
 	public async Task<List<MobileFinanceCharge>> ChargesAsync(Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
-		await access.RequireAsync(studentId,academicYearId,cancellationToken:cancellationToken);
+		await access.RequireAsync(studentId,academicYearId,permission:Permissions.ViewCharges,cancellationToken:cancellationToken);
 		return (await ChargeRowsAsync(studentId,academicYearId,cancellationToken)).Select(x=>x.ToDto()).ToList();
 	}
 	private async Task<List<DueFee>> DueRowsAsync(Guid studentId, Guid yearId, CancellationToken ct)

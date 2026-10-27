@@ -42,7 +42,7 @@ public class MobileFinancePermissionApi_Tests(FinanceRoutingApiTestFactory facto
 	[InlineData("activity")]
 	[InlineData("notifications")]
 	[InlineData("statement/pdf")]
-	public async Task Staff_finance_grant_does_not_grant_a_family_route(string suffix)
+	public async Task Existing_finance_grant_still_requires_persisted_family_association(string suffix)
 	{
 		using var client=Factory.CreateClient();
 		client.DefaultRequestHeaders.Add("__tenant",TestAuthHandler.TestTenantId);
@@ -52,7 +52,7 @@ public class MobileFinancePermissionApi_Tests(FinanceRoutingApiTestFactory facto
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden,await response.Content.ReadAsStringAsync());
 	}
 	[Fact]
-	public async Task Exact_family_view_still_requires_persisted_child_association()
+	public async Task Old_self_service_grant_alone_does_not_grant_collection_read()
 	{
 		using var client=Factory.CreateClient();
 		client.DefaultRequestHeaders.Add("__tenant",TestAuthHandler.TestTenantId);

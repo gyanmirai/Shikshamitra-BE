@@ -39,7 +39,7 @@ public class AdmissionOfferingReadService(
 	public async Task<PagedResultDto<AdmissionOfferingListDto>> GetListAsync(AdmissionOfferingListInput input)
 	{
 		var read = await GetRowsQueryAsync(input);
-		var query = read.Query;
+		var query = AdmissionOfferingColumnFilters.Apply(read.Query, input.ColumnFilters);
 		var totalCount = await AsyncExecuter.CountAsync(query);
 		var pageRows = await AsyncExecuter.ToListAsync(
 			ApplySorting(query, input.Sorting)
@@ -142,6 +142,9 @@ public class AdmissionOfferingReadService(
 					stage.Name.Contains(input.Search) || standard.Name.Contains(input.Search))
 			select new AdmissionOfferingReadRow
 			{
+				Name = offering.Name == "" ? offering.Code : offering.Name,
+				EffectiveOpenDate = offering.OpenDate.HasValue ? offering.OpenDate.Value.Date : cycle.StartDate.Date,
+				EffectiveCloseDate = offering.CloseDate.HasValue ? offering.CloseDate.Value.Date : cycle.EndDate.Date,
 				Offering = offering,
 				Campus = campus,
 				Cycle = cycle,
@@ -419,20 +422,21 @@ public class AdmissionOfferingReadService(
 		}).ToList()
 	};
 
-	private static IQueryable<AdmissionOfferingReadRow> ApplySorting(
+	private static IOrderedQueryable<AdmissionOfferingReadRow> ApplySorting(
 		IQueryable<AdmissionOfferingReadRow> query,
 		string? sorting)
 	{
 		var descending = sorting?.Contains("desc", StringComparison.OrdinalIgnoreCase) == true;
 		var field = sorting?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
-		return field switch
+		var ordered = field switch
 		{
-			"name" => descending ? query.OrderByDescending(x => x.Offering.Name) : query.OrderBy(x => x.Offering.Name),
+			"name" => descending ? query.OrderByDescending(x => x.Name) : query.OrderBy(x => x.Name),
 			"code" => descending ? query.OrderByDescending(x => x.Offering.Code) : query.OrderBy(x => x.Offering.Code),
 			"boardname" => descending ? query.OrderByDescending(x => x.BoardType) : query.OrderBy(x => x.BoardType),
 			"mediumname" => descending ? query.OrderByDescending(x => x.MediumName) : query.OrderBy(x => x.MediumName),
 			"stagename" => descending ? query.OrderByDescending(x => x.StageName) : query.OrderBy(x => x.StageName),
 			"standardname" => descending ? query.OrderByDescending(x => x.StandardName) : query.OrderBy(x => x.StandardName),
+			"applicationcount" => descending ? query.OrderByDescending(x => x.ApplicationCount) : query.OrderBy(x => x.ApplicationCount),
 			"effectiveopendate" => descending
 				? query.OrderByDescending(x => x.Offering.OpenDate.HasValue ? x.Offering.OpenDate.Value.Date : x.Cycle.StartDate.Date)
 				: query.OrderBy(x => x.Offering.OpenDate.HasValue ? x.Offering.OpenDate.Value.Date : x.Cycle.StartDate.Date),
@@ -441,6 +445,7 @@ public class AdmissionOfferingReadService(
 				: query.OrderBy(x => x.Offering.CloseDate.HasValue ? x.Offering.CloseDate.Value.Date : x.Cycle.EndDate.Date),
 			_ => query.OrderBy(x => x.StandardName).ThenBy(x => x.Offering.Code)
 		};
+		return ordered.ThenBy(row => row.Offering.Id);
 	}
 
 	private static string? StatusReasonCode(AdmissionOfferingAvailabilityStatus status) => status switch
@@ -462,7 +467,7 @@ public class AdmissionOfferingReadService(
 	private sealed record AdmissionOfferingReadQuery(IQueryable<AdmissionOfferingReadRow> Query,
 		Dictionary<Guid, List<AdmissionOfferingValidationError>> Errors);
 
-	private sealed class AdmissionOfferingReadRow
+	private sealed class AdmissionOfferingReadRow : AdmissionOfferingColumnFilterRow
 	{
 		public required AdmissionOffering Offering { get; init; }
 		public AdmissionCampus? Campus { get; init; }
@@ -484,6 +489,5 @@ public class AdmissionOfferingReadService(
 		public AdmissionFormDefinition? ApplicationForm { get; init; }
 		public AdmissionIntakeProfile? InquiryProfile { get; init; }
 		public AdmissionIntakeProfile? AssignmentProfile { get; init; }
-		public int ApplicationCount { get; init; }
 	}
 }

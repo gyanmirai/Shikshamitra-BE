@@ -14,7 +14,7 @@ public class StudentPortalOwnerSelection_Tests
 		var family = Family();
 		family.UpdateFatherDetails(Person("Father"));
 		family.UpdateMotherDetails(Person("Mother"));
-		StudentPortalOwnerSelection.Relationships(family).ShouldBe(["father", "mother"]);
+		StudentPortalOwnerSelection.Relationships(family).ShouldBe(["father", "mother", "guardian"]);
 		StudentPortalOwnerSelection.AutomaticRelationship(family, "guardian").ShouldBe("father");
 	}
 
@@ -30,14 +30,29 @@ public class StudentPortalOwnerSelection_Tests
 	}
 
 	[Fact]
-	public void Other_guardian_is_available_only_without_either_parent()
+	public void Other_guardian_remains_available_with_a_saved_parent()
 	{
 		var family = Family();
 		family.UpdateFatherDetails(Person("  "));
 		StudentPortalOwnerSelection.Relationships(family).ShouldBe(["guardian"]);
-		StudentPortalOwnerSelection.AutomaticRelationship(family, "father").ShouldBe("guardian");
+		StudentPortalOwnerSelection.AutomaticRelationship(family, "father").ShouldBeNull();
 		family.UpdateMotherDetails(Person("Mother"));
-		StudentPortalOwnerSelection.Relationships(family).ShouldBe(["mother"]);
+		StudentPortalOwnerSelection.Relationships(family).ShouldBe(["mother", "guardian"]);
+	}
+
+	[Fact]
+	public void Manual_adult_credentials_require_explicit_access_confirmation()
+	{
+		var input = new SendStudentCredentialsDto { AccountType = "guardian", Relationship = "guardian",
+			ExpectedEmail = "aunt@example.test", ConcurrencyStamp = "case-stamp" };
+		new SendStudentCredentialsDtoValidator().Validate(input).IsValid.ShouldBeFalse();
+	}
+
+	[Fact]
+	public void Student_self_credentials_do_not_require_adult_confirmation()
+	{
+		new SendStudentCredentialsDtoValidator().Validate(new SendStudentCredentialsDto { AccountType = "student", Relationship = "self",
+			ExpectedEmail = "student@example.test", ConcurrencyStamp = "case-stamp" }).IsValid.ShouldBeTrue();
 	}
 
 	[Fact]

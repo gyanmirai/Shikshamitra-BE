@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using FluentValidation;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
@@ -9,6 +10,8 @@ public class StudentCredentialsWorkspaceDto
 {
 	public Guid CaseId { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
+	[JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+	public bool GuardianAccessEnabled { get; set; }
 	public IReadOnlyList<StudentCredentialsRecipientDto> Recipients { get; set; } = [];
 	public StudentSiblingParentContextDto? ParentSibling { get; set; }
 }
@@ -62,6 +65,7 @@ public class StudentSiblingParentContextDto
 	public string? BlockedReason { get; set; }
 	public bool CanRetrySetup { get; set; }
 	public bool CanLink { get; set; }
+	public bool GuardianAccessSelected { get; set; }
 	public IReadOnlyList<StudentSiblingParentCandidateDto> Candidates { get; set; } = [];
 }
 
@@ -69,9 +73,11 @@ public class StudentCredentialsRecipientDto
 {
 	public string AccountType { get; set; } = string.Empty;
 	public string Relationship { get; set; } = string.Empty;
+	public string? RelationshipLabel { get; set; }
 	public string? Name { get; set; }
 	public string? Email { get; set; }
 	public bool CanSend { get; set; }
+	public bool IsMainContact { get; set; }
 	public string? BlockedReason { get; set; }
 	public StudentCredentialEmailDto? Delivery { get; set; }
 	public bool CanEditEmail { get; set; }
@@ -126,6 +132,7 @@ public class SendStudentCredentialsDto
 	public string Relationship { get; set; } = string.Empty;
 	public string ExpectedEmail { get; set; } = string.Empty;
 	public string ConcurrencyStamp { get; set; } = string.Empty;
+	public bool ConfirmRecipientAccess { get; set; }
 }
 
 public class SendStudentCredentialsDtoValidator : AbstractValidator<SendStudentCredentialsDto>
@@ -137,5 +144,24 @@ public class SendStudentCredentialsDtoValidator : AbstractValidator<SendStudentC
 			? value == "self" : value is "father" or "mother" or "guardian");
 		RuleFor(input => input.ExpectedEmail).NotEmpty().EmailAddress().MaximumLength(256);
 		RuleFor(input => input.ConcurrencyStamp).NotEmpty().MaximumLength(100);
+		RuleFor(input => input.ConfirmRecipientAccess).Equal(true).When(input => input.AccountType == "guardian")
+			.WithMessage("Confirm this person may access this student in the app before sending credentials.");
+	}
+}
+
+/// <summary>An explicit case-only access choice, independent of the main school contact.</summary>
+public class StudentGuardianAccessSelectionDto
+{
+	public string ExpectedEmail { get; set; } = string.Empty;
+	public bool ConfirmRecipientAccess { get; set; }
+}
+
+public class StudentGuardianAccessSelectionDtoValidator : AbstractValidator<StudentGuardianAccessSelectionDto>
+{
+	public StudentGuardianAccessSelectionDtoValidator()
+	{
+		RuleFor(input => input.ExpectedEmail).NotEmpty().EmailAddress().MaximumLength(256)
+			.Must(value => value != null && !value.Contains('\r') && !value.Contains('\n'));
+		RuleFor(input => input.ConfirmRecipientAccess).Equal(true);
 	}
 }

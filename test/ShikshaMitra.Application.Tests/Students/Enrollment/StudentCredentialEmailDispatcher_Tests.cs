@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using AngleSharp.Html.Parser;
 using Microsoft.AspNetCore.Identity;
 using NSubstitute;
 using ShikshaMitra.Students.Portal;
@@ -22,6 +23,37 @@ namespace ShikshaMitra.Students;
 
 public class StudentCredentialEmailDispatcher_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
+	[Fact]
+	public async Task New_credentials_use_the_approved_email_card_without_replacing_the_temporary_password()
+	{
+		using var school = GetRequiredService<ICurrentTenant>().Change(Guid.NewGuid());
+		var fixture = await CreateAsync(false);
+		await fixture.Dispatcher.DispatchAsync(fixture.Row.Id);
+		(await ReadAsync(fixture.Row.Id)).Status.ShouldBe("Sent");
+		var call = fixture.Sender.ReceivedCalls().Single(x => x.GetMethodInfo().Name == nameof(IEmailSender.SendAsync));
+		var body = call.GetArguments()[2]!.ToString()!;
+		var document = new HtmlParser().ParseDocument(body);
+		document.QuerySelector("table[aria-label='Account details']").ShouldNotBeNull();
+		document.QuerySelector("img[alt='Get it on Google Play']").ShouldNotBeNull();
+		document.QuerySelector("a[href*='reset-password']").ShouldBeNull();
+		document.Body!.TextContent.ShouldNotContain("Mobile app coming soon");
+		document.Body.TextContent.ShouldContain("Temporary password");
+		var passwordRow = document.QuerySelectorAll("tr").Single(row =>
+			row.QuerySelector("th")?.TextContent.Trim() == "Temporary password");
+		var password = passwordRow.QuerySelector("td")!.TextContent.Trim();
+		password.Length.ShouldBeLessThanOrEqualTo(10);
+		password.Any(char.IsUpper).ShouldBeTrue();
+		password.Any(char.IsLower).ShouldBeTrue();
+		password.Any(char.IsDigit).ShouldBeTrue();
+		password.Any(character => !char.IsLetterOrDigit(character)).ShouldBeTrue();
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var users = GetRequiredService<IdentityUserManager>();
+			var user = await users.FindByIdAsync(fixture.Row.UserId.ToString());
+			(await users.CheckPasswordAsync(user!, password)).ShouldBeTrue();
+			user!.ShouldChangePasswordOnNextLogin.ShouldBeTrue();
+		});
+	}
 	[Fact]
 	public async Task Sender_failure_retains_initial_password_and_retry_uses_the_same_password()
 	{

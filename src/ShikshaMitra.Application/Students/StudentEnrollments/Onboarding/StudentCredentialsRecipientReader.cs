@@ -8,6 +8,7 @@ using ShikshaMitra.Students.Records;
 using ShikshaMitra.Students.Portal;
 using ShikshaMitra.Students.StudentEnrollments.Admissions;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Data;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 
@@ -59,8 +60,10 @@ public class StudentCredentialsRecipientReader(IStudentRepository students,
 			};
 			var parentEmail = Normalize(person?.Email);
 			result.Add(new() { AccountType = "guardian", Relationship = relationship, Name = person?.FullName,
+				RelationshipLabel = relationship == "guardian" ? student.GetProperty<string>(StudentFamilyContactSelection.GuardianRelationshipKey) : null,
+				IsMainContact = StudentFamilyContactSelection.Resolve(student) == relationship,
 				Email = parentEmail, BlockedReason = ValidEmail(parentEmail) ? null
-					: "Add or correct this parent's saved email in Student Records." });
+					: $"Add or correct the selected {relationship}'s own saved email in Student Records." });
 		}
 		return result;
 	}

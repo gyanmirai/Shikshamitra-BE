@@ -30,8 +30,23 @@ public partial class StudentOnboardingAppService
 		return context;
 	}
 
-	private async Task PrepareSiblingParentSelectionAsync(StudentOnboardingCase item, StudentSiblingParentSelectionDto? input)
+	private async Task PrepareSiblingParentSelectionAsync(StudentOnboardingCase item, StudentSiblingParentSelectionDto? input,
+		StudentGuardianAccessSelectionDto? guardianAccess = null)
 	{
+		if (guardianAccess != null)
+		{
+			if (input != null) throw PortalInvalid("Choose one adult app-access recipient for this case.");
+			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
+			await AuthorizationService.CheckAsync(IdentityPermissions.Users.Create);
+			EnsureCredentialsActor();
+			var accessRules = await ReadSavedRulesAsync(item);
+			if (!accessRules.HasValue || !StudentPortalAccountRules.IsEnabled(accessRules.Value, "guardian"))
+				throw PortalInvalid("Adult app access is not enabled by this case's saved school settings.");
+			await SiblingParents.PrepareGuardianSelectionAsync(item, guardianAccess);
+			await caseRepository.UpdateAsync(item, false);
+			await AddEventAsync(item.Id, "GuardianAccessSelected", "Staff explicitly selected the saved guardian for this child's app access. Sibling parent accounts and main school contact remain independent.");
+			return;
+		}
 		if (input != null && !(await new StudentSiblingParentSelectionDtoValidator().ValidateAsync(input)).IsValid)
 			throw PortalInvalid("Choose a saved Father or Mother account before activating the student.");
 		var context = await ReadSiblingParentContextAsync(item);

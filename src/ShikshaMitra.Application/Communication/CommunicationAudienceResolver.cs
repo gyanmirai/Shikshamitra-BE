@@ -6,6 +6,7 @@ using ShikshaMitra.Application.Contracts.Groups;
 using ShikshaMitra.HR.Employees;
 using ShikshaMitra.Students;
 using Volo.Abp;
+using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
@@ -195,6 +196,7 @@ public class CommunicationAudienceResolver(
 				.Select(x => new StudentAudienceProjection
 				{
 					Id = x.Id,
+					ExtraProperties = x.ExtraProperties,
 					FirstName = x.FirstName,
 					MiddleName = x.MiddleName,
 					LastName = x.LastName,
@@ -231,15 +233,27 @@ public class CommunicationAudienceResolver(
 	{
 		var studentName = BuildStudentDisplayName(student);
 		var parentRecipients = new List<CommunicationRecipientSnapshot>();
+		var selected = student.ExtraProperties.GetValueOrDefault(StudentFamilyContactSelection.SelectionKey)?.ToString();
 
 		if (audience.ParentsFirst)
 		{
-			AddParentRecipient(parentRecipients, campaignId, student, "Father", student.FatherFullName, student.FatherEmail, student.FatherContactNo, studentName);
-			AddParentRecipient(parentRecipients, campaignId, student, "Mother", student.MotherFullName, student.MotherEmail, student.MotherContactNo, studentName);
-			AddParentRecipient(parentRecipients, campaignId, student, "Guardian", student.GuardianFullName, student.GuardianEmail, student.GuardianContactNo, studentName);
+			var available = new List<string>();
+			if (!student.FatherFullName.IsNullOrWhiteSpace() || !student.FatherEmail.IsNullOrWhiteSpace() || !student.FatherContactNo.IsNullOrWhiteSpace()) available.Add("father");
+			if (!student.MotherFullName.IsNullOrWhiteSpace() || !student.MotherEmail.IsNullOrWhiteSpace() || !student.MotherContactNo.IsNullOrWhiteSpace()) available.Add("mother");
+			if (!student.GuardianFullName.IsNullOrWhiteSpace() || !student.GuardianEmail.IsNullOrWhiteSpace() || !student.GuardianContactNo.IsNullOrWhiteSpace()) available.Add("guardian");
+			foreach (var relationship in StudentFamilyContactSelection.MessageRelationships(available, selected))
+			{
+				if (relationship == "father") AddParentRecipient(parentRecipients, campaignId, student, "Father", student.FatherFullName, student.FatherEmail, student.FatherContactNo, studentName);
+				else if (relationship == "mother") AddParentRecipient(parentRecipients, campaignId, student, "Mother", student.MotherFullName, student.MotherEmail, student.MotherContactNo, studentName);
+				else
+				{
+					var label = student.ExtraProperties.GetValueOrDefault(StudentFamilyContactSelection.GuardianRelationshipKey)?.ToString();
+					AddParentRecipient(parentRecipients, campaignId, student, string.IsNullOrWhiteSpace(label) ? "Guardian" : $"Guardian ({label})", student.GuardianFullName, student.GuardianEmail, student.GuardianContactNo, studentName);
+				}
+			}
 		}
 
-		if (parentRecipients.Count == 0 && (!student.ContactEmail.IsNullOrWhiteSpace() || !student.ContactMobileNumber.IsNullOrWhiteSpace()))
+		if (parentRecipients.Count == 0 && (!audience.ParentsFirst || selected.IsNullOrWhiteSpace()) && (!student.ContactEmail.IsNullOrWhiteSpace() || !student.ContactMobileNumber.IsNullOrWhiteSpace()))
 		{
 			parentRecipients.Add(CreateRecipient(
 				campaignId,
@@ -386,6 +400,7 @@ public class CommunicationAudienceResolver(
 
 	private sealed class StudentAudienceProjection
 	{
+		public ExtraPropertyDictionary ExtraProperties { get; init; } = new();
 		public Guid Id { get; init; }
 		public string? FirstName { get; init; }
 		public string? MiddleName { get; init; }

@@ -24,7 +24,7 @@ public partial class StudentOnboardingAppService
 		var resolver = LazyServiceProvider.LazyGetRequiredService<StudentOnboardingCredentialEligibilityResolver>();
 		foreach (var type in new[] { "student", "guardian" })
 		{
-			if (type == "guardian" && await SiblingParents.IsParentFlowAsync(item)) continue;
+			if (type == "guardian" && (StudentSiblingParentService.HasGuardianSelection(item) || await SiblingParents.IsParentFlowAsync(item))) continue;
 			if (!StudentPortalAccountRules.IsEnabled(rules, type)) continue;
 			if (await portalLinkRepository.AnyAsync(link => link.StudentId == student.Id && link.AccountType == type)) continue;
 			// The resolver checks committed placement and current documents before it reports a missing account.
@@ -33,7 +33,7 @@ public partial class StudentOnboardingAppService
 			// New App Login rules never guess between multiple saved parents. Staff can
 			// still select the recipient through Send Credentials in automatic mode.
 			if (type == "guardian" && rules.TryGetProperty("guardianAccountAccess", out _) &&
-				StudentPortalOwnerSelection.Relationships(student.FamilyDetail).Count > 1) continue;
+				StudentPortalOwnerSelection.Relationships(student.FamilyDetail).Count(relation => relation is "father" or "mother") > 1) continue;
 			var relationship = type == "student" ? "self" : StudentPortalOwnerSelection.AutomaticRelationship(
 				student.FamilyDetail, OnboardingRuleConfiguration.Text(rules, "guardianAccountRelationship", "guardian"));
 			if (relationship == null) continue;

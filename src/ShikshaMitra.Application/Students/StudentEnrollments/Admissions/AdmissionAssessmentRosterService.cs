@@ -147,6 +147,24 @@ public class AdmissionAssessmentRosterService(
 				SessionStartsAt = sortAttempts.GetValueOrDefault(row.Stage.Id)?.SlotStartsAt ?? (sortSessionId.HasValue ? sessionRows.GetValueOrDefault(sortSessionId.Value)?.StartsAt : null)
 			};
 		}).ToList();
+		if (!string.IsNullOrWhiteSpace(input.ColumnFilters))
+		{
+			// Evaluate against the displayed attempt across the authorized population before counts/paging.
+			var matchingStages = AdmissionAssessmentColumnFilters.Apply(rows.Select(summary =>
+			{
+				var attempt = sortAttempts.GetValueOrDefault(summary.Context.Stage.Id);
+				return new AdmissionAssessmentColumnFilterRow
+				{
+					StageId = summary.Context.Stage.Id,
+					ApplicationNumber = summary.Context.Application.ApplicationNumber,
+					ClassName = summary.Context.ClassName,
+					SessionName = attempt?.SessionId is Guid sessionId ? sessionRows.GetValueOrDefault(sessionId)?.Name ?? string.Empty : string.Empty,
+					Attendance = attempt?.Attendance ?? "pending",
+					Outcome = attempt?.Outcome ?? string.Empty
+				};
+			}), input.ColumnFilters).Select(row => row.StageId).ToHashSet();
+			rows = rows.Where(row => matchingStages.Contains(row.Context.Stage.Id)).ToList();
+		}
 		var counts = CountQueues(rows);
 		var statusCounts = new AdmissionAssessmentStatusCountsDto
 		{

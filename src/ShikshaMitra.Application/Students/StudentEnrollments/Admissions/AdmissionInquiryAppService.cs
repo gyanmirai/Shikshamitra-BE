@@ -421,6 +421,7 @@ public class AdmissionInquiryAppService(
 				.GroupBy(field => field.BindingKey!, StringComparer.OrdinalIgnoreCase)
 				.ToDictionary(group => group.Key, group => values[group.Last().Code], StringComparer.OrdinalIgnoreCase), guardian);
 		}
+		AdmissionFamilyContactCapture.Capture(applicant, input.FamilyContacts, input.ParentRelationship);
 		if (!input.ExistingFamilyId.HasValue) await familyRepository.InsertAsync(family, autoSave: false);
 		if (newGuardian) await guardianRepository.InsertAsync(guardian!, autoSave: false);
 		await applicantRepository.InsertAsync(applicant, autoSave: false);
@@ -428,6 +429,7 @@ public class AdmissionInquiryAppService(
 			input.ApplicantName, phone, input.Email, input.Source, input.SourceDetail);
 		inquiry.SetPreferredLanguage(input.PreferredLanguageCode);
 		inquiry.LinkIdentity(family.Id, applicant.Id);
+		AdmissionFamilyContactCapture.CopyToInquiry(applicant, inquiry);
 		if (inquiryFormId.HasValue)
 		{
 			var snapshot = input.FormValues
@@ -682,6 +684,9 @@ public class AdmissionInquiryAppService(
 	{
 		var inquiry = await GetInquiryAsync(id);
 		var title = input.Title?.Trim() ?? string.Empty;
+		var schoolContact = AdmissionFamilyContactCapture.ReadMainContact(inquiry);
+		var recipientEmail = schoolContact != null ? schoolContact.Email : inquiry.Email;
+		var recipientMobile = schoolContact != null ? schoolContact.Mobile : inquiry.NormalizedPhone;
 		var subject = input.Subject?.Trim();
 		var body = input.Body?.Trim() ?? string.Empty;
 		var channels = (input.Channels ?? []).Distinct().ToList();
@@ -696,14 +701,14 @@ public class AdmissionInquiryAppService(
 			channel is not (CommunicationChannelType.WhatsApp or CommunicationChannelType.Sms or CommunicationChannelType.Email)))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Choose at least one family communication channel: WhatsApp, SMS, or Email.");
-		if (channels.Contains(CommunicationChannelType.Email) && string.IsNullOrWhiteSpace(inquiry.Email))
+		if (channels.Contains(CommunicationChannelType.Email) && string.IsNullOrWhiteSpace(recipientEmail))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Add an email address to this inquiry before selecting Email.");
 		if (channels.Contains(CommunicationChannelType.Email) && string.IsNullOrWhiteSpace(subject))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Enter an email subject before selecting Email.");
 		if (channels.Any(channel => channel is CommunicationChannelType.WhatsApp or CommunicationChannelType.Sms) &&
-			string.IsNullOrWhiteSpace(inquiry.NormalizedPhone))
+			string.IsNullOrWhiteSpace(recipientMobile))
 			throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput,
 				"Add a mobile number to this inquiry before selecting WhatsApp or SMS.");
 
@@ -732,9 +737,9 @@ public class AdmissionInquiryAppService(
 					{
 						RecipientType = "AdmissionInquiry",
 						RecipientId = inquiry.ApplicantId ?? inquiry.Id,
-						DisplayName = inquiry.ApplicantName,
-						Email = inquiry.Email,
-						MobileNumber = inquiry.NormalizedPhone,
+						DisplayName = schoolContact?.FullName ?? inquiry.ApplicantName,
+						Email = recipientEmail,
+						MobileNumber = recipientMobile,
 						PreferredLanguageCode = inquiry.PreferredLanguageCode,
 						IsParentDefault = true
 					}
@@ -824,6 +829,12 @@ public class AdmissionInquiryAppService(
 					(!input.MediumId.HasValue || offering.MediumId == input.MediumId.Value) &&
 					(!input.StandardId.HasValue || offering.StandardId == input.StandardId.Value) &&
 					(input.StandardIds.Count == 0 || Enumerable.Contains(input.StandardIds, offering.StandardId))));
+		}
+		if (!string.IsNullOrWhiteSpace(input.StandardName))
+		{
+			var classQuery = AdmissionQueueColumnFilters.Text(await standardRepository.GetQueryableAsync(), standard => standard.Name, input.StandardName, NormalizeTextFilterType(input.StandardNameFilterType));
+			var offeringQuery = await offeringRepository.GetQueryableAsync();
+			query = query.Where(inquiry => inquiry.AdmissionOfferingId.HasValue && offeringQuery.Any(offering => offering.Id == inquiry.AdmissionOfferingId && classQuery.Any(standard => standard.Id == offering.StandardId)));
 		}
 		var managementQuery = await managementRepository.GetQueryableAsync();
 		var followUpQuery = await followUpRepository.GetQueryableAsync();
@@ -955,6 +966,7 @@ public class AdmissionInquiryAppService(
 			management.QualificationDueAt < currentTime;
 		return new AdmissionInquiryDto
 		{
+		MainSchoolContact = AdmissionFamilyContactCapture.ReadMainContact(x),
 		Id = x.Id, ConcurrencyStamp = x.ConcurrencyStamp, InquiryNumber = x.InquiryNumber, AdmissionCycleId = x.AdmissionCycleId, AdmissionOfferingId = x.AdmissionOfferingId, FamilyId = x.FamilyId, ApplicantId = x.ApplicantId, AssignedCounsellorId = null,
 		AssignedCounsellorName = null, AdmissionCycleName = cycleName ?? string.Empty,
 		AdmissionOfferingCode = offeringCode,

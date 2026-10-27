@@ -54,6 +54,7 @@ public class AdmissionCycleListInput : PagedAndSortedResultRequestDto
 	public Guid? AcademicYearId { get; set; }
 	public AdmissionCycleStatus? Status { get; set; }
 	public AdmissionCycleWindowStatus? WindowStatus { get; set; }
+	public string? ColumnFilters { get; set; }
 }
 
 public class AdmissionCycleActionDto

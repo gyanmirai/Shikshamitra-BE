@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
@@ -35,9 +36,19 @@ public class AdmissionWorkflowReadService(
 				 applicationUsage.Any(application => application.WorkflowDefinitionId == workflow.Id))) &&
 			(string.IsNullOrWhiteSpace(search) || workflow.Name.Contains(search) || workflow.Code.Contains(search)));
 
+		var filtered = AdmissionWorkflowColumnFilters.Apply(query.Select(workflow => new AdmissionWorkflowColumnFilterRow
+		{
+			Id = workflow.Id,
+			Name = workflow.Name,
+			Version = workflow.Version,
+			OfferingCount = offeringUsage.Count(offering => offering.WorkflowDefinitionId == workflow.Id),
+			LastModificationTime = workflow.LastModificationTime ?? workflow.CreationTime,
+			PublishedAt = workflow.PublishedAt
+		}), input.ColumnFilters);
+		query = query.Where(workflow => filtered.Any(row => row.Id == workflow.Id));
 		var count = await AsyncExecuter.CountAsync(query);
 		var workflows = await AsyncExecuter.ToListAsync(
-			Sort(query, input.Sorting).Skip(input.SkipCount).Take(input.MaxResultCount));
+			Sort(query, offeringUsage, input.Sorting).ThenBy(workflow => workflow.Id).Skip(input.SkipCount).Take(input.MaxResultCount));
 		var ids = workflows.Select(workflow => workflow.Id).ToList();
 		var offeringCounts = await GetOfferingCountsAsync(ids);
 		var campusCounts = await GetCampusCountsAsync(ids);
@@ -232,8 +243,9 @@ public class AdmissionWorkflowReadService(
 		return counts.ToDictionary(item => item.Id, item => item.Count);
 	}
 
-	private static IQueryable<AdmissionWorkflowDefinition> Sort(
+	private static IOrderedQueryable<AdmissionWorkflowDefinition> Sort(
 		IQueryable<AdmissionWorkflowDefinition> query,
+		IQueryable<AdmissionOffering> offeringUsage,
 		string? sorting) => sorting?.Trim().ToLowerInvariant() switch
 	{
 		"name" => query.OrderBy(workflow => workflow.Name),
@@ -242,6 +254,23 @@ public class AdmissionWorkflowReadService(
 		"version" => query.OrderBy(workflow => workflow.Version),
 		"version desc" => query.OrderByDescending(workflow => workflow.Version),
 		"status" => query.OrderBy(workflow => workflow.Status),
+		"status desc" => query.OrderByDescending(workflow => workflow.Status),
+		"statuslabel" => query.OrderBy(StatusLabel),
+		"statuslabel desc" => query.OrderByDescending(StatusLabel),
+		"offeringcount" => query.OrderBy(workflow => offeringUsage.Count(offering => offering.WorkflowDefinitionId == workflow.Id)),
+		"offeringcount desc" => query.OrderByDescending(workflow => offeringUsage.Count(offering => offering.WorkflowDefinitionId == workflow.Id)),
+		"publishedat" => query.OrderBy(workflow => workflow.PublishedAt),
+		"publishedat desc" => query.OrderByDescending(workflow => workflow.PublishedAt),
+		"lastmodificationtime" => query.OrderBy(workflow => workflow.LastModificationTime ?? workflow.CreationTime),
 		_ => query.OrderByDescending(workflow => workflow.LastModificationTime ?? workflow.CreationTime)
 	};
+
+	private static readonly Expression<Func<AdmissionWorkflowDefinition, string>> StatusLabel = workflow =>
+		workflow.Status == AdmissionWorkflowStatus.Draft ? "Draft" :
+		workflow.Status == AdmissionWorkflowStatus.Published ? "Published" :
+		workflow.Status == AdmissionWorkflowStatus.Archived ? "Archived" :
+		workflow.Status == AdmissionWorkflowStatus.Validated ? "Validated" :
+		workflow.Status == AdmissionWorkflowStatus.SubmittedForApproval ? "Submitted" :
+		workflow.Status == AdmissionWorkflowStatus.Approved ? "Approved" :
+		workflow.Status == AdmissionWorkflowStatus.Scheduled ? "Scheduled" : "Superseded";
 }

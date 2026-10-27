@@ -35,7 +35,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var service = GetRequiredService<IStudentOnboardingAppService>();
 			var beforeSettings = (await service.GetSettingsAsync(fixture.Case.AcademicYearId)).Single(value => value.AcademicYearId == fixture.Case.AcademicYearId).ConfigurationJson;
 			var workspace = await service.GetCredentialsAsync(fixture.Case.Id);
-			workspace.Recipients.Select(owner => owner.Relationship).ShouldBe(["self", "father", "mother"]);
+			workspace.Recipients.Select(owner => owner.Relationship).ShouldBe(["self", "father", "mother", "guardian"]);
 			workspace.Recipients.ShouldAllBe(owner => owner.CanSend);
 			var firstInput = new SendStudentCredentialsDto { AccountType = "student", Relationship = "self",
 				ExpectedEmail = fixture.StudentEmail, ConcurrencyStamp = workspace.ConcurrencyStamp };
@@ -48,7 +48,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var repeated = await service.SendCredentialsAsync(workspace.CaseId, firstInput);
 			repeated.ConcurrencyStamp.ShouldBe(workspace.ConcurrencyStamp);
 			(await WithUnitOfWorkAsync(() => requests.CountAsync(row => row.CaseId == workspace.CaseId))).ShouldBe(1);
-			workspace = await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = "guardian", Relationship = "father",
+			workspace = await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father",
 				ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = workspace.ConcurrencyStamp });
 			var item = await service.GetAsync(workspace.CaseId);
 			item.Status.ShouldBe(timing == "completion" ? StudentOnboardingStatus.Completed : StudentOnboardingStatus.NeedsAttention);
@@ -77,7 +77,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var workspace = await service.GetCredentialsAsync(fixture.Case.Id);
 			workspace.Recipients.ShouldAllBe(owner => !owner.CanSend);
 			(await Should.ThrowAsync<BusinessException>(() => service.SendCredentialsAsync(workspace.CaseId,
-				new() { AccountType = "guardian", Relationship = "father", ExpectedEmail = fixture.FatherEmail,
+				new() { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father", ExpectedEmail = fixture.FatherEmail,
 					ConcurrencyStamp = workspace.ConcurrencyStamp }))).Code.ShouldBe(StudentOnboardingErrorCodes.PortalAccountInvalid);
 			(await service.GetPortalAccountsAsync(workspace.CaseId)).ShouldBeEmpty();
 			(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>().CountAsync(row => row.CaseId == workspace.CaseId))).ShouldBe(0);
@@ -100,7 +100,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				{ AccountType = "student", ConcurrencyStamp = workspace.ConcurrencyStamp }))).Code.ShouldBe(StudentOnboardingErrorCodes.PortalAccountInvalid);
 			workspace = await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = "student", Relationship = "self",
 				ExpectedEmail = fixture.StudentEmail, ConcurrencyStamp = workspace.ConcurrencyStamp });
-			workspace = await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = "guardian", Relationship = "father",
+			workspace = await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father",
 				ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = workspace.ConcurrencyStamp });
 			var completed = await service.GetAsync(workspace.CaseId);
 			completed.Status.ShouldBe(StudentOnboardingStatus.Completed); completed.CredentialsPending.ShouldBeTrue();
@@ -137,7 +137,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var service = GetRequiredService<IStudentOnboardingAppService>(); var workspace = await service.GetCredentialsAsync(fixture.Case.Id);
 			workspace = await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = "student", Relationship = "self",
 				ExpectedEmail = fixture.StudentEmail, ConcurrencyStamp = workspace.ConcurrencyStamp });
-			workspace = await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = "guardian", Relationship = "father",
+			workspace = await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father",
 				ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = workspace.ConcurrencyStamp });
 			var item = await service.GetAsync(workspace.CaseId); item.Status.ShouldBe(StudentOnboardingStatus.NeedsAttention); item.CredentialsPending.ShouldBeTrue();
 			await WithUnitOfWorkAsync(async () =>
@@ -156,7 +156,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		{
 			var fixture = await CreateOneClickCredentialsCaseAsync("activation");
 			var service = GetRequiredService<IStudentOnboardingAppService>(); var workspace = await service.GetCredentialsAsync(fixture.Case.Id);
-			var input = new SendStudentCredentialsDto { AccountType = "guardian", Relationship = "father",
+			var input = new SendStudentCredentialsDto { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father",
 				ExpectedEmail = "different@example.test", ConcurrencyStamp = workspace.ConcurrencyStamp };
 			(await Should.ThrowAsync<BusinessException>(() => service.SendCredentialsAsync(workspace.CaseId, input))).Code.ShouldBe(StudentOnboardingErrorCodes.PortalAccountInvalid);
 			input.ExpectedEmail = fixture.FatherEmail; input.ConcurrencyStamp = "stale";
@@ -236,7 +236,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 				workspace.Recipients.Single(owner => owner.Relationship == "father").CanSend.ShouldBeFalse();
 			}
 			var error = await Should.ThrowAsync<AbpAuthorizationException>(() => WithUnitOfWorkAsync(() => service.SendCredentialsAsync(fixture.Case.Id,
-				new() { AccountType = "guardian", Relationship = "father", ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = fixture.Case.ConcurrencyStamp })));
+				new() { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father", ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = fixture.Case.ConcurrencyStamp })));
 			error.Data["PolicyName"].ShouldBe(permission);
 			(await GetRequiredService<IStudentOnboardingAppService>().GetPortalAccountsAsync(fixture.Case.Id)).ShouldBeEmpty();
 			(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>().CountAsync(row => row.CaseId == fixture.Case.Id))).ShouldBe(0);
@@ -284,7 +284,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			var row = new StudentCredentialEmailRequest(Guid.NewGuid(), TestTenantId, fixture.Case.Id, fixture.Case.StudentId,
 				link.Id, link.UserId, "guardian", fixture.FatherEmail, Guid.NewGuid(), DateTime.UtcNow.AddMinutes(-3));
 			await WithUnitOfWorkAsync(() => requests.InsertAsync(row, true));
-			var input = new SendStudentCredentialsDto { AccountType = "guardian", Relationship = "father",
+			var input = new SendStudentCredentialsDto { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father",
 				ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = "stale" };
 			(await Should.ThrowAsync<BusinessException>(() => service.SendCredentialsAsync(workspace.CaseId, input))).Code.ShouldBe(StudentOnboardingErrorCodes.ConcurrencyConflict);
 			input.ConcurrencyStamp = workspace.ConcurrencyStamp;

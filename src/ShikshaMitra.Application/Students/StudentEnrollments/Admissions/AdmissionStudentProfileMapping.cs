@@ -64,6 +64,7 @@ internal static class AdmissionStudentProfileMapping
 			.Any(prefix => key.StartsWith("AdmissionStudentField." + prefix, StringComparison.Ordinal))))
 			student.UpdateFamilyInfo(Parent("Father", family?.FatherDetails), Parent("Mother", family?.MotherDetails),
 				Parent("Guardian", family?.GuardianDetails), ReadSiblings(V("Family.SiblingStudentIds")) ?? family?.SiblingStudentIds);
+		AdmissionFamilyContactCapture.ApplySelection(applicant, student);
 		var contact = student.ContactDetail;
 		if (contact != null)
 			student.ApplyVerifiedRegistrationContact(contact.PrimaryContactNo, V("Contact.SecondaryPhone") ?? contact.SecondaryContactNo,

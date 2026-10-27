@@ -43,6 +43,22 @@ public class AdmissionCycleAppService(
 			(!input.Status.HasValue || x.Status == input.Status.Value));
 
 		queryable = ApplyWindowFilter(queryable, input.WindowStatus, today);
+		if (!string.IsNullOrWhiteSpace(input.ColumnFilters))
+		{
+			var scopedOfferings = await applicationScope.GetScopedOfferingsAsync();
+			var scopedApplications = await applicationScope.GetScopedApplicationsAsync();
+			var filterRows = AdmissionCycleColumnFilters.Apply(queryable.Select(cycle => new AdmissionCycleColumnFilterRow
+			{
+				Id = cycle.Id,
+				Name = cycle.Name,
+				StartDate = cycle.StartDate,
+				EndDate = cycle.EndDate,
+				LinkedOfferingCount = scopedOfferings.Count(offering => offering.AdmissionCycleId == cycle.Id),
+				ApplicationCount = scopedApplications.Count(application => application.AdmissionCycleId == cycle.Id &&
+					scopedOfferings.Any(offering => offering.Id == application.AdmissionOfferingId))
+			}), input.ColumnFilters);
+			queryable = queryable.Where(cycle => filterRows.Any(row => row.Id == cycle.Id));
+		}
 		var totalCount = await AsyncExecuter.CountAsync(queryable);
 		var rows = await AsyncExecuter.ToListAsync(ApplySorting(queryable, input.Sorting)
 			.Skip(input.SkipCount)

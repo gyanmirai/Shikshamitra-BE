@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -28,18 +28,22 @@ public class HrPolicyAssignmentResolver(
 		Employee employee,
 		Guid academicYearId,
 		DateTime date,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken,
+		HrPolicyAssignment? proposedAssignment = null,
+		Guid? replacedAssignmentId = null)
 	{
-		return await ResolveAsync(employee, null, academicYearId, date, cancellationToken);
+		return await ResolveAsync(employee, null, academicYearId, date, cancellationToken, proposedAssignment, replacedAssignmentId);
 	}
 
 	internal async Task<HrPolicyAssignmentResolution> ResolvePreviewAsync(
 		Guid? groupId,
 		Guid academicYearId,
 		DateTime date,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken,
+		HrPolicyAssignment? proposedAssignment = null,
+		Guid? replacedAssignmentId = null)
 	{
-		return await ResolveAsync(null, groupId, academicYearId, date, cancellationToken);
+		return await ResolveAsync(null, groupId, academicYearId, date, cancellationToken, proposedAssignment, replacedAssignmentId);
 	}
 
 	private async Task<HrPolicyAssignmentResolution> ResolveAsync(
@@ -47,7 +51,9 @@ public class HrPolicyAssignmentResolver(
 		Guid? groupId,
 		Guid academicYearId,
 		DateTime date,
-		CancellationToken cancellationToken)
+		CancellationToken cancellationToken,
+		HrPolicyAssignment? proposedAssignment,
+		Guid? replacedAssignmentId)
 	{
 		var targets = await BuildTargetKeysAsync(employee, groupId, academicYearId, cancellationToken);
 		if (targets.Count == 0)
@@ -72,6 +78,14 @@ public class HrPolicyAssignmentResolver(
 				targetKeys.Contains(x.TargetKey) &&
 				x.EffectiveFrom <= date &&
 				(!x.EffectiveTo.HasValue || x.EffectiveTo.Value >= date)), cancellationToken);
+
+		// Overlay a detached draft without changing the persisted candidates or the resolution algorithm.
+		if (replacedAssignmentId.HasValue)
+			candidates = candidates.Where(x => x.Id != replacedAssignmentId.Value).ToList();
+		if (proposedAssignment != null && proposedAssignment.TenantId == CurrentTenant.Id &&
+			proposedAssignment.AcademicYearId == academicYearId && proposedAssignment.IsEffectiveOn(date) &&
+			targets.Any(target => target.TargetType == proposedAssignment.TargetType && target.TargetKey == proposedAssignment.TargetKey))
+			candidates.Add(proposedAssignment);
 
 		var specificity = targets.ToDictionary(x => (x.TargetType, x.TargetKey), x => x.Specificity);
 		var winner = candidates

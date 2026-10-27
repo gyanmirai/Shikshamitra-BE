@@ -19,7 +19,7 @@ public partial class ShikshaMitraDbContext
 		ChangeTracker.DetectChanges();
 		using var authorizationScopeChange = InvalidateChangedAuthorizationScope();
 		var tenants = ChangeTracker.Entries().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
-			.Where(x => IsPayrollInput(x.Entity, x.Metadata.ClrType)).Select(x => x.Entity is IMultiTenant scoped ? scoped.TenantId : CurrentTenant.Id).Distinct().ToList();
+			.Where(x => IsPayrollInput(x.Entity, x.Metadata.ClrType) && !IsAdvisorySetupReviewOnly(x)).Select(x => x.Entity is IMultiTenant scoped ? scoped.TenantId : CurrentTenant.Id).Distinct().ToList();
 		if (tenants.Count == 0) return base.SaveChanges(acceptAllChangesOnSuccess);
 		using var transaction = Database.CurrentTransaction == null ? Database.BeginTransaction() : null;
 		foreach (var tenantId in tenants.OrderBy(x => x))
@@ -38,7 +38,7 @@ public partial class ShikshaMitraDbContext
 		ChangeTracker.DetectChanges();
 		using var authorizationScopeChange = InvalidateChangedAuthorizationScope();
 		var tenants = ChangeTracker.Entries().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
-			.Where(x => IsPayrollInput(x.Entity, x.Metadata.ClrType)).Select(x => x.Entity is IMultiTenant scoped ? scoped.TenantId : CurrentTenant.Id).Distinct().ToList();
+			.Where(x => IsPayrollInput(x.Entity, x.Metadata.ClrType) && !IsAdvisorySetupReviewOnly(x)).Select(x => x.Entity is IMultiTenant scoped ? scoped.TenantId : CurrentTenant.Id).Distinct().ToList();
 		if (tenants.Count == 0) return await SaveSubmissionChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
 		// The fence and the input write must commit together, including callers without an ABP transaction.
 		await using var transaction = Database.CurrentTransaction == null ? await Database.BeginTransactionAsync(cancellationToken) : null;

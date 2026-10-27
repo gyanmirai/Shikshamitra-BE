@@ -15,6 +15,8 @@ Use it for endpoint families, permissions, request conventions, errors, and know
 Use current controllers and application contracts when route behavior is unclear.
 Do not restore raw generated exports under `docs/`.
 
+Advisory school setup-review endpoints and storage are documented in [setup review](references/setup-review.md).
+
 ## Shared request rules
 
 All tenant-scoped HR APIs require authentication and tenant context:
@@ -305,11 +307,14 @@ Policy APIs resolve work calendars, payroll policies, attendance policies, assig
 | Payroll policies | `/api/hr/payroll/policies*` |
 | Leave policies | `/api/leave-policies*` |
 | Policy assignments | `/api/hr/policy-assignments*` |
+| Current/proposed assignment resolution | `POST /api/hr/policy-assignments/resolution-preview` |
 | Effective policies | `/api/hr/employees/{employeeId}/effective-policies?date=YYYY-MM-DD` |
 | Holiday impact preview | `/api/hr/policy-holiday-impact-preview*` |
 | Policy versions | `/api/hr/{policyType}/policies/{policyId}/versions*` |
 
 Work-calendar effective dates accept years from 1900 through 2100, and a custom weekly-off pattern must leave at least one working day.
+Assignment resolution preview requires the existing `HR.Policies.PreviewImpact` grant at both controller and application-service boundaries. Supply `assignment`, `date`, optional `assignmentId` and optional `sampleEmployeeId`; the tenant is server-derived. It resolves current and detached proposed assignments through the same staff/group/default ordering without saving them. Staff samples require current staff scope. A group-only result is explicitly scoped to that group; a new-ID tie returns `isComplete: false` and no proposed winner rather than guessing its future ID.
+Shared policy impact responses add `ruleDifferencesStatus` and `ruleDifferences` for current/proposed contract fields. Collection differences describe operational holiday, weekday and payroll-month values while excluding temporary row identities. Unknown comparisons are not represented as no changes. These disclosures do not simulate salary or change confirmation/locking behavior.
 Work-calendar, attendance, payroll, and leave policy names are unique only among non-archived policies in the same tenant and academic year, so an archived name can be reused.
 Leave policy uniqueness is case-insensitive and is backed by the normalized database key, while the other policy families preserve their existing case-sensitive name contract.
 Duplicate active policy names return a stable business error that the frontend can present without exposing database details.

@@ -38,6 +38,7 @@ public class TransactionListItem
 // ────────────────────────────────────────────────────────────────
 public class TransactionCreateUpdateResponse
 {
+	public string? Message { get; set; }
 	public bool Success { get; set; } = true;
 	public TransactionResponseData Data { get; set; }
 }

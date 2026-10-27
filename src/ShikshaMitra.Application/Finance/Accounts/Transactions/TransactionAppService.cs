@@ -80,13 +80,38 @@ public partial class TransactionAppService(
 	[UnitOfWork(isTransactional: true)]
 	public async Task<TransactionCreateUpdateResponse> CreateAsync(Guid academicYearId, TransactionCreateRequest input, TransactionType transactionType)
 	{
+		using var cashUow = LazyServiceProvider.LazyGetRequiredService<IUnitOfWorkManager>().Begin(
+			new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);
+		var response = await CreateCoreAsync(academicYearId, input, transactionType);
+		await cashUow.CompleteAsync();
+		return response;
+	}
+
+	private async Task<TransactionCreateUpdateResponse> CreateCoreAsync(Guid academicYearId, TransactionCreateRequest input, TransactionType transactionType)
+	{
         var paymentDate = input.PaymentDate.UtcDateTime;
 		await CheckPermissionAsync(transactionType, "Add");
 		Transaction.EnsureValidMoneyAndMethod(input.Amount, input.PaymentMethod);
-		await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(
-			academicYearId, null, null, null, null);
+		if (input.PaymentMethod == 0 && input.PaymentDate > new DateTimeOffset(Clock.Now.ToUniversalTime()))
+			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidEvidence);
+		if (transactionType == TransactionType.Expense && input.PaymentMethod == 0 && input.CashCollectionId.HasValue)
+			await financeScopeAccessService.EnsureCollectionYearAccessibleAsync(academicYearId);
+		else await financeScopeAccessService.EnsureAcademicContextAccessibleAsync(academicYearId, null, null, null, null);
 
-		if (input.IdempotencyKey == Guid.Empty) throw new BusinessException(AccountsRegisterErrorCodes.ManualEntryKeyConflict);
+		if (input.IdempotencyKey == Guid.Empty || input.PaymentMethod == 0 && !input.IdempotencyKey.HasValue)
+			throw new BusinessException(AccountsRegisterErrorCodes.ManualEntryKeyConflict);
+		if (input.PaymentMethod != 0 && (input.CashCollectionId.HasValue || input.CashConcurrencyStamp != null))
+			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidSource);
+		// Validate the original cash request before any idempotent replay. Approval
+		// later adds a bank destination to the stored Income, but callers still
+		// cannot supply or change bank/source routing on a cash-income request.
+		if (input.PaymentMethod == 0 && input.BankAccountId.HasValue)
+			throw new BusinessException(AccountsRegisterErrorCodes.InvalidCashBank);
+		if (input.PaymentMethod == 0 && transactionType == TransactionType.Income &&
+			(input.CashCollectionId.HasValue || input.CashConcurrencyStamp != null))
+			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidSource);
+		if (input.IdempotencyKey.HasValue)
+			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Finance.Accounts.CashManagement.ICashCollectionLock>().AcquireAsync(input.IdempotencyKey.Value);
         if (input.IdempotencyKey.HasValue)
         {
             var prior = await transactionRepository.FindAsync(input.IdempotencyKey.Value);
@@ -94,12 +119,20 @@ public partial class TransactionAppService(
             {
                 prior.ExtraProperties.TryGetValue("PaymentReference", out var reference);
                 prior.ExtraProperties.TryGetValue("Counterparty", out var counterparty);
+                prior.ExtraProperties.TryGetValue("CashConcurrencyStamp", out var cashStamp);
                 if (prior.IsAutomatic || prior.TenantId != CurrentTenant.Id || prior.AcademicYearId != academicYearId ||
-                    prior.TransactionType != transactionType || prior.CategoryId != input.CategoryId || prior.Amount != input.Amount ||
-                    prior.PaymentMethod != input.PaymentMethod || prior.PaymentDate != paymentDate || prior.BankAccountId != input.BankAccountId ||
+                    prior.TransactionType != transactionType || prior.CategoryId != input.CategoryId ||
+                    (prior.PaymentMethod == 0 && prior.CashCollectionId.HasValue && transactionType == TransactionType.Income
+                        ? prior.GetOriginalCashIncomeAmount() : prior.Amount) != input.Amount ||
+                    prior.PaymentMethod != input.PaymentMethod || prior.PaymentDate != paymentDate ||
+                    (!(prior.PaymentMethod == 0 && prior.CashCollectionId.HasValue && transactionType == TransactionType.Income) && prior.BankAccountId != input.BankAccountId) ||
                     prior.Name != input.Name || prior.Notes != input.Notes || reference?.ToString() != input.PaymentReference?.Trim() ||
+                    (input.PaymentMethod == 0 && prior.CreatorId != CurrentUser.Id) ||
+                    (transactionType == TransactionType.Expense && (prior.CashCollectionId != input.CashCollectionId || cashStamp?.ToString() != input.CashConcurrencyStamp)) ||
                     counterparty?.ToString() != input.Counterparty?.Trim() || !prior.CategoryTags.Select(x => x.Value).OrderBy(x => x).SequenceEqual(input.CategoryTags.Select(x => new Tag(x).Value).Distinct().OrderBy(x => x)))
                     throw new BusinessException(AccountsRegisterErrorCodes.ManualEntryKeyConflict);
+                if (prior.FinanceFeeAccountId.HasValue || prior.StudentId.HasValue)
+                    await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(prior.StudentId, prior.FinanceFeeAccountId);
                 return MapToCreateUpdateResponse(prior, await transactionCategoryRepository.GetAsync(prior.CategoryId));
             }
         }
@@ -128,6 +161,7 @@ public partial class TransactionAppService(
         var label = bank == null ? null : $"{bank.BankName} • {bank.AccountNumber[^Math.Min(4, bank.AccountNumber.Length)..]}";
         transaction.SetManualRouting(category.Name, bank?.Id, label, input.PaymentReference);
         transaction.ExtraProperties["Counterparty"] = input.Counterparty?.Trim();
+		await RouteCashAsync(transaction, input);
         await transactionRepository.InsertAsync(transaction, autoSave: true);
 		return MapToCreateUpdateResponse(transaction, category);
 	}
@@ -140,6 +174,7 @@ public partial class TransactionAppService(
 			await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(transaction.StudentId, transaction.FinanceFeeAccountId);
 		await EnsureTransactionYearAsync(transaction);
 		EnsureTransactionType(transaction, transactionType);
+		if (!transaction.IsConfirmed) throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidSource);
 
 		var category = await transactionCategoryRepository.GetAsync(transaction.CategoryId);
 		var scopedStudentIds = await financeScopeAccessService.GetScopedStudentIdsQueryAsync();
@@ -174,6 +209,8 @@ public partial class TransactionAppService(
 			await financeScopeAccessService.EnsureCollectionPayerAccessibleAsync(transaction.StudentId, transaction.FinanceFeeAccountId);
 		await EnsureTransactionYearAsync(transaction);
 		EnsureTransactionType(transaction, transactionType);
+		if (transaction.CashCollectionId.HasValue || transaction.PaymentMethod != 0 && input.PaymentMethod == 0)
+			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.Immutable);
 
 		await referenceLock.AcquireAsync();
 		var category = await transactionCategoryRepository.FindAsync(input.CategoryId)
@@ -199,6 +236,7 @@ public partial class TransactionAppService(
 		await EnsureTransactionYearAsync(transaction);
 		EnsureTransactionType(transaction, transactionType);
 		if (transaction.IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");
+		if (transaction.CashCollectionId.HasValue) throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.Immutable);
         await transactionRepository.DeleteAsync(transaction, autoSave: true);
 		return new TransactionDeleteResponse { Success = true, Message = "Transaction deleted successfully" };
 	}

@@ -46,8 +46,6 @@ public class AccountSettingsSimplificationApi_Tests(FinanceRoutingApiTestFactory
    bank.GetProperty("code").GetString().ShouldNotBeNullOrWhiteSpace();
  }
  [Theory]
- [InlineData("charge","Finance.Fees.Charges.Add")]
- [InlineData("charge","Finance.Fees.Charges.Update")]
  [InlineData("collection","Finance.Fees.FeeCollections.Add")]
  [InlineData("refund","Finance.Fees.Refund.Approve")]
  public async Task Financial_picker_uses_the_owning_action_without_master_view_grants(string operation,string permission)
@@ -60,6 +58,17 @@ public class AccountSettingsSimplificationApi_Tests(FinanceRoutingApiTestFactory
    var result=await response.Content.ReadFromJsonAsync<JsonElement>();
    result.GetProperty("bankAccounts").ValueKind.ShouldBe(JsonValueKind.Array);
    result.GetProperty("incomeCategories").ValueKind.ShouldBe(JsonValueKind.Array);
+ }
+ [Theory]
+ [InlineData("Finance.Fees.Charges.Add")]
+ [InlineData("Finance.Fees.Charges.Update")]
+ public async Task Retired_charge_picker_does_not_reintroduce_legacy_charge_authority(string permission)
+ {
+   await EnsureAcademicScopeAsync();
+   using var client=Factory.CreateClient();
+   client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,permission);
+   var response=await client.GetAsync($"/api/finance-routing-options?academicYearId={Factory.SeededAcademicYearId}&operation=charge");
+   response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
  }
  [Fact]
  public async Task Fee_collection_add_cannot_use_refund_approval_picker()
@@ -84,7 +93,8 @@ public class AccountSettingsSimplificationApi_Tests(FinanceRoutingApiTestFactory
        .Where(x=>x.AcademicYearId==Factory.SeededAcademicYearId).Select(x=>x.Id));
      var manager=services.GetRequiredService<AutomaticTransactionManager>();
      for(var attempt=0;attempt<2;attempt++)
-       await manager.RecordAsync(Factory.SeededAcademicYearId,categoryId,"Fees",null,null,"Receipt",12.34m,0,
+       await manager.RecordAsync(Factory.SeededAcademicYearId,categoryId,"Fees",null,null,"Receipt",12.34m,
+         (int)ShikshaMitra.Finance.Fees.Collections.PaymentMethodEnum.BankTransfer,
          ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Income,key,sourceId,studentId,false,paymentDate);
    });
    await WithTenantUowAsync(async services=> {

@@ -58,7 +58,15 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         var category = await categoryResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         var reference = $"Manual {Guid.NewGuid():N}";
         var requestKey = Guid.NewGuid();
-        var body = new { idempotencyKey = requestKey, name = reference, counterparty = "Parent association", categoryId = category.GetProperty("id").GetGuid(), amount = 12.34m, paymentMethod = 0, paymentDate = at, paymentReference = "REF-123", categoryTags = Array.Empty<string>() };
+        // Generic register filtering is independent of the separately tested cash
+        // approval/funding workflow. Use an actual non-cash bank destination here.
+        var bankId = Guid.NewGuid();
+        await WithTenantAsync(async services => await services.GetRequiredService<IRepository<ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount, Guid>>()
+            .InsertAsync(new ShikshaMitra.Domain.Finance.Accounts.Settings.BankAccount(bankId, Factory.SeededAcademicYearId,
+                "Register test bank", "Synthetic branch", null, "School", Enum.GetValues<ShikshaMitra.Finance.Accounts.Settings.BankAccountType>().First(),
+                BitConverter.ToUInt64(bankId.ToByteArray(), 0).ToString(), "Register testing", "TEST0001234", null,
+                tenantId: Guid.Parse(TestAuthHandler.TestTenantId))));
+        var body = new { idempotencyKey = requestKey, name = reference, counterparty = "Parent association", categoryId = category.GetProperty("id").GetGuid(), amount = 12.34m, paymentMethod = 3, bankAccountId = bankId, paymentDate = at, paymentReference = "REF-123", categoryTags = Array.Empty<string>() };
         var created = await Client.PostAsJsonAsync($"/api/{route}?academicYearId={Factory.SeededAcademicYearId}", body);
         created.StatusCode.ShouldBe(HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         var value = await created.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
@@ -84,7 +92,7 @@ public class AccountsRegisterApi_Tests(FinanceRoutingApiTestFactory factory) : S
         (await Client.GetAsync($"/api/accounts/register/{opposite}/{id}?academicYearId={Factory.SeededAcademicYearId}")).IsSuccessStatusCode.ShouldBeFalse();
         var second = await Client.PostAsJsonAsync($"/api/{route}?academicYearId={Factory.SeededAcademicYearId}", new {
             idempotencyKey = Guid.NewGuid(), name = reference + " second", counterparty = "Another payer", categoryId = category.GetProperty("id").GetGuid(),
-            amount = 5m, paymentMethod = 0, paymentDate = at.AddMinutes(1), categoryTags = Array.Empty<string>() });
+            amount = 5m, paymentMethod = 3, bankAccountId = bankId, paymentDate = at.AddMinutes(1), categoryTags = Array.Empty<string>() });
         second.EnsureSuccessStatusCode();
         var firstSorted = await ReadPageAsync(url + "&sortBy=amount&sortDescending=false&pageSize=1");
         firstSorted.TotalCount.ShouldBe(2); firstSorted.Items.Single().Amount.ShouldBe(5m);

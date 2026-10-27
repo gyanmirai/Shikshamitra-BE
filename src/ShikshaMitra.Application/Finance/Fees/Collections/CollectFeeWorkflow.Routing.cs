@@ -8,6 +8,7 @@ using ShikshaMitra.Finance.Accounts.Transactions;
 using ShikshaMitra.Finance.Fees.Collections.Dtos;
 using ShikshaMitra.Finance.Fees.FeeCollection;
 using Volo.Abp;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.Finance.Fees.Collections;
 public partial class CollectFeeWorkflow
@@ -67,22 +68,50 @@ public partial class CollectFeeWorkflow
    {
      var payment = input.Payments[index]; var bank = plan.Banks[index];
      var record = transaction.PaymentRecords![index]; record.SetReceivingBank(bank.Id, bank.Label);
+     if (payment.PaymentMethod == PaymentMethodEnum.Cash)
+     {
+       var payer = await CashPayerNameAsync(input);
+       await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Finance.Accounts.CashManagement.CashCollection, Guid>>()
+         .InsertAsync(new ShikshaMitra.Finance.Accounts.CashManagement.CashCollection(GuidGenerator.Create(), CurrentTenant.Id,
+           input.AcademicYearId, transaction.Metadata.Id, $"collection:{transaction.Metadata.Id:N}:{index}:", null,
+           transaction.ReceiptNumber, payer, Money(payment.Amount), record.PaymentDate,
+           CurrentUser.Id ?? throw new Volo.Abp.Authorization.AbpAuthorizationException(), input.StudentId, input.FinanceFeeAccountId, record.Id), autoSave: true);
+     }
      foreach (var allocation in allocations.Where(x => x.InstrumentIndex == index))
      {
        var line = plan.Lines[allocation.CategoryIndex];
        await automaticTransactions.RecordAsync(input.AcademicYearId, line.CategoryId, line.CategoryName,
          bank.Id, bank.Label, transaction.ReceiptNumber, allocation.Amount, (int)payment.PaymentMethod,
          TransactionType.Income, $"collection:{transaction.Metadata.Id:N}:{index}:{allocation.CategoryIndex}",
-         transaction.Metadata.Id, input.StudentId, confirmed, record.PaymentDate.UtcDateTime, input.FinanceFeeAccountId);
+         transaction.Metadata.Id, input.StudentId, confirmed && payment.PaymentMethod != PaymentMethodEnum.Cash, record.PaymentDate.UtcDateTime, input.FinanceFeeAccountId);
      }
    }
+ }
+ private async Task<string> CashPayerNameAsync(CollectFeeInput input)
+ {
+   // Cash evidence needs a label, not the student's complete related-data graph.
+   if (input.FinanceFeeAccountId.HasValue)
+   {
+     var accounts = await LazyServiceProvider.LazyGetRequiredService<IRepository<FinanceFeeAccount, Guid>>().GetQueryableAsync();
+     return await AsyncExecuter.FirstOrDefaultAsync(accounts
+       .Where(x => x.Id == input.FinanceFeeAccountId.Value && x.TenantId == CurrentTenant.Id)
+       .Select(x => x.ApplicantName))
+       ?? throw new EntityNotFoundException(typeof(FinanceFeeAccount), input.FinanceFeeAccountId.Value);
+   }
+   var students = await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.IStudentRepository>()
+     .GetQueryableWithoutAutoIncludesAsync();
+   var student = await AsyncExecuter.FirstOrDefaultAsync(students
+     .Where(x => x.Id == input.StudentId!.Value && x.TenantId == CurrentTenant.Id)
+     .Select(x => new { x.FirstName, x.LastName }))
+     ?? throw new EntityNotFoundException(typeof(ShikshaMitra.Students.Student), input.StudentId!.Value);
+   return string.Join(" ", new[] { student.FirstName, student.LastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
  }
  private static decimal Money(double value)
  {
    if (!double.IsFinite(value) || value <= 0 || value > 999999999999.99d)
      throw new BusinessException(FinanceRoutingErrorCodes.AllocationMismatch);
    var amount = Convert.ToDecimal(value);
-   if (decimal.Round(amount, 2) != amount) throw new UserFriendlyException("Payment amounts must have at most two decimal places.");
+   if (decimal.Round(amount, 2) != amount) throw new BusinessException(FinanceRoutingErrorCodes.AllocationMismatch);
    return amount;
  }
 }

@@ -42,4 +42,5 @@ public static class PaymentTermErrorCodes
 	public const string InvalidTemplateConfiguration = $"{Prefix}:000039";
 	public const string DemandDateBeforeCoverageStart = $"{Prefix}:000040";
 	public const string DemandOffsetDaysExceedsMaximum = $"{Prefix}:000041";
+	public const string DuplicateName = $"{Prefix}:000042";
 }

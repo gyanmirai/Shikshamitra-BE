@@ -446,6 +446,7 @@ There is no public document URL or arbitrary email-recipient override.
 | GET /api/payroll/payslip-deliveries?salarySlipId= | GenerateSalarySlip.View | Delivery history across all issued revisions, with recipient, actor, times, status and safe error category. |
 | POST /api/payroll/payslip-deliveries | GenerateSalarySlip.Add | DocumentId and IdempotencyKey; queues the current official document for its employee. |
 | GET /api/payroll/payslip-settings | GenerateSalarySlip.View | SchoolName, SchoolAddress, AutomaticEmail, ConcurrencyStamp and last IdempotencyKey. |
+| POST /api/payroll/payslip-settings/preview | GenerateSalarySlip.View | Accepts validated `SalaryDocumentPresentation` and returns a no-store A4 PDF using the issuance renderer. Reads current tenant school identity/logo; ignores client logo references. Fixed, explicitly synthetic employee/payroll facts only; no employee lookup, settings persistence, document issuance or delivery. |
 | PUT /api/payroll/payslip-settings | GenerateSalarySlip.Add | Presentation, AutomaticEmail, ConcurrencyStamp and IdempotencyKey; optimistic concurrency and idempotent retries under the payroll fence. Incoming school details are ignored. |
 
 These short permission suffixes refer to the existing HR payroll payslip permission catalogue, not new grants.

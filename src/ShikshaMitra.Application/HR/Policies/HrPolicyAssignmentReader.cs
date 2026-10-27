@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -102,6 +102,51 @@ public class HrPolicyAssignmentReader(
 
 		var dto = ToEffectivePoliciesDto(resolved);
 		await assignmentEnricher.EnrichEffectiveTargetDisplayNamesAsync(dto);
+		return dto;
+	}
+
+	public async Task<PolicyAssignmentResolutionPreviewDto> PreviewResolutionAsync(PolicyAssignmentResolutionPreviewRequestDto input)
+	{
+		var proposal = input.Assignment;
+		var targetType = HrPolicyMapping.ParseAssignmentTargetType(proposal.TargetType);
+		var validator = LazyServiceProvider.LazyGetRequiredService<HrPolicyAssignmentTargetValidator>();
+		await validator.ValidateTargetAsync(targetType, proposal.TargetKey, proposal.AcademicYearId);
+		await validator.ValidateReferencesAsync(proposal);
+		if (input.AssignmentId.HasValue)
+		{
+			var original = await repository.GetAsync(input.AssignmentId.Value);
+			if (original.AcademicYearId != proposal.AcademicYearId)
+				throw new BusinessException(HRErrorCodes.HrPolicyAssignmentAcademicYearMismatch);
+		}
+		Guid? employeeId = targetType == HrPolicyAssignmentTargetType.Employee ? Guid.Parse(proposal.TargetKey) : input.SampleEmployeeId;
+		if (targetType == HrPolicyAssignmentTargetType.Employee && input.SampleEmployeeId.HasValue && input.SampleEmployeeId != employeeId)
+			throw new BusinessException(HRErrorCodes.HrPolicyAssignmentTargetInvalid);
+		if (employeeId.HasValue)
+			await LazyServiceProvider.LazyGetRequiredService<IEmployeeAuthorizationService>().CheckEmployeeScopeAccessAsync(employeeId.Value);
+		Guid? groupId = targetType == HrPolicyAssignmentTargetType.Group ? Guid.Parse(proposal.TargetKey) : null;
+		var current = await policyResolver.ResolvePreviewAsync(employeeId, groupId, input.Date, proposal.AcademicYearId);
+		var draft = new HrPolicyAssignment(input.AssignmentId ?? Guid.Empty, CurrentTenant.Id, proposal.AcademicYearId,
+			targetType, proposal.TargetKey, proposal.TargetDisplayName, proposal.AttendancePolicyId,
+			proposal.PayrollPolicyId, proposal.LeavePolicyId, proposal.EffectiveFrom, proposal.EffectiveTo,
+			proposal.IsActive, proposal.Priority, proposal.AssignmentReason);
+		var proposed = await policyResolver.ResolvePreviewAsync(employeeId, groupId, input.Date, proposal.AcademicYearId,
+			proposedAssignment: draft, replacedAssignmentId: input.AssignmentId);
+		// New IDs are allocated only by the real write. Never pretend a temporary
+		// ID can resolve the final deterministic-ID tie breaker.
+		var draftStep = proposed.ResolutionSteps.FirstOrDefault(x => x.AssignmentId == draft.Id);
+		var unresolvedTie = !input.AssignmentId.HasValue && draftStep != null &&
+			(draftStep.SkipReason == "deterministic_tie_breaker" ||
+			 (draftStep.Status == "matched" && proposed.ResolutionSteps.Any(x => x.SkipReason == "deterministic_tie_breaker")));
+		var dto = new PolicyAssignmentResolutionPreviewDto
+		{
+			Current = ToEffectivePoliciesDto(current),
+			Proposed = unresolvedTie ? null : ToEffectivePoliciesDto(proposed),
+			IsComplete = !unresolvedTie,
+			Scope = employeeId.HasValue ? "selected_staff" : "selected_group_only",
+			UnavailableReason = unresolvedTie ? "The new assignment ties on scope, priority and start date. Its final ID is not allocated; choose a different priority or start date and preview again." : null
+		};
+		await assignmentEnricher.EnrichEffectiveTargetDisplayNamesAsync(dto.Current);
+		if (dto.Proposed != null) await assignmentEnricher.EnrichEffectiveTargetDisplayNamesAsync(dto.Proposed);
 		return dto;
 	}
 }

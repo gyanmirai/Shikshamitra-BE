@@ -8,6 +8,10 @@ owner: backend-team
 audience: humans-and-agents
 ---
 
+## Salary template Basic-purpose regression
+
+`SalaryTemplateComposerAppService_Tests.Fresh_tenant_requires_explicit_Basic_purpose_and_preserves_fixed_salary` runs in a new synthetic tenant for both Basic Salary and a custom earning name. An Ordinary 50000 earning cannot preview; changing only its explicit semantic purpose to Basic preserves the fixed formula, previews Gross/Basic 50000, deductions 1000 and Net 49000, then creates and reloads an Active template using the preview proof. This SQLite fixture does not certify a deployed tenant or PostgreSQL runtime.
+
 ## Onboarding work assignment
 
 `EmployeeWorkAssignmentControllerDiscovery_Tests` resolves the real MVC action catalogue without seeding data, verifies the onboarding controller exists, and rejects all conventional actions on the internal `EmployeeWorkAssignmentValidator` helper. The helper is explicitly non-remote; access remains through the authorized onboarding endpoints.

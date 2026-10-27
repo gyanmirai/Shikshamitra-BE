@@ -7,5 +7,6 @@ public interface IPayslipSettingsAppService : IApplicationService
 {
 	Task<string> UploadLogoAsync(string contentType, byte[] bytes);
 	Task<PayslipSettingsDto> GetAsync();
+	Task<byte[]> PreviewAsync(SalaryDocumentPresentation input);
 	Task<PayslipSettingsDto> SaveAsync(PayslipSettingsDto input);
 }

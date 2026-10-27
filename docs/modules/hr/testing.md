@@ -8,6 +8,10 @@ owner: backend-team
 audience: humans-and-agents
 ---
 
+## Payslip settings sample regression
+
+For the read-only settings sample, run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~PayslipSettingsPreview_Tests|FullyQualifiedName~PayslipPdfLayout_Tests"`. It covers View-only rendering, denied actions/host/anonymous access, invalid presentation, unchanged settings, no-store PDF responses, logo embedding, long identity fields and 64 appearance combinations through the issuance renderer. All payroll facts are synthetic. Optional `PAYSLIP_VERIFY_ARTIFACTS` writes generated sample PDFs to an owned local folder for visual inspection; no PostgreSQL server is required.
+
 ## New-school starter policy regression coverage
 
 Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~InitialSetupApi_Tests"` for clean-school setup and starter-policy coverage. `InitialSetupApi_Tests.HrStarterPolicies.cs` covers fresh tenant creation through the host and legacy APIs, academic-year lifecycle initialization, policy/shift list and edit APIs, employee input validation and finalization policy resolution, repeated initialization, customization/deletion preservation across years, tenant isolation, no existing-tenant backfill, and failure/rollback with a valid retry. The fixture uses synthetic schools and in-memory SQLite; its legacy seeder creates only one synthetic year and never provisions a real tenant. PostgreSQL concurrent-delivery behavior is protected by deterministic IDs/database primary keys but is not exercised by this SQLite suite.

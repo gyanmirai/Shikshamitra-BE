@@ -20,5 +20,11 @@ public class PayslipSettingsController(IPayslipSettingsAppService settings) : Ab
 		return new { BlobName = await settings.UploadLogoAsync(file.ContentType, memory.ToArray()) };
 	}
 	[HttpGet] public Task<PayslipSettingsDto> GetAsync() => settings.GetAsync();
+	[HttpPost("preview")]
+	public async Task<IActionResult> PreviewAsync(SalaryDocumentPresentation input)
+	{
+		Response.Headers.CacheControl = "no-store";
+		return File(await settings.PreviewAsync(input), "application/pdf", "synthetic-payslip-preview.pdf");
+	}
 	[HttpPut] public Task<PayslipSettingsDto> SaveAsync(PayslipSettingsDto input) => settings.SaveAsync(input);
 }

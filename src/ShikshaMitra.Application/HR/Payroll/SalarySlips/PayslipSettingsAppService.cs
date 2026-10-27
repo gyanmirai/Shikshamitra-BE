@@ -12,10 +12,21 @@ namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 [RemoteService(false)]
 public class PayslipSettingsAppService(IRepository<PayslipSettings, Guid> settings, IPayrollInputRevisionStore fence,
-	SalarySlipAccessService access, PayslipLogoService logos, PayrollDocumentSchoolService school)
+	SalarySlipAccessService access, PayslipLogoService logos, PayrollDocumentSchoolService school, PayslipPdfService pdf)
 	: ApplicationService, IPayslipSettingsAppService
 {
 	public Task<string> UploadLogoAsync(string contentType, byte[] bytes) => logos.UploadAsync(contentType, bytes);
+	// Read-only: no employee lookup, settings write, issuance or delivery side effects.
+	public async Task<byte[]> PreviewAsync(SalaryDocumentPresentation input)
+	{
+		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View);
+		var tenant = CurrentTenant.Id ?? throw new BusinessException(HRErrorCodes.PayslipSchoolDetailsRequired);
+		if (input == null) throw new BusinessException("HR:Payslip:PresentationInvalid");
+		input = input with { LogoBlobName = null };
+		input.Validate(tenant);
+		var details = await school.ReadAsync();
+		return pdf.Generate(PayslipSettingsPreview.Create(details.Name, details.Address, input) with { LogoBytes = await school.LogoAsync() });
+	}
 	public async Task<PayslipSettingsDto> GetAsync()
 	{
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View);

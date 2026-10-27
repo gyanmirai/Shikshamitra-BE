@@ -3,12 +3,20 @@ module: hr
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-25
+updated_on: 2026-10-26
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Trace HR backend workflows
+
+## Staff welcome email login
+
+`EmployeeEmailService` resolves the current tenant's school code through `ITenantStore` and builds an absolute application login link from `App:ClientUrl`. The HTML email includes a visible Login to ShikshaMitra button, a copyable URL and the HTML-encoded school code next to the synthetic-tested credentials layout. The frontend accepts the editable `organization` query parameter as the school-code prefill; authentication still validates credentials and tenant access normally.
+
+Deferred staff-creation effects restore the tenant captured when the callback was registered before uploading the optional profile picture, publishing the creation event and rendering the welcome email after unit-of-work completion. The callback then restores its caller's tenant context. A fake-sender regression exercises a different ambient tenant at completion and verifies the creating school's login link.
+
+`App:ClientUrl` must be an HTTP(S) application root without user information, query or fragment. Missing or invalid configuration, or an unresolved tenant school code, uses the existing logged email-failure path instead of sending a guessed destination. No password or login credential is placed in the URL. This change does not send emails during validation, activate staff, alter account creation or guarantee SMTP delivery.
 
 TL;DR: use this page to understand how HR actions move through employees, attendance, leave, policies, payroll, and reports.
 Each workflow points to the API and testing pages that validate it.
@@ -123,6 +131,10 @@ Archived work-calendar, attendance, payroll, and leave policies release their na
 Current and archived policy workspaces use independent server-side search, count, and pagination so accumulated history cannot hide live policies.
 Leave policies are restored as drafts, and restoration stops with the standard duplicate-name error if a current policy has reused the archived name.
 Normal leave-policy create and update calls reject Archived status, and only the separately authorized archive workflow may archive a current policy.
+Leave archive rejects active same-tenant, same-year assignment references whose end date is today or later, including future-start assignments and open-ended ranges.
+The existing default-policy requirement remains independent; historical ended or inactive assignments and referenced rule identities are retained without reassignment.
+Archive and assignment-reference creation/update acquire the existing tenant payroll-input fence before the tenant-scoped PostgreSQL policy-row lock, then recheck references or policy usability before writing. This order matches onboarding and ordinary HR saves; a failed fence cannot fall through to a row lock.
+The archive business error is `ShikshaMitra:LeavePolicyHasActiveAssignments` and reports the reference count; it does not disclose another tenant's assignments or replace the policy automatically.
 
 ## Reports and notifications
 

@@ -268,12 +268,15 @@ public class SaveStudentOnboardingFeeStructureDto
 
 public class StudentOnboardingRollPreviewInput
 {
+	/// <summary>Optional selected division to preview before placement is saved.</summary>
+	public Guid? DivisionId { get; set; }
 	public int? RollNumber { get; set; }
 	public string? RollAssignmentMode { get; set; }
 	public string? Reason { get; set; }
 }
 public class StudentOnboardingRollPreviewDto
 {
+	public Guid? DivisionId { get; set; }
 	public string SchoolAssignmentMode { get; set; } = "manual";
 	public string RollAssignmentMode { get; set; } = "manual";
 	public int ProposedRollNumber { get; set; }
@@ -285,6 +288,7 @@ public class ActivateStudentOnboardingDto
 	public string? ConcurrencyStamp { get; set; }
 	public string IdempotencyKey { get; set; } = string.Empty;
 	public StudentSiblingParentSelectionDto? SiblingParentSelection { get; set; }
+	public StudentGuardianAccessSelectionDto? GuardianAccessSelection { get; set; }
 }
 
 public class CancelStudentOnboardingDto

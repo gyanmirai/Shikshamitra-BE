@@ -1,6 +1,6 @@
 using System;
+using System.Linq;
 using System.Security.Cryptography;
-using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using ShikshaMitra.Students.Portal;
@@ -86,7 +86,7 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 			if (!await users.HasPasswordAsync(user))
 			{
 				// The user's password is never generated from email/mobile or exposed through staff APIs.
-				var password = "Sm!9" + Convert.ToHexString(RandomNumberGenerator.GetBytes(24)) + "a";
+				var password = GenerateInitialPassword();
 				var result = await users.AddPasswordAsync(user, password);
 				if (!result.Succeeded)
 				{
@@ -132,7 +132,7 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 							"&resetToken=" + Uri.EscapeDataString(token) + "&tenantId=" + tenant.Id;
 					}
 					await sender.SendAsync(request.Email, password == null ? "Student account access - " + state.SchoolName : "Your school app credentials - " + state.SchoolName,
-						BuildBody(state, user, password, resetUrl, user.ShouldChangePasswordOnNextLogin), true);
+						StudentCredentialEmailTemplate.Build(state, user, password, resetUrl, user.ShouldChangePasswordOnNextLogin), true);
 					request.Sent(DateTime.UtcNow);
 				}
 			}
@@ -143,6 +143,18 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 			request.Failed(DateTime.UtcNow);
 		}
 		await requests.UpdateAsync(request, false); await delivery.CompleteAsync();
+	}
+	private static string GenerateInitialPassword()
+	{
+		const string characters = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+		string password;
+		do
+		{
+			password = RandomNumberGenerator.GetString(characters, 10);
+		}
+		while (!password.Any(char.IsUpper) || !password.Any(char.IsLower) ||
+			!password.Any(char.IsDigit) || password.All(char.IsLetterOrDigit));
+		return password;
 	}
 	private async Task<bool> ActorMaySendAsync(StudentCredentialEmailRequest row)
 	{
@@ -171,19 +183,4 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 	private Task<StudentCredentialEmailEligibility> ResolveDeliveryAsync(StudentCredentialEmailRequest row) =>
 		row.RequiresSavedOwnerValidation() ? eligibility.ResolveExplicitAsync(row.CaseId, row.AccountType, false)
 			: eligibility.ResolveAsync(row.CaseId, row.AccountType, false);
-	private static string Encode(string? value) => HtmlEncoder.Default.Encode(value ?? string.Empty);
-	private static string BuildBody(StudentCredentialEmailEligibility state, IdentityUser user, string? password, string? resetUrl, bool initialSetupPending)
-	{
-		var credentials = password == null ? (initialSetupPending
-			? "<p>Your account needs email verification and password setup. Use the secure setup link before signing in.</p>"
-			: "<p>Use your existing password. Linking another child does not change your account credentials.</p>") :
-			"<p>Temporary password: <strong>" + Encode(password) + "</strong></p><p>Use the secure setup link to verify your email and choose your own password before signing in.</p>";
-		var setup = resetUrl == null ? "" : "<p><a href='" + Encode(resetUrl) + "'>Verify email / choose password</a></p>";
-		var mobile = string.IsNullOrWhiteSpace(user.PhoneNumber) ? "" : "<p>Mobile: " + Encode(user.PhoneNumber) + "</p>";
-		return "<!doctype html><html><body><h2>" + Encode(state.SchoolName) + "</h2><p>Dear " + Encode(user.Name) +
-			",</p><p>Your school app account has access to " + Encode(state.StudentName) + ".</p><p>Email: " + Encode(user.Email) +
-			"</p>" + mobile + "<p>Username: <strong>" + Encode(user.UserName) + "</strong></p>" + credentials + setup +
-			"<p><a href='" + Encode(state.LoginUrl) + "'>School login</a></p><p>Your school code: " + Encode(state.SchoolName) +
-			"</p><p>Keep your credentials private. Contact your school for help.</p></body></html>";
-	}
 }

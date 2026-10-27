@@ -43,16 +43,24 @@ public class AdmissionInquiryQualificationEmailDispatcher(
 				SetState(inquiry, "Skipped", "Inquiry is no longer Interested.");
 				await inquiries.UpdateAsync(inquiry, false); await prepare.CompleteAsync(); return;
 			}
-			if (!MailAddress.TryCreate(inquiry.Email, out var address) || address.Address != inquiry.Email)
+			var schoolContact = AdmissionFamilyContactCapture.ReadMainContact(inquiry);
+			var recipientEmail = schoolContact != null ? schoolContact.Email : inquiry.Email;
+			var previousRecipient = inquiry.GetProperty<string>("QualificationEmailRecipient");
+			if (previousRecipient != null && !string.Equals(previousRecipient, recipientEmail, StringComparison.OrdinalIgnoreCase))
+			{
+				SetState(inquiry, "NeedsReview", "The main school contact changed. Review Communication history before sending again.");
+				await inquiries.UpdateAsync(inquiry, false); await prepare.CompleteAsync(); return;
+			}
+			if (!MailAddress.TryCreate(recipientEmail, out var address) || address.Address != recipientEmail)
 			{
 				SetState(inquiry, "Skipped", "No valid contact email was captured in the inquiry.");
 				await inquiries.UpdateAsync(inquiry, false); await prepare.CompleteAsync(); return;
 			}
 			var campaign = await communications.PrepareInquiryQualificationAsync(inquiry,
-				await cycles.GetAsync(inquiry.AdmissionCycleId));
+				await cycles.GetAsync(inquiry.AdmissionCycleId), schoolContact);
 			campaignId = campaign.Id;
 			inquiry.SetProperty("QualificationEmailCampaignId", campaignId);
-			inquiry.SetProperty("QualificationEmailRecipient", inquiry.Email);
+			inquiry.SetProperty("QualificationEmailRecipient", recipientEmail);
 			SetState(inquiry, "Processing", "Qualification email is being processed.");
 			inquiry.SetProperty("QualificationEmailNextAttemptAt", DateTime.UtcNow.AddMinutes(10));
 			await inquiries.UpdateAsync(inquiry, false);
@@ -63,8 +71,10 @@ public class AdmissionInquiryQualificationEmailDispatcher(
 		var current = await inquiries.GetAsync(id);
 		try
 		{
+			var currentContact = AdmissionFamilyContactCapture.ReadMainContact(current);
+			var currentEmail = currentContact != null ? currentContact.Email : current.Email;
 			if (AdmissionInquiryStatusRules.Display(current.Status) != AdmissionInquiryStatus.Interested ||
-				!string.Equals(current.Email, current.GetProperty<string>("QualificationEmailRecipient"), StringComparison.OrdinalIgnoreCase))
+				!string.Equals(currentEmail, current.GetProperty<string>("QualificationEmailRecipient"), StringComparison.OrdinalIgnoreCase))
 			{
 				SetState(current, "Skipped", "Inquiry interest or contact email changed before delivery.");
 				await inquiries.UpdateAsync(current, false); await delivery.CompleteAsync(); return;

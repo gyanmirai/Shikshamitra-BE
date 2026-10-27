@@ -39,8 +39,7 @@ public partial class StudentOnboardingAppService
 	{
 		if (!CurrentTenant.Id.HasValue || !CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
 		var item = await GetCaseAsync(id);
-		var parentFlow = input.AccountType == "guardian" && await SiblingParents.IsParentFlowAsync(item);
-		if (parentFlow && input.Relationship is not ("father" or "mother")) throw PortalInvalid("Choose Father or Mother for parent app login.");
+		var parentFlow = input.AccountType == "guardian" && input.Relationship is ("father" or "mother") && await SiblingParents.IsParentFlowAsync(item);
 		var existingLink = await portalLinkRepository.FindAsync(x => x.StudentId == item.StudentId && x.AccountType == input.AccountType);
 		if (ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(item).HasValue)
 			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(item, false);
@@ -62,6 +61,10 @@ public partial class StudentOnboardingAppService
 			return (await MapPortalLinksAsync([existingLink]))[0];
 		}
 		EnsureConcurrency(item, input.ConcurrencyStamp);
+		if (input.AccountType == "guardian" && input.Relationship is ("father" or "mother") && StudentSiblingParentService.HasGuardianSelection(item))
+			throw PortalInvalid("Guardian app access is already selected for this case. Use the reviewed access repair workflow.");
+		if (input.AccountType == "guardian" && input.Relationship == "guardian")
+			await PrepareSiblingParentSelectionAsync(item, null, new() { ExpectedEmail = input.Email.Trim(), ConfirmRecipientAccess = true });
 		var rules = await ReadSavedRulesAsync(item);
 		var optional = rules.HasValue && StudentPortalAccountRules.Access(rules.Value, input.AccountType) == StudentPortalAccountRules.Optional;
 		if (!item.StudentEnrollmentId.HasValue || item.Status == StudentOnboardingStatus.Cancelled ||
@@ -80,7 +83,7 @@ public partial class StudentOnboardingAppService
 		var student = await studentRepository.GetWithDetailsAsync(item.StudentId)
 			?? throw PortalInvalid("Student record is unavailable.");
 		if (input.AccountType == "guardian" && !StudentPortalOwnerSelection.Relationships(student.FamilyDetail).Contains(input.Relationship))
-			throw PortalInvalid("Choose a saved Father or Mother profile. Other guardian is available only when neither parent is recorded.");
+			throw PortalInvalid("Choose the current saved Father, Mother or Guardian profile.");
 		var guardian = input.Relationship switch
 		{
 			"father" => student.FamilyDetail?.FatherDetails,
@@ -100,6 +103,8 @@ public partial class StudentOnboardingAppService
 		var reusingParent = parentFlow && user != null;
 		if (user != null)
 		{
+			if (input.AccountType == "guardian" && input.Relationship == "guardian")
+				throw PortalInvalid("This guardian email already belongs to an account. Use the reviewed access repair workflow.");
 			if (parentFlow)
 			{
 				var selected = await SiblingParents.ResolveSelectedAsync(item);

@@ -43,7 +43,7 @@ public sealed class HrReportingTableQuery
 	private bool Matches(Dictionary<string, object?> row) =>
 		(string.IsNullOrWhiteSpace(_query.Search) || _fields.Values.Any(field =>
 			Text(row.GetValueOrDefault(field.Id), field.Type).Contains(_query.Search.Trim(), StringComparison.OrdinalIgnoreCase) ||
-			(Convert.ToString(row.GetValueOrDefault(field.Id), CultureInfo.InvariantCulture) ?? "").Contains(_query.Search.Trim(), StringComparison.OrdinalIgnoreCase)))
+			(Convert.ToString(DisplayValue(row.GetValueOrDefault(field.Id)), CultureInfo.InvariantCulture) ?? "").Contains(_query.Search.Trim(), StringComparison.OrdinalIgnoreCase)))
 		&& _filters.All(group => group.Any(match => match(row)));
 	private Func<Dictionary<string, object?>, bool> Compile(HrReportTableFilterDto filter)
 	{
@@ -73,7 +73,7 @@ public sealed class HrReportingTableQuery
 				"contains" => ((string)actual).Contains((string)expected!, StringComparison.OrdinalIgnoreCase),
 				"startsWith" => ((string)actual).StartsWith((string)expected!, StringComparison.OrdinalIgnoreCase),
 				"endsWith" => ((string)actual).EndsWith((string)expected!, StringComparison.OrdinalIgnoreCase),
-				"equals" => comparison == 0,
+				"equals" => comparison == 0 || raw is HrOperationalEnumValue item && ValueComparer.Instance.Compare(Typed(item.Native, type), expected) == 0,
 				"greaterThan" => comparison > 0, "lessThan" => comparison < 0,
 				"after" => comparison >= 0, "before" => comparison <= 0,
 				"between" => comparison >= 0 && ValueComparer.Instance.Compare(actual, upper) <= 0,
@@ -88,6 +88,7 @@ public sealed class HrReportingTableQuery
 	}
 	private object? Typed(object? value, string type)
 	{
+		value = DisplayValue(value);
 		if (value == null || value is JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined }) return null;
 		var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
 		if (type is "number" or "money") return decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var number) ? number : null;
@@ -107,12 +108,14 @@ public sealed class HrReportingTableQuery
 	}
 	private object? SortValue(object? value, string type)
 	{
+		if (value is HrOperationalTextValue textValue) value = textValue.Order;
 		var text = Convert.ToString(value, CultureInfo.InvariantCulture);
 		// Unlimited is ordered above finite amounts, while remaining excluded from finite filters.
 		if (type is "money" or "number" && text is "No ceiling" or "No upper limit" or "Unlimited") return decimal.MaxValue;
 		return type == "datetime" && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var timestamp)
 			? timestamp.UtcDateTime : Typed(value, type);
 	}
+	private static object? DisplayValue(object? value) => value switch { HrOperationalEnumValue item => item.Display, HrOperationalTextValue item => item.Display, _ => value };
 	private string Text(object? value, string type)
 	{
 		var typed = Typed(value, type);

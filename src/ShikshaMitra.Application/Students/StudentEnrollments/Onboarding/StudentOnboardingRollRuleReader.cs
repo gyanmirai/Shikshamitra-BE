@@ -91,10 +91,10 @@ public class StudentOnboardingRollRuleReader(OnboardingConfigurationManager conf
 		frozen["assignmentMode"] = OnboardingRuleConfiguration.Text(settings.Root.GetProperty("rollNumber"), "assignmentMode", "both");
 		return frozen.ToJsonString();
 	}
-	public async Task<string> CaptureForCaseAsync(StudentOnboardingCase item)
+	public async Task<string> CaptureForCaseAsync(StudentOnboardingCase item, Guid? divisionId = null)
 	{
 		var settings = await configuration.GetAsync(item.AcademicYearId); if (settings == null) return "null";
-		var rule = settings.ResolveRule("rollNumber", item, ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now));
+		var rule = settings.ResolveRule("rollNumber", item, ShikshaMitra.Students.StudentEnrollments.Admissions.AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now), divisionId);
 		var frozen = rule.HasValue ? JsonNode.Parse(rule.Value.GetRawText())!.AsObject() : new JsonObject();
 		frozen["numberingScope"] = "class-division";
 		frozen["startingNumber"] = 1;

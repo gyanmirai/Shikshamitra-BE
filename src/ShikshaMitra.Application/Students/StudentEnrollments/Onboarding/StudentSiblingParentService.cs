@@ -25,6 +25,39 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 	private const string SelectionKey = "SiblingParentActivationSelection";
 	private const string ReuseKey = "SiblingParentAccountReused";
 	private const string SourceRelationshipKey = "SiblingParentActivationSourceRelationship";
+	private const string GuardianAccessKey = "ManualGuardianAccessSelection";
+
+	internal async Task PrepareGuardianSelectionAsync(StudentOnboardingCase item, StudentGuardianAccessSelectionDto input)
+	{
+		if (!(await new StudentGuardianAccessSelectionDtoValidator().ValidateAsync(input)).IsValid)
+			throw Invalid("Confirm app access for the current saved guardian email before activating.");
+		if (ReadSelection(item) != null || WasReused(item))
+			throw Invalid("A parent account choice is already reviewed. Use the reviewed access repair workflow.");
+		var owner = (await recipients.GetAsync(item)).SingleOrDefault(value => value.Relationship == "guardian" && value.AccountType == "guardian");
+		if (owner?.BlockedReason != null || !StudentCredentialsRecipientReader.SameEmail(owner?.Email, input.ExpectedEmail))
+			throw Invalid("The saved guardian email changed or is unavailable. Refresh App Login and confirm the recipient again.");
+		var linked = await links.FindAsync(value => value.StudentId == item.StudentId && value.AccountType == "guardian");
+		if (linked != null)
+		{
+			var user = await users.FindByIdAsync(linked.UserId.ToString());
+			if (linked.Relationship != "guardian" || linked.VerifiedByUserId == Guid.Empty || user == null ||
+				!StudentCredentialsRecipientReader.SameEmail(user.Email, input.ExpectedEmail))
+				throw Invalid("An adult account is already linked. Use the reviewed access repair workflow.");
+			return;
+		}
+		if (await users.FindByEmailAsync(owner!.Email!) != null)
+			throw Invalid("This guardian email already belongs to an account. Use the reviewed access repair workflow.");
+		item.SetProperty(GuardianAccessKey, JsonSerializer.Serialize(input));
+		item.SetProperty("ManualGuardianAccessSelectedBy", CurrentUser.Id);
+	}
+
+	internal static bool HasGuardianSelection(StudentOnboardingCase item) => ReadGuardianSelection(item) != null;
+
+	private static StudentGuardianAccessSelectionDto? ReadGuardianSelection(StudentOnboardingCase item)
+	{
+		try { return JsonSerializer.Deserialize<StudentGuardianAccessSelectionDto>(item.GetProperty<string>(GuardianAccessKey) ?? "null"); }
+		catch (JsonException) { throw Invalid("The saved guardian access choice requires review."); }
+	}
 	public async Task<bool> IsParentFlowAsync(StudentOnboardingCase item)
 	{
 		var applicant = await applicants.FindAsync(item.ApplicantId);
@@ -48,6 +81,28 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 		if (!CurrentTenant.Id.HasValue || item.TenantId != CurrentTenant.Id || applicant == null ||
 			applicant.TenantId != CurrentTenant.Id || !AdmissionSiblingParentSelection.IsParentFlow(applicant)) return read;
 		result.Enabled = true;
+		// An independently reviewed guardian link remains a guardian even when parents
+		// are later captured. A case-only explicit choice never reuses a sibling parent.
+		var guardianChoice = ReadGuardianSelection(item);
+		var adultLink = await links.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == item.StudentId && x.AccountType == "guardian");
+		if (guardianChoice != null || adultLink?.Relationship == "guardian")
+		{
+			result.GuardianAccessSelected = true;
+			if (ReadSelection(item) != null || WasReused(item)) return Block(read, "The saved adult access choices conflict. Ask an administrator to review App Login.");
+			var owner = (await recipients.GetAsync(item)).SingleOrDefault(value => value.AccountType == "guardian" && value.Relationship == "guardian");
+			if (owner?.BlockedReason != null || owner?.Email == null || guardianChoice != null &&
+				(!guardianChoice.ConfirmRecipientAccess || !StudentCredentialsRecipientReader.SameEmail(owner.Email, guardianChoice.ExpectedEmail)))
+				return Block(read, "The saved guardian changed. Refresh and confirm app access again.");
+			if (adultLink != null)
+			{
+				var user = await users.FindByIdAsync(adultLink.UserId.ToString());
+				if (adultLink.Relationship != "guardian" || adultLink.VerifiedByUserId == Guid.Empty || user == null ||
+					user.TenantId != CurrentTenant.Id || !user.IsActive || !StudentCredentialsRecipientReader.SameEmail(owner.Email, user.Email))
+					return Block(read, "The linked adult account requires a reviewed identity repair.");
+			}
+			result.Status = "NotRequired";
+			return read;
+		}
 		var confirmation = AdmissionSiblingParentSelection.ReadConfirmation(applicant);
 		if (confirmation == null) return read;
 		result.FamilyConfirmed = true;
@@ -72,7 +127,8 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 				MotherEmail = x.FamilyDetail == null || x.FamilyDetail.MotherDetails == null ? null : x.FamilyDetail.MotherDetails.Email,
 				LegacyParentEmail = x.FamilyDetail == null || x.FamilyDetail.GuardianDetails == null ? null : x.FamilyDetail.GuardianDetails.Email }));
 		var candidates = new List<StudentSiblingParentCandidateDto>();
-		foreach (var owner in (await recipients.GetAsync(item)).Where(x => x.AccountType == "guardian" &&
+		var currentOwners = await recipients.GetAsync(item);
+		foreach (var owner in currentOwners.Where(x => x.AccountType == "guardian" &&
 			AdmissionSiblingParentSelection.IsRelationship(x.Relationship) && x.BlockedReason == null))
 		{
 			var user = await users.FindByEmailAsync(owner.Email!);
@@ -107,23 +163,50 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 		result.Candidates = candidates;
 		result.RequiresSelection = candidates.Count > 1;
 		var selected = ReadSelection(item);
+		if (adultLink != null)
+		{
+			// A persisted, reviewed link is checked against this child's current owner,
+			// not against the other children still eligible to supply a NEW sibling link.
+			var retained = await ReadRetainedParentAsync(adultLink, currentOwners);
+			if (retained == null || selected != null && !Same(retained, selected) || WasReused(item) && selected == null)
+				return Block(read, "The linked parent differs from the confirmed family. Ask an administrator to review it.");
+			if (selected == null)
+			{
+				// The first account prepared on this case still owns its normal delivery
+				// request. It must not become a sibling reuse or suppress credentials.
+				result.Candidates = []; result.RequiresSelection = false; result.Status = "NewParent";
+				return read;
+			}
+			var candidate = candidates.Find(value => Same(value, selected)) ?? retained;
+			result.Candidates = [candidate]; result.RequiresSelection = false;
+			result.SelectedRelationship = selected.Relationship;
+			result.IsLinked = true; result.LinkedRelationship = candidate.Relationship;
+			result.Status = candidate.SetupStatus == "Ready" ? "Linked" : candidate.SetupStatus == "Failed" ? "SetupFailed" : "SetupPending";
+			return read;
+		}
 		if (selected != null)
 		{
 			if (!candidates.Any(candidate => Same(candidate, selected))) return Block(read, "The reviewed parent account changed. Ask an administrator to review App Login.");
 			result.SelectedRelationship = selected.Relationship;
 		}
-		var linked = await links.FindAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == item.StudentId && x.AccountType == "guardian");
-		if (linked != null)
-		{
-			var candidate = candidates.Find(x => x.UserId == linked.UserId && x.Relationship == linked.Relationship);
-			if (candidate == null || linked.VerifiedByUserId == Guid.Empty || selected != null && !Same(candidate, selected))
-				return Block(read, "The linked parent differs from the confirmed family. Ask an administrator to review it.");
-			result.IsLinked = true; result.LinkedRelationship = candidate.Relationship;
-			result.Status = candidate.SetupStatus == "Ready" ? "Linked" : candidate.SetupStatus == "Failed" ? "SetupFailed" : "SetupPending";
-			return read;
-		}
 		result.Status = candidates.Count > 1 ? "SelectParent" : candidates.Count == 1 ? "Available" : "NewParent";
 		return read;
+	}
+
+	private async Task<StudentSiblingParentCandidateDto?> ReadRetainedParentAsync(StudentPortalAccountLink link,
+		IReadOnlyList<StudentCredentialsRecipientDto> owners)
+	{
+		if (link.TenantId != CurrentTenant.Id || link.VerifiedByUserId == Guid.Empty ||
+			!AdmissionSiblingParentSelection.IsRelationship(link.Relationship)) return null;
+		var owner = owners.SingleOrDefault(value => value.AccountType == "guardian" && value.Relationship == link.Relationship);
+		if (owner?.BlockedReason != null || owner?.Email == null) return null;
+		var user = await users.FindByIdAsync(link.UserId.ToString());
+		if (user == null || user.TenantId != CurrentTenant.Id || !user.IsActive ||
+			!StudentCredentialsRecipientReader.SameEmail(owner.Email, user.Email)) return null;
+		var roles = await users.GetRolesAsync(user);
+		if (roles.Count != 1 || roles[0] != "Parent") return null;
+		return new() { UserId = user.Id, Relationship = link.Relationship, Email = owner.Email, Name = owner.Name,
+			SetupStatus = user.EmailConfirmed && !user.ShouldChangePasswordOnNextLogin && await users.HasPasswordAsync(user) ? "Ready" : "Pending" };
 	}
 
 	public async Task PrepareSelectionAsync(StudentOnboardingCase item, StudentSiblingParentSelectionDto? input)
@@ -131,6 +214,11 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 		var read = await ReadAsync(item);
 		var context = read.Context;
 		if (context.BlockedReason != null) throw Invalid(context.BlockedReason);
+		if (ReadGuardianSelection(item) != null)
+		{
+			if (input != null) throw Invalid("Guardian app access is already selected for this case. Use the reviewed access repair workflow.");
+			return;
+		}
 		if (!context.Enabled || !context.FamilyConfirmed)
 		{
 			if (input != null) throw Invalid("Refresh the confirmed parent family before choosing app access.");

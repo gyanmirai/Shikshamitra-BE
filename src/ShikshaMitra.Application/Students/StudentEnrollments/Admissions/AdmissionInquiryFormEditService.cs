@@ -120,5 +120,6 @@ public class AdmissionInquiryFormEditService(
 			}
 			await guardians.UpdateAsync(guardian, false);
 		}
+		if (applicant != null) AdmissionFamilyContactCapture.CopyToInquiry(applicant, inquiry);
 	}
 }

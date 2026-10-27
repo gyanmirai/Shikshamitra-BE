@@ -6,6 +6,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class StartAdmissionDirectRegistrationDto
 {
+	public AdmissionFamilyContactsDto? FamilyContacts { get; set; }
 	[Required]
 	public Guid RequestId { get; set; }
 

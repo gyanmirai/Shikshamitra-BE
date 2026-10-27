@@ -92,17 +92,39 @@ public class StudentPortalEmailChangeService(IdentityUserManager users, IStudent
 		var student = await students.GetCredentialsProfileAsync(studentId);
 		foreach (var recipient in recipients)
 		{
-			if (recipient.Relationship == "guardian") continue; // Historical guardian repair retains its existing reviewed workflow.
-			var link = ownedLinks.FirstOrDefault(x => x.AccountType == recipient.AccountType);
-			recipient.HasLinkedAccount = link != null;
-			recipient.CanEditEmail = canEdit && (link == null || canUpdate && link.Relationship == recipient.Relationship);
+			var occupied = ownedLinks.FirstOrDefault(x => x.AccountType == recipient.AccountType);
+			var link = ownedLinks.FirstOrDefault(x => x.AccountType == recipient.AccountType && x.Relationship == recipient.Relationship);
+			var user = link == null ? null : await users.FindByIdAsync(link.UserId.ToString());
+			var savedEmail = student == null ? null : StudentPortalProfileEmail.Read(student, recipient.Relationship);
+			recipient.HasLinkedAccount = link != null && user != null && user.TenantId == CurrentTenant.Id &&
+				!string.IsNullOrWhiteSpace(recipient.Email) && StudentPortalProfileEmail.Same(recipient.Email, savedEmail) &&
+				StudentPortalProfileEmail.Same(savedEmail, user.Email);
+			recipient.CanEditEmail = false;
+			if (recipient.Relationship == "guardian")
+			{
+				// Linked-owner display is independent from authority to edit that login.
+				// Generic guardian email changes retain the reviewed repair workflow.
+				recipient.EmailEditBlockedReason = "Guardian login email changes require the reviewed identity repair workflow.";
+				recipient.EmailEditToken = string.Empty;
+				continue;
+			}
+			if (occupied != null && link == null)
+			{
+				recipient.EmailEditBlockedReason = "A different account owner is linked to this login.";
+				continue;
+			}
 			if (link == null)
 			{
+				recipient.CanEditEmail = canEdit;
 				if (student != null) recipient.EmailEditToken = ProfileToken(student);
 				continue;
 			}
-			var user = await users.FindByIdAsync(link.UserId.ToString());
-			if (user == null || user.TenantId != CurrentTenant.Id) { recipient.CanEditEmail = false; continue; }
+			if (user == null || user.TenantId != CurrentTenant.Id || !recipient.HasLinkedAccount)
+			{
+				recipient.EmailEditBlockedReason = "The saved profile and linked login differ. Use the reviewed identity repair workflow.";
+				continue;
+			}
+			recipient.CanEditEmail = canEdit && canUpdate;
 			var accountLinks = await links.GetListAsync(x => x.UserId == user.Id);
 			var topology = await TopologyAsync(accountLinks);
 			recipient.EmailEditToken = EditToken(user, topology);
@@ -115,7 +137,6 @@ public class StudentPortalEmailChangeService(IdentityUserManager users, IStudent
 					: !state.IsCurrent(user, Clock.Now) || state.Topology != topology ? "Stale" : state.Status;
 			}
 			if (!canUpdate) recipient.EmailEditBlockedReason = "An authorized account administrator must update this login email.";
-			else if (link.Relationship != recipient.Relationship) recipient.EmailEditBlockedReason = "A different parent is linked to this login.";
 		}
 	}
 

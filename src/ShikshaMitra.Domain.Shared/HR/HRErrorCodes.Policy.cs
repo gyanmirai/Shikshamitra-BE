@@ -1,7 +1,8 @@
-namespace ShikshaMitra.HR;
+﻿namespace ShikshaMitra.HR;
 
 public static partial class HRErrorCodes
 {
+	public const string LeavePolicyHasActiveAssignments = "ShikshaMitra:LeavePolicyHasActiveAssignments";
 	public const string HrPolicyImpactBlocking = "ShikshaMitra:HrPolicyImpactBlocking";
 	public const string HrPolicyImpactConfirmationRequired = "ShikshaMitra:HrPolicyImpactConfirmationRequired";
 	public const string HrPolicyImpactConfirmationInvalid = "ShikshaMitra:HrPolicyImpactConfirmationInvalid";

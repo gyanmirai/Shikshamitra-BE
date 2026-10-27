@@ -3,12 +3,22 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-24
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Parent defaults and optional guardians (27 October 2026)
+
+The final rebuilt Application gate passes 33 cases: `AdmissionFamilyContactCapture_Tests`, `StudentPortalOwnerSelection_Tests` and the `Optional_guardian_`, `Optional_mother_link_projection`, `Record_main_contact_`, `Main_school_`, `Guardian_access_capability`, `Confirmed_guardian_intent` and `Contact_only_parent_profiles` scenarios. Eleven Domain family/message-policy cases also pass.
+
+These cover optional profile handoff, main-contact validation, immutable intake retry, selected-person communication without borrowing another mailbox, retained non-parent audience mode, explicit adult authorisation, exact linked-owner projection, email collisions, Optional/Not needed policy capability and legacy automatic preparation respecting a confirmed guardian case choice. Preservation tests compare a real existing password hash, existing child/sibling link IDs and relationships, retained sibling IDs and repeat-activation identity.
+
+The separate existing account/sibling/email gate passes 52 cases. Its three contact-only rows initially omitted the new adult confirmation; their inputs were corrected and all three pass in the final 33-case run, retaining their existing setup blocker and no-creation assertions. Existing tenant, staff scope, exact action/identity grants, disabled policy, drift, shared-parent verification, password preservation and duplicate-delivery protections remain covered.
+
+The serialized local Host build passes with zero errors and three existing Finance-controller nullable warnings. Student docs validation passes; all-module validation remains blocked by two existing Finance reference-file mojibake findings. No migration or Finance source change is required. The already-running local Host was not replaced, and in-app browser form input stalled; these automated checks do not establish current live UI persistence, mailbox delivery or deployed acceptance.
 
 ## Onboarding app-login email edits (24 October 2026)
 
@@ -275,6 +285,12 @@ The current isolated API gate passed **29/29 tests**, zero failures/skips, on 20
 
 ## Parent-only sibling admission and onboarding (2026-10-23)
 
+`StudentSiblingParentLinkedAccountRegression_Tests` covers the distinction between retaining a reviewed link and discovering an account eligible for a new sibling link. The confirmed-family first-manual-account case must retain one idempotent intent, dispatch through a substituted email sender and never acquire the sibling-reuse flag. Removing the original child's portal link must preserve the other child's exact link, parent password and portal visibility without another credential request. Current-owner email, role, active-state, relationship, verification and pinned-selection drift remain blocked. Keep the existing `Sibling_parent_onboarding_` cases for original setup recovery, tenant/scope/permission checks, legacy-source attestation, disabled access and non-relabeling. Staging response evidence and red/green test logs are retained only under ignored `.artifacts/parent-link-regression/`; a local fix does not establish staging deployment or real mailbox delivery.
+
+On 27 October 2026, both new positive scenarios first reproduced their respective false review blocks. After the fix, 53 distinct focused cases were verified across the sibling-onboarding, retained-link, dispatcher and optional-guardian runs. The broader run initially passed 52/53; its new real-dispatch fixture lacked an absolute browser origin. Reusing the existing sibling retry fixture's test-only origin produced a final 3/3 regression pass without further production changes. Source-child link removal retained the target child's portal visibility and password; six owner/identity/provenance drift checks remained denied. Sanitized staging GET evidence, TRX files and the deduplicated verification summary remain ignored artifacts. No staging data, access grants, passwords or outbound email were changed by diagnosis.
+
+The first-family fixture additionally records the source Father's saved admission and Student profile details while intentionally leaving that source without a portal account; its final rerun passed. An isolated Host build completed with zero errors and existing repository warnings. The running local Host was not stopped or replaced, and staging deployment/post-deployment acceptance remain separate gates.
+
 `AdmissionSiblingParentFlow_Tests.cs` covers same-email/different-mobile suggestions, explicit source selection, both captured Father/Mother options, current Student parent projections, wrong-source rejection, unchanged shared parent contact, idempotent replay, authored Inquiry parent contacts, public trusted-selection rejection, non-parent role validation and selective matching among more than 2,000 pending applicants.
 Compatibility cases retain canonical duplicate/replay behavior without a new first-name/last-name/date-of-birth hard block, and preserve legacy Guardian/Relative primary display names without offering those contacts as Father/Mother candidates.
 The combined Application gate passed **53/53**, zero failures/skips (`test/ShikshaMitra.Application.Tests/TestResults/sibling-parent-final-verified.trx`). It includes 25 `StudentSiblingParentOnboarding_Tests` scenarios covering manual-first preparation, both-parent selection, tenant/scope/permission denials, historical exact-source reuse, contact/identity drift, required/optional late linking, original failed-setup recovery and production-DI dispatch cancellation. The real application-service journey preserves the parent password and returns both eligible children through the portal API without a sibling email intent. Controlled transport substitutes establish dispatch behavior, not real mailbox delivery.
@@ -412,6 +428,14 @@ Run `AdmissionAdditionalStudentFieldCatalog_Tests`, `AdmissionStudentProfileMapp
 Rollback cases must use the existing copied SQLite database and normal UOW manager harness; the common application fixture disables transactions. Frontend authenticated acceptance remains a separate gate for the shared photo/identity/location controls, form save/reload and finalization review copy.
 
 ## Credential email and access verification
+
+The credential-card change has focused rendering coverage in `StudentCredentialEmailTemplate_Tests` and delivery integration in `StudentCredentialEmailDispatcher_Tests`. Checks include the visible four-row credential card, an unlinked Google Play badge, retained full-length secrets, HTML encoding, blocked-image alt text, optional-name fallback, existing-password reuse and conditional recovery links. Preview files use synthetic details only; no email transport or account provisioning runs in the preview helper. The current password policy and first-login change requirement remain unchanged. Browser checks inspect the exact generated HTML at desktop and narrow widths; they are not Gmail/Outlook inbox or mobile-app acceptance.
+
+The short-initial-password regression in `StudentCredentialEmailDispatcher_Tests` checks that the actual emailed password is at most 10 characters, includes uppercase and lowercase letters, numbers and a symbol, validates against the saved Identity account and retains mandatory first-login password change. Run the dispatcher and template suites together; existing-account and transport-retry cases must still preserve the stored password. Existing longer passwords are never truncated or reset by resend. The configured Identity password policy remains enforced; an incompatible school policy must not be silently weakened.
+
+On 26 October 2026, the combined dispatcher and template suites passed all 24 cases after reproducing the old generator's length-limit failure. Host rebuild completed with zero errors. This validates local generation and Identity password checks, not a new real mailbox send or mobile-client login. Evidence: `.artifacts/credential-password-length-red.log`, `.artifacts/credential-password-length-green.log` and `.artifacts/credential-password-host-build.log`.
+
+On 26 October 2026, 28 distinct focused cases passed across the dispatcher, template, two sibling-dispatch regressions and two linked-owner/shared-parent email regressions (overlapping template reruns are counted once). The exact renderer was inspected at desktop, 360 px and 320 px widths; a synthetic 53-character password remained complete with no horizontal overflow. Student docs validation and whitespace checks passed. Real mailbox delivery, Outlook/Gmail client rendering and deployment were not exercised. Evidence stays under ignored `.artifacts/credential-email-ui-*` files.
 
 | Gate | Required evidence |
 |---|---|

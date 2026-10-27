@@ -77,6 +77,7 @@ public class EmployeePersonalInfoPostCommitEffects(
 
 		currentUnitOfWork.OnCompleted(async () =>
 		{
+			using var tenantScope = currentTenant.Change(tenantId);
 			if (profilePictureContent != null &&
 			    !string.IsNullOrWhiteSpace(profilePictureFileName))
 			{

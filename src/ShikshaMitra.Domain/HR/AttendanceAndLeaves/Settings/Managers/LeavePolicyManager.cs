@@ -1,10 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.Policies;
 using Volo.Abp;
 using Volo.Abp.Domain.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
@@ -12,13 +13,19 @@ public class LeavePolicyManager : DomainService
 {
 	private readonly ILeavePolicyRepository _leavePolicyRepository;
 	private readonly IEmployeeLeaveRepository _employeeLeaveRepository;
+	private readonly IRepository<HrPolicyAssignment, Guid> _assignmentRepository;
+	private readonly ILeavePolicyReferenceLock _referenceLock;
 
 	public LeavePolicyManager(
 		ILeavePolicyRepository leavePolicyRepository,
-		IEmployeeLeaveRepository employeeLeaveRepository)
+		IEmployeeLeaveRepository employeeLeaveRepository,
+		IRepository<HrPolicyAssignment, Guid> assignmentRepository,
+		ILeavePolicyReferenceLock referenceLock)
 	{
 		_leavePolicyRepository = leavePolicyRepository;
 		_employeeLeaveRepository = employeeLeaveRepository;
+		_assignmentRepository = assignmentRepository;
+		_referenceLock = referenceLock;
 	}
 
 	public async Task<LeavePolicy> CreateAsync(
@@ -91,7 +98,22 @@ public class LeavePolicyManager : DomainService
 
 	public async Task EnsureCanDeactivateAsync(LeavePolicy leavePolicy)
 	{
+		await _referenceLock.AcquireAsync(leavePolicy.Id, CurrentTenant.Id);
 		await EnsureDefaultCanChangeAsync(leavePolicy, isDefaultAfterUpdate: false, HrPolicyStatus.Archived);
+		var today = Clock.Now.Date;
+		var assignments = await _assignmentRepository.GetQueryableAsync();
+		var referenceCount = await AsyncExecuter.CountAsync(assignments.Where(assignment =>
+			assignment.TenantId == CurrentTenant.Id &&
+			assignment.AcademicYearId == leavePolicy.AcademicYearId &&
+			assignment.LeavePolicyId == leavePolicy.Id &&
+			assignment.IsActive &&
+			(!assignment.EffectiveTo.HasValue || assignment.EffectiveTo.Value >= today)));
+		if (referenceCount > 0)
+		{
+			throw new BusinessException(HRErrorCodes.LeavePolicyHasActiveAssignments)
+				.WithData("policyId", leavePolicy.Id)
+				.WithData("assignmentCount", referenceCount);
+		}
 	}
 
 	public async Task SetDefaultAsync(LeavePolicy leavePolicy)
@@ -166,8 +188,8 @@ public class LeavePolicyManager : DomainService
 	{
 		var materialized = rules.ToList();
 		if (materialized.Count(rule => rule.IsActive) != 2 ||
-		    materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Paid) ||
-		    materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Unpaid))
+			materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Paid) ||
+			materialized.All(rule => !rule.IsActive || rule.PaidType != LeavePaidType.Unpaid))
 		{
 			throw new BusinessException(HRErrorCodes.LeavePolicyPaidUnpaidRulesRequired);
 		}

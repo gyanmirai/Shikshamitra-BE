@@ -17,6 +17,7 @@ public class AdmissionAssessmentRosterInput : PagedAndSortedResultRequestDto
 	[MaxLength(800)] public string? StandardIds { get; set; }
 	public Guid? SessionId { get; set; }
 	[MaxLength(128)] public string? Search { get; set; }
+	[MaxLength(12000)] public string? ColumnFilters { get; set; }
 	[RegularExpression("^(pending|ongoing|complete)$")] public string? Status { get; set; }
 	[RegularExpression("^(toBook|attendance|result|review|ready|attention|completed)$")] public string? Queue { get; set; }
 }

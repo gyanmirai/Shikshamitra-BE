@@ -75,12 +75,14 @@ public class StudentRenewalPortalCoordinator(StudentRecordRenewalCoordinator ren
 			return await MapAsync(student, item, existing, linked);
 		}
 		if (input.AccountType == "guardian" && !StudentPortalOwnerSelection.Relationships(student.FamilyDetail).Contains(input.Relationship))
-			throw Invalid("Choose a saved Father or Mother profile. Other guardian is available only when neither parent is recorded.");
+			throw Invalid("Choose the current saved Father, Mother or Guardian profile.");
 		if (!await roles.RoleExistsAsync(role)) throw Invalid("The portal role must be configured by an identity administrator.");
 		var user = await users.FindByEmailAsync(email);
 		var existingIdentity = user != null;
 		if (user != null)
 		{
+			if (input.AccountType == "guardian" && input.Relationship == "guardian")
+				throw Invalid("This guardian email already belongs to an account. Use the reviewed access repair workflow.");
 			await authority.EnsureCurrentPermissionsAsync(IdentityPermissions.Users.Update);
 			var names = await users.GetRolesAsync(user);
 			if (!input.LinkExistingGuardian || input.AccountType != "guardian" || user.TenantId != CurrentTenant.Id || !user.IsActive || !user.EmailConfirmed || names.Count != 1 || names[0] != "Parent" ||

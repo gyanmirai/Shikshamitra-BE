@@ -63,13 +63,25 @@ public class AdmissionFormAppService(
 			(!input.Purpose.HasValue || form.Purpose == input.Purpose) &&
 			(!input.Version.HasValue || form.Version == input.Version) &&
 			(string.IsNullOrWhiteSpace(input.Search) || form.Name.Contains(input.Search) || form.Code.Contains(input.Search)));
+		var sectionQuery = await sectionRepository.GetQueryableAsync();
+		if (!string.IsNullOrEmpty(input.ColumnFilters))
+		{
+			var filterRows = AdmissionFormColumnFilters.Apply(query.Select(form => new AdmissionFormColumnFilterRow
+			{
+				Id = form.Id,
+				Name = form.Name,
+				Version = form.Version,
+				SectionCount = sectionQuery.Count(section => section.FormDefinitionId == form.Id)
+			}), input.ColumnFilters);
+			query = query.Where(form => filterRows.Any(row => row.Id == form.Id));
+		}
 		var count = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(query.OrderByDescending(form => form.CreationTime)
 			.Skip(input.SkipCount).Take(input.MaxResultCount));
 		var rowIds = rows.Select(form => form.Id).ToList();
 		var sectionCounts = rowIds.Count == 0
 			? new Dictionary<Guid, int>()
-			: (await AsyncExecuter.ToListAsync((await sectionRepository.GetQueryableAsync())
+			: (await AsyncExecuter.ToListAsync(sectionQuery
 				.Where(section => rowIds.Contains(section.FormDefinitionId))))
 				.GroupBy(section => section.FormDefinitionId)
 				.ToDictionary(group => group.Key, group => group.Count());

@@ -72,6 +72,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		["hr-document-settings"] = ["title", "documentSize", "documentTypesString"],
 		["hr-employee-documents"] = ["title", "docType", "statusVal"],
 		["hr-icard-templates"] = ["name", "organization", "orientation", "status"],
+		["employee-icard-selection-table"] = ["fullName", "designation", "readiness"],
 		["hr-self-leave-history"] = ["name", "employeeIdentifier", "submittedBy", "organization", "description", "remarks", "paidType", "appliedDate", "startDate", "endDate", "totalDays", "reason", "status"],
 		["hr-pf-rules"] = ["name", "code", "employeePercentage", "employerPercentage", "contributionBasis", "wageCeiling", "effectiveFrom", "isActive"],
 		["hr-professional-tax"] = ["jurisdictionCode", "effectiveFrom", "fromSalary", "toSalary", "taxAmount", "deductInCessationMonth"],
@@ -97,6 +98,13 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		if (request.Format is not ("excel" or "pdf") || request.Columns.Count is < 1 or > 60 || request.Columns.Any(x => (request.Table is not ("hr-generated-report" or "hr-salary-documents") && !allowed.Contains(x.Id)) || string.IsNullOrWhiteSpace(x.Label) || x.Label.Length > 128)
 			|| request.Columns.Select(x => x.Id).Distinct().Count() != request.Columns.Count) throw HrReportingEngine.Invalid("Choose supported data columns and Excel or PDF.");
 		if (request.Query.ValueKind != JsonValueKind.Object || request.Query.GetRawText().Length > 32768) throw HrReportingEngine.Invalid("Provide a valid table query of at most 32 KB.");
+	}
+	public static void ValidateForExport(HrTableExportRequest request)
+	{
+		Validate(request);
+		// Selection query access must not admit a generic captured export or an old artifact.
+		if (request.Table == "employee-icard-selection-table")
+			throw HrReportingEngine.Invalid("Export selected staff through the I-card document workflow.");
 	}
 	public async Task EnsureAccessAsync(HrTableExportRequest request)
 	{
@@ -148,7 +156,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 				if (next == 0) _operationalEnvelope = page.Envelope;
 				var raw = HrOperationalTableQuery.Items(page.Envelope);
 				all.AddRange(page.Rows.Select((row, index) => new HrOperationalTableRow(row, raw[index],
-					columns.ToDictionary(column => column.Id, column => HrTableExportProjection.Value(request.Table, column.Id, row, today)))));
+					columns.ToDictionary(column => column.Id, column => HrTableExportProjection.QueryValue(request.Table, column, row, raw[index], today)))));
 				next = page.NextOffset ?? next + page.Rows.Count;
 				if (next >= page.Total) break;
 				if (page.Rows.Count < 100 || next > HrReportingEngine.MaximumPopulation) throw HrReportingEngine.Invalid("The table source returned an incomplete population. Retry the query.");
@@ -178,7 +186,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 		}
 		return Fields[request.Table].Select(id => {
 			var field = HrTableExportProjection.Field(new() { Id = id, Label = id });
-			if (id is "status" or "statusValue" or "isTeaching" or "genderValue" or "paidType" or "sourceType" or "changeAction" or "earningType" or "deductionType" or "calculationType" or "contributionBasis" or "orientation" or "staffCategory" or "boardType" or "issueFilter" or "enrollmentStatus" or "attendanceStatus") field.Type = "enum";
+			if (id is "status" or "statusVal" or "statusValue" or "isTeaching" or "employeeGroup" or "genderValue" or "paidType" or "sourceType" or "changeAction" or "earningType" or "deductionType" or "calculationType" or "contributionBasis" or "orientation" or "staffCategory" or "boardType" or "issueFilter" or "enrollmentStatus" or "attendanceStatus" or "visibleInPayslip" or "isActive" or "deductInCessationMonth" or "isBatchLocked") field.Type = "enum";
 			if (id is "startTime" or "endTime" or "inTime" or "outTime" or "timeIn" or "timeOut") field.Type = "clock";
 			return field;
 		}).ToList();
@@ -254,6 +262,7 @@ public class HrTableExportSources(IAbpLazyServiceProvider services) : ITransient
 			"hr-pf-rules" => await Service<IProvidentFundAppService>().GetFilteredListAsync(offset, size, q["search"]?.ToString()),
 			"hr-professional-tax" => await Service<IProfessionalTaxAppService>().GetListAsync(Input<PagedAndSortedResultRequestDto>()),
 			"employee-table" => await Service<IEmployeeSearchAppService>().GetFilteredListAsync(Input<GetEmployeeListInput>()),
+			"employee-icard-selection-table" => await Service<IEmployeeSearchAppService>().GetFilteredListAsync(Input<GetEmployeeListInput>()),
 			"employee-onboarding-table" => await Service<IEmployeeApplicationAppService>().GetListAsync(Input<GetEmployeeApplicationListInput>()),
 			"hr-attendance-register" => await Service<IAttendanceRegisterAppService>().GetGroupedAsync(Input<GetGroupedAttendanceRegisterInput>()),
 			"hr-manual-attendance" => await Service<ITakeAttendanceAppService>().GetDayAsync(Input<GetTakeAttendanceDayInput>()),

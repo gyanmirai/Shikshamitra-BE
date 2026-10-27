@@ -215,6 +215,13 @@ Existing over-limit text must be corrected before a subsequent details save; lif
 | Account heads          | `Controllers/Finance/Accounts/Settings/AccountHeadController.cs`                                    |
 | Transaction categories | `Controllers/Finance/Accounts/Settings/IncomeCategoryController.cs`, `ExpenseCategoryController.cs` |
 | Reconciliation         | `Controllers/Finance/Accounts/Reconciliation/ReconciliationController.cs`                           |
+| Cash Management | `Controllers/Finance/Accounts/CashManagement/CashManagementController.cs`; [commands and exact authorities](./references/cash-management.md) |
+
+Cash approval validates `countedAmount` against the remaining pending cash after paid expenses and immediately confirms that bank deposit and net Income.
+`amount` retains original collection, `spentAmount` retains actual expenses, `depositedAmount` becomes the net deposit and `remainingAmount` becomes 0.
+A fully spent source accepts count 0 without a visible Income/deposit row.
+Expense options expose only pending positive sources; deposit/credit endpoints remain for legacy approved-held/transit history.
+Original manual Income creation retries retain their gross request amount after net finalization.
 
 ## Reports and audit API families
 
@@ -322,7 +329,7 @@ Fee Category and all four Finance policy types trim names, collapse Unicode whit
 
 Cloning without an explicit name selects the first available `Copy`, `Copy 2`, etc. name across Current and Archived policies, bounded to the 128-character name limit. Explicit names still undergo duplicate validation. Copies remain Draft and nondefault; cloning the default leaves the source default unchanged. Automatically generated policy codes use random GUID material rather than truncated sequential GUID prefixes, which can repeat across clones. Existing database unique indexes remain the final exact-name/code collision guard. Legacy normalization collisions must be reconciled before introducing a database normalized-key index.
 
-Payment Term duplicate generated codes retain error `Finance:PaymentTerm:000023`, with a specific message identifying the code and asking for another name or code. Concession policy percentages accept at most two decimal places; excessive precision is rejected rather than rounded silently (`Finance:ConcessionPolicy:010027`).
+Payment Term create and draft-update requests trim `name` before required/minimum/maximum-length validation and save the trimmed display name. Name comparisons use `FinanceName.Equals` (collapsed whitespace, case-insensitive) across all boards and archived/current terms in the current tenant and academic year, excluding the edited term itself. Duplicate names return `Finance:PaymentTerm:000042` with `Name`; duplicate generated codes retain `Finance:PaymentTerm:000023`. Academic-year cloning also skips name conflicts, reporting each skipped source code in `conflictedCodes`. Create/update and target-year bulk-clone name checks and persistence share a tenant/year PostgreSQL transaction advisory lock through commit or rollback. These commands require an actual Read Committed transaction; a stricter ambient snapshot is rejected rather than permitting a stale duplicate comparison. Existing stored names and version snapshots remain unchanged. Concession policy percentages accept at most two decimal places; excessive precision is rejected rather than rounded silently (`Finance:ConcessionPolicy:010027`).
 
 Concession Apply On retains the canonical enum contract: `0 = AllOutstanding`, `1 = CurrentInstallment`, `2 = FutureInstallments`, `3 = AllFees`. DTOs expose the symbolic strings; immutable historical snapshot JSON retains its original numeric enum representation. History presentation must compare canonical enum values before displaying labels.
 

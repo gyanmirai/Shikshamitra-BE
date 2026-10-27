@@ -22,7 +22,8 @@ Account Heads are retired from active account settings. Fee Heads remain, and ea
 | Approve charge lines | Revalidate the saved active Income Category | Charge becomes collectible; category routing remains fixed |
 | Activate a Collection Policy with late fees | Required Late Fee Income Category | Pinned with the policy version |
 | Activate a Refund Policy | Required Expense Category; default paying bank if any non-cash method is allowed | Defaults are pinned in the refund policy snapshot |
-| Collect fees or charges | Actual school bank on each instrument | Confirmed payment creates Income; deferred payment stores hidden routing snapshots |
+| Collect fees or charges | School bank for non-cash instruments | Verified non-cash payment creates Income; deferred payment and cash store hidden routing snapshots |
+| Spend pending cash and finalize deposit | Pending receipt for paid expenses; receiving bank and remaining count at approval | Paid Expense consumes pending cash; final approval confirms only the net deposit as Income, preserving original receipt and gross audit values |
 | Approve a refund | Optional approval notes | Reserves refundable allocations; creates no Expense |
 | Record a refund payout | Expense Category, source school bank, method, date and non-cash reference | Completes the refund and creates Expense exactly once in the same transaction |
 | Return a confirmed refund payout | Evidence and reason | Creates an opposite signed Expense correction |
@@ -45,7 +46,7 @@ Charge create/update DTOs include `chargeCategoryId`; the backend resolves its I
 
 `FinanceIncomeAllocator` attributes each cent to a category and instrument in stable source order. It rejects nonpositive values, more than two decimal places, and unequal totals. Collection retries retain the existing command fingerprint and serializable unit of work. Automatic entry source keys have a unique database index. Generic manual-entry update and delete operations reject automatic entries, and student scope applies to automatic entry reads.
 
-Reconciliation confirms the existing hidden income rows. Rejected deferred payments never become Income. The existing collection validator rejects deferred transactions with multiple instruments or both fee and charge receipts: receipt-level reconciliation cannot safely decide such payments. Confirmed split payments remain supported.
+Non-cash reconciliation confirms the existing hidden income rows. Cash uses [final net deposit approval](./cash-management.md); generic reconciliation cannot release it. Rejected deferred payments never become Income. The existing collection validator rejects deferred transactions with multiple instruments or both fee and charge receipts: receipt-level reconciliation cannot safely decide such payments. Confirmed split payments remain supported.
 
 The separate Income and Expenses registers exclude receipt/refund headers when automatic category entries exist, preventing duplicate amounts. Manual entries and historical source activity remain visible.
 

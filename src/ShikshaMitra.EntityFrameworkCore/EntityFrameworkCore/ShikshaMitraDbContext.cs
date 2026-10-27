@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Finance.Accounts.CashManagement;
 using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.HR.Employees;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
@@ -73,6 +74,10 @@ public partial class ShikshaMitraDbContext(DbContextOptions<ShikshaMitraDbContex
 		builder.Ignore<FeeRefundLine>();
 		builder.Ignore<FeeRefundReservation>();
 		builder.Ignore<FeeRefundSettlement>();
+		builder.Ignore<CashDepositRecord>();
+		builder.Ignore<CashCreditRecord>();
+		builder.Ignore<CashExpenseRecord>();
+		builder.Ignore<CashCommandRecord>();
 
 		builder.ApplyConfigurationsFromAssembly(typeof(ShikshaMitraDbContext).Assembly);
 		builder.Entity<TeacherDiary>(b =>

@@ -28,6 +28,11 @@ public static class ApiProblemDetailsMapper
 			TenantSettingsDomainErrorCodes.DuplicateStandardName or
 			TenantSettingsDomainErrorCodes.DuplicateDivisionName => StatusCodes.Status409Conflict,
 			FeeCollectionErrorCodes.IdempotencyConflict => StatusCodes.Status409Conflict,
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.Stale or
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.RetryConflict or
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidState or
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.InsufficientCash or
+			Finance.Accounts.CashManagement.CashManagementErrorCodes.Immutable => StatusCodes.Status409Conflict,
             Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyVerified or
             Finance.Accounts.Reconciliation.ReconciliationErrorCodes.AlreadyRejected or
             Finance.Accounts.Reconciliation.ReconciliationErrorCodes.TerminalStatus => StatusCodes.Status409Conflict,

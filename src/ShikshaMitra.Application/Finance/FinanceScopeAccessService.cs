@@ -156,46 +156,8 @@ public partial class FinanceScopeAccessService(
 		}
 
 		var scope = await userScopeService.GetUserScopeAsync(currentUserId.Value);
-		var query = await studentRepository.GetQueryableAsync();
+		var query = (await studentRepository.GetQueryableAsync()).Where(student => student.TenantId == CurrentTenant.Id);
 
-		if (scope.IsAdmin)
-		{
-			return query;
-		}
-
-		if (!scope.HasAnyAccess)
-		{
-			return query.Where(_ => false);
-		}
-
-		var scopedQuery = query.Where(s =>
-			scope.HasWildcardAcademicYear ||
-			(s.AcademicYearId.HasValue && scope.WildcardBoardAcademicYearIds.Contains(s.AcademicYearId.Value)) ||
-			(s.DivisionId.HasValue && (
-				scope.DivisionIds.Contains(s.DivisionId.Value) ||
-				(scope.HasWildcardDivision && s.StandardId.HasValue && scope.WildcardDivisionStandardIds.Contains(s.StandardId.Value)))) ||
-			(s.StandardId.HasValue && (
-				scope.StandardIds.Contains(s.StandardId.Value) ||
-				(scope.HasWildcardStandard && s.AcademicMediumStageId.HasValue && scope.WildcardStandardMediumStageIds.Contains(s.AcademicMediumStageId.Value)))) ||
-			(s.AcademicMediumStageId.HasValue && (
-				scope.MediumStageIds.Contains(s.AcademicMediumStageId.Value) ||
-				(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(s.AcademicMediumId)))) ||
-			scope.MediumIds.Contains(s.AcademicMediumId) ||
-			(scope.HasWildcardMedium && s.AcademicBoardId.HasValue && scope.WildcardMediumBoardIds.Contains(s.AcademicBoardId.Value)) ||
-			(s.AcademicBoardId.HasValue && scope.BoardIds.Contains(s.AcademicBoardId.Value)));
-
-		if (scope.HasWildcardAcademicYear)
-		{
-			return scopedQuery;
-		}
-
-		if (scope.AcademicYearIds.Any())
-		{
-			return scopedQuery.Where(s =>
-				!s.AcademicYearId.HasValue ||
-				scope.AcademicYearIds.Contains(s.AcademicYearId.Value));
-		}
-
-		return scopedQuery.Where(s => !s.AcademicYearId.HasValue);
+		return FinanceStudentScopeQueryBuilder.ApplyPayerScope(query, scope);
 	}
 }

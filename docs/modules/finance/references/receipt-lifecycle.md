@@ -14,14 +14,14 @@ audience: humans-and-agents
 
 | Collection method | At collection | Reconciliation | Receipts history |
 | --- | --- | --- | --- |
-| Cash | Issue an Official Receipt immediately for fees and/or charges | Read-only Cash tab; no approval required | Official document, payment method, amount, date, PDF |
+| Cash | Issue an Official Receipt immediately for fees and/or charges | Pending cash may fund paid expenses; Cash Management approval confirms the final net deposit and releases only that remainder as Income | Original official document, payment method, amount, date, PDF |
 | Cheque, Demand Draft, UPI, Bank Transfer, Credit Card, Debit Card | Issue a Provisional Receipt immediately | Existing payment verification approval/rejection | Provisional document remains accessible while pending |
 | Non-cash approved | Create a new Official Receipt; link both documents | Original provisional row becomes Approved and points to the official number | Both numbers retained; one underlying payment |
 | Non-cash rejected | No official receipt issued | Existing rejection reverses the collection and requires remarks | Provisional document remains as rejected evidence |
 
 "Kachi" is displayed as **Provisional Receipt**; "Pakki" is displayed as **Official Receipt**. The enum values and historical receipt numbers remain unchanged. Fee, Charge, and Fees and Charges identify document scope separately from its provisional/official lifecycle.
 
-Approval is the existing reconciliation command, not bank-statement import or automatic bank matching. Those services are outside this delivery. The Cash tab acknowledges counter collection, not bank deposit reconciliation.
+Non-cash approval uses the existing reconciliation command. For Cash, the original receipt remains final while [Cash Management](./cash-management.md) confirms the net bank deposit and Income together after paid pending expenses. Bank-statement import and automatic matching remain outside this delivery.
 
 ## Flow contract and integrity
 

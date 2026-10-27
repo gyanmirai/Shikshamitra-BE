@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp;
+using Volo.Abp.Data;
 
 namespace ShikshaMitra.Students.StudentEnrollments.Registration;
 
@@ -29,6 +31,8 @@ public class StudentFamilyInfoAppService(
 
         var result = new StudentFamilyInfoDto
         {
+            MainContactRelationship = StudentFamilyContactSelection.Resolve(student, familyDetail),
+            GuardianRelationship = student.GetProperty<string>(StudentFamilyContactSelection.GuardianRelationshipKey),
             StudentId = student.Id,
             Status = student.Status,
             FatherDetails = familyDetail?.FatherDetails != null
@@ -91,7 +95,17 @@ public class StudentFamilyInfoAppService(
         var existingFamilyDetail = await familyDetailRepository.FindAsync(studentId);
         var familyDetail = existingFamilyDetail ?? new StudentFamilyDetail(student.Id, student.TenantId);
         var shouldCreateFamilyDetail = existingFamilyDetail == null;
-        familyDetail.UpdateFamilyInformation(fatherDetails, motherDetails, guardianDetails, input.SiblingStudentIds);
+        // Omitted sibling IDs are a contact edit, never an instruction to remove sibling links.
+        familyDetail.UpdateFamilyInformation(fatherDetails, motherDetails, guardianDetails, input.SiblingStudentIds ?? familyDetail.SiblingStudentIds);
+        if (input.MainContactRelationship != null)
+            StudentFamilyContactSelection.Select(student, input.MainContactRelationship, familyDetail);
+        if (input.GuardianRelationship != null)
+        {
+            if (input.GuardianRelationship.Trim().Length > 128)
+                throw new BusinessException("Students:Family:GuardianRelationshipInvalid");
+            student.SetProperty(StudentFamilyContactSelection.GuardianRelationshipKey, input.GuardianRelationship.Trim());
+        }
+        await studentRepository.UpdateAsync(student, autoSave: false);
 
         if (shouldCreateFamilyDetail)
         {

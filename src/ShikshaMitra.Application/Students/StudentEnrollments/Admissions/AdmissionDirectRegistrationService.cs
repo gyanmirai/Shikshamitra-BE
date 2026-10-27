@@ -128,6 +128,7 @@ public class AdmissionDirectRegistrationService(
 		else if (input.ParentRelationship != null)
 			AdmissionSiblingParentSelection.CaptureParent(applicant, input.ParentRelationship,
 				string.Join(" ", new[] { input.GuardianFirstName, input.GuardianLastName }.Where(value => !string.IsNullOrWhiteSpace(value))), phone, input.GuardianEmail);
+		AdmissionFamilyContactCapture.Capture(applicant, input.FamilyContacts, input.ParentRelationship);
 		await applicantRepository.InsertAsync(applicant, autoSave: true);
 		var application = returningStudent == null
 			? await lifecycleService.StartForSpecialRegistrationAsync(applicant.Id, offering.Id)
@@ -158,6 +159,9 @@ public class AdmissionDirectRegistrationService(
 			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict,
 				"This request ID already belongs to another registration.");
 		await applicationScope.EnsureCanAccessAsync(application);
+		if (!AdmissionFamilyContactCapture.MatchesRequest(applicant, input.FamilyContacts, input.ParentRelationship))
+			throw new BusinessException(AdmissionErrorCodes.DirectRegistrationIdempotencyConflict,
+				"This request ID already belongs to different family contact choices.");
 		var family = await familyRepository.FindAsync(applicant.FamilyId);
 		var guardian = family?.PrimaryGuardianId.HasValue == true
 			? await guardianRepository.FindAsync(family.PrimaryGuardianId.Value) : null;

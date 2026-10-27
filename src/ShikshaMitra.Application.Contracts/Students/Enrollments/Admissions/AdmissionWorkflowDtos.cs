@@ -100,6 +100,7 @@ public class CreateUpdateAdmissionWorkflowDto
 public class AdmissionWorkflowListInput : PagedAndSortedResultRequestDto
 {
 	public string? Search { get; set; }
+	public string? ColumnFilters { get; set; }
 	public AdmissionWorkflowStatus? Status { get; set; }
 	public int? Version { get; set; }
 	public bool? IsUsed { get; set; }

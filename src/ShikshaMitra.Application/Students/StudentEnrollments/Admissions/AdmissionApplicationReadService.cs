@@ -52,6 +52,7 @@ public class AdmissionApplicationReadService(
 				row.ContactPhone != null && row.ContactPhone.Contains(search) || row.ContactEmail != null && row.ContactEmail.ToLower().Contains(search) ||
 				row.StandardName != null && row.StandardName.ToLower().Contains(search) || row.AssignedCounsellorName != null && row.AssignedCounsellorName.ToLower().Contains(search));
 		}
+		projection = AdmissionQueueColumnFilters.Applications(projection, input.ColumnFilters);
 		var count = await AsyncExecuter.CountAsync(projection);
 		var rows = await AsyncExecuter.ToListAsync(AdmissionApplicationListQueryService.Sort(projection, input.Sorting)
 			.Skip(input.SkipCount).Take(input.MaxResultCount));

@@ -40,7 +40,7 @@ public sealed partial class StudentRecordsApplicationPostgres_Tests
 		var before = await GetCredentialsPostgresResultAsync<StudentCredentialsWorkspaceDto>(url);
 		var owner = before.Recipients.Single(recipient => recipient.Relationship == "father");
 		owner.Email.ShouldBe(fixture.Email); owner.CanSend.ShouldBeTrue(owner.BlockedReason);
-		var command = new SendStudentCredentialsDto { AccountType = "guardian", Relationship = "father",
+		var command = new SendStudentCredentialsDto { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father",
 			ExpectedEmail = owner.Email!, ConcurrencyStamp = before.ConcurrencyStamp };
 		var settingsBefore = await CredentialsPostgresSettingsSnapshotAsync();
 		var rulesBefore = await InTenantAsync(async services =>

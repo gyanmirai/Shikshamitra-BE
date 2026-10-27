@@ -39,7 +39,7 @@ public partial class CommunicationAppService
 
 	// Internal system notification, never a staff/public API. Approval, consent and provider checks
 	// use the same Communication implementation as manually-created campaigns.
-	internal async Task<CommunicationCampaignDto> PrepareInquiryQualificationAsync(AdmissionInquiry inquiry, AdmissionCycle cycle)
+	internal async Task<CommunicationCampaignDto> PrepareInquiryQualificationAsync(AdmissionInquiry inquiry, AdmissionCycle cycle, AdmissionSchoolContactDto? mainContact = null)
 	{
 		var existing = await _campaignRepository.FirstOrDefaultAsync(item =>
 			item.SourceEntityType == InquiryQualificationSource && item.SourceEntityId == inquiry.Id);
@@ -61,7 +61,7 @@ public partial class CommunicationAppService
 				ExplicitRecipients = [new CommunicationExplicitRecipientDto
 				{
 					RecipientType = "AdmissionInquiry", RecipientId = inquiry.ApplicantId ?? inquiry.Id,
-					DisplayName = inquiry.ApplicantName, Email = inquiry.Email,
+					DisplayName = mainContact?.FullName ?? inquiry.ApplicantName, Email = mainContact != null ? mainContact.Email : inquiry.Email,
 					PreferredLanguageCode = inquiry.PreferredLanguageCode, IsParentDefault = true
 				}]
 			}

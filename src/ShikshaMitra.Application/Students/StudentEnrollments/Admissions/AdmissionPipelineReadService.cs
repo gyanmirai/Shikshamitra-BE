@@ -47,6 +47,7 @@ public class AdmissionPipelineReadService(
 				row.InquiryNumber != null && row.InquiryNumber.ToLower().Contains(search) ||
 				row.ContactPhone != null && row.ContactPhone.Contains(search) || row.ContactEmail != null && row.ContactEmail.ToLower().Contains(search));
 		}
+		query = AdmissionQueueColumnFilters.Pipeline(query, input.ColumnFilters);
 		var count = await AsyncExecuter.CountAsync(query);
 		var rows = await AsyncExecuter.ToListAsync(Sort(query, input.Sorting).Skip(input.SkipCount).Take(input.MaxResultCount));
 		var ownerNames = await people.GetNamesAsync(rows.Where(row => row.AssignedCounsellorId.HasValue).Select(row => row.AssignedCounsellorId!.Value));
@@ -187,6 +188,11 @@ public class AdmissionPipelineReadService(
 		var descending = parts.Length > 1 && parts[1].Equals("desc", StringComparison.OrdinalIgnoreCase);
 		var sorted = parts[0].ToLowerInvariant() switch
 		{
+			"inquirynumber" => descending ? query.OrderByDescending(row => row.InquiryNumber) : query.OrderBy(row => row.InquiryNumber),
+			"standardname" => descending ? query.OrderByDescending(row => row.StandardName) : query.OrderBy(row => row.StandardName),
+			"contactphone" => descending ? query.OrderByDescending(row => row.ContactPhone) : query.OrderBy(row => row.ContactPhone),
+			"contactemail" => descending ? query.OrderByDescending(row => row.ContactEmail) : query.OrderBy(row => row.ContactEmail),
+			"status" => descending ? query.OrderByDescending(row => row.Status) : query.OrderBy(row => row.Status),
 			"applicationnumber" => descending ? query.OrderByDescending(row => row.ApplicationNumber) : query.OrderBy(row => row.ApplicationNumber),
 			"applicantname" => descending ? query.OrderByDescending(row => row.ApplicantName) : query.OrderBy(row => row.ApplicantName),
 			"currentstagename" => descending ? query.OrderByDescending(row => row.CurrentStageName) : query.OrderBy(row => row.CurrentStageName),

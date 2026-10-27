@@ -55,7 +55,12 @@ public class StudentRecordChangeApplication(IRepository<StudentRecordChange, Gui
 			if (StudentRecordPayloadService.Hash(before) != StudentRecordPayloadService.Hash(item.BeforeJson))
 				throw new BusinessException("Students:Records:StaleSnapshot");
 			await payloads.ApplyAsync(item.StudentId, item.Section, item.PayloadJson, item.Id);
-			if (item.Section == "family") await guardianReviews.CaptureAsync(item.StudentId, item.Id, item.PolicyJson);
+			if (item.Section == "family")
+			{
+				var existingAccess = await guardianReviews.GetLinksAsync(item.StudentId);
+				if (StudentFamilyContactSelection.RequiresAccessReview(before, item.PayloadJson, existingAccess.Select(link => link.Relationship).ToArray()))
+					await guardianReviews.CaptureAsync(item.StudentId, item.Id, item.PolicyJson);
+			}
 			item.Apply(now);
 			await changes.UpdateAsync(item);
 			await work.CompleteAsync();

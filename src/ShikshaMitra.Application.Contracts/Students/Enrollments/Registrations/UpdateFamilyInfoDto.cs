@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace ShikshaMitra.Students.Enrollments.Registrations;
 
@@ -8,6 +9,10 @@ namespace ShikshaMitra.Students.Enrollments.Registrations;
 /// </summary>
 public class UpdateFamilyInfoDto
 {
+	[RegularExpression("^(father|mother|guardian)$")]
+	public string? MainContactRelationship { get; set; }
+	[StringLength(128)]
+	public string? GuardianRelationship { get; set; }
 	/// <summary>
 	/// Father details
 	/// </summary>

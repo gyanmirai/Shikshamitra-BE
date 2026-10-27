@@ -139,7 +139,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var requests = GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>();
 		(await WithUnitOfWorkAsync(() => requests.CountAsync(x => x.CaseId == activated.Id))).ShouldBe(0);
 		var repeatedSend = await service.SendCredentialsAsync(activated.Id,
-			new() { AccountType = "guardian", Relationship = "father", ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = workspace.ConcurrencyStamp });
+			new() { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father", ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = workspace.ConcurrencyStamp });
 		repeatedSend.ConcurrencyStamp.ShouldBe(workspace.ConcurrencyStamp);
 		repeatedSend.Recipients.Single(x => x.Relationship == "father").CanSend.ShouldBeFalse();
 		await Should.ThrowAsync<BusinessException>(() => GetRequiredService<IStudentCredentialEmailAppService>().RequestAsync(activated.Id,
@@ -170,7 +170,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		(await WithUnitOfWorkAsync(() => requests.CountAsync(x => x.CaseId == activated.Id))).ShouldBe(0);
 		var workspace = await service.GetCredentialsAsync(activated.Id);
 		workspace.Recipients.Single(x => x.Relationship == "father").CanSend.ShouldBeTrue();
-		workspace = await service.SendCredentialsAsync(activated.Id, new() { AccountType = "guardian", Relationship = "father",
+		workspace = await service.SendCredentialsAsync(activated.Id, new() { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father",
 			ExpectedEmail = fixture.FatherEmail, ConcurrencyStamp = workspace.ConcurrencyStamp });
 		(await service.GetPortalAccountsAsync(activated.Id)).ShouldHaveSingleItem();
 		var request = await WithUnitOfWorkAsync(() => requests.GetAsync(x => x.CaseId == activated.Id && x.AccountType == "guardian"));
@@ -314,7 +314,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var service = GetRequiredService<IStudentOnboardingAppService>();
 		await service.ActivateAsync(original.Case.Id, new() { ConcurrencyStamp = original.Case.ConcurrencyStamp, IdempotencyKey = "original-parent-manual" });
 		var firstWorkspace = await service.GetCredentialsAsync(original.Case.Id);
-		await service.SendCredentialsAsync(original.Case.Id, new() { AccountType = "guardian", Relationship = "father",
+		await service.SendCredentialsAsync(original.Case.Id, new() { AccountType = "guardian", ConfirmRecipientAccess = true, Relationship = "father",
 			ExpectedEmail = original.FatherEmail, ConcurrencyStamp = firstWorkspace.ConcurrencyStamp });
 		var parent = (await service.GetPortalAccountsAsync(original.Case.Id)).ShouldHaveSingleItem();
 		var requests = GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>();

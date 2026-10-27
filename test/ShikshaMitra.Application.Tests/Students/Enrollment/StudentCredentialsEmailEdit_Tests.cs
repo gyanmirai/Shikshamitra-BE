@@ -58,7 +58,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var after = await WithUnitOfWorkAsync(() => _studentRepository.GetWithDetailsAsync(fixture.Case.StudentId));
 		after!.ContactDetail?.PrimaryContactNo.ShouldBe(mobile);
 		after.FamilyDetail?.FatherDetails?.ContactNo.ShouldBe(parentPhone);
-		await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = type, Relationship = relationship,
+		await service.SendCredentialsAsync(workspace.CaseId, new() { AccountType = type, Relationship = relationship, ConfirmRecipientAccess = type == "guardian",
 			ExpectedEmail = recipient.Email!, ConcurrencyStamp = workspace.ConcurrencyStamp });
 		var request = await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>().GetAsync(x => x.CaseId == workspace.CaseId));
 		request.Email.ShouldBe("updated-" + email); request.Status.ShouldBe("Pending"); request.AttemptCount.ShouldBe(0);

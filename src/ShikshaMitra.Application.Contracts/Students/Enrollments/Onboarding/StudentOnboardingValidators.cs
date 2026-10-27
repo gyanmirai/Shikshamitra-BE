@@ -80,6 +80,10 @@ public class ActivateStudentOnboardingDtoValidator : AbstractValidator<ActivateS
 	{
 		RuleFor(x => x.ConcurrencyStamp).NotEmpty();
 		RuleFor(x => x.IdempotencyKey).NotEmpty().MaximumLength(128);
+		RuleFor(x => x.GuardianAccessSelection).SetValidator(new StudentGuardianAccessSelectionDtoValidator()!)
+			.When(x => x.GuardianAccessSelection != null);
+		RuleFor(x => x).Must(input => input.GuardianAccessSelection == null || input.SiblingParentSelection == null)
+			.WithMessage("Choose one adult app-access recipient for this case.");
 	}
 }
 

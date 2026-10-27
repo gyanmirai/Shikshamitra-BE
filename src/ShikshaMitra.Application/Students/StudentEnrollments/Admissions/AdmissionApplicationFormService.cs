@@ -130,6 +130,16 @@ public class AdmissionApplicationFormService(
 		{
 			AdmissionFirstParentContactMapping.Apply(applicant, parentAnswers, guardian);
 			await applicantRepository.UpdateAsync(applicant, false);
+			if (application.InquiryId.HasValue)
+			{
+				var inquiries = LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionInquiry, Guid>>();
+				var inquiry = await inquiries.FindAsync(application.InquiryId.Value);
+				if (inquiry?.ApplicantId == applicant.Id)
+				{
+					AdmissionFamilyContactCapture.CopyToInquiry(applicant, inquiry);
+					await inquiries.UpdateAsync(inquiry, false);
+				}
+			}
 		}
 		if (guardian is not null && applicant?.ExistingStudentId.HasValue != true && (applicant == null || AdmissionSiblingParentSelection.ReadConfirmation(applicant) == null)) await guardianRepository.UpdateAsync(guardian, false);
 		instance.MarkSaved();

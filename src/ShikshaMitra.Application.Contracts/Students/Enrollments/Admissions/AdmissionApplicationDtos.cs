@@ -6,6 +6,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionApplicationListInput : PagedAndSortedResultRequestDto
 {
+	[System.ComponentModel.DataAnnotations.MaxLength(12000)] public string? ColumnFilters { get; set; }
 	/// <summary>Restricts the decision/finalization menu without limiting applicant history queries.</summary>
 	public bool DecisionWorkspaceOnly { get; set; }
 	public bool ActiveOnly { get; set; }

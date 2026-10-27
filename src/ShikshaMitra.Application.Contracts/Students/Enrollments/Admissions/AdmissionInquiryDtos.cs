@@ -8,6 +8,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 
 public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 {
+	public AdmissionSchoolContactDto? MainSchoolContact { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public string InquiryNumber { get; set; } = string.Empty;
 	public Guid AdmissionCycleId { get; set; }
@@ -62,6 +63,7 @@ public class AdmissionInquiryDto : FullAuditedEntityDto<Guid>
 
 public class CreateAdmissionInquiryDto
 {
+	public AdmissionFamilyContactsDto? FamilyContacts { get; set; }
 	public Guid? ExistingFamilyId { get; set; }
 	public Guid? ExistingParentApplicantId { get; set; }
 	[RegularExpression("^(father|mother)$")]
@@ -92,6 +94,8 @@ public class CreateAdmissionInquiryDto
 
 public class AdmissionInquiryListInput : PagedAndSortedResultRequestDto
 {
+	[System.ComponentModel.DataAnnotations.MaxLength(250)] public string? StandardName { get; set; }
+	public string? StandardNameFilterType { get; set; }
 	public bool DashboardFollowUpsDue { get; set; }
 	public Guid? DivisionId { get; set; }
 	public Guid? AcademicYearId { get; set; }

@@ -56,6 +56,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 			await Should.ThrowAsync<BusinessException>(() => service.SendCredentialsAsync(workspace.CaseId, new()
 			{
 				AccountType = "guardian", Relationship = relationship, ExpectedEmail = email,
+				ConfirmRecipientAccess = true,
 				ConcurrencyStamp = workspace.ConcurrencyStamp
 			}));
 			(await WithUnitOfWorkAsync(() => GetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>()

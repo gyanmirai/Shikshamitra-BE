@@ -8,13 +8,13 @@ internal static class StudentPortalOwnerSelection
 {
 	internal static IReadOnlyList<string> Relationships(StudentFamilyDetail? family)
 	{
-		var parents = new[] { "father", "mother" }.Where(relation => Present(Profile(family, relation))).ToArray();
-		return parents.Length > 0 ? parents : Present(family?.GuardianDetails) ? ["guardian"] : [];
+		return new[] { "father", "mother", "guardian" }.Where(relation => Present(Profile(family, relation))).ToArray();
 	}
 
 	internal static string? AutomaticRelationship(StudentFamilyDetail? family, string preferred)
 	{
-		var allowed = Relationships(family);
+		// A saved guardian contact is never authority to create app access automatically.
+		var allowed = Relationships(family).Where(relation => relation is "father" or "mother").ToArray();
 		if (allowed.Contains(preferred)) return preferred;
 		return allowed.FirstOrDefault(relation => !string.IsNullOrWhiteSpace(Profile(family, relation)?.Email))
 			?? allowed.FirstOrDefault();

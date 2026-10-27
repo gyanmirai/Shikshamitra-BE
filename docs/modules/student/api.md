@@ -3,7 +3,7 @@ module: student
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-24
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -61,6 +61,19 @@ Retired explicit user denials conservatively deny their canonical replacement, i
 Changing an override replaces that legacy denial while retaining any other affected canonical denial.
 Deploy the matching frontend and backend together, review roles/users holding retired grants, and verify effective access before use.
 No schema migration or grant reseed is required for this permission change.
+
+## Parent-default contact and recipient contracts
+
+| Contract | Behaviour |
+| --- | --- |
+| Inquiry / Direct Registration `familyContacts` | Optional `{otherParent?,otherGuardian?,mainContactRelationship}`. Each added person has `fullName`, `relationship`, optional `mobile` and `email`; the selected other guardian needs its own mobile or email. The other-parent relationship must differ from the captured parent. `parentRelationship` and confirmed sibling source IDs remain Father/Mother proof and are never replaced by the main-contact choice. |
+| Records `family` snapshot/read/write | Adds `mainContactRelationship` (`father`, `mother`, `guardian`) and `guardianRelationship`. The existing Changes grants, school policy, reason and expected snapshot apply. Omitted sibling IDs preserve existing links. A contact preference is not portal authority. |
+| Inquiry `mainSchoolContact` | Additive captured recipient display: `fullName`, `relationship`, `relationshipLabel`, `mobile`, `email`. Messaging uses this contact without a different-person fallback; original inquiry identity fields remain unchanged. |
+| Credentials recipients | Adds `isMainContact`, optional `relationshipLabel`; `hasLinkedAccount` identifies the exact relationship and saved mailbox. An occupied adult link cannot be replaced by choosing another person. Generic-guardian email editing remains reviewed-only. |
+| Send Credentials | Adult requests additionally require `confirmRecipientAccess: true`; the saved relationship, expected mailbox, case stamp, grants and scope remain authoritative. Student self requests retain their existing contract. |
+| Activation `guardianAccessSelection` | Optional `{expectedEmail,confirmRecipientAccess}` permits an explicitly authorised saved guardian instead of an unlinked sibling parent handoff. It validates the current guardian mailbox, enabled access policy, actor authority, conflicts/collisions and case stamp. The case-only choice grants no link by itself and cannot replace an existing adult link. |
+| Credentials workspace `guardianAccessEnabled` | Explicit Boolean from saved account policy (`optional`/`required` enabled; `not-needed` disabled), independent of required/readiness status. It does not establish family proof or account authority. |
+| Credentials `parentSibling.guardianAccessSelected` | Reports an existing case-only guardian choice, including a legacy case with `enabled: false`. It is not confirmed sibling-family provenance. A changed mailbox needs explicit reconfirmation; linked-owner changes retain review. |
 
 ## Portal account owner profiles and case correction
 
@@ -294,7 +307,7 @@ Target-year options expose the Onboarding-owned `rollAssignmentMode` (`manual`, 
 
 `POST /returns/preview` accepts the return input and returns one transition preview row for `ReuseProfile`; Fresh/Resume use their real Admissions handoff. Reuse supports a reviewed return within the same academic year by reopening the existing inactive enrollment. Completed and cancelled renewal cases remain in history; only one active renewal can exist for a student and year. A requester may cancel AwaitingRenewal only while its linked case is PendingChecklist, before target enrollment or new-year Finance dependencies; Provisioning cancellation is blocked.
 
-Initial Onboarding exposes its school mode on the case DTO. `POST /api/student/onboarding/{id}/roll-preview` requires AllocateIdentifier and accepts `{rollNumber?,rollAssignmentMode?,reason?}`; it returns `{schoolAssignmentMode,rollAssignmentMode,proposedRollNumber,concurrencyStamp}`. The existing identifiers command retains GR inputs and positive `rollNumber`, adds optional `rollAssignmentMode`, and validates the accepted automatic proposal using the shared owner allocator.
+Initial Onboarding exposes its school mode on the case DTO. `POST /api/student/onboarding/{id}/roll-preview` requires AllocateIdentifier and accepts `{divisionId?,rollNumber?,rollAssignmentMode?,reason?}`; it returns `{divisionId,schoolAssignmentMode,rollAssignmentMode,proposedRollNumber,concurrencyStamp}`. Optional `divisionId` previews a selected, unsaved division in the case's intended class, subject to tenant and placement access checks; omission retains the saved placement behavior. Preview resolves the selected division's published rule, locks and available numbers without saving placement, reserving a seat or identifier, or advancing the issued-number cursor. An unlocked roll from another division is not reused; a locked roll remains preserved and must be available in the selected division. The stamp is the saved case's concurrency stamp. Existing placement and identifier save commands remain authoritative and revalidate current availability; preview does not reserve its displayed number. The existing identifiers command retains GR inputs and positive `rollNumber`, adds optional `rollAssignmentMode`, and validates the accepted automatic proposal using the shared owner allocator.
 
 Decision and renewal commands require `concurrencyStamp`. Correction first supports `previewOnly`; submission uses a reason and idempotency key and returns the new `transitionId`. Case DTO capabilities are derived from state, actual actor/role, permissions, and correction impact; they do not replace server authorization.
 
@@ -346,6 +359,14 @@ Base route: `/api/student/enrollment/admissions/cycles`.
 
 List results include `status`, computed `windowStatus`, `isAcceptingApplications`, Academic Year
 name, schedule timestamps, and usage counts. All action DTOs carry the current concurrency stamp.
+The optional `columnFilters` query parameter is a JSON array of `{column,type,value,valueType}`
+criteria (at most 20, 12,000 characters). `name` accepts string `contains`, `equals`, `startsWith`
+and `endsWith`; `startDate`/`endDate` accept date-only `equals`, `after` and `before` using
+`DD-MM-YYYY` or `YYYY-MM-DD`. `linkedOfferingCount`/`applicationCount` accept nonnegative integer
+`equals`, `greaterThan`, `lessThan` and inclusive `between` with `{min,max}`. Criteria combine
+with AND before counting and paging; counts use the same authorized Offering/Application scope
+as the displayed usage values. Lifecycle/window filters retain their scalar parameters.
+Invalid fields, operators, values or malformed JSON return `Students:Admissions:InvalidCycleFilter`.
 Close, reopen, archive, and window revision require a reason of at most 500 characters. Cycle
 description is optional and limited to 1000 characters.
 
@@ -474,6 +495,42 @@ Inquiry and Registration form definitions publish directly from Draft after vali
 Choice fields support either static option arrays or an approved source descriptor such as `{ "source": "EducationBoards" }` or `{ "source": "EducationMediums", "parentField": "BOARD_FIELD" }`. Approved source metadata is exposed by `GET /api/student/enrollment/admissions/forms/metadata/data-sources`; tenant-scoped options are read through `GET /api/student/enrollment/admissions/forms/metadata/options?sourceKey=...&parentId=...`. Arbitrary URLs and executable data sources are not accepted, and submission validates selected values against the authoritative source.
 
 Form list, detail, create, and update contracts expose `purpose`; new forms support `Inquiry` or `Registration`, and list requests may filter by purpose. The additive form-purpose migration may have classified earlier test definitions as `Correction` or `Consent`; those values are retained for reading existing records, but new drafts, clones, and versions cannot use them.
+
+The form list also accepts optional `columnFilters`: a JSON array of `{column,type,value,valueType}`
+criteria, limited to 20 entries and 12,000 characters. `name` supports case-insensitive string
+`contains`, `equals`, `startsWith` and `endsWith` (at most 150 characters). `version` and
+`sectionCount` support nonnegative 32-bit integer `equals`, `greaterThan`, `lessThan` and inclusive
+`between` with `{min,max}`. Criteria intersect the existing search, status, purpose and version
+parameters before counting and paging. Section criteria and displayed section counts use the
+same repository scope. Unsupported or malformed criteria return `Students:Admissions:InvalidFormFilter`.
+
+## Admissions list column predicates
+
+List column-filter additions preserve the existing authorization, tenant, academic and lifecycle
+scope. Optional `columnFilters` is a bounded JSON array of `{column,type,value,valueType}`
+criteria (at most 20 entries / 12,000 characters); supported criteria combine with AND before
+result counts and pagination. Existing scalar scope/status inputs continue to intersect them.
+
+| List | Supported column fields |
+|---|---|
+| Pipeline | `applicantName`, `applicationNumber`, `inquiryNumber`, `standardName`, `contactPhone`, `contactEmail` text predicates |
+| Applications | `standardName` text; nullable `decisionEnteredAt` and `lastSavedAt` local-day predicates |
+| Admission Stage/workflows | `name` text; `version`/`offeringCount` integer predicates; `lastModificationTime`/nullable `publishedAt` local-day predicates |
+| Admission Offering | Displayed name/code fallback `name`; effective calendar `effectiveOpenDate`/`effectiveCloseDate`; `applicationCount` integer predicates; academic/configuration/availability retain their existing scalar parameters |
+| Assessment applicants | `applicationNumber`, `className`, displayed `sessionName` text; displayed-attempt `attendance` and `result` enums; progress retains the existing `status` parameter |
+
+Text operators are `contains`, `equals`, `startsWith` and `endsWith`; numeric operators are
+`equals`, `greaterThan`, `lessThan` and inclusive `between` with `{min,max}`. Date operators
+are `equals`, `before` and `after`. Application/Workflow timestamp criteria include
+`startOffsetMinutes` and `endOffsetMinutes` using JavaScript timezone-offset sign, separately
+validated at both selected local midnights for DST. They compare against UTC day boundaries;
+missing timestamps remain excluded. Offering calendar dates retain date-only semantics.
+
+Inquiry Class additionally accepts `standardName` and `standardNameFilterType` text predicates
+through scoped Offerings/Standards. Workflow sorting adds `statusLabel` for displayed-label order
+while preserving the legacy numeric `status` sort. Other supported sorts retain stable ID
+tie-breakers. Public Inquiry Links remains a full-list endpoint with client filtering; this adds
+no paging, mutation, permission or workflow change to that endpoint.
 
 ## Assessment endpoints
 

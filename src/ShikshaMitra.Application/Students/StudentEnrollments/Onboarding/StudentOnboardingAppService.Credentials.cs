@@ -40,9 +40,10 @@ public partial class StudentOnboardingAppService
 		if (owner.BlockedReason != null) throw PortalInvalid(owner.BlockedReason);
 		if (!StudentCredentialsRecipientReader.SameEmail(owner.Email, input.ExpectedEmail))
 			throw PortalInvalid("The saved email changed. Refresh the recipient before sending credentials.");
-		if (input.AccountType == "guardian" && await SiblingParents.IsParentFlowAsync(item))
+		if (input.AccountType == "guardian" && input.Relationship is ("father" or "mother") && StudentSiblingParentService.HasGuardianSelection(item))
+			throw PortalInvalid("Guardian app access is already selected for this case. Use the reviewed access repair workflow.");
+		if (input.AccountType == "guardian" && input.Relationship is ("father" or "mother") && await SiblingParents.IsParentFlowAsync(item))
 		{
-			if (input.Relationship is not ("father" or "mother")) throw PortalInvalid("Choose Father or Mother for parent app login.");
 			var parent = await ReadSiblingParentContextAsync(item);
 			if (parent.BlockedReason != null) throw PortalInvalid(parent.BlockedReason);
 			if (parent.IsLinked && await SiblingParents.IsReusedAsync(id, "guardian")) return await MapCredentialsAsync(item);
@@ -94,7 +95,11 @@ public partial class StudentOnboardingAppService
 	{
 		var owners = await LazyServiceProvider.LazyGetRequiredService<StudentCredentialsRecipientReader>().GetAsync(item);
 		var parent = await ReadSiblingParentContextAsync(item);
-		if (parent.Enabled) owners = owners.Where(owner => owner.AccountType != "guardian" || owner.Relationship is "father" or "mother").ToArray();
+		var accessRules = await ReadSavedRulesAsync(item);
+		var guardianAccessEnabled = accessRules.HasValue && StudentPortalAccountRules.IsEnabled(accessRules.Value, "guardian");
+		// A case-only guardian choice also exists in legacy manual cases; exposing
+		// that preference never turns it into Father/Mother sibling provenance.
+		parent.GuardianAccessSelected |= StudentSiblingParentService.HasGuardianSelection(item);
 		if (parent.Status == "SetupFailed") parent.CanRetrySetup = await CanRetryParentSetupAsync(item);
 		var requests = await LazyServiceProvider.LazyGetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>()
 			.GetListAsync(row => row.CaseId == item.Id);
@@ -107,7 +112,13 @@ public partial class StudentOnboardingAppService
 		var canUpdate = await AuthorizationService.IsGrantedAsync(IdentityPermissions.Users.Update);
 		foreach (var owner in owners)
 		{
-			if (owner.AccountType == "guardian" && parent.Enabled && parent.FamilyConfirmed &&
+			if (owner.AccountType == "guardian" && owner.Relationship is ("father" or "mother") && StudentSiblingParentService.HasGuardianSelection(item))
+			{
+				owner.CanSend = false;
+				owner.BlockedReason = "Guardian app access is already selected for this case. Use the reviewed access repair workflow.";
+				continue;
+			}
+			if (owner.AccountType == "guardian" && owner.Relationship is ("father" or "mother") && parent.Enabled && parent.FamilyConfirmed &&
 				(parent.IsLinked || parent.Candidates.Count > 0 || parent.BlockedReason != null))
 			{
 				owner.CanSend = false;
@@ -129,7 +140,8 @@ public partial class StudentOnboardingAppService
 				var identity = await portalUserManager.FindByEmailAsync(owner.Email!);
 				if (identity != null)
 				{
-					if (parent.Enabled) owner.BlockedReason = "Confirm this parent through Add sibling in Admissions before linking an existing account.";
+					if (owner.Relationship == "guardian") owner.BlockedReason = "This guardian email already belongs to an account. Ask an identity administrator to use the reviewed access repair workflow.";
+					else if (parent.Enabled) owner.BlockedReason = "Confirm this parent through Add sibling in Admissions before linking an existing account.";
 					else if (!canUpdate) owner.BlockedReason = "An authorized identity administrator must link this existing account.";
 					else
 					{
@@ -158,7 +170,9 @@ public partial class StudentOnboardingAppService
 			owner.CanEditEmail = false;
 			owner.EmailEditBlockedReason = "Link the confirmed parent before requesting a login email change.";
 		}
-		return new() { CaseId = item.Id, ConcurrencyStamp = item.ConcurrencyStamp, Recipients = owners, ParentSibling = parent.Enabled ? parent : null };
+		return new() { CaseId = item.Id, ConcurrencyStamp = item.ConcurrencyStamp, Recipients = owners,
+			GuardianAccessEnabled = guardianAccessEnabled,
+			ParentSibling = parent.Enabled || parent.GuardianAccessSelected ? parent : null };
 	}
 
 	private void EnsureCredentialsActor()

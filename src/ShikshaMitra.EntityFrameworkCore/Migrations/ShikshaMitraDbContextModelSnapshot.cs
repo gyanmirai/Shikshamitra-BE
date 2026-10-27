@@ -33459,6 +33459,9 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<Guid?>("RoomId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("RoomNumber")
                         .IsRequired()
                         .HasColumnType("text");
@@ -33475,6 +33478,8 @@ namespace ShikshaMitra.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("RoomId");
+
                     b.HasIndex("StandardId");
 
                     b.Property<int>("SortOrder")
@@ -33483,6 +33488,8 @@ namespace ShikshaMitra.Migrations
                         .HasDefaultValue(0);
 
                     b.HasIndex("TenantId", "StandardId", "SortOrder");
+
+                    b.HasIndex("TenantId", "RoomId");
 
                     b.ToTable("academic_Divisions", (string) null);
                 });
@@ -33803,6 +33810,9 @@ namespace ShikshaMitra.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
                     b.Property<string>("BlobName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -33848,12 +33858,26 @@ namespace ShikshaMitra.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("LastModifierId");
 
+                    b.Property<DateTime?>("LeaseExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("LeaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ReportTypeId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("RequestJson")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<Guid>("RequestedBy")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -33869,6 +33893,8 @@ namespace ShikshaMitra.Migrations
                     b.HasIndex("ExpiresAt");
 
                     b.HasIndex("TenantId", "RequestedBy", "CreationTime");
+
+                    b.HasIndex("TenantId", "Status", "LeaseExpiresAt");
 
                     b.ToTable("AppInstituteReportJobs", (string) null);
                 });
@@ -43217,6 +43243,11 @@ namespace ShikshaMitra.Migrations
 
             modelBuilder.Entity("ShikshaMitra.TenantSettings.Divisions.Division", b =>
                 {
+                    b.HasOne("ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room", null)
+                        .WithMany()
+                        .HasForeignKey("RoomId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ShikshaMitra.TenantSettings.Standards.Standard", "Standard")
                         .WithMany("Divisions")
                         .HasForeignKey("StandardId")

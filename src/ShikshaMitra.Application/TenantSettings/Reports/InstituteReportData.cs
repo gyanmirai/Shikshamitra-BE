@@ -21,7 +21,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.TenantSettings.Reports;
 
 [RemoteService(false)]
-public class InstituteReportData(
+public partial class InstituteReportData(
 	IRepository<AcademicYear, Guid> years, IRepository<EducationBoard, Guid> boards,
 	IRepository<EducationMedium, Guid> mediums, IRepository<EducationMediumStage, Guid> stages,
 	IRepository<Standard, Guid> standards, IRepository<Division, Guid> divisions,
@@ -29,7 +29,7 @@ public class InstituteReportData(
 	IRepository<RoomType, Guid> roomTypes, IRepository<ShiftManagement, Guid> shifts,
 	IUserScopeService scopes, InstituteReportAccess access, InstituteDocumentReportData documents, InstituteIdentityReportData identities) : ApplicationService
 {
-	public async Task<List<InstituteHierarchyRow>> HierarchyAsync(Guid userId, InstituteReportFilters filter)
+	internal async Task<IQueryable<InstituteHierarchyRow>> HierarchyQueryAsync(Guid userId, InstituteReportFilters filter)
 	{
 		var tenant = CurrentTenant.Id ?? throw new BusinessException("InstituteReports:TenantRequired");
 		var yq = (await years.GetQueryableAsync()).Where(x => x.TenantId == tenant);
@@ -48,9 +48,9 @@ public class InstituteReportData(
 				AcademicYearId = y.Id, EducationBoardId = b == null ? null : b.Id,
 				EducationMediumId = m == null ? null : m.Id, EducationMediumStageId = s == null ? null : s.Id,
 				StandardId = c == null ? null : c.Id, DivisionId = d == null ? null : d.Id,
-				Year = y.Name, Board = b == null ? "" : b.Type.ToString(), Medium = m == null ? "" : m.Name,
+				Year = y.Name, Board = b == null ? "" : b.Type == EducationBoardType.CBSE ? "CBSE" : "GSEB", Medium = m == null ? "" : m.Name,
 				Stage = s == null ? "" : s.Name, Standard = c == null ? "" : c.Name, Division = d == null ? "" : d.Name,
-				Capacity = d == null ? null : d.Strength, RoomReference = d == null ? null : d.RoomNumber,
+				Capacity = d == null ? null : d.Strength, RoomReference = d == null ? null : d.RoomId.HasValue ? d.RoomId.Value.ToString() : d.RoomNumber,
 				ShiftId = c == null ? null : c.ShiftId
 			};
 		query = query.ApplyUserScope(await scopes.GetUserScopeAsync(userId));
@@ -61,27 +61,20 @@ public class InstituteReportData(
 		if (filter.StandardId.HasValue) query = query.Where(x => x.StandardId == filter.StandardId);
 		if (filter.DivisionId.HasValue) query = query.Where(x => x.DivisionId == filter.DivisionId);
 		if (filter.ShiftId.HasValue) query = query.Where(x => x.ShiftId == filter.ShiftId);
-		var result = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.Year).ThenBy(x => x.Medium).ThenBy(x => x.Standard).ThenBy(x => x.Division));
-		var boardNames = await AsyncExecuter.ToListAsync(bq);
-		foreach (var row in result) row.Board = boardNames.Find(x => x.Id == row.EducationBoardId)?.CustomName
-			?? (boardNames.Find(x => x.Id == row.EducationBoardId) is { } board ? EducationBoardNames.DisplayName(board.Type) : "");
-		return result;
+		return query;
+	}
+	public async Task<List<InstituteHierarchyRow>> HierarchyAsync(Guid userId, InstituteReportFilters filter)
+	{
+		var rows = await AsyncExecuter.ToListAsync((await HierarchyQueryAsync(userId, filter)).OrderBy(x => x.Year).ThenBy(x => x.Medium).ThenBy(x => x.Standard).ThenBy(x => x.Division));
+		await HydrateBoardNamesAsync(rows);
+		return rows;
 	}
 	public async Task<AcademicReportPreviewDto> GenerateAsync(InstituteReportRequest request, Guid userId, bool all = false)
 	{
 		InstituteReportCatalog.Validate(request);
 		await access.EnsureAsync(userId, request.ReportType);
 		var definition = InstituteReportCatalog.Get(request.ReportType);
-		var choices = (await OptionsAsync(userId)).Choices;
-		var selected = new List<string>();
-		foreach (var property in typeof(InstituteReportFilters).GetProperties())
-		{
-			if (property.GetValue(request.Filters) is not Guid id) continue;
-			var key = char.ToLowerInvariant(property.Name[0]) + property.Name[1..];
-			var option = choices.GetValueOrDefault(key)?.Find(x => x.Id == id);
-			if (option == null) throw new Volo.Abp.Authorization.AbpAuthorizationException("A report filter is outside your permitted scope.");
-			selected.Add(option.Name);
-		}
+		var selected = await ValidateFiltersAsync(request, userId);
 		var result = new AcademicReportPreviewDto { ReportType = definition.Label, GeneratedAtUtc = DateTime.UtcNow,
 			Columns = request.Columns.Count == 0 ? definition.Columns : request.Columns.Select(id => definition.Columns.Single(x => x.Id == id)).ToList(),
 			FilterSummary = (definition.Academic ? "Permitted academic hierarchy" : "School-wide catalogue") + (selected.Count > 0 ? ": " + string.Join(" / ", selected) : ""), Page = request.Page, PageSize = request.PageSize };
@@ -93,10 +86,14 @@ public class InstituteReportData(
 		if (request.Filters.IdentityScope != null) result.FilterSummary += " Scope: " + request.Filters.IdentityScope;
 		if (request.ReportType == "shift-register" && (result.Columns.Exists(x => x.Id == "totalHours") || request.Conditions.Exists(x => x.Field == "totalHours") || request.SortField == "totalHours"))
 			result.FilterSummary += ". Total hours is elapsed time rounded to two decimal places, without break deductions. An earlier end time means the next day; equal times mean zero hours.";
-		var rows = await ReadRowsAsync(request, userId);
-		rows = InstituteReportProjection.Apply(rows, request).ToList();
-		result.TotalCount = rows.Count;
-		result.Rows = all ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+		var page = await ReadPageAsync(request, userId, all);
+		if (page != null) { result.Rows = page.Value.Rows; result.TotalCount = page.Value.Count; }
+		else
+		{
+			var rows = InstituteReportProjection.Apply(await ReadRowsAsync(request, userId), request).ToList();
+			result.TotalCount = rows.Count;
+			result.Rows = all ? rows : rows.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToList();
+		}
 		result.NormalizedFilters.AcademicYearId = request.Filters.AcademicYearId;
 		return result;
 	}
@@ -113,23 +110,26 @@ public class InstituteReportData(
 		var hierarchy = request.ReportType is "academic-hierarchy" or "division-capacity" or "class-division-summary" ? await HierarchyAsync(userId, filter) : [];
 		if (request.ReportType == "academic-hierarchy") return hierarchy.Select(HierarchyValues).ToList();
 		if (request.ReportType == "class-division-summary") return InstituteClassDivisionSummary.Create(hierarchy);
-		var roomList = await rooms.GetListAsync(x => x.TenantId == tenant);
+		var roomList = await AsyncExecuter.ToListAsync((await rooms.GetQueryableAsync()).Where(x => x.TenantId == tenant)
+			.Select(x => new { x.Id, x.RoomName, x.BuildingId, x.FloorId, x.RoomTypeId, x.Capacity, x.TotalBenches, x.BenchCapacity, x.Features }));
+		var roomLookup = roomList.ToDictionary(x => x.Id);
 		if (request.ReportType == "division-capacity")
 		{
-			var shiftList = await shifts.GetListAsync(x => x.TenantId == tenant);
+			var shiftList = await AsyncExecuter.ToListAsync((await shifts.GetQueryableAsync()).Where(x => x.TenantId == tenant).Select(x => new { x.Id, x.ShiftName }));
+			var shiftLookup = shiftList.ToDictionary(x => x.Id, x => x.ShiftName);
 			return hierarchy.Where(x => x.DivisionId.HasValue).Select(x => {
-				var row = HierarchyValues(x); var room = Guid.TryParse(x.RoomReference, out var id) ? roomList.Find(r => r.Id == id) : null;
+				var row = HierarchyValues(x); var room = Guid.TryParse(x.RoomReference, out var id) ? roomLookup.GetValueOrDefault(id) : null;
 				row["capacity"] = x.Capacity?.ToString(CultureInfo.InvariantCulture);
 				row["room"] = room?.RoomName ?? x.RoomReference;
 				row["roomAssignment"] = string.IsNullOrWhiteSpace(x.RoomReference) ? "unassigned" : room == null ? "unresolved" : "assigned";
-				row["shift"] = shiftList.Find(s => s.Id == x.ShiftId)?.ShiftName;
+				row["shift"] = x.ShiftId.HasValue ? shiftLookup.GetValueOrDefault(x.ShiftId.Value) : null;
 				return row;
 			}).Where(x => filter.RoomAssignment == null || x["roomAssignment"] == filter.RoomAssignment).ToList();
 		}
-		var buildingList = await buildings.GetListAsync(x => x.TenantId == tenant);
+		var buildingList = await AsyncExecuter.ToListAsync((await buildings.GetQueryableAsync()).Where(x => x.TenantId == tenant).Select(x => new { x.Id, x.BuildingName }));
 		var buildingIds = buildingList.Select(x => x.Id).ToArray();
-		var floorList = await floors.GetListAsync(x => Enumerable.Contains(buildingIds, x.BuildingId));
-		var typeList = await roomTypes.GetListAsync(x => x.TenantId == tenant);
+		var floorList = await AsyncExecuter.ToListAsync((await floors.GetQueryableAsync()).Where(x => Enumerable.Contains(buildingIds, x.BuildingId)).Select(x => new { x.Id, x.BuildingId, x.FloorName }));
+		var typeList = await AsyncExecuter.ToListAsync((await roomTypes.GetQueryableAsync()).Where(x => x.TenantId == tenant).Select(x => new { x.Id, x.RoomTypeName }));
 		return roomList.Where(x => (!filter.BuildingId.HasValue || x.BuildingId == filter.BuildingId) && (!filter.FloorId.HasValue || x.FloorId == filter.FloorId) && (!filter.RoomTypeId.HasValue || x.RoomTypeId == filter.RoomTypeId))
 			.OrderBy(x => x.RoomName).Select(x => Row(("building", buildingList.Find(b => b.Id == x.BuildingId)?.BuildingName),
 				("floor", floorList.Find(f => f.Id == x.FloorId && f.BuildingId == x.BuildingId)?.FloorName), ("room", x.RoomName),

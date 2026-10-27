@@ -16,14 +16,31 @@ namespace ShikshaMitra.TenantSettings.EducationBoards;
 public class EducationBoardAppService(
 	IEducationBoardRepository educationBoardRepository,
 	EducationBoardManager educationBoardManager,
-	AcademicOrganizationScopeAccessService scopeAccessService,
-	IRepository<Room, Guid> roomRepository) : CrudAppService<
+	AcademicHierarchyQueryScope queryScope,
+	AcademicHierarchyReader hierarchy) : CrudAppService<
 	EducationBoard,
 	EducationBoardDto,
 	Guid,
 	PagedAndSortedResultRequestDto,
 	CreateUpdateEducationBoardDto>(educationBoardRepository), IEducationBoardAppService
 {
+	[Volo.Abp.RemoteService(false)]
+	public async Task<ListResultDto<EducationBoardDto>> GetHierarchyAsync(Guid academicYearId)
+	{
+		await CheckGetListPolicyAsync();
+		if (academicYearId == Guid.Empty) throw new Volo.Abp.Validation.AbpValidationException("AcademicYearId is required.");
+		return new(await hierarchy.ReadAsync(academicYearId));
+	}
+	public override async Task<EducationBoardDto> GetAsync(Guid id)
+	{
+		await CheckGetPolicyAsync();
+		return (await hierarchy.ReadAsync(null, id)).FirstOrDefault()
+			?? throw new Volo.Abp.Authorization.AbpAuthorizationException();
+	}
+	protected override async Task<IQueryable<EducationBoard>> CreateFilteredQueryAsync(PagedAndSortedResultRequestDto input) =>
+		await queryScope.BoardsAsync(await base.CreateFilteredQueryAsync(input));
+	protected override IQueryable<EducationBoard> ApplySorting(IQueryable<EducationBoard> query, PagedAndSortedResultRequestDto input) =>
+		string.IsNullOrWhiteSpace(input.Sorting) ? query.OrderBy(x => x.Type).ThenBy(x => x.Id) : base.ApplySorting(query, input);
 	public Task<System.Collections.Generic.List<EducationBoardOptionDto>> GetOptionsAsync() => Task.FromResult(
 		Enum.GetValues<EducationBoardType>().Select(type => new EducationBoardOptionDto
 		{
@@ -54,40 +71,10 @@ public class EducationBoardAppService(
 	public async override Task<PagedResultDto<EducationBoardDto>>
 		GetListAsync(PagedAndSortedResultRequestDto input)
 	{
-		var result = await base.GetListAsync(input);
-
-		result.Items = result.Items.OrderBy(x => x.Type).ToList();
-
-		foreach (var board in result.Items)
-		{
-			board.EducationMediums = board.EducationMediums.OrderBy(x => x.CreationTime).ToList();
-
-			foreach (var medium in board.EducationMediums)
-			{
-				medium.EducationMediumStages = medium.EducationMediumStages.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
-				foreach (var stage in medium.EducationMediumStages)
-				{
-					stage.Standards = stage.Standards.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
-					foreach (var standard in stage.Standards)
-					{
-						standard.Divisions = standard.Divisions.OrderBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id).ToList();
-					}
-				}
-			}
-		}
-
-		var allDivisions = result.Items
-			.SelectMany(b => b.EducationMediums ?? [])
-			.SelectMany(m => m.EducationMediumStages ?? [])
-			.SelectMany(s => s.Standards ?? [])
-			.SelectMany(s => s.Divisions ?? []);
-
-		await scopeAccessService.ResolveRoomIdsAsync(allDivisions);
-
-		var prunedItems = await scopeAccessService.PruneBoardTreeAsync(result.Items);
-		result.Items = prunedItems.ToList();
-		result.TotalCount = result.Items.Count;
-
-		return result;
+		await CheckGetListPolicyAsync();
+		var query = await CreateFilteredQueryAsync(input);
+		var total = await AsyncExecuter.CountAsync(query);
+		var items = await hierarchy.ReadBoardsAsync(ApplyPaging(ApplySorting(query, input), input));
+		return new(total, items);
 	}
 }

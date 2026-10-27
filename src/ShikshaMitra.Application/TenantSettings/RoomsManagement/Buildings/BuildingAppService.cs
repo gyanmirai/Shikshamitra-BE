@@ -6,6 +6,7 @@ using ShikshaMitra.TenantSettings.Formatting;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Buildings;
 
@@ -43,6 +44,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 		return result;
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<BuildingDto> CreateAsync(CreateBuildingDto input)
 	{
 		var rules = await Formatting.GetAsync("buildings");
@@ -53,7 +55,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			Description = InstituteFieldFormattingCatalog.Optional(rules, "description", input.Description, BuildingConsts.MaxDescriptionLength)
 		};
 
-		var createdBuilding = await buildingRepository.InsertAsync(building, autoSave: true);
+		var createdBuilding = await buildingRepository.InsertAsync(building, autoSave: false);
 
 		foreach (var floorDto in input.Floors)
 		{
@@ -72,10 +74,10 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 		return await GetAsync(createdBuilding.Id);
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task<BuildingDto> UpdateAsync(Guid id, UpdateBuildingDto input)
 	{
-		await capacity.LockBuildingAsync(id);
-		var building = await buildingRepository.GetAsync(id);
+		var building = await capacity.LockBuildingAsync(id);
 
 		var existingFloors = await AsyncExecuter.ToListAsync(
 			(await floorRepository.GetQueryableAsync()).Where(f => f.BuildingId == id)
@@ -101,13 +103,14 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			}
 		}
 
+		var counts = await capacity.GetRoomCountsAsync([id]);
+		var floorsById = existingFloors.ToDictionary(floor => floor.Id);
 		foreach (var floorDto in input.FloorsToUpdate)
-			await capacity.EnsureFloorLimitAsync(existingFloors.First(floor => floor.Id == floorDto.Id), floorDto.TotalRoom);
-
+			capacity.EnsureFloorLimit(floorsById[floorDto.Id], floorDto.TotalRoom, counts.GetValueOrDefault(floorDto.Id));
 		building.BuildingName = input.BuildingName;
 		building.TotalFloors = input.TotalFloors;
 		building.Description = input.Description;
-		await buildingRepository.UpdateAsync(building, autoSave: true);
+		await buildingRepository.UpdateAsync(building, autoSave: false);
 
 		// Delete floors explicitly marked for deletion
 		var floorsToDelete = existingFloors
@@ -122,7 +125,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 		// Update existing floors
 		foreach (var floorDto in input.FloorsToUpdate)
 		{
-			var existingFloor = existingFloors.FirstOrDefault(f => f.Id == floorDto.Id);
+			var existingFloor = floorsById.GetValueOrDefault(floorDto.Id);
 			if (existingFloor != null)
 			{
 				existingFloor.FloorName = floorDto.FloorName;
@@ -158,6 +161,7 @@ public class BuildingAppService(IRepository<Building, Guid> buildingRepository, 
 			floor.RoomCount = counts.GetValueOrDefault(floor.Id);
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public async Task DeleteAsync(Guid id)
 	{
 		await capacity.LockBuildingAsync(id);

@@ -31,7 +31,7 @@ public class SchoolIdentityController(ISchoolIdentityAppService service) : AbpCo
 
 	private async Task<IActionResult> BrandingAssetAsync(SchoolIdentityAssetKind kind)
 	{
-		var result = await service.GetBrandingAssetAsync(kind);
+		var result = await service.GetBrandingAssetAsync(kind, Request.Headers.IfMatch.Count == 0 ? Request.Headers.IfNoneMatch.ToString() : null);
 		Response.Headers["X-Content-Type-Options"] = "nosniff";
 		Response.Headers.Append(HeaderNames.Vary, "Authorization, Cookie, __tenant");
 		if (result == null)
@@ -41,6 +41,8 @@ public class SchoolIdentityController(ISchoolIdentityAppService service) : AbpCo
 		}
 		// Revalidate on every reuse so authorization and tenant checks always run before a 304.
 		Response.Headers.CacheControl = "private, no-cache";
+		Response.Headers.ETag = result.EntityTag;
+		if (result.NotModified) return StatusCode(StatusCodes.Status304NotModified);
 		return File(result.Content, result.ContentType, lastModified: null, entityTag: new EntityTagHeaderValue(result.EntityTag));
 	}
 	[HttpPost("preview")]

@@ -21,4 +21,5 @@ public sealed class SchoolBrandingImageDto
 	public byte[] Content { get; set; } = [];
 	public string ContentType { get; set; } = "";
 	public string EntityTag { get; set; } = "";
+	public bool NotModified { get; set; }
 }

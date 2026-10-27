@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Reports;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.TenantSettings.Reports;
 
@@ -72,6 +73,28 @@ public class InstituteReportJobDto
 	public bool IsDynamic { get; set; }
 }
 
+public class InstituteReportHistoryRowDto
+{
+	public Guid Id { get; set; }
+	public string ReportTypeId { get; set; } = "";
+	public string ReportType { get; set; } = "";
+	public string Format { get; set; } = "";
+	public string Status { get; set; } = "";
+	public string? FileName { get; set; }
+	public string? ErrorMessage { get; set; }
+	public DateTime CreationTime { get; set; }
+	public DateTime? CompletedAt { get; set; }
+	public DateTime ExpiresAt { get; set; }
+	public bool IsDynamic { get; set; }
+}
+
+public class InstituteReportHistoryInput : PagedAndSortedResultRequestDto
+{
+	[StringLength(200)] public string? Filter { get; set; }
+	[StringLength(16384)] public string? ColumnFilters { get; set; }
+	[StringLength(100)] public string? TimeZone { get; set; }
+}
+
 public class InstituteAiPlanInput
 {
 	[Required, StringLength(2000, MinimumLength = 10)] public string Prompt { get; set; } = "";
@@ -100,6 +123,8 @@ public interface IInstituteReportAppService : IApplicationService
 	Task<AcademicReportPreviewDto> PreviewAsync(InstituteReportRequest input);
 	Task<InstituteReportJobDto> CreateExportAsync(InstituteReportRequest input);
 	Task<List<InstituteReportJobDto>> GetExportsAsync();
+	Task<PagedResultDto<InstituteReportHistoryRowDto>> GetHistoryAsync(InstituteReportHistoryInput input);
+	Task<List<InstituteReportHistoryRowDto>> GetStatusesAsync(List<Guid> ids);
 	Task<InstituteReportJobDto> GetExportAsync(Guid jobId);
 	Task<AcademicReportDownloadDto> DownloadAsync(Guid jobId);
 	Task<InstituteAiPlanResult> PlanAsync(InstituteAiPlanInput input);

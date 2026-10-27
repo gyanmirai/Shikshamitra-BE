@@ -10,6 +10,7 @@ using ShikshaMitra.TenantSettings.RoomsManagement.RoomTypes;
 using ShikshaMitra.Constants.Permissions;
 using System.Collections.Generic;
 using ShikshaMitra.TenantSettings.Formatting;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
@@ -118,38 +119,19 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 	public override async Task<PagedResultDto<RoomDto>> GetListAsync(GetRoomListDto input)
 	{
 		await CheckGetListPolicyAsync();
-		var query = await CreateFilteredQueryAsync(input);
-		var totalCount = await AsyncExecuter.CountAsync(query);
-
-		query = ApplySorting(query, input);
-		query = ApplyPaging(query, input);
-
-		var rooms = await AsyncExecuter.ToListAsync(query);
-		var roomDtos = ObjectMapper.Map<System.Collections.Generic.List<Room>, System.Collections.Generic.List<RoomDto>>(rooms);
-
-		// Load building and room type names
-		foreach (var dto in roomDtos)
-		{
-			var building = await _buildingRepository.FindAsync(dto.BuildingId);
-			var floor = await _floorRepository.FindAsync(dto.FloorId);
-			var roomType = await _roomTypeRepository.FindAsync(dto.RoomTypeId);
-
-			dto.BuildingName = building?.BuildingName;
-			dto.FloorName = floor?.FloorName;
-			dto.RoomTypeName = roomType?.RoomTypeName;
-		}
-
-		return new PagedResultDto<RoomDto>(totalCount, roomDtos);
+		return await ReadPageAsync(input);
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public override async Task<RoomDto> CreateAsync(CreateUpdateRoomDto input)
 	{
 		await CheckCreatePolicyAsync();
 		var rules = await LazyServiceProvider.LazyGetRequiredService<InstituteFieldFormattingStore>().GetAsync("rooms");
 		input.RoomName = InstituteFieldFormattingCatalog.Required(rules, "roomName", input.RoomName, RoomConsts.MaxRoomNameLength);
-		await Capacity.LockBuildingAsync(input.BuildingId);
-		var selectedFloor = await ValidateFloorBelongsToBuildingAsync(input.FloorId, input.BuildingId);
-		await Capacity.EnsureRoomSpaceAsync(selectedFloor);
+		var building = await Capacity.LockBuildingAsync(input.BuildingId);
+		var floor = await ValidateFloorBelongsToBuildingAsync(input.FloorId, input.BuildingId);
+		var roomType = await _roomTypeRepository.GetAsync(input.RoomTypeId);
+		await Capacity.EnsureRoomSpaceAsync(floor);
 
 		var room = ObjectMapper.Map<CreateUpdateRoomDto, Room>(input);
 		room.TenantId = CurrentTenant.Id;
@@ -157,10 +139,6 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 		room.Features = await ResolveFeaturesAsync(input.Features);
 		await ApplyImageAsync(room, input);
 		await Repository.InsertAsync(room, autoSave: true);
-
-		var building = await _buildingRepository.GetAsync(room.BuildingId);
-		var floor = await _floorRepository.GetAsync(room.FloorId);
-		var roomType = await _roomTypeRepository.GetAsync(room.RoomTypeId);
 
 		var dto = ObjectMapper.Map<Room, RoomDto>(room);
 		dto.BuildingName = building.BuildingName;
@@ -170,22 +148,20 @@ public partial class RoomAppService : CrudAppService<Room, RoomDto, Guid, GetRoo
 		return dto;
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public override async Task<RoomDto> UpdateAsync(Guid id, CreateUpdateRoomDto input)
 	{
 		await CheckUpdatePolicyAsync();
 		var room = await Repository.GetAsync(id);
-		await Capacity.LockBuildingAsync(input.BuildingId);
-		var selectedFloor = await ValidateFloorBelongsToBuildingAsync(input.FloorId, input.BuildingId);
-		await Capacity.EnsureRoomSpaceAsync(selectedFloor, id);
+		var building = await Capacity.LockBuildingAsync(input.BuildingId);
+		var floor = await ValidateFloorBelongsToBuildingAsync(input.FloorId, input.BuildingId);
+		var roomType = await _roomTypeRepository.GetAsync(input.RoomTypeId);
+		await Capacity.EnsureRoomSpaceAsync(floor, id);
 		ObjectMapper.Map(input, room);
 		room.SetColumnLayout(input.ColumnRows, input.BenchCapacity);
 		room.Features = await ResolveFeaturesAsync(input.Features);
 		await ApplyImageAsync(room, input);
 		await Repository.UpdateAsync(room, autoSave: true);
-
-		var building = await _buildingRepository.GetAsync(room.BuildingId);
-		var floor = await _floorRepository.GetAsync(room.FloorId);
-		var roomType = await _roomTypeRepository.GetAsync(room.RoomTypeId);
 
 		var dto = ObjectMapper.Map<Room, RoomDto>(room);
 		dto.BuildingName = building.BuildingName;

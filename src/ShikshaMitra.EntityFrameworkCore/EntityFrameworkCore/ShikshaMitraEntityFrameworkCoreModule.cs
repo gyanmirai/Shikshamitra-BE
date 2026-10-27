@@ -79,6 +79,8 @@ public class ShikshaMitraEntityFrameworkCoreModule : AbpModule
             /* Remove "includeAllEntities: true" to create
              * default repositories only for aggregate roots */
             options.AddDefaultRepositories(includeAllEntities: true);
+            options.AddRepository<ShikshaMitra.TenantSettings.Reports.InstituteReportJob,
+                ShikshaMitra.TenantSettings.Reports.EfCoreInstituteReportJobRepository>();
             options.AddRepository<ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityAsset,
                 ShikshaMitra.TenantSettings.SchoolIdentity.EfCoreSchoolIdentityAssetRepository>();
             options.AddRepository<ShikshaMitra.TenantSettings.SchoolIdentity.SchoolIdentityProfile,

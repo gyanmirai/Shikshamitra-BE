@@ -11,7 +11,7 @@ public class CreateUpdateRoomDto
 	public string RoomName { get; set; }
 
 	[Required]
-	[Range(1, int.MaxValue)]
+	[Range(0, int.MaxValue)]
 	public int Capacity { get; set; }
 
 	[Required]

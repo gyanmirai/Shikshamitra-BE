@@ -164,7 +164,7 @@ public partial class SchoolIdentityAppService(
 		return asset == null ? null : new() { Id = asset.Id, ContentType = asset.ContentType, Width = asset.Width, Height = asset.Height };
 	}
 
-	public async Task<SchoolBrandingImageDto?> GetBrandingAssetAsync(SchoolIdentityAssetKind kind)
+	public async Task<SchoolBrandingImageDto?> GetBrandingAssetAsync(SchoolIdentityAssetKind kind, string? ifNoneMatch = null)
 	{
 		if (kind is not (SchoolIdentityAssetKind.Logo or SchoolIdentityAssetKind.Banner)) throw new AbpAuthorizationException();
 		var branding = await GetBrandingAsync();
@@ -172,9 +172,12 @@ public partial class SchoolIdentityAppService(
 		if (selected == null) return null;
 		var asset = await assets.GetAsync(selected.Id);
 		if (asset.TenantId != CurrentTenant.Id || asset.Kind != kind) throw new AbpAuthorizationException();
+		var tag = $"\"{CurrentTenant.Id:N}-{asset.Id:N}\"";
+		if (ifNoneMatch?.Split(',').Select(value => value.Trim()).Any(value => value == "*" || value == tag || value == "W/" + tag) == true)
+			return new() { ContentType = asset.ContentType, EntityTag = tag, NotModified = true };
 		// Uploaded assets are immutable; replacing an image creates a new asset ID.
 		return new() { Content = await blobs.GetAllBytesAsync(asset.BlobName), ContentType = asset.ContentType,
-			EntityTag = $"\"{CurrentTenant.Id:N}-{asset.Id:N}\"" };
+			EntityTag = tag };
 	}
 
 	public async Task<SchoolIdentityAssetDownloadDto> PreviewAsync(SchoolIdentityPreviewDto input)

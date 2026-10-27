@@ -49,7 +49,7 @@ public class TenantSettingsMapperProfile : Profile
 
 		// Mapping for Division
 		CreateMap<Division, DivisionDto>()
-			.ForMember(dest => dest.RoomId, opt => opt.MapFrom(src => src.RoomNumber));
+			.ForMember(dest => dest.RoomId, opt => opt.MapFrom(src => src.RoomId.HasValue ? src.RoomId.Value.ToString() : src.RoomNumber));
         CreateMap<CreateUpdateDivisionDto, Division>().ForMember(dest => dest.SortOrder, opt => opt.Ignore());
 
 		#endregion

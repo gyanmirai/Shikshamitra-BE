@@ -11,6 +11,7 @@ using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
 using ShikshaMitra.TenantSettings.AcademicSetups.Divisions;
 using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationBoards;
+using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Divisions;
@@ -116,6 +117,60 @@ public class AcademicChildOrder_Tests : ShikshaMitraApplicationTestBase<Academic
 			sortedClasses.Items.Where(x => x.EducationMediumStageId == hierarchy.StageId).Select(x => x.Name).ShouldBe(["Class 3", "Class 2", "Class 1"]);
 			var sortedDivisions = await divisions.GetListAsync(new PagedAndSortedResultRequestDto { MaxResultCount = 1000, Sorting = "Name DESC" });
 			sortedDivisions.Items.Where(x => x.StandardId == hierarchy.StandardIds[0]).Select(x => x.Name).ShouldBe(["C", "B", "A"]);
+		});
+	}
+
+	[Fact]
+	public async Task Hierarchy_projection_preserves_saved_sibling_order_and_sort_positions_instead_of_creation_order()
+	{
+		using var tenant = GetRequiredService<ICurrentTenant>().Change(TenantId);
+		using var principal = SignIn();
+		var hierarchy = await SeedHierarchyAsync();
+		var createdAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+		Guid academicYearId = default;
+		Guid secondStageId = default;
+		await WithUnitOfWorkAsync(async () =>
+		{
+			academicYearId = (await GetRequiredService<IRepository<EducationBoard, Guid>>().GetAsync(hierarchy.BoardId)).AcademicYearId;
+			var stages = GetRequiredService<IRepository<EducationMediumStage, Guid>>();
+			var firstStage = await stages.GetAsync(hierarchy.StageId);
+			firstStage.CreationTime = createdAt;
+			await stages.UpdateAsync(firstStage, true);
+			var secondStage = await stages.InsertAsync(new EducationMediumStage(
+				Guid.NewGuid(), TenantId, "Secondary", null, hierarchy.MediumId) { CreationTime = createdAt.AddDays(1) }, true);
+			secondStageId = secondStage.Id;
+			var standards = GetRequiredService<IRepository<Standard, Guid>>();
+			var divisions = GetRequiredService<IRepository<Division, Guid>>();
+			for (var index = 0; index < hierarchy.StandardIds.Length; index++)
+			{
+				var standard = await standards.GetAsync(hierarchy.StandardIds[index]);
+				standard.CreationTime = createdAt.AddDays(index);
+				await standards.UpdateAsync(standard, true);
+				var division = await divisions.GetAsync(hierarchy.DivisionIds[index]);
+				division.CreationTime = createdAt.AddDays(index);
+				await divisions.UpdateAsync(division, true);
+			}
+		});
+		await GetRequiredService<IEducationMediumStageAppService>().ReorderAsync(hierarchy.MediumId,
+			new() { Ids = [secondStageId, hierarchy.StageId] });
+		await GetRequiredService<IStandardAppService>().ReorderAsync(hierarchy.StageId,
+			new() { Ids = hierarchy.StandardIds.Reverse().ToList() });
+		await GetRequiredService<IDivisionAppService>().ReorderAsync(hierarchy.StandardIds[0],
+			new() { Ids = hierarchy.DivisionIds.Reverse().ToList() });
+		await WithUnitOfWorkAsync(async () =>
+		{
+			var tree = await GetRequiredService<IEducationBoardAppService>().GetHierarchyAsync(academicYearId);
+			var stages = tree.Items.Single(x => x.Id == hierarchy.BoardId).EducationMediums.Single(x => x.Id == hierarchy.MediumId)
+				.EducationMediumStages;
+			stages.Select(x => x.Id).ShouldBe([secondStageId, hierarchy.StageId]);
+			stages.Select(x => x.SortOrder).ShouldBe([0, 1]);
+			stages.Select(x => x.CreationTime).ShouldBe([createdAt.AddDays(1), createdAt]);
+			var standards = stages.Single(x => x.Id == hierarchy.StageId).Standards;
+			standards.Select(x => x.Id).ShouldBe(hierarchy.StandardIds.Reverse());
+			standards.Select(x => x.SortOrder).ShouldBe([0, 1]);
+			var divisions = standards.Single(x => x.Id == hierarchy.StandardIds[0]).Divisions;
+			divisions.Select(x => x.Id).ShouldBe(hierarchy.DivisionIds.Reverse());
+			divisions.Select(x => x.SortOrder).ShouldBe([0, 1]);
 		});
 	}
 

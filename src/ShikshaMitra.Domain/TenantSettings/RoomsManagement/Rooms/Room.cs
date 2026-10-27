@@ -26,16 +26,16 @@ public class Room : AuditedAggregateRoot<Guid>, IMultiTenant
 	public void SetColumnLayout(int[]? columnRows, int benchCapacity)
 	{
 		if (columnRows == null) return;
-		if (columnRows.Length is < 1 or > 50 || System.Linq.Enumerable.Any(columnRows, rows => rows is < 1 or > 100)
-			|| benchCapacity is < 1 or > 20)
+		if (columnRows.Length > 50 || System.Linq.Enumerable.Any(columnRows, rows => rows is < 1 or > 100)
+			|| benchCapacity is < 0 or > 20)
 		{
 			throw new Volo.Abp.BusinessException("Rooms:InvalidColumnLayout")
-				.WithData("Details", "Use 1 to 50 columns, 1 to 100 rows per column, and 1 to 20 students per bench.");
+				.WithData("Details", "Use 0 to 50 columns, 1 to 100 rows per column, and 0 to 20 students per bench.");
 		}
 		ColumnRows = (int[])columnRows.Clone();
 		BenchesPerColumn = columnRows.Length;
-		BenchesPerRow = System.Linq.Enumerable.Max(columnRows);
-		TotalBenches = System.Linq.Enumerable.Sum(columnRows);
+		BenchesPerRow = columnRows.Length == 0 ? 0 : System.Linq.Enumerable.Max(columnRows);
+		TotalBenches = benchCapacity == 0 ? 0 : System.Linq.Enumerable.Sum(columnRows);
 		BenchCapacity = benchCapacity;
 		Capacity = TotalBenches * benchCapacity;
 	}

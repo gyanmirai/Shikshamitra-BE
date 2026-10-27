@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using ShikshaMitra.Academic.Reports;
 using ShikshaMitra.TenantSettings.Reports;
 using Volo.Abp.AspNetCore.Mvc;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.Controllers.TenantSettings;
 
@@ -17,6 +18,8 @@ public class InstituteReportController(IInstituteReportAppService service) : Abp
 	[HttpPost("preview")] public Task<AcademicReportPreviewDto> Preview([FromBody] InstituteReportRequest input) => service.PreviewAsync(input);
 	[HttpPost("exports"), Authorize(InstituteReportPermissions.Add)] public Task<InstituteReportJobDto> Export([FromBody] InstituteReportRequest input) => service.CreateExportAsync(input);
 	[HttpGet("exports")] public Task<List<InstituteReportJobDto>> Exports() => service.GetExportsAsync();
+	[HttpGet("history")] public Task<PagedResultDto<InstituteReportHistoryRowDto>> History([FromQuery] InstituteReportHistoryInput input) => service.GetHistoryAsync(input);
+	[HttpPost("statuses")] public Task<List<InstituteReportHistoryRowDto>> Statuses([FromBody] List<Guid> ids) => service.GetStatusesAsync(ids);
 	[HttpGet("exports/{jobId:guid}")] public Task<InstituteReportJobDto> Job(Guid jobId) => service.GetExportAsync(jobId);
 	[HttpGet("exports/{jobId:guid}/download")] public async Task<IActionResult> Download(Guid jobId)
 	{

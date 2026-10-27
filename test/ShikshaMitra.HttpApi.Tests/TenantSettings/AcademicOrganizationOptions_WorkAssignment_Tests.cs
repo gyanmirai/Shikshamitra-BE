@@ -11,9 +11,7 @@ namespace ShikshaMitra.TenantSettings;
 
 public partial class AcademicOrganizationOptionsApi_Tests
 {
-	[Fact]
-	[TestTier(TestTraits.Tiers.Important)]
-	public async Task WorkAssignment_Invite_Uses_Organization_Catalogue_And_Preserves_Multiple_Labels()
+	internal async Task AssertWorkAssignmentRoundTripAsync()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();
 		var seeded = await SeedAcademicOrganizationsAsync();
@@ -26,7 +24,7 @@ public partial class AcademicOrganizationOptionsApi_Tests
 				OrganizationIds = [seeded.CbseEnglishSecondaryStageId, seeded.GsebGujaratiPrimaryStageId]
 			}
 		}, JsonOptions);
-		response.StatusCode.ShouldBe(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+		response.StatusCode.ShouldBe(HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
 		var invite = (await response.Content.ReadFromJsonAsync<EmployeeApplicationInviteDto>(JsonOptions))!;
 		invite.Application.WorkAssignment!.OrganizationLabels.ShouldBe(["CBSE - English - Secondary", "GSEB - Gujarati - Primary"]);
 		var publicResponse = await CreateAnonymousClient().GetFromJsonAsync<PublicEmployeeApplicationDto>(

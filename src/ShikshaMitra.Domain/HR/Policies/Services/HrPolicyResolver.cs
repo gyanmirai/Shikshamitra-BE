@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
@@ -51,13 +51,13 @@ public class HrPolicyResolver(
 	public IDisposable BeginReadBatch(IEnumerable<Employee> employees)
 	{
 		var previous = readBatch;
-		readBatch = employees.ToDictionary(x => $"employee:{x.Id}", x => (object?)x);
+		readBatch = employees.ToDictionary(x => $"employee:{x.Id}", x => (object?) x);
 		var assignments = assignmentResolver.BeginReadBatch();
 		return new Volo.Abp.DisposeAction(() => { readBatch = previous; assignments.Dispose(); });
 	}
 	private async Task<T> ReadAsync<T>(string key, Func<Task<T>> load)
 	{
-		if (readBatch?.TryGetValue(key, out var cached) == true) return (T)cached!;
+		if (readBatch?.TryGetValue(key, out var cached) == true) return (T) cached!;
 		var result = await load();
 		if (readBatch != null) readBatch[key] = result;
 		return result;
@@ -66,7 +66,9 @@ public class HrPolicyResolver(
 		Guid employeeId,
 		DateTime date,
 		Guid? academicYearId = null,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+		HrPolicyAssignment? proposedAssignment = null,
+		Guid? replacedAssignmentId = null)
 	{
 		var resolvedAcademicYearId = academicYearId ?? await ResolveAcademicYearIdAsync(date, cancellationToken);
 		var targetDate = date.Date;
@@ -75,7 +77,7 @@ public class HrPolicyResolver(
 			employee,
 			resolvedAcademicYearId,
 			targetDate,
-			cancellationToken);
+			cancellationToken, proposedAssignment, replacedAssignmentId);
 		var assignment = resolution.Assignment;
 		var payrollPolicy = assignment is null
 			? await ReadAsync($"default-payroll:{resolvedAcademicYearId}", () => ResolveDefaultPayrollPolicyAsync(resolvedAcademicYearId, cancellationToken))
@@ -114,15 +116,17 @@ public class HrPolicyResolver(
 		Guid? groupId,
 		DateTime date,
 		Guid academicYearId,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default,
+		HrPolicyAssignment? proposedAssignment = null,
+		Guid? replacedAssignmentId = null)
 	{
 		var targetDate = date.Date;
 		if (employeeId.HasValue)
 		{
-			return await ResolveAsync(employeeId.Value, targetDate, academicYearId, cancellationToken);
+			return await ResolveAsync(employeeId.Value, targetDate, academicYearId, cancellationToken, proposedAssignment, replacedAssignmentId);
 		}
 
-		var resolution = await assignmentResolver.ResolvePreviewAsync(groupId, academicYearId, targetDate, cancellationToken);
+		var resolution = await assignmentResolver.ResolvePreviewAsync(groupId, academicYearId, targetDate, cancellationToken, proposedAssignment, replacedAssignmentId);
 		var assignment = resolution.Assignment;
 		var payrollPolicy = assignment is null
 			? await ResolveDefaultPayrollPolicyAsync(academicYearId, cancellationToken)

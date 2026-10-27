@@ -3,10 +3,19 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-25
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
+
+## Onboarding work assignment
+
+`EmployeeWorkAssignmentControllerDiscovery_Tests` resolves the real MVC action catalogue without seeding data, verifies the onboarding controller exists, and rejects all conventional actions on the internal `EmployeeWorkAssignmentValidator` helper. The helper is explicitly non-remote; access remains through the authorized onboarding endpoints.
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~EmployeeWorkAssignmentValidator_Tests|FullyQualifiedName~EmployeeApplicationAppService_Tests|FullyQualifiedName~EmployeeOnboardingAcademicScopeAssigner_Tests"` and `dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~EmployeeApplication_Tests"`.
+Coverage includes mode/ID/year validation, actor-catalogue revalidation, foreign/deleted year rejection, multiple organizations, no-setup choices, legacy preservation, public/list round trips, explicit HR confirmation, school-wide no-grant finalization and unchanged teaching scope requirements. The validator's actor-catalogue boundary is also covered by `AcademicOrganizationOptionsApi_Tests` for real year/tenant/scope filtering. PostgreSQL migration execution and browser acceptance require separate environment validation.
+
+Run `EmployeeWorkAssignmentApi_Tests` for the positive multi-organization HTTP invitation/public-read round trip, and the `WorkAssignment_Invite_Rejects_Other_Year_And_Actor_Scope_Ids` cases for rejected HTTP writes. The positive test has a dedicated SQLite fixture using the Application harness's nontransactional unit-of-work setting: the shared HTTP fixture reuses one physical connection and cannot represent the invitation's nested `requiresNew` transaction. ID/label assertions, endpoints, authorization and production transaction behavior are retained; this contract fixture does not certify PostgreSQL atomicity.
 
 ## Payslip settings sample regression
 

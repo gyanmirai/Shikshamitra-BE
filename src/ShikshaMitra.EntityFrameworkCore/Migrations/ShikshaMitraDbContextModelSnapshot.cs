@@ -16006,6 +16006,25 @@ namespace ShikshaMitra.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<string>("WorkAssignmentMode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("WorkAssignmentAcademicYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WorkAssignmentAcademicYearName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.PrimitiveCollection<Guid[]>("WorkAssignmentOrganizationIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
+                    b.PrimitiveCollection<string[]>("WorkAssignmentOrganizationLabels")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");

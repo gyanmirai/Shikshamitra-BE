@@ -83,6 +83,8 @@ public class EmployeeApplicationController(IEmployeeApplicationAppService appSer
 			PersonalInfo = PersonalInfoContractMapper.ToCreateDto(request.PersonalInfo),
 			AcademicYearId = request.AcademicYearId,
 			AcademicScopes = request.AcademicScopes,
+			WorkAssignment = request.WorkAssignment,
+			WorkAssignmentConfirmed = request.WorkAssignmentConfirmed,
 			FamilyInfo = request.FamilyInfo,
 			AdditionalInfo = request.AdditionalInfo,
 			WorkExperiences = request.WorkExperiences,

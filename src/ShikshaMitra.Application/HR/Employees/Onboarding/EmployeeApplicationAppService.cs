@@ -48,7 +48,8 @@ public class EmployeeApplicationAppService(
 	IRepository<EmployeeCompensationRevision, Guid> compensationRepository,
 	IPayrollInputRevisionStore payrollFence,
 	EmployeePersonalInfoProjection personalInfoProjection,
-	EmployeeActivationReadinessService activationReadiness)
+	EmployeeActivationReadinessService activationReadiness,
+	EmployeeWorkAssignmentValidator workAssignmentValidator)
 	: ApplicationService, IEmployeeApplicationAppService
 {
 	private const int TokenExpiryDays = 30;
@@ -95,11 +96,12 @@ public class EmployeeApplicationAppService(
 	public async Task<EmployeeApplicationInviteDto> CreateAsync(CreateEmployeeApplicationInviteDto input)
 	{
 		await EnsureInviteEmailAvailableAsync(input.Email);
+		var workAssignment = input.WorkAssignment == null ? null : await workAssignmentValidator.ValidateAsync(input.WorkAssignment);
 
 		var token = CreateRawToken();
 		var now = Clock.Now;
 		var publicPath = CreatePublicPath(token);
-		var application = await InsertInvitationWithRetryAsync(input, token, now);
+		var application = await InsertInvitationWithRetryAsync(input, token, now, workAssignment);
 		var emailResult = await invitationEmailService.SendInvitationAsync(application, publicPath);
 		return CreateInviteResponse(application, token, emailResult);
 	}
@@ -107,7 +109,7 @@ public class EmployeeApplicationAppService(
 	private async Task<EmployeeApplication> InsertInvitationWithRetryAsync(
 		CreateEmployeeApplicationInviteDto input,
 		string token,
-		DateTime now)
+		DateTime now, EmployeeWorkAssignmentSummaryDto? workAssignment)
 	{
 		for (var attempt = 1; attempt <= MaxApplicationNumberInsertAttempts; attempt++)
 		{
@@ -126,6 +128,8 @@ public class EmployeeApplicationAppService(
 				input.MobileNo,
 				input.PositionAppliedFor,
 				input.DepartmentAppliedFor);
+
+			if (workAssignment != null) ApplyWorkAssignment(application, workAssignment);
 
 			try
 			{
@@ -251,6 +255,14 @@ public class EmployeeApplicationAppService(
 		if (application.Status is EmployeeApplicationStatus.Rejected or EmployeeApplicationStatus.Withdrawn)
 		{
 			throw new BusinessException(HRErrorCodes.EmployeeApplicationInvalidStatusTransition);
+		}
+
+		var assignment = input.WorkAssignment ?? MapWorkAssignment(application);
+		if (assignment != null)
+		{
+			if (!input.WorkAssignmentConfirmed)
+				throw new AbpValidationException("Confirm the organization / work assignment before finalizing.");
+			ApplyWorkAssignment(application, await workAssignmentValidator.ValidateAsync(assignment));
 		}
 
 		await EnsureFinalizationPolicyOverrideAsync(input.PersonalInfo);
@@ -807,6 +819,20 @@ public class EmployeeApplicationAppService(
 		return false;
 	}
 
+	private static void ApplyWorkAssignment(EmployeeApplication application, EmployeeWorkAssignmentSummaryDto assignment) =>
+		application.SetWorkAssignment(assignment.Mode, assignment.AcademicYearId, assignment.AcademicYearName,
+			assignment.OrganizationIds, assignment.OrganizationLabels);
+
+	private static EmployeeWorkAssignmentSummaryDto? MapWorkAssignment(EmployeeApplication application) =>
+		application.WorkAssignmentMode == null ? null : new EmployeeWorkAssignmentSummaryDto
+		{
+			Mode = application.WorkAssignmentMode,
+			AcademicYearId = application.WorkAssignmentAcademicYearId,
+			AcademicYearName = application.WorkAssignmentAcademicYearName,
+			OrganizationIds = application.WorkAssignmentOrganizationIds.ToList(),
+			OrganizationLabels = application.WorkAssignmentOrganizationLabels.ToList()
+		};
+
 	private static EmployeeApplicationListItemDto MapToListItemDto(EmployeeApplication application) =>
 		new()
 		{
@@ -818,6 +844,8 @@ public class EmployeeApplicationAppService(
 			MobileNo = application.MobileNo,
 			PositionAppliedFor = application.PositionAppliedFor,
 			DepartmentAppliedFor = application.DepartmentAppliedFor,
+			WorkAssignment = MapWorkAssignment(application),
+			WorkAssignmentDisplay = application.WorkAssignmentDisplay,
 			TokenExpiresAt = application.TokenExpiresAt,
 			LinkLastIssuedAt = application.LinkLastIssuedAt,
 			SubmittedAt = application.SubmittedAt,
@@ -845,6 +873,8 @@ public class EmployeeApplicationAppService(
 			SecondaryMobileNo = application.SecondaryMobileNo,
 			PositionAppliedFor = application.PositionAppliedFor,
 			DepartmentAppliedFor = application.DepartmentAppliedFor,
+			WorkAssignment = MapWorkAssignment(application),
+			WorkAssignmentDisplay = application.WorkAssignmentDisplay,
 			DateOfBirth = application.DateOfBirth?.ToDateTime(TimeOnly.MinValue),
 			Gender = application.Gender,
 			Religion = application.Religion,
@@ -929,6 +959,8 @@ public class EmployeeApplicationAppService(
 			MobileNo = application.MobileNo,
 			PositionAppliedFor = application.PositionAppliedFor,
 			DepartmentAppliedFor = application.DepartmentAppliedFor,
+			WorkAssignment = MapWorkAssignment(application),
+			WorkAssignmentDisplay = application.WorkAssignmentDisplay,
 			TokenExpiresAt = application.TokenExpiresAt,
 			IsExpired = isExpired,
 			IsSubmitted = isSubmitted,

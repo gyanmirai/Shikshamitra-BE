@@ -11,6 +11,7 @@ public class EmployeeApplicationConfiguration : IEntityTypeConfiguration<Employe
 	{
 		builder.ToTable(ShikshaMitraConsts.DbTablePrefix + "EmployeeApplications", ShikshaMitraConsts.DbSchema);
 		builder.ConfigureByConvention();
+		builder.Ignore(x => x.WorkAssignmentDisplay);
 
 		builder.Property(x => x.ApplicationNumber).IsRequired().HasMaxLength(40);
 		builder.Property(x => x.TokenHash).IsRequired().HasMaxLength(128);
@@ -23,6 +24,10 @@ public class EmployeeApplicationConfiguration : IEntityTypeConfiguration<Employe
 		builder.Property(x => x.SecondaryMobileNo).HasMaxLength(20);
 		builder.Property(x => x.PositionAppliedFor).HasMaxLength(256);
 		builder.Property(x => x.DepartmentAppliedFor).HasMaxLength(256);
+		builder.Property(x => x.WorkAssignmentMode).HasMaxLength(32);
+		builder.Property(x => x.WorkAssignmentAcademicYearName).HasMaxLength(256);
+		builder.Property(x => x.WorkAssignmentOrganizationIds).IsRequired();
+		builder.Property(x => x.WorkAssignmentOrganizationLabels).IsRequired();
 		builder.Property(x => x.Religion).HasMaxLength(128);
 		builder.Property(x => x.FamilyCaste).HasMaxLength(128);
 		builder.Property(x => x.QualificationSummary).HasMaxLength(2048);

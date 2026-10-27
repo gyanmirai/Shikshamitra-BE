@@ -32,7 +32,7 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Employees.Onboarding;
 
-public class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class EmployeeApplicationAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private readonly IEmployeeApplicationAppService _applications;
 	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;

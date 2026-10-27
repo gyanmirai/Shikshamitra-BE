@@ -76,13 +76,13 @@ public class EmployeeOnboardingInvitationEmailService(
 			: application.FullName;
 		var encodedName = HtmlEncoder.Default.Encode(candidateName);
 		var encodedPosition = HtmlEncoder.Default.Encode(application.PositionAppliedFor ?? "the role");
-		var encodedDepartment = HtmlEncoder.Default.Encode(application.DepartmentAppliedFor ?? "the school team");
+		var encodedDepartment = HtmlEncoder.Default.Encode(application.WorkAssignmentDisplay);
 		var encodedUrl = HtmlEncoder.Default.Encode(invitationUrl);
 		var encodedExpiry = HtmlEncoder.Default.Encode(application.TokenExpiresAt.ToString("dd MMM yyyy"));
 
 		return $@"
 <p>Dear {encodedName},</p>
-<p>You have been invited to complete your staff onboarding for <strong>{encodedPosition}</strong> in <strong>{encodedDepartment}</strong>.</p>
+<p>You have been invited to complete your staff onboarding for <strong>{encodedPosition}</strong> with work assignment <strong>{encodedDepartment}</strong>.</p>
 <p>Please complete your application before <strong>{encodedExpiry}</strong>.</p>
 <p><a href=""{encodedUrl}"">Open employee onboarding application</a></p>
 <p>If the button does not open, copy and paste this link into your browser:</p>

@@ -93,7 +93,7 @@ public static class HrTableExportProjection
 		};
 		if (table == "employee-onboarding-table") return field switch {
 			"candidate" => Join(string.IsNullOrEmpty(Text("fullName")) ? "Candidate" : Text("fullName"), new[] { Text("email"), Text("mobileNo"), Text("applicationNumber") }.FirstOrDefault(value => !string.IsNullOrEmpty(value)) ?? ""),
-			"position" => Join(Text("positionAppliedFor"), Text("departmentAppliedFor")), _ => Get(field) };
+			"position" => Join(Text("positionAppliedFor"), Text("workAssignmentDisplay")), _ => Get(field) };
 		if (table == "hr-attendance-register") return field switch
 		{
 			"employeeName" => Join(Text("employeeName"), Text("employeeCode"), Text("educationMediumStageName")),

@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-25
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -128,6 +128,14 @@ The endpoint returns explicit unavailable states when an academic year or leave 
 The HR dashboard excludes approved-leave employees without stored attendance from the missing-attendance count and attendance-rate denominator.
 Approved half-day leave removes one-half attendance unit but leaves the unrecorded remainder visible as missing attendance.
 A stored attendance row suppresses the same-day leave overlay in HR dashboard totals and trend points.
+
+### Application work assignment
+
+Invitation creation accepts optional `workAssignment`: `mode` is `specificOrganizations`, `schoolWide`, or `decideLater`. Specific work requires `academicYearId` and 1–100 unique `organizationIds`, using stage IDs from the actor/tenant/year-scoped `/api/app/academic-organization-options` catalogue. Other modes require no year and an empty ID list. Unknown, duplicate, empty, foreign, unavailable, or out-of-scope choices are rejected before invitation persistence/email.
+
+List, detail, public-token and finalization responses expose the structured assignment with server-resolved `organizationLabels` and `academicYearName` snapshots, plus `workAssignmentDisplay` for exports. These are organizational context only. School-wide never assigns academic access, selects all units, changes roles or bypasses teaching validation. Functional `personalInfo.department` remains independent; legacy `departmentAppliedFor` stays readable and is never mapped to IDs or overwritten by public submission.
+
+Finalization may supply a revised `workAssignment` and must set `workAssignmentConfirmed: true` whenever a structured assignment exists or is supplied. Saved or revised specific IDs are revalidated against current actor scope and hierarchy before employee creation. Missing/deleted years or organizations require HR review. Legacy clients may omit assignment; blanks remain unclassified. The additive `AddEmployeeApplicationWorkAssignment` migration must be applied by the normal release process before using this contract; this change does not execute migrations.
 
 ### Application finalization salary contract
 

@@ -26,7 +26,7 @@ namespace ShikshaMitra.TenantSettings;
 
 [Collection(ApiTestCollection.Name)]
 [TestModule(TestTraits.Modules.TenantSettings)]
-public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
+public partial class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 {
 	private const string OptionsUrl = "/api/app/academic-organization-options";
 

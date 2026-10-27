@@ -26,6 +26,7 @@ public class CreateEmployeeApplicationInviteDto
 	public string? MobileNo { get; set; }
 	public string? PositionAppliedFor { get; set; }
 	public string? DepartmentAppliedFor { get; set; }
+	public EmployeeWorkAssignmentDto? WorkAssignment { get; set; }
 }
 
 public class EmployeeApplicationStatusUpdateDto
@@ -53,6 +54,8 @@ public class EmployeeApplicationListItemDto : EntityDto<Guid>
 	public string? MobileNo { get; set; }
 	public string? PositionAppliedFor { get; set; }
 	public string? DepartmentAppliedFor { get; set; }
+	public EmployeeWorkAssignmentSummaryDto? WorkAssignment { get; set; }
+	public string WorkAssignmentDisplay { get; set; } = string.Empty;
 	public DateTime TokenExpiresAt { get; set; }
 	public DateTime LinkLastIssuedAt { get; set; }
 	public DateTime? SubmittedAt { get; set; }
@@ -113,6 +116,8 @@ public class PublicEmployeeApplicationDto
 	public string? MobileNo { get; set; }
 	public string? PositionAppliedFor { get; set; }
 	public string? DepartmentAppliedFor { get; set; }
+	public EmployeeWorkAssignmentSummaryDto? WorkAssignment { get; set; }
+	public string WorkAssignmentDisplay { get; set; } = string.Empty;
 	public DateTime TokenExpiresAt { get; set; }
 	public bool CanSubmit { get; set; }
 	public bool IsExpired { get; set; }

@@ -13,6 +13,46 @@ audience: humans-and-agents
 TL;DR: Institute Setup APIs cover initial progress, completion, buildings, room types, and rooms.
 Use controllers for route truth and contracts for request and response shapes.
 
+## Bounded setup reads and binary room commands
+
+`GET /api/app/education-board/hierarchy?academicYearId={id}` returns the complete permitted hierarchy for one year.
+Generic board, medium, stage, standard and division lists apply tenant and UserScope predicates before counting and paging; child DTOs contain only permitted descendants.
+Single-record board, medium, stage, standard and division reads enforce the same visibility rules.
+Hierarchy projections omit stage banner bytes; School Identity owns the separate asset APIs.
+
+Room lists support server pagination/search/sorting and bounded `columnFilters` JSON.
+Up to ten filters combine OR within one column and AND across columns; string operators are `contains`, `equals`, `startsWith` and `endsWith`, and numeric operators are `equals`, `greaterThan`, `lessThan` and `between` with `min`/`max`.
+Supported text columns are room, building, floor, room-type names and the comma-joined features; numeric columns are capacity and total benches.
+Unsupported filters and sorting fields fail validation instead of filtering only a returned page.
+
+`POST /api/institute-setup/rooms` and `PUT /api/institute-setup/rooms/{id}` accept multipart form field `input` containing room-command JSON and optional binary `image`.
+JSON metadata is limited to 16 KiB, image files to 5 MiB, and the request to 6 MiB; metadata and image changes share the application transaction.
+Existing JSON room commands remain compatible.
+`GET /api/institute-setup/rooms/{id}/image/file` returns authenticated binary bytes or 204 when absent, with private no-store and nosniff headers.
+Building floors expose grouped `roomCount`; capacity conflicts use `RoomFloorLimitReached` or `FloorRoomLimitBelowUsage` under the existing Tenant Settings error prefix.
+Division room references are validated against the current tenant.
+Unassign current and retained historical division references before deleting a room; deletion does not silently clear academic records.
+
+### Building floor capacity errors
+
+`PUT /api/institute-setup/buildings/{id}` rejects a floor `totalRoom` below its current saved-room count before changing the building or floors.
+The response is HTTP 400 `application/problem+json`, with `errorCode: ShikshaMitra.TenantSettings:FloorRoomLimitBelowUsage`, a contextual `detail`, and `data` containing `BuildingId`, `FloorId`, `FloorName`, `RoomLimit` and `RoomCount`.
+For a requested limit of 1 and two saved rooms, `detail` reads: `Cannot set total rooms to 1. Ground already has 2 rooms. Delete or reassign existing rooms before reducing the total room capacity.`
+The message remains available when development exception details and stack traces are disabled.
+`Room` currently has no active status or soft-delete flag; every saved room on the floor counts, and deleting or moving a room releases its place.
+A limit equal to or above the current count is allowed.
+
+## Paged report history
+
+`GET /api/app/institute-setup-report/history?skipCount={n}&maxResultCount={n}` returns compact rows and a scoped total.
+Optional `filter`, allowlisted `sorting` and `columnFilters` apply before counting and paging. History pages contain at most 100 rows; at most ten column filters are accepted. Date filters use UTC minute boundaries after the frontend normalizes local table input.
+Optional `timeZone` identifies the browser timezone for global searches of displayed dates; omitted values use UTC and invalid identifiers fail validation. Date-like global searches compare permitted job IDs and timestamp metadata in memory before SQL counting/paging. Ordinary history reads and text criteria keep the bounded SQL path; this compatibility path does not load job requests or file bytes.
+`POST /api/app/institute-setup-report/statuses` accepts a bounded list of pending job IDs; detail and regeneration use the existing single-export endpoint.
+These endpoints preserve requester ownership, tenant isolation and current source grants.
+The legacy exports endpoint remains compatible.
+Default previews and supported numeric predicates use SQL counts and pages.
+Text comparisons, derived strings, formatted times/hours, identity JSON selections and precision-sensitive values retain the existing projection semantics through an explicit fallback; full exports are not truncated.
+
 ## Reports
 
 Base route: `/api/app/institute-setup-report`. `InstituteReportController` delegates to `IInstituteReportAppService`; application methods enforce access for direct calls too.
@@ -226,7 +266,14 @@ These validations require no schema migration.
 Both business errors use HTTP 400 ProblemDetails with `errorCode`, a localized `detail`, and `BuildingId`, `FloorId`, `FloorName`, `RoomLimit` and `RoomCount` in its top-level `data` object.
 Room writes keep the existing Room Management Add policy; building reads require `ShikshaMitra.Module.InstituteSetup.BuildingManagement.View` and building updates require `ShikshaMitra.Module.InstituteSetup.BuildingManagement.Add`.
 
-Room create/update DTOs accept optional `columnRows`, an ordered array of bench-row counts per column. When supplied, the domain requires 1 to 50 columns, 1 to 100 rows in each column, and 1 to 20 students per bench. It derives `benchesPerColumn` from the array length, `benchesPerRow` from its maximum, `totalBenches` from its sum, and `capacity` from total benches times bench capacity. Older requests may omit the array and keep their rectangular layout contract. Responses return the saved array.
+Room create/update DTOs accept optional `columnRows`, an ordered array of bench-row counts per column.
+When supplied, the domain allows 0 to 50 columns and 0 to 20 students per bench; each configured column still requires 1 to 100 rows.
+It derives `benchesPerColumn` from the array length and `benchesPerRow` from its maximum, using zero for both dimensions when `columnRows` is explicitly `[]`.
+If the array is empty or `benchCapacity` is zero, both `totalBenches` and `capacity` are zero.
+With positive students per bench, `totalBenches` is the row-count sum and `capacity` is that sum times `benchCapacity`.
+Configured rows remain saved when students per bench is zero, so a later positive value restores their calculated totals.
+Null or omitted `columnRows` preserves the legacy rectangular-layout fallback.
+Responses return the saved array, and the zero-value behavior requires no additional migration.
 
 | Feature catalogue operation | Contract | Permission |
 | --- | --- | --- |

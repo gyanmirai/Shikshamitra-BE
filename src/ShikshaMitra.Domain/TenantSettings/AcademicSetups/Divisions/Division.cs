@@ -16,6 +16,13 @@ public class Division : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public int SortOrder { get; private set; }
 
 	public string RoomNumber { get; internal set; }
+	public Guid? RoomId { get; private set; }
+
+	internal void AssignRoom(string roomNumber, Guid? roomId)
+	{
+		RoomNumber = roomNumber;
+		RoomId = roomId;
+	}
 
 	internal void SetSortOrder(int sortOrder) => SortOrder = Check.Range(sortOrder, nameof(sortOrder), 0, int.MaxValue);
 

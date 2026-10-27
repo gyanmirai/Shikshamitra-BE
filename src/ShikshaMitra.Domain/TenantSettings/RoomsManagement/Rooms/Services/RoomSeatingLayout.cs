@@ -8,13 +8,14 @@ public static class RoomSeatingLayout
 {
 	public sealed record SeatPosition(int SeatNumber, int Row, int Column);
 
-	public static int GetCapacity(Room room) => room.ColumnRows is { Length: > 0 }
-		? room.ColumnRows.Sum() * Math.Max(1, room.BenchCapacity)
+	public static int GetCapacity(Room room) => room.ColumnRows != null
+		? room.ColumnRows.Sum() * Math.Max(0, room.BenchCapacity)
 		: Math.Max(0, room.TotalBenches > 0 ? room.TotalBenches * room.BenchCapacity : room.Capacity);
 
 	public static List<SeatPosition> GetSeats(Room room)
 	{
 		var capacity = GetCapacity(room);
+		if (capacity == 0) return [];
 		var benchCapacity = Math.Max(1, room.BenchCapacity);
 		var seats = new List<SeatPosition>(capacity);
 		if (room.ColumnRows is { Length: > 0 } columnRows)

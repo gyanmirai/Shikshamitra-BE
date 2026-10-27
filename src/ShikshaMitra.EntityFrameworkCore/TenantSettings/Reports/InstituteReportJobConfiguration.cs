@@ -13,10 +13,12 @@ internal class InstituteReportJobConfiguration : IEntityTypeConfiguration<Instit
 		builder.ConfigureByConvention();
 		builder.Property(x => x.TenantId).IsRequired();
 		builder.Property(x => x.RequestJson).IsRequired();
+		builder.Property(x => x.ReportTypeId).HasMaxLength(64).IsRequired();
 		builder.Property(x => x.Status).HasMaxLength(24).IsRequired();
 		builder.Property(x => x.BlobName).HasMaxLength(256);
 		builder.Property(x => x.ErrorMessage).HasMaxLength(500);
 		builder.HasIndex(x => new { x.TenantId, x.RequestedBy, x.CreationTime });
 		builder.HasIndex(x => x.ExpiresAt);
+		builder.HasIndex(x => new { x.TenantId, x.Status, x.LeaseExpiresAt });
 	}
 }

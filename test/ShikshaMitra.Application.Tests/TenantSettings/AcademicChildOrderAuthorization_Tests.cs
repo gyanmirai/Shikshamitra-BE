@@ -27,8 +27,8 @@ public class AcademicChildOrderAuthorization_Tests
 			.Returns(Task.FromResult(AuthorizationResult.Failed()));
 		using var services = new ServiceCollection().AddSingleton<IAuthorizationService>(authorization).BuildServiceProvider();
 		var provider = new AbpLazyServiceProvider(services);
-		var standardService = new StandardAppService(null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = provider };
-		var divisionService = new DivisionAppService(null!, null!, null!, null!, null!) { LazyServiceProvider = provider };
+		var standardService = new StandardAppService(null!, null!, null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = provider };
+		var divisionService = new DivisionAppService(null!, null!, null!, null!, null!, null!, null!) { LazyServiceProvider = provider };
 		Func<Task> action = reorderDivisions
 			? () => divisionService.ReorderAsync(Guid.NewGuid(), new() { Ids = [Guid.NewGuid()] })
 			: () => standardService.ReorderAsync(Guid.NewGuid(), new() { Ids = [Guid.NewGuid()] });

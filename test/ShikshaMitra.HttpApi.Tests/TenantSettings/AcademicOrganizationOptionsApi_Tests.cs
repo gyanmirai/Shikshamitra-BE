@@ -17,6 +17,7 @@ using ShikshaMitra.TenantSettings.EducationMediums;
 using ShikshaMitra.TenantSettings.Standards;
 using Shouldly;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
 using Volo.Abp.Uow;
 using Xunit;
@@ -252,6 +253,7 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
+			await EnsureScopedIdentityAsync(scope.ServiceProvider, userId, tenantId);
 			await scopeRepository.InsertAsync(
 				new UserScopeAssignment(
 					Guid.NewGuid(),
@@ -277,6 +279,7 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))
 		{
+			await EnsureScopedIdentityAsync(scope.ServiceProvider, userId, tenantId);
 			await scopeRepository.InsertAsync(
 				new UserScopeAssignment(
 					Guid.NewGuid(),
@@ -289,6 +292,13 @@ public class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestBase
 			await userScopeService.InvalidateUserScopeCacheAsync(userId);
 			await uow.CompleteAsync();
 		}
+	}
+
+	private static async Task EnsureScopedIdentityAsync(IServiceProvider services, Guid userId, Guid tenantId)
+	{
+		var users = services.GetRequiredService<IIdentityUserRepository>();
+		if (await users.FindAsync(userId) == null)
+			await users.InsertAsync(new IdentityUser(userId, $"orgopt-{userId:N}", $"orgopt-{userId:N}@example.test", tenantId));
 	}
 
 	private sealed record SeededAcademicOrganizations(

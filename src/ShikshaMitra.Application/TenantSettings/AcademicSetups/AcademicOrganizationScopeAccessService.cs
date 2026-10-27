@@ -42,23 +42,19 @@ public class AcademicOrganizationScopeAccessService(
 			return;
 		}
 
-		var rooms = await roomRepository.GetListAsync();
-		var roomsByName = rooms.ToDictionary(r => r.RoomName, r => r.Id, StringComparer.OrdinalIgnoreCase);
+		var names = nonGuidDivisions.Select(d => d.RoomId.Trim().ToUpperInvariant()).Distinct().ToArray();
+		var rooms = await AsyncExecuter.ToListAsync((await roomRepository.GetQueryableAsync())
+			.Where(r => r.TenantId == CurrentTenant.Id && Enumerable.Contains(names, r.RoomName.Trim().ToUpper()))
+			.Select(r => new { r.Id, r.RoomName }));
+		var roomsByName = rooms.GroupBy(r => r.RoomName.Trim(), StringComparer.OrdinalIgnoreCase)
+			.Where(group => group.Count() == 1).ToDictionary(group => group.Key, group => group.Single().Id, StringComparer.OrdinalIgnoreCase);
 
 		foreach (var division in nonGuidDivisions)
 		{
-			var searchRoomId = division.RoomId == "101" ? "B101" : division.RoomId;
+			var searchRoomId = division.RoomId.Trim();
 			if (roomsByName.TryGetValue(searchRoomId, out var roomId))
 			{
 				division.RoomId = roomId.ToString();
-			}
-			else
-			{
-				var matched = rooms.FirstOrDefault(r => r.RoomName.EndsWith(searchRoomId, StringComparison.OrdinalIgnoreCase));
-				if (matched != null)
-				{
-					division.RoomId = matched.Id.ToString();
-				}
 			}
 		}
 	}

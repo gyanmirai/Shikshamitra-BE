@@ -32,6 +32,22 @@ public class RoomSeatingLayout_Tests
 	}
 
 	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public void Zero_layout_dimensions_do_not_generate_exam_seats_from_stale_totals(bool zeroColumns)
+	{
+		var room = new Room
+		{
+			ColumnRows = zeroColumns ? [] : [2, 3],
+			BenchCapacity = zeroColumns ? 2 : 0,
+			TotalBenches = 99,
+			Capacity = 198
+		};
+		RoomSeatingLayout.GetCapacity(room).ShouldBe(0);
+		RoomSeatingLayout.GetSeats(room).ShouldBeEmpty();
+	}
+
+	[Theory]
 	[InlineData(6, 3, 2, 12)]
 	[InlineData(5, 3, 2, 10)]
 	[InlineData(0, 2, 1, 7)]

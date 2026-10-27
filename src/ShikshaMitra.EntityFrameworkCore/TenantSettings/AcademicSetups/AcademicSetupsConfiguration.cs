@@ -176,6 +176,9 @@ public class AcademicSetupsConfiguration
 
 		// Make the Strength property required with a range
 		builder.Property(x => x.Strength).IsRequired();
+		builder.HasOne<ShikshaMitra.TenantSettings.RoomsManagement.Rooms.Room>().WithMany()
+			.HasForeignKey(x => x.RoomId).OnDelete(DeleteBehavior.Restrict);
+		builder.HasIndex(x => new { x.TenantId, x.RoomId });
 
 		// Define many-to-one relationship:
 		// Many Divisions can belong to one Standard

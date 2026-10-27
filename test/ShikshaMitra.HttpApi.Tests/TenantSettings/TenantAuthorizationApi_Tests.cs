@@ -13,9 +13,11 @@ using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Identity;
+using Volo.Abp.MultiTenancy;
 using Volo.Abp.PermissionManagement;
 using Volo.Abp.TenantManagement;
 using Volo.Abp.Data;
+using Volo.Abp.Uow;
 using Xunit;
 
 namespace ShikshaMitra.TenantSettings;
@@ -221,12 +223,13 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Tenant_Admin_With_Permission_Should_Call_Permission_Management_Apis()
 	{
+		var targetUserId = await CreateTenantUserAsync();
 		using var client = CreateClient(
 			tenantId: TestTenantId.ToString(),
 			roles: "admin",
 			permissions: IdentityPermissions.Users.ManagePermissions);
 
-		var response = await client.GetAsync($"/api/permission-management/permissions?providerName=U&providerKey={Guid.NewGuid()}");
+		var response = await client.GetAsync($"/api/permission-management/permissions?providerName=U&providerKey={targetUserId}");
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 	}
@@ -235,11 +238,11 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 	[TestTier(TestTraits.Tiers.Critical)]
 	public async Task Tenant_Admin_Should_Update_And_Read_User_Module_Visibility()
 	{
+		var targetUserId = await CreateTenantUserAsync();
 		using var client = CreateClient(
 			tenantId: TestTenantId.ToString(),
 			roles: "admin",
 			permissions: IdentityPermissions.Users.ManagePermissions);
-		var targetUserId = Guid.NewGuid();
 		var url = $"/api/permission-management/permissions?providerName=U&providerKey={targetUserId}";
 
 		var updateResponse = await client.PutAsJsonAsync(
@@ -301,6 +304,18 @@ public class TenantAuthorizationApi_Tests : ShikshaMitraApiTestBase
 		// extensible dictionary in this DTO with the host's Newtonsoft converters.
 		responseDocument.RootElement.GetProperty("extraProperties").GetProperty("color")
 			.GetString().ShouldBe("#abcdef", responseJson);
+	}
+
+	private async Task<Guid> CreateTenantUserAsync()
+	{
+		using var scope = Factory.Services.CreateScope();
+		using var tenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(TestTenantId);
+		using var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+		var userId = Guid.NewGuid();
+		await scope.ServiceProvider.GetRequiredService<IIdentityUserRepository>().InsertAsync(
+			new IdentityUser(userId, $"permission-{userId:N}", $"permission-{userId:N}@example.test", TestTenantId));
+		await uow.CompleteAsync();
+		return userId;
 	}
 
 	private HttpClient CreateClient(string tenantId, string permissions, string roles = "admin", string? userId = null)

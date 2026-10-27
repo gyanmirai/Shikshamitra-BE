@@ -14,10 +14,10 @@ public class BuildingRoomCapacityManager(
 	IRepository<Room, Guid> rooms,
 	IBuildingRoomCapacityLock capacityLock) : DomainService
 {
-	public async Task LockBuildingAsync(Guid buildingId)
+	public async Task<Building> LockBuildingAsync(Guid buildingId)
 	{
 		await capacityLock.AcquireAsync(buildingId);
-		await buildings.GetAsync(buildingId);
+		return await buildings.GetAsync(buildingId);
 	}
 
 	public async Task EnsureRoomSpaceAsync(Floor floor, Guid? currentRoomId = null)
@@ -29,9 +29,8 @@ public class BuildingRoomCapacityManager(
 			throw LimitError(RoomsManagementErrorCodes.RoomFloorLimitReached, floor, floor.TotalRoom, count);
 	}
 
-	public async Task EnsureFloorLimitAsync(Floor floor, int limit)
+	public void EnsureFloorLimit(Floor floor, int limit, int count)
 	{
-		var count = await rooms.CountAsync(room => room.FloorId == floor.Id);
 		if (limit < count)
 			throw LimitError(RoomsManagementErrorCodes.FloorRoomLimitBelowUsage, floor, limit, count);
 	}

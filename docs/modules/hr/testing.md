@@ -10,6 +10,8 @@ audience: humans-and-agents
 
 ## Onboarding work assignment
 
+`EmployeeWorkAssignmentControllerDiscovery_Tests` resolves the real MVC action catalogue without seeding data, verifies the onboarding controller exists, and rejects all conventional actions on the internal `EmployeeWorkAssignmentValidator` helper. The helper is explicitly non-remote; access remains through the authorized onboarding endpoints.
+
 Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~EmployeeWorkAssignmentValidator_Tests|FullyQualifiedName~EmployeeApplicationAppService_Tests|FullyQualifiedName~EmployeeOnboardingAcademicScopeAssigner_Tests"` and `dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~EmployeeApplication_Tests"`.
 Coverage includes mode/ID/year validation, actor-catalogue revalidation, foreign/deleted year rejection, multiple organizations, no-setup choices, legacy preservation, public/list round trips, explicit HR confirmation, school-wide no-grant finalization and unchanged teaching scope requirements. The validator's actor-catalogue boundary is also covered by `AcademicOrganizationOptionsApi_Tests` for real year/tenant/scope filtering. PostgreSQL migration execution and browser acceptance require separate environment validation.
 

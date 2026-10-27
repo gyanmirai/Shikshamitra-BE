@@ -157,12 +157,12 @@ public partial class AcademicOrganizationOptionsApi_Tests : ShikshaMitraApiTestB
 		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
 	}
 
-	private async Task<SeededAcademicOrganizations> SeedAcademicOrganizationsAsync()
+	private async Task<SeededAcademicOrganizations> SeedAcademicOrganizationsAsync(Guid? tenantOverride = null)
 	{
 		using var scope = Factory.Services.CreateScope();
 		var currentTenant = scope.ServiceProvider.GetRequiredService<ICurrentTenant>();
 		var uowManager = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>();
-		var tenantId = Guid.Parse(TestAuthHandler.TestTenantId);
+		var tenantId = tenantOverride ?? Guid.Parse(TestAuthHandler.TestTenantId);
 
 		using (currentTenant.Change(tenantId))
 		using (var uow = uowManager.Begin(new AbpUnitOfWorkOptions(), requiresNew: true))

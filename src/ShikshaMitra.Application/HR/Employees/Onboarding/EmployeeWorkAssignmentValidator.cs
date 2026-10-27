@@ -3,12 +3,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.TenantSettings.AcademicSetups.AcademicOrganizationOptions;
 using ShikshaMitra.TenantSettings.AcademicYears;
+using Volo.Abp;
 using Volo.Abp.Application.Services;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Validation;
 
 namespace ShikshaMitra.HR.Employees.Onboarding;
 
+[RemoteService(false)]
 public class EmployeeWorkAssignmentValidator(
 	IAcademicOrganizationOptionsAppService organizationOptions,
 	IAcademicYearRepository academicYears) : ApplicationService, ITransientDependency

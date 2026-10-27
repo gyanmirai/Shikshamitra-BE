@@ -11,6 +11,25 @@ namespace ShikshaMitra.TenantSettings;
 
 public partial class AcademicOrganizationOptionsApi_Tests
 {
+	[Fact]
+	[TestTier(TestTraits.Tiers.Important)]
+	public async Task WorkAssignment_Invite_Rejects_Foreign_Tenant_Organization_Id()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var local = await SeedAcademicOrganizationsAsync();
+		var foreign = await SeedAcademicOrganizationsAsync(Guid.NewGuid());
+		var response = await Client.PostAsJsonAsync("/api/employee-applications", new CreateEmployeeApplicationInviteDto
+		{
+			Email = $"foreign-work-assignment.{Guid.NewGuid():N}@example.com",
+			WorkAssignment = new()
+			{
+				Mode = EmployeeWorkAssignmentModes.SpecificOrganizations, AcademicYearId = local.AcademicYearId,
+				OrganizationIds = [foreign.CbseEnglishSecondaryStageId]
+			}
+		}, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest, await response.Content.ReadAsStringAsync());
+	}
+
 	internal async Task AssertWorkAssignmentRoundTripAsync()
 	{
 		await EnsureDefaultTestUserHasTenantWideScopeAsync();

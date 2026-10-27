@@ -59,6 +59,7 @@ public static partial class ShikshaMitraSubmodulePermissions
 			{ "Finance.Settings.ChargeCategory", new SubmoduleInfo(Fees_Settings_ChargeCategory.All, Fees_Settings_ChargeCategory.DisplayNames) },
 
 			// Accounts submodules
+			{ "Finance.Accounts.CashManagement", new SubmoduleInfo(Accounts_CashManagement.All, Accounts_CashManagement.DisplayNames) },
 			{ "Finance.Accounts.Activity", new SubmoduleInfo(Accounts_Activity.All, Accounts_Activity.DisplayNames) },
 			{ "Finance.Accounts.Reconciliation", new SubmoduleInfo(Accounts_Reconciliation.All, Accounts_Reconciliation.DisplayNames) },
 			{ "Finance.Accounts.ExpenseTracking", new SubmoduleInfo(Accounts_ExpenseTracking.All, Accounts_ExpenseTracking.DisplayNames) },

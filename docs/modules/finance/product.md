@@ -3,7 +3,7 @@ module: finance
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -70,6 +70,8 @@ Fee Heads under an archived Fee Category are read-only. Status changes require r
 
 ## Payment Term invoice scheduling
 
+Payment Term names are trimmed before request validation and saving. Duplicate comparison collapses whitespace and ignores case within the current tenant and academic year, across boards and lifecycle states. The name belongs to the master term, so editing its own schedule or creating a revision retains that identity. Cloning to another academic year skips a source term when its name or code conflicts in the target year and reports the skipped source code. Create, draft update, and target-year bulk clone serialize their name checks and writes with a tenant/year PostgreSQL transaction advisory lock held until commit or rollback. The actual transaction must use Read Committed isolation so a waiting writer sees the previous commit; unsupported ambient isolation fails closed. Existing records, published versions, fee assignments, and stored display spacing are not rewritten. The existing tenant/year/code database constraint remains; a normalized-name database index requires separate legacy-collision reconciliation.
+
 Template generation configures payment due and invoice rules together and returns a complete validated schedule before application.
 For specific-date rules, authors supply one explicit invoice date per generated installment; generated dates and manual installment edits share the same server validation.
 
@@ -131,3 +133,14 @@ and submission evaluate the same explicitly entered due IDs, so leaving a siblin
 empty cannot itself invalidate the preview fingerprint. Current-source
 `Finance:Concession:010020` represents a changed preview, including a real balance or concurrency
 change; it is not a policy-maximum error.
+
+
+## Pending cash and final deposit approval
+
+Pending receipts may fund paid expenses through the existing Expense Add action.
+Approval requires the current remaining count and selected receiving bank, atomically deposits that remainder and confirms only the net amount as Income.
+Receipt 10000 minus paid expense 2000 therefore produces Income/deposit 8000, Expense 2000 and held cash 0 while the official receipt and settled dues retain 10000.
+The user explicitly selected deposit-basis Income; generic Income-minus-Expense reports reflect that classification.
+Fully spent cash may be finalized with count 0 and produces no visible Income or bank deposit.
+Previously approved-held/in-transit history keeps its existing bank-credit workflow and posted Income amounts.
+See [Cash Management](./references/cash-management.md) for authority, audit evidence, rounding and retry contracts.

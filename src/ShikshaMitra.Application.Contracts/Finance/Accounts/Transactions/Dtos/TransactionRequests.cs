@@ -6,6 +6,8 @@ namespace ShikshaMitra.Finance.Accounts.Transactions.Dtos;
 
 public class TransactionCreateRequest
 {
+	public Guid? CashCollectionId { get; set; }
+	public string? CashConcurrencyStamp { get; set; }
     public Guid? IdempotencyKey { get; set; }
     [StringLength(200)]
     public string? Counterparty { get; set; }

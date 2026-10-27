@@ -50,6 +50,7 @@ public partial class TransactionAppService
 		new()
 		{
 			Success = true,
+			Message = transaction.TransactionType == ShikshaMitra.Finance.Accounts.Transactions.TransactionType.Income && transaction.CashCollectionId.HasValue ? "Cash recorded. Income is pending independent Cash Management approval." : null,
 			Data = new TransactionResponseData
 			{
 				Id           = transaction.Id,

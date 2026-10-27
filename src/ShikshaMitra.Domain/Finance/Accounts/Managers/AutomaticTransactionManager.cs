@@ -24,7 +24,8 @@ public class AutomaticTransactionManager(IRepository<Transaction, Guid> entries,
  }
  public async Task ConfirmAsync(Guid sourceId)
  {
-   var rows = await entries.GetListAsync(x => x.SourceId == sourceId && !x.IsConfirmed);
+   // Cash is confirmed only by the independent Cash Management approval for its exact instrument.
+   var rows = await entries.GetListAsync(x => x.SourceId == sourceId && !x.IsConfirmed && x.PaymentMethod != 0);
    foreach (var row in rows) row.Confirm();
  }
  public async Task ReverseAsync(Guid sourceId)

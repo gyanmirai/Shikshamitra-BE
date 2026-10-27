@@ -25,7 +25,7 @@ Frontend ownership is documented in [the frontend workspace contract](../../../.
 | API | Extend GET `/api/accounts/register` with direction, calendar month/year and category; add GET `/api/accounts/register/{source}/{id}` with academicYearId |
 | Legacy compatibility | Existing direction-less register queries retain existing permission semantics; new direction scopes require their exact Income/Expense View grant |
 | Detail | Enforce the same direction/source permission, tenant, academic year, confirmed/awaiting state and student scope as the list; never return another category's transactions |
-| Manual create | Existing POST `/api/incomes` and `/api/expenses`; add bankAccountId and optional paymentReference and optional UUID idempotencyKey; validate active/effective category, eligible bank, method, money and academic date |
+| Manual create | Existing POST `/api/incomes` and `/api/expenses`; bank/reference fields follow the payment method. Cash requires a UUID idempotencyKey; cash Expense requires a pending cashCollectionId and current cashConcurrencyStamp. Validate active/effective category, method, money and academic date |
 | Preconditions | Accessible year, active category of the matching type, non-cash eligible school bank, positive decimal amount with at most two decimals |
 | Side effects | One manual transaction; automatic monetary entries remain owned by collection/refund services; existing audit/UOW and cache consumers remain |
 | Failures | Invalid filters/foreign IDs fail safely; scope failure returns no list rows or denies detail; failed validation creates no transaction |
@@ -44,9 +44,15 @@ Unavailable legacy facts remain unavailable.
 
 ## Monetary and lifecycle invariants
 
-Confirmed collections appear in Income; provisional/rejected collections do not.
+Verified non-cash collections appear in Income; provisional/rejected collections do not.
+Cash collections and manual cash Income stay hidden while pending.
+Pending cash may fund actual paid expenses; final approval deposits and recognizes only the remaining net amount.
+For collection 10000 and paid expense 2000, Income is8000 and Expense remains2000; the official receipt remains 10000.
+Fully spent cash finalizes with count 0 and no visible zero Income row or deposit.
+Previously confirmed Income and legacy deposit/credit history retain their amounts.
+See [Cash Management](./cash-management.md) for original-gross audit evidence, exact retries and final-deposit authority.
 Approved/Processing refunds without paid accounting evidence are excluded from Expenses and remain in Refunds.
-Approval does not create an expense or reduce bank balance.
+Refund approval does not create an expense or reduce bank balance.
 Recording payment creates the expense exactly once using the selected category, bank and method. It appears as Paid immediately; linked returns appear as Returned.
 Positive expense values represent outward money; signed returned-payout corrections remain separate linked evidence.
 Automatic category/instrument allocations must retain their exact totals and must not be counted again through receipt/refund header fallbacks.

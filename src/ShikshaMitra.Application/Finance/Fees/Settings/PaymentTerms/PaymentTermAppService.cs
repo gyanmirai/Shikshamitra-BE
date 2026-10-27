@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Security.UserScope;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Finance.Audit;
+using ShikshaMitra.Finance;
 using ShikshaMitra.TenantSettings.Standards;
 using ShikshaMitra.Domain.Finance.Fees.Settings;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
@@ -12,6 +13,7 @@ using ShikshaMitra.TenantSettings.AcademicYears;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using Volo.Abp;
@@ -19,6 +21,7 @@ using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Identity;
+using Volo.Abp.Uow;
 
 namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 
@@ -33,7 +36,8 @@ public class PaymentTermAppService(
 	IRepository<Standard, Guid> standardRepository,
 	FinanceAuditWriter auditWriter,
 	IUserScopeAccessService scopeAccess,
-	PaymentTermScheduleResolver scheduleResolver
+	PaymentTermScheduleResolver scheduleResolver,
+	IPaymentTermNameMutationLock nameMutationLock
 ) : ApplicationService, IPaymentTermAppService
 {
 	public async Task<PagedResultDto<PaymentTermListDto>> GetListAsync(PaymentTermGetListInput input)
@@ -213,8 +217,10 @@ public class PaymentTermAppService(
 		return new PagedResultDto<PaymentTermVersionHistoryDto>(totalCount, versions);
 	}
 
+	[UnitOfWork(isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted)]
 	public async Task<PaymentTermDto> CreateAsync(CreatePaymentTermDto input)
 	{
+		await nameMutationLock.AcquireAsync(input.AcademicYearId);
 		var board = await boardRepository.GetAsync(input.BoardId);
 		if (board.AcademicYearId != input.AcademicYearId)
 		{
@@ -229,6 +235,7 @@ public class PaymentTermAppService(
 			board.EndDate);
 		EnsureSaveStatus(input.Status);
 		EnsureDefaultIsActive(input.IsDefault, input.Status);
+		await EnsureUniqueNameAsync(input.AcademicYearId, input.Name, excludeId: null);
 		await EnsureUniqueCodeAsync(input.AcademicYearId, input.Code, excludeId: null);
 
 		if (input.DemandGenerationRule == DemandGenerationRule.XDaysBeforeDue &&
@@ -279,9 +286,11 @@ public class PaymentTermAppService(
 		return await GetAsync(term.Id);
 	}
 
+	[UnitOfWork(isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted)]
 	public async Task<PaymentTermDto> UpdateDraftAsync(Guid paymentTermId, UpdatePaymentTermDraftDto input)
 	{
 		var term = await GetTermWithVersionsAsync(paymentTermId);
+		await nameMutationLock.AcquireAsync(term.AcademicYearId);
 		if (term.Status == PaymentTermStatus.Archived)
 		{
 			throw new BusinessException(PaymentTermErrorCodes.ArchiveInUse)
@@ -297,6 +306,7 @@ public class PaymentTermAppService(
 		EnsureSaveStatus(input.Status);
 		EnsureDefaultIsActive(input.IsDefault, input.Status);
 
+		await EnsureUniqueNameAsync(term.AcademicYearId, input.Name, paymentTermId);
 		await EnsureUniqueCodeAsync(term.AcademicYearId, input.Code, paymentTermId);
 
 		var draft = term.GetDraftVersion();
@@ -483,12 +493,14 @@ public class PaymentTermAppService(
 		return await GetAsync(term.Id);
 	}
 
+	[UnitOfWork(isTransactional: true, isolationLevel: IsolationLevel.ReadCommitted)]
 	public async Task<ClonePaymentTermsResultDto> CloneAsync(ClonePaymentTermsDto input)
 	{
 		if (input.SourceAcademicYearId == input.TargetAcademicYearId)
 		{
 			throw new BusinessException("Source and target academic years must be different.");
 		}
+		await nameMutationLock.AcquireAsync(input.TargetAcademicYearId);
 
 		var sourceAcademicYear = await academicYearRepository.GetAsync(input.SourceAcademicYearId);
 		var targetAcademicYear = await academicYearRepository.GetAsync(input.TargetAcademicYearId);
@@ -527,7 +539,7 @@ public class PaymentTermAppService(
 				t.AcademicYearId == input.TargetAcademicYearId &&
 				t.Code == source.Code);
 
-			if (existing != null)
+			if (existing != null || await NameExistsAsync(input.TargetAcademicYearId, source.Name, excludeId: null))
 			{
 				result.ConflictedCodes.Add(source.Code);
 				continue;
@@ -695,6 +707,27 @@ public class PaymentTermAppService(
 		{
 			throw new BusinessException(PaymentTermErrorCodes.DuplicateCode)
 				.WithData("Code", normalized);
+		}
+	}
+
+	private async Task<bool> NameExistsAsync(Guid academicYearId, string name, Guid? excludeId)
+	{
+		// Keep tenant/soft-delete filters enabled and compare only names in this year.
+		// Normalizing the projection also catches legacy spacing without rewriting it.
+		var query = (await paymentTermRepository.GetQueryableAsync())
+			.Where(t => t.AcademicYearId == academicYearId &&
+				(!excludeId.HasValue || t.Id != excludeId.Value))
+			.Select(t => t.Name);
+		var names = await AsyncExecuter.ToListAsync(query);
+		return names.Any(existing => FinanceName.Equals(existing, name));
+	}
+
+	private async Task EnsureUniqueNameAsync(Guid academicYearId, string name, Guid? excludeId)
+	{
+		if (await NameExistsAsync(academicYearId, name, excludeId))
+		{
+			throw new BusinessException(PaymentTermErrorCodes.DuplicateName)
+				.WithData("Name", name.Trim());
 		}
 	}
 

@@ -133,10 +133,12 @@ public class PaymentTermListDto : EntityDto<Guid>
 
 public class CreatePaymentTermDto
 {
+	private string _name = string.Empty;
+
 	public Guid AcademicYearId { get; set; }
 	public Guid BoardId { get; set; }
 	[Required, StringLength(100, MinimumLength = 3)]
-	public string Name { get; set; } = string.Empty;
+	public string Name { get => _name; set => _name = value?.Trim() ?? string.Empty; }
 	[Required, StringLength(24, MinimumLength = 3)]
 	[RegularExpression("^[A-Z0-9-]+$")]
 	public string Code { get; set; } = string.Empty;
@@ -154,8 +156,10 @@ public class CreatePaymentTermDto
 
 public class UpdatePaymentTermDraftDto
 {
+	private string _name = string.Empty;
+
 	[Required, StringLength(100, MinimumLength = 3)]
-	public string Name { get; set; } = string.Empty;
+	public string Name { get => _name; set => _name = value?.Trim() ?? string.Empty; }
 	[Required, StringLength(24, MinimumLength = 3)]
 	[RegularExpression("^[A-Z0-9-]+$")]
 	public string Code { get; set; } = string.Empty;

@@ -28,7 +28,7 @@ public class HrPolicyVersionReadService(
 	{
 		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var query = (await versionRepository.GetQueryableAsync())
-			.Where(x => x.PolicyType == normalized && x.PolicyId == policyId);
+			.Where(x => x.TenantId == CurrentTenant.Id && x.PolicyType == normalized && x.PolicyId == policyId);
 		if (!string.IsNullOrWhiteSpace(action) && action != "all") query = query.Where(x => x.ChangeAction == action);
 		if (!string.IsNullOrWhiteSpace(search))
 		{
@@ -85,7 +85,7 @@ public class HrPolicyVersionReadService(
 	{
 		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var entity = await versionRepository.GetAsync(versionId);
-		if (entity.PolicyType != normalized || entity.PolicyId != policyId)
+		if (entity.TenantId != CurrentTenant.Id || entity.PolicyType != normalized || entity.PolicyId != policyId)
 		{
 			throw new BusinessException(HRErrorCodes.HrPolicyVersionNotFound);
 		}

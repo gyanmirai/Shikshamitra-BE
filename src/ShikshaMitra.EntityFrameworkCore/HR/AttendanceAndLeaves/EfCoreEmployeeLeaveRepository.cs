@@ -8,11 +8,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Volo.Abp.Domain.Repositories.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.Data;
+using Volo.Abp;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 public class EfCoreEmployeeLeaveRepository(
-	IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
+	IDbContextProvider<ShikshaMitraDbContext> dbContextProvider, IDataFilter historyFilter)
 	: EfCoreRepository<ShikshaMitraDbContext, EmployeeLeave, Guid>(dbContextProvider), IEmployeeLeaveRepository
 {
 	private static int _sqliteNextPublicId;
@@ -170,11 +172,13 @@ public class EfCoreEmployeeLeaveRepository(
 		}
 
 		var ruleIds = leavePolicyRuleIds.ToList();
+		// Deleted audited records still pin immutable rule identities. Keep tenant filtering enabled.
+		using var history = historyFilter.Disable<ISoftDelete>();
 		var dbSet = await GetDbSetAsync();
 		var referenced = await dbSet
 			.IgnoreAutoIncludes()
 			.AsNoTracking()
-			.Where(x => ruleIds.Contains(x.LeavePolicyRuleId) && !x.IsDeleted)
+			.Where(x => Enumerable.Contains(ruleIds, x.LeavePolicyRuleId))
 			.Select(x => x.LeavePolicyRuleId)
 			.Distinct()
 			.ToListAsync(cancellationToken);
@@ -182,8 +186,8 @@ public class EfCoreEmployeeLeaveRepository(
 		var db = await GetDbContextAsync();
 		var settlements = await db.Set<ShikshaMitra.HR.AttendanceAndLeaves.YearEndSettlements.LeaveYearEndSettlementItem>()
 			.AsNoTracking()
-			.Where(x => ruleIds.Contains(x.SourceLeavePolicyRuleId) ||
-				(x.TargetLeavePolicyRuleId.HasValue && ruleIds.Contains(x.TargetLeavePolicyRuleId.Value)))
+			.Where(x => Enumerable.Contains(ruleIds, x.SourceLeavePolicyRuleId) ||
+				(x.TargetLeavePolicyRuleId.HasValue && Enumerable.Contains(ruleIds, x.TargetLeavePolicyRuleId.Value)))
 			.Select(x => new { x.SourceLeavePolicyRuleId, x.TargetLeavePolicyRuleId })
 			.ToListAsync(cancellationToken);
 		referenced.AddRange(settlements.Select(x => x.SourceLeavePolicyRuleId).Where(ruleIds.Contains));

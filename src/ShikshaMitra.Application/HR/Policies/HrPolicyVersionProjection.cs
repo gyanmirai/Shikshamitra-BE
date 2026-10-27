@@ -34,6 +34,7 @@ public static class HrPolicyVersionProjection
 		"workcalendar" or "work_calendar" or "work-calendars" or "work_calendar_policies" => "work_calendar",
 		"payroll" or "payroll_policy" => "payroll",
 		"attendance" or "attendance_policy" => "attendance",
+		"leave" or "leave_policy" => "leave",
 		_ => throw new Volo.Abp.BusinessException(HRErrorCodes.HrPolicyInvalidType)
 	};
 

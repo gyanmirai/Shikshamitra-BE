@@ -3,7 +3,7 @@ module: hr
 domain: hr-policy-architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-25
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -82,6 +82,16 @@ The year, policy set, rules and marker commit together. A failure propagates and
 Starter settings and review obligations are documented in [HR product behavior](../product.md#new-school-starter-policies). No FE deployment or schema migration is required: flags use existing tenant/year extra-property storage. Deploy the backend before creating new production tenants. Existing tenants remain unchanged and would require a separately reviewed explicit backfill feature.
 
 Policy create, edit, clone, restore, set-default, and archive operations capture `HrPolicyVersion` snapshots. Restoring a version always creates a new draft policy; it does not mutate active policy history. Risky changes use impact preview and confirmation tokens before write operations when employees, assignments, payroll snapshots, or attendance evaluations may be affected. Locked payroll impact remains blocking.
+
+### Leave impact and version history
+
+`POST /api/leave-policies/impact/preview` assesses an exact create/update/default/archive proposal or an information-only `inspect` request, in the authenticated tenant and selected academic year/date window. Effective staff uses the operational staff > group > default resolver and real memberships. Assignment records, pinned requests, settlement items and linked payroll periods are separate measures. Each has an explicit scope and nullable availability state; failed/incomplete input is never zero. Payroll exposure uses employee/request-date overlap and settlement employee/month provenance, not a nonexistent leave-policy ID on payroll snapshots. Exposure alone is not a salary change or a blanket prohibition on changing an unrelated configuration. Balance deltas and salary differences remain explicitly uncalculated; public year-start balance resolution and policy-date accrual semantics are unchanged.
+
+`POST /api/leave-policies/impact/details` recomputes the same fingerprint before serving bounded pages. Employee/request/payroll details retain their owning read grants and existing staff scope. Accessible totals and redacted counts are distinguished from the complete tenant safety assessment. Confirmation binds the actor, tenant, proposal, dates, source versions/configurations, assignment/membership dependencies and reference identities; mutation revalidation occurs after acquiring the tenant payroll fence and involved policy rows. Draft maintenance and new-draft restore add no operational gate. Active edits, activation and default replacement require server review; the initial unreferenced default can still be created during setup.
+
+Leave versions reuse `HR_PolicyVersions`. Existing policies start at counter 1; their first changed lifecycle write captures the actual pre-change configuration as an explicitly labeled baseline, then captures the incremented version. GET never creates history. No-op writes do not invent events. Default promotion and demotion capture both policies within one unit of work with a shared audit correlation. The additive `AddLeavePolicyVersion` migration initializes the counter and concurrency mapping; it does not reconstruct historical events.
+
+Leave history/compare uses existing Leave View, and restore-as-new-draft uses existing Leave Add. Restore copies operational snapshot rules into fresh identities, Draft and nondefault, retaining source policy/version provenance. It never rebinds assignments, requests, carry-in, settlements or payroll outcomes. Referenced historical rules, including source/target settlement rules and audited deleted request references, cannot be repurposed by later edits. Existing archive/unarchive and mutation grants remain separate and unchanged. Deploy the additive backend contract/schema before the compatible frontend; coordinated rollout is required before enforcing reviewed active writes for existing clients.
 
 ## Holiday sync
 

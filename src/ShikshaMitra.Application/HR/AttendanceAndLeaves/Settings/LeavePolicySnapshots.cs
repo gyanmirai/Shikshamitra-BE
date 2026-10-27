@@ -29,5 +29,5 @@ public static class LeavePolicySnapshots
 		snapshot.PolicyTitle, snapshot.Description, snapshot.Status, snapshot.IsDefault,
 		snapshot.EffectiveFrom, snapshot.EffectiveTo,
 		Rules = snapshot.Rules.OrderBy(x => x.PaidType)
-	});
+	}, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 }

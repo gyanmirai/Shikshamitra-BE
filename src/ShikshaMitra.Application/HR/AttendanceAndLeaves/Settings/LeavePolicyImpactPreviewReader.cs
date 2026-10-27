@@ -30,7 +30,7 @@ public class LeavePolicyImpactPreviewReader(
 		if (input.AsOfDate == default || from > to || input.AsOfDate.Date < from || input.AsOfDate.Date > to ||
 			from < year.StartDate.Date || to > year.EndDate.Date || (to - from).TotalDays > 400)
 			throw new BusinessException(HRErrorCodes.PolicyAssignmentRangeInvalid);
-		if (input.Action is not ("update" or "create" or "set-default" or "archive"))
+		if (input.Action is not ("inspect" or "update" or "create" or "set-default" or "archive"))
 			throw new BusinessException(HRErrorCodes.HrPolicyInvalidType);
 		if (input.Action == "create" && input.PolicyId.HasValue)
 			throw new BusinessException(HRErrorCodes.HrPolicyInvalidVersionSnapshot);
@@ -40,6 +40,8 @@ public class LeavePolicyImpactPreviewReader(
 			var validation = await new LeavePolicyCreateRequestValidator().ValidateAsync(input.Proposal);
 			if (!validation.IsValid) throw new Volo.Abp.Validation.AbpValidationException(validation.ToString());
 			input.Proposal.Rules = input.Proposal.Rules.OrderBy(x => x.PaidType, StringComparer.Ordinal).ToList();
+			input.Proposal.ImpactScope = new() { AsOfDate = input.AsOfDate.Date, FromDate = input.FromDate?.Date,
+				ToDate = input.ToDate?.Date, ExpectedVersion = input.ExpectedVersion };
 		}
 		var all = await policies.GetListByAcademicYearIdAsync(year.Id, includeInactive: true);
 		var policy = input.PolicyId.HasValue ? all.SingleOrDefault(x => x.Id == input.PolicyId) : null;
@@ -104,19 +106,31 @@ public class LeavePolicyImpactPreviewReader(
 			PolicyType = "leave", PolicyId = input.PolicyId, AcademicYearId = year.Id, Action = input.Action,
 			CurrentVersion = policy?.Version, ProposedVersion = (policy?.Version ?? 0) + 1, LeaveImpact = result
 		};
-		var noChange = policy != null && (input.Action == "set-default" && policy.IsDefault ||
+		var noChange = policy != null && (input.Action == "inspect" || input.Action == "set-default" && policy.IsDefault ||
 			input.Action == "archive" && policy.Status == HrPolicyStatus.Archived ||
 			input.Action == "update" && input.Proposal != null &&
 			LeavePolicySnapshots.Configuration(LeavePolicySnapshots.Capture(policy)) == LeavePolicySnapshots.Configuration(input.Proposal));
 		if (noChange) preview.ProposedVersion = policy!.Version;
 		if (!complete) preview.Warnings.Add(new() { Severity = "blocking", Code = HRErrorCodes.HrPolicyImpactBlocking,
 			Message = "Population, payroll provenance, or source stability is incomplete. Refresh and resolve unavailable measures before using the assessment." });
-		if (!noChange && (policy?.Status == HrPolicyStatus.Active || input.Action == "set-default" || input.Proposal?.IsDefault == true))
+		if (input.Action != "inspect" && !noChange && (policy?.Status == HrPolicyStatus.Active || input.Action == "set-default" || input.Proposal?.IsDefault == true ||
+			input.Action == "update" && input.Proposal?.Status == "Active"))
 			preview.Warnings.Add(new() { Severity = "warning", Code = HRErrorCodes.AffectedEmployees,
 				Message = "Review the exact proposal and reference assessment before changing an active/default leave policy. Uncalculated balance and salary outcomes are not zero." });
-		return new(preview, population, refs);
+		var differences = new System.Collections.Generic.List<HrPolicyVersionDifferenceDto>();
+		if (policy != null && input.Action != "inspect")
+		{
+			var current = LeavePolicySnapshots.Capture(policy);
+			var proposed = input.Proposal ?? LeavePolicySnapshots.Capture(policy);
+			if (input.Action == "set-default") proposed.IsDefault = true;
+			if (input.Action == "archive") { proposed.Status = "Archived"; proposed.IsDefault = false; }
+			differences = HrPolicyVersionDiffBuilder.BuildDifferences(LeavePolicySnapshots.Configuration(current),
+				LeavePolicySnapshots.Configuration(proposed), new HrPolicyVersionDisplayContext());
+		}
+		return new(preview, population, refs, differences);
 	}
 }
 
 public sealed record LeavePolicyImpactAssessment(HrPolicyImpactPreviewDto Preview,
-	LeaveImpactPopulation Population, LeaveImpactReferences References);
+	LeaveImpactPopulation Population, LeaveImpactReferences References,
+	System.Collections.Generic.List<HrPolicyVersionDifferenceDto> Differences);

@@ -53,8 +53,8 @@ internal sealed class FakeReceiptNumberSequenceRepository(
 }
 
 internal sealed class FakeEmployeeLeaveRepository(
-    IDbContextProvider<ShikshaMitraDbContext> dbContextProvider)
-    : EfCoreEmployeeLeaveRepository(dbContextProvider)
+    IDbContextProvider<ShikshaMitraDbContext> dbContextProvider, Volo.Abp.Data.IDataFilter historyFilter)
+    : EfCoreEmployeeLeaveRepository(dbContextProvider, historyFilter)
 {
     private static int _nextPublicId;
 

@@ -22,11 +22,9 @@ public class HrPolicyVersionCaptureService(
 		WriteIndented = false
 	};
 
-	public async Task CaptureAsync(string policyType, object policyDto, string action, string? reason = null)
+	public async Task CaptureAsync(string policyType, object policyDto, string action, string? reason = null, string? correlationId = null)
 	{
-		// Internal capture may enroll leave snapshots. Public type normalization stays
-		// unchanged until leave-specific read/restore authorization is implemented.
-		var normalized = policyType == "leave" ? "leave" : HrPolicyVersionProjection.NormalizePolicyType(policyType);
+		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var snapshotJson = JsonSerializer.Serialize(policyDto, JsonOptions);
 		var version = normalized switch
 		{
@@ -39,6 +37,7 @@ public class HrPolicyVersionCaptureService(
 
 		var query = await versionRepository.GetQueryableAsync();
 		var exists = await AsyncExecuter.AnyAsync(query.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
 			x.PolicyType == version.PolicyType &&
 			x.PolicyId == version.PolicyId &&
 			x.VersionNumber == version.VersionNumber));
@@ -64,7 +63,7 @@ public class HrPolicyVersionCaptureService(
 				version.Status,
 				version.EffectiveFrom,
 				version.EffectiveTo
-			});
+			}, correlationId: correlationId);
 	}
 
 	private HrPolicyVersion BuildWorkCalendarVersion(WorkCalendarPolicyDto dto, string snapshotJson, string action, string? reason) =>

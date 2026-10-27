@@ -5,8 +5,8 @@ using ShikshaMitra.EntityFrameworkCore;
 namespace ShikshaMitra.Migrations;
 
 [DbContext(typeof(ShikshaMitraDbContext))]
-[Migration("20261026193000_AddLeavePolicyVersion")]
-public class AddLeavePolicyVersion : Migration
+[Migration("20261027164027_AddLeavePolicyVersion")]
+public partial class AddLeavePolicyVersion : Migration
 {
 	protected override void Up(MigrationBuilder migrationBuilder) => migrationBuilder.AddColumn<int>(
 		name: "Version", table: "AppEmployeeLeavePolicies", type: "integer", nullable: false, defaultValue: 1);

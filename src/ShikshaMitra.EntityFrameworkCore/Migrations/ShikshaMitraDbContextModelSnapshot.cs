@@ -14286,7 +14286,7 @@ namespace ShikshaMitra.Migrations
                         .HasDefaultValue(30);
 
                     b.Property<int>("MinNoticeDays")
-                        .ValueGeneratedOnAdd()
+                        .ValueGeneratedNever()
                         .HasColumnType("integer")
                         .HasDefaultValue(2);
 

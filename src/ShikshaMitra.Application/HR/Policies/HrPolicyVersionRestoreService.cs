@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Audit;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -18,6 +19,7 @@ public class HrPolicyVersionRestoreService(
 	HrPolicyWorkCalendarValidator workCalendarValidator,
 	HrPolicyNameUniquenessService nameUniquenessService,
 	HrPolicyVersionCaptureService captureService,
+	LeavePolicyVersionRestoreAdapter leaveRestore,
 	HrAuditWriter auditWriter)
 	: ApplicationService, ITransientDependency
 {
@@ -31,6 +33,7 @@ public class HrPolicyVersionRestoreService(
 			"work_calendar" => (object)await RestoreWorkCalendarAsync(version, input),
 			"payroll" => HrPolicyMapping.ToDto(await RestorePayrollPolicyAsync(version, input)),
 			"attendance" => HrPolicyMapping.ToDto(await RestoreAttendancePolicyAsync(version, input)),
+			"leave" => await leaveRestore.RestoreAsync(version, input),
 			_ => throw new BusinessException(HRErrorCodes.HrPolicyInvalidType)
 		};
 

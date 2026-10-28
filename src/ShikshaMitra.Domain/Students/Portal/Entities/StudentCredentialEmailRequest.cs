@@ -25,6 +25,14 @@ public class StudentCredentialEmailRequest : FullAuditedAggregateRoot<Guid>, IMu
 	public DateTime? ClaimedAt { get; private set; }
 	public bool RequiresSavedOwnerValidation() => ExtraProperties.TryGetValue("SavedOwnerCredentialsRequested", out var value) &&
 		bool.TryParse(value?.ToString(), out var required) && required;
+	public bool IsExistingParentHelp() => ExtraProperties.TryGetValue("ExistingParentSignInHelp", out var value) && bool.TryParse(value?.ToString(), out var required) && required;
+	public void RequireExistingParentHelp(Guid? actor)
+	{
+		if (AccountType != "guardian") throw new InvalidOperationException("Only a linked Parent can receive sign-in help.");
+		RequireSavedOwnerValidation(actor);
+		ExtraProperties["ExistingParentSignInHelp"] = true;
+		ClearInitialPassword();
+	}
 	protected StudentCredentialEmailRequest() { }
 	public StudentCredentialEmailRequest(Guid id, Guid tenantId, Guid caseId, Guid studentId, Guid linkId,
 		Guid userId, string accountType, string email, Guid? actor, DateTime now) : base(id)
@@ -54,6 +62,7 @@ public class StudentCredentialEmailRequest : FullAuditedAggregateRoot<Guid>, IMu
 		// This is a new intent. Only the authorized one-click command may mark its
 		// request as explicit manual delivery again; legacy resend keeps school flags.
 		ExtraProperties.Remove("SavedOwnerCredentialsRequested");
+		ExtraProperties.Remove("ExistingParentSignInHelp");
 	}
 	public void Claim(DateTime now)
 	{

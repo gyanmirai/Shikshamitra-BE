@@ -132,6 +132,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
 		var activated = await service.ActivateAsync(fixture.Case.Id, new() { ConcurrencyStamp = fixture.Case.ConcurrencyStamp,
 			IdempotencyKey = "sibling-parent-reuse", SiblingParentSelection = ParentSelection(fixture, parent) });
 		activated.Status.ShouldBe(StudentOnboardingStatus.Completed); activated.CredentialsPending.ShouldBeFalse();
+		activated.RequiredCredentialDeliveryConfirmed.ShouldBeNull();
 		var workspace = await service.GetCredentialsAsync(activated.Id);
 		workspace.ParentSibling!.IsLinked.ShouldBeTrue(); workspace.ParentSibling.Status.ShouldBe("Linked");
 		workspace.Recipients.Single(x => x.Relationship == "father").CanSend.ShouldBeFalse();

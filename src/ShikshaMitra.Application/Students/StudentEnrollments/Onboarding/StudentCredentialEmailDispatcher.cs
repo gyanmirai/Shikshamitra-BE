@@ -36,7 +36,11 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 		{
 			var row = await requests.FindAsync(id);
 			if (row == null || !tenant.Id.HasValue || row.TenantId != tenant.Id) return;
-			if (siblingParents != null && (await siblingParents.IsReusedAsync(row.CaseId, row.AccountType) ||
+			if (row.IsExistingParentHelp() && (siblingParents == null || !await siblingParents.IsReusedAsync(row.CaseId, row.AccountType)))
+			{
+				row.Cancel("The reviewed existing Parent link is no longer available."); await requests.UpdateAsync(row, false); await prepare.CompleteAsync(); return;
+			}
+			if (siblingParents != null && (!row.IsExistingParentHelp() && await siblingParents.IsReusedAsync(row.CaseId, row.AccountType) ||
 				!row.RequiresSavedOwnerValidation() && await siblingParents.IsManualParentCaseAsync(row.CaseId, row.AccountType)))
 			{
 				if (row.Status is "Pending" or "Processing" or "Failed")
@@ -83,7 +87,7 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 				await prepare.CompleteAsync(); return;
 			}
 			row.Claim(DateTime.UtcNow);
-			if (!await users.HasPasswordAsync(user))
+			if (!row.IsExistingParentHelp() && !await users.HasPasswordAsync(user))
 			{
 				// The user's password is never generated from email/mobile or exposed through staff APIs.
 				var password = GenerateInitialPassword();
@@ -107,7 +111,7 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 		{
 			// Re-read the relationship immediately before sending, including exits and guardian replacements.
 			var state = await ResolveDeliveryAsync(request);
-			if (siblingParents != null && await siblingParents.IsReusedAsync(request.CaseId, request.AccountType) ||
+			if (siblingParents != null && !request.IsExistingParentHelp() && await siblingParents.IsReusedAsync(request.CaseId, request.AccountType) ||
 				!Matches(request, state) || !await SavedRecipientMatchesAsync(request, state) || !await ActorMaySendAsync(request)) request.Cancel("Account access, staff authorization or readiness changed. Email cancelled.");
 			else
 			{
@@ -115,7 +119,7 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 				if (user == null || !user.IsActive) request.Cancel("The account is unavailable or inactive.");
 				else
 				{
-					var password = request.EncryptedInitialPassword == null ? null : encryption.Decrypt(request.EncryptedInitialPassword);
+					var password = request.IsExistingParentHelp() || request.EncryptedInitialPassword == null ? null : encryption.Decrypt(request.EncryptedInitialPassword);
 					if (password != null && (!user.ShouldChangePasswordOnNextLogin || !await users.CheckPasswordAsync(user, password)))
 					{
 						// The owner/admin may have changed the password while delivery was failing.
@@ -124,7 +128,7 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 					}
 					// A sent email retry uses owner recovery. Existing sibling credentials are never overwritten.
 					string? resetUrl = null;
-					if (password != null || request.SentAt.HasValue || user.ShouldChangePasswordOnNextLogin)
+					if (request.IsExistingParentHelp() || password != null || request.SentAt.HasValue || user.ShouldChangePasswordOnNextLogin)
 					{
 						var token = await users.GeneratePasswordResetTokenAsync(user);
 						var baseUri = new Uri(state.LoginUrl, UriKind.Absolute);
@@ -167,6 +171,7 @@ public class StudentCredentialEmailDispatcher(IRepository<StudentCredentialEmail
 		{
 			// Revoking a staff member's academic scope also revokes their queued send authority.
 			await onboarding.EnsureCaseAccessAsync(row.CaseId);
+			if (row.IsExistingParentHelp() && (siblingParents == null || !await siblingParents.CanSendExistingParentHelpAsync(row.CaseId))) return false;
 			return true;
 		}
 		catch (AbpAuthorizationException) { return false; }

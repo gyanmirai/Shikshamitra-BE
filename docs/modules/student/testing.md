@@ -3,12 +3,39 @@ module: student
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-27
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
 
 # Validate Student Enrollment Admissions changes
+
+## Payment joining date
+
+`AdmissionPaymentJoiningDate_Tests.cs` extends the owning runtime integration fixture with candidate-preview purity (no account or persisted date), missing-form proration, preview/preparation parity, application-stamp conflicts, prepared-date locking, submitted Registration answer synchronization, the shared Registration edit guard, and invalid date rejection. `AdmissionJoiningDate_Tests` covers application-local date storage and locked corrections. Retain the existing `Proration_` integration cases for policy-version, regular/one-time fee, legacy binding, and Onboarding handoff behavior. The implementation uses existing Finance calculations and endpoints without Finance-module changes or migrations.
+
+The local owning gate passes 25 application cases (new date scenarios plus existing proration regressions), a separate five-case exact-permission/tenant/deferred-Onboarding gate, two persistence/submitted-snapshot rechecks, and two Domain cases, with zero skips. The persistence regression caught ABP rehydrating an ISO ExtraProperties string as `DateTime`; the application accessor and captured joining-date prefill now normalize that representation without changing the calendar day. These checks do not establish live payment acceptance. The attempted Development Host uses localhost PostgreSQL but startup is blocked by missing `AbpSettingDefinitions`; no migration, reseed, credential/configuration change, or payment collection was performed to bypass that blocker.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~Payment_joining_date_preview_and_capture|FullyQualifiedName~Prepared_fee_schedule_should_lock|FullyQualifiedName~Payment_date_|FullyQualifiedName~Proration_"
+dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~AdmissionJoiningDate_Tests"
+```
+
+## Institute Setup academic form choices
+
+`AdmissionAcademicOptionsUnit_Tests` covers legacy academic descriptors, the lowercase public-choice JSON contract, and owning View permissions without opening unrelated form sources. `Academic_form_choices_use_Institute_Setup_IDs_and_parent_membership` verifies configured class/division GUIDs, year/medium/class boundaries, public-offering choices and rejection of former hardcoded labels. Retain `Custom_record_dynamic_choices_are_record_bound_and_read_only_lookup_returns_only_selected_labels` when changing Records choice projection. These checks use the test database; they do not establish acceptance by a previously running Host process.
+
+## Onboarding App Login (28 October 2026)
+
+The final owning Application regression passes **125/125**, zero skips, across existing credential/dispatcher/sibling/email-edit/validation scenarios and the new Onboarding-only Parent confirmation cases. Domain outbox checks pass **8/8**. After the final policy/mailbox projection correction, a separate focused gate passes **6/6**; the full regression was not repeated solely for these narrow guards.
+
+`StudentOnboardingExistingParent_Tests` covers Father/Mother/Guardian and legacy-flow linking without Admissions confirmation, activation without an unrequested Identity Users Update grant, exact target/source tenant/scope/stamp/action checks, original initial-setup evidence, conflicting roles/source drift, Guardian owner-verified email changes and help without adding/replacing an existing password. The scoped review findings have failing-then-passing regressions for unconfirmed-candidate email correction and activation without linking. Help transport is substituted; real identity, persistence, token and authorization services run.
+
+The final six cases verify that saved rules disabling adult access hide both confirmation and link capabilities; Mother/Guardian may save the family's existing Father mailbox without account/link/email/Admissions writes; Student/adult destinations remain distinct in both edit directions; and actual conflicting identities remain blocked. Shared adult contact addresses do not authorize two adult accounts or automatic reuse.
+
+The subsequent linked-email correction has a **12/12** focused gate (zero skips), including eight `StudentLinkedPortalEmailCollision_Tests` cases and impacted Student/shared-parent/Guardian verification and original recipient-provenance regression. Its red run reproduced six collision/late-drift failures while adult sharing already passed. Requests reject an identity-free opposite saved mailbox for linked Student/Father/Guardian; shared parents check every linked child; verification send and confirmation recheck canonical opposite profiles even when the existing own-email topology is unchanged. Confirmation drift uses a genuine protected owner token. Adult/adult sharing still verifies, and unproven raw Student fallback is not promoted into a Student login collision. Current Application/dependency compilation passes as part of this focused gate; the previous isolated Host result predates this internal service/reader correction, and no additional Host rebuild was requested.
+
+The final serialized isolated Host build passes with **0 errors** and existing warnings. Its artifacts are separate from the running user Host; the earlier ordinary-output build encountered existing runtime/debugger file locks and was not treated as a successful build. No user backend was stopped or restarted. Student documentation and whitespace validation pass; all-module docs retain the two existing Finance reference-file mojibake blockers described below. No live email, authenticated runtime/deployment, migration or mailbox acceptance is established by these backend checks. Detailed command/TRX evidence remains in the session artifacts.
 
 ## Parent defaults and optional guardians (27 October 2026)
 
@@ -1104,14 +1131,6 @@ The two Institute Setup minimum-age context cases (configured 5 years and unconf
 
 Local browser verification used this build to create and edit synthetic INQ-2026-000009. Existing class minimum 6 years and academic start 1 June 2026 were displayed, underage saves succeeded, DOB persisted after reload, and an exact-minimum DOB removed the advisory. Acknowledgement delivery was disabled. This does not establish stage/live deployment.
 
-## Payment completion policy verification (22 October 2026)
-
-- `AdmissionPaymentCompletionPolicy_Tests`: 12 passing cases for default compatibility, partial/full rules, deferral policy, normalization, extensions and malformed versions/values.
-- `AdmissionPaymentCompletionReader_Tests`: 14 passing cases for confirmed partial versus full settlement, verified zero versus unknown zero, permissions, pending/historical evidence, disabled deferral, inactive stages, configuration failure and reused selection ownership.
-- The application integration run passes all three new `Payment_completion_` cases: actual Finance collection of 300/1000 permits Partial and blocks Full until the remaining 700 is collected; disabled deferral rejects a direct command; prepared zero-payable Finance obligations advance without a transaction. Existing fee-selection concurrency/scope, reason-based deferral/replay/finalization, unchanged Onboarding policy and Finance settlement regression cases also pass. The initial unit fixture failures were corrected and all 14 reader cases passed on rerun; no production service changes were needed for those fixture corrections.
-- Domain/Application/EF and test leaf builds pass in isolated output with analyzers disabled for workstation memory. The initial clean dependency build was interrupted under high memory use; the completed isolated EF output was then reused. This is focused validation, not a full-solution analyzer gate.
-- Student documentation validation passes. Finance source hashes match the pre-task baseline (761 backend files). No schema migration or Finance module change was introduced, and no live payment was made. Restart/rebuild the debugger Host before expecting its new completion capabilities in the local browser.
-
 ## Form section verification retirement (23 October 2026)
 
 - Focused Domain coverage passes 15 tests for Form normalization, preserved policy fields and raw historical compatibility. The isolated Application run passes 5 tests for legacy manual continuation, correction/history, automatic submission and document handoff. The existing legacy Inquiry-to-Form handoff also passes separately, for 6 integration cases total.
@@ -1125,3 +1144,20 @@ Local browser verification used this build to create and edit synthetic INQ-2026
 - The additional pending-case rerun passes after extending the stale/off-page/tenant scenario with a fresh one-click assignment, no unnecessary reason/approval, positive number 13 following reserved number 12, and unchanged off-page student. An initial fixture failure was fixed by reusing the canonical default-checklist/snapshot seeding helper, not by weakening production readiness.
 - The Roll batch HTTP contract suite passes 11/11 cases, including optional target-list bounds, duplicate/empty IDs and rejection of client-targeted Renumber. Existing endpoint authorization, stamps and stable submission keys remain covered.
 - Isolated serialized Host build passes with zero errors; existing warnings remain. Student docs validation and `git diff --check` pass. Evidence: `.artifacts/current-page-roll/results/current-page-roll-final.trx` and `current-page-roll-direct.trx` in that directory. These local SQLite and contract checks do not establish production-provider race coverage, deployed behavior or real account/email delivery. No migration or Finance module change was introduced.
+
+## Fixed Payment checkpoint verification (28 October 2026)
+
+- AdmissionPaymentStageConfiguration_Tests: 9 passing cases for removal of retired payment/paymentCompletion data, preservation of extensions, empty normalization and rejection of malformed stage-root JSON.
+- The focused Application run passes 28 cases, including 14 readiness unit cases, four new Payment_checkpoint_ integration cases and existing fee-selection scope/concurrency, deferral validation/replay/finalization and Onboarding regressions. Previously pinned Full/off JSON no longer blocks a confirmed 300/1000 payment or a reason-based deferral. Finance-verified zero payable advances without creating payment evidence. Inactive stages, unprepared balances, unverified/historical evidence and missing permissions remain guarded.
+- Changed Domain.Shared, Contracts and Application plus test leaf builds pass with the pinned .NET SDK and analyzers disabled, using isolated outputs. The unchanged prebuilt Domain/EF/TestBase dependencies are reused; EF source is older than the reused DLL. This is focused validation, not a fresh solution/analyzer build or production-provider sign-off.
+- No migration, live payment or Finance module change is involved. Existing stored workflow JSON/history is retained; only draft normalization strips retired configuration. The existing paymentCompletion API envelope reports operational readiness capabilities, not configurable rules. Rebuild/restart the debugger Host to serve the new implementation locally.
+## School Exit validation
+
+`StudentSchoolExitOutstanding_Tests` exercises the exact reviewable-owner whitelist, mandatory recorded approval evidence and stale evidence after increased debt/new books. `StudentSchoolExitIntegration_Tests` adds direct-policy pending-book approval enforcement, requester separation, unchanged library/roster state, missing Finance evidence and tenant isolation. Run alongside existing Records transition/proration regressions:
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~StudentSchoolExit|FullyQualifiedName~Record_transition|FullyQualifiedName~WithdrawalProration" -p:UseSharedCompilation=false
+powershell -ExecutionPolicy Bypass -File scripts/docs/validate-docs.ps1 -Module student
+```
+
+Focused tests do not establish browser, deployed permission, worker concurrency on PostgreSQL, or production acceptance.

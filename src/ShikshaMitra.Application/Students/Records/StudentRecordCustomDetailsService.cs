@@ -169,7 +169,7 @@ public class StudentRecordCustomDetailsService(StudentRecordRegistrationReader r
 						}
 			}
 			var changedDependentFields = definition.Sections.SelectMany(s => s.Fields).Where(f =>
-				AdmissionFormMasterDataValidator.TrySource(f.OptionsJson, out _, out var parent) && changedFields.Any(c => c.Code == parent)).Select(f => f.Code).ToHashSet();
+				AdmissionFormMasterDataValidator.TrySource(AdmissionAcademicFormOptions.OptionsJson(f.Code, f.FieldType, f.OptionsJson), out _, out var parent) && changedFields.Any(c => c.Code == parent)).Select(f => f.Code).ToHashSet();
 			var errors = validation.FieldErrors.Where(x => relevant.Contains(x.Key) || changedDependentFields.Any(f => x.Key == f || x.Key.StartsWith(f + "[", StringComparison.Ordinal)) ||
 				definition.Sections.Any(s => s.Code == x.Key && s.Fields.Any(f => changedFields.Any(c => c.Code == f.Code) ||
 					relevant.Any(p => p == f.Code || p.StartsWith(f.Code + "[", StringComparison.Ordinal))))).ToDictionary(x => x.Key, x => x.Value);

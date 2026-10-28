@@ -41,6 +41,12 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 			await EnsureAuthorityAsync(item);
 			await authority.ValidateAsync(item);
 			var policy = StudentRecordsPolicy.FromJson(item.PolicyJson);
+			if (StudentSchoolExitOutstanding.IsExit(item.Outcome))
+			{
+				var exitReadiness = await readiness.PreviewAsync(item.AcademicYearId, JsonSerializer.Deserialize<StudentRecordTransitionInput>(item.InputJson)!, policy, false, validateDate: false);
+				if (!exitReadiness.Ready) throw new BusinessException(exitReadiness.Issues[0].Code);
+				await RequireOutstandingApprovalAsync(item, exitReadiness);
+			}
 			var today = AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now);
 			var removalOnApproval = (item.Outcome is "Graduate" or "Withdraw" or "Transfer") && policy.Transitions.RosterRemovalTiming == "Approval";
 			if (item.EffectiveDate > today && !removalOnApproval)
@@ -57,6 +63,7 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 					if (sibling.ReturnHandoffId.HasValue) continue;
 					var preview = await readiness.PreviewAsync(sibling.AcademicYearId, JsonSerializer.Deserialize<StudentRecordTransitionInput>(sibling.InputJson)!, StudentRecordsPolicy.FromJson(sibling.PolicyJson), false, validateDate: false, frozenRollRule: sibling.GetOnboardingRollRule());
 					if (!preview.Ready) throw new BusinessException("Students:Records:BatchHeld");
+					await RequireOutstandingApprovalAsync(sibling, preview);
 				}
 			}
 			if (item.CorrectionOfId.HasValue) await corrections.ApplyAsync(item);
@@ -78,6 +85,7 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 		var input = JsonSerializer.Deserialize<StudentRecordTransitionInput>(item.InputJson)!;
 		var row = await readiness.PreviewAsync(item.AcademicYearId, input, policy, false, validateDate: false, frozenRollRule: item.GetOnboardingRollRule());
 		if (!row.Ready) throw new BusinessException(row.Issues[0].Code).WithData("Issues", string.Join(" ", row.Issues.Select(x => x.Message)));
+		await RequireOutstandingApprovalAsync(item, row);
 		var source = await readiness.GetSourceAsync(item.StudentId, item.AcademicYearId);
 		if (StudentRecordTransitionReadinessService.Capture(source.Student, source.Enrollment) != item.BeforeJson) throw new BusinessException("Students:Records:StaleSnapshot");
 		if (item.Outcome is "Promote" or "Repeat" or "Return")
@@ -106,6 +114,13 @@ public partial class StudentRecordTransitionApplication(IRepository<StudentRecor
 			await enrollments.UpdateAsync(source.Enrollment); await students.UpdateAsync(source.Student);
 		}
 		item.Apply(null, StudentRecordTransitionReadinessService.Capture(source.Student, source.Enrollment), Clock.Now);
+	}
+	private async Task RequireOutstandingApprovalAsync(StudentRecordTransition item, StudentRecordTransitionPreviewRowDto row)
+	{
+		if (row.OutstandingItems.Count == 0) return;
+		var approvals = await events.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.TransitionId == item.Id && (x.Action == "Approved" || x.Action == "OutstandingApproved"));
+		StudentSchoolExitOutstanding.RequireApprovedEvidence(item, row, approvals.ToArray());
+		await authority.ValidateAsync(item);
 	}
 	private async Task EnsureAuthorityAsync(StudentRecordTransition item)
 	{

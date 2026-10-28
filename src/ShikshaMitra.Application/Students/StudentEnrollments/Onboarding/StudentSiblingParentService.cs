@@ -16,7 +16,7 @@ namespace ShikshaMitra.Students.StudentEnrollments.Onboarding;
 
 /// <summary>Reads confirmed family provenance and current parent identities; never creates users or sends email.</summary>
 [RemoteService(false)]
-public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> applicants,
+public partial class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> applicants,
 	IRepository<StudentOnboardingCase, Guid> cases, IStudentRepository students,
 	IRepository<StudentPortalAccountLink, Guid> links, IdentityUserManager users,
 	IRepository<StudentCredentialEmailRequest, Guid> requests,
@@ -77,9 +77,11 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 	{
 		var read = new ParentRead();
 		var result = read.Context;
+		if (HasOnboardingConfirmation(item)) return await ReadOnboardingParentsAsync(item);
 		var applicant = await applicants.FindAsync(item.ApplicantId);
 		if (!CurrentTenant.Id.HasValue || item.TenantId != CurrentTenant.Id || applicant == null ||
-			applicant.TenantId != CurrentTenant.Id || !AdmissionSiblingParentSelection.IsParentFlow(applicant)) return read;
+			applicant.TenantId != CurrentTenant.Id) return read;
+		if (!AdmissionSiblingParentSelection.IsParentFlow(applicant)) return await ReadOnboardingParentsAsync(item);
 		result.Enabled = true;
 		// An independently reviewed guardian link remains a guardian even when parents
 		// are later captured. A case-only explicit choice never reuses a sibling parent.
@@ -104,7 +106,7 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 			return read;
 		}
 		var confirmation = AdmissionSiblingParentSelection.ReadConfirmation(applicant);
-		if (confirmation == null) return read;
+		if (confirmation == null) return await ReadOnboardingParentsAsync(item);
 		result.FamilyConfirmed = true;
 		var source = await applicants.FindAsync(confirmation.SourceApplicantId);
 		if (source == null || source.TenantId != CurrentTenant.Id || source.FamilyId != applicant.FamilyId ||
@@ -150,7 +152,7 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 			var initial = (await requests.GetListAsync(row => row.TenantId == CurrentTenant.Id && row.UserId == user.Id &&
 				Enumerable.Contains(verifiedIds, row.LinkId) && row.AccountType == "guardian" &&
 				(row.Status == "Pending" || row.Status == "Processing" || row.Status == "Sent" || row.Status == "Failed")))
-				.Where(row => StudentCredentialsRecipientReader.SameEmail(row.Email, user.Email) &&
+				.Where(row => !row.IsExistingParentHelp() && StudentCredentialsRecipientReader.SameEmail(row.Email, user.Email) &&
 					verified.Any(link => link.Id == row.LinkId && link.StudentId == row.StudentId))
 				.OrderByDescending(row => row.CreationTime).FirstOrDefault();
 			if (!user.EmailConfirmed && initial == null) continue;
@@ -214,6 +216,11 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 		var read = await ReadAsync(item);
 		var context = read.Context;
 		if (context.BlockedReason != null) throw Invalid(context.BlockedReason);
+		if (context.RequiresOnboardingConfirmation)
+		{
+			if (input != null) throw Invalid("Confirm the existing saved adult explicitly in App Login after activation.");
+			return;
+		}
 		if (ReadGuardianSelection(item) != null)
 		{
 			if (input != null) throw Invalid("Guardian app access is already selected for this case. Use the reviewed access repair workflow.");
@@ -263,6 +270,12 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 	public void MarkReused(StudentOnboardingCase item) => item.SetProperty(ReuseKey, true);
 	internal static void RefreshEmailSelection(StudentOnboardingCase item, Guid userId, string previousEmail, string email)
 	{
+		var guardian = ReadGuardianSelection(item);
+		if (guardian != null && StudentPortalProfileEmail.Same(guardian.ExpectedEmail, previousEmail))
+		{
+			guardian.ExpectedEmail = email;
+			item.SetProperty(GuardianAccessKey, JsonSerializer.Serialize(guardian));
+		}
 		var selection = ReadSelection(item);
 		if (selection?.ExpectedUserId != userId || !StudentPortalProfileEmail.Same(selection.ExpectedEmail, previousEmail)) return;
 		selection.ExpectedEmail = email;
@@ -274,7 +287,7 @@ public class StudentSiblingParentService(IRepository<AdmissionApplicant, Guid> a
 	{
 		if (accountType != "guardian") return false;
 		var item = await cases.FindAsync(caseId);
-		return item != null && WasReused(item) && await IsParentFlowAsync(item);
+		return item != null && WasReused(item) && (HasOnboardingConfirmation(item) || await IsParentFlowAsync(item));
 	}
 	public async Task<bool> IsManualParentCaseAsync(Guid caseId, string accountType)
 	{

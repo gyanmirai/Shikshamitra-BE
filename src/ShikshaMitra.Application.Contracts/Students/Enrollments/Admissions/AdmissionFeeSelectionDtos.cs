@@ -61,8 +61,6 @@ public class AdmissionFeeSelectionDto
 
 public class AdmissionPaymentCompletionDto
 {
-	public string PaymentRule { get; set; } = "partial";
-	public bool AllowCollectionLater { get; set; } = true;
 	public bool CanComplete { get; set; }
 	public bool CanDeferCollection { get; set; }
 	public string Status { get; set; } = "collectionPending";

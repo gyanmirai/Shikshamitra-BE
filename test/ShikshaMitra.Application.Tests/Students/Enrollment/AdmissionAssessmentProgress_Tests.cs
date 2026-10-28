@@ -34,6 +34,15 @@ public class AdmissionAssessmentProgress_Tests
 	}
 
 	[Fact]
+	public void Legacy_pending_review_is_not_complete_even_with_saved_marks()
+	{
+		var attempt = Attempt();
+		attempt.RecordResult(80, null, null, Guid.NewGuid(), Policy);
+		typeof(AdmissionAssessmentAttempt).GetProperty(nameof(AdmissionAssessmentAttempt.Status))!.SetValue(attempt, "pendingReview");
+		AdmissionAssessmentRosterService.ClassifyStatus(attempt, null, Now, true).ShouldBe("ongoing");
+	}
+
+	[Fact]
 	public void Interview_slot_times_take_precedence_over_the_shared_session_window()
 	{
 		var session = Session(-60, 60);

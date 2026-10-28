@@ -48,6 +48,8 @@ public partial class StudentOnboardingAppService
 			var user = await portalUserManager.FindByEmailAsync(email.Trim());
 			if (user != null)
 			{
+				// Existing adult access needs its own reviewed Onboarding or legacy sibling confirmation.
+				if (type == "guardian" && !(await SiblingParents.GetAsync(item)).FamilyConfirmed) continue;
 				var roles = await portalUserManager.GetRolesAsync(user);
 				if (type != "guardian" || !user.IsActive || roles.Count != 1 || roles[0] != "Parent" ||
 					!await AuthorizationService.IsGrantedAsync(IdentityPermissions.Users.Update) ||

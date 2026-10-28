@@ -666,7 +666,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
     }
 
     private async Task<CollectibleAdmissionFixture> CreateCollectibleAdmissionAsync(string name, bool paymentStage = true,
-        AdmissionPaymentCompletionPolicy? completion = null, decimal amount = 1000m, bool oneTime = true)
+        decimal amount = 1000m, bool oneTime = true)
     {
         await WithUnitOfWorkAsync(async () =>
         {
@@ -683,8 +683,7 @@ public partial class AdmissionWorkflowRuntimeIntegration_Tests
             Name = "Finance collection journey", Code = $"COLLECT_{Guid.NewGuid():N}"[..24],
             Stages = paymentStage ? [new() { Id = entry, Code = "FEES", Name = "Fee structure confirmation",
                 StageType = AdmissionWorkflowStageType.Payment,
-                IsEntryStage = true, IsRequired = true,
-                ConfigurationJson = completion == null ? null : System.Text.Json.JsonSerializer.Serialize(new { paymentCompletion = completion }) }, new() { Id = decision, Code = "DECISION", Name = "Admission decision",
+                IsEntryStage = true, IsRequired = true }, new() { Id = decision, Code = "DECISION", Name = "Admission decision",
                 StageType = AdmissionWorkflowStageType.Approval, DisplayOrder = 1, IsTerminalStage = true, IsRequired = true }]
                 : [new() { Id = decision, Code = "DECISION", Name = "Admission decision", StageType = AdmissionWorkflowStageType.Approval,
                     IsEntryStage = true, IsTerminalStage = true, IsRequired = true }],

@@ -12,6 +12,10 @@ public class StudentCredentialsWorkspaceDto
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	[JsonIgnore(Condition = JsonIgnoreCondition.Never)]
 	public bool GuardianAccessEnabled { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+	public bool StudentAccessEnabled { get; set; }
+	[JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+	public bool CanEnableStudentAccess { get; set; }
 	public IReadOnlyList<StudentCredentialsRecipientDto> Recipients { get; set; } = [];
 	public StudentSiblingParentContextDto? ParentSibling { get; set; }
 }
@@ -30,6 +34,7 @@ public class RetryStudentParentSetupDto
 
 public class LinkStudentSiblingParentDto
 {
+	public bool ConfirmExistingParentAccess { get; set; }
 	public string ConcurrencyStamp { get; set; } = string.Empty;
 	public StudentSiblingParentSelectionDto? SiblingParentSelection { get; set; }
 }
@@ -38,7 +43,7 @@ public class StudentSiblingParentSelectionDtoValidator : AbstractValidator<Stude
 {
 	public StudentSiblingParentSelectionDtoValidator()
 	{
-		RuleFor(input => input.Relationship).Must(value => value is "father" or "mother");
+		RuleFor(input => input.Relationship).Must(value => value is "father" or "mother" or "guardian");
 		RuleFor(input => input.ExpectedEmail).NotEmpty().EmailAddress().MaximumLength(256);
 		RuleFor(input => input.ExpectedUserId).NotEmpty();
 	}
@@ -55,6 +60,7 @@ public class StudentSiblingParentCandidateDto
 
 public class StudentSiblingParentContextDto
 {
+	public bool RequiresOnboardingConfirmation { get; set; }
 	public bool Enabled { get; set; }
 	public bool FamilyConfirmed { get; set; }
 	public bool IsLinked { get; set; }
@@ -71,6 +77,7 @@ public class StudentSiblingParentContextDto
 
 public class StudentCredentialsRecipientDto
 {
+	public bool CanSendExistingParentHelp { get; set; }
 	public string AccountType { get; set; } = string.Empty;
 	public string Relationship { get; set; } = string.Empty;
 	public string? RelationshipLabel { get; set; }
@@ -107,7 +114,7 @@ public class UpdateStudentCredentialsEmailDtoValidator : AbstractValidator<Updat
 	{
 		RuleFor(x => x.AccountType).Must(x => x is "student" or "guardian");
 		RuleFor(x => x.Relationship).Must((input, value) => input.AccountType == "student"
-			? value == "self" : value is "father" or "mother");
+			? value == "self" : value is "father" or "mother" or "guardian");
 		RuleFor(x => x.ExpectedEmail).MaximumLength(256);
 		RuleFor(x => x.Email).MaximumLength(256);
 		RuleFor(x => x.Email).NotEmpty().EmailAddress()
@@ -128,6 +135,7 @@ public class ConfirmStudentPortalEmailDto
 /// <summary>The address is a drift guard, never an arbitrary delivery destination.</summary>
 public class SendStudentCredentialsDto
 {
+	public bool SendExistingParentHelp { get; set; }
 	public string AccountType { get; set; } = string.Empty;
 	public string Relationship { get; set; } = string.Empty;
 	public string ExpectedEmail { get; set; } = string.Empty;

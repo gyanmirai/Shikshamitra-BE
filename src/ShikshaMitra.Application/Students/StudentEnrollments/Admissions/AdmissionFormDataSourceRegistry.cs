@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using ShikshaMitra.TenantSettings.EducationBoards;
 using ShikshaMitra.TenantSettings.AcademicSetups.EducationMediums;
-using ShikshaMitra.TenantSettings.AcademicSetups.Standards;
+using ShikshaMitra.Students.Records;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Linq;
 using Volo.Abp.MultiTenancy;
@@ -15,8 +15,8 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public sealed class AdmissionFormDataSourceRegistry(
 	IEducationBoardRepository educationBoardRepository,
 	IEducationMediumRepository educationMediumRepository,
-	IStandardRepository standardRepository,
 	IStudentRepository studentRepository,
+	StudentDirectoryOptionsService academicOptions,
 	StudentScopeAccessService studentScope,
 	IAsyncQueryableExecuter asyncExecuter,
 	ICurrentTenant currentTenant) : ITransientDependency
@@ -26,7 +26,10 @@ public sealed class AdmissionFormDataSourceRegistry(
 		new() { Key = "StudentSiblings", DisplayName = "Sibling students", Description = "Student identities within the signed-in staff member's school scope.", SupportsParent = false },
 		new() { Key = "EducationBoards", DisplayName = "Education boards", Description = "Tenant-visible education boards.", SupportsParent = false },
 		new() { Key = "EducationMediums", DisplayName = "Education mediums", Description = "Tenant-visible mediums, optionally filtered by board.", SupportsParent = true },
-		new() { Key = "StandardsByMediumStage", DisplayName = "Standards", Description = "Tenant-visible standards for an education-medium stage.", SupportsParent = true }
+		new() { Key = "StandardsByMediumStage", DisplayName = "Standards", Description = "Tenant-visible standards for an education-medium stage.", SupportsParent = true },
+		new() { Key = "Standards", DisplayName = "Institute Setup classes", Description = "Permitted classes in the selected academic year.", SupportsParent = false },
+		new() { Key = "StandardsByMedium", DisplayName = "Classes by medium", Description = "Permitted Institute Setup classes for the selected medium and academic year.", SupportsParent = true },
+		new() { Key = "DivisionsByStandard", DisplayName = "Divisions by class", Description = "Permitted Institute Setup divisions belonging to the selected class and academic year.", SupportsParent = true }
 	];
 
 	public static bool IsAllowed(string? sourceKey) =>
@@ -47,6 +50,23 @@ public sealed class AdmissionFormDataSourceRegistry(
 		var source = Metadata.FirstOrDefault(item => string.Equals(item.Key, sourceKey, StringComparison.OrdinalIgnoreCase));
 		if (source == null) throw new ArgumentException("Unknown admission form data source.", nameof(sourceKey));
 		if (source.SupportsParent && !parentId.HasValue) return [];
+		if (source.Key is "Standards" or "StandardsByMedium" or "StandardsByMediumStage" or "DivisionsByStandard")
+		{
+			if (!academicYearId.HasValue || !currentTenant.Id.HasValue) return [];
+			var hierarchy = await academicOptions.GetAsync(academicYearId);
+			var options = source.Key == "DivisionsByStandard"
+				? hierarchy.Divisions.Where(item => item.ParentId == parentId)
+				: hierarchy.Standards.Where(item => source.Key == "StandardsByMediumStage"
+					? item.StageId == parentId : !parentId.HasValue || item.ParentId == parentId);
+			var duplicateNames = options.GroupBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+				.Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+			return options.Select((item, index) => new AdmissionFormOptionDto
+			{
+				Value = item.Id.ToString(), Label = duplicateNames.Contains(item.Name) && source.Key != "DivisionsByStandard"
+					? $"{item.Name} ({hierarchy.Mediums.FirstOrDefault(medium => medium.Id == item.ParentId)?.Name} / {hierarchy.Stages.FirstOrDefault(stage => stage.Id == item.StageId)?.Name})" : item.Name,
+				DisplayOrder = index
+			}).ToList();
+		}
 		if (source.Key == "StudentSiblings")
 		{
 			var query = await studentScope.ApplyCurrentUserScopeAsync(await studentRepository.GetQueryableWithoutAutoIncludesAsync());
@@ -87,10 +107,6 @@ public sealed class AdmissionFormDataSourceRegistry(
 				.Select((item, index) => new AdmissionFormOptionDto { Value = item.Id.ToString(), Label = item.Type.ToString(), DisplayOrder = index })
 				.ToList(),
 			"EducationMediums" => (await educationMediumRepository.GetListAsync(item => item.EducationBoardId == parentId!.Value))
-				.OrderBy(item => item.Name)
-				.Select((item, index) => new AdmissionFormOptionDto { Value = item.Id.ToString(), Label = item.Name, DisplayOrder = index })
-				.ToList(),
-			"StandardsByMediumStage" => (await standardRepository.GetListAsync(item => item.EducationMediumStageId == parentId!.Value))
 				.OrderBy(item => item.Name)
 				.Select((item, index) => new AdmissionFormOptionDto { Value = item.Id.ToString(), Label = item.Name, DisplayOrder = index })
 				.ToList(),

@@ -103,6 +103,9 @@ public partial class StudentOnboardingAppService
 		var reusingParent = parentFlow && user != null;
 		if (user != null)
 		{
+			await AuthorizationService.CheckAsync(IdentityPermissions.Users.Update);
+			if (input.AccountType == "guardian" && !parentFlow)
+				throw PortalInvalid("Confirm and link the saved existing Parent explicitly in App Login. An email match alone does not authorize access.");
 			if (input.AccountType == "guardian" && input.Relationship == "guardian")
 				throw PortalInvalid("This guardian email already belongs to an account. Use the reviewed access repair workflow.");
 			if (parentFlow)
@@ -112,7 +115,6 @@ public partial class StudentOnboardingAppService
 					throw PortalInvalid("Confirm this parent through Add sibling in Admissions, then activate the student to link the existing account.");
 			}
 			// Existing staff identities and unverified email matches are never silently repurposed.
-			await AuthorizationService.CheckAsync(IdentityPermissions.Users.Update);
 			var roles = await portalUserManager.GetRolesAsync(user);
 			if (!input.LinkExistingGuardian || input.AccountType != "guardian" || !user.IsActive ||
 				roles.Count != 1 || !roles.Contains("Parent") ||

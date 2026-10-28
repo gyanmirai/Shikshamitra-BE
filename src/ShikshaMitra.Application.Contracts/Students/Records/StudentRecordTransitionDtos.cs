@@ -37,6 +37,9 @@ public sealed class StudentRecordTransitionIssueDto
 }
 public sealed class StudentRecordTransitionPreviewRowDto
 {
+	public bool ApprovalRequired { get; set; }
+	public List<StudentRecordTransitionIssueDto> OutstandingItems { get; set; } = [];
+	[JsonIgnore] public string OutstandingEvidence { get; set; } = "[]";
 	public ShikshaMitra.Finance.Fees.Collections.Dtos.FeeProrationResultDto? Proration { get; set; }
 	public string RollNumberScope { get; set; } = "class-division";
 	public string RollAssignmentMode { get; set; } = "manual";
@@ -74,6 +77,8 @@ public sealed class StudentRecordTransitionQueryDto : PagedResultRequestDto
 }
 public sealed class StudentRecordTransitionDto
 {
+	public bool OutstandingOverrideRequired { get; set; }
+	public List<StudentRecordTransitionIssueDto> OutstandingItems { get; set; } = [];
 	public Guid? AdmissionApplicationId { get; set; }
 	public Guid? AdmissionInquiryId { get; set; }
 	public bool CanApprove { get; set; }
@@ -111,6 +116,7 @@ public sealed class StudentRecordTransitionEventDto
 }
 public sealed class StudentRecordTransitionDecisionDto
 {
+	[StringLength(1000)] public string OutstandingReason { get; set; } = "";
 	[Required] public string ConcurrencyStamp { get; set; } = "";
 	[StringLength(1000)] public string Remarks { get; set; } = "";
 }
@@ -241,6 +247,7 @@ public interface IStudentRecordTransitionAppService : IApplicationService
 {
 	Task<PagedResultDto<StudentRecordTransitionDto>> GetListAsync(StudentRecordTransitionQueryDto input);
 	Task<StudentRecordTransitionDto> GetAsync(Guid id);
+	Task<StudentSchoolExitSummaryDto> GetSchoolExitSummaryAsync(Guid studentId, Guid academicYearId, string outcome = "Withdraw", DateTime? effectiveDate = null);
 	Task<StudentRecordTransitionPreviewDto> PreviewAsync(StudentRecordTransitionBatchInput input);
 	Task<StudentRecordTransitionOptionsDto> GetOptionsAsync(Guid? academicYearId, Guid? studentId, Guid? admissionOfferingId = null);
 	Task<StudentRecordTransitionBatchResultDto> SubmitBatchAsync(StudentRecordTransitionBatchInput input);

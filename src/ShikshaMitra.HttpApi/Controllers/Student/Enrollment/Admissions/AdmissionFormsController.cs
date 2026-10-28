@@ -20,7 +20,7 @@ public class AdmissionFormsController(IAdmissionFormAppService service) : AbpCon
 	[HttpGet("metadata/field-types"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<IReadOnlyList<AdmissionFormFieldMetadataDto>>> GetFieldTypesAsync() => Result.Success(await service.GetFieldTypesAsync());
 	[HttpGet("metadata/system-fields"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<IReadOnlyList<AdmissionFormSystemFieldMetadataDto>>> GetSystemFieldsAsync() => Result.Success(await service.GetSystemFieldsAsync());
 	[HttpGet("metadata/data-sources"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)] public async Task<Result<IReadOnlyList<AdmissionFormDataSourceMetadataDto>>> GetDataSourcesAsync() => Result.Success(await service.GetDataSourcesAsync());
-	[HttpGet("metadata/options"), Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
+	[HttpGet("metadata/options")]
 	public async Task<Result<IReadOnlyList<AdmissionFormOptionDto>>> GetOptionsAsync([FromQuery] string sourceKey,
 		[FromQuery] Guid? parentId = null, [FromQuery] Guid? academicYearId = null, [FromQuery] string? searchTerm = null,
 		[FromQuery] int skipCount = 0, [FromQuery] int maxResultCount = 20, [FromQuery] List<Guid>? selectedIds = null) =>

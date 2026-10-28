@@ -85,11 +85,12 @@ public class EmployeeApplicationAppService(
 			query
 				.OrderByDescending(x => x.CreationTime).ThenBy(x => x.Id)
 				.Skip(input.SkipCount)
-				.Take(input.MaxResultCount));
+				.Take(input.MaxResultCount)
+				.Select(EmployeeApplicationListProjection.Item));
 
 		return new PagedResultDto<EmployeeApplicationListItemDto>(
 			totalCount,
-			applications.Select(MapToListItemDto).ToList());
+			applications);
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.Add)]
@@ -831,29 +832,6 @@ public class EmployeeApplicationAppService(
 			AcademicYearName = application.WorkAssignmentAcademicYearName,
 			OrganizationIds = application.WorkAssignmentOrganizationIds.ToList(),
 			OrganizationLabels = application.WorkAssignmentOrganizationLabels.ToList()
-		};
-
-	private static EmployeeApplicationListItemDto MapToListItemDto(EmployeeApplication application) =>
-		new()
-		{
-			Id = application.Id,
-			ApplicationNumber = application.ApplicationNumber,
-			Status = application.Status,
-			FullName = application.FullName,
-			Email = application.Email,
-			MobileNo = application.MobileNo,
-			PositionAppliedFor = application.PositionAppliedFor,
-			DepartmentAppliedFor = application.DepartmentAppliedFor,
-			WorkAssignment = MapWorkAssignment(application),
-			WorkAssignmentDisplay = application.WorkAssignmentDisplay,
-			TokenExpiresAt = application.TokenExpiresAt,
-			LinkLastIssuedAt = application.LinkLastIssuedAt,
-			SubmittedAt = application.SubmittedAt,
-			FinalizedAt = application.FinalizedAt,
-			FinalizedEmployeeId = application.FinalizedEmployeeId,
-			HasResume = application.HasResume,
-			HasPhoto = application.HasPhoto,
-			CreationTime = application.CreationTime
 		};
 
 	private EmployeeApplicationDto MapToDto(EmployeeApplication application, bool includePublicPath = true)

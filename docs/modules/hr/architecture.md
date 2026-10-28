@@ -3,7 +3,7 @@ module: hr
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -16,6 +16,8 @@ Contracts define data transfer objects, application services orchestrate workflo
 Employee directory reads apply visibility and filters, count and page in the database, then project display scalars through `EmployeeSearchProjection.Summary` before materialization.
 This avoids loading employee documents, work experience, bank details, and complete role or shift entities for directory rows.
 Organization names are enriched in a batch for the returned page, with the existing tenant and UserScope filters preserved.
+
+Onboarding list reads count and page the existing tenant-filtered application query, then select `EmployeeApplicationListProjection.Item` before materialization. Only summary scalars and work-assignment arrays are read; personal/family/additional JSON snapshots, work history, tokens and the tracked application graph are excluded. Display formatting runs over those projected values. Detail/public/finalization readers retain their full snapshots and existing authorization paths.
 
 ## Layer map
 

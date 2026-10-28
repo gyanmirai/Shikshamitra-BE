@@ -8,13 +8,14 @@ using ShikshaMitra.HR.Employees.Settings;
 using Volo.Abp.Application.Services;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.DependencyInjection;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp;
 
 namespace ShikshaMitra.HR.Employees.Documents;
 
 [RemoteService(false)]
 public class EmployeeDocumentReadService(
-	EmployeeDocumentManager employeeDocumentManager,
+	IEmployeeRepository employeeRepository,
 	IDocumentSettingRepository documentSettingRepository,
 	IBlobContainer blobContainer)
 	: ApplicationService, ITransientDependency
@@ -26,8 +27,13 @@ public class EmployeeDocumentReadService(
 		if (!string.IsNullOrWhiteSpace(search)) { var term = search.Trim().ToLowerInvariant(); query = query.Where(x => x.DocumentName.ToLower().Contains(term)); }
 		var count = await AsyncExecuter.CountAsync(query);
 		var definitions = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.DocumentName).ThenBy(x => x.Id).Skip((page - 1) * pageSize).Take(pageSize));
-		var documents = await employeeDocumentManager.GetDocumentsAsync(employeeId);
-		if (documents.Count > 500000) throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+		var documentQuery = await GetDocumentQueryAsync(employeeId);
+		var documentCount = await AsyncExecuter.CountAsync(documentQuery);
+		if (documentCount > 500000) throw new BusinessException(HRErrorCodes.ReportPopulationTooLarge);
+		if (documentCount == 0) await EnsureEmployeeExistsAsync(employeeId);
+		var definitionIds = definitions.Select(definition => definition.Id).ToArray();
+		var documents = definitionIds.Length == 0 ? [] : await AsyncExecuter.ToListAsync(documentQuery
+			.Where(document => document.DocumentNameId.HasValue && Enumerable.Contains(definitionIds, document.DocumentNameId.Value)));
 		var names = definitions.ToDictionary(x => x.Id, x => x.DocumentName);
 		var latest = documents.Where(x => x.DocumentNameId.HasValue).GroupBy(x => x.DocumentNameId!.Value).ToDictionary(x => x.Key, x => x.OrderByDescending(item => item.CreationTime).First());
 		return new(count, definitions.Select(definition => {
@@ -47,7 +53,8 @@ public class EmployeeDocumentReadService(
 		var normalizedPage = page < 1 ? 1 : page;
 		var normalizedPageSize = pageSize < 1 ? defaultPageSize : Math.Min(pageSize, maxPageSize);
 
-		var documents = await employeeDocumentManager.GetDocumentsAsync(employeeId);
+		var documents = await AsyncExecuter.ToListAsync(await GetDocumentQueryAsync(employeeId));
+		if (documents.Count == 0) await EnsureEmployeeExistsAsync(employeeId);
 		var settingsLookup = await GetSettingsLookupAsync(documents);
 		var filtered = FilterDocuments(documents, settingsLookup, search);
 		var totalCount = filtered.Count();
@@ -74,16 +81,26 @@ public class EmployeeDocumentReadService(
 
 	public async Task<DocumentDto> GetDocumentAsync(Guid employeeId, Guid documentId)
 	{
-		var document = await employeeDocumentManager.GetDocumentAsync(employeeId, documentId);
+		var document = await AsyncExecuter.FirstOrDefaultAsync((await GetDocumentQueryAsync(employeeId))
+			.Where(item => item.Id == documentId));
+		if (document == null)
+		{
+			await EnsureEmployeeExistsAsync(employeeId);
+			throw new BusinessException(HRErrorCodes.EmployeeDocumentNotFound);
+		}
 		var content = await ReadBlobAsync(document.BlobName);
 
-		return EmployeeDocumentProjection.ToDocumentDto(document, content);
+		return new DocumentDto { FileName = document.DocumentName, ContentType = document.ContentType, Content = content, Size = document.Size };
 	}
 
 	public async Task<List<DocumentMetadataDto>> GetDocumentMetadataAsync(Guid employeeId)
 	{
-		var documents = await employeeDocumentManager.GetDocumentsAsync(employeeId);
-		return documents.Select(EmployeeDocumentProjection.ToMetadata).ToList();
+		var documents = await AsyncExecuter.ToListAsync((await GetDocumentQueryAsync(employeeId)).Select(document => new DocumentMetadataDto
+		{
+			Id = document.Id, FileName = document.DocumentName, Size = document.Size, ContentType = document.ContentType
+		}));
+		if (documents.Count == 0) await EnsureEmployeeExistsAsync(employeeId);
+		return documents;
 	}
 
 	public async Task<byte[]> ReadBlobAsync(string blobName)
@@ -94,7 +111,19 @@ public class EmployeeDocumentReadService(
 		return memoryStream.ToArray();
 	}
 
-	private async Task<Dictionary<Guid, string>> GetSettingsLookupAsync(IEnumerable<EmployeeDocument> documents)
+	private async Task<IQueryable<EmployeeDocumentReadItem>> GetDocumentQueryAsync(Guid employeeId)
+		=> EmployeeDocumentReadItem.Query(await employeeRepository.GetQueryableAsync(), employeeId);
+
+	private async Task EnsureEmployeeExistsAsync(Guid employeeId)
+	{
+		var employees = await employeeRepository.GetQueryableAsync();
+		// Keep employee-not-found behavior and the parent's tenant/soft-delete filters;
+		// mutation methods continue loading their aggregate through the domain manager.
+		if (!await AsyncExecuter.AnyAsync(employees.Where(employee => employee.Id == employeeId)))
+			throw new EntityNotFoundException(typeof(Employee), employeeId);
+	}
+
+	private async Task<Dictionary<Guid, string>> GetSettingsLookupAsync(IEnumerable<EmployeeDocumentReadItem> documents)
 	{
 		var nameIds = documents
 			.Where(d => d.DocumentNameId.HasValue)
@@ -111,8 +140,8 @@ public class EmployeeDocumentReadService(
 		return settings.ToDictionary(s => s.Id, s => s.DocumentName);
 	}
 
-	private static IEnumerable<EmployeeDocument> FilterDocuments(
-		IEnumerable<EmployeeDocument> documents,
+	private static IEnumerable<EmployeeDocumentReadItem> FilterDocuments(
+		IEnumerable<EmployeeDocumentReadItem> documents,
 		IReadOnlyDictionary<Guid, string> settingsLookup,
 		string? search)
 	{

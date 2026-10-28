@@ -6,6 +6,19 @@ namespace ShikshaMitra.HR.Employees.Documents;
 
 public static class EmployeeDocumentProjection
 {
+	public static EmployeeDocumentResponseDto ToListItem(EmployeeDocumentReadItem document, IReadOnlyDictionary<Guid, string> settingsLookup) => new()
+	{
+		DocumentId = document.Id,
+		DocumentNameId = document.DocumentNameId,
+		DocumentName = document.DocumentNameId.HasValue && settingsLookup.TryGetValue(document.DocumentNameId.Value, out var settingName)
+			? settingName : null,
+		FileName = document.DocumentName,
+		ContentType = document.ContentType,
+		Size = document.Size,
+		UploadedAt = document.CreationTime,
+		UpdatedAt = document.LastModificationTime
+	};
+
 	public static EmployeeDocumentResponseDto ToListItem(EmployeeDocument document, IReadOnlyDictionary<Guid, string> settingsLookup) => new()
 	{
 		DocumentId = document.Id,

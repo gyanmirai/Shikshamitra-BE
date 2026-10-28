@@ -57,6 +57,46 @@ public class SalaryTemplateComposerAppService_Tests
 		replay.VersionCount.ShouldBe(1);
 	}
 
+	[Theory]
+	[InlineData("Basic Salary")]
+	[InlineData("Teaching pay")]
+	public async Task Fresh_tenant_requires_explicit_Basic_purpose_and_preserves_fixed_salary(string earningName)
+	{
+		using (_currentTenant.Change(Guid.NewGuid()))
+		{
+			var earning = await InsertEarningAsync(earningName);
+			var deduction = await InsertDeductionAsync("Medical Emergency");
+			var input = Save("New school salary", [new SalaryTemplateRuleDto
+			{
+				ComponentId = earning.Id, LineKind = "EARNING", SemanticType = "ORDINARY",
+				FormulaType = "FIXED_AMOUNT", Value = 50000m, DisplayOrder = 0
+			}, new SalaryTemplateRuleDto
+			{
+				ComponentId = deduction.Id, LineKind = "DEDUCTION", SemanticType = "ORDINARY",
+				FormulaType = "FIXED_AMOUNT", Value = 1000m, DisplayOrder = 1
+			}]);
+			(await _appService.GetListAsync()).Items.ShouldBeEmpty();
+			(await Should.ThrowAsync<BusinessException>(() => AttachPreviewAsync(input, sampleMonthlyAmount: 50000m)))
+				.Code.ShouldBe("HR:Payroll:SalaryTemplateRequiresOneBasic");
+			(await _appService.GetListAsync()).Items.ShouldBeEmpty();
+
+			// Payroll purpose is explicit metadata on the template rule, independent of its display name.
+			input.Rules[0].SemanticType = "BASIC";
+			var preview = await AttachPreviewAsync(input, sampleMonthlyAmount: 50000m);
+			preview.Calculation.BasicSalary.ShouldBe(50000m);
+			preview.Calculation.GrossSalary.ShouldBe(50000m);
+			preview.Calculation.TotalDeductions.ShouldBe(1000m);
+			preview.Calculation.NetSalary.ShouldBe(49000m);
+			var saved = await _appService.CreateAsync(input);
+			saved.Status.ShouldBe("ACTIVE");
+			var reloaded = await _appService.GetAsync(saved.Id);
+			var basic = reloaded.EditableVersion.Rules.Single(rule => rule.ComponentId == earning.Id);
+			basic.SemanticType.ShouldBe("BASIC");
+			basic.FormulaType.ShouldBe("FIXED_AMOUNT");
+			basic.Value.ShouldBe(50000m);
+		}
+	}
+
 	[Fact]
 	public async Task Should_create_an_active_default_and_replace_it_with_an_immutable_new_version()
 	{
@@ -251,9 +291,10 @@ public class SalaryTemplateComposerAppService_Tests
 		return await _appService.UpdateAsync(id, input);
 	}
 
-	private async Task AttachPreviewAsync(SaveSalaryTemplateDto input, Guid? id = null)
+	private async Task<SalaryTemplatePreviewDto> AttachPreviewAsync(SaveSalaryTemplateDto input, Guid? id = null,
+		decimal sampleMonthlyAmount = 20000m)
 	{
-		input.SampleMonthlyAmount = 20000m;
+		input.SampleMonthlyAmount = sampleMonthlyAmount;
 		input.SampleEffectiveMonth = new DateTime(2026, 9, 1);
 		var preview = await _appService.PreviewAsync(new PreviewSalaryTemplateRequestDto
 		{
@@ -264,6 +305,7 @@ public class SalaryTemplateComposerAppService_Tests
 			EsiManagementMode = input.DefaultEsiManagementMode, EsiPolicyId = input.DefaultEsiPolicyId, EsiExternalReason = input.DefaultEsiExternalReason
 		});
 		input.PreviewToken = preview.PreviewToken;
+		return preview;
 	}
 
 	private static SaveSalaryTemplateDto Save(string name, SalaryTemplateRuleDto[] rules) => new()

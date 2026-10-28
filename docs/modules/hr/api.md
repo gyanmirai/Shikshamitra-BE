@@ -260,6 +260,9 @@ The settings list returns Active, Needs setup, and Archived templates to Salary 
 `POST /api/payroll/salary-templates/preview` accepts current rules, salary basis, monthly amount, effective month, PF selection, and optional template/version/concurrency context under Salary Templates View permission.
 It is employee-independent and does not persist templates, versions, employee structures, or payroll records.
 It returns `isSample`, `calculation`, `previewToken`, and `expiresAt`.
+An unreachable monthly target returns HTTP 400 with `HR:Payroll:CompensationTargetNotSolvable`, an actionable explanation, and `data.field=monthlyAmount` / `data.relatedField=rules`.
+When fixed earnings alone exceed an employer-cost target, safe numeric data includes `target`, `fixedEarnings`, and `reason=FIXED_EARNINGS_EXCEED_EMPLOYER_COST`.
+Employer cost includes gross plus employer contributions; employee deductions cannot make an over-budget template valid. A fixed-only template needs a target matching its actual employer cost, not an arbitrary higher amount.
 Each create/update carries `previewToken`, `sampleMonthlyAmount`, `sampleEffectiveMonth`, an idempotency key, expected active version, and concurrency stamp.
 The protected preview expires after 30 minutes and binds tenant, user, normalized inputs, version context, and calculation results.
 Save recalculates using current configuration and rejects a missing, changed, mismatched, or expired preview with `SalaryTemplatePreviewRequired`, `SalaryTemplatePreviewChanged`, or `SalaryTemplatePreviewExpired` under the `HR:Payroll:` prefix.

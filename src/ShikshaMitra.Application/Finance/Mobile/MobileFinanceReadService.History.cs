@@ -32,7 +32,20 @@ public partial class MobileFinanceReadService
 		}
 		var count=await AsyncExecuter.CountAsync(query,cancellationToken);
 		var rows=await AsyncExecuter.ToListAsync(query.OrderByDescending(x=>x.CreationTime).ThenBy(x=>x.Id).Skip(skipCount).Take(maxResultCount),cancellationToken);
-		return new(await PaymentDtosAsync(rows,studentId,academicYearId,cancellationToken),count);
+		return new(await PaymentDtosAsync(rows,studentId,academicYearId,cancellationToken),count)
+		{
+			PaymentSummary=await PaymentSummaryAsync(studentId,academicYearId,cancellationToken)
+		};
+	}
+	private async Task<MobileFinancePaymentSummary> PaymentSummaryAsync(Guid studentId,Guid yearId,CancellationToken ct)
+	{
+		// Summary is annual, independent of the requested list page and status filter.
+		var paid=await transactions.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==yearId&&x.Status==FeeCollectionStatus.Paid,cancellationToken:ct);
+		var ids=paid.Select(x=>x.Id).ToArray();
+		var evidence=await methods.GetListAsync(x=>x.StudentId==studentId&&Enumerable.Contains(ids,x.FeeRecordMetadataId),cancellationToken:ct);
+		var byPayment=evidence.GroupBy(x=>x.FeeRecordMetadataId).ToDictionary(g=>g.Key,g=>g.Select(x=>x.Amount).ToList());
+		return MobileFinanceProjection.PaymentSummary(studentId,yearId,paid.Select(x=>(
+			MobileFinanceProjection.PaymentAmount(x.TotalPaidFee,byPayment.GetValueOrDefault(x.Id)??[]),x.Status,DateOnly.FromDateTime(x.CreationTime))));
 	}
 	private async Task<List<MobileFinancePayment>> PaymentDtosAsync(List<FeeRecordMetadata> rows,Guid studentId,Guid academicYearId,CancellationToken cancellationToken)
 	{
@@ -80,8 +93,10 @@ public partial class MobileFinanceReadService
 		var adjustment = await access.IsGrantedAsync(Permissions.ViewAdjustments);
 		if (!concession && !refund && !adjustment) throw new Volo.Abp.Authorization.AbpAuthorizationException();
 		var result=new List<MobileFinanceRequest>();
+		MobileFinanceRequestSummary? summary=null;
 		if (concession && kind is (null or "concession"))
 		{
+			if(kind=="concession")summary=MobileFinanceProjection.ConcessionSummary(studentId,academicYearId,await DueRowsAsync(studentId,academicYearId,cancellationToken));
 			var repository=LazyServiceProvider.LazyGetRequiredService<IConcessionRequestRepository>();
 			var rows=await AsyncExecuter.ToListAsync((await repository.WithDetailsAsync(x=>x.ConcessionFeeHeadMappings,x=>x.ConcessionDueFeeAllocations,x=>x.ConcessionReversals))
 				.Where(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&(x.Status!=ConcessionRequestStatus.Draft||x.CreatorId==context.UserId))
@@ -102,6 +117,7 @@ public partial class MobileFinanceReadService
 		{
 			var repository=LazyServiceProvider.LazyGetRequiredService<IRepository<FeeRefundRequest,Guid>>();
 			var rows=await repository.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&(x.Status!=FeeRefundStatus.Draft||x.CreatorId==context.UserId),cancellationToken:cancellationToken);
+			if(kind=="refund")summary=MobileFinanceProjection.RefundSummary(studentId,academicYearId,rows.Select(x=>(x.ProcessedAmount,x.ReversedAmount,x.Status)));
    var receiptIds=rows.Where(x=>x.OriginalReceiptId.HasValue).Select(x=>x.OriginalReceiptId!.Value).Distinct().ToArray();
    var ownedReceipts=(await receipts.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&Enumerable.Contains(receiptIds,x.Id),cancellationToken:cancellationToken)).Select(x=>x.Id).ToHashSet();
    result.AddRange(rows.Select(x=>RefundDto(x,context.IsGuardian&&x.CreatorId==context.UserId?x.Reason:null) with {
@@ -115,7 +131,7 @@ public partial class MobileFinanceReadService
 			var rows=await repository.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId,cancellationToken:cancellationToken);
 			result.AddRange(rows.Select(x=>new MobileAdjustmentRequest(x.Id,x.Status.ToString(),MobileFinanceProjection.Money(MobileFinanceProjection.LegacyMoney(x.RequestedAmount)),Utc(x.CreationTime),context.IsGuardian&&x.CreatorId==context.UserId?x.Reason:null,[])));
 		}
-		return new(result.OrderByDescending(x=>x.SortDate).ThenBy(x=>x.Id).Skip(skipCount).Take(maxResultCount).ToList(),result.Count,kind=="concession"?skipCount/maxResultCount+1:null,kind=="concession"?maxResultCount:null,kind=="concession"?(int)Math.Ceiling((decimal)result.Count/maxResultCount):null);
+		return new(result.OrderByDescending(x=>x.SortDate).ThenBy(x=>x.Id).Skip(skipCount).Take(maxResultCount).ToList(),result.Count,kind=="concession"?skipCount/maxResultCount+1:null,kind=="concession"?maxResultCount:null,kind=="concession"?(int)Math.Ceiling((decimal)result.Count/maxResultCount):null) { RequestSummary=summary };
 	}
 	private static string[] ConcessionActions(ConcessionRequestStatus status, bool edit, bool submit, bool cancel) =>
 		new[] { status == ConcessionRequestStatus.Draft && edit ? "edit" : null,

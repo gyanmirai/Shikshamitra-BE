@@ -429,6 +429,26 @@ Installments expose additive `scheduleStatus`: unbilled Pending/Partial rows dis
 while Paid and InReconciliation retain their canonical payment/clearance status. Existing
 `status` remains unchanged.
 
+The existing payments list includes `paymentSummary` with exact `studentId`,
+`academicYearId`, decimal-string `paidAmount`, `successfulPaymentCount` and nullable
+`latestPaymentDate`. It covers the full selected academic year before pagination or
+status filtering. Only Paid transactions count; amounts use their validated decimal
+payment-method evidence, including principal/charge components of the transaction.
+This is successful-payment history, not retained principal after refunds. InReconciliation
+and Reversed transactions remain visible under their actual list statuses but are excluded
+from this summary. Receipt visibility still requires its independent existing grant.
+
+`requests?kind=concession|refund` includes `requestSummary` with `studentId`,
+`academicYearId`, `kind`, decimal-string `totalAmount` and `completedRequestCount`.
+Concession total is the applied owned-year DueFee concession ledger, including its
+reversals; the request-count field is unused (zero) for that kind. Refund total is the
+retained processed payout (`ProcessedAmount - ReversedAmount`), while completed count
+includes only fully Processed requests with positive payout and no reversal. Pending
+approval amounts never count as refunded. Summaries precede pagination and retain each
+endpoint's existing permission, tenant, enrolled-year and family-association checks.
+Mixed-kind/adjustment requests and receipts responses have no added summary. Deploy
+these backend additions before the companion Concession/Refunds/Payment history client.
+
 Principal amounts come from decimal DueFee ledger values; transaction amounts come
 from decimal PaymentMethodRecord splits. Legacy charge/receipt storage is converted
 per row at the boundary, never summed through the legacy double DTOs. Stored

@@ -11,7 +11,7 @@ using Volo.Abp;
 namespace ShikshaMitra.Finance.Mobile;
 
 /// <summary>Shared decimal read projection for the family screens and statement.</summary>
-public static class MobileFinanceProjection
+public static partial class MobileFinanceProjection
 {
 	public static string Money(decimal value) => value.ToString("F2", CultureInfo.InvariantCulture);
 	public static string InstallmentScheduleStatus(DueFee due, DateTime asOf, decimal reconciliationAmount)

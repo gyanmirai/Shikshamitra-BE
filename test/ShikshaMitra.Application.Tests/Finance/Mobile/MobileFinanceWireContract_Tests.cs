@@ -38,7 +38,8 @@ public class MobileFinanceWireContract_Tests
   var installment=new MobileFinanceInstallment(id,null,"October 2026",id,"Tuition",new(2026,10,28),null,"1000.00","300.00","600.00","100.00","100.00","0.00","Partial");
   var installmentJson=Write("installments.json",new[]{installment});
   installmentJson[0].GetProperty("dueFeeId").GetGuid().ShouldBe(id);installmentJson[0].GetProperty("paid").GetString().ShouldBe("300.00");
-  var paymentJson=Write("payments.json",new MobileFinanceList<MobileFinancePayment>([payment],1));
+  var paymentJson=Write("payments.json",new MobileFinanceList<MobileFinancePayment>([payment],1) { PaymentSummary=new(id,year,"1000.00",1,new(2026,10,28)) });
+  paymentJson.GetProperty("paymentSummary").GetProperty("paidAmount").GetString().ShouldBe("1000.00");
   paymentJson.TryGetProperty("page",out _).ShouldBeFalse();paymentJson.GetProperty("items")[0].GetProperty("receipts")[0].TryGetProperty("id",out _).ShouldBeFalse();
   var receiptJson=Write("receipts.json",new MobileFinanceList<MobileFinanceReceipt>([receipt],1));
   receiptJson.GetProperty("items")[0].GetProperty("totalPaidAmount").GetString().ShouldBe("1000.00");
@@ -53,8 +54,8 @@ public class MobileFinanceWireContract_Tests
   var activity=new MobileFinancePage<MobileFinanceActivityItem>([new(id,"refund","Refund request","Submitted",new(2026,10,28,10,0,0,DateTimeKind.Utc),false)],21,2,20);
   var activityJson=Write("activity.json",activity);Write("notifications.json",activity);
   activityJson.GetProperty("page").GetInt32().ShouldBe(2);activityJson.TryGetProperty("currentPage",out _).ShouldBeFalse();
-  Write("concessions.json",new MobileFinanceRequestPage([concession],1,1,20,1));
-  Write("refunds.json",new MobileFinanceRequestPage([refund],1,null,null,null));
+  Write("concessions.json",new MobileFinanceRequestPage([concession],1,1,20,1) { RequestSummary=new(id,year,"concession","150.00",0) });
+  Write("refunds.json",new MobileFinanceRequestPage([refund],1,null,null,null) { RequestSummary=new(id,year,"refund","400.00",0) });
   Write("refund-result.json",refund);
   var eligibility=MobileFinanceCanonicalCommandProjection.Map(new RefundEligibilityDto{StudentId=id,AcademicYearId=year,RefundPolicyName="Half refund",AllowPartialRefund=true,
    AllowedPayoutMethods=["Cash"],TotalPaid=1000m,TotalRefundable=500m,Receipts=[new(){ReceiptId=id,ReceiptNumber="R-001",ReceiptDate=new(2026,10,28),PaidAmount=1000m,RefundableAmount=500m}],

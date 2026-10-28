@@ -175,6 +175,14 @@ See [Cash Management](./references/cash-management.md).
 
 ## Family mobile Finance
 
+`MobileFinanceScreenSummary_Tests` verifies successful-payment/uncleared/reversed
+separation, exact paise, net processed refunds, completed counts and real zero totals.
+The persisted `Finance_overview_uses_owned_principal_records_instead_of_mixed_transaction_totals`
+case also checks that payment summary is independent of page/status and excludes other
+children/years; Concession summary uses applied owned-child dues even on an empty page.
+`MobileFinanceWireContract_Tests` exports actual serializer examples containing the new
+payment/request summary objects. Use these with the companion mobile summary parser tests.
+
 `MobileFinanceCharges_Tests.cs` extends the persisted family fixture with live ABP principal/permission checks and actual database queries for the dedicated charge page/detail/allocation history. Cases cover the hand-derived `1000-200 verified-300 pending-100 waived=400` equation, legacy/overview/statement parity, reversed collections, full waivers, mixed settlement, voids, processed/reversed/failed refund outcomes, fee-only/charge/combined and provisional/final receipt documents, whole-document totals, independent receipt/refund grants, school calendar dates, search/category/tab/count/paging semantics, hidden decisions, wrong batch identity, sibling/year/tenant/revoked association and explicit denial.
 
 ```powershell

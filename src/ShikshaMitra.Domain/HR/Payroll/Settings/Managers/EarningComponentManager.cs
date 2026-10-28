@@ -109,8 +109,15 @@ public class EarningComponentManager : DomainService
 				.WithData("message", "An earning component cannot use itself as its percentage base.");
 		}
 
-		var components = (await _earningComponentRepository.GetListAsync())
-			.ToDictionary(component => component.Id);
+		var components = (await _earningComponentRepository.GetListAsync()).ToDictionary(component => component.Id);
+		ValidateDependency(componentId, calculationType, selectedEarningComponentId, dependOn, components);
+	}
+
+	public static void ValidateDependency(Guid componentId, CalculationType calculationType,
+		Guid? selectedEarningComponentId, ComponentDependency dependOn,
+		IReadOnlyDictionary<Guid, EarningComponent> components)
+	{
+		if (calculationType != CalculationType.Percentage || dependOn != ComponentDependency.CustomComponent || !selectedEarningComponentId.HasValue) return;
 		if (!components.TryGetValue(selectedEarningComponentId.Value, out var selected) ||
 		    !selected.IsActive)
 		{

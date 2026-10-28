@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-27
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -28,6 +28,18 @@ __tenant: your_tenant_id_here
 
 Mutating endpoints must enforce backend authorization.
 Hidden frontend buttons are not a security boundary.
+
+## HR setup readiness
+
+`GET /api/hr/setup-readiness?academicYearId=<id>` returns `isReady`, `academicYearId`, `availableYears`, and `checks`.
+Each check contains `code`, `step`, `state`, `reason`, and `canConfigure`.
+States are `ready`, `missing`, `inactive`, `invalid`, `conflicting`, or `unknown`.
+The application service requires an active current-tenant identity and at least one existing operator action from `HrSetupPermissions.Operators`; self-service and read-only grants alone do not authorize this summary.
+The response contains configuration status and academic-year choices, without employee records, compensation amounts, or protected configuration details.
+Omitting the academic year reports year-specific checks as unknown and offers existing tenant years; a foreign or nonexistent year returns 404.
+Checks cover usable shifts, explicitly approved employee roles for both staff groups, unique active default policies and referenced calendars, valid active earnings, and at least one usable active salary template with its required dependencies.
+The read does not seed defaults, record review acknowledgements, enable schemes, or persist progress.
+Configuration writes continue through their existing authorized endpoints, and operational validation remains authoritative.
 
 ## Employee picker lookup
 

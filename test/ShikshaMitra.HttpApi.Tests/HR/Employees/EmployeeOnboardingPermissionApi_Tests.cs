@@ -37,6 +37,24 @@ public class EmployeeOnboardingPermissionApi_Tests(ShikshaMitraApiTestFactory fa
 	private static readonly Guid TenantId = Guid.Parse(TestAuthHandler.TestTenantId);
 
 	[Theory]
+	[InlineData(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.View, HttpStatusCode.OK)]
+	[InlineData(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.View, HttpStatusCode.Forbidden)]
+	[InlineData(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeOnboarding.Add, HttpStatusCode.Forbidden)]
+	[TestTier(TestTraits.Tiers.Critical)]
+	public async Task Onboarding_List_Requires_Its_Own_View_Permission(string permission, HttpStatusCode expected)
+	{
+		using var client = CreatePermissionClient(permission);
+		using var response = await client.GetAsync("/api/employee-applications?skipCount=0&maxResultCount=10");
+		response.StatusCode.ShouldBe(expected, await response.Content.ReadAsStringAsync());
+		if (expected == HttpStatusCode.OK)
+		{
+			using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+			json.RootElement.GetProperty("totalCount").GetInt64().ShouldBeGreaterThanOrEqualTo(0);
+			json.RootElement.GetProperty("items").GetArrayLength().ShouldBeLessThanOrEqualTo(10);
+		}
+	}
+
+	[Theory]
 	[InlineData(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Add)]
 	[InlineData(ShikshaMitraSubmodulePermissions.HR.Employee_EmployeeList.Edit)]
 	[TestTier(TestTraits.Tiers.Critical)]

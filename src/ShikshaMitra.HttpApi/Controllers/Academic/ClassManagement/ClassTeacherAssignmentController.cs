@@ -17,6 +17,15 @@ public class ClassTeacherAssignmentController(
 	IClassTeacherAssignmentAppService appService
 ) : AbpController
 {
+	[HttpGet("workspace")]
+	[Authorize(ShikshaMitraSubmodulePermissions.ClassManagement.ClassTeacherAssignment.View)]
+	[ProducesResponseType(typeof(ClassTeacherWorkspaceDto), 200)]
+	public async Task<IActionResult> GetWorkspaceAsync([FromQuery] Guid organizationId)
+	{
+		if (organizationId == Guid.Empty) return BadRequest(new { error = "organizationId is required" });
+		return Ok(await appService.GetWorkspaceAsync(organizationId));
+	}
+
 	[HttpGet]
 	[Authorize(ShikshaMitraSubmodulePermissions.ClassManagement.ClassTeacherAssignment.View)]
 	[ProducesResponseType(typeof(List<ClassTeacherRowDto>), 200)]

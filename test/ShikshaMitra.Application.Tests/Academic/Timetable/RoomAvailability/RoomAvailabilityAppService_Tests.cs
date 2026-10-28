@@ -18,7 +18,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
-public class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class RoomAvailabilityAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly IRoomAvailabilityAppService _roomAvailabilityAppService;
     private readonly IRepository<Room, Guid> _roomRepository;

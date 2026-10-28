@@ -26,6 +26,7 @@ This documentation is backend-first, module-first, and agent-friendly.
 ## Quick Links
 
 - [HR Module](./modules/hr/README.md)
+- [Academic setup guide](./modules/academic/README.md)
 - [Examination Module](./modules/examination/README.md)
 - [Institute Setup Module](./modules/institute-setup/README.md)
 - [Host Tenant Management](./modules/host-tenants/README.md)

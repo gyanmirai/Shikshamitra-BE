@@ -16,7 +16,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
 
-public class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class SubstitutionAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     private readonly ISubstitutionAppService _substitutionAppService;
     private readonly IRepository<SubstitutionRequest, Guid> _substitutionRepository;

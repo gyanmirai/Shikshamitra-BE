@@ -3,7 +3,7 @@ module: examination
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-19
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -23,3 +23,11 @@ git diff --check
 Before production deployment, inspect the generated migration and run the repository migration verification process.
 `ExamSeatAllocationRoomLayout_Tests.cs` extends the existing application test class with uneven-column preview/apply, invalid manual-seat rejection without modifying saved assignments, and unavailable-seat capacity checks. Domain tests preserve exact legacy partial-grid coordinates and verify that saved column counts determine physical seats.
 Acceptance requires tenant and user-scope enforcement, one plan owner per exam subject at both application and database layers, shared plans across different schedules, a fully recoverable draft, no publication with unplanned subjects, all-plan atomic publication, one publication record, post-publication immutability, one exam dashboard row, no partial replacement during apply, repeat-safe requests, truthful plan counts and capacity, and actionable validation errors.
+
+## Grade filter options
+
+`ExamGradeOptionsApi_Tests` covers the Record Marks view permission, eligible roster and tenant filtering, custom grading-scale totals, and a rare grade beyond the first 500 marked students. Run it through the HTTP API test project:
+
+```powershell
+dotnet test test/ShikshaMitra.HttpApi.Tests/ShikshaMitra.HttpApi.Tests.csproj --filter "FullyQualifiedName~ExamGradeOptionsApi_Tests"
+```

@@ -28,7 +28,7 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Academic.Examination.SeatAllocation;
 
 [RemoteService(false)]
-public class ExamSeatAllocationAppService(
+public partial class ExamSeatAllocationAppService(
     IRepository<ExamSeatAllocation, Guid> seatAllocationRepository,
     IRepository<ExamSeatingPlan, Guid> seatingPlanRepository,
     IRepository<ExamSeatingPlanSubject, Guid> seatingPlanSubjectRepository,
@@ -816,20 +816,15 @@ public class ExamSeatAllocationAppService(
             throw new UserFriendlyException("Seating plan not found for this exam.");
 
         var planIds = plans.Select(plan => plan.Id).ToHashSet();
-        var planSubjects = planIds.Count == 0
-            ? []
-            : await seatingPlanSubjectRepository.GetListAsync(subject =>
-                subject.ExamId == examId && planIds.Contains(subject.SeatingPlanId));
+        var context = await LoadSeatingReadContextAsync(exam, plans);
+        var planSubjects = context.Subjects.Where(subject => planIds.Contains(subject.SeatingPlanId)).ToList();
         var subjectIdsByPlan = planSubjects
             .GroupBy(subject => subject.SeatingPlanId)
             .ToDictionary(
                 group => group.Key,
                 group => group.Select(subject => subject.ExamSubjectId).ToHashSet());
 
-        var allocations = planIds.Count == 0
-            ? []
-            : await seatAllocationRepository.GetListAsync(allocation =>
-                allocation.ExamId == examId && planIds.Contains(allocation.SeatingPlanId));
+        var allocations = context.Allocations.Where(allocation => planIds.Contains(allocation.SeatingPlanId)).ToList();
         var allocationsByPlan = allocations
             .GroupBy(allocation => allocation.SeatingPlanId)
             .ToDictionary(group => group.Key, group => group.ToList());
@@ -837,7 +832,7 @@ public class ExamSeatAllocationAppService(
         foreach (var plan in plans)
         {
             planCounts[plan.Id] = (
-                (await GetEligibleStudentsForPlanAsync(exam, plan)).Count,
+                GetEligibleStudentIds(exam, plan, context).Count,
                 allocationsByPlan.GetValueOrDefault(plan.Id)?.Count ?? 0);
         }
 
@@ -849,22 +844,8 @@ public class ExamSeatAllocationAppService(
             ? []
             : await divisionRepository.GetListAsync(division => allDivisionIds.Contains(division.Id));
         var divisionsById = divisions.ToDictionary(division => division.Id);
-        var students = allDivisionIds.Count == 0
-            ? []
-            : await studentRepository.GetListAsync(student =>
-                student.StandardId == exam.StandardId &&
-                student.DivisionId.HasValue &&
-                allDivisionIds.Contains(student.DivisionId.Value));
-
-        var availableRoomIds = exam.ExamSubjects
-            .SelectMany(subject => subject.RoomAssignments)
-            .SelectMany(row => row.RoomIds)
-            .Concat(plans.SelectMany(plan => ParseGuidCsv(plan.RoomIdsCsv)))
-            .Distinct()
-            .ToList();
-        var rooms = availableRoomIds.Count == 0
-            ? []
-            : await roomRepository.GetListAsync(room => availableRoomIds.Contains(room.Id));
+        var students = context.Students;
+        var rooms = context.Rooms;
         var roomsById = rooms.ToDictionary(room => room.Id);
 
         var sessions = new List<SeatingPlanSessionDto>();
@@ -1213,7 +1194,7 @@ public class ExamSeatAllocationAppService(
             Plans = planGroups,
             Sessions = sessions,
             Readiness = await BuildExaminationSeatingReadinessAsync(
-                exam, publication, plans, planSubjects, subjectDtos, planCounts)
+                exam, publication, plans, planSubjects, subjectDtos, planCounts, context)
         };
     }
 
@@ -1331,18 +1312,16 @@ public class ExamSeatAllocationAppService(
         return await GetSeatingPlanWorkspaceAsync(examId, plan.Id);
     }
 
-    private async Task<ExaminationSeatingReadinessDto> BuildExaminationSeatingReadinessAsync(Exam exam)
+    private async Task<ExaminationSeatingReadinessDto> BuildExaminationSeatingReadinessAsync(Exam exam, SeatingReadContext? context = null)
     {
         var publication = await FindSeatingPublicationAsync(exam.Id);
-        var plans = await seatingPlanRepository.GetListAsync(plan => plan.ExamId == exam.Id);
+        context ??= await LoadSeatingReadContextAsync(exam);
+        var plans = context.Plans;
         var planIds = plans.Select(plan => plan.Id).ToHashSet();
-        var planSubjects = planIds.Count == 0
-            ? []
-            : await seatingPlanSubjectRepository.GetListAsync(subject =>
-                subject.ExamId == exam.Id && planIds.Contains(subject.SeatingPlanId));
+        var planSubjects = context.Subjects.Where(subject => planIds.Contains(subject.SeatingPlanId)).ToList();
         var subjectDtos = await GetExamSubjectDtosAsync(exam);
         return await BuildExaminationSeatingReadinessAsync(
-            exam, publication, plans, planSubjects, subjectDtos);
+            exam, publication, plans, planSubjects, subjectDtos, context: context);
     }
 
     private async Task<ExaminationSeatingReadinessDto> BuildExaminationSeatingReadinessAsync(
@@ -1351,8 +1330,10 @@ public class ExamSeatAllocationAppService(
         IReadOnlyList<ExamSeatingPlan> plans,
         IReadOnlyList<ExamSeatingPlanSubject> planSubjects,
         IReadOnlyList<SeatingPlanSubjectDto> subjectDtos,
-        IReadOnlyDictionary<Guid, (int total, int allocated)>? planCounts = null)
+        IReadOnlyDictionary<Guid, (int total, int allocated)>? planCounts = null,
+        SeatingReadContext? context = null)
     {
+        context ??= await LoadSeatingReadContextAsync(exam, plans, planSubjects);
         var subjectNamesById = subjectDtos.ToDictionary(subject => subject.ExamSubjectId, subject => subject.SubjectName);
         var readiness = new ExaminationSeatingReadinessDto
         {
@@ -1371,7 +1352,7 @@ public class ExamSeatAllocationAppService(
         {
             var (total, allocated) = planCounts != null
                 ? planCounts[plan.Id]
-                : await ComputeCountsAsync(exam, plan.Id);
+                : (GetEligibleStudentIds(exam, plan, context).Count, context.Allocations.Count(allocation => allocation.SeatingPlanId == plan.Id));
             readiness.TotalStudentSeats += total;
             readiness.AllocatedStudentSeats += allocated;
         }
@@ -1451,7 +1432,7 @@ public class ExamSeatAllocationAppService(
                 continue;
             }
 
-            var validation = await ValidateSeatingPlanAsync(exam.Id, plan.Id);
+            var validation = ValidateSeatingPlanFromContext(exam, plan, context);
             if (validation.IsValid)
                 readiness.ReadyPlanCount++;
 
@@ -1525,14 +1506,14 @@ public class ExamSeatAllocationAppService(
                     CurrentUser.Id ?? Guid.Empty,
                     CurrentUser.Name,
                     input.Reason,
-                    await SnapshotAssignmentsJsonAsync(examId, plan.Id)), autoSave: true);
+                    SerializeAssignmentsSnapshot(allocations.Where(allocation => allocation.SeatingPlanId == plan.Id))), autoSave: false);
             }
 
             if (allocations.Count > 0)
-                await seatAllocationRepository.DeleteManyAsync(allocations, autoSave: true);
+                await seatAllocationRepository.DeleteManyAsync(allocations, autoSave: false);
             if (subjects.Count > 0)
-                await seatingPlanSubjectRepository.DeleteManyAsync(subjects, autoSave: true);
-            await seatingPlanRepository.DeleteManyAsync(plans, autoSave: true);
+                await seatingPlanSubjectRepository.DeleteManyAsync(subjects, autoSave: false);
+            await seatingPlanRepository.DeleteManyAsync(plans, autoSave: false);
         }
 
         await CurrentUnitOfWork!.SaveChangesAsync();
@@ -1548,7 +1529,8 @@ public class ExamSeatAllocationAppService(
         if (await FindSeatingPublicationAsync(examId) != null)
             return await GetSeatingPlanWorkspaceAsync(examId);
 
-        var readiness = await BuildExaminationSeatingReadinessAsync(exam);
+        var context = await LoadSeatingReadContextAsync(exam);
+        var readiness = await BuildExaminationSeatingReadinessAsync(exam, context);
         if (!readiness.IsReadyToPublish)
         {
             var blockerSummary = string.Join(
@@ -1561,7 +1543,7 @@ public class ExamSeatAllocationAppService(
             };
         }
 
-        var plans = await seatingPlanRepository.GetListAsync(plan => plan.ExamId == examId);
+        var plans = context.Plans.ToList();
         var now = DateTime.UtcNow;
         var userId = CurrentUser.Id ?? Guid.Empty;
         foreach (var plan in plans)
@@ -1580,19 +1562,19 @@ public class ExamSeatAllocationAppService(
                 userId,
                 CurrentUser.Name,
                 "Published with the complete examination seating arrangement.",
-                await SnapshotAssignmentsJsonAsync(examId, plan.Id)), autoSave: true);
+                SerializeAssignmentsSnapshot(context.Allocations.Where(allocation => allocation.SeatingPlanId == plan.Id))), autoSave: false);
         }
-        await seatingPlanRepository.UpdateManyAsync(plans, autoSave: true);
+        await seatingPlanRepository.UpdateManyAsync(plans, autoSave: false);
 
         await seatingPublicationRepository.InsertAsync(new ExamSeatingPublication(
             guidGenerator.Create(),
             CurrentTenant.Id,
             examId,
             now,
-            userId), autoSave: true);
+            userId), autoSave: false);
 
-        await seatingPlanNotifier.NotifyAsync(examId, input);
         await CurrentUnitOfWork!.SaveChangesAsync();
+        await seatingPlanNotifier.NotifyAsync(examId, input);
         return await GetSeatingPlanWorkspaceAsync(examId);
     }
 
@@ -1603,16 +1585,20 @@ public class ExamSeatAllocationAppService(
     /// </summary>
     public async Task<SeatingValidationResponseDto> ValidateSeatingPlanAsync(Guid examId, Guid? seatingPlanId = null)
     {
-        var blockers = new List<SeatingValidationIssueDto>();
-        var warnings = new List<SeatingValidationIssueDto>();
         var exam = await GetScopedExamAsync(examId);
         var plan = await ResolvePlanAsync(exam, seatingPlanId);
+        return ValidateSeatingPlanFromContext(exam, plan, await LoadSeatingReadContextAsync(exam));
+    }
 
-        var rooms = await GetRoomsInScopeAsync(examId, plan.Id);
+    private static SeatingValidationResponseDto ValidateSeatingPlanFromContext(Exam exam, ExamSeatingPlan plan, SeatingReadContext context)
+    {
+        var blockers = new List<SeatingValidationIssueDto>();
+        var warnings = new List<SeatingValidationIssueDto>();
+        var roomIds = ParseGuidCsv(plan.RoomIdsCsv).ToHashSet();
+        var rooms = context.Rooms.Where(room => roomIds.Contains(room.Id)).ToList();
         var roomsById = rooms.ToDictionary(r => r.Id);
-        var allocations = await seatAllocationRepository.GetListAsync(a => a.ExamId == examId && a.SeatingPlanId == plan.Id);
-        var eligibleStudents = await GetEligibleStudentsForPlanAsync(exam, plan);
-        var eligibleStudentIds = eligibleStudents.Select(s => s.Id).ToHashSet();
+        var allocations = context.Allocations.Where(allocation => allocation.SeatingPlanId == plan.Id).ToList();
+        var eligibleStudentIds = GetEligibleStudentIds(exam, plan, context);
 
         if (eligibleStudentIds.Count == 0)
             blockers.Add(new SeatingValidationIssueDto { Code = "NO_ELIGIBLE_STUDENTS", Message = "This seating plan has no eligible students." });
@@ -1712,10 +1698,9 @@ public class ExamSeatAllocationAppService(
         }
 
         // Same room/seat reused by another seating plan whose subjects run at the same time.
-        var currentPlanSubjectIds = (await GetPlanSubjectsAsync(plan.Id)).Select(s => s.ExamSubjectId).ToList();
+        var currentPlanSubjectIds = context.Subjects.Where(subject => subject.SeatingPlanId == plan.Id).Select(subject => subject.ExamSubjectId).ToList();
         var examSubjectsById = exam.ExamSubjects.ToDictionary(s => s.Id);
-        var otherPlanSubjects = await seatingPlanSubjectRepository.GetListAsync(s =>
-            s.ExamId == examId && s.SeatingPlanId != plan.Id);
+        var otherPlanSubjects = context.Subjects.Where(subject => subject.SeatingPlanId != plan.Id).ToList();
         var overlappingPlanIds = otherPlanSubjects
             .GroupBy(s => s.SeatingPlanId)
             .Where(group => PlanSchedulesOverlap(
@@ -1727,9 +1712,8 @@ public class ExamSeatAllocationAppService(
 
         if (overlappingPlanIds.Count > 0)
         {
-            var otherAllocations = await seatAllocationRepository.GetListAsync(a =>
-                a.ExamId == examId && overlappingPlanIds.Contains(a.SeatingPlanId));
-            var relatedPlans = await seatingPlanRepository.GetListAsync(plan => overlappingPlanIds.Contains(plan.Id));
+            var otherAllocations = context.Allocations.Where(allocation => overlappingPlanIds.Contains(allocation.SeatingPlanId)).ToList();
+            var relatedPlans = context.Plans.Where(relatedPlan => overlappingPlanIds.Contains(relatedPlan.Id)).ToList();
             var relatedPlansById = relatedPlans.ToDictionary(plan => plan.Id);
             var currentSeatKeys = allocations
                 .GroupBy(a => (a.RoomId, a.SeatNumber))
@@ -1807,6 +1791,11 @@ public class ExamSeatAllocationAppService(
     private async Task<string> SnapshotAssignmentsJsonAsync(Guid examId, Guid seatingPlanId)
     {
         var allocations = await seatAllocationRepository.GetListAsync(a => a.ExamId == examId && a.SeatingPlanId == seatingPlanId);
+        return SerializeAssignmentsSnapshot(allocations);
+    }
+
+    private static string SerializeAssignmentsSnapshot(IEnumerable<ExamSeatAllocation> allocations)
+    {
         var snapshot = allocations.Select(a => new { a.StudentId, a.RoomId, a.SeatNumber, a.BenchId });
         return System.Text.Json.JsonSerializer.Serialize(snapshot);
     }

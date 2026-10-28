@@ -26,12 +26,13 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// Application service for Subject Assignment operations
 /// </summary>
 [RemoteService(IsEnabled = false)]
-public class SubjectAssignmentAppService(
+public partial class SubjectAssignmentAppService(
 	IRepository<AssignedSubject, Guid> assignmentRepository,
 	IRepository<Subject, Guid> subjectRepository,
 	IRepository<ElectiveGroup, Guid> electiveGroupRepository,
 	IGuidGenerator guidGenerator,
 	IIdentityUserRepository userRepository,
+	IRepository<IdentityUser, Guid> identityUserQueryRepository,
 	ILogger<SubjectAssignmentAppService> logger,
 	IWeeklyLectureSlotRepository weeklyLectureSlotRepository,
 	ITimetableRepository timetableRepository,
@@ -197,7 +198,7 @@ public class SubjectAssignmentAppService(
 		Guid? divisionId = null
 	)
 	{
-		var query = await assignmentRepository.WithDetailsAsync(a => a.Chapters, a => a.Teachers);
+		var query = await assignmentRepository.GetQueryableAsync();
 		var hasTenantWideScope = await userScopeAccessService.CurrentUserHasTenantWideScopeAsync();
 		var hasClassTeacherAccess = await HasClassTeacherAccessAsync();
 		var reportingEmployeeIds = CurrentUser.Id.HasValue
@@ -272,10 +273,34 @@ public class SubjectAssignmentAppService(
 			query = query.Where(a => a.Status == SubjectStatus.Published);
 		}
 
-		// Non-admin users only see subjects they are personally assigned to teach.
-		var assignments = await AsyncExecuter.ToListAsync(query);
+		var groupKeys = await GetAssignmentListGroupKeysAsync(query, teacherSearch);
+		var totalCount = groupKeys.Count;
+		var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
+		var selectedIds = groupKeys.Skip(page * pageSize).Take(pageSize).SelectMany(ids => ids).ToList();
+		if (selectedIds.Count == 0)
+		{
+			return new SubjectAssignmentPagedResponse
+			{
+				TotalCount = totalCount,
+				CurrentPage = page,
+				PageSize = pageSize,
+				TotalPages = totalPages,
+				Items = []
+			};
+		}
+
+		var pageQuery = query.Where(assignment => selectedIds.Contains(assignment.Id));
+		var chapterCounts = (await AsyncExecuter.ToListAsync(pageQuery.Select(assignment => new
+		{
+			assignment.Id,
+			Count = assignment.Chapters.Count()
+		}))).ToDictionary(assignment => assignment.Id, assignment => assignment.Count);
+		var assignmentQuery = await assignmentRepository.WithDetailsAsync(a => a.Teachers);
+		var pageAssignmentIds = pageQuery.Select(assignment => assignment.Id);
+		var assignments = await AsyncExecuter.ToListAsync(assignmentQuery
+			.Where(assignment => pageAssignmentIds.Contains(assignment.Id)).OrderBy(assignment => assignment.Id));
 		var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(classId);
-		var readMetrics = BuildSubjectAssignmentReadMetrics(assignments, weeklySlot);
+		var readMetrics = BuildSubjectAssignmentReadMetrics(assignments, weeklySlot, chapterCounts);
 
 		// Group assignments
 		var groupedAssignments = new List<SubjectAssignmentGroupDto>();
@@ -311,14 +336,14 @@ public class SubjectAssignmentAppService(
 			.ToDictionary(s => s.ElectiveGroupId!.Value, s => s.WeeklyLectures)
 			?? new Dictionary<Guid, int>();
 
-		// Count already-placed timetable slots per subject for this class
-		var timetables = await timetableRepository.GetByStandardIdAsync(classId);
-		var occupiedBySubject = timetables
-			.SelectMany(t => t.Slots)
-			.SelectMany(s => s.Subjects)
-			.GroupBy(ss => ss.SubjectId)
-			.ToDictionary(g => g.Key, g => g.Count());
-		var usage = await LoadAssignmentListUsageAsync(classId, subjectIds, electiveGroupIds, timetables);
+		var timetableQuery = (await timetableRepository.GetQueryableAsync()).Where(timetable => timetable.StandardId == classId);
+		var occupiedBySubject = (await AsyncExecuter.ToListAsync(timetableQuery
+			.SelectMany(timetable => timetable.Slots).SelectMany(slot => slot.Subjects)
+			.Where(subject => subjectIds.Contains(subject.SubjectId))
+			.GroupBy(subject => subject.SubjectId)
+			.Select(group => new { SubjectId = group.Key, Count = group.Count() })))
+			.ToDictionary(group => group.SubjectId, group => group.Count);
+		var usage = await LoadAssignmentListUsageAsync(classId, subjectIds, electiveGroupIds, occupiedBySubject);
 
 		// Bulk-load every assigned teacher once for the flat teacher list and legacy primary fields.
 		var allAssignmentTeacherIds = assignments
@@ -326,18 +351,7 @@ public class SubjectAssignmentAppService(
 			.Select(t => t.TeacherId)
 			.Distinct()
 			.ToList();
-		var teacherNamesDict = allAssignmentTeacherIds.Count > 0
-			? (await userRepository.GetListByIdsAsync(allAssignmentTeacherIds))
-				.ToDictionary(u => u.Id, u => $"{u.Name} {u.Surname}".Trim())
-			: new Dictionary<Guid, string>();
-		var teacherDisplayNamesDict = allAssignmentTeacherIds.Count > 0
-			? (await employeeRepository.GetListAsync(employee => allAssignmentTeacherIds.Contains(employee.Id)))
-				.ToDictionary(
-					employee => employee.Id,
-					employee => string.IsNullOrWhiteSpace(employee.EmployeeCode)
-						? employee.EmployeeName
-						: $"{employee.EmployeeCode} - {employee.EmployeeName}")
-			: new Dictionary<Guid, string>();
+		var (teacherNamesDict, teacherDisplayNamesDict) = await LoadAssignmentListTeacherNamesAsync(allAssignmentTeacherIds);
 
 		foreach (var coreAssignment in coreSubjects)
 		{
@@ -363,7 +377,7 @@ public class SubjectAssignmentAppService(
 			var usageParts = BuildAssignmentUsageParts(usage,
 				new[] { coreAssignment.SubjectId },
 				coreAssignment.ElectiveGroupId,
-				coreAssignment.Chapters.Count);
+				chapterCounts.GetValueOrDefault(coreAssignment.Id));
 
 			groupedAssignments.Add(new SubjectAssignmentGroupDto
 			{
@@ -375,7 +389,7 @@ public class SubjectAssignmentAppService(
 				OccupiedSlots = occupiedSlots,
 				UnoccupiedSlots = totalSlots - occupiedSlots,
 				SetupHealthScore = metrics.SetupHealthScore,
-				ChaptersCount = coreAssignment.Chapters.Count,
+				ChaptersCount = chapterCounts.GetValueOrDefault(coreAssignment.Id),
 				WeeklyPeriods = metrics.WeeklyPeriods,
 				PrimaryTeacherId = primaryTeacherEntry?.TeacherId.ToString(),
 				PrimaryTeacherName = primaryTeacherNames.FirstOrDefault(),
@@ -431,7 +445,7 @@ public class SubjectAssignmentAppService(
 			var usageParts = BuildAssignmentUsageParts(usage,
 				subjectIdsInGroup,
 				first.ElectiveGroupId,
-				group.Sum(a => a.Chapters.Count));
+				group.Sum(a => chapterCounts.GetValueOrDefault(a.Id)));
 
 			groupedAssignments.Add(new SubjectAssignmentGroupDto
 			{
@@ -445,7 +459,7 @@ public class SubjectAssignmentAppService(
 				OccupiedSlots = electiveOccupiedSlots,
 				UnoccupiedSlots = electiveTotalSlots - electiveOccupiedSlots,
 				SetupHealthScore = avgHealth,
-				ChaptersCount = group.Sum(a => a.Chapters.Count),
+				ChaptersCount = group.Sum(a => chapterCounts.GetValueOrDefault(a.Id)),
 				WeeklyPeriods = groupMetrics.FirstOrDefault()?.WeeklyPeriods ?? first.WeeklyPeriods,
 				PrimaryTeacherId = firstPrimary?.TeacherId.ToString(),
 				PrimaryTeacherName = primaryTeacherNames.FirstOrDefault(),
@@ -473,32 +487,13 @@ public class SubjectAssignmentAppService(
 			});
 		}
 
-		var normalizedTeacherSearch = teacherSearch?.Trim();
-		if (!string.IsNullOrWhiteSpace(normalizedTeacherSearch))
-		{
-			groupedAssignments = groupedAssignments
-				.Where(a =>
-					a.TeacherNames.Concat(a.PrimaryTeacherNames).Any(name =>
-						name.Contains(normalizedTeacherSearch, StringComparison.OrdinalIgnoreCase)))
-				.ToList();
-		}
-
-		// Pagination
-		var totalCount = groupedAssignments.Count;
-		var totalPages = (int) Math.Ceiling(totalCount / (double) pageSize);
-
-		var pagedItems = groupedAssignments
-			.Skip(page * pageSize)
-			.Take(pageSize)
-			.ToList();
-
 		return new SubjectAssignmentPagedResponse
 		{
 			TotalCount = totalCount,
 			CurrentPage = page,
 			PageSize = pageSize,
 			TotalPages = totalPages,
-			Items = pagedItems
+			Items = groupedAssignments
 		};
 	}
 
@@ -1823,7 +1818,7 @@ public class SubjectAssignmentAppService(
 		Guid standardId,
 		List<Guid> subjectIds,
 		List<Guid> electiveGroupIds,
-		IReadOnlyCollection<ShikshaMitra.Academic.Timetable.Timetables.Timetable> timetables)
+		Dictionary<Guid, int> timetableSubjectCounts)
 	{
 		var subjectOrGroupIds = subjectIds.Concat(electiveGroupIds).Distinct().ToList();
 		var examQuery = await examRepository.GetQueryableAsync();
@@ -1838,10 +1833,16 @@ public class SubjectAssignmentAppService(
 		var assignmentCounts = await AsyncExecuter.ToListAsync(assignmentQuery
 			.Where(assignment => assignment.StandardId == standardId && subjectIds.Contains(assignment.SubjectId))
 			.GroupBy(assignment => assignment.SubjectId).Select(group => new { SubjectId = group.Key, Count = group.Count() }));
-		var slots = timetables.SelectMany(timetable => timetable.Slots).ToList();
+		var timetableQuery = await timetableRepository.GetQueryableAsync();
+		var timetableGroups = await AsyncExecuter.ToListAsync(timetableQuery
+			.Where(timetable => timetable.StandardId == standardId)
+			.SelectMany(timetable => timetable.Slots)
+			.Where(slot => slot.ElectiveGroupId.HasValue && electiveGroupIds.Contains(slot.ElectiveGroupId.Value))
+			.GroupBy(slot => slot.ElectiveGroupId!.Value)
+			.Select(group => new { GroupId = group.Key, Count = group.Count() }));
 		return new AssignmentListUsage(
-			slots.SelectMany(slot => slot.Subjects).GroupBy(subject => subject.SubjectId).ToDictionary(group => group.Key, group => group.Count()),
-			slots.Where(slot => slot.ElectiveGroupId.HasValue).GroupBy(slot => slot.ElectiveGroupId!.Value).ToDictionary(group => group.Key, group => group.Count()),
+			timetableSubjectCounts,
+			timetableGroups.ToDictionary(group => group.GroupId, group => group.Count),
 			examSubjects.ToLookup(subject => subject.SubjectId, subject => subject.ExamId),
 			homeworkCounts.ToDictionary(group => group.SubjectId, group => group.Count),
 			assignmentCounts.ToDictionary(group => group.SubjectId, group => group.Count));
@@ -2112,7 +2113,8 @@ public class SubjectAssignmentAppService(
 	}
 
 	private static Dictionary<Guid, SubjectAssignmentReadMetrics> BuildSubjectAssignmentReadMetrics(
-		IReadOnlyCollection<AssignedSubject> assignments, WeeklyLectureSlot? weeklySlot)
+		IReadOnlyCollection<AssignedSubject> assignments, WeeklyLectureSlot? weeklySlot,
+		IReadOnlyDictionary<Guid, int>? chapterCounts = null)
 	{
 		var weeklyLecturesBySubject = weeklySlot?.Subjects
 			.Where(s => s.SubjectId.HasValue)
@@ -2133,7 +2135,7 @@ public class SubjectAssignmentAppService(
 
 				return new SubjectAssignmentReadMetrics(
 					weeklyPeriods,
-					CalculateSetupHealthScore(a, weeklyPeriods));
+					CalculateSetupHealthScore(a, weeklyPeriods, chapterCounts?.GetValueOrDefault(a.Id)));
 			});
 	}
 
@@ -2146,7 +2148,7 @@ public class SubjectAssignmentAppService(
 			: SubjectAssignmentReadMetrics.FromAssignment(assignment);
 	}
 
-	private static int CalculateSetupHealthScore(AssignedSubject assignment, int weeklyPeriods)
+	private static int CalculateSetupHealthScore(AssignedSubject assignment, int weeklyPeriods, int? chapterCount = null)
 	{
 		var score = 0;
 		if (!string.IsNullOrWhiteSpace(assignment.SubjectCode)) score += 10;
@@ -2155,8 +2157,8 @@ public class SubjectAssignmentAppService(
 		if (HasMeaningfulContent(assignment.LearningGoals)) score += 15;
 		if (HasMeaningfulContent(assignment.Description)) score += 5;
 		if (HasMeaningfulContent(assignment.Prerequisites)) score += 5;
-		if (assignment.Chapters.Count > 0) score += 15;
-		if (assignment.Chapters.Count >= 3) score += 10;
+		if ((chapterCount ?? assignment.Chapters.Count) > 0) score += 15;
+		if ((chapterCount ?? assignment.Chapters.Count) >= 3) score += 10;
 		if (weeklyPeriods > 0) score += 5;
 		if (assignment.Documents.Count > 0) score += 5;
 

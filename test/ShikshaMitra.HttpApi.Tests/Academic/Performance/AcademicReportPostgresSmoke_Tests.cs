@@ -8,8 +8,14 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.Academic.Curriculum;
+using ShikshaMitra.Academic.Audit;
+using ShikshaMitra.Academic.Syllabus;
+using ShikshaMitra.Academic.StudentAcademic360;
+using ShikshaMitra.Academic.Dashboard;
+using ShikshaMitra.Academic.Timetable.RoomAvailability;
 using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Academic.Examination.Exams;
+using ShikshaMitra.Academic.Examination.Exams.Dtos;
 using ShikshaMitra.Academic.Examination.Results;
 using ShikshaMitra.Academic.Examination.Settings;
 using ShikshaMitra.Academic.Homework;
@@ -69,6 +75,19 @@ public sealed class AcademicReportPostgresSmoke_Tests(ITestOutputHelper output)
         (await scopedStudents.CountAsync()).ShouldBe(2, "The persisted report-user scope must authorize both smoke students.");
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(5));
         var generator = services.GetRequiredService<AcademicReportGenerator>();
+        var examService = services.GetRequiredService<IExamAppService>();
+        var scheduleDate = await db.Set<ExamSubject>().Where(subject => subject.ExamId == fixture.ExamId)
+            .Select(subject => subject.ExamDate!.Value).FirstAsync();
+        var examPage = await examService.GetListAsync(new GetExamsInput
+        {
+            AcademicMediumId = factory.SeededMediumId, StandardId = factory.SeededStandardId,
+            DivisionId = fixture.DivisionId, Status = ExamStatus.Completed,
+            StartDate = new DateTimeOffset(scheduleDate.Date, TimeSpan.Zero),
+            EndDate = new DateTimeOffset(scheduleDate.Date.AddDays(1).AddTicks(-1), TimeSpan.Zero),
+            MaxResultCount = 2
+        });
+        examPage.Items.ShouldContain(exam => exam.ExamId == fixture.ExamId && exam.Status == ExamStatus.Completed);
+        examPage.CompletedCount.ShouldBeGreaterThanOrEqualTo(1);
         var kinds = typeof(AcademicReportTypes).GetFields(BindingFlags.Public | BindingFlags.Static)
             .Where(field => field.IsLiteral && field.FieldType == typeof(string)).Select(field => (string)field.GetRawConstantValue()!).ToList();
         kinds.Count.ShouldBe(68);
@@ -85,14 +104,44 @@ public sealed class AcademicReportPostgresSmoke_Tests(ITestOutputHelper output)
                 }, userId, tenantId, cancellation.Token, batchSize: 1);
                 export.Metadata.Columns.ShouldNotBeEmpty(kind);
                 var rows = 0;
+                var leadingRows = new List<Dictionary<string, string?>>();
                 await foreach (var row in export.Rows.WithCancellation(cancellation.Token))
                 {
                     row.ShouldNotBeNull(kind);
+                    if (leadingRows.Count < 2) leadingRows.Add(row);
                     row.Values.ShouldAllBe(value => value != "NaN" && value != "Infinity" && value != "NaN%" && value != "Infinity%", kind);
                     (++rows).ShouldBeLessThan(1000, kind);
                 }
                 totalRows += rows;
                 output.WriteLine($"Static {kind}: {rows} rows");
+                if (kind is AcademicReportTypes.ChapterProgressReport or AcademicReportTypes.SubjectPrimaryTeacherReport
+                    or AcademicReportTypes.SubjectWiseChapterCoverage or AcademicReportTypes.ChapterDescriptionSummary
+                    or AcademicReportTypes.TimelineReport or AcademicReportTypes.ClassWiseChapterAssignment
+                    or AcademicReportTypes.CurriculumCompletionReport or AcademicReportTypes.ChapterRevisionTracker
+                    or AcademicReportTypes.ClasswiseTimetable or AcademicReportTypes.TeacherwiseTimetable
+                    or AcademicReportTypes.RoomUtilizationReport or AcademicReportTypes.SubjectwiseTimetableDistribution
+                    or AcademicReportTypes.FreePeriodsReport or AcademicReportTypes.TimetableChangeLog ||
+                    AcademicReportGenerator.IsExamScopedReport(kind) ||
+                    kind is AcademicReportTypes.StudentAllBatchResult or AcademicReportTypes.StudentAllExamResult)
+                {
+                    foreach (var page in new[] { 1, 2, 999 })
+                    {
+                        var preview = await generator.GenerateAsync(new AcademicReportRequestDto
+                        {
+                            ReportType = kind, Page = page, PageSize = 1,
+                            Filters = new() { ExamId = fixture.ExamId, ClassIds = [factory.SeededStandardId],
+                                DivisionIds = [fixture.DivisionId], StudentIds = studentIds }
+                        }, userId, tenantId, exportAllRows: false);
+                        preview.TotalCount.ShouldBe(rows, kind);
+                        preview.Columns.Select(column => (column.Id, column.Label))
+                            .ShouldBe(export.Metadata.Columns.Select(column => (column.Id, column.Label)), kind);
+                        var expectedRows = kind is AcademicReportTypes.ExamSummaryReport or AcademicReportTypes.ResultListPassFailOverallAnalysis
+                            ? leadingRows.Take(1).ToList() : leadingRows.Skip(page - 1).Take(1).ToList();
+                        preview.Rows.Count.ShouldBe(expectedRows.Count, kind);
+                        for (var index = 0; index < expectedRows.Count; index++)
+                            foreach (var cell in expectedRows[index]) preview.Rows[index][cell.Key].ShouldBe(cell.Value, kind);
+                    }
+                }
             }
             catch (Exception exception) { throw new InvalidOperationException($"PostgreSQL static export failed: {kind}", exception); }
         }
@@ -127,6 +176,42 @@ public sealed class AcademicReportPostgresSmoke_Tests(ITestOutputHelper output)
             }
             catch (Exception exception) { throw new InvalidOperationException($"PostgreSQL dynamic dataset failed: {dataset.Id}", exception); }
         }
+        async Task CheckReadAsync(string name, Func<Task> read)
+        {
+            try { await read(); output.WriteLine($"Visible UI read translated: {name}"); }
+            catch (Exception exception) { throw new InvalidOperationException($"PostgreSQL visible UI read failed: {name}", exception); }
+        }
+        await CheckReadAsync("subject lookup", async () => { _ = await services.GetRequiredService<ISubjectAppService>().GetLookupAsync(factory.SeededMediumId); });
+        await CheckReadAsync("subject allocation page", async () => { _ = await services.GetRequiredService<ISubjectAssignmentAppService>().GetListAsync(factory.SeededStandardId, 1, 2); });
+        var chapterSubjectId = await db.Set<AssignedSubject>().Where(subject => subject.StandardId == factory.SeededStandardId).Select(subject => subject.SubjectId).FirstAsync();
+        await CheckReadAsync("chapter lookup", async () => { _ = await services.GetRequiredService<IChapterAppService>().GetLookupAsync(factory.SeededStandardId, chapterSubjectId, fixture.DivisionId); });
+        await CheckReadAsync("chapter linked statuses", async () => { _ = await services.GetRequiredService<IChapterAppService>().GetByStandardAndSubjectAsync(factory.SeededStandardId, chapterSubjectId, fixture.DivisionId); });
+        await CheckReadAsync("lesson workspace", async () => { _ = await services.GetRequiredService<ILessonPlanAppService>().GetWorkspaceAsync(new GetLessonPlanWorkspaceInput
+            { AcademicYearId = fixture.AcademicYearId, AcademicMediumId = factory.SeededMediumId, MaxResultCount = 2 }); });
+        await CheckReadAsync("academic audit page", async () => { _ = await services.GetRequiredService<IAcademicAuditTrailAppService>().GetListAsync(new AcademicAuditEventListRequestDto
+            { AcademicMediumId = factory.SeededMediumId, MaxResultCount = 2 }); });
+        var roomReads = services.GetRequiredService<IRoomAvailabilityAppService>();
+        var uiDate = DateTime.SpecifyKind(scheduleDate.Date, DateTimeKind.Unspecified);
+        await CheckReadAsync("room reservation page", async () => { _ = await roomReads.GetReservationsPageAsync(new GetRoomReservationsPageInputDto
+            { CreatedDate = uiDate, SearchTerm = "28-10-2026", SearchColumns = ["date", "createdAt"], Sorting = "createdAt desc", MaxResultCount = 2 }); });
+        await CheckReadAsync("room reservation badge", async () => { _ = await roomReads.GetReservationSummaryAsync(new GetReservationsInputDto { CreatedDate = uiDate }); });
+        await CheckReadAsync("room audit page", async () => { _ = await roomReads.GetAuditLogsPageAsync(new GetRoomAuditLogsInputDto { FromDate = uiDate, ToDate = uiDate, MaxResultCount = 2 }); });
+        await CheckReadAsync("room availability", async () => { _ = await roomReads.GetAvailabilityAsync(new RoomAvailabilityFilterDto { Date = uiDate }); });
+        var academic360 = services.GetRequiredService<IStudentAcademic360AppService>();
+        await CheckReadAsync("student 360 page and cohort summary", async () =>
+        {
+            var page = await academic360.GetListAsync(new GetStudentAcademic360ListInput
+            {
+                AcademicYearId = fixture.AcademicYearId, BoardId = factory.SeededBoardId, EducationMediumId = factory.SeededMediumId,
+                StandardId = factory.SeededStandardId, DivisionId = fixture.DivisionId, MaxResultCount = 2
+            });
+            page.Items.ShouldContain(item => studentIds.Contains(item.StudentId));
+        });
+        await CheckReadAsync("student 360 bounded detail", async () => { _ = await academic360.GetAsync(studentIds[0], new StudentAcademic360Input
+            { AcademicYearId = fixture.AcademicYearId, DetailPaging = true, TaskMaxResultCount = 20, ExamMaxResultCount = 10 }); });
+        var dashboard = services.GetRequiredService<IAcademicDashboardAppService>();
+        await CheckReadAsync("principal operations section", async () => { _ = await dashboard.GetPrincipalOperationsAsync(); });
+        await CheckReadAsync("teacher assessment section", async () => { _ = await dashboard.GetTeacherAssessmentAsync(); });
         await uow.CompleteAsync(cancellation.Token);
     }
 

@@ -52,17 +52,31 @@ public partial class AcademicDashboardAppService
 
     public async Task<PrincipalAcademicDashboardOperationsDto> GetPrincipalOperationsAsync()
     {
-        var overview = await BuildPrincipalDashboardAsync(
-            includeAnalytics: false, includePerformance: false);
-        return new PrincipalAcademicDashboardOperationsDto
+        var overview = await ReadDashboardSectionAggregatesAsync(teacherScope: false);
+        var result = new PrincipalAcademicDashboardOperationsDto
         {
-            ReadinessRate = overview.ReadinessRate,
-            EvaluationLag = overview.EvaluationLag,
+            ReadinessRate = overview.ReadinessItems.Count > 0
+                ? (int)Math.Round(overview.ReadinessItems.Average(item => item.TotalCount == 0
+                    ? 0 : (double)item.CompletedCount / item.TotalCount * 100)) : 0,
+            EvaluationLag = overview.PendingEvaluations > 0
+                ? $"{overview.PendingEvaluations} pending" : "No pending evaluations",
             UpcomingExams = overview.UpcomingExams,
-            Insights = overview.Insights,
             ReadinessItems = overview.ReadinessItems,
             ActionCenterItems = overview.ActionCenterItems,
             DataHealthItems = overview.DataHealthItems
         };
+        if (overview.PendingEvaluations > 10)
+        {
+            result.Insights.Add(new AcademicDashboardInsightDto
+            {
+                Title = $"{overview.PendingEvaluations} homework evaluations pending review",
+                Summary = "Some teachers have pending assessments older than expected.",
+                Severity = "warning",
+                Source = "evaluations",
+                ActionLabel = "Assessment portal",
+                ActionHref = "/academic/gradingAndFeedback"
+            });
+        }
+        return result;
     }
 }

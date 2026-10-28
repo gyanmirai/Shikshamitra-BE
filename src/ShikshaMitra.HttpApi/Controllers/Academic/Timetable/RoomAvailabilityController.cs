@@ -30,6 +30,15 @@ public class RoomAvailabilityController(IRoomAvailabilityAppService service) : S
         return await _service.GetReservationsAsync(input);
     }
 
+    [HttpGet("room-reservations/page")]
+    public Task<RoomReservationPageResultDto> GetReservationsPageAsync([FromQuery] GetRoomReservationsPageInputDto input) => _service.GetReservationsPageAsync(input);
+
+    [HttpGet("room-reservations/summary")]
+    public Task<RoomReservationSummaryDto> GetReservationSummaryAsync([FromQuery] GetReservationsInputDto input) => _service.GetReservationSummaryAsync(input);
+
+    [HttpGet("room-availability/audit-logs/page")]
+    public Task<Volo.Abp.Application.Dtos.PagedResultDto<RoomAuditLogDto>> GetAuditLogsPageAsync([FromQuery] GetRoomAuditLogsInputDto input) => _service.GetAuditLogsPageAsync(input);
+
     [HttpPost]
     [Route("room-reservations/check-conflicts")]
     public async Task<ConflictCheckResultDto> CheckConflictsAsync([FromBody] CheckConflictRequestDto input)

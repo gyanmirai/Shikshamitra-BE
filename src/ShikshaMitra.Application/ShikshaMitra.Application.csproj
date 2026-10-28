@@ -63,7 +63,10 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Common\PDF\Fonts\NotoSansGujarati.ttf" LogicalName="ShikshaMitra.Pdf.Fonts.NotoSansGujarati.ttf" />
+    <EmbeddedResource Include="Common\PDF\Fonts\NotoSansDevanagari-Regular.ttf" LogicalName="ShikshaMitra.Pdf.Fonts.NotoSansDevanagari-Regular.ttf" />
+    <EmbeddedResource Include="Common\PDF\Fonts\NotoSansDevanagari-Bold.ttf" LogicalName="ShikshaMitra.Pdf.Fonts.NotoSansDevanagari-Bold.ttf" />
     <Content Include="Common\PDF\Fonts\OFL-NotoSansGujarati.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Common\PDF\Fonts\NotoSansDevanagari-OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

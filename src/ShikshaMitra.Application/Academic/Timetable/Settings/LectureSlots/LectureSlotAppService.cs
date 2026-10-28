@@ -18,7 +18,7 @@ namespace ShikshaMitra.Academic.Timetable.Settings.LectureSlots;
 
 [RemoteService(IsEnabled = false)]
 [Authorize]
-public class LectureSlotAppService(
+public partial class LectureSlotAppService(
     ILectureSlotConfigRepository lectureSlotConfigRepository,
     ITimetableRepository timetableRepository,
     IRepository<Standard, Guid> standardRepository,
@@ -33,39 +33,27 @@ public class LectureSlotAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsLectureSlots.View)]
     public async Task<PagedResultDto<LectureSlotListDto>> GetByMediumAsync(GetLectureSlotsByMediumInput input)
     {
-        // Load all standards under the requested medium for name lookup
         var standardQueryable = await standardRepository.GetQueryableAsync();
-        var allStandards = await AsyncExecuter.ToListAsync(
-            standardQueryable.Where(s => s.EducationMediumStage.EducationMediumId == input.AcademicMediumId));
-
-        var standardIds = allStandards.Select(s => s.Id).ToList();
-
-        // Query configs (which represent "created lecture slots") for those standards
-        var configsQueryable = await lectureSlotConfigRepository.WithDetailsAsync();
-        var allConfigs = await AsyncExecuter.ToListAsync(
-            configsQueryable.Where(c => standardIds.Contains(c.StandardId)));
-
-        // Apply optional search filter on standard name
+        var standardNames = await AsyncExecuter.ToListAsync(standardQueryable
+            .Where(s => s.EducationMediumStage.EducationMediumId == input.AcademicMediumId).Select(s => new { s.Id, s.Name }));
         if (!string.IsNullOrWhiteSpace(input.Search))
-        {
-            var matchingStandardIds = allStandards
-                .Where(s => s.Name.Contains(input.Search, StringComparison.OrdinalIgnoreCase))
-                .Select(s => s.Id)
-                .ToHashSet();
-            allConfigs = allConfigs.Where(c => matchingStandardIds.Contains(c.StandardId)).ToList();
-        }
-
-        var totalCount = allConfigs.Count;
-        var pagedConfigs = allConfigs
-            .OrderBy(c => allStandards.First(s => s.Id == c.StandardId).Name)
-            .Skip(input.SkipCount)
-            .Take(input.MaxResultCount)
-            .ToList();
-
-        var standardsDict = allStandards.ToDictionary(s => s.Id, s => s.Name);
-        var shiftInfos = await LoadClassShiftInfosAsync(allStandards);
+            standardNames = standardNames.Where(s => s.Name.Contains(input.Search, StringComparison.OrdinalIgnoreCase)).ToList();
+        var standardsDict = standardNames.ToDictionary(s => s.Id, s => s.Name);
+        var standardIds = standardsDict.Keys.ToArray();
+        var configsQueryable = (await lectureSlotConfigRepository.GetQueryableAsync())
+            .Where(config => Enumerable.Contains(standardIds, config.StandardId));
+        var totalCount = await AsyncExecuter.CountAsync(configsQueryable);
+        var pageIds = await AsyncExecuter.ToListAsync(TimetableSettingPageOrder.ByStandardName(configsQueryable, standardsDict,
+            config => config.StandardId).ThenBy(config => config.Id).Skip(input.SkipCount).Take(input.MaxResultCount).Select(config => config.Id));
+        var pageOrder = pageIds.Select((id, index) => new { id, index }).ToDictionary(item => item.id, item => item.index);
+        var pageGraphs = await AsyncExecuter.ToListAsync((await lectureSlotConfigRepository.WithDetailsAsync())
+            .Where(config => pageIds.Contains(config.Id)));
+        var pagedConfigs = pageGraphs.OrderBy(config => pageOrder[config.Id]).ToList();
+        var pageStandardIds = pagedConfigs.Select(config => config.StandardId).Distinct().ToArray();
+        var pagedStandards = await standardRepository.GetListAsync(standard => Enumerable.Contains(pageStandardIds, standard.Id));
+        var shiftInfos = await LoadClassShiftInfosAsync(pagedStandards);
         var roomNames = await LoadRoomNamesAsync(pagedConfigs);
-        var requiredLecturesDict = await LoadRequiredWeeklyLecturesAsync(standardIds);
+        var requiredLecturesDict = await LoadRequiredWeeklyLecturesAsync(pageStandardIds.ToList());
 
         var items = pagedConfigs.Select(config => MapToListDto(
             config,
@@ -147,16 +135,24 @@ public class LectureSlotAppService(
     public async Task AssignAsync(Guid id, AssignLectureSlotDto input)
     {
         var source = await lectureSlotConfigRepository.GetAsync(id);
+        var context = await LoadAssignmentReadsAsync(input.SelectedStandardIds);
+        var inserted = new List<LectureSlotConfig>();
+        var updated = new List<LectureSlotConfig>();
 
         foreach (var standardId in input.SelectedStandardIds)
         {
-            var targetStandard = await standardRepository.GetAsync(standardId);
-            var shiftInfo = await RequireClassShiftAsync(targetStandard);
+            if (!context.Standards.TryGetValue(standardId, out _))
+                throw new Volo.Abp.Domain.Entities.EntityNotFoundException(typeof(Standard), standardId);
+            var shiftInfo = context.Shifts.GetValueOrDefault(standardId);
+            if (shiftInfo == null || !shiftInfo.HasClassShift)
+                throw new BusinessException(TimetableErrorCodes.LectureSlotClassShiftNotAssigned)
+                    .WithData("StandardId", standardId)
+                    .WithData("message", "Please assign the school shift to this class before configuring lecture slots.");
             EnsureSlotConfigWithinShift(standardId, source, shiftInfo);
 
-            await ValidateActiveAssignmentsCompatibleWithSourceAsync(standardId, source);
+            ValidateActiveAssignmentsCompatibleWithSource(standardId, source, context.Timings[standardId]);
 
-            var existing = await lectureSlotConfigRepository.FindByStandardIdAsync(standardId);
+            var existing = context.Configurations.GetValueOrDefault(standardId);
             if (existing is not null)
             {
                 // Overwrite in-place: replace school hours and all slot groups
@@ -189,7 +185,7 @@ public class LectureSlotAppService(
                     existing.AddSlotGroup(newGroup);
                 }
 
-                await lectureSlotConfigRepository.UpdateAsync(existing);
+                updated.Add(existing);
             }
             else
             {
@@ -225,9 +221,11 @@ public class LectureSlotAppService(
                     clone.AddSlotGroup(newGroup);
                 }
 
-                await lectureSlotConfigRepository.InsertAsync(clone);
+                inserted.Add(clone);
             }
         }
+        if (updated.Count > 0) await lectureSlotConfigRepository.UpdateManyAsync(updated);
+        if (inserted.Count > 0) await lectureSlotConfigRepository.InsertManyAsync(inserted);
     }
 
     private async Task ValidateActiveAssignmentsNotModifiedAsync(Guid standardId, List<SlotConfigurationDto> newConfigurations)
@@ -277,26 +275,9 @@ public class LectureSlotAppService(
         }
     }
 
-    private async Task ValidateActiveAssignmentsCompatibleWithSourceAsync(Guid standardId, LectureSlotConfig sourceConfig)
+    private static void ValidateActiveAssignmentsCompatibleWithSource(Guid standardId, LectureSlotConfig sourceConfig,
+        IEnumerable<ActiveAssignmentTiming> activeSlots)
     {
-        var existingTimetables = await timetableRepository.GetByStandardIdAsync(standardId);
-        if (existingTimetables.Count == 0)
-        {
-            return;
-        }
-
-        var activeSlots = existingTimetables
-            .SelectMany(t => t.Slots)
-            .Where(s => s.Subjects.Count > 0)
-            .Select(s => new { s.Day, s.StartTime, s.EndTime, s.SlotType })
-            .Distinct()
-            .ToList();
-
-        if (activeSlots.Count == 0)
-        {
-            return;
-        }
-
         foreach (var activeSlot in activeSlots)
         {
             var dayValue = (int)activeSlot.Day;

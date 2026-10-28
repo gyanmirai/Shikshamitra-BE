@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using ShikshaMitra.Academic.Curriculum;
 using ShikshaMitra.Academic.Curriculum.Settings;
@@ -19,8 +20,9 @@ using Shouldly;
 using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EntityFrameworkCore;
+using Volo.Abp.Identity;
 using Volo.Abp.MultiTenancy;
-using Volo.Abp.Users;
+using Volo.Abp.Security.Claims;
 using Xunit;
 using TimetableEntity = ShikshaMitra.Academic.Timetable.Timetables.Timetable;
 
@@ -272,7 +274,11 @@ public partial class AcademicReportPerformance_Tests
                 var assignment = await SeedAssignmentAsync(tenantId);
                 var division = await GetRequiredService<DivisionManager>().CreateAsync(assignment.StandardId, "A", 30);
                 await GetRequiredService<IRepository<Division, Guid>>().InsertAsync(division, autoSave: true);
-                var userId = GetRequiredService<ICurrentUser>().GetId();
+                var userId = Guid.NewGuid();
+                await GetRequiredService<IIdentityUserRepository>().InsertAsync(
+                    new IdentityUser(userId, $"dynamic-report-{userId:N}", $"{userId:N}@example.test", tenantId), autoSave: true);
+                using var principal = GetRequiredService<ICurrentPrincipalAccessor>().Change(new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(AbpClaimTypes.UserId, userId.ToString()), new Claim(AbpClaimTypes.TenantId, tenantId.ToString())], "Test")));
                 await GetRequiredService<IRepository<UserScopeAssignment, Guid>>().InsertAsync(
                     new UserScopeAssignment(Guid.NewGuid(), tenantId, userId, description: "Dynamic timetable test tenant scope"), autoSave: true);
                 await GetRequiredService<IUserScopeService>().InvalidateUserScopeCacheAsync(userId);

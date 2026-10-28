@@ -1286,7 +1286,7 @@ public partial class AcademicDashboardAppService : ApplicationService, IAcademic
 
     private async Task<List<DashboardChapterProgress>> GetDashboardChapterProgressAsync()
     {
-        var query = await _chapterProgressRepository.GetQueryableAsync();
+        var query = await GetTenantDashboardProgressQueryAsync();
         return await AsyncExecuter.ToListAsync(query.Select(progress =>
             new DashboardChapterProgress(progress.ChapterId, progress.DivisionId, progress.Progress)));
     }

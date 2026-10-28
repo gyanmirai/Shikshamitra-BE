@@ -330,6 +330,28 @@ public class RubricAssessmentAppService(
 	}
 
 	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
+	public async Task<RubricEvaluationDto?> GetSubmissionEvaluationAsync(Guid rubricId, Guid submissionId, Guid studentId)
+	{
+		var rubric = await rubricRepository.GetAsync(rubricId);
+		await EnsureCurrentUserCanAccessRubricAsync(rubric, nameof(GetSubmissionEvaluationAsync));
+		var query = await submissionRepository.GetQueryableAsync();
+		var submission = await AsyncExecuter.FirstOrDefaultAsync(query.Where(row => row.Id == submissionId)
+			.Select(row => new { row.StudentId, row.HomeworkAssignmentId, row.AssignmentId, row.DivisionId }));
+		if (submission == null) return null;
+		EnsureSubmissionMatchesRubric(rubric, submission.StudentId, submission.HomeworkAssignmentId, submission.AssignmentId, studentId);
+		if (submission.AssignmentId.HasValue)
+		{
+			var assignment = await assignmentRepository.GetAsync(submission.AssignmentId.Value, includeDetails: true);
+			await EnsureCurrentUserCanAccessAssignmentDivisionAsync(assignment, submission.DivisionId, nameof(GetSubmissionEvaluationAsync));
+		}
+		var evaluation = await evaluationRepository.FirstOrDefaultAsync(row => row.RubricId == rubricId &&
+			row.StudentSubmissionId == submissionId && row.StudentId == studentId);
+		if (evaluation == null) return null;
+		await LoadScoresAsync([evaluation]);
+		return MapEvaluation(evaluation);
+	}
+
+	[Authorize(ShikshaMitraSubmodulePermissions.Academics.HomeworkAndAssignment_AssessmentAndFeedback.View)]
 	public async Task<RubricEvaluationDto?> GetStudentAssignmentEvaluationAsync(Guid studentId, Guid assignmentId)
 	{
 		var submission = await submissionRepository.GetSubmissionByStudentAndAssignmentAsync(studentId, assignmentId);
@@ -534,19 +556,22 @@ public class RubricAssessmentAppService(
 	private static void EnsureSubmissionMatchesRubric(
 		AssessmentRubric rubric,
 		StudentSubmissionEntity submission,
-		Guid studentId)
+		Guid studentId) => EnsureSubmissionMatchesRubric(rubric, submission.StudentId, submission.HomeworkAssignmentId, submission.AssignmentId, studentId);
+
+	private static void EnsureSubmissionMatchesRubric(
+		AssessmentRubric rubric, Guid actualStudentId, Guid? homeworkId, Guid? assignmentId, Guid studentId)
 	{
-		if (submission.StudentId != studentId)
+		if (actualStudentId != studentId)
 		{
 			throw new BusinessException("AssessmentRubric:SubmissionStudentMismatch");
 		}
 
-		if (rubric.HomeworkId.HasValue && submission.HomeworkAssignmentId != rubric.HomeworkId.Value)
+		if (rubric.HomeworkId.HasValue && homeworkId != rubric.HomeworkId.Value)
 		{
 			throw new BusinessException("AssessmentRubric:SubmissionTaskMismatch");
 		}
 
-		if (rubric.AssignmentId.HasValue && submission.AssignmentId != rubric.AssignmentId.Value)
+		if (rubric.AssignmentId.HasValue && assignmentId != rubric.AssignmentId.Value)
 		{
 			throw new BusinessException("AssessmentRubric:SubmissionTaskMismatch");
 		}

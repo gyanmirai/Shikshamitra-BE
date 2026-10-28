@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ShikshaMitra.TenantSettings.EducationMediums;
@@ -6,6 +8,7 @@ using Volo.Abp;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Domain.Services;
 using Volo.Abp.Guids;
+using Volo.Abp.Linq;
 using ShikshaMitra.Academic.Curriculum;
 
 namespace ShikshaMitra.Academic.Curriculum.Settings;
@@ -14,9 +17,40 @@ public class SubjectManager(
 	IGuidGenerator guidGenerator,
 	IRepository<Subject> subjectRepository,
 	IRepository<EducationMedium, Guid> educationMediumRepository,
+	IAsyncQueryableExecuter asyncExecuter,
 	ILogger<Subject> logger
 ) : DomainService
 {
+	public async Task<List<Subject>> CreateSubjectsAsync(IReadOnlyList<SubjectCreation> inputs)
+	{
+		if (inputs.Count == 0) return [];
+		var mediumIds = inputs.Select(input => input.EducationMediumId).Distinct().ToArray();
+		var media = await educationMediumRepository.GetQueryableAsync();
+		var existingMediumIds = (await asyncExecuter.ToListAsync(media
+			.Where(medium => Enumerable.Contains(mediumIds, medium.Id)).Select(medium => medium.Id))).ToHashSet();
+		var names = inputs.Select(input => input.Name.Trim().ToUpperInvariant()).Distinct().ToArray();
+		var subjects = await subjectRepository.GetQueryableAsync();
+		var existing = await asyncExecuter.ToListAsync(subjects.Where(subject =>
+			Enumerable.Contains(mediumIds, subject.EducationMediumId) && Enumerable.Contains(names, subject.Name.ToUpper()))
+			.Select(subject => new { subject.EducationMediumId, Name = subject.Name.ToUpper() }));
+		var existingNames = existing.Select(subject => (subject.EducationMediumId, subject.Name)).ToHashSet();
+		var result = new List<Subject>(inputs.Count);
+		foreach (var input in inputs)
+		{
+			if (!existingMediumIds.Contains(input.EducationMediumId))
+				throw new BusinessException(CurriculumErrorCodes.SubjectEducationMediumNotFound)
+					.WithData("EducationMediumId", input.EducationMediumId);
+			if (existingNames.Contains((input.EducationMediumId, input.Name.Trim().ToUpperInvariant())))
+				throw new BusinessException(CurriculumErrorCodes.DuplicateSubjectName)
+					.WithData("Name", input.Name)
+					.WithData("message", $"A subject with name '{input.Name}' already exists. Please choose a different name.");
+			result.Add(new Subject(guidGenerator.Create(), CurrentTenant.Id, input.Name, input.Color,
+				input.EducationMediumId, input.DisplayName, input.Category, input.Icon, input.Description, input.Status, input.SortOrder));
+			existingNames.Add((input.EducationMediumId, input.Name.ToUpperInvariant()));
+		}
+		return result;
+	}
+
 	public async Task<Subject> CreateSubject(
 		string name,
 		string color,

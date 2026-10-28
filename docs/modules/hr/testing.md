@@ -16,6 +16,12 @@ Read-only assertions confirm the endpoint does not create employee records, earn
 `test/browser/hr-setup/HrSetupBrowser.csproj` exposes disposable SQLite and real ABP APIs on loopback port 4396 for the frontend wizard browser tests.
 Its synthetic authentication and fixture-reset endpoints exist only in the test executable.
 
+## Onboarding list query regression
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~EmployeeApplicationListQuery_Tests" --logger "console;verbosity=detailed"`. The SQLite fixture compares the previous entity read with the summary projection for 35 and 200 synthetic applications and a 20-row page. It checks two application reads (count/page), tenant and soft-delete exclusion, ordering, search/status/paging, display parity, no tracked application graph, and excluded snapshot/token columns. A separate Npgsql `ToQueryString` test compiles PostgreSQL SQL without opening a connection. The fixture prints selected-column counts and alternating materialization timings after five warmups and 30 samples; those timings exclude network, authorization and counts and do not measure a deployed tenant or PostgreSQL execution.
+
+Run `EmployeeOnboardingPermissionApi_Tests` for the in-process HTTP permission boundary, including the list's own View permission. Staff Directory View and onboarding Add do not grant list access. Existing work-assignment/finalization suites remain required.
+
 ## Salary template Basic-purpose regression
 
 `SalaryTemplateComposerAppService_Tests.Fresh_tenant_requires_explicit_Basic_purpose_and_preserves_fixed_salary` runs in a new synthetic tenant for both Basic Salary and a custom earning name. An Ordinary 50000 earning cannot preview; changing only its explicit semantic purpose to Basic preserves the fixed formula, previews Gross/Basic 50000, deductions 1000 and Net 49000, then creates and reloads an Active template using the preview proof. This SQLite fixture does not certify a deployed tenant or PostgreSQL runtime.

@@ -3,10 +3,18 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-27
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
+
+## HR setup readiness
+
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~HrSetupReadinessApi_Tests` for clean-school HTTP and direct-service authorization coverage.
+The isolated fixture covers missing and usable configuration, tenant/year/identity boundaries, self-service denial, inactive earnings, conflicting defaults, invalid calendar references, employee-group role coverage, and conditional template dependencies.
+Read-only assertions confirm the endpoint does not create employee records, earning components, or ESI configuration.
+`test/browser/hr-setup/HrSetupBrowser.csproj` exposes disposable SQLite and real ABP APIs on loopback port 4396 for the frontend wizard browser tests.
+Its synthetic authentication and fixture-reset endpoints exist only in the test executable.
 
 ## Salary template Basic-purpose regression
 

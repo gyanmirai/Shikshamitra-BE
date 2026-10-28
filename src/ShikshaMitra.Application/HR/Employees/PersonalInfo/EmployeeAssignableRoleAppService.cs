@@ -30,13 +30,7 @@ public class EmployeeAssignableRoleAppService(
 		var roles = await roleRepository.GetListAsync();
 		var items = roles
 			.Where(role => role.TenantId == CurrentTenant.Id &&
-				!string.IsNullOrWhiteSpace(role.Name) &&
-				!EmployeeOnboardingRoleAssignment.IsReservedSystemRole(role.Name) &&
-				!string.Equals(role.Name.Trim(), EmployeeRoleAudience.Student, StringComparison.OrdinalIgnoreCase) &&
-				!string.Equals(role.Name.Trim(), EmployeeRoleAudience.Parent, StringComparison.OrdinalIgnoreCase) &&
-				string.Equals(role.GetProperty<string>(EmployeeRoleAudience.ExtraPropertyName),
-					EmployeeRoleAudience.Employee, StringComparison.Ordinal) &&
-				role.GetProperty<bool>(EmployeeOnboardingRoleAssignment.ExtraPropertyName))
+				EmployeeRoleEligibility.IsOnboardingAssignable(role))
 			.OrderBy(role => role.Name)
 			.ThenBy(role => role.Id)
 			.Select(role => new EmployeeAssignableRoleDto

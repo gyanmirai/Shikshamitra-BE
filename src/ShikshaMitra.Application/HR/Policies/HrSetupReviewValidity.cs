@@ -29,5 +29,6 @@ internal static class HrSetupReviewValidity
 	{
 		try { validate(); return true; }
 		catch (BusinessException) { return false; }
+		catch (ArgumentException) { return false; }
 	}
 }

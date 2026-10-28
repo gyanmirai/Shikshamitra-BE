@@ -3,10 +3,16 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-27
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
+
+## Onboarding list query regression
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~EmployeeApplicationListQuery_Tests" --logger "console;verbosity=detailed"`. The SQLite fixture compares the previous entity read with the summary projection for 35 and 200 synthetic applications and a 20-row page. It checks two application reads (count/page), tenant and soft-delete exclusion, ordering, search/status/paging, display parity, no tracked application graph, and excluded snapshot/token columns. A separate Npgsql `ToQueryString` test compiles PostgreSQL SQL without opening a connection. The fixture prints selected-column counts and alternating materialization timings after five warmups and 30 samples; those timings exclude network, authorization and counts and do not measure a deployed tenant or PostgreSQL execution.
+
+Run `EmployeeOnboardingPermissionApi_Tests` for the in-process HTTP permission boundary, including the list's own View permission. Staff Directory View and onboarding Add do not grant list access. Existing work-assignment/finalization suites remain required.
 
 ## Salary template Basic-purpose regression
 

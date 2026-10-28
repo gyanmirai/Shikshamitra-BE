@@ -18,6 +18,9 @@ public class MobileFinancePermissionApi_Tests(FinanceRoutingApiTestFactory facto
 	[InlineData("overview")]
 	[InlineData("installments")]
 	[InlineData("charges")]
+	[InlineData("charges/page")]
+	[InlineData("charges/99999999-9999-9999-9999-999999999999")]
+	[InlineData("charges/99999999-9999-9999-9999-999999999999/payments")]
 	[InlineData("payments")]
 	[InlineData("receipts")]
 	[InlineData("requests")]
@@ -36,6 +39,9 @@ public class MobileFinancePermissionApi_Tests(FinanceRoutingApiTestFactory facto
 	[InlineData("overview")]
 	[InlineData("installments")]
 	[InlineData("charges")]
+	[InlineData("charges/page")]
+	[InlineData("charges/99999999-9999-9999-9999-999999999999")]
+	[InlineData("charges/99999999-9999-9999-9999-999999999999/payments")]
 	[InlineData("payments")]
 	[InlineData("receipts")]
 	[InlineData("requests")]
@@ -47,7 +53,8 @@ public class MobileFinancePermissionApi_Tests(FinanceRoutingApiTestFactory facto
 		using var client=Factory.CreateClient();
 		client.DefaultRequestHeaders.Add("__tenant",TestAuthHandler.TestTenantId);
 		client.DefaultRequestHeaders.Add(TestAuthHandler.TestRolesHeader,"accountant");
-		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,"Finance.Fees.FeeCollections.View");
+		client.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader,
+			suffix.StartsWith("charges", StringComparison.Ordinal) ? "Finance.Fees.Charges.View" : "Finance.Fees.FeeCollections.View");
 		using var response=await client.GetAsync(Url(suffix));
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden,await response.Content.ReadAsStringAsync());
 	}

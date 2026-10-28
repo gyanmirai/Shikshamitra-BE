@@ -3,7 +3,7 @@ module: finance
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -115,6 +115,14 @@ For payments made before assessment preservation existed, the service recovers l
 ## Category and bank routing
 
 See [Income and expense routing](./references/income-expense-routing.md) for the current category selection, school bank, recognition, historical compatibility, and validation contracts.
+
+## Family charge visibility
+
+Parents and students with the existing Charges View grant can read approved and voided per-child charge lines in the dedicated family Charges list/detail/history. Pending/rejected staff decisions remain private. Every call rechecks the persisted active portal association and enrolled academic year; a role label or sibling relationship alone grants no access.
+
+The shared family charge reader supplies the legacy charge array, overview/statement approved-charge totals, and dedicated detail. For original amount A, verified active allocations V, pending verification P and effective waivers W, payable is `max(0,A-V-P-W)`; voided obligations have zero payable. Reversed collection allocations remain in history but contribute neither V nor P. Processed less reversed charge refunds are reported separately and never reopen the obligation. Legacy floating-point allocations are converted and rounded per row before summation.
+
+Open means approved with payable or pending verification. Settled means approved with both zero. Payment-status precedence is Voided, InReconciliation, Partial/Pending while payable remains, Settled/Waived when a waiver completes settlement, otherwise Paid. Original, verified, pending, waived, payable and refunded amounts remain separate. This surface performs no mutations or permission seeding.
 
 ## Whole-rupee monetary rules
 

@@ -3,7 +3,7 @@ module: finance
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-27
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -150,6 +150,17 @@ Actual payout command/replay scenarios remain in `FeeRefundApi_Tests` and requir
 `CollectionReceiptGrouping_Tests` covers version snapshots, legacy defaults, exact decimal component totals, one-component collections and provisional status parity. `ReceiptGroupingReconciliationApi_Tests` covers combined/separate queue row counts, total preservation, either-row whole-instrument approval/rejection, final receipt links, principal restoration, charge rollback and duplicate decisions. The collect-input validator suite accepts fee-plus-charge collections with one instrument and retains mixed-provisional-instrument containment.
 
 ## Family mobile Finance
+
+`MobileFinanceCharges_Tests.cs` extends the persisted family fixture with live ABP principal/permission checks and actual database queries for the dedicated charge page/detail/allocation history. Cases cover the hand-derived `1000-200 verified-300 pending-100 waived=400` equation, legacy/overview/statement parity, reversed collections, full waivers, mixed settlement, voids, processed/reversed/failed refund outcomes, fee-only/charge/combined and provisional/final receipt documents, whole-document totals, independent receipt/refund grants, school calendar dates, search/category/tab/count/paging semantics, hidden decisions, wrong batch identity, sibling/year/tenant/revoked association and explicit denial.
+
+```powershell
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~MobileAcademicAppService_Tests.Charges_|FullyQualifiedName~MobileAcademicAppService_Tests.Finance_" -m:1
+# With the dedicated loopback opt-in described below, execute the same read fixtures against PostgreSQL:
+dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~PostgreSQL_family_charges_" -m:1
+dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~MobileFinancePermission" -m:1
+```
+
+The PostgreSQL cases execute the current EF query/model sources against freshly created test databases. They are not evidence of migration-inclusive CI, production acceptance or power-loss durability. HTTP authorization coverage includes the three additive charge routes; the application tests exercise actual persisted associations and the real permission checker rather than relying only on method metadata.
 
 `MobileFinanceProjection_Tests` covers exact decimal billed/future/credit amounts,
 receipt ownership across tenant/child/year, real receipt IDs and final/provisional

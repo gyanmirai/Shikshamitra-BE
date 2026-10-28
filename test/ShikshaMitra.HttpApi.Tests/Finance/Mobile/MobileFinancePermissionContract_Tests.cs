@@ -16,6 +16,9 @@ public class MobileFinancePermissionContract_Tests
 	[InlineData("PaymentsAsync", "Finance.Fees.FeeCollections.View")]
 	[InlineData("StatementPdfAsync", "Finance.Fees.FeeCollections.View")]
 	[InlineData("ChargesAsync", "Finance.Fees.Charges.View")]
+	[InlineData("ChargesPageAsync", "Finance.Fees.Charges.View")]
+	[InlineData("ChargeAsync", "Finance.Fees.Charges.View")]
+	[InlineData("ChargePaymentsAsync", "Finance.Fees.Charges.View")]
 	[InlineData("ReceiptsAsync", "Finance.Fees.InvoiceReceipt.View")]
 	[InlineData("ReceiptPdfAsync", "Finance.Fees.InvoiceReceipt.View")]
 	public void Read_operation_uses_the_existing_web_action(string method, string permission) =>

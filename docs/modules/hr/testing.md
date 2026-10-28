@@ -771,31 +771,14 @@ It required no production worker, correction, permission or configuration change
 
 ## Draft document boundaries and log privacy
 
-`PayslipDraftBoundary_Tests` reads draft payroll and its PDF through the authenticated API before review or locking.
-It verifies there is no issued revision, that the official PDF endpoint rejects the draft and that sending the source slip identifier cannot queue a delivery.
-Review alone still creates no official document or automatic attempt.
-After locking, preview, download and the captured automatic attachment must use the exact stored first revision.
+`SalarySlipAvailabilityApi_Tests` covers the issued-only read boundary with synthetic SQLite fixtures: no-run/draft reads, direct service IDs, both preview-PDF aliases, inconsistent draft document IDs, exact read permission, tenant denial, preparation/review/staleness status and frozen Finalized/Paid documents. These tests do not execute PostgreSQL locking. `PayrollIssuedReportBoundary_Tests` covers legacy captured-report/export rejection and preservation of unrelated reports. `PayrollReadinessProjector_Tests` keeps critical blockers after review and preserves registration warnings without blocking payroll.
+`HrIssuedSalaryTemplateCompatibilityApi_Tests` inserts old published register/statement definitions containing `includeDrafts`, reads them through the library, previews real SQLite rows, queues generation from the unchanged saved revision and saves the next normalized revision. It verifies unlocked salary is excluded, queued parameters keep drafts false, and explicit true preview/generation requests are rejected. This proves API queuing and persisted request compatibility, not PostgreSQL background-worker or concurrency execution.
 
-The fixture omits only its own newly configured school row before issuance and restores it through the supported settings API.
-The unchanged implementation returned a preview despite missing saved school facts, and its structured request logs contained TotalEarning, TotalDeduction and NetSalary fields.
-The draft renderer now reuses the required saved school identity/address and the existing actionable missing-details error.
-This rendering guard does not block payroll preparation, create an activation requirement or regenerate an issued document.
-Request diagnostics retain employee/period/status/timing fields while excluding those salary totals.
+`PayslipDraftBoundary_Tests` now rejects every payslip detail/PDF alias before lock, both before and after review. Rejected reads must not persist a draft slip, produce an issued revision or queue delivery. It then locks the synthetic payroll and verifies the issued summary, document hash, both PDF routes and captured automatic attachment use the same stored first revision.
 
-The test captures log field names rather than their sensitive values and uses a separate fresh `PAYROLL_PAYSLIP_DRAFT_TEST_POSTGRES` database with capture-only email.
-Optional `PAYSLIP_VERIFY_ARTIFACTS` exports the exact draft/issued response bytes and synthetic evidence for independent content and layout inspection.
-This workflow does not prove a fresh browser, native printing or Gujarat applicability acceptance.
+The PostgreSQL fixture uses a separate fresh `PAYROLL_PAYSLIP_DRAFT_TEST_POSTGRES` database with capture-only email. It captures log field names instead of sensitive values and requires request diagnostics to exclude TotalEarning, TotalDeduction and NetSalary. Optional `PAYSLIP_VERIFY_ARTIFACTS` exports only the issued response bytes and synthetic evidence. This revised PostgreSQL journey remains unrun until its isolated database setup is approved; earlier draft-preview results are not evidence for the current contract.
 
-The product reproduction failed the missing-school response and all three request-log privacy assertions before the fix.
-An earlier harness attempt failed because it queried the persisted draft using a display month instead of the canonical yyyy-MM value; that is retained separately from the product reproduction.
-The final API regression passed one test with no failures or skips in 3.0401 minutes on 2026-10-05.
-The same final source passed twenty salary-slip application tests and ten PDF-layout/response-mapping tests with no failures or skips.
-The existing permission-consistency API selection passed all thirteen cases with no failures or skips in 2.7672 minutes on that same final test binary.
-The Release API-host build succeeded with 133 analyzer/nullability warnings and no errors.
-
-PDF.js 5.6.205 on Node 20.19.5 extracted both exact API artifacts and verified configured school identity/address, employee facts, preview/official labels, INR 9,925 net pay, INR 75 employee ESI, no employer fields and no NUL/replacement characters.
-Poppler rendered both final A4 pages, which were visually inspected for readable labels, aligned values and clipping.
-These static checks and canonical-byte assertions remain separate from the outstanding authenticated Codex browser, native-print and jurisdiction acceptance.
+Authenticated browser, native printing, PostgreSQL concurrency and Gujarat applicability acceptance remain separate validation layers.
 
 ## Correction history transport ordering
 

@@ -15,7 +15,7 @@ public class SalaryDocumentAndVariance_Tests
 	[Theory]
 	[InlineData(true, 312)]
 	[InlineData(false, -312)]
-	public void Only_the_exact_registration_delta_explains_a_saved_CTC_variance(bool registered, decimal delta)
+	public void Registration_number_change_alone_cannot_explain_a_saved_CTC_variance(bool registered, decimal delta)
 	{
 		var profile = new PayrollStatutoryProfile { VersionId = Guid.NewGuid() };
 		var pf = PayrollSchemeApplication.Decide("PF", true, "7", true, 1145, 1145);
@@ -23,10 +23,37 @@ public class SalaryDocumentAndVariance_Tests
 		var after = PayrollSchemeApplication.Decide("ESI", true, registered ? "123456" : null, true, 72, 312);
 		var saved = new SalaryTemplateCalculationDto { StatutoryApplication = new(profile, pf, before) };
 		var current = new PayrollStatutoryApplication(profile, pf, after);
-		CompensationStatutoryVariance.IsExplained(saved, current, CompensationProtectionPolicy.ProtectEmployerCost, delta).ShouldBeTrue();
+		before.NumberPresent.ShouldNotBe(after.NumberPresent);
+		before.AppliedEmployeeAmount.ShouldBe(72m);
+		after.AppliedEmployeeAmount.ShouldBe(72m);
+		before.AppliedEmployerAmount.ShouldBe(312m);
+		after.AppliedEmployerAmount.ShouldBe(312m);
+		CompensationStatutoryVariance.IsExplained(saved, current, CompensationProtectionPolicy.ProtectEmployerCost, delta).ShouldBeFalse();
+		CompensationStatutoryVariance.IsExplained(saved, current, CompensationProtectionPolicy.ProtectEmployerCost, 0m).ShouldBeFalse();
 		CompensationStatutoryVariance.IsExplained(saved, current, CompensationProtectionPolicy.ProtectEmployerCost, delta + 1).ShouldBeFalse();
 		CompensationStatutoryVariance.IsExplained(saved, current with { EmployeeStateInsurance = after with { CalculatedEmployerAmount = 313 } },
 			CompensationProtectionPolicy.ProtectEmployerCost, delta).ShouldBeFalse();
+	}
+
+	[Theory]
+	[InlineData(true, CompensationProtectionPolicy.ProtectEmployerCost, 312)]
+	[InlineData(false, CompensationProtectionPolicy.ProtectEmployerCost, -312)]
+	[InlineData(true, CompensationProtectionPolicy.ProtectTakeHome, -72)]
+	[InlineData(false, CompensationProtectionPolicy.ProtectTakeHome, 72)]
+	public void Real_scheme_application_changes_explain_only_the_exact_protected_amount_delta(
+		bool enabled, CompensationProtectionPolicy policy, decimal delta)
+	{
+		var profile = new PayrollStatutoryProfile { VersionId = Guid.NewGuid(), ApplyEsic = !enabled };
+		var pf = PayrollSchemeApplication.Decide("PF", true, "7", true, 1145, 1145);
+		var before = PayrollSchemeApplication.Decide("ESI", !enabled, null, true, 72, 312, "Synthetic prior enrollment");
+		var after = PayrollSchemeApplication.Decide("ESI", enabled, null, true, 72, 312, "Synthetic changed enrollment");
+		var saved = new SalaryTemplateCalculationDto { StatutoryApplication = new(profile, pf, before) };
+		var current = new PayrollStatutoryApplication(profile with { VersionId = Guid.NewGuid(), ApplyEsic = enabled }, pf, after);
+		CompensationStatutoryVariance.IsExplained(saved, current, policy, delta).ShouldBeTrue();
+		CompensationStatutoryVariance.IsExplained(saved, current, policy, delta + 1m).ShouldBeFalse();
+		CompensationStatutoryVariance.IsExplained(saved, current, policy, 0m).ShouldBeFalse();
+		CompensationStatutoryVariance.IsExplained(saved,
+			current with { EmployeeStateInsurance = after with { CalculatedEmployerAmount = 313m } }, policy, delta).ShouldBeFalse();
 	}
 
 	[Fact]

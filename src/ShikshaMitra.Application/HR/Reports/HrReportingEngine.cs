@@ -50,6 +50,10 @@ public static class HrReportingEngine
 		var generated = d.Summaries.Select(x => x.Function + "_" + x.Field).Append("rowCount").ToHashSet();
 		if (d.Sorts.Count > 4 || d.Sorts.Any(x => (!fields.ContainsKey(x.Field) && !generated.Contains(x.Field)) || x.Direction is not ("asc" or "desc"))) throw Invalid("Choose up to four supported sort fields.");
 		if (d.Layout == "summary" && d.Sorts.Any(x => !d.Groups.Contains(x.Field) && !generated.Contains(x.Field))) throw Invalid("Sort grouped summaries by a grouping field or a summary column.");
+		// Existing saved salary definitions may still declare this retired option. Remove only one
+		// exact legacy declaration; actual IncludeDrafts=true run requests remain rejected below.
+		if (PayrollIssuedReportBoundary.IsSalaryDocument(d.DataSource) && d.Parameters.Count(x => x == "includeDrafts") == 1)
+			d.Parameters.Remove("includeDrafts");
 		if (d.Parameters.Distinct().Count() != d.Parameters.Count || d.Parameters.Any(x => !dataset.Parameters.Contains(x))) throw Invalid("A run parameter is not supported by this dataset.");
 		if (d.DataSource is "attendance" or "leave" or "payroll_register" or "payroll_statement" && !d.Parameters.Contains("period")) throw Invalid("This dataset requires a reporting period parameter.");
 		if (d.DataSource == "payroll_statement" && !d.Parameters.Contains("employeeIds")) throw Invalid("Salary statements require a staff parameter.");

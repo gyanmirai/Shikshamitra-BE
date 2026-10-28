@@ -183,8 +183,10 @@ public class HrReportingPostgres_Tests(HrReportingPostgresFactory factory) : Shi
 		var finalized = await PostAndReadAsync<HrReportingPreviewDto>("/api/hr/reports/designer-preview", input);
 		finalized.Rows.Count.ShouldBe(1); finalized.Totals["totalEarnings"].ShouldBe(10000m); finalized.Totals["netPay"].ShouldBe(9925m);
 		input.Parameters.IncludeDrafts = true;
-		var included = await PostAndReadAsync<HrReportingPreviewDto>("/api/hr/reports/designer-preview", input);
-		included.Rows.Count.ShouldBe(2); included.Rows.ShouldContain(x => x["status"]!.ToString() == "Draft"); included.Totals["netPay"].ShouldBe(17865m);
+		var rejectedDrafts = await Client.PostAsJsonAsync("/api/hr/reports/designer-preview", input, JsonOptions);
+		rejectedDrafts.IsSuccessStatusCode.ShouldBeFalse();
+		(await rejectedDrafts.Content.ReadAsStringAsync()).ShouldContain("The template does not expose this run parameter.");
+		input.Parameters.IncludeDrafts = false;
 		input.Definition = HrReportingCatalogue.BuiltIns().Single(x => x.Id == "builtin:salary-components").Definition;
 		var components = await PostAndReadAsync<HrReportingPreviewDto>("/api/hr/reports/designer-preview", input);
 		components.Columns.ShouldContain(x => x.Id.StartsWith("Earning:") && x.Type == "money");

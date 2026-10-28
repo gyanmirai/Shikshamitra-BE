@@ -24,14 +24,17 @@ public class PayslipDocumentAppService(IRepository<PayslipDocument, Guid> docume
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View);
 		await access.EnsureEmployeeScopeAllowedAsync(employeeId);
 		var month = SalarySlipMonthYearNormalizer.Normalize(monthYear);
+		var slip = await slips.GetByEmployeeAndMonthAsync(employeeId, month);
+		if (slip == null || slip.TenantId != CurrentTenant.Id ||
+			slip.Status is not (SalarySlipStatus.Finalized or SalarySlipStatus.Paid)) return [];
 		var query = await documents.GetQueryableAsync();
 		// Project metadata so history never loads all PDF artifacts.
-		var records = await AsyncExecuter.ToListAsync(query.Where(x => x.EmployeeId == employeeId && x.MonthYear == month)
+		var records = await AsyncExecuter.ToListAsync(query.Where(x => x.TenantId == CurrentTenant.Id &&
+			x.SalarySlipId == slip.Id && x.EmployeeId == employeeId && x.MonthYear == month)
 			.OrderByDescending(x => x.Revision).Select(x => new PayslipDocumentDto(x.Id, x.SalarySlipId,
 				x.Revision, x.IssuedAt, x.IssuedBy, x.Sha256, false, x.ReplacesDocumentId, x.ReplacementReason)));
 		if (records.Count == 0) return records;
 		var employee = await employees.GetAsync(employeeId, includeDetails: false);
-		var slip = await slips.GetAsync(records[0].SalarySlipId);
 		return records.Select((x, i) => x with
 		{
 			IsCurrent = i == 0,
@@ -47,6 +50,11 @@ public class PayslipDocumentAppService(IRepository<PayslipDocument, Guid> docume
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.HR.PayrollManagement_GenerateSalarySlip.View);
 		var document = await documents.GetAsync(documentId);
 		await access.EnsureEmployeeScopeAllowedAsync(document.EmployeeId);
+		var slip = await slips.GetAsync(document.SalarySlipId);
+		if (document.TenantId != CurrentTenant.Id || slip.TenantId != CurrentTenant.Id ||
+			slip.EmployeeId != document.EmployeeId || slip.MonthYear != document.MonthYear ||
+			slip.Status is not (SalarySlipStatus.Finalized or SalarySlipStatus.Paid))
+			throw new BusinessException(HRErrorCodes.PayslipNotAvailable);
 		return document.Pdf;
 	}
 

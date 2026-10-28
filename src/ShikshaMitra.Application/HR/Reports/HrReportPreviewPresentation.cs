@@ -15,7 +15,7 @@ internal static class HrReportPreviewPresentation
 	{
 		var warnings = HrReportCatalog.BuildCapabilityWarnings(source, input);
 		if (source is HrReportDataSources.PayrollStatement or HrReportDataSources.PayrollRegister)
-			warnings.Add(input.Filters.IncludeDrafts ? "Preview includes unlocked payroll. It is not an official salary statement." : "Issued payroll only. Unavailable months are not counted as zero pay.");
+			warnings.Add("Issued payroll only. Unavailable months are not counted as zero pay.");
 		if (exportAllRows && totalCount >= HrReportRequestProcessor.MaxExportRows)
 		{
 			warnings.Add($"Export capped at {HrReportRequestProcessor.MaxExportRows} rows. Narrow filters for a complete extract.");

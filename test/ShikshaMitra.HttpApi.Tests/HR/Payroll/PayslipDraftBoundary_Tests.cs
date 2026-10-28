@@ -61,7 +61,7 @@ public sealed class PayslipDraftAuditLogger : ILogger<SalarySlipAppService>
 public class PayslipDraftBoundary_Tests
 {
 	[PayslipDraftBoundaryFact]
-	public async Task Drafts_require_real_school_facts_cannot_be_distributed_and_keep_salary_amounts_out_of_logs()
+	public async Task Unlocked_payroll_is_unavailable_then_locking_issues_one_frozen_document_without_logging_salary_amounts()
 	{
 		using var factory = new PayslipDraftBoundaryTestFactory();
 		var workflow = new EsiPayrollWorkflowScenario(factory);
@@ -93,55 +93,51 @@ public class PayslipDraftBoundary_Tests
 		var slipUrl = $"/api/payroll/salary-slips?{query}";
 		var previewUrl = $"/api/payroll/salary-slips/pdf-preview?{query}";
 		var documentsUrl = $"/api/payroll/payslip-documents?{query}";
-		var draft = (await api.GetFromJsonAsync<SalarySlipResponse>(slipUrl, json))!;
-		draft.Status.ShouldBe("Draft");
-		draft.DocumentId.ShouldBeNull();
-		draft.DocumentRevision.ShouldBeNull();
-		draft.NetPay.ShouldBe(9925);
-		var preview = await api.GetByteArrayAsync(previewUrl);
-		Guid draftId;
+		async Task AssertUnavailableAsync(string expectedStatus)
+		{
+			var availability = (await api.GetFromJsonAsync<SalarySlipAvailabilityDto>(
+				$"/api/payroll/salary-slips/availability?{query}", json))!;
+			availability.Status.ShouldBe(expectedStatus);
+			availability.CanViewPayslip.ShouldBeFalse();
+			foreach (var path in new[] { "", "/pdf", "/pdf-preview", "/preview-pdf" })
+			{
+				using var rejected = await api.GetAsync($"/api/payroll/salary-slips{path}?{query}");
+				rejected.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+				(await rejected.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.PayslipNotAvailable);
+			}
+			(await api.GetFromJsonAsync<List<PayslipDocumentDto>>(documentsUrl, json))!.ShouldBeEmpty();
+			factory.Messages.ShouldBeEmpty();
+		}
+		await AssertUnavailableAsync("PENDING");
 		using (var scope = factory.Services.CreateScope())
 		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(EsiPayrollWorkflowScenario.Tenant))
 		using (scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: false))
-			draftId = (await scope.ServiceProvider.GetRequiredService<ISalarySlipRepository>()
+			(await scope.ServiceProvider.GetRequiredService<ISalarySlipRepository>()
 				.GetByEmployeeAndMonthAsync(employee.Id, month.ToString("yyyy-MM", CultureInfo.InvariantCulture)))
-				.ShouldNotBeNull("The draft read must persist its authoritative source slip.").Id;
-		(await api.GetFromJsonAsync<List<PayslipDocumentDto>>(documentsUrl, json))!.ShouldBeEmpty();
-		var officialBeforeLock = await api.GetAsync($"/api/payroll/salary-slips/pdf?{query}");
-		officialBeforeLock.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
-		(await officialBeforeLock.Content.ReadAsStringAsync()).ShouldContain(HRErrorCodes.SalarySlipPdfRequiresFinalized);
+				.ShouldBeNull("Viewing unavailable payroll must not create a draft salary slip.");
 		var attemptedSend = await api.PostAsJsonAsync("/api/payroll/payslip-deliveries",
-			new SendPayslipDto { DocumentId = draftId, IdempotencyKey = Guid.NewGuid() }, json);
+			new SendPayslipDto { DocumentId = Guid.NewGuid(), IdempotencyKey = Guid.NewGuid() }, json);
 		attemptedSend.StatusCode.ShouldBe(HttpStatusCode.NotFound);
-		(await api.GetFromJsonAsync<List<PayslipDeliveryDto>>($"/api/payroll/payslip-deliveries?salarySlipId={draftId}", json))!.ShouldBeEmpty();
 		factory.Messages.ShouldBeEmpty();
-		// Omit only this newly created fixture's school row before any official document exists.
-		// Payroll preparation remains available, but a PDF must not invent school identity facts.
-		using (var scope = factory.Services.CreateScope())
-		using (scope.ServiceProvider.GetRequiredService<ICurrentTenant>().Change(EsiPayrollWorkflowScenario.Tenant))
-		using (var unit = scope.ServiceProvider.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true, isTransactional: true))
-		{
-			var settings = scope.ServiceProvider.GetRequiredService<IRepository<PayslipSettings, Guid>>();
-			await settings.HardDeleteAsync(await settings.GetAsync(EsiPayrollWorkflowScenario.Tenant));
-			await unit.CompleteAsync();
-		}
-		var missingSchool = await api.GetAsync(previewUrl);
-		var missingSchoolCode = missingSchool.IsSuccessStatusCode ? null : await missingSchool.Content.ReadAsStringAsync();
-		(await api.GetFromJsonAsync<SalarySlipResponse>(slipUrl, json))!.Status.ShouldBe("Draft");
-		await SaveSchoolAsync();
 		var run = await workflow.CalculateAsync(month);
 		await workflow.ReviewAsync(run.Id, employee.Id, month);
-		(await api.GetFromJsonAsync<List<PayslipDocumentDto>>(documentsUrl, json))!.ShouldBeEmpty();
+		await AssertUnavailableAsync("REVIEWED");
 		await EsiPayrollWorkflowScenario.RequireSuccess(await workflow.LockAsync(run.Id, employee.Id, month));
 		var issued = (await api.GetFromJsonAsync<List<PayslipDocumentDto>>(documentsUrl, json))!.Single();
 		issued.Revision.ShouldBe(1);
-		issued.SalarySlipId.ShouldBe(draftId);
+		var finalSlip = (await api.GetFromJsonAsync<SalarySlipResponse>(slipUrl, json))!;
+		finalSlip.Status.ShouldBe("Finalized");
+		finalSlip.DocumentId.ShouldBe(issued.Id);
+		finalSlip.DocumentRevision.ShouldBe(1);
+		finalSlip.NetPay.ShouldBe(9925);
+		(await api.GetFromJsonAsync<SalarySlipAvailabilityDto>($"/api/payroll/salary-slips/availability?{query}", json))!
+			.Status.ShouldBe("AVAILABLE");
 		var official = await api.GetByteArrayAsync($"/api/payroll/payslip-documents/{issued.Id}/pdf");
 		var officialHash = Convert.ToHexString(SHA256.HashData(official));
 		officialHash.ShouldBe(issued.Sha256);
-		Convert.ToHexString(SHA256.HashData(preview)).ShouldNotBe(officialHash);
 		Convert.ToHexString(SHA256.HashData(await api.GetByteArrayAsync(previewUrl))).ShouldBe(officialHash);
-		var delivery = (await api.GetFromJsonAsync<List<PayslipDeliveryDto>>($"/api/payroll/payslip-deliveries?salarySlipId={draftId}", json))!.Single();
+		Convert.ToHexString(SHA256.HashData(await api.GetByteArrayAsync($"/api/payroll/salary-slips/pdf?{query}"))).ShouldBe(officialHash);
+		var delivery = (await api.GetFromJsonAsync<List<PayslipDeliveryDto>>($"/api/payroll/payslip-deliveries?salarySlipId={issued.SalarySlipId}", json))!.Single();
 		delivery.DocumentId.ShouldBe(issued.Id);
 		delivery.Automatic.ShouldBeTrue();
 		using (var scope = factory.Services.CreateScope())
@@ -153,26 +149,20 @@ public class PayslipDraftBoundary_Tests
 		if (!string.IsNullOrWhiteSpace(artifactRoot))
 		{
 			Directory.CreateDirectory(artifactRoot);
-			await File.WriteAllBytesAsync(Path.Combine(artifactRoot, "draft.pdf"), preview);
 			await File.WriteAllBytesAsync(Path.Combine(artifactRoot, "issued.pdf"), official);
 			await File.WriteAllTextAsync(Path.Combine(artifactRoot, "evidence.json"), JsonSerializer.Serialize(new
 			{
 				schoolName,
 				schoolAddress,
-				draft.EmployeeName,
-				draft.EmployeeCode,
-				draft.NetPay,
-				missingSchoolStatus = (int) missingSchool.StatusCode,
-				missingSchoolCode,
+				finalSlip.EmployeeName,
+				finalSlip.EmployeeCode,
+				finalSlip.NetPay,
 				logFieldNames = factory.Audit.FieldNames.ToArray(),
-				draftSha256 = Convert.ToHexString(SHA256.HashData(preview)),
 				issuedSha256 = officialHash
 			}, json));
 		}
 		factory.Audit.FieldNames.ShouldContain(fields => new[] { "EmployeeId", "MonthYear", "Status", "Duration" }.All(fields.Contains));
 		factory.ShouldSatisfyAllConditions(
-			() => missingSchool.StatusCode.ShouldBe(HttpStatusCode.BadRequest),
-			() => missingSchoolCode.ShouldNotBeNull().ShouldContain(HRErrorCodes.PayslipSchoolDetailsRequired),
 			() => factory.Audit.FieldNames.SelectMany(fields => fields).ShouldNotContain("TotalEarning"),
 			() => factory.Audit.FieldNames.SelectMany(fields => fields).ShouldNotContain("TotalDeduction"),
 			() => factory.Audit.FieldNames.SelectMany(fields => fields).ShouldNotContain("NetSalary"));

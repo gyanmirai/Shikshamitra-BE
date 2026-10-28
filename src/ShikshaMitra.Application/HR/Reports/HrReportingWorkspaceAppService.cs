@@ -101,6 +101,7 @@ public class HrReportingWorkspaceAppService(
 		var scope = await scopeAuthorization.CaptureAsync(UserId(), CurrentTenant.Id);
 		var run = new HrReportRun(GuidGenerator.Create(), CurrentTenant.Id, UserId(), name, templateId, revision, definition.DataSource,
 			JsonSerializer.Serialize(definition, HrReportingEngine.Json), JsonSerializer.Serialize(p, HrReportingEngine.Json), JsonSerializer.Serialize(scope), Clock.Now);
+		if (PayrollIssuedReportBoundary.IsSalaryDocument(definition.DataSource)) run.ExtraProperties["issuedSalaryDocumentsOnly"] = true;
 		await runs.InsertAsync(run, true);
 		await jobs.EnqueueAsync(new HrReportingRunJobArgs { RunId = run.Id, TenantId = run.TenantId, AttemptId = run.AttemptId });
 		await audit.WriteAsync(null, "hr_report_run", run.Id, "HR report", "report_queued", name);

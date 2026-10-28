@@ -338,7 +338,7 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		});
 		var originalPaidRuleId = created.Rules.Single(rule => rule.PaidType == "Paid").Id;
 
-		var updated = await _leavePolicyAppService.UpdateLeavePolicyAsync(created.Id, new LeavePolicyUpdateRequest
+		var update = new LeavePolicyUpdateRequest
 		{
 			PolicyTitle = created.PolicyTitle,
 			Status = created.Status,
@@ -351,7 +351,19 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 				Rule(accrualPolicyType: "Monthly", leaveCount: 12),
 				Rule(paidType: "Unpaid", entitlementMode: "Unlimited", leaveCount: null, allowNegativeBalance: true)
 			]
-		});
+		};
+		var accessor = GetRequiredService<Microsoft.AspNetCore.Http.IHttpContextAccessor>();
+		var previous = accessor.HttpContext;
+		accessor.HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+		LeavePolicyDetailResponse updated;
+		try
+		{
+			var preview = await GetRequiredService<ILeavePolicyImpactAppService>().PreviewAsync(new()
+				{ AcademicYearId = academicYearId, PolicyId = created.Id, Action = "update", AsOfDate = GetRequiredService<IClock>().Now.Date, Proposal = update });
+			accessor.HttpContext.Request.Headers[HrPolicyImpactConfirmationService.HeaderName] = preview.ConfirmationToken;
+			updated = await _leavePolicyAppService.UpdateLeavePolicyAsync(created.Id, update);
+		}
+		finally { accessor.HttpContext = previous; }
 
 		var updatedPaidRule = updated.Rules.Single(rule => rule.PaidType == "Paid");
 		updatedPaidRule.AccrualPolicyType.ShouldBe("Monthly");
@@ -462,7 +474,17 @@ public class LeavePolicyAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		}
 		else
 		{
-			await _leavePolicyAppService.DeleteLeavePolicyAsync(policy.Id);
+			var accessor = GetRequiredService<Microsoft.AspNetCore.Http.IHttpContextAccessor>();
+			var previous = accessor.HttpContext;
+			accessor.HttpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+			try
+			{
+				var preview = await GetRequiredService<ILeavePolicyImpactAppService>().PreviewAsync(new()
+					{ AcademicYearId = academicYearId, PolicyId = policy.Id, Action = "archive", AsOfDate = today });
+				accessor.HttpContext.Request.Headers[HrPolicyImpactConfirmationService.HeaderName] = preview.ConfirmationToken;
+				await _leavePolicyAppService.DeleteLeavePolicyAsync(policy.Id);
+			}
+			finally { accessor.HttpContext = previous; }
 			(await _leavePolicyAppService.GetLeavePolicyByIdAsync(policy.Id)).Status.ShouldBe("Archived");
 		}
 		var after = await _leavePolicyAppService.GetLeavePolicyByIdAsync(policy.Id);

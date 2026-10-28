@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -27,7 +27,7 @@ public class CashManagementDeploymentModel_Tests
 
 	[Fact]
 	[Trait("Category", "OfflineMigrationModel")]
-	public void Current_snapshot_and_cash_target_model_should_allow_EF9_migration_without_pending_changes()
+	public void Current_snapshot_and_latest_target_model_should_allow_EF9_migration_without_pending_changes()
 	{
 		// Match ShikshaMitraDbContextFactory without starting a host or opening a database connection.
 		AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", false);
@@ -46,7 +46,11 @@ public class CashManagementDeploymentModel_Tests
 		cashMigration.TargetModel.GetEntityTypes().Select(entity => entity.GetTableName())
 			.Where(table => table != null && CashTables.Contains(table)).OrderBy(table => table).ToArray()
 			.ShouldBe(CashTables.OrderBy(table => table).ToArray());
-		foreach (var saved in new[] { snapshot, cashMigration.TargetModel })
+		// Historical target models describe their point in the migration chain. Later
+		// additive migrations must be reflected by the latest target, not backfilled here.
+		var latestId = migrations.Migrations.Keys.OrderBy(name => name, StringComparer.Ordinal).Last();
+		var latest = migrations.CreateMigration(migrations.Migrations[latestId], db.Database.ProviderName!);
+		foreach (var saved in new[] { snapshot, latest.TargetModel })
 		{
 			var initialized = initializer.Initialize(saved, designTime: true);
 			var differences = differ.GetDifferences(initialized.GetRelationalModel(), current.GetRelationalModel());

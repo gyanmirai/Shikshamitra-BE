@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
@@ -19,7 +20,7 @@ using Xunit;
 namespace ShikshaMitra.HR.AttendanceAndLeaves;
 
 [Collection(ApiTestCollection.Name)]
-public class LeavePolicySafetyApi_Tests(HrOperationalTableApiTestFactory factory)
+public partial class LeavePolicySafetyApi_Tests(HrOperationalTableApiTestFactory factory)
 	: ShikshaMitraApiTestBase(factory), IClassFixture<HrOperationalTableApiTestFactory>
 {
 	private const string Root = "/api/leave-policies";
@@ -35,9 +36,9 @@ public class LeavePolicySafetyApi_Tests(HrOperationalTableApiTestFactory factory
 	public async Task Each_Action_Uses_Its_Existing_Exact_Grant(string action, string grant, HttpStatusCode expected)
 	{
 		var (year, policy) = await CreateFixtureAsync();
-		if (action == "restore") (await Client.DeleteAsync($"{Root}/{policy.Id}")).EnsureSuccessStatusCode();
+		if (action == "restore") (await ActAsync(Client, "archive", year, policy, reviewed: true)).EnsureSuccessStatusCode();
 		using var client = Restricted(grant);
-		using var response = await ActAsync(client, action, year, policy);
+		using var response = await ActAsync(client, action, year, policy, reviewed: true);
 		response.StatusCode.ShouldBe(expected, await response.Content.ReadAsStringAsync());
 	}
 
@@ -50,7 +51,7 @@ public class LeavePolicySafetyApi_Tests(HrOperationalTableApiTestFactory factory
 	public async Task View_Only_Cannot_Invoke_Writes_Directly(string action)
 	{
 		var (year, policy) = await CreateFixtureAsync();
-		if (action == "restore") (await Client.DeleteAsync($"{Root}/{policy.Id}")).EnsureSuccessStatusCode();
+		if (action == "restore") (await ActAsync(Client, "archive", year, policy, reviewed: true)).EnsureSuccessStatusCode();
 		using var client = Restricted("View");
 		using var response = await ActAsync(client, action, year, policy);
 		response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
@@ -102,16 +103,38 @@ public class LeavePolicySafetyApi_Tests(HrOperationalTableApiTestFactory factory
 		(await Client.GetFromJsonAsync<LeavePolicyDetailResponse>($"{Root}/{policy.Id}", JsonOptions))!.Status.ShouldBe("Active");
 	}
 
-	private static Task<HttpResponseMessage> ActAsync(HttpClient client, string action, Guid year, LeavePolicyResponse policy) => action switch
+	private async Task<HttpResponseMessage> ActAsync(HttpClient client, string action, Guid year, LeavePolicyResponse policy, bool reviewed = false)
 	{
-		"view" => client.GetAsync($"{Root}/{policy.Id}"),
-		"create" => client.PostAsJsonAsync($"{Root}?academicYearId={year}", Request()),
-		"edit" => client.PutAsJsonAsync($"{Root}/{policy.Id}", new LeavePolicyUpdateRequest { PolicyTitle = policy.PolicyTitle, Status = "Active", EffectiveFrom = policy.EffectiveFrom, Rules = Request().Rules }),
-		"default" => client.PatchAsync($"{Root}/{policy.Id}/set-default", null),
-		"archive" => client.DeleteAsync($"{Root}/{policy.Id}"),
-		"restore" => client.PostAsync($"{Root}/{policy.Id}/unarchive", null),
-		_ => throw new ArgumentOutOfRangeException(nameof(action))
-	};
+		var body = new LeavePolicyUpdateRequest { PolicyTitle = policy.PolicyTitle, Status = "Active", EffectiveFrom = policy.EffectiveFrom, Rules = Request().Rules, ExpectedVersion = policy.Version };
+		if (reviewed && action is "edit" or "default" or "archive")
+			await AttachReviewAsync(client, year, policy.Id, policy.Version, action == "edit" ? "update" : action == "default" ? "set-default" : "archive", action == "edit" ? body : null);
+		return await (action switch
+		{
+			"view" => client.GetAsync($"{Root}/{policy.Id}"),
+			"create" => client.PostAsJsonAsync($"{Root}?academicYearId={year}", Request()),
+			"edit" => client.PutAsJsonAsync($"{Root}/{policy.Id}", body),
+			"default" => client.PatchAsync($"{Root}/{policy.Id}/set-default", null),
+			"archive" => client.DeleteAsync($"{Root}/{policy.Id}"),
+			"restore" => client.PostAsync($"{Root}/{policy.Id}/unarchive", null),
+			_ => throw new ArgumentOutOfRangeException(nameof(action))
+		});
+	}
+
+	private async Task<LeavePolicyImpactReviewDto> AttachReviewAsync(HttpClient client, Guid year, Guid id, int version, string action, LeavePolicyUpdateRequest? body = null)
+	{
+		var date = Factory.Services.GetRequiredService<Volo.Abp.Timing.IClock>().Now.Date;
+		var scope = new LeavePolicyReviewScope { AsOfDate = date, ExpectedVersion = version };
+		if (body != null) body.ImpactScope = scope;
+		using var response = await client.PostAsJsonAsync($"{Root}/impact/preview", new LeavePolicyImpactRequest
+			{ AcademicYearId = year, PolicyId = id, Action = action, AsOfDate = date, ExpectedVersion = version, Proposal = body });
+		response.EnsureSuccessStatusCode();
+		var preview = (await response.Content.ReadFromJsonAsync<LeavePolicyImpactReviewDto>(JsonOptions))!;
+		client.DefaultRequestHeaders.Remove(HrPolicyImpactConfirmationService.HeaderName);
+		client.DefaultRequestHeaders.Remove(LeavePolicyMutationReview.ScopeHeader);
+		if (preview.ConfirmationToken != null) client.DefaultRequestHeaders.Add(HrPolicyImpactConfirmationService.HeaderName, preview.ConfirmationToken);
+		client.DefaultRequestHeaders.Add(LeavePolicyMutationReview.ScopeHeader, JsonSerializer.Serialize(scope, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+		return preview;
+	}
 
 	private async Task<(Guid, LeavePolicyResponse)> CreateFixtureAsync()
 	{

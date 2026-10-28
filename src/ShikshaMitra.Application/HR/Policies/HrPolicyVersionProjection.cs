@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text.Json;
 
 namespace ShikshaMitra.HR.Policies;
@@ -34,6 +34,7 @@ public static class HrPolicyVersionProjection
 		"workcalendar" or "work_calendar" or "work-calendars" or "work_calendar_policies" => "work_calendar",
 		"payroll" or "payroll_policy" => "payroll",
 		"attendance" or "attendance_policy" => "attendance",
+		"leave" or "leave_policy" => "leave",
 		_ => throw new Volo.Abp.BusinessException(HRErrorCodes.HrPolicyInvalidType)
 	};
 
@@ -42,6 +43,7 @@ public static class HrPolicyVersionProjection
 		"work_calendar" => "work_calendar_policy",
 		"payroll" => "payroll_policy",
 		"attendance" => "attendance_policy",
+		"leave" => "leave_policy",
 		_ => "policy_version"
 	};
 

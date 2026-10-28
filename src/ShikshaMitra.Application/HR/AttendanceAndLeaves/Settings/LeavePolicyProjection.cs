@@ -1,6 +1,7 @@
-using System;
+﻿using System;
 using System.Linq;
 using ShikshaMitra.HR.Policies;
+using Volo.Abp.Data;
 
 namespace ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 
@@ -8,6 +9,11 @@ public static class LeavePolicyProjection
 {
 	public static LeavePolicyItem ToPolicyItem(LeavePolicy policy) => new()
 	{
+		SourceVersionId = policy.GetProperty<Guid?>("SourceVersionId"), SourcePolicyId = policy.GetProperty<Guid?>("SourcePolicyId"),
+		SourceVersionNumber = policy.GetProperty<int?>("SourceVersionNumber"),
+		AcademicYearId = policy.AcademicYearId,
+		Version = policy.Version,
+		ConcurrencyStamp = policy.ConcurrencyStamp,
 		Id = policy.Id,
 		CreationTime = policy.CreationTime,
 		LastModificationTime = policy.LastModificationTime,
@@ -23,6 +29,11 @@ public static class LeavePolicyProjection
 
 	public static LeavePolicyDetailResponse ToDetail(LeavePolicy policy) => new()
 	{
+		SourceVersionId = policy.GetProperty<Guid?>("SourceVersionId"), SourcePolicyId = policy.GetProperty<Guid?>("SourcePolicyId"),
+		SourceVersionNumber = policy.GetProperty<int?>("SourceVersionNumber"),
+		AcademicYearId = policy.AcademicYearId,
+		Version = policy.Version,
+		ConcurrencyStamp = policy.ConcurrencyStamp,
 		Id = policy.Id,
 		CreationTime = policy.CreationTime,
 		LastModificationTime = policy.LastModificationTime,
@@ -41,6 +52,10 @@ public static class LeavePolicyProjection
 		var item = ToPolicyItem(policy);
 		return new LeavePolicyResponse
 		{
+			SourceVersionId = item.SourceVersionId, SourcePolicyId = item.SourcePolicyId, SourceVersionNumber = item.SourceVersionNumber,
+			AcademicYearId = item.AcademicYearId,
+			Version = item.Version,
+			ConcurrencyStamp = item.ConcurrencyStamp,
 			Id = item.Id,
 			PolicyTitle = item.PolicyTitle,
 			Status = item.Status,

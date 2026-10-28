@@ -1,8 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using ShikshaMitra.HR.Policies;
 using System.Threading.Tasks;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.Infrastructure.Data;
@@ -47,7 +50,7 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		var paidRule = created.Rules.Single(rule => rule.PaidType == "Paid");
 		var unpaidRule = created.Rules.Single(rule => rule.PaidType == "Unpaid");
 
-		var response = await Client.PutAsJsonAsync($"{LeavePoliciesUrl}/{created.Id}", new LeavePolicyUpdateRequest
+		var update = new LeavePolicyUpdateRequest
 		{
 			PolicyTitle = created.PolicyTitle,
 			Status = created.Status,
@@ -71,7 +74,9 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 					leaveCount: unpaidRule.LeaveCount,
 					allowNegativeBalance: unpaidRule.AllowNegativeBalance)
 			]
-		}, JsonOptions);
+		};
+		await ReviewAsync(created, "update", update);
+		var response = await Client.PutAsJsonAsync($"{LeavePoliciesUrl}/{created.Id}", update, JsonOptions);
 
 		response.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var updated = await response.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
@@ -126,12 +131,14 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		var first = await CreateLeavePolicyAsync($"Default-A-{Guid.NewGuid():N}");
 		var second = await CreateLeavePolicyAsync($"Default-B-{Guid.NewGuid():N}");
 
+		await ReviewAsync(first, "set-default");
 		var firstDefaultResponse = await Client.PatchAsync($"{LeavePoliciesUrl}/{first.Id}/set-default", null);
 		firstDefaultResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var firstDefault = await firstDefaultResponse.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
 		firstDefault.ShouldNotBeNull();
 		firstDefault.IsDefault.ShouldBeTrue();
 
+		await ReviewAsync(second, "set-default");
 		var secondDefaultResponse = await Client.PatchAsync($"{LeavePoliciesUrl}/{second.Id}/set-default", null);
 		secondDefaultResponse.StatusCode.ShouldBe(HttpStatusCode.OK);
 		var secondDefault = await secondDefaultResponse.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
@@ -143,6 +150,31 @@ public class LeavePolicyApi_Tests : ShikshaMitraApiTestBase
 		var firstDetail = await firstDetailResponse.Content.ReadFromJsonAsync<LeavePolicyDetailResponse>(JsonOptions);
 		firstDetail.ShouldNotBeNull();
 		firstDetail.IsDefault.ShouldBeFalse();
+	}
+
+	private async Task ReviewAsync(LeavePolicyResponse policy, string action, LeavePolicyUpdateRequest? proposal = null)
+	{
+		ShikshaMitra.TenantSettings.AcademicYears.AcademicYear year;
+		using (var serviceScope = Factory.Services.CreateScope())
+		using (serviceScope.ServiceProvider.GetRequiredService<Volo.Abp.MultiTenancy.ICurrentTenant>().Change(Guid.Parse(ShikshaMitra.Infrastructure.Auth.TestAuthHandler.TestTenantId)))
+		using (var unit = serviceScope.ServiceProvider.GetRequiredService<Volo.Abp.Uow.IUnitOfWorkManager>().Begin(new Volo.Abp.Uow.AbpUnitOfWorkOptions(), requiresNew: true))
+		{
+			year = await serviceScope.ServiceProvider.GetRequiredService<Volo.Abp.Domain.Repositories.IRepository<ShikshaMitra.TenantSettings.AcademicYears.AcademicYear, Guid>>().GetAsync(AcademicYearId);
+			await unit.CompleteAsync();
+		}
+		var date = Factory.Services.GetRequiredService<Volo.Abp.Timing.IClock>().Now.Date;
+		// Seeded test years may be historical; bind the review to a date in that exact year.
+		if (year != null) date = date < year.StartDate.Date ? year.StartDate.Date : date > year.EndDate.Date ? year.EndDate.Date : date;
+		var scope = new LeavePolicyReviewScope { AsOfDate = date };
+		if (proposal != null) proposal.ImpactScope = scope;
+		var response = await Client.PostAsJsonAsync($"{LeavePoliciesUrl}/impact/preview", new LeavePolicyImpactRequest
+			{ AcademicYearId = AcademicYearId, PolicyId = policy.Id, Action = action, AsOfDate = date, Proposal = proposal });
+		response.EnsureSuccessStatusCode();
+		var preview = (await response.Content.ReadFromJsonAsync<LeavePolicyImpactReviewDto>(JsonOptions))!;
+		Client.DefaultRequestHeaders.Remove(HrPolicyImpactConfirmationService.HeaderName);
+		Client.DefaultRequestHeaders.Remove(LeavePolicyMutationReview.ScopeHeader);
+		if (preview.ConfirmationToken != null) Client.DefaultRequestHeaders.Add(HrPolicyImpactConfirmationService.HeaderName, preview.ConfirmationToken);
+		Client.DefaultRequestHeaders.Add(LeavePolicyMutationReview.ScopeHeader, JsonSerializer.Serialize(scope, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 	}
 
 	private async Task<LeavePolicyResponse> CreateLeavePolicyAsync(string? policyTitle = null)

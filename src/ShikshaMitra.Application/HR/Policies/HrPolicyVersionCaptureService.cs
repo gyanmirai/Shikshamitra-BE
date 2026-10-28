@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Audit;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -21,7 +22,7 @@ public class HrPolicyVersionCaptureService(
 		WriteIndented = false
 	};
 
-	public async Task CaptureAsync(string policyType, object policyDto, string action, string? reason = null)
+	public async Task CaptureAsync(string policyType, object policyDto, string action, string? reason = null, string? correlationId = null)
 	{
 		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var snapshotJson = JsonSerializer.Serialize(policyDto, JsonOptions);
@@ -30,11 +31,13 @@ public class HrPolicyVersionCaptureService(
 			"work_calendar" => BuildWorkCalendarVersion((WorkCalendarPolicyDto) policyDto, snapshotJson, action, reason),
 			"payroll" => BuildPayrollVersion((PayrollPolicyDto) policyDto, snapshotJson, action, reason),
 			"attendance" => BuildAttendanceVersion((AttendancePolicyDto) policyDto, snapshotJson, action, reason),
+			"leave" => BuildLeaveVersion((LeavePolicySnapshotDto) policyDto, snapshotJson, action, reason),
 			_ => throw new BusinessException(HRErrorCodes.HrPolicyInvalidType)
 		};
 
 		var query = await versionRepository.GetQueryableAsync();
 		var exists = await AsyncExecuter.AnyAsync(query.Where(x =>
+			x.TenantId == CurrentTenant.Id &&
 			x.PolicyType == version.PolicyType &&
 			x.PolicyId == version.PolicyId &&
 			x.VersionNumber == version.VersionNumber));
@@ -60,7 +63,7 @@ public class HrPolicyVersionCaptureService(
 				version.Status,
 				version.EffectiveFrom,
 				version.EffectiveTo
-			});
+			}, correlationId: correlationId);
 	}
 
 	private HrPolicyVersion BuildWorkCalendarVersion(WorkCalendarPolicyDto dto, string snapshotJson, string action, string? reason) =>
@@ -71,4 +74,7 @@ public class HrPolicyVersionCaptureService(
 
 	private HrPolicyVersion BuildAttendanceVersion(AttendancePolicyDto dto, string snapshotJson, string action, string? reason) =>
 		new(GuidGenerator.Create(), CurrentTenant.Id, "attendance", dto.Id, dto.AcademicYearId, dto.Version, dto.Name, dto.Status, null, null, snapshotJson, action, reason);
+
+	private HrPolicyVersion BuildLeaveVersion(LeavePolicySnapshotDto dto, string snapshotJson, string action, string? reason) =>
+		new(GuidGenerator.Create(), CurrentTenant.Id, "leave", dto.Id, dto.AcademicYearId, dto.Version, dto.PolicyTitle, dto.Status, dto.EffectiveFrom, dto.EffectiveTo, snapshotJson, action, reason);
 }

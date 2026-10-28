@@ -1160,7 +1160,7 @@ public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 		var timestampDifference = compare.Differences.FirstOrDefault(x =>
 			x.FieldKey is "creationTime" or "lastModificationTime");
 		timestampDifference.ShouldNotBeNull();
-		timestampDifference!.ToDisplayValue.ShouldNotContain("T");
+		timestampDifference!.ToDisplayValue.ShouldNotMatch(@"\d{4}-\d{2}-\d{2}T");
 		timestampDifference.ToDisplayValue.ShouldContain(" ");
 		compare.Differences.ShouldAllBe(x =>
 			!x.FromDisplayValue.Contains(context.WorkCalendar.Id.ToString(), StringComparison.OrdinalIgnoreCase) &&
@@ -3708,7 +3708,7 @@ public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 	public async Task GroupAssignment_Update_Should_Allow_LeavePolicy_Only_Repair_When_LockedPayrollExists()
 	{
 		var context = await CreatePolicyContextAsync();
-		var employee = await CreateEmployeeAsync();
+		var employee = await CreateActiveLeaveImpactEmployeeAsync();
 		var group = await CreateRoleGroupAsync(context.AcademicYearId, employee.RoleId, "Locked Leave Repair Group");
 		var assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
 		var existingAssignment = await assignmentRepository.InsertAsync(new HrPolicyAssignment(

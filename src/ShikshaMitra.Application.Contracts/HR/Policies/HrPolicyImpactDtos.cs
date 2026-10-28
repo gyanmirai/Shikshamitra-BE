@@ -64,6 +64,7 @@ public class HrPolicyAssignmentImpactPreviewRequestDto
 
 public class HrPolicyImpactPreviewDto
 {
+	public ShikshaMitra.HR.AttendanceAndLeaves.Settings.LeavePolicyImpactDto? LeaveImpact { get; set; }
 	public string PolicyType { get; set; } = string.Empty;
 	public Guid? PolicyId { get; set; }
 	public Guid AcademicYearId { get; set; }

@@ -169,6 +169,19 @@ Tenant and user-scope checks remain mandatory in addition to these endpoint perm
 The target leave model uses paid and unpaid rule buckets inside leave policies.
 Do not reintroduce removed leave-type behavior without product approval.
 
+### Leave impact and immutable versions
+
+| Endpoint | Existing permission and contract |
+|---|---|
+| `POST /api/leave-policies/impact/preview` | `inspect`: Leave View; `create`: Add; `update`: Edit; `set-default`: SetDefault; `archive`: Delete. Exact tenant/year/date scope, optional expected version and proposed policy body. |
+| `POST /api/leave-policies/impact/details` | Same action grant, plus the owning employee, assignment, leave-center or payroll read grant and staff scope. Assessment/fingerprint, metric and bounded skip/max page; accessible, assessed and redacted totals are distinct. |
+| `GET /api/hr/leave/policies/{policyId}/versions` and individual/compare reads | Existing `HR.LeaveManagement.Setting.LeavePolicy.View`; shared immutable snapshot contract. |
+| Version `restore-preview` and `restore-draft` under that route | Existing `HR.LeaveManagement.Setting.LeavePolicy.Add`. New policy/rule identities, same tenant/year, Draft, nondefault, source provenance. Source history and references remain unchanged. |
+
+Measures carry nullable count, status, definition, scope and availability reason. Zero means a completed query; unavailable/partial is never zero. Effective staff, assignment records, pinned requests and factual payroll-period exposure are separate. Balance deltas and salary differences remain not calculated. Preview changes are field-level and use stable Paid/Unpaid rule keys.
+
+Applicable active/default mutations require `X-HR-Policy-Impact-Token`. Update bodies include the exact reviewed `impactScope` and `expectedVersion`; default/archive actions send `X-HR-Leave-Impact-Scope` as JSON. Changed proposal, actor, source version/dependencies, expired token or incomplete assessment fails server revalidation. Draft maintenance adds no operational gate. The first changed write enrolls existing configuration as an honest baseline; reads do not backfill events. See [policy architecture](references/policy-architecture.md#leave-impact-and-version-history) for lock ordering, rollout and reference invariants.
+
 ## Payroll API families
 
 Payroll APIs manage setup, preview, review, lock, and salary slips:

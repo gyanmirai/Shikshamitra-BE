@@ -18,7 +18,7 @@ Its synthetic authentication and fixture-reset endpoints exist only in the test 
 
 ## HR read performance regressions
 
-Run `EmployeeProfileRead_Tests` and `AttendanceRegisterLookupPerformance_Tests` in the Application test project, `EmployeeDocumentProjection_Tests` in EntityFrameworkCore tests, and `EmployeeDocumentApi_Tests`, `AttendanceRegisterApi_Tests` and `HrReportingWorkspaceApi_Tests` in HTTP API tests. Keep broader HR regression suites and the pinned SDK solution build as integration gates.
+Run `EmployeeProfileRead_Tests` and `AttendanceRegisterLookupPerformance_Tests` in the Application test project, `EmployeeDocumentProjection_Tests` in EntityFrameworkCore tests, and `EmployeeDocumentApi_Tests`, `AttendanceRegisterApi_Tests`, `HrReportingWorkspaceApi_Tests` and `HrReportingHistoryPerformanceApi_Tests` in HTTP API tests. Keep broader HR regression suites and the pinned SDK solution build as integration gates.
 
 The fixtures distinguish actual SQLite query budgets from PostgreSQL SQL compilation without a connection. Lock tests compare former per-date reads with batched reads at increasing date populations and retain tenant/date parity. Profile and document projections check excluded unrelated graph fields without pretending authorization performs no reads. HTTP tests retain missing/denied/tenant behavior, document contents and checklist paging. Report history tests preserve access checks, recovery and accurate history paging while counting redundant run reads.
 

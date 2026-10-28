@@ -347,13 +347,13 @@ Dedicated read-only charge routes below use `Charge.Id` (never the batch request
 
 | GET suffix | Response |
 |---|---|
-| `charges/page` | `{studentId,academicYearId,currency,asOf,items,totalCount,page,pageSize,summary,counts,categories}` |
+| `charges/page` | `{studentId,academicYearId,currency,asOf,items,totalCount,currentPage,pageSize,summary,counts,categories}` |
 | `charges/{chargeId}` | `{studentId,academicYearId,currency,asOf,charge}` |
-| `charges/{chargeId}/payments` | `{studentId,academicYearId,chargeId,currency,items,totalCount,page,pageSize}` |
+| `charges/{chargeId}/payments` | `{studentId,academicYearId,chargeLineId,currency,items,totalCount,currentPage,pageSize}` |
 
-The page supports `filter=all|open|settled|voided`, trimmed search (maximum 100 characters) over name/category/public reason, and optional `categoryId`. Order is applied timestamp descending then charge ID descending. Counts and summary apply search/category before the selected tab/page; summary excludes voided obligations. Categories come from the entire visible approved/voided child/year set. The existing `charges` array remains approved-only and retains its legacy `paidAmount`, which includes active pending allocations.
+The page supports `filter=all|open|settled|voided`, trimmed search (maximum 100 characters) over name/category/public reason, and optional `chargeCategoryId`. Order is applied timestamp descending then charge ID descending. Counts and summary apply search/category before the selected tab/page; summary excludes voided obligations. Categories come from the entire visible approved/voided child/year set. The `charges` array uses the same canonical charge-line projection as the page, including approved and voided visible lines.
 
-Charge amounts are distinct fixed two-decimal strings: `amount`, `verifiedPaidAmount`, `pendingVerificationAmount`, `waivedAmount`, `outstandingAmount`, `refundedAmount`. Due date and overdue checks use Asia/Kolkata calendar dates; event instants are UTC. Detail includes public reason, category, approval/void timestamps and decision/payment statuses, without staff identities or private notes/reasons. Missing category display text is `Category unavailable`.
+Charge amounts are distinct fixed two-decimal strings: `amount`, `collectedAmount`, `verifiedPaidAmount`, `reconciliationAmount`, `waivedAmount`, `outstandingAmount`, `refundedAmount`. Due date and overdue checks use Asia/Kolkata calendar dates; event instants are UTC. Detail includes public reason, category, approval/void timestamps and approval/payment statuses, without staff identities or private notes/reasons. Missing category display text is `Category unavailable`.
 
 Payment history returns the real charge allocation ID, owned transaction ID, allocation amount, canonical payment methods and transaction status, ordered by payment timestamp then allocation ID descending. Receipt metadata additionally requires `Finance.Fees.InvoiceReceipt.View`: only actual owned Charge/Combined documents appear, with whole-document totals and owned replacement links; fee-only sibling documents are excluded. PDF downloads retain the existing receipt endpoint and grant. Refund references additionally require `Finance.Fees.Refund.View`; only processed/reversed owned charge outcomes appear, without beneficiary fields. Aggregate refunded amounts remain visible with Charges View. No receipt or source provenance is invented.
 
@@ -361,15 +361,15 @@ Family monetary responses identify `currency: "INR"` and encode amounts as decim
 
 Root: `/api/mobile/v1/finance/students/{studentId}`. Reads return the standard
 `{success:true,data:...}` envelope; PDF routes return `application/pdf`.
-`academicYearId` is required except for `context`. Pages use `page=1&pageSize=20`
-(maximum 100) and return `{items,totalCount,page,pageSize}`. Money is an INR
+`academicYearId` is required except for `context`. Charges use `page=1&pageSize=20` (maximum 100), returning `currentPage` and `pageSize`.
+Payment, receipt and request GETs use `skipCount=0&maxResultCount=20` (maximum 100) and return `{items,totalCount,currency}`; concession request pages additionally return `currentPage,pageSize,totalPages`. Money is an INR
 fixed two-decimal string; due dates are date-only, activity timestamps UTC instants.
 
 | GET suffix | Existing permission | Result |
 |---|---|---|
 | `context` | `Finance.Fees.FeeCollections.View` | Linked student, enrolled years, selected year, section/action capabilities and disabled reasons |
 | `overview`, `installments`, `payments` | `Finance.Fees.FeeCollections.View` | Collection-account summary, obligations and payment history; embedded receipt details additionally require Receipts View |
-| `charges` | `Finance.Fees.Charges.View` | Detailed approved child/year charges |
+| `charges` | `Finance.Fees.Charges.View` | Detailed approved/voided child/year charges |
 | `receipts`, `receipts/{receiptId}/pdf` | `Finance.Fees.InvoiceReceipt.View` | Official receipts and PDF after tenant/student/year ownership checks |
 | `requests?kind=concession` | `Finance.Fees.Concession.View` | Authorized concession history |
 | `requests?kind=refund` | `Finance.Fees.Refund.View` | Authorized refund history |
@@ -392,6 +392,43 @@ Request capabilities require the corresponding View and write grants; refund cre
 The overview/statement is the collection-account financial summary (including charge, concession and refund totals); detailed feature lists require their separate View grant.
 Deploy this backend before the companion mobile update, whose missing section capabilities fail closed.
 
+The overview response always includes a non-null `feeOverview` object with the web
+Fee Details names below. Every value is a fixed two-decimal string; absent amounts
+are `"0.00"`, never null. The unpublished v1 contract is replaced directly with canonical
+web names; there are no compatibility aliases or v2 endpoint. The companion mobile client must use this contract.
+
+| Field | Principal meaning |
+|---|---|
+| `totalFee` | Original annual demand across all owned year dues, including future installments |
+| `netFee` | Annual principal after concessions and adjustment credits |
+| `paidFee` | Retained principal applied to net fees, capped per due; excludes refunds and excess |
+| `pendingFee` | Outstanding principal only for bills generated as of the server clock |
+| `concessionAmount` | Applied principal concessions |
+| `overdueFee` | Outstanding principal meeting the shared generated-bill overdue rule |
+| `reconciliationAmount` | Principal FeeCollectionRecord amounts for owned child/year InReconciliation metadata and year fee heads |
+| `grossPaidAmount` | Gross payments recorded on principal dues |
+| `refundedAmount` | Processed principal refunds recorded on dues |
+| `overpaymentAmount` | Retained payment above net principal |
+| `adjustmentCreditAmount` | Noncash principal adjustment credits |
+
+This projection shares annual principal calculation with staff Fee Details without calling
+a staff API. The existing persisted family association and enrolled-year guard remains mandatory.
+Reconciliation is separate information; provisional allocations already reduce outstanding.
+Overview no longer exposes `billedAmount`, `verifiedPaidAmount`, `pendingVerificationAmount`,
+`outstandingAmount`, or flat concession/adjustment/refund aliases.
+Additional charges and late fees remain separate. `chargeOutstandingAmount` covers
+ad hoc charges only; it is not the web `pendingCharges`, which also includes late fees.
+Statement summary labels and amounts use the canonical fee overview and show extra charges separately.
+
+The mobile Fees card also consumes additive two-decimal overview strings `dueNowAmount`
+(generated-bill pending principal minus overdue principal) and `remainingAmount`
+(generated-bill pending principal plus future unbilled outstanding). These exclude charges
+and late fees. Deploy these server fields before the updated mobile Fees screen; that screen
+rejects a missing partition rather than calculating financial amounts on the device.
+Installments expose additive `scheduleStatus`: unbilled Pending/Partial rows display Upcoming,
+while Paid and InReconciliation retain their canonical payment/clearance status. Existing
+`status` remains unchanged.
+
 Principal amounts come from decimal DueFee ledger values; transaction amounts come
 from decimal PaymentMethodRecord splits. Legacy charge/receipt storage is converted
 per row at the boundary, never summed through the legacy double DTOs. Stored
@@ -400,7 +437,25 @@ separately. Future scheduled amount is remaining principal before demand generat
 LateFeeAmount is outstanding policy-assessed late fee; ChargeOutstandingAmount is
 outstanding approved ad hoc charge. Neither is hidden inside billed principal.
 Concession and noncash adjustment are principal credits. WaiverAmount covers charge
-and late-fee waiver evidence. RefundedAmount is refunded principal.
+and late-fee waiver evidence. `feeOverview.refundedAmount` is refunded principal.
+
+Canonical family read contracts use the web facts and retain only necessary family extensions:
+
+| Surface | Canonical identity, amounts and metadata |
+|---|---|
+| Installments | `dueFeeId`, nullable actual schedule `installmentId`, `installmentLabel`, `feeHeadId`, `feeHeadName`, dates, `total`, retained applied `paid`, `due`, `reconciliationAmount`, `concessionAmount`, `refundAmount`, `status`, `currency` |
+| Charges | `chargeLineId` is the owned student line; `chargeId` is its batch request, nullable for absent legacy evidence. `chargeName`, `purposeDescription`, `chargeCategoryId`, `categoryName`, dates, approval `status`, `paymentStatus`, `isOverdue`, `amount`, `collectedAmount`, `verifiedPaidAmount`, `reconciliationAmount`, `waivedAmount`, `outstandingAmount`, `refundedAmount`, `currency` |
+| Charge allocations | `sourceAllocationId`, `paymentId`, `date`, line `amountPaid`, `status`, `paymentMethods`, `refundedAmount`, `receipts`, `refunds`, `currency`. Refund refs use `id,status,processedAmount`; this amount is processed less reversals |
+| Payments | `paymentId`, `receiptNumber`, `date`, `amount`, `status`, `paymentMethods`, `receipts`, `currency`. Receipt refs use `receiptId,receiptNumber,scope,hasPdf` plus kind/verification and owned linked receipt IDs |
+| Receipts | `id,receiptNumber,receiptKind,receiptScope,verificationStatus,totalPaidAmount,receiptDate,creationTime,feeCollectionTransactionId,hasPdf`, owned linked final/provisional IDs and numbers, `currency` |
+| Concession requests | Typed `kind=concession`, `id`, child/year, `concessionTypeName`, `concessionAmount`, `requestedConcessionAmount`, `approvedConcessionAmount`, `createdAt`, `status,statusName,concurrencyStamp,availableActions`, creator-only `remarks` |
+| Refund requests/results | Typed `kind=refund`, `id,voucherNumber,totalAmount,calculatedAmount,approvedAmount,processedAmount,reversedAmount,creationTime,submittedAt,status,availableActions`, creator-only `reason`, original receipt identity/number, `currency` |
+
+`collectedAmount` includes verified and pending allocations; reconciliation is a subset, not a second deduction from due. Charge allocation `amountPaid` is never the whole transaction total. Refund requested base, policy-calculated, approved, processed and reversed amounts remain separate. Mixed request pages serialize explicit derived concession/refund/adjustment records with a `kind` discriminator; they have no generic `title,amount,date` aliases.
+
+Concession eligibility accepts optional `studentFeeStructureId`. Its typed context follows web `ConcessionRequestContextDto`: assignment options, selection flag, blockers, selected assignment's `feeHeads`, `eligibleDueFees`, `concessionPolicies` and `concessionTypes`. Only the exact child's/year's assigned current active policy is offered. Due rows use `installmentLabel,originalAmount,eligibleConcessionAmount`; types use `concessionTypeId`, document requirements `documentName`. No selection returns nullable `studentFeeStructureId` and requires explicit assignment choice when multiple assignments exist. Family create/edit/submit/upload capabilities are extensions.
+Concession preview uses `totalConcessionAmount,concessionPolicyName,totalEligibleBase,netPayable` and the preview fingerprint. Owner detail/save/action results use `concessionRequestId,totalRequestedConcessionAmount,totalApprovedConcessionAmount,totalReversedConcessionAmount,netApprovedConcessionAmount,submittedDocuments` with canonical web fields, decimal strings and family-only available actions. Document downloads additionally require ViewDocument; no staff approval/actor projection is exposed.
+Refund eligibility follows web `RefundEligibilityDto`: `refundPolicyName,allowedPayoutMethods,totalRefundable,receipts[receiptId,...],feeHeads[feeHeadId,feeHeadName,totalPaid,totalRefunded,totalRefundable,months[dueFeeId,sourceAllocationId,sourceReceiptId,receiptNumber,month,year,total,paid,refunded,refundable]]`. Supported family commands remain fee-allocation based. Preview follows `FeeRefundPreviewDto` including `requestedAmount,maximumAllowedAmount,settledPaidAmount,priorProcessedRefund,activeReservation,deductionAmount,capAdjustment,isAllowed,reasons` plus `previewFingerprint`. Numeric enums retain their existing wire identity; money always uses invariant two-decimal strings.
 
 Request history includes submitted staff-created requests and the current actor's
 drafts. Other people's drafts, evidence, payout beneficiaries, internal notes and
@@ -432,7 +487,7 @@ uses the same student/year root above and the standard response envelope.
 Financial mutations require a stable nonempty `idempotencyKey` (maximum 100
 characters); reuse the key and original payload after an unknown outcome. Changed
 payloads do not reuse a key. Concession edits and actions include the current
-`concurrencyStamp`; submission and refund/adjustment creation include the server
+`concurrencyStamp`; cancellation uses `requestConcurrencyStamp`. Submission and refund/adjustment creation include the server
 `previewFingerprint`. Parent-created submissions always wait for staff review,
 including when the guardian also has administrator permissions. Source receipt,
 allocation, due, policy, type and document IDs are checked against the authorized

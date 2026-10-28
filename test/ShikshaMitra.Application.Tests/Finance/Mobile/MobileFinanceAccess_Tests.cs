@@ -162,8 +162,13 @@ public partial class MobileAcademicAppService_Tests
 		await Should.ThrowAsync<AbpAuthorizationException>(()=>reads.ReceiptPdfAsync(f.Student.Id,f.Year.Id,receipt.Id));
 		await GrantFinancePermissionAsync(f.User.Id,Permissions.DownloadReceipts);
 		var permittedPayment=(await reads.PaymentsAsync(f.Student.Id,f.Year.Id)).Items.Single();
-		permittedPayment.Receipts.Single().Id.ShouldBe(receipt.Id);
-		permittedPayment.Receipts.Single().PaymentId.ShouldBe(transaction.Id);
+		permittedPayment.Receipts.Single().ReceiptId.ShouldBe(receipt.Id);
+		permittedPayment.PaymentId.ShouldBe(transaction.Id);permittedPayment.ReceiptNumber.ShouldBe(transaction.ReceiptNumber);
+  WriteFamilyChargeWireSample("payments-persisted.json",await reads.PaymentsAsync(f.Student.Id,f.Year.Id));
+  WriteFamilyChargeWireSample("receipts-persisted.json",await reads.ReceiptsAsync(f.Student.Id,f.Year.Id));
+  var offset=await reads.PaymentsAsync(f.Student.Id,f.Year.Id,skipCount:1,maxResultCount:1);offset.TotalCount.ShouldBe(1);offset.Items.ShouldBeEmpty();
+  await Should.ThrowAsync<Volo.Abp.BusinessException>(()=>reads.PaymentsAsync(f.Student.Id,f.Year.Id,skipCount:-1));
+  await Should.ThrowAsync<Volo.Abp.BusinessException>(()=>reads.ReceiptsAsync(f.Student.Id,f.Year.Id,maxResultCount:101));
 		await Should.ThrowAsync<AbpAuthorizationException>(()=>reads.ReceiptPdfAsync(f.Student.Id,f.Year.Id,other.Id));
 		var pdf=await reads.ReceiptPdfAsync(f.Student.Id,f.Year.Id,receipt.Id);
 		Encoding.ASCII.GetString(pdf,0,5).ShouldBe("%PDF-");

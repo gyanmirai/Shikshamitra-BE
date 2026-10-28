@@ -43,7 +43,8 @@ public class MobileConcessionDocumentInput
 public class MobileFinanceRequestAction
 {
     [Required, MaxLength(100)] public string IdempotencyKey { get; set; } = string.Empty;
-    [Required] public string ConcurrencyStamp { get; set; } = string.Empty;
+    public string ConcurrencyStamp { get; set; } = string.Empty;
+    public string RequestConcurrencyStamp { get; set; } = string.Empty;
     public string? PreviewFingerprint { get; set; }
     [MaxLength(1000)] public string? Reason { get; set; }
 }
@@ -82,3 +83,7 @@ public class MobileAdjustmentLineInput
 
 public sealed record MobileFinanceCommandResult(Guid Id, string Kind, string Status, string Amount, IReadOnlyList<string> AvailableActions) { public string Currency => "INR"; }
 public sealed record MobileFinanceActivityItem(Guid Id, string Kind, string Title, string Status, DateTime Date, bool IsRead);
+
+public sealed record MobileAdjustmentEligibility(IReadOnlyList<MobileAdjustmentSource> Lines) { public string Currency => "INR"; }
+public sealed record MobileAdjustmentSource(Guid DueFeeId, Guid FeeHeadId, string Label, string AvailableAmount);
+public sealed record MobileAdjustmentPreview(string PreviewFingerprint, string Amount) { public string Currency => "INR"; }

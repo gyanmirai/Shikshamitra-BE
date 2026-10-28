@@ -187,6 +187,8 @@ dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~MobileF
 The PostgreSQL cases execute the current EF query/model sources against freshly created test databases. They are not evidence of migration-inclusive CI, production acceptance or power-loss durability. HTTP authorization coverage includes the three additive charge routes; the application tests exercise actual persisted associations and the real permission checker rather than relying only on method metadata.
 
 `MobileFinanceProjection_Tests` covers exact decimal billed/future/credit amounts,
+the Fees overdue/due-now/upcoming partition with paise, zero totals, and future
+installments that are paid or awaiting clearance (their statuses must not become Upcoming),
 receipt ownership across tenant/child/year, real receipt IDs and final/provisional
 linkage, and the student-self read-only discriminator. `MobileFinanceAccess_Tests`
 adds cases to the persisted mobile fixture using the real ABP permission checker:

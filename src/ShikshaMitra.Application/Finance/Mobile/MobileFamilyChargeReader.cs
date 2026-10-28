@@ -79,10 +79,10 @@ internal record FamilyChargeFacts(Charge Charge, string CategoryName, List<Famil
 		var status = Charge.Status == ChargeStatus.Voided ? "Voided" : Pending > 0m ? "InReconciliation"
 			: Outstanding > 0m ? Verified > 0m ? "Partial" : "Pending"
 			: Waived > 0m ? Verified > 0m ? "Settled" : "Waived" : "Paid";
-		return new(Charge.Id, Charge.ChargeName, Charge.PurposeDescription, Charge.ChargeCategoryId, CategoryName,
+		return new(Charge.Id, Charge.ChargeRequestId == Guid.Empty ? null : Charge.ChargeRequestId, Charge.ChargeName, Charge.PurposeDescription, Charge.ChargeCategoryId, CategoryName,
 			dueDate, Charge.AppliedOn.ToUniversalTime(), Charge.ApprovedOn?.ToUniversalTime(), Charge.VoidedOn?.ToUniversalTime(),
 			Charge.Status.ToString(), status, Charge.Status == ChargeStatus.Approved && Outstanding > 0m && dueDate < today,
-			MobileFinanceProjection.Money(Charge.Amount), MobileFinanceProjection.Money(Verified), MobileFinanceProjection.Money(Pending),
+			MobileFinanceProjection.Money(Charge.Amount), MobileFinanceProjection.Money(Verified + Pending), MobileFinanceProjection.Money(Verified), MobileFinanceProjection.Money(Pending),
 			MobileFinanceProjection.Money(Waived), MobileFinanceProjection.Money(Outstanding), MobileFinanceProjection.Money(Refunded));
 	}
 }

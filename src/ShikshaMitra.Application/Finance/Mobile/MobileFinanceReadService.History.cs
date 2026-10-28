@@ -20,9 +20,9 @@ namespace ShikshaMitra.Finance.Mobile;
 public partial class MobileFinanceReadService
 {
 	[Authorize(Permissions.View)]
-	public async Task<MobileFinancePage<MobileFinancePayment>> PaymentsAsync(Guid studentId, Guid academicYearId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default, string? status = null)
+	public async Task<MobileFinanceList<MobileFinancePayment>> PaymentsAsync(Guid studentId, Guid academicYearId, int skipCount = 0, int maxResultCount = 20, CancellationToken cancellationToken = default, string? status = null)
 	{
-		await access.RequireAsync(studentId,academicYearId,cancellationToken:cancellationToken); ValidatePage(page,pageSize);
+		await access.RequireAsync(studentId,academicYearId,cancellationToken:cancellationToken); ValidateOffset(skipCount,maxResultCount);
 		var query=(await transactions.GetQueryableAsync()).Where(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId);
 		if(!string.IsNullOrWhiteSpace(status)&&!string.Equals(status,"all",StringComparison.OrdinalIgnoreCase))
 		{
@@ -31,8 +31,8 @@ public partial class MobileFinanceReadService
 			query=query.Where(x=>x.Status==filter);
 		}
 		var count=await AsyncExecuter.CountAsync(query,cancellationToken);
-		var rows=await AsyncExecuter.ToListAsync(query.OrderByDescending(x=>x.CreationTime).ThenBy(x=>x.Id).Skip(Skip(page,pageSize)).Take(pageSize),cancellationToken);
-		return new(await PaymentDtosAsync(rows,studentId,academicYearId,cancellationToken),count,page,pageSize);
+		var rows=await AsyncExecuter.ToListAsync(query.OrderByDescending(x=>x.CreationTime).ThenBy(x=>x.Id).Skip(skipCount).Take(maxResultCount),cancellationToken);
+		return new(await PaymentDtosAsync(rows,studentId,academicYearId,cancellationToken),count);
 	}
 	private async Task<List<MobileFinancePayment>> PaymentDtosAsync(List<FeeRecordMetadata> rows,Guid studentId,Guid academicYearId,CancellationToken cancellationToken)
 	{
@@ -42,20 +42,20 @@ public partial class MobileFinanceReadService
 			? await receipts.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&Enumerable.Contains(ids,x.FeeCollectionTransactionId),cancellationToken:cancellationToken)
 			: new List<FeePaymentReceipt>();
 		var documentMap=await ReceiptDtosAsync(documents,studentId,academicYearId,cancellationToken);
-		return rows.Select(x=>new MobileFinancePayment(x.Id,DateOnly.FromDateTime(x.CreationTime),
+		return rows.Select(x=>new MobileFinancePayment(x.Id,x.ReceiptNumber,DateOnly.FromDateTime(x.CreationTime),
 			MobileFinanceProjection.Money(MobileFinanceProjection.PaymentAmount(x.TotalPaidFee,splits.Where(s=>s.FeeRecordMetadataId==x.Id).Select(s=>s.Amount).ToList())),x.Status.ToString(),
 			splits.Where(s=>s.FeeRecordMetadataId==x.Id).Select(s=>s.PaymentMethod.ToString()).Distinct().ToList(),
-			documents.Where(r=>r.FeeCollectionTransactionId==x.Id).Select(r=>documentMap[r.Id]).ToList())).ToList();
+			documents.Where(r=>r.FeeCollectionTransactionId==x.Id).Select(r=>MobileFinanceProjection.ReceiptReference(documentMap[r.Id])).ToList())).ToList();
 	}
 	[Authorize(Permissions.ViewReceipts)]
-	public async Task<MobileFinancePage<MobileFinanceReceipt>> ReceiptsAsync(Guid studentId, Guid academicYearId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+	public async Task<MobileFinanceList<MobileFinanceReceipt>> ReceiptsAsync(Guid studentId, Guid academicYearId, int skipCount = 0, int maxResultCount = 20, CancellationToken cancellationToken = default)
 	{
-		await access.RequireAsync(studentId,academicYearId,permission:Permissions.ViewReceipts,cancellationToken:cancellationToken); ValidatePage(page,pageSize);
+		await access.RequireAsync(studentId,academicYearId,permission:Permissions.ViewReceipts,cancellationToken:cancellationToken); ValidateOffset(skipCount,maxResultCount);
 		var query=(await receipts.GetQueryableAsync()).Where(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId);
 		var count=await AsyncExecuter.CountAsync(query,cancellationToken);
-		var rows=await AsyncExecuter.ToListAsync(query.OrderByDescending(x=>x.ReceiptDate).ThenBy(x=>x.Id).Skip(Skip(page,pageSize)).Take(pageSize),cancellationToken);
+		var rows=await AsyncExecuter.ToListAsync(query.OrderByDescending(x=>x.ReceiptDate).ThenBy(x=>x.Id).Skip(skipCount).Take(maxResultCount),cancellationToken);
 		var mapped=await ReceiptDtosAsync(rows,studentId,academicYearId,cancellationToken);
-		return new(rows.Select(x=>mapped[x.Id]).ToList(),count,page,pageSize);
+		return new(rows.Select(x=>mapped[x.Id]).ToList(),count);
 	}
 	[Authorize(Permissions.DownloadReceipts)]
 	public async Task<byte[]> ReceiptPdfAsync(Guid studentId, Guid academicYearId, Guid receiptId, CancellationToken cancellationToken = default)
@@ -69,12 +69,12 @@ public partial class MobileFinanceReadService
 		return await receiptPdf.GenerateAsync(receipt,context.Student,context.AcademicYears.Single(x=>x.Id==academicYearId),cancellationToken);
 	}
 	[Authorize]
-	public async Task<MobileFinancePage<MobileFinanceRequest>> RequestsAsync(Guid studentId, Guid academicYearId, string? kind = null, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+	public async Task<MobileFinanceRequestPage> RequestsAsync(Guid studentId, Guid academicYearId, string? kind = null, int skipCount = 0, int maxResultCount = 20, CancellationToken cancellationToken = default)
 	{
 		if (kind is not (null or "concession" or "refund" or "adjustment")) throw new BusinessException("Finance:SelfService:InvalidRequest");
 		var required = kind switch { "concession" => Permissions.ViewConcessions, "refund" => Permissions.ViewRefunds,
 			"adjustment" => Permissions.ViewAdjustments, _ => Permissions.View };
-		var context=await access.RequireAsync(studentId,academicYearId,permission:required,cancellationToken:cancellationToken); ValidatePage(page,pageSize);
+		var context=await access.RequireAsync(studentId,academicYearId,permission:required,cancellationToken:cancellationToken); ValidateOffset(skipCount,maxResultCount);
 		var concession = await access.IsGrantedAsync(Permissions.ViewConcessions);
 		var refund = await access.IsGrantedAsync(Permissions.ViewRefunds);
 		var adjustment = await access.IsGrantedAsync(Permissions.ViewAdjustments);
@@ -83,31 +83,39 @@ public partial class MobileFinanceReadService
 		if (concession && kind is (null or "concession"))
 		{
 			var repository=LazyServiceProvider.LazyGetRequiredService<IConcessionRequestRepository>();
-			var rows=await AsyncExecuter.ToListAsync((await repository.GetQueryableAsync())
+			var rows=await AsyncExecuter.ToListAsync((await repository.WithDetailsAsync(x=>x.ConcessionFeeHeadMappings,x=>x.ConcessionDueFeeAllocations,x=>x.ConcessionReversals))
 				.Where(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&(x.Status!=ConcessionRequestStatus.Draft||x.CreatorId==context.UserId))
-				.Select(x=>new{x.Id,x.Status,x.CreatorId,x.CreationTime,x.Remarks,Amount=x.ConcessionFeeHeadMappings.Sum(m=>m.FeeHeadConcessionAmount)}),cancellationToken);
+				,cancellationToken);
 			var edit=context.IsGuardian&&await access.IsGrantedAsync(Permissions.EditConcession);
 			var submit=context.IsGuardian&&await access.IsGrantedAsync(Permissions.SubmitConcession);
 			var cancel=context.IsGuardian&&await access.IsGrantedAsync(Permissions.CancelConcession);
-			result.AddRange(rows.Select(x=>new MobileFinanceRequest(x.Id,"concession","Concession request",x.Status.ToString(),MobileFinanceProjection.Money(x.Amount),Utc(x.CreationTime),
-				context.IsGuardian&&x.CreatorId==context.UserId?x.Remarks:null,x.CreatorId==context.UserId
-					? ConcessionActions(x.Status, edit, submit, cancel) : [])));
+   var typeIds=rows.Select(x=>x.ConcessionTypeId).Distinct().ToArray();
+   var types=await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Finance.Fees.Settings.ConcessionTypes.ConcessionType,Guid>>().GetListAsync(x=>Enumerable.Contains(typeIds,x.Id),cancellationToken:cancellationToken);
+   var typeNames=types.ToDictionary(x=>x.Id,x=>x.Name);
+   result.AddRange(rows.Select(x=>new MobileConcessionRequest(x.Id,studentId,academicYearId,typeNames.GetValueOrDefault(x.ConcessionTypeId,string.Empty),
+    MobileFinanceProjection.Money(x.GetTotalRequestedConcession()),MobileFinanceProjection.Money(x.GetTotalRequestedConcession()),MobileFinanceProjection.Money(x.GetTotalApprovedConcession()),
+    Utc(x.CreationTime),x.Status.ToString(),x.Status.ToString(),x.ConcurrencyStamp,x.CreatorId==context.UserId?ConcessionActions(x.Status,edit,submit,cancel):[],
+    context.IsGuardian&&x.CreatorId==context.UserId?x.Remarks:null)));
+
 		}
 		if (refund && kind is (null or "refund"))
 		{
 			var repository=LazyServiceProvider.LazyGetRequiredService<IRepository<FeeRefundRequest,Guid>>();
 			var rows=await repository.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&(x.Status!=FeeRefundStatus.Draft||x.CreatorId==context.UserId),cancellationToken:cancellationToken);
-			result.AddRange(rows.Select(x=>new MobileFinanceRequest(x.Id,"refund","Refund request",x.Status.ToString(),
-				MobileFinanceProjection.Money(MobileFinanceProjection.RefundRequestAmount(x.TotalAmount,x.CalculatedAmount,
-					!x.RefundPolicyVersionId.HasValue&&!x.ConcessionRequestId.HasValue)),Utc(x.CreationTime),context.IsGuardian&&x.CreatorId==context.UserId?x.Reason:null,[])));
+   var receiptIds=rows.Where(x=>x.OriginalReceiptId.HasValue).Select(x=>x.OriginalReceiptId!.Value).Distinct().ToArray();
+   var ownedReceipts=(await receipts.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId&&Enumerable.Contains(receiptIds,x.Id),cancellationToken:cancellationToken)).Select(x=>x.Id).ToHashSet();
+   result.AddRange(rows.Select(x=>RefundDto(x,context.IsGuardian&&x.CreatorId==context.UserId?x.Reason:null) with {
+    OriginalReceiptId=x.OriginalReceiptId.HasValue&&ownedReceipts.Contains(x.OriginalReceiptId.Value)?x.OriginalReceiptId:null,
+    OriginalReceiptNumber=x.OriginalReceiptId.HasValue&&ownedReceipts.Contains(x.OriginalReceiptId.Value)?x.OriginalReceiptNumber:null }));
+
 		}
 		if (adjustment && kind is (null or "adjustment"))
 		{
 			var repository=LazyServiceProvider.LazyGetRequiredService<IRepository<FeeAdjustmentRequest,Guid>>();
 			var rows=await repository.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==academicYearId,cancellationToken:cancellationToken);
-			result.AddRange(rows.Select(x=>new MobileFinanceRequest(x.Id,"adjustment","Adjustment request",x.Status.ToString(),MobileFinanceProjection.Money(MobileFinanceProjection.LegacyMoney(x.RequestedAmount)),Utc(x.CreationTime),context.IsGuardian&&x.CreatorId==context.UserId?x.Reason:null,[])));
+			result.AddRange(rows.Select(x=>new MobileAdjustmentRequest(x.Id,x.Status.ToString(),MobileFinanceProjection.Money(MobileFinanceProjection.LegacyMoney(x.RequestedAmount)),Utc(x.CreationTime),context.IsGuardian&&x.CreatorId==context.UserId?x.Reason:null,[])));
 		}
-		return new(result.OrderByDescending(x=>x.Date).ThenBy(x=>x.Id).Skip(Skip(page,pageSize)).Take(pageSize).ToList(),result.Count,page,pageSize);
+		return new(result.OrderByDescending(x=>x.SortDate).ThenBy(x=>x.Id).Skip(skipCount).Take(maxResultCount).ToList(),result.Count,kind=="concession"?skipCount/maxResultCount+1:null,kind=="concession"?maxResultCount:null,kind=="concession"?(int)Math.Ceiling((decimal)result.Count/maxResultCount):null);
 	}
 	private static string[] ConcessionActions(ConcessionRequestStatus status, bool edit, bool submit, bool cancel) =>
 		new[] { status == ConcessionRequestStatus.Draft && edit ? "edit" : null,
@@ -117,16 +125,27 @@ public partial class MobileFinanceReadService
 	private async Task<Dictionary<Guid,MobileFinanceReceipt>> ReceiptDtosAsync(List<FeePaymentReceipt> rows,Guid studentId,Guid yearId,CancellationToken ct)
 	{
 		var linkIds=rows.SelectMany(x=>new[]{x.LinkedFinalReceiptId,x.LinkedProvisionalReceiptId}).Where(x=>x.HasValue).Select(x=>x!.Value).Distinct().ToArray();
-		var linked=(await receipts.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==yearId&&Enumerable.Contains(linkIds,x.Id),cancellationToken:ct)).Select(x=>x.Id).ToHashSet();
+  var linked=(await receipts.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==yearId&&Enumerable.Contains(linkIds,x.Id),cancellationToken:ct)).ToDictionary(x=>x.Id);
+
 		var txIds=rows.Select(x=>x.FeeCollectionTransactionId).Distinct().ToArray();
 		var ownedTransactions=(await transactions.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==yearId&&Enumerable.Contains(txIds,x.Id),cancellationToken:ct)).Select(x=>x.Id).ToHashSet();
 		return rows.ToDictionary(x=>x.Id,x=>
 		{
 			var dto=MobileFinanceProjection.Receipt(x);
-			return dto with{PaymentId=ownedTransactions.Contains(x.FeeCollectionTransactionId)?x.FeeCollectionTransactionId:null,
-				LinkedReceiptId=dto.LinkedReceiptId.HasValue&&linked.Contains(dto.LinkedReceiptId.Value)?dto.LinkedReceiptId:null};
+   return dto with { FeeCollectionTransactionId=ownedTransactions.Contains(x.FeeCollectionTransactionId)?x.FeeCollectionTransactionId:null,
+    LinkedFinalReceiptId=x.LinkedFinalReceiptId.HasValue&&linked.ContainsKey(x.LinkedFinalReceiptId.Value)?x.LinkedFinalReceiptId:null,
+    LinkedProvisionalReceiptId=x.LinkedProvisionalReceiptId.HasValue&&linked.ContainsKey(x.LinkedProvisionalReceiptId.Value)?x.LinkedProvisionalReceiptId:null,
+    LinkedFinalReceiptNumber=x.LinkedFinalReceiptId.HasValue&&linked.TryGetValue(x.LinkedFinalReceiptId.Value,out var final)?final.ReceiptNumber:null,
+    LinkedProvisionalReceiptNumber=x.LinkedProvisionalReceiptId.HasValue&&linked.TryGetValue(x.LinkedProvisionalReceiptId.Value,out var provisional)?provisional.ReceiptNumber:null };
+
 		});
 	}
+ public static MobileRefundRequest RefundDto(FeeRefundRequest x,string? reason) => new(x.Id,x.VoucherNumber,
+  MobileFinanceProjection.Money(x.TotalAmount),MobileFinanceProjection.Money(x.CalculatedAmount),MobileFinanceProjection.Money(x.ApprovedAmount),
+  MobileFinanceProjection.Money(x.ProcessedAmount),MobileFinanceProjection.Money(x.ReversedAmount),Utc(x.CreationTime),x.SubmittedAt?.UtcDateTime,
+  x.Status.ToString(),[],reason,x.OriginalReceiptId,x.OriginalReceiptNumber);
+ private static void ValidateOffset(int skipCount,int maxResultCount)
+ { if(skipCount<0||maxResultCount<1||maxResultCount>100)throw new BusinessException("Finance:SelfService:InvalidRequest"); }
 	private static DateTimeOffset Utc(DateTime value)=>new(DateTime.SpecifyKind(value,DateTimeKind.Utc));
 	private static int Skip(int page,int size)=>(int)Math.Min((long)(page-1)*size,int.MaxValue);
 	private static void ValidatePage(int page,int pageSize)

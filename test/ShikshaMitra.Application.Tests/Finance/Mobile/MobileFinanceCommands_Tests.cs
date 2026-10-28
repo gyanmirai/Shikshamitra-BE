@@ -113,9 +113,17 @@ public partial class MobileAcademicAppService_Tests
 		var input = new MobileConcessionInput { StudentFeeStructureId = assignment.Id, ConcessionPolicyId = policyId,
 			ConcessionPolicyVersionId = version.Id, ConcessionTypeId = type.Id, IdempotencyKey = Guid.NewGuid().ToString("N"),
 			DueFeeConcessions = [new() { DueFeeId = due.Id, FeeHeadId = head.Id, Amount = "200.00" }] };
-		var preview = JsonSerializer.SerializeToElement(await service.FamilyPreviewAsync(f.Student.Id, f.Year.Id, input));
+		var context=await service.FamilyEligibilityAsync(f.Student.Id,f.Year.Id,assignment.Id);
+  ShikshaMitra.Finance.Mobile.MobileFinanceWireContract_Tests.Write("concession-context.json",context);
+  context.StudentFeeStructureId.ShouldBe(assignment.Id); context.EligibleDueFees.ShouldHaveSingleItem().DueFeeId.ShouldBe(due.Id);
+  context.EligibleDueFees[0].OriginalAmount.ShouldBe("500.00");context.EligibleDueFees[0].EligibleConcessionAmount.ShouldBe("500.00");
+  await Should.ThrowAsync<AbpAuthorizationException>(()=>service.FamilyEligibilityAsync(f.Student.Id,f.Year.Id,Guid.NewGuid()));
+  var typedPreview=await service.FamilyPreviewAsync(f.Student.Id, f.Year.Id, input);
+  ShikshaMitra.Finance.Mobile.MobileFinanceWireContract_Tests.Write("concession-preview.json",typedPreview);
+  var preview = JsonSerializer.SerializeToElement(typedPreview);
 		var draft = JsonSerializer.SerializeToElement(await service.FamilySaveAsync(f.Student.Id, f.Year.Id, null, input));
-		var id = draft.GetProperty("Id").GetGuid();
+		ShikshaMitra.Finance.Mobile.MobileFinanceWireContract_Tests.Write("concession-detail.json",await FinanceRequestAsync(()=>service.FamilyGetAsync(f.Student.Id,f.Year.Id,draft.GetProperty("ConcessionRequestId").GetGuid())));
+  var id = draft.GetProperty("ConcessionRequestId").GetGuid();
 		(await FinanceRequestAsync(async () => (await GetRequiredService<IConcessionRequestRepository>().GetWithDetailsAsync(id)).CreatorId)).ShouldBe(f.User.Id,
 			"A family draft must retain its authenticated tenant creator before ownership-protected submission.");
 		var submit = new MobileFinanceRequestAction { IdempotencyKey = Guid.NewGuid().ToString("N"),
@@ -132,10 +140,15 @@ public partial class MobileAcademicAppService_Tests
 		if (!staffRoute)
 		{
 			var replay = JsonSerializer.SerializeToElement(await service.FamilyActionAsync(f.Student.Id, f.Year.Id, id, submit, true));
-			replay.GetProperty("Id").GetGuid().ShouldBe(id);
+			replay.GetProperty("ConcessionRequestId").GetGuid().ShouldBe(id);
 		}
 		var request = await GetRequiredService<IConcessionRequestRepository>().GetWithDetailsAsync(id);
 		request.Status.ShouldBe(ConcessionRequestStatus.Pending); request.GetTotalApprovedConcession().ShouldBe(0m);
+  var history=await RealFinanceReads().RequestsAsync(f.Student.Id,f.Year.Id,"concession");
+  var listed=history.Items.ShouldHaveSingleItem().ShouldBeOfType<MobileConcessionRequest>();
+  listed.RequestedConcessionAmount.ShouldBe("200.00");listed.ApprovedConcessionAmount.ShouldBe("0.00");listed.ConcessionTypeName.ShouldBe(type.Name);
+  ShikshaMitra.Finance.Mobile.MobileFinanceWireContract_Tests.Write("concessions-persisted.json",history);
+  (await RealFinanceReads().RequestsAsync(f.Student.Id,f.Year.Id,"concession",skipCount:1,maxResultCount:1)).Items.ShouldBeEmpty();
 		(await GetRequiredService<IRepository<DueFee, Guid>>().GetAsync(due.Id)).OutstandingAmount.ShouldBe(500m);
 		var other = new IdentityUser(Guid.NewGuid(), "second-requestor", "second-requestor@example.test", tenantId);
 		other.SetEmailConfirmed(true); await Insert(other);

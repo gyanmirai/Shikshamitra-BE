@@ -16,14 +16,14 @@ public class MobileFinanceCommandRules_Tests
     [Fact]
     public void Family_money_wire_contract_includes_explicit_currency_and_decimal_text()
     {
-        var receipt = new MobileFinanceReceipt(Guid.NewGuid(), null, "R-1", "FinalFee", "Verified", DateOnly.FromDateTime(DateTime.Today), "0.30", null);
-        var payment = new MobileFinancePayment(Guid.NewGuid(), receipt.Date, "0.30", "Paid", ["Cash"], [receipt]);
-        var result = new MobileFinanceCommandResult(Guid.NewGuid(), "refund", "Pending", "0.30", []);
+        var receipt = new MobileFinanceReceipt(Guid.NewGuid(), "R-1", "FinalFee", "Fee", "Verified", "0.30", DateOnly.FromDateTime(DateTime.Today), DateTime.Today, null, true, null, null, null, null);
+        var payment = new MobileFinancePayment(Guid.NewGuid(),receipt.ReceiptNumber, receipt.ReceiptDate, "0.30", "Paid", ["Cash"], [MobileFinanceProjection.ReceiptReference(receipt)]);
+        var result = new MobileFinanceCommandResult(Guid.NewGuid(), "adjustment", "Pending", "0.30", []);
         foreach (var value in new object[] { receipt, payment, result })
         {
             var json = JsonSerializer.SerializeToElement(value);
             json.GetProperty("Currency").GetString().ShouldBe("INR");
-            json.GetProperty("Amount").GetString().ShouldBe("0.30");
+            json.GetProperty(value is MobileFinanceReceipt ? "TotalPaidAmount" : "Amount").GetString().ShouldBe("0.30");
         }
     }
     [Theory]
@@ -90,12 +90,12 @@ public class MobileFinanceCommandRules_Tests
                 new() { SourceReceiptId = receipt, SourceAllocationId = second, DueFeeId = Guid.NewGuid(), Refundable = 25.25m }
             ] }] };
         var json = JsonSerializer.SerializeToElement(MobileFinanceRefundEligibilityProjection.Map(result));
-        json.GetProperty("MaximumAllowedAmount").GetString().ShouldBe("125.50");
+        json.GetProperty("TotalRefundable").GetString().ShouldBe("125.50");
         var source = json.GetProperty("Receipts")[0];
-        source.GetProperty("AllowPartialRefund").GetBoolean().ShouldBe(allowPartial);
-        var lines = source.GetProperty("Lines").EnumerateArray().ToList();
+        json.GetProperty("AllowPartialRefund").GetBoolean().ShouldBe(allowPartial);
+        var lines = json.GetProperty("FeeHeads")[0].GetProperty("Months").EnumerateArray().ToList();
         lines.Select(x => x.GetProperty("SourceAllocationId").GetGuid()).ShouldBe([first, second]);
-        lines.Select(x => x.GetProperty("AvailableAmount").GetString()).ShouldBe(["100.25", "25.25"]);
+        lines.Select(x => x.GetProperty("Refundable").GetString()).ShouldBe(["100.25", "25.25"]);
     }
     [Theory]
     [InlineData(null, "500.00")]

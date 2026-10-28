@@ -48,15 +48,20 @@ public partial class FeeRefundAppService : IFamilyRefundService
 				SourceAllocationId = x.SourceAllocationId, Amount = MobileFinanceCommandRules.ParseMoney(x.Amount) }).ToList() };
 	}
 
-	public virtual async Task<object> FamilyRefundPreviewAsync(Guid child, Guid year, MobileRefundInput input)
+	public virtual async Task<MobileFeeRefundPreview> FamilyRefundPreviewAsync(Guid child, Guid year, MobileRefundInput input)
 	{
 		await RequireFamilyRefundAsync(child, year);
 		var prepared = await PrepareAsync(FamilyRefundInput(child, year, input), familyAuthorized: true);
-		return new { Currency = "INR", PreviewFingerprint = prepared.Hash, Amount = MobileFinanceCommandRules.Money(prepared.Calculation.FinalRefund), prepared.Policy.PolicyName };
+		return new MobileFeeRefundPreview { PreviewFingerprint=prepared.Hash,StudentFeeStructureId=prepared.AssignmentId,
+   RefundPolicyId=prepared.PolicyId,RefundPolicyVersionId=prepared.PolicyVersionId,RefundPolicyName=prepared.Policy.PolicyName,
+   SettledPaidAmount=MobileFinanceProjection.Money(prepared.Calculation.SettledPaidAmount),PriorProcessedRefund=MobileFinanceProjection.Money(prepared.Calculation.PriorProcessedRefund),
+   ActiveReservation=MobileFinanceProjection.Money(prepared.Calculation.ActiveReservation),RequestedAmount=MobileFinanceProjection.Money(input.Lines.Sum(x=>MobileFinanceCommandRules.ParseMoney(x.Amount))),
+   DeductionAmount=MobileFinanceProjection.Money(prepared.Calculation.DeductionAmount),CapAdjustment=MobileFinanceProjection.Money(prepared.Calculation.CapAdjustment),
+   MaximumAllowedAmount=MobileFinanceProjection.Money(prepared.Calculation.FinalRefund),IsAllowed=true };
 	}
 
 	[UnitOfWork(IsDisabled = true)]
-	public virtual async Task<MobileFinanceCommandResult> FamilyRefundCreateAsync(Guid child, Guid year, MobileRefundInput input)
+	public virtual async Task<MobileRefundRequest> FamilyRefundCreateAsync(Guid child, Guid year, MobileRefundInput input)
 	{
 		await RequireFamilyRefundAsync(child, year);
 		await LazyServiceProvider.LazyGetRequiredService<MobileFinanceAccessService>().RequireAsync(child, year,
@@ -70,7 +75,7 @@ public partial class FeeRefundAppService : IFamilyRefundService
 			var saved = await RequireAsync(replay.Value);
 			MobileFinanceCommandRules.RequireOwner(child, year, currentUser.GetId(), saved.StudentId ?? Guid.Empty, saved.AcademicYearId, saved.CreatorId);
 			await uow.CompleteAsync();
-			return new(saved.Id, "refund", saved.Status.ToString(), MobileFinanceCommandRules.Money(saved.CalculatedAmount), []);
+			return MobileFinanceReadService.RefundDto(saved,saved.Reason);
 		}
 		var create = FamilyRefundInput(child, year, input);
 		var prepared = await PrepareAsync(create, familyAuthorized: true);
@@ -84,14 +89,14 @@ public partial class FeeRefundAppService : IFamilyRefundService
 		await WriteAuditAsync(request, FinanceAuditActions.Create, "Family refund submitted for staff review.");
 		await store.RecordAsync("refund_create", input.IdempotencyKey, payload, request.Id, child, year);
 		await uow.CompleteAsync();
-		return new(request.Id, "refund", request.Status.ToString(), MobileFinanceCommandRules.Money(request.CalculatedAmount), []);
+		return MobileFinanceReadService.RefundDto(request,request.Reason);
 	}
 
-    public virtual async Task<object> FamilyRefundEligibilityAsync(Guid child, Guid year)
+    public virtual async Task<MobileRefundEligibility> FamilyRefundEligibilityAsync(Guid child, Guid year)
     {
         await RequireFamilyRefundAsync(child, year);
         var result = await FamilyEligibilityCoreAsync(child, year);
-        return MobileFinanceRefundEligibilityProjection.Map(result);
+        return MobileFinanceCanonicalCommandProjection.Map(result);
     }
     private async Task<RefundEligibilityDto> FamilyEligibilityCoreAsync(Guid child, Guid academicYearId)
     {

@@ -481,7 +481,7 @@ public class SalaryTemplateAppService(
 		Rules = MapRulesForContract(version.GetRules())
 	};
 
-	private static bool RequiresSetup(SalaryStructureTemplateVersion? version) =>
+	internal static bool RequiresSetup(SalaryStructureTemplateVersion? version) =>
 		version != null && (
 			version.DefaultEsiManagementMode == EsiManagement.InPlatform && !version.DefaultEsiPolicyId.HasValue ||
 			version.GetRules().Any(x => x.FormulaType == SalaryTemplateFormulaType.EmployeeProvidentFund) && !version.DefaultPfRuleId.HasValue);

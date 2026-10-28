@@ -28,21 +28,18 @@ public class EmployeesController : AbpControllerBase
 	private const int MaxEmployeePageSize = 500;
 
 	private readonly IEmployeeSearchAppService _searchAppService;
-	private readonly IEmployeePersonalInfoAppService _personalInfoAppService;
-	private readonly IEmployeeAuthorizationService _authorizationService;
+	private readonly IEmployeeProfileAppService _profileAppService;
 	private readonly ICurrentEmployeeProfileAppService _currentEmployeeProfileAppService;
 	private readonly IEmployeeDashboardAppService _employeeDashboardAppService;
 
 	public EmployeesController(
 		IEmployeeSearchAppService searchAppService,
-		IEmployeePersonalInfoAppService personalInfoAppService,
-		IEmployeeAuthorizationService authorizationService,
+		IEmployeeProfileAppService profileAppService,
 		ICurrentEmployeeProfileAppService currentEmployeeProfileAppService,
 		IEmployeeDashboardAppService employeeDashboardAppService)
 	{
 		_searchAppService = searchAppService;
-		_personalInfoAppService = personalInfoAppService;
-		_authorizationService = authorizationService;
+		_profileAppService = profileAppService;
 		_currentEmployeeProfileAppService = currentEmployeeProfileAppService;
 		_employeeDashboardAppService = employeeDashboardAppService;
 	}
@@ -138,10 +135,7 @@ public class EmployeesController : AbpControllerBase
 	[ProducesResponseType(StatusCodes.Status403Forbidden)]
 	public virtual async Task<EmployeeDetails> GetEmployeeByIdAsync(Guid employeeId)
 	{
-		await _authorizationService.CheckEmployeeAccessAsync(employeeId);
-
-		var employee = await _personalInfoAppService.GetWithDetailsAsync(employeeId);
-		return MapToEmployeeDetails(employee);
+		return await _profileAppService.GetAsync(employeeId);
 	}
 
 	private static EmployeeDetails MapToEmployeeDetails(EmployeeDto employee)

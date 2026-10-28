@@ -21,13 +21,13 @@ public partial class MobileFinanceController(IMobileFinanceReadService reads) : 
 	[HttpGet("installments")]
 	public async Task<Result<List<MobileFinanceInstallment>>> Installments(Guid studentId,[FromQuery] Guid academicYearId,CancellationToken cancellationToken)=>Result.Success(await reads.InstallmentsAsync(studentId,academicYearId,cancellationToken));
 	[HttpGet("charges")]
-	public async Task<Result<List<MobileFinanceCharge>>> Charges(Guid studentId,[FromQuery] Guid academicYearId,CancellationToken cancellationToken)=>Result.Success(await reads.ChargesAsync(studentId,academicYearId,cancellationToken));
+	public async Task<Result<List<MobileFamilyCharge>>> Charges(Guid studentId,[FromQuery] Guid academicYearId,CancellationToken cancellationToken)=>Result.Success(await reads.ChargesAsync(studentId,academicYearId,cancellationToken));
 	[HttpGet("payments")]
-	public async Task<Result<MobileFinancePage<MobileFinancePayment>>> Payments(Guid studentId,[FromQuery] Guid academicYearId,[FromQuery] int page=1,[FromQuery] int pageSize=20,[FromQuery] string? status=null,CancellationToken cancellationToken=default)=>Result.Success(await reads.PaymentsAsync(studentId,academicYearId,page,pageSize,cancellationToken,status));
+	public async Task<Result<MobileFinanceList<MobileFinancePayment>>> Payments(Guid studentId,[FromQuery] Guid academicYearId,[FromQuery] int skipCount=0,[FromQuery] int maxResultCount=20,[FromQuery] string? status=null,CancellationToken cancellationToken=default)=>Result.Success(await reads.PaymentsAsync(studentId,academicYearId,skipCount,maxResultCount,cancellationToken,status));
 	[HttpGet("receipts")]
-	public async Task<Result<MobileFinancePage<MobileFinanceReceipt>>> Receipts(Guid studentId,[FromQuery] Guid academicYearId,[FromQuery] int page=1,[FromQuery] int pageSize=20,CancellationToken cancellationToken=default)=>Result.Success(await reads.ReceiptsAsync(studentId,academicYearId,page,pageSize,cancellationToken));
+	public async Task<Result<MobileFinanceList<MobileFinanceReceipt>>> Receipts(Guid studentId,[FromQuery] Guid academicYearId,[FromQuery] int skipCount=0,[FromQuery] int maxResultCount=20,CancellationToken cancellationToken=default)=>Result.Success(await reads.ReceiptsAsync(studentId,academicYearId,skipCount,maxResultCount,cancellationToken));
 	[HttpGet("requests")]
-	public async Task<Result<MobileFinancePage<MobileFinanceRequest>>> Requests(Guid studentId,[FromQuery] Guid academicYearId,[FromQuery] string? kind=null,[FromQuery] int page=1,[FromQuery] int pageSize=20,CancellationToken cancellationToken=default)=>Result.Success(await reads.RequestsAsync(studentId,academicYearId,kind,page,pageSize,cancellationToken));
+	public async Task<Result<MobileFinanceRequestPage>> Requests(Guid studentId,[FromQuery] Guid academicYearId,[FromQuery] string? kind=null,[FromQuery] int skipCount=0,[FromQuery] int maxResultCount=20,CancellationToken cancellationToken=default)=>Result.Success(await reads.RequestsAsync(studentId,academicYearId,kind,skipCount,maxResultCount,cancellationToken));
 	[HttpGet("receipts/{receiptId:guid}/pdf")]
 	public async Task<FileContentResult> ReceiptPdf(Guid studentId,Guid receiptId,[FromQuery] Guid academicYearId,CancellationToken cancellationToken)=>File(await reads.ReceiptPdfAsync(studentId,academicYearId,receiptId,cancellationToken),"application/pdf",$"receipt-{receiptId}.pdf");
 	[HttpGet("statement/pdf")]

@@ -44,51 +44,66 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 	private static List<DueFeeConcessionInput> FamilyDues(MobileConcessionInput input) => input.DueFeeConcessions
 		.Select(x => new DueFeeConcessionInput(x.DueFeeId, x.FeeHeadId, MobileFinanceCommandRules.ParseMoney(x.Amount))).ToList();
 
-	public virtual async Task<object> FamilyEligibilityAsync(Guid child, Guid year)
-	{
-		await RequireFamilyAsync(child, year);
-		var assignments = await studentFeeStructureRepository.GetListAsync(x => x.StudentId == child && x.AcademicYearId == year);
-		var types = await concessionTypeRepository.GetListAsync(x => x.AcademicYearId == year && x.IsActive);
-		var results = new List<object>();
-		foreach (var assignment in assignments.Where(x => x.ConcessionPolicyId.HasValue && x.ConcessionPolicyVersionId.HasValue))
-		{
-			var version = await financePolicyVersionRepository.FindAsync(assignment.ConcessionPolicyVersionId!.Value);
-			if (version == null || version.PolicyType != "concession" || version.PolicyId != assignment.ConcessionPolicyId || version.AcademicYearId != year) continue;
-			if (await financePolicyVersionRepository.FindAsync(x => x.PolicyType == "concession" && x.PolicyId == version.PolicyId && x.VersionNumber > version.VersionNumber) != null) continue;
-			var policy = System.Text.Json.JsonSerializer.Deserialize<ConcessionPolicySnapshot>(version.SnapshotJson);
-			if (policy == null || policy.Status != ConcessionPolicyStatus.Active) continue;
+	public virtual async Task<MobileConcessionRequestContext> FamilyEligibilityAsync(Guid child, Guid year, Guid? studentFeeStructureId = null)
+ {
+  var access = await RequireFamilyAsync(child, year);
+  var assignments = await studentFeeStructureRepository.GetListAsync(x => x.StudentId == child && x.AcademicYearId == year);
+  if(studentFeeStructureId.HasValue && !assignments.Any(x=>x.Id==studentFeeStructureId)) throw new Volo.Abp.Authorization.AbpAuthorizationException();
+  var structureIds=assignments.Select(x=>x.FeeStructureStandardId).ToArray();
+  var structures=await feeStructureRepository.GetListAsync(x=>Enumerable.Contains(structureIds,x.Id));
+  var result = new MobileConcessionRequestContext {
+   StudentId=child,AcademicYearId=year,StudentName=access.StudentName,
+   AssignmentSelectionRequired=!studentFeeStructureId.HasValue&&assignments.Count>1,
+   Assignments=assignments.OrderBy(x=>x.ChargeStartDate).ThenBy(x=>x.Id).Select(x=>new MobileConcessionAssignmentOption {
+    StudentFeeStructureId=x.Id,FeeStructureId=x.FeeStructureStandardId,FeeStructureName=structures.FirstOrDefault(f=>f.Id==x.FeeStructureStandardId)?.Name??string.Empty,
+    ChargeStartDate=x.ChargeStartDate,ChargeEndDate=x.ChargeEndDate }).ToList(),
+   CanCreate=await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.RequestConcession),
+   CanEdit=await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.EditConcession),
+   CanSubmit=await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.SubmitConcession),
+   CanUploadDocuments=await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.UploadConcessionDocument) };
+  if(result.AssignmentSelectionRequired){result.Blockers.Add("Select the fee assignment for this concession request.");return result;}
+  var assignment=assignments.SingleOrDefault(x=>x.Id==studentFeeStructureId)??assignments.SingleOrDefault();
+  if(assignment==null){result.Blockers.Add("No fee assignment is available.");return result;}
+  result.StudentFeeStructureId=assignment.Id;
+  result.FeeStructureName=structures.FirstOrDefault(x=>x.Id==assignment.FeeStructureStandardId)?.Name??string.Empty;
+  if(!assignment.ConcessionPolicyId.HasValue||!assignment.ConcessionPolicyVersionId.HasValue){result.Blockers.Add("No concession policy is assigned.");return result;}
+  var version=await financePolicyVersionRepository.FindAsync(assignment.ConcessionPolicyVersionId.Value);
+  if(version==null||version.PolicyType!="concession"||version.PolicyId!=assignment.ConcessionPolicyId||version.AcademicYearId!=year||
+   await financePolicyVersionRepository.FindAsync(x=>x.PolicyType=="concession"&&x.PolicyId==version.PolicyId&&x.VersionNumber>version.VersionNumber)!=null)
+  {result.Blockers.Add("The assigned concession policy is unavailable.");return result;}
+  var policy=System.Text.Json.JsonSerializer.Deserialize<ConcessionPolicySnapshot>(version.SnapshotJson);
+  if(policy==null||policy.Status!=ConcessionPolicyStatus.Active){result.Blockers.Add("The assigned concession policy is inactive.");return result;}
+  var assignedDues=await dueFeeRepository.GetListAsync(x=>x.StudentId==child&&x.StudentFeeStructureId==assignment.Id);
+  var headIds=assignedDues.Select(x=>x.FeeHeadId).Distinct().ToArray();
+  var heads=await feeHeadRepository.GetListAsync(x=>Enumerable.Contains(headIds,x.Id)&&x.AcademicYearId==year&&x.IsActive&&x.IsConcessionApplied);
+  var headNames=heads.ToDictionary(x=>x.Id,x=>x.Name); var permitted=heads.Select(x=>x.Id).ToHashSet();
+  if(assignment.ConcessionFeeHeadScope==ConcessionFeeHeadScope.SelectedFeeHeads)permitted.IntersectWith(assignment.GetConcessionApplicableFeeHeadIds());
+  var eligible=ConcessionRequestManager.GetEligibleDueFees(assignedDues.Where(x=>permitted.Contains(x.FeeHeadId)).ToList(),policy.ApplyOn);
+  result.EligibleDueFees=eligible.Select(x=>FamilyEligibleDue(x,headNames.GetValueOrDefault(x.FeeHeadId,string.Empty),policy)).ToList();
+  result.FeeHeads=result.EligibleDueFees.GroupBy(x=>new{x.FeeHeadId,x.FeeHeadName}).Select(g=>new MobileConcessionEligibleFeeHead {
+   FeeHeadId=g.Key.FeeHeadId,FeeHeadName=g.Key.FeeHeadName,EligibleOutstanding=MobileFinanceProjection.Money(eligible.Where(d=>d.FeeHeadId==g.Key.FeeHeadId).Sum(d=>ConcessionRequestManager.GetConcessionCapacity(d,policy))) }).ToList();
+  result.ConcessionPolicies=[new MobileConcessionPolicyOption {
+   ConcessionPolicyId=version.PolicyId,ConcessionPolicyVersionId=version.Id,PolicyName=policy.PolicyName,PolicyCode=policy.PolicyCode,Version=version.VersionNumber,IsDefault=policy.IsDefault,AutoCreateRefund=policy.ShouldAutoCreateRefund,
+   ValueSource=policy.ValueSource.ToString(),CalculationMethod=policy.CalculationMethod.ToString(),ApplyOn=policy.ApplyOn.ToString(),
+   PercentageValue=policy.PercentageValue.HasValue?MobileFinanceProjection.Money(policy.PercentageValue.Value):null,
+   FixedAmount=policy.FixedAmount.HasValue?MobileFinanceProjection.Money(policy.FixedAmount.Value):null,
+   MaximumPercentage=policy.MaximumPercentage.HasValue?MobileFinanceProjection.Money(policy.MaximumPercentage.Value):null,
+   MaximumFixedAmount=policy.MaximumFixedAmount.HasValue?MobileFinanceProjection.Money(policy.MaximumFixedAmount.Value):null,
+   ApplicableConcessionTypeIds=policy.ApplicableConcessionTypeIds?.ToList()??[],FeeHeadScope=policy.FeeHeadScope.ToString(),ApplicableFeeHeadIds=policy.ApplicableFeeHeadIds?.ToList()??[],RoundingMethod=policy.RoundingMethod.ToString() }];
+  var types=await concessionTypeRepository.GetListAsync(x=>x.AcademicYearId==year&&x.IsActive);
+  result.ConcessionTypes=types.Where(x=>(policy.ApplicableConcessionTypeIds?.Count??0)==0||policy.ApplicableConcessionTypeIds!.Contains(x.Id)).Select(x=>new MobileConcessionTypeOption {
+   ConcessionTypeId=x.Id,Name=x.Name,Description=x.Description,Documents=x.ConcessionTypeDocuments.Select(d=>new MobileConcessionDocumentRequirement {
+    DocumentId=d.Id,DocumentName=d.DocumentName,IsRequired=d.IsRequired,MaxFileSizeBytes=Math.Min(d.MaxFileSizeBytes,10*1024*1024),AcceptedFormats=d.AcceptedFormats.Select(f=>f.DocumentType.ToString()).ToList() }).ToList() }).ToList();
+  if(eligible.Count==0)result.Blockers.Add("No installments are eligible for the assigned policy.");
+  return result;
+ }
+ private static MobileConcessionEligibleDueFee FamilyEligibleDue(ShikshaMitra.Finance.Fees.FeeCollection.DueFee x,string name,ConcessionPolicySnapshot policy)=>new(){
+  DueFeeId=x.Id,FeeHeadId=x.FeeHeadId,FeeHeadName=name,Month=(int)x.Month,Year=x.Year,InstallmentLabel=x.GetDisplayInstallmentLabel(),
+  OriginalAmount=MobileFinanceProjection.Money(x.OriginalAmount),PaidAmount=MobileFinanceProjection.Money(x.PaidAmount),ConcessionAmount=MobileFinanceProjection.Money(x.ConcessionAmount),
+  AdjustmentCreditAmount=MobileFinanceProjection.Money(x.AdjustmentCreditAmount),OutstandingAmount=MobileFinanceProjection.Money(x.OutstandingAmount),
+  EligibleConcessionAmount=MobileFinanceProjection.Money(ConcessionRequestManager.GetConcessionCapacity(x,policy)),Status=x.Status.ToString(),ConcurrencyStamp=x.ConcurrencyStamp };
 
-            var assignedDues = await dueFeeRepository.GetListAsync(x => x.StudentId == child && x.StudentFeeStructureId == assignment.Id);
-            var headIds = assignedDues.Select(x => x.FeeHeadId).Distinct().ToArray();
-            var heads = await feeHeadRepository.GetListAsync(x => Enumerable.Contains(headIds, x.Id) && x.AcademicYearId == year && x.IsActive && x.IsConcessionApplied);
-            var headNames = heads.ToDictionary(x => x.Id, x => x.Name);
-            var permittedHeads = heads.Select(x => x.Id).ToHashSet();
-            if (assignment.ConcessionFeeHeadScope == ConcessionFeeHeadScope.SelectedFeeHeads)
-                permittedHeads.IntersectWith(assignment.GetConcessionApplicableFeeHeadIds());
-            var eligible = ConcessionRequestManager.GetEligibleDueFees(assignedDues.Where(x => permittedHeads.Contains(x.FeeHeadId)).ToList(), policy.ApplyOn);
-			results.Add(new { StudentFeeStructureId = assignment.Id, assignment.ConcessionPolicyId, assignment.ConcessionPolicyVersionId,
-				policy.PolicyName,
-                EligibleDueFees = eligible.Select(x => new { DueFeeId = x.Id, x.FeeHeadId, FeeHeadName = headNames.GetValueOrDefault(x.FeeHeadId, string.Empty), Label = x.GetDisplayInstallmentLabel(),
-                    Amount = MobileFinanceCommandRules.Money(ConcessionRequestManager.GetConcessionCapacity(x, policy)),
-                    OutstandingAmount = MobileFinanceCommandRules.Money(x.OutstandingAmount) }).ToArray(),
-                PercentageValue = policy.PercentageValue.HasValue ? MobileFinanceCommandRules.Money(policy.PercentageValue.Value) : null,
-                FixedAmount = policy.FixedAmount.HasValue ? MobileFinanceCommandRules.Money(policy.FixedAmount.Value) : null,
-                ValueSource = policy.ValueSource.ToString(), CalculationMethod = policy.CalculationMethod.ToString(),
-				MaximumPercentage = policy.MaximumPercentage.HasValue ? MobileFinanceCommandRules.Money(policy.MaximumPercentage.Value) : null,
-				MaximumFixedAmount = policy.MaximumFixedAmount.HasValue ? MobileFinanceCommandRules.Money(policy.MaximumFixedAmount.Value) : null,
-				ConcessionTypes = types.Where(x => (policy.ApplicableConcessionTypeIds?.Count ?? 0) == 0 || policy.ApplicableConcessionTypeIds!.Contains(x.Id))
-				.Select(x => new { x.Id, x.Name, Documents = x.ConcessionTypeDocuments.Select(d => new { DocumentId = d.Id,
-					Name = d.DocumentName, d.IsRequired, MaxFileSizeBytes = Math.Min(d.MaxFileSizeBytes, 10 * 1024 * 1024),
-					AcceptedFormats = d.AcceptedFormats.Select(f => f.DocumentType.ToString()).ToArray() }).ToArray() }).ToArray() });
-		}
-		return new { Currency = "INR", Assignments = results,
-			CanCreate = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.RequestConcession),
-			CanEdit = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.EditConcession),
-			CanSubmit = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.SubmitConcession),
-			CanUploadDocuments = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.UploadConcessionDocument) };
-	}
-
-	public virtual async Task<object> FamilyPreviewAsync(Guid child, Guid year, MobileConcessionInput input)
+	public virtual async Task<MobileConcessionRequestPreview> FamilyPreviewAsync(Guid child, Guid year, MobileConcessionInput input)
 	{
 		await RequireFamilyAsync(child, year);
 		if (!await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.RequestConcession) &&
@@ -97,10 +112,22 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 		await RequireAssignedFamilyPolicyAsync(child, year, input);
 		var preview = await concessionRequestManager.PreviewAsync(CurrentTenant.Id, year, child, input.ConcessionPolicyId,
 			input.ConcessionPolicyVersionId, input.ConcessionTypeId, FamilyHeads(input), input.StudentFeeStructureId, FamilyDues(input));
-		return new { Currency = "INR", PreviewFingerprint = ComputePreviewFingerprint(input.ConcessionPolicyVersionId, preview.EligibleDueFees, preview.Mappings),
-			Amount = MobileFinanceCommandRules.Money(preview.Mappings.Sum(x => x.FeeHeadConcessionAmount)), preview.Policy.PolicyName,
-			EligibleDueFees = preview.EligibleDueFees.Select(x => new { DueFeeId = x.Id, x.FeeHeadId, Label = x.GetDisplayInstallmentLabel(),
-				Amount = MobileFinanceCommandRules.Money(x.OriginalAmount), OutstandingAmount = MobileFinanceCommandRules.Money(x.OutstandingAmount) }).ToArray() };
+  var headIds=preview.EligibleDueFees.Select(x=>x.FeeHeadId).Distinct().ToArray();
+  var names=(await feeHeadRepository.GetListAsync(x=>Enumerable.Contains(headIds,x.Id))).ToDictionary(x=>x.Id,x=>x.Name);
+  var total=preview.Mappings.Sum(x=>x.FeeHeadConcessionAmount);
+  var eligibleBase=preview.Mappings.Sum(x=>x.PreConcessionFeeHeadAmount);
+  return new MobileConcessionRequestPreview { StudentFeeStructureId=input.StudentFeeStructureId,ConcessionPolicyId=input.ConcessionPolicyId,
+   ConcessionPolicyVersionId=input.ConcessionPolicyVersionId,ConcessionPolicyName=preview.Policy.PolicyName,ConcessionPolicyCode=preview.Policy.PolicyCode,
+   ConcessionPolicyVersion=preview.Policy.Version,ApplyOn=preview.Policy.ApplyOn.ToString(),ValueSource=preview.Policy.ValueSource.ToString(),CalculationMethod=preview.Policy.CalculationMethod.ToString(),
+   MaximumPercentage=preview.Policy.MaximumPercentage.HasValue?MobileFinanceProjection.Money(preview.Policy.MaximumPercentage.Value):null,
+   MaximumFixedAmount=preview.Policy.MaximumFixedAmount.HasValue?MobileFinanceProjection.Money(preview.Policy.MaximumFixedAmount.Value):null,
+   FeeHeadConcessions=preview.Mappings.Select(x=>new MobileFeeHeadConcessionDetail {FeeHeadId=x.FeeHeadId,FeeHeadName=names.GetValueOrDefault(x.FeeHeadId,string.Empty),
+    AnnualBaseAmount=MobileFinanceProjection.Money(x.PreConcessionFeeHeadAmount),BasedOn=(int)x.UserSpecifiedConcessionAmountType,Amount=MobileFinanceProjection.Money(x.UserSpecifiedConcessionAmountValue),
+    DiscountAmount=MobileFinanceProjection.Money(x.FeeHeadConcessionAmount),NetAmount=MobileFinanceProjection.Money(x.PostConcessionFeeHeadAmount)}).ToList(),
+   TotalConcessionAmount=MobileFinanceProjection.Money(total),TotalEligibleBase=MobileFinanceProjection.Money(eligibleBase),NetPayable=MobileFinanceProjection.Money(Math.Max(0m,eligibleBase-total)),
+   PreviewFingerprint=ComputePreviewFingerprint(input.ConcessionPolicyVersionId,preview.EligibleDueFees,preview.Mappings),GeneratedAt=Clock.Now,
+   EligibleDueFees=preview.EligibleDueFees.Select(x=>FamilyEligibleDue(x,names.GetValueOrDefault(x.FeeHeadId,string.Empty),preview.Policy)).ToList() };
+
 	}
 
 	private async Task<ConcessionRequest> RequireOwnedFamilyRequestAsync(Guid child, Guid year, Guid requestId)
@@ -110,32 +137,55 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 		return request;
 	}
 
-	private async Task<object> FamilyDetailAsync(ConcessionRequest request)
+	private async Task<MobileConcessionRequestDetail> FamilyDetailAsync(ConcessionRequest request)
 	{
 		var edit = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.EditConcession);
 		var submit = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.SubmitConcession);
 		var cancel = await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.CancelConcession);
-		return new { Currency = "INR", Id = request.Id, Kind = "concession", Status = request.Status.ToString(),
-		Amount = MobileFinanceCommandRules.Money(request.GetTotalRequestedConcession()), request.ConcurrencyStamp,
-		AvailableActions = new[] { request.Status == ConcessionRequestStatus.Draft && edit ? "edit" : null,
-			request.Status == ConcessionRequestStatus.Draft && submit ? "submit" : null,
-			request.Status is (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending) && cancel ? "cancel" : null }
-			.Where(x => x != null).Select(x => x!).ToArray(),
-		request.Remarks, request.StudentFeeStructureId, request.ConcessionPolicyId, request.ConcessionPolicyVersionId, request.ConcessionTypeId,
-		FeeHeadConcessions = request.ConcessionFeeHeadMappings.Select(x => new { x.FeeHeadId, BasedOn = (int)x.UserSpecifiedConcessionAmountType,
-			Amount = MobileFinanceCommandRules.Money(x.UserSpecifiedConcessionAmountValue) }).ToArray(),
-		DueFeeConcessions = ConcessionRequestManager.ReadDueFeeEvidence(request).Select(x => new { x.DueFeeId, x.FeeHeadId, Amount = MobileFinanceCommandRules.Money(x.Amount) }).ToArray(),
-		Documents = request.ConcessionRequestDocuments.Select(x => new { x.DocumentId, Url = BuildDocumentAccessUrl(request.Id, x.DocumentId), x.Status }).ToArray() };
+  var type=await concessionTypeRepository.GetAsync(request.ConcessionTypeId);
+  var canViewDocuments=await FamilyAccess.IsGrantedAsync(MobileFinancePermissions.ViewConcessionDocument);
+  var student=await studentRepository.GetAsync(request.StudentId);
+  var version=await financePolicyVersionRepository.GetAsync(request.ConcessionPolicyVersionId);
+  var policy=System.Text.Json.JsonSerializer.Deserialize<ConcessionPolicySnapshot>(version.SnapshotJson)??throw new BusinessException(ConcessionPolicyErrorCodes.PolicyVersionNotFound);
+  var headIds=request.ConcessionFeeHeadMappings.Select(x=>x.FeeHeadId).ToArray();
+  var names=(await feeHeadRepository.GetListAsync(x=>Enumerable.Contains(headIds,x.Id))).ToDictionary(x=>x.Id,x=>x.Name);
+  List<ConcessionTypeRequirementSnapshot> requirements;
+  try { requirements=string.IsNullOrWhiteSpace(request.TypeRequirementsSnapshotJson)&&!request.SubmittedOn.HasValue
+   ? type.ConcessionTypeDocuments.Select(d=>new ConcessionTypeRequirementSnapshot(d.Id,d.DocumentName,d.IsRequired,d.MaxFileSizeBytes,d.AcceptedFormats.Select(f=>f.DocumentType).ToList())).ToList()
+   : System.Text.Json.JsonSerializer.Deserialize<List<ConcessionTypeRequirementSnapshot>>(request.TypeRequirementsSnapshotJson??string.Empty,CommandJsonOptions)??[]; }
+  catch(System.Text.Json.JsonException){throw new BusinessException(FinanceConcessionErrorCodes.ConfigurationSnapshotInvalid);}
+  var required= requirements.Select(d=>new MobileConcessionDocumentRequirement{DocumentId=d.DocumentId,DocumentName=d.DocumentName,IsRequired=d.IsRequired,
+   MaxFileSizeBytes=d.MaxFileSizeBytes,AcceptedFormats=d.AcceptedFormats.Select(format=>format.ToString()).ToList(),IsUploaded=request.ConcessionRequestDocuments.Any(x=>x.DocumentId==d.DocumentId&&x.Status==1&&!string.IsNullOrWhiteSpace(x.Url)),
+   Url=canViewDocuments&&request.ConcessionRequestDocuments.Any(x=>x.DocumentId==d.DocumentId&&x.Status==1&&!string.IsNullOrWhiteSpace(x.Url))?BuildDocumentAccessUrl(request.Id,d.DocumentId):null}).ToList();
+  return new MobileConcessionRequestDetail { ConcessionRequestId=request.Id, Status=request.Status.ToString(),StatusName=request.Status.ToString(),
+   StudentId=request.StudentId,AcademicYearId=request.AcademicYearId,StudentName=FormatStudentName(student),
+   ConcessionPolicyName=policy.PolicyName,ConcessionPolicyCode=policy.PolicyCode,ConcessionPolicyVersion=policy.Version,CancellationReason=request.CancellationReason,
+   RequiredDocuments=required,MissingDocumentIds=required.Where(x=>x.IsRequired&&!x.IsUploaded).Select(x=>x.DocumentId).ToList(),
+   DocumentSubmissionState=required.Where(x=>x.IsRequired).All(x=>x.IsUploaded)?"Complete":"DocumentsPending",CreatedAt=request.CreationTime,SubmittedAt=request.SubmittedOn,
+   TotalRequestedConcessionAmount=MobileFinanceProjection.Money(request.GetTotalRequestedConcession()),
+   TotalApprovedConcessionAmount=MobileFinanceProjection.Money(request.GetTotalApprovedConcession()),
+   TotalReversedConcessionAmount=MobileFinanceProjection.Money(request.GetTotalReversedConcession()),
+   NetApprovedConcessionAmount=MobileFinanceProjection.Money(request.GetNetApprovedConcession()),ConcurrencyStamp=request.ConcurrencyStamp,
+   AvailableActions=new[]{request.Status==ConcessionRequestStatus.Draft&&edit?"edit":null,request.Status==ConcessionRequestStatus.Draft&&submit?"submit":null,
+    request.Status is (ConcessionRequestStatus.Draft or ConcessionRequestStatus.Pending)&&cancel?"cancel":null}.Where(x=>x!=null).Select(x=>x!).ToList(),
+   Remarks=request.Remarks,StudentFeeStructureId=request.StudentFeeStructureId,ConcessionPolicyId=request.ConcessionPolicyId,
+   ConcessionPolicyVersionId=request.ConcessionPolicyVersionId,ConcessionTypeId=request.ConcessionTypeId,ConcessionTypeName=type.Name,
+   FeeHeadConcessions=request.ConcessionFeeHeadMappings.Select(x=>new MobileFeeHeadConcessionDetail{FeeHeadId=x.FeeHeadId,FeeHeadName=names.GetValueOrDefault(x.FeeHeadId,string.Empty),AnnualBaseAmount=MobileFinanceProjection.Money(x.PreConcessionFeeHeadAmount),NetAmount=MobileFinanceProjection.Money(x.PostConcessionFeeHeadAmount),BasedOn=(int)x.UserSpecifiedConcessionAmountType,
+    Amount=MobileFinanceProjection.Money(x.UserSpecifiedConcessionAmountValue),DiscountAmount=MobileFinanceProjection.Money(x.FeeHeadConcessionAmount)}).ToList(),
+   DueFeeConcessions=ConcessionRequestManager.ReadDueFeeEvidence(request).Select(x=>new MobileDueFeeConcession{DueFeeId=x.DueFeeId,FeeHeadId=x.FeeHeadId,Amount=MobileFinanceProjection.Money(x.Amount)}).ToList(),
+   SubmittedDocuments=request.ConcessionRequestDocuments.Select(x=>new MobileConcessionSubmittedDocument{DocumentId=x.DocumentId,
+    DocumentName=requirements.FirstOrDefault(d=>d.DocumentId==x.DocumentId)?.DocumentName??string.Empty,Url=x.Status==1&&!string.IsNullOrWhiteSpace(x.Url)?BuildDocumentAccessUrl(request.Id,x.DocumentId):string.Empty,Status=x.Status}).ToList() };
+
 	}
 
-	public virtual async Task<object> FamilyGetAsync(Guid child, Guid year, Guid id)
+	public virtual async Task<MobileConcessionRequestDetail> FamilyGetAsync(Guid child, Guid year, Guid id)
 	{
 		await RequireFamilyAsync(child, year);
 		return await FamilyDetailAsync(await RequireOwnedFamilyRequestAsync(child, year, id));
 	}
 
 	[UnitOfWork(IsDisabled = true)]
-	public virtual async Task<object> FamilySaveAsync(Guid child, Guid year, Guid? id, MobileConcessionInput input)
+	public virtual async Task<MobileConcessionRequestDetail> FamilySaveAsync(Guid child, Guid year, Guid? id, MobileConcessionInput input)
 	{
 		await RequireFamilyAsync(child, year, id.HasValue ? MobileFinancePermissions.EditConcession : MobileFinancePermissions.RequestConcession);
 		using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
@@ -173,7 +223,7 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 	}
 
 	[UnitOfWork(IsDisabled = true)]
-	public virtual async Task<object> FamilyActionAsync(Guid child, Guid year, Guid id, MobileFinanceRequestAction input, bool submit)
+	public virtual async Task<MobileConcessionRequestDetail> FamilyActionAsync(Guid child, Guid year, Guid id, MobileFinanceRequestAction input, bool submit)
 	{
 		await RequireFamilyAsync(child, year, submit ? MobileFinancePermissions.SubmitConcession : MobileFinancePermissions.CancelConcession);
 		using var uow = unitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = IsolationLevel.Serializable }, requiresNew: true);
@@ -182,7 +232,7 @@ public partial class ConcessionRequestAppService : IFamilyConcessionService
 		var replay = await FamilyCommands.ReplayAsync(action, input.IdempotencyKey, payload);
 		var request = await RequireOwnedFamilyRequestAsync(child, year, id);
 		if (replay.HasValue) { if (replay != id) throw new BusinessException(FamilyFinanceErrorCodes.IdempotencyConflict); await uow.CompleteAsync(); return await FamilyDetailAsync(request); }
-		EnsureConcurrencyStamp(request, input.ConcurrencyStamp);
+		EnsureConcurrencyStamp(request, submit ? input.ConcurrencyStamp : input.RequestConcurrencyStamp);
 		if (submit)
 		{
 			request.EnsureDraft();

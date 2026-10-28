@@ -29,11 +29,10 @@ public partial class FeeAdjustmentAppService : IFamilyAdjustmentService
 			.Where(x => x.Available > 0m).ToList();
 	}
 
-	public virtual async Task<object> FamilyAdjustmentEligibilityAsync(Guid child, Guid year)
+	public virtual async Task<MobileAdjustmentEligibility> FamilyAdjustmentEligibilityAsync(Guid child, Guid year)
 	{
 		await RequireFamilyAdjustmentAsync(child, year);
-		return new { Currency = "INR", Lines = (await FamilyAdjustmentSourcesAsync(child, year)).Select(x => new { DueFeeId = x.Due.Id, x.Due.FeeHeadId,
-			Label = x.Due.GetDisplayInstallmentLabel(), AvailableAmount = MobileFinanceCommandRules.Money(x.Available) }).ToArray() };
+		return new((await FamilyAdjustmentSourcesAsync(child, year)).Select(x => new MobileAdjustmentSource(x.Due.Id,x.Due.FeeHeadId,x.Due.GetDisplayInstallmentLabel(),MobileFinanceCommandRules.Money(x.Available))).ToList());
 	}
 
 	private async Task<(string Fingerprint, List<(Guid DueFeeId, double Amount)> Lines, decimal Amount)> PrepareFamilyAdjustmentAsync(Guid child, Guid year, MobileAdjustmentInput input)
@@ -56,11 +55,11 @@ public partial class FeeAdjustmentAppService : IFamilyAdjustmentService
 			lines.Select(x => (x.DueFeeId, Convert.ToDouble(x.Amount))).ToList(), lines.Sum(x => x.Amount));
 	}
 
-	public virtual async Task<object> FamilyAdjustmentPreviewAsync(Guid child, Guid year, MobileAdjustmentInput input)
+	public virtual async Task<MobileAdjustmentPreview> FamilyAdjustmentPreviewAsync(Guid child, Guid year, MobileAdjustmentInput input)
 	{
 		await RequireFamilyAdjustmentAsync(child, year);
 		var prepared = await PrepareFamilyAdjustmentAsync(child, year, input);
-		return new { Currency = "INR", PreviewFingerprint = prepared.Fingerprint, Amount = MobileFinanceCommandRules.Money(prepared.Amount) };
+		return new(prepared.Fingerprint,MobileFinanceCommandRules.Money(prepared.Amount));
 	}
 
 	[UnitOfWork(IsDisabled = true)]

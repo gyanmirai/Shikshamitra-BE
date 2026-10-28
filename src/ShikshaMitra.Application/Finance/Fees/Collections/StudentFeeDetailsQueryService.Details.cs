@@ -96,20 +96,21 @@ public partial class StudentFeeDetailsQueryService
 		return dueFees.GroupBy(d => d.FeeHeadId).Select(group =>
 		{
 			var feeHead = feeHeads.GetValueOrDefault(group.Key);
-			var total = (double)group.Sum(d => d.OriginalAmount);
-			var paid = (double)group.Sum(d => d.AppliedPaymentAmount);
-			var pending = (double)group.Where(d => d.IsBillGeneratedOn(today)).Sum(d => d.OutstandingAmount);
+			var principal = FeePrincipalOverview.Calculate(group, clock.Now, (decimal)reconByFeeHead.GetValueOrDefault(group.Key, 0d));
+			var total = (double)principal.TotalFee;
+			var paid = (double)principal.PaidFee;
+			var pending = (double)principal.PendingFee;
 			var recon = reconByFeeHead.GetValueOrDefault(group.Key, 0d);
 			return new FeeHeadSummaryDto
 			{
 				FeeHeadId = group.Key, FeeHeadName = feeHead?.Name ?? string.Empty,
 				Amount = total, PaidAmount = paid, PendingAmount = pending,
-				NetFee = group.Sum(d => d.NetPayableAmount),
-				ConcessionAmount = group.Sum(d => d.ConcessionAmount),
-				GrossPaidAmount = group.Sum(d => d.PaidAmount),
-				RefundedAmount = group.Sum(d => d.RefundedAmount),
-				OverpaymentAmount = group.Sum(d => d.OverpaymentAmount),
-				AdjustmentCreditAmount = group.Sum(d => d.AdjustmentCreditAmount),
+				NetFee = principal.NetFee,
+				ConcessionAmount = principal.ConcessionAmount,
+				GrossPaidAmount = principal.GrossPaidAmount,
+				RefundedAmount = principal.RefundedAmount,
+				OverpaymentAmount = principal.OverpaymentAmount,
+				AdjustmentCreditAmount = principal.AdjustmentCreditAmount,
 				Description = feeHead?.Description ?? string.Empty,
 				ReconciliationAmount = recon > 0d ? recon : null,
 				Status = group.Any(isOverdue) ? FeeCollectionStatus.Overdue

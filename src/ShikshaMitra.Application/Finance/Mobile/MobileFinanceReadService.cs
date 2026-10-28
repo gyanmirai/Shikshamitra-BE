@@ -66,7 +66,13 @@ public partial class MobileFinanceReadService(MobileFinanceAccessService access,
 		var ids = metadata.Select(x => x.Id).ToArray();
 		var splits = await methods.GetListAsync(x => x.StudentId == studentId && Enumerable.Contains(ids,x.FeeRecordMetadataId), cancellationToken:ct);
 		var payments = metadata.Select(x => new MobilePaymentBalance(x.Id,MobileFinanceProjection.PaymentAmount(x.TotalPaidFee,splits.Where(s => s.FeeRecordMetadataId == x.Id).Select(s=>s.Amount).ToList()),x.Status)).ToList();
-		return (MobileFinanceProjection.Overview(studentId,yearId,clock.Now,dueRows,chargeRows,late.Values.ToList(),payments),dueRows,chargeRows);
+		var pendingIds = metadata.Where(x => x.Status == FeeCollectionStatus.InReconciliation).Select(x => x.Id).ToArray();
+		var headIds = dueRows.Select(x => x.FeeHeadId).Distinct().ToArray();
+		var principalRecords = LazyServiceProvider.LazyGetRequiredService<IRepository<FeeCollectionRecord, Guid>>();
+		var reconciliation = await principalRecords.GetListAsync(x => x.StudentId == studentId
+			&& Enumerable.Contains(headIds, x.FeeHeadId) && Enumerable.Contains(pendingIds, x.FeeRecordMetadataId), cancellationToken: ct);
+		return (MobileFinanceProjection.Overview(studentId,yearId,clock.Now,dueRows,chargeRows,late.Values.ToList(),payments,
+			reconciliation.Sum(x => MobileFinanceProjection.LegacyMoney(x.Amount))),dueRows,chargeRows);
 	}
 	[Authorize(Permissions.View)]
 	public async Task<List<MobileFinanceInstallment>> InstallmentsAsync(Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
@@ -80,27 +86,32 @@ public partial class MobileFinanceReadService(MobileFinanceAccessService access,
 		var headIds=rows.Select(x=>x.FeeHeadId).Distinct().ToArray();
 		var names=(await heads.GetListAsync(x=>Enumerable.Contains(headIds,x.Id),cancellationToken:cancellationToken)).ToDictionary(x=>x.Id,x=>x.Name);
 		var pending = await PendingPrincipalAsync(studentId,academicYearId,cancellationToken);
-		return rows.OrderBy(x=>x.ScheduleDueDate??x.DueDate).ThenBy(x=>x.Id).Select(x=>new MobileFinanceInstallment(x.Id,x.GetDisplayInstallmentLabel(),names.GetValueOrDefault(x.FeeHeadId,string.Empty),
+		return rows.OrderBy(x=>x.ScheduleDueDate??x.DueDate).ThenBy(x=>x.Id).Select(x=>new MobileFinanceInstallment(x.Id,x.PaymentTermInstallmentId,x.GetDisplayInstallmentLabel(),x.FeeHeadId,names.GetValueOrDefault(x.FeeHeadId,string.Empty),
 			DateOnly.FromDateTime(x.ScheduleDueDate??x.DueDate),x.DemandDate.HasValue?DateOnly.FromDateTime(x.DemandDate.Value):null,
-			MobileFinanceProjection.Money(x.OriginalAmount),MobileFinanceProjection.Money(x.PaidAmount),MobileFinanceProjection.Money(x.OutstandingAmount),
-			pending.Contains(x.Id)?"InReconciliation":!x.IsBillGeneratedOn(clock.Now)?"Scheduled":x.OutstandingAmount<=0?"Paid":(x.ScheduleDueDate??x.DueDate).Date<clock.Now.Date?"Overdue":x.Status.ToString())).ToList();
+			MobileFinanceProjection.Money(x.OriginalAmount),MobileFinanceProjection.Money(x.AppliedPaymentAmount),MobileFinanceProjection.Money(x.OutstandingAmount),
+   MobileFinanceProjection.Money(pending.GetValueOrDefault(x.Id)),MobileFinanceProjection.Money(x.ConcessionAmount),MobileFinanceProjection.Money(x.RefundedAmount),
+			DueFeeCollectionStatusResolver.Resolve(x,clock.Now,Convert.ToDouble(pending.GetValueOrDefault(x.Id))).ToString())
+			{
+				ScheduleStatus = MobileFinanceProjection.InstallmentScheduleStatus(x, clock.Now, pending.GetValueOrDefault(x.Id))
+			}).ToList();
 	}
 	[Authorize(Permissions.ViewCharges)]
-	public async Task<List<MobileFinanceCharge>> ChargesAsync(Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
+	public async Task<List<MobileFamilyCharge>> ChargesAsync(Guid studentId, Guid academicYearId, CancellationToken cancellationToken = default)
 	{
 		await access.RequireAsync(studentId,academicYearId,permission:Permissions.ViewCharges,cancellationToken:cancellationToken);
-		return (await ChargeRowsAsync(studentId,academicYearId,cancellationToken)).Select(x=>x.ToDto()).ToList();
+		var now=new DateTimeOffset(clock.Now).ToUniversalTime();
+  return (await FamilyChargeRowsAsync(studentId,academicYearId,cancellationToken)).Select(x=>x.ToDto(now)).ToList();
 	}
 	private async Task<List<DueFee>> DueRowsAsync(Guid studentId, Guid yearId, CancellationToken ct)
 	{
 		var headQuery = (await heads.GetQueryableAsync()).Where(x=>x.AcademicYearId==yearId).Select(x=>x.Id);
 		return await AsyncExecuter.ToListAsync((await dues.GetQueryableAsync()).Where(x=>x.StudentId==studentId && headQuery.Contains(x.FeeHeadId)),ct);
 	}
-	private async Task<HashSet<Guid>> PendingPrincipalAsync(Guid studentId, Guid yearId, CancellationToken ct)
+	private async Task<Dictionary<Guid,decimal>> PendingPrincipalAsync(Guid studentId, Guid yearId, CancellationToken ct)
 	{
 		var txIds=(await transactions.GetQueryableAsync()).Where(x=>x.StudentId==studentId&&x.AcademicYearId==yearId&&x.Status==FeeCollectionStatus.InReconciliation).Select(x=>x.Id);
 		var allocations=LazyServiceProvider.LazyGetRequiredService<IRepository<FeeCollectionDueFeeAllocation,Guid>>();
-		return (await AsyncExecuter.ToListAsync((await allocations.GetQueryableAsync()).Where(x=>txIds.Contains(x.FeeRecordMetadataId)).Select(x=>x.DueFeeId),ct)).ToHashSet();
+		return (await AsyncExecuter.ToListAsync((await allocations.GetQueryableAsync()).Where(x=>txIds.Contains(x.FeeRecordMetadataId)),ct)).GroupBy(x=>x.DueFeeId).ToDictionary(g=>g.Key,g=>g.Sum(x=>MobileFinanceProjection.LegacyMoney(x.Amount)));
 	}
 	private async Task<List<MobileChargeBalance>> ChargeRowsAsync(Guid studentId,Guid yearId,CancellationToken ct)
 	{

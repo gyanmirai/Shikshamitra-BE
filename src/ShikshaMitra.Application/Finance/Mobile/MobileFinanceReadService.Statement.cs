@@ -36,9 +36,7 @@ public partial class MobileFinanceReadService
 			});
 			page.Content().PaddingVertical(12).Column(column=>
 			{
-				foreach(var (label,amount) in new[]{("Billed principal",overview.BilledAmount),("Verified payments (all scopes)",overview.VerifiedPaidAmount),("Payments awaiting verification",overview.PendingVerificationAmount),
-					("Billed principal outstanding",overview.OutstandingAmount),("Future scheduled principal",overview.FutureScheduledAmount),("Charge outstanding",overview.ChargeOutstandingAmount),
-					("Late fee outstanding",overview.LateFeeAmount),("Concession",overview.ConcessionAmount),("Charge and late fee waivers",overview.WaiverAmount),("Noncash adjustment",overview.AdjustmentAmount),("Refunded principal",overview.RefundedAmount)})
+				foreach(var (label,amount) in MobileFinanceProjection.StatementSummary(overview))
 					column.Item().Row(row=>{row.RelativeItem().Text(label);row.ConstantItem(100).AlignRight().Text(amount);});
 				column.Item().PaddingTop(12).Text("Installments").SemiBold();
 				column.Item().Table(table=>
@@ -46,7 +44,7 @@ public partial class MobileFinanceReadService
 					table.ColumnsDefinition(cols=>{cols.RelativeColumn(3);cols.RelativeColumn(2);cols.RelativeColumn();cols.RelativeColumn();cols.RelativeColumn();});
 					table.Header(header=>{foreach(var text in new[]{"Fee / installment","Due / status","Amount","Paid","Outstanding"})header.Cell().BorderBottom(1).Padding(3).Text(text).SemiBold();});
 					foreach(var item in installments)
-						foreach(var text in new[]{$"{item.FeeHeadName} / {item.Label}",$"{item.DueDate:yyyy-MM-dd} / {item.Status}",item.Amount,item.PaidAmount,item.OutstandingAmount})table.Cell().Padding(3).Text(text);
+						foreach(var text in new[]{$"{item.FeeHeadName} / {item.InstallmentLabel}",$"{item.DueDate:yyyy-MM-dd} / {item.Status}",item.Total,item.Paid,item.Due})table.Cell().Padding(3).Text(text);
 				});
 				if(chargeRows.Count>0)
 				{

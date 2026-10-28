@@ -18,22 +18,22 @@ public partial class MobileFinanceReadService
 		LazyServiceProvider.LazyGetRequiredService<MobileFamilyChargeReader>().ReadAsync(studentId, yearId, ct);
 	[Authorize(Permissions.ViewCharges)]
 	public async Task<MobileChargePage> ChargesPageAsync(Guid studentId, Guid academicYearId, int page = 1, int pageSize = 20,
-		string filter = "all", string? search = null, Guid? categoryId = null, CancellationToken cancellationToken = default)
+		string filter = "all", string? search = null, Guid? chargeCategoryId = null, CancellationToken cancellationToken = default)
 	{
 		await access.RequireAsync(studentId, academicYearId, permission: Permissions.ViewCharges, cancellationToken: cancellationToken);
 		ValidatePage(page, pageSize); search = search?.Trim();
-		if (filter is not ("all" or "open" or "settled" or "voided") || search?.Length > 100 || categoryId == Guid.Empty)
+		if (filter is not ("all" or "open" or "settled" or "voided") || search?.Length > 100 || chargeCategoryId == Guid.Empty)
 			throw new BusinessException("Finance:SelfService:InvalidRequest");
 		var rows = await FamilyChargeRowsAsync(studentId, academicYearId, cancellationToken);
 		var categories = rows.Select(x => new MobileChargeCategory(x.Charge.ChargeCategoryId, x.CategoryName)).Distinct()
 			.OrderBy(x => x.Name).ThenBy(x => x.Id).ToList();
-		var matches = rows.Where(x => (!categoryId.HasValue || x.Charge.ChargeCategoryId == categoryId)
+		var matches = rows.Where(x => (!chargeCategoryId.HasValue || x.Charge.ChargeCategoryId == chargeCategoryId)
 			&& (string.IsNullOrEmpty(search) || x.Charge.ChargeName.Contains(search, StringComparison.OrdinalIgnoreCase)
 				|| x.CategoryName.Contains(search, StringComparison.OrdinalIgnoreCase)
 				|| x.Charge.PurposeDescription.Contains(search, StringComparison.OrdinalIgnoreCase))).ToList();
 		var counts = new MobileChargeCounts(matches.Count, matches.Count(x => x.Open), matches.Count(x => x.Settled), matches.Count(x => x.Charge.Status == ChargeStatus.Voided));
 		var approved = matches.Where(x => x.Charge.Status == ChargeStatus.Approved).ToList();
-		var summary = new MobileChargeSummary(MobileFinanceProjection.Money(approved.Sum(x => x.Charge.Amount)), MobileFinanceProjection.Money(approved.Sum(x => x.Verified)),
+		var summary = new MobileChargeSummary(MobileFinanceProjection.Money(approved.Sum(x => x.Charge.Amount)), MobileFinanceProjection.Money(approved.Sum(x => x.Verified + x.Pending)), MobileFinanceProjection.Money(approved.Sum(x => x.Verified)),
 			MobileFinanceProjection.Money(approved.Sum(x => x.Pending)), MobileFinanceProjection.Money(approved.Sum(x => x.Waived)),
 			MobileFinanceProjection.Money(approved.Sum(x => x.Outstanding)), MobileFinanceProjection.Money(approved.Sum(x => x.Refunded)));
 		var filtered = matches.Where(x => filter switch { "open" => x.Open, "settled" => x.Settled, "voided" => x.Charge.Status == ChargeStatus.Voided, _ => true }).ToList();
@@ -80,7 +80,7 @@ public partial class MobileFinanceReadService
 				{
 					var link = x.LinkedFinalReceiptId ?? x.LinkedProvisionalReceiptId;
 					return new MobileChargeReceipt(x.Id, x.FeeCollectionTransactionId, x.ReceiptNumber, x.ReceiptKind.ToString(), x.VerificationStatus.ToString(),
-						x.ReceiptDate, MobileFinanceProjection.Money(MobileFinanceProjection.LegacyMoney(x.TotalPaidAmount)), link.HasValue && ownedLinks.Contains(link.Value) ? link : null, x.ReceiptScope.ToString());
+						x.ReceiptDate, MobileFinanceProjection.Money(MobileFinanceProjection.LegacyMoney(x.TotalPaidAmount)), x.LinkedFinalReceiptId.HasValue && ownedLinks.Contains(x.LinkedFinalReceiptId.Value) ? x.LinkedFinalReceiptId : null, x.LinkedProvisionalReceiptId.HasValue && ownedLinks.Contains(x.LinkedProvisionalReceiptId.Value) ? x.LinkedProvisionalReceiptId : null, x.ReceiptScope.ToString(), true);
 				}).ToList(), refs);
 		}).ToList(), charge.Payments.Count, page, pageSize);
 	}

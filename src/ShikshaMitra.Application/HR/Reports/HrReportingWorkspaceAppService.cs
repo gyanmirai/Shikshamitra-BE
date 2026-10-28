@@ -154,7 +154,7 @@ public class HrReportingWorkspaceAppService(
 	private async Task<bool> CanReadRunAsync(HrReportRun run)
 	{
 		if (!await access.CanReadAsync(run.DataSource, UserId())) return false;
-		try { await AuthorizedAsync(run.Id); return true; }
+		try { await EnsureAuthorizedAsync(run); return true; }
 		catch (BusinessException) { return false; }
 		catch (AbpAuthorizationException) { return false; }
 	}
@@ -234,10 +234,14 @@ public class HrReportingWorkspaceAppService(
 	internal async Task<HrReportRun> AuthorizedAsync(Guid id)
 	{
 		var run = await runs.GetAsync(id);
+		await EnsureAuthorizedAsync(run);
+		return run;
+	}
+	private async Task EnsureAuthorizedAsync(HrReportRun run)
+	{
 		if (run.TenantId != CurrentTenant.Id || run.OwnerUserId != UserId()) throw new AbpAuthorizationException();
 		await capturedAccess.EnsureAsync(run);
 		run.RecoverInterruptedWork(Clock.Now);
-		return run;
 	}
 	internal static string BlobName(HrReportRun run, string format) => $"hr-report-runs/{run.TenantId:N}/{run.Id:N}.{format}";
 	private Guid UserId() => CurrentUser.Id ?? throw new AbpAuthorizationException();

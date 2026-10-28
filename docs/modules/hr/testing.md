@@ -16,6 +16,14 @@ Read-only assertions confirm the endpoint does not create employee records, earn
 `test/browser/hr-setup/HrSetupBrowser.csproj` exposes disposable SQLite and real ABP APIs on loopback port 4396 for the frontend wizard browser tests.
 Its synthetic authentication and fixture-reset endpoints exist only in the test executable.
 
+## HR read performance regressions
+
+Run `EmployeeProfileRead_Tests` and `AttendanceRegisterLookupPerformance_Tests` in the Application test project, `EmployeeDocumentProjection_Tests` in EntityFrameworkCore tests, and `EmployeeDocumentApi_Tests`, `AttendanceRegisterApi_Tests` and `HrReportingWorkspaceApi_Tests` in HTTP API tests. Keep broader HR regression suites and the pinned SDK solution build as integration gates.
+
+The fixtures distinguish actual SQLite query budgets from PostgreSQL SQL compilation without a connection. Lock tests compare former per-date reads with batched reads at increasing date populations and retain tenant/date parity. Profile and document projections check excluded unrelated graph fields without pretending authorization performs no reads. HTTP tests retain missing/denied/tenant behavior, document contents and checklist paging. Report history tests preserve access checks, recovery and accurate history paging while counting redundant run reads.
+
+Synthetic query counts, SQL text size and in-memory host results do not establish deployed latency, PostgreSQL execution plans or concurrent transaction behavior. Do not treat an unconfigured PostgreSQL fixture as a pass or start a database service without separately approved scope.
+
 ## Onboarding list query regression
 
 Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~EmployeeApplicationListQuery_Tests" --logger "console;verbosity=detailed"`. The SQLite fixture compares the previous entity read with the summary projection for 35 and 200 synthetic applications and a 20-row page. It checks two application reads (count/page), tenant and soft-delete exclusion, ordering, search/status/paging, display parity, no tracked application graph, and excluded snapshot/token columns. A separate Npgsql `ToQueryString` test compiles PostgreSQL SQL without opening a connection. The fixture prints selected-column counts and alternating materialization timings after five warmups and 30 samples; those timings exclude network, authorization and counts and do not measure a deployed tenant or PostgreSQL execution.

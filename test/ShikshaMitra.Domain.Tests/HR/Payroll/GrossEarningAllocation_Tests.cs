@@ -10,6 +10,17 @@ namespace ShikshaMitra.HR.Payroll;
 
 public class GrossEarningAllocation_Tests
 {
+	[Fact]
+	public void Bug6475_fixed_earnings_cannot_be_squeezed_into_a_smaller_gross()
+	{
+		GrossEarningRule[] rules = [new(Basic, true, SalaryTemplateFormulaType.FixedAmount, 2000m),
+			new(Other, false, SalaryTemplateFormulaType.FixedAmount, 50000m)];
+		var error = Should.Throw<BusinessException>(() => GrossEarningAllocation.Calculate(50000m, rules));
+		error.Code.ShouldBe(HRErrorCodes.SalaryTemplateAllocationMismatch);
+		error.Data["allocated"].ShouldBe(52000m);
+		GrossEarningAllocation.Calculate(52000m, rules).Values.Sum().ShouldBe(52000m);
+	}
+
 	private static readonly Guid Basic = Guid.Parse("00000000-0000-0000-0000-000000000001");
 	private static readonly Guid Other = Guid.Parse("00000000-0000-0000-0000-000000000002");
 	private static readonly Guid Third = Guid.Parse("00000000-0000-0000-0000-000000000003");

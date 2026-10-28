@@ -5,11 +5,14 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using ShikshaMitra.Constants.Permissions;
 using ShikshaMitra.Controllers.HR.Payroll;
 using ShikshaMitra.HR.Payroll.Templates;
+using ShikshaMitra.HR.Payroll.Settings;
+using ShikshaMitra.HR.Payroll.Statutory;
 using ShikshaMitra.Infrastructure.Auth;
 using ShikshaMitra.Infrastructure.Traits;
 using Shouldly;
@@ -25,6 +28,55 @@ public class SalaryTemplateApi_Tests : ShikshaMitraApiTestBase
 
 	public SalaryTemplateApi_Tests(ShikshaMitraApiTestFactory factory) : base(factory)
 	{
+	}
+
+	[Fact]
+	public async Task Bug6475_preview_returns_actionable_400_then_a_valid_signed_preview_without_saving()
+	{
+		await EnsureDefaultTestUserHasTenantWideScopeAsync();
+		var catalog = await GetAndReadAsync<SalaryTemplateComponentCatalogDto>($"{BaseUrl}/component-catalog");
+		var earnings = catalog.Items.Where(x => x.LineKind == "EARNING").Take(2).ToArray();
+		var deductions = catalog.Items.Where(x => x.LineKind == "DEDUCTION").Take(2).ToArray();
+		var pf = await PostAndReadAsync<PfRuleCreateResponseDto>("/api/payroll/pf-rules", new CreateUpdateProvidentFundDto
+		{
+			Name = "Bug6475 synthetic PF " + Guid.NewGuid().ToString("N"), Code = "REPRO_" + string.Concat(Guid.NewGuid().ToString("N").Take(10).Select(c => (char)('A' + c % 26))),
+			EmployeePercentage = 12m, EmployerPercentage = 12m, WageCeiling = 15000m,
+			EffectiveFrom = new(2026, 1, 1), ContributionBasis = PfContributionBasis.Basic, IsActive = true
+		});
+		var esi = await PostAndReadAsync<EsiPolicyDto>("/api/payroll/statutory-schemes/esi/policies", new CreateEsiPolicyDto
+		{
+			Name = "Bug6475 synthetic ESIC " + Guid.NewGuid().ToString("N"), Code = "REPRO_" + Guid.NewGuid().ToString("N").ToUpperInvariant(),
+			EffectiveFrom = new(2026, 1, 1), SourceUrl = "https://example.invalid/synthetic-esic", SourceVerifiedOn = new(2026, 10, 1), IdempotencyKey = Guid.NewGuid(),
+			CalculationSettings = new() { EligibilityBasis = "GROSS", CalculationBasis = "GROSS" }
+		});
+		var input = new PreviewSalaryTemplateRequestDto
+		{
+			SalaryBasis = "EMPLOYER_COST", MonthlyAmount = 50000m, EffectiveMonth = new(2026, 10, 1),
+			PfApplicable = true, PfRuleId = pf.Id, EsiManagementMode = "IN_PLATFORM", EsiPolicyId = esi.Id,
+			Rules = [
+				new() { ComponentId = earnings[0].ComponentId, LineKind = "EARNING", SemanticType = "BASIC", FormulaType = "FIXED_AMOUNT", Value = 2000m, DisplayOrder = 0 },
+				new() { ComponentId = earnings[1].ComponentId, LineKind = "EARNING", SemanticType = "ORDINARY", FormulaType = "FIXED_AMOUNT", Value = 50000m, DisplayOrder = 1 },
+				new() { ComponentId = deductions[0].ComponentId, LineKind = "DEDUCTION", SemanticType = "EMPLOYEE_PROVIDENT_FUND", FormulaType = "EMPLOYEE_PROVIDENT_FUND", DisplayOrder = 2 },
+				new() { ComponentId = deductions[1].ComponentId, LineKind = "DEDUCTION", SemanticType = "ORDINARY", FormulaType = "FIXED_AMOUNT", Value = 200m, DisplayOrder = 3 }]
+		};
+		var before = (await GetAndReadAsync<SalaryTemplateListDto>(BaseUrl)).Items.Count;
+		var response = await Client.PostAsJsonAsync($"{BaseUrl}/preview", input, JsonOptions);
+		response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+		using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+		body.RootElement.GetProperty("errorCode").GetString().ShouldBe("HR:Payroll:CompensationTargetNotSolvable");
+		body.RootElement.GetProperty("detail").GetString()!.ShouldContain("Fixed earnings total INR 52000.00");
+		body.RootElement.GetProperty("detail").GetString()!.ShouldContain("Employee deductions do not reduce employer cost");
+		body.RootElement.GetProperty("data").GetProperty("field").GetString().ShouldBe("monthlyAmount");
+		body.RootElement.GetProperty("data").GetProperty("relatedField").GetString().ShouldBe("rules");
+		input.MonthlyAmount = 52240m;
+		var preview = await PostAndReadAsync<SalaryTemplatePreviewDto>($"{BaseUrl}/preview", input);
+		preview.PreviewToken.ShouldNotBeNullOrWhiteSpace();
+		preview.Calculation.GrossSalary.ShouldBe(52000m);
+		preview.Calculation.EmployerCost.ShouldBe(52240m);
+		preview.Calculation.NetSalary.ShouldBe(51560m);
+		preview.Calculation.EmployeeStateInsurance.PolicyId.ShouldBe(esi.Id);
+		preview.Calculation.TargetResult.IsExact.ShouldBeTrue();
+		(await GetAndReadAsync<SalaryTemplateListDto>(BaseUrl)).Items.Count.ShouldBe(before);
 	}
 
 	[Fact]

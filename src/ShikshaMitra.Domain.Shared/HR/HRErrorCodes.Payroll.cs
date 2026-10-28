@@ -2,6 +2,7 @@ namespace ShikshaMitra.HR;
 
 public static partial class HRErrorCodes
 {
+	public const string CompensationTargetNotSolvable = "HR:Payroll:CompensationTargetNotSolvable";
 	public const string PayslipDocumentInvalid = "HR:Payroll:030044";
 	public const string PayslipDocumentRequired = "HR:Payroll:030045";
 	public const string PayslipSchoolDetailsRequired = "HR:Payroll:030046";

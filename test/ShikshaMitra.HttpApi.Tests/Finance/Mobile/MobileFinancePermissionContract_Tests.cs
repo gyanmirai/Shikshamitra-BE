@@ -23,12 +23,12 @@ public class MobileFinancePermissionContract_Tests
 	[InlineData("ReceiptPdfAsync", "Finance.Fees.InvoiceReceipt.View")]
 	public void Read_operation_uses_the_existing_web_action(string method, string permission) =>
 		typeof(MobileFinanceReadService).GetMethod(method)!.GetCustomAttributes<AuthorizeAttribute>()
-			.Select(x=>x.Policy).ShouldContain(permission);
+			.Select(x => x.Policy).ShouldContain(permission);
 
 	[Fact]
 	public void Mobile_mapping_contains_only_existing_finance_action_names()
 	{
-		MobileFinancePermissions.All.ShouldAllBe(x=>x.StartsWith("Finance.Fees.",StringComparison.Ordinal));
+		MobileFinancePermissions.All.ShouldAllBe(x => x.StartsWith("Finance.Fees.", StringComparison.Ordinal));
 		MobileFinancePermissions.IsSupported("Finance.SelfService.View").ShouldBeFalse();
 		MobileFinancePermissions.RequiresGuardian(MobileFinancePermissions.RequestRefund).ShouldBeTrue();
 		MobileFinancePermissions.RequiresGuardian(MobileFinancePermissions.View).ShouldBeFalse();

@@ -11,11 +11,12 @@ using Volo.Abp.Authorization;
 using Volo.Abp.BackgroundJobs;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Application.Dtos;
 
 namespace ShikshaMitra.TenantSettings.Reports;
 
 [RemoteService(false)]
-public class InstituteReportAppService(InstituteReportData data, InstituteReportAccess access,
+public partial class InstituteReportAppService(InstituteReportData data, InstituteReportAccess access,
 	InstituteReportPlanner planner, InstituteReportApproval approval, IRepository<InstituteReportJob, Guid> jobs,
 	IBackgroundJobManager background, IBlobContainer blobs, IUserScopeService scopes) : ApplicationService, IInstituteReportAppService
 {
@@ -45,6 +46,7 @@ public class InstituteReportAppService(InstituteReportData data, InstituteReport
 	public async Task<InstituteReportJobDto> GetExportAsync(Guid jobId) => Map(await AuthorizedJobAsync(jobId));
 	public async Task<AcademicReportDownloadDto> DownloadAsync(Guid jobId)
 	{
+		await access.EnsureAsync(User, refresh: true);
 		var job = await AuthorizedJobAsync(jobId);
 		if (job.Status != "Completed" || job.BlobName == null || job.ExpiresAt <= Clock.Now) throw new BusinessException("InstituteReports:FileUnavailable", "The report is not ready or has expired. Generate it again if needed.");
 		var request = Read(job);

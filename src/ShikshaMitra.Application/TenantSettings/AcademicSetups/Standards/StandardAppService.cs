@@ -27,6 +27,8 @@ public class StandardAppService(
 	StandardManager standardManager,
 	AcademicOrganizationScopeAccessService scopeAccessService,
 	AcademicReorderAccessService reorderAccessService,
+	AcademicHierarchyQueryScope queryScope,
+	AcademicHierarchyReader hierarchy,
 	ShiftReferenceValidator shiftReferenceValidator) : CrudAppService<
 	Standard,
 	StandardDto,
@@ -53,6 +55,13 @@ public class StandardAppService(
 				.ThenBy(x => x.SortOrder).ThenBy(x => x.Name).ThenBy(x => x.Id)
 			: base.ApplySorting(query, input);
 
+	public override async Task<PagedResultDto<StandardDto>> GetListAsync(PagedAndSortedResultRequestDto input)
+	{
+		await CheckGetListPolicyAsync();
+		var query = await queryScope.StandardsAsync(await base.CreateFilteredQueryAsync(input));
+		var total = await AsyncExecuter.CountAsync(query);
+		return new(total, await hierarchy.ReadStandardsAsync(ApplyPaging(ApplySorting(query, input), input)));
+	}
 	public override async Task<StandardDto> CreateAsync(CreateUpdateStandardDto input)
 	{
 		await shiftReferenceValidator.EnsureExistsAsync(input.ShiftId);
@@ -136,27 +145,20 @@ public class StandardAppService(
 		}
 
 		var divisionIds = divisions.Select(d => d.Id).Distinct().ToList();
-		var studentRows = await AsyncExecuter.ToListAsync(
+		var occupancy = await AsyncExecuter.ToListAsync(
 			(await studentRepository.GetQueryableWithoutAutoIncludesAsync())
 				.Where(s => s.DivisionId.HasValue
-					&& divisionIds.Contains(s.DivisionId.Value)
+					&& Enumerable.Contains(divisionIds, s.DivisionId.Value)
 					&& s.Status == StudentLifeCycleStatusEnum.Enrolled)
-				.Select(s => new
+				.GroupBy(s => s.DivisionId!.Value)
+				.Select(group => new
 				{
-					DivisionId = s.DivisionId!.Value,
-					Gender = s.AdditionalDetail != null ? s.AdditionalDetail.Gender : null
+					DivisionId = group.Key,
+					Current = group.Count(),
+					Male = group.Count(s => s.AdditionalDetail != null && s.AdditionalDetail.Gender == GenderEnum.Male),
+					Female = group.Count(s => s.AdditionalDetail != null && s.AdditionalDetail.Gender == GenderEnum.Female)
 				}));
-
-		var countsByDivision = studentRows
-			.GroupBy(s => s.DivisionId)
-			.ToDictionary(
-				g => g.Key,
-				g => new
-				{
-					Current = g.Count(),
-					Male = g.Count(x => x.Gender == GenderEnum.Male),
-					Female = g.Count(x => x.Gender == GenderEnum.Female)
-				});
+		var countsByDivision = occupancy.ToDictionary(row => row.DivisionId);
 
 		foreach (var division in divisions)
 		{

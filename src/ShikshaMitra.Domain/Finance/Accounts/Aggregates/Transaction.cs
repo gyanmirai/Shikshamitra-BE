@@ -15,6 +15,15 @@ namespace ShikshaMitra.Finance.Accounts.Incomes;
 /// </summary>
 public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 {
+	public Guid? CashCollectionId { get; private set; }
+	public void LinkCashCollection(Guid id, bool pendingIncome = false, Guid? studentId = null, Guid? financeFeeAccountId = null)
+	{
+		if (CashCollectionId.HasValue || PaymentMethod != 0 || id == Guid.Empty || pendingIncome && TransactionType != TransactionType.Income)
+			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidSource);
+		CashCollectionId = id;
+		StudentId = studentId; FinanceFeeAccountId = financeFeeAccountId;
+		if (pendingIncome) IsConfirmed = false;
+	}
 	public Guid? TenantId { get; private set; }
 	public Guid AcademicYearId { get; private set; }
 	public Guid CategoryId { get; private set; }
@@ -29,6 +38,23 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
  public bool IsConfirmed { get; private set; } = true;
  public bool IsAutomatic => SourceKey != null;
  public void Confirm() => IsConfirmed = true;
+	public const string OriginalCashGrossAmountKey = "OriginalCashGrossAmount";
+	public decimal GetOriginalCashIncomeAmount() => ExtraProperties.TryGetValue(OriginalCashGrossAmountKey, out var gross)
+		? gross is decimal amount ? amount : decimal.Parse(gross.ToString()!, System.Globalization.CultureInfo.InvariantCulture) : Amount;
+	public void ApproveCashIncome(Guid bankId, string bankLabel, decimal? depositedAmount = null)
+	{
+		if (PaymentMethod != 0 || TransactionType != TransactionType.Income || IsConfirmed ||
+			ExtraProperties.ContainsKey(OriginalCashGrossAmountKey) || bankId == Guid.Empty || string.IsNullOrWhiteSpace(bankLabel))
+			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidState);
+		var net = depositedAmount ?? Amount;
+		if (net < 0 || net > Amount || decimal.Round(net, 2) != net)
+			throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.InvalidAmount);
+		ExtraProperties[OriginalCashGrossAmountKey] = Amount;
+		Amount = net; BankAccountId = bankId; BankLabelSnapshot = bankLabel;
+		// Retain zero shares as suppressed audit evidence; an approved source is closed
+		// even though its zero Income rows must stay out of all confirmed register reads.
+		IsConfirmed = net > 0;
+	}
  public void SetManualRouting(string categoryName, Guid? bankId, string? bankLabel, string? reference)
  {
    if (IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");
@@ -139,6 +165,7 @@ public class Transaction : FullAuditedAggregateRoot<Guid>, IMultiTenant
 		string? notes)
 	{
 		if (IsAutomatic) throw new BusinessException("Finance:AutomaticEntryImmutable");
+		if (CashCollectionId.HasValue) throw new BusinessException(ShikshaMitra.Finance.Accounts.CashManagement.CashManagementErrorCodes.Immutable);
 		EnsureValidMoneyAndMethod(amount, paymentMethod);
 		CategoryId = categoryId;
 		Name = name;

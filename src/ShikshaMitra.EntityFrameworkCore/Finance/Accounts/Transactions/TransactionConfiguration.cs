@@ -17,6 +17,9 @@ public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
 			.HasForeignKey(x => x.FinanceFeeAccountId).OnDelete(DeleteBehavior.Restrict);
 
 		builder.Ignore(x => x.IsAutomatic);
+		builder.HasIndex(x => x.CashCollectionId);
+		builder.HasOne<ShikshaMitra.Finance.Accounts.CashManagement.CashCollection>().WithMany()
+			.HasForeignKey(x => x.CashCollectionId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x=>x.SourceId);
   builder.Property(x => x.SourceKey).HasMaxLength(200);
   builder.Property(x => x.CategoryNameSnapshot).HasMaxLength(500);

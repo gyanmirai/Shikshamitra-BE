@@ -20,7 +20,9 @@ public class DivisionAppService(
 	DivisionManager divisionManager,
 	IStandardRepository standardRepository,
 	AcademicReorderAccessService reorderAccessService,
-	AcademicOrganizationScopeAccessService scopeAccessService) : CrudAppService<
+	AcademicOrganizationScopeAccessService scopeAccessService,
+	AcademicHierarchyQueryScope queryScope,
+	AcademicHierarchyReader hierarchy) : CrudAppService<
 		Division,
 		DivisionDto,
 		Guid,
@@ -72,20 +74,19 @@ public class DivisionAppService(
 
 	public override async Task<DivisionDto> GetAsync(Guid id)
 	{
-		var dto = await base.GetAsync(id);
-		await scopeAccessService.ResolveRoomIdsAsync(new[] { dto });
-		return dto;
+		await CheckGetPolicyAsync();
+		var query = await queryScope.DivisionsAsync(await divisionRepository.GetQueryableAsync());
+		return (await hierarchy.ReadDivisionsAsync(query.Where(x => x.Id == id))).FirstOrDefault()
+			?? throw new Volo.Abp.Authorization.AbpAuthorizationException();
 	}
 
 	public override async Task<PagedResultDto<DivisionDto>> GetListAsync(
 		PagedAndSortedResultRequestDto input)
 	{
-		var result = await base.GetListAsync(input);
-
-		result.Items = (await scopeAccessService.FilterDivisionsAsync(result.Items)).ToList();
-		await scopeAccessService.ResolveRoomIdsAsync(result.Items);
-		result.TotalCount = result.Items.Count;
-
-		return result;
+		await CheckGetListPolicyAsync();
+		var query = await queryScope.DivisionsAsync(await base.CreateFilteredQueryAsync(input));
+		var total = await AsyncExecuter.CountAsync(query);
+		var items = await hierarchy.ReadDivisionsAsync(ApplyPaging(ApplySorting(query, input), input));
+		return new(total, items);
 	}
 }

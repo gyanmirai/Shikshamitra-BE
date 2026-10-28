@@ -1,4 +1,4 @@
-using ShikshaMitra.Common;
+﻿using ShikshaMitra.Common;
 using ShikshaMitra.Groups;
 using ShikshaMitra.HR.AttendanceAndLeaves.Settings;
 using ShikshaMitra.HR.Audit;
@@ -31,7 +31,7 @@ using Xunit;
 
 namespace ShikshaMitra.HR.Policies;
 
-public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
+public partial class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private readonly IWorkCalendarPolicyAppService _workCalendars;
 	private readonly IPayrollPolicyAppService _payrollPolicies;
@@ -1160,7 +1160,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 		var timestampDifference = compare.Differences.FirstOrDefault(x =>
 			x.FieldKey is "creationTime" or "lastModificationTime");
 		timestampDifference.ShouldNotBeNull();
-		timestampDifference!.ToDisplayValue.ShouldNotContain("T");
+		timestampDifference!.ToDisplayValue.ShouldNotMatch(@"\d{4}-\d{2}-\d{2}T");
 		timestampDifference.ToDisplayValue.ShouldContain(" ");
 		compare.Differences.ShouldAllBe(x =>
 			!x.FromDisplayValue.Contains(context.WorkCalendar.Id.ToString(), StringComparison.OrdinalIgnoreCase) &&
@@ -3708,7 +3708,7 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	public async Task GroupAssignment_Update_Should_Allow_LeavePolicy_Only_Repair_When_LockedPayrollExists()
 	{
 		var context = await CreatePolicyContextAsync();
-		var employee = await CreateEmployeeAsync();
+		var employee = await CreateActiveLeaveImpactEmployeeAsync();
 		var group = await CreateRoleGroupAsync(context.AcademicYearId, employee.RoleId, "Locked Leave Repair Group");
 		var assignmentRepository = GetRequiredService<IRepository<HrPolicyAssignment, Guid>>();
 		var existingAssignment = await assignmentRepository.InsertAsync(new HrPolicyAssignment(
@@ -5626,16 +5626,16 @@ public class HrPolicyAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaM
 	private static CreateUpdateWorkCalendarPolicyDto BuildWorkCalendarInput(
 		Guid academicYearId,
 		List<WorkCalendarHolidayDto> holidays) => new()
-	{
-		AcademicYearId = academicYearId,
-		Name = $"Calendar {Guid.NewGuid():N}",
-		Status = "active",
-		EffectiveFrom = new DateTime(2026, 4, 1),
-		EffectiveTo = new DateTime(2027, 3, 31),
-		WeeklyOffPattern = "saturday_sunday",
-		HolidaySyncMode = "linked_with_overrides",
-		Holidays = holidays
-	};
+		{
+			AcademicYearId = academicYearId,
+			Name = $"Calendar {Guid.NewGuid():N}",
+			Status = "active",
+			EffectiveFrom = new DateTime(2026, 4, 1),
+			EffectiveTo = new DateTime(2027, 3, 31),
+			WeeklyOffPattern = "saturday_sunday",
+			HolidaySyncMode = "linked_with_overrides",
+			Holidays = holidays
+		};
 
 	private static WorkCalendarHolidayDto BuildWorkCalendarHoliday(
 		Guid academicYearId,

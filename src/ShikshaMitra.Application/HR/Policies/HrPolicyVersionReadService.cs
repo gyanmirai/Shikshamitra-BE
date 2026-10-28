@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -28,7 +28,7 @@ public class HrPolicyVersionReadService(
 	{
 		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var query = (await versionRepository.GetQueryableAsync())
-			.Where(x => x.PolicyType == normalized && x.PolicyId == policyId);
+			.Where(x => x.TenantId == CurrentTenant.Id && x.PolicyType == normalized && x.PolicyId == policyId);
 		if (!string.IsNullOrWhiteSpace(action) && action != "all") query = query.Where(x => x.ChangeAction == action);
 		if (!string.IsNullOrWhiteSpace(search))
 		{
@@ -85,7 +85,7 @@ public class HrPolicyVersionReadService(
 	{
 		var normalized = HrPolicyVersionProjection.NormalizePolicyType(policyType);
 		var entity = await versionRepository.GetAsync(versionId);
-		if (entity.PolicyType != normalized || entity.PolicyId != policyId)
+		if (entity.TenantId != CurrentTenant.Id || entity.PolicyType != normalized || entity.PolicyId != policyId)
 		{
 			throw new BusinessException(HRErrorCodes.HrPolicyVersionNotFound);
 		}
@@ -115,6 +115,28 @@ public class HrPolicyVersionReadService(
 				version.CreatedByName = namesById.GetValueOrDefault(version.CreatorId.Value) ?? "Unknown user";
 			}
 		}
+	}
+
+	public async Task<List<HrPolicyVersionDifferenceDto>> CompareProposedRulesAsync(object current, object proposed)
+	{
+		var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+		var currentProperties = JsonSerializer.SerializeToElement(current, options).EnumerateObject()
+			.ToDictionary(x => x.Name, x => x.Value.Clone());
+		var proposedProperties = JsonSerializer.SerializeToElement(proposed, options).EnumerateObject()
+			.Where(x => currentProperties.ContainsKey(x.Name)).ToDictionary(x => x.Name, x => x.Value.Clone());
+		HrPolicyProposalCollectionComparison.Normalize(currentProperties);
+		HrPolicyProposalCollectionComparison.Normalize(proposedProperties);
+		// Compare the update contract only. IDs, versions, audit timestamps and other
+		// response-only metadata are not removed rules when a form omits them.
+		var fromJson = JsonSerializer.Serialize(currentProperties.Where(x => proposedProperties.ContainsKey(x.Key)).ToDictionary(x => x.Key, x => x.Value), options);
+		var toJson = JsonSerializer.Serialize(proposedProperties, options);
+		var differences = HrPolicyVersionDiffBuilder.BuildDifferences(fromJson, toJson, await BuildDisplayContextAsync(fromJson, toJson));
+		foreach (var difference in differences.Where(x => HrPolicyProposalCollectionComparison.Supports(x.Field)))
+		{
+			difference.FromDisplayValue = difference.FromValue = HrPolicyProposalCollectionComparison.Display(difference.Field, currentProperties[difference.Field]);
+			difference.ToDisplayValue = difference.ToValue = HrPolicyProposalCollectionComparison.Display(difference.Field, proposedProperties[difference.Field]);
+		}
+		return differences;
 	}
 
 	private async Task<HrPolicyVersionDisplayContext> BuildDisplayContextAsync(params string[] snapshots)

@@ -16,7 +16,7 @@ using Volo.Abp.Domain.Repositories;
 namespace ShikshaMitra.TenantSettings.Reports;
 
 [RemoteService(false)]
-public class InstituteIdentityReportData(IRepository<SchoolIdentityProfile, Guid> profiles,
+public partial class InstituteIdentityReportData(IRepository<SchoolIdentityProfile, Guid> profiles,
 	IRepository<AcademicYear, Guid> years, IRepository<EducationBoard, Guid> boards,
 	IRepository<EducationMedium, Guid> mediums, IRepository<EducationMediumStage, Guid> organizations,
 	IUserScopeService scopes, InstituteReportAccess access) : ApplicationService
@@ -25,27 +25,11 @@ public class InstituteIdentityReportData(IRepository<SchoolIdentityProfile, Guid
 	private async Task<List<IdentityRow>> PermittedAsync(Guid user)
 	{
 		await access.EnsureAsync(user, "school-identity-register");
-		var tenant = CurrentTenant.Id ?? throw new BusinessException("InstituteReports:TenantRequired");
-		var scope = await scopes.GetUserScopeAsync(user);
-		var rows = await profiles.GetListAsync(x => x.TenantId == tenant);
-		var yearList = await years.GetListAsync(x => x.TenantId == tenant);
-		var boardList = await boards.GetListAsync(x => x.TenantId == tenant);
-		var mediumList = await mediums.GetListAsync(x => x.TenantId == tenant);
-		var organizationList = await organizations.GetListAsync(x => x.TenantId == tenant);
-		var result = new List<IdentityRow>();
-		foreach (var profile in rows)
-		{
-			var board = boardList.Find(x => x.Id == profile.EducationBoardId);
-			var medium = mediumList.Find(x => x.Id == profile.EducationMediumId);
-			var organization = organizationList.Find(x => x.Id == profile.OrganizationId);
-			if (profile.EducationBoardId.HasValue && (board == null || board.AcademicYearId != profile.AcademicYearId)) continue;
-			if (profile.EducationMediumId.HasValue && (medium == null || medium.EducationBoardId != profile.EducationBoardId)) continue;
-			if (profile.OrganizationId.HasValue && (organization == null || organization.EducationMediumId != profile.EducationMediumId)) continue;
-			if (!SchoolIdentityScopeAccess.Allows(scope, profile.AcademicYearId, profile.EducationBoardId, profile.EducationMediumId, profile.OrganizationId)) continue;
-			result.Add(new(profile, yearList.Find(x => x.Id == profile.AcademicYearId)?.Name ?? "",
-				board == null ? "" : board.CustomName ?? EducationBoardNames.DisplayName(board.Type), medium?.Name ?? "", organization?.Name ?? ""));
-		}
-		return result;
+		var rows = await AsyncExecuter.ToListAsync(await QueryAsync(user));
+		var names = await InstituteReportBoardNames.CustomAsync((await boards.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id), rows.Select(x => x.Profile.EducationBoardId), AsyncExecuter);
+		foreach (var row in rows)
+			if (row.Profile.EducationBoardId.HasValue && names.TryGetValue(row.Profile.EducationBoardId.Value, out var name)) row.Board = name;
+		return rows;
 	}
 	public async Task<Dictionary<string, List<InstituteReportOption>>> ChoicesAsync(Guid user)
 	{
@@ -95,5 +79,12 @@ public class InstituteIdentityReportData(IRepository<SchoolIdentityProfile, Guid
 		["customBannerCount"] = Number(rows.Count(x => x.Profile.Choices.Banner.Mode == SchoolIdentityAssetMode.Custom))
 	};
 	private static string Number(int value) => value.ToString(CultureInfo.InvariantCulture);
-	private sealed record IdentityRow(SchoolIdentityProfile Profile, string Year, string Board, string Medium, string Organization);
+	private sealed class IdentityRow
+	{
+		public SchoolIdentityProfile Profile { get; set; } = null!;
+		public string Year { get; set; } = "";
+		public string Board { get; set; } = "";
+		public string Medium { get; set; } = "";
+		public string Organization { get; set; } = "";
+	}
 }

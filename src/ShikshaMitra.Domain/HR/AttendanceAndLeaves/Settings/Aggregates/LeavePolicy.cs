@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using ShikshaMitra.HR.Policies;
@@ -33,6 +33,10 @@ public class LeavePolicy : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public DateTime? EffectiveTo { get; protected set; }
 	public bool IsActive { get; protected set; }
 	public bool IsDefault { get; protected set; }
+	public int Version { get; private set; } = 1;
+
+	// The application lifecycle advances once after a successful logical mutation.
+	public void AdvanceVersion() => Version = checked(Version + 1);
 
 	public virtual AcademicYear? AcademicYear { get; protected set; }
 	public virtual ICollection<LeavePolicyRule> Rules { get; protected set; } = new List<LeavePolicyRule>();

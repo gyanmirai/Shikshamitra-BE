@@ -3,10 +3,39 @@ module: hr
 domain: testing
 content_type: Reference
 status: canonical
-updated_on: 2026-10-25
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
+
+## Salary template Basic-purpose regression
+
+`SalaryTemplateComposerAppService_Tests.Fresh_tenant_requires_explicit_Basic_purpose_and_preserves_fixed_salary` runs in a new synthetic tenant for both Basic Salary and a custom earning name. An Ordinary 50000 earning cannot preview; changing only its explicit semantic purpose to Basic preserves the fixed formula, previews Gross/Basic 50000, deductions 1000 and Net 49000, then creates and reloads an Active template using the preview proof. This SQLite fixture does not certify a deployed tenant or PostgreSQL runtime.
+
+## Onboarding work assignment
+
+`EmployeeWorkAssignmentControllerDiscovery_Tests` resolves the real MVC action catalogue without seeding data, verifies the onboarding controller exists, and rejects all conventional actions on the internal `EmployeeWorkAssignmentValidator` helper. The helper is explicitly non-remote; access remains through the authorized onboarding endpoints.
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~EmployeeWorkAssignmentValidator_Tests|FullyQualifiedName~EmployeeApplicationAppService_Tests|FullyQualifiedName~EmployeeOnboardingAcademicScopeAssigner_Tests"` and `dotnet test test/ShikshaMitra.Domain.Tests --filter "FullyQualifiedName~EmployeeApplication_Tests"`.
+Coverage includes mode/ID/year validation, actor-catalogue revalidation, foreign/deleted year rejection, multiple organizations, no-setup choices, legacy preservation, public/list round trips, explicit HR confirmation, school-wide no-grant finalization and unchanged teaching scope requirements. The validator's actor-catalogue boundary is also covered by `AcademicOrganizationOptionsApi_Tests` for real year/tenant/scope filtering. PostgreSQL migration execution and browser acceptance require separate environment validation.
+
+Run `EmployeeWorkAssignmentApi_Tests` for the positive multi-organization HTTP invitation/public-read round trip, and the `WorkAssignment_Invite_Rejects_Other_Year_And_Actor_Scope_Ids` cases for rejected HTTP writes. The positive test has a dedicated SQLite fixture using the Application harness's nontransactional unit-of-work setting: the shared HTTP fixture reuses one physical connection and cannot represent the invitation's nested `requiresNew` transaction. ID/label assertions, endpoints, authorization and production transaction behavior are retained; this contract fixture does not certify PostgreSQL atomicity.
+
+## Payslip settings sample regression
+
+For the read-only settings sample, run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~PayslipSettingsPreview_Tests|FullyQualifiedName~PayslipPdfLayout_Tests"`. It covers View-only rendering, denied actions/host/anonymous access, invalid presentation, unchanged settings, no-store PDF responses, logo embedding, long identity fields and 64 appearance combinations through the issuance renderer. All payroll facts are synthetic. Optional `PAYSLIP_VERIFY_ARTIFACTS` writes generated sample PDFs to an owned local folder for visual inspection; no PostgreSQL server is required.
+
+## Leave policy impact reader coverage
+
+Run `dotnet test test/ShikshaMitra.Application.Tests --filter "FullyQualifiedName~LeaveImpact_|FullyQualifiedName~LeavePolicyImpactFingerprint_Tests|FullyQualifiedName~LeavePolicySnapshotComparison_Tests|FullyQualifiedName~LeavePolicyAppService_Tests"` for synthetic SQLite reader, fingerprint, snapshot comparison, and existing leave-policy regressions. `HrPolicyAppService_Tests.LeaveImpact.cs` and `HrPolicyAppService_Tests.LeaveReferences.cs` cover actual 0/1/80 active default users, real group membership, employee overrides with null leave/default fallback, same-count proposal fingerprints, independent reference counts, request statuses and inclusive business-date boundaries, exact request/settlement payroll provenance, lock states, unavailable malformed months, unresolved defaults, wrong-year IDs, invalid date scopes and stale expected versions.
+
+The `LeavePolicyImpactPreviewReader` assessment gives each measure a nullable count, status, definition, scope and availability reason. `LeavePolicyImpactFingerprint_Tests` verifies identical dependency IDs/stamps in reversed enumeration order keep the same fingerprint, while a changed stamp invalidates it. `HrPolicyAppService_Tests.LeaveResolverParity.cs` compares usability with the operational resolver, including an explicitly constructed inconsistent stored-row fixture; it does not establish that ordinary writes can produce that state. Payroll periods describe factual exposure; settlement-only periods report no snapshot rather than assuming they are unlocked. A malformed linked month makes the exposure total unavailable while retaining explicitly partial known periods. Balance changes and salary differences remain not calculated.
+
+Run `LeavePolicySafetyApi_Tests`, `LeavePolicyApi_Tests`, `LeavePolicyAppService_Tests`, the `HrPolicyAppService_Tests.LeaveImpact/LeaveReferences/LeaveLifecycle/LeaveResolverParity` partials and the fingerprint/snapshot comparison tests. HTTP coverage exercises exact existing action grants, history under Leave View, new-draft restore under Leave Add, tenant isolation, owning read grants on drilldowns, stale assessments, actor-bound tokens, same-count changed proposals and atomic default history. Application fixtures cover 0/1/80 actual active staff, default/group/employee precedence, request statuses/window boundaries, settlement/payroll provenance, baseline enrollment, no-op history and pinned source/target rule identities. Existing employee onboarding deliberately creates inactive drafts; active-population fixtures explicitly seed active status only in disposable test data.
+
+The Version migration is additive and enrolls existing policies at version 1 without inventing earlier events. Validate migration upgrade and real concurrent edits/default changes against a separately authorized disposable PostgreSQL database. SQLite unit/API checks do not establish PostgreSQL row-lock, transaction rollback or concurrent-writer acceptance. `LeavePolicyLockOrderPostgres_Tests` remains the fence-before-row barrier regression; never interpret an unconfigured/skipped PostgreSQL test as a pass. The FE policy suite covers precise unavailable metrics, exact review scope, restricted/error drilldowns, prompt cancellation/year switching and the shared restore drawer. Authenticated browser acceptance is a separate check.
+
+Run `CashManagementDeploymentModel_Tests` and `LeavePolicyDeploymentModel_Tests` in separate exact-class-filter processes in the EF test project. These are offline metadata checks: the latest target model and snapshot must match the current design-time model, the earlier cash migration keeps its historical target and additive operations, and the later leave target must include the merged cash tables. Leave's migration adds only the Version column; its rule metadata preserves explicit minimum-notice zero. These checks do not open a connection or apply a migration and do not replace PostgreSQL upgrade/concurrency acceptance.
 
 ## New-school starter policy regression coverage
 

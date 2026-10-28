@@ -145,6 +145,30 @@ The register API suite uses isolated SQLite state fixtures for approval/paid/ret
 Actual payout command/replay scenarios remain in `FeeRefundApi_Tests` and require SHIKSHAMITRA_REFUND_TEST_DB pointing to a migrated disposable refund_workflow_test_ PostgreSQL database.
 
 
+## Cash Management verification (27 October 2026)
+
+The 27 October pending-cash correction supersedes the previous approve-before-spend example.
+Final focused verification passed 38/38 HTTP checks and 10/10 cash domain checks.
+The final memory-safe build completed with 0 errors and 195 existing warnings; historical migration designers were omitted only by the local verification target.
+The prior-academic-year deposit-date regression was observed failing before the date guard and passing after it; rejected approval preserves pending state, bank and Income/deposit balances.
+The Finance docs validator still reports preexisting mojibake in `references/charge-management-e2e-test-plan.md` and `references/income-expense-workspaces.md`; unrelated encoding repairs were left outside this change.
+`SimpleCashFlowApi_Tests` covers receipt 10000, pending paid expense 2000, net deposit approval8000, Income 8000, Expense 2000, held cash 0 and unchanged original receipt 10000.
+It covers original gross manual-income retries after partial and fully spent finalization, zero Income suppression, four fractional rows with exact two-paise allocation, approval replay and separately seeded legacy approved/transit credit history.
+`CashExpenseRoutingApi_Tests` checks pending source options and payer-scoped admission expenses without unrelated bank/student grants.
+`CashManagementAuthorizationApi_Tests` and administrator cases retain exact action permission, current database-role self-approval, tenant/year/payer denial and membership-revocation checks.
+
+`CashCollection_Tests` covers pending-only spending, net-count and zero finalization, money conservation, deterministic proportional allocation and immutable original-gross evidence.
+Zero-value finalized Income remains stored with `IsConfirmed=false` for audit and is intentionally hidden by existing confirmed-only register, workspace and legacy list/detail queries.
+Non-cash automatic confirmation excludes these cash rows.
+The original receipt fallback remains blocked whenever modern source Income exists, including suppressed zero rows.
+
+The API and EF test projects use a local verification target omitting unchanged historical generated migration designers; the new cash designer, current snapshot and runtime mappings remain included.
+No production project configuration changed.
+These isolated SQLite fixtures do not certify PostgreSQL concurrent allocation or physical transaction rollback; the existing serializable source lock, stamps and replay remain in force.
+The design-time/runtime Npgsql timestamp difference remains a deployment-path validation requirement.
+No production migration, grants or real cash commands are part of this verification.
+See [Cash Management](./references/cash-management.md).
+
 ## Collection receipt grouping
 
 `CollectionReceiptGrouping_Tests` covers version snapshots, legacy defaults, exact decimal component totals, one-component collections and provisional status parity. `ReceiptGroupingReconciliationApi_Tests` covers combined/separate queue row counts, total preservation, either-row whole-instrument approval/rejection, final receipt links, principal restoration, charge rollback and duplicate decisions. The collect-input validator suite accepts fee-plus-charge collections with one instrument and retains mixed-provisional-instrument containment.

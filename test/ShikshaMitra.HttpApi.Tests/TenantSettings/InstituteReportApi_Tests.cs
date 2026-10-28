@@ -35,6 +35,7 @@ namespace ShikshaMitra.TenantSettings;
 
 public class InstituteReportTestFactory : SchoolDocumentsTestFactory
 {
+	public System.Collections.Concurrent.ConcurrentQueue<string> Commands { get; } = new();
 	public Dictionary<Guid, UserScopeContext> Scopes { get; } = [];
 	public InstituteAiPlanResult AiResult { get; set; } = new();
 	public string Provider { get; init; } = "OpenAI";
@@ -45,6 +46,8 @@ public class InstituteReportTestFactory : SchoolDocumentsTestFactory
 		base.ConfigureWebHost(builder);
 		builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["AI:Provider"] = Provider, ["OpenAI:ApiKey"] = "synthetic-test-key", ["ZAI:ApiKey"] = "synthetic-test-key" }));
 		builder.ConfigureTestServices(services => {
+			services.Configure<Volo.Abp.EntityFrameworkCore.AbpDbContextOptions>(options => options.PreConfigure(context =>
+				context.DbContextOptions.AddInterceptors(new InstituteReportCommandRecorder(Commands))));
 			var scopes = Substitute.For<IUserScopeService>();
 			scopes.GetUserScopeAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(call => Task.FromResult(Scopes.GetValueOrDefault(call.ArgAt<Guid>(0)) ?? new UserScopeContext()));
 			services.AddSingleton(scopes);

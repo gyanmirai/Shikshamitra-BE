@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Volo.Abp.Application.Dtos;
@@ -55,6 +55,7 @@ public interface IHrPolicyAssignmentAppService : IApplicationService
 	Task DeleteAsync(Guid id);
 	Task<EffectiveEmployeePoliciesDto> GetEffectivePoliciesAsync(Guid employeeId, DateTime date);
 	Task<EffectiveEmployeePoliciesDto> GetPreviewAsync(PolicyAssignmentPreviewRequestDto input);
+	Task<PolicyAssignmentResolutionPreviewDto> PreviewResolutionAsync(PolicyAssignmentResolutionPreviewRequestDto input);
 }
 
 public interface IHrPolicySafetyAppService : IApplicationService

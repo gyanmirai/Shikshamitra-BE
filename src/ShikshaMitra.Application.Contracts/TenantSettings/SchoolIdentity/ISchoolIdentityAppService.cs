@@ -9,7 +9,7 @@ public interface ISchoolIdentityAppService : IApplicationService
 {
 	Task<SchoolIdentityProfileDto> GetAsync(SchoolIdentityContextDto input);
 	Task<SchoolBrandingDto> GetBrandingAsync();
-	Task<SchoolBrandingImageDto?> GetBrandingAssetAsync(SchoolIdentityAssetKind kind);
+	Task<SchoolBrandingImageDto?> GetBrandingAssetAsync(SchoolIdentityAssetKind kind, string? ifNoneMatch = null);
 	Task<SchoolIdentityAssetDownloadDto> PreviewAsync(SchoolIdentityPreviewDto input);
 	Task<SchoolIdentityProfileDto> UpdateAsync(SchoolIdentityUpdateDto input);
 	Task<SchoolIdentityProfileDto> CopyAsync(SchoolIdentityCopyDto input);

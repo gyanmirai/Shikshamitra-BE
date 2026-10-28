@@ -23,7 +23,7 @@ public class AcademicStageOrderAuthorization_Tests
 		authorization.AuthorizeAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<object?>(), Arg.Any<string>())
 			.Returns(Task.FromResult(AuthorizationResult.Failed()));
 		using var services = new ServiceCollection().AddSingleton<IAuthorizationService>(authorization).BuildServiceProvider();
-		var service = new EducationMediumStageAppService(null!, null!, null!, null!)
+		var service = new EducationMediumStageAppService(null!, null!, null!, null!, null!)
 		{
 			LazyServiceProvider = new AbpLazyServiceProvider(services)
 		};

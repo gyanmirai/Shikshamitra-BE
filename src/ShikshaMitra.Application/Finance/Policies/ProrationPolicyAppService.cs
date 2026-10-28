@@ -220,12 +220,13 @@ public class ProrationPolicyAppService(
 	public async Task<ProrationPolicyDto> CloneAsync(Guid id, ProrationPolicyCloneRequestDto input)
 	{
 		var source = await GetRequiredAsync(id);
+		var targetAcademicYearId = input.TargetAcademicYearId ?? source.AcademicYearId;
 		return await CreateAsync(new CreateUpdateProrationPolicyDto
 		{
-			AcademicYearId = input.TargetAcademicYearId ?? source.AcademicYearId,
+			AcademicYearId = targetAcademicYearId,
 			PolicyName = string.IsNullOrWhiteSpace(input.Name)
 				? FinanceName.NextCopy(source.PolicyName, await AsyncExecuter.ToListAsync(
-					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == (input.TargetAcademicYearId ?? source.AcademicYearId))
+					(await repository.GetQueryableAsync()).Where(x => x.AcademicYearId == targetAcademicYearId)
 					.Select(x => x.PolicyName)))
 				: FinanceName.Normalize(input.Name),
 			Description = source.Description,
@@ -331,7 +332,14 @@ public class ProrationPolicyAppService(
 		var count = await feeHeadRepository.CountAsync(x =>
 			ids.Contains(x.Id) && x.IsActive && x.AcademicYearId == academicYearId);
 		if (count != ids.Count)
-			throw new BusinessException(ProrationPolicyErrorCodes.FeeHeadRequired);
+		{
+			var unavailable = await feeHeadRepository.GetListAsync(x => ids.Contains(x.Id) &&
+				(!x.IsActive || x.AcademicYearId != academicYearId));
+			var names = string.Join(", ", unavailable.Select(x => x.Name).OrderBy(x => x));
+			throw new BusinessException(ProrationPolicyErrorCodes.FeeHeadUnavailable)
+				.WithData("FeeHeadNames", string.IsNullOrWhiteSpace(names) ? "One or more selected fee heads" : names)
+				.WithData("AcademicYearId", academicYearId);
+		}
 	}
 
 	private async Task<Dictionary<Guid, string>> GetFeeHeadNamesAsync(IEnumerable<Guid> ids)

@@ -7,6 +7,8 @@ namespace ShikshaMitra.HR.Employees.Onboarding;
 
 public class FinalizeEmployeeApplicationDto
 {
+	public EmployeeWorkAssignmentDto? WorkAssignment { get; set; }
+	public bool WorkAssignmentConfirmed { get; set; }
 	[Required]
 	public CreateEmployeePersonalInfoDto PersonalInfo { get; set; } = new();
 

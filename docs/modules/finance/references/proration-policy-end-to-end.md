@@ -3,7 +3,7 @@ module: finance
 domain: proration-policy
 content_type: Reference
 status: implemented
-updated_on: 2026-10-05
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -400,6 +400,28 @@ Proration configuration exposes View, Add and Delete under the [fee configuratio
 Apply the same canonical actions in backend entry points and frontend controls; tenant/scope/version checks still apply.
 
 ## Validation and error contract
+
+### Cloning an existing policy
+
+`POST /api/finance/proration-policies/{id}/clone` requires Proration Policy Add permission.
+The source is read through the current tenant filter.
+Cloning an Active default creates a separate nondefault Draft with new policy/code/rule identities and version 1; it does not modify the source, its default selection, or its version history.
+Admission and early-withdrawal rule configuration is preserved.
+Explicitly supplying the source academic year in `targetAcademicYearId` is equivalent to omitting it.
+The service resolves this optional target once into a nonnullable year ID before using it in database predicates or creating the Draft.
+With no explicit name, the server selects the next unused `Copy`, `Copy 2`, and subsequent suffix within the target academic year, including names occupied by archived policies and respecting the name length limit.
+An explicit name still follows normalized, case-insensitive uniqueness validation.
+
+Clone validates active Fee Heads in the target academic year, including when a different year is requested.
+It does not silently map source-year heads to similarly named target-year heads or discard unavailable rules.
+For a different academic year, create a policy using that year's active Fee Heads.
+`Finance:ProrationPolicy:010027` identifies inactive, missing, or wrong-year heads and provides current-tenant head names when available; review the source rules and reactivate or select valid heads before retrying.
+The API returns localized recovery instructions for name/code conflicts, invalid rules/status, and default restrictions in `application/problem+json` with the stable `errorCode` and safe business data.
+A rejected clone creates no Draft or version and does not change the source default.
+
+Regression coverage: `test/ShikshaMitra.Application.Tests/Finance/Policies/ProrationPolicyClone_Tests.cs` and the proration clone cases in `test/ShikshaMitra.HttpApi.Tests/Common/Middleware/ApiProblemDetailsPipeline_Tests.cs`.
+
+### Other validation failures
 
 Return stable error codes with structured fields for:
 

@@ -9,6 +9,7 @@ using ShikshaMitra.Finance.Fees.FeeRefund;
 using ShikshaMitra.Finance.Fees.Receipts;
 using Volo.Abp;
 using Volo.Abp.Authorization;
+using Volo.Abp.Domain.Repositories;
 
 namespace ShikshaMitra.Finance.Accounts.Activity;
 
@@ -73,6 +74,11 @@ public partial class AccountsActivityAppService
             if (receipt.TenantId != CurrentTenant.Id || receipt.AcademicYearId != academicYearId ||
                 receipt.ReceiptKind is not (FeeReceiptKind.FinalFee or FeeReceiptKind.FinalCharge)) throw new AbpAuthorizationException();
             await scopeAccessService.EnsureCollectionPayerAccessibleAsync(receipt.StudentId, receipt.FinanceFeeAccountId);
+            // Receipt evidence stays available in Receipts. Modern register entries
+            // must be opened through their own confirmed Income rows, never through
+            // this legacy receipt fallback (which would bypass cash approval).
+            if (await transactionRepository.AnyAsync(t => t.SourceId == receipt.FeeCollectionTransactionId && t.SourceKey != null))
+                throw new AbpAuthorizationException();
             detail.SourceId = receipt.FeeCollectionTransactionId;
             detail.StudentId = receipt.StudentId;
             detail.FinanceFeeAccountId = receipt.FinanceFeeAccountId;

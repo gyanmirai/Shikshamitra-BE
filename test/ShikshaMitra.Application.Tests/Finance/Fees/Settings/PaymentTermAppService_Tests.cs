@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using ShikshaMitra.Domain.Finance.Fees.Settings.PaymentTerms;
 using ShikshaMitra.Finance.Fees.Settings.PaymentTerms.Dtos;
@@ -24,6 +26,31 @@ using Xunit;
 
 namespace ShikshaMitra.Finance.Fees.Settings.PaymentTerms;
 
+public class PaymentTermNameValidation_Tests
+{
+	[Fact]
+	public void Names_Are_Trimmed_Before_Request_Length_Validation()
+	{
+		var create = new CreatePaymentTermDto { Name = " \t9th PT One \t" };
+		var update = new UpdatePaymentTermDraftDto { Name = " \t9th PT One \t" };
+		create.Name.ShouldBe("9th PT One");
+		update.Name.ShouldBe("9th PT One");
+		create.Name = "  ab  ";
+		var errors = new List<ValidationResult>();
+		Validator.TryValidateProperty(create.Name,
+			new ValidationContext(create) { MemberName = nameof(create.Name) }, errors).ShouldBeFalse();
+		create.Name = " \t ";
+		Validator.TryValidateProperty(create.Name,
+			new ValidationContext(create) { MemberName = nameof(create.Name) }, []).ShouldBeFalse();
+		create.Name = $" \t{new string('N', 100)} \t";
+		Validator.TryValidateProperty(create.Name,
+			new ValidationContext(create) { MemberName = nameof(create.Name) }, []).ShouldBeTrue();
+		update.Name = $" \t{new string('N', 100)} \t";
+		Validator.TryValidateProperty(update.Name,
+			new ValidationContext(update) { MemberName = nameof(update.Name) }, []).ShouldBeTrue();
+	}
+}
+
 public class PaymentTermAppService_Tests : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
 	private readonly IPaymentTermAppService _paymentTerms;
@@ -35,6 +62,67 @@ public class PaymentTermAppService_Tests : ShikshaMitraApplicationTestBase<Shiks
 		_paymentTerms = GetRequiredService<IPaymentTermAppService>();
 		_academicYears = GetRequiredService<IRepository<AcademicYear, Guid>>();
 		_boards = GetRequiredService<IRepository<EducationBoard, Guid>>();
+	}
+
+	[Theory]
+	[InlineData(false)]
+	[InlineData(true)]
+	public async Task Name_Uniqueness_Ignores_Whitespace_And_Case_Across_Boards(bool archived)
+	{
+		var (yearId, boardId, otherBoardId) = await SeedAcademicContextAsync();
+		var original = await _paymentTerms.CreateAsync(BuildInput(yearId, boardId, "9th PT One", "PT-ONE"));
+		if (archived) await _paymentTerms.ArchiveAsync(original.Id, new() { Reason = "Schedule retired" });
+		var error = await Should.ThrowAsync<BusinessException>(() => _paymentTerms.CreateAsync(
+			BuildInput(yearId, otherBoardId, " \t9TH \u00a0 PT ONE  ", "DIFFERENT-CODE")));
+		error.Code.ShouldBe("Finance:PaymentTerm:000042");
+		(await _paymentTerms.GetAsync(original.Id)).Name.ShouldBe("9th PT One");
+	}
+
+	[Fact]
+	public async Task Update_Rejects_Duplicate_Name_But_Allows_Own_Trimmed_Name()
+	{
+		var (yearId, boardId, _) = await SeedAcademicContextAsync();
+		await _paymentTerms.CreateAsync(BuildInput(yearId, boardId, "9th PT One", "PT-ONE"));
+		var input = BuildInput(yearId, boardId, "9th PT Two", "PT-TWO");
+		var other = await _paymentTerms.CreateAsync(input);
+		var update = new UpdatePaymentTermDraftDto {
+			Name = " 9th pt one\t", Code = input.Code, Status = PaymentTermSaveStatus.Draft,
+			DemandGenerationRule = input.DemandGenerationRule, Installments = input.Installments
+		};
+		(await Should.ThrowAsync<BusinessException>(() => _paymentTerms.UpdateDraftAsync(other.Id, update)))
+			.Code.ShouldBe("Finance:PaymentTerm:000042");
+		update.Name = " 9th PT Two\t";
+		(await _paymentTerms.UpdateDraftAsync(other.Id, update)).Name.ShouldBe("9th PT Two");
+	}
+
+	[Fact]
+	public async Task Same_Name_Is_Allowed_In_Another_Year_And_Tenant_And_Is_Trimmed()
+	{
+		var (yearId, boardId, _) = await SeedAcademicContextAsync();
+		await _paymentTerms.CreateAsync(BuildInput(yearId, boardId, "9th PT One", "PT-ONE"));
+		var (nextYearId, nextBoardId, _) = await SeedAcademicContextAsync();
+		(await _paymentTerms.CreateAsync(BuildInput(nextYearId, nextBoardId, " 9th PT One\t", "PT-ONE")))
+			.Name.ShouldBe("9th PT One");
+		var tenantId = Guid.NewGuid();
+		using var tenant = GetRequiredService<ICurrentTenant>().Change(tenantId);
+		var (tenantYearId, tenantBoardId, _) = await SeedAcademicContextAsync(tenantId);
+		(await _paymentTerms.CreateAsync(BuildInput(tenantYearId, tenantBoardId, "9th PT One", "PT-ONE")))
+			.Name.ShouldBe("9th PT One");
+	}
+
+	[Fact]
+	public async Task Clone_Skips_A_Duplicate_Name_Even_With_A_Different_Code()
+	{
+		var (sourceYearId, sourceBoardId, _) = await SeedAcademicContextAsync();
+		var source = await _paymentTerms.CreateAsync(BuildInput(sourceYearId, sourceBoardId, "9th PT One", "SOURCE-CODE"));
+		var (targetYearId, targetBoardId, _) = await SeedAcademicContextAsync();
+		await _paymentTerms.CreateAsync(BuildInput(targetYearId, targetBoardId, "9TH PT ONE", "TARGET-CODE"));
+		var clone = await _paymentTerms.CloneAsync(new() {
+			SourceAcademicYearId = sourceYearId, TargetAcademicYearId = targetYearId,
+			PaymentTermIds = [source.Id]
+		});
+		clone.ClonedTermIds.ShouldBeEmpty();
+		clone.ConflictedCodes.ShouldContain("SOURCE-CODE");
 	}
 
 	[Fact]

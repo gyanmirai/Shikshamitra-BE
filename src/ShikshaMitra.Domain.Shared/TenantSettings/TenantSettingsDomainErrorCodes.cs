@@ -6,4 +6,5 @@ public static class TenantSettingsDomainErrorCodes
 	public const string DuplicateStandardName = "ShikshaMitra.TenantSettings:DuplicateStandardName";
 	public const string DuplicateDivisionName = "ShikshaMitra.TenantSettings:DuplicateDivisionName";
 	public const string InvalidAcademicOrder = "ShikshaMitra.TenantSettings:InvalidAcademicOrder";
+	public const string InvalidDivisionRoom = "ShikshaMitra.TenantSettings:InvalidDivisionRoom";
 }

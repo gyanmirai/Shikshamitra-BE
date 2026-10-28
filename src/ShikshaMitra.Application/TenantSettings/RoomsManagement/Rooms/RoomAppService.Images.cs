@@ -3,6 +3,9 @@ using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.BlobStoring;
 using Volo.Abp.Data;
+using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Uow;
+using ShikshaMitra.TenantSettings.Divisions;
 
 namespace ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 
@@ -44,10 +47,17 @@ public partial class RoomAppService
 		if (!string.IsNullOrEmpty(previous)) await ImageBlobs.DeleteAsync(previous);
 	}
 
+	[UnitOfWork(isTransactional: true)]
 	public override async Task DeleteAsync(Guid id)
 	{
 		await CheckDeletePolicyAsync();
 		var room = await Repository.GetAsync(id);
+		var divisions = LazyServiceProvider.LazyGetRequiredService<IRepository<Division, Guid>>();
+		using (LazyServiceProvider.LazyGetRequiredService<IDataFilter>().Disable<ISoftDelete>())
+		{
+			if (await divisions.AnyAsync(division => division.TenantId == CurrentTenant.Id && division.RoomId == id))
+				throw new BusinessException(RoomsManagementErrorCodes.RoomInUse).WithData("RoomId", id);
+		}
 		var blob = room.GetProperty<string?>("RoomImageBlob", null);
 		await base.DeleteAsync(id);
 		if (!string.IsNullOrEmpty(blob)) await ImageBlobs.DeleteAsync(blob);

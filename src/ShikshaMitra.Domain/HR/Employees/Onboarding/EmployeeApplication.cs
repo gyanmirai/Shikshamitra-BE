@@ -23,6 +23,31 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public string? SecondaryMobileNo { get; private set; }
 	public string? PositionAppliedFor { get; private set; }
 	public string? DepartmentAppliedFor { get; private set; }
+	public string? WorkAssignmentMode { get; private set; }
+	public Guid? WorkAssignmentAcademicYearId { get; private set; }
+	public string? WorkAssignmentAcademicYearName { get; private set; }
+	public Guid[] WorkAssignmentOrganizationIds { get; private set; } = [];
+	public string[] WorkAssignmentOrganizationLabels { get; private set; } = [];
+
+	public void SetWorkAssignment(string mode, Guid? academicYearId, string? academicYearName,
+		IEnumerable<Guid> organizationIds, IEnumerable<string> organizationLabels)
+	{
+		if (mode is not (EmployeeWorkAssignmentModes.SpecificOrganizations or
+			EmployeeWorkAssignmentModes.SchoolWide or EmployeeWorkAssignmentModes.DecideLater))
+			throw new ArgumentException("Choose a valid work assignment mode.", nameof(mode));
+		var ids = organizationIds.ToArray();
+		var labels = organizationLabels.ToArray();
+		if (ids.Length != labels.Length || ids.Distinct().Count() != ids.Length || ids.Contains(Guid.Empty) ||
+			(mode == EmployeeWorkAssignmentModes.SpecificOrganizations
+				? !academicYearId.HasValue || academicYearId == Guid.Empty || ids.Length == 0
+				: academicYearId.HasValue || ids.Length != 0))
+			throw new ArgumentException("Work assignment organizations and academic year do not match the mode.");
+		WorkAssignmentMode = mode;
+		WorkAssignmentAcademicYearId = academicYearId;
+		WorkAssignmentAcademicYearName = academicYearName;
+		WorkAssignmentOrganizationIds = ids;
+		WorkAssignmentOrganizationLabels = labels;
+	}
 
 	public DateOnly? DateOfBirth { get; private set; }
 	public int? Gender { get; private set; }
@@ -95,6 +120,17 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	}
 
 	public string FullName => string.Join(" ", new[] { FirstName, MiddleName, LastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
+	public string WorkAssignmentDisplay => WorkAssignmentDescription +
+		(WorkAssignmentMode != null && !string.IsNullOrWhiteSpace(DepartmentAppliedFor)
+			? $"; Legacy department: {DepartmentAppliedFor}" : string.Empty);
+	private string WorkAssignmentDescription => WorkAssignmentMode switch
+	{
+		EmployeeWorkAssignmentModes.SpecificOrganizations =>
+			$"{string.Join("; ", WorkAssignmentOrganizationLabels)} ({WorkAssignmentAcademicYearName})",
+		EmployeeWorkAssignmentModes.SchoolWide => "School-wide / not tied to an academic organization",
+		EmployeeWorkAssignmentModes.DecideLater => "Decide later",
+		_ => string.IsNullOrWhiteSpace(DepartmentAppliedFor) ? "Not recorded" : $"Legacy department: {DepartmentAppliedFor}"
+	};
 	public bool HasResume => !string.IsNullOrWhiteSpace(ResumeBlobName);
 	public bool HasPhoto => !string.IsNullOrWhiteSpace(PhotoBlobName);
 
@@ -143,7 +179,7 @@ public class EmployeeApplication : FullAuditedAggregateRoot<Guid>, IMultiTenant
 			personalInfo.MobileNo,
 			personalInfo.SecondaryMobileNo,
 			personalInfo.Designation,
-			personalInfo.Department);
+			DepartmentAppliedFor);
 
 		DateOfBirth = personalInfo.DateOfBirth;
 		Gender = personalInfo.Gender;

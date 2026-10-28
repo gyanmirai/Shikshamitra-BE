@@ -25,6 +25,65 @@ namespace ShikshaMitra.Common.Tests.Middleware;
 public class ApiProblemDetailsPipeline_Tests
 {
 	[Theory]
+	[InlineData(false, "010005", "different name")]
+	[InlineData(true, "010005", "different name")]
+	[InlineData(false, "010014", "Review")]
+	[InlineData(true, "010014", "Review")]
+	[InlineData(false, "010026", "another Active")]
+	[InlineData(true, "010026", "another Active")]
+	[InlineData(false, "010027", "reactivate")]
+	[InlineData(true, "010027", "reactivate")]
+	public async Task Proration_clone_errors_preserve_specific_recovery_in_problem_json(bool useResultFilter, string rule, string recovery)
+	{
+		var code = "Finance:ProrationPolicy:" + rule;
+		var assembly = typeof(ShikshaMitraDomainSharedModule).Assembly;
+		using var resource = assembly.GetManifestResourceStream(assembly.GetManifestResourceNames()
+			.Single(name => name.EndsWith("Localization.ShikshaMitra.en.json")))!;
+		using var messages = await JsonDocument.ParseAsync(resource);
+		var template = messages.RootElement.GetProperty("Texts").GetProperty(code).GetString()!;
+		var resolver = CreateResolver(new Dictionary<string, string> { [code] = template });
+		var data = new Dictionary<string, object?>
+		{
+			["Name"] = "Admission Copy", ["Location"] = "Archived", ["FeeHeadNames"] = "Transport Fee"
+		};
+		var http = new DefaultHttpContext();
+		http.Request.Path = "/api/finance/proration-policies/source/clone";
+		void AssertRecovery(string? detail)
+		{
+			detail.ShouldContain(recovery);
+			if (rule == "010005") detail.ShouldContain("Admission Copy");
+			if (rule == "010027") detail.ShouldContain("Transport Fee");
+			detail.ShouldNotContain("{FeeHeadNames}");
+			detail.ShouldNotContain("{Name}");
+		}
+		if (useResultFilter)
+		{
+			var payload = new { Error = new { Code = code, Message = ApiProblemDetailsMapper.GetDefaultDetail(400), Data = data } };
+			var context = new ResultExecutingContext(new ActionContext(http, new RouteData(), new ActionDescriptor()),
+				new List<IFilterMetadata>(), new ObjectResult(payload) { StatusCode = 400 }, new object());
+			await new ApiProblemDetailsResultFilter(resolver).OnResultExecutionAsync(context,
+				() => Task.FromResult(new ResultExecutedContext(context, new List<IFilterMetadata>(), context.Result, new object())));
+			var result = ((ObjectResult)context.Result).Value.ShouldBeOfType<ProblemDetails>();
+			AssertRecovery(result.Detail);
+			result.Extensions["errorCode"].ShouldBe(code);
+		}
+		else
+		{
+			http.Response.Body = new MemoryStream();
+			var exception = new BusinessException(code);
+			foreach (var pair in data) exception.WithData(pair.Key, pair.Value);
+			await new ApiProblemDetailsMiddleware(_ => throw exception,
+				NullLogger<ApiProblemDetailsMiddleware>.Instance, resolver).InvokeAsync(http);
+			http.Response.StatusCode.ShouldBe(400);
+			http.Response.ContentType.ShouldBe("application/problem+json");
+			http.Response.Body.Position = 0;
+			using var result = await JsonDocument.ParseAsync(http.Response.Body);
+			AssertRecovery(result.RootElement.GetProperty("detail").GetString());
+			result.RootElement.GetProperty("errorCode").GetString().ShouldBe(code);
+		}
+	}
+
+	[Theory]
 	[InlineData("UserScope:UsersNotFound", "linked account")]
 	[InlineData("UserScope:InvalidReferences", "Reload the academic hierarchy")]
 	[InlineData("UserScope:BulkAssignFailed", "reference-123")]

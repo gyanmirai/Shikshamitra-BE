@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-25
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -14,6 +14,8 @@ TL;DR: this is the canonical backend HR API map.
 Use it for endpoint families, permissions, request conventions, errors, and known partial surfaces.
 Use current controllers and application contracts when route behavior is unclear.
 Do not restore raw generated exports under `docs/`.
+
+Advisory school setup-review endpoints and storage are documented in [setup review](references/setup-review.md).
 
 ## Shared request rules
 
@@ -127,6 +129,14 @@ The HR dashboard excludes approved-leave employees without stored attendance fro
 Approved half-day leave removes one-half attendance unit but leaves the unrecorded remainder visible as missing attendance.
 A stored attendance row suppresses the same-day leave overlay in HR dashboard totals and trend points.
 
+### Application work assignment
+
+Invitation creation accepts optional `workAssignment`: `mode` is `specificOrganizations`, `schoolWide`, or `decideLater`. Specific work requires `academicYearId` and 1–100 unique `organizationIds`, using stage IDs from the actor/tenant/year-scoped `/api/app/academic-organization-options` catalogue. Other modes require no year and an empty ID list. Unknown, duplicate, empty, foreign, unavailable, or out-of-scope choices are rejected before invitation persistence/email.
+
+List, detail, public-token and finalization responses expose the structured assignment with server-resolved `organizationLabels` and `academicYearName` snapshots, plus `workAssignmentDisplay` for exports. These are organizational context only. School-wide never assigns academic access, selects all units, changes roles or bypasses teaching validation. Functional `personalInfo.department` remains independent; legacy `departmentAppliedFor` stays readable and is never mapped to IDs or overwritten by public submission.
+
+Finalization may supply a revised `workAssignment` and must set `workAssignmentConfirmed: true` whenever a structured assignment exists or is supplied. Saved or revised specific IDs are revalidated against current actor scope and hierarchy before employee creation. Missing/deleted years or organizations require HR review. Legacy clients may omit assignment; blanks remain unclassified. The additive `AddEmployeeApplicationWorkAssignment` migration must be applied by the normal release process before using this contract; this change does not execute migrations.
+
 ### Application finalization salary contract
 
 `POST /api/employee-applications/{id}/finalize` requires `salary` using the existing `SaveEmployeeCompensationDto` contract.
@@ -158,6 +168,19 @@ Tenant and user-scope checks remain mandatory in addition to these endpoint perm
 
 The target leave model uses paid and unpaid rule buckets inside leave policies.
 Do not reintroduce removed leave-type behavior without product approval.
+
+### Leave impact and immutable versions
+
+| Endpoint | Existing permission and contract |
+|---|---|
+| `POST /api/leave-policies/impact/preview` | `inspect`: Leave View; `create`: Add; `update`: Edit; `set-default`: SetDefault; `archive`: Delete. Exact tenant/year/date scope, optional expected version and proposed policy body. |
+| `POST /api/leave-policies/impact/details` | Same action grant, plus the owning employee, assignment, leave-center or payroll read grant and staff scope. Assessment/fingerprint, metric and bounded skip/max page; accessible, assessed and redacted totals are distinct. |
+| `GET /api/hr/leave/policies/{policyId}/versions` and individual/compare reads | Existing `HR.LeaveManagement.Setting.LeavePolicy.View`; shared immutable snapshot contract. |
+| Version `restore-preview` and `restore-draft` under that route | Existing `HR.LeaveManagement.Setting.LeavePolicy.Add`. New policy/rule identities, same tenant/year, Draft, nondefault, source provenance. Source history and references remain unchanged. |
+
+Measures carry nullable count, status, definition, scope and availability reason. Zero means a completed query; unavailable/partial is never zero. Effective staff, assignment records, pinned requests and factual payroll-period exposure are separate. Balance deltas and salary differences remain not calculated. Preview changes are field-level and use stable Paid/Unpaid rule keys.
+
+Applicable active/default mutations require `X-HR-Policy-Impact-Token`. Update bodies include the exact reviewed `impactScope` and `expectedVersion`; default/archive actions send `X-HR-Leave-Impact-Scope` as JSON. Changed proposal, actor, source version/dependencies, expired token or incomplete assessment fails server revalidation. Draft maintenance adds no operational gate. The first changed write enrolls existing configuration as an honest baseline; reads do not backfill events. See [policy architecture](references/policy-architecture.md#leave-impact-and-version-history) for lock ordering, rollout and reference invariants.
 
 ## Payroll API families
 
@@ -305,11 +328,14 @@ Policy APIs resolve work calendars, payroll policies, attendance policies, assig
 | Payroll policies | `/api/hr/payroll/policies*` |
 | Leave policies | `/api/leave-policies*` |
 | Policy assignments | `/api/hr/policy-assignments*` |
+| Current/proposed assignment resolution | `POST /api/hr/policy-assignments/resolution-preview` |
 | Effective policies | `/api/hr/employees/{employeeId}/effective-policies?date=YYYY-MM-DD` |
 | Holiday impact preview | `/api/hr/policy-holiday-impact-preview*` |
 | Policy versions | `/api/hr/{policyType}/policies/{policyId}/versions*` |
 
 Work-calendar effective dates accept years from 1900 through 2100, and a custom weekly-off pattern must leave at least one working day.
+Assignment resolution preview requires the existing `HR.Policies.PreviewImpact` grant at both controller and application-service boundaries. Supply `assignment`, `date`, optional `assignmentId` and optional `sampleEmployeeId`; the tenant is server-derived. It resolves current and detached proposed assignments through the same staff/group/default ordering without saving them. Staff samples require current staff scope. A group-only result is explicitly scoped to that group; a new-ID tie returns `isComplete: false` and no proposed winner rather than guessing its future ID.
+Shared policy impact responses add `ruleDifferencesStatus` and `ruleDifferences` for current/proposed contract fields. Collection differences describe operational holiday, weekday and payroll-month values while excluding temporary row identities. Unknown comparisons are not represented as no changes. These disclosures do not simulate salary or change confirmation/locking behavior.
 Work-calendar, attendance, payroll, and leave policy names are unique only among non-archived policies in the same tenant and academic year, so an archived name can be reused.
 Leave policy uniqueness is case-insensitive and is backed by the normalized database key, while the other policy families preserve their existing case-sensitive name contract.
 Duplicate active policy names return a stable business error that the frontend can present without exposing database details.
@@ -446,6 +472,7 @@ There is no public document URL or arbitrary email-recipient override.
 | GET /api/payroll/payslip-deliveries?salarySlipId= | GenerateSalarySlip.View | Delivery history across all issued revisions, with recipient, actor, times, status and safe error category. |
 | POST /api/payroll/payslip-deliveries | GenerateSalarySlip.Add | DocumentId and IdempotencyKey; queues the current official document for its employee. |
 | GET /api/payroll/payslip-settings | GenerateSalarySlip.View | SchoolName, SchoolAddress, AutomaticEmail, ConcurrencyStamp and last IdempotencyKey. |
+| POST /api/payroll/payslip-settings/preview | GenerateSalarySlip.View | Accepts validated `SalaryDocumentPresentation` and returns a no-store A4 PDF using the issuance renderer. Reads current tenant school identity/logo; ignores client logo references. Fixed, explicitly synthetic employee/payroll facts only; no employee lookup, settings persistence, document issuance or delivery. |
 | PUT /api/payroll/payslip-settings | GenerateSalarySlip.Add | Presentation, AutomaticEmail, ConcurrencyStamp and IdempotencyKey; optimistic concurrency and idempotent retries under the payroll fence. Incoming school details are ignored. |
 
 These short permission suffixes refer to the existing HR payroll payslip permission catalogue, not new grants.

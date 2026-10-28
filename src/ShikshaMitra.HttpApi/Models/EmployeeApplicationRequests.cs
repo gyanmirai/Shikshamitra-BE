@@ -21,6 +21,8 @@ public class PublicEmployeeApplicationSubmitRequest
 
 public class EmployeeApplicationFinalizeRequest
 {
+	public EmployeeWorkAssignmentDto? WorkAssignment { get; set; }
+	public bool WorkAssignmentConfirmed { get; set; }
 	[Required]
 	public PersonalInfoRequest PersonalInfo { get; set; } = new();
 

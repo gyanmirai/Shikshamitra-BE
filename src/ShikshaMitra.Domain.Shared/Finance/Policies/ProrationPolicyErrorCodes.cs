@@ -38,4 +38,5 @@ public static class ProrationPolicyErrorCodes
 	public const string OneTimeFeeCannotBeProrated = Prefix + "010023";
 	public const string ScheduleCoverageRequired = Prefix + "010024";
 	public const string DefaultPolicyMustBeActive = Prefix + "010025";
+	public const string FeeHeadUnavailable = Prefix + "010027";
 }

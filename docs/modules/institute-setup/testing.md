@@ -3,7 +3,7 @@ module: institute-setup
 domain: testing
 content_type: Troubleshooting
 status: canonical
-updated_on: 2026-10-26
+updated_on: 2026-10-27
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -11,6 +11,21 @@ audience: humans-and-agents
 # Validate Institute Setup backend changes
 
 TL;DR: run the docs validator for documentation changes and targeted Tenant Settings or Academic tests for behavior changes.
+
+## Performance and migration regressions
+
+`AcademicSetupPagingApi_Tests` covers scope-before-pagination, accurate totals, hidden-record detail denial, complete selected-year hierarchy without banner bytes, foreign-room rejection and ambiguous legacy room names.
+`RoomTransportApi_Tests`, `RoomPerformance_Tests` and `DivisionOccupancyQuery_Tests` cover multipart/binary transport, rollback, bounded related-name queries, server filters, floor capacity and SQL occupancy aggregation.
+The report API regressions cover unrelated catalogue reads, bounded SQL previews/history, pending statuses, principal reuse, Unicode semantics, lease recovery and conditional branding reads without blob retrieval.
+History search coverage includes the displayed `Pending` fallback, rendered English dates, date/time aliases, raw ISO timestamps, historical browser timezone offsets and invalid timezone rejection. The compatibility scan must project timestamps and IDs without loading saved requests or file bytes.
+Use isolated artifacts and one compiler at a time on memory-constrained hosts.
+SQL command counts are local regression evidence; they are not deployed latency measurements.
+
+Apply `20261027051506_ImproveInstituteSetupPerformance` before deploying the updated backend.
+It adds report type/lease metadata and the division room reference, backfills tenant-owned GUIDs or unique exact names, and preserves ambiguous legacy labels.
+Validate Up and Down only on a new disposable PostgreSQL database and verify unrelated sentinel data remains intact.
+Set `INSTITUTE_PERFORMANCE_TEST_POSTGRES` to a loopback PostgreSQL administrator connection, then run the HTTP test project with filter `InstitutePerformancePostgres_Tests`. The fixture creates a unique `institute_perf_tests_*` database, verifies backfills, the restrictive room foreign key, production PostgreSQL feature filters and rollback preservation, then removes only its own database.
+The target model and snapshot restore metadata for two Admission Application Numbering entities already created by `20261022053630_AddAdmissionApplicationNumbering`; this migration does not create or drop those unrelated tables. Verify `dotnet ef migrations has-pending-model-changes` with the matching EF tool version before rollout.
 Rooms Management has focused domain layout and direct-call authorization coverage.
 
 ## Reports
@@ -43,10 +58,24 @@ Release requires applying `20261021052944_AddSchoolDocuments` before exposing th
 
 | Check | Command |
 | --- | --- |
-| Unequal columns, derived capacity, invalid layouts and feature normalization | `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~RoomLayout_Tests` |
+| Unequal columns, zero layouts, restored totals, bounds and feature normalization | `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~RoomLayout_Tests` |
+| Zero-seat layouts, stale totals and legacy seating fallback | `dotnet test test/ShikshaMitra.Domain.Tests --filter FullyQualifiedName~RoomSeatingLayout_Tests` |
+| Zero-value JSON/multipart create, update, reload and positive restoration | `dotnet test test/ShikshaMitra.HttpApi.Tests --filter FullyQualifiedName~RoomZeroLayoutApi_Tests` |
 | Read/write room and catalogue policy enforcement | `dotnet test test/ShikshaMitra.Application.Tests --filter FullyQualifiedName~RoomAuthorization_Tests` |
 
+The layout and seating cases live in `test/ShikshaMitra.Domain.Tests/TenantSettings/RoomLayout_Tests.cs` and `test/ShikshaMitra.Domain.Tests/TenantSettings/RoomSeatingLayout_Tests.cs`.
+`test/ShikshaMitra.HttpApi.Tests/TenantSettings/RoomZeroLayoutApi_Tests.cs` exercises both transports through the real HTTP pipeline with disposable SQLite and synthetic tenant authentication.
+These checks cover the [room layout contract](./api.md#rooms-management-endpoint-families); they do not establish deployed acceptance.
+
 The room migration script and EF model consistency were checked locally. Applying its seed SQL and verifying tenant isolation against a disposable PostgreSQL database remain release checks; no disposable PostgreSQL connection was verified. These focused tests do not establish deployed persistence.
+
+### Building floor capacity
+
+Run `dotnet test test/ShikshaMitra.HttpApi.Tests --filter "FullyQualifiedName~BuildingRoomCapacityApi_Tests|FullyQualifiedName~RoomTransportApi_Tests" --artifacts-path .artifacts/room-capacity-validation` for the HTTP capacity and room-command regressions.
+`BuildingRoomCapacityApi_Tests` uses disposable SQLite and the production HTTP pipeline with development exception details and stack traces disabled.
+It covers the 2-to-1 capacity rejection, HTTP 400 ProblemDetails with localized requested count/floor/current count and corrective guidance, typed floor/count context, unchanged saved building/floor values, equal or higher capacity, and reducing capacity after deleting a room.
+These tests establish local API behavior; they do not validate deployed staging data or PostgreSQL row-lock concurrency.
+The [frontend testing guide](../../../../Shikshamitra-FE/docs/institute-setup/testing.md) owns inline validation and browser evidence.
 
 ## Initial setup checks
 

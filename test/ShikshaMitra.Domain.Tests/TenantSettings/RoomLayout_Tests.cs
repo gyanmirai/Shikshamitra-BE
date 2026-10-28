@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Shouldly;
 using ShikshaMitra.TenantSettings.RoomsManagement.Rooms;
 using Volo.Abp;
@@ -27,7 +28,7 @@ public class RoomLayout_Tests
 	[InlineData(0, 2)]
 	[InlineData(-1, 2)]
 	[InlineData(101, 2)]
-	[InlineData(3, 0)]
+	[InlineData(3, -1)]
 	[InlineData(3, 21)]
 	public void Invalid_rows_or_bench_capacity_are_rejected(int rows, int capacity)
 	{
@@ -35,10 +36,50 @@ public class RoomLayout_Tests
 	}
 
 	[Fact]
-	public void Empty_or_excessive_column_counts_are_rejected()
+	public void Excessive_column_counts_are_rejected()
 	{
-		Should.Throw<BusinessException>(() => new Room().SetColumnLayout([], 2));
-		Should.Throw<BusinessException>(() => new Room().SetColumnLayout(new int[51], 2));
+		Should.Throw<BusinessException>(() => new Room().SetColumnLayout(Enumerable.Repeat(1, 51).ToArray(), 2));
+	}
+
+	[Fact]
+	public void Maximum_layout_dimensions_remain_valid()
+	{
+		var room = new Room();
+		room.SetColumnLayout(Enumerable.Repeat(100, 50).ToArray(), 20);
+		room.TotalBenches.ShouldBe(5000);
+		room.Capacity.ShouldBe(100000);
+	}
+
+	[Theory]
+	[InlineData(0)]
+	[InlineData(2)]
+	public void Zero_columns_clear_the_existing_layout_and_totals(int capacity)
+	{
+		var room = new Room();
+		room.SetColumnLayout([3, 5], 2);
+		room.SetColumnLayout([], capacity);
+		room.ColumnRows.ShouldBeEmpty();
+		room.BenchesPerRow.ShouldBe(0);
+		room.BenchesPerColumn.ShouldBe(0);
+		room.BenchCapacity.ShouldBe(capacity);
+		room.TotalBenches.ShouldBe(0);
+		room.Capacity.ShouldBe(0);
+	}
+
+	[Fact]
+	public void Zero_bench_capacity_clears_totals_and_retains_rows_for_restoring_capacity()
+	{
+		var room = new Room();
+		room.SetColumnLayout([3, 5], 0);
+		room.ColumnRows.ShouldBe(new[] { 3, 5 });
+		room.BenchesPerRow.ShouldBe(5);
+		room.BenchesPerColumn.ShouldBe(2);
+		room.BenchCapacity.ShouldBe(0);
+		room.TotalBenches.ShouldBe(0);
+		room.Capacity.ShouldBe(0);
+		room.SetColumnLayout(room.ColumnRows, 2);
+		room.TotalBenches.ShouldBe(8);
+		room.Capacity.ShouldBe(16);
 	}
 
 	[Fact]

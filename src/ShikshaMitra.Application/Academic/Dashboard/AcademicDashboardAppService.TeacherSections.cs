@@ -47,21 +47,33 @@ public partial class AcademicDashboardAppService
 
     public async Task<TeacherAcademicDashboardAssessmentDto> GetTeacherAssessmentAsync()
     {
-        var overview = await BuildTeacherDashboardAsync(
-            includeAnalytics: false, includeAttention: false);
+        var overview = await ReadDashboardSectionAggregatesAsync(teacherScope: true);
+        var pendingTasks = new List<AcademicDashboardPendingTaskDto>();
+        if (overview.PendingEvaluations > 0)
+        {
+            pendingTasks.Add(new() { Id = "p2", Title = "Homework Reviews Pending", Count = overview.PendingEvaluations, Priority = "high", Action = "Review", Icon = "solar:notebook-bold", Path = "/academic/gradingAndFeedback" });
+        }
+        if (overview.PendingGradeEntries > 0)
+        {
+            pendingTasks.Add(new() { Id = "p3", Title = "Grade Entries Pending", Count = overview.PendingGradeEntries, Priority = "medium", Action = "Enter", Icon = "solar:document-text-bold", Path = "/academic/gradeEntry" });
+        }
         return new TeacherAcademicDashboardAssessmentDto
         {
-            SystemAlertsCount = overview.SystemAlertsCount,
-            EvaluationsRate = overview.EvaluationsRate,
+            SystemAlertsCount = overview.ActionCenterItems.Count,
+            EvaluationsRate = overview.TotalSubmissions > 0
+                ? (int)Math.Round((double)overview.ReviewedSubmissions / overview.TotalSubmissions * 100) : 0,
             PendingEvaluations = overview.PendingEvaluations,
             UpcomingExams = overview.UpcomingExams,
             ReadinessItems = overview.ReadinessItems,
             ActionCenterItems = overview.ActionCenterItems,
             DataHealthItems = overview.DataHealthItems,
-            PendingTasks = overview.PendingTasks,
-            RecentActivities = overview.RecentActivities,
-            HomeworkStatus = overview.HomeworkStatus,
-            UpcomingExamsList = overview.UpcomingExamsList
+            PendingTasks = pendingTasks,
+            HomeworkStatus = new AcademicDashboardHomeworkStatusDto
+            {
+                Completed = overview.ReviewedSubmissions,
+                Graded = overview.ReviewedSubmissions,
+                Pending = overview.PendingSubmissions
+            }
         };
     }
 

@@ -32,7 +32,15 @@ public class AcademicDynamicReportQueryService(
 		AcademicDynamicReportSpecDto requestedPlan,
 		AcademicAiReportCatalogScope scope)
 	{
-		var snapshot = await catalogService.BuildSnapshotAsync(scope);
+		var snapshot = await catalogService.BuildSnapshotAsync(scope, requestedPlan.Module);
+		return await GenerateAsync(requestedPlan, scope, snapshot);
+	}
+
+	internal async Task<AcademicReportPreviewDto> GenerateAsync(
+		AcademicDynamicReportSpecDto requestedPlan,
+		AcademicAiReportCatalogScope scope,
+		AcademicDynamicReportCatalogSnapshot snapshot)
+	{
 		var plan = guard.ValidatePlan(requestedPlan, requestedPlan.Module, snapshot);
 		var dataset = catalogService.GetDataset(plan.Dataset);
 		var rows = plan.Module switch

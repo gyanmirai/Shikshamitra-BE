@@ -98,8 +98,9 @@ public class AcademicReportAppService(
         await reportAgentPermissionService.EnsureCanBuildAsync(input.Module);
         var catalogScope = await GetAiCatalogScopeAsync(
             userId, input.AcademicYearId, input.EducationBoardId, input.EducationMediumId);
-        var plan = await ResolveAiPlanAsync(input.Plan, input.Module, catalogScope);
-        var preview = await dynamicReportQueryService.GenerateAsync(plan, catalogScope);
+        var snapshot = await dynamicReportCatalog.BuildSnapshotAsync(catalogScope, input.Module);
+        var plan = await ResolveAiPlanAsync(input.Plan, input.Module, catalogScope, snapshot: snapshot);
+        var preview = await dynamicReportQueryService.GenerateAsync(plan, catalogScope, snapshot);
         const int previewRowLimit = 12;
         preview.Rows = preview.Rows.Take(previewRowLimit).ToList();
         preview.PageSize = preview.Rows.Count;
@@ -180,9 +181,10 @@ public class AcademicReportAppService(
         AcademicDynamicReportSpecDto requestedPlan,
         string module,
         AcademicAiReportCatalogScope scope,
-        string prompt = "Approved AI report plan")
+        string prompt = "Approved AI report plan",
+        AcademicDynamicReportCatalogSnapshot? snapshot = null)
     {
-        var snapshot = await dynamicReportCatalog.BuildSnapshotAsync(scope);
+        snapshot ??= await dynamicReportCatalog.BuildSnapshotAsync(scope, module);
         var plan = AcademicDynamicReportFilterResolver.Resolve(prompt, requestedPlan, snapshot);
         plan = AcademicAiReportPlanNormalizer.Normalize(
             $"{prompt}\n{plan.InterpretedRequest}", module, plan,

@@ -3,7 +3,7 @@ module: examination
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-08-31
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -34,3 +34,16 @@ V2 clients send `Version` on draft and apply writes.
 A mismatch returns code `SEATING_PLAN_CONCURRENCY_CONFLICT` and requires a refresh.
 User scope and tenant filters still apply in addition to endpoint permissions.
 Creating or editing a plan fails when any selected subject already belongs to another plan or has an incomplete schedule. Mutations after publication return code `EXAMINATION_SEATING_PUBLISHED`; incomplete global publication returns `EXAMINATION_SEATING_NOT_READY` with blocker details.
+
+## Grade filter options
+
+`GET api/academics/exams/marks/grade-options` requires `Academics.Examination_RecordMarks.View` and the existing exam user-scope check. It returns a string array for grade filters without loading mark feedback or student profiles.
+
+| Query | Rule |
+|---|---|
+| `ExamId` | Required exam ID |
+| `SubjectId` | Optional; omitted includes all exam subjects |
+| `DivisionId` | Optional; omitted includes permitted exam divisions |
+| `StandardId` | Optional consistency filter; a different standard returns an empty array |
+
+Only enrolled, approved students and their applicable locked elective selections contribute marks. Subject grading scales use their configured total and inclusive ranges, matching Grade Entry; an unmatched custom range contributes no label. Nonempty labels are trimmed and ordinal-distinct, with their case preserved. There is no result cap. Missing subjects, divisions, eligible marks, or labels return an empty array.

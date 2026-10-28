@@ -3,6 +3,7 @@ using ShikshaMitra.Common;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
@@ -36,6 +37,15 @@ public class ChapterAppService(
 	IReportingManagerAccessService reportingManagerAccessService
 ) : ApplicationService, IChapterAppService
 {
+	public async Task<List<ChapterLookupDto>> GetLookupAsync(Guid standardId, Guid subjectId, Guid? divisionId = null)
+	{
+		var assigned = await GetReadAssignmentAsync(standardId, subjectId, divisionId, includeChapters: false);
+		return await AsyncExecuter.ToListAsync((await assignedSubjectRepository.GetQueryableAsync())
+			.Where(row => row.Id == assigned.Id).SelectMany(row => row.Chapters)
+			.OrderBy(chapter => chapter.ChapterNumber).Select(chapter => new ChapterLookupDto
+			{ Id = chapter.Id, ChapterNumber = chapter.ChapterNumber, ChapterName = chapter.ChapterName }));
+	}
+
 	public async Task<ApiSuccessResponseDto> CreateAsync(Guid standardId, Guid subjectId, List<CreateChapterDto> input)
 	{
 		var assignedSubject = (await assignedSubjectRepository.GetListAsync(
@@ -80,29 +90,7 @@ public class ChapterAppService(
 
 	public async Task<List<ChapterDto>> GetByStandardAndSubjectAsync(Guid standardId, Guid subjectId, Guid? divisionId = null)
 	{
-		var assignedSubjectQuery = await assignedSubjectRepository.WithDetailsAsync();
-		var assignedSubject = await AsyncExecuter.FirstOrDefaultAsync(
-			assignedSubjectQuery.Where(a => a.StandardId == standardId && a.SubjectId == subjectId)
-		)
-			?? throw new BusinessException("Academic:Chapter:002", "Subject not assigned to this class");
-		// A subject teacher may read every chapter of a subject they are assigned to,
-		// even when they do not have a separate class/division UserScope assignment.
-		// Reporting managers inherit the same read visibility for their reportees'
-		// subject allocations.
-		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
-		{
-			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-read");
-		}
-
-		if (divisionId.HasValue)
-		{
-			var divisionExists = await divisionRepository.AnyAsync(
-				division => division.Id == divisionId.Value && division.StandardId == standardId);
-			if (!divisionExists)
-			{
-				throw new BusinessException("Academic:Chapter:006", "Division does not belong to the selected class.");
-			}
-		}
+		var assignedSubject = await GetReadAssignmentAsync(standardId, subjectId, divisionId, includeChapters: true);
 
 		var chapters = assignedSubject.Chapters.OrderBy(c => c.ChapterNumber).ToList();
 		var dtos = ObjectMapper.Map<List<AssignedSubjectChapter>, List<ChapterDto>>(chapters);
@@ -118,6 +106,19 @@ public class ChapterAppService(
 		return dtos;
 	}
 
+	private async Task<AssignedSubject> GetReadAssignmentAsync(Guid standardId, Guid subjectId, Guid? divisionId, bool includeChapters)
+	{
+		var query = includeChapters ? await assignedSubjectRepository.WithDetailsAsync()
+			: await assignedSubjectRepository.GetQueryableAsync();
+		var assignedSubject = await AsyncExecuter.FirstOrDefaultAsync(query.Where(row => row.StandardId == standardId && row.SubjectId == subjectId))
+			?? throw new BusinessException("Academic:Chapter:002", "Subject not assigned to this class");
+		if (!await HasTeacherSubjectAccessAsync(assignedSubject))
+			await userScopeAccessService.EnsureCurrentUserCanAccessAsync(assignedSubject, operation: "chapter-read");
+		if (divisionId.HasValue && !await divisionRepository.AnyAsync(division => division.Id == divisionId.Value && division.StandardId == standardId))
+			throw new BusinessException("Academic:Chapter:006", "Division does not belong to the selected class.");
+		return assignedSubject;
+	}
+
 	private async Task<bool> HasTeacherSubjectAccessAsync(AssignedSubject assignedSubject)
 	{
 		// Subject allocation is an explicit resource-level grant. It must be checked
@@ -130,13 +131,13 @@ public class ChapterAppService(
 			return false;
 		}
 
-		var employee = await employeeRepository.FirstOrDefaultAsync(
-			candidate => candidate.UserId == CurrentUser.Id.Value);
+		var employeeId = await AsyncExecuter.FirstOrDefaultAsync((await employeeRepository.GetQueryableAsync())
+			.Where(candidate => candidate.UserId == CurrentUser.Id.Value).Select(candidate => (Guid?)candidate.Id));
 		var employeeIds = new HashSet<Guid>();
 		employeeIds.Add(CurrentUser.Id.Value);
-		if (employee != null)
+		if (employeeId.HasValue)
 		{
-			employeeIds.Add(employee.Id);
+			employeeIds.Add(employeeId.Value);
 		}
 
 		var reporteeEmployeeIds = await reportingManagerAccessService
@@ -151,6 +152,9 @@ public class ChapterAppService(
 		{
 			return true;
 		}
+		if (await AsyncExecuter.AnyAsync((await assignedSubjectRepository.GetQueryableAsync())
+			.Where(subject => subject.Id == assignedSubject.Id && subject.Teachers.Any(teacher => employeeIds.Contains(teacher.TeacherId)))))
+			return true;
 
 		return await teacherSubjectAllocationRepository.AnyAsync(allocation =>
 			allocation.StandardId == assignedSubject.StandardId &&
@@ -393,12 +397,13 @@ public class ChapterAppService(
 		var linkedByChapter = chapterIds.ToDictionary(id => id, _ => new ChapterLinkSummary());
 		var progressSnapshots = new List<ChapterProgressSnapshot>();
 
-		var lessonPlans = await lessonPlanRepository.GetListAsync(lp =>
+		var lessonPlans = await AsyncExecuter.ToListAsync((await lessonPlanRepository.GetQueryableAsync()).Where(lp =>
 			lp.StandardId == assignedSubject.StandardId &&
 			lp.SubjectId == assignedSubject.SubjectId &&
 			chapterIds.Contains(lp.ChapterId) &&
 			(!divisionId.HasValue || lp.DivisionId == divisionId.Value) &&
-			lp.Status != LessonPlanStatus.Rejected);
+			lp.Status != LessonPlanStatus.Rejected).Select(plan => new
+			{ plan.Id, plan.ChapterId, plan.DivisionId, plan.PlannedDate, plan.CreationTime, plan.PlannedCompletionPercentage }));
 		foreach (var lessonPlan in lessonPlans)
 		{
 			var summary = linkedByChapter[lessonPlan.ChapterId];
@@ -415,9 +420,10 @@ public class ChapterAppService(
 		if (lessonPlans.Count > 0)
 		{
 			var lessonPlanIds = lessonPlans.Select(plan => plan.Id).ToList();
-			var submittedDiaries = await teacherDiaryRepository.GetListAsync(diary =>
+			var submittedDiaries = await AsyncExecuter.ToListAsync((await teacherDiaryRepository.GetQueryableAsync()).Where(diary =>
 				lessonPlanIds.Contains(diary.LessonPlanId) &&
-				diary.Status == TeacherDiaryStatus.Submitted);
+				diary.Status == TeacherDiaryStatus.Submitted).Select(diary => new
+				{ diary.LessonPlanId, diary.CreationTime, diary.ActualDate, diary.LastModificationTime, diary.SubmittedAt, diary.ActualCompletionPercentage }));
 			var diaryByLessonPlan = submittedDiaries
 				.GroupBy(diary => diary.LessonPlanId)
 				.ToDictionary(group => group.Key, group => group.OrderByDescending(diary => diary.CreationTime).First());
@@ -436,52 +442,57 @@ public class ChapterAppService(
 		}
 		var progressByChapter = ChapterProgressCalculator.Calculate(progressSnapshots);
 
-		var homeworks = await homeworkRepository.GetListAsync(hw =>
+		var chapterIdSet = chapterIds.ToHashSet();
+		var homeworks = await AsyncExecuter.ToListAsync((await homeworkRepository.GetQueryableAsync()).Where(hw =>
 			hw.StandardId == assignedSubject.StandardId &&
 			hw.SubjectId == assignedSubject.SubjectId &&
 			(!divisionId.HasValue ||
 				hw.DivisionId == divisionId.Value ||
-				hw.DivisionSchedules.Any(schedule => schedule.DivisionId == divisionId.Value)));
+				hw.DivisionSchedules.Any(schedule => schedule.DivisionId == divisionId.Value)))
+			.Select(homework => new { homework.Id, homework.ChapterId, homework.ChapterIdsJson }));
 		var homeworkChapterLinks = new Dictionary<Guid, List<Guid>>();
 		foreach (var homework in homeworks)
 		{
-			foreach (var chapterId in chapterIds.Where(chapterId => IsLinkedToChapter(homework.ChapterId, homework.ChapterIdsJson, chapterId)))
+			foreach (var chapterId in ReadChapterLinks(homework.ChapterId, homework.ChapterIdsJson).Where(chapterIdSet.Contains))
 			{
 				linkedByChapter[chapterId].Homeworks++;
 				AddLinkedTask(homeworkChapterLinks, homework.Id, chapterId);
 			}
 		}
 
-		var assignments = await assignmentRepository.GetListAsync(assignment =>
+		var assignments = await AsyncExecuter.ToListAsync((await assignmentRepository.GetQueryableAsync()).Where(assignment =>
 			assignment.StandardId == assignedSubject.StandardId &&
 			assignment.SubjectId == assignedSubject.SubjectId &&
 			(!divisionId.HasValue ||
 				assignment.DivisionId == divisionId.Value ||
-				assignment.DivisionSchedules.Any(schedule => schedule.DivisionId == divisionId.Value)));
+				assignment.DivisionSchedules.Any(schedule => schedule.DivisionId == divisionId.Value)))
+			.Select(assignment => new { assignment.Id, assignment.ChapterIdsJson }));
 		var assignmentChapterLinks = new Dictionary<Guid, List<Guid>>();
 		foreach (var assignment in assignments)
 		{
-			foreach (var chapterId in chapterIds.Where(chapterId => IsLinkedToChapter(null, assignment.ChapterIdsJson, chapterId)))
+			foreach (var chapterId in ReadChapterLinks(null, assignment.ChapterIdsJson).Where(chapterIdSet.Contains))
 			{
 				linkedByChapter[chapterId].Assessments++;
 				AddLinkedTask(assignmentChapterLinks, assignment.Id, chapterId);
 			}
 		}
 
-		var questions = await questionBankRepository.GetListAsync(question =>
+		var questionCounts = await AsyncExecuter.ToListAsync((await questionBankRepository.GetQueryableAsync()).Where(question =>
 			question.StandardId == assignedSubject.StandardId &&
 			question.SubjectId == assignedSubject.SubjectId &&
 			question.ChapterId.HasValue &&
 			chapterIds.Contains(question.ChapterId.Value) &&
-			!question.IsArchived);
-		foreach (var questionGroup in questions.GroupBy(question => question.ChapterId!.Value))
+			!question.IsArchived).GroupBy(question => question.ChapterId!.Value)
+			.Select(group => new { ChapterId = group.Key, Count = group.Count() }));
+		foreach (var questionGroup in questionCounts)
 		{
-			linkedByChapter[questionGroup.Key].Questions += questionGroup.Count();
-			linkedByChapter[questionGroup.Key].Assessments++;
+			linkedByChapter[questionGroup.ChapterId].Questions += questionGroup.Count;
+			linkedByChapter[questionGroup.ChapterId].Assessments++;
 		}
 
-		var blueprintRules = await blueprintChapterRuleRepository.GetListAsync(rule => chapterIds.Contains(rule.ChapterId));
-		foreach (var chapterId in blueprintRules.Select(rule => rule.ChapterId).Distinct())
+		var blueprintChapterIds = await AsyncExecuter.ToListAsync((await blueprintChapterRuleRepository.GetQueryableAsync())
+			.Where(rule => Enumerable.Contains(chapterIds, rule.ChapterId)).Select(rule => rule.ChapterId).Distinct());
+		foreach (var chapterId in blueprintChapterIds)
 		{
 			linkedByChapter[chapterId].Assessments++;
 		}
@@ -520,11 +531,12 @@ public class ChapterAppService(
 			return;
 		}
 
-		var rubrics = await rubricRepository.GetListAsync(rubric =>
+		var rubrics = await AsyncExecuter.ToListAsync((await rubricRepository.GetQueryableAsync()).Where(rubric =>
 			!rubric.IsTemplate &&
 			rubric.Status != RubricStatus.Archived &&
 			((rubric.HomeworkId.HasValue && homeworkIds.Contains(rubric.HomeworkId.Value)) ||
-			 (rubric.AssignmentId.HasValue && assignmentIds.Contains(rubric.AssignmentId.Value))));
+			 (rubric.AssignmentId.HasValue && assignmentIds.Contains(rubric.AssignmentId.Value))))
+			.Select(rubric => new { rubric.HomeworkId, rubric.AssignmentId }));
 
 		foreach (var rubric in rubrics)
 		{
@@ -557,11 +569,15 @@ public class ChapterAppService(
 		chapterIds.Add(chapterId);
 	}
 
-	private static bool IsLinkedToChapter(Guid? legacyChapterId, string? chapterIdsJson, Guid chapterId)
+	private static readonly Regex ChapterLinkPattern = new("(?=(?<chapter>[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}))", RegexOptions.Compiled);
+
+	private static HashSet<Guid> ReadChapterLinks(Guid? legacyChapterId, string? chapterIdsJson)
 	{
-		return legacyChapterId == chapterId ||
-			(!string.IsNullOrWhiteSpace(chapterIdsJson) &&
-			 chapterIdsJson.Contains(chapterId.ToString(), StringComparison.OrdinalIgnoreCase));
+		var ids = new HashSet<Guid>();
+		if (legacyChapterId.HasValue) ids.Add(legacyChapterId.Value);
+		if (!string.IsNullOrWhiteSpace(chapterIdsJson))
+			foreach (Match match in ChapterLinkPattern.Matches(chapterIdsJson)) ids.Add(Guid.Parse(match.Groups["chapter"].Value));
+		return ids;
 	}
 
 	private static string DefaultStatus(string? currentStatus, string fallback) =>

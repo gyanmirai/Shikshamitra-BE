@@ -17,7 +17,7 @@ using Volo.Abp.Uow;
 namespace ShikshaMitra.Academic.Timetable.RoomAvailability;
 
 [Authorize]
-public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityAppService
+public partial class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityAppService
 {
     private readonly IRepository<Room, Guid> _roomRepository;
     private readonly IRepository<RoomReservation, Guid> _reservationRepository;
@@ -65,26 +65,42 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
     public async Task<List<RoomAvailabilityDto>> GetAvailabilityAsync(RoomAvailabilityFilterDto input)
     {
-        var rooms = await _roomRepository.GetListAsync();
-        var buildings = await _buildingRepository.GetListAsync();
-        var floors = await _floorRepository.GetListAsync();
-        var roomTypes = await _roomTypeRepository.GetListAsync();
-
-        var buildingLookup = buildings.ToDictionary(b => b.Id, b => b.BuildingName);
-        var floorLookup = floors.ToDictionary(f => f.Id, f => f.FloorName);
-        var roomTypeLookup = roomTypes.ToDictionary(t => t.Id, t => t.RoomTypeName);
-
-        rooms = ApplyRoomMasterFilters(rooms, input, buildingLookup, floorLookup, roomTypeLookup)
-            .OrderByDescending(r => r.CreationTime)
-            .ThenBy(r => r.RoomName)
-            .ToList();
-
+        var roomQuery = await _roomRepository.GetQueryableAsync();
+        if (input.BuildingId.HasValue) roomQuery = roomQuery.Where(room => room.BuildingId == input.BuildingId.Value);
+        if (input.FloorId.HasValue) roomQuery = roomQuery.Where(room => room.FloorId == input.FloorId.Value);
+        if (input.RoomTypeId.HasValue) roomQuery = roomQuery.Where(room => room.RoomTypeId == input.RoomTypeId.Value);
+        if (input.MinimumCapacity.HasValue && input.MinimumCapacity.Value > 0)
+            roomQuery = roomQuery.Where(room => room.Capacity >= input.MinimumCapacity.Value);
+        var buildings = await _buildingRepository.GetQueryableAsync();
+        var floors = await _floorRepository.GetQueryableAsync();
+        var types = await _roomTypeRepository.GetQueryableAsync();
+        var candidates = await AsyncExecuter.ToListAsync(from room in roomQuery
+            join building in buildings on room.BuildingId equals building.Id into buildingRows
+            from building in buildingRows.DefaultIfEmpty()
+            join floor in floors on room.FloorId equals floor.Id into floorRows
+            from floor in floorRows.DefaultIfEmpty()
+            join type in types on room.RoomTypeId equals type.Id into typeRows
+            from type in typeRows.DefaultIfEmpty()
+            select new RoomMasterRow
+            {
+                Id = room.Id, RoomName = room.RoomName, CreationTime = room.CreationTime,
+                Capacity = room.Capacity, Features = room.Features,
+                BuildingName = building == null ? null : building.BuildingName,
+                FloorName = floor == null ? null : floor.FloorName,
+                TypeName = type == null ? null : type.RoomTypeName
+            });
+        var search = input.Search?.Trim();
+        var rooms = candidates.Where(room => string.IsNullOrWhiteSpace(search) ||
+            ContainsIgnoreCase(room.RoomName, search) || ContainsIgnoreCase(room.BuildingName, search) ||
+            ContainsIgnoreCase(room.FloorName, search) || ContainsIgnoreCase(room.TypeName, search) ||
+            room.Features?.Any(feature => ContainsIgnoreCase(feature, search)) == true)
+            .OrderByDescending(room => room.CreationTime).ThenBy(room => room.RoomName).ToList();
         var result = new List<RoomAvailabilityDto>();
 
         var timeStart = input.StartTime ?? new TimeSpan(8, 0, 0);
         var timeEnd = input.EndTime ?? new TimeSpan(16, 0, 0);
-        var availability = await _conflictService.CheckRoomsAsync(
-            rooms, input.Date, timeStart, timeEnd, input.StandardId, input.DivisionId);
+        var availability = await _conflictService.CheckRoomSnapshotsAsync(
+            rooms.Select(room => new RoomConflictRoom(room.Id, room.RoomName)).ToList(), input.Date, timeStart, timeEnd, input.StandardId, input.DivisionId);
 
         foreach (var room in rooms)
         {
@@ -102,9 +118,9 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 occupiedBy = block?.Message;
             }
 
-            var buildingName = buildingLookup.TryGetValue(room.BuildingId, out var bName) ? bName : "Main Building";
-            var floorName = floorLookup.TryGetValue(room.FloorId, out var fName) ? fName : "First Floor";
-            var typeName = roomTypeLookup.TryGetValue(room.RoomTypeId, out var tName) ? tName : "Classroom";
+            var buildingName = room.BuildingName ?? "Main Building";
+            var floorName = room.FloorName ?? "First Floor";
+            var typeName = room.TypeName ?? "Classroom";
 
             var dto = new RoomAvailabilityDto
             {
@@ -131,58 +147,6 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             ? result
             : result.Where(r => r.Status == "available").ToList();
     }
-
-    private static IEnumerable<Room> ApplyRoomMasterFilters(
-        IEnumerable<Room> rooms,
-        RoomAvailabilityFilterDto input,
-        IReadOnlyDictionary<Guid, string> buildingLookup,
-        IReadOnlyDictionary<Guid, string> floorLookup,
-        IReadOnlyDictionary<Guid, string> roomTypeLookup)
-    {
-        var query = rooms;
-
-        if (input.BuildingId.HasValue)
-        {
-            query = query.Where(r => r.BuildingId == input.BuildingId.Value);
-        }
-
-        if (input.FloorId.HasValue)
-        {
-            query = query.Where(r => r.FloorId == input.FloorId.Value);
-        }
-
-        if (input.RoomTypeId.HasValue)
-        {
-            query = query.Where(r => r.RoomTypeId == input.RoomTypeId.Value);
-        }
-
-        if (input.MinimumCapacity.HasValue && input.MinimumCapacity.Value > 0)
-        {
-            query = query.Where(r => r.Capacity >= input.MinimumCapacity.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(input.Search))
-        {
-            var search = input.Search.Trim();
-            query = query.Where(r =>
-                ContainsIgnoreCase(r.RoomName, search) ||
-                ContainsIgnoreCase(BuildingName(r, buildingLookup), search) ||
-                ContainsIgnoreCase(FloorName(r, floorLookup), search) ||
-                ContainsIgnoreCase(RoomTypeName(r, roomTypeLookup), search) ||
-                r.Features?.Any(feature => ContainsIgnoreCase(feature, search)) == true);
-        }
-
-        return query;
-    }
-
-    private static string BuildingName(Room room, IReadOnlyDictionary<Guid, string> lookup) =>
-        lookup.TryGetValue(room.BuildingId, out var name) ? name : string.Empty;
-
-    private static string FloorName(Room room, IReadOnlyDictionary<Guid, string> lookup) =>
-        lookup.TryGetValue(room.FloorId, out var name) ? name : string.Empty;
-
-    private static string RoomTypeName(Room room, IReadOnlyDictionary<Guid, string> lookup) =>
-        lookup.TryGetValue(room.RoomTypeId, out var name) ? name : string.Empty;
 
     private static bool ContainsIgnoreCase(string? value, string search) =>
         value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
@@ -252,10 +216,15 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
     {
         await LazyServiceProvider.LazyGetRequiredService<IAdmissionAssessmentResourceLock>().AcquireAsync(CurrentTenant.Id,
             new[] { input.RoomId, input.TeacherId.GetValueOrDefault() });
-        var conflicts = await _conflictService.CheckConflictsAsync(
-            input.RoomId, input.Date, input.StartTime, input.EndTime, null,
-            input.TeacherId, input.StandardId, input.DivisionId
-        );
+        var dates = input.IsRecurring && input.RecurringConfig != null
+            ? GenerateRecurringDates(input.Date, input.RecurringConfig) : new List<DateTime>();
+        var mainWindow = new RoomConflictWindow(input.RoomId, input.Date, input.StartTime, input.EndTime,
+            null, input.TeacherId, input.StandardId, input.DivisionId);
+        var series = input.IsRecurring && input.RecurringConfig != null
+            ? await _conflictService.CreateSessionAsync(dates.Select(date => mainWindow with { Date = date }).Prepend(mainWindow).ToList())
+            : null;
+        var conflicts = series != null ? await series.CheckAsync(mainWindow) : await _conflictService.CheckConflictsAsync(
+            input.RoomId, input.Date, input.StartTime, input.EndTime, null, input.TeacherId, input.StandardId, input.DivisionId);
 
         EnsureNoCriticalConflicts(conflicts, "Cannot complete booking");
 
@@ -280,13 +249,10 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
             await _recurringConfigRepository.InsertAsync(config);
             configId = config.Id;
 
-            var dates = GenerateRecurringDates(input.Date, input.RecurringConfig);
+            var children = new List<RoomReservation>();
             foreach (var date in dates)
             {
-                var stepConflict = await _conflictService.CheckConflictsAsync(
-                    input.RoomId, date, input.StartTime, input.EndTime, null,
-                    input.TeacherId, input.StandardId, input.DivisionId
-                );
+                var stepConflict = await series!.CheckAsync(mainWindow with { Date = date });
 
                 if (stepConflict.OverallSeverity == "critical" && input.RecurringConfig.SkipConflictDates)
                 {
@@ -308,8 +274,9 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
                 }
 
                 await EnsureCanAccessReservationAsync(subReservation, "room-reservation-create");
-                await _reservationRepository.InsertAsync(subReservation);
+                children.Add(subReservation);
             }
+            if (children.Count > 0) await _reservationRepository.InsertManyAsync(children);
         }
 
         var mainReservation = new RoomReservation(
@@ -721,22 +688,27 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 		await EnsureCanAccessReservationAsync(reservation, "room-reservation-approve");
         var oldValJson = JsonSerializer.Serialize(reservation);
 
-        await EnsureReservationCanBeApprovedAsync(reservation);
-
-        reservation.Approve(CurrentUser.Id ?? Guid.Empty);
-        await _reservationRepository.UpdateAsync(reservation);
-
         if (reservation.IsRecurring && reservation.RecurringConfigId.HasValue)
         {
             var children = await _reservationRepository.GetListAsync(r =>
                 r.RecurringConfigId == reservation.RecurringConfigId.Value &&
                 !r.IsRecurring);
+            var windows = children.Prepend(reservation).Select(ReservationWindow).ToList();
+            var session = await _conflictService.CreateSessionAsync(windows);
+            EnsureNoCriticalConflicts(await session.CheckAsync(ReservationWindow(reservation)), "Cannot approve booking");
+            reservation.Approve(CurrentUser.Id ?? Guid.Empty);
             foreach (var child in children)
             {
-                await EnsureReservationCanBeApprovedAsync(child);
+                EnsureNoCriticalConflicts(await session.CheckAsync(ReservationWindow(child)), "Cannot approve booking");
                 child.Approve(CurrentUser.Id ?? Guid.Empty);
-                await _reservationRepository.UpdateAsync(child);
             }
+            await _reservationRepository.UpdateManyAsync(children.Prepend(reservation));
+        }
+        else
+        {
+            await EnsureReservationCanBeApprovedAsync(reservation);
+            reservation.Approve(CurrentUser.Id ?? Guid.Empty);
+            await _reservationRepository.UpdateAsync(reservation);
         }
 
         var newValJson = JsonSerializer.Serialize(reservation);
@@ -771,6 +743,10 @@ public class RoomAvailabilityAppService : ApplicationService, IRoomAvailabilityA
 
         EnsureNoCriticalConflicts(conflicts, "Cannot approve booking");
     }
+
+    private static RoomConflictWindow ReservationWindow(RoomReservation reservation) => new(reservation.RoomId,
+        reservation.Date, reservation.StartTime, reservation.EndTime, reservation.Id, reservation.TeacherId,
+        reservation.StandardId, reservation.DivisionId);
 
     private static void EnsureNoCriticalConflicts(ConflictCheckResult conflicts, string action)
     {

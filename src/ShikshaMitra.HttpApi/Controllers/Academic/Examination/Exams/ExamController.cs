@@ -120,6 +120,13 @@ public class ExamController(
         return await examAppService.GetMarksAsync(input);
     }
 
+    [HttpGet("marks/grade-options")]
+    [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.View)]
+    public async Task<List<string>> GetGradeOptionsAsync([FromQuery] GetExamGradeOptionsInput input)
+    {
+        return await examAppService.GetGradeOptionsAsync(input);
+    }
+
     [HttpPatch("{examId}/students/{studentId}/marks")]
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Examination_RecordMarks.Add)]
     public async Task<UpdateStudentMarksResponseDto> UpdateStudentMarksAsync(Guid examId, Guid studentId, [FromQuery] Guid subjectId, [FromBody] UpdateStudentMarksDto input)

@@ -11,6 +11,12 @@ namespace ShikshaMitra.Controllers.Academic.Curriculum;
 [Authorize]
 public class LessonPlanController(ILessonPlanAppService lessonPlanAppService) : AbpController
 {
+    [HttpGet("workspace")]
+    public async Task<IActionResult> GetWorkspace([FromQuery] GetLessonPlanWorkspaceInput input)
+    {
+        return Ok(await lessonPlanAppService.GetWorkspaceAsync(input));
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetList([FromQuery] GetLessonPlansInput input)
     {

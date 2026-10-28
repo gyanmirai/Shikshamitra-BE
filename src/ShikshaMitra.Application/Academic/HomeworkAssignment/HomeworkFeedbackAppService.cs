@@ -105,7 +105,10 @@ public class HomeworkFeedbackAppService : ApplicationService, IHomeworkFeedbackA
 				&& s.Status == StudentLifeCycleStatusEnum.Enrolled
 				&& s.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved
 				&& !s.IsDeleted
-			)
+			).OrderBy(student => student.Id).Select(student => new
+			{
+				student.Id, student.RollNo, student.GrNo, student.FirstName, student.MiddleName, student.LastName
+			})
 		);
 
 		// 4. Get existing submissions for this homework and division

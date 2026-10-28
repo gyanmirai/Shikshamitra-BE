@@ -76,7 +76,7 @@ internal static class QuestExtensions
 			x = x.FontSize(specs.DefaultFontSize).WithPortableFonts();
 			if (!string.IsNullOrWhiteSpace(specs.FontFamily))
 			{
-				x = x.FontFamily(specs.FontFamily, PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily);
+				x = x.FontFamily(specs.FontFamily, PortablePdfFonts.DefaultFamily, PortablePdfFonts.GujaratiFamily, PortablePdfFonts.DevanagariFamily);
 			}
 
 			return x;

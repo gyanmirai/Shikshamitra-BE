@@ -21,7 +21,7 @@ namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 [Authorize]
 [RemoteService(IsEnabled = false)]
-public class HomeworkAppService(
+public partial class HomeworkAppService(
     IRepository<HomeworkAssignmentEntity, Guid> homeworkRepository,
     IRepository<HomeworkDivisionSchedule, Guid> scheduleRepository,
     IDivisionRepository divisionRepository,
@@ -243,13 +243,7 @@ public class HomeworkAppService(
             ? await userRepository.GetListAsync(u => allUserIds.Contains(u.Id))
             : new List<IdentityUser>();
         var homeworkIds = items.Select(h => h.Id).ToList();
-        var submissions = homeworkIds.Any()
-            ? await studentSubmissionRepository.GetListAsync(s =>
-                s.HomeworkAssignmentId.HasValue && homeworkIds.Contains(s.HomeworkAssignmentId.Value))
-            : new List<StudentSubmissionEntity>();
-        var submissionLookup = submissions
-            .GroupBy(s => s.HomeworkAssignmentId!.Value)
-            .ToDictionary(g => g.Key, g => BuildSubmissionSummary(g));
+        var submissionLookup = await GetHomeworkSubmissionSummariesAsync(homeworkIds);
 
         var standardLookup = standards.ToDictionary(s => s.Id, s => s.Name);
         var subjectLookup = subjectLookupByHomeworkId;
@@ -839,21 +833,14 @@ public class HomeworkAppService(
         var standards = standardIds.Count == 0 ? [] : await standardRepository.GetListAsync(s => standardIds.Contains(s.Id));
         var subjects = subjectIds.Count == 0 ? [] : await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
         var divisions = divisionIds.Count == 0 ? [] : await divisionRepository.GetListAsync(d => divisionIds.Contains(d.Id));
-        var submissions = homeworkIds.Count == 0
-            ? []
-            : await studentSubmissionRepository.GetListAsync(s => s.HomeworkAssignmentId.HasValue && homeworkIds.Contains(s.HomeworkAssignmentId.Value));
+        var submissionLookup = await GetHomeworkSubmissionSummariesAsync(homeworkIds);
 
         var standardLookup = standards.ToDictionary(s => s.Id, s => s.Name);
         var subjectLookup = subjects.ToDictionary(s => s.Id, s => s.Name);
         var divisionLookup = divisions.ToDictionary(d => d.Id, d => d.Name);
-        var submissionsByHomework = submissions
-            .GroupBy(s => s.HomeworkAssignmentId!.Value)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
         return homeworks.Select(homework =>
         {
-            submissionsByHomework.TryGetValue(homework.Id, out var taskSubmissions);
-            taskSubmissions ??= [];
+            var submissionSummary = submissionLookup.GetValueOrDefault(homework.Id);
             var schedules = homework.DivisionSchedules.ToList();
             var dueAt = schedules
                 .Where(s => s.IsPublished)
@@ -882,9 +869,9 @@ public class HomeworkAppService(
                 NextDueAt = dueAt,
                 PublishedDivisionCount = schedules.Count(s => s.IsPublished),
                 TotalDivisionCount = schedules.Count,
-                SubmittedCount = taskSubmissions.Count(s => s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.Reviewed),
-                LateCount = taskSubmissions.Count(s => s.Status == SubmissionStatus.Late),
-                EvaluationPendingCount = taskSubmissions.Count(s => s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview),
+                SubmittedCount = submissionSummary?.SubmittedCount ?? 0,
+                LateCount = submissionSummary?.LateCount ?? 0,
+                EvaluationPendingCount = submissionSummary?.EvaluationPendingCount ?? 0,
                 DivisionIds = schedules.Select(s => s.DivisionId).Distinct().ToList(),
                 DivisionNames = schedules.Select(s => divisionLookup.GetValueOrDefault(s.DivisionId, string.Empty)).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList()
             };
@@ -909,6 +896,8 @@ public class HomeworkAppService(
         var divisionIds = rows.Select(row => row.DivisionId).Distinct().ToList();
         var divisions = await divisionRepository.GetListAsync(division => divisionIds.Contains(division.Id));
         var divisionLookup = divisions.ToDictionary(division => division.Id, division => division.Name);
+        var calendarDays = await ReadHomeworkDueDateCandidatesAsync(standardId,
+            rows.Select(row => (row.DivisionId, row.DueAt)));
 
         foreach (var row in rows)
         {
@@ -924,15 +913,17 @@ public class HomeworkAppService(
                     $"Due Date must be after Publish Date for {divisionName}. Publish Date: {row.PublishAt.Value:dd/MM/yyyy HH:mm}; Due Date: {row.DueAt:dd/MM/yyyy HH:mm}.");
             }
 
-            await EnsureHomeworkDueDateAllowedAsync(standardId, row.DivisionId, row.DueAt, divisionName);
+            EnsureHomeworkDueDateAllowed(calendarDays, standardId, row.DivisionId, row.DueAt, divisionName);
         }
     }
 
     private async Task ValidateExistingHomeworkScheduleDatesAsync(HomeworkAssignmentEntity homework)
     {
+        var calendarDays = await ReadHomeworkDueDateCandidatesAsync(homework.StandardId,
+            homework.DivisionSchedules.Select(row => (row.DivisionId, row.DueDate)));
         foreach (var row in homework.DivisionSchedules)
         {
-            await EnsureHomeworkDueDateAllowedAsync(homework.StandardId, row.DivisionId, row.DueDate);
+            EnsureHomeworkDueDateAllowed(calendarDays, homework.StandardId, row.DivisionId, row.DueDate);
         }
     }
 
@@ -950,31 +941,6 @@ public class HomeworkAppService(
             throw new BusinessException("ShikshaMitra.Homework:CannotCloseWithPendingSubmissions")
                 .WithData("HomeworkId", homeworkId)
                 .WithData("PendingSubmissions", pendingCount);
-        }
-    }
-
-    private async Task EnsureHomeworkDueDateAllowedAsync(
-        Guid standardId,
-        Guid divisionId,
-        DateTime dueDate,
-        string? divisionName = null)
-    {
-        var date = dueDate.Date;
-        var blockedDays = await calendarDayRepository.GetListAsync(day =>
-            day.Status == CalendarDayStatus.Active &&
-            day.Date.Date == date &&
-            (day.AppliesToAll ||
-                (day.StandardId.HasValue && day.StandardId.Value == standardId) ||
-                (day.DivisionId.HasValue && day.DivisionId.Value == divisionId)));
-
-        var blockingDay = blockedDays.FirstOrDefault(day => CalendarDayBlockingRules.BlocksHomeworkDueDate(day.DayType));
-        if (blockingDay != null)
-        {
-            var targetDivision = string.IsNullOrWhiteSpace(divisionName)
-                ? "the selected division"
-                : divisionName;
-            throw new UserFriendlyException(
-                $"Due Date {date:dd/MM/yyyy} for {targetDivision} is blocked by the academic calendar entry \"{blockingDay.Title}\". Choose another due date.");
         }
     }
 
@@ -1055,8 +1021,7 @@ public class HomeworkAppService(
             var updater = await userRepository.FindAsync(h.LastModifierId.Value);
             updatedBy = updater != null ? $"{updater.Name} {updater.Surname}".Trim() : string.Empty;
         }
-        var submissions = await studentSubmissionRepository.GetListAsync(s => s.HomeworkAssignmentId == h.Id);
-        var submissionSummary = BuildSubmissionSummary(submissions);
+        var submissionSummary = (await GetHomeworkSubmissionSummariesAsync([h.Id])).GetValueOrDefault(h.Id);
 
         return BuildHomeworkDto(h, academicMediumId, standardName, subjectName, chapterName,
             chapterIds, chapterNames, hwType, divisionLookup, createdBy, updatedBy,
@@ -1173,26 +1138,6 @@ public class HomeworkAppService(
         UpdatedAt = h.LastModificationTime ?? h.CreationTime,
         UpdatedBy = updatedBy,
     };
-
-    private static LearningTaskSubmissionSummary BuildSubmissionSummary(IEnumerable<StudentSubmissionEntity> submissions)
-    {
-        var list = submissions.ToList();
-        var submittedCount = list.Count(s =>
-            s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.Reviewed);
-        var lateCount = list.Count(s => s.Status == SubmissionStatus.Late);
-        var checkedCount = list.Count(s => s.Status == SubmissionStatus.Reviewed);
-        var evaluationPendingCount = list.Count(s =>
-            s.Status is SubmissionStatus.Submitted or SubmissionStatus.Late or SubmissionStatus.NeedsReview);
-
-        return new LearningTaskSubmissionSummary(
-            TotalStudents: 0,
-            SubmittedCount: submittedCount,
-            PendingCount: 0,
-            LateCount: lateCount,
-            CheckedCount: checkedCount,
-            EvaluationPendingCount: evaluationPendingCount
-        );
-    }
 
     private sealed record LearningTaskSubmissionSummary(
         int TotalStudents,

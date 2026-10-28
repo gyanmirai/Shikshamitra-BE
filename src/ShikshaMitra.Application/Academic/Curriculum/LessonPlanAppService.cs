@@ -26,7 +26,7 @@ using Volo.Abp.Users;
 namespace ShikshaMitra.Academic.Curriculum;
 
 [Authorize]
-public class LessonPlanAppService(
+public partial class LessonPlanAppService(
     IRepository<LessonPlan, Guid> lessonPlanRepository,
     IRepository<TeacherDiary, Guid> teacherDiaryRepository,
     LessonPlanProgressManager lessonPlanProgressManager,

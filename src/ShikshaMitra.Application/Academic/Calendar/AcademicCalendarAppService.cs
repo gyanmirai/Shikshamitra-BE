@@ -448,19 +448,20 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
         // Division is only meaningful when the marker targets a single class
         var divisionId = !input.AppliesToAll && targetStandardIds.Count == 1 ? input.DivisionId : null;
 
+        var lastInstant = endDate.AddTicks(TimeSpan.TicksPerDay - 1);
+        var existingDays = await _calendarDayRepository.GetQueryableAsync();
+        var duplicateDates = (await AsyncExecuter.ToListAsync(existingDays
+            .Where(day => day.AcademicCalendarId == calendarId &&
+                day.Date >= startDate && day.Date <= lastInstant &&
+                day.Status == CalendarDayStatus.Active &&
+                (input.AppliesToAll || day.AppliesToAll || Enumerable.Contains(targetStandardIds, day.StandardId)))
+            .Select(day => day.Date.Date).Distinct())).ToHashSet();
+
         foreach (var date in EnumerateDates(startDate, endDate))
         {
-            foreach (var standardId in targetStandardIds)
+            if (duplicateDates.Contains(date))
             {
-                var duplicate = await _calendarDayRepository.FirstOrDefaultAsync(d =>
-                    d.AcademicCalendarId == calendarId && d.Date.Date == date.Date &&
-                    d.Status == CalendarDayStatus.Active &&
-                    (d.AppliesToAll || input.AppliesToAll || d.StandardId == standardId));
-
-                if (duplicate != null)
-                {
-                    throw new UserFriendlyException($"A calendar day configuration already exists for {date:yyyy-MM-dd}. Delete or update it instead.");
-                }
+                throw new UserFriendlyException($"A calendar day configuration already exists for {date:yyyy-MM-dd}. Delete or update it instead.");
             }
         }
 
@@ -1758,11 +1759,10 @@ public class AcademicCalendarAppService : ApplicationService, IAcademicCalendarA
             query = query.Where(x => x.Action == action.Value);
         }
 
-        var totalCount = query.Count();
-        var items = query.OrderByDescending(x => x.ChangedAt)
+        var totalCount = await AsyncExecuter.CountAsync(query);
+        var items = await AsyncExecuter.ToListAsync(query.OrderByDescending(x => x.ChangedAt)
                          .Skip(skipCount)
-                         .Take(maxResultCount)
-                         .ToList();
+                         .Take(maxResultCount));
 
         return new PagedResultDto<AcademicCalendarAuditLogDto>(
             totalCount,

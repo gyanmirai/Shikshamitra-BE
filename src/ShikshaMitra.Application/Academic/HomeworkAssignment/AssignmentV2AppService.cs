@@ -23,7 +23,7 @@ namespace ShikshaMitra.Academic.HomeworkAssignment;
 
 [Authorize]
 [RemoteService(IsEnabled = false)]
-public class AssignmentV2AppService(
+public partial class AssignmentV2AppService(
     IRepository<AssignmentEntity, Guid> assignmentRepository,
     IRepository<AssignmentDivisionSchedule, Guid> scheduleRepository,
     IDivisionRepository divisionRepository,
@@ -724,31 +724,22 @@ public class AssignmentV2AppService(
             academicYearId,
             standardId,
             rows.Select(row => (row.DivisionId, row.PublishAt, row.DueAt)).ToList());
+        var calendarDays = await ReadAssignmentDueDateCandidatesAsync(academicYearId, rows.Select(row => row.DueAt));
 
         foreach (var row in rows)
         {
-            await EnsureAssignmentDueDateAllowedAsync(
-                academicYearId,
-                standardId,
-                row.DivisionId,
-                row.DueAt);
+            EnsureAssignmentDueDateAllowed(calendarDays, standardId, row.DivisionId, row.DueAt);
         }
     }
 
     private async Task ValidateExistingAssignmentScheduleDatesAsync(AssignmentEntity assignment)
     {
+        if (!assignment.AcademicYearId.HasValue) return;
+        var calendarDays = await ReadAssignmentDueDateCandidatesAsync(assignment.AcademicYearId.Value,
+            assignment.DivisionSchedules.Select(row => row.DueDate));
         foreach (var row in assignment.DivisionSchedules)
         {
-            if (!assignment.AcademicYearId.HasValue)
-            {
-                continue;
-            }
-
-            await EnsureAssignmentDueDateAllowedAsync(
-                assignment.AcademicYearId.Value,
-                assignment.StandardId,
-                row.DivisionId,
-                row.DueDate);
+            EnsureAssignmentDueDateAllowed(calendarDays, assignment.StandardId, row.DivisionId, row.DueDate);
         }
     }
 
@@ -773,43 +764,6 @@ public class AssignmentV2AppService(
             throw new BusinessException("ShikshaMitra.Assignment:CannotCloseWithPendingSubmissions")
                 .WithData("AssignmentId", assignmentId)
                 .WithData("PendingSubmissions", pendingCount);
-        }
-    }
-
-    private async Task EnsureAssignmentDueDateAllowedAsync(
-        Guid academicYearId,
-        Guid standardId,
-        Guid divisionId,
-        DateTime dueDate)
-    {
-        var calendars = await calendarRepository.GetListAsync(calendar =>
-            calendar.AcademicYearId == academicYearId &&
-            calendar.Status == CalendarStatus.Published);
-        var applicableCalendar = calendars
-            .OrderByDescending(calendar => calendar.IsDefault)
-            .ThenByDescending(calendar => calendar.PublishedAt ?? DateTime.MinValue)
-            .ThenBy(calendar => calendar.Id)
-            .FirstOrDefault();
-        if (applicableCalendar == null)
-        {
-            return;
-        }
-
-        var date = dueDate.Date;
-        var candidateDays = await calendarDayRepository.GetListAsync(day =>
-            day.AcademicCalendarId == applicableCalendar.Id &&
-            day.Status == CalendarDayStatus.Active &&
-            day.Date.Date == date);
-        var blockedDays = candidateDays.Where(day =>
-            AssignmentCalendarPolicy.AppliesTo(day, standardId, divisionId));
-
-        var blockingDay = blockedDays.FirstOrDefault(day => CalendarDayBlockingRules.BlocksHomeworkDueDate(day.DayType));
-        if (blockingDay != null)
-        {
-            throw new BusinessException("ShikshaMitra.Assignment:DueDateBlockedByCalendar")
-                .WithData("DueDate", date.ToString("yyyy-MM-dd"))
-                .WithData("CalendarDay", blockingDay.Title)
-                .WithData("DayType", blockingDay.DayType);
         }
     }
 

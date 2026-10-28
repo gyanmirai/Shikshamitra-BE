@@ -36,6 +36,7 @@ public interface IExamAppService : IApplicationService
     Task ChangeStatusAsync(Guid examId, ExamStatus status);
 
     Task<GetExamMarksResponseDto> GetMarksAsync(GetExamMarksInput input);
+    Task<List<string>> GetGradeOptionsAsync(GetExamGradeOptionsInput input);
 
     Task<UpdateStudentMarksResponseDto> UpdateStudentMarksAsync(Guid examId, Guid studentId, Guid subjectId, UpdateStudentMarksDto input);
 

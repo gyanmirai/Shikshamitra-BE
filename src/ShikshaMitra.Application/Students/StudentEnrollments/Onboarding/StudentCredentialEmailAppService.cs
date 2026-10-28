@@ -26,7 +26,7 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 			var state = await eligibility.ResolveAsync(caseId, type);
 			var row = state.LinkId.HasValue ? await requests.FindAsync(x => x.CaseId == caseId && x.AccountType == type && x.LinkId == state.LinkId) : null;
 			var dto = Map(type, state, row);
-			if (await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsReusedAsync(caseId, type))
+			if (row?.IsExistingParentHelp() != true && await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsReusedAsync(caseId, type))
 			{
 				dto.Status = "Linked"; dto.CanSend = false; dto.Message = "Uses the existing parent login. No new credentials are needed.";
 			}
@@ -47,12 +47,16 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 	internal Task<StudentCredentialEmailDto> RetryOriginalParentSetupAsync(StudentCredentialEmailRequest original, string concurrencyStamp) =>
 		RequestCoreAsync(original.CaseId, new() { AccountType = "guardian", ConcurrencyStamp = concurrencyStamp },
 			allowCompletionWait: true, originalSetup: original);
+	internal Task<StudentCredentialEmailDto> RequestExistingParentHelpAsync(Guid caseId, string concurrencyStamp) =>
+		RequestCoreAsync(caseId, new() { AccountType = "guardian", ConcurrencyStamp = concurrencyStamp }, allowCompletionWait: true, existingParentHelp: true);
 
 	private async Task<StudentCredentialEmailDto> RequestCoreAsync(Guid caseId, RequestStudentCredentialEmailDto input, bool allowCompletionWait,
-		StudentCredentialEmailRequest? originalSetup = null)
+		StudentCredentialEmailRequest? originalSetup = null, bool existingParentHelp = false)
 	{
 		ValidateType(input.AccountType);
-		if (await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsReusedAsync(caseId, input.AccountType))
+		var reused = await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsReusedAsync(caseId, input.AccountType);
+		if (existingParentHelp && !reused) throw Invalid("Confirm and link the existing Parent before requesting sign-in help.");
+		if (reused && !existingParentHelp)
 			throw Invalid("This student uses the existing parent login. No new credentials are needed.");
 		var state = allowCompletionWait ? await eligibility.ResolveExplicitAsync(caseId, input.AccountType)
 			: await eligibility.ResolveAsync(caseId, input.AccountType);
@@ -64,6 +68,7 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 		if (!string.IsNullOrWhiteSpace(input.ConcurrencyStamp) && input.ConcurrencyStamp != item.ConcurrencyStamp)
 			throw new BusinessException(StudentOnboardingErrorCodes.ConcurrencyConflict);
 		var row = await FindAsync(caseId, input.AccountType, state.LinkId!.Value);
+		if (existingParentHelp && row?.Status == "Processing" && !row.IsExistingParentHelp()) throw Invalid("An account email is being processed. Refresh its status first.");
 		if (originalSetup != null && row?.Id != originalSetup.Id) throw Invalid("The original parent setup request is no longer available.");
 		if (originalSetup != null && row!.Status is "Sent" or "Pending" or "Processing") return Map(input.AccountType, state, row);
 		if (row == null) row = await InsertAsync(state, input.AccountType, allowCompletionWait);
@@ -82,6 +87,7 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 			}
 			if (changed) await requests.UpdateAsync(row, false);
 		}
+		if (existingParentHelp) { row.RequireExistingParentHelp(CurrentUser.Id); await requests.UpdateAsync(row, false); }
 		return Map(input.AccountType, state, row);
 	}
 	// Called by the onboarding transaction after provisioning. Repeated readiness refreshes are harmless.
@@ -91,6 +97,7 @@ public class StudentCredentialEmailAppService(IRepository<StudentCredentialEmail
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Add);
 		ValidateType(accountType);
 		if (await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsManualParentCaseAsync(caseId, accountType)) return;
+		if (await LazyServiceProvider.LazyGetRequiredService<StudentSiblingParentService>().IsReusedAsync(caseId, accountType)) return;
 		var state = await eligibility.ResolveAsync(caseId, accountType);
 		if (!state.EmailEnabled || !state.IsReady || !state.LinkId.HasValue || !state.UserId.HasValue) return;
 		if (await FindAsync(caseId, accountType, state.LinkId.Value) != null) return;

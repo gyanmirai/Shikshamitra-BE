@@ -21,6 +21,8 @@ public class StudentRecordTransitionsController(IStudentRecordTransitionAppServi
 	[HttpGet] public async Task<Result<PagedResultDto<StudentRecordTransitionDto>>> GetListAsync([FromQuery] StudentRecordTransitionQueryDto input) => Result.Success(await service.GetListAsync(input));
 	[HttpGet("{id:guid}")] public async Task<Result<StudentRecordTransitionDto>> GetAsync(Guid id) => Result.Success(await service.GetAsync(id));
 	[HttpGet("options")] public async Task<Result<StudentRecordTransitionOptionsDto>> OptionsAsync([FromQuery] Guid? academicYearId, [FromQuery] Guid? studentId, [FromQuery] Guid? admissionOfferingId = null) => Result.Success(await service.GetOptionsAsync(academicYearId, studentId, admissionOfferingId));
+	[HttpGet("school-exit-summary")]
+	public async Task<Result<StudentSchoolExitSummaryDto>> SchoolExitSummaryAsync([FromQuery] Guid studentId, [FromQuery] Guid academicYearId, [FromQuery] string outcome = "Withdraw", [FromQuery] DateTime? effectiveDate = null) => Result.Success(await service.GetSchoolExitSummaryAsync(studentId, academicYearId, outcome, effectiveDate));
 	[HttpPost("preview"), Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create)]
 	public async Task<Result<StudentRecordTransitionPreviewDto>> PreviewAsync(StudentRecordTransitionBatchInput input) => Result.Success(await service.PreviewAsync(input));
 	[HttpPost("batches"), Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Create)]

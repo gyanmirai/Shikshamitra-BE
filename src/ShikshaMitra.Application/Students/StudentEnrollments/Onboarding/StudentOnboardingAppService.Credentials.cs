@@ -40,6 +40,25 @@ public partial class StudentOnboardingAppService
 		if (owner.BlockedReason != null) throw PortalInvalid(owner.BlockedReason);
 		if (!StudentCredentialsRecipientReader.SameEmail(owner.Email, input.ExpectedEmail))
 			throw PortalInvalid("The saved email changed. Refresh the recipient before sending credentials.");
+		if (input.SendExistingParentHelp)
+		{
+			if (input.AccountType != "guardian" || !await SiblingParents.IsReusedAsync(id, "guardian"))
+				throw PortalInvalid("Link and confirm the existing Parent account before requesting sign-in help.");
+			var reviewed = await ReadSiblingParentContextAsync(item);
+			if (!reviewed.IsLinked || reviewed.BlockedReason != null || reviewed.LinkedRelationship != input.Relationship || !await SiblingParents.CanSendExistingParentHelpAsync(id))
+				throw PortalInvalid(reviewed.BlockedReason ?? "The saved adult differs from the reviewed linked Parent account.");
+			var helpRequests = LazyServiceProvider.LazyGetRequiredService<IRepository<StudentCredentialEmailRequest, Guid>>();
+			var helpLink = await portalLinkRepository.FindAsync(x => x.StudentId == item.StudentId && x.AccountType == "guardian");
+			var pendingHelp = helpLink == null ? null : await helpRequests.FindAsync(x => x.CaseId == id && x.LinkId == helpLink.Id && x.AccountType == "guardian");
+			if (pendingHelp?.IsExistingParentHelp() == true && (pendingHelp.Status is "Pending" or "Processing") && StudentCredentialsRecipientReader.SameEmail(pendingHelp.Email, owner.Email)) return await MapCredentialsAsync(item);
+			EnsureConcurrency(item, input.ConcurrencyStamp);
+			await LazyServiceProvider.LazyGetRequiredService<StudentCredentialEmailAppService>().RequestExistingParentHelpAsync(id, item.ConcurrencyStamp);
+			await AddEventAsync(id, "ExistingParentHelpRequested", "Staff requested sign-in help for the current saved linked Parent. No password was generated or replaced.");
+			await caseRepository.UpdateAsync(item, false);
+			await CurrentUnitOfWork!.SaveChangesAsync();
+			return await MapCredentialsAsync(item);
+		}
+		if (input.AccountType == "guardian" && await SiblingParents.IsReusedAsync(id, "guardian")) return await MapCredentialsAsync(item);
 		if (input.AccountType == "guardian" && input.Relationship is ("father" or "mother") && StudentSiblingParentService.HasGuardianSelection(item))
 			throw PortalInvalid("Guardian app access is already selected for this case. Use the reviewed access repair workflow.");
 		if (input.AccountType == "guardian" && input.Relationship is ("father" or "mother") && await SiblingParents.IsParentFlowAsync(item))
@@ -47,11 +66,11 @@ public partial class StudentOnboardingAppService
 			var parent = await ReadSiblingParentContextAsync(item);
 			if (parent.BlockedReason != null) throw PortalInvalid(parent.BlockedReason);
 			if (parent.IsLinked && await SiblingParents.IsReusedAsync(id, "guardian")) return await MapCredentialsAsync(item);
-			if (parent.Candidates.Count > 0) throw PortalInvalid("Save and activate the student to link the confirmed existing parent. No new credentials are needed.");
+				if (parent.Candidates.Count > 0) throw PortalInvalid("Explicitly confirm and link the saved existing Parent in App Login before requesting sign-in help.");
 			var identity = await portalUserManager.FindByEmailAsync(owner.Email!);
 			if (identity != null && !await portalLinkRepository.AnyAsync(link => link.StudentId == item.StudentId &&
 				link.AccountType == "guardian" && link.UserId == identity.Id && link.Relationship == input.Relationship && link.VerifiedByUserId != Guid.Empty))
-				throw PortalInvalid("Confirm this parent through Add sibling in Admissions before linking an existing account.");
+					throw PortalInvalid("The saved email belongs to an existing account. Confirm an eligible Parent in App Login or ask authorized staff to review a conflicting or restricted account.");
 		}
 		var resolver = LazyServiceProvider.LazyGetRequiredService<StudentOnboardingCredentialEligibilityResolver>();
 		var state = await resolver.ResolveSendPreparationAsync(id, input.AccountType);
@@ -112,19 +131,26 @@ public partial class StudentOnboardingAppService
 		var canUpdate = await AuthorizationService.IsGrantedAsync(IdentityPermissions.Users.Update);
 		foreach (var owner in owners)
 		{
+			if (owner.AccountType == "guardian" && StudentSiblingParentService.HasOnboardingConfirmation(item) && parent.BlockedReason != null)
+			{
+				owner.CanSend = false;
+				owner.BlockedReason = parent.BlockedReason;
+				continue;
+			}
+			var reusedRecipient = owner.AccountType == "guardian" && parent.IsLinked && parent.LinkedRelationship == owner.Relationship && await SiblingParents.IsReusedAsync(item.Id, "guardian");
 			if (owner.AccountType == "guardian" && owner.Relationship is ("father" or "mother") && StudentSiblingParentService.HasGuardianSelection(item))
 			{
 				owner.CanSend = false;
 				owner.BlockedReason = "Guardian app access is already selected for this case. Use the reviewed access repair workflow.";
 				continue;
 			}
-			if (owner.AccountType == "guardian" && owner.Relationship is ("father" or "mother") && parent.Enabled && parent.FamilyConfirmed &&
+			if (!reusedRecipient && owner.AccountType == "guardian" && parent.Enabled && (parent.FamilyConfirmed || parent.RequiresOnboardingConfirmation && parent.Candidates.Any(x => x.Relationship == owner.Relationship)) &&
 				(parent.IsLinked || parent.Candidates.Count > 0 || parent.BlockedReason != null))
 			{
 				owner.CanSend = false;
 				owner.BlockedReason = parent.BlockedReason ?? (parent.IsLinked
 					? "Uses the existing parent login. No new credentials are needed."
-					: "The existing parent will be linked when you save and activate the student.");
+						: "Confirm and link this saved existing Parent in App Login before sending sign-in help.");
 				continue;
 			}
 			var state = states[owner.AccountType];
@@ -135,13 +161,15 @@ public partial class StudentOnboardingAppService
 			if (owner.BlockedReason == null && !state.LinkId.HasValue &&
 				!await portalRoleManager.RoleExistsAsync(owner.AccountType == "student" ? "Student" : "Parent"))
 				owner.BlockedReason = "The school's portal role needs to be configured by an identity administrator.";
+			if (owner.BlockedReason == null && !state.LinkId.HasValue && owner.AccountType == "student" &&
+				(await portalUserManager.FindByEmailAsync(owner.Email!) != null || await portalUserManager.FindByNameAsync(owner.Email!) != null))
+				owner.BlockedReason = "This Student email is already used by another account. Correct the saved email or ask authorized staff to review it.";
 			if (owner.BlockedReason == null && !state.LinkId.HasValue && owner.AccountType == "guardian")
 			{
 				var identity = await portalUserManager.FindByEmailAsync(owner.Email!);
 				if (identity != null)
 				{
-					if (owner.Relationship == "guardian") owner.BlockedReason = "This guardian email already belongs to an account. Ask an identity administrator to use the reviewed access repair workflow.";
-					else if (parent.Enabled) owner.BlockedReason = "Confirm this parent through Add sibling in Admissions before linking an existing account.";
+					if (owner.Relationship == "guardian" || parent.Enabled) owner.BlockedReason = "The saved email belongs to a conflicting, inactive or restricted account, or has no accessible verified Parent association. Ask authorized staff to review it.";
 					else if (!canUpdate) owner.BlockedReason = "An authorized identity administrator must link this existing account.";
 					else
 					{
@@ -161,16 +189,26 @@ public partial class StudentOnboardingAppService
 			else if (owner.BlockedReason == null && linkRequest != null && !linkRequest.CanRequest(DateTime.UtcNow))
 				owner.BlockedReason = "Wait two minutes before sending credentials again.";
 			owner.CanSend = owner.BlockedReason == null;
+			if (reusedRecipient)
+			{
+				owner.CanSendExistingParentHelp = owner.CanSend && parent.BlockedReason == null && await SiblingParents.CanSendExistingParentHelpAsync(item.Id);
+				owner.CanSend = false;
+				owner.BlockedReason ??= "Uses the existing Parent login. Select sign-in help to email secure account access guidance.";
+			}
 		}
 		await LazyServiceProvider.LazyGetRequiredService<StudentPortalEmailChangeService>()
 			.EnrichAsync(owners, item.StudentId, canEdit && item.Status != StudentOnboardingStatus.Cancelled, canUpdate);
 		foreach (var owner in owners.Where(x => x.AccountType == "guardian" && !x.HasLinkedAccount &&
-			parent.Candidates.Any(candidate => candidate.Relationship == x.Relationship)))
+			parent.SelectedRelationship == x.Relationship))
 		{
 			owner.CanEditEmail = false;
 			owner.EmailEditBlockedReason = "Link the confirmed parent before requesting a login email change.";
 		}
 		return new() { CaseId = item.Id, ConcurrencyStamp = item.ConcurrencyStamp, Recipients = owners,
+			StudentAccessEnabled = accessRules.HasValue && StudentPortalAccountRules.IsEnabled(accessRules.Value, "student"),
+			CanEnableStudentAccess = canEdit && accessRules.HasValue && !StudentPortalAccountRules.IsEnabled(accessRules.Value, "student") &&
+				item.ExtraProperties.TryGetValue("ReadinessRulesSnapshot", out var savedRules) && savedRules is string &&
+				await HasActiveStudentAccessEnrollmentAsync(item),
 			GuardianAccessEnabled = guardianAccessEnabled,
 			ParentSibling = parent.Enabled || parent.GuardianAccessSelected ? parent : null };
 	}

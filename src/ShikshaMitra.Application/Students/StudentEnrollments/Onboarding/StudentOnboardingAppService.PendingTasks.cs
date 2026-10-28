@@ -97,16 +97,34 @@ public partial class StudentOnboardingAppService
 	{
 		if (item.Status == StudentOnboardingStatus.Cancelled) return false;
 		var rules = await ReadSavedRulesAsync(item);
-		if (!rules.HasValue) return false;
+		return (await ReadCredentialReadinessAsync(item, rules, requiredOnly)).Pending;
+	}
+
+	private async Task<(bool Pending, bool? RequiredDeliveryConfirmed)> ReadCredentialReadinessAsync(
+		StudentOnboardingCase item, JsonElement? rules, bool requiredOnly = false)
+	{
+		if (item.Status == StudentOnboardingStatus.Cancelled || !rules.HasValue) return (false, null);
 		var types = new[] { "student", "guardian" }.Where(type => !requiredOnly || StudentPortalAccountRules.IsRequired(rules.Value, type)).ToArray();
-		if (!item.StudentEnrollmentId.HasValue && types.Any(type => OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "studentAccount" : "guardianAccount"))) return true;
-		if (await handoffRepository.AnyAsync(h => h.OnboardingCaseId == item.Id && h.Required && (h.ServiceKey == "student-account" || h.ServiceKey == "guardian-account") && h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged)) return true;
+		if (!item.StudentEnrollmentId.HasValue && types.Any(type => OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "studentAccount" : "guardianAccount"))) return (true, null);
+		var accountsPending = await handoffRepository.AnyAsync(h => h.OnboardingCaseId == item.Id && h.Required && (h.ServiceKey == "student-account" || h.ServiceKey == "guardian-account") && h.Status != StudentOnboardingServiceHandoffStatus.Acknowledged);
 		var requests = await LazyServiceProvider.LazyGetRequiredService<IRepository<ShikshaMitra.Students.Portal.StudentCredentialEmailRequest, Guid>>().GetListAsync(e => e.CaseId == item.Id);
 		var manualParent = await SiblingParents.IsParentFlowAsync(item);
-		var reusedParent = manualParent && SiblingParents.WasReused(item);
-		if (requests.Any(request => Enumerable.Contains(types, request.AccountType) && request.Status != "Sent" &&
-			(request.AccountType != "guardian" || !reusedParent) &&
-			(request.RequiresSavedOwnerValidation() || StudentPortalAccountRules.Access(rules.Value, request.AccountType) == StudentPortalAccountRules.Optional))) return true;
-		return types.Any(type => (type != "guardian" || !manualParent) && StudentPortalAccountRules.IsRequired(rules.Value, type) && OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail") && !requests.Any(e => e.AccountType == type && e.Status == "Sent"));
+		var reusedParent = await SiblingParents.IsReusedAsync(item.Id, "guardian");
+		var applicableRequests = requests.Where(request => (request.AccountType != "guardian" || !reusedParent) &&
+			(request.RequiresSavedOwnerValidation() || StudentPortalAccountRules.Access(rules.Value, request.AccountType) == StudentPortalAccountRules.Optional)).ToList();
+		var configuredRequired = new[] { "student", "guardian" }.Where(type => (type != "guardian" || !manualParent && !reusedParent) &&
+			StudentPortalAccountRules.IsRequired(rules.Value, type) &&
+			OnboardingRuleConfiguration.Boolean(rules.Value, type == "student" ? "sendStudentCredentialEmail" : "sendGuardianCredentialEmail")).ToArray();
+		var requestedPending = applicableRequests.Any(request => Enumerable.Contains(types, request.AccountType) && request.Status != "Sent");
+		var configuredPending = configuredRequired.Any(type => Enumerable.Contains(types, type) && !requests.Any(request => request.AccountType == type && request.Status == "Sent"));
+		bool? requiredDeliveryConfirmed = null;
+		if (item.StudentEnrollmentId.HasValue && OnboardingRuleConfiguration.Text(rules.Value, "credentialSendingTime", "activation") == "activation")
+		{
+			var requiredRequests = applicableRequests.Where(request => StudentPortalAccountRules.IsRequired(rules.Value, request.AccountType)).ToList();
+			if (requiredRequests.Count != 0 || configuredRequired.Length != 0)
+				requiredDeliveryConfirmed = !requiredRequests.Any(request => request.Status != "Sent") &&
+					!configuredRequired.Any(type => !requests.Any(request => request.AccountType == type && request.Status == "Sent"));
+		}
+		return (accountsPending || requestedPending || configuredPending, requiredDeliveryConfirmed);
 	}
 }

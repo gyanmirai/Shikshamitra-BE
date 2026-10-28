@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
@@ -65,7 +66,7 @@ public class StudentPortalEmailChangeService(IdentityUserManager users, IStudent
 		if (allLinks.Count > 1 && !input.ConfirmSharedParent) throw Invalid("Confirm that the new login email applies to every child linked to this parent.");
 		var email = input.Email.Trim();
 		if (StudentPortalProfileEmail.Same(user.Email, email)) return;
-		await CheckDuplicateAsync(user, email);
+		await CheckDuplicateAsync(user, email, allLinks);
 		if (previous != null && previous.Status is "Pending" or "Sent" && previous.RequestedAt.AddMinutes(2) > Clock.Now &&
 			previous.IsCurrent(user, Clock.Now) && StudentPortalProfileEmail.Same(previous.Email, email)) return;
 		if (previous != null && previous.RequestedAt.AddMinutes(2) > Clock.Now)
@@ -100,14 +101,6 @@ public class StudentPortalEmailChangeService(IdentityUserManager users, IStudent
 				!string.IsNullOrWhiteSpace(recipient.Email) && StudentPortalProfileEmail.Same(recipient.Email, savedEmail) &&
 				StudentPortalProfileEmail.Same(savedEmail, user.Email);
 			recipient.CanEditEmail = false;
-			if (recipient.Relationship == "guardian")
-			{
-				// Linked-owner display is independent from authority to edit that login.
-				// Generic guardian email changes retain the reviewed repair workflow.
-				recipient.EmailEditBlockedReason = "Guardian login email changes require the reviewed identity repair workflow.";
-				recipient.EmailEditToken = string.Empty;
-				continue;
-			}
 			if (occupied != null && link == null)
 			{
 				recipient.EmailEditBlockedReason = "A different account owner is linked to this login.";
@@ -156,12 +149,12 @@ public class StudentPortalEmailChangeService(IdentityUserManager users, IStudent
 		if (state == null || state.RequestId != input.RequestId) throw Invalid();
 		if (state.Status == "Verified") return;
 		if (state.Status is not ("Pending" or "Sent") || !state.IsCurrent(user, Clock.Now)) throw Invalid();
-		using var actor = await UseActorAsync(state.ActorId);
+		using var actor = principalAccessor.Change(await LoadActorPrincipalAsync(state.ActorId));
 		await CheckStaffAsync();
 		var accountLinks = await CheckAccountAsync(user);
 		await CheckRequestSourceAsync(state, accountLinks);
 		if (await TopologyAsync(accountLinks) != state.Topology) throw Invalid("The linked profiles changed. Ask your school to review and request email verification again.");
-		await CheckDuplicateAsync(user, state.Email);
+		await CheckDuplicateAsync(user, state.Email, accountLinks);
 		// Identity verifies the protected, expiring, user/security-stamp/new-email-bound token.
 		// It changes only email verification data, not the password hash or any child link.
 		if (!(await users.ChangeEmailAsync(user, state.Email, input.Token)).Succeeded) throw Invalid("This verification link is invalid or expired. Ask your school to request a new one.");
@@ -196,34 +189,59 @@ public class StudentPortalEmailChangeService(IdentityUserManager users, IStudent
 	[UnitOfWork(true)]
 	public virtual async Task SendVerificationAsync(StudentPortalEmailChangeJobArgs args)
 	{
-		if (!CurrentTenant.Id.HasValue || CurrentTenant.Id != args.TenantId) throw Invalid();
-		var user = await users.FindByIdAsync(args.UserId.ToString());
-		if (user == null || user.TenantId != CurrentTenant.Id) return;
-		var state = StudentPortalEmailChangeState.Read(user);
-		if (state == null || state.RequestId != args.RequestId || state.Status != "Pending") return;
-		using var actor = await UseActorAsync(state.ActorId);
-		await CheckStaffAsync();
-		var accountLinks = await CheckAccountAsync(user);
-		await CheckRequestSourceAsync(state, accountLinks);
-		if (!state.IsCurrent(user, Clock.Now) || await TopologyAsync(accountLinks) != state.Topology) throw Invalid();
-		await CheckDuplicateAsync(user, state.Email);
-		// Flush the optimistic claim before transport. Concurrent jobs fail before
-		// SMTP; a transport failure rolls the claim back for the durable job retry.
-		state.Status = "Processing"; state.Save(user);
-		if (!(await users.UpdateAsync(user)).Succeeded) throw Invalid();
-		await CurrentUnitOfWork!.SaveChangesAsync();
-		var token = await users.GenerateChangeEmailTokenAsync(user, state.Email);
-		var clientUrl = configuration["App:ClientUrl"] ?? configuration["App:AngularUrl"];
-		if (!Uri.TryCreate(clientUrl, UriKind.Absolute, out var client) || client.Scheme is not ("http" or "https")) throw Invalid("The school's login address is not configured.");
-		var url = new Uri(client, "/account/confirm-portal-email").AbsoluteUri + "?tenantId=" + args.TenantId +
-			"&userId=" + user.Id + "&requestId=" + state.RequestId + "&token=" + Uri.EscapeDataString(token);
-		await sender.SendAsync(state.Email, "Verify your school app login email",
-			"<p>Your school requested a login email change.</p><p><a href=\"" + HtmlEncoder.Default.Encode(url) +
-			"\">Confirm email change</a></p><p>Your existing password and linked children will be preserved. " +
-			"Your old login email stays active until you confirm. If you did not request this, contact your school.</p>", true);
-		state.Status = "Sent"; state.Save(user);
-		if (!(await users.UpdateAsync(user)).Succeeded) throw Invalid();
-		await CurrentUnitOfWork!.SaveChangesAsync();
+		var stage = "tenant";
+		try
+		{
+			if (!CurrentTenant.Id.HasValue || CurrentTenant.Id != args.TenantId) throw Invalid();
+			stage = "account";
+			var user = await users.FindByIdAsync(args.UserId.ToString());
+			if (user == null || user.TenantId != CurrentTenant.Id) return;
+			var state = StudentPortalEmailChangeState.Read(user);
+			if (state == null || state.RequestId != args.RequestId || state.Status != "Pending") return;
+			stage = "actor";
+			using var actor = principalAccessor.Change(await LoadActorPrincipalAsync(state.ActorId));
+			stage = "permissions";
+			await CheckStaffAsync();
+			stage = "linked-children";
+			var accountLinks = await CheckAccountAsync(user);
+			stage = "source";
+			await CheckRequestSourceAsync(state, accountLinks);
+			stage = "request-state";
+			if (!state.IsCurrent(user, Clock.Now)) throw Invalid();
+			stage = "topology";
+			if (await TopologyAsync(accountLinks) != state.Topology) throw Invalid();
+			stage = "duplicate-email";
+			await CheckDuplicateAsync(user, state.Email, accountLinks);
+			// Flush the optimistic claim before transport. Concurrent jobs fail before
+			// SMTP; a transport failure rolls the claim back for the durable job retry.
+			stage = "claim";
+			state.Status = "Processing"; state.Save(user);
+			if (!(await users.UpdateAsync(user)).Succeeded) throw Invalid();
+			await CurrentUnitOfWork!.SaveChangesAsync();
+			stage = "token";
+			var token = await users.GenerateChangeEmailTokenAsync(user, state.Email);
+			stage = "client-url";
+			var clientUrl = configuration["App:ClientUrl"] ?? configuration["App:AngularUrl"];
+			if (!Uri.TryCreate(clientUrl, UriKind.Absolute, out var client) || client.Scheme is not ("http" or "https")) throw Invalid("The school's login address is not configured.");
+			var url = new Uri(client, "/account/confirm-portal-email").AbsoluteUri + "?tenantId=" + args.TenantId +
+				"&userId=" + user.Id + "&requestId=" + state.RequestId + "&token=" + Uri.EscapeDataString(token);
+			stage = "transport";
+			await sender.SendAsync(state.Email, "Verify your school app login email",
+				"<p>Your school requested a login email change.</p><p><a href=\"" + HtmlEncoder.Default.Encode(url) +
+				"\">Confirm email change</a></p><p>Your existing password and linked children will be preserved. " +
+				"Your old login email stays active until you confirm. If you did not request this, contact your school.</p>", true);
+			stage = "persist";
+			state.Status = "Sent"; state.Save(user);
+			if (!(await users.UpdateAsync(user)).Succeeded) throw Invalid();
+			await CurrentUnitOfWork!.SaveChangesAsync();
+		}
+		catch (Exception exception)
+		{
+			// Only a fixed stage marker reaches the sanitized job failure; token links,
+			// SMTP details and exception messages must not be copied into durable logs.
+			exception.Data[StudentPortalEmailChangeJob.FailureStageKey] = stage;
+			throw;
+		}
 	}
 
 	private async Task CheckStaffAsync()
@@ -232,11 +250,13 @@ public class StudentPortalEmailChangeService(IdentityUserManager users, IStudent
 		await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
 		await AuthorizationService.CheckAsync(IdentityPermissions.Users.Update);
 	}
-	private async Task<IDisposable> UseActorAsync(Guid actorId)
+	private async Task<ClaimsPrincipal> LoadActorPrincipalAsync(Guid actorId)
 	{
 		var actor = await users.FindByIdAsync(actorId.ToString());
 		if (actor == null || !actor.IsActive || actor.TenantId != CurrentTenant.Id) throw new AbpAuthorizationException();
-		return principalAccessor.Change(await principals.CreateAsync(actor));
+		// The caller enters the AsyncLocal scope; changes inside this async loader
+		// would be restored before its caller performs authorization.
+		return await principals.CreateAsync(actor);
 	}
 	private async Task<List<StudentPortalAccountLink>> CheckAccountAsync(IdentityUser user)
 	{
@@ -244,7 +264,7 @@ public class StudentPortalEmailChangeService(IdentityUserManager users, IStudent
 		var accountLinks = await links.GetListAsync(x => x.UserId == user.Id);
 		var roles = await users.GetRolesAsync(user);
 		if (accountLinks.Count == 0 || roles.Count != 1 || accountLinks.Any(x => x.TenantId != CurrentTenant.Id ||
-			x.VerifiedByUserId == Guid.Empty || x.Relationship == "guardian" || roles[0] != (x.AccountType == "student" ? "Student" : "Parent")) ||
+			x.VerifiedByUserId == Guid.Empty || roles[0] != (x.AccountType == "student" ? "Student" : "Parent")) ||
 			roles[0] == "Student" && accountLinks.Count != 1) throw Invalid();
 		var studentIds = accountLinks.Select(x => x.StudentId).ToArray();
 		if (await accessReviews.AnyAsync(x => Enumerable.Contains(studentIds, x.StudentId) && x.Status == "Pending") ||
@@ -268,12 +288,20 @@ public class StudentPortalEmailChangeService(IdentityUserManager users, IStudent
 		}
 		return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("|", values))));
 	}
-	private async Task CheckDuplicateAsync(IdentityUser user, string email)
+	private async Task CheckDuplicateAsync(IdentityUser user, string email, IReadOnlyList<StudentPortalAccountLink> accountLinks)
 	{
 		var duplicate = await users.FindByEmailAsync(email);
 		var duplicateName = await users.FindByNameAsync(email);
 		if (duplicate != null && duplicate.Id != user.Id || duplicateName != null && duplicateName.Id != user.Id)
 			throw Invalid("This email is already used by another account. Existing accounts cannot be merged through an email change.");
+		var recipients = LazyServiceProvider.LazyGetRequiredService<StudentCredentialsRecipientReader>();
+		foreach (var link in accountLinks)
+		{
+			var owners = await recipients.GetForStudentAsync(link.StudentId);
+			if (owners.Count == 0) throw Invalid();
+			if (owners.Any(owner => owner.AccountType != link.AccountType && StudentPortalProfileEmail.Same(owner.Email, email)))
+				throw Invalid("Student and adult app logins need different saved email addresses.");
+		}
 	}
 	private async Task CheckRequestSourceAsync(StudentPortalEmailChangeState state, List<StudentPortalAccountLink> accountLinks)
 	{

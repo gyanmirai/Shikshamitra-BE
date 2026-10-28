@@ -76,6 +76,14 @@ public sealed class StudentRecordTransition : FullAuditedAggregateRoot<Guid>, IM
 		CurrentApprovalStage++; LastApprovedBy = actor;
 		if (CurrentApprovalStage == ApprovalStageCount) Status = "Approved";
 	}
+	public void CaptureOutstandingApproval(string evidence)
+	{
+		if (CurrentApprovalStage < 1 || LastApprovedBy == null || Status is not ("Submitted" or "Approved")) throw new BusinessException("Students:Records:InvalidChangeState");
+		var key = "SchoolExitOutstandingStage" + CurrentApprovalStage;
+		if (ExtraProperties.ContainsKey(key)) throw new BusinessException("Students:Records:InvalidChangeState");
+		ExtraProperties[key] = evidence;
+	}
+	public string? GetOutstandingApproval(int stage) => ExtraProperties.TryGetValue("SchoolExitOutstandingStage" + stage, out var value) ? value?.ToString() : null;
 	public static StudentRecordTransition CreateAdmissionReturn(Guid id, Guid tenantId, Guid batchId, Guid studentId,
 		Guid yearId, Guid? sourceEnrollmentId, string reason, DateTime effectiveDate, string inputJson, string beforeJson,
 		Guid? policyVersionId, string policyJson, string approvalRuleJson, Guid requestedBy, int approvalStageCount, Guid handoffId)

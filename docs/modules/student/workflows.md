@@ -1,9 +1,9 @@
----
+﻿---
 module: student
 domain: workflows
 content_type: Reference
 status: canonical
-updated_on: 2026-10-24
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -14,7 +14,7 @@ TL;DR: setup commands produce validated offering defaults, while inquiry and app
 
 ## Correct app-login email without leaving onboarding
 
-1. Staff selects Student or a saved Father/Mother in App Login and opens Add email or Update email.
+1. Staff selects Student or a saved Father/Mother/Guardian in App Login and opens Add email or Update email.
 2. An unlinked owner saves only the selected profile email; Send Credentials remains an explicit staff action after normal readiness checks.
 3. For an existing login, staff with Identity Users Update confirms any shared-parent impact and requests verification of the proposed email.
 4. The queued verification job rechecks the requesting staff's active identity, permissions, all linked students' scope and exact unchanged account/profile/link state before delivery.
@@ -366,13 +366,17 @@ Eligibility, Review, and Offer are retired Admission Stage types. New drafts can
 
 ## Run a managed Payment stage
 
-1. Add Payment with a versioned Admissions completion policy: partial confirmed payment (default) or full Finance settlement, and whether audited collection deferral is allowed (default on). No admission pricing or collection-method policy is authored.
+1. Add Payment with Stage details and Stage behavior. No partial/full threshold or deferral switch is configured; existing saved versions are preserved and their retired settings are ignored.
 2. Read only published structures matching the Offering tenant, academic year, Board, Medium and Class. Missing candidates prevent collection but do not prevent audited deferral.
 3. Save the structure and optional heads using application concurrency. Mandatory heads and an immutable structure-version snapshot are included by the server.
-4. Collect through the Finance adapter with the valid saved snapshot. Partial requires a positive Finance-confirmed payment; a historical or unverified payment flag alone is insufficient. Full requires the entire selected class structure, including future installments, to be settled under the existing Finance contract. Finance-verified zero-payable obligations can continue without a payment entry; missing/unprepared data never counts as zero. If enabled, Collect later in Onboarding requires a reason and no structure or payment. The server rejects deferral when disabled. Both commands retain configured transition routing; deferral is a completed checkpoint, not a Paid/Waived outcome or an administrative skip.
+4. Collect through the Finance adapter with the valid saved snapshot. Any positive Finance-confirmed payment is sufficient; historical/unverified evidence alone is not. Finance-verified zero payable needs no artificial payment; missing/unprepared data never counts as zero. Active-stage Collect later in Onboarding requires a reason and no structure or payment, regardless of retired settings. Both commands preserve routing, concurrency and idempotency; deferral is not Paid/Waived or an administrative skip.
 5. Approve and finalize through the normal Admission decision flow. Finalization hands the saved intent and deferral reason to Onboarding. Deferral itself creates no account, dues, assignment or receipt. Onboarding still requires structure confirmation before activation; it does not require payment. Finance alone owns actual obligations and collections.
 
 Legacy Admission record, verification, waiver and reversal commands are unavailable in this flow. Repeated workflow keys replay the existing transition and do not duplicate deferral audit or Finance rows. Confirmation/deferral alone perform no Finance ledger mutation; actual collection uses the Finance integration and its persistence requirements.
+
+### Confirm the actual joining date before collection
+
+The Payment workspace can confirm the same actual joining date used by Registration and Onboarding. Registration supplies the initial saved value when present; Payment also supports a form without a joining-date field. Candidate preview calls the existing Finance calculator without creating accounts, dues, or payments. Staff confirm the date with the current application stamp before using the existing Finance preparation endpoint. The application stores the shared fact, synchronizes explicit bound/legacy current form answers and captured admission data, and records an audit event while preserving submitted snapshots. After any fee assignment is prepared, both Payment and Registration date changes are locked for controlled Finance correction. Collection deferral remains independent and performs no date confirmation or monetary write; an unfinished Onboarding case can capture a missing date before its first preparation.
 
 ## Run a managed Offer stage
 

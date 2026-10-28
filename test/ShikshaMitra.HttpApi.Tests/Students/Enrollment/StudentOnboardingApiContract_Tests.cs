@@ -13,6 +13,17 @@ namespace ShikshaMitra.HttpApi.Tests.Students.Enrollment;
 public class StudentOnboardingApiContract_Tests
 {
 	[Fact]
+	public void Student_access_correction_is_case_scoped_and_requires_configuration_authority_at_both_boundaries()
+	{
+		Post(nameof(StudentOnboardingController.EnableStudentAppAccessAsync)).ShouldBe("{id:guid}/student-app-access/enable");
+		foreach (var type in new[] { typeof(StudentOnboardingController), typeof(StudentOnboardingAppService) })
+			type.GetMethod(nameof(StudentOnboardingAppService.EnableStudentAppAccessAsync))!
+				.GetCustomAttributes<AuthorizeAttribute>().Select(value => value.Policy)
+				.ShouldContain(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure);
+		typeof(EnableStudentAppAccessDto).GetProperties().Select(value => value.Name).ShouldBe(["Reason", "ConcurrencyStamp"]);
+	}
+
+	[Fact]
 	public void Profile_email_write_is_scoped_and_owner_confirmation_is_separate_without_token_auditing()
 	{
 		Put(nameof(StudentOnboardingController.UpdateCredentialsEmailAsync)).ShouldBe("{id:guid}/credentials/email");

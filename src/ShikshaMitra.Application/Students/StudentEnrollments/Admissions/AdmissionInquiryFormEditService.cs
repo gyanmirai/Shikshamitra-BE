@@ -64,6 +64,9 @@ public class AdmissionInquiryFormEditService(
 				(!values.TryGetValue(field.Code, out var edited) || AdmissionApplicationValueConverter.Unwrap(raw) != edited)))
 				throw new BusinessException(AdmissionInquiryManagementErrorCodes.InvalidInput, "Read-only inquiry fields cannot be changed.");
 			var validation = validator.Validate(definitions, await sections.GetListAsync(section => section.FormDefinitionId == formId.Value), values);
+			var cycle = await LazyServiceProvider.LazyGetRequiredService<IRepository<AdmissionCycle, Guid>>().GetAsync(offering.AdmissionCycleId);
+			await LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryAcademicOptionsService>()
+				.ValidateAsync(definitions, values, offering, cycle.AcademicYearId, false);
 			if (validation.Errors.Count > 0)
 				throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed).WithData("Fields", string.Join(", ", validation.FieldErrors.Keys));
 			foreach (var definition in definitions.Where(field => field.BindingType == AdmissionFormBindingType.System && !string.IsNullOrWhiteSpace(field.BindingKey)))

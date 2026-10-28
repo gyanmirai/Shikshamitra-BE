@@ -181,6 +181,10 @@ public class AdmissionPublicInquiryAppService(
 				}).ToList()
 			};
 			AddIdentityFallbacks(context.Form, fields);
+			var academicChoices = LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryAcademicOptionsService>();
+			foreach (var field in context.Form.Sections.SelectMany(section => section.Fields))
+				if (AdmissionFormMasterDataValidator.TrySource(AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson), out var key, out _) && AdmissionAcademicFormOptions.IsAcademic(key))
+					field.OptionsJson = AdmissionAcademicFormOptions.SerializeOptions(await academicChoices.ForPublicOfferingAsync(key, selected));
 		}
 		return context;
 	}

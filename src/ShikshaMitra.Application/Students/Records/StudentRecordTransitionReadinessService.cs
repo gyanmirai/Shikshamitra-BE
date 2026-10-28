@@ -145,7 +145,7 @@ public class StudentRecordTransitionReadinessService(StudentRecordsAccessService
 		if (policy.Transitions.OutcomeChecks.TryGetValue(input.Outcome, out var checks))
 			await AddOwnerChecksAsync(row, source.Student.Id, source.Enrollment.AcademicYearId, source.Enrollment.StandardId, checks,
 				input.Outcome == "Withdraw" ? input.EffectiveDate : null);
-		row.Ready = row.Issues.Count == 0; return row;
+		StudentSchoolExitOutstanding.Complete(row); return row;
 	}
 	public Task<string> CaptureRollRuleAsync(StudentRecordTransitionInput input) => rollRules.CaptureAsync(input.StudentId, input.TargetAcademicYearId!.Value, input.TargetStandardId!.Value, input.TargetDivisionId!.Value);
 	public Task ValidateRollRuleAsync(StudentRecordRenewalCase item, string frozenJson, string reason) => rollRules.ValidateAsync(item.StudentId, item.AcademicYearId, item.StandardId, item.DivisionId, item.RollNumber, reason, frozenJson);
@@ -239,19 +239,23 @@ public class StudentRecordTransitionReadinessService(StudentRecordsAccessService
 				examQuery.Any(e => e.Id == x.ExamId && e.TenantId == CurrentTenant.Id && e.StandardId == standardId))))
 				Add(row, "AcademicResultRequired", "Publish an available source-class academic result before this transition.");
 		}
-		if (checks.RequireFinanceClearance || withdrawalDate.HasValue)
+		var isExit = StudentSchoolExitOutstanding.IsExit(row.Outcome);
+		var evidence = new SortedDictionary<string, string>();
+		if (checks.RequireFinanceClearance || withdrawalDate.HasValue || isExit)
 		{
-			var clearance = await finance.GetAsync(studentId, academicYearId, withdrawalDate, checks.RequireFinanceClearance);
+			var clearance = await finance.GetAsync(studentId, academicYearId, withdrawalDate, checks.RequireFinanceClearance, isExit);
 			row.Proration = clearance.Proration;
-			if (!clearance.Cleared) Add(row, "FinanceClearanceRequired", clearance.Detail);
+			if (!clearance.Cleared) Add(row, isExit && clearance.OutstandingOnly ? "OutstandingFees" : "FinanceClearanceRequired", clearance.Detail);
+			if (clearance.OutstandingOnly) evidence["Finance"] = clearance.Evidence;
 		}
-		if (checks.RequireLibraryClearance)
+		if (checks.RequireLibraryClearance || isExit)
 		{
 			var memberQuery = await members.GetQueryableAsync(); var issueQuery = await bookIssues.GetQueryableAsync();
-			if (await AsyncExecuter.AnyAsync(issueQuery.Where(x => x.TenantId == CurrentTenant.Id && x.MemberRole == 0 && x.Status != BookIssueStatus.Returned &&
-				(x.MemberId == studentId || memberQuery.Any(m => m.Id == x.MemberId && m.StudentId == studentId && m.TenantId == CurrentTenant.Id)))))
-				Add(row, "LibraryClearanceRequired", "Return the outstanding library books in Library before continuing.");
+			var pending = await AsyncExecuter.ToListAsync(issueQuery.Where(x => x.TenantId == CurrentTenant.Id && x.MemberRole == 0 && x.Status != BookIssueStatus.Returned &&
+				(x.MemberId == studentId || memberQuery.Any(m => m.Id == x.MemberId && m.StudentId == studentId && m.TenantId == CurrentTenant.Id))).OrderBy(x => x.Id).Select(x => x.Id));
+			if (pending.Count > 0) { Add(row, isExit ? "OutstandingBooks" : "LibraryClearanceRequired", "Outstanding books remain recorded in Library."); evidence["Library"] = JsonSerializer.Serialize(pending); }
 		}
+		row.OutstandingEvidence = JsonSerializer.Serialize(evidence);
 		if (checks.RequireTransportClearance && await transportMembers.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == studentId && x.CurrentRouteId.HasValue && x.Status == TransportMemberStatus.Active))
 			Add(row, "TransportClearanceRequired", "Close the current route assignment in Transport before continuing.");
 	}

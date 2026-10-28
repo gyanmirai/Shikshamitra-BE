@@ -270,6 +270,8 @@ public class AdmissionInquiryAppService(
 						"The inquiry contains a field outside its published form.");
 				var sections = await formSectionRepository.GetListAsync(section => section.FormDefinitionId == inquiryFormId.Value);
 				var validation = formValidator.Validate(fields, sections, values);
+				await LazyServiceProvider.LazyGetRequiredService<AdmissionInquiryAcademicOptionsService>()
+					.ValidateAsync(fields, values, offering!, cycle.AcademicYearId, isPublic);
 				if (validation.Errors.Count > 0)
 					throw new BusinessException(AdmissionApplicationErrorCodes.ValidationFailed)
 						.WithData("Fields", string.Join(", ", validation.FieldErrors.Keys));

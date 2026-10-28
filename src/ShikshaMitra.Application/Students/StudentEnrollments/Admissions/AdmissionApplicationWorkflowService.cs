@@ -123,17 +123,14 @@ public class AdmissionApplicationWorkflowService(
 		var review = managedReview ? await reviewRuntime.EnsureCompleteAsync(application.Id, current.Id) : null;
 		var managedPayment = current.StageType == AdmissionWorkflowStageType.Payment;
 		if (managedPayment && input.SkipCurrentStage) throw new BusinessException(AdmissionApplicationErrorCodes.ManualSkipNotAllowed);
-		if (managedPayment && input.DeferFeeCollection && !AdmissionPaymentCompletionReader.ReadPolicy(definition.ConfigurationJson).AllowCollectionLater)
-			throw new BusinessException(AdmissionFeeSelectionErrorCodes.CollectionOrDeferralRequired,
-				"This workflow does not allow collection to be deferred to Onboarding.");
 		if (managedPayment && !input.DeferFeeCollection)
 		{
 			var selectionContext = await feeSelection.GetContextAsync(application);
 			var completion = await LazyServiceProvider.LazyGetRequiredService<AdmissionPaymentCompletionReader>()
-				.ReadAsync(application, current, definition, true, selectionContext.Owner?.Id);
+				.ReadAsync(application, current, true, selectionContext.Owner?.Id);
 			if (!completion.CanComplete)
 				throw new BusinessException(AdmissionFeeSelectionErrorCodes.CollectionOrDeferralRequired,
-					completion.Blocker ?? "Complete the configured Payment requirement before continuing.");
+					completion.Blocker ?? "Record a confirmed payment or collect later in Onboarding with a reason.");
 			await feeSelection.EnsureSelectionAsync(application);
 		}
 		AdmissionPaymentStageDto? payment = null;

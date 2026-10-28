@@ -222,6 +222,7 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 
 	private static void ValidateSingleOption(AdmissionFormFieldDefinition field, string value, ICollection<string> errors)
 	{
+		if (AdmissionFormMasterDataValidator.TrySource(AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson), out var key, out _) && AdmissionAcademicFormOptions.IsAcademic(key)) return;
 		var options = ReadOptions(field);
 		if (options.Count > 0 && !options.Contains(value, StringComparer.OrdinalIgnoreCase))
 			errors.Add($"{field.Code} contains an invalid option.");
@@ -239,9 +240,10 @@ public class AdmissionApplicationFormValidator(AdmissionWorkflowConditionEvaluat
 			}
 			var options = ReadOptions(field);
 			var dynamicOptions = false;
-			if (!string.IsNullOrWhiteSpace(field.OptionsJson))
+			var effectiveOptions = AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson);
+			if (!string.IsNullOrWhiteSpace(effectiveOptions))
 			{
-				using var source = JsonDocument.Parse(field.OptionsJson);
+				using var source = JsonDocument.Parse(effectiveOptions);
 				dynamicOptions = source.RootElement.ValueKind == JsonValueKind.Object && source.RootElement.TryGetProperty("source", out _);
 			}
 			foreach (var item in document.RootElement.EnumerateArray())

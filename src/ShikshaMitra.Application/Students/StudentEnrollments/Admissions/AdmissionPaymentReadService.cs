@@ -17,7 +17,7 @@ public class AdmissionPaymentReadService(AdmissionPaymentAccessService access,
 		var selectionContext = await feeSelection.GetContextAsync(context.Application);
 		var deferred = context.Application.GetFeeCollectionDeferral()?.StageId == stageId;
 		var completion = await LazyServiceProvider.LazyGetRequiredService<AdmissionPaymentCompletionReader>()
-			.ReadAsync(context.Application, context.Stage, context.Definition,
+			.ReadAsync(context.Application, context.Stage,
 				context.Workflow.Status == AdmissionWorkflowInstanceStatus.Active, selectionContext.Owner?.Id);
 		return new AdmissionPaymentStageDto
 		{

@@ -30,11 +30,18 @@ public static class AdmissionAssessmentColumnFilters
 					"sessionName" => row => row.SessionName,
 					"attendance" => row => row.Attendance,
 					"result" => row => row.Outcome,
+					"status" => row => row.Status,
 					_ => throw Invalid()
 				};
-				if (column is "attendance" or "result")
+				if (column is "attendance" or "result" or "status")
 				{
-					if (valueType != "enum" || operation != "equals" || (column == "attendance" ? value is not ("pending" or "present" or "absent") : value is not ("passed" or "failed" or "waived"))) throw Invalid();
+					var valid = column switch
+					{
+						"attendance" => value is "pending" or "present" or "absent" or "notMarked" or "notRequired" or "notApplicable",
+						"status" => value is "notBooked" or "scheduled" or "attendancePending" or "resultPending" or "reviewPending" or "ongoing" or "passed" or "failed" or "absent" or "waived" or "retakeRequired",
+						_ => value is "passed" or "failed" or "waived"
+					};
+					if (valueType != "enum" || operation != "equals" || !valid) throw Invalid();
 					rows = rows.Where(row => field(row) == value);
 				}
 				else
@@ -66,4 +73,5 @@ public class AdmissionAssessmentColumnFilterRow
 	public string SessionName { get; set; } = string.Empty;
 	public string Attendance { get; set; } = "pending";
 	public string Outcome { get; set; } = string.Empty;
+	public string Status { get; set; } = string.Empty;
 }

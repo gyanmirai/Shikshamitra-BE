@@ -13,6 +13,40 @@ namespace ShikshaMitra.Students.StudentEnrollments.Admissions;
 public partial class AdmissionWorkflowRuntimeIntegration_Tests
 {
 	[Fact]
+	public async Task Assessment_display_filters_counts_and_pages_use_the_same_waiver_projection()
+	{
+		using var tenant = _currentTenant.Change(TestTenantId);
+		using var principal = _principalAccessor.Change(BuildAdminPrincipal());
+		var (application, stageId, offering) = await CreateManagedAssessmentApplicationAsync();
+		var service = GetRequiredService<IAdmissionAssessmentAppService>();
+		var runtime = await _applicationAppService.GetWorkflowAsync(application.Id);
+		var state = await service.GetAsync(application.Id, stageId);
+		await service.WaiveAsync(application.Id, stageId, new() { ConcurrencyStamp = state.ConcurrencyStamp, Reason = "Approved exemption" });
+		var other = await CreateApplicantAsync("Pending assessment student");
+		await StartFixtureApplicationAsync(other.Id, offering.Id);
+		var input = new AdmissionAssessmentRosterInput { AdmissionOfferingId = offering.Id,
+			WorkflowStageDefinitionId = runtime.Stages.Single(stage => stage.Id == stageId).DefinitionStageId, MaxResultCount = 1,
+			ColumnFilters = """[{"column":"status","type":"equals","value":"waived","valueType":"enum"},{"column":"attendance","type":"equals","value":"notRequired","valueType":"enum"}]""" };
+		var roster = await service.GetApplicantsAsync(input);
+		roster.TotalCount.ShouldBe(1);
+		roster.StatusCounts.All.ShouldBe(1);
+		roster.StatusCounts.Complete.ShouldBe(1);
+		roster.Items.Single().DisplayStatus.ShouldBe("waived");
+		roster.Items.Single().DisplayAttendance.ShouldBe("notRequired");
+		roster.Items.Single().Assessment.Attempts.Single().Attendance.ShouldBe("pending");
+		input.Status = "pending";
+		roster = await service.GetApplicantsAsync(input);
+		roster.TotalCount.ShouldBe(0);
+		roster.StatusCounts.Complete.ShouldBe(1);
+		input.Status = null;
+		input.ColumnFilters = null;
+		roster = await service.GetApplicantsAsync(input);
+		roster.TotalCount.ShouldBe(2);
+		roster.StatusCounts.Pending.ShouldBe(1);
+		roster.StatusCounts.Complete.ShouldBe(1);
+	}
+
+	[Fact]
 	public async Task Assessment_roster_tracks_unbooked_attendance_result_route_readiness_and_completed_history()
 	{
 		using var tenant = _currentTenant.Change(TestTenantId);

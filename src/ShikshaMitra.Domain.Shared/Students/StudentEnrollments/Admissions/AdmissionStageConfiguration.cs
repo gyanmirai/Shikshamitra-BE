@@ -29,7 +29,7 @@ public static class AdmissionStageConfiguration
 				break;
 			case AdmissionWorkflowStageType.Payment:
 				root.Remove("payment");
-				_ = AdmissionPaymentCompletionPolicy.Read(root.ToJsonString());
+				root.Remove("paymentCompletion");
 				break;
 			case AdmissionWorkflowStageType.DocumentVerification:
 				var documents = Settings(root, "documentVerification");

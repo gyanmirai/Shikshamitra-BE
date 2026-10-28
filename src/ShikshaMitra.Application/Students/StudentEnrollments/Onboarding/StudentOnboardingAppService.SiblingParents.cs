@@ -25,6 +25,8 @@ public partial class StudentOnboardingAppService
 		{
 			context.Candidates = [];
 			context.RequiresSelection = false;
+			context.RequiresOnboardingConfirmation = false;
+			context.CanLink = false;
 			context.Status = "NotRequired";
 		}
 		return context;
@@ -55,7 +57,7 @@ public partial class StudentOnboardingAppService
 			if (input != null) throw PortalInvalid("Parent app login is not enabled by the saved school settings.");
 			return;
 		}
-		if (context.Candidates.Count > 0 && !context.IsLinked)
+		if (context.Candidates.Count > 0 && !context.IsLinked && !context.RequiresOnboardingConfirmation)
 		{
 			await AuthorizationService.CheckAsync(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Edit);
 			await AuthorizationService.CheckAsync(IdentityPermissions.Users.Update);
@@ -86,7 +88,9 @@ public partial class StudentOnboardingAppService
 			link = new StudentPortalAccountLink(GuidGenerator.Create(), CurrentTenant.Id!.Value, item.StudentId,
 				selected.UserId, "guardian", selected.Relationship, CurrentUser.Id!.Value);
 			await portalLinkRepository.InsertAsync(link, false);
-			await AddEventAsync(item.Id, "SiblingParentLinked", SiblingParents.UsesHistoricalParentSource(item)
+			await AddEventAsync(item.Id, StudentSiblingParentService.HasOnboardingConfirmation(item) ? "OnboardingParentLinked" : "SiblingParentLinked", StudentSiblingParentService.HasOnboardingConfirmation(item)
+				? "Staff explicitly confirmed this saved adult and linked the existing Parent account in Onboarding. Existing credentials and child links were preserved."
+				: SiblingParents.UsesHistoricalParentSource(item)
 				? "The confirmed existing parent account was reused from a historical admission. Existing relationships and credentials were preserved."
 				: "The confirmed existing parent account was linked. No new credentials were requested.");
 		}
@@ -148,9 +152,16 @@ public partial class StudentOnboardingAppService
 		if (ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService.ReturnTransitionId(item).HasValue)
 			await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(item, false);
 		var context = await ReadSiblingParentContextAsync(item);
-		if (!context.Enabled || !context.FamilyConfirmed || context.Status == "NotRequired" || context.Candidates.Count == 0)
-			throw PortalInvalid("Confirm an available Father or Mother through Add sibling in Admissions first.");
-		await PrepareSiblingParentSelectionAsync(item, input.SiblingParentSelection);
+		var rules = await ReadSavedRulesAsync(item);
+		if (!rules.HasValue || !StudentPortalAccountRules.IsEnabled(rules.Value, "guardian")) throw PortalInvalid("Adult app access is not enabled for this case.");
+		if (input.ConfirmExistingParentAccess)
+			await SiblingParents.PrepareOnboardingSelectionAsync(item, input.SiblingParentSelection);
+		else
+		{
+			if (!context.Enabled || !context.FamilyConfirmed || context.Status == "NotRequired" || context.Candidates.Count == 0)
+				throw PortalInvalid("Explicitly confirm the saved adult and existing Parent account in App Login before linking.");
+			await PrepareSiblingParentSelectionAsync(item, input.SiblingParentSelection);
+		}
 		await LinkSiblingParentAsync(item);
 		await RefreshProvisioningAsync(item);
 		await CurrentUnitOfWork!.SaveChangesAsync();

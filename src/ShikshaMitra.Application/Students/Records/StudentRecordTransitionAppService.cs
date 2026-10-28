@@ -83,8 +83,13 @@ public partial class StudentRecordTransitionAppService(IRepository<StudentRecord
 		var history = await events.GetListAsync(x => x.TenantId == CurrentTenant.Id && x.TransitionId == item.Id);
 		var canStage = await IsStageApproverAsync(item);
 		var handoff = item.ReturnHandoffId.HasValue ? await admissionReturns.GetHandoffAsync(item) : null;
+		StudentRecordTransitionPreviewRowDto? exitReadiness = null;
+		if (StudentSchoolExitOutstanding.IsExit(item.Outcome) && item.Status is "Submitted" or "Approved" or "Scheduled" or "Exception")
+			exitReadiness = await readiness.PreviewAsync(item.AcademicYearId, input, StudentRecordsPolicy.FromJson(item.PolicyJson), false, validateDate: false);
 		return new()
 		{
+			OutstandingOverrideRequired = exitReadiness?.OutstandingItems.Count > 0,
+			OutstandingItems = exitReadiness?.OutstandingItems ?? [],
 			AdmissionApplicationId = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionApplications.View) ? handoff?.AdmissionApplicationId : null,
 			AdmissionInquiryId = await AuthorizationService.IsGrantedAsync(ShikshaMitraSubmodulePermissions.Students.AdmissionInquiries.View) ? handoff?.AdmissionInquiryId : null,
 			Id = item.Id, BatchId = item.BatchId, StudentId = item.StudentId, AcademicYearId = item.AcademicYearId,

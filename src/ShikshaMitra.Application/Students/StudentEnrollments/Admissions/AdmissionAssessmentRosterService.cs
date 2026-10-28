@@ -139,10 +139,15 @@ public class AdmissionAssessmentRosterService(
 				factsByStage.GetValueOrDefault(row.Stage.Id) ?? []).Count == 0;
 			var sortSessionId = sortAttempts.GetValueOrDefault(row.Stage.Id)?.SessionId;
 			var appointmentStart = latest?.SlotStartsAt ?? (latest?.SessionId is Guid latestSessionId ? sessionRows.GetValueOrDefault(latestSessionId)?.StartsAt : null);
+			var displayAttempt = sortAttempts.GetValueOrDefault(row.Stage.Id);
+			var displayPolicy = AdmissionAssessmentAccessService.ReadAttemptPolicy(displayAttempt, policies[row.Stage.Id])!;
+			var display = AdmissionAssessmentRosterState.Resolve(displayAttempt,
+				sortSessionId.HasValue ? sessionRows.GetValueOrDefault(sortSessionId.Value) : null,
+				classificationNow, displayPolicy.ScoringEnabled, displayPolicy.AttendanceRequired);
 			return new RosterSummary
 			{
-				Context = row, Active = active, Status = ClassifyStatus(sortAttempts.GetValueOrDefault(row.Stage.Id),
-					sortSessionId.HasValue ? sessionRows.GetValueOrDefault(sortSessionId.Value) : null, classificationNow, policy.ScoringEnabled), Queue = active && latest?.Status == "pending" && sortSessionId.HasValue && sessionRows.GetValueOrDefault(sortSessionId.Value)?.RoomReady == false
+				Context = row, Active = active, Status = display.Progress, DisplayStatus = display.Status, DisplayAttendance = display.Attendance,
+				Queue = active && latest?.Status == "pending" && sortSessionId.HasValue && sessionRows.GetValueOrDefault(sortSessionId.Value)?.RoomReady == false
 					? "attention" : active && latest?.Status == "pending" && appointmentStart > classificationNow ? "attendance" : Classify(active, row.Stage.Status, latest, countsByStage.GetValueOrDefault(row.Stage.Id), policy, ready),
 				SessionStartsAt = sortAttempts.GetValueOrDefault(row.Stage.Id)?.SlotStartsAt ?? (sortSessionId.HasValue ? sessionRows.GetValueOrDefault(sortSessionId.Value)?.StartsAt : null)
 			};
@@ -159,7 +164,8 @@ public class AdmissionAssessmentRosterService(
 					ApplicationNumber = summary.Context.Application.ApplicationNumber,
 					ClassName = summary.Context.ClassName,
 					SessionName = attempt?.SessionId is Guid sessionId ? sessionRows.GetValueOrDefault(sessionId)?.Name ?? string.Empty : string.Empty,
-					Attendance = attempt?.Attendance ?? "pending",
+					Attendance = summary.DisplayAttendance,
+					Status = summary.DisplayStatus,
 					Outcome = attempt?.Outcome ?? string.Empty
 				};
 			}), input.ColumnFilters).Select(row => row.StageId).ToHashSet();
@@ -204,7 +210,8 @@ public class AdmissionAssessmentRosterService(
 			}
 			return new AdmissionAssessmentRosterItemDto { AdmissionOfferingId = row.Application.AdmissionOfferingId, WorkflowStageDefinitionId = row.Definition.Id,
 				InterviewerName = historyByStage[row.Stage.Id].Where(item => item.Status != "cancelled").OrderByDescending(item => item.AttemptNumber).Select(item => item.SessionId.HasValue ? sessionRows.GetValueOrDefault(item.SessionId.Value)?.InterviewerId : null).FirstOrDefault() is Guid interviewerId ? interviewerNames.GetValueOrDefault(interviewerId) : null,
-				ClassName = row.ClassName, Status = summary.Status, OfferingName = row.OfferingName, WorkflowVersion = versions.GetValueOrDefault(row.Definition.WorkflowDefinitionId), ApplicationId = row.Application.Id, ApplicationNumber = row.Application.ApplicationNumber,
+				ClassName = row.ClassName, Status = summary.Status, DisplayStatus = summary.DisplayStatus, DisplayAttendance = summary.DisplayAttendance,
+				OfferingName = row.OfferingName, WorkflowVersion = versions.GetValueOrDefault(row.Definition.WorkflowDefinitionId), ApplicationId = row.Application.Id, ApplicationNumber = row.Application.ApplicationNumber,
 				ApplicantId = row.Application.ApplicantId, ApplicantName = row.ApplicantName.Trim(), StageInstanceId = row.Stage.Id, StageName = row.Stage.Name,
 				ApplicationStatus = row.Application.Status, StageStatus = row.Stage.Status, IsActive = summary.Active, EnteredAt = row.Stage.EnteredAt,
 				Queue = summary.Queue, Assessment = evidence };
@@ -213,17 +220,7 @@ public class AdmissionAssessmentRosterService(
 
 	// Display progress is independent of routing readiness and never advances the workflow.
 	internal static string ClassifyStatus(AdmissionAssessmentAttempt? attempt, AdmissionAssessmentSession? session, DateTime now, bool scoringEnabled)
-	{
-		if (attempt == null || attempt.Status == "cancelled" || attempt.Outcome == "retake") return "pending";
-		if (attempt.Outcome == "waived") return "complete";
-		var startsAt = attempt.SlotStartsAt ?? session?.StartsAt;
-		var endsAt = attempt.SlotEndsAt ?? session?.EndsAt;
-		if (startsAt > now) return "pending";
-		// Qualitative assessments and absence have a final outcome without numeric marks.
-		var recorded = (attempt.Status is "completed" or "pendingReview") &&
-			(attempt.Outcome == "absent" || attempt.Outcome is "passed" or "failed" && (!scoringEnabled || attempt.Marks.HasValue));
-		return recorded && (!endsAt.HasValue || endsAt <= now) ? "complete" : "ongoing";
-	}
+		=> AdmissionAssessmentRosterState.Resolve(attempt, session, now, scoringEnabled, false).Progress;
 
 	private static string Classify(bool active, AdmissionRuntimeStageStatus stageStatus, AdmissionAssessmentAttempt? latest,
 		int attemptCount, AdmissionAssessmentPolicy policy, bool ready)
@@ -273,6 +270,8 @@ public class AdmissionAssessmentRosterService(
 		public RosterContext Context { get; set; } = null!;
 		public bool Active { get; set; }
 		public string Status { get; set; } = string.Empty;
+		public string DisplayStatus { get; set; } = string.Empty;
+		public string DisplayAttendance { get; set; } = string.Empty;
 		public string Queue { get; set; } = string.Empty;
 		public DateTime? SessionStartsAt { get; set; }
 	}

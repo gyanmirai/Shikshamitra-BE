@@ -29,42 +29,34 @@ public class WeeklyLectureSlotAppService(
     [Authorize(ShikshaMitraSubmodulePermissions.Academics.Timetable_SettingsWeeklyLectures.View)]
     public async Task<PagedResultDto<WeeklyLectureSlotListDto>> GetListAsync(GetWeeklyLectureSlotsInput input)
     {
-        // Load all standards under the requested medium for name lookup
         var standardQueryable = await standardRepository.GetQueryableAsync();
-        var allStandards = await AsyncExecuter.ToListAsync(
-            standardQueryable.Where(s => s.EducationMediumStage.EducationMediumId == input.AcademicMediumId));
-
-        var standardIds = allStandards.Select(s => s.Id).ToList();
-
-        // Query only slots that exist for those standards
-        var queryable = await weeklyLectureSlotRepository.WithDetailsAsync();
-        var allSlots = await AsyncExecuter.ToListAsync(
-            queryable.Where(w => standardIds.Contains(w.StandardId)));
-
-        // Apply optional search filter on standard name
+        var standardNames = await AsyncExecuter.ToListAsync(standardQueryable
+            .Where(s => s.EducationMediumStage.EducationMediumId == input.AcademicMediumId).Select(s => new { s.Id, s.Name }));
         if (!string.IsNullOrWhiteSpace(input.Search))
-        {
-            var matchingStandardIds = allStandards
-                .Where(s => s.Name.Contains(input.Search, StringComparison.OrdinalIgnoreCase))
-                .Select(s => s.Id)
-                .ToHashSet();
-            allSlots = allSlots.Where(w => matchingStandardIds.Contains(w.StandardId)).ToList();
-        }
-
-        var totalCount = allSlots.Count;
-        var standardsDict = allStandards.ToDictionary(s => s.Id, s => s.Name);
-
-        var pagedSlots = allSlots
-            .OrderBy(w => standardsDict.GetValueOrDefault(w.StandardId, string.Empty))
-            .Skip(input.SkipCount)
-            .Take(input.MaxResultCount)
-            .ToList();
-
-        var subjects = await subjectRepository.GetListAsync();
+            standardNames = standardNames.Where(s => s.Name.Contains(input.Search, StringComparison.OrdinalIgnoreCase)).ToList();
+        var standardsDict = standardNames.ToDictionary(s => s.Id, s => s.Name);
+        var standardIds = standardsDict.Keys.ToArray();
+        var queryable = (await weeklyLectureSlotRepository.GetQueryableAsync())
+            .Where(slot => Enumerable.Contains(standardIds, slot.StandardId));
+        var totalCount = await AsyncExecuter.CountAsync(queryable);
+        var pageIds = await AsyncExecuter.ToListAsync(TimetableSettingPageOrder.ByStandardName(queryable, standardsDict,
+            slot => slot.StandardId).ThenBy(slot => slot.Id).Skip(input.SkipCount).Take(input.MaxResultCount).Select(slot => slot.Id));
+        var pageOrder = pageIds.Select((id, index) => new { id, index }).ToDictionary(item => item.id, item => item.index);
+        var pageGraphs = await AsyncExecuter.ToListAsync((await weeklyLectureSlotRepository.WithDetailsAsync())
+            .Where(slot => pageIds.Contains(slot.Id)));
+        var pagedSlots = pageGraphs.OrderBy(slot => pageOrder[slot.Id]).ToList();
+        var pageStandardIds = pagedSlots.Select(slot => slot.StandardId).Distinct().ToList();
+        var capacityDict = await LoadAvailableCapacityAsync(pageStandardIds);
+        var publishedScopes = await LoadPublishedSubjectAssignmentScopesAsync(pageStandardIds);
+        var visibleSubjects = pagedSlots.SelectMany(slot => GetPublishedWeeklyLectureSubjects(slot, publishedScopes)).ToList();
+        var groupIds = visibleSubjects.Where(subject => subject.ElectiveGroupId.HasValue)
+            .Select(subject => subject.ElectiveGroupId!.Value).Distinct().ToArray();
         var electiveGroupQueryable = await electiveGroupRepository.WithDetailsAsync(eg => eg.Subjects);
-        var electiveGroups = await AsyncExecuter.ToListAsync(electiveGroupQueryable);
-        var capacityDict = await LoadAvailableCapacityAsync(standardIds);
-        var publishedScopes = await LoadPublishedSubjectAssignmentScopesAsync(pagedSlots.Select(slot => slot.StandardId));
+        var electiveGroups = await AsyncExecuter.ToListAsync(electiveGroupQueryable.Where(group => Enumerable.Contains(groupIds, group.Id)));
+        var subjectIds = visibleSubjects.Where(subject => subject.SubjectId.HasValue).Select(subject => subject.SubjectId!.Value)
+            .Concat(electiveGroups.SelectMany(group => group.Subjects).Select(subject => subject.SubjectId)).Distinct().ToArray();
+        var subjects = await AsyncExecuter.ToListAsync((await subjectRepository.GetQueryableAsync())
+            .Where(subject => Enumerable.Contains(subjectIds, subject.Id)).Select(subject => new { subject.Id, subject.Name, subject.Color }));
 
         var items = pagedSlots.Select(slot =>
         {

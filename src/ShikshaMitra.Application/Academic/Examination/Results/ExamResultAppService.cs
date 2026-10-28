@@ -20,7 +20,7 @@ using Volo.Abp.Users;
 namespace ShikshaMitra.Academic.Examination.Results;
 
 [RemoteService(false)]
-public class ExamResultAppService(
+public partial class ExamResultAppService(
     IExamRepository examRepository,
     IRepository<ExamResultHeader, Guid> resultHeaderRepository,
     IRepository<ExamResultDetail, Guid> resultDetailRepository,
@@ -44,8 +44,14 @@ public class ExamResultAppService(
     public async Task<ResultReadinessDto> GetReadinessAsync(Guid examId, Guid divisionId)
     {
         var exam = await GetScopedExamAsync(examId, divisionId);
-        var inputs = await LoadResultInputsAsync(exam, divisionId);
-        return await GetReadinessAsync(exam, divisionId, inputs);
+        var students = await AsyncExecuter.ToListAsync((await studentRepository.GetQueryableAsync())
+            .Where(student => student.DivisionId == divisionId && student.Status == StudentLifeCycleStatusEnum.Enrolled && !student.IsDeleted)
+            .Select(student => student.Id));
+        var applicableSubjects = await subjectApplicabilityResolver.ResolveAsync(exam, students, readOnly: true);
+        var marks = await AsyncExecuter.ToListAsync((await examMarkRepository.GetQueryableAsync())
+            .Where(mark => mark.ExamId == examId && mark.DivisionId == divisionId)
+            .Select(mark => new { mark.StudentId, mark.SubjectId }).Distinct());
+        return await GetReadinessAsync(exam, divisionId, applicableSubjects, marks.Select(mark => (mark.StudentId, mark.SubjectId)));
     }
 
     private async Task<ResultInputs> LoadResultInputsAsync(Exam exam, Guid divisionId)
@@ -60,11 +66,14 @@ public class ExamResultAppService(
         return new ResultInputs(enrolledStudents, applicableSubjectIdsByStudent, marks);
     }
 
-    private async Task<ResultReadinessDto> GetReadinessAsync(Exam exam, Guid divisionId, ResultInputs inputs)
+    private Task<ResultReadinessDto> GetReadinessAsync(Exam exam, Guid divisionId, ResultInputs inputs)
+        => GetReadinessAsync(exam, divisionId, inputs.ApplicableSubjectIdsByStudent, inputs.Marks.Select(mark => (mark.StudentId, mark.SubjectId)));
+
+    private async Task<ResultReadinessDto> GetReadinessAsync(Exam exam, Guid divisionId,
+        Dictionary<Guid, HashSet<Guid>> applicableSubjectIdsByStudent, IEnumerable<(Guid StudentId, Guid SubjectId)> marks)
     {
         var examId = exam.Id;
         var checks = new List<ReadinessCheckDto>();
-        var applicableSubjectIdsByStudent = inputs.ApplicableSubjectIdsByStudent;
         var requiredSubjectIds = applicableSubjectIdsByStudent.Values
             .SelectMany(subjectIds => subjectIds)
             .ToHashSet();
@@ -112,7 +121,6 @@ public class ExamResultAppService(
         });
 
         // Check 3: Marks entries exist
-        var marks = inputs.Marks;
         var expectedMarkRows = applicableSubjectIdsByStudent.Values.Sum(subjectIds => subjectIds.Count);
         var markKeys = marks
             .Where(mark => applicableSubjectIdsByStudent.TryGetValue(mark.StudentId, out var subjectIds) &&
@@ -418,8 +426,19 @@ public class ExamResultAppService(
     {
         var header = await resultHeaderRepository.GetAsync(resultHeaderId);
         await GetScopedExamAsync(header.ExamId, header.DivisionId);
-        var details = await resultDetailRepository.GetListAsync(d => d.ResultHeaderId == resultHeaderId);
-        return ComputeAnalytics(resultHeaderId, details);
+        var summary = await ReadResultSummaryAsync(resultHeaderId);
+        var grades = await AsyncExecuter.ToListAsync((await resultDetailRepository.GetQueryableAsync())
+            .Where(detail => detail.ResultHeaderId == resultHeaderId).GroupBy(detail => detail.Grade)
+            .Select(group => new { Grade = group.Key, Count = group.Count() }));
+        return new ResultAnalyticsDto
+        {
+            ResultHeaderId = resultHeaderId, TotalStudents = summary.TotalStudents,
+            Appeared = summary.Appeared, Passed = summary.Passed, Failed = summary.Failed,
+            Compartment = summary.Compartment, Absent = summary.Absent,
+            PassPercentage = summary.PassPercentage, HighestPercentage = summary.Highest,
+            LowestPercentage = summary.Lowest, AveragePercentage = summary.AveragePercentage,
+            GradeDistribution = grades.OrderBy(grade => grade.Grade).ToDictionary(grade => grade.Grade, grade => grade.Count)
+        };
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -434,8 +453,7 @@ public class ExamResultAppService(
             h => h.ExamId == examId && h.DivisionId == divisionId);
         if (header is null) return null;
 
-        var details = await resultDetailRepository.GetListAsync(d => d.ResultHeaderId == header.Id);
-        return MapToHeaderDto(header, details);
+        return MapToHeaderDto(header, await ReadResultSummaryAsync(header.Id));
     }
 
     // ─────────────────────────────────────────────────────────────────────────

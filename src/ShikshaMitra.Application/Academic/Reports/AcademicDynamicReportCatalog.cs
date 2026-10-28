@@ -228,7 +228,7 @@ public class AcademicDynamicReportCatalog(
 			? dataset
 			: throw AcademicDynamicReportGuard.DatasetNotAllowed(datasetId);
 
-	public async Task<AcademicDynamicReportCatalogSnapshot> BuildSnapshotAsync(AcademicAiReportCatalogScope scope)
+	public async Task<AcademicDynamicReportCatalogSnapshot> BuildSnapshotAsync(AcademicAiReportCatalogScope scope, string? module = null)
 	{
 		var standardQuery = await standardRepository.GetQueryableAsync();
 		standardQuery = standardQuery.Where(item =>
@@ -287,7 +287,10 @@ public class AcademicDynamicReportCatalog(
 
 		// Token order uses OrdinalIgnoreCase, so database collation cannot choose the top 1000.
 		// Scan narrow scalar pages and retain only those 1000 candidates in memory.
-		var chapterCandidates = await LoadChapterCatalogCandidatesAsync(query);
+		SortedSet<ChapterCatalogCandidate> chapterCandidates = module == null || string.Equals(
+			AcademicDynamicReportGuard.NormalizeModule(module), AcademicReportModules.Curriculum, StringComparison.OrdinalIgnoreCase)
+			? await LoadChapterCatalogCandidatesAsync(query)
+			: [];
 		var chapters = chapterCandidates
 			.Select((item, index) => new CatalogChapter(
 				$"chapter_{index + 1}", item.Id, item.ChapterName, item.StandardId, item.SubjectId,

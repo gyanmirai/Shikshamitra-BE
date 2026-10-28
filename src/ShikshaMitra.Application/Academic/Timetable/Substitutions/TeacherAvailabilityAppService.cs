@@ -21,7 +21,7 @@ using ShikshaMitra.HR.AttendanceAndLeaves;
 namespace ShikshaMitra.Academic.Timetable.Substitutions;
 
 [RemoteService(IsEnabled = false)]
-public class TeacherAvailabilityAppService(
+public partial class TeacherAvailabilityAppService(
     IRepository<TeacherAvailability, Guid> availabilityRepository,
     IRepository<SubstitutionRequest, Guid> substitutionRepository,
     ITimetableRepository timetableRepository,
@@ -45,55 +45,71 @@ public class TeacherAvailabilityAppService(
             ? null
             : await GetVisibleTeachersAsync();
 
-        var rows = await availabilityRepository.GetListAsync(x => !x.IsCancelled);
-        var filtered = rows.AsEnumerable();
+        var filtered = (await availabilityRepository.GetQueryableAsync()).Where(x => !x.IsCancelled);
 
         if (visibility != null)
         {
+            var visibleIds = visibility.ReferenceIds.ToArray();
             filtered = filtered.Where(x =>
-                x.TeacherId.HasValue && visibility.ReferenceIds.Contains(x.TeacherId.Value));
+                x.TeacherId.HasValue && Enumerable.Contains(visibleIds, x.TeacherId.Value));
         }
 
         if (input.AcademicYearId.HasValue) filtered = filtered.Where(x => x.AcademicYearId == input.AcademicYearId);
-        if (input.Date.HasValue) filtered = filtered.Where(x => x.AvailabilityDate == NormalizeDate(input.Date.Value));
-        if (input.FromDate.HasValue) filtered = filtered.Where(x => x.AvailabilityDate >= NormalizeDate(input.FromDate.Value));
-        if (input.ToDate.HasValue) filtered = filtered.Where(x => x.AvailabilityDate <= NormalizeDate(input.ToDate.Value));
+        if (input.Date.HasValue)
+        {
+            var date = NormalizeDate(input.Date.Value);
+            filtered = filtered.Where(x => x.AvailabilityDate == date);
+        }
+        if (input.FromDate.HasValue)
+        {
+            var date = NormalizeDate(input.FromDate.Value);
+            filtered = filtered.Where(x => x.AvailabilityDate >= date);
+        }
+        if (input.ToDate.HasValue)
+        {
+            var date = NormalizeDate(input.ToDate.Value);
+            filtered = filtered.Where(x => x.AvailabilityDate <= date);
+        }
         if (input.TeacherId.HasValue) filtered = filtered.Where(x => x.TeacherId == input.TeacherId);
         if (!string.IsNullOrWhiteSpace(input.TeacherName))
         {
-            filtered = filtered.Where(x => string.Equals(x.TeacherName, input.TeacherName, StringComparison.OrdinalIgnoreCase));
+            // Match stored names with the existing CLR comparer, independent of database collation.
+            var names = await AsyncExecuter.ToListAsync(filtered.Select(x => x.TeacherName).Distinct());
+            var matchingNames = names.Where(name => string.Equals(name, input.TeacherName,
+                StringComparison.OrdinalIgnoreCase)).ToArray();
+            filtered = filtered.Where(x => Enumerable.Contains(matchingNames, x.TeacherName));
         }
         if (input.SourceType.HasValue) filtered = filtered.Where(x => x.SourceType == input.SourceType);
 
-        var list = filtered.OrderBy(x => x.AvailabilityDate).ThenBy(x => x.StartTime).ToList();
-        var total = list.Count;
+        var total = await AsyncExecuter.CountAsync(filtered);
         var max = input.MaxResultCount <= 0 ? 50 : input.MaxResultCount;
 
-        var pageRows = list.Skip(input.SkipCount).Take(max).ToList();
-        var attendanceRows = pageRows.Where(x => x.SourceType == TeacherAvailabilitySource.Attendance).ToList();
-        var teacherIds = attendanceRows.Where(x => x.TeacherId.HasValue).Select(x => x.TeacherId!.Value).Distinct().ToArray();
-        var teacherNames = attendanceRows.Where(x => !x.TeacherId.HasValue).Select(x => x.TeacherName).Distinct().ToArray();
-        var employees = teacherIds.Length == 0 ? [] : await employeeRepository.GetListAsync(x =>
-            Enumerable.Contains(teacherIds, x.Id) ||
-            (x.UserId.HasValue && Enumerable.Contains(teacherIds, x.UserId.Value)));
-        if (teacherNames.Length > 0)
-        {
-            // EmployeeName is computed and cannot be used in an EF predicate.
-            employees.AddRange((await employeeRepository.GetListAsync()).Where(x =>
-                teacherNames.Contains(x.EmployeeName, StringComparer.OrdinalIgnoreCase) &&
-                employees.All(existing => existing.Id != x.Id)));
-        }
-        var shifts = await attendanceWindowResolver.LoadShiftsAsync(employees);
+        var pageRows = await AsyncExecuter.ToListAsync(filtered.OrderBy(x => x.AvailabilityDate)
+            .ThenBy(x => x.StartTime).Skip(input.SkipCount).Take(max));
+        var employees = await LoadPageCoverageEmployeesAsync(pageRows);
+        var attendanceRows = pageRows.Where(row => row.SourceType == TeacherAvailabilitySource.Attendance).ToList();
+        var attendanceIds = attendanceRows.Where(row => row.TeacherId.HasValue).Select(row => row.TeacherId!.Value).ToHashSet();
+        var attendanceNames = attendanceRows.Where(row => !row.TeacherId.HasValue).Select(row => row.TeacherName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var attendanceEmployees = employees.Where(employee => attendanceIds.Contains(employee.Id) ||
+            (employee.UserId.HasValue && attendanceIds.Contains(employee.UserId.Value))).ToList();
+        attendanceEmployees.AddRange(employees.Where(employee => attendanceNames.Contains(employee.EmployeeName) &&
+            attendanceEmployees.All(existing => existing.Id != employee.Id)));
+        var shifts = await attendanceWindowResolver.LoadShiftsAsync(attendanceEmployees);
         var dtoRows = new List<TeacherAvailabilityDto>();
         foreach (var row in pageRows)
         {
-            var employee = ResolveEmployeeByTeacherReference(employees, row.TeacherId, row.TeacherName);
+            var employee = ResolveEmployeeByTeacherReference(attendanceEmployees, row.TeacherId, row.TeacherName);
             var shift = employee?.ShiftId is Guid shiftId ? shifts.GetValueOrDefault(shiftId) : null;
             var window = row.SourceType == TeacherAvailabilitySource.Attendance
                 ? AttendanceAvailabilityWindowResolver.Resolve(shift, row.IsFullDay, row.StartTime, row.EndTime)
                 : (row.StartTime, row.EndTime);
-            dtoRows.Add(await MapAsync(row, window));
+            var dto = Map(row);
+            dto.StartTime = window.Item1.ToString("HH:mm");
+            dto.EndTime = window.Item2.ToString("HH:mm");
+            dtoRows.Add(dto);
         }
+        await ApplyPageCoverageAsync(pageRows, dtoRows, employees);
 
         return new PagedResultDto<TeacherAvailabilityDto>(total, dtoRows);
     }
@@ -421,40 +437,6 @@ public class TeacherAvailabilityAppService(
         return ids.Distinct().ToList();
     }
 
-    private async Task<TeacherAvailabilityDto> MapAsync(TeacherAvailability row, (TimeOnly Start, TimeOnly End) window)
-    {
-        var dto = Map(row);
-        dto.StartTime = window.Start.ToString("HH:mm");
-        dto.EndTime = window.End.ToString("HH:mm");
-
-        if (row.AffectedLectureCount <= 0 && row.SourceType != TeacherAvailabilitySource.Attendance)
-        {
-            dto.CanCreateSubstitution = false;
-            return dto;
-        }
-
-        var affected = await GetAffectedLecturesAsync(new CreateTeacherAvailabilityDto
-        {
-            AcademicYearId = row.AcademicYearId,
-            TeacherId = row.TeacherId,
-            TeacherName = row.TeacherName,
-            DepartmentName = row.DepartmentName,
-            AvailabilityDate = row.AvailabilityDate,
-            StartTime = dto.StartTime,
-            EndTime = dto.EndTime,
-            AvailabilityStatus = row.AvailabilityStatus,
-            SourceType = row.SourceType,
-            SourceEntityId = row.SourceEntityId,
-            Reason = row.Reason,
-            IsFullDay = row.IsFullDay,
-            NotifyLeadership = row.NotifyLeadership,
-            AttachmentName = row.AttachmentName,
-            Remarks = row.Remarks
-        });
-        TeacherAvailabilityCoverage.Apply(dto, affected.Items);
-        return dto;
-    }
-
     private static TeacherAvailabilityDto Map(TeacherAvailability row) => new()
     {
         Id = row.Id,
@@ -552,13 +534,12 @@ public class TeacherAvailabilityAppService(
         var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
         if (scope.HasAnyAccess)
         {
-            var timetables = await timetableRepository.GetAllWithSlotsAsync();
-            var scopedTimetables = timetables.FilterByUserScope(scope);
-            referenceIds.UnionWith(scopedTimetables
+            var timetableQuery = TimetableScopeQuery.Apply(await timetableRepository.GetQueryableAsync(), scope);
+            referenceIds.UnionWith(await AsyncExecuter.ToListAsync(timetableQuery
                 .SelectMany(timetable => timetable.Slots)
                 .SelectMany(slot => slot.Subjects)
                 .Where(subject => subject.TeacherId.HasValue)
-                .Select(subject => subject.TeacherId!.Value));
+                .Select(subject => subject.TeacherId!.Value).Distinct()));
         }
 
         if (CurrentUser.Id.HasValue)

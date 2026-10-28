@@ -9,6 +9,8 @@ namespace ShikshaMitra.Academic.Curriculum;
 /// </summary>
 public interface ISubjectAppService
 {
+	Task<List<SubjectLookupDto>> GetLookupAsync(Guid educationMediumId, string? searchTerm = null, bool includeArchived = false);
+
 	/// <summary>
 	/// Get a single subject by ID
 	/// </summary>

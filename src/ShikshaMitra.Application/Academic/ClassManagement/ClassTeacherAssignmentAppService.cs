@@ -35,6 +35,18 @@ public class ClassTeacherAssignmentAppService(
 {
 	private const int MaximumClassTeacherAssignments = 2;
 
+	public async Task<ClassTeacherWorkspaceDto> GetWorkspaceAsync(Guid organizationId)
+	{
+		var context = await LoadContextAsync(organizationId);
+		var rows = BuildRows(context);
+		return new ClassTeacherWorkspaceDto
+		{
+			Items = rows,
+			Summary = BuildSummary(rows, rows.Count(row => row.AssignmentStatus == "Changed")),
+			EligibleTeachers = BuildEligibleTeachers(context, null)
+		};
+	}
+
 	public async Task<List<ClassTeacherRowDto>> GetClassTeacherAssignmentsAsync(Guid organizationId)
 	{
 		logger.LogInformation(
@@ -64,7 +76,12 @@ public class ClassTeacherAssignmentAppService(
 	{
 		var context = await LoadContextAsync(organizationId, activeTeachingEmployeesOnly: true);
 		var normalizedSearch = search?.Trim().ToLowerInvariant();
+		return BuildEligibleTeachers(context, normalizedSearch);
+	}
 
+	private List<ClassTeacherEligibleTeacherDto> BuildEligibleTeachers(
+		ClassTeacherAssignmentContext context, string? normalizedSearch)
+	{
 		return context.Employees
 			.Where(employee =>
 				employee.EmployeeStatusType == EmployeeStatusType.Active &&
@@ -276,21 +293,29 @@ public class ClassTeacherAssignmentAppService(
 		bool activeTeachingEmployeesOnly = false
 	)
 	{
-		var standards = await standardRepository.GetListAsync(
-			standard => standard.EducationMediumStageId == organizationId
-		);
+		var standards = await AsyncExecuter.ToListAsync((await standardRepository.GetQueryableAsync())
+			.Where(standard => standard.EducationMediumStageId == organizationId)
+			.Select(standard => new StandardRead(standard.Id, standard.Name, standard.AgeLowerLimit)));
 		var standardIds = standards.Select(standard => standard.Id).ToList();
 		var divisions = standardIds.Any()
-			? await divisionRepository.GetListAsync(division => standardIds.Contains(division.StandardId))
-			: new List<Division>();
+			? await AsyncExecuter.ToListAsync((await divisionRepository.GetQueryableAsync())
+				.Where(division => Enumerable.Contains(standardIds, division.StandardId))
+				.Select(division => new DivisionRead(division.Id, division.StandardId, division.Name, division.Strength)))
+			: new List<DivisionRead>();
 		var classTeachers = standardIds.Any()
-			? await classTeacherRepository.GetListAsync(assignment => standardIds.Contains(assignment.StandardId))
-			: new List<ClassTeacher.ClassTeacher>();
-		var employees = activeTeachingEmployeesOnly
-			? await employeeRepository.GetListAsync(employee =>
-				employee.EmployeeStatusType == EmployeeStatusType.Active &&
-				employee.EmployeeGroup == EmployeeGroupType.Teaching)
-			: await employeeRepository.GetListAsync();
+			? await AsyncExecuter.ToListAsync((await classTeacherRepository.GetQueryableAsync())
+				.Where(assignment => Enumerable.Contains(standardIds, assignment.StandardId))
+				.Select(assignment => new AssignmentRead(assignment.StandardId, assignment.DivisionId,
+					assignment.TeacherId, assignment.Status, assignment.CreationTime,
+					assignment.LastModificationTime, assignment.CreatorId, assignment.LastModifierId)))
+			: new List<AssignmentRead>();
+		var employeeQuery = await employeeRepository.GetQueryableAsync();
+		if (activeTeachingEmployeesOnly)
+			employeeQuery = employeeQuery.Where(employee => employee.EmployeeStatusType == EmployeeStatusType.Active &&
+				employee.EmployeeGroup == EmployeeGroupType.Teaching);
+		var employees = await AsyncExecuter.ToListAsync(employeeQuery.Select(employee => new TeacherRead(
+			employee.Id, employee.FirstName, employee.LastName, employee.EmployeeCode, employee.Department,
+			employee.EmployeeStatusType, employee.EmployeeGroup)));
 
 		return new ClassTeacherAssignmentContext(
 			organizationId,
@@ -469,7 +494,7 @@ public class ClassTeacherAssignmentAppService(
 	}
 
 	private AssignedTeacherDto BuildAssignedTeacher(
-		Employee employee,
+		TeacherRead employee,
 		ClassTeacherAssignmentContext context,
 		Guid? excludeClassId = null,
 		Guid? excludeDivisionId = null
@@ -494,18 +519,13 @@ public class ClassTeacherAssignmentAppService(
 	}
 
 	private ClassTeacherEligibleTeacherDto BuildEligibleTeacher(
-		Employee employee,
+		TeacherRead employee,
 		ClassTeacherAssignmentContext context,
 		Guid? excludeClassId = null,
 		Guid? excludeDivisionId = null
 	)
 	{
-		var classTeacherCount = context.ClassTeachers.Count(assignment =>
-			assignment.TeacherId == employee.Id &&
-			!(excludeClassId.HasValue && excludeDivisionId.HasValue &&
-			  assignment.StandardId == excludeClassId.Value &&
-			  assignment.DivisionId == excludeDivisionId.Value)
-		);
+		var classTeacherCount = context.CountAssignments(employee.Id, excludeClassId, excludeDivisionId);
 		var isActive = employee.EmployeeStatusType == EmployeeStatusType.Active;
 		var isTeachingStaff = employee.EmployeeGroup == EmployeeGroupType.Teaching;
 		var isOverLimit = classTeacherCount >= MaximumClassTeacherAssignments;
@@ -676,7 +696,7 @@ public class ClassTeacherAssignmentAppService(
 	}
 
 	private List<ClassTeacherValidationIssueDto> BuildTeacherIssues(
-		Employee employee,
+		TeacherRead employee,
 		ClassTeacherAssignmentContext context,
 		Guid classId,
 		Guid divisionId
@@ -687,10 +707,7 @@ public class ClassTeacherAssignmentAppService(
 		var isTeachingStaff = employee.EmployeeGroup == EmployeeGroupType.Teaching;
 		// Exclude the current assignment so a teacher is not flagged for having the
 		// assignment that already belongs to this class-division.
-		var classTeacherCount = context.ClassTeachers.Count(assignment =>
-			assignment.TeacherId == employee.Id &&
-			!(assignment.StandardId == classId && assignment.DivisionId == divisionId)
-		);
+		var classTeacherCount = context.CountAssignments(employee.Id, classId, divisionId);
 
 		if (!isActive)
 		{
@@ -750,18 +767,36 @@ public class ClassTeacherAssignmentAppService(
 		return issues;
 	}
 
+	private sealed record StandardRead(Guid Id, string Name, int AgeLowerLimit);
+	private sealed record DivisionRead(Guid Id, Guid StandardId, string Name, int Strength);
+	private sealed record AssignmentRead(Guid StandardId, Guid DivisionId, Guid TeacherId,
+		ClassTeacherAssignmentStatus Status, DateTime CreationTime, DateTime? LastModificationTime,
+		Guid? CreatorId, Guid? LastModifierId);
+	private sealed record TeacherRead(Guid Id, string? FirstName, string? LastName, string EmployeeCode,
+		string? Department, EmployeeStatusType? EmployeeStatusType, EmployeeGroupType? EmployeeGroup)
+	{
+		public string EmployeeName => string.Join(" ", new[] { FirstName, LastName }.Where(name => !string.IsNullOrWhiteSpace(name)));
+	}
+
 	private sealed class ClassTeacherAssignmentContext(
 		Guid organizationId,
-		List<Standard> standards,
-		List<Division> divisions,
-		List<ClassTeacher.ClassTeacher> classTeachers,
-		List<Employee> employees
+		List<StandardRead> standards,
+		List<DivisionRead> divisions,
+		List<AssignmentRead> classTeachers,
+		List<TeacherRead> employees
 	)
 	{
 		public Guid OrganizationId { get; } = organizationId;
-		public List<Standard> Standards { get; } = standards;
-		public List<Division> Divisions { get; } = divisions;
-		public List<ClassTeacher.ClassTeacher> ClassTeachers { get; } = classTeachers;
-		public List<Employee> Employees { get; } = employees;
+		public List<StandardRead> Standards { get; } = standards;
+		public List<DivisionRead> Divisions { get; } = divisions;
+		public List<AssignmentRead> ClassTeachers { get; } = classTeachers;
+		public List<TeacherRead> Employees { get; } = employees;
+		private readonly Dictionary<Guid, int> _counts = classTeachers.GroupBy(row => row.TeacherId)
+			.ToDictionary(group => group.Key, group => group.Count());
+		private readonly Dictionary<(Guid TeacherId, Guid StandardId, Guid DivisionId), int> _countsByClass = classTeachers
+			.GroupBy(row => (row.TeacherId, row.StandardId, row.DivisionId)).ToDictionary(group => group.Key, group => group.Count());
+		public int CountAssignments(Guid teacherId, Guid? classId, Guid? divisionId) =>
+			_counts.GetValueOrDefault(teacherId) - (classId.HasValue && divisionId.HasValue
+				? _countsByClass.GetValueOrDefault((teacherId, classId.Value, divisionId.Value)) : 0);
 	}
 }

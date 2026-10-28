@@ -29,7 +29,7 @@ using ShikshaMitra.HR.Employees;
 namespace ShikshaMitra.Academic.Examination.Exams;
 
 [RemoteService(false)]
-public class ExamAppService(
+public partial class ExamAppService(
 	IExamRepository examRepository,
 	IRepository<Subject, Guid> subjectRepository,
 	IRepository<ExamType, Guid> examTypeRepository,
@@ -652,62 +652,115 @@ public class ExamAppService(
 			);
 		}
 
-		// Status and scope need only identifiers and schedule boundaries. Hydrate room assignments,
-		// grade data and audit fields after paging instead of tracking every matching exam graph.
-		var allRows = await AsyncExecuter.ToListAsync(query.OrderBy(x => x.exam.CreationTime)
-			.Select(x => new ExamListCandidate(x.exam.Id, x.exam.StandardId,
-				x.standard.EducationMediumStageId, x.stage.EducationMediumId, x.exam.Status,
-				x.exam.ExamDivisions.Select(division => division.DivisionId).ToList(),
-				x.exam.ExamSubjects.Select(subject => new ExamListSubjectSchedule(subject.SubjectId,
-					subject.ExamDate, subject.StartTime, subject.EndTime)).ToList())));
+		var utcNow = DateTime.UtcNow;
+		var institutionNow = ExamScheduleStatusResolver.GetInstitutionNow(utcNow);
+		var todayInInstitution = DateTime.SpecifyKind(institutionNow.Date, DateTimeKind.Utc);
+		var currentSecond = institutionNow.Hour * 3600 + institutionNow.Minute * 60 + institutionNow.Second;
+		var rangeStartDate = DateTime.SpecifyKind(filterStartDate!.Value.Date, DateTimeKind.Utc);
+		var rangeStartSecond = filterStartDate.Value.Hour * 3600 + filterStartDate.Value.Minute * 60 + filterStartDate.Value.Second;
+		var rangeEndDate = DateTime.SpecifyKind(filterEndDate!.Value, DateTimeKind.Utc);
 		var scope = await userScopeAccessService.GetCurrentUserScopeAsync();
-		if (!scope.IsAdmin)
+		if (!scope.IsAdmin && !scope.HasWildcardAcademicYear)
 		{
-			var primaryTeacherSubjects = await GetCurrentPrimaryTeacherSubjectIdsByStandardAsync(
-				allRows.Select(row => row.StandardId).Distinct().ToList());
-			allRows = allRows
-				.Where(row =>
-					CanAccessExam(row.StandardId, row.StageId, row.MediumId, row.DivisionIds, scope) ||
-					PrimaryTeacherCanAccessExam(row.StandardId, row.Subjects.Select(subject => subject.SubjectId), primaryTeacherSubjects))
-				.ToList();
-		}
-
-		var rowsWithEffectiveStatus = allRows
-			.Select(row => new { Row = row, Window = GetExamScheduleWindow(row.Subjects) })
-			.Where(row => IsExamInDateRange(row.Row.Status, row.Window, filterStartDate!.Value, filterEndDate!.Value, isDefaultDateRange))
-			.Select(row => new
+			var standardIds = await AsyncExecuter.ToListAsync(query.Select(row => row.exam.StandardId).Distinct());
+			var primaryTeacherSubjects = await GetCurrentPrimaryTeacherSubjectIdsByStandardAsync(standardIds);
+			var permittedIds = query.Where(row =>
+				row.exam.ExamDivisions.Any(division => scope.DivisionIds.Contains(division.DivisionId)) ||
+				scope.WildcardDivisionStandardIds.Contains(row.exam.StandardId) ||
+				(scope.HasWildcardStandard && scope.WildcardStandardMediumStageIds.Contains(row.standard.EducationMediumStageId)) ||
+				(scope.HasWildcardMediumStage && scope.WildcardMediumStageMediumIds.Contains(row.stage.EducationMediumId)) ||
+				(scope.HasWildcardMedium && scope.MediumIds.Contains(row.stage.EducationMediumId)))
+				.Select(row => row.exam.Id);
+			foreach (var entry in primaryTeacherSubjects)
 			{
-				row.Row,
-				EffectiveStatus = ExamScheduleStatusResolver.Resolve(row.Row.Status, row.Window.StartAt, row.Window.EndAt, DateTime.UtcNow)
-			})
-			.ToList();
-
-		var pendingCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Pending);
-		var publishedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Published);
-		var ongoingCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Ongoing);
-		var completedCount = rowsWithEffectiveStatus.Count(x => x.EffectiveStatus == ExamStatus.Completed);
-
-		var filteredRows = rowsWithEffectiveStatus
-			.Where(x => !input.Status.HasValue || x.EffectiveStatus == input.Status.Value)
-			.ToList();
-
-		var totalCount = filteredRows.Count;
-
-		var selectedPage = filteredRows
-			.Skip(input.SkipCount)
-			.Take(input.MaxResultCount)
-			.ToList();
-		var pageIds = selectedPage.Select(row => row.Row.Id).ToList();
+				var standardId = entry.Key;
+				var subjectIds = entry.Value.ToList();
+				permittedIds = permittedIds.Concat(query.Where(row => row.exam.StandardId == standardId &&
+					row.exam.ExamSubjects.Any() && row.exam.ExamSubjects.All(subject => subjectIds.Contains(subject.SubjectId)))
+					.Select(row => row.exam.Id));
+			}
+			query = query.Where(row => permittedIds.Contains(row.exam.Id));
+		}
+		// SQLite cannot compare TimeSpan and rounds sub-millisecond date parts. Read exact
+		// schedule keys only near a comparison boundary, then apply their IDs before SQL paging.
+		var currentBoundarySeconds = new[] { (currentSecond + 86399) % 86400, currentSecond, (currentSecond + 1) % 86400 };
+		var rangeBoundarySeconds = new[] { (rangeStartSecond + 86399) % 86400, rangeStartSecond, (rangeStartSecond + 1) % 86400 };
+		var boundaryIds = await AsyncExecuter.ToListAsync(query.Where(row => row.exam.ExamSubjects.Any(subject => subject.ExamDate.HasValue &&
+			((subject.ExamDate.Value.Date == todayInInstitution &&
+			  ((subject.StartTime.HasValue && currentBoundarySeconds.Contains(subject.StartTime.Value.Hour * 3600 + subject.StartTime.Value.Minute * 60 + subject.StartTime.Value.Second)) ||
+			   (subject.EndTime.HasValue && currentBoundarySeconds.Contains(subject.EndTime.Value.Hour * 3600 + subject.EndTime.Value.Minute * 60 + subject.EndTime.Value.Second)))) ||
+			 (subject.ExamDate.Value.Date == rangeStartDate && subject.EndTime.HasValue &&
+			  rangeBoundarySeconds.Contains(subject.EndTime.Value.Hour * 3600 + subject.EndTime.Value.Minute * 60 + subject.EndTime.Value.Second)))))
+			.Select(row => row.exam.Id));
+		var boundaryRows = boundaryIds.Count == 0 ? new List<ExamListBoundaryCandidate>() : await AsyncExecuter.ToListAsync(query
+			.Where(row => boundaryIds.Contains(row.exam.Id)).Select(row => new ExamListBoundaryCandidate(row.exam.Id, row.exam.Status,
+				row.exam.ExamSubjects.Select(subject => new ExamListSubjectSchedule(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime)).ToList())));
+		var excludedBoundaryIds = new List<Guid>();
+		var boundaryStatuses = new Dictionary<Guid, ExamStatus>();
+		foreach (var row in boundaryRows)
+		{
+			var window = GetExamScheduleWindow(row.Subjects);
+			if (!IsExamInDateRange(row.Status, window, filterStartDate.Value, filterEndDate.Value, isDefaultDateRange)) excludedBoundaryIds.Add(row.Id);
+			else boundaryStatuses[row.Id] = ExamScheduleStatusResolver.Resolve(row.Status, window.StartAt, window.EndAt, utcNow);
+		}
+		var pendingBoundaryIds = boundaryStatuses.Where(entry => entry.Value == ExamStatus.Pending).Select(entry => entry.Key).ToList();
+		var publishedBoundaryIds = boundaryStatuses.Where(entry => entry.Value == ExamStatus.Published).Select(entry => entry.Key).ToList();
+		var ongoingBoundaryIds = boundaryStatuses.Where(entry => entry.Value == ExamStatus.Ongoing).Select(entry => entry.Key).ToList();
+		var completedBoundaryIds = boundaryStatuses.Where(entry => entry.Value == ExamStatus.Completed).Select(entry => entry.Key).ToList();
+		query = query.Where(row => !excludedBoundaryIds.Contains(row.exam.Id) && (boundaryIds.Contains(row.exam.Id) ||
+			(!row.exam.ExamSubjects.Any(subject => subject.ExamDate.HasValue) && (isDefaultDateRange || row.exam.Status == ExamStatus.Pending)) ||
+			(row.exam.ExamSubjects.Any(subject => subject.ExamDate.HasValue && subject.ExamDate.Value.Date <= rangeEndDate) &&
+			 row.exam.ExamSubjects.Any(subject => subject.ExamDate.HasValue &&
+				 (subject.ExamDate.Value.Date > rangeStartDate || (subject.ExamDate.Value.Date == rangeStartDate &&
+					 (!subject.EndTime.HasValue || (subject.EndTime.Value.Hour * 3600 + subject.EndTime.Value.Minute * 60 + subject.EndTime.Value.Second) >= rangeStartSecond)))))));
+		var coarseStatusRows = query.Select(row => new
+		{
+			Id = row.exam.Id,
+			row.exam.CreationTime,
+			EffectiveStatus = row.exam.Status == ExamStatus.Pending || !row.exam.ExamSubjects.Any(subject => subject.ExamDate.HasValue)
+				? ExamStatus.Pending
+				: row.exam.ExamSubjects.Any(subject => subject.ExamDate.HasValue &&
+					(subject.ExamDate.Value.Date < todayInInstitution || (subject.ExamDate.Value.Date == todayInInstitution &&
+					 (!subject.StartTime.HasValue || (subject.StartTime.Value.Hour * 3600 + subject.StartTime.Value.Minute * 60 + subject.StartTime.Value.Second) <= currentSecond)))) &&
+				  row.exam.ExamSubjects.Any(subject => subject.ExamDate.HasValue &&
+					(subject.ExamDate.Value.Date > todayInInstitution || (subject.ExamDate.Value.Date == todayInInstitution &&
+					 (!subject.EndTime.HasValue || (subject.EndTime.Value.Hour * 3600 + subject.EndTime.Value.Minute * 60 + subject.EndTime.Value.Second) >= currentSecond))))
+					? ExamStatus.Ongoing
+					: !row.exam.ExamSubjects.Any(subject => subject.ExamDate.HasValue &&
+						(subject.ExamDate.Value.Date > todayInInstitution || (subject.ExamDate.Value.Date == todayInInstitution &&
+						 (!subject.EndTime.HasValue || (subject.EndTime.Value.Hour * 3600 + subject.EndTime.Value.Minute * 60 + subject.EndTime.Value.Second) >= currentSecond))))
+						? ExamStatus.Completed : row.exam.Status
+		});
+		var rowsWithEffectiveStatus = coarseStatusRows.Select(row => new
+		{
+			row.Id, row.CreationTime,
+			EffectiveStatus = pendingBoundaryIds.Contains(row.Id) ? ExamStatus.Pending :
+				publishedBoundaryIds.Contains(row.Id) ? ExamStatus.Published :
+				ongoingBoundaryIds.Contains(row.Id) ? ExamStatus.Ongoing :
+				completedBoundaryIds.Contains(row.Id) ? ExamStatus.Completed : row.EffectiveStatus
+		});
+		var counts = await AsyncExecuter.ToListAsync(rowsWithEffectiveStatus.GroupBy(row => row.EffectiveStatus)
+			.Select(group => new { Status = group.Key, Count = group.Count() }));
+		var statusCounts = counts.ToDictionary(count => count.Status, count => count.Count);
+		var pendingCount = statusCounts.GetValueOrDefault(ExamStatus.Pending);
+		var publishedCount = statusCounts.GetValueOrDefault(ExamStatus.Published);
+		var ongoingCount = statusCounts.GetValueOrDefault(ExamStatus.Ongoing);
+		var completedCount = statusCounts.GetValueOrDefault(ExamStatus.Completed);
+		var filteredRows = rowsWithEffectiveStatus.Where(row => !input.Status.HasValue || row.EffectiveStatus == input.Status.Value);
+		var totalCount = input.Status.HasValue ? statusCounts.GetValueOrDefault(input.Status.Value) : counts.Sum(count => count.Count);
+		var selectedPage = await AsyncExecuter.ToListAsync(filteredRows.OrderBy(row => row.CreationTime)
+			.Skip(input.SkipCount).Take(input.MaxResultCount));
+		var pageIds = selectedPage.Select(row => row.Id).ToList();
 		// Project setup names instead of entities: Standard and Stage have model auto-includes
 		// that otherwise expand a small exam page into the whole academic setup graph.
 		var pageDetails = await AsyncExecuter.ToListAsync(query.Where(row => pageIds.Contains(row.exam.Id))
 			.Select(row => new { row.exam, StandardName = row.standard.Name, ExamTypeName = row.examType.Name }));
 		var detailsById = pageDetails.ToDictionary(row => row.exam.Id);
-		var queryResult = selectedPage.Where(row => detailsById.ContainsKey(row.Row.Id)).Select(row => new
+		var queryResult = selectedPage.Where(row => detailsById.ContainsKey(row.Id)).Select(row => new
 		{
-			detailsById[row.Row.Id].exam,
-			detailsById[row.Row.Id].StandardName,
-			detailsById[row.Row.Id].ExamTypeName,
+			detailsById[row.Id].exam,
+			detailsById[row.Id].StandardName,
+			detailsById[row.Id].ExamTypeName,
 			row.EffectiveStatus
 		}).ToList();
 
@@ -1333,6 +1386,7 @@ public class ExamAppService(
 
 		var incompleteSubjectIds = new List<Guid>();
 		var divisionIds = exam.ExamDivisions.Select(x => x.DivisionId).ToList();
+		var validateCalendarDate = CreateExamCalendarValidator(exam.StandardId, divisionIds, exam.ExamSubjects.Select(subject => subject.ExamDate));
 
 		foreach (var subject in exam.ExamSubjects.Where(subject => !electiveGroupBySubjectId.ContainsKey(subject.SubjectId)))
 		{
@@ -1343,7 +1397,7 @@ public class ExamAppService(
 			}
 
 			ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
-			await EnsureExamDateAllowedAsync(exam.StandardId, divisionIds, subject.ExamDate.Value);
+			await validateCalendarDate(subject.ExamDate.Value);
 		}
 
 		var electiveGroups = exam.ExamSubjects
@@ -1371,7 +1425,7 @@ public class ExamAppService(
 				}
 
 				ValidateSubjectScheduleValues(subject.SubjectId, subject.ExamDate, subject.StartTime, subject.EndTime, subject.TotalMarks, subject.PassingMarks);
-				await EnsureExamDateAllowedAsync(exam.StandardId, divisionIds, subject.ExamDate.Value);
+				await validateCalendarDate(subject.ExamDate.Value);
 			}
 		}
 
@@ -1517,6 +1571,7 @@ public class ExamAppService(
 	private sealed record ExamListCandidate(Guid Id, Guid StandardId, Guid StageId, Guid MediumId,
 		ExamStatus Status, List<Guid> DivisionIds, List<ExamListSubjectSchedule> Subjects);
 	private sealed record ExamListSubjectSchedule(Guid SubjectId, DateTime? ExamDate, DateTime? StartTime, DateTime? EndTime);
+	private sealed record ExamListBoundaryCandidate(Guid Id, ExamStatus Status, List<ExamListSubjectSchedule> Subjects);
 	private sealed record ExamScheduleWindow(DateTime? FirstDate, DateTime? StartAt, DateTime? EndAt);
 
 	private static DateTime? GetExamFinalEndAt(Exam exam)
@@ -1676,6 +1731,7 @@ public class ExamAppService(
 				.WithData("ElectiveGroupId", emptyElectiveGroup.Key);
 		}
 
+		var validateCalendarDate = CreateExamCalendarValidator(exam.StandardId, exam.ExamDivisions.Select(division => division.DivisionId), rows.Select(row => row.ExamDate));
 		foreach (var row in rows)
 		{
 			var subjectId = row.ElectiveGroupId ?? row.SubjectId;
@@ -1688,7 +1744,7 @@ public class ExamAppService(
 			ValidateSubjectScheduleValues(subjectId, row.ExamDate, row.StartTime, row.EndTime, row.TotalMarks, row.PassingMarks);
 			if (row.ExamDate.HasValue)
 			{
-				await EnsureExamDateAllowedAsync(exam.StandardId, exam.ExamDivisions.Select(x => x.DivisionId), row.ExamDate.Value);
+				await validateCalendarDate(row.ExamDate.Value);
 			}
 		}
 
@@ -1769,29 +1825,6 @@ public class ExamAppService(
 		return leftElectiveGroupId.HasValue &&
 			rightElectiveGroupId.HasValue &&
 			leftElectiveGroupId.Value == rightElectiveGroupId.Value;
-	}
-
-	private async Task EnsureExamDateAllowedAsync(Guid standardId, IEnumerable<Guid> divisionIds, DateTime examDate)
-	{
-		var date = examDate.Date;
-		var divisionSet = divisionIds.ToHashSet();
-		var blockedDays = await calendarDayRepository.GetListAsync(day =>
-			day.Status == CalendarDayStatus.Active &&
-			day.Date.Date == date &&
-			(day.AppliesToAll ||
-				(day.StandardId.HasValue && day.StandardId.Value == standardId) ||
-				(day.DivisionId.HasValue && divisionSet.Contains(day.DivisionId.Value))));
-
-		var blockingDay = blockedDays.FirstOrDefault(day => CalendarDayBlockingRules.BlocksExamSchedule(day.DayType));
-		if (blockingDay != null)
-		{
-			var message = $"Cannot publish this exam because the scheduled date {date:dd MMM yyyy} conflicts with {blockingDay.DayType.ToString().ToLowerInvariant()} '{blockingDay.Title}' in the Academic Calendar.";
-			throw new BusinessException("ShikshaMitra.Exam:ScheduleDateBlockedByCalendar", message)
-				.WithData("ExamDate", date.ToString("yyyy-MM-dd"))
-				.WithData("CalendarDay", blockingDay.Title)
-				.WithData("DayType", blockingDay.DayType)
-				.WithData("message", message);
-		}
 	}
 
 	private async Task SyncScheduleToAcademicCalendarAsync(Exam exam, IReadOnlyCollection<NormalizedExamSubjectSchedule> subjectSchedules)
@@ -2144,24 +2177,21 @@ public class ExamAppService(
 
 	private async Task<List<Guid>> GetRequiredSubjectIdsForDivisionAsync(Exam exam, Guid divisionId)
 	{
-		var subjectIds = new List<Guid>();
-		foreach (var examSubject in exam.ExamSubjects)
-		{
-			var electiveGroupId = await GetElectiveGroupIdForSubjectAsync(exam.StandardId, examSubject.SubjectId);
-			if (!electiveGroupId.HasValue)
-			{
-				subjectIds.Add(examSubject.SubjectId);
-				continue;
-			}
-
-			var eligibleStudents = await GetEligibleStudentsForSubjectAsync(exam, examSubject.SubjectId, divisionId);
-			if (eligibleStudents.Count > 0)
-			{
-				subjectIds.Add(examSubject.SubjectId);
-			}
-		}
-
-		return subjectIds.Distinct().ToList();
+		var subjectIds = exam.ExamSubjects.Select(subject => subject.SubjectId).Distinct().ToList();
+		var assignments = await AsyncExecuter.ToListAsync((await assignmentRepository.GetQueryableAsync())
+			.Where(assignment => assignment.StandardId == exam.StandardId && subjectIds.Contains(assignment.SubjectId) && assignment.ElectiveGroupId.HasValue)
+			.Select(assignment => new { assignment.SubjectId, GroupId = assignment.ElectiveGroupId!.Value }));
+		var groups = assignments.GroupBy(assignment => assignment.SubjectId)
+			.ToDictionary(group => group.Key, group => group.First().GroupId);
+		if (groups.Count == 0) return subjectIds;
+		var students = (await studentRepository.GetQueryableAsync()).Where(student => student.DivisionId == divisionId &&
+			student.Status == StudentLifeCycleStatusEnum.Enrolled && student.AdmissionApprovalStatus == StudentEnrollmentApprovalState.Approved && !student.IsDeleted);
+		var groupIds = groups.Values.Distinct().ToList();
+		var selections = await AsyncExecuter.ToListAsync((await studentElectiveSelectionRepository.GetQueryableAsync())
+			.Where(selection => selection.IsLocked && groupIds.Contains(selection.ElectiveGroupId) && students.Any(student => student.Id == selection.StudentId))
+			.Select(selection => new { selection.ElectiveGroupId, selection.SelectedSubjectId }).Distinct());
+		var selected = selections.Select(selection => (selection.ElectiveGroupId, selection.SelectedSubjectId)).ToHashSet();
+		return subjectIds.Where(id => !groups.TryGetValue(id, out var groupId) || selected.Contains((groupId, id))).ToList();
 	}
 
 	private async Task EnsureElectiveSubjectUsableForDivisionAsync(Exam exam, Guid subjectId, Guid divisionId)
@@ -2518,22 +2548,13 @@ public class ExamAppService(
 		var examSubject = exam.ExamSubjects.FirstOrDefault(s => s.SubjectId == input.SubjectId)
 			?? throw new UserFriendlyException("Subject not found in this exam.");
 
-		var subjectList = await subjectRepository.GetListAsync(s => s.Id == input.SubjectId);
-		var subject = subjectList.FirstOrDefault();
-
-		var divisionList = await divisionRepository.GetListAsync(d => d.Id == input.DivisionId);
-		var division = divisionList.FirstOrDefault();
-
-		var standardList = await standardRepository.GetListAsync(s => s.Id == exam.StandardId);
-		var standard = standardList.FirstOrDefault();
-
-		var enrolledStudents = await GetEligibleStudentsForSubjectAsync(exam, input.SubjectId, input.DivisionId);
-
-		var existingMarks = await examMarkRepository.GetListAsync(m =>
-			m.ExamId == input.ExamId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId);
-
-		var marksEntered = existingMarks.Count(m => m.MarksObtained.HasValue);
-		var totalStudents = enrolledStudents.Count;
+		var subjectName = await AsyncExecuter.FirstOrDefaultAsync((await subjectRepository.GetQueryableAsync()).Where(s => s.Id == input.SubjectId).Select(s => s.Name));
+		var divisionName = await AsyncExecuter.FirstOrDefaultAsync((await divisionRepository.GetQueryableAsync()).Where(d => d.Id == input.DivisionId).Select(d => d.Name));
+		var standardName = await AsyncExecuter.FirstOrDefaultAsync((await standardRepository.GetQueryableAsync()).Where(s => s.Id == exam.StandardId).Select(s => s.Name));
+		var (enrolledStudents, _) = await GetEligibleStudentsQueryAsync(exam, input.SubjectId, input.DivisionId);
+		var totalStudents = await AsyncExecuter.CountAsync(enrolledStudents);
+		var marksEntered = await AsyncExecuter.CountAsync((await examMarkRepository.GetQueryableAsync()).Where(m =>
+			m.ExamId == input.ExamId && m.SubjectId == input.SubjectId && m.DivisionId == input.DivisionId && m.MarksObtained.HasValue));
 		var pending = totalStudents - marksEntered;
 
 		var allWorkflowStates = await examMarksWorkflowStateRepository.GetListAsync(
@@ -2553,9 +2574,9 @@ public class ExamAppService(
 		{
 			ExamId = exam.Id,
 			ExamName = exam.ExamName,
-			SubjectName = subject?.Name ?? string.Empty,
-			ClassName = standard?.Name ?? string.Empty,
-			DivisionName = division?.Name ?? string.Empty,
+			SubjectName = subjectName ?? string.Empty,
+			ClassName = standardName ?? string.Empty,
+			DivisionName = divisionName ?? string.Empty,
 			MaxMarks = examSubject.TotalMarks ?? 0,
 			PassingMarks = examSubject.PassingMarks ?? 0,
 			ExamDate = examSubject.ExamDate,
@@ -2864,27 +2885,25 @@ public class ExamAppService(
 		await EnsureMarksWorkflowTargetAsync(examId, subjectId, divisionId);
 		var result = new List<GradeEntryAuditLogDto>();
 
-		var marks = await examMarkRepository.GetListAsync(m =>
+		var marks = (await examMarkRepository.GetQueryableAsync()).Where(m =>
 			m.ExamId == examId && m.SubjectId == subjectId && m.DivisionId == divisionId);
+		var markCount = await AsyncExecuter.CountAsync(marks);
+		var lastMark = await AsyncExecuter.FirstOrDefaultAsync(marks
+			.OrderByDescending(mark => mark.LastModificationTime ?? mark.CreationTime)
+			.Select(mark => new { Timestamp = mark.LastModificationTime ?? mark.CreationTime, ActorId = mark.LastModifierId ?? mark.CreatorId }));
 
 		var state = (await examMarksWorkflowStateRepository.GetListAsync(
 			w => w.ExamId == examId && w.SubjectId == subjectId && w.DivisionId == divisionId))
 			.FirstOrDefault();
 
-		// Fetch user details for modifier/creator
-		var userIds = marks.Select(m => m.LastModifierId ?? m.CreatorId)
-			.Where(id => id.HasValue)
-			.Select(id => id!.Value)
-			.Distinct()
-			.ToList();
-
-		if (state?.LastModifierId.HasValue == true)
-			userIds.Add(state.LastModifierId.Value);
-
-		var users = userIds.Count > 0
-			? await identityUserRepository.GetListAsync(u => userIds.Contains(u.Id))
-			: new List<IdentityUser>();
-		var userDict = users.ToDictionary(u => u.Id, u => u.Name ?? u.UserName);
+		var userIds = new List<Guid>();
+		if (lastMark?.ActorId is Guid actorId) userIds.Add(actorId);
+		if (state?.LastModifierId is Guid modifierId) userIds.Add(modifierId);
+		else if (state?.CreatorId is Guid creatorId && await AsyncExecuter.AnyAsync(marks.Where(mark => (mark.LastModifierId ?? mark.CreatorId) == creatorId)))
+			userIds.Add(creatorId);
+		var users = await AsyncExecuter.ToListAsync((await identityUserRepository.GetQueryableAsync())
+			.Where(user => userIds.Contains(user.Id)).Select(user => new { user.Id, Name = user.Name ?? user.UserName }));
+		var userDict = users.ToDictionary(user => user.Id, user => user.Name);
 
 		string GetUserName(Guid? id) => id.HasValue && userDict.TryGetValue(id.Value, out var name) ? name : "System";
 
@@ -2899,15 +2918,14 @@ public class ExamAppService(
 			});
 		}
 
-		var lastMark = marks.OrderByDescending(m => m.LastModificationTime ?? m.CreationTime).FirstOrDefault();
 		if (lastMark != null)
 		{
 			result.Add(new GradeEntryAuditLogDto
 			{
-				Timestamp = lastMark.LastModificationTime ?? lastMark.CreationTime,
+				Timestamp = lastMark.Timestamp,
 				Action = "Marks Modified",
-				ChangedBy = GetUserName(lastMark.LastModifierId ?? lastMark.CreatorId),
-				Details = $"Latest changes applied to student records. Active count of records: {marks.Count}."
+				ChangedBy = GetUserName(lastMark.ActorId),
+				Details = $"Latest changes applied to student records. Active count of records: {markCount}."
 			});
 		}
 

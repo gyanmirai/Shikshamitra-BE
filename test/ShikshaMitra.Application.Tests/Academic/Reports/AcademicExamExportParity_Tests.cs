@@ -20,7 +20,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Reports;
 
-public class AcademicExamExportParity_Tests : SubjectTeacherReassignmentTestBase
+public partial class AcademicExamExportParity_Tests : SubjectTeacherReassignmentTestBase
 {
     public static IEnumerable<object[]> ReportCases()
     {
@@ -197,6 +197,17 @@ public class AcademicExamExportParity_Tests : SubjectTeacherReassignmentTestBase
                 var db = await GetRequiredService<IDbContextProvider<ShikshaMitraDbContext>>().GetDbContextAsync();
                 db.ChangeTracker.Clear();
                 var expected = await generator.GenerateAsync(request, ActorId, TenantId, true);
+                foreach (var page in new[] { 1, 2, 999 })
+                {
+                    db.ChangeTracker.Clear(); request.Page = page; request.PageSize = 1;
+                    var preview = await generator.GenerateAsync(request, ActorId, TenantId, false);
+                    preview.TotalCount.ShouldBe(expected.TotalCount);
+                    var expectedPage = expected.Rows.Skip(page - 1).Take(1).ToList();
+                    preview.Rows.Count.ShouldBe(expectedPage.Count);
+                    for (var index = 0; index < expectedPage.Count; index++)
+                        preview.Rows[index].OrderBy(pair => pair.Key).ShouldBe(expectedPage[index].OrderBy(pair => pair.Key), $"{reportType}, preview page {page}");
+                    db.ChangeTracker.Entries<ExamMark>().ShouldBeEmpty();
+                }
                 db.ChangeTracker.Clear();
                 var export = await generator.GenerateExportAsync(request, ActorId, TenantId, batchSize: 1);
                 var actual = new List<Dictionary<string, string?>>();

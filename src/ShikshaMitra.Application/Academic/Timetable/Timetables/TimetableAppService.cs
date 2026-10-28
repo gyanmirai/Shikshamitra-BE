@@ -25,7 +25,7 @@ namespace ShikshaMitra.Academic.Timetable.Timetables;
 
 [RemoteService(IsEnabled = false)]
 [Authorize]
-public class TimetableAppService(
+public partial class TimetableAppService(
     ITimetableRepository timetableRepository,
     TimetableManager timetableManager,
     ILectureSlotConfigRepository lectureSlotConfigRepository,
@@ -580,7 +580,7 @@ public class TimetableAppService(
         var standard = await standardRepository.GetAsync(standardId);
         var divisionQueryable = await divisionRepository.GetQueryableAsync();
         var divisions = await AsyncExecuter.ToListAsync(
-            divisionQueryable.Where(d => d.StandardId == standardId).OrderBy(d => d.Name));
+            divisionQueryable.Where(d => d.StandardId == standardId).OrderBy(d => d.Name).Select(d => new { d.Id, d.Name }));
 
         if (!scope.IsAdmin && !scope.HasTenantWideScope())
         {
@@ -603,8 +603,10 @@ public class TimetableAppService(
             .Take(input.MaxResultCount)
             .ToList();
 
-        var timetables = await timetableRepository.GetByStandardIdAsync(standardId);
-        var allTimetables = await timetableRepository.GetAllWithSlotsAsync();
+        var pageDivisionIds = pagedDivisions.Select(division => division.Id).ToArray();
+        var timetables = await AsyncExecuter.ToListAsync((await timetableRepository.WithDetailsAsync())
+            .Where(timetable => timetable.StandardId == standardId && Enumerable.Contains(pageDivisionIds, timetable.DivisionId)));
+        var conflictCandidates = await LoadManagementConflictCandidatesAsync(timetables);
         var weeklySlot = await weeklyLectureSlotRepository.FindByStandardIdAsync(standardId);
         var assignedSubjectsQueryable = await assignedSubjectRepository.WithDetailsAsync(a => a.Teachers);
         var assignedSubjects = await AsyncExecuter.ToListAsync(
@@ -713,13 +715,6 @@ public class TimetableAppService(
                     }
                 }
 
-                // 2. Cross-class/division conflicts with any active timetable.
-                var otherTimetables = allTimetables
-                    .Where(t =>
-                        (t.StandardId != tt.StandardId || t.DivisionId != tt.DivisionId) &&
-                        t.Status != TimetableStatus.NotCreated)
-                    .ToList();
-
                 foreach (var slot in tt.Slots.Where(s => s.SlotType == SlotType.Period))
                 {
                     var teacherIds = slot.Subjects.Where(sub => sub.TeacherId.HasValue).Select(sub => sub.TeacherId!.Value).ToList();
@@ -727,17 +722,15 @@ public class TimetableAppService(
 
                     if (teacherIds.Count > 0 || roomIds.Count > 0)
                     {
-                        foreach (var otherTt in otherTimetables)
+                        var otherTimetables = conflictCandidates[(slot.Day, slot.StartTime, slot.EndTime)]
+                            .Where(candidate => candidate.StandardId != tt.StandardId || candidate.DivisionId != tt.DivisionId)
+                            .GroupBy(candidate => candidate.TimetableId);
+                        foreach (var otherSlots in otherTimetables)
                         {
-                            var otherSlot = otherTt.Slots.FirstOrDefault(s => s.Day == slot.Day && s.StartTime == slot.StartTime && s.EndTime == slot.EndTime);
-                            if (otherSlot != null)
-                            {
-                                var otherTeacherIds = otherSlot.Subjects.Where(sub => sub.TeacherId.HasValue).Select(sub => sub.TeacherId!.Value);
-                                var otherRoomIds = otherSlot.Subjects.Where(sub => sub.RoomId.HasValue).Select(sub => sub.RoomId!.Value);
-
-                                conflictCount += teacherIds.Intersect(otherTeacherIds).Count();
-                                conflictCount += roomIds.Intersect(otherRoomIds).Count();
-                            }
+                            conflictCount += teacherIds.Intersect(otherSlots.Where(candidate => candidate.TeacherId.HasValue)
+                                .Select(candidate => candidate.TeacherId!.Value)).Count();
+                            conflictCount += roomIds.Intersect(otherSlots.Where(candidate => candidate.RoomId.HasValue)
+                                .Select(candidate => candidate.RoomId!.Value)).Count();
                         }
                     }
                 }

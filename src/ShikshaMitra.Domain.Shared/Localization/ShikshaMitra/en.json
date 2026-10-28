@@ -877,6 +877,8 @@
         "Permission:Finance.Accounts.CashManagement.View": "View cash management",
         "Permission:Finance.Accounts.CashManagement.Approve": "Approve collected cash",
         "Permission:Finance.Accounts.CashManagement.Deposit": "Record bank deposits",
-        "Permission:Finance.Accounts.CashManagement.Reconcile": "Confirm bank credits"
+        "Permission:Finance.Accounts.CashManagement.Reconcile": "Confirm bank credits",
+        "ShikshaMitra:AcademicSetup:Invalid": "Choose a valid Academic setup stage, setting and school context before saving.",
+        "ShikshaMitra:AcademicSetup:InvalidStoredState": "The saved Academic setup guide state is invalid. Contact a school administrator to review it."
     }
 }

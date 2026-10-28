@@ -8,6 +8,7 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students;
 using Volo.Abp;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.Guids;
 
@@ -23,12 +24,40 @@ public class StudentElectiveAssignmentAppService(
 	ILogger<StudentElectiveAssignmentAppService> logger
 ) : ApplicationService, IStudentElectiveAssignmentAppService
 {
+	public async Task<List<ElectiveSelectionCountDto>> GetSelectionCountsAsync(ElectiveSelectionCountsRequestDto input)
+	{
+		var groupIds = input.ElectiveGroupIds.Distinct().ToArray();
+		var divisionIds = input.DivisionIds.Distinct().ToArray();
+		if (groupIds.Length == 0 || divisionIds.Length == 0) return [];
+		var groups = await electiveGroupRepository.GetQueryableAsync();
+		var foundGroups = await AsyncExecuter.ToListAsync(groups.Where(group => Enumerable.Contains(groupIds, group.Id))
+			.Select(group => group.Id));
+		var missing = groupIds.Where(id => !foundGroups.Contains(id)).ToList();
+		if (missing.Count > 0) throw new EntityNotFoundException(typeof(ElectiveGroup), missing[0]);
+		var students = (await studentRepository.GetQueryableAsync()).Where(student =>
+			student.AcademicMediumId == input.AcademicMediumId && student.StandardId == input.ClassId &&
+			student.DivisionId.HasValue && Enumerable.Contains(divisionIds, student.DivisionId.Value));
+		var selections = (await selectionRepository.GetQueryableAsync()).Where(selection =>
+			Enumerable.Contains(groupIds, selection.ElectiveGroupId));
+		var query = from student in students
+			join selection in selections on student.Id equals selection.StudentId
+			group selection by new { selection.ElectiveGroupId, DivisionId = student.DivisionId!.Value, selection.SelectedSubjectId } into grouped
+			select new ElectiveSelectionCountDto
+			{
+				ElectiveGroupId = grouped.Key.ElectiveGroupId, DivisionId = grouped.Key.DivisionId,
+				SubjectId = grouped.Key.SelectedSubjectId, Count = grouped.Count()
+			};
+		return await AsyncExecuter.ToListAsync(query.OrderBy(row => row.ElectiveGroupId)
+			.ThenBy(row => row.DivisionId).ThenBy(row => row.SubjectId));
+	}
+
 	public async Task<PaginatedStudentElectiveResponseDto> GetStudentElectiveAssignmentsAsync(
 		Guid academicMediumId,
 		Guid classId,
 		Guid divisionId,
 		Guid electiveGroupId,
-		string? search = null
+		string? search = null,
+		bool includeSelectableSubjects = true
 	)
 	{
 		logger.LogInformation(
@@ -57,7 +86,8 @@ public class StudentElectiveAssignmentAppService(
 		var students = await AsyncExecuter.ToListAsync(studentsQuery
 			.OrderBy(s => s.RollNo == null)
 			.ThenBy(s => s.RollNo)
-			.ThenBy(s => s.Id));
+			.ThenBy(s => s.Id)
+			.Select(student => new { student.Id, student.FirstName, student.MiddleName, student.LastName, student.RollNo }));
 
 		// Get the elective group with subjects
 		var electiveGroup = await electiveGroupRepository.GetAsync(
@@ -67,31 +97,32 @@ public class StudentElectiveAssignmentAppService(
 
 		// Get subject details
 		var subjectIds = electiveGroup.Subjects.Select(s => s.SubjectId).ToList();
-		var subjects = await subjectRepository.GetListAsync(s => subjectIds.Contains(s.Id));
-		var subjectOptions = subjects
+		var subjects = await subjectRepository.GetQueryableAsync();
+		var subjectOptions = await AsyncExecuter.ToListAsync(subjects.Where(subject => Enumerable.Contains(subjectIds, subject.Id))
 			.Select(s => new ElectiveSubjectOptionDto
 			{
 				SubjectId = s.Id,
 				SubjectName = s.Name,
 				SubjectColor = s.Color
-			})
-			.ToList();
+			}));
 		var subjectLookup = subjectOptions.ToDictionary(s => s.SubjectId);
 
 		// Get existing selections
 		var studentIds = students.Select(s => s.Id).ToList();
-		var selections = await selectionRepository.GetListAsync(s =>
-			studentIds.Contains(s.StudentId) &&
-			s.ElectiveGroupId == electiveGroupId
-		);
+		var selections = await AsyncExecuter.ToListAsync((await selectionRepository.GetQueryableAsync())
+			.Where(selection => Enumerable.Contains(studentIds, selection.StudentId) && selection.ElectiveGroupId == electiveGroupId)
+			.Select(selection => new { selection.StudentId, selection.SelectedSubjectId, selection.StudentPreference, selection.IsLocked }));
+		var selectionsByStudent = selections.GroupBy(selection => selection.StudentId)
+			.ToDictionary(group => group.Key, group => group.First());
 
 		var result = new PaginatedStudentElectiveResponseDto
 		{
 			TotalRecords = students.Count,
 			IsLocked = selections.Any() && selections.All(s => s.IsLocked),
+			SubjectOptions = subjectOptions,
 			Records = students.Select(student =>
 			{
-				var selection = selections.FirstOrDefault(s => s.StudentId == student.Id);
+				selectionsByStudent.TryGetValue(student.Id, out var selection);
 				ElectiveSubjectOptionDto? selectedSubjectOption = null;
 				if (selection != null && subjectLookup.TryGetValue(selection.SelectedSubjectId, out var option))
 				{
@@ -112,7 +143,7 @@ public class StudentElectiveAssignmentAppService(
 					SelectedSubjectId = selection?.SelectedSubjectId,
 					SelectedSubjectName = selectedSubjectOption?.SubjectName,
 					StudentPreference = selection?.StudentPreference,
-					SelectableSubjects = subjectOptions.ToList()
+					SelectableSubjects = includeSelectableSubjects ? subjectOptions : []
 				};
 			}).ToList()
 		};

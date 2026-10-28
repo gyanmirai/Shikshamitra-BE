@@ -14,7 +14,7 @@ using Xunit;
 
 namespace ShikshaMitra.Academic.Audit;
 
-public class AcademicAuditScope_Tests
+public partial class AcademicAuditScope_Tests
     : ShikshaMitraApplicationTestBase<ShikshaMitraApplicationTestModule>
 {
     [Fact]

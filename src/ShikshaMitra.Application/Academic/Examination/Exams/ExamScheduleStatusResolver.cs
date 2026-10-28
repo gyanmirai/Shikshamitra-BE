@@ -24,7 +24,7 @@ internal static class ExamScheduleStatusResolver
 			return ExamStatus.Pending;
 		}
 
-		var institutionNow = TimeZoneInfo.ConvertTimeFromUtc(NormalizeUtc(utcNow), InstitutionTimeZone);
+		var institutionNow = GetInstitutionNow(utcNow);
 		if (institutionNow >= scheduledStart.Value && institutionNow <= scheduledEnd.Value)
 		{
 			return ExamStatus.Ongoing;
@@ -32,6 +32,9 @@ internal static class ExamScheduleStatusResolver
 
 		return institutionNow > scheduledEnd.Value ? ExamStatus.Completed : persistedStatus;
 	}
+
+	public static DateTime GetInstitutionNow(DateTime utcNow) =>
+		TimeZoneInfo.ConvertTimeFromUtc(NormalizeUtc(utcNow), InstitutionTimeZone);
 
 	private static DateTime NormalizeUtc(DateTime value) => value.Kind switch
 	{

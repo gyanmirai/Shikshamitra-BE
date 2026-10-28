@@ -7,32 +7,40 @@ using ShikshaMitra.Academic.Curriculum.Settings;
 using ShikshaMitra.Students;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Domain.Repositories;
+using Volo.Abp.Linq;
 
 namespace ShikshaMitra.Academic.Examination.Exams;
 
 public class StudentExamSubjectApplicabilityResolver(
     IRepository<AssignedSubject, Guid> assignedSubjectRepository,
-    IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository)
+    IRepository<StudentElectiveSelection, Guid> studentElectiveSelectionRepository,
+    IAsyncQueryableExecuter asyncExecuter)
     : ITransientDependency
 {
-    public async Task<Dictionary<Guid, HashSet<Guid>>> ResolveAsync(
+    public Task<Dictionary<Guid, HashSet<Guid>>> ResolveAsync(
         Exam exam,
         IReadOnlyCollection<Student> students,
+        bool readOnly = false)
+        => ResolveAsync(exam, students.Select(student => student.Id).ToList(), readOnly);
+
+    public async Task<Dictionary<Guid, HashSet<Guid>>> ResolveAsync(
+        Exam exam,
+        IReadOnlyCollection<Guid> students,
         bool readOnly = false)
     {
         using var assignmentTracking = readOnly ? assignedSubjectRepository.DisableTracking() : null;
         using var selectionTracking = readOnly ? studentElectiveSelectionRepository.DisableTracking() : null;
         var examSubjectIds = exam.ExamSubjects.Select(subject => subject.SubjectId).ToHashSet();
-        var result = students.ToDictionary(student => student.Id, _ => new HashSet<Guid>());
+        var result = students.ToDictionary(student => student, _ => new HashSet<Guid>());
         if (students.Count == 0 || examSubjectIds.Count == 0)
         {
             return result;
         }
 
-        var electiveAssignments = await assignedSubjectRepository.GetListAsync(assignment =>
+        var electiveAssignments = await asyncExecuter.ToListAsync((await assignedSubjectRepository.GetQueryableAsync()).Where(assignment =>
             assignment.StandardId == exam.StandardId &&
             examSubjectIds.Contains(assignment.SubjectId) &&
-            assignment.ElectiveGroupId.HasValue);
+            assignment.ElectiveGroupId.HasValue).Select(assignment => new { assignment.SubjectId, assignment.ElectiveGroupId }));
         var electiveGroupBySubjectId = electiveAssignments
             .GroupBy(assignment => assignment.SubjectId)
             .ToDictionary(group => group.Key, group => group.First().ElectiveGroupId!.Value);
@@ -46,12 +54,12 @@ public class StudentExamSubjectApplicabilityResolver(
             return result;
         }
 
-        var studentIds = students.Select(student => student.Id).ToHashSet();
+        var studentIds = students.ToHashSet();
         var electiveGroupIds = electiveGroupBySubjectId.Values.ToHashSet();
-        var selections = await studentElectiveSelectionRepository.GetListAsync(selection =>
+        var selections = await asyncExecuter.ToListAsync((await studentElectiveSelectionRepository.GetQueryableAsync()).Where(selection =>
             studentIds.Contains(selection.StudentId) &&
             electiveGroupIds.Contains(selection.ElectiveGroupId) &&
-            selection.IsLocked);
+            selection.IsLocked).Select(selection => new { selection.StudentId, selection.ElectiveGroupId, selection.SelectedSubjectId }));
         var selectionByStudentAndGroup = selections
             .GroupBy(selection => (selection.StudentId, selection.ElectiveGroupId))
             .ToDictionary(group => group.Key, group => group.First().SelectedSubjectId);
@@ -63,7 +71,7 @@ public class StudentExamSubjectApplicabilityResolver(
 
         foreach (var student in students)
         {
-            var applicableSubjectIds = result[student.Id];
+            var applicableSubjectIds = result[student];
             foreach (var examSubjectId in examSubjectIds)
             {
                 if (!electiveGroupBySubjectId.TryGetValue(examSubjectId, out var electiveGroupId))
@@ -72,7 +80,7 @@ public class StudentExamSubjectApplicabilityResolver(
                     continue;
                 }
 
-                if (!selectionByStudentAndGroup.TryGetValue((student.Id, electiveGroupId), out var selectedSubjectId) ||
+                if (!selectionByStudentAndGroup.TryGetValue((student, electiveGroupId), out var selectedSubjectId) ||
                     !examSubjectIdsByElectiveGroup[electiveGroupId].Contains(selectedSubjectId))
                 {
                     // Fail closed for incomplete or stale elective configuration so readiness

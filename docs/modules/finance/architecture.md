@@ -3,7 +3,7 @@ module: finance
 domain: architecture
 content_type: Reference
 status: canonical
-updated_on: 2026-10-23
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -53,6 +53,10 @@ Proration integration uses `AdmissionProrationPolicyResolver` for the Finance ye
 | Derive student scope server-side | Caller-supplied scope can leak or corrupt Finance data |
 | Preserve maker-checker restrictions | Finance approvals must be traceable and separated from creation |
 | Update report docs with calculation changes | Report accuracy is a production requirement |
+
+## Family charge reads
+
+`Application/Finance/Mobile/MobileFamilyChargeReader.cs` is the canonical tenant/child/year read model for approved and voided charges, owned collection allocations, effective waivers and processed/reversed refunds. It feeds `MobileFinanceReadService.Charges.cs` and the compatible approved-only legacy projection used by overview and statement. `Application.Contracts/Finance/Mobile/MobileFinanceChargeDtos.cs` owns the additive wire DTOs; `MobileFinanceController.Charges.cs` remains thin. New operations use the existing `MobileFinanceAccessService` and exact Charges View permission; receipt/refund references keep independent existing grants. There is no schema migration or read-time write.
 
 ## Category and bank routing
 

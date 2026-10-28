@@ -3,7 +3,7 @@ module: finance
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-27
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -342,6 +342,20 @@ Reconciliation list rows expose the stored evidence in `instrumentDetails` and t
 Missing historical transfer dates and account holder names remain unknown; receipt or collection dates must not be substituted for the entered transfer date. Previously discarded references or names cannot be recovered without independent evidence. This change uses the existing JSONB column and requires no schema migration or automatic backfill. Receipt PDF cache version `v3` regenerates earlier cached documents from the available original evidence without altering amounts, payment status or receipt numbering. Existing tenant, academic scope and action permissions continue to apply.
 
 ## Family mobile Finance
+
+Dedicated read-only charge routes below use `Charge.Id` (never the batch request ID), and require the exact existing `Finance.Fees.Charges.View` action plus a live child/year association:
+
+| GET suffix | Response |
+|---|---|
+| `charges/page` | `{studentId,academicYearId,currency,asOf,items,totalCount,page,pageSize,summary,counts,categories}` |
+| `charges/{chargeId}` | `{studentId,academicYearId,currency,asOf,charge}` |
+| `charges/{chargeId}/payments` | `{studentId,academicYearId,chargeId,currency,items,totalCount,page,pageSize}` |
+
+The page supports `filter=all|open|settled|voided`, trimmed search (maximum 100 characters) over name/category/public reason, and optional `categoryId`. Order is applied timestamp descending then charge ID descending. Counts and summary apply search/category before the selected tab/page; summary excludes voided obligations. Categories come from the entire visible approved/voided child/year set. The existing `charges` array remains approved-only and retains its legacy `paidAmount`, which includes active pending allocations.
+
+Charge amounts are distinct fixed two-decimal strings: `amount`, `verifiedPaidAmount`, `pendingVerificationAmount`, `waivedAmount`, `outstandingAmount`, `refundedAmount`. Due date and overdue checks use Asia/Kolkata calendar dates; event instants are UTC. Detail includes public reason, category, approval/void timestamps and decision/payment statuses, without staff identities or private notes/reasons. Missing category display text is `Category unavailable`.
+
+Payment history returns the real charge allocation ID, owned transaction ID, allocation amount, canonical payment methods and transaction status, ordered by payment timestamp then allocation ID descending. Receipt metadata additionally requires `Finance.Fees.InvoiceReceipt.View`: only actual owned Charge/Combined documents appear, with whole-document totals and owned replacement links; fee-only sibling documents are excluded. PDF downloads retain the existing receipt endpoint and grant. Refund references additionally require `Finance.Fees.Refund.View`; only processed/reversed owned charge outcomes appear, without beneficiary fields. Aggregate refunded amounts remain visible with Charges View. No receipt or source provenance is invented.
 
 Family monetary responses identify `currency: "INR"` and encode amounts as decimal strings. Concession and adjustment preview fingerprints normalize equivalent decimal scales before hashing. Clients must refresh older previews after this normalization; existing command receipts continue matching their original submitted payloads for replay.
 

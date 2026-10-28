@@ -26,8 +26,7 @@ namespace ShikshaMitra.Finance.Mobile;
 public partial class MobileFinanceReadService(MobileFinanceAccessService access, IDueFeeRepository dues,
 	IRepository<FeeHead, Guid> heads, IRepository<FeeRecordMetadata, Guid> transactions,
 	IRepository<PaymentMethodRecord, Guid> methods, IFeePaymentReceiptRepository receipts,
-	IChargeRepository charges, IRepository<ChargeCollectionRecord, Guid> chargePayments,
-	IRepository<ChargeWaiverApplication, Guid> chargeWaivers, LateFeeBalanceService lateFees,
+	LateFeeBalanceService lateFees,
 	IFeeReceiptPdfGenerator receiptPdf, IRepository<AcademicYear, Guid> years, IClock clock)
 	: ApplicationService, IMobileFinanceReadService, ITransientDependency
 {
@@ -105,14 +104,6 @@ public partial class MobileFinanceReadService(MobileFinanceAccessService access,
 	}
 	private async Task<List<MobileChargeBalance>> ChargeRowsAsync(Guid studentId,Guid yearId,CancellationToken ct)
 	{
-		var rows=await charges.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==yearId&&x.Status==ChargeStatus.Approved,cancellationToken:ct);
-		var ids=rows.Select(x=>x.Id).ToArray();
-		var tx=(await transactions.GetQueryableAsync()).Where(x=>x.StudentId==studentId&&x.AcademicYearId==yearId&&x.Status!=FeeCollectionStatus.Reversed).Select(x=>x.Id);
-		var pendingTransactions=(await transactions.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==yearId&&x.Status==FeeCollectionStatus.InReconciliation,cancellationToken:ct)).Select(x=>x.Id).ToHashSet();
-		var paid=await AsyncExecuter.ToListAsync((await chargePayments.GetQueryableAsync()).Where(x=>x.StudentId==studentId&&Enumerable.Contains(ids,x.ChargeId)&&tx.Contains(x.FeeRecordMetadataId)),ct);
-		var waivers=await chargeWaivers.GetListAsync(x=>x.StudentId==studentId&&x.AcademicYearId==yearId&&Enumerable.Contains(ids,x.ChargeId),cancellationToken:ct);
-		return rows.Select(x=>new MobileChargeBalance(x.Id,x.ChargeName,x.PurposeDescription,x.Amount,
-			paid.Where(p=>p.ChargeId==x.Id).Sum(p=>MobileFinanceProjection.LegacyMoney(p.Amount)),waivers.Where(w=>w.ChargeId==x.Id).Sum(w=>w.EffectiveAmount),
-			paid.Where(p=>p.ChargeId==x.Id&&pendingTransactions.Contains(p.FeeRecordMetadataId)).Sum(p=>MobileFinanceProjection.LegacyMoney(p.Amount)))).ToList();
+		return (await FamilyChargeRowsAsync(studentId,yearId,ct)).Where(x=>x.Charge.Status==ChargeStatus.Approved).Select(x=>x.Legacy).ToList();
 	}
 }

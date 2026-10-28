@@ -47,5 +47,27 @@ public partial class MobileAcademicAppService_Tests
   var installment=installments.ShouldHaveSingleItem();installment.DueFeeId.ShouldBe(due.Id);installment.InstallmentId.ShouldBeNull();
   installment.Paid.ShouldBe("500.00");installment.Due.ShouldBe("500.00");installment.ReconciliationAmount.ShouldBe("300.00");
   WriteFamilyChargeWireSample("installments-persisted.json",installments);
+		var payments=await RealFinanceReads().PaymentsAsync(f.Student.Id,f.Year.Id,skipCount:1,maxResultCount:1,status:"Reversed");
+		var paymentJson=System.Text.Json.JsonSerializer.SerializeToElement(payments,new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+		paymentJson.TryGetProperty("paymentSummary",out var paymentSummary).ShouldBeTrue("History requires a whole-year summary independent of status filter and page.");
+		paymentSummary.GetProperty("paidAmount").GetString().ShouldBe("1000.00");
+		paymentSummary.GetProperty("successfulPaymentCount").GetInt32().ShouldBe(1);
+		paymentSummary.GetProperty("studentId").GetGuid().ShouldBe(f.Student.Id);
+		paymentSummary.GetProperty("academicYearId").GetGuid().ShouldBe(f.Year.Id);
+		payments.Items.ShouldBeEmpty();payments.TotalCount.ShouldBe(1);
+		await GrantFinancePermissionAsync(f.User.Id,Permissions.ViewConcessions);
+		await GrantFinancePermissionAsync(f.User.Id,Permissions.ViewRefunds);
+		var concessionDue=new DueFee(Guid.NewGuid(),tenantId,f.Student.Id,head.Id,MonthEnum.November,2026,false,200m,DateTime.Today.AddMonths(1));
+		concessionDue.ApplyConcession(75.25m);await Insert(concessionDue);
+		var foreignDue=new DueFee(Guid.NewGuid(),tenantId,Guid.NewGuid(),head.Id,MonthEnum.November,2026,false,1000m,DateTime.Today.AddMonths(1));
+		foreignDue.ApplyConcession(900m);await Insert(foreignDue);
+		foreach(var kind in new[]{"concession","refund"})
+		{
+			var requests=await RealFinanceReads().RequestsAsync(f.Student.Id,f.Year.Id,kind,skipCount:20);
+			var requestJson=System.Text.Json.JsonSerializer.SerializeToElement(requests,new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+			requestJson.TryGetProperty("requestSummary",out var summary).ShouldBeTrue();
+			summary.GetProperty("totalAmount").GetString().ShouldBe(kind=="concession"?"75.25":"0.00");
+			summary.GetProperty("kind").GetString().ShouldBe(kind);
+		}
 	});
 }

@@ -54,5 +54,17 @@ public sealed record MobileAdjustmentRequest(Guid Id, string Status, string Requ
  string? Reason, IReadOnlyList<string> AvailableActions) : MobileFinanceRequest(Id,"adjustment")
 { [System.Text.Json.Serialization.JsonIgnore] public override DateTimeOffset SortDate => CreationTime; }
 public record MobileFinancePage<T>(IReadOnlyList<T> Items, int TotalCount, int Page, int PageSize) { public string Currency => "INR"; }
-public record MobileFinanceList<T>(IReadOnlyList<T> Items, int TotalCount) { public string Currency => "INR"; }
-public record MobileFinanceRequestPage(IReadOnlyList<MobileFinanceRequest> Items, int TotalCount, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? CurrentPage, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? PageSize, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? TotalPages) { public string Currency => "INR"; }
+public record MobileFinancePaymentSummary(Guid StudentId, Guid AcademicYearId, string PaidAmount, int SuccessfulPaymentCount, DateOnly? LatestPaymentDate);
+public record MobileFinanceRequestSummary(Guid StudentId, Guid AcademicYearId, string Kind, string TotalAmount, int CompletedRequestCount);
+public record MobileFinanceList<T>(IReadOnlyList<T> Items, int TotalCount)
+{
+ public string Currency => "INR";
+ [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+ public MobileFinancePaymentSummary? PaymentSummary { get; init; }
+}
+public record MobileFinanceRequestPage(IReadOnlyList<MobileFinanceRequest> Items, int TotalCount, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? CurrentPage, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? PageSize, [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)] int? TotalPages)
+{
+ public string Currency => "INR";
+ [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+ public MobileFinanceRequestSummary? RequestSummary { get; init; }
+}

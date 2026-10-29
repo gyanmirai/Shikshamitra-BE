@@ -131,6 +131,7 @@ public class CreateUpdateRefundPolicyDtoValidator : AbstractValidator<CreateUpda
 
 public class RefundPolicyListRequestDto : PagedAndSortedResultRequestDto
 {
+	public bool IncludeArchived { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string? Status { get; set; }
 	public string? Search { get; set; }

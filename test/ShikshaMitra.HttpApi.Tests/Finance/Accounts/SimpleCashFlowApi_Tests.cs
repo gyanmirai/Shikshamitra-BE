@@ -36,6 +36,103 @@ public class SimpleCashFlowApi_Tests : ShikshaMitraApiTestBase
     }
 
     [Fact]
+    public async Task Bulk_deposit_closes_year_pool_and_replays_after_balance_changes()
+    {
+        var year = Factory.SeededAcademicYearId;
+        await CashTestDates.EnsureCurrentYearAsync(Client, year, JsonOptions);
+        var category = await PostAsync(Client, $"/api/income-categories?academicYearId={year}", new { name = "Pool " + Guid.NewGuid().ToString("N") });
+        for (var i = 0; i < 2; i++)
+            await PostAsync(Client, $"/api/incomes?academicYearId={year}", new { idempotencyKey = Guid.NewGuid(), name = "Pool cash " + i,
+                categoryId = category.GetProperty("id").GetGuid(), amount = 50m, paymentMethod = 0, paymentDate = DateTimeOffset.UtcNow,
+                categoryTags = Array.Empty<string>() });
+        var expenses = await PostAsync(Client, $"/api/expense-categories?academicYearId={year}", new { name = "Pool costs " + Guid.NewGuid().ToString("N") });
+        var before = await ReadAsync(Client, $"/api/finance/cash-management?academicYearId={year}");
+        var available = before.GetProperty("availableCash").GetDecimal();
+        var overdraft = await Client.PostAsJsonAsync($"/api/expenses?academicYearId={year}", new { idempotencyKey = Guid.NewGuid(), name = "Pool overdraft",
+            counterparty = "Supplier", categoryId = expenses.GetProperty("id").GetGuid(), amount = available + 1m,
+            paymentMethod = 0, paymentDate = DateTimeOffset.UtcNow, categoryTags = Array.Empty<string>() }, JsonOptions);
+        overdraft.IsSuccessStatusCode.ShouldBeFalse();
+        (await ReadAsync(Client, $"/api/finance/cash-management?academicYearId={year}")).GetProperty("availableCash").GetDecimal().ShouldBe(available);
+        var expenseAmount = available - 25m;
+        var expense = new { idempotencyKey = Guid.NewGuid(), name = "Pooled payment " + Guid.NewGuid(), counterparty = "Supplier",
+            categoryId = expenses.GetProperty("id").GetGuid(), amount = expenseAmount, paymentMethod = 0, paymentDate = DateTimeOffset.UtcNow,
+            categoryTags = Array.Empty<string>() };
+        await PostAsync(Client, $"/api/expenses?academicYearId={year}", expense);
+        await PostAsync(Client, $"/api/expenses?academicYearId={year}", expense);
+        var filtered = await ReadAsync(Client, $"/api/finance/cash-management?academicYearId={year}&search=does-not-match-{Guid.NewGuid()}");
+        filtered.GetProperty("totalCount").GetInt32().ShouldBe(0);
+        filtered.GetProperty("availableCash").GetDecimal().ShouldBe(25m);
+        var indiaNow = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromMinutes(330));
+        var monthPage = await ReadAsync(Client, $"/api/finance/cash-management?academicYearId={year}&month={indiaNow.Month}&year={indiaNow.Year}");
+        monthPage.GetProperty("availableCash").GetDecimal().ShouldBe(25m);
+        var remainingPage = await ReadAsync(Client, $"/api/finance/cash-management?academicYearId={year}&pageSize=100");
+        var remainingId = remainingPage.GetProperty("items").EnumerateArray().First(x => x.GetProperty("remainingAmount").GetDecimal() > 0).GetProperty("id").GetGuid();
+        var allocatedDetail = await ReadAsync(Client, $"/api/finance/cash-management/{remainingId}?academicYearId={year}");
+        allocatedDetail.GetProperty("expenses").EnumerateArray().Single(x => x.GetProperty("name").GetString() == expense.name)
+            .GetProperty("id").GetGuid().ShouldBe(expense.idempotencyKey);
+        var (bankCreator, bank) = await ReviewerAndBankAsync();
+        bankCreator.Dispose();
+        using var actor = Factory.CreateClient();
+        actor.DefaultRequestHeaders.Add(AlwaysGrantPermissionChecker.TestPermissionsHeader, "Finance.Accounts.CashManagement.Deposit");
+        var key = Guid.NewGuid();
+        using (actor)
+        {
+            async Task<HttpResponseMessage> Deposit(decimal expected)
+            {
+                using var form = new MultipartFormDataContent();
+                form.Add(new StringContent(year.ToString()), "academicYearId");
+                form.Add(new StringContent(bank.ToString()), "bankAccountId");
+                form.Add(new StringContent(expected.ToString(System.Globalization.CultureInfo.InvariantCulture)), "expectedAmount");
+                form.Add(new StringContent(key.ToString()), "idempotencyKey");
+                form.Add(new ByteArrayContent(System.Text.Encoding.ASCII.GetBytes("%PDF-1.7\nsynthetic deposit slip")), "file", "deposit.pdf");
+                return await actor.PostAsync("/api/finance/cash-management/bulk-deposit", form);
+            }
+            (await Deposit(available)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+            var first = await Deposit(25m);
+            first.StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await first.Content.ReadFromJsonAsync<JsonElement>(JsonOptions)).GetProperty("amount").GetDecimal().ShouldBe(25m);
+            (await Deposit(25m)).StatusCode.ShouldBe(HttpStatusCode.OK);
+            (await Deposit(1m)).StatusCode.ShouldBe(HttpStatusCode.Conflict);
+        }
+        var after = await ReadAsync(Client, $"/api/finance/cash-management?academicYearId={year}&pageSize=100");
+        after.GetProperty("availableCash").GetDecimal().ShouldBe(0m);
+        var detail = await ReadAsync(Client, $"/api/finance/cash-management/{remainingId}?academicYearId={year}");
+        detail.GetProperty("supportingDocumentName").GetString().ShouldBe("deposit.pdf");
+        var download = await Client.GetAsync($"/api/finance/cash-management/{remainingId}/supporting-document?academicYearId={year}");
+        download.StatusCode.ShouldBe(HttpStatusCode.OK);
+        download.Content.Headers.ContentType!.MediaType.ShouldBe("application/pdf");
+        // Simulate the original payer becoming inaccessible after a successful batch.
+        // A same-total new source must not make this old key a fresh deposit.
+        using (var serviceScope = Factory.Services.CreateScope())
+        {
+            var services = serviceScope.ServiceProvider;
+            using var tenant = services.GetRequiredService<ICurrentTenant>().Change(Guid.Parse(TestAuthHandler.TestTenantId));
+            using var uow = services.GetRequiredService<IUnitOfWorkManager>().Begin(requiresNew: true);
+            var repo = services.GetRequiredService<IRepository<ShikshaMitra.Finance.Accounts.CashManagement.CashCollection, Guid>>();
+            var hidden = await repo.GetAsync(remainingId);
+            typeof(ShikshaMitra.Finance.Accounts.CashManagement.CashCollection).GetProperty("StudentId")!.SetValue(hidden, Guid.NewGuid());
+            await repo.UpdateAsync(hidden);
+            await uow.CompleteAsync();
+        }
+        (await Client.GetAsync($"/api/expenses/{expense.idempotencyKey}")).IsSuccessStatusCode.ShouldBeFalse();
+        var hiddenExpenses = await ReadAsync(Client, $"/api/expenses?academicYearId={year}&search={Uri.EscapeDataString(expense.name)}");
+        hiddenExpenses.GetProperty("totalCount").GetInt32().ShouldBe(0);
+        var hiddenRegister = await ReadAsync(Client, $"/api/accounts/register?academicYearId={year}&direction=expense&search={Uri.EscapeDataString(expense.name)}");
+        hiddenRegister.GetProperty("items").GetArrayLength().ShouldBe(0);
+        await PostAsync(Client, $"/api/incomes?academicYearId={year}", new { idempotencyKey = Guid.NewGuid(), name = "Replacement pool cash",
+            categoryId = category.GetProperty("id").GetGuid(), amount = 25m, paymentMethod = 0, paymentDate = DateTimeOffset.UtcNow,
+            categoryTags = Array.Empty<string>() });
+        using var replayForm = new MultipartFormDataContent();
+        replayForm.Add(new StringContent(year.ToString()), "academicYearId");
+        replayForm.Add(new StringContent(bank.ToString()), "bankAccountId");
+        replayForm.Add(new StringContent("25"), "expectedAmount");
+        replayForm.Add(new StringContent(key.ToString()), "idempotencyKey");
+        replayForm.Add(new ByteArrayContent(System.Text.Encoding.ASCII.GetBytes("%PDF-1.7\nsynthetic deposit slip")), "file", "deposit.pdf");
+        (await Client.PostAsync("/api/finance/cash-management/bulk-deposit", replayForm)).IsSuccessStatusCode.ShouldBeFalse();
+        (await ReadAsync(Client, $"/api/finance/cash-management?academicYearId={year}")).GetProperty("availableCash").GetDecimal().ShouldBe(25m);
+    }
+
+    [Fact]
     public async Task Receipt_pending_expense_then_net_approval_conserves_cash_and_original_receipt()
     {
         var year = Factory.SeededAcademicYearId;
@@ -410,7 +507,22 @@ public class SimpleCashFlowApi_Tests : ShikshaMitraApiTestBase
         detail.GetProperty("inTransitAmount").GetDecimal().ShouldBe(0m);
         await AssertIncomeAsync(sourceId, 100m);
         var expenses = await ReadAsync(Client, $"/api/finance/cash-management/options?academicYearId={year}&operation=expense");
-        expenses.GetProperty("cashSources").EnumerateArray().Any(x => x.GetProperty("id").GetGuid() == cashId).ShouldBeFalse();
+        expenses.GetProperty("cashSources").EnumerateArray().Any(x => x.GetProperty("id").GetGuid() == cashId).ShouldBeTrue();
+        var (newBankCreator, newBankId) = await ReviewerAndBankAsync();
+        newBankCreator.Dispose();
+        var yearPool = await ReadAsync(Client, $"/api/finance/cash-management?academicYearId={year}");
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(year.ToString()), "academicYearId");
+        form.Add(new StringContent(newBankId.ToString()), "bankAccountId");
+        form.Add(new StringContent(yearPool.GetProperty("availableCash").GetDecimal().ToString(System.Globalization.CultureInfo.InvariantCulture)), "expectedAmount");
+        form.Add(new StringContent(Guid.NewGuid().ToString()), "idempotencyKey");
+        (await Client.PostAsync("/api/finance/cash-management/bulk-deposit", form)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        detail = await ReadAsync(Client, $"/api/finance/cash-management/{cashId}?academicYearId={year}");
+        detail.GetProperty("bankAccountId").GetGuid().ShouldBe(newBankId);
+        var deposits = detail.GetProperty("deposits").EnumerateArray().ToArray();
+        deposits.Single(x => x.GetProperty("id").GetGuid() == depositId).GetProperty("bankAccountId").GetGuid().ShouldBe(bankId);
+        deposits.Single(x => x.GetProperty("id").GetGuid() != depositId).GetProperty("bankAccountId").GetGuid().ShouldBe(newBankId);
+        await AssertIncomeAsync(sourceId, 100m);
     }
 
     [Fact]
@@ -447,6 +559,14 @@ public class SimpleCashFlowApi_Tests : ShikshaMitraApiTestBase
         after.GetProperty("remainingAmount").GetDecimal().ShouldBe(100m);
         var register = await ReadAsync(Client, $"/api/accounts/register?academicYearId={year}&direction=income&search={reference}");
         register.GetProperty("items").GetArrayLength().ShouldBe(0);
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(year.ToString()), "academicYearId");
+        form.Add(new StringContent(bankId.ToString()), "bankAccountId");
+        form.Add(new StringContent("100"), "expectedAmount");
+        form.Add(new StringContent(Guid.NewGuid().ToString()), "idempotencyKey");
+        (await Client.PostAsync("/api/finance/cash-management/bulk-deposit", form)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        var deposited = await ReadAsync(Client, $"/api/finance/cash-management/{cashId}?academicYearId={year}");
+        deposited.GetProperty("remainingAmount").GetDecimal().ShouldBe(0m);
     }
 
     private async Task<(HttpClient Client, Guid BankId)> ReviewerAndBankAsync(Guid? academicYearId = null)

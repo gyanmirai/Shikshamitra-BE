@@ -64,7 +64,8 @@ public partial class AccountsActivityAppService
         var profiles = await WorkspaceStudentsAsync(input.AcademicYearId);
         var scopedStudents = await scopeAccessService.GetScopedStudentIdsQueryAsync();
         var students = await studentRepository.GetQueryableAsync();
-        var transactions = await transactionRepository.GetQueryableAsync();
+        var transactions = await scopeAccessService.FilterPooledCashTransactionsAsync(
+            await transactionRepository.GetQueryableAsync(), input.AcademicYearId);
         var categories = await categoryRepository.GetQueryableAsync();
         var type = income ? TransactionType.Income : TransactionType.Expense;
         var automatic = transactions.Where(x => x.SourceKey != null);

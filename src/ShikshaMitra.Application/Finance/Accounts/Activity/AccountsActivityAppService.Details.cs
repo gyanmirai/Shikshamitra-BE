@@ -37,6 +37,7 @@ public partial class AccountsActivityAppService
                 throw new AbpAuthorizationException();
             if (transaction.StudentId.HasValue || transaction.FinanceFeeAccountId.HasValue)
                 await scopeAccessService.EnsureCollectionPayerAccessibleAsync(transaction.StudentId, transaction.FinanceFeeAccountId);
+            await scopeAccessService.EnsurePooledCashTransactionAccessibleAsync(transaction);
             var category = await categoryRepository.FindAsync(transaction.CategoryId);
             detail.SourceId = transaction.SourceId ?? transaction.Id;
             detail.StudentId = transaction.StudentId;

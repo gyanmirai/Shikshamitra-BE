@@ -104,6 +104,13 @@ public class ConcessionPolicyAppService_Tests : ShikshaMitraApplicationTestBase<
 
 		currentPage.Items.ShouldContain(x => x.Id == current.Id);
 		currentPage.Items.ShouldNotContain(x => x.Id == archived.Id);
+		var combined = await _concessionPolicies.GetListAsync(new() { AcademicYearId = academicYearId, IncludeArchived = true, MaxResultCount = 20 });
+		combined.TotalCount.ShouldBe(2);
+		combined.Items.ShouldContain(x => x.Id == current.Id);
+		combined.Items.ShouldContain(x => x.Id == archived.Id);
+		var paged = await _concessionPolicies.GetListAsync(new() { AcademicYearId = academicYearId, IncludeArchived = true, MaxResultCount = 1 });
+		paged.TotalCount.ShouldBe(2);
+		paged.Items.Count.ShouldBe(1);
 		archivedPage.Items.ShouldContain(x => x.Id == archived.Id);
 		archivedPage.Items.ShouldNotContain(x => x.Id == current.Id);
 	}

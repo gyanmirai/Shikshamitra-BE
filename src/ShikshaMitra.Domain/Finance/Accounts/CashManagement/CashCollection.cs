@@ -75,6 +75,32 @@ public class CashCollection : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void Spend(Guid transactionId, string name, decimal amount, DateTimeOffset paymentDate)
 	{
 		Available(amount, requiredStatus: 0);
+		RecordSpend(transactionId, name, amount, paymentDate);
+	}
+	public void SpendAvailable(Guid allocationId, string name, decimal amount, DateTimeOffset paymentDate)
+	{
+		EnsureMoney(amount);
+		if (amount > RemainingAmount) throw new BusinessException(CashManagementErrorCodes.InsufficientCash);
+		RecordSpend(allocationId, name, amount, paymentDate);
+	}
+	public void DepositRemaining(Guid actor, Guid bankId, string bankLabel, DateTimeOffset at, string? notes)
+	{
+		EnsureMoney(RemainingAmount);
+		if (Status == 0)
+		{
+			Approve(actor, bankId, bankLabel, RemainingAmount, at, notes, allowSelfApproval: true);
+			return;
+		}
+		if (actor == Guid.Empty || bankId == Guid.Empty || at == default || at < CollectedAt)
+			throw new BusinessException(CashManagementErrorCodes.InvalidEvidence);
+		var label = Evidence(bankLabel, 500);
+		var amount = RemainingAmount;
+		var deposit = new CashDepositRecord(Guid.NewGuid(), actor, amount, at, Reference, OptionalNotes(notes));
+		deposit.Credit(actor, amount, at, Reference, OptionalNotes(notes));
+		Deposits.Add(deposit); DepositedAmount += amount; BankAccountId = bankId; BankLabel = label;
+	}
+	private void RecordSpend(Guid transactionId, string name, decimal amount, DateTimeOffset paymentDate)
+	{
 		if (paymentDate == default || paymentDate < CollectedAt) throw new BusinessException(CashManagementErrorCodes.InvalidEvidence);
 		if (transactionId == Guid.Empty || Expenses.Any(x => x.Id == transactionId))
 			throw new BusinessException(CashManagementErrorCodes.RetryConflict);

@@ -2,6 +2,7 @@ namespace ShikshaMitra.Finance.Fees.Concessions;
 
 public static class FinanceConcessionErrorCodes
 {
+	public const string BenefitAlreadyGranted = "Finance:Concession:010034";
 	public const string NotPending = "Finance:Concession:010001";
 	public const string DiscountExceedsBase = "Finance:Concession:010002";
 	public const string PercentageOver100 = "Finance:Concession:010003";
@@ -30,6 +31,7 @@ public static class FinanceConcessionErrorCodes
 	public const string RefundSourceUnavailable = "Finance:Concession:010030";
 	public const string RefundRequestBlocksReversal = "Finance:Concession:010031";
 	public const string WholeRupeeAmountRequired = "Finance:Concession:010032";
+	public const string RequestNotEditable = "Finance:Concession:010033";
 
 	public const string StudentNotFound = "Finance:Concession:020002";
 	public const string ConcessionTypeNotFound = "Finance:Concession:020003";

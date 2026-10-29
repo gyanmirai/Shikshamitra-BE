@@ -14,6 +14,20 @@ Account Heads are retired from active account settings. Fee Heads remain, and ea
 
 ## Configuration and payment flow
 
+Every tenant/academic-year context has two stored `TransactionCategory` records named None, one
+Income and one Expense. These are valid category selections with real IDs and normal routing
+validation; a missing/empty ID remains invalid. Only the `fee-head` Income Category lookup and
+`refund-policy` Expense Category lookup offer None, always first. Master category lists and all
+other routing lookups exclude it. Existing tenant, year, type and permission filters still apply.
+Category responses expose `isSystemCategory`. None cannot be edited, deactivated or deleted.
+
+The data-only `AddNoneTransactionCategories` migration backfills existing non-deleted years and
+reuses existing None IDs, reactivating archived/soft-deleted None records and clearing their
+effective windows. Other categories, historical transaction references and amounts are unchanged.
+Retries do not duplicate records or increment unchanged versions. Rollback preserves the records
+because financial records may already reference them. `AcademicYearNoneCategoryHandler` and
+`NoneCategoryInitializer` create defaults inside new-year creation's unit of work; GETs do not write.
+
 | Action | Saved selection | Financial effect |
 |---|---|---|
 | Create an Income or Expense Category | Academic year and category type | Independent master; no Account Head required |

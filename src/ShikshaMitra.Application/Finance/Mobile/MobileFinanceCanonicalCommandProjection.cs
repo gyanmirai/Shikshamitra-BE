@@ -74,6 +74,7 @@ public static class MobileFinanceCanonicalCommandProjection
  };
  public static MobileConcessionTypeOption Map(ConcessionTypeOptionDto x) => new()
  {
+  BenefitBlocker = x.BenefitBlocker,
   ConcessionTypeId = x.ConcessionTypeId,
   Name = x.Name,
   Description = x.Description,

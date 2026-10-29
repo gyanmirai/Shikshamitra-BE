@@ -120,6 +120,7 @@ public class ConcessionPolicyImpactDto
 
 public class ConcessionPolicyListRequestDto : PagedAndSortedResultRequestDto
 {
+	public bool IncludeArchived { get; set; }
 	public Guid AcademicYearId { get; set; }
 	public string? Status { get; set; }
 	public string? Search { get; set; }

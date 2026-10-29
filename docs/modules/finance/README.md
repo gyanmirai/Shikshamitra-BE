@@ -12,7 +12,7 @@ audience: humans-and-agents
 
 Receipt classification, approval, PDF format and naming: [Provisional and official receipts](./references/receipt-lifecycle.md).
 
-Pending cash expenses, final net deposit approval and legacy bank credits: [Cash Management](./references/cash-management.md).
+Pooled cash expenses, academic-year cash deposits and legacy bank credits: [Cash Management](./references/cash-management.md).
 
 TL;DR: use this page as the entrypoint for Finance behavior, API families, architecture, workflows, and validation.
 Finance covers fees, collections, concessions, adjustments, refunds, receipts, accounts, audit, and reports.

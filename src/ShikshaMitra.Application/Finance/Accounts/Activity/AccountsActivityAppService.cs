@@ -177,7 +177,8 @@ public partial class AccountsActivityAppService(
         if (canViewFees || (canViewIncome && (source is null or "income")) ||
             (canViewExpense && (source is null or "expense")))
         {
-            var transactions = await transactionRepository.GetQueryableAsync();
+            var transactions = await scopeAccessService.FilterPooledCashTransactionsAsync(
+                await transactionRepository.GetQueryableAsync(), input.AcademicYearId);
             var categories = await categoryRepository.GetQueryableAsync();
             var query = from transaction in transactions
                         join category in categories on transaction.CategoryId equals category.Id

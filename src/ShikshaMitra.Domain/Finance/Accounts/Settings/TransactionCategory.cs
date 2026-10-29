@@ -25,6 +25,7 @@ public class TransactionCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public bool IsActive { get; private set; }
 	public string? DeactivationReason { get; private set; }
 	public int Version { get; private set; }
+	public bool IsSystemCategory => string.Equals(Name.Trim(), "None", StringComparison.OrdinalIgnoreCase);
 
 	private readonly List<Tag> _tags = [];
 	public IReadOnlyCollection<Tag> Tags => _tags.AsReadOnly();
@@ -49,6 +50,7 @@ public class TransactionCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 	public void Update(string? code, string name, string? description, Guid? defaultAccountHeadId,
 		DateTimeOffset? effectiveFrom, DateTimeOffset? effectiveTo, IEnumerable<string> tags)
 	{
+		EnsureUserEditable();
 		SetDetails(code, name, description, defaultAccountHeadId, effectiveFrom, effectiveTo);
 		SetTags(tags);
 		Version++;
@@ -58,12 +60,18 @@ public class TransactionCategory : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
 	public void Deactivate(string reason)
 	{
+		EnsureUserEditable();
 		var normalizedReason = reason?.Trim();
 		if (string.IsNullOrWhiteSpace(normalizedReason) || normalizedReason.Length > AccountSettingConsts.MaxDeactivationReasonLength)
 			throw new BusinessException(AccountSettingErrorCodes.DeactivationReasonRequired);
 		IsActive = false;
 		DeactivationReason = normalizedReason;
 		Version++;
+	}
+
+	public void EnsureUserEditable()
+	{
+		if (IsSystemCategory) throw new BusinessException(AccountSettingErrorCodes.SystemCategoryReadOnly);
 	}
 
 	public void AddTag(string value)

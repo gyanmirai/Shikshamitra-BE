@@ -9,6 +9,25 @@ namespace ShikshaMitra.Domain.Finance.Fees;
 public class ConcessionRequestLifecycle_Tests
 {
 	[Theory]
+	[InlineData(ConcessionRequestStatus.Pending)]
+	[InlineData(ConcessionRequestStatus.Approved)]
+	[InlineData(ConcessionRequestStatus.Rejected)]
+	[InlineData(ConcessionRequestStatus.Cancelled)]
+	[InlineData(ConcessionRequestStatus.PartiallyReversed)]
+	[InlineData(ConcessionRequestStatus.Reversed)]
+	public void Editing_a_locked_request_identifies_the_status_that_blocks_it(ConcessionRequestStatus status)
+	{
+		var request = CreateDraft();
+		typeof(ConcessionRequest).GetProperty(nameof(ConcessionRequest.Status))!.SetValue(request, status);
+
+		var exception = Assert.Throws<BusinessException>(() => request.UpdateRemarks("Attempted edit"));
+
+		Assert.Equal("Finance:Concession:010033", exception.Code);
+		Assert.Equal(status.ToString(), exception.Data["Status"]);
+		Assert.Equal("Draft request", request.Remarks);
+	}
+
+	[Theory]
 	[InlineData(true)]
 	[InlineData(false)]
 	public void Explicit_administrator_creator_decision_preserves_actor_and_terminal_state(bool approve)

@@ -28,7 +28,7 @@ public class AdmissionFormMasterDataValidator(AdmissionFormDataSourceRegistry so
 				var visible = validator.GetVisibleFieldCodes(sectionFields, [section], row);
 				foreach (var field in sectionFields.Where(f => visible.Contains(f.Code) && f.FieldType is AdmissionFormFieldType.Select or AdmissionFormFieldType.MultiSelect or AdmissionFormFieldType.Radio))
 				{
-					if (!TrySource(field.OptionsJson, out var sourceKey, out var parentField)) continue;
+					if (!TrySource(AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson), out var sourceKey, out var parentField)) continue;
 					var selected = field.FieldType == AdmissionFormFieldType.MultiSelect ? ReadMultiple(row.GetValueOrDefault(field.Code)) : [row.GetValueOrDefault(field.Code) ?? ""];
 					var valid = true;
 					if (sourceKey == "StudentSiblings")

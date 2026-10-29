@@ -86,7 +86,8 @@ public static class HrReportingDocumentWriter
 						column.Item().Text(Context(run));
 						column.Item().Text("Staff selection: " + (parameters.EmployeeIds.Count > 0 ? parameters.EmployeeIds.Count + " selected staff" : "All authorized staff") + "; departments: " + (parameters.Departments.Count > 0 ? string.Join(", ", parameters.Departments) : "All"));
 						column.Item().Text("Rules: " + Rules(run));
-						if (parameters.IncludeDrafts) column.Item().Text("Includes saved draft payroll. Draft rows are labelled.");
+						if (design.DataSource is HrReportDataSources.PayrollRegister or HrReportDataSources.PayrollStatement)
+							column.Item().Text("Issued payroll only. Unavailable months are not counted as zero pay.");
 					});
 					page.Content().Table(table =>
 					{

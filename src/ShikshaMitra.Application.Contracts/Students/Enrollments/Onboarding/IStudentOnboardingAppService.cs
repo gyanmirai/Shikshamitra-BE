@@ -45,6 +45,7 @@ public interface IStudentOnboardingAppService : IApplicationService
 	Task<StudentCredentialsWorkspaceDto> RetryParentSetupAsync(Guid id, RetryStudentParentSetupDto input);
 	Task<StudentCredentialsWorkspaceDto> LinkParentAsync(Guid id, LinkStudentSiblingParentDto input);
 	Task<StudentOnboardingCaseDto> EnableGuardianCredentialEmailAsync(Guid id, EnableGuardianCredentialEmailDto input);
+	Task<StudentCredentialsWorkspaceDto> EnableStudentAppAccessAsync(Guid id, EnableStudentAppAccessDto input);
 	Task<IReadOnlyList<StudentPortalAccountDto>> GetMyPortalStudentsAsync();
 	Task<IReadOnlyList<StudentOnboardingPolicyDto>> GetPoliciesAsync(Guid academicYearId);
 	Task<StudentOnboardingPolicyDto> CreatePolicyAsync(UpsertStudentOnboardingPolicyDto input);

@@ -52,6 +52,8 @@ public class AdmissionAssessmentRosterItemDto
 {
 	public string ClassName { get; set; } = string.Empty;
 	public string Status { get; set; } = string.Empty;
+	public string DisplayStatus { get; set; } = string.Empty;
+	public string DisplayAttendance { get; set; } = string.Empty;
 	public Guid AdmissionOfferingId { get; set; }
 	public Guid WorkflowStageDefinitionId { get; set; }
 	public string OfferingName { get; set; } = string.Empty;

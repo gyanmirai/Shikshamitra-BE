@@ -20,7 +20,7 @@ public class AdmissionPaymentCompletionReader_Tests
 {
 	[Theory]
 	[InlineData("partial", 50, 150, false, true)]
-	[InlineData("full", 50, 150, false, false)]
+	[InlineData("full", 50, 150, false, true)]
 	[InlineData("full", 200, 0, true, true)]
 	[InlineData("partial", 0, 0, true, true)]
 	[InlineData("full", 0, 0, true, true)]
@@ -34,8 +34,8 @@ public class AdmissionPaymentCompletionReader_Tests
 		var collections = Substitute.For<IAdmissionFeeCollectionAppService>();
 		collections.GetSummaryAsync(application.Id).Returns(new AdmissionFeeCollectionDto
 		{ AccountId = cleared || outstanding > 0 ? Guid.NewGuid() : null, ConfirmedPaidAmount = confirmed, OutstandingAmount = outstanding });
-		var state = await Reader(finance, collections).ReadAsync(application, stage, definition, true);
-		state.CanComplete.ShouldBe(allowed); state.PaymentRule.ShouldBe(rule);
+		var state = await Reader(finance, collections).ReadAsync(application, stage, true);
+		state.CanComplete.ShouldBe(allowed);
 		if (cleared) collections.ReceivedCalls().ShouldBeEmpty();
 		collections.ReceivedCalls().ShouldAllBe(call => call.GetMethodInfo().Name == "GetSummaryAsync");
 		finance.ReceivedCalls().ShouldAllBe(call => call.GetMethodInfo().Name == "IsSettledForOnboardingAsync");
@@ -52,7 +52,7 @@ public class AdmissionPaymentCompletionReader_Tests
 		var collections = Substitute.For<IAdmissionFeeCollectionAppService>();
 		collections.GetSummaryAsync(application.Id).Returns(new AdmissionFeeCollectionDto
 		{ AccountId = Guid.NewGuid(), HasPaymentEvidence = true, ConfirmedPaidAmount = 0m, PendingVerificationAmount = 50m, OutstandingAmount = 150m });
-		var state = await Reader(finance, collections, readAllowed).ReadAsync(application, stage, definition, true);
+		var state = await Reader(finance, collections, readAllowed).ReadAsync(application, stage, true);
 		state.CanComplete.ShouldBeFalse(); state.CanDeferCollection.ShouldBeTrue(); state.Blocker.ShouldNotBeNull();
 		if (!readAllowed) collections.ReceivedCalls().ShouldBeEmpty();
 	}
@@ -60,13 +60,13 @@ public class AdmissionPaymentCompletionReader_Tests
 	[Theory]
 	[InlineData(false, true)]
 	[InlineData(true, false)]
-	public async Task Disabled_deferral_and_inactive_stage_are_reported(bool later, bool active)
+	public async Task Retired_deferral_settings_are_ignored_but_inactive_stages_remain_blocked(bool later, bool active)
 	{
 		var (application, stage, definition) = Fixture("full", later);
 		var finance = Substitute.For<IAdmissionFinanceIntegration>();
 		finance.IsSettledForOnboardingAsync(application.Id).Returns(true);
-		var result = await Reader(finance, Substitute.For<IAdmissionFeeCollectionAppService>()).ReadAsync(application, stage, definition, active);
-		result.CanDeferCollection.ShouldBe(active && later); result.CanComplete.ShouldBe(active);
+		var result = await Reader(finance, Substitute.For<IAdmissionFeeCollectionAppService>()).ReadAsync(application, stage, active);
+		result.CanDeferCollection.ShouldBe(active); result.CanComplete.ShouldBe(active);
 	}
 
 	[Fact]
@@ -75,7 +75,7 @@ public class AdmissionPaymentCompletionReader_Tests
 		var (application, stage, definition) = Fixture("full", selection: false);
 		var finance = Substitute.For<IAdmissionFinanceIntegration>();
 		var collections = Substitute.For<IAdmissionFeeCollectionAppService>();
-		var result = await Reader(finance, collections).ReadAsync(application, stage, definition, true);
+		var result = await Reader(finance, collections).ReadAsync(application, stage, true);
 		result.CanComplete.ShouldBeFalse(); result.Status.ShouldBe("feeStructureRequired");
 		finance.ReceivedCalls().ShouldBeEmpty(); collections.ReceivedCalls().ShouldBeEmpty();
 	}
@@ -86,7 +86,7 @@ public class AdmissionPaymentCompletionReader_Tests
 		var (application, stage, definition) = Fixture("partial");
 		var finance = Substitute.For<IAdmissionFinanceIntegration>();
 		finance.IsSettledForOnboardingAsync(application.Id).Returns(Task.FromException<bool>(new BusinessException("Finance:NotPrepared")));
-		var result = await Reader(finance, Substitute.For<IAdmissionFeeCollectionAppService>()).ReadAsync(application, stage, definition, true);
+		var result = await Reader(finance, Substitute.For<IAdmissionFeeCollectionAppService>()).ReadAsync(application, stage, true);
 		result.CanComplete.ShouldBeFalse(); result.CanDeferCollection.ShouldBeTrue(); result.Blocker.ShouldContain("could not verify");
 	}
 
@@ -100,7 +100,7 @@ public class AdmissionPaymentCompletionReader_Tests
 		var finance = Substitute.For<IAdmissionFinanceIntegration>();
 		finance.IsSettledForOnboardingAsync(application.Id).Returns(true);
 		var result = await Reader(finance, Substitute.For<IAdmissionFeeCollectionAppService>())
-			.ReadAsync(application, next, definition, true, first.Id);
+			.ReadAsync(application, next, true, first.Id);
 		result.CanComplete.ShouldBeTrue();
 	}
 
@@ -110,7 +110,7 @@ public class AdmissionPaymentCompletionReader_Tests
 		authorization.CurrentPrincipal.Returns(new ClaimsPrincipal(new ClaimsIdentity()));
 		authorization.AuthorizeAsync(Arg.Any<ClaimsPrincipal>(), Arg.Any<object?>(), Arg.Any<string>())
 			.Returns(Task.FromResult(readAllowed ? AuthorizationResult.Success() : AuthorizationResult.Failed()));
-		return new(Substitute.For<IRepository<AdmissionWorkflowStageDefinition, Guid>>(),
+		return new(
 			Substitute.For<IRepository<AdmissionApplicationStageInstance, Guid>>(), finance, collections)
 		{ LazyServiceProvider = new AbpLazyServiceProvider(new ServiceCollection().AddSingleton<IAuthorizationService>(authorization).BuildServiceProvider()) };
 	}
@@ -119,7 +119,7 @@ public class AdmissionPaymentCompletionReader_Tests
 	{
 		var definition = new AdmissionWorkflowStageDefinition(Guid.NewGuid(), Guid.NewGuid(), "PAY", "Payment", AdmissionWorkflowStageType.Payment,
 			0, true, false, description: null,
-			configurationJson: JsonSerializer.Serialize(new { paymentCompletion = new AdmissionPaymentCompletionPolicy { PaymentRule = rule, AllowCollectionLater = later } }),
+			configurationJson: JsonSerializer.Serialize(new { paymentCompletion = new { version = 1, paymentRule = rule, allowCollectionLater = later } }),
 			isEntryStage: true, isTerminalStage: false);
 		var application = new AdmissionApplication(Guid.NewGuid(), null, "QA", Guid.NewGuid(), null, Guid.NewGuid(), Guid.NewGuid(), definition.WorkflowDefinitionId, Guid.NewGuid());
 		var stage = new AdmissionApplicationStageInstance(Guid.NewGuid(), null, Guid.NewGuid(), definition.Id, "PAY", "Payment", AdmissionWorkflowStageType.Payment, 0, true);

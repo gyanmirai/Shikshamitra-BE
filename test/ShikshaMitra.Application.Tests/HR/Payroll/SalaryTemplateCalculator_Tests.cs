@@ -18,6 +18,47 @@ namespace ShikshaMitra.HR.Payroll;
 public class SalaryTemplateCalculator_Tests
 {
 	[Theory]
+	[InlineData(false, false)]
+	[InlineData(true, false)]
+	[InlineData(false, true)]
+	[InlineData(true, true)]
+	public void Bug6475_fixed_earnings_exceed_employer_cost_and_corrected_target_reconciles(bool applyPf, bool applyEsi)
+	{
+		var fixture = BuildFixture(12m, 12m, 15000m);
+		var rules = fixture.Rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning ||
+			(applyPf && x.SemanticType == PayrollComponentSemanticType.EmployeeProvidentFund)).ToList();
+		rules[0] = rules[0] with { FormulaType = SalaryTemplateFormulaType.FixedAmount, Value = 2000m };
+		rules[1] = rules[1] with { FormulaType = SalaryTemplateFormulaType.FixedAmount, SemanticType = PayrollComponentSemanticType.Ordinary, Value = 50000m };
+		var deduction = Guid.NewGuid();
+		fixture.Components[deduction] = new(deduction, "Ordinary deduction");
+		rules.Add(new("ORDINARY_DEDUCTION", deduction, SalaryTemplateLineKind.Deduction,
+			SalaryTemplateFormulaType.FixedAmount, PayrollComponentSemanticType.Ordinary, 200m, null, 4));
+		var esi = applyEsi ? BuildEsiContext(fixture.Components.Keys) with { EffectiveMonth = new(2026, 10, 1), Enrollment = null } : null;
+		var pf = applyPf ? fixture.PfRule : null;
+		var error = Should.Throw<BusinessException>(() => SalaryTemplateCalculator.Calculate(
+			SalaryInputBasis.EmployerCost, 50000m, rules, fixture.Components, pf, [], esi));
+		error.Code.ShouldBe(HRErrorCodes.CompensationTargetNotSolvable);
+		error.Data["reason"].ShouldBe("FIXED_EARNINGS_EXCEED_EMPLOYER_COST");
+		error.Data["fixedEarnings"].ShouldBe(52000m);
+		error.Data["target"].ShouldBe(50000m);
+		error.Data["field"].ShouldBe("monthlyAmount");
+		error.Data["relatedField"].ShouldBe("rules");
+		error.Data["message"].ToString()!.ShouldContain("INR 2000.00");
+		// A synthetic 12% PF on Basic adds 240; this is not the live DM PF rule.
+		var correctedCost = applyPf ? 52240m : 52000m;
+		var result = SalaryTemplateCalculator.Calculate(SalaryInputBasis.EmployerCost, correctedCost,
+			rules, fixture.Components, pf, [], esi);
+		result.Gross.ShouldBe(52000m);
+		result.EmployerCost.ShouldBe(correctedCost);
+		result.Net.ShouldBe(applyPf ? 51560m : 51800m);
+		result.Earnings.Sum(x => x.Amount).ShouldBe(result.Gross);
+		if (applyEsi) result.EmployeeStateInsurance!.IsCovered.ShouldBeFalse();
+		// Raising a fixed template to an arbitrary target still must not silently scale its earnings.
+		Should.Throw<BusinessException>(() => SalaryTemplateCalculator.Calculate(SalaryInputBasis.EmployerCost,
+			correctedCost + 1000m, rules, fixture.Components, pf, [], esi)).Code.ShouldBe(HRErrorCodes.CompensationTargetNotSolvable);
+	}
+
+	[Theory]
 	[InlineData(false, "CLASSIFIED_EARNINGS", "CLASSIFIED_EARNINGS")]
 	[InlineData(true, "CLASSIFIED_EARNINGS", "CLASSIFIED_EARNINGS")]
 	[InlineData(false, "GROSS", "COMPONENT")]

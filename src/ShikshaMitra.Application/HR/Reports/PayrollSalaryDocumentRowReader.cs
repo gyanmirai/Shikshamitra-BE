@@ -15,7 +15,7 @@ using Volo.Abp.Linq;
 namespace ShikshaMitra.HR.Reports;
 
 public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> documents,
-	IRepository<SalarySlip, Guid> slips, IRepository<PayrollRunItemSnapshot, Guid> snapshots,
+	IRepository<SalarySlip, Guid> slips,
 	HrReportEmployeeQueryService employees, IAsyncQueryableExecuter executer) : ITransientDependency
 {
 	public async Task<HrReportRowsResult> BuildAsync(HrReportRequestDto input, UserScopeContext scope, bool exportAllRows)
@@ -60,35 +60,7 @@ public class PayrollSalaryDocumentRowReader(IRepository<PayslipDocument, Guid> d
 						   PayableDays = null
 					   };
 		IQueryable<DocumentRow> query = official;
-		if (input.Filters.IncludeDrafts)
-		{
-			var snapshotQuery = await snapshots.GetQueryableAsync();
-			var drafts = from snapshot in snapshotQuery
-						 join employee in staff on snapshot.EmployeeId equals employee.Id
-						 where snapshot.TenantId == scope.TenantId && string.Compare(snapshot.MonthYear, firstMonth) >= 0 && string.Compare(snapshot.MonthYear, lastMonth) <= 0 &&
-							 !slipQuery.Any(slip => slip.EmployeeId == snapshot.EmployeeId && slip.MonthYear == snapshot.MonthYear &&
-								 (slip.Status == SalarySlipStatus.Finalized || slip.Status == SalarySlipStatus.Paid))
-						 select new DocumentRow
-						 {
-							 EmployeeId = snapshot.EmployeeId,
-							 EmployeeCode = snapshot.EmployeeIdentifier,
-							 Month = snapshot.MonthYear,
-							 FactsJson = null,
-							 SnapshotJson = snapshot.StatutoryApplicationJson,
-							 TotalEarnings = snapshot.NetPay + snapshot.TotalDeduction,
-							 TotalDeduction = snapshot.TotalDeduction,
-							 NetPay = snapshot.NetPay,
-							 EarningsJson = snapshot.EarningComponentsJson,
-							 DeductionsJson = snapshot.DeductionComponentsJson,
-							 EmployeeName = snapshot.EmployeeName,
-							 GrossSalary = snapshot.GrossSalary,
-							 BasicSalary = snapshot.BasicSalary,
-							 Salary = snapshot.FullGrossSalary,
-							 PayableDays = snapshot.PayableDays,
-							 LeaveJson = snapshot.LeaveUnitsByTypeJson
-						 };
-			query = official.Concat(drafts);
-		}
+		// Salary documents and exports never expose unlocked payroll, including legacy IncludeDrafts requests.
 		var total = await executer.CountAsync(query);
 		var financialTotals = await executer.FirstOrDefaultAsync(query.GroupBy(_ => 1).Select(group => new
 		{ Earnings = group.Sum(x => x.TotalEarnings), Deductions = group.Sum(x => x.TotalDeduction), Net = group.Sum(x => x.NetPay) }));

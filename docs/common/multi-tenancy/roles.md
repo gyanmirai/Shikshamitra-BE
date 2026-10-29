@@ -3,6 +3,14 @@
 This guide explains how ShikshaMitra roles relate to permissions and data scope.
 Use it when you create test roles, verify seeded roles, or debug role assignment failures.
 
+## Read user role assignments
+
+`GET /api/security/user-directory` accepts the existing ABP `GetIdentityUsersInput` paging, filtering, and sorting contract and returns `{ totalCount, items }`. Each item includes `id`, `userName`, `name`, `surname`, `email`, `phoneNumber`, and `roleNames` (an array, empty for no assigned role). Role names preserve their stored spelling.
+
+`UserDirectoryAppService` enforces `AbpIdentity.Users` and delegates the account list to the existing identity service. `IUserScopeResolutionRepository.GetRoleNamesByUserIdsAsync` batches membership for that page using explicit current-tenant predicates on users and roles. Direct permission overrides do not become role assignments. This read adds no grants or schema changes.
+
+The frontend loads every page with stable `userName,id` ordering before its local table filtering and sorting. See the [frontend client](https://github.com/gyanmirai/Shikshamitra-FE/blob/main/docs/security/clients.md#user-directory) for presentation and the `UserDirectoryApi_Tests` HTTP suite for tenant isolation, paging, and authorization checks. Filter by `FullyQualifiedName~UserDirectoryApi_Tests` to run this suite with its identity-only test data.
+
 ## Role basics
 
 Roles define what a user can do.

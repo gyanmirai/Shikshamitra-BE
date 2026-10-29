@@ -6,7 +6,7 @@ Read it before changing permissions, navigation guards, identity, user scope, or
 ## Authorization model
 
 - Action permission: whether the caller may perform the exact operation.
-- Module visibility: whether navigation exposes a module, independent of action grants.
+- Module visibility: whether navigation exposes a module. Effective visibility is required when assigning a mapped feature's action grants.
 - Tenant boundary: which tenant owns the target, enforced by the server.
 - User scope: which records within that tenant the caller may access.
 
@@ -33,7 +33,7 @@ Do not add individual backend action tiles, catalogue search, or a replacement e
 The backend permission definitions are authoritative for names, hierarchy, display labels, allowed providers, and tenancy side.
 Retain the complete server catalogue in the draft and preserve entries outside the displayed navigation groups.
 Grouped frontend controls may only submit names present in that catalogue and eligible for the selected provider.
-A missing visibility grant must not lock an authorized administrator out of configuring a known module.
+A missing visibility grant must not hide a known module from an authorized administrator's permission editor. It prevents new action grants until an administrator explicitly grants the required visibility, either beforehand or in the same permission batch.
 
 Frontend grouping follows the staging mappings and dependencies; it does not change backend permission definitions or endpoint enforcement.
 The user-approved Statutory Schemes exception retains the same UI with View/Edit/Delete controls.
@@ -81,6 +81,16 @@ Names are exact and case-sensitive.
 Reject unknown, duplicate, disabled, wrong-tenancy-side, and provider-ineligible entries atomically.
 Validate role names and user IDs against current-tenant identity records.
 Never normalize Add/Create/Edit aliases or silently discard unknown entries.
+
+### Navigation visibility prerequisite
+
+Positive action assignments through the flat, nested, and user-override services require effective visibility for the target provider, including each mapped navigation ancestor. A complete alternative navigation path is sufficient when a feature has multiple entries. API-only actions without a mapped navigation entry retain their existing behavior.
+
+The service evaluates the final requested batch before any writes. Explicit visibility Allow in that batch satisfies the prerequisite; Revoke removes only the selected provider's direct grant, and user Deny blocks inherited visibility. Follow role clears a user visibility override and evaluates the remaining role grants. Existing role visibility can satisfy a user's prerequisite without copying grants into the user.
+
+Missing prerequisites reject the entire batch with HTTP 400 and `VISIBILITY_PREREQUISITE_MISSING`, following the shared business-rule error contract. Visibility changes alone do not remove existing action grants or change endpoint authorization. Revoking existing actions, denying user access, and clearing overrides remain available for hidden features. No data migration, reseeding, or automatic access repair is performed.
+
+`src/ShikshaMitra.Domain.Shared/Security/Permissions/NavigationVisibilityPrerequisites.json` is the versioned server mapping from exact action namespaces to alternative navigation visibility paths. The longest exact or dot-boundary namespace match applies. Exact visibility flags remain independently configurable, including Institute Setup flags whose action children share the `ShikshaMitra.Module.*` namespace. Navigation changes that move a mapped feature or change its visibility controls require a coordinated mapping update and frontend/backend contract checks. Do not infer prerequisites from similar permission names or require flags absent from Set Visibility.
 
 Use ABP permission-management writes for provider semantics, cache invalidation, and audit participation.
 Use a transaction for the whole batch, reusing an existing transactional unit of work.

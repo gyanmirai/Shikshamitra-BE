@@ -25,10 +25,27 @@ public class StudentCredentialsRecipientReader(IStudentRepository students,
 	{
 		var student = await students.GetCredentialsProfileAsync(item.StudentId);
 		if (student == null || student.TenantId != item.TenantId) return [];
-		var email = Normalize(student.ContactDetail?.Email);
 		var applicant = await applicants.FindAsync(item.ApplicantId);
 		var capturedEmail = applicant != null && (applicant.ExistingStudentId == student.Id || applicant.ReservedStudentId == student.Id)
 			? AdmissionStudentProfileMapping.Read(applicant, "Applicant.Email") : null;
+		return await ReadProfileAsync(student, capturedEmail);
+	}
+
+	/// <summary>Canonical saved owners for an already-scoped linked child, including historical children without a current case.</summary>
+	internal async Task<IReadOnlyList<StudentCredentialsRecipientDto>> GetForStudentAsync(Guid studentId)
+	{
+		var student = await students.GetCredentialsProfileAsync(studentId);
+		if (student == null || !tenant.Id.HasValue || student.TenantId != tenant.Id) return [];
+		var boundApplicants = await applicants.GetListAsync(applicant => applicant.TenantId == tenant.Id &&
+			(applicant.ExistingStudentId == studentId || applicant.ReservedStudentId == studentId));
+		var capturedEmail = boundApplicants.Select(applicant => AdmissionStudentProfileMapping.Read(applicant, "Applicant.Email"))
+			.FirstOrDefault(email => SameEmail(email, student.ContactDetail?.Email));
+		return await ReadProfileAsync(student, capturedEmail);
+	}
+
+	private async Task<IReadOnlyList<StudentCredentialsRecipientDto>> ReadProfileAsync(Student student, string? capturedEmail)
+	{
+		var email = Normalize(student.ContactDetail?.Email);
 		var studentEmailRecorded = SameEmail(email, capturedEmail) || email != null && StudentPortalProfileEmail.HasStudentCapture(student, email);
 		if (!studentEmailRecorded && email != null)
 		{
@@ -37,7 +54,7 @@ public class StudentCredentialsRecipientReader(IStudentRepository students,
 			studentEmailRecorded = applied.Any(change => change.Section == "general" && ChangedToEmail(change.BeforeJson, change.PayloadJson, email));
 			if (!studentEmailRecorded && applied.Any(change => change.Section == "registration-form"))
 			{
-				var retained = await profiles.FindAsync(profile => profile.StudentId == student.Id && profile.TenantId == item.TenantId);
+				var retained = await profiles.FindAsync(profile => profile.StudentId == student.Id && profile.TenantId == student.TenantId);
 				if (retained != null) studentEmailRecorded = applied.Any(change => change.Section == "registration-form" &&
 					ChangedFormToEmail(change.BeforeJson, change.PayloadJson, email, retained.SourcesJson, retained.SchemaJson));
 			}

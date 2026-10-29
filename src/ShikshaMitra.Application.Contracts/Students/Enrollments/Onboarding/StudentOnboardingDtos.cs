@@ -122,6 +122,8 @@ public class StudentOnboardingCaseDto : FullAuditedEntityDto<Guid>
 	public bool AdmissionConfirmed { get; set; }
     public bool HasDocumentRequirementsSnapshot { get; set; }
 	public bool CredentialsPending { get; set; }
+	public bool? RequiredCredentialDeliveryConfirmed { get; set; }
+	public IReadOnlyList<StudentOnboardingServiceHandoffDto> RequiredServiceHandoffs { get; set; } = [];
 	public Guid? SelectedFeeStructureId { get; set; }
 	public bool FeeStructureConfirmed { get; set; }
 	public IReadOnlyList<CapturedStudentFieldDto> CapturedStudentFields { get; set; } = [];

@@ -282,10 +282,12 @@ public class AdmissionFormAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
 	public Task<IReadOnlyList<AdmissionFormDataSourceMetadataDto>> GetDataSourcesAsync() => Task.FromResult(AdmissionFormDataSourceRegistry.Metadata);
 
-	[Authorize(ShikshaMitraSubmodulePermissions.Students.AdmissionForms.View)]
-	public Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null,
-		string? searchTerm = null, int skipCount = 0, int maxResultCount = 20, List<Guid>? selectedIds = null) =>
-		dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId, searchTerm, skipCount, maxResultCount, selectedIds);
+	public async Task<IReadOnlyList<AdmissionFormOptionDto>> GetOptionsAsync(string sourceKey, Guid? parentId = null, Guid? academicYearId = null,
+		string? searchTerm = null, int skipCount = 0, int maxResultCount = 20, List<Guid>? selectedIds = null)
+	{
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionFormOptionsAccessService>().EnsureReadAsync(sourceKey);
+		return await dataSourceRegistry.GetOptionsAsync(sourceKey, parentId, academicYearId, searchTerm, skipCount, maxResultCount, selectedIds);
+	}
 
 	private static List<string> Compare(AdmissionFormDto from, AdmissionFormDto to)
 	{

@@ -66,12 +66,16 @@ public class AdmissionApplicationFormService(
 		Guid applicationId,
 		UpdateAdmissionApplicationFormValuesDto input)
 	{
+		using var work = UnitOfWorkManager.Begin(new Volo.Abp.Uow.AbpUnitOfWorkOptions
+		{ IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);
 		var application = await applicationReadService.GetEntityAsync(applicationId);
 		application.SaveDraft();
 		EnsureConcurrency(application, input.ConcurrencyStamp);
 		var instance = await GetInstanceAsync(applicationId);
 		var existingValues = await valueRepository.GetListAsync(value => value.FormInstanceId == instance.Id);
 		var definitions = await fieldRepository.GetListAsync(field => field.FormDefinitionId == instance.FormDefinitionId);
+		await LazyServiceProvider.LazyGetRequiredService<AdmissionJoiningDateCapture>()
+			.GuardFormChangeAsync(application, definitions, input.Values);
 		var applicant = await applicantRepository.FindAsync(application.ApplicantId);
 		AdmissionGuardian? guardian = null;
 		if (applicant is not null && definitions.Any(field => field.BindingType == AdmissionFormBindingType.System && field.BindingKey?.StartsWith("Guardian.", StringComparison.OrdinalIgnoreCase) == true))
@@ -148,7 +152,9 @@ public class AdmissionApplicationFormService(
 			"DraftSaved", System.Text.Json.JsonSerializer.Serialize(input.Values.Select(value => value.FieldCode).Distinct(StringComparer.OrdinalIgnoreCase)), CurrentUser.Id), false);
 		await applicationRepository.UpdateAsync(application, false);
 		await activityRepository.InsertAsync(LazyServiceProvider.LazyGetRequiredService<StudentJourneyAuditWriter>().CreateActivity("ApplicationSaved", "Application draft saved", application.ApplicantId, application.Id), true);
-		return await GetAsync(applicationId);
+		var result = await GetAsync(applicationId);
+		await work.CompleteAsync();
+		return result;
 	}
 
 	internal async Task RecoverFirstParentContactAsync(AdmissionApplication application, AdmissionApplicant applicant,

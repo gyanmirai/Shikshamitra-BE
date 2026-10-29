@@ -209,7 +209,11 @@ public partial class ShikshaMitraPermissionAppService : ApplicationService, IPer
 		};
 	}
 
-	public virtual async Task UpdateAsync(string providerName, string providerKey, UpdatePermissionsDto input)
+	public virtual Task UpdateAsync(string providerName, string providerKey, UpdatePermissionsDto input) =>
+		UpdatePermissionsAsync(providerName, providerKey, input);
+
+	private async Task UpdatePermissionsAsync(string providerName, string providerKey, UpdatePermissionsDto input,
+		UserPermissionOverrideDto[]? overrides = null)
 	{
 		// Reuse the request transaction. A direct invocation still owns a transaction when needed.
 		using var ownedTransaction = _unitOfWorkManager.Current?.Options.IsTransactional == true
@@ -234,6 +238,7 @@ public partial class ShikshaMitraPermissionAppService : ApplicationService, IPer
 					if (!current.IsEnabled || !await SimpleStateCheckerManager.IsEnabledAsync(current))
 						throw InvalidPermissions();
 			}
+			await ValidateVisibilityPrerequisitesAsync(providerName, providerKey, input.Permissions, overrides);
 			// ABP 9 PermissionManager.SetAsync compares effective access, so an inherited grant can
 			// suppress a requested direct grant. Use its registered management provider after validation.
 			var provider = Options.ManagementProviders

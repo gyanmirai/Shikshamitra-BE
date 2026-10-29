@@ -23,8 +23,9 @@ public partial class StudentOnboardingAppService
 		if (!CurrentUser.Id.HasValue) throw new AbpAuthorizationException();
 		var item = await GetCaseAsync(id);
 		var handoff = await handoffRepository.FindAsync(h => h.OnboardingCaseId == id &&
-			h.ServiceKey == "service-consent" && h.Required)
-			?? throw new BusinessException(StudentOnboardingErrorCodes.ServiceConsentInvalid)
+			h.ServiceKey == "service-consent" && h.Required);
+		if (handoff == null || !IsApplicableServiceHandoff(item, handoff))
+			throw new BusinessException(StudentOnboardingErrorCodes.ServiceConsentInvalid)
 				.WithData("Reason", "Service consent is not required for this onboarding case.");
 		if (handoff.Status == StudentOnboardingServiceHandoffStatus.Acknowledged)
 			return await MapCaseAsync(item, true);
@@ -72,7 +73,7 @@ public partial class StudentOnboardingAppService
 		if (reviewedReturn) await LazyServiceProvider.LazyGetRequiredService<ShikshaMitra.Students.Records.StudentRecordAdmissionReturnService>().ValidateOnboardingAsync(item, false);
 		var handoffs = await handoffRepository.GetListAsync(h => h.OnboardingCaseId == item.Id);
 		var now = DateTime.UtcNow;
-		handoffs = handoffs.Where(h => h.ServiceKey != "finance-first-payment" && (h.ServiceKey != "service-consent" || !item.ExtraProperties.ContainsKey("ReadinessRulesSnapshot"))).ToList();
+		handoffs = handoffs.Where(handoff => IsApplicableServiceHandoff(item, handoff)).ToList();
 		foreach (var account in handoffs.Where(h => h.ServiceKey is "student-account" or "guardian-account"))
 		{
 			var type = account.ServiceKey.Replace("-account", "");

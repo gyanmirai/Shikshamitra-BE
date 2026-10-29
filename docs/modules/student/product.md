@@ -1,9 +1,9 @@
----
+﻿---
 module: student
 domain: product
 content_type: Reference
 status: canonical
-updated_on: 2026-10-27
+updated_on: 2026-10-28
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -28,14 +28,21 @@ The credentials workspace exposes whether adult access is enabled by the saved a
 
 ## Add or update an app-login email during onboarding
 
-Authorized staff can add or update the selected Student, Father or Mother email directly from App Login, including when Admission did not capture it.
+Authorized staff can add or update the selected Student, Father, Mother or Guardian email directly from App Login, including when Admission did not capture it.
 Before account creation, the narrow edit saves the current profile and explicit Student-recipient provenance without sending credentials or granting portal access.
+Discovering an existing Parent match does not confirm access: its unlinked profile email remains editable, and activation without a link does not require Identity Users Update. A persisted reviewed selection and an existing linked login retain their stronger change checks.
 Manual Send Credentials retains saved account-access policy, activation/readiness checks, identity permissions, cooldown and durable delivery rules.
 An email already used by an existing account never silently merges families or grants that account access to another child.
+Father, Mother and Guardian contact profiles may retain the same family mailbox; saving it grants no access and creates no identity. App Login selects one adult. Student and adult app-login destinations must remain distinct, and actual conflicting identities still block the edit.
 For an already-linked account, an authorized identity updater requests owner verification of the new email; the old login remains unchanged until that verification succeeds.
 A shared parent change requires confirmation and applies to all existing child links atomically, keeping the same identity, password and relationships.
 Pending guardian-access reviews, out-of-scope children, stale profiles, changed links, invalid/expired tokens and email collisions block the change rather than partially rewriting profiles.
-Historical generic-guardian accounts retain their existing reviewed repair path. Saved Student, Father, Mother and optional Guardian recipients remain distinct; the narrow email editor handles Student/Father/Mother, while guardian corrections use Records review.
+Linked email changes recheck canonical opposite-account saved recipients for every linked child when requested, before verification delivery and when the owner confirms. This rejects a Student/adult destination collision even before the opposite identity exists. Legacy raw contact fallback without Student-own-email provenance remains ineligible as a Student login and does not create a new collision rule.
+Saved Student, Father, Mother and Guardian recipients remain distinct. Guardian login email changes use the same owner verification, shared-child confirmation, expiry, cooldown and all-child scope checks; wider identity or relationship replacement still requires Records review.
+
+An eligible existing Parent can be explicitly confirmed and linked after activation inside Onboarding without Admissions family confirmation. The saved relationship/email/user ID, active Parent-only identity, exact verified existing-child association, target/source scope, pending access reviews, current stamp and saved access policy are rechecked. Onboarding records its own confirmation and audit; historical Admissions evidence is unchanged. Existing adult links cannot be switched through this command. Unconfirmed parents require their exact source-child initial setup evidence.
+
+Linked reused parents can receive explicit sign-in help through the current durable outbox. This sends a protected owner recovery/setup link and never generates, adds, resets or replaces a password. Automatic and ordinary credential sends remain suppressed for reused accounts; original failed account setup retains its separate retry path. Each selected recipient remains an independent email intent with its own status, cooldown and failure.
 
 ## Automatic application numbers
 
@@ -76,7 +83,7 @@ Admission event instants use UTC and timezone-aware persistence parameters. Prev
 | Email presentation | The module-local `StudentCredentialEmailTemplate` renders an encoded, responsive Arial credential card with the school code, username, available temporary password and linked Student. It uses the existing primary/info/grey palette and an official, non-clickable Google Play badge while no published app destination is configured. Ordinary credential messages have no verification button, School login link or coming-soon banner. Existing accounts do not receive a replacement password; recovery-only messages retain a small text setup/reset link when needed. Rendering does not change the generated password, authentication, recipient checks or delivery semantics. |
 | Account and delivery settings | Not needed disables new preparation/delivery; Optional permits it without blocking completion; Required gates completion on the account and required delivery work. Legacy false/true retains Not needed/Required semantics. Account preparation and delivery eligibility remain separate. Explicitly selecting automatic delivery enables email only for enabled account types; manual is the default and leaves sending to staff. Existing saved automatic choices remain intact. Optional accounts may be requested after completion without reopening the case, and requested delivery remains visible in Credentials until sent. |
 | Automatic recipients | Automatic mode can prepare enabled accounts with eligible saved contact details and existing identity grants. New App Login rules with multiple saved parents require staff to select the recipient through Send Credentials. Missing optional contact details do not hold setup open. No new mailbox-verification bypass is introduced. |
-| One-click staff delivery | Send Credentials authorizes only the current saved Student or explicitly confirmed parent/guardian recipient, prepares or safely reuses its account and records durable intent in one transaction. Adult manual requests require recipient-access confirmation; this is not mailbox verification. Explicit manual intent may send with automatic email Off without changing saved flags, required-account policy, readiness, timing or identity grants. The scoped App Login command saves missing/unlinked Student/Father/Mother email; linked changes require owner verification and wider guardian repairs retain Records review. Guardian-fallback Student email is not eligible. Completion-timed requests wait without generating a password until non-email requirements complete. |
+| One-click staff delivery | Send Credentials authorizes only the current saved Student or explicitly confirmed parent/guardian recipient, prepares or safely reuses its account and records durable intent in one transaction. Adult manual requests require recipient-access confirmation; this is not mailbox verification. Explicit manual intent may send with automatic email Off without changing saved flags, required-account policy, readiness, timing or identity grants. The scoped App Login command saves missing/unlinked Student/Father/Mother/Guardian email; linked changes require owner verification and wider identity/relationship repairs retain Records review. Guardian-fallback Student email is not eligible. Completion-timed requests wait without generating a password until non-email requirements complete. |
 | Exit | Applied Withdraw/Transfer/Graduate transitions set Left and revoke only that child's portal links. Current portal reads and token renewal deny departed children; shared Parent identities retain access to other children. Reviewed corrections restore only recorded links that still match the owner profile and exclusive role. |
 | Verification boundary | Sent means the configured email sender accepted delivery. Inbox arrival and the separately maintained mobile-app UI require their own acceptance checks. |
 
@@ -337,7 +344,7 @@ Form defaults to managed Submission with rules with applicant Save Draft retaine
 
 ## Managed Payment stages
 
-Payment is a configurable Finance completion checkpoint. Candidates must be published and match the tenant and Offering academic-year/Board/Medium/Class context. Selection saves the versioned structure and mandatory/optional head snapshot with application concurrency and creates no Finance assignment, due, receipt or settlement. Its pinned version 1 completion policy defaults to confirmed partial payment with audited collection deferral enabled. Full payment means the entire selected class structure, including future installments, is settled by Finance; confirmed zero-payable clearance requires no artificial payment. Missing/unprepared data, pending verification and historical payment flags do not establish full settlement. Disabling collection deferral removes the capability and rejects direct deferral commands. Ordinary completion requires both a valid saved snapshot and the policy's Finance decision; allowed deferral retains the existing mandatory reason and handoff behavior. Finance module code and monetary contracts remain unchanged.
+Payment is a fixed Finance collection checkpoint. Published structures must match the tenant and Offering academic-year/Board/Medium/Class. Selection saves the versioned structure and mandatory/optional heads with application concurrency, without creating Finance obligations. Ordinary continuation requires a valid selection plus any confirmed Finance payment or Finance-verified zero payable. Missing/unprepared balances and historical/unverified payment flags alone are insufficient. Active-stage collection deferral is available with its mandatory reason. Partial/Full and allowCollectionLater configuration are retired: runtime ignores old saved settings, new draft normalization strips them, and existing published definitions/history are not rewritten. Finance module code, permissions and monetary contracts remain unchanged.
 
 Actual fee assignment and collection remain Finance-owned. Offering-linked Onboarding reads/selects/confirms the existing structure only. This confirmation is never a Paid status. Admission payer, purpose, independent amount, collection settings and financial transaction actions are removed from the supported stage.
 

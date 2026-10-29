@@ -36,7 +36,8 @@ public static class HrReportingCatalogue
 				f.Groupable = f.Type is "string" or "date" or "boolean";
 				f.Chartable = f.Groupable || f.Summarizable;
 			}
-			if (dataset.Id.StartsWith("payroll_", StringComparison.Ordinal)) dataset.Parameters.Add("includeDrafts");
+			if (dataset.Id.StartsWith("payroll_", StringComparison.Ordinal) && !PayrollIssuedReportBoundary.IsSalaryDocument(dataset.Id))
+				dataset.Parameters.Add("includeDrafts");
 			if (dataset.Id == "performance") dataset.Parameters.Add("cycleId");
 			if (dataset.Id is "attendance" or "employee") dataset.Parameters.AddRange(["academicYearId", "educationMediumStageId", "employeeGroup"]);
 		}

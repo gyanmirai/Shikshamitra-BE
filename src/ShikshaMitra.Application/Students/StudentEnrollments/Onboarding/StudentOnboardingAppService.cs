@@ -855,8 +855,9 @@ public partial class StudentOnboardingAppService(
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.View)]
 	public async Task<IReadOnlyList<StudentOnboardingServiceHandoffDto>> GetServiceHandoffsAsync(Guid id)
 	{
-		await GetCaseAsync(id);
+		var onboardingCase = await GetCaseAsync(id);
 		return (await handoffRepository.GetListAsync(item => item.OnboardingCaseId == id))
+			.Where(handoff => IsApplicableServiceHandoff(onboardingCase, handoff))
 			.OrderBy(item => item.ServiceKey).Select(MapHandoff).ToList();
 	}
 
@@ -866,7 +867,7 @@ public partial class StudentOnboardingAppService(
 		var item = await GetCaseAsync(id);
 		var handoff = await handoffRepository.FindAsync(item => item.Id == handoffId && item.OnboardingCaseId == id) ??
 			throw new EntityNotFoundException(typeof(StudentOnboardingServiceHandoff), handoffId);
-		if (handoff.ServiceKey is not ("finance-first-payment" or "student-account" or "guardian-account") ||
+		if (!IsApplicableServiceHandoff(item, handoff) || handoff.ServiceKey is not ("student-account" or "guardian-account") ||
 			!item.StudentEnrollmentId.HasValue || item.Status is StudentOnboardingStatus.Completed or StudentOnboardingStatus.Cancelled)
 			throw new BusinessException(StudentOnboardingErrorCodes.CaseNotEditable);
 		await RefreshProvisioningAsync(item);
@@ -1392,13 +1393,15 @@ public partial class StudentOnboardingAppService(
 				a.Status == StudentIdentifierAllocationStatus.Reserved)
 			: null;
 		var handoffs = onboardingCase.StudentEnrollmentId.HasValue
-			? await handoffRepository.GetListAsync(h => h.OnboardingCaseId == onboardingCase.Id && h.Required && h.ServiceKey != "finance-first-payment" && (h.ServiceKey != "service-consent" || !onboardingCase.ExtraProperties.ContainsKey("ReadinessRulesSnapshot")))
+			? (await handoffRepository.GetListAsync(h => h.OnboardingCaseId == onboardingCase.Id && h.Required))
+				.Where(handoff => IsApplicableServiceHandoff(onboardingCase, handoff)).ToList()
 			: [];
 		var requiredHandoffs = onboardingCase.Status != StudentOnboardingStatus.Completed ? handoffs : [];
 		var studentAccount = handoffs.Find(h => h.ServiceKey == "student-account");
 		var guardianAccount = handoffs.Find(h => h.ServiceKey == "guardian-account");
 		var accountPolicy = !onboardingCase.StudentEnrollmentId.HasValue ? await ResolvePolicyAsync(onboardingCase) : null;
 		var accountRules = await ReadSavedRulesAsync(onboardingCase);
+		var credentialReadiness = await ReadCredentialReadinessAsync(onboardingCase, accountRules);
 		var satisfied = steps.Count(step => IsSatisfied(step.Status));
 		var primaryBlocker = StudentOnboardingWorkSummary.PrimaryBlocker(steps, requiredHandoffs);
 		var progressTotal = steps.Count + requiredHandoffs.Count;
@@ -1413,7 +1416,9 @@ public partial class StudentOnboardingAppService(
 					}).ToList()
 				: [],
 			Id = onboardingCase.Id,
-			CredentialsPending = await CredentialsPendingAsync(onboardingCase),
+			CredentialsPending = credentialReadiness.Pending,
+			RequiredCredentialDeliveryConfirmed = credentialReadiness.RequiredDeliveryConfirmed,
+			RequiredServiceHandoffs = handoffs.OrderBy(handoff => handoff.ServiceKey).Select(MapHandoff).ToList(),
 			PortalAccountOwners = includeEvents && student != null ? MapPortalAccountOwners(student) : null,
 			AdmissionRoute = onboardingCase.GetAdmissionRoute(),
 			FeeAssignmentConfirmed = feeConfirmed,
@@ -1531,6 +1536,11 @@ public partial class StudentOnboardingAppService(
 		MaximumSequence = series.MaximumSequence, EffectiveFrom = series.EffectiveFrom, EffectiveUntil = series.EffectiveUntil,
 		IsActive = series.IsActive, NextPreview = $"{series.Prefix}{series.NextSequence.ToString().PadLeft(series.Padding, '0')}{series.Suffix}"
 	};
+
+	// Keep retired handoffs in persisted history, outside current readiness and operational actions.
+	private static bool IsApplicableServiceHandoff(StudentOnboardingCase item, StudentOnboardingServiceHandoff handoff) =>
+		handoff.ServiceKey != "finance-first-payment" &&
+		(handoff.ServiceKey != "service-consent" || !item.ExtraProperties.ContainsKey("ReadinessRulesSnapshot"));
 
 	private static StudentOnboardingServiceHandoffDto MapHandoff(StudentOnboardingServiceHandoff handoff) => new()
 	{

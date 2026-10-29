@@ -85,7 +85,7 @@ public class EsiCorrectness_Tests : ShikshaMitraApplicationTestBase<ShikshaMitra
 	}
 
 	[Fact]
-	public void Registration_pending_without_number_must_block_final_payroll()
+	public void Registration_pending_keeps_eligible_contributions_without_blocking_final_payroll()
 	{
 		var employeeId = Guid.NewGuid();
 		var componentId = Guid.NewGuid();
@@ -103,7 +103,10 @@ public class EsiCorrectness_Tests : ShikshaMitraApplicationTestBase<ShikshaMitra
 		result.EmployeeStateInsuranceNumber.ShouldBeNull();
 		result.EmployeeStateInsuranceCoverageDecision.ShouldBe("WITHIN_WAGE_CEILING");
 		PayrollLockPreconditionGuard.HasBlockingLockIssue(JsonSerializer.Serialize(result.StatutoryIssueCodes))
-			.ShouldBeTrue("Covered payroll has no insurance number but may pass the statutory lock check.");
+			.ShouldBeFalse();
+		result.EmployeeStateInsuranceWages.ShouldBe(10000m);
+		result.TotalDeduction.ShouldBe(75m);
+		result.EmployerContributionTotal.ShouldBe(325m);
 	}
 
 	[Fact]
@@ -153,12 +156,12 @@ public class EsiCorrectness_Tests : ShikshaMitraApplicationTestBase<ShikshaMitra
 	}
 
 	[Theory]
-	[InlineData("WITHIN_WAGE_CEILING", true)]
-	[InlineData("CONTRIBUTION_PERIOD_CONTINUATION", true)]
-	[InlineData("FORCE_COVERED_OVERRIDE", true)]
+	[InlineData("WITHIN_WAGE_CEILING", false)]
+	[InlineData("CONTRIBUTION_PERIOD_CONTINUATION", false)]
+	[InlineData("FORCE_COVERED_OVERRIDE", false)]
 	[InlineData("ABOVE_WAGE_CEILING", false)]
 	[InlineData("FORCE_NOT_COVERED_OVERRIDE", false)]
-	public void Lock_checks_coverage_facts_even_when_issue_codes_and_contributions_are_empty(string decision, bool blocked)
+	public void Missing_registration_number_does_not_invent_a_coverage_lock_blocker(string decision, bool blocked)
 	{
 		var id = Guid.NewGuid();
 		var snapshot = new PayrollRunItemSnapshot(Guid.NewGuid(), null, "2026-08", id)

@@ -131,6 +131,8 @@ internal static class AdmissionAdditionalStudentFieldCatalog
 		if (!Metadata.TryGetValue(key, out var field) ||
 			!applicant.ExtraProperties.TryGetValue(PropertyPrefix + field.Key, out var raw) || raw is null)
 			return null;
+		if (field.Key == "Academic.JoiningDate" && raw is DateTime joiningDate)
+			return joiningDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 		var value = raw.ToString();
 		return field.FieldType switch
 		{

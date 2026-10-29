@@ -236,8 +236,7 @@ internal static class SalaryTemplateCalculator
 		var (allocationMinimum, allocationMaximum) = SalaryTemplateAllocation.GetGrossBounds(rules, upperBound);
 		if (allocationMinimum > allocationMaximum)
 		{
-			throw new BusinessException("HR:Payroll:CompensationTargetNotSolvable")
-				.WithData("salaryBasis", inputBasis.ToString()).WithData("target", target);
+			throw TargetNotSolvable(inputBasis, target, rules);
 		}
 		var breakpoints = new SortedSet<decimal> { allocationMinimum, allocationMaximum };
 		foreach (var slab in slabs)
@@ -322,15 +321,30 @@ internal static class SalaryTemplateCalculator
 		}
 		if (feasible.Count == 0)
 		{
-			throw new BusinessException("HR:Payroll:CompensationTargetNotSolvable")
-				.WithData("salaryBasis", inputBasis.ToString())
-				.WithData("target", target)
-				.WithData("message", "This target cannot be reached with earnings that reconcile to gross. Change the target or the template's earning rules.");
+			throw TargetNotSolvable(inputBasis, target, rules);
 		}
 
 		return inputBasis == SalaryInputBasis.TakeHome
 			? feasible.OrderBy(x => x.Gross).ThenBy(x => x.Net - target).First().Gross
 			: feasible.OrderByDescending(x => x.Gross).ThenBy(x => target - x.EmployerCost).First().Gross;
+	}
+
+	private static BusinessException TargetNotSolvable(SalaryInputBasis basis, decimal target,
+		IReadOnlyList<SalaryTemplateRule> rules)
+	{
+		var fixedEarnings = rules.Where(x => x.LineKind == SalaryTemplateLineKind.Earning &&
+			x.FormulaType == SalaryTemplateFormulaType.FixedAmount).Sum(x => Round(x.Value ?? 0m));
+		var fixedExceedsCost = basis == SalaryInputBasis.EmployerCost && fixedEarnings > target;
+		return new BusinessException(HRErrorCodes.CompensationTargetNotSolvable)
+			.WithData("salaryBasis", basis.ToString())
+			.WithData("target", target)
+			.WithData("fixedEarnings", fixedEarnings)
+			.WithData("reason", fixedExceedsCost ? "FIXED_EARNINGS_EXCEED_EMPLOYER_COST" : "EARNINGS_CANNOT_RECONCILE")
+			.WithData("field", "monthlyAmount")
+			.WithData("relatedField", "rules")
+			.WithData("message", fixedExceedsCost
+				? FormattableString.Invariant($"Fixed earnings total INR {fixedEarnings:0.00}, exceeding the monthly cost to school of INR {target:0.00} by INR {fixedEarnings - target:0.00}, before employer PF/ESIC contributions. Reduce the fixed earning amounts or set a target that matches earnings plus applicable employer contributions. Employee deductions do not reduce employer cost.")
+				: "The monthly target cannot be reached with these earning rules and applicable employer contributions. Review the amount and earning rules together: earnings must equal gross, and cost to school must include employer PF/ESIC contributions. Fixed earnings cannot scale automatically; use an explicit remainder earning only if the salary should vary with the target.");
 	}
 
 	private static SalaryTemplateEvaluation EvaluateGross(

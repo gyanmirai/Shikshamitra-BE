@@ -8,9 +8,15 @@ using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePerm
 namespace ShikshaMitra.HR.Payroll.SalarySlips;
 
 [RemoteService(false)]
-public class SalarySlipAppService(SalarySlipWorkflow workflow, SalarySlipPdfWorkflow pdfWorkflow)
+public class SalarySlipAppService(SalarySlipWorkflow workflow, SalarySlipPdfWorkflow pdfWorkflow,
+	SalarySlipAvailabilityReader availability)
 	: ApplicationService, ISalarySlipAppService
 {
+	public async Task<SalarySlipAvailabilityDto> GetAvailabilityAsync(Guid employeeId, string monthYear, Guid? academicYearId = null)
+	{
+		await AuthorizationService.CheckAsync(Permissions.View);
+		return await availability.GetAsync(employeeId, monthYear, academicYearId);
+	}
 	public async Task<SalarySlipDto> GetSalarySlipAsync(Guid employeeId, string monthYear)
 	{
 		await AuthorizationService.CheckAsync(Permissions.View);

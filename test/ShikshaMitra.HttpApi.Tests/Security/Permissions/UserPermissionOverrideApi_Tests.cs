@@ -25,6 +25,7 @@ public partial class PermissionConsistencyApi_Tests
     public async Task User_overrides_survive_role_updates_and_follow_role_clears_them()
     {
         var (role, user) = await CreateTargetAsync();
+        await GrantActionVisibilityAsync(Url("R", role), View, Edit);
         await SetAsync(Url("R", role), (View, true));
         await SetOverridesAsync(user, (View, "deny"), (Edit, "allow"));
         await AssertOverrideAsync(user, View, "deny", false);
@@ -47,6 +48,7 @@ public partial class PermissionConsistencyApi_Tests
         var (role, user) = await CreateTargetAsync();
         const string alias = "AbpIdentity.Users";
         const string derived = "Academics";
+        await GrantActionVisibilityAsync(Url("R", role), "AbpIdentity.Users.Delete");
         await SetAsync(Url("R", role), ("AbpIdentity.Users.Delete", true));
         await SetOverridesAsync(user, (alias, "deny"), (derived, "deny"));
         await AssertRealCheckerAsync(user, role, alias, false);

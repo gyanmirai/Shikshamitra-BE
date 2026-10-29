@@ -28,7 +28,7 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 			foreach (var field in section.Fields)
 			{
 				if (fullForm && source.FormMaskedFieldCodes.Contains(field.Code)) continue;
-				if (!AdmissionFormMasterDataValidator.TrySource(field.OptionsJson, out var key, out var parentField) || !AdmissionFormDataSourceRegistry.IsAllowed(key)) continue;
+				if (!AdmissionFormMasterDataValidator.TrySource(AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson), out var key, out var parentField) || !AdmissionFormDataSourceRegistry.IsAllowed(key)) continue;
 				if (!key.Equals("StudentSiblings", StringComparison.OrdinalIgnoreCase)) permitted ??= await directoryOptions.GetAsync(source.AcademicYearId);
 				var rows = section.IsRepeatable ? Math.Max(RowCount(source.CurrentValues.GetValueOrDefault(field.Code)), RowCount(source.OriginalValues.GetValueOrDefault(field.Code))) : 1;
 				var all = new List<AdmissionFormOptionDto>();
@@ -60,7 +60,7 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 	{
 		if (input.SkipCount < 0 || input.MaxResultCount is < 1 or > 21 || input.SearchTerm?.Length > 100 || input.SelectedIds == null ||
 			input.SelectedIds.Count > 20 || input.SelectedIds.Contains(Guid.Empty)) throw new BusinessException("Students:Records:InvalidDirectoryQuery");
-		if (!AdmissionFormMasterDataValidator.TrySource(field.OptionsJson, out var key, out _) || !AdmissionFormDataSourceRegistry.IsAllowed(key))
+		if (!AdmissionFormMasterDataValidator.TrySource(AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson), out var key, out _) || !AdmissionFormDataSourceRegistry.IsAllowed(key))
 			throw new BusinessException("Students:Records:InvalidCustomField");
 		var retained = Selected(source.CurrentValues.GetValueOrDefault(field.Code)).Concat(Selected(source.OriginalValues.GetValueOrDefault(field.Code))).ToHashSet();
 		if (input.SelectedOnly && (!string.IsNullOrWhiteSpace(input.SearchTerm) || input.SkipCount != 0)) throw new BusinessException("Students:Records:InvalidDirectoryQuery");
@@ -77,7 +77,7 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 	}
 	internal async Task<bool> AreChangedMasterOptionsAllowedAsync(StudentRecordRegistrationSourceDto source, AdmissionFormFieldDto field, JsonElement previous)
 	{
-		if (!AdmissionFormMasterDataValidator.TrySource(field.OptionsJson, out var key, out var parentField) || key.Equals("StudentSiblings", StringComparison.OrdinalIgnoreCase)) return true;
+		if (!AdmissionFormMasterDataValidator.TrySource(AdmissionAcademicFormOptions.OptionsJson(field.Code, field.FieldType, field.OptionsJson), out var key, out var parentField) || key.Equals("StudentSiblings", StringComparison.OrdinalIgnoreCase)) return true;
 		if (!AdmissionFormDataSourceRegistry.IsAllowed(key)) return false;
 		var section = source.Definition!.Sections.Single(x => x.Id == field.SectionId);
 		var current = source.CurrentValues[field.Code]; var count = section.IsRepeatable ? RowCount(current) : 1;
@@ -125,6 +125,9 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 		{
 			"EducationBoards" => permitted.Boards.Select(x => x.Id).ToHashSet(),
 			"EducationMediums" => permitted.Mediums.Where(x => x.ParentId == parent).Select(x => x.Id).ToHashSet(),
+			"Standards" => permitted.Standards.Where(x => !parent.HasValue || x.ParentId == parent).Select(x => x.Id).ToHashSet(),
+			"StandardsByMedium" => permitted.Standards.Where(x => x.ParentId == parent).Select(x => x.Id).ToHashSet(),
+			"DivisionsByStandard" => permitted.Divisions.Where(x => x.ParentId == parent).Select(x => x.Id).ToHashSet(),
 			"StandardsByMediumStage" => (await AsyncExecuter.ToListAsync((await standards.GetQueryableAsync()).Where(x => x.TenantId == CurrentTenant.Id &&
 				x.EducationMediumStageId == parent && Enumerable.Contains(permittedStandardIds, x.Id)).Select(x => x.Id))).ToHashSet(), _ => []
 		};
@@ -133,7 +136,8 @@ public class StudentRecordFieldOptionsService(AdmissionFormDataSourceRegistry re
 		var knownLabels = key switch
 		{
 			"EducationBoards" => permitted.Boards, "EducationMediums" => permitted.Mediums,
-			"StandardsByMediumStage" => permitted.Standards, _ => []
+			"StandardsByMediumStage" or "Standards" or "StandardsByMedium" => permitted.Standards,
+			"DivisionsByStandard" => permitted.Divisions, _ => []
 		};
 		var labels = knownLabels.Where(x => selected.Contains(x.Id)).Select(x => new AdmissionFormOptionDto
 		{ Value = x.Id.ToString(), Label = x.Name, IsActive = allowedIds.Contains(x.Id) }).ToList();

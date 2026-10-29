@@ -82,6 +82,12 @@ public class StudentOnboardingController(IStudentOnboardingAppService service) :
 		Result.Success(await service.LinkParentAsync(id, input));
 
 	// Case-only policy correction; never provisions accounts or sends an email.
+	[HttpPost("{id:guid}/student-app-access/enable")]
+	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
+	public async Task<Result<StudentCredentialsWorkspaceDto>> EnableStudentAppAccessAsync(Guid id, EnableStudentAppAccessDto input) =>
+		Result.Success(await service.EnableStudentAppAccessAsync(id, input));
+
+	// Case-only policy correction; never provisions accounts or sends an email.
 	[HttpPost("{id:guid}/guardian-credential-email/enable")]
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.StudentOnboarding.Configure)]
 	public async Task<Result<StudentOnboardingCaseDto>> EnableGuardianCredentialEmailAsync(Guid id, EnableGuardianCredentialEmailDto input) =>

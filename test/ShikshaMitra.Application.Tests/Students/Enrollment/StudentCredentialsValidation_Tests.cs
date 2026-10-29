@@ -20,7 +20,7 @@ public class StudentCredentialsValidation_Tests
 	public void One_click_contract_accepts_only_the_selected_saved_owner_shape(string type, string relationship)
 	{
 		new SendStudentCredentialsDtoValidator().Validate(new SendStudentCredentialsDto { AccountType = type, Relationship = relationship,
-			ExpectedEmail = "owner@example.test", ConcurrencyStamp = Guid.NewGuid().ToString("N") }).IsValid.ShouldBeTrue();
+			ConfirmRecipientAccess = type == "guardian", ExpectedEmail = "owner@example.test", ConcurrencyStamp = Guid.NewGuid().ToString("N") }).IsValid.ShouldBeTrue();
 	}
 
 	[Theory]
@@ -36,10 +36,20 @@ public class StudentCredentialsValidation_Tests
 	}
 
 	[Fact]
-	public void One_click_contract_has_no_arbitrary_address_or_client_verification_boolean()
+	public void One_click_contract_contains_only_saved_owner_guards_and_explicit_access_intents()
 	{
 		typeof(SendStudentCredentialsDto).GetProperties().Select(property => property.Name)
-			.ShouldBe(["AccountType", "Relationship", "ExpectedEmail", "ConcurrencyStamp"]);
+			.ShouldBe(["SendExistingParentHelp", "AccountType", "Relationship", "ExpectedEmail", "ConcurrencyStamp", "ConfirmRecipientAccess"]);
+	}
+	[Theory]
+	[InlineData("father")]
+	[InlineData("mother")]
+	[InlineData("guardian")]
+	public void Adult_credentials_and_existing_parent_help_require_explicit_access_confirmation(string relationship)
+	{
+		foreach (var help in new[] { false, true })
+			new SendStudentCredentialsDtoValidator().Validate(new SendStudentCredentialsDto { AccountType = "guardian", Relationship = relationship,
+				ExpectedEmail = "parent@example.test", ConcurrencyStamp = "stamp", SendExistingParentHelp = help }).IsValid.ShouldBeFalse();
 	}
 
 	[Theory]

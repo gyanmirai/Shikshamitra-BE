@@ -33,10 +33,10 @@ public partial class ShikshaMitraPermissionAppService
             await CheckProviderPolicy("U", userId.ToString());
             if (input?.Permissions == null || input.Permissions.Any(item => item == null || item.State is not ("inherit" or "allow" or "deny")))
                 throw InvalidPermissions();
-            await UpdateAsync("U", userId.ToString(), new UpdatePermissionsDto
+            await UpdatePermissionsAsync("U", userId.ToString(), new UpdatePermissionsDto
             {
                 Permissions = input.Permissions.Select(item => new UpdatePermissionDto { Name = item.Name, IsGranted = item.State == "allow" }).ToArray()
-            });
+            }, input.Permissions);
             foreach (var item in input.Permissions)
                 await _denies.SetDeniedAsync(userId, item.Name, item.State == "deny");
             if (ownedTransaction != null) await ownedTransaction.CompleteAsync();

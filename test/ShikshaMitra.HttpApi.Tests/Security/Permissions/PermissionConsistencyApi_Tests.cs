@@ -50,6 +50,7 @@ public partial class PermissionConsistencyApi_Tests(ShikshaMitraApiTestFactory f
         var (role, user) = await CreateTargetAsync();
         var roleUrl = Url("R", role);
         var userUrl = Url("U", user.ToString());
+        await GrantActionVisibilityAsync(roleUrl, Edit, Activate);
         await SetAsync(roleUrl, (Edit, true), (Activate, true));
         var roleGrants = await ReadAsync(roleUrl);
         roleGrants.Single(x => x.Name == Edit).IsGranted.ShouldBeTrue();
@@ -254,6 +255,12 @@ public partial class PermissionConsistencyApi_Tests(ShikshaMitraApiTestFactory f
     {
         using var response = await Client.PutAsJsonAsync(url, new { permissions = changes.Select(x => new { name = x.Name, isGranted = x.IsGranted }) });
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent, await response.Content.ReadAsStringAsync());
+    }
+    private Task GrantActionVisibilityAsync(string url, params string[] actions)
+    {
+        var names = actions.SelectMany(name => NavigationVisibilityPrerequisites.GetPaths(name).FirstOrDefault() ?? [])
+            .Distinct(StringComparer.Ordinal).ToArray();
+        return names.Length == 0 ? Task.CompletedTask : SetAsync(url, names.Select(name => (name, true)).ToArray());
     }
     private async Task<(string Role, Guid User)> CreateTargetAsync(Guid? tenantId = null)
     {

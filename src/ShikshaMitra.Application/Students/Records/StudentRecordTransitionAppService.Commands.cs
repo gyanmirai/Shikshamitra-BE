@@ -30,6 +30,13 @@ public partial class StudentRecordTransitionAppService
 			var classScope = ShikshaMitra.Students.StudentEnrollments.Onboarding.StudentOnboardingRollRuleReader.Parse(ruleJson) is { } rule && ShikshaMitra.Students.StudentEnrollments.Onboarding.OnboardingRuleConfiguration.Text(rule, "numberingScope") == "class";
 			var reserved = proposed.Where(x => x.TargetAcademicYearId == command.TargetAcademicYearId && x.TargetStandardId == command.TargetStandardId && (classScope || x.TargetDivisionId == command.TargetDivisionId)).Where(x => x.RollNumber.HasValue).Select(x => x.RollNumber!.Value);
 			var row = await readiness.PreviewAsync(input.AcademicYearId, command, policy.Policy, false, cohortReservations: reserved);
+			var changeRule = policy.Policy.Changes[command.Outcome is "Promote" or "Repeat" ? "Placement" : "Status"];
+			var effectiveDays = (command.EffectiveDate.Date - AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now)).TotalDays;
+			row.ApprovalRequired = row.OutstandingItems.Count > 0 || changeRule.RequiresApproval(effectiveDays < 0, effectiveDays > 0, command.Outcome == "Return");
+			if (row.OutstandingItems.Count > 0 && (changeRule.Stages.Count == 0 || changeRule.Stages.Any(x => x.RoleNames.Count == 0)))
+			{
+				StudentRecordTransitionReadinessService.Add(row, "OutstandingApprovalNotConfigured", "Configure an authorized approval stage before requesting exit with outstanding items."); row.Ready = false;
+			}
 			result.Items.Add(row);
 			var accepted = JsonSerializer.Deserialize<StudentRecordTransitionInput>(JsonSerializer.Serialize(command))!;
 			accepted.RollNumber = row.ProposedRollNumber ?? command.RollNumber;
@@ -78,9 +85,14 @@ public partial class StudentRecordTransitionAppService
 		foreach (var command in input.Items.Where(x => preview.Items.Single(p => p.StudentId == x.StudentId).Ready))
 		{
 			var source = await readiness.GetSourceAsync(command.StudentId, input.AcademicYearId);
+			if (StudentSchoolExitOutstanding.IsExit(command.Outcome) && await transitions.AnyAsync(x => x.TenantId == CurrentTenant.Id && x.StudentId == command.StudentId && x.AcademicYearId == input.AcademicYearId &&
+				(x.Outcome == "Withdraw" || x.Outcome == "Transfer" || x.Outcome == "Graduate") && (x.Status == "Submitted" || x.Status == "Approved" || x.Status == "Scheduled" || x.Status == "Exception")))
+				throw new BusinessException("Students:Records:ExitAlreadyPending");
 			var rule = policy.Policy.Changes[command.Outcome is "Promote" or "Repeat" ? "Placement" : "Status"];
 			var days = (command.EffectiveDate.Date - AdmissionCycleWindowEvaluator.GetInstitutionDate(Clock.Now)).TotalDays;
-			var stages = rule.RequiresApproval(days < 0, days > 0, command.Outcome == "Return") ? rule.Stages.Count : 0;
+			var outstanding = preview.Items.Single(x => x.StudentId == command.StudentId).OutstandingItems.Count > 0;
+			var stages = outstanding || rule.RequiresApproval(days < 0, days > 0, command.Outcome == "Return") ? rule.Stages.Count : 0;
+			if (outstanding && (stages == 0 || rule.Stages.Any(x => x.RoleNames.Count == 0))) throw new BusinessException("Students:Records:OutstandingApprovalNotConfigured");
 			var item = new StudentRecordTransition(GuidGenerator.Create(), CurrentTenant.Id.Value, batch.Id, source.Student.Id, input.AcademicYearId,
 				source.Enrollment.Id, command.Outcome, command.Reason, command.EffectiveDate, JsonSerializer.Serialize(command),
 				StudentRecordTransitionReadinessService.Capture(source.Student, source.Enrollment), policy.VersionId, policy.Policy.ToJson(), JsonSerializer.Serialize(rule),
@@ -118,10 +130,22 @@ public partial class StudentRecordTransitionAppService
 	[Authorize(ShikshaMitraSubmodulePermissions.Students.Records_Transitions.Approve)]
 	public async Task<StudentRecordTransitionDto> ApproveAsync(Guid id, StudentRecordTransitionDecisionDto input)
 	{
-		using var work = UnitOfWorkManager.Begin(requiresNew: true, isTransactional: true);
+		using var work = UnitOfWorkManager.Begin(new AbpUnitOfWorkOptions { IsTransactional = true, IsolationLevel = System.Data.IsolationLevel.Serializable }, requiresNew: true);
 		var item = await GetScopedAsync(id); Match(item, input.ConcurrencyStamp);
 		if (!await IsStageApproverAsync(item)) throw new AbpAuthorizationException();
+		StudentRecordTransitionPreviewRowDto? outstanding = null;
+		if (StudentSchoolExitOutstanding.IsExit(item.Outcome))
+		{
+			outstanding = await readiness.PreviewAsync(item.AcademicYearId, JsonSerializer.Deserialize<StudentRecordTransitionInput>(item.InputJson)!, StudentRecordsPolicy.FromJson(item.PolicyJson), false, validateDate: false);
+			if (!outstanding.Ready) throw new BusinessException(outstanding.Issues[0].Code);
+			if (outstanding.OutstandingItems.Count > 0 && (string.IsNullOrWhiteSpace(input.OutstandingReason) || input.OutstandingReason.Length > 1000)) throw new BusinessException("Students:Records:OutstandingReasonRequired");
+		}
 		item.Approve(CurrentUser.Id!.Value); await transitions.UpdateAsync(item);
+		if (outstanding?.OutstandingItems.Count > 0)
+		{
+			item.CaptureOutstandingApproval(outstanding.OutstandingEvidence);
+			await events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id!.Value, id, CurrentUser.Id.Value, "OutstandingApproved", item.CurrentApprovalStage, input.OutstandingReason.Trim()));
+		}
 		await events.InsertAsync(new(GuidGenerator.Create(), CurrentTenant.Id!.Value, id, CurrentUser.Id.Value, "Approved", item.CurrentApprovalStage, input.Remarks));
 		await work.CompleteAsync();
 		await ApplyBatchAsync(item.BatchId); return await ReadCommittedAsync(id);

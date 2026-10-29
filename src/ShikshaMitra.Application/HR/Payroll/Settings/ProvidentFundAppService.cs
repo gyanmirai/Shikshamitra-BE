@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Volo.Abp;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.Application.Services;
+using Permissions = ShikshaMitra.Constants.Permissions.ShikshaMitraSubmodulePermissions.HR.PayrollManagement_SettingsPfRule;
 
 namespace ShikshaMitra.HR.Payroll.Settings;
 
@@ -16,9 +18,15 @@ public class ProvidentFundAppService(
 		IProvidentFundAppService
 {
 	private readonly IProvidentFundRepository _providentFundRepository = providentFundRepository;
+	protected override Task CheckGetPolicyAsync() => AuthorizationService.CheckAsync(Permissions.View);
+	protected override Task CheckGetListPolicyAsync() => AuthorizationService.CheckAsync(Permissions.View);
+	protected override Task CheckCreatePolicyAsync() => AuthorizationService.CheckAsync(Permissions.Add);
+	protected override Task CheckUpdatePolicyAsync() => AuthorizationService.CheckAsync(Permissions.Add);
+	protected override Task CheckDeletePolicyAsync() => AuthorizationService.CheckAsync(Permissions.Delete);
 
 	public override async Task<ProvidentFundDto> CreateAsync(CreateUpdateProvidentFundDto input)
 	{
+		await CheckCreatePolicyAsync();
 		ArgumentNullException.ThrowIfNull(input);
 
 		await EnsureCodeAvailableAsync(input.Code);
@@ -47,6 +55,7 @@ public class ProvidentFundAppService(
 
 	public override async Task<ProvidentFundDto> UpdateAsync(Guid id, CreateUpdateProvidentFundDto input)
 	{
+		await CheckUpdatePolicyAsync();
 		ArgumentNullException.ThrowIfNull(input);
 
 		var existing = await Repository.GetAsync(id);
@@ -90,6 +99,7 @@ public class ProvidentFundAppService(
 
 	public async Task<PagedResultDto<ProvidentFundDto>> GetFilteredListAsync(int skipCount, int maxResultCount, string? search)
 	{
+		await CheckGetListPolicyAsync();
 		var queryable = await Repository.GetQueryableAsync();
 
 		if (!string.IsNullOrWhiteSpace(search))

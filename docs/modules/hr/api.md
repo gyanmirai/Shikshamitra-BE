@@ -3,7 +3,7 @@ module: hr
 domain: api
 content_type: Reference
 status: canonical
-updated_on: 2026-10-28
+updated_on: 2026-10-29
 owner: backend-team
 audience: humans-and-agents
 ---
@@ -208,13 +208,18 @@ Payroll APIs manage setup, preview, review, lock, and salary slips:
 | ESI statutory scheme | `/api/payroll/statutory-schemes/esi*` | `HR.PayrollManagement.Settings.StatutorySchemes.*` | Implemented |
 | Pay elements | `/api/payroll/pay-elements` | Class-level authorization | Implemented |
 | Payroll policies | `/api/hr/payroll/policies` | `HR.PayrollManagement.Settings.PayrollPolicies.*` | Implemented |
-| One-time salary components | `/api/payroll/employees/{employeeId}/salary-structure` | `HR.Employee.EmployeeList.*` | Implemented |
+| One-time salary components | `/api/payroll/employees/{employeeId}/salary-structure` | GET: `HR.Employee.EmployeeList.View`; PUT: `HR.PayrollManagement.PayrollStructure.Add` plus existing employee-modification authority | Implemented |
 | Compensation revisions | `/api/payroll/employees/{employeeId}/compensation` | `HR.PayrollManagement.CompensationRevisions.View`, `Manage`, or `ViewAudit` | Implemented |
 | Run payroll | `/api/payroll/run` | `HR.PayrollManagement.RunPayroll.*` | Generation-bound review and lock; rollout pending |
 | Durable payroll previews | `/api/payroll/run/previews*` | `HR.PayrollManagement.RunPayroll.View` | Additive migration and integration verification pending |
 | Salary slips | `/api/payroll/salary-slips` | `HR.PayrollManagement.GenerateSalarySlip.*` | Implemented |
 | Payroll attendance imports | `/api/payroll/attendance-imports*` | `HR.PayrollManagement.RunPayroll.View` | Implemented |
-| Professional tax | Not documented as HTTP API | Not documented | Partial |
+
+PF and professional-tax application services enforce their existing View, Add and Delete actions for direct calls as well as HTTP requests; Add does not require View.
+Salary-structure application calls retain the same employee ownership/scope and modification checks as their controllers.
+Salary-template reads require Salary Templates View, except the active assignment catalogue, which requires Compensation Revisions Manage.
+Template create, update, default and archive calls retain their independent Add, Edit, SetDefault and Archive actions, including idempotent responses without an extra View prerequisite.
+Compensation-history and effective-revision application reads require Compensation Revisions View or Manage plus the existing employee-scope check before querying salary data.
 
 Payroll month parameters use `MMMM-YYYY`, such as `JANUARY-2025`.
 Payroll lock is idempotent for an already locked month and returns the documented payroll lock error.

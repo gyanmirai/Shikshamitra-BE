@@ -26,6 +26,7 @@ public partial class PermissionConsistencyApi_Tests
 			catalogue.Where(entry => entry.Name.StartsWith("InstituteSetup.SchoolIdentity.", StringComparison.Ordinal))
 				.Select(entry => entry.Name).OrderBy(name => name).ShouldBe(expected.OrderBy(name => name));
 		}
+		await GrantActionVisibilityAsync(roleUrl, expected);
 		foreach (var name in expected)
 		{
 			await SetAsync(roleUrl, (name, true));

@@ -24,6 +24,8 @@ public partial class MobileFinanceController(IMobileFinanceReadService reads) : 
 	public async Task<Result<List<MobileFamilyCharge>>> Charges(Guid studentId,[FromQuery] Guid academicYearId,CancellationToken cancellationToken)=>Result.Success(await reads.ChargesAsync(studentId,academicYearId,cancellationToken));
 	[HttpGet("payments")]
 	public async Task<Result<MobileFinanceList<MobileFinancePayment>>> Payments(Guid studentId,[FromQuery] Guid academicYearId,[FromQuery] int skipCount=0,[FromQuery] int maxResultCount=20,[FromQuery] string? status=null,CancellationToken cancellationToken=default)=>Result.Success(await reads.PaymentsAsync(studentId,academicYearId,skipCount,maxResultCount,cancellationToken,status));
+	[HttpGet("transactions")]
+	public async Task<Result<MobileFinanceList<MobileFinanceTransaction>>> Transactions(Guid studentId,[FromQuery] Guid academicYearId,[FromQuery] int skipCount=0,[FromQuery] int maxResultCount=20,CancellationToken cancellationToken=default)=>Result.Success(await reads.TransactionsAsync(studentId,academicYearId,skipCount,maxResultCount,cancellationToken));
 	[HttpGet("receipts")]
 	public async Task<Result<MobileFinanceList<MobileFinanceReceipt>>> Receipts(Guid studentId,[FromQuery] Guid academicYearId,[FromQuery] int skipCount=0,[FromQuery] int maxResultCount=20,CancellationToken cancellationToken=default)=>Result.Success(await reads.ReceiptsAsync(studentId,academicYearId,skipCount,maxResultCount,cancellationToken));
 	[HttpGet("requests")]
